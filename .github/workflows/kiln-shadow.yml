@@ -1,62 +1,11 @@
-# Runs six of this repository's slowest Linux CI legs a second time, on Trunk's Kiln
-# runners, so the two can be compared on the same commits. It repeats those legs only;
-# the rest of CI is not duplicated.
-#
-# It does not affect merging. This workflow is not a required check, and every job sets
-# `continue-on-error`, so a failure here reports neutral rather than red. The CI that
-# gates this repository is untouched and keeps running as before.
-#
-# It costs this repository nothing to run: the runners are self-hosted, so they consume
-# no GitHub Actions minutes and no capacity on the runners already in use.
-#
-# `actions/cache` is served by Trunk's cache on these runners by default; no step here
-# turns that on. It is a per-repository setting in the Trunk Kiln settings at
-# app.trunk.io, and a job can opt back out to GitHub's cache with `cache=github` in its
-# `runs-on`.
-#
-# Each job runs the same cargo and test commands as its upstream job, so the two
-# timings compare. Each job also has the same key as its upstream job, and its name is
-# the upstream name with a "KILN: " prefix, so a check here reads as
-# "Trunk Kiln shadow / KILN: <upstream check name>". When you change one of these
-# upstream jobs, change its copy here too:
-#
-#   cargo-test-linux       <- cargo-tests.reusable.yaml
-#   cargo-test-linux-musl  <- cargo-tests.reusable.yaml
-#   sdk-tests              <- cargo-tests.reusable.yaml (the typescript and csharp linux legs only)
-#   snapshot-tests         <- compiler-tests.reusable.yaml
-#   sdk_parity_check       <- ci.yaml
-#
-# Keep the prefix. A required status check matches by name, and these jobs always pass
-# because of `continue-on-error`. Without the prefix, a job here could satisfy a
-# required upstream check with the same name.
-#
-# These are the only differences, and each one is specific to Kiln:
-#   - The checkout keeps `clean: false`, and the backdate step follows it. The runner
-#     boots with a warm `target/`, and the default clean would delete it.
-#   - There is no `Swatinem/rust-cache` step. The runner image already holds the cargo
-#     registry, and a GitHub cache restore from these runners costs more than it saves.
-#   - sccache comes from Trunk CI. `.envrc` keeps it when `TRUNK_SCCACHE_LANE` is set.
-#   - There is no step that uploads test results to Trunk. The shadow results must not
-#     go into this repository's flaky-test collections. For this reason, the test steps
-#     have no step-level `continue-on-error`: upstream sets it only for that upload.
-#   - Timeouts are longer, and the legs that ran out of memory take `memory=high`.
-#
-# To stop it, delete this file.
 name: Trunk Kiln shadow
 
 on:
   pull_request:
   push:
     branches: ["canary"]
-  # A run on the default branch writes the cache scope every fork pull request reads,
-  # and only a `push`-class event may write it. This makes that warm-up something a
-  # maintainer can trigger, rather than waiting for the next push to canary.
   workflow_dispatch:
 
-# Prefixed so this cannot collide with BoundaryML's own ci.yaml concurrency group.
-# On a push to canary the key ends in github.sha, so canary pushes never cancel each
-# other -- canary is what writes the cache this whole trial depends on, and a key on
-# github.ref alone would collapse those pushes into one group and cancel the cache write.
 concurrency:
   group: kiln-shadow-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
@@ -67,9 +16,6 @@ permissions:
 jobs:
   cargo-test-linux:
     name: "KILN: cargo test (x86_64-unknown-linux-gnu)"
-    # The runner boots from the organization's default CI template, which carries a
-    # warm `target/`. An administrator must approve that template for pull requests
-    # from forks, or these jobs get the plain base image and compile from scratch.
     runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge
     timeout-minutes: 60
     continue-on-error: true
@@ -89,26 +35,18 @@ jobs:
       - name: "Backdate the git refs baml_artifact tracks"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
-          # Read unconditionally: the stamp below needs it whether or not the ref survived.
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
           git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
-          p="$(git rev-parse --git-path HEAD)"
-          if r="$(git symbolic-ref -q HEAD)"; then p="${p} $(git rev-parse --git-path "${r}")"; fi
-          # Checkout of any other ref DELETES refs/heads/canary, which two build scripts
-          # track. Recreate it with update-ref: an empty ref file is a corrupt ref.
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
           if ! git show-ref --verify --quiet refs/heads/canary; then
             b="${basis:-$(git rev-parse HEAD)}"
             git update-ref refs/heads/canary "${b}"
             echo "recreated refs/heads/canary at ${b}"
           fi
-          p="${p} $(git rev-parse --git-path refs/heads/canary)"
-          # shellcheck disable=SC2086
-          touch -t 197001010000 ${p}
-          # shellcheck disable=SC2086
-          ls -l --time-style=+%Y-%m-%d\ %H:%M ${p}
-          # The tree was built under the snapshot's commit, so every job that consumes it
-          # must stamp the same one. Absent (no warm template), leave it unset: build.rs
-          # then reads `git rev-parse HEAD`, which is this commit and is equally valid.
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
           if [ -n "${basis}" ]; then
             echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
             echo "stamping BAML_GIT_SHA=${basis}"
@@ -138,7 +76,6 @@ jobs:
         run: cargo fetch
         working-directory: baml_language
 
-      # `baml_tests`, `baml_cli` and `baml_pack_host` run in the snapshot job, as upstream.
       - name: "Build tests with --timings"
         run: cargo nextest run --no-run --all-features --timings --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
@@ -187,9 +124,6 @@ jobs:
 
   cargo-test-linux-musl:
     name: "KILN: cargo test (x86_64-unknown-linux-musl)"
-    # The runner boots from the organization's default CI template, which carries a
-    # warm `target/`. An administrator must approve that template for pull requests
-    # from forks, or these jobs get the plain base image and compile from scratch.
     runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge..memory=high
     timeout-minutes: 60
     continue-on-error: true
@@ -204,26 +138,18 @@ jobs:
       - name: "Backdate the git refs baml_artifact tracks"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
-          # Read unconditionally: the stamp below needs it whether or not the ref survived.
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
           git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
-          p="$(git rev-parse --git-path HEAD)"
-          if r="$(git symbolic-ref -q HEAD)"; then p="${p} $(git rev-parse --git-path "${r}")"; fi
-          # Checkout of any other ref DELETES refs/heads/canary, which two build scripts
-          # track. Recreate it with update-ref: an empty ref file is a corrupt ref.
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
           if ! git show-ref --verify --quiet refs/heads/canary; then
             b="${basis:-$(git rev-parse HEAD)}"
             git update-ref refs/heads/canary "${b}"
             echo "recreated refs/heads/canary at ${b}"
           fi
-          p="${p} $(git rev-parse --git-path refs/heads/canary)"
-          # shellcheck disable=SC2086
-          touch -t 197001010000 ${p}
-          # shellcheck disable=SC2086
-          ls -l --time-style=+%Y-%m-%d\ %H:%M ${p}
-          # The tree was built under the snapshot's commit, so every job that consumes it
-          # must stamp the same one. Absent (no warm template), leave it unset: build.rs
-          # then reads `git rev-parse HEAD`, which is this commit and is equally valid.
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
           if [ -n "${basis}" ]; then
             echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
             echo "stamping BAML_GIT_SHA=${basis}"
@@ -235,9 +161,6 @@ jobs:
         run: |
           rustup show
           rustup target add x86_64-unknown-linux-musl
-      # A Trunk runner-image bug, not a baml one: the image bakes HashiCorp's apt key and
-      # HashiCorp has since rotated it (NO_PUBKEY FC9CA96ACA026560), so one unverifiable
-      # source makes `apt-get update` exit 100. Dropped here only; baml's action is unmodified.
       - name: "Work around the stale HashiCorp apt key"
         run: sudo rm -f /etc/apt/sources.list.d/hashicorp.list
       - name: "Setup musl cross toolchain"
@@ -258,12 +181,9 @@ jobs:
       - name: "Fetch cargo dependencies"
         run: cargo fetch
         working-directory: baml_language
-      # Default features, as upstream: every feature turns on native-tls, which needs
-      # a separate OpenSSL build for musl.
       - name: "Build tests with --timings"
         run: cargo build --tests --bin baml-cli --bin baml-pack-host --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
-      # `baml_corpus` runs in the snapshot job, as upstream.
       - name: "Run tests with nextest"
         run: cargo nextest run --profile ci --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=baml_corpus)'
         working-directory: baml_language
@@ -304,16 +224,12 @@ jobs:
 
   sdk-tests:
     name: "KILN: sdk tests (${{ matrix.sdk-label }}, ${{ matrix.os-label }})"
-    # The runner boots from the organization's default CI template, which carries a
-    # warm `target/`. An administrator must approve that template for pull requests
-    # from forks, or these jobs get the plain base image and compile from scratch.
     runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge..memory=${{ matrix.memory }}
     timeout-minutes: ${{ matrix.timeout }}
     continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
-        # Only the legs that ran out of memory at the standard tier take `memory: high`.
         include:
           - { sdk-label: "typescript", sdk-dir: "typescript", package-name: "sdk_test_typescript", sdk-path: "typescript", install-args: "sccache direnv node npm:pnpm cargo:cargo-nextest", os-label: "linux", timeout: 30, memory: "standard" }
           - { sdk-label: "csharp", sdk-dir: "csharp", package-name: "sdk_test_csharp", sdk-path: "csharp", install-args: "sccache direnv cargo:cargo-nextest", os-label: "linux", timeout: 30, memory: "high" }
@@ -340,26 +256,18 @@ jobs:
       - name: "Backdate the git refs baml_artifact tracks"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
-          # Read unconditionally: the stamp below needs it whether or not the ref survived.
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
           git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
-          p="$(git rev-parse --git-path HEAD)"
-          if r="$(git symbolic-ref -q HEAD)"; then p="${p} $(git rev-parse --git-path "${r}")"; fi
-          # Checkout of any other ref DELETES refs/heads/canary, which two build scripts
-          # track. Recreate it with update-ref: an empty ref file is a corrupt ref.
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
           if ! git show-ref --verify --quiet refs/heads/canary; then
             b="${basis:-$(git rev-parse HEAD)}"
             git update-ref refs/heads/canary "${b}"
             echo "recreated refs/heads/canary at ${b}"
           fi
-          p="${p} $(git rev-parse --git-path refs/heads/canary)"
-          # shellcheck disable=SC2086
-          touch -t 197001010000 ${p}
-          # shellcheck disable=SC2086
-          ls -l --time-style=+%Y-%m-%d\ %H:%M ${p}
-          # The tree was built under the snapshot's commit, so every job that consumes it
-          # must stamp the same one. Absent (no warm template), leave it unset: build.rs
-          # then reads `git rev-parse HEAD`, which is this commit and is equally valid.
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
           if [ -n "${basis}" ]; then
             echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
             echo "stamping BAML_GIT_SHA=${basis}"
@@ -608,9 +516,6 @@ jobs:
 
   snapshot-tests:
     name: "KILN: Compiler and documentation tests"
-    # The runner boots from the organization's default CI template, which carries a
-    # warm `target/`. An administrator must approve that template for pull requests
-    # from forks, or these jobs get the plain base image and compile from scratch.
     runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge
     timeout-minutes: 30
     continue-on-error: true
@@ -629,26 +534,18 @@ jobs:
       - name: "Backdate the git refs baml_artifact tracks"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
-          # Read unconditionally: the stamp below needs it whether or not the ref survived.
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
           git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
-          p="$(git rev-parse --git-path HEAD)"
-          if r="$(git symbolic-ref -q HEAD)"; then p="${p} $(git rev-parse --git-path "${r}")"; fi
-          # Checkout of any other ref DELETES refs/heads/canary, which two build scripts
-          # track. Recreate it with update-ref: an empty ref file is a corrupt ref.
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
           if ! git show-ref --verify --quiet refs/heads/canary; then
             b="${basis:-$(git rev-parse HEAD)}"
             git update-ref refs/heads/canary "${b}"
             echo "recreated refs/heads/canary at ${b}"
           fi
-          p="${p} $(git rev-parse --git-path refs/heads/canary)"
-          # shellcheck disable=SC2086
-          touch -t 197001010000 ${p}
-          # shellcheck disable=SC2086
-          ls -l --time-style=+%Y-%m-%d\ %H:%M ${p}
-          # The tree was built under the snapshot's commit, so every job that consumes it
-          # must stamp the same one. Absent (no warm template), leave it unset: build.rs
-          # then reads `git rev-parse HEAD`, which is this commit and is equally valid.
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
           if [ -n "${basis}" ]; then
             echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
             echo "stamping BAML_GIT_SHA=${basis}"
@@ -675,14 +572,16 @@ jobs:
         run: cargo fetch
         working-directory: baml_language
       # --bins includes the normal baml-pack-host executable, not just its
-      # unit-test harness. Keep these packages/features identical to the
-      # nextest invocation below.
+      # unit-test harness. --tests unifies the test/dev-dependency features
+      # in the same build as both executables. Keep these packages/features
+      # identical to the nextest invocation below.
       - name: "Build tests and CLI binaries with --timings"
         run: cargo build --tests --bins -p baml_tests -p baml_cli -p baml_pack_host --all-features --timings
         working-directory: baml_language
       # This job owns glibc coverage of baml_tests, baml_cli and baml_pack_host.
-      # Keep the GNU job's --exclude list in sync. `cargo insta` takes no
-      # profile flag, hence NEXTEST_PROFILE.
+      # Keep the GNU job's --exclude list in sync. The musl job also runs
+      # pack_e2e, so both Linux libc variants exercise the ELF pack path.
+      # `cargo insta` takes no profile flag, hence NEXTEST_PROFILE.
       - name: "Run compiler, CLI, and snapshot tests"
         run: cargo insta test --test-runner nextest --dnd -p baml_tests -p baml_cli -p baml_pack_host --all-features --unreferenced=reject
         working-directory: baml_language
@@ -753,9 +652,6 @@ jobs:
 
   sdk_parity_check:
     name: "KILN: SDK parity lint"
-    # The runner boots from the organization's default CI template, which carries a
-    # warm `target/`. An administrator must approve that template for pull requests
-    # from forks, or these jobs get the plain base image and compile from scratch.
     runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
     timeout-minutes: 15
     continue-on-error: true
@@ -773,26 +669,18 @@ jobs:
       - name: "Backdate the git refs baml_artifact tracks"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
-          # Read unconditionally: the stamp below needs it whether or not the ref survived.
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
           git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
-          p="$(git rev-parse --git-path HEAD)"
-          if r="$(git symbolic-ref -q HEAD)"; then p="${p} $(git rev-parse --git-path "${r}")"; fi
-          # Checkout of any other ref DELETES refs/heads/canary, which two build scripts
-          # track. Recreate it with update-ref: an empty ref file is a corrupt ref.
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
           if ! git show-ref --verify --quiet refs/heads/canary; then
             b="${basis:-$(git rev-parse HEAD)}"
             git update-ref refs/heads/canary "${b}"
             echo "recreated refs/heads/canary at ${b}"
           fi
-          p="${p} $(git rev-parse --git-path refs/heads/canary)"
-          # shellcheck disable=SC2086
-          touch -t 197001010000 ${p}
-          # shellcheck disable=SC2086
-          ls -l --time-style=+%Y-%m-%d\ %H:%M ${p}
-          # The tree was built under the snapshot's commit, so every job that consumes it
-          # must stamp the same one. Absent (no warm template), leave it unset: build.rs
-          # then reads `git rev-parse HEAD`, which is this commit and is equally valid.
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
           if [ -n "${basis}" ]; then
             echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
             echo "stamping BAML_GIT_SHA=${basis}"
@@ -806,8 +694,6 @@ jobs:
       - name: "Install Rust toolchain"
         working-directory: baml_language
         run: rustup show
-      # Upstream restores this leg's `target/` from a cache action; this run does not,
-      # so the CLI build below is cold and this leg is the slowest of the five.
       - name: "Build local BAML CLI"
         run: cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
       - name: "Run SDK parity analysis"
