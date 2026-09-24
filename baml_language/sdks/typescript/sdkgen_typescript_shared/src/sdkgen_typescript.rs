@@ -106,6 +106,8 @@ mod tests {
         let output = to_source_code(&runtime_owned_pool(), &[], NamingConvention::PreserveCase);
         let media = &output[&PathBuf::from("baml/media/index.ts")];
         let stream = &output[&PathBuf::from("ai/stream/index.ts")];
+        assert!(media.starts_with(crate::LEAF_BANNER));
+        assert!(!media.contains("pnpm add"));
         for (runtime_name, local_name) in [
             ("BamlImage", "Image"),
             ("BamlAudio", "Audio"),
