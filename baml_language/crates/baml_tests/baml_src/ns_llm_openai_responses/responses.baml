@@ -639,11 +639,13 @@ function oai_stream_time_to_first_token_timeout_ms() -> string {
     root.llm_mock.mock_sse_serve(
         [root.llm_mock.sse_data(completed)],
         (mock: root.llm_mock.MockSseServer) -> {
+            // TTFT starts when the client sees the headers, and the corpus runs
+            // every leaf concurrently: keep the first event far past the limit.
             let cl = openai.ResponsesClient.new(
                 model = "gpt-4o-mini",
                 api_key = "test-key",
                 base_url = mock.base_url(),
-                request_timeout_ms = 1000,
+                request_timeout_ms = 15000,
                 time_to_first_token_timeout_ms = 20,
             );
             let outcome = _oai_stream_final(cl) catch_all (e) {
@@ -652,7 +654,7 @@ function oai_stream_time_to_first_token_timeout_ms() -> string {
             };
             `${cl.time_to_first_token_timeout_ms ?? -1}|${outcome}`
         },
-        first_event_delay_ms = 200,
+        first_event_delay_ms = 10000,
     )
 }
 
