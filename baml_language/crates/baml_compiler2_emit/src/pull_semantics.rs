@@ -43,11 +43,9 @@ pub(crate) trait PullSink<'db> {
     fn binary_op_for_operands(
         &mut self,
         op: BinOp,
-        _left: &Operand<'db>,
-        _right: &Operand<'db>,
-    ) -> Result<(), Self::Error> {
-        self.binary_op(op)
-    }
+        left: &Operand<'db>,
+        right: &Operand<'db>,
+    ) -> Result<(), Self::Error>;
     fn unary_op(&mut self, op: UnaryOp) -> Result<(), Self::Error>;
 
     fn alloc_array(&mut self, element_ty: &TyTemplate, len: usize) -> Result<(), Self::Error>;
