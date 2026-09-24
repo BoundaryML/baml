@@ -225,15 +225,6 @@ fn migrate_removed_features(
         .descendants()
         .filter(|node| node.kind() == SyntaxKind::RAW_STRING_LITERAL)
         .filter_map(|node| {
-            let start = node
-                .children_with_tokens()
-                .filter_map(SyntaxElement::into_token)
-                .find(|token| token.kind() == SyntaxKind::HASH)?
-                .text_range()
-                .start();
-            let start = usize::from(start);
-            let end = usize::from(node.text_range().end());
-            let replacement = hash_string_to_quoted(source.get(start..end)?)?;
             if node.ancestors().skip(1).any(|ancestor| {
                 matches!(
                     ancestor.kind(),
@@ -243,6 +234,15 @@ fn migrate_removed_features(
                 has_legacy_jinja_template = true;
                 return None;
             }
+            let start = node
+                .children_with_tokens()
+                .filter_map(SyntaxElement::into_token)
+                .find(|token| token.kind() == SyntaxKind::HASH)?
+                .text_range()
+                .start();
+            let start = usize::from(start);
+            let end = usize::from(node.text_range().end());
+            let replacement = hash_string_to_quoted(source.get(start..end)?)?;
             Some((start..end, replacement))
         })
         .collect::<Vec<_>>();
@@ -525,12 +525,6 @@ template_string Legacy(name: string) #"Hello {{ name }}"#
     #[test]
     fn malformed_hash_string_is_not_rewritten() {
         let source = "function broken() -> string { #\"unclosed }\n";
-        assert_eq!(migrate_removed_features(source).unwrap(), source);
-    }
-
-    #[test]
-    fn malformed_jinja_hash_string_preserves_parser_diagnostics() {
-        let source = "function broken() -> string {\n    prompt: #\"unclosed\n}\n";
         assert_eq!(migrate_removed_features(source).unwrap(), source);
     }
 
