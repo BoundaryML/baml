@@ -936,6 +936,7 @@ impl RunArgs {
         let StandaloneSource {
             db,
             package,
+            root,
             needs_format_hint,
             ..
         } = self.load_standalone_source(file_path)?;
@@ -947,7 +948,7 @@ impl RunArgs {
             &format!("cannot run: compilation errors in {display}"),
             reporter,
         )?;
-        let engine = self.compile_to_engine(&db, package, argv, parent)?;
+        let engine = self.compile_to_engine(&db, package, argv, &root)?;
         self.vlog(format_args!(
             "Compiled {} function(s) from standalone file",
             engine.user_functions().len()
