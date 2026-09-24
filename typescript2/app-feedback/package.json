@@ -24,10 +24,6 @@
     "typescript": "^5"
   },
   "name": "app-feedback",
-  "overrides": {
-    "nanoid": "3.3.18",
-    "postcss": "8.5.28"
-  },
   "private": true,
   "scripts": {
     "build": "next build",

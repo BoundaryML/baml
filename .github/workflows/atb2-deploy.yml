@@ -5,7 +5,6 @@ on:
     branches: [canary]
     paths:
       - "tools/miniatb/**"
-      - "baml_language/**"
       - "release/platforms.json"
       - "skills/baml-core/SKILL.md"
       - ".github/workflows/atb2-deploy.yml"

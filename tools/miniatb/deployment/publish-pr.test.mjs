@@ -1,15 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { publishPR, prepareCommit } from './publish-pr.mjs';
-const state = { branch: 'bammy/test-issue', sha: 'a'.repeat(40), title: 'Expected: fix', body: 'verified', phase: 'prepared' };
-const pr = { state: 'open', head: { sha: state.sha, repo: { full_name: 'BoundaryML/baml' } }, html_url: 'https://github.com/BoundaryML/baml/pull/123' };
+const state = { repository: 'example/baml-fork', branch: 'bammy/test-issue', sha: 'a'.repeat(40), title: 'Expected: fix', body: 'verified', phase: 'prepared' };
+const pr = { state: 'open', head: { sha: state.sha, repo: { full_name: state.repository } }, html_url: 'https://github.com/BoundaryML/baml/pull/123' };
 function remote({ branch = false, existing = false, losePush = false, loseCreate = false, failSave = false, changed = false } = {}) {
   const counts = { push: 0, create: 0 }; const saved = [];
   return { counts, saved,
     api: async (method, route, body) => {
+      if (method === 'GET' && route === '/repos/' + state.repository) return { full_name: state.repository, fork: true, private: false, source: { full_name: 'BoundaryML/baml' } };
       if (method === 'GET' && route.includes('/pulls?')) return existing ? [pr] : [];
-      if (method === 'GET') return branch ? { object: { sha: changed ? 'b'.repeat(40) : state.sha } } : null;
-      assert.equal(body.draft, true); assert.equal(body.base, 'canary');
+      if (method === 'GET') { assert.equal(route, `/repos/${state.repository}/git/ref/heads/${state.branch}`); return branch ? { object: { sha: changed ? 'b'.repeat(40) : state.sha } } : null; }
+      assert.equal(body.head, 'example:' + state.branch); assert.equal(body.head_repo, 'baml-fork'); assert.equal(body.maintainer_can_modify, false); assert.equal(route, '/repos/BoundaryML/baml/pulls'); assert.equal(body.draft, true); assert.equal(body.base, 'canary');
       counts.create++; existing = true;
       if (loseCreate) throw new Error('response lost');
       return pr;
@@ -58,4 +59,20 @@ test('prepared commit resumes before or after the local branch update and reject
   prepareCommit(prepared, git);
   head = prepared.base; dirty = true;
   assert.throws(() => prepareCommit(prepared, git), /source changed/);
+});
+
+test('publication rejects upstream, private repositories and unrelated forks before a push', async () => {
+  for (const repository of [undefined, '', 'BoundaryML/baml', 'boundaryml/baml']) {
+    const r = remote(); await assert.rejects(publishPR({ ...state, repository }, r), /dedicated fork/);
+    assert.deepEqual(r.counts, { push: 0, create: 0 });
+  }
+  for (const fork of [
+    { full_name: state.repository, fork: false, private: false, source: { full_name: 'BoundaryML/baml' } },
+    { full_name: state.repository, fork: true, private: true, source: { full_name: 'BoundaryML/baml' } },
+    { full_name: state.repository, fork: true, private: false, source: { full_name: 'other/repo' } },
+  ]) {
+    const r = remote(); r.api = async () => fork;
+    await assert.rejects(publishPR(state, r), /public BAML fork/);
+    assert.deepEqual(r.counts, { push: 0, create: 0 });
+  }
 });

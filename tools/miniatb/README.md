@@ -55,12 +55,13 @@ the supported verification format.
 | `TYPESAFE_API_KEY` | Optional JEV classification; absent means difficulty unknown. |
 | `ATB2_POSTHOG_API_KEY`, `ATB2_POSTHOG_PROJECT_ID`, `ATB2_POSTHOG_HOST` | Enable PostHog polling. Existing `ATB_POSTHOG_*` aliases work. |
 | `MINIATB_GITHUB_INGRESS=1` | Enable GitHub polling. Initial lookback is one hour, overridable with `MINIATB_GITHUB_SINCE`. |
-| `BAMMY_GITHUB_APP_CLIENT_ID`, `BAMMY_GITHUB_APP_PRIVATE_KEY` | Mint repository-scoped installation tokens for intake and publishing. |
+| `BAMMY_GITHUB_APP_CLIENT_ID`, `BAMMY_GITHUB_APP_PRIVATE_KEY` | Mint separate tokens for upstream issue intake/PR creation and fork-only code publishing. Install the App on both repositories. |
 | `ATB_SLACK_SIGNING_SECRET`, `ATB_SLACK_FIX_CHANNEL` | Verify events and restrict ingress to the configured channel. |
 | `ATB_SLACK_BOT_TOKEN`, `MINIATB_SLACK_NOTIFY=1` | Enable Slack notifications. Disabled by default. |
 | `ATB2_SHEPHERDS` | Existing `github-login:SLACK_USER_ID,...` format. Routes by subsystem; only mapped users can cancel with X. |
 | `ATB2_UI_URL`, `ATB2_UI_RUNNER_SECRET` | Website links and shared HMAC key, at least 32 characters. |
-| `MINIATB_ALLOW_PUSH=1` | Permit publishing the automatic fix. Enabled in the Fly configuration; requires the Bammy GitHub App credentials. |
+| `MINIATB_PUBLISH_REPO` | Public BAML fork outside BoundaryML, as `owner/repo`. Keep Actions disabled and do not add secrets to the fork. Missing configuration blocks autofix, not intake. |
+| `MINIATB_ALLOW_PUSH=1` | Permit publishing the automatic fix. Enabled in the Fly configuration; requires the Bammy GitHub App credentials and a dedicated fork. |
 | `ATB2_LINEAR_API_KEY`, `ATB2_LINEAR_TEAM` | Optional website export; `ATB_LINEAR_TOKEN` remains a key alias. |
 
 Claude's machine login lives in `MINIATB_CLAUDE_HOME` (the existing Fly volume uses `/data/home`; default `/data/claude`). Never put it in a repository.

@@ -167,6 +167,8 @@ export function stageInfo(issue: Issue): StageInfo[] {
           : { detail: 'dry run: not pushed', stage: 'pr', state: 'todo' },
       );
       return out;
+    default:
+      return out;
   }
 }
 

@@ -111,7 +111,10 @@ function outcomeOf(row: IssueRow): HandleOutcome | null {
   return {
     branch: o.branch ?? null,
     design_doc: o.design_doc ?? null,
-    kind: o.kind,
+    kind:
+      o.kind === 'fixed' || o.kind === 'hard' || o.kind === 'agent_stopped'
+        ? o.kind
+        : 'agent_stopped',
     pr: o.pr ?? null,
     reason: o.reason ?? null,
     running:
@@ -471,7 +474,7 @@ export async function loadIssuesById(ids: string[]): Promise<Issue[]> {
     .slice(0, 20);
   if (!valid.length) return [];
   const rows = await issueRows(
-    `issues_with_outcome?${COLUMNS}&id=in.(${valid.map(encodeURIComponent).join(',')})`,
+    `issues_with_outcome?${COLUMNS}&status->>state=neq.cancelled&id=in.(${valid.map(encodeURIComponent).join(',')})`,
   );
   return rows.map(issueOf);
 }
@@ -503,11 +506,12 @@ export async function loadPendingReports(): Promise<PendingReport[]> {
   );
   const latest = new Map<string, string>();
   for (const event of histories.flat()) {
-    const key = `${event.dataset}:${event.feedback_id}`;
+    const key = `${event.dataset ?? 'live'}:${event.feedback_id}`;
     if (!latest.has(key)) latest.set(key, event.kind);
   }
   return pending.flatMap((report) => {
-    const kind = latest.get(`${report.dataset}:${report.id}`);
+    const dataset = report.dataset ?? 'live';
+    const kind = latest.get(`${dataset}:${report.id}`);
     if (kind === 'no_issue') return [];
     const phase =
       kind === 'investigation_started'
@@ -517,11 +521,11 @@ export async function loadPendingReports(): Promise<PendingReport[]> {
           : 'ingested';
     return [
       {
-        dataset: report.dataset,
+        dataset,
         id: report.id,
         phase,
         title: report.title,
-      } as PendingReport,
+      } satisfies PendingReport,
     ];
   });
 }

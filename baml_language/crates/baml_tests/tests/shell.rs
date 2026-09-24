@@ -501,6 +501,53 @@ printf '%s\n' '{"type":"result","subtype":"success","structured_output":"ok"}'
 
 #[tokio::test]
 #[cfg(unix)]
+async fn claude_code_client_preserves_results_when_stdin_is_closed() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    for (is_error, exit, expected) in [
+        (true, 0, "refused"),
+        (true, 23, "exit"),
+        (false, 0, "input"),
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        let script = temp.path().join("closed-stdin.sh");
+        std::fs::write(&script, format!(
+            "#!/bin/sh\nexec 0<&-\nprintf '%s\\n' '{{\"type\":\"result\",\"is_error\":{is_error},\"subtype\":\"mock_error\",\"structured_output\":\"ok\"}}'\nexit {exit}\n"
+        )).unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let output = baml_test! {
+            baml: r#"
+                function LargePrompt(payload: string) -> string {
+                    client: "openai/gpt-4o-mini"
+                    prompt: `${payload} ${ctx.output_format()}`
+                }
+                function main(executable: string, payload: string) -> string {
+                    let spec = LargePrompt@spec(payload);
+                    let cl = claude_code.ClaudeCodeClient.new(executable = executable, timeout_ms = 10000);
+                    cl.invoke(ai.ModelTurnInput {
+                        prompt: spec.prompt_template,
+                        journal: ai.Journal.new(spec),
+                        toolbox: spec.tools(),
+                        output_type: spec.output_type(),
+                    }) catch (e) {
+                        ai.errors.Refused => { return "refused"; },
+                        ai.errors.InvalidRequest => { return "exit"; },
+                        ai.errors.NetworkFailure => { return "input"; },
+                    };
+                    "unexpected success"
+                }
+            "#,
+            args: {
+                "executable" => BexExternalValue::String(script.to_string_lossy().into_owned().into()),
+                "payload" => BexExternalValue::String("x".repeat(1024 * 1024).into()),
+            },
+        };
+        assert_eq!(output.result, Ok(BexExternalValue::String(expected.into())));
+    }
+}
+
+#[tokio::test]
+#[cfg(unix)]
 async fn claude_code_client_preserves_process_wait_timeout() {
     use std::os::unix::fs::PermissionsExt as _;
 
@@ -508,7 +555,7 @@ async fn claude_code_client_preserves_process_wait_timeout() {
     let script = temp.path().join("claude-code-timeout-probe.sh");
     std::fs::write(
         &script,
-        "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"result\"}'\nexec 1>&-\nwhile :; do :; done\n",
+        "#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' '{\"type\":\"result\"}'\nexec 1>&-\nwhile :; do :; done\n",
     )
     .expect("write Claude Code timeout probe");
     let mut permissions = std::fs::metadata(&script)
@@ -540,7 +587,7 @@ async fn claude_code_client_preserves_process_wait_timeout() {
                 let cl = claude_code.ClaudeCodeClient.new(
                     model = "offline-timeout-probe",
                     executable = executable,
-                    timeout_ms = 500,
+                    timeout_ms = 2000,
                 );
                 let _ = cl.invoke(timeout_provider_input()) catch_all (e) {
                     let timeout: baml.errors.Timeout => {
@@ -560,8 +607,8 @@ async fn claude_code_client_preserves_process_wait_timeout() {
         panic!("expected a string timeout result, got {:?}", output.result);
     };
     assert!(result.starts_with("Timeout:"), "{result}");
-    assert!(result.contains("timed out after 500ms"), "{result}");
-    assert!(result.ends_with(":500"), "{result}");
+    assert!(result.contains("timed out after 2000ms"), "{result}");
+    assert!(result.ends_with(":2000"), "{result}");
 }
 
 #[tokio::test]

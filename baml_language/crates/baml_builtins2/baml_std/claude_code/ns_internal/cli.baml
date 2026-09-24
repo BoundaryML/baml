@@ -125,6 +125,12 @@ function tool_protocol(tb: ai.tools.Toolbox) -> string {
     `
 }
 
+function _write_prompt(p: baml.sys.Process, prompt: string) -> string? {
+    defer { p.stdin.close() }
+    p.stdin.write(prompt);
+    null
+}
+
 /// (internal) Consume the live JSONL stream: log every event as it arrives, return the
 /// terminal result event.
 function _read_result(p: baml.sys.Process) -> json {
@@ -298,15 +304,17 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     }
     // events stream LIVE: each JSONL line logs as it arrives, and the last
     // relevant line is the result. Stderr inherits the parent process.
+    let input_error: string? = null;
     let result = baml.future.with_timeout(baml.time.Duration.from_milliseconds(c.timeout_ms), () -> {
         // Stream the journal through stdin to avoid OS argument-size limits.
         // Drain stdout concurrently: either pipe can exceed its buffer.
         let input = spawn {
-            defer { p.stdin.close() }
-            p.stdin.write(prompt_text);
+            _write_prompt(p, prompt_text) catch_all (e) {
+                _ => e.to_string()
+            }
         };
         let result = _read_result(p);
-        await input;
+        input_error = await input;
         result
     }) catch (e) {
         baml.errors.Timeout => {
@@ -342,6 +350,14 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
             provider: "claude-code",
             reason: baml.json.path_or<string>(result, ".subtype", "error"),
             raw_body: baml.json.stringify(result),
+        }
+    }
+    if let error: string = input_error {
+        throw ai.errors.NetworkFailure {
+            status_code: null,
+            provider: "claude-code",
+            detail: "the Claude Code CLI could not receive the prompt: " + error,
+            raw_body: null,
         }
     }
     log.info(

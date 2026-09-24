@@ -95,7 +95,7 @@ export function IssueActions({
           <button
             className="rounded border px-3 py-2 text-sm disabled:opacity-50"
             disabled={busy || !body.trim()}
-            type="button"
+            type="submit"
           >
             Add comment
           </button>

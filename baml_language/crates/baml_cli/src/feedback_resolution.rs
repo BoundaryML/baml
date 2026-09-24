@@ -103,16 +103,24 @@ pub(crate) fn resolution(issues: &[IssueResolution], installed: &str) -> &'stati
     if issues.is_empty() {
         return "triaging";
     }
-    if issues.iter().all(|i| i.state == "cancelled") {
+    let live: Vec<_> = issues
+        .iter()
+        .filter(|i| {
+            !matches!(
+                i.state.as_str(),
+                "cancelled" | "closed" | "wont_fix" | "rejected" | "duplicate"
+            )
+        })
+        .collect();
+    if live.is_empty() {
         return "cancelled";
     }
-    let all_fixed = issues.iter().all(|i| fixed_in(i).is_some());
+    let all_fixed = live.iter().all(|i| fixed_in(i).is_some());
     if !all_fixed {
         return "in_progress";
     }
     if release_version(installed).is_some_and(|current| {
-        issues
-            .iter()
+        live.iter()
             .all(|i| fixed_in(i).is_some_and(|fixed| current >= fixed))
     }) {
         "resolved"
@@ -435,6 +443,29 @@ mod tests {
         );
         assert_eq!(
             resolution(&[cancelled, issue("i2", "approved", None)], "0.18.0"),
+            "in_progress"
+        );
+    }
+    #[test]
+    fn terminal_non_fixes_do_not_block_released_fixes() {
+        for state in ["cancelled", "closed", "wont_fix", "rejected", "duplicate"] {
+            let terminal = issue("i1", state, None);
+            assert_eq!(
+                resolution(std::slice::from_ref(&terminal), "0.18.0"),
+                "cancelled"
+            );
+            let issues = [terminal, issue("i2", "merged", Some("0.19.0"))];
+            assert_eq!(resolution(&issues, "0.18.0"), "fixed");
+            assert_eq!(resolution(&issues, "0.19.0"), "resolved");
+        }
+        assert_eq!(
+            resolution(
+                &[
+                    issue("i1", "deferred", None),
+                    issue("i2", "merged", Some("0.19.0"))
+                ],
+                "0.19.0"
+            ),
             "in_progress"
         );
     }

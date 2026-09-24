@@ -293,7 +293,7 @@ function announce_issue(issue: Issue) -> Issue {
 }
 
 function slack_text(value: string) -> string {
-    value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    value.replace_all("&", "&amp;").replace_all("<", "&lt;").replace_all(">", "&gt;")
 }
 
 function cancel_from_slack(envelope: json) -> void {

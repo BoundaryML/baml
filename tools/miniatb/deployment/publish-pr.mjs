@@ -1,17 +1,22 @@
 import fs from 'node:fs';
+import { publishRepository } from './github-token.mjs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
 export async function publishPR(state, deps) {
   if (!/^bammy\/[a-z0-9-]+$/.test(state.branch) || !/^[a-f0-9]{40}$/.test(state.sha)) throw new Error('Invalid publication identity');
-  const head = `BoundaryML:${state.branch}`;
+  const repository = publishRepository(state.repository);
+  const fork = await deps.api('GET', `/repos/${repository}`);
+  if (fork.full_name !== repository || !fork.fork || fork.private !== false
+      || fork.source?.full_name !== 'BoundaryML/baml') throw new Error('Publication target is not a public BAML fork');
+  const head = `${repository.split('/')[0]}:${state.branch}`;
   async function existingPR() {
     const rows = await deps.api('GET', `/repos/BoundaryML/baml/pulls?state=all&head=${encodeURIComponent(head)}&base=canary&per_page=100`);
     if (!Array.isArray(rows) || rows.length > 1) throw new Error('Ambiguous PR history');
     const pr = rows[0];
     if (!pr) return null;
-    if (pr.state !== 'open' || pr.head?.sha !== state.sha || pr.head?.repo?.full_name !== 'BoundaryML/baml') throw new Error('Existing PR changed or closed; inspect before retrying');
+    if (pr.state !== 'open' || pr.head?.sha !== state.sha || pr.head?.repo?.full_name !== repository) throw new Error('Existing PR changed or closed; inspect before retrying');
     if (!/^https:\/\/github\.com\/BoundaryML\/baml\/pull\/[1-9][0-9]*$/.test(pr.html_url)) throw new Error('Invalid PR URL');
     return pr.html_url;
   }
@@ -22,7 +27,7 @@ export async function publishPR(state, deps) {
   const prior = await existingPR();
   if (prior) return saved(prior);
   if (state.phase === 'published') throw new Error('Recorded PR unavailable; refusing duplicate creation');
-  const ref = `/repos/BoundaryML/baml/git/ref/heads/${state.branch}`;
+  const ref = `/repos/${repository}/git/ref/heads/${state.branch}`;
   let remote = await deps.api('GET', ref, undefined, true);
   if (remote && remote.object?.sha !== state.sha) throw new Error('Remote branch changed; refusing to overwrite');
   if (!remote) {
@@ -38,7 +43,7 @@ export async function publishPR(state, deps) {
   if (found) return saved(found);
   try {
     await deps.api('POST', '/repos/BoundaryML/baml/pulls', {
-      head: state.branch, base: 'canary', title: state.title, body: state.body, draft: true,
+      head, head_repo: repository.split('/')[1], maintainer_can_modify: false, base: 'canary', title: state.title, body: state.body, draft: true,
     });
   } catch (error) {
     const recovered = await existingPR();
@@ -64,25 +69,26 @@ export function prepareCommit(state, git) {
 async function main(dir, branch) {
   const file = path.join(dir, 'publication.json');
   const state = JSON.parse(fs.readFileSync(file, 'utf8'));
-  if (state.branch !== branch || fs.lstatSync(file).isSymbolicLink()) throw new Error('Publication record mismatch');
+  if (state.branch !== branch || state.repository !== publishRepository(process.env.MINIATB_PUBLISH_REPO) || fs.lstatSync(file).isSymbolicLink()) throw new Error('Publication record mismatch');
   const tree = path.join(dir, 'worktree');
   const git = args => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-C', tree, ...args], { encoding: 'utf8', timeout: 300000, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   prepareCommit(state, git);
 
   const token = process.env.GH_TOKEN;
-  if (!token) throw new Error('Publishing credential missing');
+  const pushToken = process.env.MINIATB_PUSH_TOKEN;
+  if (!token || !pushToken) throw new Error('Publishing credential missing');
   return publishPR(state, {
     api: async (method, route, body, missing = false) => {
       const r = await fetch('https://api.github.com' + route, {
         method, redirect: 'error', signal: AbortSignal.timeout(30000),
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'miniatb', 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${route.startsWith(`/repos/${state.repository}/`) || route === `/repos/${state.repository}` ? pushToken : token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'miniatb', 'Content-Type': 'application/json' },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
       if (missing && r.status === 404) return null;
       if (!r.ok) throw new Error(`GitHub publication HTTP ${r.status}`);
       return r.json();
     },
-    push: async (name, sha) => { git(['push', `--force-with-lease=refs/heads/${name}:`, 'https://github.com/BoundaryML/baml.git', `${sha}:refs/heads/${name}`]); },
+    push: async (name, sha) => { git(['push', `--force-with-lease=refs/heads/${name}:`, `https://github.com/${state.repository}.git`, `${sha}:refs/heads/${name}`]); },
     save: async value => { fs.writeFileSync(file + '.tmp', JSON.stringify(value), { mode: 0o600 }); fs.renameSync(file + '.tmp', file); },
   });
 }

@@ -60,9 +60,16 @@ function posthog_feedback(row: json[], project: string) -> Feedback? {
     };
     let files: map<string, string> = {};
     for (let file in baml.json.path_or<json[]>(props, ".files", [])) {
-        let name = baml.json.path<string>(file, ".name");
-        let encoded = baml.json.path<string>(file, ".content_base64");
-        let content = uint8array.from_base64(encoded).to_string() catch_all (_) {
+        let name = baml.json.path_or<string>(file, ".name", "").trim();
+        if (name == "") {
+            continue;
+        };
+        let encoded = baml.json.path_or<string?>(file, ".content_base64", null);
+        let content = if (encoded == null) {
+            "[Attachment could not be decoded]"
+        } else {
+            uint8array.from_base64(encoded).to_string()
+        } catch_all (_) {
             _ => "[Attachment could not be decoded]",
         };
         files.set(name, content);

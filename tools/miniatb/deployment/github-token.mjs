@@ -1,8 +1,15 @@
 import { sign } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 
+export function publishRepository(value) {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/.test(value)
+      || value.split('/')[0].toLowerCase() === 'boundaryml') throw new Error('Configure MINIATB_PUBLISH_REPO as a dedicated fork outside BoundaryML');
+  return value;
+}
+
 export async function installationToken(mode, env = process.env, request = fetch) {
-  if (!['read', 'publish'].includes(mode)) throw new Error('Invalid GitHub token mode');
+  if (!['read', 'publish', 'push'].includes(mode)) throw new Error('Invalid GitHub token mode');
+  const repository = mode === 'push' ? publishRepository(env.MINIATB_PUBLISH_REPO) : 'BoundaryML/baml';
   const client = env.BAMMY_GITHUB_APP_CLIENT_ID;
   const key = env.BAMMY_GITHUB_APP_PRIVATE_KEY;
   if (!client || !key) throw new Error('Bammy GitHub App credentials missing');
@@ -33,11 +40,11 @@ export async function installationToken(mode, env = process.env, request = fetch
     if (!response.ok) throw new Error(`GitHub App authentication failed (HTTP ${response.status})`);
     return response.json();
   }
-  const installation = await api('/repos/BoundaryML/baml/installation');
+  const installation = await api(`/repos/${repository}/installation`);
   if (!Number.isSafeInteger(installation.id) || installation.id <= 0) throw new Error('Invalid GitHub installation');
   const result = await api(`/app/installations/${installation.id}/access_tokens`, {
-    repositories: ['baml'],
-    permissions: mode === 'read' ? { issues: 'read' } : { contents: 'write', pull_requests: 'write' },
+    repositories: [repository.split('/')[1]],
+    permissions: mode === 'read' ? { issues: 'read' } : mode === 'push' ? { contents: 'write' } : { contents: 'read', pull_requests: 'write' },
   });
   if (typeof result.token !== 'string' || !result.token || /\s/.test(result.token)) throw new Error('Invalid GitHub installation token');
   return result.token;

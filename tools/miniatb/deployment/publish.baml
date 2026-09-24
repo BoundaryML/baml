@@ -138,6 +138,7 @@ function publish(issue: Issue, fix: Fix) -> string {
     write_json(
         run_dir() + "/publication.json",
         {
+            "repository": baml.env.get("MINIATB_PUBLISH_REPO") ?? "",
             "branch": branch,
             "sha": sha,
             "base": base,
@@ -180,7 +181,8 @@ function resume_publication(issue: Issue) -> string {
                 "HOME": "/tmp",
                 "GH_TOKEN": token,
                 "GIT_ASKPASS": app_dir() + "/deployment/askpass",
-                "MINIATB_PUSH_TOKEN": token,
+                "MINIATB_PUSH_TOKEN": github_token("push"),
+                "MINIATB_PUBLISH_REPO": baml.env.get("MINIATB_PUBLISH_REPO") ?? "",
                 "GIT_CONFIG_NOSYSTEM": "1",
                 "GIT_CONFIG_GLOBAL": "/dev/null",
                 "GIT_TERMINAL_PROMPT": "0",

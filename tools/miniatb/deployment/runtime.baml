@@ -51,6 +51,7 @@ function controller_env(id: string) -> map<string, string> {
             "MINIATB_SLACK_NOTIFY",
             "MINIATB_DATASET",
             "MINIATB_ALLOW_PUSH",
+            "MINIATB_PUBLISH_REPO",
             "BAMMY_GITHUB_APP_CLIENT_ID",
             "BAMMY_GITHUB_APP_PRIVATE_KEY",
         ]

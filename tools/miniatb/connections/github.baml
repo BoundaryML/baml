@@ -115,6 +115,7 @@ function github_token(mode: string) -> string {
         options = baml.sys.ProcessOptions {
             env: {
                 "PATH": "/usr/local/bin:/usr/bin:/bin",
+                "MINIATB_PUBLISH_REPO": baml.env.get("MINIATB_PUBLISH_REPO") ?? "",
                 "BAMMY_GITHUB_APP_CLIENT_ID": baml.env.get("BAMMY_GITHUB_APP_CLIENT_ID") ?? "",
                 "BAMMY_GITHUB_APP_PRIVATE_KEY": baml.env.get("BAMMY_GITHUB_APP_PRIVATE_KEY") ?? "",
             },

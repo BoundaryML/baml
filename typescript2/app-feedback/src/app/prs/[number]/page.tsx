@@ -32,7 +32,10 @@ export default async function PrPage({
           the investigation and updates here or in the Slack thread.
         </p>
       </div>
-      <LiveAgents pr={`https://github.com/BoundaryML/baml/pull/${number}`} />
+      <LiveAgents
+        dataset={dataset}
+        pr={`https://github.com/BoundaryML/baml/pull/${number}`}
+      />
       <Activity dataset={dataset} events={events} />
     </main>
   );

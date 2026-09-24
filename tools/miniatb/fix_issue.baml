@@ -94,6 +94,7 @@ function autofix(issue: Issue) -> void {
         baml.env.get("MINIATB_ALLOW_PUSH"),
         baml.env.get("BAMMY_GITHUB_APP_CLIENT_ID"),
         baml.env.get("BAMMY_GITHUB_APP_PRIVATE_KEY"),
+        publish_repo = baml.env.get("MINIATB_PUBLISH_REPO"),
     ) {
         patch_issue(
             issue.id,
@@ -151,11 +152,18 @@ function autofix(issue: Issue) -> void {
     };
 }
 
-function autofix_blocker(allow_push: string?, client_id: string?, private_key: string?) -> string? {
+function autofix_blocker(
+    allow_push: string?,
+    client_id: string?,
+    private_key: string?,
+    publish_repo: string? = null,
+) -> string? {
     if (allow_push != "1") {
         "Automatic fix publishing is disabled (MINIATB_ALLOW_PUSH)"
     } else if (client_id == null || client_id == "" || private_key == null || private_key == "") {
         "Automatic fix requires Bammy GitHub App credentials"
+    } else if (publish_repo == null || publish_repo == "") {
+        "Automatic fix requires a dedicated fork (MINIATB_PUBLISH_REPO)"
     } else {
         null
     }

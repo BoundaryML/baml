@@ -179,10 +179,7 @@ function sandbox(
     let status = child.wait();
     let result = Execution { exit_code: status.exit_code, stdout: await out, stderr: await err };
     require(
-        result.exit_code != 124
-            && result.exit_code >= 0
-            && result.exit_code < 126
-            && !result.stderr.starts_with("bwrap:"),
+        result.exit_code >= 0 && result.exit_code < 124 && !result.stderr.starts_with("bwrap:"),
         "Sandbox could not complete: " + result.stderr.slice(0, 500),
     );
     result

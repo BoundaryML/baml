@@ -251,6 +251,10 @@ test "shepherd mapping retains GitHub identities and validates Slack users" {
         assert.is_true(rejected);
     }
     assert.equal(slack_text("<@everyone> & title"), "&lt;@everyone&gt; &amp; title");
+    assert.equal(
+        slack_text("<a> <b> && <!channel>"),
+        "&lt;a&gt; &lt;b&gt; &amp;&amp; &lt;!channel&gt;",
+    );
 }
 
 test "agent events match the website transcript contract" {
@@ -382,7 +386,8 @@ test "autofix reports configuration blockers before starting an agent" {
     assert.is_true(autofix_blocker("0", "client", "key") != null);
     assert.is_true(autofix_blocker("1", null, "key") != null);
     assert.is_true(autofix_blocker("1", "client", "") != null);
-    assert.equal(autofix_blocker("1", "client", "key"), null);
+    assert.is_true(autofix_blocker("1", "client", "key") != null);
+    assert.equal(autofix_blocker("1", "client", "key", publish_repo = "example/baml"), null);
 }
 
 test "first issue announcement includes the draft or reports no PR" {
@@ -401,4 +406,28 @@ test "dedup retains issues during and after a blocked fix" {
     assert.is_true(dedup_states().includes("deferred"));
     assert.is_true(!dedup_states().includes("cancelled"));
     assert.is_true(!dedup_states().includes("merged"));
+}
+
+test "malformed attachments cannot block the PostHog checkpoint" {
+    let row = [
+        "event-2".to_json(),
+        "time".to_json(),
+        baml.json.parse(
+            `
+                {"title":"Report", "files":[{}, null, {"name":"bad.baml", "content_base64":{}},
+                  {"name":"empty.baml"}, {"name":"main.baml", "content_base64":"aGVsbG8="}]}
+            `,
+        ),
+    ];
+    let seen: Feedback[] = [];
+    let checkpoint = posthog_page([row, posthog_fixture()], "42", PosthogCursor { after: "start", uuid: "", until: "end" }, (
+        feedback: Feedback,
+    ) -> null {
+        seen.push(feedback);
+        null
+    });
+    assert.equal(seen.length(), 2);
+    assert.equal(seen[0].files.get("main.baml"), "hello");
+    assert.equal(seen[0].files.get("empty.baml"), "[Attachment could not be decoded]");
+    assert.is_true(baml.json.path<bool>(checkpoint, ".complete"));
 }

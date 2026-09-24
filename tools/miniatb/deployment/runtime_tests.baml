@@ -214,6 +214,16 @@ function test_sandbox() -> void {
         + "/secret && test ! -s .git && test -z \"$ATB2_GITHUB_TOKEN\" && test -z \"$FEEDBACK_SUPABASE_KEY\" && ! touch source.baml && touch /scratch/ok && test ! -e /app && test \"$(ls /sys/class/net 2>/dev/null | wc -l)\" = 0";
     let result = sandbox(command, folder + "/worktree", folder + "/scratch");
     assert.equal(result.exit_code, 0);
+    assert.equal(sandbox("exit 1", folder + "/worktree", folder + "/scratch").exit_code, 1);
+    for (let command in ["exit 125", "kill -KILL $$", "sleep 2"]) {
+        let rejected = false;
+        sandbox(command, folder + "/worktree", folder + "/scratch", seconds = 1) catch_all (_) {
+            _ => {
+                rejected = true;
+            }
+        };
+        assert.is_true(rejected);
+    }
     assert.equal(baml.fs.read(folder + "/worktree/source.baml"), "original");
     assert.is_true(baml.fs.exists(folder + "/scratch/ok"));
     baml.fs.chmod(folder + "/worktree", 511);

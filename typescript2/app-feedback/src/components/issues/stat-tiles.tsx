@@ -41,11 +41,7 @@ export function StatTiles({ issues }: { issues: Issue[] }) {
       <Tile hint={`${feedback} reports`} label="Open" value={open} />
       <Tile label="Agent running" value={running} />
       <Tile label="Draft PRs" value={prs} />
-      <Tile
-        hint="gate failed / stopped / hard"
-        label="Needs a human"
-        value={needsHuman}
-      />
+      <Tile hint="stopped / hard" label="Needs a human" value={needsHuman} />
       <Tile hint="merged or shipped" label="Landed" value={landed} />
       <Tile label="Total" value={issues.length} />
     </div>
