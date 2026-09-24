@@ -1,0 +1,23 @@
+[package]
+name = "btel_clock"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "Calibrated raw clocks and immutable telemetry clock epochs"
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+btel_types = { workspace = true }
+quanta = { workspace = true }
+web-time = { workspace = true }

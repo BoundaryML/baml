@@ -319,6 +319,7 @@ mod tests {
             real_local_count: 0,
             bytecode,
             kind: FunctionKind::Bytecode,
+            telemetry_policy_id: crate::TelemetryPolicyId::none(),
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_base::Span::fake(),

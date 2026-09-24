@@ -145,6 +145,11 @@ name = "bex"
 approved_prefixes = ["events", "prof"]
 link_crates = ["baml_type", "sys_types"]
 
+# Btel telemetry pipeline crates. The producer starts with `btel_types`;
+# transport, processing, and publication crates will join this family later.
+[[namespaces]]
+name = "btel"
+
 # lsp namespace configuration
 [[namespaces]]
 name = "baml_lsp"

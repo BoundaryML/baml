@@ -1,0 +1,8 @@
+repository = "https://github.com/metrics-rs/quanta"
+revision = "bb6ca3f82b0b0cfbd7c04a0221f82e63d06a47ed"
+version = "0.12.6"
+license = "MIT"
+# Source and LICENSE copied verbatim except the isolated fresh-calibration/
+# metadata patch in lib.rs + calibration.rs, raw-read inlining/ASM annotations,
+# and raw QPC reads with exact cold reference conversion on Windows.
+# Packaging omits upstream Markdown, benchmarks, CI, and benchmark dependency.

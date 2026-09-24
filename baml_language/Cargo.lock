@@ -1248,6 +1248,7 @@ dependencies = [
  "bex_vm",
  "bex_vm_types",
  "bridge_ctypes",
+ "btel_clock",
  "futures",
  "indexmap",
  "libc",
@@ -1415,6 +1416,8 @@ dependencies = [
  "bex_heap",
  "bex_str",
  "bex_vm_types",
+ "btel_clock",
+ "btel_types",
  "chacha20poly1305",
  "console",
  "getrandom 0.2.17",
@@ -1424,6 +1427,7 @@ dependencies = [
  "rand_chacha 0.3.1",
  "rand_core 0.6.4",
  "rand_xoshiro",
+ "rustc-hash 2.1.2",
  "serde",
  "serde_json",
  "sha2",
@@ -1448,6 +1452,7 @@ dependencies = [
  "bex_resource_types",
  "bex_str",
  "borsh",
+ "btel_types",
  "hex",
  "indexmap",
  "num-bigint",
@@ -1712,6 +1717,19 @@ dependencies = [
  "memchr",
  "serde",
 ]
+
+[[package]]
+name = "btel_clock"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_types",
+ "quanta",
+ "web-time",
+]
+
+[[package]]
+name = "btel_types"
+version = "0.0.0-beta"
 
 [[package]]
 name = "bumpalo"
@@ -5698,6 +5716,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "quanta"
+version = "0.12.6"
+dependencies = [
+ "libc",
+ "portable-atomic",
+ "raw-cpuid",
+ "wasip1",
+ "wasip2",
+ "web-sys",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "quinn"
 version = "0.11.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5840,6 +5871,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f97cdb2a36ed4183de61b2f824cc45c9f1037f28afe0a322e9fff4c108b5aaa"
 dependencies = [
  "rand_core 0.6.4",
+]
+
+[[package]]
+name = "raw-cpuid"
+version = "11.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "498cd0dc59d73224351ee52a95fee0f1a617a2eae0e7d9d720cc622c73a54186"
+dependencies = [
+ "bitflags 2.11.1",
 ]
 
 [[package]]
@@ -7888,6 +7928,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
+name = "wasip1"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5e26842486624357dbeb8f0381cf1fb42f022291fd787d4a816768fec8cc760"
+
+[[package]]
 name = "wasip2"
 version = "1.0.3+wasi-0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8551,6 +8597,9 @@ name = "wit-bindgen"
 version = "0.57.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
+dependencies = [
+ "bitflags 2.11.1",
+]
 
 [[package]]
 name = "wit-bindgen-core"

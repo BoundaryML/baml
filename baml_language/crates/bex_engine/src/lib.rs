@@ -103,7 +103,7 @@ use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
-use bex_vm::{BexVm, VmEventSourceLocation, VmExecState};
+use bex_vm::{BexVm, VmEventSourceLocation, VmExecState, telemetry::TelemetryPolicies};
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalIndex, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
     TaskGroupInner, UnscheduledFuture, Value, ValueKind, VmGlobals,
@@ -280,7 +280,7 @@ pub(crate) enum ThreadOutcome {
     /// Root thread completed normally; return this value to the host.
     RootValue(BexExternalValue),
     /// Spawned child thread settled — `FutureManager` already updated.
-    SettledChild,
+    SettledChild(bex_vm::telemetry::InvocationOutcome),
 }
 
 // ============================================================================
@@ -766,6 +766,9 @@ pub fn cancelled_unhandled_throw() -> EngineError {
 ///         └── Tlab ─── exclusive allocation region from shared heap
 /// ```
 pub struct BexEngine {
+    // Test-only observation of boundary calls, including duplicates. No production sink.
+    #[cfg(test)]
+    completed_threads: std::sync::Mutex<Vec<(u64, bex_vm::telemetry::InvocationOutcome)>>,
     process_euid: ProcessEuid,
     engine_id: EngineId,
     program_metadata: ProgramMetadata,
@@ -773,6 +776,9 @@ pub struct BexEngine {
     next_thread_id: AtomicU64,
     /// The unified heap (shared across all VM instances)
     heap: Arc<BexHeap>,
+    /// One policy namespace for all function objects and VMs in this engine.
+    telemetry_policies: Arc<TelemetryPolicies>,
+    telemetry_clock: btel_clock::ClockRuntime,
     /// Frozen global variables shared across every post-`$init` VM.
     ///
     /// Populated once during `$init` and immutable thereafter; cloning is a
@@ -1488,7 +1494,13 @@ impl BexEngine {
         sys_ops: std::sync::Arc<sys_ops::SysOps>,
         argv: Vec<String>,
     ) -> Result<Self, EngineError> {
-        Self::build(bytecode_program, sys_ops, argv, None)
+        Self::build(
+            bytecode_program,
+            sys_ops,
+            argv,
+            None,
+            btel_clock::ClockMode::Auto,
+        )
     }
 
     /// Construct an engine with runtime compilation enabled by an injected
@@ -1499,7 +1511,36 @@ impl BexEngine {
         argv: Vec<String>,
         runtime_compiler: Arc<dyn RuntimeCompiler>,
     ) -> Result<Self, EngineError> {
-        Self::build(bytecode_program, sys_ops, argv, Some(runtime_compiler))
+        Self::build(
+            bytecode_program,
+            sys_ops,
+            argv,
+            Some(runtime_compiler),
+            btel_clock::ClockMode::Auto,
+        )
+    }
+
+    /// Choose OS monotonic timing before any counter detection/calibration.
+    pub fn new_with_telemetry_clock(
+        bytecode_program: bex_vm_types::Program,
+        sys_ops: Arc<sys_ops::SysOps>,
+        argv: Vec<String>,
+        runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
+        clock_mode: btel_clock::ClockMode,
+    ) -> Result<Self, EngineError> {
+        Self::build(
+            bytecode_program,
+            sys_ops,
+            argv,
+            runtime_compiler,
+            clock_mode,
+        )
+    }
+
+    /// Invoke from a generic after-restore hook before resuming work. This
+    /// resets telemetry timing only, not the engine's other lifecycle state.
+    pub fn reset_telemetry_clock_after_restore(&self) -> Arc<btel_clock::ClockEpoch> {
+        self.telemetry_clock.reset_after_restore()
     }
 
     fn build(
@@ -1507,6 +1548,7 @@ impl BexEngine {
         sys_ops: std::sync::Arc<sys_ops::SysOps>,
         argv: Vec<String>,
         runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
+        clock_mode: btel_clock::ClockMode,
     ) -> Result<Self, EngineError> {
         raise_fd_soft_limit();
         let argv: Arc<[String]> = Arc::from(argv);
@@ -1658,6 +1700,9 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         let park_requested = Arc::new(AtomicBool::new(false));
 
+        let telemetry_policies = Arc::new(TelemetryPolicies::new());
+        let telemetry_clock = btel_clock::ClockRuntime::new(clock_mode);
+
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
         // results into the global slots via StoreGlobal instructions.
@@ -1674,6 +1719,8 @@ impl BexEngine {
                     Arc::clone(&dynamic_dispatch),
                     Arc::clone(&error_class_ptrs),
                     Arc::clone(&panic_class_ptrs),
+                    Arc::clone(&telemetry_policies),
+                    telemetry_clock.start_run(),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -1681,6 +1728,8 @@ impl BexEngine {
                 loop {
                     match vm.exec() {
                         Ok(VmExecState::Complete(_)) => {
+                            telemetry_clock.validate(vm.telemetry_clock(), true);
+                            vm.finish_telemetry(bex_vm::telemetry::InvocationOutcome::Ok);
                             // Extract the (potentially mutated) global pool back
                             // so StoreGlobal writes are visible to subsequent calls.
                             globals_pool = match vm.globals {
@@ -1699,11 +1748,15 @@ impl BexEngine {
                             continue;
                         }
                         Ok(other) => {
+                            telemetry_clock.validate(vm.telemetry_clock(), true);
+                            vm.finish_telemetry(bex_vm::telemetry::InvocationOutcome::Errored);
                             return Err(EngineError::InitFailed(format!(
                                 "$init function '{init_name}' yielded unexpectedly: {other:?}"
                             )));
                         }
                         Err(e) => {
+                            telemetry_clock.validate(vm.telemetry_clock(), true);
+                            vm.finish_telemetry(bex_vm::telemetry::InvocationOutcome::Errored);
                             return Err(EngineError::InitFailed(format!(
                                 "$init function '{init_name}' failed: {e}"
                             )));
@@ -1797,11 +1850,15 @@ impl BexEngine {
         );
 
         Ok(Self {
+            #[cfg(test)]
+            completed_threads: std::sync::Mutex::new(Vec::new()),
             process_euid,
             engine_id,
             program_metadata,
             next_thread_id: AtomicU64::new(1),
             heap,
+            telemetry_policies,
+            telemetry_clock,
             globals,
             _globals_permit: globals_permit,
             resolved_function_names,
@@ -3236,6 +3293,8 @@ impl BexEngine {
             Arc::clone(&self.dynamic_dispatch),
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
+            Arc::clone(&self.telemetry_policies),
+            self.telemetry_clock.start_run(),
         );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
@@ -3359,7 +3418,7 @@ impl BexEngine {
         // `cancelled_unhandled_throw`).
         match result {
             Ok(ThreadOutcome::RootValue(value)) => Ok(BexCallResult { value: Ok(value) }),
-            Ok(ThreadOutcome::SettledChild) => Ok(BexCallResult {
+            Ok(ThreadOutcome::SettledChild(_)) => Ok(BexCallResult {
                 // Root threads should never produce SettledChild; treat as an
                 // engine invariant violation rather than silently returning Null.
                 value: Err(EngineError::Other(
@@ -4439,11 +4498,15 @@ impl BexEngine {
                 self.settle_child_cancelled(thread, future_id).await?;
                 // Cancellation settlement does not carry a child stack trace.
                 let _ = trace;
-                return Ok(ThreadOutcome::SettledChild);
+                return Ok(ThreadOutcome::SettledChild(
+                    bex_vm::telemetry::InvocationOutcome::Cancelled,
+                ));
             }
             self.settle_child_errored(thread, future_id, value, trace)
                 .await?;
-            return Ok(ThreadOutcome::SettledChild);
+            return Ok(ThreadOutcome::SettledChild(
+                bex_vm::telemetry::InvocationOutcome::Errored,
+            ));
         }
         // A panic escaping all in-BAML catches to the host is an
         // engine-level failure mode, not a value the function opted into
@@ -4678,6 +4741,7 @@ impl BexEngine {
         call_id: CallId,
         future_id: FutureId,
         thread_id: u64,
+        telemetry: bex_vm::telemetry::ThreadSpawnContext,
 
         log_capture: Option<LogCaptureContext>,
     ) -> std::pin::Pin<
@@ -4692,6 +4756,7 @@ impl BexEngine {
             call_id,
             future_id,
             thread_id,
+            telemetry,
             log_capture,
         ))
     }
@@ -4716,6 +4781,7 @@ impl BexEngine {
         call_id: CallId,
         future_id: FutureId,
         thread_id: u64,
+        telemetry: bex_vm::telemetry::ThreadSpawnContext,
 
         log_capture: Option<LogCaptureContext>,
     ) -> Result<(), EngineError> {
@@ -4763,8 +4829,11 @@ impl BexEngine {
             Arc::clone(&self.dynamic_dispatch),
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
+            Arc::clone(&self.telemetry_policies),
+            Arc::clone(&telemetry.clock),
         );
         child_vm.thread_id = thread_id;
+        child_vm.configure_spawn_telemetry(&telemetry);
 
         child_vm.set_entry_point(closure, &[]);
 
@@ -4792,9 +4861,16 @@ impl BexEngine {
                     None => {
                         let mut permit = inactive.acquire().await;
 
-                        if let Err(err) =
-                            engine.settle_child_cancelled(&mut permit, future_id).await
-                        {
+                        let settled = engine.settle_child_cancelled(&mut permit, future_id).await;
+                        engine.finish_thread_telemetry(
+                            &mut permit,
+                            if settled.is_ok() {
+                                bex_vm::telemetry::InvocationOutcome::Cancelled
+                            } else {
+                                bex_vm::telemetry::InvocationOutcome::Errored
+                            },
+                        );
+                        if let Err(err) = settled {
                             tracing::error!(
                                 ?err,
                                 ?future_id,
@@ -4820,7 +4896,7 @@ impl BexEngine {
                 )
                 .await
             {
-                Ok(ThreadOutcome::SettledChild) => {}
+                Ok(ThreadOutcome::SettledChild(_)) => {}
                 Ok(ThreadOutcome::RootValue(_)) => {
                     tracing::error!(
                         ?future_id,
@@ -4882,107 +4958,135 @@ impl BexEngine {
         self: &Arc<Self>,
         return_type: RuntimeTy,
         throws_type: Option<RuntimeTy>,
-        mut thread: ActiveHeapPermit<BexThread>,
+        thread: ActiveHeapPermit<BexThread>,
         call_id: CallId,
 
         log_capture: Option<LogCaptureContext>,
         cancel: &CancellationToken,
         copy_objects: bool,
     ) -> Result<ThreadOutcome, EngineError> {
-        loop {
-            let vm_exec_result = thread.vm.exec();
+        use bex_vm::telemetry::{ClockDuration, InvocationOutcome};
 
-            let exec_result = match vm_exec_result {
-                Ok(state) => state,
-                Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => {
-                    return self
-                        .route_unhandled_vm_throw(
-                            &mut thread,
-                            call_id,
-                            value,
-                            trace,
-                            throws_type.as_ref(),
-                        )
-                        .await;
-                }
-                Err(bex_vm::errors::VmError::Thrown(thrown)) => {
-                    return self
-                        .route_unhandled_vm_throw(
-                            &mut thread,
-                            call_id,
-                            thrown.value,
-                            Vec::new(),
-                            throws_type.as_ref(),
-                        )
-                        .await;
-                }
-                Err(bex_vm::errors::VmError::InternalError(err)) => {
-                    if let Some(future_id) = thread.vm_thread_settles_future() {
-                        let mut guard = self.futures.acquire(thread.proof()).await;
-                        guard
-                            .internal_error_future(future_id, EngineError::VmInternalError(err))?;
-                        drop(guard);
-                        thread.vm_thread_cancel().cancel();
-                        return Ok(ThreadOutcome::SettledChild);
-                    }
-                    return Err(EngineError::VmInternalError(err));
-                }
-                Err(bex_vm::errors::VmError::TracedInternalError { source, trace }) => {
-                    if let Some(future_id) = thread.vm_thread_settles_future() {
-                        let mut guard = self.futures.acquire(thread.proof()).await;
-                        guard.internal_error_future(
-                            future_id,
-                            EngineError::TracedVmInternalError { source, trace },
-                        )?;
-                        drop(guard);
-                        thread.vm_thread_cancel().cancel();
-                        return Ok(ThreadOutcome::SettledChild);
-                    }
-                    return Err(EngineError::TracedVmInternalError { source, trace });
-                }
-            };
-            match exec_result {
-                VmExecState::Complete(value) => {
-                    // Spawned children: write the value into the future
-                    // registry and return SettledChild. The awaiter's
-                    // next `Await` instruction picks up `FutureRead::Ready`.
-                    if let Some(future_id) = thread.vm_thread_settles_future() {
-                        let mut guard = self.futures.acquire(thread.proof()).await;
-                        guard.fulfill_future(future_id, value)?;
-                        return Ok(ThreadOutcome::SettledChild);
-                    }
-                    // "Cancel wins" semantics: if cancellation races with a
-                    // completed VM step, report a cancellation panic rather
-                    // than returning a success value.
-                    let cancelled = cancel.is_cancelled();
+        // The completion boundary owns the VM even when execution propagates
+        // an error with `?` or returns early. Only the non-fallible parking
+        // scopes below may temporarily take the permit; they always reacquire
+        // and restore it before exposing a fallible result to this block.
+        let mut active = Some(thread);
+        let result = async {
+            let mut thread = active.as_mut().expect("active execution permit");
 
-                    if cancelled {
-                        return Err(cancelled_unhandled_throw());
-                    }
+            loop {
+                self.telemetry_clock
+                    .validate(thread.vm.telemetry_clock(), false);
+                let vm_exec_result = thread.vm.exec();
+                self.telemetry_clock
+                    .validate(thread.vm.telemetry_clock(), false);
 
-                    let return_value = if !copy_objects {
-                        if let Some(ptr) = value.as_object_ptr() {
-                            // SAFETY: the active thread holds the heap permit
-                            // through `thread.proof()`.
-                            //
-                            // Heap-boxed floats can't be handle-wrapped — a
-                            // function declared `-> float` (or
-                            // `-> Union<float, ...>` / `-> float?`) should
-                            // surface as an inline `BexExternalValue::Float`,
-                            // not an opaque `Handle`. Route them through the
-                            // typed converter so declared-type metadata
-                            // (e.g. Union wrapping) is preserved; the bare
-                            // unboxing fast-path stripped that.
-                            if matches!(unsafe { ptr.get() }, Object::Float(_)) {
-                                self.convert_vm_value_to_external_with_type(
+                let exec_result = match vm_exec_result {
+                    Ok(state) => state,
+                    Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => {
+                        return self
+                            .route_unhandled_vm_throw(
+                                thread,
+                                call_id,
+                                value,
+                                trace,
+                                throws_type.as_ref(),
+                            )
+                            .await;
+                    }
+                    Err(bex_vm::errors::VmError::Thrown(thrown)) => {
+                        return self
+                            .route_unhandled_vm_throw(
+                                thread,
+                                call_id,
+                                thrown.value,
+                                Vec::new(),
+                                throws_type.as_ref(),
+                            )
+                            .await;
+                    }
+                    Err(bex_vm::errors::VmError::InternalError(err)) => {
+                        if let Some(future_id) = thread.vm_thread_settles_future() {
+                            let mut guard = self.futures.acquire(thread.proof()).await;
+                            guard.internal_error_future(
+                                future_id,
+                                EngineError::VmInternalError(err),
+                            )?;
+                            drop(guard);
+                            thread.vm_thread_cancel().cancel();
+                            return Ok(ThreadOutcome::SettledChild(InvocationOutcome::Errored));
+                        }
+                        return Err(EngineError::VmInternalError(err));
+                    }
+                    Err(bex_vm::errors::VmError::TracedInternalError { source, trace }) => {
+                        if let Some(future_id) = thread.vm_thread_settles_future() {
+                            let mut guard = self.futures.acquire(thread.proof()).await;
+                            guard.internal_error_future(
+                                future_id,
+                                EngineError::TracedVmInternalError { source, trace },
+                            )?;
+                            drop(guard);
+                            thread.vm_thread_cancel().cancel();
+                            return Ok(ThreadOutcome::SettledChild(InvocationOutcome::Errored));
+                        }
+                        return Err(EngineError::TracedVmInternalError { source, trace });
+                    }
+                };
+                match exec_result {
+                    VmExecState::Complete(value) => {
+                        // Spawned children: write the value into the future
+                        // registry and return SettledChild. The awaiter's
+                        // next `Await` instruction picks up `FutureRead::Ready`.
+                        if let Some(future_id) = thread.vm_thread_settles_future() {
+                            let mut guard = self.futures.acquire(thread.proof()).await;
+                            guard.fulfill_future(future_id, value)?;
+                            return Ok(ThreadOutcome::SettledChild(InvocationOutcome::Ok));
+                        }
+                        // "Cancel wins" semantics: if cancellation races with a
+                        // completed VM step, report a cancellation panic rather
+                        // than returning a success value.
+                        let cancelled = cancel.is_cancelled();
+
+                        if cancelled {
+                            return Err(cancelled_unhandled_throw());
+                        }
+
+                        let return_value = if !copy_objects {
+                            if let Some(ptr) = value.as_object_ptr() {
+                                // SAFETY: the active thread holds the heap permit
+                                // through `thread.proof()`.
+                                //
+                                // Heap-boxed floats can't be handle-wrapped — a
+                                // function declared `-> float` (or
+                                // `-> Union<float, ...>` / `-> float?`) should
+                                // surface as an inline `BexExternalValue::Float`,
+                                // not an opaque `Handle`. Route them through the
+                                // typed converter so declared-type metadata
+                                // (e.g. Union wrapping) is preserved; the bare
+                                // unboxing fast-path stripped that.
+                                if matches!(unsafe { ptr.get() }, Object::Float(_)) {
+                                    self.convert_vm_value_to_external_with_type(
+                                        value,
+                                        &return_type,
+                                        &thread.vm,
+                                        thread.proof(),
+                                    )?
+                                } else {
+                                    let handle = self.heap.create_handle(ptr);
+                                    BexExternalValue::Handle(handle)
+                                }
+                            } else {
+                                let external = self.convert_vm_value_to_external_with_type(
                                     value,
                                     &return_type,
                                     &thread.vm,
                                     thread.proof(),
+                                )?;
+                                crate::conversion::coerce_return_to_declared_type(
+                                    external,
+                                    &return_type,
                                 )?
-                            } else {
-                                let handle = self.heap.create_handle(ptr);
-                                BexExternalValue::Handle(handle)
                             }
                         } else {
                             let external = self.convert_vm_value_to_external_with_type(
@@ -4995,74 +5099,71 @@ impl BexEngine {
                                 external,
                                 &return_type,
                             )?
-                        }
-                    } else {
-                        let external = self.convert_vm_value_to_external_with_type(
-                            value,
-                            &return_type,
-                            &thread.vm,
-                            thread.proof(),
-                        )?;
-                        crate::conversion::coerce_return_to_declared_type(external, &return_type)?
-                    };
-
-                    return Ok(ThreadOutcome::RootValue(return_value));
-                }
-
-                VmExecState::SysOp { operation, args } => {
-                    // Single round-trip sys-op call. Convert args, race
-                    // the op against the active cancel token, and push the
-                    // resulting value back on the VM stack. No
-                    // `Object::Future` is allocated and no `FutureManager`
-                    // entry is created — the schedule/await dance would be
-                    // pure overhead because the user never sees the future.
-                    #[allow(clippy::large_enum_variant)]
-                    enum SysOpOutcome {
-                        Cancelled,
-                        Result(Result<BexExternalValue, OpError>),
+                        };
+                        return Ok(ThreadOutcome::RootValue(return_value));
                     }
 
-                    // Honor an already-cancelled call before traversing and
-                    // externalizing sys-op arguments. Host-call argument packs
-                    // can contain arbitrarily large value trees; cancellation
-                    // must remain an O(1) pre-check rather than paying that
-                    // conversion cost for an operation that will never run.
-                    if cancel.is_cancelled() {
-                        // Cancel-at-yield: spawned children settle as
-                        // Cancelled so the heap Future no longer hangs
-                        // at Pending; root threads surface the cancel
-                        // to the host.
-
-                        if let Some(future_id) = thread.vm_thread_settles_future() {
-                            self.settle_child_cancelled(&mut thread, future_id).await?;
-                            return Ok(ThreadOutcome::SettledChild);
+                    VmExecState::SysOp { operation, args } => {
+                        // Single round-trip sys-op call. Convert args, race
+                        // the op against the active cancel token, and push the
+                        // resulting value back on the VM stack. No
+                        // `Object::Future` is allocated and no `FutureManager`
+                        // entry is created — the schedule/await dance would be
+                        // pure overhead because the user never sees the future.
+                        #[allow(clippy::large_enum_variant)]
+                        enum SysOpOutcome {
+                            Cancelled,
+                            Result(Result<BexExternalValue, OpError>),
                         }
-                        return Err(cancelled_unhandled_throw());
-                    }
 
-                    let runtime_type_overlay =
-                        self.runtime_type_overlay(&thread.vm, &args, thread.proof());
-                    let runtime_compile_request = match operation {
-                        SysOp::ReflectPackageCompile => {
-                            Some(Ok(Self::runtime_compile_request(&thread.vm, &args)?))
-                        }
-                        SysOp::ReflectSessionCompile => {
-                            Some(Self::runtime_session_compile_request(&mut thread.vm, &args))
-                        }
-                        _ => None,
-                    };
-                    if let Some(Ok(request)) = runtime_compile_request.as_ref()
-                        && let bex_vm_types::RuntimeCompileMode::Session(session) = &request.mode
-                        && let Some(future_id) = thread.vm_thread_settles_future()
-                    {
-                        let mut guard = self.futures.acquire(thread.proof()).await;
-                        guard.register_session_lease(future_id, &session.lease)?;
-                    }
-                    let runtime_schema_overlay =
-                        self.runtime_schema_overlay(&thread.vm, &args, thread.proof());
+                        // Honor an already-cancelled call before traversing and
+                        // externalizing sys-op arguments. Host-call argument packs
+                        // can contain arbitrarily large value trees; cancellation
+                        // must remain an O(1) pre-check rather than paying that
+                        // conversion cost for an operation that will never run.
+                        if cancel.is_cancelled() {
+                            // Cancel-at-yield: spawned children settle as
+                            // Cancelled so the heap Future no longer hangs
+                            // at Pending; root threads surface the cancel
+                            // to the host.
 
-                    let bex_args: Vec<BexExternalValue> =
-                        if operation == SysOp::BamlHostCallHostValue {
+                            if let Some(future_id) = thread.vm_thread_settles_future() {
+                                self.settle_child_cancelled(thread, future_id).await?;
+                                return Ok(ThreadOutcome::SettledChild(
+                                    InvocationOutcome::Cancelled,
+                                ));
+                            }
+                            return Err(cancelled_unhandled_throw());
+                        }
+
+                        let runtime_type_overlay =
+                            self.runtime_type_overlay(&thread.vm, &args, thread.proof());
+                        let runtime_compile_request = match operation {
+                            SysOp::ReflectPackageCompile => {
+                                Some(Ok(Self::runtime_compile_request(&thread.vm, &args)?))
+                            }
+                            SysOp::ReflectSessionCompile => {
+                                Some(Self::runtime_session_compile_request(&mut thread.vm, &args))
+                            }
+                            _ => None,
+                        };
+                        if let Some(Ok(request)) = runtime_compile_request.as_ref()
+                            && let bex_vm_types::RuntimeCompileMode::Session(session) =
+                                &request.mode
+                            && let Some(future_id) = thread.vm_thread_settles_future()
+                        {
+                            let mut guard = self.futures.acquire(thread.proof()).await;
+                            let registered =
+                                guard.register_session_lease(future_id, &session.lease);
+                            drop(guard);
+                            registered?;
+                        }
+                        let runtime_schema_overlay =
+                            self.runtime_schema_overlay(&thread.vm, &args, thread.proof());
+
+                        let bex_args: Vec<BexExternalValue> = if operation
+                            == SysOp::BamlHostCallHostValue
+                        {
                             let params = host_call_params(args.first().copied())
                                 .map_err(EngineError::VmInternalError)?;
                             if args.len() != 4 {
@@ -5092,127 +5193,213 @@ impl BexEngine {
                                 .collect()
                         };
 
-                    // Capture the host-call type args (`type_arg_0`/`args[2]`
-                    // = return type `T`; `type_arg_1`/`args[3]` = throws
-                    // contract `E`) as OWNED `RuntimeTy` values now, while the heap
-                    // permit is still held and the packed `Object::Type`
-                    // pointers are live. The async wait below releases the
-                    // permit, and a moving GC can then relocate/collect the
-                    // object; the engine-local `args` Vec is not a GC root
-                    // and is never forwarded, so re-reading the raw pointer
-                    // post-await would be a use-after-free. Cloning the
-                    // `RuntimeTy`s here sidesteps that.
-                    //
-                    // `host_throws_ty` drives the throws-contract check at
-                    // the host-throw injection site below: a host throw
-                    // that doesn't match `E` becomes a
-                    // `baml.panics.HostContractViolation` panic instead of
-                    // a catchable throw.
-                    // Host-facing validation reads these in the wire's
-                    // spelling, so convert once at the read.
-                    let host_ret_ty: Option<baml_type::RuntimeTy> =
-                        if operation == SysOp::BamlHostCallHostValue {
-                            Some(crate::conversion::overlay_wire_ty_under_permit(
-                                &host_call_type_arg(args.get(2).copied(), 2, "ret_ty")
-                                    .map_err(EngineError::VmInternalError)?,
-                                thread.proof(),
-                            ))
-                        } else {
-                            None
-                        };
-                    let host_throws_ty: Option<baml_type::RuntimeTy> =
-                        if operation == SysOp::BamlHostCallHostValue {
-                            Some(crate::conversion::overlay_wire_ty_under_permit(
-                                &host_call_type_arg(args.get(3).copied(), 3, "throws_ty")
-                                    .map_err(EngineError::VmInternalError)?,
-                                thread.proof(),
-                            ))
-                        } else {
-                            None
-                        };
-
-                    let sys_op_result = if let Some(request) = runtime_compile_request {
-                        match request {
-                            Ok(request) => self.execute_runtime_compile(request, operation),
-                            Err(error) => SysOpResult::Ready(Err(error)),
-                        }
-                    } else {
-                        self.execute_sys_op(
-                            operation,
-                            &bex_args,
-                            &runtime_type_overlay,
-                            call_id,
-                            cancel,
-                            thread.proof(),
-                            runtime_schema_overlay.as_ref(),
-                        )
-                    };
-
-                    let outcome = match sys_op_result {
-                        SysOpResult::Ready(r) => r,
-                        SysOpResult::Async(fut) => {
-                            // Release the heap permit so concurrent GC
-                            // can run during the wait. Re-acquire
-                            // before touching VM state.
-
-                            let inactive = thread.release();
-                            self.maybe_collect_garbage().await;
-                            let outcome = tokio::select! {
-                                biased;
-                                () = cancel.cancelled() => SysOpOutcome::Cancelled,
-                                r = fut                  => SysOpOutcome::Result(r),
+                        // Capture the host-call type args (`type_arg_0`/`args[2]`
+                        // = return type `T`; `type_arg_1`/`args[3]` = throws
+                        // contract `E`) as OWNED `RuntimeTy` values now, while the heap
+                        // permit is still held and the packed `Object::Type`
+                        // pointers are live. The async wait below releases the
+                        // permit, and a moving GC can then relocate/collect the
+                        // object; the engine-local `args` Vec is not a GC root
+                        // and is never forwarded, so re-reading the raw pointer
+                        // post-await would be a use-after-free. Cloning the
+                        // `RuntimeTy`s here sidesteps that.
+                        //
+                        // `host_throws_ty` drives the throws-contract check at
+                        // the host-throw injection site below: a host throw
+                        // that doesn't match `E` becomes a
+                        // `baml.panics.HostContractViolation` panic instead of
+                        // a catchable throw.
+                        // Host-facing validation reads these in the wire's
+                        // spelling, so convert once at the read.
+                        let host_ret_ty: Option<baml_type::RuntimeTy> =
+                            if operation == SysOp::BamlHostCallHostValue {
+                                Some(crate::conversion::overlay_wire_ty_under_permit(
+                                    &host_call_type_arg(args.get(2).copied(), 2, "ret_ty")
+                                        .map_err(EngineError::VmInternalError)?,
+                                    thread.proof(),
+                                ))
+                            } else {
+                                None
                             };
-                            thread = inactive.acquire().await;
+                        let host_throws_ty: Option<baml_type::RuntimeTy> =
+                            if operation == SysOp::BamlHostCallHostValue {
+                                Some(crate::conversion::overlay_wire_ty_under_permit(
+                                    &host_call_type_arg(args.get(3).copied(), 3, "throws_ty")
+                                        .map_err(EngineError::VmInternalError)?,
+                                    thread.proof(),
+                                ))
+                            } else {
+                                None
+                            };
 
-                            match outcome {
-                                SysOpOutcome::Cancelled => {
-                                    if let Some(future_id) = thread.vm_thread_settles_future() {
-                                        self.settle_child_cancelled(&mut thread, future_id).await?;
-                                        return Ok(ThreadOutcome::SettledChild);
-                                    }
-                                    return Err(cancelled_unhandled_throw());
-                                }
-                                SysOpOutcome::Result(r) => r,
+                        let sys_op_result = if let Some(request) = runtime_compile_request {
+                            match request {
+                                Ok(request) => self.execute_runtime_compile(request, operation),
+                                Err(error) => SysOpResult::Ready(Err(error)),
                             }
-                        }
-                    };
+                        } else {
+                            self.execute_sys_op(
+                                operation,
+                                &bex_args,
+                                &runtime_type_overlay,
+                                call_id,
+                                cancel,
+                                thread.proof(),
+                                runtime_schema_overlay.as_ref(),
+                            )
+                        };
 
-                    match outcome {
-                        Ok(external) => {
-                            // Schema-aware return-type validation for host
-                            // callables. The bridge's shared
-                            // `validate_host_return` guard already rejected
-                            // scalar / enum-identity / class-name mismatches at
-                            // the FFI boundary; here — where the compiled class
-                            // schema is reachable — we additionally validate
-                            // class *field types* against the declared return
-                            // type (`host_ret_ty`, captured from `args[2]` before
-                            // the await). A mismatch is injected into the VM's
-                            // exception unwinder so an in-BAML `catch` can
-                            // catch it exactly like a host-raised error.
-                            if operation == SysOp::BamlHostCallHostValue
-                                && let Some(ret_ty) = host_ret_ty.as_ref()
-                                && let Err(message) =
-                                    self.validate_host_return_schema(&external, ret_ty)
-                            {
-                                // A wrong-return-type at the engine-level
-                                // schema check is the same kind of contract
-                                // breach as the FFI-boundary guard catches:
-                                // the host returned a value that doesn't
-                                // inhabit `T`. Surface as
-                                // `baml.panics.HostContractViolation`
-                                // (panic, not catchable).
-                                let op_err = OpError::new(
-                                    SysOp::BamlHostCallHostValue,
-                                    sys_types::VmPanic::HostContractViolation {
-                                        message,
-                                        class_name: None,
-                                        language: None,
-                                    },
+                        let outcome = match sys_op_result {
+                            SysOpResult::Ready(r) => r,
+                            SysOpResult::Async(fut) => {
+                                // Release the heap permit so concurrent GC
+                                // can run during the wait. Re-acquire
+                                // before touching VM state.
+
+                                thread.vm.begin_sys_op_telemetry_wait();
+                                let wait = thread.vm.take_telemetry_wait().map(|(frame, start)| {
+                                    (frame, start, Arc::clone(thread.vm.telemetry_clock()))
+                                });
+                                let (resumed, outcome, elapsed) = async {
+                                    let inactive =
+                                        active.take().expect("active execution permit").release();
+                                    self.maybe_collect_garbage().await;
+                                    let outcome = tokio::select! {
+                                        biased;
+                                        () = cancel.cancelled() => SysOpOutcome::Cancelled,
+                                        r = fut                  => SysOpOutcome::Result(r),
+                                    };
+
+                                    // End at observed completion, before permit reacquisition.
+                                    let elapsed = wait
+                                        .as_ref()
+                                        .map_or(ClockDuration::ZERO, |(_, start, clock)| {
+                                            start.elapsed_until(clock.read())
+                                        });
+                                    (inactive.acquire().await, outcome, elapsed)
+                                }
+                                .await;
+                                thread = active.insert(resumed);
+                                thread.vm.record_telemetry_wait(
+                                    wait.map(|(frame, _, _)| frame),
+                                    elapsed,
                                 );
+
+                                match outcome {
+                                    SysOpOutcome::Cancelled => {
+                                        if let Some(future_id) = thread.vm_thread_settles_future() {
+                                            self.settle_child_cancelled(thread, future_id).await?;
+                                            return Ok(ThreadOutcome::SettledChild(
+                                                InvocationOutcome::Cancelled,
+                                            ));
+                                        }
+                                        return Err(cancelled_unhandled_throw());
+                                    }
+                                    SysOpOutcome::Result(r) => r,
+                                }
+                            }
+                        };
+
+                        match outcome {
+                            Ok(external) => {
+                                // Schema-aware return-type validation for host
+                                // callables. The bridge's shared
+                                // `validate_host_return` guard already rejected
+                                // scalar / enum-identity / class-name mismatches at
+                                // the FFI boundary; here — where the compiled class
+                                // schema is reachable — we additionally validate
+                                // class *field types* against the declared return
+                                // type (`host_ret_ty`, captured from `args[2]` before
+                                // the await). A mismatch is injected into the VM's
+                                // exception unwinder so an in-BAML `catch` can
+                                // catch it exactly like a host-raised error.
+                                if operation == SysOp::BamlHostCallHostValue
+                                    && let Some(ret_ty) = host_ret_ty.as_ref()
+                                    && let Err(message) =
+                                        self.validate_host_return_schema(&external, ret_ty)
+                                {
+                                    // A wrong-return-type at the engine-level
+                                    // schema check is the same kind of contract
+                                    // breach as the FFI-boundary guard catches:
+                                    // the host returned a value that doesn't
+                                    // inhabit `T`. Surface as
+                                    // `baml.panics.HostContractViolation`
+                                    // (panic, not catchable).
+                                    let op_err = OpError::new(
+                                        SysOp::BamlHostCallHostValue,
+                                        sys_types::VmPanic::HostContractViolation {
+                                            message,
+                                            class_name: None,
+                                            language: None,
+                                        },
+                                    );
+                                    if let Some(outcome) = self
+                                        .inject_sysop_throw(
+                                            thread,
+                                            call_id,
+                                            op_err,
+                                            throws_type.as_ref(),
+                                            host_throws_ty.as_ref(),
+                                        )
+                                        .await?
+                                    {
+                                        return Ok(outcome);
+                                    }
+                                    // VM caught the throw; the unwinder truncated
+                                    // the eval stack back to the catching frame's
+                                    // locals region, so we must NOT push the
+                                    // would-be return value (there's no slot
+                                    // expecting it any more). Fall through to the
+                                    // top of the outer loop.
+                                } else {
+                                    // Convert the external value back into a VM
+                                    // Value (allocating string / list / instance
+                                    // heap objects as needed) and push it onto
+                                    // the eval stack. The bytecode that follows
+                                    // this sys-op call is a normal `store_var`
+                                    // / projection / whatever the surrounding
+                                    // expression expected — no implicit await.
+                                    let value = if operation == SysOp::BamlHostCallHostValue {
+                                        self.convert_external_to_vm_value_with_ty(
+                                            thread,
+                                            external,
+                                            host_ret_ty.as_ref(),
+                                        )?
+                                    } else if let Some(overlay) = runtime_schema_overlay.as_ref() {
+                                        self.convert_external_to_vm_value_with_runtime_schema(
+                                            thread,
+                                            external,
+                                            overlay,
+                                            &runtime_type_overlay.class_handles_by_name(),
+                                            &runtime_type_overlay.enum_handles_by_name(),
+                                        )?
+                                    } else {
+                                        self.convert_external_to_vm_value_with_dynamic_types(
+                                            thread,
+                                            external,
+                                            None,
+                                            &runtime_type_overlay.class_handles_by_name(),
+                                            &runtime_type_overlay.enum_handles_by_name(),
+                                        )?
+                                    };
+
+                                    thread.vm.stack.push(value);
+                                }
+                            }
+                            Err(op_err) => {
+                                // A sysop error. The throw value (built via
+                                // [`op_error_to_throw_value`]) is **injected into
+                                // the VM's exception unwinder** via
+                                // [`Self::inject_sysop_throw`], so an in-BAML
+                                // `try { f(x) } catch (e: …) { … }` catches sysop
+                                // throws like any other throw. If no handler
+                                // matches, the throw propagates exactly like a
+                                // VM-internal `ThrownUnhandled` — settling a
+                                // spawned child errored or surfacing as
+                                // `EngineError::UnhandledThrow` at the root.
                                 if let Some(outcome) = self
                                     .inject_sysop_throw(
-                                        &mut thread,
+                                        thread,
                                         call_id,
                                         op_err,
                                         throws_type.as_ref(),
@@ -5222,341 +5409,365 @@ impl BexEngine {
                                 {
                                     return Ok(outcome);
                                 }
-                                // VM caught the throw; the unwinder truncated
-                                // the eval stack back to the catching frame's
-                                // locals region, so we must NOT push the
-                                // would-be return value (there's no slot
-                                // expecting it any more). Fall through to the
-                                // top of the outer loop.
-                            } else {
-                                // Convert the external value back into a VM
-                                // Value (allocating string / list / instance
-                                // heap objects as needed) and push it onto
-                                // the eval stack. The bytecode that follows
-                                // this sys-op call is a normal `store_var`
-                                // / projection / whatever the surrounding
-                                // expression expected — no implicit await.
-                                let value = if operation == SysOp::BamlHostCallHostValue {
-                                    self.convert_external_to_vm_value_with_ty(
-                                        &mut thread,
-                                        external,
-                                        host_ret_ty.as_ref(),
-                                    )?
-                                } else if let Some(overlay) = runtime_schema_overlay.as_ref() {
-                                    self.convert_external_to_vm_value_with_runtime_schema(
-                                        &mut thread,
-                                        external,
-                                        overlay,
-                                        &runtime_type_overlay.class_handles_by_name(),
-                                        &runtime_type_overlay.enum_handles_by_name(),
-                                    )?
-                                } else {
-                                    self.convert_external_to_vm_value_with_dynamic_types(
-                                        &mut thread,
-                                        external,
-                                        None,
-                                        &runtime_type_overlay.class_handles_by_name(),
-                                        &runtime_type_overlay.enum_handles_by_name(),
-                                    )?
-                                };
-
-                                thread.vm.stack.push(value);
+                                // VM caught the throw; fall through to the top of
+                                // the outer loop for the next `vm.exec()`.
                             }
                         }
-                        Err(op_err) => {
-                            // A sysop error. The throw value (built via
-                            // [`op_error_to_throw_value`]) is **injected into
-                            // the VM's exception unwinder** via
-                            // [`Self::inject_sysop_throw`], so an in-BAML
-                            // `try { f(x) } catch (e: …) { … }` catches sysop
-                            // throws like any other throw. If no handler
-                            // matches, the throw propagates exactly like a
-                            // VM-internal `ThrownUnhandled` — settling a
-                            // spawned child errored or surfacing as
-                            // `EngineError::UnhandledThrow` at the root.
-                            if let Some(outcome) = self
-                                .inject_sysop_throw(
-                                    &mut thread,
+                    }
+
+                    VmExecState::Spawn {
+                        future: unscheduled,
+                        telemetry,
+                    } => {
+                        // BEP-034: pull the closure + name off the
+                        // `UnscheduledFuture` heap object and hand them to
+                        // `spawn_thread`, which allocates the future and
+                        // dispatches the body on a fresh `BexThread`.
+                        let unscheduled = thread
+                            .vm
+                            .unscheduled_future(unscheduled)
+                            .map_err(EngineError::VmInternalError)?;
+                        let UnscheduledFuture {
+                            closure,
+                            name: name_ptr,
+                            config: config_ptr,
+                            returns,
+                            throws,
+                        } = unscheduled.clone();
+                        let spawn_name: Option<String> =
+                            name_ptr.and_then(|ptr| match unsafe { ptr.get() } {
+                                Object::String(s) => Some(s.to_string()),
+                                _ => None,
+                            });
+                        // BEP-034 middleware: a `spawn ... with` lowers its final
+                        // transformed `baml.spawn.Params` into the config
+                        // operand. The params override the spawn operands — a
+                        // transformer may have wrapped/replaced the body or set a
+                        // name — and carry the options: `cancel` links into the
+                        // child's effective token; `detach` decouples it from the
+                        // parent; `group` rate-limits it.
+                        let params = config_ptr.and_then(Self::read_spawn_params);
+                        let (closure, spawn_name) = match &params {
+                            Some(p) => (p.body, p.name.clone().or(spawn_name)),
+                            None => (closure, spawn_name),
+                        };
+                        let (user_cancel, group, detach) = match params {
+                            Some(p) => (p.cancel, p.group, p.detach),
+                            None => (None, None, false),
+                        };
+                        // Each spawned thread gets a child cancel token so parent →
+                        // child cascade falls out of the token tree without bespoke
+                        // tracking. A `detach = true` spawn instead gets a fresh,
+                        // independent token so the parent's cancellation (and
+                        // unhandled-throw cascade) does NOT reach it — it behaves
+                        // like a top-level task.
+                        let child_cancel = if detach {
+                            CancellationToken::new()
+                        } else {
+                            cancel.child_token()
+                        };
+                        let child_thread_id = self.next_bex_thread_id().0;
+                        // Provenance for shutdown leak reports: the written spawn
+                        // name when there is one, else the function this spawn
+                        // expression appears in.
+                        let spawn_origin: std::sync::Arc<str> = spawn_name
+                            .clone()
+                            .or_else(|| thread.vm.current_function_name())
+                            .unwrap_or_else(|| "<unknown spawn site>".to_string())
+                            .into();
+                        let future_ptr = {
+                            let mut guard = self.futures.acquire(thread.proof()).await;
+                            let (future_id, future_ptr) = guard.new_future(
+                                returns,
+                                throws,
+                                child_cancel.clone(),
+                                spawn_origin,
+                            );
+                            drop(guard);
+                            Arc::clone(self)
+                                .spawn_thread(
+                                    child_cancel,
+                                    closure,
+                                    spawn_name,
+                                    user_cancel,
+                                    group,
                                     call_id,
-                                    op_err,
-                                    throws_type.as_ref(),
-                                    host_throws_ty.as_ref(),
+                                    future_id,
+                                    child_thread_id,
+                                    telemetry,
+                                    log_capture.clone(),
                                 )
-                                .await?
-                            {
-                                return Ok(outcome);
-                            }
-                            // VM caught the throw; fall through to the top of
-                            // the outer loop for the next `vm.exec()`.
+                                .await?;
+                            future_ptr
+                        };
+                        thread.vm.stack.push(Value::object(future_ptr));
+
+                        // Spawn setup can yield to Tokio while retaining the
+                        // parent's heap permit. Cooperate only after the child
+                        // is registered and its future is rooted on our stack;
+                        // collection can now move both VMs' reachable objects.
+                        let gc_requested = self.heap.should_gc();
+                        #[cfg(not(target_arch = "wasm32"))]
+                        let gc_requested =
+                            gc_requested || self.park_requested.load(Ordering::Relaxed);
+                        if gc_requested {
+                            let resumed = self
+                                .gc_safepoint(active.take().expect("active execution permit"))
+                                .await;
+                            thread = active.insert(resumed);
                         }
                     }
-                }
 
-                VmExecState::Spawn {
-                    future: unscheduled,
-                } => {
-                    // BEP-034: pull the closure + name off the
-                    // `UnscheduledFuture` heap object and hand them to
-                    // `spawn_thread`, which allocates the future and
-                    // dispatches the body on a fresh `BexThread`.
-                    let unscheduled = thread
-                        .vm
-                        .unscheduled_future(unscheduled)
-                        .map_err(EngineError::VmInternalError)?;
-                    let UnscheduledFuture {
-                        closure,
-                        name: name_ptr,
-                        config: config_ptr,
-                        returns,
-                        throws,
-                    } = unscheduled.clone();
-                    let spawn_name: Option<String> =
-                        name_ptr.and_then(|ptr| match unsafe { ptr.get() } {
-                            Object::String(s) => Some(s.to_string()),
-                            _ => None,
+                    VmExecState::Await(future_id) => {
+                        // Fail-fast if the thread's own cancel token is
+                        // already fired (e.g. parent cascaded into us
+                        // between the previous yield and this await). The
+                        // BEP guarantees that the next `await` after the
+                        // token fires throws `Cancelled`; we honor that
+                        // even when the awaited future is unrelated to our
+                        // cancel chain (and would otherwise never settle
+                        // via cascade).
+                        //
+                        // For spawned children: route through `cancel_future`
+                        // so the heap Future settles instead of leaking as
+                        // Pending. Mirrors the `VmError::ThrownUnhandled`
+                        // arm above for a Cancelled panic from the VM side.
+                        if cancel.is_cancelled() {
+                            if let Some(future_id) = thread.vm_thread_settles_future() {
+                                self.settle_child_cancelled(thread, future_id).await?;
+                                return Ok(ThreadOutcome::SettledChild(
+                                    InvocationOutcome::Cancelled,
+                                ));
+                            }
+                            return Err(cancelled_unhandled_throw());
+                        }
+                        #[allow(clippy::items_after_statements)]
+                        // Outcome of the SetOnce-vs-cancel race below. Inline
+                        // here because moving it to module scope just for
+                        // clippy's preference would split the readers'
+                        // attention across two files.
+                        enum AwaitOutcome {
+                            Cancelled,
+                            Done(Result<(), EngineError>),
+                        }
+                        // Tightly-scoped guard so the proof's borrow on `vm`
+                        // ends before we release the VM permit below.
+                        let future = {
+                            let mut g = self.futures.acquire(thread.proof()).await;
+                            let future = g.future_ready(future_id);
+                            drop(g);
+                            future?
+                        };
+                        // Release the VM permit before the SetOnce wait — the
+                        // wait is the safepoint. Holding a permit through the
+                        // wait would deadlock concurrent GC park (which needs
+                        // every permit) against the spawned task that fulfils
+                        // this future (which needs a permit to write the heap).
+
+                        let wait = thread.vm.take_telemetry_wait().map(|(frame, start)| {
+                            (frame, start, Arc::clone(thread.vm.telemetry_clock()))
                         });
-                    // BEP-034 middleware: a `spawn ... with` lowers its final
-                    // transformed `baml.spawn.Params` into the config
-                    // operand. The params override the spawn operands — a
-                    // transformer may have wrapped/replaced the body or set a
-                    // name — and carry the options: `cancel` links into the
-                    // child's effective token; `detach` decouples it from the
-                    // parent; `group` rate-limits it.
-                    let params = config_ptr.and_then(Self::read_spawn_params);
-                    let (closure, spawn_name) = match &params {
-                        Some(p) => (p.body, p.name.clone().or(spawn_name)),
-                        None => (closure, spawn_name),
-                    };
-                    let (user_cancel, group, detach) = match params {
-                        Some(p) => (p.cancel, p.group, p.detach),
-                        None => (None, None, false),
-                    };
-                    // Each spawned thread gets a child cancel token so parent →
-                    // child cascade falls out of the token tree without bespoke
-                    // tracking. A `detach = true` spawn instead gets a fresh,
-                    // independent token so the parent's cancellation (and
-                    // unhandled-throw cascade) does NOT reach it — it behaves
-                    // like a top-level task.
-                    let child_cancel = if detach {
-                        CancellationToken::new()
-                    } else {
-                        cancel.child_token()
-                    };
-                    let child_thread_id = self.next_bex_thread_id().0;
-                    // Provenance for shutdown leak reports: the written spawn
-                    // name when there is one, else the function this spawn
-                    // expression appears in.
-                    let spawn_origin: std::sync::Arc<str> = spawn_name
-                        .clone()
-                        .or_else(|| thread.vm.current_function_name())
-                        .unwrap_or_else(|| "<unknown spawn site>".to_string())
-                        .into();
-                    let future_ptr = {
-                        let mut guard = self.futures.acquire(thread.proof()).await;
-                        let (future_id, future_ptr) =
-                            guard.new_future(returns, throws, child_cancel.clone(), spawn_origin);
-                        drop(guard);
-                        Arc::clone(self)
-                            .spawn_thread(
-                                child_cancel,
-                                closure,
-                                spawn_name,
-                                user_cancel,
-                                group,
-                                call_id,
-                                future_id,
-                                child_thread_id,
-                                log_capture.clone(),
-                            )
-                            .await?;
-                        future_ptr
-                    };
-                    thread.vm.stack.push(Value::object(future_ptr));
+                        let (resumed, outcome, elapsed) = async {
+                            let inactive =
+                                active.take().expect("active execution permit").release();
+                            // While parked, run a heuristic-driven GC check (no
+                            // permit dance needed since we're already released).
+                            self.maybe_collect_garbage().await;
+                            // Race the SetOnce wait against the thread's own
+                            // cancel token so an unrelated-future await
+                            // doesn't hang when the thread itself is cancelled
+                            // (cascade only saves us when the awaited future is
+                            // a descendant whose token derives from ours).
+                            let outcome = tokio::select! {
+                                biased;
+                                () = cancel.cancelled() => AwaitOutcome::Cancelled,
+                                r = future              => AwaitOutcome::Done(r),
+                            };
 
-                    // Spawn setup can yield to Tokio while retaining the
-                    // parent's heap permit. Cooperate only after the child
-                    // is registered and its future is rooted on our stack;
-                    // collection can now move both VMs' reachable objects.
-                    let gc_requested = self.heap.should_gc();
-                    #[cfg(not(target_arch = "wasm32"))]
-                    let gc_requested = gc_requested || self.park_requested.load(Ordering::Relaxed);
-                    if gc_requested {
-                        thread = self.gc_safepoint(thread).await;
-                    }
-                }
-
-                VmExecState::Await(future_id) => {
-                    // Fail-fast if the thread's own cancel token is
-                    // already fired (e.g. parent cascaded into us
-                    // between the previous yield and this await). The
-                    // BEP guarantees that the next `await` after the
-                    // token fires throws `Cancelled`; we honor that
-                    // even when the awaited future is unrelated to our
-                    // cancel chain (and would otherwise never settle
-                    // via cascade).
-                    //
-                    // For spawned children: route through `cancel_future`
-                    // so the heap Future settles instead of leaking as
-                    // Pending. Mirrors the `VmError::ThrownUnhandled`
-                    // arm above for a Cancelled panic from the VM side.
-                    if cancel.is_cancelled() {
-                        if let Some(future_id) = thread.vm_thread_settles_future() {
-                            self.settle_child_cancelled(&mut thread, future_id).await?;
-                            return Ok(ThreadOutcome::SettledChild);
+                            // End at observed completion, before permit reacquisition.
+                            let elapsed = wait
+                                .as_ref()
+                                .map_or(ClockDuration::ZERO, |(_, start, clock)| {
+                                    start.elapsed_until(clock.read())
+                                });
+                            (inactive.acquire().await, outcome, elapsed)
                         }
-                        return Err(cancelled_unhandled_throw());
-                    }
-                    #[allow(clippy::items_after_statements)]
-                    // Outcome of the SetOnce-vs-cancel race below. Inline
-                    // here because moving it to module scope just for
-                    // clippy's preference would split the readers'
-                    // attention across two files.
-                    enum AwaitOutcome {
-                        Cancelled,
-                        Done(Result<(), EngineError>),
-                    }
-                    // Tightly-scoped guard so the proof's borrow on `vm`
-                    // ends before we release the VM permit below.
-                    let future = {
-                        let mut g = self.futures.acquire(thread.proof()).await;
-                        g.future_ready(future_id)?
-                    };
-                    // Release the VM permit before the SetOnce wait — the
-                    // wait is the safepoint. Holding a permit through the
-                    // wait would deadlock concurrent GC park (which needs
-                    // every permit) against the spawned task that fulfils
-                    // this future (which needs a permit to write the heap).
+                        .await;
+                        thread = active.insert(resumed);
+                        thread
+                            .vm
+                            .record_telemetry_wait(wait.map(|(frame, _, _)| frame), elapsed);
 
-                    let inactive = thread.release();
-                    // While parked, run a heuristic-driven GC check (no
-                    // permit dance needed since we're already released).
-                    self.maybe_collect_garbage().await;
-                    // Race the SetOnce wait against the thread's own
-                    // cancel token so an unrelated-future await
-                    // doesn't hang when the thread itself is cancelled
-                    // (cascade only saves us when the awaited future is
-                    // a descendant whose token derives from ours).
-                    let outcome = tokio::select! {
-                        biased;
-                        () = cancel.cancelled() => AwaitOutcome::Cancelled,
-                        r = future              => AwaitOutcome::Done(r),
-                    };
-                    thread = inactive.acquire().await;
+                        match outcome {
+                            AwaitOutcome::Cancelled => {
+                                if let Some(future_id) = thread.vm_thread_settles_future() {
+                                    self.settle_child_cancelled(thread, future_id).await?;
+                                    return Ok(ThreadOutcome::SettledChild(
+                                        InvocationOutcome::Cancelled,
+                                    ));
+                                }
+                                return Err(cancelled_unhandled_throw());
+                            }
+                            AwaitOutcome::Done(r) => r?,
+                        }
+                    }
 
-                    match outcome {
-                        AwaitOutcome::Cancelled => {
+                    // BEP-034 `baml.future.__await_any`: park until the FIRST of
+                    // several input futures settles, then resume so the VM
+                    // re-executes the `AwaitAny` opcode and pushes the winner's
+                    // index. Mirrors the `Await` arm's permit/cancel dance but
+                    // races all the inputs' SetOnce wakeups at once. The opcode
+                    // already filtered out futures that were settled going in, so
+                    // an empty `future_ids` means every input had a wakeup pending
+                    // or the array was empty.
+                    VmExecState::AwaitAny(future_ids) => {
+                        // Fail-fast on our own cancellation, exactly as `Await`
+                        // does: the next suspension point after the token fires
+                        // must surface `Cancelled`.
+                        if cancel.is_cancelled() {
                             if let Some(future_id) = thread.vm_thread_settles_future() {
-                                self.settle_child_cancelled(&mut thread, future_id).await?;
-                                return Ok(ThreadOutcome::SettledChild);
+                                self.settle_child_cancelled(thread, future_id).await?;
+                                return Ok(ThreadOutcome::SettledChild(
+                                    InvocationOutcome::Cancelled,
+                                ));
                             }
                             return Err(cancelled_unhandled_throw());
                         }
-                        AwaitOutcome::Done(r) => r?,
-                    }
-                }
-
-                // BEP-034 `baml.future.__await_any`: park until the FIRST of
-                // several input futures settles, then resume so the VM
-                // re-executes the `AwaitAny` opcode and pushes the winner's
-                // index. Mirrors the `Await` arm's permit/cancel dance but
-                // races all the inputs' SetOnce wakeups at once. The opcode
-                // already filtered out futures that were settled going in, so
-                // an empty `future_ids` means every input had a wakeup pending
-                // or the array was empty.
-                VmExecState::AwaitAny(future_ids) => {
-                    // Fail-fast on our own cancellation, exactly as `Await`
-                    // does: the next suspension point after the token fires
-                    // must surface `Cancelled`.
-                    if cancel.is_cancelled() {
-                        if let Some(future_id) = thread.vm_thread_settles_future() {
-                            self.settle_child_cancelled(&mut thread, future_id).await?;
-                            return Ok(ThreadOutcome::SettledChild);
+                        #[allow(clippy::items_after_statements)]
+                        enum AwaitAnyOutcome {
+                            Cancelled,
+                            Done(Result<(), EngineError>),
                         }
-                        return Err(cancelled_unhandled_throw());
-                    }
-                    #[allow(clippy::items_after_statements)]
-                    enum AwaitAnyOutcome {
-                        Cancelled,
-                        Done(Result<(), EngineError>),
-                    }
-                    // Build one SetOnce waiter per pending input. Each waiter
-                    // is self-contained (clones the future's `Arc<SetOnce>`),
-                    // so we can drop the guard and release the permit before
-                    // parking — same safepoint discipline as `Await`.
-                    let waiters = {
-                        let mut g = self.futures.acquire(thread.proof()).await;
-                        let mut ws = Vec::with_capacity(future_ids.len());
-                        for future_id in &future_ids {
-                            ws.push(g.future_ready(*future_id)?);
-                        }
-                        ws
-                    };
-
-                    let inactive = thread.release();
-                    self.maybe_collect_garbage().await;
-                    let outcome = if waiters.is_empty() {
-                        // Empty INPUT array: `future_ready` returns a waiter
-                        // for every id — already-settled inputs yield
-                        // immediately-ready waiters — so empty waiters ⟺
-                        // empty `future_ids`. Per BEP-034 (matching JS
-                        // `Promise.race([])`), racing an empty array never
-                        // settles: park on cancellation rather than busy-spin
-                        // or panic in `select_all` (which rejects an empty
-                        // iterator).
-                        cancel.cancelled().await;
-                        AwaitAnyOutcome::Cancelled
-                    } else {
-                        let first_settled =
-                            futures::future::select_all(waiters.into_iter().map(Box::pin));
-                        tokio::select! {
-                            biased;
-                            () = cancel.cancelled() => AwaitAnyOutcome::Cancelled,
-                            (r, _idx, _rest) = first_settled => AwaitAnyOutcome::Done(r),
-                        }
-                    };
-                    thread = inactive.acquire().await;
-
-                    match outcome {
-                        AwaitAnyOutcome::Cancelled => {
-                            if let Some(future_id) = thread.vm_thread_settles_future() {
-                                self.settle_child_cancelled(&mut thread, future_id).await?;
-                                return Ok(ThreadOutcome::SettledChild);
+                        // Build one SetOnce waiter per pending input. Each waiter
+                        // is self-contained (clones the future's `Arc<SetOnce>`),
+                        // so we can drop the guard and release the permit before
+                        // parking — same safepoint discipline as `Await`.
+                        let waiters = {
+                            let mut g = self.futures.acquire(thread.proof()).await;
+                            let mut ws = Vec::with_capacity(future_ids.len());
+                            for future_id in &future_ids {
+                                ws.push(g.future_ready(*future_id));
                             }
-                            return Err(cancelled_unhandled_throw());
+                            drop(g);
+                            ws.into_iter().collect::<Result<Vec<_>, _>>()?
+                        };
+
+                        let wait = thread.vm.take_telemetry_wait().map(|(frame, start)| {
+                            (frame, start, Arc::clone(thread.vm.telemetry_clock()))
+                        });
+                        let (resumed, outcome, elapsed) = async {
+                            let inactive =
+                                active.take().expect("active execution permit").release();
+                            self.maybe_collect_garbage().await;
+                            let outcome = if waiters.is_empty() {
+                                // Empty INPUT array: `future_ready` returns a waiter
+                                // for every id — already-settled inputs yield
+                                // immediately-ready waiters — so empty waiters ⟺
+                                // empty `future_ids`. Per BEP-034 (matching JS
+                                // `Promise.race([])`), racing an empty array never
+                                // settles: park on cancellation rather than busy-spin
+                                // or panic in `select_all` (which rejects an empty
+                                // iterator).
+                                cancel.cancelled().await;
+                                AwaitAnyOutcome::Cancelled
+                            } else {
+                                let first_settled =
+                                    futures::future::select_all(waiters.into_iter().map(Box::pin));
+                                tokio::select! {
+                                    biased;
+                                    () = cancel.cancelled() => AwaitAnyOutcome::Cancelled,
+                                    (r, _idx, _rest) = first_settled => AwaitAnyOutcome::Done(r),
+                                }
+                            };
+
+                            // End at observed completion, before permit reacquisition.
+                            let elapsed = wait
+                                .as_ref()
+                                .map_or(ClockDuration::ZERO, |(_, start, clock)| {
+                                    start.elapsed_until(clock.read())
+                                });
+                            (inactive.acquire().await, outcome, elapsed)
                         }
-                        // Only an internal-error future surfaces here; normal
-                        // BAML success/throw/cancel settles resolve the SetOnce
-                        // with `Ok(())` and are observed when the VM re-reads
-                        // the future (and the stdlib `await futures[i]` it).
-                        AwaitAnyOutcome::Done(r) => r?,
-                    }
-                }
+                        .await;
+                        thread = active.insert(resumed);
+                        thread
+                            .vm
+                            .record_telemetry_wait(wait.map(|(frame, _, _)| frame), elapsed);
 
-                VmExecState::Event {
-                    event_name,
-                    data,
-                    source_location,
-                } => {
-                    if event_name == "$baml_log" {
-                        self.capture_baml_log_event(
-                            &thread,
-                            log_capture.as_ref(),
-                            data,
-                            source_location,
-                        );
+                        match outcome {
+                            AwaitAnyOutcome::Cancelled => {
+                                if let Some(future_id) = thread.vm_thread_settles_future() {
+                                    self.settle_child_cancelled(thread, future_id).await?;
+                                    return Ok(ThreadOutcome::SettledChild(
+                                        InvocationOutcome::Cancelled,
+                                    ));
+                                }
+                                return Err(cancelled_unhandled_throw());
+                            }
+                            // Only an internal-error future surfaces here; normal
+                            // BAML success/throw/cancel settles resolve the SetOnce
+                            // with `Ok(())` and are observed when the VM re-reads
+                            // the future (and the stdlib `await futures[i]` it).
+                            AwaitAnyOutcome::Done(r) => r?,
+                        }
                     }
-                    // Only reserved `$baml_log` events are currently produced
-                    // by the standard library. `SendEvent` pops its two
-                    // arguments but does not push a return value, so push null
-                    // before the VM resumes at the next instruction.
-                    thread.vm.stack.push(Value::NULL);
-                }
 
-                VmExecState::EarlyYield => {
-                    thread = self.gc_safepoint(thread).await;
+                    VmExecState::Event {
+                        event_name,
+                        data,
+                        source_location,
+                    } => {
+                        if event_name == "$baml_log" {
+                            self.capture_baml_log_event(
+                                thread,
+                                log_capture.as_ref(),
+                                data,
+                                source_location,
+                            );
+                        }
+                        // Only reserved `$baml_log` events are currently produced
+                        // by the standard library. `SendEvent` pops its two
+                        // arguments but does not push a return value, so push null
+                        // before the VM resumes at the next instruction.
+                        thread.vm.stack.push(Value::NULL);
+                    }
+
+                    VmExecState::EarlyYield => {
+                        let resumed = self
+                            .gc_safepoint(active.take().expect("active execution permit"))
+                            .await;
+                        thread = active.insert(resumed);
+                    }
                 }
             }
         }
+        .await;
+
+        let outcome = match &result {
+            Ok(ThreadOutcome::RootValue(_)) => InvocationOutcome::Ok,
+            Ok(ThreadOutcome::SettledChild(outcome)) => *outcome,
+            Err(error) if cancel.is_cancelled() && is_cancelled_engine_error(error) => {
+                InvocationOutcome::Cancelled
+            }
+            Err(_) => InvocationOutcome::Errored,
+        };
+        self.finish_thread_telemetry(active.as_mut().expect("restored execution permit"), outcome);
+        result
+    }
+
+    fn finish_thread_telemetry(
+        &self,
+        thread: &mut BexThread,
+        outcome: bex_vm::telemetry::InvocationOutcome,
+    ) {
+        self.telemetry_clock
+            .validate(thread.vm.telemetry_clock(), thread.vm.is_telemetry_root());
+        thread.vm.finish_telemetry(outcome);
+        #[cfg(test)]
+        self.completed_threads
+            .lock()
+            .unwrap()
+            .push((thread.vm.thread_id, outcome));
     }
 
     /// Execute a system operation via uniform dispatch through function pointers.
@@ -6743,3 +6954,6 @@ mod type_identity_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod completion_tests;
