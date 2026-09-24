@@ -1454,7 +1454,12 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         Ok(())
     }
 
-    fn binary_op(&mut self, _op: baml_compiler2_mir::BinOp) -> Result<(), Self::Error> {
+    fn binary_op(
+        &mut self,
+        _op: baml_compiler2_mir::BinOp,
+        _left: &Operand<'a>,
+        _right: &Operand<'a>,
+    ) -> Result<(), Self::Error> {
         if !self.sim.pop_n(2) {
             return Err(());
         }
