@@ -3,7 +3,7 @@
 use std::{sync::Arc, time::Duration};
 
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, TelemetryRecording};
-use btel_publisher::{RecordingConfig, proto};
+use btel_recorder::{RecordingConfig, proto};
 use sys_native::SysOpsExt;
 
 fn context() -> bex_engine::FunctionCallContext {

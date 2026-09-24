@@ -3,7 +3,7 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, TelemetryRecording};
-use btel_publisher::{CompletionFlags, RecordingConfig, proto};
+use btel_recorder::{CompletionFlags, RecordingConfig, proto};
 use sys_native::SysOpsExt;
 
 fn context() -> bex_engine::FunctionCallContext {
@@ -134,8 +134,9 @@ fn telemetry_environment_modes() {
             None,
             Some("off"),
             Some("low"),
-            Some("auto"),
+            Some("medium"),
             Some("high"),
+            Some("auto"),
             Some("invalid"),
         ] {
             let mut command = std::process::Command::new(std::env::current_exe().unwrap());
@@ -157,7 +158,7 @@ fn telemetry_environment_modes() {
         }
         return;
     }
-    let mode = std::env::var("BAML_TELEMETRY").unwrap_or_else(|_| "auto".into());
+    let mode = std::env::var("BAML_TELEMETRY").unwrap_or_else(|_| "medium".into());
     tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build().unwrap().block_on(async {
         let program = baml_db::testing::compile_source(r#"
             function leaf() -> int { "abc".length() }
@@ -169,7 +170,7 @@ fn telemetry_environment_modes() {
             Arc::new(sys_native::SysOps::native()), vec![], None,
             btel_clock::ClockMode::Monotonic,
             TelemetryRecording::local_files_in(root.path(), RecordingConfig::default()));
-        if mode == "invalid" {
+        if mode == "invalid" || mode == "auto" {
             assert!(matches!(result, Err(bex_engine::EngineError::Other(message)) if message.contains("BAML_TELEMETRY")));
             assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
             return;

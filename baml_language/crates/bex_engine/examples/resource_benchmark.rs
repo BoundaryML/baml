@@ -101,7 +101,7 @@ fn run(args: Run) -> Result<()> {
     let expected = if args.mode == Mode::Off {
         "off"
     } else {
-        "auto"
+        "medium"
     };
     ensure!(
         std::env::var("BAML_TELEMETRY").as_deref() == Ok(expected),
@@ -119,7 +119,7 @@ fn run(args: Run) -> Result<()> {
         .worker_threads(workers.get())
         .enable_all()
         .build()?;
-    let config = btel_publisher::RecordingConfig {
+    let config = btel_recorder::RecordingConfig {
         target_bytes: NonZeroUsize::new(1024 * 1024).unwrap(),
         flush_interval_duration: Duration::from_secs(1),
     };
@@ -140,13 +140,14 @@ fn run(args: Run) -> Result<()> {
         }
         Mode::CloudFast | Mode::CloudSlow => Some(TelemetryRecording::cloud(
             config,
-            btel_bcs::PublisherConfig::default(),
+            btel_bcs::CloudPublisherConfig::default(),
             btel_bcs::delivery::DeliveryConfig {
-                prepare_base_url: args
-                    .prepare_base_url
-                    .context("--prepare-base-url required")?,
                 allow_http: true,
-                ..Default::default()
+                ..btel_bcs::delivery::DeliveryConfig::new(
+                    args.prepare_base_url
+                        .context("--prepare-base-url required")?
+                        .parse()?,
+                )
             },
         )),
     };

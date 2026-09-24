@@ -14,6 +14,10 @@ use prost::{Message, encoding::uint64};
 
 use crate::proto::span_event::Event;
 
+const VARINT_PAYLOAD_BITS: u32 = 7;
+const VARINT_CONTINUATION_BIT: u8 = 1 << VARINT_PAYLOAD_BITS;
+const VARINT_PAYLOAD_MASK: u8 = VARINT_CONTINUATION_BIT - 1;
+
 #[derive(Default)]
 pub(crate) struct EncodedSpans {
     bytes: Vec<u8>,
@@ -133,9 +137,9 @@ impl CompletionWriter<'_> {
             return;
         }
         self.byte(tag);
-        while value >= 128 {
-            self.byte(value.to_le_bytes()[0] | 0x80);
-            value >>= 7;
+        while value > u64::from(VARINT_PAYLOAD_MASK) {
+            self.byte(value.to_le_bytes()[0] | VARINT_CONTINUATION_BIT);
+            value >>= VARINT_PAYLOAD_BITS;
         }
         self.byte(value.to_le_bytes()[0]);
     }
@@ -172,7 +176,7 @@ fn leaf<M: Message>(bytes: &mut Vec<u8>, tag: u8, message: &M) {
 fn end_short(bytes: &mut [u8], length: usize) {
     let size = bytes.len() - length - 1;
     assert!(
-        size < 128,
+        size <= usize::from(VARINT_PAYLOAD_MASK),
         "span schema exceeded its scalar-only encoding bound"
     );
     bytes[length] = u8::try_from(size).expect("one-byte length checked above");
@@ -181,9 +185,13 @@ fn end_container(bytes: &mut [u8], length: usize) {
     let mut size = u32::try_from(bytes.len() - length - LENGTH_BYTES)
         .expect("recording allocation exceeded its admitted encoding bound");
     for i in 0..LENGTH_BYTES {
-        bytes[length + i] =
-            (size.to_le_bytes()[0] & 0x7f) | if i + 1 == LENGTH_BYTES { 0 } else { 0x80 };
-        size >>= 7;
+        let continuation = if i + 1 == LENGTH_BYTES {
+            0
+        } else {
+            VARINT_CONTINUATION_BIT
+        };
+        bytes[length + i] = (size.to_le_bytes()[0] & VARINT_PAYLOAD_MASK) | continuation;
+        size >>= VARINT_PAYLOAD_BITS;
     }
 }
 
@@ -191,6 +199,22 @@ fn end_container(bytes: &mut [u8], length: usize) {
 mod tests {
     use super::*;
     use crate::proto;
+
+    #[test]
+    fn container_lengths_decode_across_varint_boundaries() {
+        for size in [0, 1, 127, 128, 16_383, 16_384, 65_535] {
+            let mut bytes = Vec::new();
+            let length = begin(&mut bytes, 1, LENGTH_BYTES);
+            bytes.resize(bytes.len() + size, 0);
+            end_container(&mut bytes, length);
+            let mut prefix = &bytes[length..length + LENGTH_BYTES];
+            assert_eq!(
+                prost::encoding::decode_varint(&mut prefix).unwrap(),
+                u64::try_from(size).unwrap()
+            );
+            assert!(prefix.is_empty());
+        }
+    }
 
     #[test]
     fn maximum_scalar_widths_fit_admission_and_decode_with_generated_schema() {

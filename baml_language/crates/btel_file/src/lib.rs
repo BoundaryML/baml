@@ -1,5 +1,5 @@
 //! Native local recording delivery. The shared publisher decides when to seal;
-//! this sink writes its exact bytes, without reencoding or per-sink aggregation.
+//! local delivery writes its exact bytes, without reencoding or per-delivery aggregation.
 //!
 //! A newly created recording directory has one writer. Completed files use
 //! zero-padded `.btel` sequence names; `.btel.part` files are never complete records.
@@ -23,8 +23,8 @@ use std::{
     thread::JoinHandle,
 };
 
-use btel_publisher::{RecordingId, SealedFile};
-pub use btel_settings::local_files::FileSinkConfig;
+use btel_recorder::{RecordingId, SealedFile};
+pub use btel_settings::local_files::LocalDeliveryConfig;
 
 mod cas;
 pub use cas::cas_path;
@@ -35,13 +35,13 @@ pub use reader::{ReadIssue, RecordingRead, read_directory};
 
 /// Terminal delivery errors retain the path and operating-system explanation.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FileSinkError(pub String);
-impl fmt::Display for FileSinkError {
+pub struct LocalDeliveryError(pub String);
+impl fmt::Display for LocalDeliveryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
     }
 }
-impl std::error::Error for FileSinkError {}
+impl std::error::Error for LocalDeliveryError {}
 
 pub fn recording_directory(root: &Path, id: RecordingId) -> PathBuf {
     let mut name = String::with_capacity(32);
@@ -52,8 +52,8 @@ pub fn recording_directory(root: &Path, id: RecordingId) -> PathBuf {
     root.join(name)
 }
 
-fn io_error(path: &Path, error: &io::Error) -> FileSinkError {
-    FileSinkError(format!("telemetry file {}: {error}", path.display()))
+fn io_error(path: &Path, error: &io::Error) -> LocalDeliveryError {
+    LocalDeliveryError(format!("telemetry file {}: {error}", path.display()))
 }
 
 enum Command {
@@ -62,46 +62,49 @@ enum Command {
     Finish,
 }
 
-pub struct FileSender {
+pub struct LocalDeliveryHandle {
     sender: mpsc::SyncSender<Command>,
-    result: Arc<OnceLock<Result<(), FileSinkError>>>,
+    result: Arc<OnceLock<Result<(), LocalDeliveryError>>>,
 }
-impl FileSender {
+impl LocalDeliveryHandle {
     /// Called only after input chunk release. Full queues apply bounded backpressure
     /// to the delivery worker; disk errors and closed writers remain errors.
-    pub fn send(&self, file: SealedFile) -> Result<(), FileSinkError> {
+    pub fn send(&self, file: SealedFile) -> Result<(), LocalDeliveryError> {
         self.enqueue(Command::File(file))
     }
     /// Move a frozen snapshot to the same bounded writer queue as recording files.
-    pub fn send_snapshot(&self, snapshot: btel_snapshot::Snapshot) -> Result<(), FileSinkError> {
+    pub fn send_snapshot(
+        &self,
+        snapshot: btel_snapshot::Snapshot,
+    ) -> Result<(), LocalDeliveryError> {
         self.enqueue(Command::Snapshot(snapshot))
     }
-    fn enqueue(&self, command: Command) -> Result<(), FileSinkError> {
+    fn enqueue(&self, command: Command) -> Result<(), LocalDeliveryError> {
         if let Some(result) = self.result.get() {
-            return result
-                .clone()
-                .and(Err(FileSinkError("telemetry file sink is closed".into())));
+            return result.clone().and(Err(LocalDeliveryError(
+                "telemetry local delivery is closed".into(),
+            )));
         }
         self.sender.send(command).map_err(|_| {
             if let Some(Err(failure)) = self.result.get() {
                 return failure.clone();
             }
-            FileSinkError("telemetry file writer stopped".into())
+            LocalDeliveryError("telemetry file writer stopped".into())
         })
     }
 }
 
-pub struct FileSink {
+pub struct LocalDelivery {
     directory: PathBuf,
     sender: mpsc::SyncSender<Command>,
-    result: Arc<OnceLock<Result<(), FileSinkError>>>,
-    delivery: Option<FileSender>,
+    result: Arc<OnceLock<Result<(), LocalDeliveryError>>>,
+    delivery: Option<LocalDeliveryHandle>,
     worker: Mutex<Option<JoinHandle<()>>>,
 }
-impl FileSink {
+impl LocalDelivery {
     /// Refuse an existing recording directory: sequences cannot overwrite a
     /// previous recording or race a second writer. Root directories may exist.
-    pub fn create(root: &Path, id: RecordingId, config: FileSinkConfig) -> io::Result<Self> {
+    pub fn create(root: &Path, id: RecordingId, config: LocalDeliveryConfig) -> io::Result<Self> {
         Self::create_with_failure_handler(root, id, config, |_| {})
     }
 
@@ -110,8 +113,8 @@ impl FileSink {
     pub fn create_with_failure_handler(
         root: &Path,
         id: RecordingId,
-        config: FileSinkConfig,
-        on_failure: impl FnOnce(&FileSinkError) + Send + 'static,
+        config: LocalDeliveryConfig,
+        on_failure: impl FnOnce(&LocalDeliveryError) + Send + 'static,
     ) -> io::Result<Self> {
         Self::create_with_cas(root, &root.join("cas"), id, config, on_failure)
     }
@@ -122,8 +125,8 @@ impl FileSink {
         root: &Path,
         cas_root: &Path,
         id: RecordingId,
-        config: FileSinkConfig,
-        on_failure: impl FnOnce(&FileSinkError) + Send + 'static,
+        config: LocalDeliveryConfig,
+        on_failure: impl FnOnce(&LocalDeliveryError) + Send + 'static,
     ) -> io::Result<Self> {
         if root.as_os_str().is_empty() {
             return Err(io::Error::new(
@@ -151,9 +154,9 @@ impl FileSink {
     #[cfg(any(test, feature = "test-support"))]
     fn start(
         directory: PathBuf,
-        config: FileSinkConfig,
-        write: impl FnMut(&SealedFile) -> Result<(), FileSinkError> + Send + 'static,
-        on_failure: impl FnOnce(&FileSinkError) + Send + 'static,
+        config: LocalDeliveryConfig,
+        write: impl FnMut(&SealedFile) -> Result<(), LocalDeliveryError> + Send + 'static,
+        on_failure: impl FnOnce(&LocalDeliveryError) + Send + 'static,
     ) -> io::Result<Self> {
         let cas_root = directory.join("cas");
         Self::start_with_snapshots(
@@ -167,12 +170,12 @@ impl FileSink {
 
     fn start_with_snapshots(
         directory: PathBuf,
-        config: FileSinkConfig,
-        mut write: impl FnMut(&SealedFile) -> Result<(), FileSinkError> + Send + 'static,
-        mut write_snapshot: impl FnMut(&btel_snapshot::Snapshot) -> Result<(), FileSinkError>
+        config: LocalDeliveryConfig,
+        mut write: impl FnMut(&SealedFile) -> Result<(), LocalDeliveryError> + Send + 'static,
+        mut write_snapshot: impl FnMut(&btel_snapshot::Snapshot) -> Result<(), LocalDeliveryError>
         + Send
         + 'static,
-        on_failure: impl FnOnce(&FileSinkError) + Send + 'static,
+        on_failure: impl FnOnce(&LocalDeliveryError) + Send + 'static,
     ) -> io::Result<Self> {
         let (sender, receiver) = mpsc::sync_channel(config.queue_files.get());
         let result = Arc::new(OnceLock::new());
@@ -188,7 +191,7 @@ impl FileSink {
                             Command::Snapshot(snapshot) => write_snapshot(&snapshot)?,
                             Command::File(file) => {
                                 if next != Some(file.sequence().get()) {
-                                    return Err(FileSinkError(
+                                    return Err(LocalDeliveryError(
                                         "telemetry file sequence is not contiguous".into(),
                                     ));
                                 }
@@ -199,7 +202,9 @@ impl FileSink {
                     }
                     Ok(())
                 }))
-                .unwrap_or_else(|_| Err(FileSinkError("telemetry file writer panicked".into())));
+                .unwrap_or_else(|_| {
+                    Err(LocalDeliveryError("telemetry file writer panicked".into()))
+                });
                 let _ = worker_result.set(outcome);
                 // Retain the result before releasing queued files and blocked sends.
                 drop(receiver);
@@ -209,7 +214,7 @@ impl FileSink {
             })?;
         Ok(Self {
             directory,
-            delivery: Some(FileSender {
+            delivery: Some(LocalDeliveryHandle {
                 sender: sender.clone(),
                 result: Arc::clone(&result),
             }),
@@ -225,9 +230,9 @@ impl FileSink {
     #[doc(hidden)]
     pub fn with_test_writer(
         directory: PathBuf,
-        config: FileSinkConfig,
-        write: impl FnMut(&SealedFile) -> Result<(), FileSinkError> + Send + 'static,
-        on_failure: impl FnOnce(&FileSinkError) + Send + 'static,
+        config: LocalDeliveryConfig,
+        write: impl FnMut(&SealedFile) -> Result<(), LocalDeliveryError> + Send + 'static,
+        on_failure: impl FnOnce(&LocalDeliveryError) + Send + 'static,
     ) -> io::Result<Self> {
         Self::start(directory, config, write, on_failure)
     }
@@ -237,18 +242,18 @@ impl FileSink {
     }
     /// Move the sole delivery endpoint to the publisher. Cannot fan out or
     /// obtain a second endpoint for this recording.
-    pub fn take_sender(&mut self) -> FileSender {
+    pub fn take_handle(&mut self) -> LocalDeliveryHandle {
         self.delivery
             .take()
-            .expect("recording already has its sole sender")
+            .expect("recording already has its sole handle")
     }
     /// None while running. Disk errors are observable even without another file.
-    pub fn result(&self) -> Option<Result<(), FileSinkError>> {
+    pub fn result(&self) -> Option<Result<(), LocalDeliveryError>> {
         self.result.get().cloned()
     }
     /// Blocking and idempotent. Stop the upstream publisher first. Runs outside
     /// VM execution/heap permits, typically in the engine's shutdown blocking task.
-    pub fn finish(&self) -> Result<(), FileSinkError> {
+    pub fn finish(&self) -> Result<(), LocalDeliveryError> {
         let mut worker = self
             .worker
             .lock()
@@ -257,27 +262,31 @@ impl FileSink {
             // Queued files precede the sentinel; a full queue also waits here.
             let _ = self.sender.send(Command::Finish);
             if handle.join().is_err() {
-                let _ = self
-                    .result
-                    .set(Err(FileSinkError("telemetry file writer panicked".into())));
+                let _ = self.result.set(Err(LocalDeliveryError(
+                    "telemetry file writer panicked".into(),
+                )));
             }
         }
         self.result().unwrap_or_else(|| {
-            Err(FileSinkError(
+            Err(LocalDeliveryError(
                 "telemetry file writer stopped without a result".into(),
             ))
         })
     }
 }
-impl Drop for FileSink {
+impl Drop for LocalDelivery {
     fn drop(&mut self) {
         let _ = self.finish();
     }
 }
 
-fn write_file(directory: &Path, id: RecordingId, file: &SealedFile) -> Result<(), FileSinkError> {
+fn write_file(
+    directory: &Path,
+    id: RecordingId,
+    file: &SealedFile,
+) -> Result<(), LocalDeliveryError> {
     if file.recording_id() != id {
-        return Err(FileSinkError(
+        return Err(LocalDeliveryError(
             "telemetry file belongs to a different recording".into(),
         ));
     }

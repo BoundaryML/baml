@@ -36,7 +36,9 @@ Every successful root must return its argument. Workers default explicitly to
 `Runtime::new` convention, and are reported; override with `--workers`.
 
 Modes are `off`, `auto-no-sink`, `local`, `cloud-fast`, and `cloud-slow`.
-The parent must set `BAML_TELEMETRY=off` for off and `auto` for all other modes.
+The parent must set `BAML_TELEMETRY=off` for off and `medium` for all other modes.
+The historical `auto-no-sink` scenario name means automatic function policies at
+the medium level, with no recording destination.
 Local mode requires a fresh `--output-dir` under `target`. Cloud modes require
 `--prepare-base-url` pointing at a separate mock-server process; that process
 controls delay, not the runner. Cloud delivery otherwise retains default bounds,

@@ -8,7 +8,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use btel_publisher::{CompletionFlags, RecordingId, proto};
+use btel_recorder::{CompletionFlags, RecordingId, proto};
 use prost::Message;
 
 #[derive(Debug, Eq, PartialEq)]

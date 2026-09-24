@@ -12,7 +12,7 @@ use btel_bcs::{
     wire::{Disposition, PrepareUploadsRequest, ProposedUploadTarget, UploadKind},
 };
 use btel_processor::{AggregateDelta, Publisher};
-use btel_publisher::{RecordingConfig, RecordingId, RecordingPublisher, SealedFile};
+use btel_recorder::{RecordingConfig, RecordingId, RecordingPublisher, SealedFile};
 use btel_snapshot::{Limits, Snapshot, SnapshotObject, SnapshotPool, SnapshotValue};
 use prost::Message;
 use sha2::{Digest, Sha256};
@@ -32,7 +32,6 @@ use support::response;
 
 fn config(server: &MockServer) -> DeliveryConfig {
     DeliveryConfig {
-        prepare_base_url: server.uri(),
         bearer_token: Some("prepare-only-secret".into()),
         allow_http: true,
         max_pending_plans: 4,
@@ -43,7 +42,7 @@ fn config(server: &MockServer) -> DeliveryConfig {
         request_timeout: Duration::from_millis(200),
         retry_delay: Duration::from_millis(5),
         max_attempts: 2,
-        ..DeliveryConfig::default()
+        ..DeliveryConfig::new(server.uri().parse().unwrap())
     }
 }
 
@@ -128,7 +127,7 @@ async fn failed_payload_releases_capacity_and_later_payload_uploads() {
             .await;
         let mut settings = config(&server);
         settings.max_pending_plans = 1;
-        settings.max_attempts = DeliveryConfig::default().max_attempts;
+        settings.max_attempts = DeliveryConfig::new(server.uri().parse().unwrap()).max_attempts;
         assert_eq!(settings.max_attempts, 4);
         let delivery = Arc::new(
             BcsDelivery::new(settings, |_| panic!("ordinary loss disabled telemetry")).unwrap(),
@@ -1177,9 +1176,8 @@ async fn required_content_type_is_sent_once_and_short_recording_url_uses_actual_
         .mount(&server)
         .await;
     let settings = DeliveryConfig {
-        prepare_base_url: server.uri(),
         allow_http: true,
-        ..DeliveryConfig::default()
+        ..DeliveryConfig::new(server.uri().parse().unwrap())
     };
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
     delivery

@@ -7,18 +7,18 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use btel_publisher::SealedFile;
+use btel_recorder::SealedFile;
 use btel_snapshot::Snapshot;
 use bytes::Bytes;
 use futures::FutureExt;
 use prost::Message;
-use reqwest::{Client, StatusCode};
+use reqwest::{Client, StatusCode, Url};
 use sha2::{Digest, Sha256};
 use tokio::sync::{Semaphore, mpsc, watch};
 
 use crate::{
     liveness::{Heartbeat, HeartbeatError},
-    plan::{checked_url, validate_proposal, validate_response},
+    plan::{validate_proposal, validate_response, validate_url},
     proto::{CasObject, CloudUploadEnvelope},
     wire::{
         CasCandidate, CasSizeClass, Disposition, PrepareUploadsRequest, PrepareUploadsResponse,
@@ -49,7 +49,7 @@ impl std::error::Error for DeliveryError {}
 /// HTTP is opt-in for local tests; production endpoints must use HTTPS.
 #[derive(Clone)]
 pub struct DeliveryConfig {
-    pub prepare_base_url: String,
+    pub prepare_base_url: Url,
     pub bearer_token: Option<String>,
     pub max_pending_plans: usize,
     /// At most 32 owners, leaving default snapshot-pool headroom for VM capture.
@@ -69,10 +69,11 @@ pub struct DeliveryConfig {
     pub allow_http: bool,
 }
 
-impl Default for DeliveryConfig {
-    fn default() -> Self {
+impl DeliveryConfig {
+    /// Configure a parsed BCS endpoint with default delivery limits.
+    pub fn new(prepare_base_url: Url) -> Self {
         Self {
-            prepare_base_url: String::new(),
+            prepare_base_url,
             bearer_token: None,
             max_pending_plans: 4,
             max_pending_snapshots: 32,
@@ -90,9 +91,15 @@ impl Default for DeliveryConfig {
             allow_http: false,
         }
     }
-}
+    fn endpoint(&self, recording_id: &str, operation: &str) -> Result<Url, DeliveryError> {
+        let mut url = self.prepare_base_url.clone();
+        url.path_segments_mut()
+            .map_err(|()| DeliveryError::InvalidConfig)?
+            .pop_if_empty()
+            .extend(["v1", "recordings", recording_id, operation]);
+        Ok(url)
+    }
 
-impl DeliveryConfig {
     fn retry_window(&self) -> Result<Duration, DeliveryError> {
         self.request_timeout
             .checked_mul(self.max_attempts)
@@ -105,9 +112,9 @@ impl DeliveryConfig {
     }
 
     fn validate(&self) -> Result<(), DeliveryError> {
-        let base = checked_url(&self.prepare_base_url, self.allow_http)
-            .map_err(|_| DeliveryError::InvalidConfig)?;
-        if base.query().is_some() || self.prepare_base_url.len() > 8192 {
+        let base = &self.prepare_base_url;
+        validate_url(base, self.allow_http).map_err(|_| DeliveryError::InvalidConfig)?;
+        if base.query().is_some() || base.as_str().len() > 8192 {
             return Err(DeliveryError::InvalidConfig);
         }
         if let Some(token) = &self.bearer_token {
@@ -233,18 +240,18 @@ struct Work {
     file: SealedFile,
     candidates: Vec<Snapshot>,
     request: PrepareUploadsRequest,
-    _reservation: Reservation,
+    reservation: Reservation,
 }
 
 /// Cloneable producer handle. Admission waits for capacity without performing I/O.
 /// Callers must recycle processor input chunks before submitting.
 #[derive(Clone)]
-pub struct DeliveryHandle {
+pub struct BcsDeliveryHandle {
     shared: Arc<Shared>,
 }
 
-impl DeliveryHandle {
-    pub fn disabled(error: DeliveryError) -> Self {
+impl BcsDeliveryHandle {
+    pub fn disabled(error: DeliveryError, config: DeliveryConfig) -> Self {
         Self {
             shared: Arc::new(Shared {
                 state: Mutex::new(State {
@@ -252,7 +259,7 @@ impl DeliveryHandle {
                     finished: true,
                     ..State::default()
                 }),
-                config: DeliveryConfig::default(),
+                config,
                 capacity: Condvar::new(),
                 cancel: watch::channel(true).0,
                 heartbeat: Heartbeat::new(),
@@ -519,7 +526,7 @@ impl DeliveryHandle {
             file,
             candidates,
             request,
-            _reservation: reservation,
+            reservation,
         };
         let result = state.sender.as_ref().unwrap().try_send(work);
         drop(state);
@@ -529,7 +536,7 @@ impl DeliveryHandle {
 
 /// Owns the worker. Finish after the processor seals its last file.
 pub struct BcsDelivery {
-    handle: DeliveryHandle,
+    handle: BcsDeliveryHandle,
     worker: Mutex<Option<thread::JoinHandle<()>>>,
 }
 
@@ -582,12 +589,12 @@ impl BcsDelivery {
             })
             .map_err(|_| DeliveryError::Worker)?;
         Ok(Self {
-            handle: DeliveryHandle { shared },
+            handle: BcsDeliveryHandle { shared },
             worker: Mutex::new(Some(worker)),
         })
     }
 
-    pub fn handle(&self) -> DeliveryHandle {
+    pub fn handle(&self) -> BcsDeliveryHandle {
         self.handle.clone()
     }
 
@@ -699,11 +706,7 @@ async fn prepare(
     request: &PrepareUploadsRequest,
     heartbeat: &Heartbeat,
 ) -> Result<PrepareUploadsResponse, DeliveryError> {
-    let url = format!(
-        "{}/v1/recordings/{}/uploads:prepare",
-        config.prepare_base_url.trim_end_matches('/'),
-        request.recording.recording_id
-    );
+    let url = config.endpoint(&request.recording.recording_id, "uploads:prepare")?;
     let key = format!(
         "{}:{}",
         request.recording.recording_id, request.recording.recording_file_sequence
@@ -715,7 +718,7 @@ async fn prepare(
             .map_err(|_| DeliveryError::Capacity)?;
         let body = Bytes::from(writer.bytes);
         let mut post = client
-            .post(&url)
+            .post(url.clone())
             .header("content-type", "application/json")
             .header("idempotency-key", &key)
             .body(body.clone());
@@ -818,7 +821,7 @@ struct Prepared {
     recording_sequence: u64,
     cas: Vec<(UploadTarget, Bytes)>,
     expiry: u64,
-    _reservation: Reservation,
+    reservation: Reservation,
 }
 
 async fn assemble(
@@ -830,7 +833,7 @@ async fn assemble(
         file,
         candidates,
         request,
-        _reservation: mut reservation,
+        mut reservation,
     } = work;
     let response = prepare(client, config, &request, &reservation.shared.heartbeat).await?;
     let retry_window = config.retry_window()?;
@@ -943,7 +946,7 @@ async fn assemble(
         recording_sequence,
         cas,
         expiry: response.expires_at_unix_ms,
-        _reservation: reservation,
+        reservation,
     })
 }
 
@@ -959,7 +962,7 @@ async fn upload(
         recording_sequence,
         cas,
         expiry,
-        _reservation: reservation,
+        reservation,
     } = prepared;
     let shared = &reservation.shared;
     let recording_lane = async {
@@ -1031,12 +1034,7 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
                 let Some(work) = work else { break };
                 if !heartbeat_started {
                     heartbeat_started = true;
-                    let endpoint = format!(
-                        "{}/v1/recordings/{}/heartbeat",
-                        shared.config.prepare_base_url.trim_end_matches('/'),
-                        work.request.recording.recording_id,
-                    );
-                    match checked_url(&endpoint, shared.config.allow_http) {
+                    match shared.config.endpoint(&work.request.recording.recording_id, "heartbeat") {
                         Ok(endpoint) => {
                             let heartbeat = shared.heartbeat.clone();
                             let client = client.clone();
@@ -1097,8 +1095,63 @@ mod tests {
     use super::*;
 
     #[test]
+    fn parsed_endpoints_still_require_http_policy_validation() {
+        let valid = DeliveryConfig::new("https://bcs.example/proxy".parse().unwrap());
+        assert_eq!(valid.validate(), Ok(()));
+        for endpoint in [
+            "http://bcs.example",
+            "ftp://bcs.example",
+            "file:///tmp",
+            "mailto:test@example.com",
+            "https://user@bcs.example",
+            "https://user:password@bcs.example",
+            "https://bcs.example?query=value",
+            "https://bcs.example#fragment",
+        ] {
+            let config = DeliveryConfig::new(endpoint.parse().unwrap());
+            assert_eq!(config.validate(), Err(DeliveryError::InvalidConfig));
+        }
+        let mut local = DeliveryConfig::new("http://localhost:8080".parse().unwrap());
+        local.allow_http = true;
+        assert_eq!(local.validate(), Ok(()));
+        local.bearer_token = Some("invalid\ntoken".into());
+        assert_eq!(local.validate(), Err(DeliveryError::InvalidConfig));
+        let oversized = format!("https://bcs.example/{}", "x".repeat(8192));
+        assert_eq!(
+            DeliveryConfig::new(oversized.parse().unwrap()).validate(),
+            Err(DeliveryError::InvalidConfig)
+        );
+    }
+
+    #[test]
+    fn control_endpoints_preserve_base_paths_and_encoded_segments() {
+        for (base, prefix) in [
+            ("https://bcs.example", "https://bcs.example"),
+            ("https://bcs.example/", "https://bcs.example"),
+            ("https://bcs.example/proxy", "https://bcs.example/proxy"),
+            ("https://bcs.example/proxy/", "https://bcs.example/proxy"),
+            ("https://bcs.example/a%2Fb/", "https://bcs.example/a%2Fb"),
+        ] {
+            let config = DeliveryConfig::new(base.parse().unwrap());
+            for operation in ["uploads:prepare", "heartbeat"] {
+                assert_eq!(
+                    config.endpoint("0123", operation).unwrap().as_str(),
+                    format!("{prefix}/v1/recordings/0123/{operation}")
+                );
+            }
+            assert_eq!(
+                config.prepare_base_url.as_str(),
+                Url::parse(base).unwrap().as_str()
+            );
+        }
+    }
+
+    #[test]
     fn fatal_cancellation_does_not_reset_cas_or_record_payload_loss() {
-        let handle = DeliveryHandle::disabled(DeliveryError::Worker);
+        let handle = BcsDeliveryHandle::disabled(
+            DeliveryError::Worker,
+            DeliveryConfig::new("https://localhost".parse().unwrap()),
+        );
         handle.record_payload_loss(DeliveryError::Worker, true);
         assert_eq!(handle.loss_count(), 0);
         assert_eq!(handle.shared.state.lock().unwrap().last_error, None);
@@ -1110,10 +1163,7 @@ mod tests {
     #[test]
     fn replay_evictions_and_payload_losses_are_separate_bounded_counters() {
         let delivery = BcsDelivery::new(
-            DeliveryConfig {
-                prepare_base_url: "https://localhost".into(),
-                ..DeliveryConfig::default()
-            },
+            DeliveryConfig::new("https://localhost".parse().unwrap()),
             |_| panic!("ordinary loss must not disable delivery"),
         )
         .unwrap();

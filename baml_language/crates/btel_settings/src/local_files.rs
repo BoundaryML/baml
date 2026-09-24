@@ -13,10 +13,10 @@ pub const RECORDINGS_DIRECTORY: &str = ".baml/btel/recordings";
 pub const QUEUE_FILES: NonZeroUsize = NonZeroUsize::new(8).unwrap();
 
 #[derive(Clone, Copy, Debug)]
-pub struct FileSinkConfig {
+pub struct LocalDeliveryConfig {
     pub queue_files: NonZeroUsize,
 }
-impl Default for FileSinkConfig {
+impl Default for LocalDeliveryConfig {
     fn default() -> Self {
         Self {
             queue_files: QUEUE_FILES,
@@ -25,7 +25,7 @@ impl Default for FileSinkConfig {
 }
 
 /// Project root (CLI) or home directory (packed executables), shared across recordings.
-/// The file sink appends the blob format version before the digest shards.
+/// Local delivery appends the blob format version before the digest shards.
 pub const CAS_DIRECTORY: &str = ".baml/btel/cas";
 /// Writer buffering for scalar-heavy snapshot blobs; does not constrain capture size.
 pub const CAS_WRITE_BUFFER_BYTES: usize = 64 * 1024;

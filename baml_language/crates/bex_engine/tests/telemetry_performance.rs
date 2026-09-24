@@ -15,7 +15,7 @@ use std::{
 
 use bex_engine::{BexExternalValue, FunctionCallContextBuilder, TelemetryRecording};
 use btel_bcs::delivery::DeliveryConfig;
-use btel_publisher::RecordingConfig;
+use btel_recorder::RecordingConfig;
 use serde_json::{Value, json};
 use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers::method};
 
@@ -60,7 +60,10 @@ fn telemetry_performance() {
                             "telemetry_performance_child",
                             "--nocapture",
                         ])
-                        .env("BAML_TELEMETRY", if mode == "off" { "off" } else { "auto" })
+                        .env(
+                            "BAML_TELEMETRY",
+                            if mode == "off" { "off" } else { "medium" },
+                        )
                         .env("BTEL_PERF_MODE", mode)
                         .env("BTEL_PERF_WORKLOAD", workload)
                         .env("BTEL_PERF_PACE_MS", pace_ms.to_string())
@@ -136,11 +139,10 @@ async fn telemetry_performance_child() {
     let recording = if mode.starts_with("cloud") {
         TelemetryRecording::cloud(
             RecordingConfig::default(),
-            btel_bcs::PublisherConfig::default(),
+            btel_bcs::CloudPublisherConfig::default(),
             DeliveryConfig {
-                prepare_base_url: server.uri(),
                 allow_http: true,
-                ..DeliveryConfig::default()
+                ..DeliveryConfig::new(server.uri().parse().unwrap())
             },
         )
     } else {

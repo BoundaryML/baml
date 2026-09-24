@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, mem::size_of};
 
-use btel_publisher::SealedFile;
+use btel_recorder::SealedFile;
 
 struct Segment {
     sequence: u64,
@@ -111,7 +111,7 @@ impl MetadataJournal {
 #[cfg(test)]
 mod tests {
     use btel_processor::AggregateDelta;
-    use btel_publisher::{RecordingBuilder, RecordingConfig, RecordingId, proto};
+    use btel_recorder::{RecordingBuilder, RecordingConfig, RecordingId, proto};
     use btel_records::SpanRecord;
     use btel_types::{CallPathEdge, CallPathId, FunctionIdAllocator, allocate_telemetry_id};
     use prost::Message;

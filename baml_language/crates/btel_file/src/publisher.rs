@@ -1,32 +1,32 @@
 use std::{sync::Arc, time::Instant};
 
 use btel_processor::{AggregateDelta, Publisher};
-use btel_publisher::{RecordingBuilder, SealedFile};
+use btel_recorder::{RecordingBuilder, SealedFile};
 use btel_records::SpanRecord;
 use btel_snapshot::Snapshot;
 use btel_types::TelemetryId;
 
-use crate::{FileSender, FileSink};
+use crate::{LocalDelivery, LocalDeliveryHandle};
 
-/// Local encoding and delivery endpoint. Keep a clone of the disk handle and
-/// call `FileSink::finish` only after the processor finishes this publisher.
+/// Local encoding and delivery endpoint. Keep a clone of the delivery worker and
+/// call `LocalDelivery::finish` only after the processor finishes this publisher.
 pub struct LocalPublisher {
     builder: RecordingBuilder,
     delivery: Option<Delivery>,
 }
 
 struct Delivery {
-    sender: FileSender,
-    sink: Arc<FileSink>,
+    handle: LocalDeliveryHandle,
+    worker: Arc<LocalDelivery>,
 }
 
 impl LocalPublisher {
-    pub fn new(builder: RecordingBuilder, mut sink: FileSink) -> Self {
+    pub fn new(builder: RecordingBuilder, mut delivery: LocalDelivery) -> Self {
         Self {
             builder,
             delivery: Some(Delivery {
-                sender: sink.take_sender(),
-                sink: Arc::new(sink),
+                handle: delivery.take_handle(),
+                worker: Arc::new(delivery),
             }),
         }
     }
@@ -39,21 +39,21 @@ impl LocalPublisher {
         }
     }
 
-    pub fn sink(&self) -> Option<&Arc<FileSink>> {
-        self.delivery.as_ref().map(|delivery| &delivery.sink)
+    pub fn delivery(&self) -> Option<&Arc<LocalDelivery>> {
+        self.delivery.as_ref().map(|delivery| &delivery.worker)
     }
 
     fn snapshots(&mut self) {
         for snapshot in self.builder.take_snapshots() {
             if let Some(delivery) = &self.delivery {
-                terminal(delivery.sender.send_snapshot(snapshot));
+                terminal(delivery.handle.send_snapshot(snapshot));
             }
         }
     }
 
     fn deliver(&self, file: Option<SealedFile>) {
         if let (Some(delivery), Some(file)) = (&self.delivery, file) {
-            terminal(delivery.sender.send(file));
+            terminal(delivery.handle.send(file));
         }
     }
 }

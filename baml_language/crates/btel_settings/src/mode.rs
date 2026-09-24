@@ -1,50 +1,70 @@
-//! Engine-wide telemetry selection, read once before engine initialization.
+//! Defaults for functions requesting auto (`null` / no explicit policy).
+//! Global disablement is represented by absence, not an automatic level.
 use std::{fmt, str::FromStr};
 
 pub const ENV_VAR: &str = "BAML_TELEMETRY";
-pub const DEFAULT_MODE: TelemetryMode = TelemetryMode::Auto;
 
-/// Visibility changes what is observed; these are not equivalent-work speed knobs.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TelemetryMode {
-    /// No telemetry clock, VM state, processor or publisher.
-    Off,
-    /// Hidden function defaults; explicit policies can enable observation.
+/// Used only when a function has no explicit telemetry policy.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum AutoTelemetryLevel {
+    /// Do not observe the function.
     Low,
-    /// Existing function defaults and capture policies.
-    Auto,
-    /// Otherwise-visible functions become spans; hidden functions stay hidden.
+    /// Timing for ordinary functions; spans and default captures for LLM functions.
+    #[default]
+    Medium,
+    /// Spans for supported functions, without enabling additional value capture.
     High,
 }
 
-impl TelemetryMode {
-    /// Snapshot per engine. Later environment changes do not affect active VMs.
-    pub fn from_env() -> Result<Self, InvalidTelemetryMode> {
-        match std::env::var(ENV_VAR) {
-            Ok(value) => value.parse(),
-            Err(std::env::VarError::NotPresent) => Ok(DEFAULT_MODE),
-            Err(std::env::VarError::NotUnicode(_)) => Err(InvalidTelemetryMode),
+/// Read once per engine. `None` disables all telemetry, including explicit policies.
+pub fn from_env() -> Result<Option<AutoTelemetryLevel>, InvalidTelemetryLevel> {
+    match std::env::var(ENV_VAR) {
+        Ok(value) if value == "off" => Ok(None),
+        Ok(value) => value.parse().map(Some),
+        Err(std::env::VarError::NotPresent) => Ok(Some(AutoTelemetryLevel::default())),
+        Err(std::env::VarError::NotUnicode(_)) => Err(InvalidTelemetryLevel),
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InvalidTelemetryLevel;
+impl fmt::Display for InvalidTelemetryLevel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{ENV_VAR} must be off, low, medium, or high")
+    }
+}
+impl std::error::Error for InvalidTelemetryLevel {}
+impl FromStr for AutoTelemetryLevel {
+    type Err = InvalidTelemetryLevel;
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "low" => Ok(Self::Low),
+            "medium" => Ok(Self::Medium),
+            "high" => Ok(Self::High),
+            _ => Err(InvalidTelemetryLevel),
         }
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct InvalidTelemetryMode;
-impl fmt::Display for InvalidTelemetryMode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{ENV_VAR} must be off, low, auto, or high")
-    }
-}
-impl std::error::Error for InvalidTelemetryMode {}
-impl FromStr for TelemetryMode {
-    type Err = InvalidTelemetryMode;
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "off" => Ok(Self::Off),
-            "low" => Ok(Self::Low),
-            "auto" => Ok(Self::Auto),
-            "high" => Ok(Self::High),
-            _ => Err(InvalidTelemetryMode),
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn automatic_levels_exclude_global_disablement_and_ambiguous_auto_name() {
+        assert_eq!(AutoTelemetryLevel::default(), AutoTelemetryLevel::Medium);
+        for (name, level) in [
+            ("low", AutoTelemetryLevel::Low),
+            ("medium", AutoTelemetryLevel::Medium),
+            ("high", AutoTelemetryLevel::High),
+        ] {
+            assert_eq!(name.parse(), Ok(level));
+        }
+        for invalid in ["off", "auto", "", "HIGH", " medium "] {
+            assert_eq!(
+                invalid.parse::<AutoTelemetryLevel>(),
+                Err(InvalidTelemetryLevel)
+            );
         }
     }
 }

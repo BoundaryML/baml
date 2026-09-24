@@ -9,7 +9,7 @@ use std::{
 
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, TelemetryRecording};
 use btel_bcs::{delivery::DeliveryConfig, proto::CloudUploadEnvelope};
-use btel_publisher::{RecordingConfig, proto};
+use btel_recorder::{RecordingConfig, proto};
 use prost::Message as _;
 use serde_json::{Value, json};
 use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers::method};
@@ -33,18 +33,17 @@ fn engine(server: &MockServer, flush_interval_duration: Duration) -> Arc<BexEngi
                 flush_interval_duration,
                 ..RecordingConfig::default()
             },
-            btel_bcs::PublisherConfig {
+            btel_bcs::CloudPublisherConfig {
                 inline_target_bytes: 1024 * 1024,
-                ..btel_bcs::PublisherConfig::default()
+                ..btel_bcs::CloudPublisherConfig::default()
             },
             DeliveryConfig {
-                prepare_base_url: server.uri(),
                 bearer_token: Some("prepare-only-token".into()),
                 allow_http: true,
                 max_attempts: 1,
                 request_timeout: Duration::from_secs(2),
                 retry_delay: Duration::ZERO,
-                ..DeliveryConfig::default()
+                ..DeliveryConfig::new(server.uri().parse().unwrap())
             },
         ),
     )
@@ -82,19 +81,18 @@ async fn capture_pressure_cannot_deadlock_vm_or_fail_execution() {
         &["capture"],
         TelemetryRecording::cloud(
             RecordingConfig::default(),
-            btel_bcs::PublisherConfig {
+            btel_bcs::CloudPublisherConfig {
                 snapshot_target: 2,
                 max_pending_snapshots: 4,
-                ..btel_bcs::PublisherConfig::default()
+                ..btel_bcs::CloudPublisherConfig::default()
             },
             DeliveryConfig {
-                prepare_base_url: server.uri(),
                 allow_http: true,
                 max_pending_plans: 1,
                 max_pending_snapshots: 4,
                 max_candidates: 4,
                 max_targets: 5,
-                ..DeliveryConfig::default()
+                ..DeliveryConfig::new(server.uri().parse().unwrap())
             },
         ),
     );

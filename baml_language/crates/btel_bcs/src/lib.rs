@@ -12,7 +12,7 @@ mod plan;
 pub mod publisher;
 pub mod wire;
 
-pub use publisher::{CloudPublisher, PublisherConfig};
+pub use publisher::{CloudPublisher, CloudPublisherConfig};
 
 pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/btel.cloud.v1.rs"));

@@ -96,17 +96,15 @@ async fn actual_sender_matches_fixed_heartbeat_wire_examples() {
                 actual.body.len().to_string()
             );
             let mut message: Liveness = serde_json::from_slice(&actual.body).unwrap();
-            uuid::Uuid::parse_str(&message.producer_session_id).unwrap();
+            assert_eq!(message.producer_session_id.get_version_num(), 4);
             assert_eq!(
-                process_session.get_or_insert_with(|| message.producer_session_id.clone()),
+                process_session.get_or_insert(message.producer_session_id),
                 &message.producer_session_id
             );
             assert!(message.liveness_sequence > previous_sequence);
             previous_sequence = message.liveness_sequence;
             // These are the only nondeterministic wire fields.
-            message
-                .producer_session_id
-                .clone_from(&expected.producer_session_id);
+            message.producer_session_id = expected.producer_session_id;
             message.liveness_sequence = expected.liveness_sequence;
             assert_eq!(serde_json::to_value(message).unwrap(), *request);
         }
@@ -122,7 +120,7 @@ fn duplicate_and_reordered_messages_preserve_the_latest_observation() {
     let mut latest: Option<&Liveness> = None;
     for (message, expected) in messages.iter().zip(&observations) {
         assert_eq!(message.producer_session_id, messages[0].producer_session_id);
-        uuid::Uuid::parse_str(&message.producer_session_id).unwrap();
+        assert_eq!(message.producer_session_id.get_version_num(), 4);
         if latest.is_none_or(|previous| message.liveness_sequence > previous.liveness_sequence) {
             latest = Some(message);
         }

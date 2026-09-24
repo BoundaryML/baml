@@ -1395,8 +1395,9 @@ impl BexEngine {
 
     /// Create a new engine with the given program.
     ///
-    /// Reads `BAML_TELEMETRY` once: off, low, auto (default), or high. Invalid
-    /// values fail construction. Off starts no telemetry workers or clock.
+    /// Reads `BAML_TELEMETRY` once: `off`, `low`, `medium` (default), or `high`.
+    /// Levels apply only to functions requesting auto (no explicit policy).
+    /// Invalid values fail construction. `off` starts no telemetry workers or clock.
     ///
     /// The engine creates a unified heap containing compile-time objects
     /// (functions, classes, enums). Each function call creates a VM that
@@ -1479,7 +1480,7 @@ impl BexEngine {
         clock_mode: btel_clock::ClockMode,
         #[cfg(not(target_arch = "wasm32"))] recording: Option<TelemetryRecording>,
     ) -> Result<Self, EngineError> {
-        let telemetry_mode = btel_settings::mode::TelemetryMode::from_env()
+        let auto_telemetry_level = btel_settings::mode::from_env()
             .map_err(|error| EngineError::Other(error.to_string()))?;
         raise_fd_soft_limit();
         let argv: Arc<[String]> = Arc::from(argv);
@@ -1634,34 +1635,34 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         let park_requested = Arc::new(AtomicBool::new(false));
 
-        let telemetry = if telemetry_mode == btel_settings::mode::TelemetryMode::Off {
-            None
-        } else {
-            #[cfg(not(target_arch = "wasm32"))]
-            let recording_id = recording.as_ref().map(TelemetryRecording::id);
-            #[cfg(not(target_arch = "wasm32"))]
-            let (runtime, delivery) = match recording {
-                Some(recording) => recording.start(source_snapshot_id.map(|id| id.0))?,
-                None => (
-                    btel_processor::TelemetryRuntime::new().map_err(|error| {
-                        EngineError::Other(format!("telemetry processor startup: {error}"))
-                    })?,
-                    None,
-                ),
-            };
-            Some(EngineTelemetry {
-                policies: Arc::new(bex_vm::telemetry::TelemetryPolicies::with_mode(
-                    telemetry_mode,
-                )),
-                clock: btel_clock::ClockRuntime::new(clock_mode),
+        let telemetry = auto_telemetry_level
+            .map(|auto_level| {
                 #[cfg(not(target_arch = "wasm32"))]
-                recording_id,
+                let recording_id = recording.as_ref().map(TelemetryRecording::id);
                 #[cfg(not(target_arch = "wasm32"))]
-                runtime,
-                #[cfg(not(target_arch = "wasm32"))]
-                delivery,
+                let (runtime, delivery) = match recording {
+                    Some(recording) => recording.start(source_snapshot_id.map(|id| id.0))?,
+                    None => (
+                        btel_processor::TelemetryRuntime::new().map_err(|error| {
+                            EngineError::Other(format!("telemetry processor startup: {error}"))
+                        })?,
+                        None,
+                    ),
+                };
+                Ok::<_, EngineError>(EngineTelemetry {
+                    policies: Arc::new(bex_vm::telemetry::TelemetryPolicies::with_auto_level(
+                        auto_level,
+                    )),
+                    clock: btel_clock::ClockRuntime::new(clock_mode),
+                    #[cfg(not(target_arch = "wasm32"))]
+                    recording_id,
+                    #[cfg(not(target_arch = "wasm32"))]
+                    runtime,
+                    #[cfg(not(target_arch = "wasm32"))]
+                    delivery,
+                })
             })
-        };
+            .transpose()?;
 
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
@@ -1679,7 +1680,7 @@ impl BexEngine {
                     Arc::clone(&dynamic_dispatch),
                     Arc::clone(&error_class_ptrs),
                     Arc::clone(&panic_class_ptrs),
-                    telemetry.as_ref().and_then(EngineTelemetry::new_root),
+                    EngineTelemetry::new_root(telemetry.as_ref()),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -3297,7 +3298,7 @@ impl BexEngine {
             Arc::clone(&self.dynamic_dispatch),
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
-            self.telemetry.as_ref().and_then(EngineTelemetry::new_root),
+            EngineTelemetry::new_root(self.telemetry.as_ref()),
         );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
@@ -4844,9 +4845,7 @@ impl BexEngine {
             Arc::clone(&self.dynamic_dispatch),
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
-            self.telemetry
-                .as_ref()
-                .and_then(|state| state.new_child(telemetry.as_ref())),
+            EngineTelemetry::new_child(self.telemetry.as_ref(), telemetry.as_ref()),
         );
         child_vm.thread_id = thread_id;
 

@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -11,7 +12,7 @@ pub struct PrepareUploadsRequest {
     pub candidates: Vec<CasCandidate>,
     pub proposed_uploads: Vec<ProposedUploadTarget>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub producer_session_id: Option<String>,
+    pub producer_session_id: Option<Uuid>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub liveness_sequence: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -90,7 +91,7 @@ pub enum ProducerState {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Liveness {
-    pub producer_session_id: String,
+    pub producer_session_id: Uuid,
     pub liveness_sequence: u64,
     pub state: ProducerState,
 }

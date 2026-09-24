@@ -1,8 +1,8 @@
 //! Synchronous borrowed-record to Protobuf encoding and aggregate merging.
 //!
-//! One accumulation/sealing strategy feeds the recording's sole sink. The
-//! engine drives this publisher on its chunk processor worker. Delivery is a
-//! completed-file callback; no storage or networking is implemented here.
+//! `RecordingBuilder` is shared by local and cloud publishers. `RecordingPublisher`
+//! adapts it to completed-file callbacks. The `Publisher` interface is defined by
+//! `btel_processor`; no storage or networking is implemented here.
 
 use btel_processor::AggregateDelta;
 use btel_records::SpanRecord;

@@ -2,10 +2,10 @@ use std::time::Duration;
 
 use btel_bcs::{
     delivery::{BcsDelivery, DeliveryConfig, DeliveryError},
-    publisher::{CloudPublisher, PublisherConfig},
+    publisher::{CloudPublisher, CloudPublisherConfig},
 };
 use btel_processor::{AggregateDelta, Publisher};
-use btel_publisher::{RecordingConfig, RecordingId};
+use btel_recorder::{RecordingConfig, RecordingId};
 use btel_records::SpanRecord;
 use btel_snapshot::{Limits, Snapshot, SnapshotPool, SnapshotValue};
 use btel_types::{CallPathId, ClockInstant, allocate_telemetry_id};
@@ -53,7 +53,9 @@ fn capture_at(
     );
 }
 
-async fn setup(config: PublisherConfig) -> (MockServer, BcsDelivery, CloudPublisher, SnapshotPool) {
+async fn setup(
+    config: CloudPublisherConfig,
+) -> (MockServer, BcsDelivery, CloudPublisher, SnapshotPool) {
     let server = MockServer::start().await;
     let base = server.uri();
     Mock::given(method("POST"))
@@ -68,9 +70,8 @@ async fn setup(config: PublisherConfig) -> (MockServer, BcsDelivery, CloudPublis
         .await;
     let delivery = BcsDelivery::new(
         DeliveryConfig {
-            prepare_base_url: server.uri(),
             allow_http: true,
-            ..DeliveryConfig::default()
+            ..DeliveryConfig::new(server.uri().parse().unwrap())
         },
         |_| {},
     )
@@ -98,9 +99,9 @@ async fn setup(config: PublisherConfig) -> (MockServer, BcsDelivery, CloudPublis
 
 #[tokio::test]
 async fn windows_cross_batches_deduplicate_and_finish_drains_the_final_partial_file() {
-    let (server, delivery, mut publisher, pool) = setup(PublisherConfig {
+    let (server, delivery, mut publisher, pool) = setup(CloudPublisherConfig {
         snapshot_target: 3,
-        ..PublisherConfig::default()
+        ..CloudPublisherConfig::default()
     })
     .await;
     for values in [&[1, 2][..], &[3, 4, 5], &[1, 6], &[7]] {
@@ -142,9 +143,9 @@ async fn windows_cross_batches_deduplicate_and_finish_drains_the_final_partial_f
 
 #[tokio::test]
 async fn one_chunk_can_stage_multiple_windows_without_publishing_while_borrowed() {
-    let (server, delivery, mut publisher, pool) = setup(PublisherConfig {
+    let (server, delivery, mut publisher, pool) = setup(CloudPublisherConfig {
         snapshot_target: 2,
-        ..PublisherConfig::default()
+        ..CloudPublisherConfig::default()
     })
     .await;
     publisher.before_batch(6);
@@ -166,7 +167,7 @@ async fn one_chunk_can_stage_multiple_windows_without_publishing_while_borrowed(
 
 #[tokio::test]
 async fn delivery_failure_clears_the_open_window_and_returns_pool_owners() {
-    let (_server, delivery, mut publisher, pool) = setup(PublisherConfig::default()).await;
+    let (_server, delivery, mut publisher, pool) = setup(CloudPublisherConfig::default()).await;
     capture(&mut publisher, &pool, 1);
     publisher.after_batch(1);
     assert_eq!(pool.stats().in_use, 1);
@@ -200,10 +201,9 @@ async fn lost_recording_replays_metadata_and_reoffers_cas_without_replaying_even
         .await;
     let delivery = BcsDelivery::new(
         DeliveryConfig {
-            prepare_base_url: server.uri(),
             allow_http: true,
             retry_delay: Duration::from_millis(1),
-            ..DeliveryConfig::default()
+            ..DeliveryConfig::new(server.uri().parse().unwrap())
         },
         |_| panic!("ordinary loss must not disable delivery"),
     )
@@ -212,7 +212,7 @@ async fn lost_recording_replays_metadata_and_reoffers_cas_without_replaying_even
     let mut publisher = CloudPublisher::new(
         RecordingId::generate(),
         RecordingConfig::default(),
-        PublisherConfig::default(),
+        CloudPublisherConfig::default(),
         handle.clone(),
     )
     .unwrap();
@@ -318,7 +318,7 @@ async fn lost_recording_replays_metadata_and_reoffers_cas_without_replaying_even
         btel_bcs::proto::CloudUploadEnvelope::decode(recovered_put.body.as_slice()).unwrap();
     assert_eq!(envelope.cas_objects.len(), 1);
     let recovered =
-        btel_publisher::proto::RecordingFile::decode(envelope.recording_file.as_deref().unwrap())
+        btel_recorder::proto::RecordingFile::decode(envelope.recording_file.as_deref().unwrap())
             .unwrap();
     let definitions = recovered.definitions.unwrap();
     assert_eq!(definitions.functions.len(), 1);

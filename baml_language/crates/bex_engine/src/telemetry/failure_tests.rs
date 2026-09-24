@@ -11,7 +11,7 @@ fn nz(n: usize) -> NonZeroUsize {
 
 fn engine_with_writer(
     source: &str,
-    write: impl FnMut(&SealedFile) -> Result<(), btel_file::FileSinkError> + Send + 'static,
+    write: impl FnMut(&SealedFile) -> Result<(), btel_file::LocalDeliveryError> + Send + 'static,
 ) -> Arc<BexEngine> {
     let mut engine = BexEngine::new(
         baml_db::testing::compile_source(source),
@@ -22,7 +22,7 @@ fn engine_with_writer(
     let telemetry = engine.telemetry.as_mut().unwrap();
     telemetry.runtime.finish().unwrap();
     let id = RecordingId::generate();
-    let mut sink = None;
+    let mut delivery = None;
     telemetry.runtime = btel_processor::TelemetryRuntime::with_publisher_factory(
         btel_settings::transport::ChunkConfig {
             chunk_capacity: nz(8),
@@ -33,9 +33,9 @@ fn engine_with_writer(
         },
         |control| {
             let failure = control;
-            let writer = btel_file::FileSink::with_test_writer(
+            let writer = btel_file::LocalDelivery::with_test_writer(
                 PathBuf::new(),
-                btel_file::FileSinkConfig::default(),
+                btel_file::LocalDeliveryConfig::default(),
                 write,
                 move |error| failure.disable(btel_processor::RuntimeError(error.to_string())),
             )?;
@@ -48,19 +48,19 @@ fn engine_with_writer(
             )
             .unwrap();
             let publisher = btel_file::LocalPublisher::new(builder, writer);
-            sink = publisher.sink().cloned();
+            delivery = publisher.delivery().cloned();
             Ok(publisher)
         },
     )
     .unwrap();
-    telemetry.delivery = sink.map(RecordingDelivery::Local);
+    telemetry.delivery = delivery.map(RecordingDelivery::Local);
     telemetry.recording_id = Some(id);
-    telemetry.policies = Arc::new(bex_vm::telemetry::TelemetryPolicies::with_mode(
-        btel_settings::mode::TelemetryMode::High,
+    telemetry.policies = Arc::new(bex_vm::telemetry::TelemetryPolicies::with_auto_level(
+        btel_settings::mode::AutoTelemetryLevel::High,
     ));
     Arc::new(engine)
 }
-use btel_publisher::SealedFile;
+use btel_recorder::SealedFile;
 
 fn context() -> crate::FunctionCallContext {
     FunctionCallContextBuilder::new(sys_types::CallId::next()).build()
@@ -71,7 +71,8 @@ async fn disk_error_with_full_file_queue_and_chunk_pool_does_not_fail_applicatio
     for errno in [libc::ENOSPC, libc::EIO] {
         let (entered, started) = mpsc::channel();
         let (release, released) = mpsc::channel();
-        let error = btel_file::FileSinkError(std::io::Error::from_raw_os_error(errno).to_string());
+        let error =
+            btel_file::LocalDeliveryError(std::io::Error::from_raw_os_error(errno).to_string());
         let expected = error.to_string();
         let engine = engine_with_writer(
             r#"
@@ -125,7 +126,9 @@ async fn disk_error_with_full_file_queue_and_chunk_pool_does_not_fail_applicatio
             .unwrap();
         assert_eq!(value, BexExternalValue::Int(10001));
         assert!(transport.is_disabled());
-        assert!(engine.telemetry.as_ref().unwrap().new_root().is_none());
+        assert!(
+            crate::telemetry_state::EngineTelemetry::new_root(engine.telemetry.as_ref()).is_none()
+        );
         assert_eq!(
             engine.telemetry_result().unwrap().unwrap_err().to_string(),
             expected

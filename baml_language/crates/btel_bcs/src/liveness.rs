@@ -16,10 +16,11 @@ use tokio::{
     sync::{Notify, watch},
     time::Instant,
 };
+use uuid::Uuid;
 
 use crate::wire::{HeartbeatPolicy, Liveness, PrepareUploadsRequest, ProducerState};
 
-static SESSION: OnceLock<String> = OnceLock::new();
+static SESSION: OnceLock<Uuid> = OnceLock::new();
 static SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -84,9 +85,7 @@ impl Heartbeat {
             })?
             + 1;
         Ok(Liveness {
-            producer_session_id: SESSION
-                .get_or_init(|| uuid::Uuid::new_v4().to_string())
-                .clone(),
+            producer_session_id: *SESSION.get_or_init(Uuid::new_v4),
             liveness_sequence: sequence,
             state: self.0.state.lock().unwrap().producer_state,
         })
@@ -288,12 +287,31 @@ mod tests {
     }
 
     #[test]
+    fn malformed_session_ids_are_rejected_at_the_json_boundary() {
+        for invalid in [
+            "",
+            "not-a-uuid",
+            "00000000-0000-4000-8000-000000000001-extra",
+        ] {
+            let heartbeat = serde_json::json!({
+                "producer_session_id": invalid,
+                "liveness_sequence": 1,
+                "state": "RUNNING",
+            });
+            assert!(serde_json::from_value::<Liveness>(heartbeat).is_err());
+            let mut prepare = serde_json::to_value(request()).unwrap();
+            prepare["producer_session_id"] = serde_json::json!(invalid);
+            assert!(serde_json::from_value::<PrepareUploadsRequest>(prepare).is_err());
+        }
+    }
+
+    #[test]
     fn process_identity_and_sequence_survive_engine_recreation() {
         let first = Heartbeat::new().liveness().unwrap();
         let second = Heartbeat::new().liveness().unwrap();
         assert_eq!(first.producer_session_id, second.producer_session_id);
         assert!(second.liveness_sequence > first.liveness_sequence);
-        uuid::Uuid::parse_str(&first.producer_session_id).unwrap();
+        assert_eq!(first.producer_session_id.get_version_num(), 4);
     }
 
     #[test]

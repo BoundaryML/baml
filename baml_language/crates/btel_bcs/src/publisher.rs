@@ -4,19 +4,19 @@ use std::{
 };
 
 use btel_processor::{AggregateDelta, Publisher};
-use btel_publisher::{RecordingBuilder, RecordingConfig, RecordingError, RecordingId, SealedFile};
+use btel_recorder::{RecordingBuilder, RecordingConfig, RecordingError, RecordingId, SealedFile};
 use btel_records::SpanRecord;
 use btel_snapshot::{Snapshot, SnapshotId};
 use btel_types::TelemetryId;
 
 use crate::{
-    delivery::{DeliveryError, DeliveryHandle},
+    delivery::{BcsDeliveryHandle, DeliveryError},
     metadata::MetadataJournal,
     wire::{ProposedUploadTarget, UploadKind},
 };
 
 #[derive(Clone, Debug)]
-pub struct PublisherConfig {
+pub struct CloudPublisherConfig {
     /// Bounded recent-offer deduplication, not authoritative CAS availability.
     pub max_offered_snapshots: usize,
     /// Soft per-file targets. A single capture may exceed the byte target.
@@ -32,7 +32,7 @@ pub struct PublisherConfig {
     pub standalone_threshold_bytes: usize,
 }
 
-impl Default for PublisherConfig {
+impl Default for CloudPublisherConfig {
     fn default() -> Self {
         Self {
             max_offered_snapshots: 65_536,
@@ -64,7 +64,7 @@ impl Default for PublisherConfig {
 pub struct CloudPublisher {
     recording: RecordingBuilder,
     recording_target: usize,
-    config: PublisherConfig,
+    config: CloudPublisherConfig,
     offered: HashSet<SnapshotId>,
     offered_order: VecDeque<SnapshotId>,
     metadata: MetadataJournal,
@@ -75,7 +75,7 @@ pub struct CloudPublisher {
     staged_recording_bytes: usize,
     preflight_size: Option<(SnapshotId, Option<usize>)>,
     failure: Option<DeliveryError>,
-    delivery: DeliveryHandle,
+    delivery: BcsDeliveryHandle,
 }
 
 #[derive(Default)]
@@ -94,8 +94,8 @@ impl CloudPublisher {
     pub fn new(
         id: RecordingId,
         recording: RecordingConfig,
-        config: PublisherConfig,
-        delivery: DeliveryHandle,
+        config: CloudPublisherConfig,
+        delivery: BcsDeliveryHandle,
     ) -> Result<Self, RecordingError> {
         let limits = delivery.config();
         if config.max_offered_snapshots == 0
@@ -439,7 +439,7 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
     }
 }
 
-fn propose(sizes: &[usize], config: &PublisherConfig) -> Vec<ProposedUploadTarget> {
+fn propose(sizes: &[usize], config: &CloudPublisherConfig) -> Vec<ProposedUploadTarget> {
     let mut targets = vec![ProposedUploadTarget {
         client_target_id: 0,
         kind: UploadKind::Recording,
@@ -488,12 +488,11 @@ mod tests {
     use super::*;
     use crate::delivery::{BcsDelivery, DeliveryConfig};
 
-    fn publisher(config: PublisherConfig) -> (BcsDelivery, CloudPublisher) {
+    fn publisher(config: CloudPublisherConfig) -> (BcsDelivery, CloudPublisher) {
         let delivery = BcsDelivery::new(
             DeliveryConfig {
-                prepare_base_url: "http://127.0.0.1:1".into(),
                 allow_http: true,
-                ..DeliveryConfig::default()
+                ..DeliveryConfig::new("http://127.0.0.1:1".parse().unwrap())
             },
             |_| {},
         )
@@ -528,7 +527,7 @@ mod tests {
 
     #[test]
     fn detached_preflight_size_is_consumed_and_failure_skips_preflight() {
-        let (_delivery, mut publisher) = publisher(PublisherConfig::default());
+        let (_delivery, mut publisher) = publisher(CloudPublisherConfig::default());
         let pool = SnapshotPool::new(2, Limits::default());
         let snapshot = pool
             .try_acquire()
@@ -569,7 +568,7 @@ mod tests {
 
     #[test]
     fn snapshots_accumulate_across_processor_batches_without_serialization() {
-        let (_delivery, mut publisher) = publisher(PublisherConfig::default());
+        let (_delivery, mut publisher) = publisher(CloudPublisherConfig::default());
         let pool = SnapshotPool::new(4, Limits::default());
         for value in 0..3 {
             publisher.before_batch(1);
@@ -588,7 +587,7 @@ mod tests {
 
     #[test]
     fn first_event_starts_non_sliding_deadline_and_idle_check_seals() {
-        let (_delivery, mut publisher) = publisher(PublisherConfig::default());
+        let (_delivery, mut publisher) = publisher(CloudPublisherConfig::default());
         assert!(publisher.deadline().is_none());
         let start = Instant::now();
         publisher.aggregate(AggregateDelta {
@@ -619,9 +618,9 @@ mod tests {
 
     #[test]
     fn slot_pressure_seals_inside_a_multi_capture_chunk_without_delivery() {
-        let (delivery, mut publisher) = publisher(PublisherConfig {
+        let (delivery, mut publisher) = publisher(CloudPublisherConfig {
             snapshot_target: 2,
-            ..PublisherConfig::default()
+            ..CloudPublisherConfig::default()
         });
         let pool = SnapshotPool::new(8, Limits::default());
         publisher.before_batch(6);
@@ -644,9 +643,9 @@ mod tests {
 
     #[test]
     fn byte_pressure_drops_only_the_owner_that_cannot_fit() {
-        let (delivery, mut publisher) = publisher(PublisherConfig {
+        let (delivery, mut publisher) = publisher(CloudPublisherConfig {
             retained_bytes_target: 1,
-            ..PublisherConfig::default()
+            ..CloudPublisherConfig::default()
         });
         let pool = SnapshotPool::new(4, Limits::default());
         capture(&mut publisher, &pool, 1);
@@ -668,9 +667,9 @@ mod tests {
 
     #[test]
     fn duplicate_ids_are_remembered_across_sealed_windows() {
-        let (_delivery, mut publisher) = publisher(PublisherConfig {
+        let (_delivery, mut publisher) = publisher(CloudPublisherConfig {
             snapshot_target: 1,
-            ..PublisherConfig::default()
+            ..CloudPublisherConfig::default()
         });
         let pool = SnapshotPool::new(4, Limits::default());
         capture(&mut publisher, &pool, 1);
@@ -684,10 +683,10 @@ mod tests {
 
     #[test]
     fn recent_id_eviction_and_loss_reset_preserve_pending_candidate_uniqueness() {
-        let (delivery, mut publisher) = publisher(PublisherConfig {
+        let (delivery, mut publisher) = publisher(CloudPublisherConfig {
             snapshot_target: 2,
             max_offered_snapshots: 1,
-            ..PublisherConfig::default()
+            ..CloudPublisherConfig::default()
         });
         let pool = SnapshotPool::new(8, Limits::default());
         for value in [1, 2, 3, 1, 2, 3] {
@@ -711,10 +710,10 @@ mod tests {
 
     #[test]
     fn owner_count_pressure_drops_only_the_unadmitted_capture() {
-        let (delivery, mut publisher) = publisher(PublisherConfig {
+        let (delivery, mut publisher) = publisher(CloudPublisherConfig {
             snapshot_target: 1,
             max_pending_snapshots: 2,
-            ..PublisherConfig::default()
+            ..CloudPublisherConfig::default()
         });
         let pool = SnapshotPool::new(4, Limits::default());
         for value in 0..3 {
@@ -731,10 +730,9 @@ mod tests {
     fn oversized_recording_releases_owners_and_later_small_file_is_staged() {
         let delivery = BcsDelivery::new(
             DeliveryConfig {
-                prepare_base_url: "http://127.0.0.1:1".into(),
                 allow_http: true,
                 max_recording_body_bytes: 128,
-                ..DeliveryConfig::default()
+                ..DeliveryConfig::new("http://127.0.0.1:1".parse().unwrap())
             },
             |_| panic!("oversized payload must not disable delivery"),
         )
@@ -745,7 +743,7 @@ mod tests {
                 target_bytes: NonZeroUsize::new(128).unwrap(),
                 ..RecordingConfig::default()
             },
-            PublisherConfig::default(),
+            CloudPublisherConfig::default(),
             delivery.handle(),
         )
         .unwrap();
@@ -773,7 +771,7 @@ mod tests {
 
     #[test]
     fn metadata_pressure_is_observable_without_disabling_recordings() {
-        let (delivery, mut publisher) = publisher(PublisherConfig::default());
+        let (delivery, mut publisher) = publisher(CloudPublisherConfig::default());
         publisher.metadata = MetadataJournal::new(1);
         publisher.span(
             allocate_telemetry_id(),
@@ -804,10 +802,9 @@ mod tests {
         for rejection in ["body", "plans", "bytes"] {
             let delivery = BcsDelivery::new(
                 DeliveryConfig {
-                    prepare_base_url: "http://127.0.0.1:1".into(),
                     allow_http: true,
                     max_recording_body_bytes: 512,
-                    ..DeliveryConfig::default()
+                    ..DeliveryConfig::new("http://127.0.0.1:1".parse().unwrap())
                 },
                 |_| panic!("payload rejection must not disable delivery"),
             )
@@ -818,7 +815,7 @@ mod tests {
                     target_bytes: NonZeroUsize::new(512).unwrap(),
                     ..RecordingConfig::default()
                 },
-                PublisherConfig::default(),
+                CloudPublisherConfig::default(),
                 delivery.handle(),
             )
             .unwrap();
@@ -886,7 +883,7 @@ mod tests {
             publisher.stage(sealed);
             assert_eq!(publisher.staged.len(), 1);
             let decoded =
-                btel_publisher::proto::RecordingFile::decode(publisher.staged[0].file.bytes())
+                btel_recorder::proto::RecordingFile::decode(publisher.staged[0].file.bytes())
                     .unwrap();
             let paths: Vec<_> = decoded
                 .definitions
@@ -902,7 +899,7 @@ mod tests {
 
     #[test]
     fn recording_target_and_staged_plan_cap_are_enforced_at_record_boundaries() {
-        let (_delivery, mut publisher) = publisher(PublisherConfig::default());
+        let (_delivery, mut publisher) = publisher(CloudPublisherConfig::default());
         publisher.recording_target = NonZeroUsize::MIN.get();
         for _ in 0..publisher.delivery.config().max_pending_plans {
             publisher.aggregate(AggregateDelta {
@@ -925,14 +922,14 @@ mod tests {
 
     #[test]
     fn publisher_owner_limit_preserves_minimum_pool_headroom() {
-        let (delivery, _) = publisher(PublisherConfig::default());
+        let (delivery, _) = publisher(CloudPublisherConfig::default());
         let make = |max_pending_snapshots| {
             CloudPublisher::new(
                 RecordingId::generate(),
                 RecordingConfig::default(),
-                PublisherConfig {
+                CloudPublisherConfig {
                     max_pending_snapshots,
-                    ..PublisherConfig::default()
+                    ..CloudPublisherConfig::default()
                 },
                 delivery.handle(),
             )
@@ -945,11 +942,11 @@ mod tests {
 
     #[test]
     fn placement_preserves_candidate_order_and_uses_all_target_kinds() {
-        let config = PublisherConfig {
+        let config = CloudPublisherConfig {
             inline_target_bytes: 10,
             batch_target_bytes: 20,
             standalone_threshold_bytes: 100,
-            ..PublisherConfig::default()
+            ..CloudPublisherConfig::default()
         };
         let targets = propose(&[5, 12, 8, 100, 15], &config);
         assert_eq!(targets[0].candidate_indices, [0]);
@@ -962,7 +959,7 @@ mod tests {
 
     #[test]
     fn recording_target_exists_without_snapshots() {
-        let targets = propose(&[], &PublisherConfig::default());
+        let targets = propose(&[], &CloudPublisherConfig::default());
         assert_eq!(targets.len(), 1);
         assert_eq!(targets[0].kind, UploadKind::Recording);
         assert!(targets[0].candidate_indices.is_empty());

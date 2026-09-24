@@ -1,4 +1,4 @@
-// Btel recording v2. Rust types are generated into OUT_DIR by btel_publisher.
+// Btel recording v2. Rust types are generated into OUT_DIR by btel_recorder.
 // RecordingPublisher seals this format; destination delivery is separate.
 syntax = "proto3";
 package baml.btel.recording.v2;

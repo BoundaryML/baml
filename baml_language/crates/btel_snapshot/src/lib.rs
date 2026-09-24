@@ -19,6 +19,7 @@ pub use encoding::{BLOB_MAGIC, BLOB_VERSION};
 mod hash;
 pub use hash::SnapshotId;
 mod memory;
+mod tags;
 
 macro_rules! index {
     ($name:ident) => {
@@ -60,7 +61,7 @@ impl<T> Range<T> {
             start: 0,
             len: 0,
             kind: PhantomData,
-            hash: hash::Hasher::new(32).finish(),
+            hash: hash::Hasher::new(tags::HashDomain::Range).finish(),
         }
     }
     pub fn len(self) -> usize {
@@ -431,9 +432,9 @@ impl SnapshotPool {
                 bigint_hashes: Vec::new(),
                 type_hashes: Vec::new(),
                 object_hashes: Vec::new(),
-                value_hash: hash::Hasher::new(32),
-                entry_hash: hash::Hasher::new(32),
-                type_hash: hash::Hasher::new(32),
+                value_hash: hash::Hasher::new(tags::HashDomain::Range),
+                entry_hash: hash::Hasher::new(tags::HashDomain::Range),
+                type_hash: hash::Hasher::new(tags::HashDomain::Range),
                 id: None,
             });
             self.0.add_bytes(storage.charged);
@@ -598,7 +599,7 @@ impl Builder {
     }
     pub fn value_start(&mut self) -> usize {
         let s = self.storage();
-        s.value_hash = hash::Hasher::new(32);
+        s.value_hash = hash::Hasher::new(tags::HashDomain::Range);
         s.values.len()
     }
     /// Reserve capacity once for a container, without initializing unused slots.
@@ -633,7 +634,7 @@ impl Builder {
     }
     pub fn entry_start(&mut self) -> usize {
         let s = self.storage();
-        s.entry_hash = hash::Hasher::new(32);
+        s.entry_hash = hash::Hasher::new(tags::HashDomain::Range);
         s.entries.len()
     }
     pub fn reserve_entries(&mut self, count: usize) {
@@ -723,7 +724,7 @@ impl Builder {
     }
     pub fn type_start(&mut self) -> usize {
         let s = self.storage();
-        s.type_hash = hash::Hasher::new(32);
+        s.type_hash = hash::Hasher::new(tags::HashDomain::Range);
         s.types.len()
     }
     pub fn push_type(&mut self, ty: OwnedType) -> TypeId {
@@ -762,7 +763,7 @@ impl Builder {
             s.owner.as_ref().unwrap(),
             &mut s.charged,
         );
-        let mut hash = hash::Hasher::new(32);
+        let mut hash = hash::Hasher::new(tags::HashDomain::Range);
         for chunk in bytes[..count].chunks(btel_settings::snapshot::COPY_HASH_BATCH_BYTES) {
             hash.raw(chunk);
             s.bytes.extend_from_slice(chunk);
@@ -801,9 +802,9 @@ fn recycle(mut storage: Box<Storage>) {
     storage.type_hashes.clear();
     storage.object_hashes.clear();
     storage.id = None;
-    storage.value_hash = hash::Hasher::new(32);
-    storage.entry_hash = hash::Hasher::new(32);
-    storage.type_hash = hash::Hasher::new(32);
+    storage.value_hash = hash::Hasher::new(tags::HashDomain::Range);
+    storage.entry_hash = hash::Hasher::new(tags::HashDomain::Range);
+    storage.type_hash = hash::Hasher::new(tags::HashDomain::Range);
     storage.root = None;
     storage.stats = CaptureStats::default();
     storage.content = 0;

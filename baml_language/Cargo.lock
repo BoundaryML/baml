@@ -1276,7 +1276,7 @@ dependencies = [
  "btel_clock",
  "btel_file",
  "btel_processor",
- "btel_publisher",
+ "btel_recorder",
  "btel_settings",
  "btel_types",
  "clap",
@@ -1763,7 +1763,7 @@ version = "0.0.0-beta"
 dependencies = [
  "btel_clock",
  "btel_processor",
- "btel_publisher",
+ "btel_recorder",
  "btel_records",
  "btel_settings",
  "btel_snapshot",
@@ -1799,7 +1799,7 @@ name = "btel_file"
 version = "0.0.0-beta"
 dependencies = [
  "btel_processor",
- "btel_publisher",
+ "btel_recorder",
  "btel_records",
  "btel_settings",
  "btel_snapshot",
@@ -1823,7 +1823,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "btel_publisher"
+name = "btel_recorder"
 version = "0.0.0-beta"
 dependencies = [
  "bex_chunkedringbuffer",

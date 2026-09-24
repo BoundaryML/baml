@@ -14,8 +14,9 @@ use borsh::BorshSerialize;
 use xxhash_rust::xxh3::Xxh3;
 
 use super::{
-    BexStr, BigInt, Description, Limit, OwnedType, Range, SnapshotObject, SnapshotRoot,
-    SnapshotValue, Storage, TypeIdentity,
+    BexStr, BigInt, OwnedType, Range, SnapshotObject, SnapshotRoot, SnapshotValue, Storage,
+    TypeIdentity,
+    tags::{self, HashDomain, ObjectTag, RootTag, TypeIdentityTag, ValueTag},
 };
 
 /// Whole-snapshot content identity. A zero digest is a valid hash, never absence.
@@ -34,10 +35,10 @@ impl SnapshotId {
 pub(super) struct Digest(pub(super) [u8; 16]);
 pub(super) struct Hasher(Xxh3);
 impl Hasher {
-    pub(super) fn new(kind: u8) -> Self {
+    pub(super) fn new(kind: HashDomain) -> Self {
         let mut h = Self(Xxh3::new());
         h.0.update(b"baml.snapshot.xxh3-128.v1\0");
-        h.byte(kind);
+        h.byte(kind as u8);
         h
     }
     pub(super) fn byte(&mut self, n: u8) {
@@ -79,29 +80,25 @@ impl BorshSerialize for TypeIdentity {
     fn serialize<W: Write>(&self, w: &mut W) -> io::Result<()> {
         match self {
             Self::Resolved(head) => {
-                1_u8.serialize(w)?;
+                (TypeIdentityTag::Resolved as u8).serialize(w)?;
                 head.tag().serialize(w)?;
                 head.name().serialize(w)
             }
             Self::Unresolved(tag) => {
-                0_u8.serialize(w)?;
+                (TypeIdentityTag::Unresolved as u8).serialize(w)?;
                 tag.serialize(w)
             }
         }
     }
 }
 pub(super) fn string(s: &BexStr) -> Digest {
-    let mut h = Hasher::new(1);
+    let mut h = Hasher::new(HashDomain::String);
     h.string(s);
     h.finish()
 }
 pub(super) fn bigint(n: &BigInt) -> Digest {
-    let mut h = Hasher::new(2);
-    h.byte(match n.sign() {
-        num_bigint::Sign::Minus => 0,
-        num_bigint::Sign::NoSign => 1,
-        num_bigint::Sign::Plus => 2,
-    });
+    let mut h = Hasher::new(HashDomain::Bigint);
+    h.byte(tags::bigint_sign(n.sign()));
     h.number(n.bits());
     for digit in n.iter_u64_digits() {
         h.number(digit);
@@ -109,33 +106,9 @@ pub(super) fn bigint(n: &BigInt) -> Digest {
     h.finish()
 }
 pub(super) fn ty(ty: &OwnedType) -> Digest {
-    let mut h = Hasher::new(3);
+    let mut h = Hasher::new(HashDomain::Type);
     h.borsh(ty);
     h.finish()
-}
-fn limit(l: Limit) -> u8 {
-    match l {
-        Limit::Values => 0,
-        Limit::Objects => 1,
-        Limit::Bytes => 2,
-        Limit::Depth => 3,
-    }
-}
-fn description(d: Description) -> u8 {
-    match d {
-        Description::Function => 0,
-        Description::Closure => 1,
-        Description::BoundMethod => 2,
-        Description::GenericFunction => 3,
-        Description::HostFunction => 4,
-        Description::Future => 5,
-        Description::UnscheduledFuture => 6,
-        Description::Package => 7,
-        Description::Interface => 8,
-        Description::Implementation => 9,
-        Description::TypeAlias => 10,
-        Description::Sentinel => 11,
-    }
 }
 pub(super) fn value(
     h: &mut Hasher,
@@ -145,34 +118,34 @@ pub(super) fn value(
     types: &[Digest],
 ) {
     match v {
-        SnapshotValue::Null => h.byte(0),
-        SnapshotValue::OmittedArg => h.byte(1),
+        SnapshotValue::Null => h.byte(ValueTag::Null as u8),
+        SnapshotValue::OmittedArg => h.byte(ValueTag::OmittedArg as u8),
         SnapshotValue::Bool(v) => {
-            h.byte(2);
+            h.byte(ValueTag::Bool as u8);
             h.byte(u8::from(v));
         }
         SnapshotValue::Int(v) => {
-            h.byte(3);
+            h.byte(ValueTag::Int as u8);
             h.0.update(&v.to_le_bytes());
         }
         SnapshotValue::Float(v) => {
-            h.byte(4);
+            h.byte(ValueTag::Float as u8);
             h.number(v.to_bits());
         }
         SnapshotValue::String(id) => {
-            h.byte(5);
+            h.byte(ValueTag::String as u8);
             h.digest(strings[id.0 as usize]);
         }
         SnapshotValue::Bigint(id) => {
-            h.byte(6);
+            h.byte(ValueTag::Bigint as u8);
             h.digest(bigints[id.0 as usize]);
         }
         SnapshotValue::Object(id) => {
-            h.byte(7);
+            h.byte(ValueTag::Object as u8);
             h.number(u64::from(id.0));
         }
         SnapshotValue::Type(id) => {
-            h.byte(8);
+            h.byte(ValueTag::Type as u8);
             h.digest(types[id.0 as usize]);
         }
         SnapshotValue::Enum {
@@ -180,14 +153,14 @@ pub(super) fn value(
             variant,
             name,
         } => {
-            h.byte(9);
+            h.byte(ValueTag::Enum as u8);
             h.number(u64::from(declaration.0));
             h.number(u64::from(variant));
             h.digest(strings[name.0 as usize]);
         }
         SnapshotValue::Truncated(l) => {
-            h.byte(10);
-            h.byte(limit(l));
+            h.byte(ValueTag::Truncated as u8);
+            h.byte(tags::limit(l));
         }
     }
 }
@@ -196,10 +169,10 @@ fn range<T>(h: &mut Hasher, r: Range<T>) {
     h.digest(r.hash);
 }
 pub(super) fn object(object: &SnapshotObject, s: &Storage) -> Digest {
-    let mut h = Hasher::new(4);
+    let mut h = Hasher::new(HashDomain::Object);
     match object {
         SnapshotObject::Bytes { data, original_len } => {
-            h.byte(0);
+            h.byte(ObjectTag::Bytes as u8);
             h.size(*original_len);
             range(&mut h, *data);
         }
@@ -208,7 +181,7 @@ pub(super) fn object(object: &SnapshotObject, s: &Storage) -> Digest {
             items,
             original_len,
         } => {
-            h.byte(1);
+            h.byte(ObjectTag::List as u8);
             h.digest(s.type_hashes[element_type.0 as usize]);
             h.size(*original_len);
             range(&mut h, *items);
@@ -219,7 +192,7 @@ pub(super) fn object(object: &SnapshotObject, s: &Storage) -> Digest {
             entries,
             original_len,
         } => {
-            h.byte(2);
+            h.byte(ObjectTag::Map as u8);
             h.digest(s.type_hashes[key_type.0 as usize]);
             h.digest(s.type_hashes[value_type.0 as usize]);
             h.size(*original_len);
@@ -231,20 +204,20 @@ pub(super) fn object(object: &SnapshotObject, s: &Storage) -> Digest {
             fields,
             original_len,
         } => {
-            h.byte(3);
+            h.byte(ObjectTag::Instance as u8);
             range(&mut h, *type_arguments);
             h.number(u64::from(declaration.0));
             h.size(*original_len);
             range(&mut h, *fields);
         }
         SnapshotObject::Declaration { name, tag, is_enum } => {
-            h.byte(4);
+            h.byte(ObjectTag::Declaration as u8);
             h.borsh(tag);
             h.borsh(name);
             h.byte(u8::from(*is_enum));
         }
         SnapshotObject::Cell(v) => {
-            h.byte(5);
+            h.byte(ObjectTag::Cell as u8);
             value(
                 &mut h,
                 *v,
@@ -253,27 +226,27 @@ pub(super) fn object(object: &SnapshotObject, s: &Storage) -> Digest {
                 &s.type_hashes,
             );
         }
-        SnapshotObject::NonSnapshotableValue {} => h.byte(6),
+        SnapshotObject::NonSnapshotableValue {} => h.byte(ObjectTag::NonSnapshotableValue as u8),
         SnapshotObject::Descriptive { kind, name } => {
-            h.byte(7);
-            h.byte(description(*kind));
+            h.byte(ObjectTag::Descriptive as u8);
+            h.byte(tags::description(*kind));
             h.byte(u8::from(name.is_some()));
             if let Some(name) = name {
                 h.digest(s.string_hashes[name.0 as usize]);
             }
         }
         SnapshotObject::Truncated(l) => {
-            h.byte(8);
-            h.byte(limit(*l));
+            h.byte(ObjectTag::Truncated as u8);
+            h.byte(tags::limit(*l));
         }
     }
     h.finish()
 }
 pub(super) fn snapshot(s: &Storage) -> SnapshotId {
-    let mut h = Hasher::new(5);
+    let mut h = Hasher::new(HashDomain::Snapshot);
     match s.root.unwrap() {
         SnapshotRoot::Value(v) => {
-            h.byte(0);
+            h.byte(RootTag::Value as u8);
             value(
                 &mut h,
                 v,
@@ -283,7 +256,7 @@ pub(super) fn snapshot(s: &Storage) -> SnapshotId {
             );
         }
         SnapshotRoot::FunctionArgs(args) => {
-            h.byte(1);
+            h.byte(RootTag::FunctionArgs as u8);
             h.size(args.parameter_count);
             range(&mut h, args.slots);
         }

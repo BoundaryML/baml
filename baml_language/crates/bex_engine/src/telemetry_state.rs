@@ -12,7 +12,7 @@ pub(crate) struct EngineTelemetry {
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) runtime: Arc<btel_processor::TelemetryRuntime>,
     #[cfg(not(target_arch = "wasm32"))]
-    pub(super) recording_id: Option<btel_publisher::RecordingId>,
+    pub(super) recording_id: Option<btel_recorder::RecordingId>,
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) delivery: Option<super::telemetry::RecordingDelivery>,
 }
@@ -20,10 +20,10 @@ impl EngineTelemetry {
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn result(&self) -> Option<Result<(), btel_processor::RuntimeError>> {
         let processing = self.runtime.result();
-        let Some(sink) = &self.delivery else {
+        let Some(delivery) = &self.delivery else {
             return processing;
         };
-        let delivery = sink.result();
+        let delivery = delivery.result();
         match (processing, delivery) {
             (_, Some(Err(error))) | (Some(Err(error)), _) => Some(Err(error)),
             (Some(Ok(())), Some(Ok(()))) => Some(Ok(())),
@@ -31,22 +31,13 @@ impl EngineTelemetry {
         }
     }
 
-    fn recording_disabled(&self) -> bool {
+    pub(super) fn new_root(telemetry: Option<&Self>) -> Option<TelemetryState> {
+        let telemetry = telemetry?;
         #[cfg(not(target_arch = "wasm32"))]
-        {
-            self.runtime.is_disabled()
-        }
-        #[cfg(target_arch = "wasm32")]
-        {
-            self.policies.mode() == btel_settings::mode::TelemetryMode::Off
-        }
-    }
-
-    pub(super) fn new_root(&self) -> Option<TelemetryState> {
-        if self.recording_disabled() {
+        if telemetry.runtime.is_disabled() {
             return None;
         }
-        Some(self.new_state(self.clock.start_run()))
+        Some(telemetry.new_state(telemetry.clock.start_run()))
     }
     fn new_state(&self, clock: Arc<btel_clock::ClockEpoch>) -> TelemetryState {
         TelemetryState::new_root(
@@ -56,12 +47,17 @@ impl EngineTelemetry {
             Arc::clone(&self.runtime),
         )
     }
-    pub(super) fn new_child(&self, context: Option<&ThreadSpawnContext>) -> Option<TelemetryState> {
-        if self.recording_disabled() {
+    pub(super) fn new_child(
+        telemetry: Option<&Self>,
+        context: Option<&ThreadSpawnContext>,
+    ) -> Option<TelemetryState> {
+        let telemetry = telemetry?;
+        #[cfg(not(target_arch = "wasm32"))]
+        if telemetry.runtime.is_disabled() {
             return None;
         }
         let context = context.expect("enabled parent supplies telemetry spawn context");
-        let mut state = self.new_state(Arc::clone(&context.clock));
+        let mut state = telemetry.new_state(Arc::clone(&context.clock));
         state.configure_spawn(context);
         Some(state)
     }

@@ -1,5 +1,5 @@
 [package]
-name = "btel_publisher"
+name = "btel_recorder"
 version = { workspace = true }
 publish = false
 edition = { workspace = true }

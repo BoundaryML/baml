@@ -3,7 +3,28 @@
 This crate implements the runtime side of a proposed BCS direct-upload contract.
 It does not imply that the BCS server already supports this protocol.
 
+## Automatic function observation
+
+A function requesting auto (`null` / no explicit policy) inherits
+`AutoTelemetryLevel`. The engine reads `BAML_TELEMETRY` once at startup:
+
+- `low`: auto functions are unobserved.
+- `medium` (default): ordinary auto functions produce timing aggregates; auto LLM
+  functions produce spans with their default input/output/error captures.
+- `high`: supported auto functions produce spans, without extra value capture.
+- `off`: global kill switch; no telemetry resources are created.
+
+Explicit function policies take precedence over every automatic level. In
+particular, `high` does not promote an explicitly configured timing-only function.
+Native/unsupported functions remain unobserved. Per-function auto is distinct
+from the engine level: the former engine-level spelling `auto` is replaced by
+`medium`. There is not yet a public BAML policy setter accepting `null`.
+
 ## Transport
+
+Construct `DeliveryConfig::new(endpoint.parse()?)` with an explicit BCS endpoint.
+The config retains a parsed `reqwest::Url`; startup still enforces HTTPS and
+rejects credentials, queries, and fragments in that base URL.
 
 The runtime posts JSON to
 `/v1/recordings/{recording_id}/uploads:prepare`. Recording IDs and digests are
@@ -77,8 +98,17 @@ CAS offers; only BCS decides whether content is already available.
 ## Ownership and limits
 
 The processor statically dispatches to `CloudPublisher`. It reuses
-`RecordingBuilder` for encoding and hands owned groups to a dedicated delivery
+`btel_recorder::RecordingBuilder` for encoding and hands owned groups to a dedicated delivery
 thread; event callbacks never perform HTTP.
+
+`CloudPublisher` submits through `BcsDeliveryHandle`; the engine retains
+`BcsDelivery` to drain and join the worker. Local recording has the same ownership
+split through `LocalDeliveryHandle` and `LocalDelivery` in `btel_file`. These are
+implementation details, not a shared delivery interface required by `Publisher`.
+
+`btel_processor` defines the shared `Publisher` interface. `CloudPublisherConfig`
+configures cloud-specific batching and placement; `RecordingConfig` is shared
+with local recording, and `DeliveryConfig` controls cloud transport.
 
 The publisher accumulates recording events and structured snapshots across
 processor batches. A window seals at a record boundary when it reaches the

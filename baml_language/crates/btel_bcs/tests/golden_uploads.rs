@@ -10,7 +10,7 @@ use btel_bcs::{
     wire::{PrepareUploadsRequest, PrepareUploadsResponse, UploadKind},
 };
 use btel_processor::AggregateDelta;
-use btel_publisher::{RecordingBuilder, RecordingConfig, RecordingId, SealedFile};
+use btel_recorder::{RecordingBuilder, RecordingConfig, RecordingId, SealedFile};
 use btel_records::SpanRecord;
 use btel_snapshot::{Limits, Snapshot, SnapshotPool, SnapshotValue};
 use btel_types::{AwaitDuration, CallPathId, ClockInstant, TelemetryId, allocate_telemetry_id};
@@ -252,7 +252,6 @@ async fn check_case(case: &str) {
     let delivery = Arc::new(
         BcsDelivery::new(
             DeliveryConfig {
-                prepare_base_url: server.uri(),
                 bearer_token: Some("golden-prepare-token".into()),
                 allow_http: true,
                 max_candidates: 8,
@@ -261,7 +260,7 @@ async fn check_case(case: &str) {
                 max_cas_body_bytes: 4096,
                 request_timeout: Duration::from_secs(2),
                 max_attempts: 1,
-                ..DeliveryConfig::default()
+                ..DeliveryConfig::new(server.uri().parse().unwrap())
             },
             |_| {},
         )

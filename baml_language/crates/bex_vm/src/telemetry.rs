@@ -21,6 +21,7 @@ use std::{
 
 use bex_vm_types::{Function, FunctionKind, FunctionMeta, HeapPtr, Value};
 use btel_clock::ClockEpoch;
+use btel_settings::mode::AutoTelemetryLevel;
 pub use btel_types::{
     AwaitDuration, CallPathEdge, CallPathId, ClockDuration, ClockInstant, InvocationMode,
     InvocationOutcome, TelemetryId,
@@ -138,7 +139,7 @@ pub struct TelemetryState {
     capture_scratch: snapshot::Scratch,
     #[cfg(target_arch = "wasm32")]
     snapshots: btel_snapshot::SnapshotPool,
-    mode: btel_settings::mode::TelemetryMode,
+    auto_level: AutoTelemetryLevel,
     thread: ThreadTelemetry,
     call_paths: FxHashMap<CallPathKey, CallPathId>,
     call_path_keys: FxHashMap<CallPathId, CallPathKey>,
@@ -159,7 +160,6 @@ impl TelemetryState {
         clock: Arc<ClockEpoch>,
         #[cfg(not(target_arch = "wasm32"))] runtime: Arc<btel_processor::TelemetryRuntime>,
     ) -> Self {
-        assert_ne!(policies.mode(), btel_settings::mode::TelemetryMode::Off);
         clock.attach_thread();
         let id = allocate_telemetry_id();
         let started_at = clock.read();
@@ -170,7 +170,7 @@ impl TelemetryState {
                 btel_settings::snapshot::MIN_SNAPSHOT_SLOTS,
                 btel_snapshot::Limits::default(),
             ),
-            mode: policies.mode(),
+            auto_level: policies.auto_level(),
             thread: ThreadTelemetry {
                 active_id: id,
                 active_call_path: CallPathId::ROOT,
@@ -288,10 +288,10 @@ impl TelemetryState {
 
         let policy_id = function.telemetry_policy_id.load();
         if policy_id == btel_types::TelemetryPolicyId::NONE {
-            if self.mode == btel_settings::mode::TelemetryMode::Low {
+            if self.auto_level == AutoTelemetryLevel::Low {
                 return None;
             }
-            if self.mode == btel_settings::mode::TelemetryMode::Auto
+            if self.auto_level == AutoTelemetryLevel::Medium
                 && !matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. }))
             {
                 return Some(self.enter_timing(
@@ -304,13 +304,10 @@ impl TelemetryState {
             }
         }
         let policy = self.policy_by_id(policy_id);
-        let mode = default_mode(function, policy);
-        let mode = if self.mode == btel_settings::mode::TelemetryMode::High
-            && mode != InvocationMode::Hidden
-        {
+        let mode = if policy_id == btel_types::TelemetryPolicyId::NONE {
             InvocationMode::Span
         } else {
-            mode
+            default_mode(function, policy)
         };
 
         if mode == InvocationMode::Hidden {
@@ -1219,8 +1216,11 @@ mod tests {
 
     #[test]
     fn engine_modes_preserve_policy_and_hidden_boundaries() {
-        use btel_settings::mode::TelemetryMode;
-        for mode in [TelemetryMode::Low, TelemetryMode::Auto, TelemetryMode::High] {
+        for mode in [
+            AutoTelemetryLevel::Low,
+            AutoTelemetryLevel::Medium,
+            AutoTelemetryLevel::High,
+        ] {
             for ai in [false, true] {
                 let function = function(
                     FunctionKind::Bytecode,
@@ -1228,16 +1228,22 @@ mod tests {
                         client: "test".into(),
                     }),
                 );
-                let mut state =
-                    test_state(Arc::new(TelemetryPolicies::with_mode(mode)), test_clock());
+                let mut state = test_state(
+                    Arc::new(TelemetryPolicies::with_auto_level(mode)),
+                    test_clock(),
+                );
                 let parent = state.active_id();
                 let frame = unsafe {
                     state.enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {
-                        assert_ne!(mode, TelemetryMode::Low, "hidden entry must not register");
+                        assert_ne!(
+                            mode,
+                            AutoTelemetryLevel::Low,
+                            "hidden entry must not register"
+                        );
                         (None, function.telemetry_function_id.unwrap())
                     })
                 };
-                if mode == TelemetryMode::Low {
+                if mode == AutoTelemetryLevel::Low {
                     assert!(frame.is_none());
                     assert_eq!(state.active_id(), parent);
                     assert!(state.span_records().is_empty());
@@ -1279,7 +1285,7 @@ mod tests {
                     )));
                 } else {
                     let frame = frame.unwrap();
-                    assert_eq!(frame.is_span(), ai || mode == TelemetryMode::High);
+                    assert_eq!(frame.is_span(), ai || mode == AutoTelemetryLevel::High);
                     unsafe {
                         state.complete_invocation(
                             frame,
@@ -1288,7 +1294,7 @@ mod tests {
                             Some(Value::int(1)),
                         );
                     };
-                    if mode == TelemetryMode::High && !ai {
+                    if mode == AutoTelemetryLevel::High && !ai {
                         assert!(state.span_records().iter().any(|record| matches!(
                             record,
                             SpanRecord::FunctionSpanCompletionOk {
@@ -1306,8 +1312,10 @@ mod tests {
                 if matches!(hidden.kind, FunctionKind::Bytecode) {
                     hidden.telemetry_function_id = None;
                 }
-                let mut state =
-                    test_state(Arc::new(TelemetryPolicies::with_mode(mode)), test_clock());
+                let mut state = test_state(
+                    Arc::new(TelemetryPolicies::with_auto_level(mode)),
+                    test_clock(),
+                );
                 assert!(
                     unsafe {
                         state.enter_bytecode(
@@ -1323,6 +1331,97 @@ mod tests {
                     .is_none()
                 );
                 assert!(state.span_records().is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn explicit_policy_overrides_auto_level_and_reset_restores_inheritance() {
+        for auto_level in [
+            AutoTelemetryLevel::Low,
+            AutoTelemetryLevel::Medium,
+            AutoTelemetryLevel::High,
+        ] {
+            for ai in [false, true] {
+                for span_from_entry in [false, true] {
+                    let function = function(
+                        FunctionKind::Bytecode,
+                        ai.then(|| FunctionMeta::Llm {
+                            client: "test".into(),
+                        }),
+                    );
+                    let mut state = test_state(
+                        Arc::new(TelemetryPolicies::with_auto_level(auto_level)),
+                        test_clock(),
+                    );
+                    state
+                        .set_policy(
+                            &function,
+                            TelemetryPolicy {
+                                span_from_entry,
+                                promote_errors: true,
+                                ..TelemetryPolicy::NONE
+                            },
+                        )
+                        .unwrap();
+                    let frame = unsafe {
+                        state.enter_bytecode(
+                            &function,
+                            HeapPtr::null(),
+                            None,
+                            0,
+                            false,
+                            &[],
+                            |_, _| (None, function.telemetry_function_id.unwrap()),
+                        )
+                    }
+                    .unwrap();
+                    assert_eq!(frame.is_span(), ai || span_from_entry);
+                    unsafe {
+                        state.complete_invocation(frame, &function, InvocationOutcome::Ok, None);
+                    }
+                    if !ai && !span_from_entry {
+                        assert_eq!(state.timing_records.len(), 1);
+                        assert!(!state.span_records().iter().any(|record| matches!(
+                            record,
+                            SpanRecord::FunctionSpanAnnouncement { .. }
+                        )));
+                    }
+
+                    state.set_policy(&function, TelemetryPolicy::NONE).unwrap();
+                    assert_eq!(
+                        function.telemetry_policy_id.load(),
+                        btel_types::TelemetryPolicyId::NONE
+                    );
+                    let frame = unsafe {
+                        state.enter_bytecode(
+                            &function,
+                            HeapPtr::null(),
+                            None,
+                            0,
+                            false,
+                            &[],
+                            |_, _| (None, function.telemetry_function_id.unwrap()),
+                        )
+                    };
+                    if auto_level == AutoTelemetryLevel::Low {
+                        assert!(frame.is_none());
+                    } else {
+                        let frame = frame.unwrap();
+                        assert_eq!(
+                            frame.is_span(),
+                            ai || auto_level == AutoTelemetryLevel::High
+                        );
+                        unsafe {
+                            state.complete_invocation(
+                                frame,
+                                &function,
+                                InvocationOutcome::Ok,
+                                None,
+                            );
+                        }
+                    }
+                }
             }
         }
     }

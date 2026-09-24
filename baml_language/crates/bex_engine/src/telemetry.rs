@@ -4,7 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use btel_publisher::{RecordingBuilder, RecordingConfig, RecordingId};
+use btel_recorder::{RecordingBuilder, RecordingConfig, RecordingId};
 
 use crate::{BexEngine, EngineError, RuntimeCompiler};
 
@@ -24,21 +24,21 @@ enum Destination {
     },
     UserFiles,
     Cloud {
-        publisher: btel_bcs::PublisherConfig,
-        delivery: btel_bcs::delivery::DeliveryConfig,
+        publisher: btel_bcs::CloudPublisherConfig,
+        delivery: Box<btel_bcs::delivery::DeliveryConfig>,
     },
 }
 
 #[derive(Clone)]
 pub(crate) enum RecordingDelivery {
-    Local(Arc<btel_file::FileSink>),
+    Local(Arc<btel_file::LocalDelivery>),
     Cloud(Arc<btel_bcs::delivery::BcsDelivery>),
 }
 
 impl RecordingDelivery {
     pub(crate) fn finish(&self) -> Result<(), btel_processor::RuntimeError> {
         match self {
-            Self::Local(sink) => sink
+            Self::Local(delivery) => delivery
                 .finish()
                 .map_err(|error| btel_processor::RuntimeError(error.to_string())),
             Self::Cloud(delivery) => delivery
@@ -49,7 +49,7 @@ impl RecordingDelivery {
 
     pub(crate) fn result(&self) -> Option<Result<(), btel_processor::RuntimeError>> {
         match self {
-            Self::Local(sink) => sink
+            Self::Local(delivery) => delivery
                 .result()
                 .map(|result| result.map_err(|e| btel_processor::RuntimeError(e.to_string()))),
             Self::Cloud(delivery) => delivery
@@ -60,7 +60,7 @@ impl RecordingDelivery {
 
     fn directory(&self) -> Option<&Path> {
         match self {
-            Self::Local(sink) => Some(sink.directory()),
+            Self::Local(delivery) => Some(delivery.directory()),
             Self::Cloud(_) => None,
         }
     }
@@ -78,7 +78,7 @@ impl TelemetryRecording {
     /// No worker starts until engine construction. There is no durable spool.
     pub fn cloud(
         config: RecordingConfig,
-        publisher: btel_bcs::PublisherConfig,
+        publisher: btel_bcs::CloudPublisherConfig,
         delivery: btel_bcs::delivery::DeliveryConfig,
     ) -> Self {
         Self {
@@ -86,7 +86,7 @@ impl TelemetryRecording {
             config,
             destination: Destination::Cloud {
                 publisher,
-                delivery,
+                delivery: Box::new(delivery),
             },
         }
     }
@@ -166,7 +166,7 @@ impl TelemetryRecording {
                     self.id,
                     self.config,
                     publisher,
-                    delivery,
+                    *delivery,
                     source_snapshot,
                     transport,
                 );
@@ -181,16 +181,16 @@ impl TelemetryRecording {
                 .ok_or_else(|| std::io::Error::other("cannot determine telemetry home directory")),
             Destination::LocalFiles { recordings, cas } => Ok((recordings, cas)),
         };
-        let mut sink = None;
+        let mut delivery = None;
         let runtime =
             btel_processor::TelemetryRuntime::with_publisher_factory(transport, |control| {
                 let failure = control.clone();
                 let writer = root.and_then(|(root, cas)| {
-                    btel_file::FileSink::create_with_cas(
+                    btel_file::LocalDelivery::create_with_cas(
                         &root,
                         &cas,
                         self.id,
-                        btel_file::FileSinkConfig::default(),
+                        btel_file::LocalDeliveryConfig::default(),
                         move |error| {
                             failure.disable(btel_processor::RuntimeError(error.to_string()));
                             tracing::warn!(%error, "telemetry recording disabled");
@@ -203,7 +203,7 @@ impl TelemetryRecording {
                 let publisher = match writer {
                     Ok(writer) => {
                         let publisher = btel_file::LocalPublisher::new(builder, writer);
-                        sink = publisher.sink().cloned();
+                        delivery = publisher.delivery().cloned();
                         publisher
                     }
                     Err(error) => {
@@ -219,13 +219,13 @@ impl TelemetryRecording {
                 Ok(publisher)
             })
             .map_err(|error| EngineError::Other(format!("telemetry processor startup: {error}")))?;
-        Ok((runtime, sink.map(RecordingDelivery::Local)))
+        Ok((runtime, delivery.map(RecordingDelivery::Local)))
     }
 
     fn start_cloud(
         id: RecordingId,
         config: RecordingConfig,
-        publisher_config: btel_bcs::PublisherConfig,
+        publisher_config: btel_bcs::CloudPublisherConfig,
         delivery_config: btel_bcs::delivery::DeliveryConfig,
         source_snapshot: Option<[u8; 32]>,
         transport: btel_settings::transport::ChunkConfig,
@@ -240,21 +240,23 @@ impl TelemetryRecording {
         let runtime =
             btel_processor::TelemetryRuntime::with_publisher_factory(transport, |control| {
                 let failure = control.clone();
-                let handle =
-                    match btel_bcs::delivery::BcsDelivery::new(delivery_config, move |error| {
+                let handle = match btel_bcs::delivery::BcsDelivery::new(
+                    delivery_config.clone(),
+                    move |error| {
                         failure.disable(btel_processor::RuntimeError(error.to_string()));
                         tracing::warn!(%error, "cloud telemetry disabled");
-                    }) {
-                        Ok(worker) => {
-                            let handle = worker.handle();
-                            delivery = Some(RecordingDelivery::Cloud(Arc::new(worker)));
-                            handle
-                        }
-                        Err(error) => {
-                            control.disable(btel_processor::RuntimeError(error.to_string()));
-                            btel_bcs::delivery::DeliveryHandle::disabled(error)
-                        }
-                    };
+                    },
+                ) {
+                    Ok(worker) => {
+                        let handle = worker.handle();
+                        delivery = Some(RecordingDelivery::Cloud(Arc::new(worker)));
+                        handle
+                    }
+                    Err(error) => {
+                        control.disable(btel_processor::RuntimeError(error.to_string()));
+                        btel_bcs::delivery::BcsDeliveryHandle::disabled(error, delivery_config)
+                    }
+                };
                 btel_bcs::CloudPublisher::new(id, config, publisher_config, handle)
                     .map(|publisher| publisher.with_source_snapshot(source_snapshot))
                     .map_err(std::io::Error::other)

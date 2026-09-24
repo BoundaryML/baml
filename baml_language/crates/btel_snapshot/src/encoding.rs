@@ -15,7 +15,10 @@ use std::io::{self, Write};
 use borsh::BorshSerialize;
 pub use btel_settings::snapshot::{BLOB_MAGIC, BLOB_VERSION};
 
-use crate::{Description, Limit, Snapshot, SnapshotObject, SnapshotRoot, SnapshotValue};
+use crate::{
+    Snapshot, SnapshotObject, SnapshotRoot, SnapshotValue,
+    tags::{self, ObjectTag, RootTag, ValueTag},
+};
 
 fn size(w: &mut impl Write, n: usize) -> io::Result<()> {
     u32::try_from(n)
@@ -31,32 +34,6 @@ fn string(w: &mut impl Write, value: &bex_str::BexStr) -> io::Result<()> {
     size(w, value.len())?;
     w.write_all(value.as_bytes())
 }
-fn limit(w: &mut impl Write, value: Limit) -> io::Result<()> {
-    let tag: u8 = match value {
-        Limit::Values => 0,
-        Limit::Objects => 1,
-        Limit::Bytes => 2,
-        Limit::Depth => 3,
-    };
-    tag.serialize(w)
-}
-fn description(w: &mut impl Write, value: Description) -> io::Result<()> {
-    let tag: u8 = match value {
-        Description::Function => 0,
-        Description::Closure => 1,
-        Description::BoundMethod => 2,
-        Description::GenericFunction => 3,
-        Description::HostFunction => 4,
-        Description::Future => 5,
-        Description::UnscheduledFuture => 6,
-        Description::Package => 7,
-        Description::Interface => 8,
-        Description::Implementation => 9,
-        Description::TypeAlias => 10,
-        Description::Sentinel => 11,
-    };
-    tag.serialize(w)
-}
 impl Snapshot {
     /// Stream a complete binary graph without cloning owners or allocating an
     /// intermediate encoded payload. The writer chooses its own buffering.
@@ -68,11 +45,11 @@ impl Snapshot {
         size(w, self.object_count())?;
         match self.root() {
             SnapshotRoot::Value(value) => {
-                0_u8.serialize(w)?;
+                (RootTag::Value as u8).serialize(w)?;
                 self.write_value(w, value)?;
             }
             SnapshotRoot::FunctionArgs(args) => {
-                1_u8.serialize(w)?;
+                (RootTag::FunctionArgs as u8).serialize(w)?;
                 original_len(w, args.parameter_count)?;
                 self.write_values(w, self.values(args.slots))?;
             }
@@ -83,7 +60,7 @@ impl Snapshot {
                     data,
                     original_len: n,
                 } => {
-                    0_u8.serialize(w)?;
+                    (ObjectTag::Bytes as u8).serialize(w)?;
                     original_len(w, *n)?;
                     let bytes = self.bytes(*data);
                     size(w, bytes.len())?;
@@ -94,7 +71,7 @@ impl Snapshot {
                     items,
                     original_len: n,
                 } => {
-                    1_u8.serialize(w)?;
+                    (ObjectTag::List as u8).serialize(w)?;
                     self.ty(*element_type).serialize(w)?;
                     original_len(w, *n)?;
                     self.write_values(w, self.values(*items))?;
@@ -105,7 +82,7 @@ impl Snapshot {
                     entries,
                     original_len: n,
                 } => {
-                    2_u8.serialize(w)?;
+                    (ObjectTag::Map as u8).serialize(w)?;
                     self.ty(*key_type).serialize(w)?;
                     self.ty(*value_type).serialize(w)?;
                     original_len(w, *n)?;
@@ -117,36 +94,36 @@ impl Snapshot {
                     fields,
                     original_len: n,
                 } => {
-                    3_u8.serialize(w)?;
+                    (ObjectTag::Instance as u8).serialize(w)?;
                     self.type_arguments(*type_arguments).serialize(w)?;
                     declaration.0.serialize(w)?;
                     original_len(w, *n)?;
                     self.write_entries(w, self.entries(*fields))?;
                 }
                 SnapshotObject::Declaration { name, tag, is_enum } => {
-                    4_u8.serialize(w)?;
+                    (ObjectTag::Declaration as u8).serialize(w)?;
                     tag.serialize(w)?;
                     name.serialize(w)?;
                     is_enum.serialize(w)?;
                 }
                 SnapshotObject::Cell(v) => {
-                    5_u8.serialize(w)?;
+                    (ObjectTag::Cell as u8).serialize(w)?;
                     self.write_value(w, *v)?;
                 }
                 SnapshotObject::NonSnapshotableValue {} => {
-                    6_u8.serialize(w)?;
+                    (ObjectTag::NonSnapshotableValue as u8).serialize(w)?;
                 }
                 SnapshotObject::Descriptive { kind, name } => {
-                    7_u8.serialize(w)?;
-                    description(w, *kind)?;
+                    (ObjectTag::Descriptive as u8).serialize(w)?;
+                    tags::description(*kind).serialize(w)?;
                     name.is_some().serialize(w)?;
                     if let Some(id) = name {
                         string(w, self.string(*id))?;
                     }
                 }
                 SnapshotObject::Truncated(reason) => {
-                    8_u8.serialize(w)?;
-                    limit(w, *reason)?;
+                    (ObjectTag::Truncated as u8).serialize(w)?;
+                    tags::limit(*reason).serialize(w)?;
                 }
             }
         }
@@ -169,33 +146,28 @@ impl Snapshot {
     }
     fn write_value(&self, w: &mut impl Write, value: SnapshotValue) -> io::Result<()> {
         match value {
-            SnapshotValue::Null => 0_u8.serialize(w),
-            SnapshotValue::OmittedArg => 1_u8.serialize(w),
+            SnapshotValue::Null => (ValueTag::Null as u8).serialize(w),
+            SnapshotValue::OmittedArg => (ValueTag::OmittedArg as u8).serialize(w),
             SnapshotValue::Bool(v) => {
-                2_u8.serialize(w)?;
+                (ValueTag::Bool as u8).serialize(w)?;
                 v.serialize(w)
             }
             SnapshotValue::Int(v) => {
-                3_u8.serialize(w)?;
+                (ValueTag::Int as u8).serialize(w)?;
                 v.serialize(w)
             }
             SnapshotValue::Float(v) => {
-                4_u8.serialize(w)?;
+                (ValueTag::Float as u8).serialize(w)?;
                 v.to_bits().serialize(w)
             }
             SnapshotValue::String(id) => {
-                5_u8.serialize(w)?;
+                (ValueTag::String as u8).serialize(w)?;
                 string(w, self.string(id))
             }
             SnapshotValue::Bigint(id) => {
-                6_u8.serialize(w)?;
+                (ValueTag::Bigint as u8).serialize(w)?;
                 let n = self.bigint(id);
-                let sign: u8 = match n.sign() {
-                    num_bigint::Sign::Minus => 0,
-                    num_bigint::Sign::NoSign => 1,
-                    num_bigint::Sign::Plus => 2,
-                };
-                sign.serialize(w)?;
+                tags::bigint_sign(n.sign()).serialize(w)?;
                 n.bits().serialize(w)?;
                 for digit in n.iter_u64_digits() {
                     digit.serialize(w)?;
@@ -203,11 +175,11 @@ impl Snapshot {
                 Ok(())
             }
             SnapshotValue::Object(id) => {
-                7_u8.serialize(w)?;
+                (ValueTag::Object as u8).serialize(w)?;
                 id.0.serialize(w)
             }
             SnapshotValue::Type(id) => {
-                8_u8.serialize(w)?;
+                (ValueTag::Type as u8).serialize(w)?;
                 self.ty(id).serialize(w)
             }
             SnapshotValue::Enum {
@@ -215,14 +187,14 @@ impl Snapshot {
                 variant,
                 name,
             } => {
-                9_u8.serialize(w)?;
+                (ValueTag::Enum as u8).serialize(w)?;
                 declaration.0.serialize(w)?;
                 variant.serialize(w)?;
                 string(w, self.string(name))
             }
             SnapshotValue::Truncated(reason) => {
-                10_u8.serialize(w)?;
-                limit(w, reason)
+                (ValueTag::Truncated as u8).serialize(w)?;
+                tags::limit(reason).serialize(w)
             }
         }
     }

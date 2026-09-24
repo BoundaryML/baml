@@ -58,6 +58,11 @@ pub(crate) fn validate_proposal(request: &PrepareUploadsRequest) -> Result<(), D
 
 pub(crate) fn checked_url(value: &str, allow_http: bool) -> Result<Url, DeliveryError> {
     let url = Url::parse(value).map_err(|_| DeliveryError::InvalidPlan)?;
+    validate_url(&url, allow_http)?;
+    Ok(url)
+}
+
+pub(crate) fn validate_url(url: &Url, allow_http: bool) -> Result<(), DeliveryError> {
     if (url.scheme() != "https" && !(allow_http && url.scheme() == "http"))
         || url.host_str().is_none()
         || !url.username().is_empty()
@@ -66,7 +71,7 @@ pub(crate) fn checked_url(value: &str, allow_http: bool) -> Result<Url, Delivery
     {
         return Err(DeliveryError::InvalidPlan);
     }
-    Ok(url)
+    Ok(())
 }
 
 pub(crate) fn validate_response(

@@ -328,7 +328,7 @@ def run_case(args, sampler, workload, mode, trial, artifact, index):
     if cloud:
         command += ["--prepare-base-url", cloud.url]
     env = os.environ.copy()
-    env["BAML_TELEMETRY"] = "off" if mode == "off" else "auto"
+    env["BAML_TELEMETRY"] = "off" if mode == "off" else "medium"
     try:
         result, samples, stages, events, error = monitor(
             command, env, sampler, args.sample_ms, args.memory_limit_mib * 1024**2,
