@@ -25,38 +25,21 @@
 //! `BamlHandle.handle_type`, the Python object stores it on construction,
 //! and Rust-internal callers (media class validation) read the field directly.
 
-use bridge_cffi::{
-    __testonly_seed_function_ref, __testonly_seed_generic_media, __testonly_seed_heap_handle,
-    BamlCffiStatus, baml_handle_clone, baml_handle_release,
-};
+use bridge_cffi::{BamlCffiStatus, handle as handle_core};
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
 
 pub(crate) fn status_to_pyerr(context: &str, status: BamlCffiStatus) -> PyErr {
-    let detail = match status {
-        BamlCffiStatus::Ok => "ok",
-        BamlCffiStatus::InvalidHandle => "invalid handle",
-        BamlCffiStatus::TypeMismatch => "handle type mismatch",
-        BamlCffiStatus::UnsupportedHandleType => "unsupported handle type",
-        BamlCffiStatus::InternalError => "internal error",
-        BamlCffiStatus::UnexpectedNullptr => "unexpected null pointer",
-    };
+    let detail = status.description();
     pyo3::exceptions::PyRuntimeError::new_err(format!("{context}: {detail}"))
 }
 
 pub(crate) fn handle_clone(key: u64, context: &str) -> PyResult<u64> {
-    let mut out_key = 0;
-    match unsafe { baml_handle_clone(key, &mut out_key) } {
-        BamlCffiStatus::Ok => Ok(out_key),
-        status => Err(status_to_pyerr(context, status)),
-    }
+    handle_core::clone_handle(key).map_err(|error| status_to_pyerr(context, error.into()))
 }
 
 pub(crate) fn release_wire_handle(key: u64, context: &str) -> PyResult<()> {
-    match unsafe { baml_handle_release(key) } {
-        BamlCffiStatus::Ok => Ok(()),
-        status => Err(status_to_pyerr(context, status)),
-    }
+    handle_core::release_handle(key).map_err(|error| status_to_pyerr(context, error.into()))
 }
 
 #[gen_stub_pyclass]
@@ -137,7 +120,7 @@ impl Drop for BamlPyHandle {
         let is_host_value = ht_i32 == BamlHandleType::HostValueCallable as i32
             || ht_i32 == BamlHandleType::HostValueOpaque as i32;
         if !is_host_value {
-            let _ = unsafe { baml_handle_release(self.handle_key) };
+            let _ = handle_core::release_handle(self.handle_key);
         }
     }
 }
@@ -148,24 +131,16 @@ impl Drop for BamlPyHandle {
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub fn _seed_function_ref_handle(global_index: u64) -> PyResult<(u64, u64)> {
-    let mut key = 0;
-    let mut handle_type = 0;
-    match unsafe { __testonly_seed_function_ref(global_index, &mut key, &mut handle_type) } {
-        BamlCffiStatus::Ok => Ok((key, handle_type as u64)),
-        status => Err(status_to_pyerr("_seed_function_ref_handle", status)),
-    }
+    let parts = handle_core::seed_function_ref_handle(global_index);
+    Ok((parts.key, parts.handle_type as u64))
 }
 
 /// Test-only: seed an `Adt(Media(generic))` entry through the shared CFFI API.
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub fn _seed_generic_media_handle() -> PyResult<(u64, u64)> {
-    let mut key = 0;
-    let mut handle_type = 0;
-    match unsafe { __testonly_seed_generic_media(&mut key, &mut handle_type) } {
-        BamlCffiStatus::Ok => Ok((key, handle_type as u64)),
-        status => Err(status_to_pyerr("_seed_generic_media_handle", status)),
-    }
+    let parts = handle_core::seed_generic_media_handle();
+    Ok((parts.key, parts.handle_type as u64))
 }
 
 /// Test-only: seed an engine-heap (`BexHeapHandle`) entry through the shared
@@ -174,12 +149,8 @@ pub fn _seed_generic_media_handle() -> PyResult<(u64, u64)> {
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub fn _seed_heap_handle(slab_key: u64) -> PyResult<(u64, u64)> {
-    let mut key = 0;
-    let mut handle_type = 0;
-    match unsafe { __testonly_seed_heap_handle(slab_key, &mut key, &mut handle_type) } {
-        BamlCffiStatus::Ok => Ok((key, handle_type as u64)),
-        status => Err(status_to_pyerr("_seed_heap_handle", status)),
-    }
+    let parts = handle_core::seed_heap_handle(slab_key);
+    Ok((parts.key, parts.handle_type as u64))
 }
 
 /// Release a handle cloned for wire ownership when encoding aborts before the

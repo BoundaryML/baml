@@ -17,99 +17,49 @@
 //! and `_toHandle` clone the table row so the input/output `BamlHandle` and the
 //! media wrapper own independent references.
 
-use std::{
-    ffi::{CString, c_char},
-    ptr, slice,
-};
-
-use bridge_cffi::{
-    BamlCffiStatus, Buffer, baml_handle_release, baml_media_base64, baml_media_file,
-    baml_media_from_base64, baml_media_from_file, baml_media_from_url, baml_media_mime_type,
-    baml_media_url, free_buffer,
-};
-use bridge_ctypes::baml_bridge::cffi::{BamlHandleType, MediaTypeEnum};
+use bex_project::MediaKind;
+use bridge_cffi::handle::{self as handle_core, HandleError, HandleParts};
+use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
 use crate::handle::{BamlHandle, handle_clone, status_to_napi};
 
 type MediaConstructor =
-    unsafe extern "C" fn(i32, *const c_char, *const c_char, *mut u64, *mut i32) -> BamlCffiStatus;
-type MediaAccessor = unsafe extern "C" fn(u64, i32, *mut Buffer) -> BamlCffiStatus;
-
-fn c_string(value: String, field: &str) -> napi::Result<CString> {
-    CString::new(value).map_err(|_| {
-        napi::Error::new(
-            napi::Status::InvalidArg,
-            format!("{field} cannot contain NUL"),
-        )
-    })
-}
+    fn(MediaKind, &str, Option<&str>) -> std::result::Result<HandleParts, HandleError>;
+type MediaAccessor<T> = fn(u64, i32) -> std::result::Result<T, HandleError>;
 
 fn create_media(
     constructor: MediaConstructor,
-    media_kind: MediaTypeEnum,
+    media_kind: MediaKind,
     value: String,
     mime_type: Option<String>,
     context: &str,
 ) -> napi::Result<(u64, i32)> {
-    let value = c_string(value, context)?;
-    let mime_type = mime_type.map(|s| c_string(s, "mimeType")).transpose()?;
-    let mime_ptr = mime_type
-        .as_ref()
-        .map(|s| s.as_ptr())
-        .unwrap_or_else(ptr::null);
-    let mut key = 0;
-    let mut handle_type = 0;
-    match unsafe {
-        constructor(
-            media_kind as i32,
-            value.as_ptr(),
-            mime_ptr,
-            &mut key,
-            &mut handle_type,
-        )
-    } {
-        BamlCffiStatus::Ok => Ok((key, handle_type)),
-        status => Err(status_to_napi(context, status)),
+    // Keep each language's existing argument error and field name.
+    for (field, input) in [
+        (context, value.as_str()),
+        ("mimeType", mime_type.as_deref().unwrap_or_default()),
+    ] {
+        if input.contains('\0') {
+            return Err(napi::Error::new(
+                napi::Status::InvalidArg,
+                format!("{field} cannot contain NUL"),
+            ));
+        }
     }
+    let parts = constructor(media_kind, &value, mime_type.as_deref())
+        .map_err(|error| status_to_napi(context, error.into()))?;
+    Ok((parts.key, parts.handle_type))
 }
 
-fn buffer_to_option(buf: Buffer) -> napi::Result<Option<String>> {
-    if buf.ptr.is_null() {
-        return Ok(None);
-    }
-    let bytes = unsafe { slice::from_raw_parts(buf.ptr as *const u8, buf.len) };
-    let owned = bytes.to_vec();
-    free_buffer(buf);
-    String::from_utf8(owned)
-        .map(Some)
-        .map_err(|_| napi::Error::new(napi::Status::GenericFailure, "invalid UTF-8 from media"))
-}
-
-fn media_string_option(
+fn media_string<T>(
     key: u64,
     handle_type: i32,
-    accessor: MediaAccessor,
+    accessor: MediaAccessor<T>,
     context: &str,
-) -> napi::Result<Option<String>> {
-    let mut out = Buffer {
-        ptr: ptr::null(),
-        len: 0,
-    };
-    match unsafe { accessor(key, handle_type, &mut out) } {
-        BamlCffiStatus::Ok => buffer_to_option(out),
-        status => Err(status_to_napi(context, status)),
-    }
-}
-
-fn media_string(
-    key: u64,
-    handle_type: i32,
-    accessor: MediaAccessor,
-    context: &str,
-) -> napi::Result<String> {
-    Ok(media_string_option(key, handle_type, accessor, context)?.unwrap_or_default())
+) -> napi::Result<T> {
+    accessor(key, handle_type).map_err(|error| status_to_napi(context, error.into()))
 }
 
 macro_rules! define_media_napi_class {
@@ -124,15 +74,20 @@ macro_rules! define_media_napi_class {
         impl $name {
             #[napi(factory, js_name = "fromUrl")]
             pub fn from_url(url: String, mime_type: Option<String>) -> napi::Result<Self> {
-                let (key, handle_type) =
-                    create_media(baml_media_from_url, $media_kind, url, mime_type, "fromUrl")?;
+                let (key, handle_type) = create_media(
+                    handle_core::media_from_url,
+                    $media_kind,
+                    url,
+                    mime_type,
+                    "fromUrl",
+                )?;
                 Ok(Self { key, handle_type })
             }
 
             #[napi(factory, js_name = "fromFile")]
             pub fn from_file(file: String, mime_type: Option<String>) -> napi::Result<Self> {
                 let (key, handle_type) = create_media(
-                    baml_media_from_file,
+                    handle_core::media_from_file,
                     $media_kind,
                     file,
                     mime_type,
@@ -144,7 +99,7 @@ macro_rules! define_media_napi_class {
             #[napi(factory, js_name = "fromBase64")]
             pub fn from_base64(base64: String, mime_type: Option<String>) -> napi::Result<Self> {
                 let (key, handle_type) = create_media(
-                    baml_media_from_base64,
+                    handle_core::media_from_base64,
                     $media_kind,
                     base64,
                     mime_type,
@@ -155,22 +110,32 @@ macro_rules! define_media_napi_class {
 
             #[napi]
             pub fn url(&self) -> napi::Result<Option<String>> {
-                media_string_option(self.key, self.handle_type, baml_media_url, "url")
+                media_string(self.key, self.handle_type, handle_core::media_url, "url")
             }
 
             #[napi]
             pub fn file(&self) -> napi::Result<Option<String>> {
-                media_string_option(self.key, self.handle_type, baml_media_file, "file")
+                media_string(self.key, self.handle_type, handle_core::media_file, "file")
             }
 
             #[napi]
             pub fn base64(&self) -> napi::Result<String> {
-                media_string(self.key, self.handle_type, baml_media_base64, "base64")
+                media_string(
+                    self.key,
+                    self.handle_type,
+                    handle_core::media_base64,
+                    "base64",
+                )
             }
 
             #[napi(js_name = "mimeType")]
             pub fn mime_type(&self) -> napi::Result<Option<String>> {
-                media_string_option(self.key, self.handle_type, baml_media_mime_type, "mimeType")
+                media_string(
+                    self.key,
+                    self.handle_type,
+                    handle_core::media_mime_type,
+                    "mimeType",
+                )
             }
 
             /// Internal: build from an existing `BamlHandle`. Used by proto
@@ -208,7 +173,7 @@ macro_rules! define_media_napi_class {
 
         impl ObjectFinalize for $name {
             fn finalize(self, _env: Env) -> napi::Result<()> {
-                let _ = unsafe { baml_handle_release(self.key) };
+                let _ = handle_core::release_handle(self.key);
                 Ok(())
             }
         }
@@ -217,21 +182,17 @@ macro_rules! define_media_napi_class {
 
 define_media_napi_class!(
     BamlImage,
-    MediaTypeEnum::Image,
+    MediaKind::Image,
     BamlHandleType::AdtMediaImage as u64
 );
 define_media_napi_class!(
     BamlAudio,
-    MediaTypeEnum::Audio,
+    MediaKind::Audio,
     BamlHandleType::AdtMediaAudio as u64
 );
 define_media_napi_class!(
     BamlVideo,
-    MediaTypeEnum::Video,
+    MediaKind::Video,
     BamlHandleType::AdtMediaVideo as u64
 );
-define_media_napi_class!(
-    BamlPdf,
-    MediaTypeEnum::Pdf,
-    BamlHandleType::AdtMediaPdf as u64
-);
+define_media_napi_class!(BamlPdf, MediaKind::Pdf, BamlHandleType::AdtMediaPdf as u64);

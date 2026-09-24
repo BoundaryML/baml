@@ -16,12 +16,15 @@ use bex_events::{
         open_boundary_from_value_segments, read_value_from_segments_result, summarize_history_run,
     },
     run::{
-        BoundaryId, CancellationState, EnvResolutionStatus, ExecutionRequest, HostCallId,
-        InMemoryRunStore, ProjectGeneration, ProjectId, RequestId, RunCursor,
-        RunCursorExpiredReason, RunDiagnostic, RunError, RunErrorClass, RunFilter, RunKind,
-        RunOutcome, RunPatch, RunRequestState, RunResult, RunSubscription, RunSummary, RunTarget,
-        RunVisibilityFilter, StartRunContext, StartedHostRun, patch_to_wire, run_summary_to_wire,
-        run_to_wire,
+        BoundaryId, EnvResolutionStatus, ExecutionRequest, HostCallId, InMemoryRunStore,
+        ProjectGeneration, ProjectId, RequestId, RunCursor, RunCursorExpiredReason, RunDiagnostic,
+        RunErrorClass, RunFilter, RunKind, RunOutcome, RunRequestState, RunSubscription,
+        RunSummary, RunTarget, RunVisibilityFilter, StartRunContext, StartedHostRun, patch_to_wire,
+        presentation::{
+            capture_loss_message, error_outcome, log_loss_diagnostic_patch,
+            root_value_success_outcome_with_value,
+        },
+        run_summary_to_wire, run_to_wire,
     },
     value::{
         ByteValueArtifactSink, CaptureLossKind, CaptureLossReason, CaptureLossRecord,
@@ -405,19 +408,6 @@ fn complete_wasm_run(
     }
 }
 
-fn root_value_success_outcome_with_value(
-    value_ref: Option<ValueRef>,
-    value: Option<Vec<u8>>,
-    renderer_hint: &str,
-) -> RunOutcome {
-    RunOutcome::Succeeded(RunResult {
-        value_ref,
-        value,
-        renderer_hint: Some(renderer_hint.to_string()),
-        supporting_payload_ids: Vec::new(),
-    })
-}
-
 /// The completed run's value, inlined as artifact-safe outbound bytes so the
 /// client has something to render — without it a test report (the pass/fail
 /// verdict and its error messages) or a function result completes as a bare
@@ -616,48 +606,13 @@ fn send_log_loss_diagnostic(
     }
 }
 
-fn log_loss_diagnostic_patch(
-    run_store: &InMemoryRunStore,
-    boundary_id: BoundaryId,
-    capture_kind: &str,
-    skipped: u64,
-) -> Option<RunPatch> {
-    run_store.add_diagnostic(
-        boundary_id,
-        RunDiagnostic {
-            severity: bex_events::run::DiagnosticSeverity::Warning,
-            code: Some("logCaptureLoss".to_string()),
-            message: capture_loss_message(capture_kind, skipped),
-            payload_id: None,
-        },
-    )
-}
-
-fn capture_loss_message(capture_kind: &str, skipped: u64) -> String {
-    format!(
-        "Skipped {skipped} captured {capture_kind} value(s) because the log capture queue was full"
-    )
-}
 fn runtime_error_outcome_with_ref(
     error: &impl std::fmt::Display,
     value_ref: Option<ValueRef>,
 ) -> RunOutcome {
     let message = format!("{error}");
-    if message.to_lowercase().contains("cancel") {
-        let now = epoch_ms();
-        RunOutcome::Cancelled(CancellationState {
-            requested_at_ms: now,
-            completed_at_ms: Some(now),
-            reason: Some(message),
-        })
-    } else {
-        RunOutcome::Failed(RunError {
-            class: RunErrorClass::Runtime,
-            message,
-            details: None,
-            value_ref,
-        })
-    }
+    let cancelled_at_ms = message.to_lowercase().contains("cancel").then(epoch_ms);
+    error_outcome(message, RunErrorClass::Runtime, value_ref, cancelled_at_ms)
 }
 
 pub(crate) fn new_history_store() -> WasmHistoryStore {
@@ -1456,7 +1411,7 @@ mod history_tests {
         ids::{BexThreadId, EngineId, ProcessEuid},
         run::{
             ExecutionRequest, PayloadKind, ProjectGeneration, RunPatchChange, RunRequestSummary,
-            RunStatus, RunTimeAnchor, StartGuard, ThreadRef,
+            RunResult, RunStatus, RunTimeAnchor, StartGuard, ThreadRef,
         },
     };
     use wasm_bindgen_test::wasm_bindgen_test;

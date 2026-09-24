@@ -5,7 +5,7 @@
 //! representation (`BexValue`, `BexExternalValue`).
 
 use ::bex_heap::{BexValue, HeapPermit, PermitProof, TlabHolder};
-use ::bex_vm_types::{HeapPtr, Object, ObjectType, Value, ValueKind};
+use ::bex_vm_types::{HeapPtr, Object, Value, ValueKind};
 use baml_type::{Literal, Ty};
 use bex_external_types::{
     BexExternalAdt, BexExternalValue, HostValueKind, RuntimeTy, UnionMetadata,
@@ -2136,15 +2136,6 @@ impl BexEngine {
             }
         }
     }
-
-    /// Convert VM values to `BexExternalValues` for sys ops.
-    ///
-    /// This is simpler than `vm_value_to_external` because sys ops only receive
-    /// primitives, strings, arrays, maps, and resources - not instances/variants.
-    #[allow(unused)]
-    pub(crate) fn vm_args_to_external(vm: &BexVm, args: &[Value]) -> Vec<BexExternalValue> {
-        args.iter().map(|v| vm_arg_to_external(vm, *v)).collect()
-    }
 }
 
 // ============================================================================
@@ -4059,129 +4050,6 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                 if find_matching_union_member(value, nested).is_some())
         })
     })
-}
-
-/// Convert a VM value to a `BexExternalValue` for sys op arguments.
-///
-/// This is simpler than `vm_value_to_external` because sys ops only receive
-/// primitives, strings, arrays, maps, and resources - not instances/variants.
-pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
-    match value.kind() {
-        ValueKind::OmittedArg => {
-            panic!("Cannot convert omitted argument sentinel to BexExternalValue")
-        }
-        ValueKind::Null => BexExternalValue::Null,
-        ValueKind::Int(i) => BexExternalValue::Int(i),
-        ValueKind::Bool(b) => BexExternalValue::Bool(b),
-        ValueKind::Object(idx) => {
-            let obj = vm.get_object(idx);
-            match obj {
-                Object::Float(f) => BexExternalValue::Float(*f),
-                Object::String(s) => BexExternalValue::String(s.clone()),
-                Object::Array(arr) => {
-                    let snap = arr.to_vec();
-                    let items: Vec<BexExternalValue> =
-                        snap.iter().map(|v| vm_arg_to_external(vm, *v)).collect();
-                    BexExternalValue::Array {
-                        element_type: bex_external_types::RuntimeTy::Null,
-                        items,
-                    }
-                }
-                Object::Map(map) => {
-                    let snap = map.to_index_map();
-                    let entries: indexmap::IndexMap<String, BexExternalValue> = snap
-                        .iter()
-                        .map(|(k, v)| (k.to_string(), vm_arg_to_external(vm, *v)))
-                        .collect();
-                    BexExternalValue::Map {
-                        key_type: bex_external_types::RuntimeTy::String,
-                        value_type: bex_external_types::RuntimeTy::Null,
-                        entries,
-                    }
-                }
-                Object::Instance(instance) => {
-                    // Get class name from the class object
-                    let class_obj = vm.get_object(instance.class);
-                    let class_name = match class_obj {
-                        Object::Class(class) => class.name.to_string(),
-                        _ => panic!("Instance class pointer doesn't point to a Class"),
-                    };
-
-                    // Get field names from class and convert fields
-                    let class_fields = match class_obj {
-                        Object::Class(class) => &class.fields,
-                        _ => panic!("Instance class pointer doesn't point to a Class"),
-                    };
-
-                    let fields: indexmap::IndexMap<String, BexExternalValue> = class_fields
-                        .iter()
-                        .zip(instance.fields.iter())
-                        .map(|(class_field, slot)| {
-                            (
-                                class_field.name.clone(),
-                                vm_arg_to_external(vm, slot.load()),
-                            )
-                        })
-                        .collect();
-
-                    BexExternalValue::Instance {
-                        class_name,
-                        type_args: instance
-                            .class_type_args
-                            .iter()
-                            .filter_map(|arg| {
-                                overlay_wire_ty(&bex_vm_types::RuntimeTy::from(arg)).ok()
-                            })
-                            .collect(),
-                        fields,
-                    }
-                }
-                Object::Bigint(bi) => BexExternalValue::Bigint((**bi).clone()),
-                Object::Uint8Array(bytes) => BexExternalValue::Uint8Array(bytes.to_vec()),
-                Object::Variant(variant) => {
-                    let enum_obj = vm.get_object(variant.enm);
-                    let Object::Enum(enm) = enum_obj else {
-                        panic!("variant.enm doesn't point to an Enum");
-                    };
-                    let variant_name = enm
-                        .variants
-                        .get(variant.index)
-                        .map(|v| v.name.clone())
-                        .unwrap_or_else(|| format!("<variant {}>", variant.index));
-                    BexExternalValue::Variant {
-                        enum_name: enm.name.to_string(),
-                        variant_name,
-                    }
-                }
-                // These types should not appear as sys op arguments.
-                Object::Function(_)
-                | Object::TypeAlias(_)
-                | Object::Interface(_)
-                | Object::Package(_)
-                | Object::ImplRule(_)
-                | Object::Closure(_)
-                | Object::BoundMethod(_)
-                | Object::GenericFunction(_)
-                | Object::HostClosure(_)
-                | Object::Cell(_)
-                | Object::Class(_)
-                | Object::Enum(_)
-                | Object::Future(_)
-                | Object::UnscheduledFuture(_)
-                | Object::RustData(_)
-                | Object::Type(_) => {
-                    panic!(
-                        "Cannot convert object type to BexExternalValue for sys op: {:?}",
-                        ObjectType::of(obj)
-                    )
-                }
-                #[cfg(feature = "heap_debug")]
-                Object::Sentinel(_) => {
-                    panic!("Cannot convert sentinel to BexExternalValue")
-                }
-            }
-        }
-    }
 }
 
 /// Coerce a host-encoded **incoming** value to match the declared param type.

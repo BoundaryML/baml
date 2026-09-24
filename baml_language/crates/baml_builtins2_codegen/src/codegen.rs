@@ -2143,12 +2143,7 @@ fn receiver_view_path(recv: &Receiver) -> String {
     }
 }
 
-#[allow(dead_code)]
-fn receiver_input_type(recv: &Receiver) -> String {
-    receiver_input_type_with_vm_usage(recv, VmUsage::None)
-}
-
-/// Like `receiver_input_type` but switches media class receivers to `&Value`
+/// Select the receiver type, switching media class receivers to `&Value`
 /// when `vm_usage == MutRef` — the `view::media::Cls<'_>` view struct holds a
 /// `&Instance` borrowed from `vm`, which would conflict with the `&mut BexVm`
 /// parameter required for mutating-VM methods.  Passing the raw `Value` (which

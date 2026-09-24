@@ -64,24 +64,12 @@ fn sanitize_module_segment(seg: &str) -> String {
 /// Routing depends only on the symbol's package + namespace path, so a
 /// function companion (`extract@stream`) routes beside its parent.
 pub(crate) fn route(name: &Name) -> LeafPath {
-    let mut segs: Vec<String> = Vec::new();
-
-    match name.package().as_str() {
-        "user" => {}
-        "baml" => segs.push("baml".to_string()),
-        "ai" => segs.push("ai".to_string()),
-        "reflect" => segs.push("reflect".to_string()),
-        other => {
-            segs.push("vendor".to_string());
-            segs.push(sanitize_module_segment(other));
-        }
+    LeafPath {
+        segments: baml_codegen_types::namespace_segments(name)
+            .iter()
+            .map(|segment| sanitize_module_segment(segment))
+            .collect(),
     }
-
-    for seg in name.namespace() {
-        segs.push(sanitize_module_segment(seg.as_str()));
-    }
-
-    LeafPath { segments: segs }
 }
 
 #[cfg(test)]

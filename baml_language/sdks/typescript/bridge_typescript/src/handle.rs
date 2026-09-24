@@ -1,31 +1,17 @@
 //! Node.js handle lifecycle — released via ObjectFinalize.
 //! Mirrors bridge_python/src/handle.rs.
 
-use bridge_cffi::{
-    __testonly_seed_function_ref, __testonly_seed_generic_media, __testonly_seed_heap_handle,
-    BamlCffiStatus, baml_handle_clone, baml_handle_release,
-};
+use bridge_cffi::{BamlCffiStatus, handle as handle_core};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
 pub(crate) fn status_to_napi(context: &str, status: BamlCffiStatus) -> napi::Error {
-    let detail = match status {
-        BamlCffiStatus::Ok => "ok",
-        BamlCffiStatus::InvalidHandle => "invalid handle",
-        BamlCffiStatus::TypeMismatch => "handle type mismatch",
-        BamlCffiStatus::UnsupportedHandleType => "unsupported handle type",
-        BamlCffiStatus::InternalError => "internal error",
-        BamlCffiStatus::UnexpectedNullptr => "unexpected null pointer",
-    };
+    let detail = status.description();
     napi::Error::new(napi::Status::GenericFailure, format!("{context}: {detail}"))
 }
 
 pub(crate) fn handle_clone(key: u64, context: &str) -> napi::Result<u64> {
-    let mut out_key = 0;
-    match unsafe { baml_handle_clone(key, &mut out_key) } {
-        BamlCffiStatus::Ok => Ok(out_key),
-        status => Err(status_to_napi(context, status)),
-    }
+    handle_core::clone_handle(key).map_err(|error| status_to_napi(context, error.into()))
 }
 
 /// A u64 handle key split into two i32 halves, mirroring the shape of
@@ -119,7 +105,7 @@ impl BamlHandle {
 
 impl ObjectFinalize for BamlHandle {
     fn finalize(self, _env: Env) -> napi::Result<()> {
-        let _ = unsafe { baml_handle_release(self.key) };
+        let _ = handle_core::release_handle(self.key);
         Ok(())
     }
 }
@@ -128,23 +114,15 @@ impl ObjectFinalize for BamlHandle {
 /// `[key, handleType]` so test code can construct a `BamlHandle`.
 #[napi(js_name = "_seedFunctionRefHandle")]
 pub fn seed_function_ref_handle(global_index: u32) -> napi::Result<(HandleKey, i32)> {
-    let mut key = 0;
-    let mut handle_type = 0;
-    match unsafe { __testonly_seed_function_ref(global_index as u64, &mut key, &mut handle_type) } {
-        BamlCffiStatus::Ok => Ok((HandleKey::from_u64(key), handle_type)),
-        status => Err(status_to_napi("_seedFunctionRefHandle", status)),
-    }
+    let parts = handle_core::seed_function_ref_handle(u64::from(global_index));
+    Ok((HandleKey::from_u64(parts.key), parts.handle_type))
 }
 
 /// Test-only: seed an `Adt(Media(generic))` entry into `HANDLE_TABLE`.
 #[napi(js_name = "_seedGenericMediaHandle")]
 pub fn seed_generic_media_handle() -> napi::Result<(HandleKey, i32)> {
-    let mut key = 0;
-    let mut handle_type = 0;
-    match unsafe { __testonly_seed_generic_media(&mut key, &mut handle_type) } {
-        BamlCffiStatus::Ok => Ok((HandleKey::from_u64(key), handle_type)),
-        status => Err(status_to_napi("_seedGenericMediaHandle", status)),
-    }
+    let parts = handle_core::seed_generic_media_handle();
+    Ok((HandleKey::from_u64(parts.key), parts.handle_type))
 }
 
 /// Test-only: seed an engine-heap (`BexHeapHandle`) entry into `HANDLE_TABLE`
@@ -152,12 +130,8 @@ pub fn seed_generic_media_handle() -> napi::Result<(HandleKey, i32)> {
 /// Two seeds of one `slabKey` share a key.
 #[napi(js_name = "_seedHeapHandle")]
 pub fn seed_heap_handle(slab_key: u32) -> napi::Result<(HandleKey, i32)> {
-    let mut key = 0;
-    let mut handle_type = 0;
-    match unsafe { __testonly_seed_heap_handle(u64::from(slab_key), &mut key, &mut handle_type) } {
-        BamlCffiStatus::Ok => Ok((HandleKey::from_u64(key), handle_type)),
-        status => Err(status_to_napi("_seedHeapHandle", status)),
-    }
+    let parts = handle_core::seed_heap_handle(u64::from(slab_key));
+    Ok((HandleKey::from_u64(parts.key), parts.handle_type))
 }
 
 /// Test-only: the number of live `HANDLE_TABLE` rows (a refcounted engine-heap

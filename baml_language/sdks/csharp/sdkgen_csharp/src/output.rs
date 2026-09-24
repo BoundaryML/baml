@@ -6,15 +6,13 @@
 use std::{
     collections::BTreeSet,
     fmt,
-    fmt::Write as _,
     path::{Component, Path, PathBuf},
 };
 
 use baml_codegen_types::GeneratedOutputFile;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
-use crate::routing::is_safe_portable_segment;
+use crate::{hash::sha256, routing::is_safe_portable_segment};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct GeneratedFile {
@@ -250,15 +248,6 @@ fn portable_path(path: &Path) -> String {
         .map(|component| component.as_os_str().to_string_lossy())
         .collect::<Vec<_>>()
         .join("/")
-}
-
-fn sha256(bytes: &[u8]) -> String {
-    Sha256::digest(bytes)
-        .iter()
-        .fold(String::with_capacity(64), |mut encoded, byte| {
-            write!(&mut encoded, "{byte:02x}").expect("writing to String cannot fail");
-            encoded
-        })
 }
 
 #[cfg(test)]

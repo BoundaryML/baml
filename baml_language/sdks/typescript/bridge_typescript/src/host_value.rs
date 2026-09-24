@@ -41,13 +41,7 @@
 //! heap-teardown semantics owned by the engine/heap layer; it is left to that
 //! layer rather than worked around here.
 
-use std::{
-    collections::HashMap,
-    sync::{
-        Arc, LazyLock, Mutex, OnceLock,
-        atomic::{AtomicU64, Ordering},
-    },
-};
+use std::sync::{Arc, LazyLock, OnceLock};
 
 use napi::{
     Status,
@@ -92,28 +86,8 @@ const DISPATCH_QUEUE_SIZE: usize = 1024;
 /// The key is a freshly-allocated `u64` (never 0). Removal happens in
 /// [`host_release_callback`] when Rust drops its last clone of the
 /// corresponding `HostValueArc`.
-struct Registry {
-    next_key: AtomicU64,
-    // `ThreadsafeFunction` does not implement `Clone`, so we wrap in `Arc`
-    // to allow the dispatch path to take a cheap reference-counted handle
-    // out of the table without holding the registry mutex while we schedule
-    // the JS call.
-    table: Mutex<HashMap<u64, Arc<DispatchTsfn>>>,
-}
-
-static REGISTRY: LazyLock<Registry> = LazyLock::new(|| Registry {
-    next_key: AtomicU64::new(1),
-    table: Mutex::new(HashMap::new()),
-});
-
-fn next_key() -> u64 {
-    loop {
-        let k = REGISTRY.next_key.fetch_add(1, Ordering::Relaxed);
-        if k != 0 {
-            return k;
-        }
-    }
-}
+static REGISTRY: LazyLock<bridge_ctypes::HostValueRegistry<Arc<DispatchTsfn>>> =
+    LazyLock::new(bridge_ctypes::HostValueRegistry::default);
 
 /// Register a JS dispatch wrapper in the host-value table and return its key.
 ///
@@ -134,8 +108,7 @@ pub fn register_host_callable(callable: Function<'_, DispatchArgs, ()>) -> napi:
         // Bound the queue (napi's default is unbounded); see DISPATCH_QUEUE_SIZE.
         .max_queue_size::<DISPATCH_QUEUE_SIZE>()
         .build()?;
-    let key = next_key();
-    REGISTRY.table.lock().unwrap().insert(key, Arc::new(tsfn));
+    let key = REGISTRY.insert(Arc::new(tsfn));
     Ok(HandleKey::from_u64(key))
 }
 
@@ -167,7 +140,7 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: Buffer) {
 /// engine-driven release path ([`host_release_callback`]) and the encoder's
 /// rollback path ([`release_host_callable`]).
 fn drop_registry_entry(host_value_key: u64) {
-    let popped: Option<Arc<DispatchTsfn>> = match REGISTRY.table.lock() {
+    let popped: Option<Arc<DispatchTsfn>> = match REGISTRY.lock() {
         Ok(mut t) => t.remove(&host_value_key),
         Err(e) => {
             // Poisoning means an earlier panic occurred while holding the
@@ -271,7 +244,7 @@ static HOST_VALUE_RELEASE_CALLBACK: OnceLock<Arc<HostValueReleaseTsfn>> = OnceLo
 /// the value into its `Map<bigint, unknown>`.
 #[napi(js_name = "mintHostValueKey")]
 pub fn mint_host_value_key() -> HandleKey {
-    HandleKey::from_u64(next_key())
+    HandleKey::from_u64(REGISTRY.mint_key())
 }
 
 /// Install the TS-side release callback. First-call-wins; subsequent
@@ -361,7 +334,7 @@ pub extern "C" fn host_dispatch_callback(
     // Look up the dispatch wrapper. The `Arc::clone` is cheap (refcount bump);
     // we drop the registry mutex before scheduling the JS call so a long
     // dispatch never blocks `register_host_callable` / `host_release_callback`.
-    let tsfn: Option<Arc<DispatchTsfn>> = match REGISTRY.table.lock() {
+    let tsfn: Option<Arc<DispatchTsfn>> = match REGISTRY.lock() {
         Ok(t) => t.get(&host_value_key).cloned(),
         Err(e) => {
             // Treat poisoning as a "no callable" condition for this

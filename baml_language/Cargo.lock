@@ -688,14 +688,12 @@ dependencies = [
  "console",
  "ctrlc",
  "hex",
- "indexmap",
  "indicatif",
  "insta",
  "libsui",
  "mimalloc",
  "mime_guess",
  "rayon",
- "regex",
  "reqwest",
  "sdkgen_cpp",
  "sdkgen_csharp",
@@ -940,7 +938,6 @@ name = "baml_fmt"
 version = "0.0.0-beta"
 dependencies = [
  "baml_db",
- "baml_type",
  "ouroboros",
  "rowan 0.16.1",
  "salsa",
@@ -991,7 +988,6 @@ dependencies = [
  "baml_db",
  "baml_fmt",
  "baml_ide",
- "baml_type",
  "baml_version",
  "crossbeam-channel",
  "ignore",
@@ -1019,7 +1015,6 @@ dependencies = [
  "baml_db",
  "baml_ide",
  "baml_lsp",
- "baml_type",
  "baml_version",
  "base64",
  "bex_engine",
@@ -1102,9 +1097,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tar",
- "tempfile",
  "thiserror 2.0.18",
- "toml 0.8.23",
  "zip",
 ]
 
@@ -6513,7 +6506,6 @@ dependencies = [
  "baml_codegen_types",
  "baml_db",
  "baml_ide",
- "baml_type",
  "baml_version",
  "proc-macro2",
  "quote",
@@ -6544,6 +6536,7 @@ dependencies = [
  "bridge_ctypes",
  "indexmap",
  "prost",
+ "sdk_test_harness_runner",
 ]
 
 [[package]]
@@ -6676,7 +6669,6 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_codegen_types",
- "indexmap",
  "pretty_assertions",
  "prettyplease",
  "proc-macro2",
@@ -6692,8 +6684,6 @@ dependencies = [
  "baml_codegen_types",
  "baml_version",
  "base64",
- "indexmap",
- "pretty_assertions",
 ]
 
 [[package]]

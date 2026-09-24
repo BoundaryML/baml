@@ -28,6 +28,7 @@ use std::{
     process::{Command, Output},
 };
 
+pub mod csharp;
 pub mod fixtures;
 
 /// Test-side helper. Runs `cmd` inside

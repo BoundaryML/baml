@@ -876,69 +876,7 @@ pub(crate) fn routes_outside_package(leaf: &LeafPath, name: &baml_codegen_types:
 
 /// Every named symbol (class, interface, enum, alias) `ty` mentions.
 fn collect_ty_names(ty: &Ty, out: &mut Vec<baml_codegen_types::Name>) {
-    match ty {
-        Ty::TypeAlias(name) | Ty::Enum(name) | Ty::EnumVariant(name, _) => {
-            out.push(name.clone());
-        }
-        Ty::Class(name, arguments) => {
-            out.push(name.clone());
-            for argument in arguments {
-                collect_ty_names(argument, out);
-            }
-        }
-        Ty::Interface(name, arguments, associated) => {
-            out.push(name.clone());
-            for argument in arguments {
-                collect_ty_names(argument, out);
-            }
-            for (_, assoc) in associated {
-                collect_ty_names(assoc, out);
-            }
-        }
-        Ty::List(inner) => collect_ty_names(inner, out),
-        Ty::Future(value, error) => {
-            collect_ty_names(value, out);
-            collect_ty_names(error, out);
-        }
-        Ty::Map { key, value, .. } => {
-            collect_ty_names(key, out);
-            collect_ty_names(value, out);
-        }
-        Ty::Union(members) => {
-            for member in members {
-                collect_ty_names(member, out);
-            }
-        }
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            for param in params {
-                collect_ty_names(&param.ty, out);
-            }
-            collect_ty_names(ret, out);
-            collect_ty_names(throws, out);
-        }
-        Ty::Int
-        | Ty::Bigint
-        | Ty::Float
-        | Ty::String
-        | Ty::Bool
-        | Ty::Null
-        | Ty::Literal(..)
-        | Ty::Uint8Array
-        | Ty::Media(..)
-        | Ty::TypeVar(..)
-        | Ty::RustType
-        | Ty::Type
-        | Ty::Resource
-        | Ty::PromptAst
-        | Ty::Unknown
-        | Ty::Never
-        | Ty::Void => {}
-    }
+    ty.visit_heads(&mut |name| out.push(name.clone()));
 }
 
 fn sort_aliases(aliases: Vec<(EmittedSymbol, SortKey)>) -> Vec<(EmittedSymbol, SortKey)> {

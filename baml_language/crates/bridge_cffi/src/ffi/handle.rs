@@ -2,12 +2,9 @@
 
 use std::{ffi::CStr, ptr};
 
-use bex_project::MediaKind;
-use bridge_ctypes::baml_bridge::cffi::MediaTypeEnum;
-
 use crate::{
     Buffer,
-    handle::{self, HandleError, HandleParts},
+    handle::{self, HandleError, HandleParts, media_kind_from_proto},
 };
 
 /// Status returned by the handle C ABI.
@@ -28,6 +25,20 @@ pub enum BamlCffiStatus {
     UnexpectedNullptr = 5,
 }
 
+impl BamlCffiStatus {
+    /// Stable detail used by native language adapters' exception messages.
+    pub const fn description(self) -> &'static str {
+        match self {
+            Self::Ok => "ok",
+            Self::InvalidHandle => "invalid handle",
+            Self::TypeMismatch => "handle type mismatch",
+            Self::UnsupportedHandleType => "unsupported handle type",
+            Self::InternalError => "internal error",
+            Self::UnexpectedNullptr => "unexpected null pointer",
+        }
+    }
+}
+
 impl From<HandleError> for BamlCffiStatus {
     fn from(error: HandleError) -> Self {
         match error {
@@ -36,17 +47,6 @@ impl From<HandleError> for BamlCffiStatus {
             HandleError::UnsupportedHandleType => Self::UnsupportedHandleType,
             HandleError::InvalidInput(_) => Self::InternalError,
         }
-    }
-}
-
-fn media_kind_from_proto(media_kind: i32) -> Option<MediaKind> {
-    match media_kind {
-        x if x == MediaTypeEnum::Image as i32 => Some(MediaKind::Image),
-        x if x == MediaTypeEnum::Audio as i32 => Some(MediaKind::Audio),
-        x if x == MediaTypeEnum::Pdf as i32 => Some(MediaKind::Pdf),
-        x if x == MediaTypeEnum::Video as i32 => Some(MediaKind::Video),
-        x if x == MediaTypeEnum::Other as i32 => Some(MediaKind::Generic),
-        _ => None,
     }
 }
 

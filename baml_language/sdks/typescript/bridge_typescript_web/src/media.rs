@@ -2,24 +2,14 @@
 
 use bex_project::MediaKind;
 use bridge_cffi::handle::{self as handle_core, HandleError, HandleParts};
-use bridge_ctypes::baml_bridge::cffi::{BamlHandleType, MediaTypeEnum};
+use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
 use wasm_bindgen::prelude::*;
 
 use crate::errors::{handle_error, unexpected_handle_type};
 
 fn media_kind(media_kind: i32, operation: &'static str) -> Result<MediaKind, JsError> {
-    let media_kind = MediaTypeEnum::try_from(media_kind)
-        .map_err(|_| handle_error(operation, &HandleError::UnsupportedHandleType))?;
-    match media_kind {
-        MediaTypeEnum::Image => Ok(MediaKind::Image),
-        MediaTypeEnum::Audio => Ok(MediaKind::Audio),
-        MediaTypeEnum::Pdf => Ok(MediaKind::Pdf),
-        MediaTypeEnum::Video => Ok(MediaKind::Video),
-        MediaTypeEnum::Other => Ok(MediaKind::Generic),
-        MediaTypeEnum::MediaTypeUnspecified => {
-            Err(handle_error(operation, &HandleError::UnsupportedHandleType))
-        }
-    }
+    handle_core::media_kind_from_proto(media_kind)
+        .ok_or_else(|| handle_error(operation, &HandleError::UnsupportedHandleType))
 }
 
 fn expected_handle_type(kind: MediaKind) -> BamlHandleType {

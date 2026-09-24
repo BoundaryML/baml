@@ -30,7 +30,7 @@ use std::{
     path::PathBuf,
 };
 
-use baml_codegen_types::{Name, Symbol, SymbolPool, Ty};
+use baml_codegen_types::{Name, SymbolPool, public_interface_tokens};
 pub use baml_codegen_types::{NamingConvention, OutputType};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 
@@ -39,92 +39,6 @@ use crate::{
     leaf::{LeafBody, group_and_sort, render_index_ts},
     routing::{LeafPath, route},
 };
-
-fn collect_interface_tys(ty: &Ty, out: &mut BTreeSet<Name>) {
-    match ty {
-        Ty::Interface(name, generics, associated) => {
-            out.insert(name.clone());
-            for nested in generics.iter().chain(associated.iter().map(|(_, ty)| ty)) {
-                collect_interface_tys(nested, out);
-            }
-        }
-        Ty::Class(_, args) => args.iter().for_each(|ty| collect_interface_tys(ty, out)),
-        Ty::List(inner) => collect_interface_tys(inner, out),
-        Ty::Map { key, value, .. } => {
-            collect_interface_tys(key, out);
-            collect_interface_tys(value, out);
-        }
-        Ty::Union(items) => items.iter().for_each(|ty| collect_interface_tys(ty, out)),
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            for param in params {
-                collect_interface_tys(&param.ty, out);
-            }
-            collect_interface_tys(ret, out);
-            collect_interface_tys(throws, out);
-        }
-        Ty::Future(value, error) => {
-            collect_interface_tys(value, out);
-            collect_interface_tys(error, out);
-        }
-        Ty::Enum(..)
-        | Ty::EnumVariant(..)
-        | Ty::TypeAlias(..)
-        | Ty::Literal(..)
-        | Ty::Int
-        | Ty::Bigint
-        | Ty::Float
-        | Ty::String
-        | Ty::Bool
-        | Ty::Null
-        | Ty::Uint8Array
-        | Ty::Media(..)
-        | Ty::TypeVar(..)
-        | Ty::RustType
-        | Ty::Type
-        | Ty::Resource
-        | Ty::PromptAst
-        | Ty::Void
-        | Ty::Unknown
-        | Ty::Never => {}
-    }
-}
-
-fn public_interface_tokens(pool: &SymbolPool) -> BTreeSet<Name> {
-    fn function(value: &baml_codegen_types::Function, out: &mut BTreeSet<Name>) {
-        for arg in &value.arguments {
-            collect_interface_tys(&arg.ty, out);
-        }
-        collect_interface_tys(&value.return_type, out);
-        if let Some(throws) = &value.throws {
-            collect_interface_tys(throws, out);
-        }
-        for (_, watcher) in &value.watchers {
-            collect_interface_tys(watcher, out);
-        }
-    }
-    let mut out = BTreeSet::new();
-    for symbol in pool.values() {
-        match symbol {
-            Symbol::Function(value) => function(value, &mut out),
-            Symbol::Class(value) => {
-                for property in &value.properties {
-                    collect_interface_tys(&property.ty, &mut out);
-                }
-                for method in value.static_methods.iter().chain(&value.instance_methods) {
-                    function(method, &mut out);
-                }
-            }
-            Symbol::TypeAlias(value) => collect_interface_tys(&value.resolves_to, &mut out),
-            Symbol::Enum(_) => {}
-        }
-    }
-    out
-}
 
 fn render_interface_tokens(tokens: impl Iterator<Item = Name>) -> String {
     let mut out = String::new();
@@ -353,25 +267,7 @@ fn render_inlinedbaml(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> Stri
 
 /// Render `s` as a TypeScript double-quoted string literal. JS escaping
 /// rules are byte-compatible with Python's for the ASCII range.
-pub(crate) fn ts_string(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
-    for ch in s.chars() {
-        match ch {
-            '\\' => out.push_str("\\\\"),
-            '"' => out.push_str("\\\""),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => {
-                let _ = write!(out, "\\x{:02x}", c as u32);
-            }
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
-}
+pub(crate) use baml_codegen_types::quoted_string as ts_string;
 
 #[cfg(test)]
 mod tests {

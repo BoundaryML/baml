@@ -14,7 +14,7 @@
 //! name from HIR — `"user"` for project files, `"baml"` for stdlib,
 //! `"<vendor>"` for declared external packages.
 //!
-//! `"baml"` routes under `baml/`, anything else under `vendor/<pkg>/`.
+//! Builtin packages (`baml`, `ai`, `reflect`) route under their own names; other external packages route under `vendor/<pkg>/`.
 //! Routing is independent of the symbol kind.
 //!
 //! Unlike TS (where `sanitize_module_segment` is a no-op), Java package
@@ -160,22 +160,12 @@ pub(crate) fn java_identifier(seg: &str) -> String {
 ///
 /// Routing depends only on the symbol's package + namespace path.
 pub(crate) fn route(name: &Name) -> PackagePath {
-    let mut segs: Vec<String> = Vec::new();
-
-    match name.package().as_str() {
-        "user" => {}
-        "baml" => segs.push("baml".to_string()),
-        other => {
-            segs.push("vendor".to_string());
-            segs.push(java_identifier(other));
-        }
+    PackagePath {
+        segments: baml_codegen_types::namespace_segments(name)
+            .iter()
+            .map(|segment| java_identifier(segment))
+            .collect(),
     }
-
-    for seg in name.namespace() {
-        segs.push(java_identifier(seg.as_str()));
-    }
-
-    PackagePath { segments: segs }
 }
 
 #[cfg(test)]

@@ -13,7 +13,7 @@
 //! a `.baml` source-syntax keyword (substituted to the current package
 //! during HIR resolution) and never appears as `Name::pkg`.
 //!
-//! `"baml"` routes under `baml/`, anything else under `vendor/<pkg>/`.
+//! Builtin packages (`baml`, `ai`, `reflect`) route under their own names; other external packages route under `vendor/<pkg>/`.
 
 #[cfg(test)]
 use std::path::PathBuf;
@@ -86,25 +86,7 @@ pub(crate) fn route(name: &Name) -> LeafPath {
     }
 }
 
-pub(crate) fn raw_route_segments(name: &Name) -> Vec<String> {
-    let mut segs: Vec<String> = Vec::new();
-
-    match name.package().as_str() {
-        "user" => {}
-        "baml" => segs.push("baml".to_string()),
-        "ai" => segs.push("ai".to_string()),
-        "reflect" => segs.push("reflect".to_string()),
-        other => {
-            segs.push("vendor".to_string());
-            segs.push(other.to_string());
-        }
-    }
-
-    for seg in name.namespace() {
-        segs.push(seg.as_str().to_string());
-    }
-    segs
-}
+pub(crate) use baml_codegen_types::namespace_segments as raw_route_segments;
 
 #[cfg(test)]
 mod tests {
