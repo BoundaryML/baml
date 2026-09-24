@@ -1056,8 +1056,8 @@ function chat_stream_heartbeat_does_not_clear_ttft() -> string {
             root.llm_mock.sse_data(`[DONE]`),
         ],
         (mock: root.llm_mock.MockSseServer) -> {
-            // TTFT starts when the client sees the headers, and the corpus runs
-            // every leaf concurrently: keep the data event far past the limit.
+            // The mock sends a heartbeat, then holds the data event for 10s, so
+            // only the 20ms TTFT can end this call, however slow the machine is.
             let cl = openai.ChatClient.new(
                 api_key = "k",
                 base_url = mock.base_url(),
@@ -1065,7 +1065,7 @@ function chat_stream_heartbeat_does_not_clear_ttft() -> string {
                 time_to_first_token_timeout_ms = 20,
             );
             let outcome = `${cl.invoke_stream(_chat_input("hi")).final_turn().terminal_text() ?? ""}` catch_all (e) {
-                let timeout: baml.errors.Timeout => "Timeout",
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.duration_ms ?? -1}`,
                 _ => `other:${e.to_string()}`,
             };
             `${cl.time_to_first_token_timeout_ms ?? -1}|${outcome}`
@@ -1075,7 +1075,7 @@ function chat_stream_heartbeat_does_not_clear_ttft() -> string {
 }
 
 test "chat_stream_heartbeat_does_not_clear_ttft" {
-    assert.equal(chat_stream_heartbeat_does_not_clear_ttft(), "20|Timeout")
+    assert.equal(chat_stream_heartbeat_does_not_clear_ttft(), "20|Timeout:20")
 }
 
 // `stream_options` is first-party OpenAI only: a compatible server that does not
@@ -1106,8 +1106,8 @@ function chat_generic_stream_time_to_first_token_timeout_ms() -> string {
             root.llm_mock.sse_data(`[DONE]`),
         ],
         (mock: root.llm_mock.MockSseServer) -> {
-            // TTFT starts when the client sees the headers, and the corpus runs
-            // every leaf concurrently: keep the first event far past the limit.
+            // The mock holds the first event for 10s, so only the 20ms TTFT can
+            // end this call, however slow the machine is.
             let cl = openai.GenericClient.new(
                 model = "qwen3",
                 base_url = mock.base_url(),
@@ -1115,7 +1115,7 @@ function chat_generic_stream_time_to_first_token_timeout_ms() -> string {
                 time_to_first_token_timeout_ms = 20,
             );
             let outcome = `${cl.invoke_stream(_chat_input("hi")).final_turn().terminal_text() ?? ""}` catch_all (e) {
-                let timeout: baml.errors.Timeout => "Timeout",
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.duration_ms ?? -1}`,
                 _ => `other:${e.to_string()}`,
             };
             `${cl.time_to_first_token_timeout_ms ?? -1}|${outcome}`
@@ -1125,7 +1125,35 @@ function chat_generic_stream_time_to_first_token_timeout_ms() -> string {
 }
 
 test "chat_generic_stream_time_to_first_token_timeout_ms" {
-    assert.equal(chat_generic_stream_time_to_first_token_timeout_ms(), "20|Timeout")
+    assert.equal(chat_generic_stream_time_to_first_token_timeout_ms(), "20|Timeout:20")
+}
+
+// The opposite case: the mock sends the first event right away and the TTFT
+// limit is 60s, so only the event can end the wait. Catches a TTFT that fires
+// early or on every stream.
+function chat_generic_stream_ttft_allows_prompt_first_event() -> string {
+    root.llm_mock.mock_sse_serve(
+        [
+            root.llm_mock.sse_data(`{"choices":[{"index":0,"delta":{"content":"ok"}}]}`),
+            root.llm_mock.sse_data(`[DONE]`),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = openai.GenericClient.new(
+                model = "qwen3",
+                base_url = mock.base_url(),
+                time_to_first_token_timeout_ms = 60000,
+            );
+            let outcome = `${cl.invoke_stream(_chat_input("hi")).final_turn().terminal_text() ?? ""}` catch_all (e) {
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.duration_ms ?? -1}`,
+                _ => `other:${e.to_string()}`,
+            };
+            `${cl.time_to_first_token_timeout_ms ?? -1}|${outcome}`
+        },
+    )
+}
+
+test "chat_generic_stream_ttft_allows_prompt_first_event" {
+    assert.equal(chat_generic_stream_ttft_allows_prompt_first_event(), "60000|ok")
 }
 
 // Streamed tool calls arrive as id/name once and argument fragments after.
