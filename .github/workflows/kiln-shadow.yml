@@ -37,6 +37,18 @@ concurrency:
 permissions:
   contents: read
 
+# mise installs sccache and direnv, then each cargo job loads .envrc via
+# `direnv export gha` so CI uses the exact same sccache config as local shells:
+# .envrc is the single source of truth. The R2 credentials come from repository
+# Actions secrets using the same BAML_SCCACHE_R2_* names that the RUSTC_WRAPPER
+# maps to AWS_* before exec'ing sccache.
+#
+# Secretless runs (e.g. fork PRs) still install sccache, but .envrc sees no R2
+# credentials and falls back to the runner-local cache.
+env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+
 jobs:
   real-cargo-test-linux:
     name: "real job (cargo test linux-gnu)"
