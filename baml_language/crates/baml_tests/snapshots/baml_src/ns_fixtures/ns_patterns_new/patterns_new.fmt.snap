@@ -108,6 +108,22 @@ function greedy_match_function_unions(cb: (int) -> int throws never) -> int {
     }
 }
 
+// Parentheses keep the pipe between these two throwing functions outside
+// both function types. Their return and throws unions remain inside each one.
+type ThrowingFunctionUnion = ((int) -> int | string throws AppError | string)
+    | ((string) -> string | int throws AppError | string);
+
+function match_throwing_function_union(cb: ThrowingFunctionUnion) -> int {
+    if (
+        cb is ((int) -> int | string throws AppError | string)
+            | ((string) -> string | int throws AppError | string)
+    ) {
+        1
+    } else {
+        0
+    }
+}
+
 type Number = int | float;
 
 function int_widens_to_alias(v: Number) -> int {

@@ -10646,6 +10646,21 @@ type Callback = (value: int) -> string throws Foo
             .expect("expected function type")
     }
 
+    fn function_types_in(node: &SyntaxNode) -> Vec<SyntaxNode> {
+        node.descendants()
+            .filter(|candidate| {
+                candidate.kind() == SyntaxKind::TYPE_EXPR
+                    && candidate.children_with_tokens().any(|child| {
+                        matches!(
+                            child,
+                            rowan::NodeOrToken::Token(token)
+                                if token.kind() == SyntaxKind::ARROW
+                        )
+                    })
+            })
+            .collect()
+    }
+
     fn compact_syntax(node: &SyntaxNode) -> String {
         node.text()
             .to_string()
@@ -10882,6 +10897,114 @@ function Demo(value: unknown) -> int {
                 .expect("expected throws type");
             assert_eq!(compact_syntax(&return_type), expected_return);
             assert_eq!(compact_syntax(&throws), expected_throws);
+        }
+    }
+
+    #[test]
+    fn union_of_throwing_functions_in_type_and_pattern_contexts() {
+        for (spelling, expected_return, expected_throws) in [
+            (
+                "((A) -> B throws E) | ((C) -> D throws F)",
+                ["B", "D"],
+                ["throwsE", "throwsF"],
+            ),
+            (
+                "((A) -> B | C throws E | F) | ((D) -> G | H throws I | J)",
+                ["B|C", "G|H"],
+                ["throwsE|F", "throwsI|J"],
+            ),
+            (
+                "((A) -> (B | C) throws (E | F)) | ((D) -> (G | H) throws (I | J))",
+                ["(B|C)", "(G|H)"],
+                ["throws(E|F)", "throws(I|J)"],
+            ),
+        ] {
+            for context in ["type", "match", "if-let", "is"] {
+                let source = match context {
+                    "type" => format!("type Callback = {spelling}"),
+                    "match" => format!(
+                        "function Demo(value: unknown) -> int {{ match (value) {{ {spelling} => 1, _ => 0 }} }}"
+                    ),
+                    "if-let" => format!(
+                        "function Demo(value: unknown) -> int {{ if let f: {spelling} = value {{ 1 }} else {{ 0 }} }}"
+                    ),
+                    "is" => format!(
+                        "function Demo(value: unknown) -> int {{ if (value is {spelling}) {{ 1 }} else {{ 0 }} }}"
+                    ),
+                    _ => unreachable!(),
+                };
+                let (root, errors) = parse_source(&source);
+                assert_no_errors(&errors);
+                assert_eq!(
+                    root.descendants()
+                        .filter(|node| node.kind() == SyntaxKind::UNION_PATTERN)
+                        .count(),
+                    usize::from(context != "type"),
+                    "only the pattern context should create an outer pattern union: {source}"
+                );
+                let functions = function_types_in(&root);
+                assert_eq!(functions.len(), 2, "expected two function types: {source}");
+                for (index, function) in functions.iter().enumerate() {
+                    let return_type = function
+                        .children()
+                        .find(|node| node.kind() == SyntaxKind::TYPE_EXPR)
+                        .expect("expected function return type");
+                    let throws = function
+                        .children()
+                        .find(|node| node.kind() == SyntaxKind::THROWS_CLAUSE)
+                        .expect("expected throws clause");
+                    assert_eq!(compact_syntax(&return_type), expected_return[index]);
+                    assert_eq!(compact_syntax(&throws), expected_throws[index]);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unparenthesized_throwing_functions_are_nested_union_members() {
+        for (spelling, expected_outer_return, expected_outer_throws, nested_throws) in [
+            (
+                "(A) -> B | (C) -> D throws E",
+                "B|(C)->DthrowsE",
+                None,
+                "throwsE",
+            ),
+            (
+                "(A) -> B throws E | (C) -> D throws F",
+                "B",
+                Some("throwsE|(C)->DthrowsF"),
+                "throwsF",
+            ),
+        ] {
+            let source = format!(
+                "function Demo(value: unknown) -> int {{ match (value) {{ {spelling} => 1, _ => 0 }} }}"
+            );
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+            assert!(
+                root.descendants()
+                    .all(|node| node.kind() != SyntaxKind::UNION_PATTERN),
+                "the pipe belongs to a function type, not the pattern: {spelling}"
+            );
+            let functions = function_types_in(&root);
+            assert_eq!(functions.len(), 2, "expected a nested function: {spelling}");
+            let outer_return = functions[0]
+                .children()
+                .find(|node| node.kind() == SyntaxKind::TYPE_EXPR)
+                .expect("expected outer return type");
+            assert_eq!(compact_syntax(&outer_return), expected_outer_return);
+            assert_eq!(
+                functions[0]
+                    .children()
+                    .find(|node| node.kind() == SyntaxKind::THROWS_CLAUSE)
+                    .map(|node| compact_syntax(&node)),
+                expected_outer_throws.map(str::to_owned)
+            );
+            let inner_throws = functions[1]
+                .children()
+                .find(|node| node.kind() == SyntaxKind::THROWS_CLAUSE)
+                .expect("expected nested throws clause");
+            assert_eq!(compact_syntax(&inner_throws), nested_throws);
         }
     }
 
