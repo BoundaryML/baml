@@ -130,7 +130,7 @@ impl FormatArgs {
                     continue;
                 }
             };
-            let source = if self.fix_removed_features {
+            let source = if self.fix_removed_features && !baml_fmt::has_ignore_directive(&source) {
                 match migrate_removed_features(&source) {
                     Ok(source) => source,
                     Err(err) => {
@@ -519,6 +519,24 @@ template_string Legacy(name: string) #"Hello {{ name }}"#
         };
 
         assert!(matches!(args.run().unwrap(), crate::ExitCode::Other));
+        assert_eq!(fs::read_to_string(source_file).unwrap(), source);
+    }
+
+    #[test]
+    fn fix_removed_features_honors_format_ignore() {
+        let tmp = tempfile::tempdir().unwrap();
+        let source_file = tmp.path().join("ignored.baml");
+        let source = "// baml-format: ignore\nfunction ignored() -> string { #\"keep me\"# }\n";
+        fs::write(&source_file, source).unwrap();
+
+        let args = FormatArgs {
+            paths: vec![source_file.clone()],
+            from: None,
+            dry_run: false,
+            fix_removed_features: true,
+        };
+
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Success));
         assert_eq!(fs::read_to_string(source_file).unwrap(), source);
     }
 
