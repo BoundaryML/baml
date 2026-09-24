@@ -192,6 +192,9 @@ impl VmBamlError {
 /// These are always fatal: they cannot be caught in BAML code.
 #[derive(Debug, Error, PartialEq, Clone)]
 pub enum VmInternalError {
+    #[error(transparent)]
+    FunctionIdExhausted(#[from] btel_types::FunctionIdExhausted),
+
     #[error("invalid argument count: expected {expected}, got {got}")]
     InvalidArgumentCount { expected: usize, got: usize },
 

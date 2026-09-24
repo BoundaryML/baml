@@ -1,5 +1,5 @@
 [package]
-name = "btel_types"
+name = "bex_chunkedringbuffer"
 version = { workspace = true }
 publish = false
 authors = { workspace = true }
@@ -9,13 +9,10 @@ homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
-description = "Core types for BAML telemetry producers"
+description = "Experimental bounded reusable telemetry chunks"
 
-[lib]
-doctest = false
-
-[dependencies]
-rustc-hash = { workspace = true }
+[target.'cfg(baml_loom)'.dependencies]
+loom = { workspace = true }
 
 [lints]
 workspace = true

@@ -1,5 +1,5 @@
 [package]
-name = "btel_types"
+name = "btel_ringbuffer"
 version = { workspace = true }
 publish = false
 authors = { workspace = true }
@@ -9,13 +9,13 @@ homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
-description = "Core types for BAML telemetry producers"
-
-[lib]
-doctest = false
+description = "Bounded telemetry rings, producer leases, and consumer wakeups"
 
 [dependencies]
-rustc-hash = { workspace = true }
+btel_types = { workspace = true }
+
+[target.'cfg(baml_loom)'.dependencies]
+loom = { workspace = true }
 
 [lints]
 workspace = true

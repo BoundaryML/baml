@@ -405,6 +405,8 @@ pub(crate) mod tests {
             telemetry: TelemetryState::new_root(
                 Arc::new(TelemetryPolicies::new()),
                 btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
+                #[cfg(not(target_arch = "wasm32"))]
+                crate::telemetry::test_runtime(),
             ),
             pending_telemetry_wait: None,
             packages: Arc::new(crate::package_load::PackageIndex::default()),
@@ -427,6 +429,8 @@ pub(crate) mod tests {
             real_local_count: 0,
             bytecode: Bytecode::default(),
             kind: FunctionKind::Native(native as *const ()),
+            telemetry_function_id: None,
+            telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
             local_names: Vec::new(),
             debug_locals: Vec::new(),
@@ -458,7 +462,7 @@ pub(crate) mod tests {
 
     #[test]
     fn hidden_native_execution_has_only_thread_events() {
-        use crate::telemetry::{InvocationOutcome, ProducerEvent};
+        use crate::telemetry::{InvocationOutcome, SpanRecord};
 
         let (mut vm, native_ptr) = vm_with_native_entry();
         vm.set_entry_point(native_ptr, &[]);
@@ -470,11 +474,12 @@ pub(crate) mod tests {
             matches!(vm.exec().unwrap(), VmExecState::Complete(value) if value == Value::int(42))
         );
         vm.finish_telemetry(InvocationOutcome::Ok);
+        assert!(vm.telemetry.timing_records().is_empty());
         assert!(matches!(
-            vm.telemetry.events(),
+            vm.telemetry.span_records(),
             [
-                ProducerEvent::ThreadStarted { .. },
-                ProducerEvent::ThreadCompleted {
+                SpanRecord::ThreadSpanAnnouncement { .. },
+                SpanRecord::ThreadSpanCompletion {
                     outcome: InvocationOutcome::Ok,
                     ..
                 }
@@ -487,7 +492,7 @@ pub(crate) mod tests {
     fn hidden_native_callbacks_preserve_visible_paths_and_reentry() {
         use crate::{
             package_baml::{Continuation, PassThroughContinuation},
-            telemetry::ProducerEvent,
+            telemetry::{SpanRecord, TimingRecord},
         };
 
         struct Again(HeapPtr);
@@ -550,13 +555,13 @@ pub(crate) mod tests {
         }
         let timings: Vec<_> = vm
             .telemetry
-            .events()
+            .timing_records()
             .iter()
             .filter_map(|event| match event {
-                ProducerEvent::Timing {
+                TimingRecord::FunctionTimingCompletion {
                     call_path, reentry, ..
                 } => Some((*call_path, *reentry)),
-                _ => None,
+                TimingRecord::ThreadSelected { .. } => None,
             })
             .collect();
         assert_eq!(
@@ -579,6 +584,33 @@ pub(crate) mod tests {
             "both lambda callbacks have the same visible call site"
         );
         assert!(timings[3..].iter().all(|(_, reentry)| !reentry));
+        let mut named_paths = HashMap::new();
+        for event in vm.telemetry.span_records() {
+            if let SpanRecord::CallPathDefined {
+                call_path,
+                visible_caller,
+                callee,
+                ..
+            } = event
+            {
+                let callee = vm.heap.function_metadata(vm.proof(), *callee).unwrap();
+                let caller =
+                    visible_caller.map(|id| vm.heap.function_metadata(vm.proof(), id).unwrap().fqn);
+                named_paths.insert(*call_path, (caller, callee.fqn));
+            }
+        }
+        // Definitions carry registered IDs for the authored functions, never
+        // the hidden native Invoke wrapper, including both lambda callbacks.
+        assert_eq!(
+            named_paths[&timings[0].0],
+            (Some("user.Main".into()), "user.F".into())
+        );
+        assert_eq!(
+            named_paths[&timings[3].0],
+            (Some("user.Main".into()), "user.G".into())
+        );
+        assert_eq!(named_paths[&timings[5].0].0.as_deref(), Some("user.Main"));
+        assert!(named_paths[&timings[5].0].1.contains("<lambda"));
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -586,7 +618,7 @@ pub(crate) mod tests {
     fn await_and_async_sysop_start_waits_at_their_semantic_boundaries() {
         use bex_vm_types::{Future, RealizedTy, types::FutureId};
 
-        use crate::telemetry::{ClockDuration, ProducerEvent};
+        use crate::telemetry::{ClockDuration, TimingRecord};
 
         for sysop in [false, true] {
             for pending in [false, true] {
@@ -658,10 +690,10 @@ pub(crate) mod tests {
                 assert!(vm.pending_telemetry_wait.is_none());
                 let waits: Vec<_> = vm
                     .telemetry
-                    .events()
+                    .timing_records()
                     .iter()
                     .filter_map(|event| {
-                        if let ProducerEvent::Timing { await_time, .. } = event {
+                        if let TimingRecord::FunctionTimingCompletion { await_time, .. } = event {
                             Some(await_time.get().get())
                         } else {
                             None
@@ -782,10 +814,58 @@ pub(crate) mod tests {
 
     #[test]
     fn trampoline_function_survives_gc_while_frame_is_active() {
+        use crate::package_baml::{BamlPackageBaml, PackageBamlImpl};
+
         let (mut vm, native_ptr) = vm_with_native_entry();
 
         vm.set_entry_point(native_ptr, &[]);
         let trampoline = trampoline_ptr(&vm);
+
+        let Object::Function(function) = vm.get_object(trampoline) else {
+            unreachable!()
+        };
+        assert_eq!(function.telemetry_function_id, None);
+        assert!(
+            vm.telemetry
+                .set_policy(function, crate::telemetry::TelemetryPolicy::NONE)
+                .is_err()
+        );
+        let cloned = function.clone();
+        assert_eq!(
+            cloned.telemetry_function_id, None,
+            "GC preserves unsupported capability"
+        );
+        let copy = PackageBamlImpl::deep_copy(&mut vm, &Value::object(trampoline)).unwrap();
+        let Object::Function(copy) = vm.get_object(copy.as_object_ptr().unwrap()) else {
+            unreachable!()
+        };
+        assert_eq!(
+            copy.telemetry_function_id, None,
+            "copying cannot enable telemetry"
+        );
+
+        // A real function copy gets a fresh ID and resets the cloned
+        // registration flag (the source is already statically registered).
+        let Object::Function(original) = vm.get_object(native_ptr) else {
+            unreachable!()
+        };
+        let original_id = original.telemetry_function_id.unwrap();
+        let copied = PackageBamlImpl::deep_copy(&mut vm, &Value::object(native_ptr)).unwrap();
+        let copied_ptr = copied.as_object_ptr().unwrap();
+        let Object::Function(copied) = vm.get_object(copied_ptr) else {
+            unreachable!()
+        };
+        let copied_id = copied.telemetry_function_id.unwrap();
+        assert_ne!(copied_id, original_id);
+        assert!(vm.heap.function_metadata(vm.proof(), copied_id).is_none());
+        // SAFETY: the running test VM excludes GC and the copy is fully linked.
+        unsafe {
+            assert_eq!(
+                vm.heap.register_telemetry_function(copied_ptr),
+                Some(copied_id)
+            );
+        }
+        assert!(vm.heap.function_metadata(vm.proof(), copied_id).is_some());
 
         let mut roots = Vec::new();
         vm.collect_roots(&mut roots);
@@ -809,7 +889,7 @@ pub(crate) mod tests {
 
         let moved_trampoline = trampoline_ptr(&vm);
         assert!(
-            matches!(vm.get_object(moved_trampoline), Object::Function(f) if f.name == "$entry::test_native"),
+            matches!(vm.get_object(moved_trampoline), Object::Function(f) if f.name == "$entry::test_native" && f.telemetry_function_id.is_none()),
             "frame should point at the moved trampoline function after forwarding"
         );
 
@@ -1886,6 +1966,9 @@ impl BexVm {
         panic_class_ptrs: Arc<[HeapPtr]>,
         telemetry_policies: Arc<TelemetryPolicies>,
         telemetry_clock: Arc<btel_clock::ClockEpoch>,
+        #[cfg(not(target_arch = "wasm32"))] telemetry_runtime: Arc<
+            btel_processor::TelemetryRuntime,
+        >,
     ) -> Self {
         // Defer the first TLAB chunk reservation until the first `tlab.alloc`,
         // which the engine reaches only after the VM has been registered as a
@@ -1929,10 +2012,27 @@ impl BexVm {
             pending_call_type_values: Vec::new(),
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
-            telemetry: TelemetryState::new_root(telemetry_policies, telemetry_clock),
+            telemetry: TelemetryState::new_root(
+                telemetry_policies,
+                telemetry_clock,
+                #[cfg(not(target_arch = "wasm32"))]
+                telemetry_runtime,
+            ),
             pending_telemetry_wait: None,
             packages,
             dynamic_dispatch,
+        }
+    }
+
+    /// Materialize a new executable object. Imported pointers bypass this;
+    /// moving GC preserves the existing identity without re-registration.
+    pub(crate) fn alloc_runtime_object(
+        &mut self,
+        object: Object,
+    ) -> Result<HeapPtr, VmInternalError> {
+        match object {
+            Object::Function(function) => Ok(self.tlab.alloc_function(function)?),
+            other => Ok(self.tlab.alloc(other)),
         }
     }
 
@@ -3533,6 +3633,12 @@ impl BexVm {
             panic_class_ptrs,
             Arc::new(TelemetryPolicies::new()),
             btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
+            #[cfg(not(target_arch = "wasm32"))]
+            btel_processor::TelemetryRuntime::new().map_err(|error| {
+                VmInternalError::BridgeFailure {
+                    message: format!("telemetry processor startup: {error}"),
+                }
+            })?,
         ))
     }
 
@@ -3616,6 +3722,8 @@ impl BexVm {
         type_args: IndexMap<String, bex_vm_types::RealizedTy>,
         type_values: IndexMap<String, TypeValue>,
     ) {
+        #[cfg(not(target_arch = "wasm32"))]
+        let _telemetry_scope = self.telemetry.execution_scope();
         debug_assert!(
             matches!(
                 self.get_object(function),
@@ -3709,6 +3817,9 @@ impl BexVm {
                     0,
                     false,
                     args,
+                    |caller, callee| unsafe {
+                        Self::register_call_path_functions(&self.heap, caller, callee)
+                    },
                 );
                 self.pending_call_type_args.clone_from(&effective_type_args);
                 self.pending_call_type_values
@@ -3859,6 +3970,8 @@ impl BexVm {
             real_local_count: 0,
             bytecode,
             kind: FunctionKind::Bytecode,
+            telemetry_function_id: None,
+            telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
             local_names: Vec::new(),
             debug_locals: Vec::new(),
@@ -3938,6 +4051,8 @@ impl BexVm {
             real_local_count: 0,
             bytecode,
             kind: FunctionKind::Bytecode,
+            telemetry_function_id: None,
+            telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
             local_names: Vec::new(),
             debug_locals: Vec::new(),
@@ -5835,6 +5950,9 @@ impl BexVm {
                     caller_pc,
                     caller_is_observed,
                     args,
+                    |caller, callee| unsafe {
+                        Self::register_call_path_functions(&self.heap, caller, callee)
+                    },
                 );
 
                 // Construct after reserving capacity so the frame can be written
@@ -6165,13 +6283,30 @@ impl BexVm {
         }
     }
 
+    /// The caller must hold this heap's execution permit. Called only when a
+    /// new telemetry call path is about to publish function references.
+    unsafe fn register_call_path_functions(
+        heap: &BexHeap,
+        caller: Option<HeapPtr>,
+        callee: HeapPtr,
+    ) -> (Option<btel_types::FunctionId>, btel_types::FunctionId) {
+        // SAFETY: the running VM excludes GC and points only at linked objects.
+        unsafe {
+            let caller = caller.and_then(|caller| heap.register_telemetry_function(caller));
+            let callee = heap
+                .register_telemetry_function(callee)
+                .expect("observed callee must support telemetry");
+            (caller, callee)
+        }
+    }
+
     /// Resolve a frame's callable wrapper to the underlying function object
     /// used as stable call-path identity.
     fn frame_function_identity(&self, frame_idx: usize) -> Option<HeapPtr> {
         let ptr = self.frames.get(frame_idx)?.function();
         // SAFETY: the frame roots `ptr` and execution holds the heap permit.
         match unsafe { ptr.get() } {
-            Object::Function(_) => Some(ptr),
+            Object::Function(function) => function.telemetry_function_id.map(|_| ptr),
             Object::Closure(closure) => Some(closure.function),
             Object::BoundMethod(method) => Some(method.function),
             Object::GenericFunction(function) => self.generic_function_authored_ptr(function).ok(),
@@ -6285,6 +6420,8 @@ impl BexVm {
     /// thread. The engine calls this exactly once when it chooses a terminal
     /// outcome (including cancellation races and explicit process exit).
     pub fn finish_telemetry(&mut self, outcome: InvocationOutcome) {
+        #[cfg(not(target_arch = "wasm32"))]
+        let _telemetry_scope = self.telemetry.execution_scope();
         self.finish_pending_telemetry_wait();
         for frame_idx in (0..self.frames.len()).rev() {
             self.complete_bytecode_invocation(frame_idx, outcome, None);
@@ -6309,6 +6446,8 @@ impl BexVm {
     /// Wraps `exec_inner` to convert `InternalError` → `TracedInternalError`
     /// with a captured stack trace.
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
+        #[cfg(not(target_arch = "wasm32"))]
+        let _telemetry_scope = self.telemetry.execution_scope();
         self.finish_pending_telemetry_wait();
         // Keep GC polling progress across engine handoffs. Returning from
         // exec (for example, to spawn a child) does not necessarily release
@@ -6360,6 +6499,8 @@ impl BexVm {
     }
 
     pub fn try_handle_external_thrown(&mut self, thrown: VmThrown) -> Result<(), VmError> {
+        #[cfg(not(target_arch = "wasm32"))]
+        let _telemetry_scope = self.telemetry.execution_scope();
         self.finish_pending_telemetry_wait();
         let exception_value = thrown.value;
         if self.frames.is_empty() {
@@ -7431,9 +7572,14 @@ impl BexVm {
                             Object::Function(_) => closure_ptr,
                             _ => closure_ptr,
                         };
-                        let telemetry =
-                            self.telemetry
-                                .spawn_context(actual_caller, caller_pc, callee);
+                        let telemetry = self.telemetry.spawn_context(
+                            actual_caller,
+                            caller_pc,
+                            callee,
+                            |caller, callee| unsafe {
+                                Self::register_call_path_functions(&self.heap, caller, callee)
+                            },
+                        );
                         return Ok(Some(VmExecState::Spawn {
                             future: object_index,
                             telemetry,
@@ -7495,6 +7641,11 @@ impl BexVm {
                                     caller_pc,
                                     caller_is_observed,
                                     args,
+                                    |caller, callee| unsafe {
+                                        Self::register_call_path_functions(
+                                            &self.heap, caller, callee,
+                                        )
+                                    },
                                 );
                                 let Frame::Bytecode(caller) = &mut self.frames[*frame_idx] else {
                                     verifier_unreachable!()

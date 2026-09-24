@@ -47,6 +47,8 @@ fn inject_function(
         real_local_count: 0,
         bytecode,
         kind: FunctionKind::Bytecode,
+        telemetry_function_id: None,
+        telemetry_registration: bex_vm_types::FunctionRegistration::default(),
         telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
         local_names: vec![],
         debug_locals: vec![],

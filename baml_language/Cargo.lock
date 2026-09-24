@@ -1231,6 +1231,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "bex_chunkedringbuffer"
+version = "0.0.0-beta"
+dependencies = [
+ "loom",
+]
+
+[[package]]
 name = "bex_engine"
 version = "0.0.0-beta"
 dependencies = [
@@ -1249,6 +1256,8 @@ dependencies = [
  "bex_vm_types",
  "bridge_ctypes",
  "btel_clock",
+ "btel_processor",
+ "btel_types",
  "futures",
  "indexmap",
  "libc",
@@ -1275,6 +1284,7 @@ version = "0.0.0-beta"
 dependencies = [
  "base64",
  "bex_vm_types",
+ "btel_types",
  "loom",
  "prost",
  "prost-build",
@@ -1307,6 +1317,7 @@ dependencies = [
  "bex_external_types",
  "bex_str",
  "bex_vm_types",
+ "btel_types",
  "indexmap",
  "num-bigint",
  "parking_lot",
@@ -1417,6 +1428,8 @@ dependencies = [
  "bex_str",
  "bex_vm_types",
  "btel_clock",
+ "btel_processor",
+ "btel_records",
  "btel_types",
  "chacha20poly1305",
  "console",
@@ -1728,8 +1741,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "btel_processor"
+version = "0.0.0-beta"
+dependencies = [
+ "bex_chunkedringbuffer",
+ "btel_clock",
+ "btel_records",
+ "btel_types",
+ "rustc-hash 2.1.2",
+]
+
+[[package]]
+name = "btel_records"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_clock",
+ "btel_types",
+]
+
+[[package]]
+name = "btel_ringbuffer"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_types",
+ "loom",
+]
+
+[[package]]
 name = "btel_types"
 version = "0.0.0-beta"
+dependencies = [
+ "rustc-hash 2.1.2",
+]
 
 [[package]]
 name = "bumpalo"

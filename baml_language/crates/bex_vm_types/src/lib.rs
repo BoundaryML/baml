@@ -28,7 +28,7 @@ pub mod types;
 pub mod unit;
 
 pub use bex_str::BexStr;
-pub use btel_types::TelemetryPolicyId;
+pub use btel_types::{FunctionRegistration, TelemetryPolicyId};
 pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp};
 pub use heap_ptr::HeapPtr;
 pub use indexable::{

@@ -2445,7 +2445,9 @@ mod tests {
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
-            output.contains("fn deep_copy(vm: &mut BexVm, value: &Value) -> Value;"),
+            output.contains(
+                "fn deep_copy(vm: &mut BexVm, value: &Value) -> Result<Value, VmRustFnError>;"
+            ),
             "BamlPackageBaml should have deep_copy:\n{output}"
         );
     }

@@ -771,7 +771,8 @@ pub struct BexEngine {
     completed_threads: std::sync::Mutex<Vec<(u64, bex_vm::telemetry::InvocationOutcome)>>,
     process_euid: ProcessEuid,
     engine_id: EngineId,
-    program_metadata: ProgramMetadata,
+    program_id: ProgramId,
+    source_snapshot_id: Option<bex_events::ids::SourceSnapshotId>,
     /// Allocates logical thread identities for structured logs.
     next_thread_id: AtomicU64,
     /// The unified heap (shared across all VM instances)
@@ -779,6 +780,8 @@ pub struct BexEngine {
     /// One policy namespace for all function objects and VMs in this engine.
     telemetry_policies: Arc<TelemetryPolicies>,
     telemetry_clock: btel_clock::ClockRuntime,
+    #[cfg(not(target_arch = "wasm32"))]
+    telemetry_runtime: Arc<btel_processor::TelemetryRuntime>,
     /// Frozen global variables shared across every post-`$init` VM.
     ///
     /// Populated once during `$init` and immutable thereafter; cloning is a
@@ -1223,44 +1226,6 @@ fn extract_host_diagnostics_from_value(
     )
 }
 
-// TODO(bep-053): replace with compiler-owned metadata — capital-letter
-// sniffing on FQN segments is an acknowledged-interim heuristic and must not
-// become load-bearing.
-fn derive_owner_type_definition_key(fqn: &str) -> Option<bex_events::DefinitionKey> {
-    let parts = fqn.split('.').collect::<Vec<_>>();
-    if parts.len() < 3 {
-        return None;
-    }
-
-    let owner = parts[parts.len() - 2];
-    if !owner
-        .chars()
-        .next()
-        .is_some_and(|ch| ch.is_ascii_uppercase())
-    {
-        return None;
-    }
-
-    Some(bex_events::DefinitionKey(format!(
-        "class:{}",
-        parts[..parts.len() - 1].join(".")
-    )))
-}
-
-// TODO(bep-053): replace with compiler-owned lambda identity — the
-// `find("<lambda")` name sniff is an acknowledged-interim heuristic.
-fn derive_lambda_metadata(fqn: &str) -> (Option<bex_events::DefinitionKey>, Option<String>) {
-    let Some(lambda_start) = fqn.find("<lambda") else {
-        return (None, None);
-    };
-
-    let parent = fqn[..lambda_start].trim_end_matches(['.', ':']).to_string();
-    let parent_function =
-        (!parent.is_empty()).then(|| bex_events::DefinitionKey(format!("function:{parent}")));
-    let lambda_path = Some(fqn[lambda_start..].to_string());
-    (parent_function, lambda_path)
-}
-
 // ── Friendly generic-inference errors ───────────────────────────────────────
 //
 // Inbound generic-call failures are surfaced to host callers, so their messages
@@ -1410,73 +1375,6 @@ impl BexEngine {
         EngineId(NEXT_ENGINE_ID.fetch_add(1, Ordering::Relaxed))
     }
 
-    fn build_program_metadata(program: &bex_vm_types::Program) -> ProgramMetadata {
-        // Metadata IDs are local to this table, in compiled-function order.
-        let mut next_function_id: u32 = 0;
-        let functions: Vec<bex_events::FunctionMetadata> = program
-            .objects
-            .iter()
-            .filter_map(|obj| {
-                let Object::Function(function) = obj else {
-                    return None;
-                };
-
-                next_function_id += 1;
-                let function_id = FunctionId(next_function_id);
-                let fqn = function.name.clone();
-                let owner_type = derive_owner_type_definition_key(&fqn);
-                let (parent_function, lambda_path) = derive_lambda_metadata(&fqn);
-                let mut parts = fqn.split('.').map(str::to_string).collect::<Vec<_>>();
-                let display_name = parts.last().cloned().unwrap_or_else(|| fqn.clone());
-                let package_name = if parts.len() > 1 {
-                    Some(parts.remove(0))
-                } else {
-                    None
-                };
-                let namespace = if parts.len() > 1 {
-                    parts[..parts.len() - 1].to_vec()
-                } else {
-                    Vec::new()
-                };
-                let source_file =
-                    (!function.source_file.is_empty()).then(|| function.source_file.clone());
-                let source_span = Some(bex_events::SourceSpan {
-                    file_id: function.span.file_id.as_u32(),
-                    start: function.span.range.start().into(),
-                    end: function.span.range.end().into(),
-                });
-
-                Some(bex_events::FunctionMetadata {
-                    function_id,
-                    fqn: fqn.clone(),
-                    display_name,
-                    source_file,
-                    source_span,
-                    kind: function.kind.into(),
-                    origin: function.origin.into(),
-                    owner_type,
-                    parent_function,
-                    lambda_path,
-                    definition_key: Some(bex_events::DefinitionKey(format!("function:{fqn}"))),
-                    package_name,
-                    namespace,
-                })
-            })
-            .collect();
-
-        // Preserve a supplied source hash as snapshot metadata without allowing
-        // that path to mint ProgramId differently from other constructions.
-        let program_id = ProgramId::new_random();
-        let source_snapshot_id = program
-            .source_content_hash
-            .map(bex_events::ids::SourceSnapshotId);
-        ProgramMetadata {
-            program_id,
-            source_snapshot_id,
-            function_table: FunctionMetadataTable { functions },
-        }
-    }
-
     /// Create a new engine with the given program.
     ///
     /// The engine creates a unified heap containing compile-time objects
@@ -1554,7 +1452,10 @@ impl BexEngine {
         let argv: Arc<[String]> = Arc::from(argv);
         let process_euid = ProcessEuid::current();
         let engine_id = Self::next_engine_id();
-        let program_metadata = Self::build_program_metadata(&bytecode_program);
+        let program_id = ProgramId::new_random();
+        let source_snapshot_id = bytecode_program
+            .source_content_hash
+            .map(bex_events::ids::SourceSnapshotId);
 
         // Extract package_init_order before consuming bytecode_program.
         let package_init_order = bytecode_program.package_init_order.clone();
@@ -1702,6 +1603,9 @@ impl BexEngine {
 
         let telemetry_policies = Arc::new(TelemetryPolicies::new());
         let telemetry_clock = btel_clock::ClockRuntime::new(clock_mode);
+        #[cfg(not(target_arch = "wasm32"))]
+        let telemetry_runtime = btel_processor::TelemetryRuntime::new()
+            .map_err(|error| EngineError::Other(format!("telemetry processor startup: {error}")))?;
 
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
@@ -1721,6 +1625,8 @@ impl BexEngine {
                     Arc::clone(&panic_class_ptrs),
                     Arc::clone(&telemetry_policies),
                     telemetry_clock.start_run(),
+                    #[cfg(not(target_arch = "wasm32"))]
+                    Arc::clone(&telemetry_runtime),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -1854,11 +1760,14 @@ impl BexEngine {
             completed_threads: std::sync::Mutex::new(Vec::new()),
             process_euid,
             engine_id,
-            program_metadata,
+            program_id,
+            source_snapshot_id,
             next_thread_id: AtomicU64::new(1),
             heap,
             telemetry_policies,
             telemetry_clock,
+            #[cfg(not(target_arch = "wasm32"))]
+            telemetry_runtime,
             globals,
             _globals_permit: globals_permit,
             resolved_function_names,
@@ -1905,9 +1814,24 @@ impl BexEngine {
         self.engine_id
     }
 
-    #[must_use]
-    pub fn program_metadata(&self) -> &ProgramMetadata {
-        &self.program_metadata
+    /// Owned snapshot of registered telemetry functions. Unobserved dynamic
+    /// functions are absent; collected ones disappear. Returned copies stay valid.
+    pub async fn program_metadata(&self) -> ProgramMetadata {
+        let inactive = self.heap_permit_manager.new_permit(()).await;
+        let active = inactive.acquire().await;
+        ProgramMetadata {
+            program_id: self.program_id,
+            source_snapshot_id: self.source_snapshot_id,
+            function_table: self.heap.function_metadata_snapshot(active.proof()),
+        }
+    }
+
+    /// Copy registered function metadata under a heap permit. Unregistered or
+    /// collected dynamic functions return None; IDs are never reused.
+    pub async fn function_metadata(&self, id: FunctionId) -> Option<btel_types::FunctionMetadata> {
+        let inactive = self.heap_permit_manager.new_permit(()).await;
+        let active = inactive.acquire().await;
+        self.heap.function_metadata(active.proof(), id)
     }
 
     fn next_bex_thread_id(&self) -> BexThreadId {
@@ -3295,6 +3219,8 @@ impl BexEngine {
             Arc::clone(&self.panic_class_ptrs),
             Arc::clone(&self.telemetry_policies),
             self.telemetry_clock.start_run(),
+            #[cfg(not(target_arch = "wasm32"))]
+            Arc::clone(&self.telemetry_runtime),
         );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
@@ -3381,17 +3307,17 @@ impl BexEngine {
             })?;
             type_args.insert(name, realized);
         }
-        thread
-            .vm
-            .set_entry_point_with_type_values(entry_ptr, &vm_args, type_args, type_values);
-
-        let log_capture = logger.is_enabled().then(|| LogCaptureContext {
-            boundary_id: boundary.boundary_id,
-            logger: logger.clone(),
-        });
-        // Run the event loop.
-        let result = self
-            .run_thread_event_loop(
+        // Entry, execution and explicit finalization share one producer until
+        // the task actually suspends. VM method scopes nest inside this poll.
+        let execution = async {
+            thread
+                .vm
+                .set_entry_point_with_type_values(entry_ptr, &vm_args, type_args, type_values);
+            let log_capture = logger.is_enabled().then(|| LogCaptureContext {
+                boundary_id: boundary.boundary_id,
+                logger: logger.clone(),
+            });
+            self.run_thread_event_loop_inner(
                 return_type,
                 throws_type,
                 thread,
@@ -3400,7 +3326,12 @@ impl BexEngine {
                 &cancel,
                 copy_objects,
             )
-            .await;
+            .await
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        let result = self.telemetry_runtime.scope(execution).await;
+        #[cfg(target_arch = "wasm32")]
+        let result = execution.await;
 
         // Flush any host-value releases queued during this call. The root
         // thread's `ActiveHeapPermit` was consumed by `run_thread_event_loop`
@@ -4831,6 +4762,8 @@ impl BexEngine {
             Arc::clone(&self.panic_class_ptrs),
             Arc::clone(&self.telemetry_policies),
             Arc::clone(&telemetry.clock),
+            #[cfg(not(target_arch = "wasm32"))]
+            Arc::clone(&self.telemetry_runtime),
         );
         child_vm.thread_id = thread_id;
         child_vm.configure_spawn_telemetry(&telemetry);
@@ -4955,6 +4888,32 @@ impl BexEngine {
     /// through [`FutureManager`] so the awaiter resumes correctly.
     #[allow(clippy::too_many_arguments)]
     async fn run_thread_event_loop(
+        self: &Arc<Self>,
+        return_type: RuntimeTy,
+        throws_type: Option<RuntimeTy>,
+        thread: ActiveHeapPermit<BexThread>,
+        call_id: CallId,
+        log_capture: Option<LogCaptureContext>,
+        cancel: &CancellationToken,
+        copy_objects: bool,
+    ) -> Result<ThreadOutcome, EngineError> {
+        let execution = self.run_thread_event_loop_inner(
+            return_type,
+            throws_type,
+            thread,
+            call_id,
+            log_capture,
+            cancel,
+            copy_objects,
+        );
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.telemetry_runtime.scope(execution).await;
+        #[cfg(target_arch = "wasm32")]
+        execution.await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn run_thread_event_loop_inner(
         self: &Arc<Self>,
         return_type: RuntimeTy,
         throws_type: Option<RuntimeTy>,

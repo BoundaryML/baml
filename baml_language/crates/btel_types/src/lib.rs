@@ -1,7 +1,7 @@
 //! Transport-independent types shared by BAML telemetry producers.
 //!
-//! This crate contains identity, time, and invocation vocabulary only. It does
-//! not contain buffering, collection, decoding, storage, or publication.
+//! Identity, time, invocation vocabulary and telemetry function registration.
+//! No buffering, event transport, collection, decoding, or storage.
 
 #![allow(unsafe_code)]
 #![allow(
@@ -9,12 +9,17 @@
     reason = "these wrappers and clock/ID primitives are measured producer hot-path operations"
 )]
 
+mod function_lookup;
+mod functions;
 use std::{
     cell::Cell,
     mem::size_of,
     num::NonZeroU64,
     sync::atomic::{AtomicU16, AtomicU64, Ordering},
 };
+
+pub use function_lookup::{FunctionLookup, FunctionRegistration};
+pub use functions::*;
 
 const ID_RANGE_SIZE: u64 = 4096;
 
@@ -169,6 +174,42 @@ impl CallPathId {
 
 const _: () = assert!(size_of::<CallPathId>() == 4);
 
+/// Identity of an aggregation node: one base call path and its reentry variant.
+/// All 32 path bits survive; reentry occupies an additional bit after widening.
+/// This is derived identity, not a separately allocated invocation or span ID.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct CallPathNodeId(u64);
+
+impl CallPathNodeId {
+    #[inline]
+    pub const fn new(path: CallPathId, reentry: bool) -> Self {
+        Self(((path.get() as u64) << 1) | reentry as u64)
+    }
+
+    #[inline]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "private representation contains exactly 32 path bits plus one reentry bit"
+    )]
+    pub const fn call_path(self) -> CallPathId {
+        // Only `new` constructs nondefault values, so bits 33..64 are zero.
+        CallPathId((self.0 >> 1) as u32)
+    }
+
+    #[inline]
+    pub const fn is_reentry(self) -> bool {
+        self.0 & 1 != 0
+    }
+
+    #[inline]
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+}
+
+const _: () = assert!(size_of::<CallPathNodeId>() == 8);
+
 /// A raw reading from the producer clock. The unit is supplied by run metadata.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
@@ -257,6 +298,24 @@ pub enum CallPathEdge {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn call_path_node_identity_preserves_all_path_bits_and_reentry() {
+        let mut identities = std::collections::HashSet::new();
+        for raw in [0, 1, (1 << 31) - 1, 1 << 31, (1 << 31) + 1, u32::MAX] {
+            let path = CallPathId(raw);
+            for reentry in [false, true] {
+                let node = CallPathNodeId::new(path, reentry);
+                assert_eq!(node.call_path(), path);
+                assert_eq!(node.is_reentry(), reentry);
+                assert!(identities.insert(node));
+            }
+        }
+        assert_eq!(
+            CallPathNodeId::new(CallPathId(u32::MAX), true).get(),
+            0x1_ffff_ffff
+        );
+    }
 
     #[test]
     fn allocator_ids_are_unique_across_workers_and_range_refills() {

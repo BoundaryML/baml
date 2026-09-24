@@ -1,5 +1,5 @@
 [package]
-name = "btel_types"
+name = "btel_records"
 version = { workspace = true }
 publish = false
 authors = { workspace = true }
@@ -9,13 +9,11 @@ homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
-description = "Core types for BAML telemetry producers"
-
-[lib]
-doctest = false
-
-[dependencies]
-rustc-hash = { workspace = true }
+description = "Typed timing and span records for BAML telemetry"
 
 [lints]
 workspace = true
+
+[dependencies]
+btel_clock = { workspace = true }
+btel_types = { workspace = true }
