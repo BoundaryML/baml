@@ -15,9 +15,10 @@
 # `runs-on`.
 #
 # Each job runs the same cargo and test commands as its upstream job, so the two
-# timings compare. Each job also has the same key and the same name as its upstream
-# job, so a check here reads as "Trunk Kiln shadow / <upstream check name>". When you
-# change one of these upstream jobs, change its copy here too:
+# timings compare. Each job also has the same key as its upstream job, and its name is
+# the upstream name with a "KILN: " prefix, so a check here reads as
+# "Trunk Kiln shadow / KILN: <upstream check name>". When you change one of these
+# upstream jobs, change its copy here too:
 #
 #   cargo-test-linux       <- cargo-tests.reusable.yaml
 #   cargo-test-linux-musl  <- cargo-tests.reusable.yaml
@@ -25,9 +26,9 @@
 #   snapshot-tests         <- compiler-tests.reusable.yaml
 #   sdk_parity_check       <- ci.yaml
 #
-# The names are safe only while no upstream check with the same name is a required
-# status check: a required check matches by name, and these jobs always pass because
-# of `continue-on-error`. Rename a job here before you make its upstream check required.
+# Keep the prefix. A required status check matches by name, and these jobs always pass
+# because of `continue-on-error`. Without the prefix, a job here could satisfy a
+# required upstream check with the same name.
 #
 # These are the only differences, and each one is specific to Kiln:
 #   - The checkout keeps `clean: false`, and the backdate step follows it. The runner
@@ -65,7 +66,7 @@ permissions:
 
 jobs:
   cargo-test-linux:
-    name: "cargo test (x86_64-unknown-linux-gnu)"
+    name: "KILN: cargo test (x86_64-unknown-linux-gnu)"
     # The runner boots from the organization's default CI template, which carries a
     # warm `target/`. An administrator must approve that template for pull requests
     # from forks, or these jobs get the plain base image and compile from scratch.
@@ -185,7 +186,7 @@ jobs:
           if-no-files-found: ignore
 
   cargo-test-linux-musl:
-    name: "cargo test (x86_64-unknown-linux-musl)"
+    name: "KILN: cargo test (x86_64-unknown-linux-musl)"
     # The runner boots from the organization's default CI template, which carries a
     # warm `target/`. An administrator must approve that template for pull requests
     # from forks, or these jobs get the plain base image and compile from scratch.
@@ -302,7 +303,7 @@ jobs:
           if-no-files-found: ignore
 
   sdk-tests:
-    name: "sdk tests (${{ matrix.sdk-label }}, ${{ matrix.os-label }})"
+    name: "KILN: sdk tests (${{ matrix.sdk-label }}, ${{ matrix.os-label }})"
     # The runner boots from the organization's default CI template, which carries a
     # warm `target/`. An administrator must approve that template for pull requests
     # from forks, or these jobs get the plain base image and compile from scratch.
@@ -606,7 +607,7 @@ jobs:
           if-no-files-found: ignore
 
   snapshot-tests:
-    name: "Compiler and documentation tests"
+    name: "KILN: Compiler and documentation tests"
     # The runner boots from the organization's default CI template, which carries a
     # warm `target/`. An administrator must approve that template for pull requests
     # from forks, or these jobs get the plain base image and compile from scratch.
@@ -751,7 +752,7 @@ jobs:
           if-no-files-found: ignore
 
   sdk_parity_check:
-    name: "SDK parity lint"
+    name: "KILN: SDK parity lint"
     # The runner boots from the organization's default CI template, which carries a
     # warm `target/`. An administrator must approve that template for pull requests
     # from forks, or these jobs get the plain base image and compile from scratch.
