@@ -9,9 +9,7 @@ breadcrumbs:
   - label: "8. Handle errors"
 ---
 
-BAML makes a big bet on error handling: errors are ordinary values, and the compiler tracks how they flow through your program so the syntax stays simple.
-
-You can see the difference in two places: how you write a function that can fail, and how you call it.
+Errors are ordinary values. The compiler tracks which errors a function can throw, including errors from its calls.
 
 ## Error handling across languages
 
@@ -105,6 +103,8 @@ function displayToolName(tool: string): string {
 </div>
 
 <div>
+
+These examples use [Effect 3](https://effect.website/docs/v3/error-management/expected-errors). Install it with `npm install effect@3`.
 
 <p className="language-tabs-heading">Write a function that can fail</p>
 
@@ -296,7 +296,7 @@ fn display_tool_name(tool: &str) -> String {
 
 ## In BAML
 
-The BAML excerpts through error context add to one project. The lambda example repeats `BadToolInput` for context; keep the existing declaration when adding it. The final checked failure is a separate project.
+Add the BAML snippets to the same project. Keep only one declaration of `BadToolInput` when adding the lambda example. Run the final `throws never` failure example separately.
 
 ### Write a function that can fail
 
@@ -359,15 +359,6 @@ Append `catch` to return the error’s message instead:
 | BAML | Expression-level `catch` | `string`, with `throws never` checked |
 
 Rust's `Result<T, E>` and Effect.ts's typed error channel shaped this model. BAML keeps the successful return value unwrapped and represents possible failures as an inferred error effect.
-
-This page explains how to:
-
-- Define and throw structured error values.
-- Inspect errors inferred by the compiler.
-- Handle selected errors or every error.
-- Enforce an explicit `throws` contract.
-- Distinguish errors from panics.
-- Understand error inference for lambdas and function-valued parameters.
 
 ## Add another error value
 
@@ -473,7 +464,7 @@ The compiler compares errors inferred from the body with the declared union. If 
 
 An exhaustive `catch_all` protects a caller when a callee changes. A `throws` contract protects a function's callers from an accidental expansion of its public error set.
 
-Use `throws never` when no error value can leave a function. The reference section includes a checked failure for this contract.
+Use `throws never` when no error value can leave a function. The compiler rejects a body that can throw.
 
 ## Distinguish errors from panics
 
@@ -591,7 +582,7 @@ function validate_score(score: int) -> int throws BadToolInput
 
 ### Throws contract diagnostic
 
-This checked failure promises `throws never` but calls a function that can throw `ToolUnavailable`:
+This function promises `throws never` but calls a function that can throw `ToolUnavailable`:
 
 <BamlProject id="no-listing-08-01-throws-never" file="baml_src/main.baml" regions={["excerpt-18"]} />
 

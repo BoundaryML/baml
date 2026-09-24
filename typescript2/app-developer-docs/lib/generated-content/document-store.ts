@@ -62,7 +62,12 @@ function runtimeSql(): Sql {
   globalThis.developerDocsSql ??= postgres(
     requireGeneratedContentDatabaseUrl(),
     {
-      max: 3,
+      // Each serverless instance owns a pool. Release idle sockets promptly so
+      // ordinary crawling/navigation cannot leave hundreds of connections open.
+      connect_timeout: 10,
+      idle_timeout: 20,
+      max: 1,
+      max_lifetime: 300,
       prepare: false,
     },
   );

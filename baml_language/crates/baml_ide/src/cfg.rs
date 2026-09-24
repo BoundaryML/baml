@@ -1,8 +1,8 @@
 //! Playground control-flow graphs: build one function's (or test's) graph
-//! from its PPIR body and inline user-function callees rustdoc-style.
+//! from its HIR body and inline user-function callees rustdoc-style.
 //!
 //! Salvaged from the pre-rework `ProjectDatabase` methods; every `self`
-//! became `db: &dyn ppir::Db` plus the compiler-visible `files` slice the
+//! became `db: &dyn baml_compiler2_hir::Db` plus the compiler-visible `files` slice the
 //! old `file_map` walks iterated. Consumed by the playground host
 //! (`requestControlFlowGraph`, run-overlay pinning).
 
@@ -61,7 +61,7 @@ impl CfgExpansionCtx {
 }
 
 pub fn ast_control_flow_graph(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     files: &[SourceFile],
     function_name: &str,
 ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
@@ -77,7 +77,7 @@ pub fn ast_control_flow_graph(
 /// the playground (`root[.namespace]::name`); recover the matching lambda
 /// from that synthesized registration and graph its body directly.
 fn ast_test_control_flow_graph_impl(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     files: &[SourceFile],
     test_name: &str,
     ctx: &mut CfgExpansionCtx,
@@ -108,10 +108,10 @@ fn ast_test_control_flow_graph_impl(
                 continue;
             };
             let Some(&init_function_loc) =
-                baml_compiler2_ppir::item_data::file_functions(db, source_file)
+                baml_compiler2_hir::item_data::file_functions(db, source_file)
                     .iter()
                     .find(|&&loc| {
-                        baml_compiler2_ppir::item_data::function_data(db, loc).name
+                        baml_compiler2_hir::item_data::function_data(db, loc).name
                             == init_function.name
                     })
             else {
@@ -197,7 +197,7 @@ fn ast_test_control_flow_graph_impl(
 }
 
 fn ast_control_flow_graph_impl(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     files: &[SourceFile],
     function_name: &str,
     ctx: &mut CfgExpansionCtx,
@@ -214,7 +214,7 @@ fn ast_control_flow_graph_impl(
 }
 
 fn ast_control_flow_graph_for_loc<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     files: &[SourceFile],
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     function_name: &str,
@@ -231,14 +231,14 @@ fn ast_control_flow_graph_for_loc<'db>(
     }
 
     let source_file = func_loc.file(db);
-    let func_span = baml_compiler2_ppir::item_data::function_source_map(db, func_loc).span;
-    let body = baml_compiler2_ppir::function_body(db, func_loc);
+    let func_span = baml_compiler2_hir::item_data::function_source_map(db, func_loc).span;
+    let body = baml_compiler2_hir::body::function_body(db, func_loc);
 
     // LLM functions desugar to Expr bodies, so it is `declarative_meta`
     // (surfaced span-free by `function_llm_meta`) — not the body variant —
     // that marks them.
     let result =
-        if let Some(llm_meta) = baml_compiler2_ppir::item_data::function_llm_meta(db, func_loc) {
+        if let Some(llm_meta) = baml_compiler2_hir::item_data::function_llm_meta(db, func_loc) {
             let client_name = llm_meta
                 .client_name
                 .as_ref()
@@ -256,7 +256,7 @@ fn ast_control_flow_graph_for_loc<'db>(
                 baml_compiler2_hir::body::FunctionBody::Expr(expr_body) => {
                     let mut graph = build_control_flow_graph_from_ast(function_name, expr_body);
                     if let Some(source_map) =
-                        baml_compiler2_ppir::function_body_source_map(db, func_loc)
+                        baml_compiler2_hir::body::function_body_source_map(db, func_loc)
                     {
                         attach_source_spans_to_graph(db, &mut graph, source_file, &source_map);
                     }
@@ -293,7 +293,7 @@ fn ast_control_flow_graph_for_loc<'db>(
 }
 
 fn expand_user_function_calls_in_graph<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     files: &[SourceFile],
     graph: &mut baml_compiler2_visualization::control_flow::ControlFlowGraph,
     caller: baml_compiler2_hir::loc::FunctionLoc<'db>,
@@ -413,14 +413,14 @@ fn expand_user_function_calls_in_graph<'db>(
 /// same-named declarations have different headers, do not guess which one a
 /// name-only call resolved to.
 fn function_header_title(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     files: &[SourceFile],
     function_name: &str,
 ) -> Option<String> {
     let mut unique_title = None;
     for &source_file in files {
-        for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, source_file) {
-            let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
+        for &func_loc in baml_compiler2_hir::item_data::file_functions(db, source_file) {
+            let func_data = baml_compiler2_hir::item_data::function_data(db, func_loc);
             if !crate::symbols::function_name_matches_source_name(
                 db,
                 source_file,
@@ -429,7 +429,7 @@ fn function_header_title(
             ) {
                 continue;
             }
-            let func_span = baml_compiler2_ppir::item_data::function_source_map(db, func_loc).span;
+            let func_span = baml_compiler2_hir::item_data::function_source_map(db, func_loc).span;
             let text = source_file.text(db);
             let start = usize::from(func_span.start()).min(text.len());
             if let Some(title) = header_title_above(&text[..start]) {
@@ -445,24 +445,24 @@ fn function_header_title(
 }
 
 fn function_header_title_for_loc(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
 ) -> Option<String> {
     let source_file = func_loc.file(db);
-    let func_span = baml_compiler2_ppir::item_data::function_source_map(db, func_loc).span;
+    let func_span = baml_compiler2_hir::item_data::function_source_map(db, func_loc).span;
     let text = source_file.text(db);
     let start = usize::from(func_span.start()).min(text.len());
     header_title_above(&text[..start])
 }
 
 fn find_function_loc<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     files: &[SourceFile],
     function_name: &str,
 ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
     for &source_file in files {
-        for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, source_file) {
-            let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
+        for &func_loc in baml_compiler2_hir::item_data::file_functions(db, source_file) {
+            let func_data = baml_compiler2_hir::item_data::function_data(db, func_loc);
             if crate::symbols::function_name_matches_source_name(
                 db,
                 source_file,
@@ -477,19 +477,19 @@ fn find_function_loc<'db>(
 }
 
 fn function_display_name(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
 ) -> String {
-    use baml_compiler2_ppir::item_data::MethodOwner;
+    use baml_compiler2_hir::item_data::MethodOwner;
 
-    let data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
-    match baml_compiler2_ppir::item_data::method_owner(db, func_loc) {
+    let data = baml_compiler2_hir::item_data::function_data(db, func_loc);
+    match baml_compiler2_hir::item_data::method_owner(db, func_loc) {
         Some(MethodOwner::Class(class_loc)) => {
-            let class = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+            let class = baml_compiler2_hir::item_data::class_data(db, class_loc);
             format!("{}.{}", class.name, data.name)
         }
         Some(MethodOwner::Interface(iface_loc)) => {
-            let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+            let iface = baml_compiler2_hir::item_data::interface_data(db, iface_loc);
             format!("{}.{}", iface.name, data.name)
         }
         Some(MethodOwner::Impl(block)) => {
@@ -514,7 +514,7 @@ fn function_display_name(
 }
 
 fn cfg_expansion_key(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
     dispatch_bindings: &CfgDispatchBindings,
 ) -> String {
@@ -531,7 +531,7 @@ fn cfg_expansion_key(
 }
 
 fn cfg_function_identity(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
 ) -> String {
     format!(
@@ -542,7 +542,7 @@ fn cfg_function_identity(
 }
 
 fn call_sites_by_source_expr<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     caller: baml_compiler2_hir::loc::FunctionLoc<'db>,
     body: &baml_compiler2_ast::ExprBody,
     dispatch_bindings: &CfgDispatchBindings,
@@ -615,7 +615,7 @@ fn call_sites_by_source_expr<'db>(
 }
 
 fn resolve_path_function<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     caller_file: SourceFile,
     callee_path: &[baml_base::Name],
 ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
@@ -633,7 +633,7 @@ fn resolve_path_function<'db>(
 }
 
 fn resolved_call_function<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     inference: &baml_compiler2_hir_ty::infer::InferenceResult<'db>,
     body: &baml_compiler2_ast::ExprBody,
@@ -641,7 +641,8 @@ fn resolved_call_function<'db>(
     dispatch_bindings: &CfgDispatchBindings,
 ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
     use baml_compiler2_ast::Expr;
-    use baml_compiler2_hir_ty::infer::MemberResolution;
+    use baml_compiler2_hir::loc::DeclRef;
+    use baml_compiler2_hir_ty::infer::{MemberResolution, MethodCallee};
 
     let resolution = inference.member_resolutions.get(&callee).or_else(|| {
         inference
@@ -653,12 +654,27 @@ fn resolved_call_function<'db>(
 
     match resolution {
         Some(
-            MemberResolution::Free { func }
-            | MemberResolution::BoundMethod { func, .. }
-            | MemberResolution::UnboundMethod { func, .. }
-            | MemberResolution::InterfaceConcreteMethod { func, .. },
+            MemberResolution::Free {
+                func: DeclRef::Source(func),
+            }
+            | MemberResolution::Method {
+                callee:
+                    MethodCallee::Inherent(DeclRef::Source(func))
+                    | MethodCallee::Concrete {
+                        func: DeclRef::Source(func),
+                        ..
+                    },
+                ..
+            },
         ) => Some(*func),
-        Some(MemberResolution::InterfaceVirtualMethod { interface, method }) => {
+        Some(MemberResolution::Method {
+            callee:
+                MethodCallee::Virtual {
+                    interface: DeclRef::Source(interface),
+                    method,
+                },
+            ..
+        }) => {
             let receiver = match &body.exprs[callee] {
                 Expr::MemberAccess { base, .. } | Expr::OptionalMemberAccess { base, .. } => {
                     match &body.exprs[*base] {
@@ -674,21 +690,34 @@ fn resolved_call_function<'db>(
             let concrete = dispatch_bindings.get(receiver)?;
             interface_method_impl_loc(db, viewer, concrete, *interface, method)
         }
+        // A served package's callee has no body in this database: no edge.
         Some(
-            MemberResolution::Field { .. }
+            MemberResolution::Free {
+                func: DeclRef::External(_),
+            }
+            | MemberResolution::Method {
+                callee:
+                    MethodCallee::Inherent(DeclRef::External(_))
+                    | MethodCallee::Concrete {
+                        func: DeclRef::External(_),
+                        ..
+                    }
+                    | MethodCallee::Virtual {
+                        interface: DeclRef::External(_),
+                        ..
+                    },
+                ..
+            }
+            | MemberResolution::Field { .. }
             | MemberResolution::Variant { .. }
-            | MemberResolution::InterfaceVirtualField { .. }
-            | MemberResolution::External(_)
-            | MemberResolution::ExternalField { .. }
-            | MemberResolution::ExternalVariant { .. }
-            | MemberResolution::ExternalInterfaceVirtualField { .. },
+            | MemberResolution::InterfaceVirtualField { .. },
         )
         | None => None,
     }
 }
 
 fn dispatch_bindings_for_call(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     inference: &baml_compiler2_hir_ty::infer::InferenceResult<'_>,
     body: &baml_compiler2_ast::ExprBody,
     call_expr: baml_compiler2_ast::ExprId,
@@ -696,9 +725,9 @@ fn dispatch_bindings_for_call(
     callee: baml_compiler2_hir::loc::FunctionLoc<'_>,
 ) -> CfgDispatchBindings {
     use baml_compiler2_ast::Expr;
-    use baml_compiler2_hir_ty::infer::MemberResolution;
+    use baml_compiler2_hir_ty::infer::{MemberResolution, Receiver};
 
-    let params = &baml_compiler2_ppir::item_data::function_data(db, callee).params;
+    let params = &baml_compiler2_hir::item_data::function_data(db, callee).params;
     let callee_expr = match &body.exprs[call_expr] {
         Expr::Call { callee, .. } | Expr::OptionalCall { callee, .. } => Some(*callee),
         _ => None,
@@ -712,16 +741,17 @@ fn dispatch_bindings_for_call(
                 .and_then(|segment| segment.resolution.as_ref())
         })
     });
-    // Call plans index only the arguments provided by the caller. A bound
-    // method's declared `self` parameter is implicit, so shift those
-    // indices back into the declaration's full parameter list.
+    // Call plans index only the arguments provided by the caller. A BOUND
+    // access's declared `self` parameter is implicit, so shift those
+    // indices back into the declaration's full parameter list; an unbound
+    // access (`I.m(recv, ..)`) writes `self` as its first argument, so its
+    // plan already indexes the full list.
     let implicit_self = usize::from(matches!(
         resolution,
-        Some(
-            MemberResolution::BoundMethod { .. }
-                | MemberResolution::InterfaceConcreteMethod { .. }
-                | MemberResolution::InterfaceVirtualMethod { .. }
-        )
+        Some(MemberResolution::Method {
+            receiver: Receiver::Bound,
+            ..
+        })
     ));
     let mut bindings = CfgDispatchBindings::new();
     let mut record = |param_index: usize, arg_expr: baml_compiler2_ast::ExprId| {
@@ -758,18 +788,21 @@ fn dispatch_bindings_for_call(
 /// `viewer` is the calling function's package: the impl providing the
 /// method is looked up among the impls that package can see.
 fn interface_method_impl_loc<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     concrete: &baml_type::Ty,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     method_name: &baml_base::Name,
 ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
     let method_of = |func_loc: &baml_compiler2_hir::loc::FunctionLoc<'db>| {
-        baml_compiler2_ppir::item_data::function_data(db, *func_loc).name == *method_name
+        baml_compiler2_hir::item_data::function_data(db, *func_loc).name == *method_name
     };
     let mut methods = baml_compiler2_hir_ty::impls::impls_for_type(db, viewer, concrete)
         .into_iter()
-        .filter_map(|resolved| resolved.source_block())
+        .filter_map(|resolved| match resolved.block() {
+            baml_compiler2_hir::loc::DeclRef::Source(block) => Some(block),
+            baml_compiler2_hir::loc::DeclRef::External(_) => None,
+        })
         .filter(|block| {
             baml_compiler2_hir_ty::interfaces::impl_data(db, *block)
                 .as_ref()
@@ -783,7 +816,7 @@ fn interface_method_impl_loc<'db>(
                 .ok()
                 .and_then(|data| data.methods.iter().find(|loc| method_of(loc)).copied())
                 .or_else(|| {
-                    baml_compiler2_ppir::item_data::interface_data(db, iface_loc)
+                    baml_compiler2_hir::item_data::interface_data(db, iface_loc)
                         .default_methods
                         .iter()
                         .find(|loc| method_of(loc))
@@ -888,7 +921,7 @@ fn merge_callee_graph_under_call_node(
 }
 
 fn attach_source_spans_to_graph(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     graph: &mut baml_compiler2_visualization::control_flow::ControlFlowGraph,
     source_file: SourceFile,
     source_map: &baml_compiler2_ast::AstSourceMap,
@@ -906,7 +939,7 @@ fn attach_source_spans_to_graph(
 }
 
 fn source_span_for_source_expr(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     source_file: SourceFile,
     source_map: &baml_compiler2_ast::AstSourceMap,
     source_expr: u32,
@@ -940,7 +973,7 @@ fn source_map_expr_range(
 }
 
 fn source_span_for_range(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     source_file: SourceFile,
     range: text_size::TextRange,
 ) -> Option<baml_compiler2_visualization::control_flow::SourceSpan> {
@@ -1157,6 +1190,65 @@ function observe_an_agent() -> string throws never {
                 node.label == "Run agent steps until completion" || node.node_type == NodeType::Loop
             }),
             "the rendered graph should retain the concrete agent loop"
+        );
+    }
+
+    /// An UNBOUND method call (`Task.run(task, runner)`) writes `self` as
+    /// its first argument, so its plan already indexes the full parameter
+    /// list; only a BOUND access's implicit receiver shifts the indices.
+    /// Mapping `runner` correctly is what lets the concrete `Agent.run`
+    /// body inline through the generic dispatch.
+    #[test]
+    fn unbound_method_calls_map_arguments_without_a_phantom_self() {
+        let (mut db, root) = test_db();
+        db.add_or_update_file_in(
+            root,
+            std::path::Path::new("/cfg-test/unbound.baml"),
+            r#"
+interface Runner<Input> {
+  function run(self, input: Input) -> string throws never
+}
+
+class Task {
+  function run<R extends Runner<Task>>(
+self,
+runner: R,
+  ) -> string throws never {
+//# Dispatch the task to its runner
+runner.run(self)
+  }
+}
+
+class Agent {
+  implements Runner<Task> {
+function run(self, input: Task) -> string throws never {
+  //# Run the agent
+  "done"
+}
+  }
+}
+
+function observe_unbound() -> string throws never {
+  let task = Task {};
+  Task.run(task, Agent {})
+}
+"#,
+        );
+        let graph =
+            build_graph(&db, "observe_unbound").expect("expected graph for observe_unbound");
+        let labels = graph
+            .nodes
+            .values()
+            .map(|node| node.label.as_str())
+            .collect::<Vec<_>>();
+        assert!(
+            labels.contains(&"Dispatch the task to its runner"),
+            "Task.run should be inlined through the unbound call; got {labels:?}"
+        );
+        assert!(
+            labels.contains(&"Run the agent"),
+            "the concrete Agent.run body should be inlined: `runner` maps to the second \
+             argument, not the third; got {labels:?}"
         );
     }
 

@@ -57,12 +57,10 @@ for (;;) {
 auto result = stream.final_();
 ```
 
-`FunctionSpec<Final>` carries the bound recipe's output type, while
-`Stream<Partial, Final>` retains the PPIR partial and final types. PPIR's
-partial-output models are generated under
-`baml_sdk::stream_types`; their `$stream` spelling is only a BAML wire type
-identity. No callable `$spec`, `$stream`, `$parse`, `$render_prompt`, or
-`$build_request` declarations are generated.
+`FunctionSpec<Final>` carries the bound recipe's output type, and
+`Stream<T>` carries the one type its partials and final value share. No callable
+`$spec`, `$stream`, `$parse`, `$render_prompt`, or `$build_request`
+declarations are generated.
 
 The flat C++ stream shortcut has synchronous and asynchronous forms and sends
 the authored function FQN with the Stream boundary operation. The C++ surface

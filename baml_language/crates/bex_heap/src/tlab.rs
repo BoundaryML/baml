@@ -612,32 +612,28 @@ mod tests {
             fields: vec![
                 bex_vm_types::ClassField {
                     name: "x".to_string(),
-                    field_type: baml_type::RuntimeTy::Int {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int {
-                        attr: baml_type::TyAttr::default(),
-                    }),
+                    field_type: baml_type::RuntimeTy::Int,
+                    field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int),
                     description: None,
                     alias: None,
                     docstring: None,
                     other: Default::default(),
                     skip: false,
+                    stream_done: false,
+                    must_exist: false,
                     runtime_type: None,
                 },
                 bex_vm_types::ClassField {
                     name: "y".to_string(),
-                    field_type: baml_type::RuntimeTy::Int {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int {
-                        attr: baml_type::TyAttr::default(),
-                    }),
+                    field_type: baml_type::RuntimeTy::Int,
+                    field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int),
                     description: None,
                     alias: None,
                     docstring: None,
                     other: Default::default(),
                     skip: false,
+                    stream_done: false,
+                    must_exist: false,
                     runtime_type: None,
                 },
             ],
@@ -645,8 +641,8 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
+            stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(100),
-            ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
             owner: bex_vm_types::HeapPtr::null(),
@@ -711,7 +707,6 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
-            ty_attr: baml_type::TyAttr::default(),
             owner: bex_vm_types::HeapPtr::null(),
         })));
 

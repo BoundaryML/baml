@@ -83,7 +83,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use super::{Head, MuDisplay, NormalParam, NormalTy, TypeContext};
-use crate::{FunctionParamMode, Name, Ty, TyAttr};
+use crate::{FunctionParamMode, Name, Ty};
 
 /// Canonicalize a term containing at least one μ-binder.
 ///
@@ -1375,9 +1375,7 @@ fn convert<H: Head>(
                     // dropped), and equality-transparency keeps it out of the
                     // member sort. `Error` is the honest sentinel for "not a
                     // real rendering".
-                    None => Ty::Error {
-                        attr: TyAttr::default(),
-                    },
+                    None => Ty::Error,
                 };
                 NormalTy::Mu {
                     binder: MuDisplay {
@@ -1539,7 +1537,7 @@ impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
         if self.cyclic.contains(&r)
             && let Some(name) = self.auto.representative_name(r)
         {
-            let t = Ty::TypeAlias(name.clone(), TyAttr::default());
+            let t = Ty::TypeAlias(name.clone());
             self.memo.insert(r, t.clone());
             return Some(t);
         }
@@ -1597,22 +1595,21 @@ impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
         extras: &[StateId],
         path: &mut Vec<StateId>,
     ) -> Option<Ty<H>> {
-        let attr = TyAttr::default;
         let mut parts: Vec<Ty<H>> = Vec::new();
         for &u in covers {
             let name = self
                 .auto
                 .representative_name(u)
                 .unwrap_or_else(|| unreachable!("candidates are named"));
-            parts.push(Ty::TypeAlias(name.clone(), attr()));
+            parts.push(Ty::TypeAlias(name.clone()));
         }
         for &m in extras {
             parts.push(self.render(m, path)?);
         }
         Some(match parts.len() {
-            0 => Ty::Never { attr: attr() },
+            0 => Ty::Never,
             1 => parts.pop().unwrap_or_else(|| unreachable!("len checked")),
-            _ => Ty::Union(parts.into(), attr()),
+            _ => Ty::Union(parts.into()),
         })
     }
 
@@ -1621,23 +1618,20 @@ impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
     /// (exposing its head constructor) while nested occurrences fold to the
     /// name.
     fn structural(&mut self, r: StateId, path: &mut Vec<StateId>) -> Option<Ty<H>> {
-        let attr = TyAttr::default;
         let auto = self.auto;
         Some(match auto.node(r) {
             Node::Leaf(l) => auto.leaves.get(l.0).clone().into_ty(),
-            Node::Enum(qn) => Ty::Enum(auto.names.get(qn.0).clone(), attr()),
-            Node::EnumVariant(qn, v) => Ty::EnumVariant(
-                auto.names.get(qn.0).clone(),
-                auto.strs.get(v.0).clone(),
-                attr(),
-            ),
+            Node::Enum(qn) => Ty::Enum(auto.names.get(qn.0).clone()),
+            Node::EnumVariant(qn, v) => {
+                Ty::EnumVariant(auto.names.get(qn.0).clone(), auto.strs.get(v.0).clone())
+            }
             Node::Class(qn, args) => {
                 let (qn, args) = (*qn, args.clone());
                 let mut out = Vec::with_capacity(args.len());
                 for a in args {
                     out.push(self.render(a, path)?);
                 }
-                Ty::Class(auto.names.get(qn.0).clone(), out.into(), attr())
+                Ty::Class(auto.names.get(qn.0).clone(), out.into())
             }
             Node::Interface(qn, args, bindings) => {
                 let (qn, args, bindings) = (*qn, args.clone(), bindings.clone());
@@ -1653,19 +1647,17 @@ impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
                     auto.names.get(qn.0).clone(),
                     out_args.into(),
                     out_bindings.into(),
-                    attr(),
                 )
             }
             Node::List(inner) => {
                 let inner = *inner;
-                Ty::List(Box::new(self.render(inner, path)?), attr())
+                Ty::List(Box::new(self.render(inner, path)?))
             }
             Node::Map(k, v) => {
                 let (k, v) = (*k, *v);
                 Ty::Map {
                     key: Box::new(self.render(k, path)?),
                     value: Box::new(self.render(v, path)?),
-                    attr: attr(),
                 }
             }
             Node::Future(v, e) => {
@@ -1673,7 +1665,6 @@ impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
                 Ty::Future(
                     Box::new(self.render(v, path)?),
                     Box::new(self.render(e, path)?),
-                    attr(),
                 )
             }
             Node::Union(_) => {
@@ -1716,9 +1707,9 @@ impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
                             parts.push(self.render(m, path)?);
                         }
                         return Some(match parts.len() {
-                            0 => Ty::Never { attr: attr() },
+                            0 => Ty::Never,
                             1 => parts.pop().unwrap_or_else(|| unreachable!("len checked")),
-                            _ => Ty::Union(parts.into(), attr()),
+                            _ => Ty::Union(parts.into()),
                         });
                     }
                     return self.cover_union(&covers, &extras, path);
@@ -1728,9 +1719,9 @@ impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
                     parts.push(self.render(m, path)?);
                 }
                 match parts.len() {
-                    0 => Ty::Never { attr: attr() },
+                    0 => Ty::Never,
                     1 => parts.pop().unwrap_or_else(|| unreachable!("len checked")),
-                    _ => Ty::Union(parts.into(), attr()),
+                    _ => Ty::Union(parts.into()),
                 }
             }
             Node::Function {
@@ -1751,7 +1742,6 @@ impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
                     params: out_params.into(),
                     ret: Box::new(self.render(ret, path)?),
                     throws: Box::new(self.render(throws, path)?),
-                    attr: attr(),
                 }
             }
             Node::Projection {
@@ -1783,7 +1773,6 @@ impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
                     base: Box::new(self.render(base, path)?),
                     interface: Box::new(iface),
                     member: auto.strs.get(member.0).clone(),
-                    attr: attr(),
                 }
             }
         })

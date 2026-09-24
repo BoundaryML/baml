@@ -14,7 +14,7 @@ use std::{
 
 use baml_base::{LangPackage, LangRoots, Name, SourceRoot, SourceRootKind};
 use baml_compiler2_hir::package::Spelling;
-use baml_type::{DeclName, Ty, TyAttr, unify::AliasEquivCtx};
+use baml_type::{DeclName, Ty, unify::AliasEquivCtx};
 
 use crate::render::Viewpoint;
 
@@ -92,12 +92,12 @@ pub(crate) fn local(name: Name) -> DeclName {
 
 /// `Class(name)` at the nameless workspace root, no type args.
 pub(crate) fn class(name: &str) -> Ty {
-    Ty::Class(local(Name::new(name)), Box::new([]), TyAttr::default())
+    Ty::Class(local(Name::new(name)), Box::new([]))
 }
 
 /// `Class(name, args)` at the nameless workspace root.
 pub(crate) fn class_with_args(name: &str, args: Vec<Ty>) -> Ty {
-    Ty::Class(local(Name::new(name)), args.into(), TyAttr::default())
+    Ty::Class(local(Name::new(name)), args.into())
 }
 
 /// The language-root table over the test roots.

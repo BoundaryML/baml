@@ -41,10 +41,13 @@ pub(super) fn fold_constants(body: &mut MirFunctionBody<'_>, arity: usize) {
                     if let Place::Local(local) = destination
                         && local.0 > arity
                         && defs[local.0] == 1
-                        && !body.locals[local.0].is_captured
                         && let Rvalue::Use(Operand::Constant(constant)) = value
                         && scalar(constant)
                     {
+                        debug_assert!(
+                            !body.locals[local.0].is_captured,
+                            "bare store to captured {local}"
+                        );
                         constants.insert(*local, Operand::Constant(constant.clone()));
                     }
                 }
@@ -223,12 +226,13 @@ fn simplify_boolean_diamonds(body: &mut MirFunctionBody<'_>) {
         else {
             continue;
         };
-        if then_local != else_local
-            || then_value == else_value
-            || body.locals[then_local.0].is_captured
-        {
+        if then_local != else_local || then_value == else_value {
             continue;
         }
+        debug_assert!(
+            !body.locals[then_local.0].is_captured,
+            "bare store to captured {then_local}"
+        );
         let statement = Statement {
             kind: StatementKind::Assign {
                 destination: Place::Local(*then_local),
@@ -280,12 +284,15 @@ pub(super) fn eliminate_dead_stores(body: &mut MirFunctionBody<'_>, arity: usize
                 ..
             } = &statement.kind
                 && local.0 > arity
-                && !body.locals[local.0].is_captured
                 // Debugger-visible stores must survive at O0, even if overwritten.
                 && (opt != OptLevel::Zero || body.locals[local.0].name.is_none())
                 && !live[local.0]
                 && effects.discardable[index][statement_index]
             {
+                debug_assert!(
+                    !body.locals[local.0].is_captured,
+                    "bare store to captured {local}"
+                );
                 statement.kind = StatementKind::Nop;
             }
             transfer(statement, &mut live, &exceptional);
@@ -463,13 +470,12 @@ fn prefix_operands<'a, 'db>(
 
 fn constant_type(constant: &Constant<'_>) -> Option<baml_type::RuntimeTy> {
     use baml_type::RuntimeTy;
-    let attr = baml_type::TyAttr::default();
     Some(match constant {
-        Constant::Int(_) => RuntimeTy::Int { attr },
-        Constant::Float(_) => RuntimeTy::Float { attr },
-        Constant::Bool(_) => RuntimeTy::Bool { attr },
-        Constant::String(_) => RuntimeTy::String { attr },
-        Constant::Null => RuntimeTy::Null { attr },
+        Constant::Int(_) => RuntimeTy::Int,
+        Constant::Float(_) => RuntimeTy::Float,
+        Constant::Bool(_) => RuntimeTy::Bool,
+        Constant::String(_) => RuntimeTy::String,
+        Constant::Null => RuntimeTy::Null,
         _ => return None,
     })
 }

@@ -60,9 +60,7 @@ fn inject_function(
         local_names: vec![],
         debug_locals: vec![],
         span: baml_type::Span::fake(),
-        return_type: baml_type::TyTemplate::Int {
-            attr: baml_type::TyAttr::default(),
-        },
+        return_type: baml_type::TyTemplate::Int,
         param_names: vec![],
         param_types: vec![],
         param_has_default: vec![],
@@ -70,9 +68,7 @@ fn inject_function(
         generic_param_bounds: vec![],
         display_param_types: vec![],
         display_return_type: "int".to_string(),
-        throws_type: baml_type::TyTemplate::Never {
-            attr: baml_type::TyAttr::default(),
-        },
+        throws_type: baml_type::TyTemplate::Never,
         origin: FunctionOrigin::UserDefined,
         is_interface_body: false,
         native_key: None,

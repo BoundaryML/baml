@@ -155,7 +155,7 @@ function main() -> int {
 
 /// B-623 regression: an uncaught `throw` of an error instance must surface the
 /// value's readable rendering, not the Rust `Debug` shape (`Instance { class_name,
-/// type_args, fields }`, `QualifiedTypeName`, `TyAttr`).
+/// type_args, fields }`, `QualifiedTypeName`).
 #[tokio::test]
 async fn uncaught_throw_renders_readable_error_not_debug() {
     let output = baml_test!(
@@ -173,12 +173,7 @@ function main() -> void {
         "expected readable render, got: {rendered}"
     );
     // Must not leak Rust `Debug` internals.
-    for leak in [
-        "Instance {",
-        "QualifiedTypeName",
-        "TyAttr",
-        "String(\"boom\")",
-    ] {
+    for leak in ["Instance {", "QualifiedTypeName", "String(\"boom\")"] {
         assert!(!rendered.contains(leak), "leaked `{leak}` in: {rendered}");
     }
 }
@@ -186,66 +181,6 @@ function main() -> void {
 // ============================================================================
 // §N+1 — catch (e, stack_trace) binding
 // ============================================================================
-
-#[tokio::test]
-async fn catch_with_stack_trace_binding() {
-    let output = baml_test!(
-        r#"
-function inner() -> string {
-  throw "boom"
-}
-
-function main() -> string {
-  inner() catch (e, st) {
-    _ => { st.to_string() }
-  }
-}
-"#
-    );
-
-    let BexExternalValue::String(st) = output.result.unwrap() else {
-        panic!("expected String variant");
-    };
-    insta::assert_snapshot!(st, @r#"
-    Traceback (most recent call last):
-      File "test.baml", line 7, in user.main
-      File "test.baml", line 3, in user.inner
-    boom
-    "#);
-}
-
-#[tokio::test]
-async fn catch_stack_trace_on_panic() {
-    let output = baml_test!(
-        r#"
-function divider() -> int {
-  42 / 0
-}
-
-function main() -> int | string {
-  divider() catch (e, st) {
-    baml.panics.DivisionByZero => { st.to_string() }
-  }
-}
-"#
-    );
-
-    let result = output.result.unwrap();
-    let st = match result {
-        BexExternalValue::String(s) => s,
-        BexExternalValue::Union { value, .. } => match *value {
-            BexExternalValue::String(s) => s,
-            other => panic!("expected String inside Union, got: {other:?}"),
-        },
-        other => panic!("expected String or Union, got: {other:?}"),
-    };
-    insta::assert_snapshot!(st, @r#"
-    Traceback (most recent call last):
-      File "test.baml", line 7, in user.main
-      File "test.baml", line 3, in user.divider
-    baml.panics.DivisionByZero { dividend: 42 }
-    "#);
-}
 
 // ============================================================================
 // §N+3 — Regression (B-613): a panic escaping to the host must bypass the
@@ -269,8 +204,8 @@ fn assert_clean_panic(output: &baml_tests::engine::TestOutput, expected_class: &
 /// whose `throws` clause is a 2+-member union. Before the fix the engine
 /// re-typed the escaping panic against the declared union (via
 /// `find_matching_member`, which never matches a `baml.panics.*` value) and
-/// leaked an internal `EngineError::TypeMismatch` naming `QualifiedTypeName` /
-/// `TyAttr`. It must instead surface the clean `baml.panics.StackOverflow`.
+/// leaked an internal `EngineError::TypeMismatch` naming `QualifiedTypeName`.
+/// It must instead surface the clean `baml.panics.StackOverflow`.
 #[tokio::test]
 async fn union_throws_panic_escapes_as_clean_panic() {
     let output = baml_test!(

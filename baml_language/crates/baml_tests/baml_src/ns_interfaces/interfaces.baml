@@ -9,13 +9,11 @@
 // to avoid ambiguity in unqualified method lookup.
 // Reflection `.to_string()` output is namespace-qualified ("interfaces.<Name>").
 //
+// Compiler-diagnostic cases formerly in `crates/baml_tests/tests/interfaces.rs`
+// now use `reflect.Package.compile` in `ns_interface_diagnostics` and
+// `ns_interface_positive_compile`.
+//
 // LEFT IN RUST (crates/baml_tests/tests/interfaces.rs):
-//   - all assert_compile_error_* / assert_no_compile_errors* /
-//     assert_no_interface_errors / assert_zero_compile_errors tests
-//     (diagnostics infrastructure: they assert on compiler diagnostics via
-//     setup_test_db / ProjectDatabase + collect_diagnostics — presence or
-//     absence of specific error codes/messages — not expressible as corpus
-//     test blocks)
 //   - aliased_interface_fields_do_not_create_concrete_runtime_slots and
 //     interface_return_uses_concrete_implementor_field_shape (assert on the
 //     host-side BexExternalValue::Instance field map shape across the FFI

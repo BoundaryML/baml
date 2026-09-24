@@ -13,9 +13,6 @@
 // directories it creates.
 //
 // Not expressible in BAML:
-//   fs_file_invalid_mode              — mode "x" is not in the string-literal
-//                                       union (compile-time type error);
-//                                       requires #[should_panic].
 //   fs_remove_on_symlink_to_dir_removes_link — `baml.fs.symlink` can create the
 //                                       link, but the assertion needs
 //                                       symlink_metadata (BAML resolves through
@@ -26,6 +23,27 @@
 // ============================================================================
 // open: nonexistent path errors
 // ============================================================================
+
+function fs_invalid_mode_is_type_error() -> bool {
+    root.compiler
+        .CompileDiagnostics(
+            {
+                "main.baml": `
+                    function main() -> string {
+                        let file = baml.fs.open("not-opened.txt", "x");
+                        file.text()
+                    }
+                `,
+            },
+        )
+        .some((diagnostic: reflect.Diagnostic) -> bool {
+            diagnostic.code == "E0001" && diagnostic.message.includes("mismatched types")
+        })
+}
+
+test "fs_file_invalid_mode" {
+    assert.is_true(fs_invalid_mode_is_type_error())
+}
 
 function fs_open_nonexistent_file_fn() -> bool {
     let path = fs_tmp("open_nonexistent") + "/nonexistent.txt";

@@ -56,6 +56,8 @@ async fn parent_throw_cancels_running_children() {
 }
 
 /// B-405: an unobserved child error is not attached to the completing call.
+/// This stays in Rust because the native test runner independently reports the
+/// child as `testing::unhandled_spawn_error`, obscuring the call-result oracle.
 #[tokio::test]
 async fn never_awaited_spawn_error_does_not_replace_call_result() {
     let program = compile_source_with_opt(
@@ -76,6 +78,7 @@ async fn never_awaited_spawn_error_does_not_replace_call_result() {
 }
 
 /// B-405: detached errors use global reporting too, not call attribution.
+/// Native tests likewise receive a separate unhandled-spawn failure.
 #[tokio::test]
 async fn never_awaited_detached_spawn_error_does_not_replace_call_result() {
     let program = compile_source_with_opt(
@@ -97,7 +100,8 @@ async fn never_awaited_detached_spawn_error_does_not_replace_call_result() {
     assert_eq!(value, BexExternalValue::String("done".into()));
 }
 
-/// B-405: a racing child does not delay or replace the call result.
+/// B-405: a racing child does not delay or replace the call result. Native
+/// tests cannot suppress the runner's separate unhandled-spawn report.
 #[tokio::test]
 async fn racing_never_awaited_spawn_error_does_not_replace_call_result() {
     let program = compile_source_with_opt(
@@ -153,29 +157,8 @@ async fn detached_infinite_spawn_does_not_block_root_completion() {
     assert_eq!(s.to_string(), "done");
 }
 
-/// A racing never-awaited child that succeeds does not delay the call.
-#[tokio::test]
-async fn racing_never_awaited_successful_spawn_returns_cleanly() {
-    let program = compile_source_with_opt(
-        r#"
-        function main() -> string {
-            let f = spawn { 42 };
-            "done"
-        }
-        "#,
-        OptLevel::One,
-    );
-    let output = run_compiled(program, "main", IndexMap::new(), false).await;
-    let value = output
-        .result
-        .expect("racing successful never-awaited spawn must return cleanly");
-    let BexExternalValue::String(s) = value else {
-        panic!("expected String, got {value:?}");
-    };
-    assert_eq!(s.to_string(), "done");
-}
-
-/// B-405: function completion does not join a delayed unobserved child.
+/// B-405: function completion does not join a delayed unobserved child. Native
+/// tests cannot suppress the runner's separate unhandled-spawn report.
 #[tokio::test]
 async fn never_awaited_delayed_throw_does_not_replace_call_result() {
     let program = compile_source_with_opt(
@@ -221,54 +204,6 @@ async fn detached_delayed_throw_is_not_waited_and_root_returns_cleanly() {
     let value = output
         .result
         .expect("root should return cleanly; the detached delayed throw is not waited-for");
-    let BexExternalValue::String(s) = value else {
-        panic!("expected String, got {value:?}");
-    };
-    assert_eq!(s.to_string(), "done");
-}
-
-/// A finite detached child does not delay the call.
-#[tokio::test]
-async fn finite_detached_spawn_does_not_block_completion() {
-    let program = compile_source_with_opt(
-        r#"
-        function main() -> string {
-            let f = spawn with baml.spawn.options(detach = true) {
-                baml.sys.sleep(baml.time.Duration.from_milliseconds(150n));
-                1
-            };
-            "done"
-        }
-        "#,
-        OptLevel::One,
-    );
-    let output = run_compiled(program, "main", IndexMap::new(), false).await;
-    let value = output
-        .result
-        .expect("finite detached spawn must not block the root; it returns cleanly");
-    let BexExternalValue::String(s) = value else {
-        panic!("expected String, got {value:?}");
-    };
-    assert_eq!(s.to_string(), "done");
-}
-
-/// A never-awaited successful child does not affect the call result.
-#[tokio::test]
-async fn never_awaited_successful_spawn_returns_cleanly() {
-    let program = compile_source_with_opt(
-        r#"
-        function main() -> string {
-            let f = spawn { 42 };
-            baml.sys.sleep(baml.time.Duration.from_milliseconds(250n));
-            "done"
-        }
-        "#,
-        OptLevel::One,
-    );
-    let output = run_compiled(program, "main", IndexMap::new(), false).await;
-    let value = output
-        .result
-        .expect("successful never-awaited spawn must return cleanly");
     let BexExternalValue::String(s) = value else {
         panic!("expected String, got {value:?}");
     };

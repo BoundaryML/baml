@@ -48,22 +48,3 @@ fn io_input_no_prompt_bytecode() {
     }
     ");
 }
-
-#[test]
-fn io_input_fully_qualified_bytecode() {
-    let bytecode = bytecode_of(
-        r#"
-            function main() -> string {
-                baml.io.input("Enter text: ")
-            }
-        "#,
-    );
-
-    insta::assert_snapshot!(bytecode, @r#"
-    function main() -> string {
-        load_const "Enter text: "
-        sys_op baml.io.input
-        return
-    }
-    "#);
-}

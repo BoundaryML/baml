@@ -9,6 +9,8 @@ RELEASING.md
 
 # Test documentation
 crates/baml_tests/BENCHMARKS.md
+crates/baml_tests/NATIVE_BAML_TEST_MIGRATION_SURVEY.md
+crates/baml_tests/NATIVE_BAML_TEST_RUST_SURVIVORS.md
 crates/baml_tests/benches/incremental/*/description.md
 
 # LSP documentation
@@ -59,3 +61,7 @@ sdks/cpp/STYLE.md
 # C# SDK documentation
 sdks/csharp/ABI.md
 sdks/csharp/DEVELOPMENT.md
+
+# Type-system quiz ledgers
+tools/type_quiz/SPEC_GAPS.md
+tools/type_quiz/COMPILER_DIVERGENCE.md

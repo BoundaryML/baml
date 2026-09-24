@@ -17,6 +17,18 @@
     "sourceHash": "84a22277fb406b38e59e5be94a565e5140bbfbab98a4daebd52070e064838c6e",
     "width": 1063
   },
+  "basics-function": {
+    "description": "Default; override by name: chars_per_token: int = 4. Returned to the caller: text.trim().length() / chars_per_token",
+    "height": 250,
+    "sourceHash": "b6bea074f582e6da538e75f9348e2cdd9c70c0c4a8cebfd0a6e69f5e88a49e38",
+    "width": 973
+  },
+  "basics-if": {
+    "description": "The selected branch supplies model: if (tokens <= 8_000) {\n        \"mini\"\n    } else if (tokens <= 100_000) {\n        \"standard\"\n    } else {\n        \"long-context\"\n    }",
+    "height": 463,
+    "sourceHash": "02220fc60481a38f4b88342c9ed582be4d7ecd96a8b663e3e27921b1a0ab7de3",
+    "width": 932
+  },
   "effect-define": {
     "description": "Return type includes errors: Effect.Effect<string, BadToolInput, never>. Wrap the successful value: Effect.succeed",
     "height": 602,
@@ -70,5 +82,17 @@
     "height": 509,
     "sourceHash": "18ee321561f40b76d65862d5571cdbb201b61fe4a87f6dc8e817b2c6b4da27d9",
     "width": 870
+  },
+  "vision-ask": {
+    "description": "System: everything until the next role: ${role(\"system\")}\n        Answer the user's question about the image.. User: text and image until the prompt ends: ${role(\"user\")}\n        ${question}\n        ${photo}. BAML inserts the image here: ${photo}",
+    "height": 701,
+    "sourceHash": "2ad9ee4d7c99021c295a0bd1f7686a7bde5454aa706d232a6c946555e62d1db5",
+    "width": 830
+  },
+  "vision-extract": {
+    "description": "Defines the output schema: Receipt. Inserts that schema into the system message: ${ctx.output_format()}",
+    "height": 506,
+    "sourceHash": "d3ae86640e4facb558497094b92a10836a405392212b647470e658d8dfe0cedd",
+    "width": 974
   }
 }
