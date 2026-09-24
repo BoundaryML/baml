@@ -162,6 +162,23 @@ pub fn bound_pool(program: &Program) -> bex_heap::BexHeap {
     heap
 }
 
+/// The tag the linker assigned to the class, enum, interface, or alias
+/// `program` declares as `fq_name`, or `None` if it declares none. Every head
+/// in the program that names the declaration carries exactly this tag, so a
+/// type position is checked by identity rather than by rendered name.
+pub fn declared_type_tag(program: &Program, fq_name: &str) -> Option<baml_type::typetag::TypeTag> {
+    program.objects.iter().find_map(|object| {
+        let (name, tag) = match object {
+            Object::Class(class) => (class.name.declared()?.render_dotted(false), class.type_tag),
+            Object::Enum(enm) => (enm.name.declared()?.render_dotted(false), enm.type_tag),
+            Object::Interface(iface) => (iface.name.render_dotted(false), iface.type_tag),
+            Object::TypeAlias(alias) => (alias.name.render_dotted(false), alias.type_tag),
+            _ => return None,
+        };
+        (name == fq_name).then_some(tag)
+    })
+}
+
 /// Read the function at pool index `idx` out of a heap built by
 /// [`bound_pool`], or `None` if the slot holds something else.
 pub fn bound_function(heap: &bex_heap::BexHeap, idx: usize) -> Option<&Function> {

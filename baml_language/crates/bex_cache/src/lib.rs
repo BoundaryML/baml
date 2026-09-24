@@ -153,7 +153,13 @@ use sha2::{Digest, Sha256};
 /// `ProgramPackage` gained `globals` (its own function and `let` slots by
 /// declaration path), `init`, and `name`, and `Program::packages` became a
 /// `Vec` — a package's identity in the executable is its position, its name
-/// display metadata — so every serialized `Program` changed shape.
+/// display metadata — so every serialized `Program` changed shape. Type tags
+/// became the linker's: a head in a unit is its declaration's object operand
+/// (`ImportEntry` lost `baked_tag`) and the linker assigns every declaration
+/// `CLASS_BASE +` its object index; `MatchHashTable` gained `keys`
+/// (`SwitchKey::{Kind, Declaration}`), solved by the linker; `ImplBodyKey`
+/// carries a name-headed `ImplBodyCoherence`; and the executable is laid out
+/// package-major in link-set order.
 pub const FORMAT_VERSION: u32 = 17;
 
 const MAGIC: [u8; 4] = *b"BEXC";

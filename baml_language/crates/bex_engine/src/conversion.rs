@@ -111,9 +111,10 @@ enum InboundDeclarationKind {
 /// A declaration's display name is never an identity: in particular,
 /// `user.ai.FunctionSpec` displays as `ai.FunctionSpec`, and a runtime package
 /// may compile that same local spelling again under a fresh head. Trust only
-/// the exact stdlib declaration spelling together with the content-addressed
-/// tag emitted for that spelling. Runtime-created heads are rejected by the
-/// tag check before their name is inspected.
+/// a declaration of the static image (a runtime-created head carries a
+/// dynamic tag and is rejected first) under the exact stdlib declaration
+/// spelling — which, within one image, only the stdlib's own declaration
+/// bears.
 fn trusted_stdlib_capability_kind(
     class: &bex_vm_types::Class,
 ) -> Option<bex_external_types::TaggedHeapHandleKind> {
@@ -138,7 +139,8 @@ fn trusted_stdlib_capability_kind(
         _ => return None,
     };
 
-    (class.type_tag == baml_type::typetag::TypeTag::of_head(qualified_name)).then_some(kind)
+    debug_assert_eq!(name.render_dotted(false), qualified_name);
+    Some(kind)
 }
 
 #[derive(Clone, Copy)]

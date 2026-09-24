@@ -32,15 +32,15 @@ use baml_compiler2_mir::{
 use baml_type::{DeclName, ParamTy, Ty, TypeName, typetag::TypeTag};
 use bex_vm_types::{
     Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionCaptureProps,
-    FunctionKind, FunctionOrigin, GlobalIndex, ImplCoherenceKey, Instruction, InterfaceBound,
-    ObjectPool, TyTemplate,
+    FunctionKind, FunctionOrigin, GlobalIndex, ImplBodyCoherence, ImplCoherenceKey, Instruction,
+    InterfaceBound, ObjectPool, SpelledBound, TyTemplate,
     bytecode::{InstructionMeta, OperandMeta},
     types::TypeAliasDef,
 };
 
 use crate::{
     ClassFieldSnapshot, LoweringError, MirCodegenContext, OptLevel,
-    emit::{CodegenRefs, compile_mir_function},
+    emit::{Anchor, CodegenRefs, compile_mir_function},
 };
 
 // ── The slot law ─────────────────────────────────────────────────────────────
@@ -125,6 +125,7 @@ pub(crate) fn build_class_object<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     class_loc: ClassLoc<'db>,
     cache: &RuntimeLowering<'_>,
+    anchor: &mut dyn Anchor,
     type_tag: TypeTag,
 ) -> Class {
     let class = class_data(db, class_loc);
@@ -158,14 +159,11 @@ pub(crate) fn build_class_object<'db>(
                     .lower_type_ref(store, field.type_ref),
             );
             let field_type = cache.convert(&tir_ty);
-            let field_template = bex_vm_types::anchor_template(&tir2_to_template(
-                &tir_ty,
-                cache,
-                &class_generic_params,
-            ));
+            let field_template =
+                anchor.anchor_template(&tir2_to_template(&tir_ty, cache, &class_generic_params));
             ClassField {
                 name: field.name.to_string(),
-                field_type: bex_vm_types::anchor_runtime_ty(&field_type),
+                field_type: anchor.anchor_runtime_ty(&field_type),
                 field_template,
                 description: field.attrs.schema.description.clone(),
                 alias: field.attrs.schema.alias.clone(),
@@ -248,6 +246,7 @@ pub(crate) fn build_alias_object<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     alias_loc: TypeAliasLoc<'db>,
     cache: &RuntimeLowering<'_>,
+    anchor: &mut dyn Anchor,
     type_tag: TypeTag,
 ) -> Result<TypeAliasDef, LoweringError> {
     let alias_data = type_alias_data(db, alias_loc);
@@ -269,7 +268,7 @@ pub(crate) fn build_alias_object<'db>(
     Ok(TypeAliasDef {
         name: wire,
         type_tag,
-        definition: bex_vm_types::anchor_realized(&definition),
+        definition: anchor.anchor_realized(&definition),
         owner: bex_vm_types::HeapPtr::null(),
     })
 }
@@ -288,14 +287,23 @@ pub(crate) fn build_interface_def(
     db: &dyn baml_compiler2_mir::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'_>,
     iface_tn: &DeclName,
-    // Minted by the caller through its one collision detector, not derived
-    // here, so every head passes the one detector.
+    // The declaration's own tag as the caller's lane states it.
     type_tag: TypeTag,
     resolved: &RuntimeLowering<'_>,
+    anchor: &mut dyn Anchor,
 ) -> bex_vm_types::types::InterfaceDef {
     use baml_compiler2_hir::item_data::FunctionParamData;
-    use baml_type::RuntimeInterface;
+    use baml_type::{RuntimeInterface, RuntimeTy};
     use bex_vm_types::types::{InterfaceDef, InterfaceFieldDef, InterfaceMethodDef};
+
+    /// A method signature at the compiler's head, before anchoring.
+    struct NamedMethod {
+        name: Name,
+        args: Vec<RuntimeTy>,
+        kwargs: Vec<(Name, RuntimeTy)>,
+        returns: RuntimeTy,
+        errors: RuntimeTy,
+    }
 
     let file = iface_loc.file(db);
     let iface_wire = resolved.wire(iface_tn);
@@ -321,14 +329,13 @@ pub(crate) fn build_interface_def(
     let lower_rt = |ctx: &baml_compiler2_hir_ty::lower::LowerCtx<'_>,
                     store: &TypeRefStore,
                     id: TypeRefId|
-     -> bex_vm_types::RuntimeTy {
+     -> RuntimeTy {
         let ty = baml_compiler2_hir_ty::lower::reject_holes(&ctx.lower_type_ref(store, id));
-        let runtime = baml_type::lower_to_runtime(&ty, resolved.aliases)
+        baml_type::lower_to_runtime(&ty, resolved.aliases)
             .unwrap_or_else(|e| {
                 unreachable!("interface `{iface_wire}` declares a non-runtime type: {e:?}")
             })
-            .map_heads(&mut |decl| resolved.wire(decl));
-        bex_vm_types::anchor_runtime_ty(&runtime)
+            .map_heads(&mut |decl| resolved.wire(decl))
     };
     // Lower an interface bound / `requires` target / associated-type bound.
     // These are constraint heads: hir keeps written pins only (no eager
@@ -337,7 +344,7 @@ pub(crate) fn build_interface_def(
     let lower_iface = |ctx: &baml_compiler2_hir_ty::lower::LowerCtx<'_>,
                        store: &TypeRefStore,
                        id: TypeRefId|
-     -> Option<bex_vm_types::RuntimeInterface> {
+     -> Option<RuntimeInterface> {
         // ConstraintHead, per the contract above: the default (existential)
         // position eagerly realizes omitted associated defaults and fills
         // the rest with Error sentinels — a bound like `type A extends
@@ -364,11 +371,11 @@ pub(crate) fn build_interface_def(
             .iter()
             .map(|(n, t)| (n.clone(), to_runtime(t)))
             .collect();
-        Some(bex_vm_types::anchor_interface(&RuntimeInterface::new(
+        Some(RuntimeInterface::new(
             resolved.wire(&qtn),
             generics,
             associated_types,
-        )))
+        ))
     };
     // A method's runtime signature: Required params -> positional `args`,
     // optional (defaulted) params -> `kwargs`; the `self` receiver is
@@ -379,11 +386,11 @@ pub(crate) fn build_interface_def(
                         params: &[FunctionParamData],
                         return_type: Option<TypeRefId>,
                         throws: Option<TypeRefId>|
-     -> InterfaceMethodDef {
+     -> NamedMethod {
         // An untyped parameter is a syntax-level error, so it cannot reach
         // emit; the top type keeps the positional layout intact if one did.
-        let unannotated = || bex_vm_types::RuntimeTy::Unknown;
-        let void = || bex_vm_types::RuntimeTy::Void;
+        let unannotated = || RuntimeTy::Unknown;
+        let void = || RuntimeTy::Void;
         let mut args = Vec::new();
         let mut kwargs = Vec::new();
         for p in params {
@@ -399,24 +406,19 @@ pub(crate) fn build_interface_def(
                 args.push(ty);
             }
         }
-        InterfaceMethodDef {
+        NamedMethod {
             name: name.clone(),
             args,
             kwargs,
             returns: return_type.map_or_else(void, |id| lower_rt(ctx, store, id)),
             errors: throws.map_or_else(void, |id| lower_rt(ctx, store, id)),
-            // Functions are pooled after interfaces, so the default's object
-            // index is not known yet; the caller back-fills it once the pool
-            // is complete.
-            default: None,
-            default_fn: bex_vm_types::HeapPtr::null(),
         }
     };
 
     // `T extends A & B` is a conjunction; every conjunct that resolves to an
     // interface is emitted so the runtime enforces all of them.
     let store = &interface.type_refs;
-    let args = generics
+    let args: Vec<(Name, Vec<RuntimeInterface>)> = generics
         .iter()
         .map(|declared| {
             let bounds = declared
@@ -427,12 +429,12 @@ pub(crate) fn build_interface_def(
             (declared.name.clone(), bounds)
         })
         .collect();
-    let requires = interface
+    let requires: Vec<RuntimeInterface> = interface
         .requires
         .iter()
         .filter_map(|&id| lower_iface(&decl_ctx, store, id))
         .collect();
-    let assoc = interface
+    let assoc: Vec<(Name, RuntimeInterface)> = interface
         .associated_types
         .iter()
         .filter_map(|at| {
@@ -444,15 +446,12 @@ pub(crate) fn build_interface_def(
     // This list is the interface's field *index space*: `RuntimeImplRule::field_links`
     // is baked parallel to it, so every declared field keeps its slot. A field always
     // carries a type — an untyped one is a syntax-level error that cannot reach emit.
-    let fields = interface
+    let fields: Vec<(Name, RuntimeTy)> = interface
         .fields
         .iter()
-        .map(|f| InterfaceFieldDef {
-            name: f.name.clone(),
-            ty: lower_rt(&decl_ctx, store, f.type_ref),
-        })
+        .map(|f| (f.name.clone(), lower_rt(&decl_ctx, store, f.type_ref)))
         .collect();
-    let mut methods: Vec<InterfaceMethodDef> = interface
+    let mut methods: Vec<NamedMethod> = interface
         .required_methods
         .iter()
         .map(|m| {
@@ -488,14 +487,59 @@ pub(crate) fn build_interface_def(
         )
     }));
 
+    // Everything lowered at the compiler's head; anchored once, here, through
+    // the caller's lane.
     InterfaceDef {
         type_tag,
         name: iface_wire,
-        args,
-        requires,
-        assoc,
-        fields,
-        methods,
+        args: args
+            .into_iter()
+            .map(|(name, bounds)| {
+                let bounds = bounds
+                    .iter()
+                    .map(|bound| anchor.anchor_interface(bound))
+                    .collect();
+                (name, bounds)
+            })
+            .collect(),
+        requires: requires
+            .iter()
+            .map(|bound| anchor.anchor_interface(bound))
+            .collect(),
+        assoc: assoc
+            .into_iter()
+            .map(|(name, bound)| (name, anchor.anchor_interface(&bound)))
+            .collect(),
+        fields: fields
+            .into_iter()
+            .map(|(name, ty)| InterfaceFieldDef {
+                name,
+                ty: anchor.anchor_runtime_ty(&ty),
+            })
+            .collect(),
+        methods: methods
+            .into_iter()
+            .map(|method| InterfaceMethodDef {
+                name: method.name,
+                args: method
+                    .args
+                    .iter()
+                    .map(|ty| anchor.anchor_runtime_ty(ty))
+                    .collect(),
+                kwargs: method
+                    .kwargs
+                    .into_iter()
+                    .map(|(name, ty)| (name, anchor.anchor_runtime_ty(&ty)))
+                    .collect(),
+                returns: anchor.anchor_runtime_ty(&method.returns),
+                errors: anchor.anchor_runtime_ty(&method.errors),
+                // Functions are pooled after interfaces, so the default's
+                // object index is not known yet; the caller back-fills it once
+                // the pool is complete.
+                default: None,
+                default_fn: bex_vm_types::HeapPtr::null(),
+            })
+            .collect(),
         // Static declarations have no owning runtime package.
         owner: bex_vm_types::HeapPtr::null(),
     }
@@ -507,12 +551,13 @@ pub(crate) fn build_interface_def(
 type ImplBoundsMap = rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>>;
 
 /// A lowered interface type split into its head plus its args / associated
-/// bindings as `TyTemplate`s (generic params → `TypeArgRef`).
+/// bindings as `TyTemplate`s (generic params → `TypeArgRef`), at the
+/// compiler's head.
 struct IfaceParts {
     head: DeclName,
     wire: TypeName,
-    args: Vec<TyTemplate>,
-    assoc: Vec<(Name, TyTemplate)>,
+    args: Vec<baml_type::TyTemplate>,
+    assoc: Vec<(Name, baml_type::TyTemplate)>,
 }
 
 /// `None` when `iface_ty` is not an interface type.
@@ -524,7 +569,7 @@ fn split_interface(
     let Ty::Interface(head, args, assoc) = iface_ty else {
         return None;
     };
-    let template = |t: &Ty| bex_vm_types::anchor_template(&tir2_to_template(t, resolved, generics));
+    let template = |t: &Ty| tir2_to_template(t, resolved, generics);
     Some(IfaceParts {
         head: head.clone(),
         wire: resolved.wire(head),
@@ -551,29 +596,74 @@ pub(crate) struct ImplRuleTarget<'db> {
     /// The full lowered target (`Ty::Interface`), for the bake's
     /// argument/associated-binding work.
     iface_ty: Ty,
-    interface_args: Vec<TyTemplate>,
+    interface_args: Vec<baml_type::TyTemplate>,
     /// The target's WRITTEN associated pins only (block-level pins are folded
     /// in by the bake).
-    interface_assoc: Vec<(Name, TyTemplate)>,
+    interface_assoc: Vec<(Name, baml_type::TyTemplate)>,
     for_ty: Ty,
-    for_ty_pattern: TyTemplate,
+    for_ty_pattern: baml_type::TyTemplate,
     impl_params: Vec<ParamTy>,
     impl_bounds: ImplBoundsMap,
     /// Each declared param's bound conjunction, in frame order, each
     /// conjunction canonically sorted — the constraint-set third of the
-    /// rule's [`ImplCoherenceKey`]. The bake stores exactly this, so a rule
-    /// and its declaring block cannot disagree on it.
-    generic_param_bounds: Vec<Vec<InterfaceBound>>,
+    /// rule's coherence identity. The bake anchors exactly this, in this
+    /// order, so a rule and its declaring block cannot disagree on it.
+    generic_param_bounds: Vec<Vec<SpelledBound>>,
 }
 
 impl ImplRuleTarget<'_> {
-    /// The block's identity key (see [`ImplCoherenceKey`]'s invariant).
-    pub(crate) fn coherence_key(&self) -> ImplCoherenceKey {
-        ImplCoherenceKey {
+    /// The block's identity as the wire spells it (see
+    /// [`ImplCoherenceKey`]'s invariant, which this carries at the compiler's
+    /// head).
+    pub(crate) fn coherence_key(&self) -> ImplBodyCoherence {
+        ImplBodyCoherence {
             for_ty_pattern: self.for_ty_pattern.clone(),
             interface_args: self.interface_args.clone(),
             generic_param_bounds: self.generic_param_bounds.clone(),
         }
+    }
+}
+
+/// One spelled bound at a lane's head.
+pub(crate) fn anchor_bound(anchor: &mut dyn Anchor, bound: &SpelledBound) -> InterfaceBound {
+    InterfaceBound {
+        interface: anchor.head(&bound.interface),
+        args: bound
+            .args
+            .iter()
+            .map(|arg| anchor.anchor_template(arg))
+            .collect(),
+        assoc: bound
+            .assoc
+            .iter()
+            .map(|(name, ty)| (name.clone(), anchor.anchor_template(ty)))
+            .collect(),
+    }
+}
+
+/// A block's coherence identity at a lane's head — the key a baked rule
+/// carries ([`ProgramImplRule::coherence_key`](bex_vm_types::types::ProgramImplRule::coherence_key)).
+pub(crate) fn anchor_coherence(
+    anchor: &mut dyn Anchor,
+    key: &ImplBodyCoherence,
+) -> ImplCoherenceKey {
+    ImplCoherenceKey {
+        for_ty_pattern: anchor.anchor_template(&key.for_ty_pattern),
+        interface_args: key
+            .interface_args
+            .iter()
+            .map(|arg| anchor.anchor_template(arg))
+            .collect(),
+        generic_param_bounds: key
+            .generic_param_bounds
+            .iter()
+            .map(|bounds| {
+                bounds
+                    .iter()
+                    .map(|bound| anchor_bound(anchor, bound))
+                    .collect()
+            })
+            .collect(),
     }
 }
 
@@ -621,8 +711,7 @@ pub(crate) fn impl_rule_target<'db>(
     // `impl_self_ty` (with `impl_frame`/`impl_generic_bounds` above) owns the
     // in-body-vs-free distinction; emit never matches the subject.
     let for_ty = baml_compiler2_hir_ty::lower::impl_self_ty(db, impl_loc);
-    let for_ty_pattern =
-        bex_vm_types::anchor_template(&tir2_to_template(&for_ty, resolved, &impl_params));
+    let for_ty_pattern = tir2_to_template(&for_ty, resolved, &impl_params);
     // Fail closed on a bound the LOWERING dropped (doc above).
     let (declared_generics, _) =
         baml_compiler2_hir::item_data::impl_declared_generics(db, impl_loc);
@@ -639,17 +728,17 @@ pub(crate) fn impl_rule_target<'db>(
     // belt on the same law (a bound that does not split drops the rule);
     // with the arity gate above it should never fire. Each conjunction is
     // sorted canonically so a written reorder cannot fork the identity key.
-    let generic_param_bounds: Option<Vec<Vec<InterfaceBound>>> = impl_params
+    let generic_param_bounds: Option<Vec<Vec<SpelledBound>>> = impl_params
         .iter()
         .map(|param| {
-            let mut bounds: Vec<InterfaceBound> = impl_bounds
+            let mut bounds: Vec<SpelledBound> = impl_bounds
                 .get(param)
                 .into_iter()
                 .flatten()
                 .map(|bound| {
                     split_interface(&bound.to_ty(), resolved, &impl_params).map(|parts| {
-                        InterfaceBound {
-                            interface: bex_vm_types::TypeHead::of_name(&parts.wire),
+                        SpelledBound {
+                            interface: parts.wire,
                             args: parts.args,
                             assoc: parts.assoc,
                         }
@@ -718,6 +807,7 @@ pub(crate) fn bake_impl_rule<'db>(
     impl_loc: ImplLoc<'db>,
     target: ImplRuleTarget<'db>,
     resolved: &RuntimeLowering<'_>,
+    anchor: &mut dyn Anchor,
 ) -> Option<ImplRuleParts<'db>> {
     let block = impl_block_data(db, impl_loc);
     let ImplRuleTarget {
@@ -768,10 +858,24 @@ pub(crate) fn bake_impl_rule<'db>(
         .collect();
     let field_links = field_links(db, impl_loc, interface, &iface_tn, &block.field_links)?;
     Some(ImplRuleParts {
-        for_ty_pattern,
-        generic_param_bounds,
-        interface_args,
-        interface_assoc,
+        for_ty_pattern: anchor.anchor_template(&for_ty_pattern),
+        generic_param_bounds: generic_param_bounds
+            .iter()
+            .map(|bounds| {
+                bounds
+                    .iter()
+                    .map(|bound| anchor_bound(anchor, bound))
+                    .collect()
+            })
+            .collect(),
+        interface_args: interface_args
+            .iter()
+            .map(|arg| anchor.anchor_template(arg))
+            .collect(),
+        interface_assoc: interface_assoc
+            .iter()
+            .map(|(name, ty)| (name.clone(), anchor.anchor_template(ty)))
+            .collect(),
         frame,
         methods,
         field_links,
@@ -796,7 +900,7 @@ fn block_associated_bindings<'db>(
     generics: &[ParamTy],
     bounds: &ImplBoundsMap,
     resolved: &RuntimeLowering<'_>,
-) -> Vec<(Name, TyTemplate)> {
+) -> Vec<(Name, baml_type::TyTemplate)> {
     let canonical = baml_compiler2_hir_ty::interfaces::impl_data(db, impl_loc)
         .as_ref()
         .ok();
@@ -837,7 +941,7 @@ fn block_associated_bindings<'db>(
                 .or_else(|| binding.type_ref.map(lower))?;
             Some((
                 binding.name.clone(),
-                bex_vm_types::anchor_template(&tir2_to_template(&ty, resolved, generics)),
+                tir2_to_template(&ty, resolved, generics),
             ))
         })
         .collect()
@@ -860,7 +964,7 @@ fn block_associated_bindings<'db>(
 fn complete_interface_assoc<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     interface: InterfaceRef<'db>,
-    interface_assoc: &mut Vec<(Name, TyTemplate)>,
+    interface_assoc: &mut Vec<(Name, baml_type::TyTemplate)>,
     iface_arg_tys: &[Ty],
     for_ty: &Ty,
     generics: &[ParamTy],
@@ -882,7 +986,7 @@ fn complete_interface_assoc<'db>(
         let completed = baml_type::unify::substitute_ty(default, &bindings);
         interface_assoc.push((
             name.clone(),
-            bex_vm_types::anchor_template(&tir2_to_template(&completed, resolved, generics)),
+            tir2_to_template(&completed, resolved, generics),
         ));
     }
 }
@@ -988,7 +1092,7 @@ pub(crate) fn compile_let_helper<'db>(
     binding: LetLoc<'db>,
     ordinal: usize,
     refs: &mut (dyn CodegenRefs<'db> + 'db),
-    class_fields: &ClassFieldSnapshot,
+    class_fields: &ClassFieldSnapshot<'db>,
     objects: &mut ObjectPool,
     objects_base: usize,
     opt: OptLevel,

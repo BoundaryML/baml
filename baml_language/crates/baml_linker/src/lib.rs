@@ -16,27 +16,38 @@
 //! global imports, lay out objects (interning generic values), resolve object
 //! imports, assemble — with one relocation walk over an operand space and one
 //! set of structural checks: an import of one kind never binds an export of
-//! another, a package never exports one path twice, an unbindable dependency
-//! or import is an error, and a linked image never carries two declarations
-//! with one type tag.
+//! another, a package never exports one path twice, and an unbindable
+//! dependency or import is an error.
+//!
+//! # Type tags
+//!
+//! The linker owns the image's type tags. A unit names every type by its
+//! declaration's object operand (a head, a declaration key of a type switch,
+//! a declaration's own tag field are all operands in the unit convention); the
+//! link assigns each declaration `CLASS_BASE + its absolute object index`,
+//! rewrites every head through the same relocation as every other operand,
+//! and solves each type switch's hash table over the tags it assigned. Two
+//! declarations cannot share a tag by construction.
 //!
 //! # Layout
 //!
-//! Group-major (every [`LinkGroup::Stdlib`] package, then every
-//! [`LinkGroup::User`] package), pass-major within a group across its
-//! packages in set order, then the group's package tails:
+//! Package-major, in set order: each package's buckets, then its init part,
+//! then its test part —
 //!
 //! ```text
-//! objects:  [classes][enums][interfaces][aliases][code][init parts][test parts]
-//! globals:  [functions + bodies][lets][init-part slots][test-part slots]
+//! objects:  [classes][enums][interfaces][aliases][code][init part][test part] per package
+//! globals:  [functions + bodies][lets][init-part slots][test-part slots]      per package
 //! ```
 //!
-//! Init parts are ordered by package initialization order — a Kahn sort over
-//! the group's edges with alphabetical ties — and test parts by package name.
-//! A generic-function VALUE (`foo<int>` as data) is emitted once per unit and
-//! interned here by `(base function's absolute slot, type args)` across code
-//! and tails: the first copy in layout order is placed, every later copy is a
-//! shadow whose references redirect to it.
+//! — so a package's objects are one contiguous range and its position in the
+//! set is its position in the image. Init parts EXECUTE in package
+//! initialization order — a Kahn sort over the set's edges with alphabetical
+//! ties — which the rendered `package_init_order` view records; placement
+//! does not encode it. A generic-function VALUE (`foo<int>` as data) is
+//! emitted once per unit and interned here by `(base function's absolute
+//! slot, type args by declaration identity)` across code and tails: the first
+//! copy in layout order is placed, every later copy is a shadow whose
+//! references redirect to it.
 //!
 //! # The rendered views
 //!
@@ -65,7 +76,7 @@ mod space;
 mod tests;
 
 use assemble::Assembler;
-pub use error::{LinkError, TagCollision};
+pub use error::LinkError;
 use order::{LayoutOrder, Objects, Slots};
 use resolve::{Space, export_globals, export_objects};
 use space::Resolved;
@@ -80,19 +91,6 @@ impl LinkPackageId {
     }
 }
 
-/// Which layout group a package belongs to — a property of its root kind,
-/// never of a path.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[deprecated(
-    note = "the flat emitter's layout group, kept only for byte identity with that emitter; a package-major layout in set order replaces it when the flat emitter is deleted"
-)]
-pub enum LinkGroup {
-    /// A standard-library package.
-    Stdlib,
-    /// A workspace or dependency package.
-    User,
-}
-
 /// One package of a [`LinkSet`]: its unit, its records, and how it reaches
 /// the other packages of the set.
 #[derive(Clone, Debug)]
@@ -105,7 +103,6 @@ pub struct LinkPackage<'a> {
     /// not share a spelling
     /// ([`LinkError::DuplicateLinkName`]), or the rendered views would collide.
     pub name: Name,
-    pub group: LinkGroup,
     /// The package's edge table: every direct dependency and prelude package
     /// by the name this package reaches it under.
     pub edges: Vec<(Name, LinkPackageId)>,
@@ -190,7 +187,7 @@ impl Linker<'_, '_> {
         let global_exports = export_globals(set, &slots)?;
         let globals = self.resolve(&tables, &global_exports, Space::Global)?;
 
-        let objects = Objects::new(set, &order, &slots, &globals)?;
+        let objects = Objects::new(set, &order, &slots, &globals, &tables)?;
         let object_exports = export_objects(set, &objects)?;
         let resolved_objects = self.resolve(&tables, &object_exports, Space::Object)?;
         let (units, tails) = Resolved::zip(resolved_objects, globals);

@@ -8,9 +8,10 @@ pub struct InterfaceDef {
     // Signature
     pub name: baml_type::TypeName,
 
-    /// This interface's head identity, content-addressed from its
-    /// fully-qualified name at emit time — the identity a `TypeHead` referring
-    /// to this interface compares by.
+    /// This interface's head identity — assigned by the linker (`CLASS_BASE +`
+    /// its object index in the image) or minted fresh by the grafter; in a
+    /// unit, its own object operand — the identity a `TypeHead` referring to
+    /// this interface compares by.
     ///
     /// Interfaces have no dispatch tag: an interface is an existential, so no
     /// *value* is ever "of" an interface in the sense `TypeTag` reports. This is

@@ -516,6 +516,7 @@ pub(crate) mod tests {
             globals: VmGlobals::Owned(GlobalPool::new()),
             error_class_ptrs: Arc::from(Vec::new()),
             panic_class_ptrs: Arc::from(Vec::new()),
+            stdlib_heads: Arc::new(crate::package_load::StdlibHeads::default()),
             prof_ring: None,
             prof_suppressed: false,
             root_profiler: RootProfiler::Inactive(InactiveReason::Disabled),
@@ -1297,6 +1298,10 @@ pub struct BexVm {
     /// `PanicClass` discriminant. Shared (`Arc`) across spawned VMs.
     panic_class_ptrs: Arc<[HeapPtr]>,
 
+    /// The stdlib declarations the runtime recognizes structurally, resolved
+    /// once from `packages` and shared across spawned VMs.
+    stdlib_heads: Arc<crate::package_load::StdlibHeads>,
+
     /// D5a snapshot: the profiling ring this engine claimed on the current
     /// OS thread, refreshed by the engine at the top of every exec resume
     /// (`run_thread_event_loop`) and **never valid across an `.await`**.
@@ -1917,6 +1922,7 @@ impl BexVm {
         dynamic_dispatch: Arc<crate::package_load::DynDispatchTables>,
         error_class_ptrs: Arc<[HeapPtr]>,
         panic_class_ptrs: Arc<[HeapPtr]>,
+        stdlib_heads: Arc<crate::package_load::StdlibHeads>,
     ) -> Self {
         // Defer the first TLAB chunk reservation until the first `tlab.alloc`,
         // which the engine reaches only after the VM has been registered as a
@@ -1926,9 +1932,10 @@ impl BexVm {
         // fires in the engine's pre-permit window.
         let tlab = Tlab::new_empty(Arc::clone(&heap));
 
-        // `error_class_ptrs` / `panic_class_ptrs` are resolved once from `packages`
-        // by the caller (`resolve_error_class_ptrs` / `resolve_panic_class_ptrs`)
-        // and shared across spawned VMs.
+        // `error_class_ptrs` / `panic_class_ptrs` / `stdlib_heads` are resolved
+        // once from `packages` by the caller (`resolve_error_class_ptrs` /
+        // `resolve_panic_class_ptrs` / `StdlibHeads::resolve`) and shared
+        // across spawned VMs.
 
         let early_yield = EarlyYieldCheck::new(
             #[cfg(not(target_arch = "wasm32"))]
@@ -1949,6 +1956,7 @@ impl BexVm {
             globals,
             error_class_ptrs,
             panic_class_ptrs,
+            stdlib_heads,
             prof_ring: None,
             prof_suppressed: false,
             root_profiler: RootProfiler::Inactive(InactiveReason::Disabled),
@@ -2506,6 +2514,11 @@ impl BexVm {
             .get(&local)
             .or_else(|| package.enums.get(&local))
             .copied()
+    }
+
+    /// The stdlib declarations the runtime recognizes structurally.
+    pub fn stdlib_heads(&self) -> &crate::package_load::StdlibHeads {
+        &self.stdlib_heads
     }
 
     /// The head for the declaration `qtn` names — its tag and its pointer, both
@@ -3322,9 +3335,10 @@ impl BexVm {
                     // type is the `image`/`audio`/… primitive
                     // (`ConcreteRealizedTy::Media`) — which is how the impl registry
                     // keys `implement I for image`. Return that, not the class.
-                    if let Some(kind) = crate::package_baml::json::media_kind_from_fqn(
-                        class.name.display_name().as_str(),
-                    ) {
+                    if let Some(kind) = self
+                        .stdlib_heads
+                        .media_kind(bex_vm_types::TypeHead::new(inst.class, class.type_tag))
+                    {
                         ConcreteRealizedTy::Media(kind)
                     } else {
                         debug_assert_eq!(inst.class_type_args.len(), class.generic_param_count);
@@ -3725,6 +3739,7 @@ impl BexVm {
 
         let error_class_ptrs = resolve_error_class_ptrs(&package_index);
         let panic_class_ptrs = resolve_panic_class_ptrs(&package_index);
+        let stdlib_heads = Arc::new(crate::package_load::StdlibHeads::resolve(&package_index));
         Ok(Self::new(
             heap,
             globals,
@@ -3735,6 +3750,7 @@ impl BexVm {
             Arc::new(crate::package_load::DynDispatchTables::default()),
             error_class_ptrs,
             panic_class_ptrs,
+            stdlib_heads,
         ))
     }
 

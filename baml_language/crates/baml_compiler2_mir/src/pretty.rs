@@ -25,7 +25,7 @@ use std::fmt::{self, Write};
 use crate::{
     AggregateKind, BasicBlock, BuiltinKind, Constant, IntrinsicOp, Local, LocalDecl, LogLevel,
     MirFunction, MirFunctionBody, MirFunctionKind, Operand, Rvalue, Statement, StatementKind,
-    Terminator,
+    SwitchKey, Terminator,
 };
 
 /// Pretty print a MIR function.
@@ -271,20 +271,22 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
             arm_names,
         } => {
             // Build name lookup for symbolic display
-            let name_map: std::collections::HashMap<i64, &str> =
-                arm_names.iter().map(|(v, n)| (*v, n.as_str())).collect();
+            let name_map: std::collections::HashMap<SwitchKey<'_>, &str> =
+                arm_names.iter().map(|(k, n)| (*k, n.as_str())).collect();
 
             write!(f, "switch ")?;
             write_operand(f, db, discriminant)?;
             write!(f, " [")?;
-            for (i, (val, target)) in arms.iter().enumerate() {
+            for (i, (key, target)) in arms.iter().enumerate() {
                 if i > 0 {
                     write!(f, ", ")?;
                 }
-                if let Some(name) = name_map.get(val) {
-                    write!(f, "{name}: {target}")?;
-                } else {
-                    write!(f, "{val}: {target}")?;
+                match (name_map.get(key), key) {
+                    (Some(name), _) => write!(f, "{name}: {target}")?,
+                    (None, SwitchKey::Int(val)) => write!(f, "{val}: {target}")?,
+                    (None, SwitchKey::Class(class)) => {
+                        write!(f, "{}: {target}", crate::class_link_name(db, *class))?;
+                    }
                 }
             }
             if *exhaustive {

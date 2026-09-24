@@ -120,7 +120,7 @@ mod tests {
                     statements: vec![],
                     terminator: Some(Terminator::Switch {
                         discriminant: Operand::Constant(Constant::Int(0)),
-                        arms: vec![(0, BlockId(1))],
+                        arms: vec![(baml_compiler2_mir::SwitchKey::Int(0), BlockId(1))],
                         otherwise: BlockId(2),
                         exhaustive: true,
                         arm_names: vec![],
@@ -166,7 +166,7 @@ mod tests {
                     statements: vec![],
                     terminator: Some(Terminator::Switch {
                         discriminant: Operand::Constant(Constant::Int(0)),
-                        arms: vec![(0, BlockId(1))],
+                        arms: vec![(baml_compiler2_mir::SwitchKey::Int(0), BlockId(1))],
                         otherwise: BlockId(2),
                         exhaustive: true,
                         arm_names: vec![],

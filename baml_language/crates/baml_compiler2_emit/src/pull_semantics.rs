@@ -128,8 +128,8 @@ pub(crate) trait PullSink<'db> {
     /// Resolve the field name for a `Place::Field { base, field }` access.
     fn resolve_field_name(&self, base: &Place, field_idx: usize) -> String;
 
-    /// Resolve a field name given the class name directly (used for `Aggregate::Class`).
-    fn class_field_name(&self, class_name: &str, field_idx: usize) -> String;
+    /// Resolve a field name given the class directly (used for `Aggregate::Class`).
+    fn class_field_name(&self, class: ClassRef<'db>, field_idx: usize) -> String;
 }
 
 /// Stack-effect callbacks for statement/terminator helpers.

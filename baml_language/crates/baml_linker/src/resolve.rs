@@ -94,16 +94,6 @@ impl Space {
     /// The checks every import passes before its slot is even read.
     fn check_shape(self, entry: &ImportEntry) -> Result<(), LinkError> {
         let path = &entry.key.path;
-        if path.is_type() != entry.baked_tag.is_some() {
-            let verb = if entry.baked_tag.is_some() {
-                "carries"
-            } else {
-                "lacks"
-            };
-            return Err(LinkError::invalid(format!(
-                "import of {path} {verb} a baked type tag"
-            )));
-        }
         let owns = match self {
             Self::Object => path.owns_object(),
             Self::Global => path.owns_global_slot(),

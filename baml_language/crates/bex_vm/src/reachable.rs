@@ -13,10 +13,11 @@ use crate::BexVm;
 
 /// Whether every declaration `ty` names was compiled into the program.
 ///
-/// Decided by tag range: a declared head is content-addressed from its
-/// fully-qualified name, and every runtime-created one — a typebuilder
-/// declaration, *and* a runtime-compiled package member, which is reminted at
-/// graft — comes from the counter range above `DYNAMIC_BASE`. So this is an
+/// Decided by tag range: a compiled declaration's tag is its object index
+/// above `CLASS_BASE` (or, in the flat lane, a content hash in that same
+/// static range), and every runtime-created one — a typebuilder declaration,
+/// *and* a runtime-compiled package member, which is reminted at graft —
+/// comes from the counter range above `DYNAMIC_BASE`. So this is an
 /// integer compare that touches neither the heap nor a pointer, which is what
 /// makes it stable: tags never change, addresses move under the collector, and
 /// an unresolved head still answers correctly.

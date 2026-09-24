@@ -4,9 +4,10 @@
 //! one kind can never bind a declaration of another.
 
 use baml_base::Name;
+use baml_type::TypeName;
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use crate::types::{ImplCoherenceKey, LocalName};
+use crate::types::LocalName;
 
 /// A package-relative item coordinate: namespace path plus item name. The
 /// owning package's own coordinates — never a consumer's spelling of them.
@@ -55,12 +56,39 @@ pub enum BodyKey {
 }
 
 /// The identity of an impl-provided body: the interface, the impl's coherence
-/// key (injective over admitted impls), and the method name.
+/// identity (injective over admitted impls), and the method name.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub struct ImplBodyKey {
     pub interface: InterfaceKey,
-    pub coherence: ImplCoherenceKey,
+    pub coherence: ImplBodyCoherence,
     pub method: Name,
+}
+
+/// An `implements` block's coherence identity as a wire key: its for-pattern,
+/// interface arguments, and constraint set — everything coherence's
+/// admissibility check discriminates on, the same discriminant as the
+/// runtime's [`ImplCoherenceKey`](crate::types::ImplCoherenceKey) — spelled
+/// from the body's own package like [`InterfaceKey`] is. A unit's type heads
+/// are that unit's operands, so a head-typed key would differ between the
+/// unit that declares the block and a later session submission that imports
+/// its body; edge spellings are manifest-fixed, so every unit of a package
+/// agrees on these.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
+pub struct ImplBodyCoherence {
+    pub for_ty_pattern: baml_type::TyTemplate,
+    pub interface_args: Vec<baml_type::TyTemplate>,
+    /// Per impl-frame param in frame order, that param's bounds canonically
+    /// sorted.
+    pub generic_param_bounds: Vec<Vec<SpelledBound>>,
+}
+
+/// One interface bound of an [`ImplBodyCoherence`], spelled from the body's
+/// package.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
+pub struct SpelledBound {
+    pub interface: TypeName,
+    pub args: Vec<baml_type::TyTemplate>,
+    pub assoc: Vec<(Name, baml_type::TyTemplate)>,
 }
 
 /// A declaration's coordinates within its package. The variant IS the kind,

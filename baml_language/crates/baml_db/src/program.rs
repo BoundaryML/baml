@@ -7,11 +7,11 @@
 //! outputs it is handed; neither sees the other. A driver that emits
 //! packages in parallel across the dependency DAG changes only this file.
 
-use baml_base::{Name, SourceRoot, SourceRootKind};
+use baml_base::{Name, SourceRoot};
 use baml_compiler2_emit::{LoweringError, OptLevel, emit_package, project_source_content_hash};
 use baml_compiler2_hir::package::{edge_table, spelling, world_roots};
-use baml_linker::{LinkError, LinkGroup, LinkPackage, LinkPackageId, LinkSet, link};
-use baml_linker_types::EmittedPackage;
+use baml_linker::{LinkError, LinkPackage, LinkPackageId, LinkSet, link};
+pub use baml_linker_types::EmittedPackage;
 use bex_vm_types::Program;
 
 /// Where a driver looks before emitting a package: a store of outputs
@@ -122,26 +122,29 @@ pub fn compile_program_with(
     opt: OptLevel,
     cache: &dyn PackageCache,
 ) -> Result<Program, CompileProgramError> {
-    // A root without files declares nothing: no output, and nothing to import
-    // from it.
+    // A root without files declares nothing itself: it is in the program only
+    // when the store serves its output (a mounted package), and then there is
+    // nothing to emit for it.
     let packages = world_roots(db, root)
         .iter()
         .copied()
-        .filter(|root| !root.files(db).is_empty())
-        .map(|root| {
+        .filter_map(|root| {
             let emitted = match cache.load(db, root, opt) {
                 Some(emitted) => emitted,
-                None => {
-                    let emitted = emit_package(db, root, opt)?;
-                    cache.store(db, root, opt, &emitted);
-                    emitted
-                }
+                None if root.files(db).is_empty() => return None,
+                None => match emit_package(db, root, opt) {
+                    Ok(emitted) => {
+                        cache.store(db, root, opt, &emitted);
+                        emitted
+                    }
+                    Err(error) => return Some(Err(error)),
+                },
             };
-            Ok(LinkedPackage {
+            Some(Ok(LinkedPackage {
                 root,
                 edges: edge_table(db, root),
                 emitted,
-            })
+            }))
         })
         .collect::<Result<Vec<_>, LoweringError>>()?;
     let mut program = link(&link_set(db, &packages))?;
@@ -162,8 +165,7 @@ struct LinkedPackage {
 
 /// The link set of the program's packages: each in program order under the
 /// program's spelling of it, its edges resolved to set positions (an edge to
-/// a package that emitted no output is dropped — nothing imports from it),
-/// and its layout group from its root's kind.
+/// a package that emitted no output is dropped — nothing imports from it).
 fn link_set<'a>(db: &dyn baml_compiler2_hir::Db, packages: &'a [LinkedPackage]) -> LinkSet<'a> {
     let spelling = spelling(db);
     let position = |root: SourceRoot| {
@@ -177,11 +179,6 @@ fn link_set<'a>(db: &dyn baml_compiler2_hir::Db, packages: &'a [LinkedPackage]) 
             .iter()
             .map(|package| LinkPackage {
                 name: spelling.of(package.root).clone(),
-                group: if package.root.kind(db) == SourceRootKind::Stdlib {
-                    LinkGroup::Stdlib
-                } else {
-                    LinkGroup::User
-                },
                 edges: package
                     .edges
                     .iter()

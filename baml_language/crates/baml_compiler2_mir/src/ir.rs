@@ -434,6 +434,20 @@ pub enum StatementKind<'db> {
 // Terminator
 // ============================================================================
 
+/// One arm key of a [`Terminator::Switch`].
+///
+/// The compiler never knows a declared head's tag: a class arm names its
+/// DECLARATION, and whoever lays that declaration into an image assigns the
+/// tag the switch dispatches on. A primitive kind's tag is a fixed constant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SwitchKey<'db> {
+    /// A fixed integer: an int literal, an enum discriminant, or a primitive
+    /// kind's tag.
+    Int(i64),
+    /// The tag of this class declaration.
+    Class(baml_compiler2_hir_ty::extern_loc::ClassRef<'db>),
+}
+
 /// How a basic block transfers control.
 ///
 /// Every basic block must end with exactly one terminator. Terminators are
@@ -459,21 +473,20 @@ pub enum Terminator<'db> {
         else_block: BlockId,
     },
 
-    /// Multi-way branch based on integer discriminant.
+    /// Multi-way branch on an integer discriminant or a value's type tag.
     Switch {
         discriminant: Operand<'db>,
-        /// Arms: (value, target block)
-        arms: Vec<(i64, BlockId)>,
+        /// Arms: (key, target block).
+        arms: Vec<(SwitchKey<'db>, BlockId)>,
         /// Default target if no arm matches.
         otherwise: BlockId,
         /// Whether this switch is exhaustive (all possible values covered).
         /// When true, the last arm's comparison can be skipped since if all
         /// other arms failed, the discriminant must match the last one.
         exhaustive: bool,
-        /// Symbolic names for arm values (debug metadata only).
-        /// Maps integer discriminant values to human-readable names like
-        /// `"DispatchState.Alpha"` or `"int"`.
-        arm_names: Vec<(i64, String)>,
+        /// Symbolic names for arm keys (debug metadata only): human-readable
+        /// names like `"DispatchState.Alpha"`, `"int"`, or a class's name.
+        arm_names: Vec<(SwitchKey<'db>, String)>,
     },
 
     /// Return from function.

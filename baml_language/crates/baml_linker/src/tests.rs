@@ -4,8 +4,8 @@ use baml_linker_types::{
 use baml_type::typetag::TypeTag;
 use bex_vm_types::{
     BodyKey, ConstValue, DeclPath, FnPath, GlobalIndex, ImplBodyKey, Instruction, InterfaceKey,
-    Object, ObjectIndex, RealizedTy,
-    bytecode::Bytecode,
+    Object, ObjectIndex, RealizedTy, TypeHead,
+    bytecode::{Bytecode, MatchHashTable, SwitchKey},
     types::{
         Class, Function, FunctionCaptureProps, FunctionKind, FunctionOrigin, GenericFunction,
         LocalName, ProgramPackage,
@@ -66,7 +66,8 @@ fn func_with_constants(name: &str, refs: &[usize]) -> Object {
     object
 }
 
-/// A class named `name` in the local package (displays as `user.<name>`).
+/// A class named `name` in the local package (displays as `user.<name>`),
+/// at class-bucket offset 0 (its own tag field is its operand).
 fn class(name: &str) -> Object {
     Object::Class(Box::new(Class {
         name: bex_vm_types::DeclarationName::Declared(baml_type::QualifiedTypeName::local(
@@ -78,7 +79,7 @@ fn class(name: &str) -> Object {
         docstring: None,
         other: indexmap::IndexMap::new(),
         stream_done: false,
-        type_tag: TypeTag::of_head(name),
+        type_tag: TypeHead::unresolved_operand(ObjectIndex::from_raw(0)).tag(),
         has_cleanup: false,
         methods: indexmap::IndexMap::new(),
         generic_param_count: 0,
@@ -99,13 +100,11 @@ fn free_fn(name: &str) -> DeclPath {
 }
 
 fn import(dep: u32, path: DeclPath) -> ImportEntry {
-    let baked_tag = path.is_type().then(|| TypeTag::of_head("baked"));
     ImportEntry {
         key: DeclKey {
             dep: DepSlot(dep),
             path,
         },
-        baked_tag,
     }
 }
 
@@ -179,7 +178,6 @@ fn package<'a>(
 ) -> LinkPackage<'a> {
     LinkPackage {
         name: Name::new(name),
-        group: LinkGroup::User,
         edges: edges
             .into_iter()
             .map(|(edge, id)| (Name::new(edge), LinkPackageId(id)))
@@ -413,7 +411,7 @@ fn transitive_dependencies_bind_through_the_parent_edge_table() {
 }
 
 #[test]
-fn layout_is_group_major_then_pass_major_with_rendered_views() {
+fn layout_is_package_major_in_set_order_with_rendered_views() {
     let stdlib_record = PackageRecord::default();
     let user_record = PackageRecord {
         exported_names: vec![item("f")],
@@ -436,11 +434,10 @@ fn layout_is_group_major_then_pass_major_with_rendered_views() {
         .exports
         .globals
         .push((DeclPath::Let(item("x")), 1));
-    let mut stdlib = package("baml", vec![], &std_unit, &stdlib_record);
-    stdlib.group = LinkGroup::Stdlib;
+    let stdlib = package("baml", vec![], &std_unit, &stdlib_record);
     let set = LinkSet {
-        // Listed user-first on purpose: layout follows the GROUP, not the
-        // set order.
+        // Listed user-first on purpose: layout follows the SET order, each
+        // package's objects contiguous.
         packages: vec![
             package("user", vec![("baml", 1)], &user_unit, &user_record),
             stdlib,
@@ -449,21 +446,21 @@ fn layout_is_group_major_then_pass_major_with_rendered_views() {
     let program = link(&set).unwrap();
     assert_eq!(
         function_names(&program),
-        vec!["class user.S", "baml.x", "class user.U", "user.f"]
+        vec!["class user.U", "user.f", "class user.S", "baml.x"]
     );
-    assert_eq!(program.function_indices["baml.x"], 1);
-    assert_eq!(program.function_global_indices["baml.x"], 0);
-    assert_eq!(program.function_indices["user.f"], 3);
-    assert_eq!(program.function_global_indices["user.f"], 1);
-    assert_eq!(program.let_global_indices["user.x"], 2);
-    assert_eq!(program.globals[2], ConstValue::Null);
+    assert_eq!(program.function_indices["user.f"], 1);
+    assert_eq!(program.function_global_indices["user.f"], 0);
+    assert_eq!(program.let_global_indices["user.x"], 1);
+    assert_eq!(program.globals[1], ConstValue::Null);
+    assert_eq!(program.function_indices["baml.x"], 3);
+    assert_eq!(program.function_global_indices["baml.x"], 2);
     let user = package_named(&program, "user");
     assert_eq!(user.exported_names, vec![item("f")]);
-    assert_eq!(user.functions[&item("f")], ObjectIndex::from_raw(3));
+    assert_eq!(user.functions[&item("f")], ObjectIndex::from_raw(1));
     assert_eq!(user.interface_blob, vec![1, 2, 3]);
     assert_eq!(
         user.globals[&DeclPath::Let(item("x"))],
-        GlobalIndex::from_raw(2)
+        GlobalIndex::from_raw(1)
     );
     assert_eq!(
         program
@@ -471,8 +468,16 @@ fn layout_is_group_major_then_pass_major_with_rendered_views() {
             .iter()
             .map(|package| package.name.as_str())
             .collect::<Vec<_>>(),
-        vec!["baml", "user"]
+        vec!["user", "baml"]
     );
+    // The linker owns the tags: each declaration's is its image index.
+    for (abs, expected) in [(0, "user.U"), (2, "user.S")] {
+        let Object::Class(class) = &program.objects[ObjectIndex::from_raw(abs)] else {
+            panic!("object {abs} is not a class")
+        };
+        assert_eq!(class.name.to_string(), expected);
+        assert_eq!(class.type_tag, TypeTag::of_static_index(abs));
+    }
 }
 
 #[test]
@@ -509,24 +514,84 @@ fn package_init_order_is_topological_with_alphabetical_ties() {
             "a.$init".to_string()
         ]
     );
+    // Placement is set order; only the execution order is topological.
     assert_eq!(
         function_names(&program),
-        vec!["b.$init", "c.$init", "a.$init"]
+        vec!["a.$init", "b.$init", "c.$init"]
     );
 }
 
 #[test]
-fn two_declarations_under_one_type_tag_are_refused() {
+fn heads_and_switch_keys_relocate_to_the_assigned_tags() {
+    // `app` declares `Foo`; `user` names it three ways — a signature head,
+    // a declaration key of a type switch, and an `AllocInstance` operand — all by
+    // the same import. After the link every one of them is `Foo`'s image
+    // index, and the switch is solved over that tag.
     let record = PackageRecord::default();
-    let a = unit_with_class("Same", "A");
-    let b = unit_with_class("Same", "B");
+    let provider = unit_with_class("Foo", "Foo");
+    let mut consumer = unit_with_fn(
+        "user.f",
+        vec![
+            Instruction::DenseTag(0),
+            alloc_import(0),
+            Instruction::Return,
+        ],
+    );
+    let Object::Function(consumer_fn) = &mut consumer.code[0] else {
+        unreachable!()
+    };
+    let head = TypeHead::unresolved_operand(ObjectIndex::from_raw(import_operand(0)));
+    consumer_fn.param_types = vec![bex_vm_types::TyTemplate::Class(head, Box::new([]))];
+    consumer_fn.bytecode.match_hash_tables = vec![MatchHashTable::unsolved(
+        vec![
+            SwitchKey::Kind(baml_type::typetag::INT),
+            SwitchKey::Declaration(ObjectIndex::from_raw(import_operand(0))),
+        ],
+        vec!["int".to_string(), "Foo".to_string()],
+    )];
+    consumer.dependencies.push(direct("app", None));
+    consumer
+        .object_imports
+        .push(import(1, DeclPath::Class(item("Foo"))));
     let set = LinkSet {
         packages: vec![
-            package("a", vec![], &a, &record),
-            package("b", vec![], &b, &record),
+            package("app", vec![], &provider, &record),
+            package("user", vec![("app", 0)], &consumer, &record),
         ],
     };
-    assert!(matches!(link(&set), Err(LinkError::TagCollision(_))));
+    let program = link(&set).unwrap();
+    let foo = TypeTag::of_static_index(0);
+    let Object::Class(class) = &program.objects[ObjectIndex::from_raw(0)] else {
+        panic!("object 0 is not the class")
+    };
+    assert_eq!(class.type_tag, foo);
+    let f = function(&program, 1);
+    let bex_vm_types::TyTemplate::Class(head, _) = &f.param_types[0] else {
+        panic!("the parameter type is a class")
+    };
+    assert_eq!(head.tag(), foo);
+    assert_eq!(
+        f.bytecode.instructions[1],
+        Instruction::AllocInstance {
+            class_obj: ObjectIndex::from_raw(0),
+            ntypeargs: 0,
+        }
+    );
+    let table = &f.bytecode.match_hash_tables[0];
+    assert!(table.is_solved());
+    assert_eq!(
+        table.keys[1],
+        SwitchKey::Declaration(ObjectIndex::from_raw(0)),
+        "the key operand relocated like every other object operand"
+    );
+    let dispatch = |tag: i64| {
+        let h = (tag.cast_unsigned().wrapping_mul(table.multiply) >> table.shift)
+            & u64::from(table.mask);
+        let entry = &table.entries[usize::try_from(h).expect("slot fits usize")];
+        (entry.expected_tag == tag).then_some(entry.dense_index)
+    };
+    assert_eq!(dispatch(baml_type::typetag::INT), Some(0));
+    assert_eq!(dispatch(foo.as_i64()), Some(1));
 }
 
 #[test]
@@ -549,8 +614,8 @@ fn impl_body_import_from_a_dependency_is_refused() {
             package: baml_type::Package::Local,
             path: item("Greeter"),
         },
-        coherence: bex_vm_types::ImplCoherenceKey {
-            for_ty_pattern: bex_vm_types::TyTemplate::Int,
+        coherence: bex_vm_types::ImplBodyCoherence {
+            for_ty_pattern: baml_type::TyTemplate::Int,
             interface_args: Vec::new(),
             generic_param_bounds: Vec::new(),
         },
@@ -566,31 +631,6 @@ fn impl_body_import_from_a_dependency_is_refused() {
     assert!(matches!(
         link(&set),
         Err(LinkError::InvalidUnit(message)) if message.contains("own package")
-    ));
-}
-
-#[test]
-fn a_type_import_without_its_baked_tag_is_malformed() {
-    let record = PackageRecord::default();
-    let provider = unit_with_class("Foo", "Foo");
-    let mut unit = unit_with_fn("user.f", vec![Instruction::Return]);
-    unit.dependencies.push(direct("app", None));
-    unit.object_imports.push(ImportEntry {
-        key: DeclKey {
-            dep: DepSlot(1),
-            path: DeclPath::Class(item("Foo")),
-        },
-        baked_tag: None,
-    });
-    let set = LinkSet {
-        packages: vec![
-            package("app", vec![], &provider, &record),
-            package("user", vec![("app", 0)], &unit, &record),
-        ],
-    };
-    assert!(matches!(
-        link(&set),
-        Err(LinkError::InvalidUnit(message)) if message.contains("lacks a baked type tag")
     ));
 }
 

@@ -138,8 +138,9 @@ fn same_named_declarations_in_two_roots_emit_as_two_programs() {
         panic!("program b holds one Point: {points_b:?}");
     };
     assert_eq!(name_a, name_b, "each is its program's workspace package");
-    // Tags are per program: content-addressed over the wire name, so the two
-    // programs' `Point`s agree — they never share a VM.
+    // Tags are per program: the linker assigns each declaration the tag of its
+    // object index, and these two programs lay out identically, so the two
+    // `Point`s agree — they never share a VM.
     assert_eq!(tag_a, tag_b);
 }
 

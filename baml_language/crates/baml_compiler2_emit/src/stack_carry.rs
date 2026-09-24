@@ -1659,7 +1659,7 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         format!("{field_idx}")
     }
 
-    fn class_field_name(&self, _class_name: &str, field_idx: usize) -> String {
+    fn class_field_name(&self, _class: ClassRef<'a>, field_idx: usize) -> String {
         format!("{field_idx}")
     }
 }

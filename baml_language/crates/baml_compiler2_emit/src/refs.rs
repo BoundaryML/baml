@@ -4,10 +4,12 @@
 //! else's — with dependency slots and import entries interned on first use.
 //!
 //! A declaration's import key is a pure function of its identity: which
-//! package root declares it and its item path there. Nothing here renders a
-//! spelling to look anything up; the one rendering, the baked type tag of a
-//! type import, is the relocation record the runtime binder needs and is
-//! derived from the same wire name the unit's bytecode carries.
+//! package root declares it and its item path there. A type head is a
+//! declaration operand like any other ([`Anchor`]): the one place a wire
+//! spelling is read is [`PackageRefs::head`], which resolves it at this
+//! package's viewpoint to the declaration and answers with that
+//! declaration's operand — so nothing in a unit carries a rendered name or a
+//! tag, and a head names nothing the import table does not list.
 
 use std::collections::{HashMap, VecDeque};
 
@@ -29,19 +31,25 @@ use baml_compiler2_hir_ty::{
 };
 use baml_compiler2_mir::RuntimeLowering;
 use baml_linker_types::{DeclKey, DepSlot, DependencyEntry, ImportEntry, import_operand};
-use baml_type::{DeclName, TypeName, typetag::TypeTag};
+use baml_type::{DeclName, TypeName};
 use bex_vm_types::{
     BodyKey, DeclPath, FnPath, GlobalIndex, ImplBodyKey, InterfaceKey, ObjectIndex, TypeHead,
-    types::LocalName,
+    bytecode::SwitchKey, types::LocalName,
 };
 
 use crate::{
-    emit::CodegenRefs,
+    emit::{Anchor, CodegenRefs},
     items::{impl_rule_target, owns_no_slot},
-    package::HeadIndex,
 };
 
 // ── Declaration coordinates ──────────────────────────────────────────────────
+
+/// The tag field a declaration object carries in a unit: its own operand,
+/// exactly what every head naming it carries, until the linker or grafter
+/// assigns the real tag.
+pub(crate) fn unit_tag(operand: u32) -> baml_type::typetag::TypeTag {
+    TypeHead::unresolved_operand(ObjectIndex::from_raw(operand as usize)).tag()
+}
 
 /// A declaration's item path within its package.
 pub(crate) fn item_path(head: &DeclName) -> LocalName {
@@ -49,12 +57,6 @@ pub(crate) fn item_path(head: &DeclName) -> LocalName {
         namespace: head.namespace().clone(),
         name: head.name().clone(),
     }
-}
-
-/// The tag a head's references bake: the content tag of its wire spelling,
-/// minted by the one formula every runtime type uses.
-pub(crate) fn head_tag(db: &dyn crate::Db, head: &DeclName) -> TypeTag {
-    TypeHead::of_name(&spelling(db).wire(head)).tag()
 }
 
 /// The head of a class, wherever it is declared.
@@ -309,16 +311,12 @@ pub(crate) struct ImportSpace {
 
 impl ImportSpace {
     /// The ordinal of `key`, interned at first use.
-    pub(crate) fn intern(&mut self, key: DeclKey, baked_tag: Option<TypeTag>) -> usize {
+    pub(crate) fn intern(&mut self, key: DeclKey) -> usize {
         if let Some(&ordinal) = self.ordinals.get(&key) {
-            debug_assert_eq!(self.entries[ordinal].baked_tag, baked_tag);
             return ordinal;
         }
         let ordinal = self.entries.len();
-        self.entries.push(ImportEntry {
-            key: key.clone(),
-            baked_tag,
-        });
+        self.entries.push(ImportEntry { key: key.clone() });
         self.ordinals.insert(key, ordinal);
         ordinal
     }
@@ -360,19 +358,19 @@ impl<'db> LocalTables<'db> {
 
     /// The unit-local object index of the `k`-th class: the class bucket
     /// comes first.
-    fn class_object(k: u32) -> u32 {
+    pub(crate) fn class_object(k: u32) -> u32 {
         k
     }
 
-    fn enum_object(&self, k: u32) -> u32 {
+    pub(crate) fn enum_object(&self, k: u32) -> u32 {
         Self::bucket_len(&self.classes) + k
     }
 
-    fn interface_object(&self, k: u32) -> u32 {
+    pub(crate) fn interface_object(&self, k: u32) -> u32 {
         self.enum_object(Self::bucket_len(&self.enums)) + k
     }
 
-    fn alias_object(&self, k: u32) -> u32 {
+    pub(crate) fn alias_object(&self, k: u32) -> u32 {
         self.interface_object(Self::bucket_len(&self.interfaces)) + k
     }
 
@@ -441,31 +439,48 @@ pub(crate) struct PackageRefs<'w, 'db> {
     pub(crate) own: Own<'w, 'db>,
     pub(crate) deps: DependencyTable,
     pub(crate) imports: ImportTables,
+    /// Wire spelling → the head it resolved to, at this package's viewpoint.
+    /// A memo, not a key: the table is injective over the package's reach,
+    /// so one spelling names one declaration here.
+    heads: HashMap<TypeName, TypeHead>,
 }
 
 impl<'w, 'db> PackageRefs<'w, 'db> {
     pub(crate) fn new(db: &'db dyn crate::Db, root: SourceRoot, own: Own<'w, 'db>) -> Self {
+        Self::with_tables(
+            db,
+            root,
+            own,
+            DependencyTable::new(root),
+            ImportTables::default(),
+        )
+    }
+
+    /// A resolver continuing from tables an earlier pass interned.
+    pub(crate) fn with_tables(
+        db: &'db dyn crate::Db,
+        root: SourceRoot,
+        own: Own<'w, 'db>,
+        deps: DependencyTable,
+        imports: ImportTables,
+    ) -> Self {
         Self {
             db,
             root,
             own,
-            deps: DependencyTable::new(root),
-            imports: ImportTables::default(),
+            deps,
+            imports,
+            heads: HashMap::new(),
         }
     }
 
     /// An object import of `path` in `root`.
-    fn import_object(
-        &mut self,
-        root: SourceRoot,
-        path: DeclPath,
-        baked_tag: Option<TypeTag>,
-    ) -> ObjectIndex {
+    fn import_object(&mut self, root: SourceRoot, path: DeclPath) -> ObjectIndex {
         let key = DeclKey {
             dep: self.deps.slot(self.db, root),
             path,
         };
-        ObjectIndex::from_raw(import_operand(self.imports.objects.intern(key, baked_tag)))
+        ObjectIndex::from_raw(import_operand(self.imports.objects.intern(key)))
     }
 
     /// A global-slot import of `path` in `root`.
@@ -474,11 +489,11 @@ impl<'w, 'db> PackageRefs<'w, 'db> {
             dep: self.deps.slot(self.db, root),
             path,
         };
-        GlobalIndex::from_raw(import_operand(self.imports.globals.intern(key, None)))
+        GlobalIndex::from_raw(import_operand(self.imports.globals.intern(key)))
     }
 
     /// The object of a type declaration: local when this unit pools it,
-    /// else an import carrying the tag the bytecode bakes for it.
+    /// else an import.
     fn type_object(
         &mut self,
         head: &DeclName,
@@ -497,29 +512,51 @@ impl<'w, 'db> PackageRefs<'w, 'db> {
                 Own::Tail => {}
             }
         }
-        let tag = head_tag(self.db, head);
-        self.import_object(head.root(), path, Some(tag))
+        self.import_object(head.root(), path)
     }
 
-    /// Intern an import for the declaration `head` refers to, unless this
-    /// unit pools it. A head no package of the closure declares is a compiler
-    /// bug: every head reaching emit was resolved by the checker.
-    pub(crate) fn import_head(
-        &mut self,
-        heads: &HeadIndex,
-        head: &TypeHead,
-    ) -> Result<(), crate::LoweringError> {
-        let tag = head.tag();
-        let Some((root, path)) = heads.declaration(tag) else {
-            return Err(crate::LoweringError::Internal(format!(
-                "a baked type head ({tag:?}) refers to a declaration no package in reach declares"
-            )));
-        };
-        if root == self.root && matches!(self.own, Own::Unit(_)) {
-            return Ok(());
+    /// The declaration a wire spelling names at this package's viewpoint.
+    /// Every spelling reaching emit was resolved by the checker, so a miss
+    /// is a compiler bug.
+    fn decl(&self, tn: &TypeName) -> DeclName {
+        spelling(self.db)
+            .resolve(self.db, self.root, tn)
+            .unwrap_or_else(|| {
+                unreachable!(
+                    "`{tn}` names no package reachable from `{}`",
+                    self.root.path(self.db).display()
+                )
+            })
+    }
+
+    /// The object of whichever type declaration `head` is: a class, enum,
+    /// interface, or (recursive) alias.
+    fn declaration_object(&mut self, head: &DeclName) -> ObjectIndex {
+        let db = self.db;
+        if let Some(class) = layout::class_ref_of(db, head) {
+            return self
+                .class(class)
+                .unwrap_or_else(|| unreachable!("the per-package resolver answers every class"));
         }
-        self.import_object(root, path.clone(), Some(tag));
-        Ok(())
+        if let Some(enum_ref) = layout::enum_ref_of(db, head) {
+            return self.enum_(enum_ref);
+        }
+        if let Some(interface) = layout::interface_ref_of(db, head) {
+            return self.interface(interface);
+        }
+        if let Some(alias) = layout::alias_ref_of(db, head) {
+            let path = DeclPath::TypeAlias(item_path(head));
+            return self.type_object(head, path, |tables| match alias {
+                DeclRef::Source(alias) => {
+                    tables.aliases.get(&alias).map(|&k| tables.alias_object(k))
+                }
+                DeclRef::External(_) => None,
+            });
+        }
+        unreachable!(
+            "`{}` resolved to a declaration no lane declares",
+            spelling(db).wire(head)
+        )
     }
 
     /// The object of an interface, local or imported.
@@ -533,6 +570,18 @@ impl<'w, 'db> PackageRefs<'w, 'db> {
             DeclRef::Source(interface) => tables.interface(interface),
             DeclRef::External(_) => None,
         })
+    }
+
+    /// The unit-convention head of the declaration `tn` spells (the
+    /// [`Anchor`] this resolver is).
+    pub(crate) fn head(&mut self, tn: &TypeName) -> TypeHead {
+        if let Some(&head) = self.heads.get(tn) {
+            return head;
+        }
+        let decl = self.decl(tn);
+        let head = TypeHead::unresolved_operand(self.declaration_object(&decl));
+        self.heads.insert(tn.clone(), head);
+        head
     }
 
     /// The global slot of a slot-owning function, local or imported; `None`
@@ -585,8 +634,7 @@ impl<'db> CodegenRefs<'db> for PackageRefs<'_, 'db> {
     }
 
     fn class_named(&mut self, tn: &TypeName) -> Option<ObjectIndex> {
-        let head = spelling(self.db).resolve(self.db, self.root, tn)?;
-        let class = layout::class_ref_of(self.db, &head)?;
+        let class = self.class_ref(tn)?;
         self.class(class)
     }
 
@@ -637,5 +685,26 @@ impl<'db> CodegenRefs<'db> for PackageRefs<'_, 'db> {
             &let_data(self.db, binding).name,
         );
         self.import_global(root, DeclPath::Let(item_path(&head)))
+    }
+
+    fn class_ref(&self, tn: &TypeName) -> Option<ClassRef<'db>> {
+        let head = spelling(self.db).resolve(self.db, self.root, tn)?;
+        layout::class_ref_of(self.db, &head)
+    }
+
+    fn switch_key<'a>(&mut self, class: ClassRef<'a>) -> SwitchKey
+    where
+        'db: 'a,
+    {
+        SwitchKey::Declaration(
+            self.class(class)
+                .unwrap_or_else(|| unreachable!("the per-package resolver answers every class")),
+        )
+    }
+}
+
+impl Anchor for PackageRefs<'_, '_> {
+    fn head(&mut self, tn: &TypeName) -> TypeHead {
+        Self::head(self, tn)
     }
 }

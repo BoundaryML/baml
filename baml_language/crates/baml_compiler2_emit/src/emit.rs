@@ -17,19 +17,24 @@ use baml_compiler2_hir_ty::{
 };
 use baml_compiler2_mir::{
     BasicBlock, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, Local, LogLevel, MirFunctionBody,
-    Operand, Place, Rvalue, StatementKind, Terminator, UnaryOp,
+    Operand, Place, Rvalue, StatementKind, SwitchKey as MirSwitchKey, Terminator, UnaryOp,
     memory::{self, CellId},
 };
 use baml_type::{RealizedTy, RuntimeTy, TyTemplate, TypeName};
 use bex_vm_types::{
     BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionCaptureProps, FunctionKind,
-    FunctionOrigin, GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool,
+    FunctionOrigin, GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, TypeHead,
     UnaryOp as VmUnaryOp,
     bytecode::{
         ClassInitPlan, DebugLocalScope, FieldCopy, FieldCopySet, InstructionMeta, JumpTableData,
-        LineTableEntry, MatchHashEntry, MatchHashTable, OperandMeta,
+        LineTableEntry, MatchHashTable, OperandMeta, SwitchKey,
     },
 };
+
+// A declaration-keyed arm of a type switch has exactly one legal shape, the
+// relocatable hash table; MIR refuses the switch road past the table's
+// capacity, so the two limits are one number.
+const _: () = assert!(baml_compiler2_mir::MAX_SWITCH_KEYS == MatchHashTable::MAX_KEYS);
 
 /// Coarse arithmetic-type classification used by [`try_specialize_binary_op`].
 ///
@@ -54,9 +59,15 @@ enum SwitchStrategy {
     JumpTable { min: i64, max: i64 },
     /// Use binary search tree (O(log n) comparisons) for sparse integers.
     BinarySearch,
-    /// Use perfect hash + dense jump table (O(1) dispatch) for sparse ≥4-arm switches.
-    /// Replaces `BinarySearch` when a compile-time perfect hash is found.
-    PerfectHash(PerfectHashResult),
+    /// Use perfect hash + dense jump table (O(1) dispatch) for sparse ≥4-arm
+    /// switches over known keys. Replaces `BinarySearch` when a perfect hash
+    /// is found; carries the solved table.
+    PerfectHash(MatchHashTable),
+    /// The hash table, unsolved: at least one key is a declaration whose tag
+    /// only the linker or grafter knows. The one legal shape for such a
+    /// switch — every other strategy bakes key VALUES as constants nothing
+    /// can relocate.
+    DeferredHash,
     /// Use linear if-else chain (O(n) comparisons).
     IfElseChain,
 }
@@ -85,15 +96,23 @@ fn unwrap_infallible<T>(result: Result<T, Infallible>) -> T {
     clippy::cast_sign_loss,
     clippy::cast_precision_loss
 )]
-fn analyze_switch(arms: &[(i64, BlockId)]) -> SwitchStrategy {
+fn analyze_switch(arms: &[(SwitchKey, BlockId)]) -> SwitchStrategy {
     // No arms - use if-else (will just jump to otherwise)
     if arms.is_empty() {
         return SwitchStrategy::IfElseChain;
     }
+    // A declaration key has no value here.
+    if arms
+        .iter()
+        .any(|(key, _)| matches!(key, SwitchKey::Declaration(_)))
+    {
+        return SwitchStrategy::DeferredHash;
+    }
+    let values: Vec<i64> = arms.iter().map(|(key, _)| kind_value(*key)).collect();
 
     // Find min and max values
-    let min = arms.iter().map(|(v, _)| *v).min().unwrap();
-    let max = arms.iter().map(|(v, _)| *v).max().unwrap();
+    let min = values.iter().copied().min().unwrap();
+    let max = values.iter().copied().max().unwrap();
     // Safety: max >= min always, and we limit jump tables to 256 entries
     let range = (max - min + 1) as usize;
 
@@ -116,9 +135,13 @@ fn analyze_switch(arms: &[(i64, BlockId)]) -> SwitchStrategy {
     // enum discriminant switches. See `find_perfect_hash` for algorithm
     // details and references.
     else if arms.len() >= BINARY_SEARCH_MIN_ARMS {
-        let keys: Vec<(i64, usize)> = arms.iter().enumerate().map(|(i, (v, _))| (*v, i)).collect();
-        if let Some(result) = find_perfect_hash(&keys) {
-            SwitchStrategy::PerfectHash(result)
+        let mut table =
+            MatchHashTable::unsolved(arms.iter().map(|(key, _)| *key).collect(), Vec::new());
+        if table
+            .solve(|_| unreachable!("a table of kind keys names no declaration"))
+            .is_ok()
+        {
+            SwitchStrategy::PerfectHash(table)
         } else {
             SwitchStrategy::BinarySearch
         }
@@ -144,109 +167,35 @@ fn analyze_switch(arms: &[(i64, BlockId)]) -> SwitchStrategy {
 /// value is consumed by the first pull, so later pulls would pop unrelated
 /// stack slots and a zero-pull form would orphan it (see `stack_carry`'s
 /// `Terminator::Switch` arm, the sole consumer).
-pub(crate) fn switch_discriminant_pulls(arms: &[(i64, BlockId)], exhaustive: bool) -> usize {
-    match analyze_switch(arms) {
+pub(crate) fn switch_discriminant_pulls(
+    arms: &[(MirSwitchKey<'_>, BlockId)],
+    exhaustive: bool,
+) -> usize {
+    // A class arm dispatches through the hash table in every lane (a value
+    // for it exists in no lane's analysis), which pulls exactly once.
+    let mut kinds = Vec::with_capacity(arms.len());
+    for (key, block) in arms {
+        match key {
+            MirSwitchKey::Int(value) => kinds.push((SwitchKey::Kind(*value), *block)),
+            MirSwitchKey::Class(_) => return 1,
+        }
+    }
+    match analyze_switch(&kinds) {
         SwitchStrategy::JumpTable { .. }
         | SwitchStrategy::PerfectHash(_)
+        | SwitchStrategy::DeferredHash
         | SwitchStrategy::BinarySearch => 1,
         SwitchStrategy::IfElseChain => arms.len().saturating_sub(usize::from(exhaustive)),
     }
 }
 
-/// Result of a successful perfect hash search.
-#[derive(Debug)]
-struct PerfectHashResult {
-    multiply: u64,
-    shift: u8,
-    mask: u8,
-    /// Verification + dispatch entries indexed by hash slot.
-    entries: Vec<MatchHashEntry>,
-}
-
-/// Find a minimal perfect hash for a small set of integer keys.
-///
-/// Searches for constants `(M, S, mask)` such that
-///   `h(x) = ((x as u64).wrapping_mul(M) >> S) & mask`
-/// maps all keys to distinct slots in `[0, table_size)`.
-///
-/// The search tries increasing table sizes (`next_power_of_two(K)`, then 2x)
-/// and brute-forces M values with all 64 shift values. For K ≤ 20 this
-/// completes in microseconds.
-///
-/// Returns `None` if no perfect hash is found (practically impossible for
-/// K ≤ 20, but handled for safety).
-///
-/// # Algorithm
-///
-/// This implements the multiply-shift hash family described in:
-/// - Neumann & Göbbert, "Improving Switch Statement Performance with Hashing
-///   Optimized at Compile Time"
-/// - Dietz 1992, "Coding Multiway Branches Using Customized Hash Functions"
-///
-/// The approach has been proposed for production compilers: LLVM issue #96971,
-/// Roslyn #66604, Go #34381.
-#[allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_lossless
-)]
-fn find_perfect_hash(keys: &[(i64, usize)]) -> Option<PerfectHashResult> {
-    let k = keys.len();
-    // Cap at 128: `MatchHashEntry::dense_index` is a `u8` (max 255), and
-    // the birthday paradox makes collision-free hashing increasingly unlikely
-    // past ~128 keys in a 256-slot table. Beyond this threshold the brute-force
-    // search would waste ~20-40ms of compile time before giving up. Falls back
-    // to binary search (O(log K)) which is fine at this scale.
-    if k == 0 || k > 128 {
-        return None;
+/// The value of a kind key. A declaration key never reaches a value-keyed
+/// strategy ([`analyze_switch`] routes it to the hash table).
+fn kind_value(key: SwitchKey) -> i64 {
+    match key {
+        SwitchKey::Kind(value) => value,
+        SwitchKey::Declaration(_) => unreachable!("a declaration key has no value at emit"),
     }
-
-    // Try table sizes: tight (next power of 2), then 2x for easier search.
-    for table_size in [k.next_power_of_two(), (k.next_power_of_two() * 2).min(256)] {
-        let mask = (table_size - 1) as u8;
-        let mut slots = vec![false; table_size];
-
-        for m in 1u64..10_000 {
-            for s in 0u8..64 {
-                // Test if (m, s) produces distinct hashes for all keys.
-                slots.fill(false);
-                let mut ok = true;
-                for &(key, _) in keys {
-                    let h = ((key as u64).wrapping_mul(m) >> s) & mask as u64;
-                    let h = h as usize;
-                    if h >= table_size || slots[h] {
-                        ok = false;
-                        break;
-                    }
-                    slots[h] = true;
-                }
-                if ok {
-                    // Build the verification + dispatch table.
-                    let mut entries = vec![
-                        MatchHashEntry {
-                            expected_tag: i64::MIN, // sentinel for empty slots
-                            dense_index: 0,
-                        };
-                        table_size
-                    ];
-                    for (dense_idx, &(key, _arm_idx)) in keys.iter().enumerate() {
-                        let h = ((key as u64).wrapping_mul(m) >> s) & mask as u64;
-                        entries[h as usize] = MatchHashEntry {
-                            expected_tag: key,
-                            dense_index: dense_idx as u8,
-                        };
-                    }
-                    return Some(PerfectHashResult {
-                        multiply: m,
-                        shift: s,
-                        mask,
-                        entries,
-                    });
-                }
-            }
-        }
-    }
-    None
 }
 
 use crate::{
@@ -298,10 +247,41 @@ enum PendingJumpTarget {
 /// A trait only while two emitters drive one codegen: the per-package
 /// resolver is the only implementation once the flat emitter is gone, and
 /// codegen then holds it directly.
+/// The one place a compile-time type name becomes a runtime head.
+///
+/// The per-package resolver answers with the declaration's object operand —
+/// a head in a unit IS an operand, relocated and tagged by the linker or
+/// grafter — and the flat emitter with the content tag its lane still mints.
+/// Every runtime type emit produces goes through one of these, so no type
+/// carries a head its lane cannot bind.
+pub(crate) trait Anchor {
+    /// The head of the declaration `tn` spells.
+    fn head(&mut self, tn: &TypeName) -> TypeHead;
+
+    fn anchor_template(&mut self, ty: &TyTemplate) -> bex_vm_types::TyTemplate {
+        ty.map_heads(&mut |tn: &TypeName| self.head(tn))
+    }
+
+    fn anchor_runtime_ty(&mut self, ty: &RuntimeTy) -> bex_vm_types::RuntimeTy {
+        ty.map_heads(&mut |tn: &TypeName| self.head(tn))
+    }
+
+    fn anchor_realized(&mut self, ty: &RealizedTy) -> bex_vm_types::RealizedTy {
+        ty.map_heads(&mut |tn: &TypeName| self.head(tn))
+    }
+
+    fn anchor_interface(
+        &mut self,
+        interface: &baml_type::RuntimeInterface,
+    ) -> bex_vm_types::RuntimeInterface {
+        interface.map_heads(&mut |tn: &TypeName| self.head(tn))
+    }
+}
+
 #[deprecated(
     note = "polymorphic only while the flat emitter is the byte-identity oracle; collapses into the per-package resolver when that emitter is deleted"
 )]
-pub(crate) trait CodegenRefs<'db> {
+pub(crate) trait CodegenRefs<'db>: Anchor {
     /// The pooled object of `class`. `None` exists only for the flat
     /// emitter's stub-skipped mounted class (the `Null`-instance fall-open
     /// at [`StackifyCodegen::alloc_instance_of`]); the per-package resolver
@@ -334,6 +314,14 @@ pub(crate) trait CodegenRefs<'db> {
     fn let_global<'a>(&mut self, binding: LetLoc<'a>) -> GlobalIndex
     where
         'db: 'a;
+    /// The class declaration `tn` spells, for its layout facts; `None` when
+    /// `tn` names no class in this lane's reach.
+    fn class_ref(&self, tn: &TypeName) -> Option<ClassRef<'db>>;
+    /// A class arm's switch key: the declaration's operand for the
+    /// per-package resolver, the flat emitter's content tag for its lane.
+    fn switch_key<'a>(&mut self, class: ClassRef<'a>) -> SwitchKey
+    where
+        'db: 'a;
 }
 
 /// MIR to bytecode compiler with stackification.
@@ -355,7 +343,7 @@ struct StackifyCodegen<'db: 'ctx, 'ctx, 'obj> {
     /// Field lookups resolve through this map instead of reading the object
     /// pool, so codegen never reads pool contents (parallel emit compiles
     /// against fragment pools that don't contain the pre-existing objects).
-    class_fields: &'ctx crate::ClassFieldSnapshot,
+    class_fields: &'ctx crate::ClassFieldSnapshot<'db>,
     /// Object pool this function's codegen mints into. Serial emit passes the
     /// whole program pool; parallel emit passes a worker-local fragment pool.
     objects: &'obj mut ObjectPool,
@@ -411,8 +399,10 @@ struct StackifyCodegen<'db: 'ctx, 'ctx, 'obj> {
     /// Instruction index where the currently emitted basic block starts.
     current_block_start: usize,
 
-    /// MIR local types for field name resolution (debug info).
-    local_types: HashMap<Local, bex_vm_types::RuntimeTy>,
+    /// MIR local types, for field-name resolution and instruction
+    /// specialization. Kept at the compiler's head: layout facts are read by
+    /// declaration, never through an anchored head.
+    local_types: HashMap<Local, RuntimeTy>,
 
     /// Slot index → variable name mapping for debug metadata.
     slot_names: Vec<String>,
@@ -428,7 +418,7 @@ struct StackifyCodegen<'db: 'ctx, 'ctx, 'obj> {
 
     /// Compile-time types for this function's closure captures, indexed by
     /// `Place::Capture`.
-    capture_types: Vec<bex_vm_types::RuntimeTy>,
+    capture_types: Vec<RuntimeTy>,
 
     /// Set of locals that are captured by child lambdas and need cell wrapping.
     /// Derived from `LocalDecl.is_captured` during `compile()`.
@@ -506,13 +496,7 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
             slot_names: Vec::new(),
             lambda_object_indices: ctx.lambda_object_indices.to_vec(),
             lambda_names: ctx.lambda_names.to_vec(),
-            // Codegen resolves places at the runtime's head; anchor the
-            // compiler-side capture types once, here, rather than at each read.
-            capture_types: ctx
-                .capture_types
-                .iter()
-                .map(bex_vm_types::anchor_runtime_ty)
-                .collect(),
+            capture_types: ctx.capture_types.to_vec(),
             captured_locals: HashSet::new(),
             spawn_captured_locals: HashSet::new(),
             spawn_captured_captures: ctx.spawn_capture_indices.clone(),
@@ -531,13 +515,16 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
 
     /// A field's declared name, by the owning class's identity and the field's
     /// index.
-    fn lookup_class_field_name(
-        &self,
-        class: baml_type::typetag::TypeTag,
+    fn lookup_class_field_name<'s, 'a>(
+        &'s self,
+        class: ClassRef<'a>,
         field_idx: usize,
-    ) -> Option<String> {
-        self.class_fields
-            .get(&class)?
+    ) -> Option<String>
+    where
+        'db: 'a,
+        'a: 's,
+    {
+        self.class_fields_for(class)?
             .get(field_idx)
             .map(|(name, _)| name.clone())
     }
@@ -546,14 +533,23 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
         self.refs.class_named(tn).map(ObjectIndex::raw)
     }
 
-    /// Class field metadata for a class type name, resolved through the same
-    /// name fallbacks as [`Self::class_object_index_for_type_name`] but
-    /// against the read-only snapshot instead of the pool.
-    fn class_fields_for(
-        &self,
-        class: baml_type::typetag::TypeTag,
-    ) -> Option<&[(String, bex_vm_types::RuntimeTy)]> {
-        self.class_fields.get(&class).map(Vec::as_slice)
+    /// A MIR switch key as this lane's bytecode states it.
+    fn resolve_switch_key(&mut self, key: MirSwitchKey<'ctx>) -> SwitchKey {
+        match key {
+            MirSwitchKey::Int(value) => SwitchKey::Kind(value),
+            MirSwitchKey::Class(class) => self.refs.switch_key(class),
+        }
+    }
+
+    /// A class's field layout from the read-only snapshot, by declaration.
+    fn class_fields_for<'s, 'a>(&'s self, class: ClassRef<'a>) -> Option<&'s [(String, RuntimeTy)]>
+    where
+        'db: 'a,
+        'a: 's,
+    {
+        // The snapshot outlives the body; read it at the body's lifetime.
+        let fields: &'s HashMap<ClassRef<'a>, Vec<(String, RuntimeTy)>> = self.class_fields;
+        fields.get(&class).map(Vec::as_slice)
     }
 
     /// Enum-object index for an enum type name, mirroring
@@ -565,7 +561,7 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
     }
 
     /// Resolve the type of a MIR Place by walking from the root local through projections.
-    fn resolve_place_type(&self, place: &Place) -> Option<bex_vm_types::RuntimeTy> {
+    fn resolve_place_type(&self, place: &Place) -> Option<RuntimeTy> {
         match place {
             // A captured local's declared type is its value's type, so a bare
             // `Local` reports the value type while naming a pointer; nothing
@@ -577,8 +573,8 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
             Place::Field { base, field } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match &base_ty {
-                    bex_vm_types::RuntimeTy::Class(head, _) => self
-                        .class_fields_for(head.tag())?
+                    RuntimeTy::Class(tn, _) => self
+                        .class_fields_for(self.refs.class_ref(tn)?)?
                         .get(*field)
                         .map(|(_, field_type)| field_type.clone()),
                     _ => None,
@@ -587,8 +583,8 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
             Place::Index { base, .. } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match base_ty {
-                    bex_vm_types::RuntimeTy::List(inner) => Some(*inner),
-                    bex_vm_types::RuntimeTy::Map { value, .. } => Some(*value),
+                    RuntimeTy::List(inner) => Some(*inner),
+                    RuntimeTy::Map { value, .. } => Some(*value),
                     _ => None,
                 }
             }
@@ -596,15 +592,15 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
     }
 
     /// Resolve the compile-time type of an operand, if known.
-    fn resolve_operand_type(&self, operand: &Operand<'ctx>) -> Option<bex_vm_types::RuntimeTy> {
+    fn resolve_operand_type(&self, operand: &Operand<'ctx>) -> Option<RuntimeTy> {
         match operand {
             Operand::Constant(c) => match c {
-                Constant::Int(_) => Some(bex_vm_types::RuntimeTy::int()),
-                Constant::Bigint(_) => Some(bex_vm_types::RuntimeTy::bigint()),
-                Constant::Float(_) => Some(bex_vm_types::RuntimeTy::float()),
+                Constant::Int(_) => Some(RuntimeTy::int()),
+                Constant::Bigint(_) => Some(RuntimeTy::bigint()),
+                Constant::Float(_) => Some(RuntimeTy::float()),
                 Constant::String(_) => Some(RuntimeTy::string()),
                 Constant::Bool(_) => Some(RuntimeTy::bool()),
-                Constant::Null => Some(bex_vm_types::RuntimeTy::null()),
+                Constant::Null => Some(RuntimeTy::null()),
                 Constant::OmittedArg => None,
                 _ => None,
             },
@@ -619,8 +615,8 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
     /// `Int`, and similarly for `Float`/`Bigint`. This lets us specialize
     /// expressions like `(-1n) & 255n` where the lhs operand carries a
     /// `RuntimeTy::Literal(Bigint(-1))` after constant-folding in TIR.
-    fn classify_arith_ty(ty: &bex_vm_types::RuntimeTy) -> Option<ArithTyClass> {
-        use bex_vm_types::RuntimeTy as T;
+    fn classify_arith_ty(ty: &RuntimeTy) -> Option<ArithTyClass> {
+        use RuntimeTy as T;
         match ty {
             T::Int => Some(ArithTyClass::Int),
             T::Float => Some(ArithTyClass::Float),
@@ -865,8 +861,7 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
 
         // Build local type map for field name resolution (debug info).
         for (i, local_decl) in mir.locals.iter().enumerate() {
-            self.local_types
-                .insert(Local(i), bex_vm_types::anchor_runtime_ty(&local_decl.ty));
+            self.local_types.insert(Local(i), local_decl.ty.clone());
         }
 
         // Build slot name mapping for debug metadata.
@@ -1385,9 +1380,8 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
                 // the interface, the value, and the receiver in that order.
                 self.emit_operand_pull(receiver);
                 self.emit_operand_pull(value);
-                let iface_const = self.add_constant(ConstValue::Type(
-                    bex_vm_types::anchor_template(&iface.to_template()),
-                ));
+                let iface_template = self.refs.anchor_template(&iface.to_template());
+                let iface_const = self.add_constant(ConstValue::Type(iface_template));
                 let inst = self.emit(Instruction::LoadType(iface_const));
                 self.set_operand(inst, OperandMeta::Const(iface.to_string()));
                 let inst = self.emit(Instruction::VirtualStoreField(*field_index as usize));
@@ -1532,7 +1526,7 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
             let fields = (0..field_count).collect::<Vec<_>>();
             let display_fields = fields
                 .iter()
-                .map(|field_idx| format!(".{}", self.class_field_name(class_name, *field_idx)))
+                .map(|field_idx| format!(".{}", self.class_field_name(class, *field_idx)))
                 .collect::<Vec<_>>();
             let plan_idx = self.bytecode.class_init_plans.len();
             self.bytecode.class_init_plans.push(ClassInitPlan {
@@ -1635,7 +1629,6 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
         type_arg_templates: &[TyTemplate],
         fields: &[Operand<'ctx>],
     ) -> bool {
-        let class_name = &baml_compiler2_mir::class_link_name(self.db, class);
         if !fields
             .iter()
             .any(|field| Self::field_copy_operand(field).is_some())
@@ -1653,7 +1646,7 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
         let mut field_idx = 0usize;
         while field_idx < fields.len() {
             let Some((base, source_field)) = Self::field_copy_operand(&fields[field_idx]) else {
-                let name = self.class_field_name(class_name, field_idx);
+                let name = self.class_field_name(class, field_idx);
                 self.emit_operand_pull(&fields[field_idx]);
                 unwrap_infallible(self.init_field(field_idx, &name));
                 field_idx += 1;
@@ -1661,7 +1654,7 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
             };
 
             if self.place_mentions_stack_carried_local(base) {
-                let name = self.class_field_name(class_name, field_idx);
+                let name = self.class_field_name(class, field_idx);
                 self.emit_operand_pull(&fields[field_idx]);
                 unwrap_infallible(self.init_field(field_idx, &name));
                 field_idx += 1;
@@ -1672,8 +1665,7 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
                 source: source_field,
                 dest: field_idx,
             }];
-            let mut display_fields =
-                vec![format!(".{}", self.class_field_name(class_name, field_idx))];
+            let mut display_fields = vec![format!(".{}", self.class_field_name(class, field_idx))];
             field_idx += 1;
 
             while field_idx < fields.len() {
@@ -1689,7 +1681,7 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
                     source: next_source_field,
                     dest: field_idx,
                 });
-                display_fields.push(format!(".{}", self.class_field_name(class_name, field_idx)));
+                display_fields.push(format!(".{}", self.class_field_name(class, field_idx)));
                 field_idx += 1;
             }
 
@@ -1823,14 +1815,13 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
             // by `LoadType`), then the method name — the opcode pops in reverse.
             self.emit_operand_pull(receiver);
             for template in type_args {
-                let const_idx =
-                    self.add_constant(ConstValue::Type(bex_vm_types::anchor_template(template)));
+                let anchored = self.refs.anchor_template(template);
+                let const_idx = self.add_constant(ConstValue::Type(anchored));
                 let inst = self.emit(Instruction::LoadType(const_idx));
                 self.set_operand(inst, OperandMeta::Const(template.to_string()));
             }
-            let iface_const = self.add_constant(ConstValue::Type(bex_vm_types::anchor_template(
-                &iface.to_template(),
-            )));
+            let iface_template = self.refs.anchor_template(&iface.to_template());
+            let iface_const = self.add_constant(ConstValue::Type(iface_template));
             let inst = self.emit(Instruction::LoadType(iface_const));
             self.set_operand(inst, OperandMeta::Const(iface.to_string()));
             self.emit_constant(&Constant::String(method.clone()));
@@ -1853,16 +1844,15 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
             // `LoadType` temp, a scoped `type T = …` slot included),
             // then the interface type, then the method name — the opcode pops
             // in reverse.
-            let self_const =
-                self.add_constant(ConstValue::Type(bex_vm_types::anchor_template(self_ty)));
+            let self_template = self.refs.anchor_template(self_ty);
+            let self_const = self.add_constant(ConstValue::Type(self_template));
             let inst = self.emit(Instruction::LoadType(self_const));
             self.set_operand(inst, OperandMeta::Const(self_ty.to_string()));
             for arg in type_args {
                 self.emit_operand_pull(arg);
             }
-            let iface_const = self.add_constant(ConstValue::Type(bex_vm_types::anchor_template(
-                &iface.to_template(),
-            )));
+            let iface_template = self.refs.anchor_template(&iface.to_template());
+            let iface_const = self.add_constant(ConstValue::Type(iface_template));
             let inst = self.emit(Instruction::LoadType(iface_const));
             self.set_operand(inst, OperandMeta::Const(iface.to_string()));
             self.emit_constant(&Constant::String(method.clone()));
@@ -1882,9 +1872,8 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
             // Stack: receiver, then the interface type (resolved against the frame
             // by `LoadType`) — the opcode pops the interface, then the receiver.
             self.emit_operand_pull(receiver);
-            let iface_const = self.add_constant(ConstValue::Type(bex_vm_types::anchor_template(
-                &iface.to_template(),
-            )));
+            let iface_template = self.refs.anchor_template(&iface.to_template());
+            let iface_const = self.add_constant(ConstValue::Type(iface_template));
             let inst = self.emit(Instruction::LoadType(iface_const));
             self.set_operand(inst, OperandMeta::Const(iface.to_string()));
             let inst = self.emit(Instruction::VirtualLoadField(*field_index as usize));
@@ -1967,7 +1956,7 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
         // that space so an existing instantiation is actually recognized.
         let anchored_args: Box<[bex_vm_types::RealizedTy]> = type_args
             .iter()
-            .map(bex_vm_types::anchor_realized)
+            .map(|ty| self.refs.anchor_realized(ty))
             .collect();
         let existing = self
             .objects
@@ -2207,50 +2196,78 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
                 exhaustive,
                 arm_names,
             } => {
-                // Build name lookup for symbolic display of discriminant values
-                let name_map: std::collections::HashMap<i64, &str> =
-                    arm_names.iter().map(|(v, n)| (*v, n.as_str())).collect();
+                // Each arm's key as this lane states it: a kind's fixed tag,
+                // or a class declaration by operand (the per-package lane) /
+                // by the flat lane's content tag.
+                let resolved: Vec<(SwitchKey, BlockId)> = arms
+                    .iter()
+                    .map(|(key, block)| (self.resolve_switch_key(*key), *block))
+                    .collect();
+                let name_map: std::collections::HashMap<SwitchKey, &str> = arm_names
+                    .iter()
+                    .map(|(key, name)| (self.resolve_switch_key(*key), name.as_str()))
+                    .collect();
 
-                // Analyze the switch to determine the best emission strategy
-                let strategy = analyze_switch(arms);
-
-                match strategy {
-                    SwitchStrategy::JumpTable { min, max } => {
-                        self.emit_switch_jump_table(
+                match analyze_switch(&resolved) {
+                    SwitchStrategy::DeferredHash => {
+                        let keys = resolved.iter().map(|(key, _)| *key).collect();
+                        let table = MatchHashTable::unsolved(keys, Vec::new());
+                        self.emit_switch_hash_table(
                             discriminant,
-                            arms,
+                            &resolved,
                             *otherwise,
-                            min,
-                            max,
+                            table,
                             &name_map,
                         );
                     }
-                    SwitchStrategy::PerfectHash(hash_result) => {
-                        self.emit_switch_perfect_hash(
+                    SwitchStrategy::PerfectHash(table) => {
+                        self.emit_switch_hash_table(
                             discriminant,
-                            arms,
+                            &resolved,
                             *otherwise,
-                            hash_result,
+                            table,
                             &name_map,
                         );
                     }
-                    SwitchStrategy::BinarySearch => {
-                        self.emit_switch_binary_search(
-                            discriminant,
-                            arms,
-                            *otherwise,
-                            *exhaustive,
-                            &name_map,
-                        );
-                    }
-                    SwitchStrategy::IfElseChain => {
-                        self.emit_switch_if_else(
-                            discriminant,
-                            arms,
-                            *otherwise,
-                            *exhaustive,
-                            &name_map,
-                        );
+                    strategy @ (SwitchStrategy::JumpTable { .. }
+                    | SwitchStrategy::BinarySearch
+                    | SwitchStrategy::IfElseChain) => {
+                        // Value-keyed strategies: every key is a kind.
+                        let int_arms: Vec<(i64, BlockId)> = resolved
+                            .iter()
+                            .map(|(key, block)| (kind_value(*key), *block))
+                            .collect();
+                        let int_names: std::collections::HashMap<i64, &str> = name_map
+                            .iter()
+                            .map(|(key, name)| (kind_value(*key), *name))
+                            .collect();
+                        match strategy {
+                            SwitchStrategy::JumpTable { min, max } => self.emit_switch_jump_table(
+                                discriminant,
+                                &int_arms,
+                                *otherwise,
+                                min,
+                                max,
+                                &int_names,
+                            ),
+                            SwitchStrategy::BinarySearch => self.emit_switch_binary_search(
+                                discriminant,
+                                &int_arms,
+                                *otherwise,
+                                *exhaustive,
+                                &int_names,
+                            ),
+                            SwitchStrategy::IfElseChain => self.emit_switch_if_else(
+                                discriminant,
+                                &int_arms,
+                                *otherwise,
+                                *exhaustive,
+                                &int_names,
+                            ),
+                            SwitchStrategy::PerfectHash(_) | SwitchStrategy::DeferredHash => {
+                                unreachable!("matched above")
+                            }
+                        }
                     }
                 }
             }
@@ -2357,9 +2374,8 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
                 // interface, then the `ntypeargs` method type args, then reads the
                 // receiver (first value arg) to resolve the impl at runtime.
                 unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                let iface_const = self.add_constant(ConstValue::Type(
-                    bex_vm_types::anchor_template(&iface.to_template()),
-                ));
+                let iface_template = self.refs.anchor_template(&iface.to_template());
+                let iface_const = self.add_constant(ConstValue::Type(iface_template));
                 let inst = self.emit(Instruction::LoadType(iface_const));
                 self.set_operand(inst, OperandMeta::Const(iface.to_string()));
                 self.emit_constant(&Constant::String(method.clone()));
@@ -2975,53 +2991,52 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
         }
     }
 
-    /// Emit switch using perfect hash + dense jump table (O(1) dispatch).
+    /// Emit switch through a hash table + dense jump table (O(1) dispatch).
     ///
-    /// The `MatchHash` instruction remaps the sparse type tag to a dense
-    /// `[0, K-1]` index via a compile-time minimal perfect hash. A subsequent
-    /// `JumpTable` dispatches on the dense index. `MatchHash` pushes `-1` for
-    /// unknown tags, which falls to the jump table's default arm.
+    /// `DenseTag` remaps the sparse type tag to a dense `[0, K-1]` index via a
+    /// minimal perfect hash over the keys' tags; a subsequent `JumpTable`
+    /// dispatches on the dense index. `DenseTag` pushes `-1` for unknown tags,
+    /// which falls to the jump table's default arm.
+    ///
+    /// `table` states the keys in arm order. It arrives solved when every key
+    /// is a kind (the values are known here), and unsolved when a key is a
+    /// declaration: its tag is assigned by whoever lays the declaration into
+    /// an image, and that producer solves the table
+    /// ([`MatchHashTable::solve`]) after relocating the keys.
     ///
     /// This replaces O(log K) `BinarySearch` (which emits ~4K instructions for
-    /// K=8) with just 3 instructions: `type_tag` + `match_hash` + `jump_table`.
-    ///
-    /// The perfect hash uses the multiply-shift family:
-    ///   `h(tag) = ((tag as u64).wrapping_mul(M) >> S) & mask`
-    ///
-    /// References:
-    /// - Neumann & Göbbert, "Improving Switch Statement Performance with
-    ///   Hashing Optimized at Compile Time"
-    /// - Dietz 1992, "Coding Multiway Branches Using Customized Hash Functions"
-    /// - Proposed for LLVM (#96971), Roslyn (#66604), Go (#34381)
+    /// K=8) with just 3 instructions: `type_tag` + `dense_tag` + `jump_table`.
     #[allow(clippy::cast_possible_wrap)]
-    fn emit_switch_perfect_hash(
+    fn emit_switch_hash_table(
         &mut self,
         discriminant: &Operand<'ctx>,
-        arms: &[(i64, BlockId)],
+        arms: &[(SwitchKey, BlockId)],
         otherwise: BlockId,
-        hash_result: PerfectHashResult,
-        name_map: &std::collections::HashMap<i64, &str>,
+        mut table: MatchHashTable,
+        name_map: &std::collections::HashMap<SwitchKey, &str>,
     ) {
+        debug_assert!(
+            table
+                .keys
+                .iter()
+                .copied()
+                .eq(arms.iter().map(|(key, _)| *key)),
+            "a switch's hash table states its arms' keys in arm order"
+        );
         // 1. Push discriminant (type tag) onto stack — consumed by DenseTag.
         self.emit_operand_pull(discriminant);
 
-        // 2. Store the MatchHashTable in bytecode and emit DenseTag instruction.
-        let key_names: Vec<String> = arms
-            .iter()
-            .map(|(v, _)| {
-                name_map
-                    .get(v)
-                    .map(ToString::to_string)
-                    .unwrap_or_else(|| v.to_string())
-            })
-            .collect();
-        let table = MatchHashTable {
-            multiply: hash_result.multiply,
-            shift: hash_result.shift,
-            mask: hash_result.mask,
-            entries: hash_result.entries,
-            key_names,
+        // 2. Store the table in bytecode and emit the DenseTag instruction.
+        let label = |key: &SwitchKey| -> String {
+            name_map
+                .get(key)
+                .map(ToString::to_string)
+                .unwrap_or_else(|| match key {
+                    SwitchKey::Kind(value) => value.to_string(),
+                    SwitchKey::Declaration(declaration) => format!("class @{}", declaration.raw()),
+                })
         };
+        table.key_names = arms.iter().map(|(key, _)| label(key)).collect();
         let hash_table_idx = self.bytecode.match_hash_tables.len();
         self.bytecode.match_hash_tables.push(table);
         self.emit(Instruction::DenseTag(hash_table_idx));
@@ -3040,8 +3055,8 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
         let mut jt = JumpTableData::new(dense_min, dense_max);
 
         // Set symbolic names from the original arm names.
-        for (dense_idx, (orig_value, _)) in arms.iter().enumerate() {
-            if let Some(&name) = name_map.get(orig_value) {
+        for (dense_idx, (key, _)) in arms.iter().enumerate() {
+            if let Some(&name) = name_map.get(key) {
                 jt.set_name(dense_idx as i64, name.to_string());
             }
         }
@@ -3447,7 +3462,8 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_> {
         // arg-discriminating check a coarse type tag cannot express (`int[]` ≠
         // `string[]`, `map<string,int>` ≠ `map<string,string>`, a realized `T[]`).
         let emit_structural = |this: &mut Self, template: &TyTemplate| {
-            let c = this.add_constant(ConstValue::Type(bex_vm_types::anchor_template(template)));
+            let anchored = this.refs.anchor_template(template);
+            let c = this.add_constant(ConstValue::Type(anchored));
             let inst = this.emit(Instruction::IsType(c));
             this.set_operand(inst, OperandMeta::Const(template.to_string()));
         };
@@ -3469,12 +3485,13 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_> {
                     let inst = self.emit(Instruction::IsType(c));
                     self.set_operand(inst, OperandMeta::Const(class_name_str.to_string()));
                 } else {
+                    let type_args_templates = type_args_templates
+                        .iter()
+                        .map(|template| self.refs.anchor_template(template))
+                        .collect();
                     let c = self.add_constant(ConstValue::ClassWithTypeArgs {
                         class_obj: ObjectIndex::from_raw(class_obj_idx),
-                        type_args_templates: type_args_templates
-                            .iter()
-                            .map(bex_vm_types::anchor_template)
-                            .collect(),
+                        type_args_templates,
                     });
                     let inst = self.emit(Instruction::IsType(c));
                     self.set_operand(inst, OperandMeta::Const(format!("{class_name_str}<...>")));
@@ -3624,8 +3641,8 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_> {
     }
 
     fn load_type(&mut self, template: &TyTemplate) -> Result<(), Self::Error> {
-        let const_idx =
-            self.add_constant(ConstValue::Type(bex_vm_types::anchor_template(template)));
+        let anchored = self.refs.anchor_template(template);
+        let const_idx = self.add_constant(ConstValue::Type(anchored));
         let inst = self.emit(Instruction::LoadType(const_idx));
         self.set_operand(inst, OperandMeta::Const(template.to_string()));
         Ok(())
@@ -3699,18 +3716,16 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_> {
 
     fn resolve_field_name(&self, base: &Place, field_idx: usize) -> String {
         let class = match self.resolve_place_type(base) {
-            Some(bex_vm_types::RuntimeTy::Class(head, _)) => head.tag(),
-            _ => return format!("{field_idx}"),
+            Some(RuntimeTy::Class(tn, _)) => self.refs.class_ref(&tn),
+            _ => None,
         };
-        self.lookup_class_field_name(class, field_idx)
+        class
+            .and_then(|class| self.lookup_class_field_name(class, field_idx))
             .unwrap_or_else(|| format!("{field_idx}"))
     }
 
-    /// Field name for a class MIR named directly. `class_name` is the
-    /// fully-qualified spelling the pool is keyed by, so its tag is the class's
-    /// own — the same function that minted it at declaration.
-    fn class_field_name(&self, class_name: &str, field_idx: usize) -> String {
-        self.lookup_class_field_name(baml_type::typetag::TypeTag::of_head(class_name), field_idx)
+    fn class_field_name(&self, class: ClassRef<'ctx>, field_idx: usize) -> String {
+        self.lookup_class_field_name(class, field_idx)
             .unwrap_or_else(|| format!("{field_idx}"))
     }
 }
@@ -3909,6 +3924,7 @@ mod tests {
         let db = crate::tests::TestDb::default();
         let mut refs = crate::FlatRefs {
             db: &db,
+            root: db.workspace(),
             slots: &slots,
             class_object_indices: &class_object_indices,
             enum_object_indices: &enum_object_indices,
@@ -3953,9 +3969,12 @@ mod tests {
     /// unrelated stack slots under a stack-carried discriminant.
     #[test]
     fn switch_discriminant_pull_counts_per_strategy() {
-        use super::switch_discriminant_pulls;
-        let arms = |values: &[i64]| -> Vec<(i64, BlockId)> {
-            values.iter().map(|&v| (v, BlockId(0))).collect()
+        use super::{MirSwitchKey, switch_discriminant_pulls};
+        let arms = |values: &[i64]| -> Vec<(MirSwitchKey<'static>, BlockId)> {
+            values
+                .iter()
+                .map(|&v| (MirSwitchKey::Int(v), BlockId(0)))
+                .collect()
         };
 
         // If-else chain (< 4 arms): one pull per emitted comparison; the

@@ -40,7 +40,8 @@ pub use check::{
 pub use db::{EventCallback, ProjectDatabase, SourceRootError, SourceRootSpec, canonicalize_lossy};
 pub use discovery::discover_baml_files;
 pub use program::{
-    CompileProgramError, NoCache, PackageCache, compile_program, compile_program_with,
+    CompileProgramError, EmittedPackage, NoCache, PackageCache, compile_program,
+    compile_program_with,
 };
 pub use project_resolution::{
     BAML_SRC_DIR, BAML_TOML, find_baml_project_root, find_baml_project_root_from_ancestors,

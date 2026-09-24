@@ -1630,22 +1630,19 @@ impl BamlClassPackage for PackageReflectImpl {
 ///
 /// BUG: this is NOT safe against every baked tag. Emit's `is_type` road does
 /// answer `None` for declared heads (`realized_type_tag`) and `IsType` arms
-/// compare pointers, but MIR's `SwitchKind::TypeTag` road bakes the CONTENT
-/// class tag of every class arm (`type_tag_for_ty` → `class_type_tags`) into
-/// a `switch` whose keys become jump-table / hash-table entries or plain
-/// `Int` constants — and a `match` with four or more bare class type
-/// patterns (`A => .., B => .., C => .., D => ..`) takes that road. The
-/// `TypeTag` instruction then pushes the REMINTED tag, no key matches, and an
+/// compare pointers, but the flat lane's `SwitchKind::TypeTag` road bakes the
+/// CONTENT class tag of every class arm (`FlatRefs::switch_key`) into a
+/// `MatchHashTable` as a `SwitchKey::Kind` — and a `match` with four or more
+/// bare class type patterns (`A => .., B => .., C => .., D => ..`) takes that
+/// road. The `TypeTag` instruction then pushes the REMINTED tag (an own
+/// class) or the linker-assigned tag (a host class), no key matches, and an
 /// exhaustive match reaches its `unreachable` otherwise block: verified
 /// 2026-09-23 by execution — `baml.panics.Unreachable { "unreachable code
 /// executed" }` from a `reflect.Package.compile`d function whose static twin
-/// passes. Nothing here nor in `bind_graft_type_heads` walks those keys
-/// (`relink::visit_index_operands` and `head_walk` never visit switch data).
-/// The remint is still required (generativity); the missing half is the
-/// relocation of baked switch keys through the same `old → live` map, which
-/// needs the keys to be distinguishable from ordinary `Int` constants on the
-/// wire — a format change that rides the unit-format bump — or MIR sending
-/// class arms down the pointer `IsType` chain in every lane.
+/// passes. The unit format already carries the fix: the per-package emitter
+/// writes class keys as `SwitchKey::Declaration` operands, which the loader
+/// solves against the tags it assigns exactly as the static linker does; it
+/// lands here when the graft consumes that format.
 ///
 /// Returns the `old content tag → reminted head` rows the head bind uses to
 /// bridge the plan's internal references onto the new identities.
@@ -1732,13 +1729,15 @@ fn dependency_named_declarations(
 /// Bind every type head an owned grafted object carries to the declaration it
 /// names — the runtime-package twin of [`bex_heap::BexHeap::bind_type_heads`].
 ///
-/// A runtime compile's emit mints heads tag-only, exactly like the static
-/// emit, so each grafted object arrives carrying unresolved heads. Tags
+/// A runtime compile's emit mints heads tag-only (the flat emitter's content
+/// tags), so each grafted object arrives carrying unresolved heads. Tags
 /// resolve against the plan pool first (`plan_objects` spans it — its own
 /// declarations *and* the live external ones its symbols imported, so a
 /// reference into an earlier eval lands on that eval's object), then against
 /// a transient index over the compile-time pool for the type-only references
-/// no import symbol carries. Both indices are built here and dropped here.
+/// no import symbol carries, keyed by the content tag of each declaration's
+/// name as well as its live tag. Both indices are built here and dropped
+/// here, and every hit adopts the declaration's own head.
 ///
 /// A tag nothing declares is a link error, not a head to leave dangling: an
 /// unresolved head is untraceable by the collector and unresolvable by
@@ -1812,12 +1811,13 @@ fn bind_graft_type_heads(
             if head.is_resolved() {
                 return;
             }
-            if let Some(&bound) = by_tag.get(&head.tag()) {
+            // Both indexes hand back the declaration's own head: a head
+            // spelled by a content tag lands on the linker-assigned identity.
+            if let Some(&bound) = by_tag
+                .get(&head.tag())
+                .or_else(|| compile_time.get(&head.tag()))
+            {
                 *head = bound;
-            } else if let Some(&declaration) = compile_time.get(&head.tag()) {
-                // The compile-time index is keyed by each declaration's own
-                // tag, so the head's tag already is the identity.
-                head.resolve(declaration);
             } else {
                 unbound.push(head.tag());
             }

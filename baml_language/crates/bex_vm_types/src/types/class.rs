@@ -65,9 +65,11 @@ pub struct Class {
     /// the whole object is complete.
     pub stream_done: bool,
 
-    /// This class's head identity, content-addressed from its fully-qualified
-    /// name at emit time. Both the `TypeTag` instruction's jump-table dispatch
-    /// value and the identity a `TypeHead` referring to this class compares by.
+    /// This class's head identity: assigned by the linker (`CLASS_BASE +` the
+    /// class's object index in the image) or, for a runtime-created class,
+    /// minted fresh by the grafter; in a unit it holds the class's own object
+    /// operand. Both the `TypeTag` instruction's jump-table dispatch value and
+    /// the identity a `TypeHead` referring to this class compares by.
     pub type_tag: baml_type::typetag::TypeTag,
 
     /// BEP-042: `true` if this class defines a magic `cleanup(self) -> void`

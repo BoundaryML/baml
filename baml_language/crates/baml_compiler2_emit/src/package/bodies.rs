@@ -14,7 +14,8 @@ use baml_compiler2_mir::{
 };
 use baml_linker_types::{DeclKey, import_operand, import_ordinal};
 use bex_vm_types::{
-    Function, GlobalIndex, Object, ObjectIndex, ObjectPool,
+    Function, GlobalIndex, Object, ObjectIndex, ObjectPool, TypeHead,
+    head_walk::{visit_function_heads_mut, visit_object_heads_mut},
     relink::{IndexOperand, visit_index_operands, visit_object_operands},
 };
 
@@ -57,13 +58,7 @@ impl RefTables {
         root: baml_base::SourceRoot,
         own: Own<'w, 'db>,
     ) -> PackageRefs<'w, 'db> {
-        PackageRefs {
-            db,
-            root,
-            own,
-            deps: self.deps,
-            imports: self.imports,
-        }
+        PackageRefs::with_tables(db, root, own, self.deps, self.imports)
     }
 }
 
@@ -73,7 +68,7 @@ impl RefTables {
 fn compile_body<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     refs: &mut (dyn CodegenRefs<'db> + 'db),
-    class_fields: &ClassFieldSnapshot,
+    class_fields: &ClassFieldSnapshot<'db>,
     objects: &mut ObjectPool,
     objects_base: usize,
     mir: &MirFunction<'db>,
@@ -123,28 +118,32 @@ fn is_builtin_file(db: &dyn crate::Db, file: SourceFile) -> bool {
     file.path(db).to_string_lossy().starts_with("<builtin>/")
 }
 
+/// `refs` continues the type pass's resolver: the imports its declarations
+/// interned come first in the unit's tables, then everything the bodies add.
 pub(super) fn emit_bodies<'db>(
     db: &'db dyn crate::Db,
-    class_fields: &ClassFieldSnapshot,
+    class_fields: &ClassFieldSnapshot<'db>,
     types: &TypePass<'db>,
+    refs: RefTables,
     opt: OptLevel,
 ) -> Result<BodyPass<'db>, LoweringError> {
     if rayon::current_num_threads() > 1 && db.parallel_db_handle().is_some() {
-        emit_bodies_parallel(db, class_fields, types, opt)
+        emit_bodies_parallel(db, class_fields, types, refs, opt)
     } else {
-        emit_bodies_serial(db, class_fields, types, opt)
+        emit_bodies_serial(db, class_fields, types, refs, opt)
     }
 }
 
 /// The code pass, serial: the reference implementation.
 fn emit_bodies_serial<'db>(
     db: &'db dyn crate::Db,
-    class_fields: &ClassFieldSnapshot,
+    class_fields: &ClassFieldSnapshot<'db>,
     types: &TypePass<'db>,
+    refs: RefTables,
     opt: OptLevel,
 ) -> Result<BodyPass<'db>, LoweringError> {
     let base = types.tables.code_base() as usize;
-    let mut refs = PackageRefs::new(db, types.root, Own::Unit(&types.tables));
+    let mut refs = refs.attach(db, types.root, Own::Unit(&types.tables));
     let mut code = ObjectPool::default();
     let mut offsets = HashMap::new();
     let lowering = RuntimeLowering::of(db, types.root);
@@ -186,7 +185,15 @@ fn emit_bodies_serial<'db>(
                 }
             };
             let fq_name = compiled.name.clone();
-            attach_function_metadata(db, function, &lowering, builtin, &fq_name, &mut compiled);
+            attach_function_metadata(
+                db,
+                function,
+                &lowering,
+                builtin,
+                &fq_name,
+                &mut refs,
+                &mut compiled,
+            );
             place_function(&types.tables, &mut code, &mut offsets, function, compiled);
         }
     }
@@ -238,8 +245,9 @@ struct WorkerItem {
 /// generic-value interning the serial pass performs across bodies.
 fn emit_bodies_parallel<'db>(
     db: &'db dyn crate::Db,
-    class_fields: &ClassFieldSnapshot,
+    class_fields: &ClassFieldSnapshot<'db>,
     types: &TypePass<'db>,
+    refs: RefTables,
     opt: OptLevel,
 ) -> Result<BodyPass<'db>, LoweringError> {
     use rayon::prelude::*;
@@ -310,7 +318,7 @@ fn emit_bodies_parallel<'db>(
         )
         .collect();
 
-    let mut refs = PackageRefs::new(db, root, Own::Unit(tables));
+    let mut refs = refs.attach(db, root, Own::Unit(tables));
     let mut code = ObjectPool::default();
     let mut offsets = HashMap::new();
     let mut intern = GenericFunctionInterner::default();
@@ -342,6 +350,7 @@ fn emit_bodies_parallel<'db>(
             &lowering,
             seed.is_builtin_file,
             &fq_name,
+            &mut refs,
             &mut compiled,
         );
         place_function(tables, &mut code, &mut offsets, function, compiled);
@@ -381,7 +390,7 @@ fn merge_item(
                     dep: deps.slot(db, root),
                     path: entry.key.path.clone(),
                 };
-                target.intern(key, entry.baked_tag)
+                target.intern(key)
             })
             .collect::<Vec<usize>>()
     };
@@ -392,11 +401,20 @@ fn merge_item(
             *slot = GlobalIndex::from_raw(import_operand(global_remap[ordinal]));
         }
     };
+    // A head is a declaration operand: an import ordinal remaps to the
+    // unit's; a local names a type bucket, final before the code pass.
+    let mut remap_head = |head: &mut TypeHead| {
+        if let Some(ordinal) = import_ordinal(head.operand().raw()) {
+            *head = TypeHead::unresolved_operand(ObjectIndex::from_raw(import_operand(
+                object_remap[ordinal],
+            )));
+        }
+    };
 
     // Pass 1: append in mint order, interning generic values by their
     // unit-wide identity — so global operands (a value's base slot may be an
-    // import) are remapped first. Completed before any object rewrite so
-    // references to later mints resolve too.
+    // import) and heads (its type arguments) are remapped first. Completed
+    // before any object rewrite so references to later mints resolve too.
     let mut index_map: Vec<usize> = Vec::with_capacity(fragment.len());
     let mut appended: Vec<usize> = Vec::new();
     for mut object in fragment {
@@ -405,6 +423,7 @@ fn merge_item(
                 remap_global(slot);
             }
         });
+        visit_object_heads_mut(&mut object, &mut remap_head);
         if let Object::GenericFunction(generic) = &object
             && let Some(existing) = intern.get(generic)
         {
@@ -442,5 +461,6 @@ fn merge_item(
         IndexOperand::Object(index) => remap_object(index),
         IndexOperand::Global(slot) => remap_global(slot),
     });
+    visit_function_heads_mut(&mut function, &mut remap_head);
     function
 }

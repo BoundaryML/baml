@@ -1,6 +1,5 @@
 //! Everything after a package's code pass: the backfills that needed the
-//! bodies pooled, the rules, the record, the tail, and the head walk that
-//! makes the import tables total.
+//! bodies pooled, the rules, the record, and the tail.
 
 use std::collections::{HashMap, HashSet};
 
@@ -24,11 +23,11 @@ use baml_linker_types::{
 };
 use bex_vm_types::{
     ClassMethodDef, DeclPath, FnPath, Function, GlobalIndex, Object, ObjectIndex, ObjectPool,
-    TypeHead, head_walk::visit_object_heads, types::LocalName,
+    types::LocalName,
 };
 
 use super::{
-    HeadIndex, TypePass,
+    TypePass,
     bodies::{BodyPass, RefTables},
 };
 use crate::{
@@ -43,11 +42,10 @@ use crate::{
 };
 
 /// Everything after the code pass: the backfills that needed the bodies
-/// pooled, the rules, the record, the tail, the head walk, and the tables.
+/// pooled, the rules, the record, the tail, and the tables.
 pub(super) fn finish<'db>(
     db: &'db dyn crate::Db,
-    heads: &HeadIndex,
-    class_fields: &ClassFieldSnapshot,
+    class_fields: &ClassFieldSnapshot<'db>,
     types: TypePass<'db>,
     bodies: BodyPass<'db>,
     opt: OptLevel,
@@ -80,26 +78,7 @@ pub(super) fn finish<'db>(
     let mut refs = refs.attach(db, root, Own::Unit(&tables));
     let impl_rules = bake_rules(db, root, &files, &offsets, &mut refs);
     let record = package_record(db, root, &exports);
-    let tail = emit_tail(db, class_fields, root, &files, &lets, opt)?;
-
-    // Import totality: every foreign head baked anywhere in the unit gets
-    // its entry, whether or not an operand names the declaration.
-    let code: Vec<Object> = code.into_iter().collect();
-    for object in classes
-        .iter()
-        .chain(&enums)
-        .chain(&interfaces)
-        .chain(&aliases)
-        .chain(&code)
-    {
-        import_heads(&mut refs, heads, object)?;
-    }
-    for rule in &impl_rules {
-        import_rule_heads(&mut refs, heads, rule)?;
-    }
-    let tail = tail
-        .map(|(tail, tail_refs)| seal_tail(db, heads, root, tail, tail_refs))
-        .transpose()?;
+    let tail = emit_tail(db, class_fields, root, &files, &lets, opt)?.map(seal_tail);
 
     Ok(EmittedPackage {
         unit: CompilationUnit {
@@ -108,7 +87,7 @@ pub(super) fn finish<'db>(
             enums,
             interfaces,
             type_alias_objects: aliases,
-            code,
+            code: code.into_iter().collect(),
             object_imports: refs.imports.objects.into_entries(),
             global_imports: refs.imports.globals.into_entries(),
             exports,
@@ -230,7 +209,7 @@ fn bake_rules<'db>(
                 continue;
             };
             let interface_head = refs.interface(target.interface);
-            let Some(rule) = bake_impl_rule(db, block, target, &lowering) else {
+            let Some(rule) = bake_impl_rule(db, block, target, &lowering, refs) else {
                 continue;
             };
             let methods = rule
@@ -263,77 +242,12 @@ fn bake_rules<'db>(
     rules
 }
 
-/// Give a tail its tables: the imports its head walk adds, then the
-/// resolver's dependency and import tables.
-fn seal_tail(
-    db: &dyn crate::Db,
-    heads: &HeadIndex,
-    root: SourceRoot,
-    mut tail: InitTail,
-    tail_refs: RefTables,
-) -> Result<InitTail, LoweringError> {
-    let mut refs = tail_refs.attach(db, root, Own::Tail);
-    for object in &tail.objects {
-        import_heads(&mut refs, heads, object)?;
-    }
-    tail.dependencies = refs.deps.into_entries();
-    tail.object_imports = refs.imports.objects.into_entries();
-    tail.global_imports = refs.imports.globals.into_entries();
-    Ok(tail)
-}
-
-/// Intern an import for every foreign head an object bakes.
-fn import_heads(
-    refs: &mut PackageRefs<'_, '_>,
-    heads: &HeadIndex,
-    object: &Object,
-) -> Result<(), LoweringError> {
-    let mut failure = None;
-    visit_object_heads(object, &mut |head: &TypeHead| {
-        if failure.is_none() {
-            failure = refs.import_head(heads, head).err();
-        }
-    });
-    failure.map_or(Ok(()), Err)
-}
-
-/// Intern an import for every foreign head a rule bakes: its pattern, its
-/// bounds, its interface arguments and bindings, and its bodies' frames.
-fn import_rule_heads(
-    refs: &mut PackageRefs<'_, '_>,
-    heads: &HeadIndex,
-    rule: &ProgramImplRuleFrag,
-) -> Result<(), LoweringError> {
-    let mut failure: Option<LoweringError> = None;
-    let mut visit = |head: &TypeHead| {
-        if failure.is_none() {
-            failure = refs.import_head(heads, head).err();
-        }
-    };
-    rule.for_ty_pattern.visit_heads(&mut visit);
-    for bounds in &rule.generic_param_bounds {
-        for bound in bounds {
-            visit(&bound.interface);
-            for arg in &bound.args {
-                arg.visit_heads(&mut visit);
-            }
-            for (_, assoc) in &bound.assoc {
-                assoc.visit_heads(&mut visit);
-            }
-        }
-    }
-    for arg in &rule.interface_args {
-        arg.visit_heads(&mut visit);
-    }
-    for (_, assoc) in &rule.interface_assoc {
-        assoc.visit_heads(&mut visit);
-    }
-    for (_, method) in &rule.methods {
-        for frame in &method.frame {
-            frame.visit_heads(&mut visit);
-        }
-    }
-    failure.map_or(Ok(()), Err)
+/// Give a tail its tables: the resolver's dependency and import tables.
+fn seal_tail((mut tail, tail_refs): (InitTail, RefTables)) -> InitTail {
+    tail.dependencies = tail_refs.deps.into_entries();
+    tail.object_imports = tail_refs.imports.objects.into_entries();
+    tail.global_imports = tail_refs.imports.globals.into_entries();
+    tail
 }
 
 /// The whole-package products beside the unit: what the package exports by
@@ -398,7 +312,7 @@ fn package_record(db: &dyn crate::Db, root: SourceRoot, exports: &ExportTable) -
 /// `None` when the package has neither `let`s nor tests.
 fn emit_tail<'db>(
     db: &'db dyn crate::Db,
-    class_fields: &ClassFieldSnapshot,
+    class_fields: &ClassFieldSnapshot<'db>,
     root: SourceRoot,
     files: &[SourceFile],
     lets: &[LetLoc<'db>],

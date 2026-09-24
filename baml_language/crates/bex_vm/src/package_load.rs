@@ -19,10 +19,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use baml_type::Name;
+use baml_type::{MediaKind, Name};
 use bex_heap::{BexHeap, Generation};
 use bex_vm_types::{
-    GlobalIndex, HeapPtr, Object, ObjectIndex,
+    GlobalIndex, HeapPtr, Object, ObjectIndex, TypeHead,
     types::{
         LocalName, MethodImpl, Package, PackageKind, ProgramImplRule, ProgramPackage,
         RuntimeImplRule,
@@ -501,6 +501,120 @@ pub fn lookup_type_by_fqn(packages: &PackageIndex, fqn: &str) -> Option<HeapPtr>
         .or_else(|| package.enums.get(&local))
         .or_else(|| package.interfaces.get(&local))
         .copied()
+}
+
+/// The head of the class, enum, interface, or type alias `fqn` names — its
+/// pointer and the tag it carries — through the package index. Usable before
+/// a `BexVm` exists.
+pub fn declaration_head_by_fqn(packages: &PackageIndex, fqn: &str) -> Option<TypeHead> {
+    let mut parts: Vec<Name> = fqn.split('.').map(Name::new).collect();
+    let name = parts.pop()?;
+    if parts.is_empty() {
+        return None;
+    }
+    let pkg = parts.remove(0);
+    let pkg_ptr = packages.package_ptr(&pkg)?;
+    // SAFETY: `packages` only ever holds compile-time `Object::Package` pointers.
+    #[expect(unsafe_code, reason = "deref a compile-time package pointer")]
+    let package = (unsafe { pkg_ptr.get() }).as_package()?;
+    let local = LocalName {
+        namespace: parts,
+        name,
+    };
+    let ptr = *package
+        .classes
+        .get(&local)
+        .or_else(|| package.enums.get(&local))
+        .or_else(|| package.interfaces.get(&local))
+        .or_else(|| package.type_aliases.get(&local))?;
+    // SAFETY: a package's declaration pointers are compile-time objects.
+    #[expect(unsafe_code, reason = "deref a compile-time declaration pointer")]
+    let tag = match unsafe { ptr.get() } {
+        Object::Class(class) => class.type_tag,
+        Object::Enum(enm) => enm.type_tag,
+        Object::Interface(interface) => interface.type_tag,
+        Object::TypeAlias(alias) => alias.type_tag,
+        _ => return None,
+    };
+    Some(TypeHead::new(ptr, tag))
+}
+
+/// One of the stdlib time classes a CSV cell decodes to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TimeClass {
+    Instant,
+    PlainDate,
+    PlainDateTime,
+}
+
+/// The stdlib declarations the runtime recognizes structurally — the CSV
+/// cell classes, the JSON media wrappers, and the `json` alias — resolved to
+/// heads once from the loaded packages and shared by every VM the engine
+/// spawns, like the error and panic class tables.
+///
+/// A program that does not load one of them (no stdlib) has no value of that
+/// type, so the entry is absent and nothing matches it.
+#[derive(Debug, Default)]
+pub struct StdlibHeads {
+    time: Vec<(TimeClass, TypeHead)>,
+    media: Vec<(MediaKind, TypeHead)>,
+    json: Option<TypeHead>,
+}
+
+impl StdlibHeads {
+    pub fn resolve(packages: &PackageIndex) -> Self {
+        let head = |fqn: &str| declaration_head_by_fqn(packages, fqn);
+        let time = [
+            (TimeClass::Instant, "baml.time.Instant"),
+            (TimeClass::PlainDate, "baml.time.PlainDate"),
+            (TimeClass::PlainDateTime, "baml.time.PlainDateTime"),
+        ]
+        .into_iter()
+        .filter_map(|(class, fqn)| Some((class, head(fqn)?)))
+        .collect();
+        // A runtime media value is an instance of one of these classes; there
+        // is no `Generic` media value, and no wrapper class for it.
+        let media = [
+            MediaKind::Image,
+            MediaKind::Audio,
+            MediaKind::Video,
+            MediaKind::Pdf,
+        ]
+        .into_iter()
+        .filter_map(|kind| Some((kind, head(kind.wrapper_class_name()?)?)))
+        .collect();
+        Self {
+            time,
+            media,
+            json: head("baml.json.json"),
+        }
+    }
+
+    /// Which stdlib time class `head` is, if any.
+    pub fn time_class(&self, head: TypeHead) -> Option<TimeClass> {
+        self.time
+            .iter()
+            .find(|(_, h)| *h == head)
+            .map(|(class, _)| *class)
+    }
+
+    /// Which media wrapper class `head` is, if any.
+    pub fn media_kind(&self, head: TypeHead) -> Option<MediaKind> {
+        self.media
+            .iter()
+            .find(|(_, h)| *h == head)
+            .map(|(kind, _)| *kind)
+    }
+
+    /// The recursive `baml.json.json` alias, if the program loads it.
+    pub fn json_alias(&self) -> Option<TypeHead> {
+        self.json
+    }
+
+    /// Whether `head` is the recursive `baml.json.json` alias.
+    pub fn is_json_alias(&self, head: TypeHead) -> bool {
+        self.json == Some(head)
+    }
 }
 
 /// Flatten every package's recursive type aliases into one `TypeName → RuntimeTy`

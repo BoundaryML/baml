@@ -19,25 +19,15 @@ use std::sync::Arc;
 use baml_type::{MediaKind, TypeName};
 use bex_vm_types::{RealizedTy, TyTemplate};
 
-/// FQN of the recursive `json` type alias declared in `baml.json`.
-/// Mirrors `baml_base::qualified_name::BAML_JSON_JSON`; inlined here to
-/// avoid dragging the whole `baml_base` crate into `bex_vm` deps.
-const BAML_JSON_JSON: &str = "baml.json.json";
-
 /// The runtime type of an untyped `json` value: the recursive `baml.json.json`
 /// alias (`null | bool | int | bigint | float | string | json[] | map<string, json>`).
 /// Recursive aliases stay opaque in `RealizedTy`, so this is the most precise
 /// element/value type available for containers parsed from untyped JSON.
-/// The `baml.json.json` alias type, headed at its declaration.
-///
-/// A stdlib FQN constant resolving to a head — one of the three sanctioned
-/// name-to-head boundaries. The alias is compiled, so the tag is
-/// content-addressed and the pointer comes off the declaration itself.
 pub(super) fn json_alias_ty(vm: &BexVm) -> RealizedTy {
-    let qtn = TypeName::from_dotted_path(BAML_JSON_JSON);
     let head = vm
-        .declaration_head(&qtn)
-        .unwrap_or_else(|| unreachable!("`{BAML_JSON_JSON}` is declared by the stdlib"));
+        .stdlib_heads()
+        .json_alias()
+        .unwrap_or_else(|| unreachable!("`baml.json.json` is declared by the stdlib"));
     RealizedTy::TypeAlias(head)
 }
 
@@ -188,11 +178,10 @@ fn collect_to_json_overrides(
 /// Whether `inst`'s class is one of the builtin media classes.
 fn is_media_instance(vm: &BexVm, inst: &Instance) -> bool {
     match vm.get_object(inst.class) {
-        // Media classes are stdlib declarations; an anonymous class is never one.
-        Object::Class(c) => c
-            .name
-            .declared()
-            .is_some_and(|qtn| media_kind_from_fqn(qtn.render_dotted(false).as_str()).is_some()),
+        Object::Class(c) => vm
+            .stdlib_heads()
+            .media_kind(bex_vm_types::TypeHead::new(inst.class, c.type_tag))
+            .is_some(),
         _ => false,
     }
 }
@@ -318,9 +307,9 @@ fn render_to_serde(
             Ok(serde_json::Value::Object(out))
         }
         Snap::Instance { class_ptr, fields } => {
-            let (class_name, field_names) = match vm.get_object(class_ptr) {
+            let (class_head, field_names) = match vm.get_object(class_ptr) {
                 Object::Class(c) => (
-                    c.name.clone(),
+                    bex_vm_types::TypeHead::new(class_ptr, c.type_tag),
                     c.fields.iter().map(|f| f.name.clone()).collect::<Vec<_>>(),
                 ),
                 _ => {
@@ -333,12 +322,7 @@ fn render_to_serde(
                 }
             };
             // Media instances render to their tagged form, not a field map.
-            // Media classes are stdlib declarations, so anonymous classes
-            // always take the field-map path.
-            if let Some(kind) = class_name
-                .declared()
-                .and_then(|qtn| media_kind_from_fqn(&qtn.render_dotted(false)))
-            {
+            if let Some(kind) = vm.stdlib_heads().media_kind(class_head) {
                 return serialize_media(vm, value, kind, path);
             }
             let mut out = serde_json::Map::with_capacity(fields.len());
@@ -825,7 +809,9 @@ fn ty_value_to_serde(
             Ok(serde_json::Value::Object(out))
         }
 
-        RealizedTy::TypeAlias(head) if is_json_alias(*head) => Ok(value_to_serde(vm, value)),
+        RealizedTy::TypeAlias(head) if vm.stdlib_heads().is_json_alias(*head) => {
+            Ok(value_to_serde(vm, value))
+        }
 
         RealizedTy::TypeAlias(_) => {
             // Unknown / cross-package recursive aliases: fall back to untyped.
@@ -987,7 +973,7 @@ fn serialize_class_instance(
         }
     };
 
-    if let Some(kind) = media_kind_from_head(head) {
+    if let Some(kind) = vm.stdlib_heads().media_kind(head) {
         return serialize_media(vm, value, kind, path);
     }
 
@@ -1027,38 +1013,6 @@ fn serialize_class_instance(
         out.insert(cf.name.clone(), field_json);
     }
     Ok(serde_json::Value::Object(out))
-}
-
-/// The [`MediaKind`] of a media class FQN, or `None` for a non-media class. A
-/// runtime media value is an `Object::Instance` of one of these std classes
-/// (carrying a `$rust_type` `_data` field); there is no `Generic` media *value*.
-pub(crate) fn media_kind_from_fqn(fqn: &str) -> Option<MediaKind> {
-    MediaKind::from_wrapper_class_name(fqn)
-}
-
-/// Which media wrapper class a head names, if any.
-///
-/// Compiled declarations carry content-addressed tags, so recognizing one of
-/// the stdlib media classes is an integer compare against the tag its FQN
-/// hashes to — no name rendered per value.
-pub(crate) fn media_kind_from_head(head: bex_vm_types::TypeHead) -> Option<MediaKind> {
-    [
-        MediaKind::Image,
-        MediaKind::Audio,
-        MediaKind::Video,
-        MediaKind::Pdf,
-        MediaKind::Generic,
-    ]
-    .into_iter()
-    .find(|kind| {
-        kind.wrapper_class_name()
-            .is_some_and(|fqn| head.tag() == baml_type::typetag::TypeTag::of_head(fqn))
-    })
-}
-
-/// Whether `head` names the recursive `baml.json.json` alias.
-fn is_json_alias(head: bex_vm_types::TypeHead) -> bool {
-    head.tag() == baml_type::typetag::TypeTag::of_head(BAML_JSON_JSON)
 }
 
 /// Emit a tagged JSON object for a media value.
@@ -1109,11 +1063,11 @@ pub(crate) fn read_media_value(
         Object::Instance(inst) => (inst.class, inst.fields.first()?.load()),
         _ => return None,
     };
-    let class_name = match vm.get_object(class) {
-        Object::Class(class) => class.name.declared()?.render_dotted(false),
+    let class_head = match vm.get_object(class) {
+        Object::Class(c) => bex_vm_types::TypeHead::new(class, c.type_tag),
         _ => return None,
     };
-    media_kind_from_fqn(class_name.as_str())?;
+    vm.stdlib_heads().media_kind(class_head)?;
 
     let data_ptr = data_value.as_object_ptr()?;
     match vm.get_object(data_ptr) {
@@ -1313,7 +1267,9 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "expected object", path)),
         },
 
-        RealizedTy::TypeAlias(head) if is_json_alias(*head) => Ok(serde_to_value(vm, json)),
+        RealizedTy::TypeAlias(head) if vm.stdlib_heads().is_json_alias(*head) => {
+            Ok(serde_to_value(vm, json))
+        }
 
         RealizedTy::TypeAlias(_) => {
             // Unknown / cross-package recursive aliases: fall back to untyped.
@@ -1321,7 +1277,7 @@ fn ty_serde_to_value(
         }
 
         RealizedTy::Class(head, type_args) => {
-            if let Some(kind) = media_kind_from_head(*head) {
+            if let Some(kind) = vm.stdlib_heads().media_kind(*head) {
                 return deserialize_media(vm, json, kind, *head, path);
             }
             deserialize_class_instance(vm, json, *head, type_args, path)
@@ -1666,7 +1622,7 @@ fn json_to_dispatch(vm: &mut BexVm, j: Value, ty: &RealizedTy) -> NativeCallResu
         RealizedTy::List(elem) => list_from_json_start(vm, j, elem),
         RealizedTy::Map { value: vty, .. } => map_from_json_start(vm, j, vty),
         RealizedTy::Class(head, type_args) | RealizedTy::Interface(head, type_args, _)
-            if media_kind_from_head(*head).is_none() =>
+            if vm.stdlib_heads().media_kind(*head).is_none() =>
         {
             match try_yield_interface_from_json(vm, j, ty) {
                 Some(yld) => yld,
@@ -1862,7 +1818,7 @@ fn try_yield_interface_from_json(
         RealizedTy::Class(head, _) | RealizedTy::Interface(head, _, _) => head,
         _ => return None,
     };
-    if media_kind_from_head(*head).is_some() {
+    if vm.stdlib_heads().media_kind(*head).is_some() {
         return None;
     }
     // Type-directed dispatch: there is no receiver value, so the resolver

@@ -3,9 +3,10 @@
 //!
 //! The SOURCE path puts the rich `app` fixture and the consumer in one database.
 //! The BLOB path compiles `app` independently into its check artifact (borsh of
-//! `PackageInterface`) and run artifact (`CompilationUnit`s), then mounts the
+//! `PackageInterface`) and run artifact (its `EmittedPackage`; the flat lane's
+//! `CompilationUnit`s for the unit-level invariants below), then mounts the
 //! former in a fresh source-less consumer database and links the latter through
-//! `generate_project_bytecode_with_mounted_units`.
+//! `compile_program_with`, served for the mount.
 //!
 //! The oracle pins four boundaries:
 //!
@@ -25,11 +26,14 @@
 
 use baml_base::Name;
 use baml_compiler2_emit::{
-    MountedPackageLinkError, OptLevel, emit_units, generate_project_bytecode_with_mounted_units,
-    generate_project_bytecode_with_opt,
+    MountedPackageLinkError, OptLevel, emit_package, emit_units,
+    generate_project_bytecode_with_mounted_units, generate_project_bytecode_with_opt,
 };
 use baml_compiler2_hir_ty::package_interface::{ExportedType, PackageInterface, export_interface};
-use baml_db::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
+use baml_db::{
+    EmittedPackage, PackageCache, ProjectDatabase, collect_diagnostics, compile_program,
+    compile_program_with, testing::assert_no_diagnostic_errors,
+};
 use baml_tests::engine::{TestDbExt, run_compiled};
 use bex_engine::BexExternalValue;
 use bex_vm_types::{Program, legacy_unit::CompilationUnit};
@@ -156,18 +160,46 @@ fn library_db() -> ProjectDatabase {
 struct LibraryArtifacts {
     blob: Vec<u8>,
     interface: PackageInterface<baml_type::TypeName>,
+    /// `app`'s run artifact: what a store serves for its mount.
+    emitted: EmittedPackage,
     units: Vec<CompilationUnit>,
+}
+
+/// The store the blob path compiles against: it serves `app`'s output —
+/// emitted once in the library database — for the consumer database's
+/// source-less mount of `app`, and nothing else.
+struct ServedLibrary<'a> {
+    app: &'a EmittedPackage,
+}
+
+impl PackageCache for ServedLibrary<'_> {
+    fn load(
+        &self,
+        db: &dyn baml_compiler2_hir::Db,
+        root: baml_db::SourceRoot,
+        _opt: OptLevel,
+    ) -> Option<EmittedPackage> {
+        (baml_compiler2_hir::package::spelling(db).of(root).as_str() == "app")
+            .then(|| self.app.clone())
+    }
+
+    fn store(
+        &self,
+        _db: &dyn baml_compiler2_hir::Db,
+        _root: baml_db::SourceRoot,
+        _opt: OptLevel,
+        _emitted: &EmittedPackage,
+    ) {
+    }
 }
 
 fn library_artifacts() -> LibraryArtifacts {
     let db = library_db();
     assert_no_diagnostic_errors(&db);
-    let interface = export_interface(
-        &db,
-        baml_compiler2_hir::package::spelling(&db)
-            .root(&Name::new("app"))
-            .unwrap(),
-    );
+    let app = baml_compiler2_hir::package::spelling(&db)
+        .root(&Name::new("app"))
+        .unwrap();
+    let interface = export_interface(&db, app);
     let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
         .expect("serialize app package interface");
     let round_trip = baml_artifact::decode::<PackageInterface<baml_type::TypeName>>(
@@ -179,10 +211,12 @@ fn library_artifacts() -> LibraryArtifacts {
         interface, round_trip,
         "interface blob must round-trip exactly"
     );
+    let emitted = emit_package(&db, app, OPT).expect("emit the app package");
     let units = emit_units(&db, package(&db), OPT).expect("emit independent app units");
     LibraryArtifacts {
         blob,
         interface,
+        emitted,
         units,
     }
 }
@@ -211,14 +245,16 @@ fn blob_db(user: &str, blob: Vec<u8>) -> ProjectDatabase {
 fn compile_source(user: &str) -> Program {
     let db = source_db(user);
     assert_no_diagnostic_errors(&db);
-    generate_project_bytecode_with_opt(&db, package(&db), OPT).expect("source-path compile")
+    compile_program(&db, package(&db), OPT).expect("source-path compile")
 }
 
 fn compile_blob(user: &str, artifacts: &LibraryArtifacts) -> Program {
     let db = blob_db(user, artifacts.blob.clone());
     assert_no_diagnostic_errors(&db);
-    generate_project_bytecode_with_mounted_units(&db, package(&db), OPT, &artifacts.units)
-        .expect("blob-path compile and link")
+    let served = ServedLibrary {
+        app: &artifacts.emitted,
+    };
+    compile_program_with(&db, package(&db), OPT, &served).expect("blob-path compile and link")
 }
 
 async fn run(program: Program, entry: &str) -> Result<BexExternalValue, String> {

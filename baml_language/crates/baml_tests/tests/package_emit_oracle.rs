@@ -1,24 +1,22 @@
 //! The per-package emitter's oracle: every package of a program emitted on
-//! its own and linked (`baml_db::compile_program`) is byte-identical to the
-//! flat whole-program emit of the same program.
-//!
-//! The flat emitter never fills the executable's three identity tables
-//! (`Class.methods`, `ProgramPackage::{globals, init}`), so the linked image
-//! is compared with those cleared, and each is asserted positively on its
-//! own. Beyond identity: emission is deterministic, the parallel code pass
-//! reproduces the serial one, and a package's unit is a pure function of its
-//! own sources and its dependencies' interfaces — a stdlib package's unit is
-//! the same bytes whatever user package sits above it.
+//! its own and linked (`baml_db::compile_program`) carries the executable's
+//! three identity tables (`Class.methods`, `ProgramPackage::{globals, init}`),
+//! each asserted positively against the rendered views the linker still
+//! derives beside them. Beyond identity: emission is deterministic, the
+//! parallel code pass reproduces the serial one, and a package's unit is a
+//! pure function of its own sources and its dependencies' interfaces — a
+//! stdlib package's unit is the same bytes whatever user package sits above
+//! it.
 
 mod common;
 
 use std::path::Path;
 
-use baml_compiler2_emit::{OptLevel, emit_package, generate_project_bytecode_with_opt};
+use baml_compiler2_emit::{OptLevel, emit_package};
 use baml_db::{ProjectDatabase, compile_program};
 use baml_tests::engine::TestDbExt;
 use bex_vm_types::{Object, Program};
-use common::{A_BAML, B_BAML, C_BAML, assert_programs_byte_identical, build_db};
+use common::{A_BAML, B_BAML, C_BAML, build_db};
 
 const ROOT: &str = "/package-emit-oracle";
 
@@ -68,24 +66,10 @@ fn package(db: &ProjectDatabase) -> baml_db::SourceRoot {
         .unwrap_or_else(|| unreachable!("the fixture builder adds one workspace root"))
 }
 
-/// The three tables the flat emitter never fills, cleared so the rest of the
-/// image can be compared byte for byte.
-fn without_identity_tables(mut program: Program) -> Program {
-    for object in program.objects.iter_mut() {
-        if let Object::Class(class) = object {
-            class.methods.clear();
-        }
-    }
-    for package in &mut program.packages {
-        package.globals.clear();
-        package.init = None;
-    }
-    program
-}
-
-/// What the flat emitter leaves empty, the per-package emitter fills: every
-/// class's inherent methods, every package's slot table, and a structural
-/// `$init` wherever the rendered init order names one.
+/// The linked image's identity tables, each checked against the rendered
+/// view derived beside it: every class's inherent methods, every package's
+/// slot table, and a structural `$init` wherever the rendered init order
+/// names one.
 fn assert_identity_tables(label: &str, program: &Program) {
     for package in &program.packages {
         let rendered_init = if package.name.as_str() == "user" {
@@ -93,10 +77,6 @@ fn assert_identity_tables(label: &str, program: &Program) {
         } else {
             format!("{}.$init", package.name)
         };
-        #[expect(
-            deprecated,
-            reason = "the rendered order is the oracle for the structural init"
-        )]
         let has_rendered = program.package_init_order.contains(&rendered_init);
         assert_eq!(
             package.init.is_some(),
@@ -111,10 +91,6 @@ fn assert_identity_tables(label: &str, program: &Program) {
                 package.name
             );
         }
-        #[expect(
-            deprecated,
-            reason = "the rendered maps are the oracle for the slot table"
-        )]
         let rendered_slots = program
             .function_global_indices
             .iter()
@@ -155,41 +131,37 @@ fn assert_identity_tables(label: &str, program: &Program) {
     );
 }
 
-fn assert_program_matches_flat(label: &str, build: impl Fn() -> ProjectDatabase) {
+fn assert_program_links(label: &str, build: impl Fn() -> ProjectDatabase) {
     for opt in LEVELS {
         let label = format!("{label}@{opt:?}");
-        let flat_db = build();
-        let flat = generate_project_bytecode_with_opt(&flat_db, package(&flat_db), opt)
-            .unwrap_or_else(|e| panic!("{label}: flat compile: {e:?}"));
         let db = build();
         let linked = compile_program(&db, package(&db), opt)
             .unwrap_or_else(|e| panic!("{label}: compile_program: {e}"));
         assert_identity_tables(&label, &linked);
-        assert_programs_byte_identical(&label, &flat, &without_identity_tables(linked));
     }
 }
 
 #[test]
-fn stdlib_only_matches_flat() {
-    assert_program_matches_flat("stdlib-only", || build_db(ROOT, &[]));
+fn stdlib_only_links() {
+    assert_program_links("stdlib-only", || build_db(ROOT, &[]));
 }
 
 #[test]
-fn single_file_matches_flat() {
-    assert_program_matches_flat("single-file", || {
+fn single_file_links() {
+    assert_program_links("single-file", || {
         build_db(ROOT, &[("single.baml", SINGLE_BAML)])
     });
 }
 
 #[test]
-fn abc_fixture_matches_flat() {
+fn abc_fixture_links() {
     let files = [("a.baml", A_BAML), ("b.baml", B_BAML), ("c.baml", C_BAML)];
-    assert_program_matches_flat("abc-fixture", || build_db(ROOT, &files));
+    assert_program_links("abc-fixture", || build_db(ROOT, &files));
 }
 
 #[test]
-fn client_init_matches_flat() {
-    assert_program_matches_flat("client-init", || {
+fn client_init_links() {
+    assert_program_links("client-init", || {
         build_db(ROOT, &[("client.baml", CLIENT_BAML)])
     });
 }
@@ -221,9 +193,9 @@ fn baml_src_db(sources: &[(std::path::PathBuf, String)]) -> ProjectDatabase {
 /// `$init_test` tails, impl rules against stdlib interfaces, every match
 /// shape.
 #[test]
-fn baml_src_matches_flat() {
+fn baml_src_links() {
     let sources = baml_src_sources();
-    assert_program_matches_flat("baml_src", || baml_src_db(&sources));
+    assert_program_links("baml_src", || baml_src_db(&sources));
 }
 
 /// One package's emitted bytes, under the program's spelling of it.

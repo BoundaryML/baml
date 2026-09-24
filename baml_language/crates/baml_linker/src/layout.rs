@@ -4,10 +4,11 @@
 use std::{collections::HashMap, ops::Range};
 
 use baml_base::Name;
-use baml_linker_types::{CompilationUnit, InitTail, LocalRef};
-use bex_vm_types::{DeclPath, Object, RealizedTy};
+use baml_linker_types::{CompilationUnit, InitTail, LocalRef, import_ordinal};
+use baml_type::typetag::TypeTag;
+use bex_vm_types::{DeclPath, Object, RealizedTy, TypeHead};
 
-use super::LinkError;
+use super::{LinkError, LinkPackageId, resolve::PathKey};
 
 /// The per-kind object buckets of a unit, in pool order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -71,38 +72,152 @@ impl Placed {
     }
 }
 
+/// What each head operand of one unit or tail names: the declaration's
+/// `(package, path)` identity, for the local type buckets and the import
+/// table. Heads are unit-convention operands until relocation, so anything
+/// keyed on a type before then keys on this instead.
+pub(super) struct HeadKeys {
+    /// By unit-convention object index over the type buckets; `None` where
+    /// no export names the object (a malformed unit).
+    objects: Vec<Option<PathKey>>,
+    /// By import ordinal.
+    imports: Vec<PathKey>,
+}
+
+impl HeadKeys {
+    pub(super) fn of_unit(
+        id: LinkPackageId,
+        unit: &CompilationUnit,
+        table: &[LinkPackageId],
+    ) -> Self {
+        let bases = [
+            0,
+            unit.classes.len(),
+            unit.classes.len() + unit.enums.len(),
+            unit.classes.len() + unit.enums.len() + unit.interfaces.len(),
+        ];
+        let total = bases[3] + unit.type_alias_objects.len();
+        let mut objects = vec![None; total];
+        for (path, local) in &unit.exports.objects {
+            let index = match local {
+                LocalRef::Class(k) => bases[0] + *k as usize,
+                LocalRef::Enum(k) => bases[1] + *k as usize,
+                LocalRef::Interface(k) => bases[2] + *k as usize,
+                LocalRef::TypeAlias(k) => bases[3] + *k as usize,
+                LocalRef::Code(_) => continue,
+            };
+            if let Some(slot) = objects.get_mut(index) {
+                *slot = Some((id, path.clone()));
+            }
+        }
+        Self {
+            objects,
+            imports: Self::import_keys(&unit.object_imports, table),
+        }
+    }
+
+    pub(super) fn of_tail(_id: LinkPackageId, tail: &InitTail, table: &[LinkPackageId]) -> Self {
+        Self {
+            objects: Vec::new(),
+            imports: Self::import_keys(&tail.object_imports, table),
+        }
+    }
+
+    fn import_keys(
+        entries: &[baml_linker_types::ImportEntry],
+        table: &[LinkPackageId],
+    ) -> Vec<PathKey> {
+        entries
+            .iter()
+            .filter_map(|entry| {
+                table
+                    .get(entry.key.dep.0 as usize)
+                    .map(|&id| (id, entry.key.path.clone()))
+            })
+            .collect()
+    }
+
+    /// The declaration `head` names.
+    fn key(&self, name: &Name, head: &TypeHead) -> Result<PathKey, LinkError> {
+        let raw = head.operand().raw();
+        let key = match import_ordinal(raw) {
+            Some(ordinal) => self.imports.get(ordinal).cloned(),
+            None => self.objects.get(raw).cloned().flatten(),
+        };
+        key.ok_or_else(|| {
+            LinkError::invalid(format!(
+                "package `{name}` carries a type head at operand {raw}, which names no declaration"
+            ))
+        })
+    }
+}
+
 /// Interns generic-function values across the whole image by `(base
-/// function's absolute slot, type args)`.
+/// function's absolute slot, type args)`, with each type argument's heads
+/// compared by declaration identity.
 #[derive(Default)]
-pub(super) struct Interner(HashMap<(usize, Vec<RealizedTy>), usize>);
+pub(super) struct Interner {
+    values: HashMap<(usize, Vec<RealizedTy>), usize>,
+    /// A link-local number per declaration, standing in for the tag the
+    /// link has not assigned yet.
+    declarations: HashMap<PathKey, usize>,
+}
 
 impl Interner {
     /// Lay out one run of code objects from `cursor`; returns each object's
     /// placement and the number actually placed (shadows are not).
     pub(super) fn place(
         &mut self,
+        name: &Name,
         objects: &[Object],
         base_slot: impl Fn(usize) -> Result<usize, LinkError>,
+        keys: &HeadKeys,
         cursor: usize,
     ) -> Result<(Vec<Placed>, usize), LinkError> {
         let mut placed = 0usize;
         let mut out = Vec::with_capacity(objects.len());
         for object in objects {
             if let Object::GenericFunction(generic) = object {
-                let key = (
-                    base_slot(generic.function.raw())?,
-                    generic.type_args.to_vec(),
-                );
-                if let Some(&canonical) = self.0.get(&key) {
+                let type_args = generic
+                    .type_args
+                    .iter()
+                    .map(|ty| self.canonical(name, keys, ty))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let key = (base_slot(generic.function.raw())?, type_args);
+                if let Some(&canonical) = self.values.get(&key) {
                     out.push(Placed::Shadow(canonical));
                     continue;
                 }
-                self.0.insert(key, cursor + placed);
+                self.values.insert(key, cursor + placed);
             }
             out.push(Placed::Own(cursor + placed));
             placed += 1;
         }
         Ok((out, placed))
+    }
+
+    /// `ty` with every head replaced by a link-local stand-in for its
+    /// declaration, so two units' spellings of one type compare equal.
+    fn canonical(
+        &mut self,
+        name: &Name,
+        keys: &HeadKeys,
+        ty: &RealizedTy,
+    ) -> Result<RealizedTy, LinkError> {
+        let mut failure = None;
+        let declarations = &mut self.declarations;
+        let canonical = ty.map_heads(&mut |head: &TypeHead| match keys.key(name, head) {
+            Ok(key) => {
+                let next = declarations.len();
+                let ordinal = *declarations.entry(key).or_insert(next);
+                TypeHead::unresolved(TypeTag::of_static_index(ordinal))
+            }
+            Err(error) => {
+                failure.get_or_insert(error);
+                *head
+            }
+        });
+        failure.map_or(Ok(canonical), Err)
     }
 }
 

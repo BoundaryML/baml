@@ -54,25 +54,11 @@ use super::{
 use crate::{
     BexVm,
     errors::{VmInternalError, VmRustFnError},
+    package_load::{StdlibHeads, TimeClass},
 };
 
 const CSV_ERROR_KIND_FQN: &str = "baml.csv.ErrorKind";
 const ITER_DONE_FQN: &str = "baml.iter.Done";
-use baml_type::typetag::TypeTag;
-
-const INSTANT_FQN: &str = "baml.time.Instant";
-const PLAINDATE_FQN: &str = "baml.time.PlainDate";
-const PLAINDATETIME_FQN: &str = "baml.time.PlainDateTime";
-
-/// Identify one of the stdlib time classes by head.
-///
-/// A compiled declaration's tag is content-addressed from its fully-qualified
-/// name, so this compares two integers and never renders a name at runtime —
-/// and it cannot be spoofed by a runtime declaration that happens to print the
-/// same, since those draw counter tags from a disjoint range.
-fn is_class(head: bex_vm_types::TypeHead, fq_name: &str) -> bool {
-    head.tag() == TypeTag::of_head(fq_name)
-}
 
 // =============================================================================
 // Error plumbing
@@ -1327,9 +1313,7 @@ enum Target {
     // runtime-declared enum decodes, where a package-index lookup could not
     // find one.
     Enum(bex_vm_types::TypeHead),
-    Instant,
-    PlainDate,
-    PlainDateTime,
+    Time(TimeClass),
 }
 
 struct CellTy {
@@ -1342,7 +1326,7 @@ fn head_key(head: &bex_vm_types::TypeHead) -> String {
     baml_type::HeadDisplay::head_display_name(head)
 }
 
-fn classify_cell_ty(ty: &bex_vm_types::RealizedTy) -> Result<CellTy, String> {
+fn classify_cell_ty(heads: &StdlibHeads, ty: &bex_vm_types::RealizedTy) -> Result<CellTy, String> {
     use bex_vm_types::RealizedTy;
     let nullable = ty.is_nullable_union();
     let base = if nullable {
@@ -1357,9 +1341,10 @@ fn classify_cell_ty(ty: &bex_vm_types::RealizedTy) -> Result<CellTy, String> {
         RealizedTy::Float => Target::Float,
         RealizedTy::Bool => Target::Bool,
         RealizedTy::Enum(head) => Target::Enum(*head),
-        RealizedTy::Class(head, _) if is_class(*head, INSTANT_FQN) => Target::Instant,
-        RealizedTy::Class(head, _) if is_class(*head, PLAINDATE_FQN) => Target::PlainDate,
-        RealizedTy::Class(head, _) if is_class(*head, PLAINDATETIME_FQN) => Target::PlainDateTime,
+        RealizedTy::Class(head, _) => match heads.time_class(*head) {
+            Some(time) => Target::Time(time),
+            None => return Err(format!("type `{base}` is not cell-decodable")),
+        },
         other => return Err(format!("type `{other}` is not cell-decodable")),
     };
     Ok(CellTy { target, nullable })
@@ -1430,7 +1415,7 @@ fn convert_cell(vm: &mut BexVm, text: &str, target: &Target) -> Result<Conv, VmR
                 None => Conv::Bad(format!("{text:?} is not a variant of `{}`", head_key(head))),
             }
         }
-        Target::Instant => {
+        Target::Time(TimeClass::Instant) => {
             let parsed = OffsetDateTime::parse(text, &Rfc3339)
                 .or_else(|_| OffsetDateTime::parse(text, &Iso8601::DEFAULT))
                 .or_else(|_| OffsetDateTime::parse(text, &Rfc2822));
@@ -1444,7 +1429,7 @@ fn convert_cell(vm: &mut BexVm, text: &str, target: &Target) -> Result<Conv, VmR
                 Err(_) => Conv::Bad(format!("cannot convert {text:?} to baml.time.Instant")),
             }
         }
-        Target::PlainDate => match Date::parse(text, super::time::DATE_FORMAT) {
+        Target::Time(TimeClass::PlainDate) => match Date::parse(text, super::time::DATE_FORMAT) {
             Ok(date) => Conv::Ok(
                 copy::time::PlainDate {
                     _days: super::time::days_since_epoch(date),
@@ -1453,7 +1438,7 @@ fn convert_cell(vm: &mut BexVm, text: &str, target: &Target) -> Result<Conv, VmR
             ),
             Err(_) => Conv::Bad(format!("cannot convert {text:?} to baml.time.PlainDate")),
         },
-        Target::PlainDateTime => {
+        Target::Time(TimeClass::PlainDateTime) => {
             match PrimitiveDateTime::parse(text, super::time::DATETIME_FORMAT) {
                 Ok(dt) => {
                     let civil = dt.assume_utc().unix_timestamp_nanos();
@@ -1542,7 +1527,7 @@ fn decode_record_to_instance(
     let mut field_values = Vec::with_capacity(class_fields.len());
     for (fi, cf) in class_fields.iter().enumerate() {
         let field_ty = vm.realize_field_ty(&cf.field_template, type_args);
-        let cell_ty = classify_cell_ty(&field_ty).map_err(|msg| {
+        let cell_ty = classify_cell_ty(vm.stdlib_heads(), &field_ty).map_err(|msg| {
             DecodeFail::Info(ErrInfo::new(
                 Kind::Options,
                 format!("field `{}` of `{key}`: {msg}", cf.name),
@@ -1668,7 +1653,7 @@ fn cell_to_optional(
     col: Option<usize>,
     ty: &bex_vm_types::RealizedTy,
 ) -> Result<Option<Value>, VmRustFnError> {
-    let cell_ty = match classify_cell_ty(ty) {
+    let cell_ty = match classify_cell_ty(vm.stdlib_heads(), ty) {
         Ok(c) => c,
         Err(msg) => {
             let info = ErrInfo::new(Kind::Options, msg);
@@ -1934,22 +1919,22 @@ fn value_cell_text(vm: &BexVm, v: Value, null_value: &str) -> Result<String, Cel
                 })?
             }
             Object::Instance(inst) => {
-                // Match the instance's class against the builtin date/time
-                // classes by tag — an integer compare per cell, with no name
-                // rendered and no package-index lookup.
-                let class_tag = match vm.get_object(inst.class) {
-                    Object::Class(class) => class.type_tag,
+                // Match the instance's class against the stdlib time classes
+                // by head — an integer compare per cell, with no name rendered
+                // and no package-index lookup.
+                let class_head = match vm.get_object(inst.class) {
+                    Object::Class(class) => bex_vm_types::TypeHead::new(inst.class, class.type_tag),
                     _ => {
                         return Err(CellTextErr::Unsupported(
                             "value is not representable as a CSV cell".to_string(),
                         ));
                     }
                 };
-                match class_tag {
-                    t if t == TypeTag::of_head(INSTANT_FQN) => instant_cell_text(inst)?,
-                    t if t == TypeTag::of_head(PLAINDATE_FQN) => plaindate_cell_text(inst)?,
-                    t if t == TypeTag::of_head(PLAINDATETIME_FQN) => plaindatetime_cell_text(inst)?,
-                    _ => {
+                match vm.stdlib_heads().time_class(class_head) {
+                    Some(TimeClass::Instant) => instant_cell_text(inst)?,
+                    Some(TimeClass::PlainDate) => plaindate_cell_text(inst)?,
+                    Some(TimeClass::PlainDateTime) => plaindatetime_cell_text(inst)?,
+                    None => {
                         return Err(CellTextErr::Unsupported(
                             "nested class values are not CSV cells; serialize explicitly (e.g. baml.json.to_string)".to_string(),
                         ));
@@ -2452,7 +2437,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
 
         for cf in &class_fields {
             let field_ty = vm.realize_field_ty(&cf.field_template, type_args);
-            let cell_ty = match classify_cell_ty(&field_ty) {
+            let cell_ty = match classify_cell_ty(vm.stdlib_heads(), &field_ty) {
                 Ok(c) => c,
                 Err(msg) => {
                     let info = ErrInfo::new(

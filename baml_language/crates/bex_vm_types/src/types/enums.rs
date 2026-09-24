@@ -23,9 +23,10 @@ pub struct Enum {
     /// itself. Use `name.display_name()` for the display string.
     pub name: crate::DeclarationName,
 
-    /// This enum's head identity, content-addressed from its fully-qualified
-    /// name at emit time — the identity a `TypeHead` referring to this enum
-    /// compares by.
+    /// This enum's head identity — assigned by the linker (`CLASS_BASE +` its
+    /// object index in the image) or minted fresh by the grafter; in a unit,
+    /// its own object operand — the identity a `TypeHead` referring to this
+    /// enum compares by.
     ///
     /// Distinct from the `TypeTag` instruction's dispatch value: every enum
     /// *value* reports the shared `type_tags::ENUM`, since dispatch does not

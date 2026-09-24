@@ -1,10 +1,14 @@
 //! Operand spaces: how a pooled object's unit- or tail-convention operands
-//! map into the image, and the one relocation walk over them.
+//! map into the image, and the one relocation walk over them — index
+//! operands, type heads (a head is the declaration's operand until the walk
+//! writes its assigned tag), and the type switches solved over those tags.
 
 use baml_base::Name;
 use baml_linker_types::{CompilationUnit, InitTail, import_ordinal};
+use baml_type::typetag::TypeTag;
 use bex_vm_types::{
-    GlobalIndex, Object, ObjectIndex,
+    GlobalIndex, Object, ObjectIndex, TypeHead,
+    head_walk::visit_object_heads_mut,
     relink::{IndexOperand, visit_object_operands},
 };
 
@@ -93,8 +97,16 @@ impl Resolved {
 
 /// How a pooled object's operands map into the image.
 pub(super) trait OperandSpace {
+    fn name(&self) -> &Name;
     fn object(&self, raw: usize) -> Result<usize, LinkError>;
     fn global(&self, raw: usize) -> Result<usize, LinkError>;
+
+    /// The tag the link assigns the declaration a unit-convention head
+    /// names: that declaration's image index.
+    fn head(&self, head: &TypeHead) -> Result<TypeHead, LinkError> {
+        let abs = self.object(head.operand().raw())?;
+        Ok(TypeHead::unresolved(TypeTag::of_static_index(abs)))
+    }
 }
 
 pub(super) struct UnitSpace<'l> {
@@ -106,6 +118,10 @@ pub(super) struct UnitSpace<'l> {
 }
 
 impl OperandSpace for UnitSpace<'_> {
+    fn name(&self) -> &Name {
+        self.name
+    }
+
     fn object(&self, raw: usize) -> Result<usize, LinkError> {
         object_operand(self.name, raw, &self.imports.objects, |local| {
             self.objects.local(self.unit, local)
@@ -128,6 +144,10 @@ pub(super) struct TailSpace<'l> {
 }
 
 impl OperandSpace for TailSpace<'_> {
+    fn name(&self) -> &Name {
+        self.name
+    }
+
     fn object(&self, raw: usize) -> Result<usize, LinkError> {
         object_operand(self.name, raw, &self.imports.objects, |local| {
             self.objects.get(local).map(|placed| placed.abs())
@@ -141,7 +161,9 @@ impl OperandSpace for TailSpace<'_> {
     }
 }
 
-/// Rewrite every index operand of a pooled `object` into image space.
+/// Rewrite every index operand of a pooled `object` into image space, every
+/// head into the tag its declaration is assigned, and solve every type
+/// switch the object carries over those tags.
 pub(super) fn relocate(object: &mut Object, space: &impl OperandSpace) -> Result<(), LinkError> {
     let mut failure = None;
     visit_object_operands(object, |operand| {
@@ -156,6 +178,47 @@ pub(super) fn relocate(object: &mut Object, space: &impl OperandSpace) -> Result
             (Ok(abs), IndexOperand::Object(index)) => *index = ObjectIndex::from_raw(abs),
             (Ok(abs), IndexOperand::Global(slot)) => *slot = GlobalIndex::from_raw(abs),
             (Err(error), _) => failure = Some(error),
+        }
+    });
+    visit_object_heads_mut(object, &mut |head| {
+        if failure.is_some() {
+            return;
+        }
+        match space.head(head) {
+            Ok(relocated) => *head = relocated,
+            Err(error) => failure = Some(error),
+        }
+    });
+    if let Some(error) = failure {
+        return Err(error);
+    }
+    if let Object::Function(function) = object {
+        for table in &mut function.bytecode.match_hash_tables {
+            // The keys are image indices now; the tag of each is its index.
+            table
+                .solve(|declaration| TypeTag::of_static_index(declaration.raw()))
+                .map_err(|unsolvable| LinkError::UnsolvableSwitch {
+                    package: space.name().clone(),
+                    keys: unsolvable.keys,
+                })?;
+        }
+    }
+    Ok(())
+}
+
+/// Relocate every head of a rule's templates through `space`.
+pub(super) fn relocate_template_heads(
+    template: &mut bex_vm_types::TyTemplate,
+    space: &impl OperandSpace,
+) -> Result<(), LinkError> {
+    let mut failure = None;
+    template.visit_heads_mut(&mut |head| {
+        if failure.is_some() {
+            return;
+        }
+        match space.head(head) {
+            Ok(relocated) => *head = relocated,
+            Err(error) => failure = Some(error),
         }
     });
     failure.map_or(Ok(()), Err)

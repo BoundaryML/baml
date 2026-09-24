@@ -31,7 +31,8 @@ use baml_type::{RuntimeTy, TyTemplate};
 
 use crate::{
     BasicBlock, BlockId, CatchRegion, FunctionOwner, Local, LocalDecl, MirFunction,
-    MirFunctionBody, MirFunctionKind, Operand, Place, Rvalue, Statement, StatementKind, Terminator,
+    MirFunctionBody, MirFunctionKind, Operand, Place, Rvalue, Statement, StatementKind, SwitchKey,
+    Terminator,
 };
 
 /// Builder for constructing MIR functions.
@@ -329,10 +330,10 @@ impl<'db> MirBuilder<'db> {
     pub(crate) fn switch(
         &mut self,
         discriminant: Operand<'db>,
-        arms: Vec<(i64, BlockId)>,
+        arms: Vec<(SwitchKey<'db>, BlockId)>,
         otherwise: BlockId,
         exhaustive: bool,
-        arm_names: Vec<(i64, String)>,
+        arm_names: Vec<(SwitchKey<'db>, String)>,
     ) {
         self.set_terminator(Terminator::Switch {
             discriminant,

@@ -26,8 +26,10 @@ pub struct TypeAliasDef {
     /// Type identity: carries short name, module path, and display name.
     pub name: baml_type::TypeName,
 
-    /// This alias's head identity, content-addressed from its fully-qualified
-    /// name at emit time, in the same space as every other declared head.
+    /// This alias's head identity — assigned by the linker (`CLASS_BASE +` its
+    /// object index in the image) or minted fresh by the grafter; in a unit,
+    /// its own object operand — in the same space as every other declared
+    /// head.
     pub type_tag: baml_type::typetag::TypeTag,
 
     /// The aliased type.

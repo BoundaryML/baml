@@ -1173,6 +1173,7 @@ pub struct BexEngine {
     /// otherwise re-resolve them from `packages` on construction).
     error_class_ptrs: Arc<[bex_vm_types::HeapPtr]>,
     panic_class_ptrs: Arc<[bex_vm_types::HeapPtr]>,
+    stdlib_heads: Arc<bex_vm::package_load::StdlibHeads>,
 
     /// Shared process/store profiler session. `Off` owns no profiler resource;
     /// engines never reread the environment or lazily activate it.
@@ -2185,6 +2186,7 @@ impl BexEngine {
         // spawned VM rather than re-resolved per `BexVm::new`.
         let error_class_ptrs = bex_vm::vm::resolve_error_class_ptrs(&packages);
         let panic_class_ptrs = bex_vm::vm::resolve_panic_class_ptrs(&packages);
+        let stdlib_heads = Arc::new(bex_vm::package_load::StdlibHeads::resolve(&packages));
 
         // Convert ObjectIndex -> HeapPtr for function lookup table.
         // Now that the heap exists, we can get stable pointers to compile-time objects.
@@ -2253,6 +2255,7 @@ impl BexEngine {
                     Arc::clone(&dynamic_dispatch),
                     Arc::clone(&error_class_ptrs),
                     Arc::clone(&panic_class_ptrs),
+                    Arc::clone(&stdlib_heads),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -2414,6 +2417,7 @@ impl BexEngine {
             _dynamic_dispatch_permit: dynamic_dispatch_permit,
             error_class_ptrs,
             panic_class_ptrs,
+            stdlib_heads,
             profiler_session,
             prof_activated: AtomicBool::new(false),
         })
@@ -4050,6 +4054,7 @@ impl BexEngine {
             Arc::clone(&self.dynamic_dispatch),
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
+            Arc::clone(&self.stdlib_heads),
         );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
@@ -5850,6 +5855,7 @@ impl BexEngine {
             Arc::clone(&self.dynamic_dispatch),
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
+            Arc::clone(&self.stdlib_heads),
         );
         child_vm.prof_thread_id = prof_thread_id;
         child_vm.prof_suppressed = prof_suppressed;
@@ -7989,7 +7995,7 @@ mod type_identity_tests {
 
     /// A host payload may name its classes anything — including a compiled
     /// declaration's exact FQN. The materialized doppelganger must mint a
-    /// fresh dynamic tag, never the compiled class's content-addressed one:
+    /// fresh dynamic tag, never the compiled class's own:
     /// sharing the tag would let its instances take the compiled class's
     /// tag-keyed dispatch arms (jump tables, virtual-field switches) while
     /// carrying a different mint and layout.

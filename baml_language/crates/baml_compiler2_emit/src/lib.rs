@@ -308,7 +308,8 @@ fn build_packages<'db>(
             else {
                 continue;
             };
-            let Some(rule) = items::bake_impl_rule(db, impl_loc, target, resolved) else {
+            let Some(rule) = items::bake_impl_rule(db, impl_loc, target, resolved, &mut FlatAnchor)
+            else {
                 continue;
             };
             let methods = rule
@@ -489,8 +490,8 @@ fn emitted_function_origin(
 /// compiled, so codegen resolves field names/types without reading the object
 /// pool (a hard requirement for parallel emit, whose workers compile against
 /// fragment pools that don't contain the pre-existing objects).
-pub(crate) type ClassFieldSnapshot =
-    HashMap<baml_type::typetag::TypeTag, Vec<(String, bex_vm_types::RuntimeTy)>>;
+pub(crate) type ClassFieldSnapshot<'db> =
+    HashMap<baml_compiler2_hir_ty::extern_loc::ClassRef<'db>, Vec<(String, baml_type::RuntimeTy)>>;
 
 /// Context for MIR codegen.
 pub(crate) struct MirCodegenContext<'db, 'ctx, 'obj> {
@@ -499,7 +500,7 @@ pub(crate) struct MirCodegenContext<'db, 'ctx, 'obj> {
     /// The resolution surface every declaration reference goes through
     /// ([`emit::CodegenRefs`]); built once per pass, it outlives the body.
     pub refs: &'obj mut (dyn emit::CodegenRefs<'db> + 'db),
-    pub class_fields: &'ctx ClassFieldSnapshot,
+    pub class_fields: &'ctx ClassFieldSnapshot<'db>,
     pub objects: &'obj mut ObjectPool,
     /// Program-absolute index of `objects[0]`: 0 when `objects` is the whole
     /// program pool (serial emit), the Stage-B watermark when it is a
@@ -1572,10 +1573,10 @@ fn decompose_units_after_prefix<'db>(
                 let Some(&iface_idx) = iface_idx_by_tn.get(&target.iface_tn) else {
                     continue;
                 };
-                rule_owners
-                    .entry(iface_idx)
-                    .or_default()
-                    .push((target.coherence_key(), fi));
+                rule_owners.entry(iface_idx).or_default().push((
+                    items::anchor_coherence(&mut FlatAnchor, &target.coherence_key()),
+                    fi,
+                ));
             }
         }
         // A Stage-6 clean file's functions are never pooled by this emit;
@@ -2284,6 +2285,8 @@ pub(crate) struct GlobalSlots<'db> {
 #[derive(Clone, Copy)]
 pub(crate) struct FlatRefs<'ctx> {
     pub(crate) db: &'ctx dyn baml_compiler2_mir::Db,
+    /// The package a wire spelling is resolved from: the compiling file's.
+    pub(crate) root: baml_base::SourceRoot,
     pub(crate) slots: &'ctx GlobalSlots<'ctx>,
     /// Class object index by every spelling Pass 2 registered (fully
     /// qualified, display, and short).
@@ -2301,6 +2304,25 @@ impl FlatRefs<'_> {
             .or_else(|| table.get(tn.display_name().as_str()))
             .or_else(|| table.get(tn.name().as_str()))
             .copied()
+    }
+}
+
+/// The flat emitter's [`emit::Anchor`]: a head is the content tag of its
+/// spelling, the identity that lane mints for every declaration.
+#[deprecated(
+    note = "the flat whole-program emitter lane: dies with `decompose` when every lane is `link(emit_units)`"
+)]
+struct FlatAnchor;
+
+impl emit::Anchor for FlatAnchor {
+    fn head(&mut self, tn: &baml_type::TypeName) -> bex_vm_types::TypeHead {
+        bex_vm_types::TypeHead::of_name(tn)
+    }
+}
+
+impl emit::Anchor for FlatRefs<'_> {
+    fn head(&mut self, tn: &baml_type::TypeName) -> bex_vm_types::TypeHead {
+        bex_vm_types::TypeHead::of_name(tn)
     }
 }
 
@@ -2371,6 +2393,29 @@ impl<'ctx> emit::CodegenRefs<'ctx> for FlatRefs<'ctx> {
                     definition_link_name(self.db, Definition::Let(binding))
                 )
             })
+    }
+
+    fn class_ref(
+        &self,
+        tn: &baml_type::TypeName,
+    ) -> Option<baml_compiler2_hir_ty::extern_loc::ClassRef<'ctx>> {
+        let head = spelling(self.db).resolve(self.db, self.root, tn)?;
+        baml_compiler2_hir_ty::layout::class_ref_of(self.db, &head)
+    }
+
+    fn switch_key<'a>(
+        &mut self,
+        class: baml_compiler2_hir_ty::extern_loc::ClassRef<'a>,
+    ) -> bex_vm_types::bytecode::SwitchKey
+    where
+        'ctx: 'a,
+    {
+        // The flat lane's class tags are content-addressed, so a class arm's
+        // value is known here: the same tag Pass 2 minted for the class.
+        let name = baml_compiler2_mir::class_link_name(self.db, class);
+        bex_vm_types::bytecode::SwitchKey::Kind(
+            baml_type::typetag::TypeTag::of_head(&name).as_i64(),
+        )
     }
 }
 
@@ -2563,6 +2608,7 @@ fn generate_impl<'db>(
     if base.is_none() {
         emit_file_group(
             db,
+            &world.roots,
             builtin_files,
             &mut tables,
             &mut program,
@@ -2574,6 +2620,7 @@ fn generate_impl<'db>(
     }
     emit_file_group(
         db,
+        &world.roots,
         user_files,
         &mut tables,
         &mut program,
@@ -2874,6 +2921,7 @@ impl EmitTables {
 #[allow(clippy::too_many_arguments)]
 fn emit_file_group<'db>(
     db: &'db dyn crate::Db,
+    world_roots: &[baml_base::SourceRoot],
     files: &[baml_base::SourceFile],
     tables: &mut EmitTables,
     program: &mut Program,
@@ -2989,9 +3037,9 @@ fn emit_file_group<'db>(
         for &class_loc in file_classes(db, *file) {
             let class = class_data(db, class_loc);
             // The fully-qualified name ("user.MyClass" / "baml.ns.MyClass")
-            // through the SAME renderer MIR uses in `class_type_tags_for_project`
-            // (`QualifiedTypeName::render_dotted(false)`). The class type-tag is
-            // derived from this string, so emit and MIR MUST produce
+            // through the SAME renderer the flat lane's switch keys use
+            // (`class_link_name`, i.e. `render_dotted(false)`). The flat class
+            // tag is derived from this string, so the two MUST produce
             // byte-identical output or `Switch`/`JumpTable` dispatch silently
             // mismatches; sharing the one renderer is what pins them together.
             let wire = cache.wire(&baml_compiler2_hir_ty::lower::qualify_def(
@@ -3002,7 +3050,7 @@ fn emit_file_group<'db>(
             let fq_name = wire.render_dotted(false);
             let type_tag = claim_type_tag(type_tags, &fq_name)?;
             let class_obj_idx = program.add_object(Object::Class(Box::new(
-                items::build_class_object(db, class_loc, cache, type_tag),
+                items::build_class_object(db, class_loc, cache, &mut FlatAnchor, type_tag),
             )));
             // Register with fully-qualified name for inter-package lookups.
             class_object_indices.insert(fq_name.clone(), class_obj_idx);
@@ -3091,8 +3139,14 @@ fn emit_file_group<'db>(
             // identity does not depend on which kind of declaration produced it.
             let iface_wire = resolved.wire(&iface_tn);
             let iface_tag = claim_type_tag(type_tags, &iface_wire.render_dotted(false))?;
-            let iface_def =
-                items::build_interface_def(db, iface_loc, &iface_tn, iface_tag, resolved);
+            let iface_def = items::build_interface_def(
+                db,
+                iface_loc,
+                &iface_tn,
+                iface_tag,
+                resolved,
+                &mut FlatAnchor,
+            );
             let iface_obj_idx = program.add_object(Object::Interface(Box::new(iface_def)));
             interface_object_indices.insert(iface_wire, iface_obj_idx);
             program_packages
@@ -3109,24 +3163,9 @@ fn emit_file_group<'db>(
         }
     }
 
-    // Read-only snapshot of pooled class field metadata for function-body
-    // codegen, built after Pass 3b so it covers every alias registered in
-    // `class_object_indices` (including classes minted by earlier file
-    // groups). See [`ClassFieldSnapshot`].
-    let class_fields: ClassFieldSnapshot = class_object_indices
-        .iter()
-        .filter_map(|(_, &idx)| match program.objects.get(idx) {
-            Some(Object::Class(class)) => Some((
-                class.type_tag,
-                class
-                    .fields
-                    .iter()
-                    .map(|f| (f.name.clone(), f.field_type.clone()))
-                    .collect(),
-            )),
-            _ => None,
-        })
-        .collect();
+    // Read-only snapshot of class field layouts for function-body codegen,
+    // by declaration, over every root of the world. See [`ClassFieldSnapshot`].
+    let class_fields: ClassFieldSnapshot<'db> = package::class_field_snapshot(db, world_roots);
 
     // --- Pass 3c: Recursive type alias definitions ---
     // Each recursive alias becomes an `Object::TypeAlias` so a package can
@@ -3156,7 +3195,7 @@ fn emit_file_group<'db>(
             let wire = cache.wire(&qtn);
             let type_tag = claim_type_tag(type_tags, &wire.render_dotted(false))?;
             let obj_idx = program.add_object(Object::TypeAlias(Box::new(
-                items::build_alias_object(db, alias_loc, cache, type_tag)?,
+                items::build_alias_object(db, alias_loc, cache, &mut FlatAnchor, type_tag)?,
             )));
             program_packages
                 .entry(wire.package().clone())
@@ -3443,16 +3482,20 @@ fn compute_throws_type(
 /// for both top-level declarations (metadata built by
 /// `compute_function_metadata`) and lambdas (metadata recorded
 /// by MIR's `lower_lambda` on `MirFunction::signature`).
-fn apply_signature_metadata(f: &mut Function, sig: &baml_compiler2_mir::RuntimeSignature) {
+fn apply_signature_metadata(
+    f: &mut Function,
+    sig: &baml_compiler2_mir::RuntimeSignature,
+    anchor: &mut dyn emit::Anchor,
+) {
     f.param_names.clone_from(&sig.param_names);
     f.param_types = sig
         .param_types
         .iter()
-        .map(bex_vm_types::anchor_template)
+        .map(|ty| anchor.anchor_template(ty))
         .collect();
     f.param_has_default.clone_from(&sig.param_has_default);
-    f.return_type = bex_vm_types::anchor_template(&sig.return_type);
-    f.throws_type = bex_vm_types::anchor_template(&sig.throws_type);
+    f.return_type = anchor.anchor_template(&sig.return_type);
+    f.throws_type = anchor.anchor_template(&sig.throws_type);
     f.docstring.clone_from(&sig.docstring);
     f.declared_name.clone_from(&sig.name);
     f.display_type_params.clone_from(&sig.display_type_params);
@@ -3463,16 +3506,16 @@ fn apply_signature_metadata(f: &mut Function, sig: &baml_compiler2_mir::RuntimeS
             bounds
                 .iter()
                 .map(|bound| bex_vm_types::types::InterfaceBound {
-                    interface: bex_vm_types::TypeHead::of_name(&bound.interface),
+                    interface: anchor.head(&bound.interface),
                     args: bound
                         .args
                         .iter()
-                        .map(bex_vm_types::anchor_template)
+                        .map(|ty| anchor.anchor_template(ty))
                         .collect(),
                     assoc: bound
                         .assoc
                         .iter()
-                        .map(|(name, ty)| (name.clone(), bex_vm_types::anchor_template(ty)))
+                        .map(|(name, ty)| (name.clone(), anchor.anchor_template(ty)))
                         .collect(),
                 })
                 .collect()
@@ -4204,7 +4247,7 @@ fn emit_functions_serial<'db>(
     slots: &GlobalSlots<'db>,
     class_object_indices: &HashMap<String, usize>,
     enum_object_indices: &HashMap<String, usize>,
-    class_fields: &ClassFieldSnapshot,
+    class_fields: &ClassFieldSnapshot<'db>,
     program: &mut Program,
     placements: &mut FunctionPlacements<'db>,
     opt: OptLevel,
@@ -4240,6 +4283,7 @@ fn emit_functions_serial<'db>(
                     let empty_spawn_capture_indices = HashSet::new();
                     let mut refs = FlatRefs {
                         db,
+                        root: pkg_info_pass4.root,
                         slots,
                         class_object_indices,
                         enum_object_indices,
@@ -4301,6 +4345,7 @@ fn emit_functions_serial<'db>(
                 cache_pass4,
                 is_builtin_file,
                 &fq_name,
+                &mut FlatAnchor,
                 &mut compiled_fn,
             );
             let pass1_slot = slots.functions[&baml_compiler2_hir::loc::DeclRef::Source(func_loc)];
@@ -4498,7 +4543,7 @@ fn emit_functions_parallel<'db>(
     slots: &GlobalSlots<'db>,
     class_object_indices: &HashMap<String, usize>,
     enum_object_indices: &HashMap<String, usize>,
-    class_fields: &ClassFieldSnapshot,
+    class_fields: &ClassFieldSnapshot<'db>,
     program: &mut Program,
     placements: &mut FunctionPlacements<'db>,
     opt: OptLevel,
@@ -4582,6 +4627,7 @@ fn emit_functions_parallel<'db>(
                 let empty_spawn_capture_indices = HashSet::new();
                 let mut refs = FlatRefs {
                     db,
+                    root: file_package(db, item.file).root,
                     slots,
                     class_object_indices,
                     enum_object_indices,
@@ -4673,6 +4719,7 @@ fn emit_functions_parallel<'db>(
             cache,
             item.is_builtin_file,
             &item.fq_name,
+            &mut FlatAnchor,
             &mut compiled_fn,
         );
         let pass1_slot = slots.functions[&baml_compiler2_hir::loc::DeclRef::Source(func_loc)];
@@ -4854,6 +4901,7 @@ fn attach_function_metadata<'db>(
     cache: &RuntimeLowering<'_>,
     is_builtin_file: bool,
     fq_name: &str,
+    anchor: &mut dyn emit::Anchor,
     compiled_fn: &mut Function,
 ) {
     let func = function_data(db, func_loc);
@@ -4861,7 +4909,7 @@ fn attach_function_metadata<'db>(
     let parameter_defaults =
         baml_compiler2_hir::signature::function_parameter_defaults(db, func_loc);
     let signature_metadata = compute_function_metadata(db, func_loc, &parameter_defaults, cache);
-    apply_signature_metadata(compiled_fn, &signature_metadata);
+    apply_signature_metadata(compiled_fn, &signature_metadata, anchor);
     compiled_fn.origin = emitted_function_origin(fq_name, is_builtin_file, func.metadata.origin);
     compiled_fn.is_interface_body = baml_compiler2_mir::function_is_interface_body(db, func_loc);
 
@@ -4945,7 +4993,7 @@ fn compile_lambdas<'db>(
     line_starts: &[u32],
     source_file: &str,
     refs: &mut (dyn emit::CodegenRefs<'db> + 'db),
-    class_fields: &ClassFieldSnapshot,
+    class_fields: &ClassFieldSnapshot<'db>,
     objects: &mut ObjectPool,
     objects_base: usize,
     opt: OptLevel,
@@ -5007,7 +5055,7 @@ fn compile_lambdas<'db>(
                 // otherwise carry no signature, which BEP-062's
                 // `reflect.signature` / `reflect.call_any` consume.
                 if let Some(sig) = &lambda.signature {
-                    apply_signature_metadata(&mut f, sig);
+                    apply_signature_metadata(&mut f, sig, &mut *refs);
                 }
                 let idx = objects_base + objects.len();
                 objects.push(Object::Function(Box::new(f)));
@@ -5037,7 +5085,7 @@ fn compile_init_function<'db>(
     slots: &GlobalSlots<'db>,
     class_object_indices: &HashMap<String, usize>,
     enum_object_indices: &HashMap<String, usize>,
-    class_fields: &ClassFieldSnapshot,
+    class_fields: &ClassFieldSnapshot<'db>,
     program: &mut Program,
     opt: OptLevel,
 ) -> Result<Function, LoweringError> {
@@ -5050,6 +5098,7 @@ fn compile_init_function<'db>(
         };
         let mut refs = FlatRefs {
             db,
+            root: file_package(db, let_loc.file(db)).root,
             slots,
             class_object_indices,
             enum_object_indices,
@@ -5136,6 +5185,12 @@ mod tests {
     }
 
     impl TestDb {
+        /// The workspace root every test file lands on.
+        pub(crate) fn workspace(&self) -> SourceRoot {
+            self.workspace
+                .expect("workspace root present from construction")
+        }
+
         /// Add a workspace file (registered on the workspace root).
         pub(crate) fn add_file(&mut self, path: impl Into<PathBuf>, content: &str) -> SourceFile {
             let file_id = FileId::new(self.next_file_id.fetch_add(1, Ordering::SeqCst));
@@ -5331,6 +5386,7 @@ mod tests {
             ),
             baml_type::typetag::TypeTag::of_head(name),
             &cache,
+            &mut FlatAnchor,
         )
     }
 

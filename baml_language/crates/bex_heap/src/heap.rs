@@ -466,10 +466,11 @@ impl BexHeap {
     /// Bind every [`bex_vm_types::TypeHead`] in the compile-time image to the
     /// declaration it names.
     ///
-    /// This is the loader's one-time serialization boundary: emit mints heads
-    /// tag-only (`TypeHead::of_name`), and this pass fills each head's pointer
-    /// off the declaration carrying that tag. The tag→pointer index is built
-    /// here and dropped here — pointer-first lookup means no tag index survives
+    /// This is the loader's one-time serialization boundary: the linker
+    /// assigned every declaration of the image the tag `CLASS_BASE + its
+    /// object index`, and every head carries that tag, so binding is
+    /// arithmetic — the tag names the pool slot — checked against the
+    /// declaration's own tag field. No index is built and nothing survives
     /// into the VM.
     ///
     /// Must run after every placeholder slot is filled (impl rules carry heads
@@ -479,29 +480,24 @@ impl BexHeap {
     /// dispatch that cannot resolve, so a program image that cannot bind
     /// completely must not run at all.
     pub fn bind_type_heads(&mut self) {
-        let mut by_tag: HashMap<baml_type::typetag::TypeTag, HeapPtr> =
-            HashMap::with_capacity(self.compile_time.len() / 4);
-        for index in 0..self.compile_time.len() {
-            let Some(tag) = Self::declaration_tag(&self.compile_time[index]) else {
-                continue;
-            };
-            let previous = by_tag.insert(tag, self.compile_time_ptr(index));
-            // A release build must fail closed here: with two claimants the
-            // insert silently keeps the last one, and every head carrying this
-            // tag would bind to it — cross-wired dispatch, not an error state
-            // anything downstream can detect.
-            assert!(
-                previous.is_none(),
-                "two compile-time declarations carry the tag {tag:?}: the pool must \
-                 hold each declaration exactly once for heads to have one referent",
-            );
-        }
+        let tags: Vec<Option<baml_type::typetag::TypeTag>> = self
+            .compile_time
+            .iter()
+            .map(Self::declaration_tag)
+            .collect();
+        let ptrs: Vec<HeapPtr> = (0..self.compile_time.len())
+            .map(|index| self.compile_time_ptr(index))
+            .collect();
         for object in &mut self.compile_time {
             bex_vm_types::head_walk::visit_object_heads_mut(object, &mut |head| {
-                if !head.is_resolved()
-                    && let Some(&declaration) = by_tag.get(&head.tag())
+                if head.is_resolved() {
+                    return;
+                }
+                let tag = head.tag();
+                if let Some(index) = tag.static_index()
+                    && tags.get(index).copied().flatten() == Some(tag)
                 {
-                    head.resolve(declaration);
+                    head.resolve(ptrs[index]);
                 }
             });
         }
@@ -550,14 +546,40 @@ impl BexHeap {
     /// caller running its own bind over freshly grafted objects (the runtime
     /// twin of [`Self::bind_type_heads`]). Built per call and dropped by the
     /// caller: pointer-first lookup means no tag index survives into the VM.
+    ///
+    /// Each declaration is indexed under its live tag AND under the content
+    /// tag of its declared name — the flat emitter's consumers still spell a
+    /// host declaration by that hash, while the host image's tags are the
+    /// linker's — and every entry is the declaration's own head, both halves
+    /// off the object, so a head that lands here adopts its identity rather
+    /// than keeping the spelling it arrived with.
     #[deprecated(
-        note = "the graft's tag-index fallback for binding heads: the graft binds heads from the import table's baked tags, then this is deleted"
+        note = "the graft's tag-index fallback for binding heads: the graft binds heads from the import table, then this is deleted"
     )]
-    pub fn compile_time_declaration_index(&self) -> HashMap<baml_type::typetag::TypeTag, HeapPtr> {
+    pub fn compile_time_declaration_index(
+        &self,
+    ) -> HashMap<baml_type::typetag::TypeTag, bex_vm_types::TypeHead> {
         let mut by_tag = HashMap::with_capacity(self.compile_time.len() / 4);
         for index in 0..self.compile_time.len() {
-            if let Some(tag) = Self::declaration_tag(&self.compile_time[index]) {
-                by_tag.insert(tag, self.compile_time_ptr(index));
+            let object = &self.compile_time[index];
+            let Some(tag) = Self::declaration_tag(object) else {
+                continue;
+            };
+            let bound = bex_vm_types::TypeHead::new(self.compile_time_ptr(index), tag);
+            by_tag.insert(tag, bound);
+            let declared = match object {
+                Object::Class(class) => class.name.declared().cloned(),
+                Object::Enum(enm) => enm.name.declared().cloned(),
+                Object::Interface(interface) => Some(interface.name.clone()),
+                Object::TypeAlias(alias) => Some(alias.name.clone()),
+                _ => None,
+            };
+            if let Some(name) = declared {
+                by_tag
+                    .entry(baml_type::typetag::TypeTag::of_head(
+                        &name.render_dotted(false),
+                    ))
+                    .or_insert(bound);
             }
         }
         by_tag

@@ -1,5 +1,5 @@
-//! Assembly: every object placed in layout order, the slots filled, the
-//! rendered views and package tables written, and the image checked.
+//! Assembly: every object placed in layout order with its tag assigned, the
+//! slots filled, the rendered views and package tables written.
 
 use std::collections::{HashMap, HashSet};
 
@@ -11,11 +11,11 @@ use bex_vm_types::{
 };
 
 use super::{
-    LinkError, LinkPackageId, LinkSet, PerPackage, TagCollision,
+    LinkError, LinkPackageId, LinkSet, PerPackage,
     layout::{Bucket, TailPart},
     order::{LayoutOrder, Objects, Slots, tail_of},
     resolve::PathKey,
-    space::{Imports, OperandSpace, TailSpace, UnitSpace, relocate},
+    space::{Imports, OperandSpace, TailSpace, UnitSpace, relocate, relocate_template_heads},
 };
 
 /// Everything resolved; builds the image.
@@ -28,15 +28,6 @@ pub(super) struct Assembler<'l, 'a> {
     pub(super) exports: HashMap<PathKey, usize>,
     pub(super) units: PerPackage<Imports>,
     pub(super) tails: PerPackage<Imports>,
-}
-
-/// The order the flat emitter gives packages (sorted by name). An order, not
-/// a key: the executable's ordinal is a position.
-#[deprecated(
-    note = "byte identity with the flat emitter; package-major set order replaces it when that emitter is deleted"
-)]
-fn flat_emitter_package_order(packages: &mut [ProgramPackage]) {
-    packages.sort_by(|a, b| a.name.cmp(&b.name));
 }
 
 /// The rendered name views, with collision detection.
@@ -102,6 +93,7 @@ impl Assembler<'_, '_> {
         program.globals = vec![ConstValue::Null; self.slots.total];
         self.place(&mut program)?;
 
+        // A package's executable identity is its position: set order.
         let mut packages: Vec<ProgramPackage> = self
             .set
             .packages
@@ -122,9 +114,7 @@ impl Assembler<'_, '_> {
         for package in &mut packages {
             package.canonicalize_impl_rules();
         }
-        flat_emitter_package_order(&mut packages);
         program.packages = packages;
-        self.check_tags(&program)?;
         Ok(program)
     }
 
@@ -149,24 +139,24 @@ impl Assembler<'_, '_> {
         }
     }
 
-    /// Push every object in layout order, relocating its operands.
+    /// Push every object in layout order, relocating its operands and heads
+    /// and assigning each declaration the tag its image index is.
     fn place(&self, program: &mut Program) -> Result<(), LinkError> {
-        for group in self.order.groups() {
+        for &id in self.order.members() {
+            let space = self.unit_space(id);
+            let placed = &space.objects.code;
             for bucket in Bucket::ALL {
-                for &id in &group.members {
-                    let space = self.unit_space(id);
-                    let placed = &space.objects.code;
-                    for (k, object) in bucket.objects(space.unit).iter().enumerate() {
-                        if bucket == Bucket::Code && placed[k].is_shadow() {
-                            continue;
-                        }
-                        let mut object = object.clone();
-                        relocate(&mut object, &space)?;
-                        program.objects.push(object);
+                for (k, object) in bucket.objects(space.unit).iter().enumerate() {
+                    if bucket == Bucket::Code && placed[k].is_shadow() {
+                        continue;
                     }
+                    let mut object = object.clone();
+                    relocate(&mut object, &space)?;
+                    assign_tag(&mut object, program.objects.len());
+                    program.objects.push(object);
                 }
             }
-            for (part, id) in group.tails() {
+            for part in LayoutOrder::parts(self.set, id) {
                 let space = self.tail_space(id);
                 for k in part.objects(space.tail) {
                     if space.objects[k].is_shadow() {
@@ -273,7 +263,8 @@ impl Assembler<'_, '_> {
     }
 
     /// Resolve a unit's impl rules: the interface head through its operand
-    /// space, each provided body through its code placement.
+    /// space, each provided body through its code placement, and every head
+    /// in the rule's templates into its assigned tag.
     fn fill_impl_rules(
         &self,
         id: LinkPackageId,
@@ -318,13 +309,37 @@ impl Assembler<'_, '_> {
                          not an interface body"
                     )));
                 }
+                let mut frame = body.frame.clone();
+                for template in &mut frame {
+                    relocate_template_heads(template, &space)?;
+                }
                 methods.insert(
                     method.clone(),
                     ProgramMethodImpl {
                         fqn: ObjectIndex::from_raw(abs),
-                        frame: body.frame.clone(),
+                        frame,
                     },
                 );
+            }
+            let mut for_ty_pattern = rule.for_ty_pattern.clone();
+            relocate_template_heads(&mut for_ty_pattern, &space)?;
+            let mut generic_param_bounds = rule.generic_param_bounds.clone();
+            for bound in generic_param_bounds.iter_mut().flatten() {
+                bound.interface = space.head(&bound.interface)?;
+                for arg in &mut bound.args {
+                    relocate_template_heads(arg, &space)?;
+                }
+                for (_, assoc) in &mut bound.assoc {
+                    relocate_template_heads(assoc, &space)?;
+                }
+            }
+            let mut interface_args = rule.interface_args.clone();
+            for arg in &mut interface_args {
+                relocate_template_heads(arg, &space)?;
+            }
+            let mut interface_assoc = rule.interface_assoc.clone();
+            for (_, assoc) in &mut interface_assoc {
+                relocate_template_heads(assoc, &space)?;
             }
             package
                 .impl_rules
@@ -332,10 +347,10 @@ impl Assembler<'_, '_> {
                 .or_default()
                 .push(ProgramImplRule {
                     interface_head,
-                    for_ty_pattern: rule.for_ty_pattern.clone(),
-                    generic_param_bounds: rule.generic_param_bounds.clone(),
-                    interface_args: rule.interface_args.clone(),
-                    interface_assoc: rule.interface_assoc.clone(),
+                    for_ty_pattern,
+                    generic_param_bounds,
+                    interface_args,
+                    interface_assoc,
                     methods,
                     field_links: rule.field_links.clone(),
                 });
@@ -344,15 +359,17 @@ impl Assembler<'_, '_> {
     }
 
     /// Fill every tail's slots, its `$init` / `$init_test` views, and the
-    /// package's structural init references.
+    /// package's structural init references. The rendered init order lists
+    /// the packages in initialization order, whatever their placement.
     fn fill_tails(
         &self,
         program: &mut Program,
         packages: &mut [ProgramPackage],
         views: &mut Views,
     ) -> Result<(), LinkError> {
-        for group in self.order.groups() {
-            for (part, id) in group.tails() {
+        let mut init_names: HashMap<LinkPackageId, String> = HashMap::new();
+        for &id in self.order.members() {
+            for part in LayoutOrder::parts(self.set, id) {
                 let space = self.tail_space(id);
                 let slot_base = space.slots.base(part);
                 let slots = part.slots(space.tail);
@@ -382,48 +399,38 @@ impl Assembler<'_, '_> {
                 match part {
                     TailPart::Init => {
                         package.init = Some(ObjectIndex::from_raw(abs));
-                        program.package_init_order.push(rendered);
+                        init_names.insert(id, rendered);
                     }
                     TailPart::Test => package.test_init = Some(ObjectIndex::from_raw(abs)),
                 }
             }
         }
+        for id in self.order.init_order() {
+            program.package_init_order.push(
+                init_names
+                    .remove(id)
+                    .unwrap_or_else(|| unreachable!("every ordered init part was placed")),
+            );
+        }
+        debug_assert!(
+            self.order
+                .test_order()
+                .iter()
+                .all(|id| packages[id.0 as usize].test_init.is_some()),
+            "every ordered test part was placed"
+        );
         Ok(())
     }
+}
 
-    /// The loader binds every head through a tag index over the image; two
-    /// declarations under one tag would make that bind ambiguous.
-    fn check_tags(&self, program: &Program) -> Result<(), LinkError> {
-        let mut owners: HashMap<TypeTag, (Name, DeclPath)> = HashMap::new();
-        for id in self.set.ids() {
-            let package = self.set.package(id);
-            for (path, _) in &package.unit.exports.objects {
-                if !path.is_type() {
-                    continue;
-                }
-                let abs = self.exports[&(id, path.clone())];
-                let tag = match &program.objects[ObjectIndex::from_raw(abs)] {
-                    Object::Class(class) => class.type_tag,
-                    Object::Enum(enm) => enm.type_tag,
-                    Object::Interface(interface) => interface.type_tag,
-                    Object::TypeAlias(alias) => alias.type_tag,
-                    _ => {
-                        return Err(LinkError::invalid(format!(
-                            "package `{}` exports {path} as an object that is not a declaration",
-                            package.name
-                        )));
-                    }
-                };
-                let owner = (package.name.clone(), path.clone());
-                if let Some(first) = owners.insert(tag, owner.clone()) {
-                    return Err(LinkError::TagCollision(Box::new(TagCollision {
-                        tag,
-                        first,
-                        second: owner,
-                    })));
-                }
-            }
-        }
-        Ok(())
+/// A declaration's tag is its image index — the identity the linker owns.
+fn assign_tag(object: &mut Object, abs: usize) {
+    let tag = TypeTag::of_static_index(abs);
+    match object {
+        Object::Class(class) => class.type_tag = tag,
+        Object::Enum(enm) => enm.type_tag = tag,
+        Object::Interface(interface) => interface.type_tag = tag,
+        Object::TypeAlias(alias) => alias.type_tag = tag,
+        _ => {}
     }
 }

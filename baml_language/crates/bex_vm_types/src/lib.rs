@@ -92,34 +92,10 @@ pub type RealizedFunctionParamTy = baml_type::RealizedFunctionParamTy<TypeHead>;
 
 // ── Crossing between the two heads ───────────────────────────────────────────
 //
-// Emit is the one legitimate producer of runtime types without a heap: it mints
-// each head's *identity* from the declaration's name and leaves the pointer
-// unfilled, for the loader to bind. The reverse direction is
-// [`TypeHead::to_name`], which needs a live heap and so can fail.
-
-/// Mint unresolved runtime heads for a compiled signature type.
-#[must_use]
-pub fn anchor_template(ty: &baml_type::TyTemplate) -> TyTemplate {
-    ty.map_heads(&mut TypeHead::of_name)
-}
-
-/// Mint unresolved runtime heads for a compiled declaration-facing type.
-#[must_use]
-pub fn anchor_runtime_ty(ty: &baml_type::RuntimeTy) -> RuntimeTy {
-    ty.map_heads(&mut TypeHead::of_name)
-}
-
-/// Mint unresolved runtime heads for a compiled value-facing type.
-#[must_use]
-pub fn anchor_realized(ty: &baml_type::RealizedTy) -> RealizedTy {
-    ty.map_heads(&mut TypeHead::of_name)
-}
-
-/// Mint unresolved runtime heads for a compiled interface bound.
-#[must_use]
-pub fn anchor_interface(interface: &baml_type::RuntimeInterface) -> RuntimeInterface {
-    interface.map_heads(&mut TypeHead::of_name)
-}
+// Emit is the one legitimate producer of runtime types without a heap: it
+// writes each head as the declaration's object operand and leaves the pointer
+// unfilled, for the linker to tag and the loader to bind. The reverse
+// direction is [`TypeHead::to_name`], which needs a live heap and so can fail.
 
 /// A head that could not be named when converting a type out of the VM.
 ///
@@ -159,12 +135,12 @@ pub use types::{
     CaptureCategory, CaptureOption, Class, ClassField, ClassMethodDef, CleanupLatch,
     ClientBuildMeta, ClientBuildType, ConstValue, DeclPath, DeclarationName, Enum, EnumVariant,
     FnPath, Function, FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, Future,
-    FutureRead, GenericFunction, HostClosure, ImplBodyKey, ImplCoherenceKey, Instance,
-    InterfaceBound, InterfaceKey, ItemPath, LockedContainer, LockedReadGuard, LockedWriteGuard,
-    MapContainer, MapReadGuard, MapWriteGuard, MediaValue, Object, ObjectType, PanicClass, Program,
-    PromptAst, RetryPolicyMeta, SysOp, SysOpErrorCategory, SysOpPanicCategory, Uint8ArrayContainer,
-    Uint8ArrayReadGuard, Uint8ArrayWriteGuard, UnscheduledFuture, Value, ValueKind, Variant,
-    format_float, sys_op_for_path, type_tags,
+    FutureRead, GenericFunction, HostClosure, ImplBodyCoherence, ImplBodyKey, ImplCoherenceKey,
+    Instance, InterfaceBound, InterfaceKey, ItemPath, LockedContainer, LockedReadGuard,
+    LockedWriteGuard, MapContainer, MapReadGuard, MapWriteGuard, MediaValue, Object, ObjectType,
+    PanicClass, Program, PromptAst, RetryPolicyMeta, SpelledBound, SysOp, SysOpErrorCategory,
+    SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard,
+    UnscheduledFuture, Value, ValueKind, Variant, format_float, sys_op_for_path, type_tags,
 };
 
 /// Used to check if the VM should yield early.

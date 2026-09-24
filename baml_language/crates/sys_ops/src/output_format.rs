@@ -1400,8 +1400,8 @@ mod tests {
     use baml_type::{DeclarationName, Freshness, TypeName};
     use sys_types::{DefKey, SapTy as RuntimeTy};
 
-    /// Build a lane key for a test declaration: a compiled declaration's
-    /// identity is the content-addressed tag of its qualified name.
+    /// Build a lane key for a test declaration: any tag distinct per name
+    /// will do, and the name's content hash is a convenient one.
     fn key(name: &TypeName) -> DefKey {
         DefKey::new(
             baml_type::typetag::TypeTag::of_head(&name.render_dotted(false)),

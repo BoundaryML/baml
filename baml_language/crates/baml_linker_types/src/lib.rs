@@ -30,7 +30,11 @@
 //! # Operand convention
 //!
 //! The instruction and [`Object`] structs are unchanged; a unit reinterprets
-//! their `ObjectIndex` / `GlobalIndex` VALUES:
+//! their `ObjectIndex` / `GlobalIndex` VALUES — and every type head's, since a
+//! head in a unit is the declaration's object operand
+//! ([`TypeHead::unresolved_operand`](bex_vm_types::TypeHead::unresolved_operand)),
+//! as is every class key of a type switch
+//! ([`SwitchKey::Declaration`](bex_vm_types::bytecode::SwitchKey)):
 //!
 //! - an object operand `raw < n_local_objects` is unit-local, laid out
 //!   bucket by bucket — classes, enums, interfaces, recursive aliases, then
@@ -143,17 +147,12 @@ pub struct DeclKey {
 }
 
 /// One entry of a unit's import table. The table is TOTAL over the foreign
-/// declarations the unit references in any way — by an index operand, or only
-/// by a type head baked into a type operand — so a reference the executable
-/// must bind is never implied by an operand the linker cannot see.
+/// declarations the unit references in any way: a type head is an object
+/// operand like any other, so a declaration reached only through a type is
+/// imported exactly as one reached by an instruction.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub struct ImportEntry {
     pub key: DeclKey,
-    /// For a type declaration, the tag this unit's bytecode carries for it
-    /// (its heads, jump tables, and type operands) — a relocation record the
-    /// runtime binder maps to the bound declaration's live head. `Some` iff
-    /// `key.path` is a type kind.
-    pub baked_tag: Option<baml_type::typetag::TypeTag>,
 }
 
 /// Which per-unit bucket + offset an export points at. The linker places each
@@ -272,7 +271,8 @@ pub struct CompilationUnit {
     pub global_imports: Vec<ImportEntry>,
     /// What this unit provides.
     pub exports: ExportTable,
-    /// The `implements` rules this unit declares.
+    /// The `implements` rules this unit declares. Their templates carry heads
+    /// in the unit convention like every other object of the unit.
     pub impl_rules: Vec<ProgramImplRuleFrag>,
 }
 

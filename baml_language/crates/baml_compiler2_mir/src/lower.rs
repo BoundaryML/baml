@@ -18,7 +18,6 @@ use baml_type::{
     DeclName, ParamTy, PrimitiveType, RealizedTy, ResolvedAliases, RuntimeGenericLayout, RuntimeTy,
     TyTemplate, TyTemplateInterface, TypeName,
 };
-use indexmap::IndexMap;
 
 use crate::{
     CellId,
@@ -27,8 +26,8 @@ use crate::{
     ir::{
         AggregateKind, BasicBlock, BinOp, BlockId, CatchRegion, Constant, FunctionOwner, IndexKind,
         IntrinsicOp, Local, LocalDecl, LogLevel, MirFunction, MirFunctionBody, MirFunctionId,
-        MirFunctionKind, MirInternalError, Operand, Place, Rvalue, StatementKind, SyntheticKind,
-        Terminator,
+        MirFunctionKind, MirInternalError, Operand, Place, Rvalue, StatementKind, SwitchKey,
+        SyntheticKind, Terminator,
     },
     optimize,
 };
@@ -50,6 +49,13 @@ enum SwitchKind {
     EnumDiscriminant(QualifiedTypeName),
     TypeTag,
 }
+
+/// The most arms a type-tag switch may have: a class arm dispatches only
+/// through the perfect-hash table, whose bounded search separates this many
+/// keys with certainty for every practical purpose and wider sets essentially
+/// never (`MatchHashTable::MAX_KEYS` in `bex_vm_types`, asserted equal by
+/// emit). A wider match takes the sequential `is_type` chain.
+pub const MAX_SWITCH_KEYS: usize = 64;
 
 /// What happens in the otherwise block of a switch.
 #[derive(Clone, Copy)]
@@ -1597,71 +1603,6 @@ unsafe impl salsa::Update for PackageLoweringData {
     }
 }
 
-/// Project-wide class → runtime type-tag map. See
-/// [`class_type_tags_for_project`].
-#[derive(Debug, PartialEq)]
-struct ProjectClassTypeTags {
-    tags: IndexMap<TypeName, i64>,
-}
-
-/// Mirrors [`PackageLoweringData`]'s impl: the map holds no Salsa-interned
-/// (`'db`) data, so storing it by value is sound; `maybe_update` uses
-/// `PartialEq` for proper Salsa early-cutoff.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for ProjectClassTypeTags {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
-
-/// Build `class_type_tags` for every class in the project, once, memoized by
-/// Salsa.
-///
-/// Tags are content-addressed (`typetag::class_type_tag` over the
-/// fully-qualified name), so they match the `class.type_tag` values the
-/// emitter assigns by construction — no iteration-order coupling — and a
-/// class keeps its tag regardless of what other code exists.
-///
-/// The tags of every class in `root`'s world
-/// ([`baml_compiler2_hir::package::world_roots`]): everything a body in
-/// `root` can name, and nothing from a workspace root that merely shares the
-/// database — tags are per program and must never be minted across worlds.
-/// Memoized per root; this was previously an untracked helper called from
-/// every `LoweringContext` construction — i.e. the whole project's item trees
-/// were walked, and every class name re-rendered and re-hashed, once per
-/// lowered function/let (see `crates/tools_compile_profile/README.md`, July
-/// 2026 audit, item #4).
-#[salsa::tracked(returns(ref))]
-fn class_type_tags_within(db: &dyn crate::Db, root: baml_base::SourceRoot) -> ProjectClassTypeTags {
-    let mut tags: IndexMap<TypeName, i64> = IndexMap::new();
-    let spelling = spelling(db);
-
-    // Every class of every root in the world, whichever lane declares it,
-    // under the content-addressed tag of its wire spelling. First encounter
-    // wins — consistent with emit's `claim_type_tag`.
-    for &member in baml_compiler2_hir::package::world_roots(db, root) {
-        for class in layout::package_classes(db, member) {
-            let class_qtn = spelling.wire(&layout::class_head(db, class));
-            let type_tag = baml_type::typetag::class_type_tag(&class_qtn.render_dotted(false));
-            tags.entry(class_qtn).or_insert(type_tag);
-        }
-    }
-
-    ProjectClassTypeTags { tags }
-}
-
 /// Build the package-invariant [`PackageLoweringData`] once per package,
 /// memoized by Salsa and shared across every function's `LoweringContext`.
 #[salsa::tracked(returns(ref))]
@@ -1795,11 +1736,6 @@ struct LoweringContext<'db> {
     scope_func_name: Option<Name>,
 
     // Schema maps built from PackageItems.
-    /// Pre-computed type tags for class types, used by `SwitchKind::TypeTag`
-    /// for union-type switch optimization (ported from MIR 1). Borrowed from
-    /// the Salsa-memoized [`class_type_tags_for_project`] (was rebuilt per
-    /// lowered function).
-    class_type_tags: &'db IndexMap<TypeName, i64>,
     /// BEP-044: for every interface, the list of classes that implement it
     /// (directly or transitively through interface `requires`). Lets the field-access
     /// and method-call lowering paths emit a type-tag switch over the
@@ -2383,11 +2319,6 @@ impl<'db> LoweringContext<'db> {
         // (was rebuilt — and every class field re-lowered — per function).
         let pkg_data = package_lowering_data(db, pkg_id);
 
-        // Tags are content-addressed over each class's fully-qualified name,
-        // so they match the emitter's `class.type_tag` values by construction.
-        // Memoized per package world (was rebuilt here per lowered body).
-        let class_type_tags = &class_type_tags_within(db, pkg_id).tags;
-
         // --- Determine arity from function signature ---
         let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
         let arity = sig.params.len();
@@ -2415,7 +2346,6 @@ impl<'db> LoweringContext<'db> {
             func_loc: Some(func_loc),
             source_param_scope: Some(func_scope_id),
             scope_func_name: Some(func_data.name.clone()),
-            class_type_tags,
             pending_lambdas: Vec::new(),
             lambda_generic_params: Vec::new(),
             scoped_type_binding_params: Vec::new(),
@@ -2462,11 +2392,6 @@ impl<'db> LoweringContext<'db> {
         // Memoized per package (was rebuilt per let binding).
         let pkg_data = package_lowering_data(db, pkg_id);
 
-        // Tags are content-addressed over each class's fully-qualified name,
-        // so they match the emitter's `class.type_tag` values by construction.
-        // Memoized per package world (was rebuilt here per lowered body).
-        let class_type_tags = &class_type_tags_within(db, pkg_id).tags;
-
         LoweringContext {
             db,
             builder: MirBuilder::new(FunctionOwner::Let(let_loc), 0),
@@ -2490,7 +2415,6 @@ impl<'db> LoweringContext<'db> {
             func_loc: None,
             source_param_scope: None,
             scope_func_name: Some(let_name),
-            class_type_tags,
             resolved_aliases: &pkg_data.resolved_aliases,
             spelling: spelling(db),
             package: pkg_id,
@@ -12987,13 +12911,13 @@ impl<'db> LoweringContext<'db> {
             .filter(|(local, _)| *local == scrutinee)
             .map(|(_, ty)| ty.clone());
 
-        // Classify arms: collect (i64_value, arm_index) for int literal or enum variant
-        // patterns, and check for a trailing wildcard/binding.
+        // Classify arms: collect (key, arm_index) for int literal, enum
+        // variant, or type patterns, and check for a trailing wildcard/binding.
         let mut switch_kind: Option<SwitchKind> = None;
-        let mut int_arms: Vec<(i64, usize)> = Vec::new();
+        let mut int_arms: Vec<(SwitchKey<'db>, usize)> = Vec::new();
         let mut otherwise_idx: Option<usize> = None;
-        // Deduplicate discriminant values so union patterns don't produce duplicate switch arms.
-        let mut seen_values: HashSet<i64> = HashSet::new();
+        // Deduplicate keys so union patterns don't produce duplicate switch arms.
+        let mut seen_values: HashSet<SwitchKey<'db>> = HashSet::new();
 
         for (i, &(pattern, _body, guard)) in arms.iter().enumerate() {
             // Guards disqualify switch optimization
@@ -13014,8 +12938,8 @@ impl<'db> LoweringContext<'db> {
                                  atom_id: AstPatId,
                                  atom: &AstPattern,
                                  switch_kind: &mut Option<SwitchKind>,
-                                 int_arms: &mut Vec<(i64, usize)>,
-                                 seen_values: &mut HashSet<i64>|
+                                 int_arms: &mut Vec<(SwitchKey<'db>, usize)>,
+                                 seen_values: &mut HashSet<SwitchKey<'db>>|
              -> bool {
                 match atom {
                     // OLD `Literal(Int(val))`: integer switch
@@ -13032,8 +12956,9 @@ impl<'db> LoweringContext<'db> {
                             Some(SwitchKind::Integer) => {}
                             Some(_) => return false,
                         }
-                        if seen_values.insert(*val) {
-                            int_arms.push((*val, i));
+                        let key = SwitchKey::Int(*val);
+                        if seen_values.insert(key) {
+                            int_arms.push((key, i));
                         }
                         true
                     }
@@ -13066,9 +12991,9 @@ impl<'db> LoweringContext<'db> {
                             layout::enum_variant_index(this.db, enum_ref, &variant)
                         });
                         let Some(idx) = idx else { return false };
-                        let disc = i64::from(idx);
-                        if seen_values.insert(disc) {
-                            int_arms.push((disc, i));
+                        let key = SwitchKey::Int(i64::from(idx));
+                        if seen_values.insert(key) {
+                            int_arms.push((key, i));
                         }
                         true
                     }
@@ -13081,10 +13006,10 @@ impl<'db> LoweringContext<'db> {
                         }
                         match this.classify_pattern_type_tag(atom_id, scrutinee_static_ty.as_ref())
                         {
-                            Some(tags) => {
-                                for tag in tags {
-                                    if seen_values.insert(tag) {
-                                        int_arms.push((tag, i));
+                            Some(keys) => {
+                                for key in keys {
+                                    if seen_values.insert(key) {
+                                        int_arms.push((key, i));
                                     }
                                 }
                             }
@@ -13158,8 +13083,12 @@ impl<'db> LoweringContext<'db> {
 
         // TypeTag switches only pay off at 4+ arms (JumpTable). For fewer arms
         // the sequential `is_type` chain is more compact because the if-else
-        // chain adds copy/pop stack management overhead per arm.
-        if matches!(switch_kind, Some(SwitchKind::TypeTag)) && int_arms.len() < 4 {
+        // chain adds copy/pop stack management overhead per arm. Past
+        // `MAX_SWITCH_KEYS` the one table a class arm can dispatch through
+        // has no room, so the chain is the only road there too.
+        if matches!(switch_kind, Some(SwitchKind::TypeTag))
+            && !(4..=MAX_SWITCH_KEYS).contains(&int_arms.len())
+        {
             return Ok(false);
         }
 
@@ -13206,7 +13135,7 @@ impl<'db> LoweringContext<'db> {
         // Build body blocks for each arm. Union sub-patterns sharing the same
         // arm_idx reuse a single block (e.g. Active | Pending → same bb).
         let bb_otherwise = self.builder.create_block();
-        let mut switch_arms: Vec<(i64, BlockId)> = Vec::new();
+        let mut switch_arms: Vec<(SwitchKey<'db>, BlockId)> = Vec::new();
         let mut arm_blocks: std::collections::HashMap<usize, BlockId> =
             std::collections::HashMap::new();
 
@@ -13235,7 +13164,7 @@ impl<'db> LoweringContext<'db> {
         }
 
         // Build arm_names: symbolic labels for the switch arms (debug metadata).
-        let arm_names: Vec<(i64, String)> = match &switch_kind {
+        let arm_names: Vec<(SwitchKey<'db>, String)> = match &switch_kind {
             Some(SwitchKind::EnumDiscriminant(enum_name)) => {
                 let variants = self
                     .decl(enum_name)
@@ -13244,32 +13173,40 @@ impl<'db> LoweringContext<'db> {
                     .unwrap_or_default();
                 int_arms
                     .iter()
-                    .filter_map(|(val, _)| {
+                    .filter_map(|(key, _)| {
+                        let SwitchKey::Int(val) = key else {
+                            return None;
+                        };
                         let index = usize::try_from(*val).ok()?;
                         let vname = variants.get(index)?;
-                        Some((*val, format!("{}.{vname}", enum_name.name())))
+                        Some((*key, format!("{}.{vname}", enum_name.name())))
                     })
                     .collect()
             }
-            Some(SwitchKind::TypeTag) => {
-                // Reverse map: tag value → human-readable type name.
-                let reverse_class: std::collections::HashMap<i64, &str> = self
-                    .class_type_tags
-                    .iter()
-                    .map(|(tn, tag)| (*tag, tn.name().as_str()))
-                    .collect();
-                int_arms
-                    .iter()
-                    .map(|(v, _)| {
-                        let name = reverse_class
-                            .get(v)
-                            .map(ToString::to_string)
-                            .unwrap_or_else(|| format_type_tag_name(*v));
-                        (*v, name)
-                    })
-                    .collect()
-            }
-            _ => int_arms.iter().map(|(v, _)| (*v, v.to_string())).collect(),
+            Some(SwitchKind::TypeTag) => int_arms
+                .iter()
+                .map(|(key, _)| {
+                    let name = match key {
+                        SwitchKey::Int(tag) => format_type_tag_name(*tag),
+                        SwitchKey::Class(class) => {
+                            layout::class_head(self.db, *class).name().to_string()
+                        }
+                    };
+                    (*key, name)
+                })
+                .collect(),
+            _ => int_arms
+                .iter()
+                .map(|(key, _)| {
+                    let name = match key {
+                        SwitchKey::Int(val) => val.to_string(),
+                        SwitchKey::Class(class) => {
+                            layout::class_head(self.db, *class).name().to_string()
+                        }
+                    };
+                    (*key, name)
+                })
+                .collect(),
         };
 
         // Lower the otherwise block
@@ -13820,18 +13757,19 @@ impl<'db> LoweringContext<'db> {
             .branch(Operand::Copy(Place::Local(test_local)), success, failure);
     }
 
-    /// Look up the integer type tag for a type. Returns `Some(tag)` for
-    /// primitives (INT=0, STRING=1, etc.) and classes (`CLASS_BASE` + index),
-    /// or `None` for types that don't have a tag (unions, generics, etc.).
-    fn type_tag_for_ty(&self, ty: &RuntimeTy) -> Option<i64> {
+    /// The switch key for a type: a primitive kind's fixed tag (INT=0,
+    /// STRING=1, etc.), a class by its declaration, or `None` for types that
+    /// have no tag of their own (unions, generics, etc.).
+    fn type_tag_for_ty(&self, ty: &RuntimeTy) -> Option<SwitchKey<'db>> {
+        let kind = |tag: i64| Some(SwitchKey::Int(tag));
         match ty {
-            RuntimeTy::Int => Some(baml_type::typetag::INT),
-            RuntimeTy::Bigint => Some(baml_type::typetag::BIGINT),
-            RuntimeTy::String => Some(baml_type::typetag::STRING),
-            RuntimeTy::Bool => Some(baml_type::typetag::BOOL),
-            RuntimeTy::Null => Some(baml_type::typetag::NULL),
-            RuntimeTy::Float => Some(baml_type::typetag::FLOAT),
-            RuntimeTy::Uint8Array => Some(baml_type::typetag::UINT8ARRAY),
+            RuntimeTy::Int => kind(baml_type::typetag::INT),
+            RuntimeTy::Bigint => kind(baml_type::typetag::BIGINT),
+            RuntimeTy::String => kind(baml_type::typetag::STRING),
+            RuntimeTy::Bool => kind(baml_type::typetag::BOOL),
+            RuntimeTy::Null => kind(baml_type::typetag::NULL),
+            RuntimeTy::Float => kind(baml_type::typetag::FLOAT),
+            RuntimeTy::Uint8Array => kind(baml_type::typetag::UINT8ARRAY),
             // The single shared ENUM tag conflates *all* enum types (and all
             // variants of one enum). That's safe on the switch path only because
             // `switch_member_tag_sufficient` bails an enum-type arm to the precise
@@ -13839,13 +13777,17 @@ impl<'db> LoweringContext<'db> {
             // Status` no longer dedups the second arm away; the chain tests
             // enum-pointer identity (`is Color`). A single-enum-type switch keeps
             // the fast tag.
-            RuntimeTy::Enum(..) | RuntimeTy::EnumVariant(..) => Some(baml_type::typetag::ENUM),
-            RuntimeTy::List(..) => Some(baml_type::typetag::LIST),
-            RuntimeTy::Map { .. } => Some(baml_type::typetag::MAP),
-            RuntimeTy::Function { .. } => Some(baml_type::typetag::FUNCTION),
-            RuntimeTy::Future(..) => Some(baml_type::typetag::FUTURE),
-            RuntimeTy::Type => Some(baml_type::typetag::TYPE),
-            RuntimeTy::Class(tn, _) => self.class_type_tags.get(tn).copied(),
+            RuntimeTy::Enum(..) | RuntimeTy::EnumVariant(..) => kind(baml_type::typetag::ENUM),
+            RuntimeTy::List(..) => kind(baml_type::typetag::LIST),
+            RuntimeTy::Map { .. } => kind(baml_type::typetag::MAP),
+            RuntimeTy::Function { .. } => kind(baml_type::typetag::FUNCTION),
+            RuntimeTy::Future(..) => kind(baml_type::typetag::FUTURE),
+            RuntimeTy::Type => kind(baml_type::typetag::TYPE),
+            // The class arm names its declaration; the tag is whoever lays
+            // that declaration into an image assigns.
+            RuntimeTy::Class(tn, _) => {
+                layout::class_ref_of(self.db, &self.runtime().decl(tn)?).map(SwitchKey::Class)
+            }
             _ => None,
         }
     }
@@ -14799,7 +14741,7 @@ impl<'db> LoweringContext<'db> {
 
 // ─── Type tag classification (shared by match/catch switch dispatch) ──────────
 
-impl LoweringContext<'_> {
+impl<'db> LoweringContext<'db> {
     /// Classify a pattern into type tag value(s) for switch dispatch.
     /// Classify a pattern as type-tag-eligible and return its tag(s).
     ///
@@ -14817,7 +14759,7 @@ impl LoweringContext<'_> {
         &self,
         pat_id: AstPatId,
         scrutinee_static_ty: Option<&RuntimeTy>,
-    ) -> Option<Vec<i64>> {
+    ) -> Option<Vec<SwitchKey<'db>>> {
         let pat = &self.body.patterns[pat_id];
         if self.pattern_contains_structural(pat_id) {
             return None;
@@ -14894,7 +14836,7 @@ impl LoweringContext<'_> {
         &self,
         ty: &RuntimeTy,
         scrutinee_static_ty: Option<&RuntimeTy>,
-    ) -> Option<Vec<i64>> {
+    ) -> Option<Vec<SwitchKey<'db>>> {
         let tags = self.ty_to_type_tags(ty)?;
         let mut members = Vec::new();
         flatten_runtime_union(ty, &mut members);
@@ -14904,23 +14846,23 @@ impl LoweringContext<'_> {
             .then_some(tags)
     }
 
-    /// Convert a `RuntimeTy` to the list of type tag integers it corresponds to.
+    /// Convert a `RuntimeTy` to the list of switch keys it corresponds to.
     /// Returns `None` if the type has no simple tag representation.
     ///
-    /// Supports primitives (globally-stable tags) and class types (looked up
-    /// from `class_type_tags`). Union types are flattened — all members must
+    /// Supports primitives (globally-stable tags) and class types (keyed by
+    /// their declaration). Union types are flattened — all members must
     /// be tag-eligible.
-    fn ty_to_type_tags(&self, ty: &RuntimeTy) -> Option<Vec<i64>> {
+    fn ty_to_type_tags(&self, ty: &RuntimeTy) -> Option<Vec<SwitchKey<'db>>> {
         match ty {
             RuntimeTy::Union(members) => {
-                let mut tags = Vec::new();
+                let mut keys = Vec::new();
                 for m in members {
-                    let member_tags = self.ty_to_type_tags(m)?;
-                    tags.extend(member_tags);
+                    let member_keys = self.ty_to_type_tags(m)?;
+                    keys.extend(member_keys);
                 }
-                Some(tags)
+                Some(keys)
             }
-            _ => self.type_tag_for_ty(ty).map(|tag| vec![tag]),
+            _ => self.type_tag_for_ty(ty).map(|key| vec![key]),
         }
     }
 }

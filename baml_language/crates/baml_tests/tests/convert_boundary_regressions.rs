@@ -69,9 +69,11 @@ fn thrown_parameter_named_like_a_catch_binding_is_not_a_rethrow() {
     let Some(bex_vm_types::Object::Function(func)) = program.objects.get(idx) else {
         panic!("user.f should resolve to a function object");
     };
-    // An emitted program's heads are tag-only until the loader binds them, so
-    // the throws type is checked by identity rather than by rendered name.
-    let expected = baml_type::typetag::TypeTag::of_head("user.MyError");
+    // An emitted program's heads carry the tag the linker assigned their
+    // declaration, so the throws type is checked by identity rather than by
+    // rendered name.
+    let expected = baml_tests::engine::declared_type_tag(&program, "user.MyError")
+        .expect("user.MyError should be declared");
     let mut found = false;
     func.throws_type.visit_heads(&mut |head| {
         if head.tag() == expected {

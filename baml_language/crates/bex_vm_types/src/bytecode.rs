@@ -90,7 +90,12 @@ impl JumpTableData {
 /// - Proposed for LLVM (issue #96971), Roslyn (#66604), Go (#34381)
 #[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct MatchHashTable {
-    /// Multiplicative hash constant, found at compile time.
+    /// The switch's keys in arm order — the table's semantics, as the compiler
+    /// states them. `keys[i]` dispatches to dense index `i`. The hash below is
+    /// derived from the tags these keys resolve to, by whoever assigns those
+    /// tags ([`Self::solve`]).
+    pub keys: Vec<SwitchKey>,
+    /// Multiplicative hash constant, found by [`Self::solve`].
     pub multiply: u64,
     /// Right-shift amount applied after multiplication.
     pub shift: u8,
@@ -100,6 +105,8 @@ pub struct MatchHashTable {
     /// - `expected_tag`: the type tag that should hash to this slot
     /// - `dense_index`: the dense arm index `[0, K-1]` for jump table dispatch
     ///   Unused slots have `expected_tag = i64::MIN` (sentinel).
+    ///
+    /// Empty until solved.
     pub entries: Vec<MatchHashEntry>,
     /// Human-readable names for keys in arm order (display only).
     /// `key_names[i]` is the name for the i-th arm (e.g. "int", "`MyClass`").
@@ -113,6 +120,167 @@ pub struct MatchHashEntry {
     pub expected_tag: i64,
     /// Dense arm index `[0, K-1]` — fed into the subsequent jump table.
     pub dense_index: u8,
+}
+
+/// One key of a type switch, as the compiler states it.
+///
+/// The compiler never knows a declared head's tag: a declaration arm is "the
+/// tag of *this* declaration", by the same object operand every other
+/// reference to the declaration carries, relocated like every other operand
+/// and materialized by whoever assigns the declaration's tag. A primitive
+/// kind's tag is a fixed constant nothing declares, so it is stated directly.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
+pub enum SwitchKey {
+    /// A fixed kind tag (`typetag::INT`, `ENUM`, ...).
+    Kind(i64),
+    /// The tag assigned to the declaration at this object operand — any
+    /// declared head. What a switch can dispatch on is what the `TypeTag`
+    /// instruction reports for a value: an instance reports its class's tag,
+    /// while an enum value reports the shared `ENUM` kind tag, so today's
+    /// compiler keys class arms this way and enum arms by kind.
+    Declaration(ObjectIndex),
+}
+
+/// No multiply-shift hash separates the switch's keys: more than
+/// [`MatchHashTable::MAX_KEYS`] of them, or a key set the bounded search could
+/// not split — which the cap makes astronomically unlikely even for keys with
+/// no structure at all.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnsolvableSwitch {
+    pub keys: usize,
+}
+
+impl std::fmt::Display for UnsolvableSwitch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "no perfect hash separates the {} keys of a type switch",
+            self.keys
+        )
+    }
+}
+
+impl std::error::Error for UnsolvableSwitch {}
+
+impl MatchHashTable {
+    /// The most keys a table can dispatch. The bound is set by the search in
+    /// [`Self::solve`], not by the byte-sized dense index: with 256 slots the
+    /// chance that one random `(M, S)` pair separates `K` arbitrary keys is
+    /// about `exp(-K² / 512)`, so over the search's ~640 000 pairs 64 keys
+    /// are separated with certainty for every practical purpose (an expected
+    /// ~200 solutions), while 128 would be found essentially never. A wider
+    /// match takes the sequential `is_type` chain instead.
+    pub const MAX_KEYS: usize = 64;
+
+    /// A table stating its keys, not yet solved.
+    #[must_use]
+    pub fn unsolved(keys: Vec<SwitchKey>, key_names: Vec<String>) -> Self {
+        Self {
+            keys,
+            multiply: 0,
+            shift: 0,
+            mask: 0,
+            entries: Vec::new(),
+            key_names,
+        }
+    }
+
+    /// Whether [`Self::solve`] has filled the hash.
+    #[must_use]
+    pub fn is_solved(&self) -> bool {
+        !self.entries.is_empty()
+    }
+
+    /// Derive the hash from the keys' tags: `tag_of` answers each
+    /// [`SwitchKey::Declaration`] with the tag its declaration was assigned.
+    ///
+    /// Searches for constants `(M, S, mask)` such that
+    ///   `h(x) = ((x as u64).wrapping_mul(M) >> S) & mask`
+    /// maps every key to a distinct slot in `[0, table_size)` — the
+    /// multiply-shift family of Neumann & Göbbert, "Improving Switch Statement
+    /// Performance with Hashing Optimized at Compile Time", and Dietz 1992,
+    /// "Coding Multiway Branches Using Customized Hash Functions"; proposed
+    /// for LLVM (#96971), Roslyn (#66604), and Go (#34381). Tries the tight
+    /// table size (`next_power_of_two(K)`) then twice it, brute-forcing `M`
+    /// against every shift; for the key counts a switch has this completes in
+    /// microseconds.
+    ///
+    /// # Errors
+    ///
+    /// [`UnsolvableSwitch`]: see its doc.
+    pub fn solve(
+        &mut self,
+        tag_of: impl Fn(ObjectIndex) -> baml_type::typetag::TypeTag,
+    ) -> Result<(), UnsolvableSwitch> {
+        let k = self.keys.len();
+        if k == 0 || k > Self::MAX_KEYS {
+            return Err(UnsolvableSwitch { keys: k });
+        }
+        let values: Vec<i64> = self
+            .keys
+            .iter()
+            .map(|key| match *key {
+                SwitchKey::Kind(tag) => tag,
+                SwitchKey::Declaration(declaration) => tag_of(declaration).as_i64(),
+            })
+            .collect();
+        let (multiply, shift, mask, entries) =
+            find_perfect_hash(&values).ok_or(UnsolvableSwitch { keys: k })?;
+        self.multiply = multiply;
+        self.shift = shift;
+        self.mask = mask;
+        self.entries = entries;
+        Ok(())
+    }
+}
+
+/// The multiply-shift search behind [`MatchHashTable::solve`]: the constants
+/// and the filled verification table, or `None` when no constants separate
+/// the keys within the search bounds.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "hash arithmetic over a table of at most 256 slots"
+)]
+fn find_perfect_hash(keys: &[i64]) -> Option<(u64, u8, u8, Vec<MatchHashEntry>)> {
+    let k = keys.len();
+    for table_size in [k.next_power_of_two(), (k.next_power_of_two() * 2).min(256)] {
+        let mask = (table_size - 1) as u8;
+        let mut slots = vec![false; table_size];
+        for m in 1u64..10_000 {
+            for s in 0u8..64 {
+                slots.fill(false);
+                let mut ok = true;
+                for &key in keys {
+                    let h = (((key as u64).wrapping_mul(m) >> s) & u64::from(mask)) as usize;
+                    if h >= table_size || slots[h] {
+                        ok = false;
+                        break;
+                    }
+                    slots[h] = true;
+                }
+                if !ok {
+                    continue;
+                }
+                let mut entries = vec![
+                    MatchHashEntry {
+                        expected_tag: i64::MIN,
+                        dense_index: 0,
+                    };
+                    table_size
+                ];
+                for (dense_index, &key) in keys.iter().enumerate() {
+                    let h = (((key as u64).wrapping_mul(m) >> s) & u64::from(mask)) as usize;
+                    entries[h] = MatchHashEntry {
+                        expected_tag: key,
+                        dense_index: dense_index as u8,
+                    };
+                }
+                return Some((m, s, mask, entries));
+            }
+        }
+    }
+    None
 }
 
 /// One field copy performed by `Instruction::InitSpread`.
