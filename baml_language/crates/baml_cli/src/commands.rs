@@ -233,6 +233,26 @@ pub(crate) enum Commands {
         hide = true
     )]
     FlushTelemetry(crate::telemetry_command::FlushTelemetryArgs),
+
+    // Durable functions proof of concept: one process that hosts one segment
+    // of a run and speaks JSON lines on stdio (see `worker_command`). Started
+    // by a site server, never by a person, so it stays hidden; it is not
+    // gated by `BAML_INTERNAL`.
+    #[command(
+        about = "(internal) host one segment of a durable run over stdio JSON lines",
+        hide = true
+    )]
+    Worker(crate::worker_command::WorkerArgs),
+
+    // Durable functions proof of concept: the site server's access to a
+    // program store (see `program_store_command`). Hidden for the same reason
+    // as `worker`.
+    #[command(
+        name = "program-store",
+        about = "(internal) export, import, or look up a program in a program store",
+        hide = true
+    )]
+    ProgramStore(crate::program_store_command::ProgramStoreArgs),
     // #[command(about = "Start an interactive REPL for BAML expressions", hide = true)]
     // Repl(baml_runtime::cli::repl::ReplArgs),
 
@@ -345,6 +365,16 @@ impl RuntimeCli {
         if let Commands::FlushTelemetry(args) = &self.command {
             return args.run();
         }
+        // The worker owns stdout (one JSON event per line and nothing else)
+        // and ends the process itself with the worker exit codes, so it runs
+        // before output policy, skill checks, and telemetry.
+        if let Commands::Worker(args) = &self.command {
+            return args.run();
+        }
+        // Machine-to-machine like the worker: stdout is one JSON object.
+        if let Commands::ProgramStore(args) = &self.command {
+            return args.run();
+        }
         if let Commands::Help(args) = &self.command {
             crate::output::init(self.output);
             return args.run(crate::output::policy().stdout.color);
@@ -394,6 +424,10 @@ impl RuntimeCli {
             Commands::Telemetry(args) => args.run(),
             // Handled by the early return above, before telemetry wiring.
             Commands::FlushTelemetry(args) => args.run(),
+            // Handled by the early return above.
+            Commands::Worker(args) => args.run(),
+            // Handled by the early return above.
+            Commands::ProgramStore(args) => args.run(),
             Commands::Format(args) => args.run(),
         }
     }
@@ -470,6 +504,7 @@ impl Commands {
             Self::Run(args) => args.from = Some(project.clone()),
             Self::Pack(args) => args.from = Some(project.clone()),
             Self::Playground(args) => args.from = Some(project.clone()),
+            Self::Worker(args) => args.from = Some(project.clone()),
             Self::Agent(crate::agent_command::AgentArgs {
                 command: crate::agent_command::AgentCommand::Install(args),
             }) => args.dir = Some(project),

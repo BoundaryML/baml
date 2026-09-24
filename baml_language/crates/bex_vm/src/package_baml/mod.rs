@@ -111,6 +111,113 @@ impl From<VmInternalError> for NativeCallResult {
     }
 }
 
+/// Position-independent state of a native continuation, for heap snapshots.
+///
+/// `tag` names the continuation type and is stable across builds of one
+/// format version. The other fields are the continuation's payload: heap
+/// references in `ptrs` and `values` (the snapshot crate translates them),
+/// types in `types`, and plain data (cursors, lengths, flags) in `ints` and
+/// `strings`. Each continuation documents its own layout next to its
+/// `snapshot` method. [`restore_continuation`] is the inverse.
+#[derive(Clone, Debug, Default)]
+pub struct ContinuationState {
+    pub tag: String,
+    pub ptrs: Vec<HeapPtr>,
+    pub values: Vec<Value>,
+    pub types: Vec<bex_vm_types::RealizedTy>,
+    pub ints: Vec<u64>,
+    pub strings: Vec<String>,
+}
+
+impl ContinuationState {
+    pub(crate) fn new(tag: &str) -> Self {
+        Self {
+            tag: tag.to_string(),
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn int(&self, index: usize) -> Result<usize, String> {
+        self.ints
+            .get(index)
+            .and_then(|value| usize::try_from(*value).ok())
+            .ok_or_else(|| format!("continuation `{}` has no integer {index}", self.tag))
+    }
+
+    pub(crate) fn ptr(&self, index: usize) -> Result<HeapPtr, String> {
+        self.ptrs
+            .get(index)
+            .copied()
+            .ok_or_else(|| format!("continuation `{}` has no pointer {index}", self.tag))
+    }
+
+    pub(crate) fn ty(&self, index: usize) -> Result<bex_vm_types::RealizedTy, String> {
+        self.types
+            .get(index)
+            .cloned()
+            .ok_or_else(|| format!("continuation `{}` has no type {index}", self.tag))
+    }
+
+    /// Split `values` into consecutive runs of the given lengths. The lengths
+    /// must add up to the number of values.
+    pub(crate) fn value_runs(&self, lengths: &[usize]) -> Result<Vec<Vec<Value>>, String> {
+        let total = lengths
+            .iter()
+            .try_fold(0usize, |sum, len| sum.checked_add(*len));
+        if total != Some(self.values.len()) {
+            return Err(format!(
+                "continuation `{}` holds {} values, which does not match its lengths",
+                self.tag,
+                self.values.len()
+            ));
+        }
+        let mut rest = self.values.as_slice();
+        Ok(lengths
+            .iter()
+            .map(|len| {
+                let (run, tail) = rest.split_at(*len);
+                rest = tail;
+                run.to_vec()
+            })
+            .collect())
+    }
+
+    pub(crate) fn invalid(&self, what: &str) -> String {
+        format!("continuation `{}` is inconsistent: {what}", self.tag)
+    }
+}
+
+/// Rebuild a continuation from the state its `snapshot` method produced. The
+/// state is untrusted: every cursor is checked against the data it indexes.
+///
+/// # Errors
+///
+/// An unknown tag, or a payload that does not fit the continuation.
+pub fn restore_continuation(state: &ContinuationState) -> Result<Box<dyn Continuation>, String> {
+    if state.tag == PassThroughContinuation::TAG {
+        return Ok(Box::new(PassThroughContinuation));
+    }
+    if let Some(restored) = array::restore_continuation(state) {
+        return restored;
+    }
+    if let Some(restored) = json::restore_continuation(state) {
+        return restored;
+    }
+    if let Some(restored) = root::restore_continuation(state) {
+        return restored;
+    }
+    if let Some(restored) = ops::restore_continuation(state) {
+        return restored;
+    }
+    if let Some(restored) = prompt::restore_continuation(state) {
+        return restored;
+    }
+    if let Some(restored) = crate::package_reflect::restore_continuation(state) {
+        return restored;
+    }
+    Err(format!("unknown native continuation `{}`", state.tag))
+}
+
 /// A continuation that resumes a native function after a bytecode callback returns.
 /// Must expose GC roots so the compacting collector can find and forward `HeapPtr`
 /// values captured by the continuation.
@@ -123,12 +230,30 @@ pub trait Continuation: Send {
 
     /// Update all `HeapPtr` values after GC moves objects (forwarding).
     fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>);
+
+    /// The state a heap snapshot keeps of this continuation, or `None` when
+    /// the continuation cannot move to another process. A thread with such a
+    /// continuation on its call stack blocks the snapshot until the native
+    /// call has returned. A type that returns `Some` has an arm in
+    /// [`restore_continuation`].
+    fn snapshot(&self) -> Option<ContinuationState> {
+        None
+    }
+
+    /// Name reported when the continuation blocks a snapshot.
+    fn snapshot_name(&self) -> &'static str {
+        std::any::type_name::<Self>()
+    }
 }
 
 /// Returns the dispatched callee's result unchanged. Shared by the single-call
 /// shims (`string.to<T>`'s `from_string` dispatch, `reflect.call_any`) whose
 /// only job is to dispatch one call and surface its value.
 pub(crate) struct PassThroughContinuation;
+
+impl PassThroughContinuation {
+    const TAG: &'static str = "pass_through";
+}
 
 impl Continuation for PassThroughContinuation {
     fn call(self: Box<Self>, _vm: &mut BexVm, value: Value) -> NativeCallResult {
@@ -138,6 +263,9 @@ impl Continuation for PassThroughContinuation {
         Vec::new()
     }
     fn apply_forwarding(&mut self, _forwarding: &HashMap<HeapPtr, HeapPtr>) {}
+    fn snapshot(&self) -> Option<ContinuationState> {
+        Some(ContinuationState::new(Self::TAG))
+    }
 }
 
 /// A typed view of an array receiver: its declared element type alongside the

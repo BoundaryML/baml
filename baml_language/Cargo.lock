@@ -680,6 +680,8 @@ dependencies = [
  "bex_cache",
  "bex_engine",
  "bex_events",
+ "bex_heap",
+ "bex_program_store",
  "bex_project",
  "bex_vm_types",
  "borsh",
@@ -687,6 +689,7 @@ dependencies = [
  "console",
  "ctrlc",
  "datafusion",
+ "futures",
  "hex",
  "indexmap",
  "indicatif",
@@ -710,6 +713,8 @@ dependencies = [
  "sha2",
  "strsim",
  "sys_native",
+ "sys_ops",
+ "sys_types",
  "tempfile",
  "text-size",
  "tokio",
@@ -1270,6 +1275,7 @@ dependencies = [
  "bex_external_types",
  "bex_heap",
  "bex_resource_types",
+ "bex_snapshot",
  "bex_str",
  "bex_vm",
  "bex_vm_types",
@@ -1368,6 +1374,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bex_program_store"
+version = "0.0.0-beta"
+dependencies = [
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "bex_project"
 version = "0.0.0-beta"
 dependencies = [
@@ -1442,6 +1457,24 @@ dependencies = [
  "sys_types",
  "thiserror 2.0.18",
  "unicode-normalization",
+]
+
+[[package]]
+name = "bex_snapshot"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_db",
+ "baml_type",
+ "baml_version",
+ "bex_heap",
+ "bex_vm",
+ "bex_vm_types",
+ "borsh",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.18",
+ "tokio",
+ "zstd",
 ]
 
 [[package]]

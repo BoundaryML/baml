@@ -114,23 +114,172 @@ pub struct Future {
 unsafe impl Send for Future {}
 unsafe impl Sync for Future {}
 
-// Futures are runtime-only; they never appear in a compiled Program. Reject
-// serialization explicitly so a malformed program fails fast.
+// Futures are runtime-only; they never appear in a compiled Program. Outside a
+// heap snapshot serialization is rejected, so a malformed program fails fast.
+// Inside a snapshot translation context (`crate::snapshot_ctx`) a future is
+// written as a `FutureWire`.
 impl BorshSerialize for Future {
-    fn serialize<W: std::io::Write>(&self, _writer: &mut W) -> std::io::Result<()> {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "Future cannot be serialized",
-        ))
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        if !crate::snapshot_ctx::writer_active() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Future cannot be serialized",
+            ));
+        }
+        let snapshot = self.to_snapshot().map_err(|reason| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, reason.to_string())
+        })?;
+        FutureWire::from(snapshot).serialize(writer)
     }
 }
 
 impl BorshDeserialize for Future {
-    fn deserialize_reader<R: std::io::Read>(_reader: &mut R) -> std::io::Result<Self> {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "Future cannot be deserialized",
-        ))
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let Some(id_base) = crate::snapshot_ctx::loader_future_id_base() else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Future cannot be deserialized",
+            ));
+        };
+        let wire = FutureWire::deserialize_reader(reader)?;
+        let mut snapshot = FutureSnapshot::try_from(wire)?;
+        let id = snapshot.id.as_usize().checked_add(id_base).ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, "future id overflows")
+        })?;
+        snapshot.id = FutureId::from_usize(id);
+        Ok(Self::from_snapshot(snapshot))
+    }
+}
+
+/// The settled or pending state of a [`Future`] in a heap snapshot.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum FutureSnapshotState {
+    Pending,
+    Ready(Value),
+    Error(Value),
+    Cancelled,
+}
+
+/// Everything a heap snapshot keeps of a [`Future`]. The cancel token and the
+/// wake signal are process-local: [`Future::from_snapshot`] creates new ones,
+/// and the engine replaces the token of a pending future with the token of
+/// the restored thread that settles it.
+#[derive(Clone, Debug)]
+pub struct FutureSnapshot {
+    pub id: FutureId,
+    pub state: FutureSnapshotState,
+    /// An await already delivered the error (see [`Future::mark_observed`]).
+    pub observed: bool,
+    /// `f.cancel()` was called (see [`Future::cancel_requested`]).
+    pub cancel_requested: bool,
+    /// The error was handed to the engine's unhandled-error queue.
+    pub reported: bool,
+    pub returns: RealizedTy,
+    pub throws: RealizedTy,
+    pub error_trace: Vec<StackFrame>,
+}
+
+#[derive(BorshSerialize, BorshDeserialize)]
+struct TraceFrameWire {
+    function_name: String,
+    file_path: String,
+    function_span: baml_type::Span,
+    error_line: u64,
+}
+
+#[derive(BorshSerialize, BorshDeserialize)]
+struct FutureWire {
+    id: u64,
+    /// 0 pending, 1 ready, 2 error, 3 cancelled.
+    state: u8,
+    value: Value,
+    flags: u8,
+    returns: RealizedTy,
+    throws: RealizedTy,
+    error_trace: Vec<TraceFrameWire>,
+}
+
+impl From<FutureSnapshot> for FutureWire {
+    fn from(snapshot: FutureSnapshot) -> Self {
+        let (state, value) = match snapshot.state {
+            FutureSnapshotState::Pending => (FutureTag::Pending as u8, Value::NULL),
+            FutureSnapshotState::Ready(value) => (FutureTag::Ready as u8, value),
+            FutureSnapshotState::Error(value) => (FutureTag::Error as u8, value),
+            FutureSnapshotState::Cancelled => (FutureTag::Cancelled as u8, Value::NULL),
+        };
+        let mut flags = 0;
+        if snapshot.observed {
+            flags |= FUTURE_FLAG_OBSERVED;
+        }
+        if snapshot.cancel_requested {
+            flags |= FUTURE_FLAG_CANCEL_REQUESTED;
+        }
+        if snapshot.reported {
+            flags |= FUTURE_FLAG_REPORTED;
+        }
+        Self {
+            id: snapshot.id.as_usize() as u64,
+            state,
+            value,
+            flags,
+            returns: snapshot.returns,
+            throws: snapshot.throws,
+            error_trace: snapshot
+                .error_trace
+                .into_iter()
+                .map(|frame| TraceFrameWire {
+                    function_name: frame.function_name,
+                    file_path: frame.file_path,
+                    function_span: frame.function_span,
+                    error_line: frame.error_line as u64,
+                })
+                .collect(),
+        }
+    }
+}
+
+impl TryFrom<FutureWire> for FutureSnapshot {
+    type Error = std::io::Error;
+
+    fn try_from(wire: FutureWire) -> std::io::Result<Self> {
+        let invalid = |message: &str| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, message.to_string())
+        };
+        let state = match wire.state {
+            t if t == FutureTag::Pending as u8 => FutureSnapshotState::Pending,
+            t if t == FutureTag::Ready as u8 => FutureSnapshotState::Ready(wire.value),
+            t if t == FutureTag::Error as u8 => FutureSnapshotState::Error(wire.value),
+            t if t == FutureTag::Cancelled as u8 => FutureSnapshotState::Cancelled,
+            _ => return Err(invalid("a future has an unknown state")),
+        };
+        let known = FUTURE_FLAG_OBSERVED | FUTURE_FLAG_CANCEL_REQUESTED | FUTURE_FLAG_REPORTED;
+        if wire.flags & !known != 0 {
+            return Err(invalid("a future has unknown flags"));
+        }
+        Ok(Self {
+            id: FutureId::from_usize(
+                usize::try_from(wire.id).map_err(|_| invalid("a future id is too large"))?,
+            ),
+            state,
+            observed: wire.flags & FUTURE_FLAG_OBSERVED != 0,
+            cancel_requested: wire.flags & FUTURE_FLAG_CANCEL_REQUESTED != 0,
+            reported: wire.flags & FUTURE_FLAG_REPORTED != 0,
+            returns: wire.returns,
+            throws: wire.throws,
+            error_trace: wire
+                .error_trace
+                .into_iter()
+                .map(|frame| {
+                    Ok(StackFrame {
+                        function_name: frame.function_name,
+                        file_path: frame.file_path,
+                        function_span: frame.function_span,
+                        error_line: usize::try_from(frame.error_line)
+                            .map_err(|_| invalid("a trace line is too large"))?,
+                    })
+                })
+                .collect::<std::io::Result<_>>()?,
+        })
     }
 }
 
@@ -256,6 +405,80 @@ impl Future {
                 cancelled_session_leases: Mutex::new(Vec::new()),
             }),
         }
+    }
+
+    /// The state a heap snapshot keeps.
+    ///
+    /// # Errors
+    ///
+    /// A future that ended with an internal engine error carries a Rust error
+    /// value that cannot move to another process.
+    pub fn to_snapshot(&self) -> Result<FutureSnapshot, &'static str> {
+        let state = match self.read() {
+            FutureRead::Pending(_) => FutureSnapshotState::Pending,
+            FutureRead::Ready(value) => FutureSnapshotState::Ready(value),
+            FutureRead::Error(value) => FutureSnapshotState::Error(value),
+            FutureRead::Cancelled => FutureSnapshotState::Cancelled,
+            FutureRead::InternalError(_) => {
+                return Err("a future that ended with an internal engine error");
+            }
+        };
+        let flags = self.flags.load(Ordering::Acquire);
+        Ok(FutureSnapshot {
+            id: self.id,
+            state,
+            observed: flags & FUTURE_FLAG_OBSERVED != 0,
+            cancel_requested: flags & FUTURE_FLAG_CANCEL_REQUESTED != 0,
+            reported: flags & FUTURE_FLAG_REPORTED != 0,
+            returns: self.types.returns.clone(),
+            throws: self.types.throws.clone(),
+            error_trace: self.error_trace(),
+        })
+    }
+
+    /// Rebuild a future from a snapshot. A settled future wakes its awaiters
+    /// at once. The cancel token is new; it is cancelled when the future is.
+    pub fn from_snapshot(snapshot: FutureSnapshot) -> Self {
+        let future = Self::pending(
+            snapshot.id,
+            snapshot.returns,
+            snapshot.throws,
+            CancellationToken::new(),
+        );
+        let mut flags = 0;
+        if snapshot.observed {
+            flags |= FUTURE_FLAG_OBSERVED;
+        }
+        if snapshot.cancel_requested {
+            flags |= FUTURE_FLAG_CANCEL_REQUESTED;
+        }
+        if snapshot.reported {
+            flags |= FUTURE_FLAG_REPORTED;
+        }
+        future.flags.store(flags, Ordering::Release);
+        if !snapshot.error_trace.is_empty() {
+            let _ = future.error_trace.set(Arc::from(snapshot.error_trace));
+        }
+        let tag = match snapshot.state {
+            FutureSnapshotState::Pending => return future,
+            FutureSnapshotState::Ready(value) => {
+                // SAFETY: the future is not shared yet.
+                unsafe { (*future.value.get()).write(value) };
+                FutureTag::Ready
+            }
+            FutureSnapshotState::Error(value) => {
+                // SAFETY: as above.
+                unsafe { (*future.value.get()).write(value) };
+                FutureTag::Error
+            }
+            FutureSnapshotState::Cancelled => {
+                future.cancel.cancel();
+                FutureTag::Cancelled
+            }
+        };
+        future.state.store(tag as u8, Ordering::Release);
+        let _ = future.settlement.ready.set(Ok(()));
+        future
     }
 
     /// Clone the wake signal used by an engine awaiter.

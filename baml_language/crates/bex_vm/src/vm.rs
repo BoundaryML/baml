@@ -327,7 +327,7 @@ pub struct BytecodeFrame {
     /// Exact BEP-066 runtime-type metadata. Ordinary calls have no dynamic
     /// definitions or exact values, so keep the comparatively large pair of
     /// side lanes boxed and absent from their hot call frames.
-    type_metadata: Option<Box<FrameTypeMetadata>>,
+    pub(crate) type_metadata: Option<Box<FrameTypeMetadata>>,
     /// Byte offset of the most recently dispatched opcode (compact path).
     /// In the legacy path this mirrors `instruction_ptr - 1` and is kept
     /// up-to-date before each `step()` call.
@@ -349,13 +349,13 @@ pub struct BytecodeFrame {
 }
 
 #[derive(Clone, Debug, Default)]
-struct FrameTypeMetadata {
+pub(crate) struct FrameTypeMetadata {
     /// Exact runtime type values for explicitly supplied slots. Wrapper-
     /// supplied static slots use `None` and are reconstructed normally. The
     /// frame's realized `type_args` remain the execution authority and root
     /// their own heads; these values preserve the additional reflection
     /// identity needed to reconstruct an explicitly supplied `type` value.
-    values: Vec<Option<TypeValue>>,
+    pub(crate) values: Vec<Option<TypeValue>>,
 }
 
 impl FrameTypeMetadata {
@@ -523,6 +523,7 @@ pub(crate) mod tests {
             prof_boundary_handle: None,
             prof_boundary_root_pending: false,
             prof_thread_id: 0,
+            remote_intercept: false,
             call_id_counter: 0,
             current_call_id: 0,
             pending_sysop_call_id: None,
@@ -592,7 +593,7 @@ pub(crate) mod tests {
         NativeCallResult::Done(Value::int(42))
     }
 
-    fn native_function_object() -> Object {
+    pub(crate) fn native_function_object() -> Object {
         let native: NativeFunction = native_done;
         Object::Function(Box::new(Function {
             name: "test_native".to_string(),
@@ -1194,9 +1195,9 @@ impl RootHaver for Frame {
 /// simplicity (we don't even need to figure out which registers to use and when
 /// to use them).
 #[derive(Clone)]
-struct ThrowContext {
-    trace: Arc<[StackFrame]>,
-    cause: Value,
+pub(crate) struct ThrowContext {
+    pub(crate) trace: Arc<[StackFrame]>,
+    pub(crate) cause: Value,
 }
 
 /// The parameter list a callable value executes with; see
@@ -1326,6 +1327,14 @@ pub struct BexVm {
     /// engine per logical thread (root call or spawn) — not the OS thread.
     pub prof_thread_id: u64,
 
+    /// Durable POC: when true, a call to a user function whose last name
+    /// segment starts with `remote_` yields [`VmExecState::RemoteCall`]
+    /// instead of pushing a frame. Off by default; the engine turns it on for
+    /// the threads of a run that has a durable host installed. An entry-point
+    /// frame is pushed by `set_entry_point` and never reaches the call funnel,
+    /// so a worker started on `remote_f` executes its body locally.
+    pub remote_intercept: bool,
+
     /// Per-call id counter; ids start at 1 (`0` = none). Minted
     /// unconditionally — it is `$id` language semantics (M1 reads it) — and
     /// only the ring write is gated on `prof_ring`.
@@ -1376,18 +1385,18 @@ pub struct BexVm {
     /// both key and cause identity; deduplicated by value and cleared, like
     /// the other throw-state stores, when a fresh entry point is set on an
     /// empty frame stack.
-    thrown_value_causes: Vec<(Value, Value)>,
+    pub(crate) thrown_value_causes: Vec<(Value, Value)>,
 
     /// Most recently observed context for each thrown value. `UnknownError`
     /// conversion uses this to transfer the original trace and cause to the
     /// normalized value.
-    thrown_value_contexts: Vec<(Value, ThrowContext)>,
+    pub(crate) thrown_value_contexts: Vec<(Value, ThrowContext)>,
 
     /// One-shot context transfers registered by `UnknownError.from` and
     /// `UnknownError.with_message`. The next fresh throw of the target consumes
     /// the entry, preserving the source throw site instead of the conversion
     /// boundary.
-    preserved_throw_contexts: Vec<(Value, ThrowContext)>,
+    pub(crate) preserved_throw_contexts: Vec<(Value, ThrowContext)>,
 
     /// Constants for building BEX `CallRef`s on demand (the `$id` surface):
     /// `(process_euid, engine_id)`, set once by the engine when it attaches
@@ -1525,6 +1534,23 @@ pub enum VmExecState {
         args: Vec<Value>,
     },
 
+    /// Durable POC: the VM reached a call to a `remote_` user function while
+    /// [`BexVm::remote_intercept`] is on.
+    ///
+    /// Shaped like [`Self::SysOp`]: the arguments were drained from the eval
+    /// stack and no frame was pushed.
+    ///
+    /// - Input: the resolved callee `Function` object (a compile-time object,
+    ///   never moved by the GC), its name, and the call arguments.
+    /// - Output (success): a single `Value` on the VM stack; the caller's
+    ///   post-call store binds it exactly like a returning bytecode callee.
+    /// - Output (failure): a throw injected into the VM's unwinder.
+    RemoteCall {
+        function: HeapPtr,
+        name: String,
+        args: Vec<Value>,
+    },
+
     /// VM has completed the execution of all available bytecode.
     Complete(Value),
 
@@ -1543,6 +1569,15 @@ pub enum VmExecState {
 
     /// We are still executing, but we should yield to allow other threads or the GC to run.
     EarlyYield,
+}
+
+/// Durable POC marker: true when the last `.`-separated segment of a function
+/// name starts with `remote_`.
+#[must_use]
+pub fn is_remote_function_name(name: &str) -> bool {
+    name.rsplit('.')
+        .next()
+        .is_some_and(|leaf| leaf.starts_with("remote_"))
 }
 
 /// Intermediate representation of a compiled BAML program.
@@ -1953,6 +1988,7 @@ impl BexVm {
             prof_boundary_handle: None,
             prof_boundary_root_pending: false,
             prof_thread_id: 0,
+            remote_intercept: false,
             call_id_counter: 0,
             current_call_id: 0,
             pending_sysop_call_id: None,
@@ -5114,7 +5150,7 @@ impl BexVm {
         Some(func.name.clone())
     }
 
-    fn capture_stack_trace(&self) -> Vec<StackFrame> {
+    pub fn capture_stack_trace(&self) -> Vec<StackFrame> {
         // The innermost (topmost) bytecode frame's live PC lives in `cur_pc`;
         // outer frames recorded their call-site PC in `faulting_pc` at call time.
         let top_bc = self
@@ -5164,7 +5200,7 @@ impl BexVm {
     /// keeps a builtin whose body is written in BAML (`baml.sys.panic`,
     /// `baml.sys.exit`) indistinguishable from one written in Rust. Internal
     /// errors keep the full trace, where those frames are the point.
-    fn capture_user_stack_trace(&self) -> Vec<StackFrame> {
+    pub fn capture_user_stack_trace(&self) -> Vec<StackFrame> {
         self.capture_stack_trace()
             .into_iter()
             .filter(|frame| !frame.is_builtin())
@@ -6767,6 +6803,7 @@ impl BexVm {
             FunctionCaptureClass::Ordinary
         };
         let callee_param_names = callee.param_names.clone();
+        let callee_is_user_callable = callee.origin.is_user_callable();
         if arg_count != callee_arity {
             return Err(VmInternalError::InvalidArgumentCount {
                 expected: callee_arity,
@@ -6779,6 +6816,23 @@ impl BexVm {
             return Err(VmError::thrown_fresh(
                 self.panic_to_exception_value(VmPanic::StackOverflow),
             ));
+        }
+
+        // Durable POC: hand a `remote_` call to the engine instead of pushing
+        // a frame. The args are the top `arg_count` stack slots (any explicit
+        // type args were already taken off by the caller), so the drain and
+        // the resume protocol match `dispatch_sysop_yield`.
+        if self.remote_intercept
+            && matches!(callee_kind, FunctionKind::Bytecode)
+            && callee_is_user_callable
+            && is_remote_function_name(&callee_name)
+        {
+            let args: Vec<Value> = self.stack.drain(locals_offset..).collect();
+            return Ok(Some(VmExecState::RemoteCall {
+                function: callee_fn_ptr,
+                name: callee_name,
+                args,
+            }));
         }
 
         match callee_kind {
@@ -7795,6 +7849,12 @@ impl BexVm {
                             if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(frame_idx) {
                                 bf.instruction_ptr = pc;
                             }
+                        } else {
+                            // The instruction changed the top frame and then
+                            // yielded (an early yield right after a call or a
+                            // return). `cur_pc` still names an instruction of
+                            // the frame that was left.
+                            self.resync_cur_pc_after_frame_change(orig_frame_idx);
                         }
                         return Ok(state);
                     }
@@ -7810,6 +7870,29 @@ impl BexVm {
                     ) => return Err(e),
                 }
             }
+        }
+    }
+
+    /// Make `cur_pc` a program counter of the top frame after an instruction
+    /// changed the top frame and yielded before the new top frame dispatched
+    /// anything. Stack traces, state dumps, and thread-state export read the
+    /// innermost frame's live program counter from `cur_pc`, so it must belong
+    /// to that frame's function.
+    ///
+    /// After a call (`previous_frame_idx` is below the new top) nothing of the
+    /// callee has run, so the live program counter is the callee's entry.
+    /// After a return the caller is still at the call instruction whose
+    /// program counter it recorded in `faulting_pc` when it descended.
+    fn resync_cur_pc_after_frame_change(&mut self, previous_frame_idx: usize) {
+        let Some(top_idx) = self.frames.len().checked_sub(1) else {
+            return;
+        };
+        if let Some(Frame::Bytecode(top)) = self.frames.last() {
+            self.cur_pc = if top_idx > previous_frame_idx {
+                top.instruction_ptr
+            } else {
+                top.faulting_pc
+            };
         }
     }
 

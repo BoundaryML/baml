@@ -44,6 +44,7 @@ mod generated {
     include!(concat!(env!("OUT_DIR"), "/reflectfunctions_generated.rs"));
 }
 pub use generated::*;
+pub(crate) use reflect::restore_continuation;
 
 /// The VM's native implementations for the `reflect` package.
 pub struct PackageReflectImpl;

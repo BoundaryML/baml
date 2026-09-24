@@ -1,0 +1,193 @@
+import { useEffect, useMemo, useState } from "react";
+import { REGISTRY_SITE, type JsonObject, type Site, type SiteEntry, type SiteInfo } from "../protocol";
+import { connectionOf, pickerFunctions, type AppState } from "../state";
+
+const CUSTOM = "__custom__";
+const DEFAULT_ARGS = '{"city":"Lisbon"}';
+
+interface Props {
+  /** The site registry, in registry order. */
+  sites: readonly SiteEntry[];
+  connections: AppState["connections"];
+  fixture: { name: string; title: string; speed: number; onReplay(): void } | null;
+  onStart(site: Site, fn: string, args: JsonObject): Promise<void>;
+  onOpenScenarios(): void;
+}
+
+const CONNECTION_LABELS = {
+  connecting: "connecting",
+  open: "connected",
+  disconnected: "disconnected, retrying",
+  fixture: "fixture",
+} as const;
+
+/**
+ * One line for every site together. A site is only worth naming when
+ * something is wrong with it, so the good case says "connected" once and the
+ * bad case names the sites that are not.
+ */
+function connectionSummary(
+  sites: readonly SiteEntry[],
+  connections: AppState["connections"],
+): { text: string; problem: boolean } {
+  const statusOf = (name: Site) => connectionOf({ connections }, name).status;
+  const down = sites.filter((site) => statusOf(site.name) === "disconnected");
+  if (down.length > 0) {
+    const names = down.map((site) => site.name).join(", ");
+    return { text: `${names} ${down.length === 1 ? "is" : "are"} not answering`, problem: true };
+  }
+  if (sites.some((site) => statusOf(site.name) === "connecting")) {
+    return { text: "connecting", problem: false };
+  }
+  if (sites.length > 0 && sites.every((site) => statusOf(site.name) === "fixture")) {
+    return { text: "fixture", problem: false };
+  }
+  return { text: "connected", problem: false };
+}
+
+function parseArgs(text: string): { args: JsonObject | null; error: string | null } {
+  try {
+    const value: unknown = JSON.parse(text);
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      return { args: null, error: "args must be a JSON object keyed by parameter name" };
+    }
+    return { args: value as JsonObject, error: null };
+  } catch (cause) {
+    return { args: null, error: cause instanceof Error ? cause.message : "invalid JSON" };
+  }
+}
+
+export function Header({ sites, connections, fixture, onStart, onOpenScenarios }: Props) {
+  // Every site runs the same program. The first site that answered names the functions.
+  const summary = connectionSummary(sites, connections);
+  const info: SiteInfo | null = sites.map((entry) => connectionOf({ connections }, entry.name).info).find((candidate) => candidate !== null) ?? null;
+  const functions = useMemo(() => pickerFunctions(info), [info]);
+  const [choice, setChoice] = useState<string>(CUSTOM);
+  const [custom, setCustom] = useState("durable_plan_trip");
+  const [argsText, setArgsText] = useState(DEFAULT_ARGS);
+  const [chosenSite, setSite] = useState<Site>(REGISTRY_SITE);
+  // The chosen site can leave the registry. The first site takes its place.
+  const site = sites.some((entry) => entry.name === chosenSite) ? chosenSite : (sites[0]?.name ?? chosenSite);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Once the function list arrives, prefer the durable demo function.
+  useEffect(() => {
+    if (functions.length === 0) {
+      setChoice(CUSTOM);
+      return;
+    }
+    setChoice((current) => {
+      if (current !== CUSTOM && functions.some((fn) => fn.name === current)) return current;
+      return (functions.find((fn) => fn.name === "durable_plan_trip") ?? functions[0])?.name ?? CUSTOM;
+    });
+  }, [functions]);
+
+  const fnName = choice === CUSTOM ? custom.trim() : choice;
+  const parsed = parseArgs(argsText);
+  const selectedInfo = functions.find((fn) => fn.name === fnName);
+
+  const start = async (): Promise<void> => {
+    if (parsed.args === null || fnName === "") return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onStart(site, fnName, parsed.args);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <header className="header" data-testid="header">
+      <div className="brand">
+        <div className="brand-row">
+          <b>BAML durable functions</b>
+          <button className="btn small scenarios-btn" data-testid="open-scenarios" onClick={onOpenScenarios}
+            title="Guided scenarios: pause and move a run, fan-out with a durable sleep, race and cancellation, deadline, all settled, kill and recover, fork">
+            <span aria-hidden="true">✦</span> Scenarios
+          </button>
+        </div>
+        <div className="conns" data-testid="conns" data-problem={summary.problem ? "true" : undefined}
+          title={sites
+            .map(({ name, url }) => `${name}${url ? ` (${url})` : ""}: ${CONNECTION_LABELS[connectionOf({ connections }, name).status]}`)
+            .join("\n")}>
+          {sites.map(({ name }) => {
+            const status = connectionOf({ connections }, name).status;
+            return (
+              <span key={name} className="conn-dot" data-status={status} data-testid={`conn-${name}`}>
+                <i className="site-dot" data-site={name} />
+              </span>
+            );
+          })}
+          <span className="conn-summary" data-problem={summary.problem ? "true" : undefined} data-testid="conn-summary">
+            {summary.problem && <span aria-hidden="true">⚠ </span>}
+            {summary.text}
+          </span>
+        </div>
+      </div>
+
+      <form className="start-form" onSubmit={(event) => { event.preventDefault(); void start(); }}>
+        <label>
+          Function
+          <span className="fn-controls">
+            {functions.length > 0 && (
+              <select className="input mono" value={choice} onChange={(event) => setChoice(event.target.value)} data-testid="fn-select">
+                {functions.map((fn) => (
+                  <option key={fn.name} value={fn.name}>
+                    {fn.name}
+                    {fn.durable ? "  [durable]" : ""}
+                    {fn.remote ? "  [remote]" : ""}
+                  </option>
+                ))}
+                <option value={CUSTOM}>other…</option>
+              </select>
+            )}
+            {choice === CUSTOM && (
+              <input className="input mono" value={custom} onChange={(event) => setCustom(event.target.value)}
+                placeholder="function name" spellCheck={false} aria-label="Function name" data-testid="fn-text" style={{ width: 190 }} />
+            )}
+          </span>
+        </label>
+        <label className="args">
+          <span>
+            Args (JSON){selectedInfo && selectedInfo.params.length > 0 && (
+              <span className="mono" style={{ textTransform: "none" }}>
+                {" "}· {selectedInfo.params.map((param) => `${param.name}: ${param.type}`).join(", ")}
+              </span>
+            )}
+          </span>
+          <textarea className="input" value={argsText} onChange={(event) => setArgsText(event.target.value)}
+            spellCheck={false} aria-invalid={parsed.error !== null} data-testid="args" />
+        </label>
+        <div className="go">
+          <span className="seg" role="group" aria-label="Site to start on">
+            {sites.map(({ name }) => (
+              <button key={name} type="button" aria-pressed={site === name} onClick={() => setSite(name)}>
+                <i className="site-dot" data-site={name} />
+                {name}
+              </button>
+            ))}
+          </span>
+          <button className="btn primary" type="submit" disabled={busy || parsed.args === null || fnName === ""} data-testid="start">
+            Start
+          </button>
+        </div>
+      </form>
+
+      {(parsed.error ?? error) && <div className="error-line" role="alert">{parsed.error ?? error}</div>}
+
+      {fixture && (
+        <div className="fixture-tag" data-testid="fixture-tag" title={fixture.title}>
+          fixture <b>{fixture.name}</b>
+          <span className="muted">{Number.isFinite(fixture.speed) ? `${fixture.speed}× speed` : "instant"}</span>
+          <button className="btn small" onClick={fixture.onReplay}>Replay</button>
+          <a className="btn small" href="?" title="Leave the recording and connect to the site servers">Live</a>
+        </div>
+      )}
+
+    </header>
+  );
+}

@@ -397,6 +397,37 @@ impl Continuation for ToStringWalkContinuation {
             }
         }
     }
+
+    /// Layout: `values = [root]`, `ptrs = pending`, `strings = results`.
+    fn snapshot(&self) -> Option<super::ContinuationState> {
+        let mut state = super::ContinuationState::new("root.to_string_walk");
+        state.values.push(self.root);
+        state.ptrs.clone_from(&self.pending);
+        state.strings.clone_from(&self.results);
+        Some(state)
+    }
+}
+
+/// Inverse of [`ToStringWalkContinuation::snapshot`]. `None` for a tag that
+/// belongs to another module.
+pub(super) fn restore_continuation(
+    state: &super::ContinuationState,
+) -> Option<Result<Box<dyn Continuation>, String>> {
+    if state.tag != "root.to_string_walk" {
+        return None;
+    }
+    let Some(root) = state.values.first().copied() else {
+        return Some(Err(state.invalid("no root value")));
+    };
+    // The walk is live while override `results.len()` runs.
+    if state.strings.len() >= state.ptrs.len() {
+        return Some(Err(state.invalid("more results than overrides")));
+    }
+    Some(Ok(Box::new(ToStringWalkContinuation {
+        root,
+        pending: state.ptrs.clone(),
+        results: state.strings.clone(),
+    })))
 }
 
 /// Owned snapshot of a heap object, captured so the recursive walker never

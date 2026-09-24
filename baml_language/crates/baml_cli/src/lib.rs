@@ -36,6 +36,7 @@ pub(crate) mod output;
 pub(crate) mod pack_command;
 pub(crate) mod paint;
 pub(crate) mod playground_command;
+pub(crate) mod program_store_command;
 pub(crate) mod project_load;
 pub(crate) mod project_session;
 pub(crate) mod query_command;
@@ -48,6 +49,7 @@ pub(crate) mod telemetry_command;
 pub(crate) mod test_command;
 pub(crate) mod test_filter;
 pub(crate) mod util;
+pub(crate) mod worker_command;
 
 // TODO: These modules are disabled for now as they depend on baml_runtime
 // pub(crate) mod api_client;

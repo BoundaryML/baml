@@ -158,21 +158,34 @@ impl HeapPtr {
 // actually puts into a serialized `Program` (`Object::{Function, Class,
 // Enum, String}`) is HeapPtr-free, so any path that does encounter one
 // reflects a real bug we want to surface immediately rather than mask.
+//
+// The one exception is a heap snapshot (`crate::snapshot_ctx`). While a
+// snapshot writer or loader has installed a translation context on the
+// current OS thread, a pointer is written as a position-independent `SnapRef`
+// and read back as the address of the restored object. With no context
+// installed the behavior is unchanged: both directions fail.
 impl BorshSerialize for HeapPtr {
-    fn serialize<W: std::io::Write>(&self, _writer: &mut W) -> std::io::Result<()> {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "HeapPtr is a runtime-only pointer and must not be serialized",
-        ))
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        match crate::snapshot_ctx::encode_ptr(*self) {
+            Some(reference) => reference?.serialize(writer),
+            None => Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "HeapPtr is a runtime-only pointer and must not be serialized",
+            )),
+        }
     }
 }
 
 impl BorshDeserialize for HeapPtr {
-    fn deserialize_reader<R: std::io::Read>(_reader: &mut R) -> std::io::Result<Self> {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "HeapPtr cannot be deserialized: runtime pointer leaked into serialized data",
-        ))
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        if !crate::snapshot_ctx::loader_active() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "HeapPtr cannot be deserialized: runtime pointer leaked into serialized data",
+            ));
+        }
+        let reference = crate::snapshot_ctx::SnapRef::deserialize_reader(reader)?;
+        crate::snapshot_ctx::decode_ptr(reference)
     }
 }
 

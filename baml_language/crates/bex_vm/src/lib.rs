@@ -21,6 +21,7 @@ pub mod package_boundary;
 pub mod package_load;
 pub mod package_reflect;
 pub mod reachable;
+pub mod snapshot;
 mod type_context;
 mod type_match;
 pub mod types;
@@ -29,6 +30,7 @@ pub mod vm;
 pub use errors::{StackFrame, VmPanic, format_traceback};
 pub use indexable::EvalStack;
 pub use package_baml::NativeFunction;
+pub use snapshot::{FrameState, FrameView, SnapshotRoot, ThrowContextState, VmThreadState};
 pub use vm::{
     BexVm, BytecodeFrame, BytecodeProgram, Frame, VmCallCaptureEvent, VmCallCaptureKind,
     VmCallInputCapture, VmCallInputCaptureHook, VmCaptureMask, VmErrorCaptureEvent,

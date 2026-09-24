@@ -1,0 +1,2072 @@
+{
+ "note": "Recorded from the site servers with the mock worker (contract section 9). The run stores of the three sites after durable_fan_out completed: the run records (meta.json) and the event files (events.jsonl).",
+ "runs": [
+  {
+   "id": "r-t7xyzw",
+   "site": "local",
+   "function": "durable_fan_out",
+   "args": {
+    "city": "Lisbon",
+    "mock_nap_ms": 7000
+   },
+   "durable": true,
+   "status": "completed",
+   "parent": null,
+   "origin": null,
+   "segment": 2,
+   "pid": null,
+   "position": {
+    "thread": 1,
+    "function": "durable_fan_out",
+    "file": "baml_src/quotes.baml",
+    "line": 166
+   },
+   "waiting_on": [],
+   "snapshots": [
+    {
+     "n": 1,
+     "snapshot_path": ".baml/runs-test-local/r-t7xyzw/snap-1.bamlsnap",
+     "state_path": ".baml/runs-test-local/r-t7xyzw/snap-1.json",
+     "bytes": 1835,
+     "ts": 1789896251720,
+     "stats": {
+      "pause_latency_ms": null,
+      "walk_ms": 1.12,
+      "encode_ms": 0.01,
+      "compress_ms": 0,
+      "write_ms": 0.25,
+      "objects": 52,
+      "raw_bytes": 1835,
+      "compressed_bytes": 1835,
+      "program_bytes": null,
+      "blocked_attempts": 0
+     },
+     "segment": 1,
+     "automatic": false
+    }
+   ],
+   "result": {
+    "city": "Lisbon",
+    "quotes": [
+     {
+      "request": {
+       "city": "Lisbon",
+       "kind": "Flight",
+       "nights": 3,
+       "delay_ms": 3000,
+       "traveler": {
+        "name": "Ada",
+        "loyalty_tier": 2
+       },
+       "options": {
+        "currency": "EUR"
+       }
+      },
+      "vendor": "Skyways",
+      "price": {
+       "amount": 420,
+       "currency": "EUR"
+      },
+      "tags": [
+       "flight",
+       "lisbon"
+      ],
+      "extras": {
+       "insurance": 12,
+       "late_checkout": 30
+      },
+      "note": "loyalty tier 2 applied for Ada"
+     },
+     {
+      "request": {
+       "city": "Lisbon",
+       "kind": "Hotel",
+       "nights": 3,
+       "delay_ms": 5000,
+       "traveler": {
+        "name": "Ada",
+        "loyalty_tier": 2
+       },
+       "options": {
+        "currency": "EUR"
+       }
+      },
+      "vendor": "Casa Azul",
+      "price": {
+       "amount": 405,
+       "currency": "EUR"
+      },
+      "tags": [
+       "hotel",
+       "lisbon"
+      ],
+      "extras": {
+       "insurance": 12,
+       "late_checkout": 30
+      },
+      "note": "loyalty tier 2 applied for Ada"
+     },
+     {
+      "request": {
+       "city": "Lisbon",
+       "kind": "Car",
+       "nights": 3,
+       "delay_ms": 2000,
+       "traveler": {
+        "name": "Ada",
+        "loyalty_tier": 2
+       },
+       "options": {
+        "currency": "EUR"
+       }
+      },
+      "vendor": "Rodas",
+      "price": {
+       "amount": 144,
+       "currency": "EUR"
+      },
+      "tags": [
+       "car",
+       "lisbon"
+      ],
+      "extras": {
+       "insurance": 12,
+       "late_checkout": 30
+      },
+      "note": "loyalty tier 2 applied for Ada"
+     },
+     {
+      "request": {
+       "city": "Lisbon",
+       "kind": "Tour",
+       "nights": 3,
+       "delay_ms": 4000,
+       "traveler": {
+        "name": "Ada",
+        "loyalty_tier": 2
+       },
+       "options": {
+        "currency": "EUR"
+       }
+      },
+      "vendor": "Seven Hills Walks",
+      "price": {
+       "amount": 225,
+       "currency": "EUR"
+      },
+      "tags": [
+       "tour",
+       "lisbon"
+      ],
+      "extras": {
+       "insurance": 12,
+       "late_checkout": 30
+      },
+      "note": "loyalty tier 2 applied for Ada"
+     }
+    ],
+    "total": {
+     "amount": 1194,
+     "currency": "EUR"
+    },
+    "vendors": {
+     "Flight": "Skyways",
+     "Hotel": "Casa Azul",
+     "Car": "Rodas",
+     "Tour": "Seven Hills Walks"
+    },
+    "cheapest": {
+     "request": {
+      "city": "Lisbon",
+      "kind": "Car",
+      "nights": 3,
+      "delay_ms": 2000,
+      "traveler": {
+       "name": "Ada",
+       "loyalty_tier": 2
+      },
+      "options": {
+       "currency": "EUR"
+      }
+     },
+     "vendor": "Rodas",
+     "price": {
+      "amount": 144,
+      "currency": "EUR"
+     },
+     "tags": [
+      "car",
+      "lisbon"
+     ],
+     "extras": {
+      "insurance": 12,
+      "late_checkout": 30
+     },
+     "note": "loyalty tier 2 applied for Ada"
+    }
+   },
+   "error": null,
+   "created_ts": 1789896251689,
+   "updated_ts": 1789896259059,
+   "remote_results": [
+    {
+     "call_id": "r-t7xyzw-c3",
+     "value": {
+      "request": {
+       "city": "Lisbon",
+       "kind": "Car",
+       "nights": 3,
+       "delay_ms": 2000,
+       "traveler": {
+        "name": "Ada",
+        "loyalty_tier": 2
+       },
+       "options": {
+        "currency": "EUR"
+       }
+      },
+      "vendor": "Rodas",
+      "price": {
+       "amount": 144,
+       "currency": "EUR"
+      },
+      "tags": [
+       "car",
+       "lisbon"
+      ],
+      "extras": {
+       "insurance": 12,
+       "late_checkout": 30
+      },
+      "note": "loyalty tier 2 applied for Ada"
+     },
+     "error": null,
+     "acked": true,
+     "ts": 1789896253808
+    },
+    {
+     "call_id": "r-t7xyzw-c1",
+     "value": {
+      "request": {
+       "city": "Lisbon",
+       "kind": "Flight",
+       "nights": 3,
+       "delay_ms": 3000,
+       "traveler": {
+        "name": "Ada",
+        "loyalty_tier": 2
+       },
+       "options": {
+        "currency": "EUR"
+       }
+      },
+      "vendor": "Skyways",
+      "price": {
+       "amount": 420,
+       "currency": "EUR"
+      },
+      "tags": [
+       "flight",
+       "lisbon"
+      ],
+      "extras": {
+       "insurance": 12,
+       "late_checkout": 30
+      },
+      "note": "loyalty tier 2 applied for Ada"
+     },
+     "error": null,
+     "acked": true,
+     "ts": 1789896254785
+    },
+    {
+     "call_id": "r-t7xyzw-c4",
+     "value": {
+      "request": {
+       "city": "Lisbon",
+       "kind": "Tour",
+       "nights": 3,
+       "delay_ms": 4000,
+       "traveler": {
+        "name": "Ada",
+        "loyalty_tier": 2
+       },
+       "options": {
+        "currency": "EUR"
+       }
+      },
+      "vendor": "Seven Hills Walks",
+      "price": {
+       "amount": 225,
+       "currency": "EUR"
+      },
+      "tags": [
+       "tour",
+       "lisbon"
+      ],
+      "extras": {
+       "insurance": 12,
+       "late_checkout": 30
+      },
+      "note": "loyalty tier 2 applied for Ada"
+     },
+     "error": null,
+     "acked": true,
+     "ts": 1789896255780
+    },
+    {
+     "call_id": "r-t7xyzw-c2",
+     "value": {
+      "request": {
+       "city": "Lisbon",
+       "kind": "Hotel",
+       "nights": 3,
+       "delay_ms": 5000,
+       "traveler": {
+        "name": "Ada",
+        "loyalty_tier": 2
+       },
+       "options": {
+        "currency": "EUR"
+       }
+      },
+      "vendor": "Casa Azul",
+      "price": {
+       "amount": 405,
+       "currency": "EUR"
+      },
+      "tags": [
+       "hotel",
+       "lisbon"
+      ],
+      "extras": {
+       "insurance": 12,
+       "late_checkout": 30
+      },
+      "note": "loyalty tier 2 applied for Ada"
+     },
+     "error": null,
+     "acked": true,
+     "ts": 1789896256798
+    }
+   ],
+   "forked_from": null,
+   "result_delivered": false,
+   "blocked": null,
+   "migrated_to": null,
+   "wake_at": null,
+   "program_hash": "e1be13b689f4c8628bb5baf41af52c8651f0d420e940b02a81182a00a6805007",
+   "cancelled_calls": []
+  },
+  {
+   "id": "r-5yu3s2",
+   "site": "cloud",
+   "function": "remote_get_quote",
+   "args": {
+    "request": {
+     "city": "Lisbon",
+     "kind": "Car",
+     "nights": 3,
+     "delay_ms": 2000,
+     "traveler": {
+      "name": "Ada",
+      "loyalty_tier": 2
+     },
+     "options": {
+      "currency": "EUR"
+     }
+    }
+   },
+   "durable": false,
+   "status": "completed",
+   "parent": {
+    "site": "local",
+    "run": "r-t7xyzw",
+    "call_id": "r-t7xyzw-c3"
+   },
+   "origin": null,
+   "segment": 1,
+   "pid": null,
+   "position": {
+    "thread": 1,
+    "function": "remote_get_quote",
+    "file": "baml_src/quotes.baml",
+    "line": 130
+   },
+   "waiting_on": [],
+   "snapshots": [],
+   "result": {
+    "request": {
+     "city": "Lisbon",
+     "kind": "Car",
+     "nights": 3,
+     "delay_ms": 2000,
+     "traveler": {
+      "name": "Ada",
+      "loyalty_tier": 2
+     },
+     "options": {
+      "currency": "EUR"
+     }
+    },
+    "vendor": "Rodas",
+    "price": {
+     "amount": 144,
+     "currency": "EUR"
+    },
+    "tags": [
+     "car",
+     "lisbon"
+    ],
+    "extras": {
+     "insurance": 12,
+     "late_checkout": 30
+    },
+    "note": "loyalty tier 2 applied for Ada"
+   },
+   "error": null,
+   "created_ts": 1789896251754,
+   "updated_ts": 1789896253818,
+   "remote_results": [],
+   "forked_from": null,
+   "result_delivered": true,
+   "blocked": null,
+   "migrated_to": null,
+   "wake_at": null,
+   "program_hash": "e1be13b689f4c8628bb5baf41af52c8651f0d420e940b02a81182a00a6805007",
+   "cancelled_calls": []
+  },
+  {
+   "id": "r-kdfxk0",
+   "site": "cloud",
+   "function": "remote_get_quote",
+   "args": {
+    "request": {
+     "city": "Lisbon",
+     "kind": "Flight",
+     "nights": 3,
+     "delay_ms": 3000,
+     "traveler": {
+      "name": "Ada",
+      "loyalty_tier": 2
+     },
+     "options": {
+      "currency": "EUR"
+     }
+    }
+   },
+   "durable": false,
+   "status": "completed",
+   "parent": {
+    "site": "local",
+    "run": "r-t7xyzw",
+    "call_id": "r-t7xyzw-c1"
+   },
+   "origin": null,
+   "segment": 1,
+   "pid": null,
+   "position": {
+    "thread": 1,
+    "function": "remote_get_quote",
+    "file": "baml_src/quotes.baml",
+    "line": 130
+   },
+   "waiting_on": [],
+   "snapshots": [],
+   "result": {
+    "request": {
+     "city": "Lisbon",
+     "kind": "Flight",
+     "nights": 3,
+     "delay_ms": 3000,
+     "traveler": {
+      "name": "Ada",
+      "loyalty_tier": 2
+     },
+     "options": {
+      "currency": "EUR"
+     }
+    },
+    "vendor": "Skyways",
+    "price": {
+     "amount": 420,
+     "currency": "EUR"
+    },
+    "tags": [
+     "flight",
+     "lisbon"
+    ],
+    "extras": {
+     "insurance": 12,
+     "late_checkout": 30
+    },
+    "note": "loyalty tier 2 applied for Ada"
+   },
+   "error": null,
+   "created_ts": 1789896251726,
+   "updated_ts": 1789896254804,
+   "remote_results": [],
+   "forked_from": null,
+   "result_delivered": true,
+   "blocked": null,
+   "migrated_to": null,
+   "wake_at": null,
+   "program_hash": "e1be13b689f4c8628bb5baf41af52c8651f0d420e940b02a81182a00a6805007",
+   "cancelled_calls": []
+  },
+  {
+   "id": "r-wr0fm1",
+   "site": "cloud2",
+   "function": "remote_get_quote",
+   "args": {
+    "request": {
+     "city": "Lisbon",
+     "kind": "Tour",
+     "nights": 3,
+     "delay_ms": 4000,
+     "traveler": {
+      "name": "Ada",
+      "loyalty_tier": 2
+     },
+     "options": {
+      "currency": "EUR"
+     }
+    }
+   },
+   "durable": false,
+   "status": "completed",
+   "parent": {
+    "site": "local",
+    "run": "r-t7xyzw",
+    "call_id": "r-t7xyzw-c4"
+   },
+   "origin": null,
+   "segment": 1,
+   "pid": null,
+   "position": {
+    "thread": 1,
+    "function": "remote_get_quote",
+    "file": "baml_src/quotes.baml",
+    "line": 130
+   },
+   "waiting_on": [],
+   "snapshots": [],
+   "result": {
+    "request": {
+     "city": "Lisbon",
+     "kind": "Tour",
+     "nights": 3,
+     "delay_ms": 4000,
+     "traveler": {
+      "name": "Ada",
+      "loyalty_tier": 2
+     },
+     "options": {
+      "currency": "EUR"
+     }
+    },
+    "vendor": "Seven Hills Walks",
+    "price": {
+     "amount": 225,
+     "currency": "EUR"
+    },
+    "tags": [
+     "tour",
+     "lisbon"
+    ],
+    "extras": {
+     "insurance": 12,
+     "late_checkout": 30
+    },
+    "note": "loyalty tier 2 applied for Ada"
+   },
+   "error": null,
+   "created_ts": 1789896251730,
+   "updated_ts": 1789896255803,
+   "remote_results": [],
+   "forked_from": null,
+   "result_delivered": true,
+   "blocked": null,
+   "migrated_to": null,
+   "wake_at": null,
+   "program_hash": "e1be13b689f4c8628bb5baf41af52c8651f0d420e940b02a81182a00a6805007",
+   "cancelled_calls": []
+  },
+  {
+   "id": "r-3hhfpe",
+   "site": "cloud2",
+   "function": "remote_get_quote",
+   "args": {
+    "request": {
+     "city": "Lisbon",
+     "kind": "Hotel",
+     "nights": 3,
+     "delay_ms": 5000,
+     "traveler": {
+      "name": "Ada",
+      "loyalty_tier": 2
+     },
+     "options": {
+      "currency": "EUR"
+     }
+    }
+   },
+   "durable": false,
+   "status": "completed",
+   "parent": {
+    "site": "local",
+    "run": "r-t7xyzw",
+    "call_id": "r-t7xyzw-c2"
+   },
+   "origin": null,
+   "segment": 1,
+   "pid": null,
+   "position": {
+    "thread": 1,
+    "function": "remote_get_quote",
+    "file": "baml_src/quotes.baml",
+    "line": 130
+   },
+   "waiting_on": [],
+   "snapshots": [],
+   "result": {
+    "request": {
+     "city": "Lisbon",
+     "kind": "Hotel",
+     "nights": 3,
+     "delay_ms": 5000,
+     "traveler": {
+      "name": "Ada",
+      "loyalty_tier": 2
+     },
+     "options": {
+      "currency": "EUR"
+     }
+    },
+    "vendor": "Casa Azul",
+    "price": {
+     "amount": 405,
+     "currency": "EUR"
+    },
+    "tags": [
+     "hotel",
+     "lisbon"
+    ],
+    "extras": {
+     "insurance": 12,
+     "late_checkout": 30
+    },
+    "note": "loyalty tier 2 applied for Ada"
+   },
+   "error": null,
+   "created_ts": 1789896251727,
+   "updated_ts": 1789896256837,
+   "remote_results": [],
+   "forked_from": null,
+   "result_delivered": true,
+   "blocked": null,
+   "migrated_to": null,
+   "wake_at": null,
+   "program_hash": "e1be13b689f4c8628bb5baf41af52c8651f0d420e940b02a81182a00a6805007",
+   "cancelled_calls": []
+  }
+ ],
+ "events": {
+  "local/r-t7xyzw": [
+   {
+    "v": 1,
+    "type": "hello",
+    "ts": 1789896251716,
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "mode": "start",
+    "function": "durable_fan_out",
+    "durable": true,
+    "program_hash": "e1be13b689f4c8628bb5baf41af52c8651f0d420e940b02a81182a00a6805007",
+    "mock_program_source": "compile",
+    "mock_project": "/Users/aaron/projects/baml2/baml_language/.claude/worktrees/ai-functions-agents-bep-926044/baml_language/demo_durable/program",
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "thread_started",
+    "ts": 1789896251717,
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "thread": 1,
+    "parent_thread": null,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "position",
+    "ts": 1789896251717,
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "thread": 1,
+    "function": "durable_fan_out",
+    "file": "baml_src/quotes.baml",
+    "line": 158,
+    "reason": "sysop",
+    "op": "baml.io.println",
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "log",
+    "ts": 1789896251717,
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "stream": "stdout",
+    "text": "asking four vendors for Lisbon",
+    "thread": 1,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "thread_started",
+    "ts": 1789896251718,
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "thread": 2,
+    "parent_thread": 1,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "position",
+    "ts": 1789896251718,
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "thread": 2,
+    "function": "durable_fan_out.<spawn>",
+    "file": "baml_src/quotes.baml",
+    "line": 159,
+    "reason": "remote_call",
+    "op": null,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "remote_call",
+    "ts": 1789896251718,
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "call_id": "r-t7xyzw-c1",
+    "thread": 2,
+    "function": "remote_get_quote",
+    "args": {
+     "request": {
+      "city": "Lisbon",
+      "kind": "Flight",
+      "nights": 3,
+      "delay_ms": 3000,
+      "traveler": {
+       "name": "Ada",
+       "loyalty_tier": 2
+      },
+      "options": {
+       "currency": "EUR"
+      }
+     }
+    },
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "thread_started",
+    "ts": 1789896251718,
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "thread": 3,
+    "parent_thread": 1,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "position",
+    "ts": 1789896251718,
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "thread": 3,
+    "function": "durable_fan_out.<spawn>",
+    "file": "baml_src/quotes.baml",
+    "line": 160,
+    "reason": "remote_call",
+    "op": null,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "remote_call",
+    "ts": 1789896251718,
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "call_id": "r-t7xyzw-c2",
+    "thread": 3,
+    "function": "remote_get_quote",
+    "args": {
+     "request": {
+      "city": "Lisbon",
+      "kind": "Hotel",
+      "nights": 3,
+      "delay_ms": 5000,
+      "traveler": {
+       "name": "Ada",
+       "loyalty_tier": 2
+      },
+      "options": {
+       "currency": "EUR"
+      }
+     }
+    },
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "thread_started",
+    "ts": 1789896251718,
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "thread": 4,
+    "parent_thread": 1,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "position",
+    "ts": 1789896251718,
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "thread": 4,
+    "function": "durable_fan_out.<spawn>",
+    "file": "baml_src/quotes.baml",
+    "line": 161,
+    "reason": "remote_call",
+    "op": null,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "remote_call",
+    "ts": 1789896251718,
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "call_id": "r-t7xyzw-c3",
+    "thread": 4,
+    "function": "remote_get_quote",
+    "args": {
+     "request": {
+      "city": "Lisbon",
+      "kind": "Car",
+      "nights": 3,
+      "delay_ms": 2000,
+      "traveler": {
+       "name": "Ada",
+       "loyalty_tier": 2
+      },
+      "options": {
+       "currency": "EUR"
+      }
+     }
+    },
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "thread_started",
+    "ts": 1789896251718,
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "thread": 5,
+    "parent_thread": 1,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "position",
+    "ts": 1789896251718,
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "thread": 5,
+    "function": "durable_fan_out.<spawn>",
+    "file": "baml_src/quotes.baml",
+    "line": 162,
+    "reason": "remote_call",
+    "op": null,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "remote_call",
+    "ts": 1789896251718,
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "call_id": "r-t7xyzw-c4",
+    "thread": 5,
+    "function": "remote_get_quote",
+    "args": {
+     "request": {
+      "city": "Lisbon",
+      "kind": "Tour",
+      "nights": 3,
+      "delay_ms": 4000,
+      "traveler": {
+       "name": "Ada",
+       "loyalty_tier": 2
+      },
+      "options": {
+       "currency": "EUR"
+      }
+     }
+    },
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "position",
+    "ts": 1789896251718,
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "thread": 1,
+    "function": "durable_fan_out",
+    "file": "baml_src/quotes.baml",
+    "line": 163,
+    "reason": "sysop",
+    "op": "baml.io.println",
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "log",
+    "ts": 1789896251718,
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "stream": "stdout",
+    "text": "sleeping 7 seconds while the vendors work",
+    "thread": 1,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "position",
+    "ts": 1789896251718,
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "thread": 1,
+    "function": "durable_fan_out",
+    "file": "baml_src/quotes.baml",
+    "line": 164,
+    "reason": "sysop",
+    "op": "baml.sys.sleep",
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "paused",
+    "ts": 1789896251720,
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "snapshot_path": ".baml/runs-test-local/r-t7xyzw/snap-1.bamlsnap",
+    "state_path": ".baml/runs-test-local/r-t7xyzw/snap-1.json",
+    "stats": {
+     "pause_latency_ms": null,
+     "walk_ms": 1.12,
+     "encode_ms": 0.01,
+     "compress_ms": 0,
+     "write_ms": 0.25,
+     "objects": 52,
+     "raw_bytes": 1835,
+     "compressed_bytes": 1835,
+     "program_bytes": null,
+     "blocked_attempts": 0
+    },
+    "wake": {
+     "reason": "sleep",
+     "remaining_ms": 6998,
+     "at_ts": 1789896258718
+    },
+    "site": "local"
+   },
+   {
+    "type": "worker_exit",
+    "run": "r-t7xyzw",
+    "segment": 1,
+    "pid": 41482,
+    "exit_code": 75,
+    "signal": null,
+    "status": "sleeping",
+    "ts": 1789896251733,
+    "site": "local"
+   },
+   {
+    "type": "sleep_scheduled",
+    "run": "r-t7xyzw",
+    "wake_at": 1789896258729,
+    "ts": 1789896251733,
+    "site": "local"
+   },
+   {
+    "type": "remote_dispatched",
+    "run": "r-t7xyzw",
+    "call_id": "r-t7xyzw-c1",
+    "child_site": "cloud",
+    "child_run": "r-kdfxk0",
+    "function": "remote_get_quote",
+    "ts": 1789896251737,
+    "site": "local"
+   },
+   {
+    "type": "remote_dispatched",
+    "run": "r-t7xyzw",
+    "call_id": "r-t7xyzw-c2",
+    "child_site": "cloud2",
+    "child_run": "r-3hhfpe",
+    "function": "remote_get_quote",
+    "ts": 1789896251739,
+    "site": "local"
+   },
+   {
+    "type": "remote_dispatched",
+    "run": "r-t7xyzw",
+    "call_id": "r-t7xyzw-c4",
+    "child_site": "cloud2",
+    "child_run": "r-wr0fm1",
+    "function": "remote_get_quote",
+    "ts": 1789896251740,
+    "site": "local"
+   },
+   {
+    "type": "remote_dispatched",
+    "run": "r-t7xyzw",
+    "call_id": "r-t7xyzw-c3",
+    "child_site": "cloud",
+    "child_run": "r-5yu3s2",
+    "function": "remote_get_quote",
+    "ts": 1789896251764,
+    "site": "local"
+   },
+   {
+    "type": "remote_returned",
+    "run": "r-t7xyzw",
+    "call_id": "r-t7xyzw-c3",
+    "child_site": "cloud",
+    "child_run": "r-5yu3s2",
+    "ok": true,
+    "ts": 1789896253808,
+    "site": "local"
+   },
+   {
+    "type": "remote_returned",
+    "run": "r-t7xyzw",
+    "call_id": "r-t7xyzw-c1",
+    "child_site": "cloud",
+    "child_run": "r-kdfxk0",
+    "ok": true,
+    "ts": 1789896254785,
+    "site": "local"
+   },
+   {
+    "type": "remote_returned",
+    "run": "r-t7xyzw",
+    "call_id": "r-t7xyzw-c4",
+    "child_site": "cloud2",
+    "child_run": "r-wr0fm1",
+    "ok": true,
+    "ts": 1789896255780,
+    "site": "local"
+   },
+   {
+    "type": "remote_returned",
+    "run": "r-t7xyzw",
+    "call_id": "r-t7xyzw-c2",
+    "child_site": "cloud2",
+    "child_run": "r-3hhfpe",
+    "ok": true,
+    "ts": 1789896256798,
+    "site": "local"
+   },
+   {
+    "type": "woken",
+    "run": "r-t7xyzw",
+    "reason": "timer",
+    "ts": 1789896258732,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "hello",
+    "ts": 1789896258759,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "mode": "resume",
+    "function": "durable_fan_out",
+    "durable": true,
+    "program_hash": "e1be13b689f4c8628bb5baf41af52c8651f0d420e940b02a81182a00a6805007",
+    "mock_program_source": "store",
+    "mock_project": "/Users/aaron/projects/baml2/baml_language/.claude/worktrees/ai-functions-agents-bep-926044/baml_language/demo_durable/program",
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "resumed",
+    "ts": 1789896258760,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "stats": {
+     "process_start_ms": 12.94,
+     "program_load_ms": 0.67,
+     "decode_ms": 0.09,
+     "first_exec_ms": 2.32,
+     "program_source": "store"
+    },
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "thread_started",
+    "ts": 1789896258760,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "thread": 1,
+    "parent_thread": null,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "thread_started",
+    "ts": 1789896258760,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "thread": 2,
+    "parent_thread": 1,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "thread_started",
+    "ts": 1789896258760,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "thread": 3,
+    "parent_thread": 1,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "thread_started",
+    "ts": 1789896258760,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "thread": 4,
+    "parent_thread": 1,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "thread_started",
+    "ts": 1789896258760,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "thread": 5,
+    "parent_thread": 1,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "remote_result_received",
+    "ts": 1789896258760,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "call_id": "r-t7xyzw-c3",
+    "thread": 4,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "thread_ended",
+    "ts": 1789896258760,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "thread": 4,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "remote_result_received",
+    "ts": 1789896258760,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "call_id": "r-t7xyzw-c1",
+    "thread": 2,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "thread_ended",
+    "ts": 1789896258760,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "thread": 2,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "remote_result_received",
+    "ts": 1789896258760,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "call_id": "r-t7xyzw-c4",
+    "thread": 5,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "thread_ended",
+    "ts": 1789896258760,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "thread": 5,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "remote_result_received",
+    "ts": 1789896258760,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "call_id": "r-t7xyzw-c2",
+    "thread": 3,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "thread_ended",
+    "ts": 1789896258760,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "thread": 3,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "position",
+    "ts": 1789896258760,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "thread": 1,
+    "function": "durable_fan_out",
+    "file": "baml_src/quotes.baml",
+    "line": 164,
+    "reason": "sysop",
+    "op": "baml.sys.sleep",
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "position",
+    "ts": 1789896258760,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "thread": 1,
+    "function": "durable_fan_out",
+    "file": "baml_src/quotes.baml",
+    "line": 165,
+    "reason": "sysop",
+    "op": "baml.io.println",
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "log",
+    "ts": 1789896258760,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "stream": "stdout",
+    "text": "awake again, collecting the quotes",
+    "thread": 1,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "thread_started",
+    "ts": 1789896258760,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "thread": 6,
+    "parent_thread": 1,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "position",
+    "ts": 1789896258760,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "thread": 1,
+    "function": "durable_fan_out",
+    "file": "baml_src/quotes.baml",
+    "line": 166,
+    "reason": "await",
+    "op": null,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "thread_ended",
+    "ts": 1789896258760,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "thread": 6,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "thread_ended",
+    "ts": 1789896258761,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "thread": 1,
+    "site": "local"
+   },
+   {
+    "v": 1,
+    "type": "completed",
+    "ts": 1789896258761,
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "value": {
+     "city": "Lisbon",
+     "quotes": [
+      {
+       "request": {
+        "city": "Lisbon",
+        "kind": "Flight",
+        "nights": 3,
+        "delay_ms": 3000,
+        "traveler": {
+         "name": "Ada",
+         "loyalty_tier": 2
+        },
+        "options": {
+         "currency": "EUR"
+        }
+       },
+       "vendor": "Skyways",
+       "price": {
+        "amount": 420,
+        "currency": "EUR"
+       },
+       "tags": [
+        "flight",
+        "lisbon"
+       ],
+       "extras": {
+        "insurance": 12,
+        "late_checkout": 30
+       },
+       "note": "loyalty tier 2 applied for Ada"
+      },
+      {
+       "request": {
+        "city": "Lisbon",
+        "kind": "Hotel",
+        "nights": 3,
+        "delay_ms": 5000,
+        "traveler": {
+         "name": "Ada",
+         "loyalty_tier": 2
+        },
+        "options": {
+         "currency": "EUR"
+        }
+       },
+       "vendor": "Casa Azul",
+       "price": {
+        "amount": 405,
+        "currency": "EUR"
+       },
+       "tags": [
+        "hotel",
+        "lisbon"
+       ],
+       "extras": {
+        "insurance": 12,
+        "late_checkout": 30
+       },
+       "note": "loyalty tier 2 applied for Ada"
+      },
+      {
+       "request": {
+        "city": "Lisbon",
+        "kind": "Car",
+        "nights": 3,
+        "delay_ms": 2000,
+        "traveler": {
+         "name": "Ada",
+         "loyalty_tier": 2
+        },
+        "options": {
+         "currency": "EUR"
+        }
+       },
+       "vendor": "Rodas",
+       "price": {
+        "amount": 144,
+        "currency": "EUR"
+       },
+       "tags": [
+        "car",
+        "lisbon"
+       ],
+       "extras": {
+        "insurance": 12,
+        "late_checkout": 30
+       },
+       "note": "loyalty tier 2 applied for Ada"
+      },
+      {
+       "request": {
+        "city": "Lisbon",
+        "kind": "Tour",
+        "nights": 3,
+        "delay_ms": 4000,
+        "traveler": {
+         "name": "Ada",
+         "loyalty_tier": 2
+        },
+        "options": {
+         "currency": "EUR"
+        }
+       },
+       "vendor": "Seven Hills Walks",
+       "price": {
+        "amount": 225,
+        "currency": "EUR"
+       },
+       "tags": [
+        "tour",
+        "lisbon"
+       ],
+       "extras": {
+        "insurance": 12,
+        "late_checkout": 30
+       },
+       "note": "loyalty tier 2 applied for Ada"
+      }
+     ],
+     "total": {
+      "amount": 1194,
+      "currency": "EUR"
+     },
+     "vendors": {
+      "Flight": "Skyways",
+      "Hotel": "Casa Azul",
+      "Car": "Rodas",
+      "Tour": "Seven Hills Walks"
+     },
+     "cheapest": {
+      "request": {
+       "city": "Lisbon",
+       "kind": "Car",
+       "nights": 3,
+       "delay_ms": 2000,
+       "traveler": {
+        "name": "Ada",
+        "loyalty_tier": 2
+       },
+       "options": {
+        "currency": "EUR"
+       }
+      },
+      "vendor": "Rodas",
+      "price": {
+       "amount": 144,
+       "currency": "EUR"
+      },
+      "tags": [
+       "car",
+       "lisbon"
+      ],
+      "extras": {
+       "insurance": 12,
+       "late_checkout": 30
+      },
+      "note": "loyalty tier 2 applied for Ada"
+     }
+    },
+    "site": "local"
+   },
+   {
+    "type": "worker_exit",
+    "run": "r-t7xyzw",
+    "segment": 2,
+    "pid": 41542,
+    "exit_code": 0,
+    "signal": null,
+    "status": "completed",
+    "ts": 1789896259058,
+    "site": "local"
+   }
+  ],
+  "cloud/r-5yu3s2": [
+   {
+    "v": 1,
+    "type": "hello",
+    "ts": 1789896251782,
+    "run": "r-5yu3s2",
+    "segment": 1,
+    "pid": 41511,
+    "mode": "start",
+    "function": "remote_get_quote",
+    "durable": false,
+    "program_hash": "e1be13b689f4c8628bb5baf41af52c8651f0d420e940b02a81182a00a6805007",
+    "mock_program_source": "store",
+    "mock_project": null,
+    "site": "cloud"
+   },
+   {
+    "v": 1,
+    "type": "thread_started",
+    "ts": 1789896251782,
+    "run": "r-5yu3s2",
+    "segment": 1,
+    "pid": 41511,
+    "thread": 1,
+    "parent_thread": null,
+    "site": "cloud"
+   },
+   {
+    "v": 1,
+    "type": "position",
+    "ts": 1789896251782,
+    "run": "r-5yu3s2",
+    "segment": 1,
+    "pid": 41511,
+    "thread": 1,
+    "function": "remote_get_quote",
+    "file": "baml_src/quotes.baml",
+    "line": 121,
+    "reason": "sysop",
+    "op": "baml.io.println",
+    "site": "cloud"
+   },
+   {
+    "v": 1,
+    "type": "log",
+    "ts": 1789896251782,
+    "run": "r-5yu3s2",
+    "segment": 1,
+    "pid": 41511,
+    "stream": "stdout",
+    "text": "[remote] Car quote for Lisbon (2000 ms)",
+    "thread": 1,
+    "site": "cloud"
+   },
+   {
+    "v": 1,
+    "type": "position",
+    "ts": 1789896251782,
+    "run": "r-5yu3s2",
+    "segment": 1,
+    "pid": 41511,
+    "thread": 1,
+    "function": "remote_get_quote",
+    "file": "baml_src/quotes.baml",
+    "line": 130,
+    "reason": "sysop",
+    "op": "baml.sys.sleep",
+    "site": "cloud"
+   },
+   {
+    "v": 1,
+    "type": "thread_ended",
+    "ts": 1789896253785,
+    "run": "r-5yu3s2",
+    "segment": 1,
+    "pid": 41511,
+    "thread": 1,
+    "site": "cloud"
+   },
+   {
+    "v": 1,
+    "type": "completed",
+    "ts": 1789896253785,
+    "run": "r-5yu3s2",
+    "segment": 1,
+    "pid": 41511,
+    "value": {
+     "request": {
+      "city": "Lisbon",
+      "kind": "Car",
+      "nights": 3,
+      "delay_ms": 2000,
+      "traveler": {
+       "name": "Ada",
+       "loyalty_tier": 2
+      },
+      "options": {
+       "currency": "EUR"
+      }
+     },
+     "vendor": "Rodas",
+     "price": {
+      "amount": 144,
+      "currency": "EUR"
+     },
+     "tags": [
+      "car",
+      "lisbon"
+     ],
+     "extras": {
+      "insurance": 12,
+      "late_checkout": 30
+     },
+     "note": "loyalty tier 2 applied for Ada"
+    },
+    "site": "cloud"
+   },
+   {
+    "type": "worker_exit",
+    "run": "r-5yu3s2",
+    "segment": 1,
+    "pid": 41511,
+    "exit_code": 0,
+    "signal": null,
+    "status": "completed",
+    "ts": 1789896253797,
+    "site": "cloud"
+   }
+  ],
+  "cloud/r-kdfxk0": [
+   {
+    "v": 1,
+    "type": "hello",
+    "ts": 1789896251755,
+    "run": "r-kdfxk0",
+    "segment": 1,
+    "pid": 41508,
+    "mode": "start",
+    "function": "remote_get_quote",
+    "durable": false,
+    "program_hash": "e1be13b689f4c8628bb5baf41af52c8651f0d420e940b02a81182a00a6805007",
+    "mock_program_source": "store",
+    "mock_project": null,
+    "site": "cloud"
+   },
+   {
+    "v": 1,
+    "type": "thread_started",
+    "ts": 1789896251756,
+    "run": "r-kdfxk0",
+    "segment": 1,
+    "pid": 41508,
+    "thread": 1,
+    "parent_thread": null,
+    "site": "cloud"
+   },
+   {
+    "v": 1,
+    "type": "position",
+    "ts": 1789896251756,
+    "run": "r-kdfxk0",
+    "segment": 1,
+    "pid": 41508,
+    "thread": 1,
+    "function": "remote_get_quote",
+    "file": "baml_src/quotes.baml",
+    "line": 121,
+    "reason": "sysop",
+    "op": "baml.io.println",
+    "site": "cloud"
+   },
+   {
+    "v": 1,
+    "type": "log",
+    "ts": 1789896251756,
+    "run": "r-kdfxk0",
+    "segment": 1,
+    "pid": 41508,
+    "stream": "stdout",
+    "text": "[remote] Flight quote for Lisbon (3000 ms)",
+    "thread": 1,
+    "site": "cloud"
+   },
+   {
+    "v": 1,
+    "type": "position",
+    "ts": 1789896251756,
+    "run": "r-kdfxk0",
+    "segment": 1,
+    "pid": 41508,
+    "thread": 1,
+    "function": "remote_get_quote",
+    "file": "baml_src/quotes.baml",
+    "line": 130,
+    "reason": "sysop",
+    "op": "baml.sys.sleep",
+    "site": "cloud"
+   },
+   {
+    "v": 1,
+    "type": "thread_ended",
+    "ts": 1789896254759,
+    "run": "r-kdfxk0",
+    "segment": 1,
+    "pid": 41508,
+    "thread": 1,
+    "site": "cloud"
+   },
+   {
+    "v": 1,
+    "type": "completed",
+    "ts": 1789896254760,
+    "run": "r-kdfxk0",
+    "segment": 1,
+    "pid": 41508,
+    "value": {
+     "request": {
+      "city": "Lisbon",
+      "kind": "Flight",
+      "nights": 3,
+      "delay_ms": 3000,
+      "traveler": {
+       "name": "Ada",
+       "loyalty_tier": 2
+      },
+      "options": {
+       "currency": "EUR"
+      }
+     },
+     "vendor": "Skyways",
+     "price": {
+      "amount": 420,
+      "currency": "EUR"
+     },
+     "tags": [
+      "flight",
+      "lisbon"
+     ],
+     "extras": {
+      "insurance": 12,
+      "late_checkout": 30
+     },
+     "note": "loyalty tier 2 applied for Ada"
+    },
+    "site": "cloud"
+   },
+   {
+    "type": "worker_exit",
+    "run": "r-kdfxk0",
+    "segment": 1,
+    "pid": 41508,
+    "exit_code": 0,
+    "signal": null,
+    "status": "completed",
+    "ts": 1789896254772,
+    "site": "cloud"
+   }
+  ],
+  "cloud2/r-wr0fm1": [
+   {
+    "v": 1,
+    "type": "hello",
+    "ts": 1789896251755,
+    "run": "r-wr0fm1",
+    "segment": 1,
+    "pid": 41510,
+    "mode": "start",
+    "function": "remote_get_quote",
+    "durable": false,
+    "program_hash": "e1be13b689f4c8628bb5baf41af52c8651f0d420e940b02a81182a00a6805007",
+    "mock_program_source": "store",
+    "mock_project": null,
+    "site": "cloud2"
+   },
+   {
+    "v": 1,
+    "type": "thread_started",
+    "ts": 1789896251755,
+    "run": "r-wr0fm1",
+    "segment": 1,
+    "pid": 41510,
+    "thread": 1,
+    "parent_thread": null,
+    "site": "cloud2"
+   },
+   {
+    "v": 1,
+    "type": "position",
+    "ts": 1789896251755,
+    "run": "r-wr0fm1",
+    "segment": 1,
+    "pid": 41510,
+    "thread": 1,
+    "function": "remote_get_quote",
+    "file": "baml_src/quotes.baml",
+    "line": 121,
+    "reason": "sysop",
+    "op": "baml.io.println",
+    "site": "cloud2"
+   },
+   {
+    "v": 1,
+    "type": "log",
+    "ts": 1789896251755,
+    "run": "r-wr0fm1",
+    "segment": 1,
+    "pid": 41510,
+    "stream": "stdout",
+    "text": "[remote] Tour quote for Lisbon (4000 ms)",
+    "thread": 1,
+    "site": "cloud2"
+   },
+   {
+    "v": 1,
+    "type": "position",
+    "ts": 1789896251755,
+    "run": "r-wr0fm1",
+    "segment": 1,
+    "pid": 41510,
+    "thread": 1,
+    "function": "remote_get_quote",
+    "file": "baml_src/quotes.baml",
+    "line": 130,
+    "reason": "sysop",
+    "op": "baml.sys.sleep",
+    "site": "cloud2"
+   },
+   {
+    "v": 1,
+    "type": "thread_ended",
+    "ts": 1789896255758,
+    "run": "r-wr0fm1",
+    "segment": 1,
+    "pid": 41510,
+    "thread": 1,
+    "site": "cloud2"
+   },
+   {
+    "v": 1,
+    "type": "completed",
+    "ts": 1789896255758,
+    "run": "r-wr0fm1",
+    "segment": 1,
+    "pid": 41510,
+    "value": {
+     "request": {
+      "city": "Lisbon",
+      "kind": "Tour",
+      "nights": 3,
+      "delay_ms": 4000,
+      "traveler": {
+       "name": "Ada",
+       "loyalty_tier": 2
+      },
+      "options": {
+       "currency": "EUR"
+      }
+     },
+     "vendor": "Seven Hills Walks",
+     "price": {
+      "amount": 225,
+      "currency": "EUR"
+     },
+     "tags": [
+      "tour",
+      "lisbon"
+     ],
+     "extras": {
+      "insurance": 12,
+      "late_checkout": 30
+     },
+     "note": "loyalty tier 2 applied for Ada"
+    },
+    "site": "cloud2"
+   },
+   {
+    "type": "worker_exit",
+    "run": "r-wr0fm1",
+    "segment": 1,
+    "pid": 41510,
+    "exit_code": 0,
+    "signal": null,
+    "status": "completed",
+    "ts": 1789896255769,
+    "site": "cloud2"
+   }
+  ],
+  "cloud2/r-3hhfpe": [
+   {
+    "v": 1,
+    "type": "hello",
+    "ts": 1789896251755,
+    "run": "r-3hhfpe",
+    "segment": 1,
+    "pid": 41509,
+    "mode": "start",
+    "function": "remote_get_quote",
+    "durable": false,
+    "program_hash": "e1be13b689f4c8628bb5baf41af52c8651f0d420e940b02a81182a00a6805007",
+    "mock_program_source": "store",
+    "mock_project": null,
+    "site": "cloud2"
+   },
+   {
+    "v": 1,
+    "type": "thread_started",
+    "ts": 1789896251755,
+    "run": "r-3hhfpe",
+    "segment": 1,
+    "pid": 41509,
+    "thread": 1,
+    "parent_thread": null,
+    "site": "cloud2"
+   },
+   {
+    "v": 1,
+    "type": "position",
+    "ts": 1789896251755,
+    "run": "r-3hhfpe",
+    "segment": 1,
+    "pid": 41509,
+    "thread": 1,
+    "function": "remote_get_quote",
+    "file": "baml_src/quotes.baml",
+    "line": 121,
+    "reason": "sysop",
+    "op": "baml.io.println",
+    "site": "cloud2"
+   },
+   {
+    "v": 1,
+    "type": "log",
+    "ts": 1789896251755,
+    "run": "r-3hhfpe",
+    "segment": 1,
+    "pid": 41509,
+    "stream": "stdout",
+    "text": "[remote] Hotel quote for Lisbon (5000 ms)",
+    "thread": 1,
+    "site": "cloud2"
+   },
+   {
+    "v": 1,
+    "type": "position",
+    "ts": 1789896251755,
+    "run": "r-3hhfpe",
+    "segment": 1,
+    "pid": 41509,
+    "thread": 1,
+    "function": "remote_get_quote",
+    "file": "baml_src/quotes.baml",
+    "line": 130,
+    "reason": "sysop",
+    "op": "baml.sys.sleep",
+    "site": "cloud2"
+   },
+   {
+    "v": 1,
+    "type": "thread_ended",
+    "ts": 1789896256758,
+    "run": "r-3hhfpe",
+    "segment": 1,
+    "pid": 41509,
+    "thread": 1,
+    "site": "cloud2"
+   },
+   {
+    "v": 1,
+    "type": "completed",
+    "ts": 1789896256758,
+    "run": "r-3hhfpe",
+    "segment": 1,
+    "pid": 41509,
+    "value": {
+     "request": {
+      "city": "Lisbon",
+      "kind": "Hotel",
+      "nights": 3,
+      "delay_ms": 5000,
+      "traveler": {
+       "name": "Ada",
+       "loyalty_tier": 2
+      },
+      "options": {
+       "currency": "EUR"
+      }
+     },
+     "vendor": "Casa Azul",
+     "price": {
+      "amount": 405,
+      "currency": "EUR"
+     },
+     "tags": [
+      "hotel",
+      "lisbon"
+     ],
+     "extras": {
+      "insurance": 12,
+      "late_checkout": 30
+     },
+     "note": "loyalty tier 2 applied for Ada"
+    },
+    "site": "cloud2"
+   },
+   {
+    "type": "worker_exit",
+    "run": "r-3hhfpe",
+    "segment": 1,
+    "pid": 41509,
+    "exit_code": 0,
+    "signal": null,
+    "status": "completed",
+    "ts": 1789896256781,
+    "site": "cloud2"
+   }
+  ]
+ }
+}

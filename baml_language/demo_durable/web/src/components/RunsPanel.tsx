@@ -1,0 +1,409 @@
+import { useEffect, useMemo, useState } from "react";
+import type { Api } from "../api";
+import { clock } from "../clock";
+import { formatClockShort, formatCountdown } from "../format";
+import { shortHash, type Run, type RunStatus, type Site, type SiteEntry } from "../protocol";
+import { forkSourceKey, groupRuns, pauseBlocked, resumeTargets, runKey, validActions, type AppState, type RunAction, type RunKey, type RunRow } from "../state";
+import type { SnapshotRef } from "../timeline/Timeline";
+import { GLYPHS, SiteChip, StatusBadge } from "./StatusBadge";
+
+interface Props {
+  /** The site registry. It names the destinations of "Resume on <site>". */
+  sites: readonly SiteEntry[];
+  runs: readonly Run[];
+  events: AppState["events"];
+  selected: RunKey | null;
+  tree: readonly RunKey[];
+  selectedSnapshot: SnapshotRef | null;
+  api: Api;
+  onSelect(key: RunKey): void;
+  onRunResponse(run: Run, requestedOn: Run["site"], selectIt: boolean): void;
+  /** Delete every run on every site. */
+  onClearAll(): Promise<void>;
+  /** The control that the scenario guide points at, or presses when autoplay is on. */
+  coach?: CoachTarget | null;
+}
+
+/**
+ * A control of the selected run that the scenario guide highlights. `mode` is
+ * the look of the highlight: `hint` waits for the user, and `press` announces
+ * that autoplay acts. The control is pressed once for every new value of
+ * `nonce`. `null` presses nothing, which is the case while a recording plays.
+ */
+export interface CoachTarget {
+  run: RunKey;
+  action: RunAction;
+  /** The destination of `resume_on`. */
+  site?: Site;
+  mode: "hint" | "press";
+  nonce: number | null;
+}
+
+/** The current time, refreshed while a run sleeps, for the countdown to its wake time. */
+function useSleepClock(active: boolean): number {
+  const [now, setNow] = useState(() => clock.now());
+  useEffect(() => {
+    if (!active) return;
+    setNow(clock.now());
+    const id = setInterval(() => setNow(clock.now()), 200);
+    return () => clearInterval(id);
+  }, [active]);
+  return now;
+}
+
+/** "wakes 17:00:12 · in 8.2 s" for a sleeping run. */
+export function WakeLine({ run, now }: { run: Run; now: number }) {
+  if (run.status !== "sleeping") return null;
+  const wakeAt = typeof run.wake_at === "number" ? run.wake_at : null;
+  return (
+    <span className="wake-line" data-testid="wake-line" title="The run suspended itself for a sleep. No process exists. A timer of the site server resumes it.">
+      {wakeAt === null ? "wake time unknown" : `wakes ${formatClockShort(wakeAt)} · in ${formatCountdown(wakeAt - now)}`}
+    </span>
+  );
+}
+
+export function RunsPanel({ sites, runs, events, selected, tree, selectedSnapshot, api, onSelect, onRunResponse, onClearAll, coach }: Props) {
+  // Remote children are listed under their parent, in call order.
+  const rows = useMemo(() => groupRuns(runs), [runs]);
+  // Rows start collapsed and a parent reports how many runs it holds.
+  // Selecting a run opens its tree, and the row STAYS open afterwards:
+  // deriving openness from the selection collapsed the run you came from
+  // every time you clicked another one, which reads as rows appearing and
+  // disappearing. Only an explicit toggle closes a row again.
+  const [override, setOverride] = useState<ReadonlyMap<RunKey, boolean>>(new Map());
+  const [clearing, setClearing] = useState(false);
+  const current = runs.find((run) => runKey(run.site, run.id) === selected) ?? null;
+  const known = new Set(runs.map((run) => runKey(run.site, run.id)));
+  const now = useSleepClock(runs.some((run) => run.status === "sleeping"));
+  const isOpen = (key: RunKey): boolean => override.get(key) ?? false;
+  // The selected run's tree opens, and a row the user had collapsed opens
+  // again when the selection moves inside it, so the selected row is always
+  // reachable.
+  useEffect(() => {
+    if (tree.length === 0) return;
+    setOverride((previous) => {
+      if (tree.every((key) => previous.get(key) === true)) return previous;
+      const next = new Map(previous);
+      for (const key of tree) next.set(key, true);
+      return next;
+    });
+  }, [tree]);
+  // The runs listed under a row, at any depth: the rows that follow it until
+  // one of its own depth. A collapsed row reports their states instead.
+  const held = useMemo(() => {
+    const result = new Map<RunKey, Run[]>();
+    rows.forEach((row, index) => {
+      if (row.children === 0) return;
+      const under: Run[] = [];
+      for (let next = index + 1; next < rows.length; next += 1) {
+        const below = rows[next];
+        if (!below || below.depth <= row.depth) break;
+        under.push(below.run);
+      }
+      result.set(row.key, under);
+    });
+    return result;
+  }, [rows]);
+  // A collapsed parent hides the rows below it that are deeper, up to the next row of its own depth.
+  const visible = useMemo(() => {
+    const result: RunRow[] = [];
+    let hideBelow: number | null = null;
+    for (const row of rows) {
+      if (hideBelow !== null && row.depth > hideBelow) continue;
+      hideBelow = isOpen(row.key) ? null : row.depth;
+      result.push(row);
+    }
+    return result;
+    // `isOpen` reads both of these.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, override, tree]);
+  const toggle = (key: RunKey): void =>
+    setOverride((current) => new Map(current).set(key, !isOpen(key)));
+
+  return (
+    <section className="panel" data-testid="runs-panel">
+      <div className="panel-head">
+        <span className="panel-title">Runs</span>
+        <span className="muted">all sites, newest first, children under their parent</span>
+        <span className="spacer" />
+        <span className="num">{runs.length}</span>
+        <button className="btn small" data-testid="clear-runs" disabled={runs.length === 0 || clearing}
+          title="Delete every run on every site: end the workers, drop the sleep timers, and empty the run stores. The program stores are kept, so the next start still skips the compile."
+          onClick={() => {
+            if (clearing) return;
+            setClearing(true);
+            void onClearAll().finally(() => setClearing(false));
+          }}>
+          {clearing ? "clearing…" : "Clear"}
+        </button>
+      </div>
+      <div className="panel-body">
+        {rows.length === 0 ? (
+          <div className="empty">No runs yet. Pick a function and press Start.</div>
+        ) : (
+          <table className="runs">
+            <colgroup>
+              <col className="c-status" />
+              <col className="c-site" />
+              <col />
+              <col className="c-d" />
+              <col className="c-pid" />
+              <col className="c-seg" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Site</th>
+                <th>Function</th>
+                <th title="durable">D</th>
+                <th>Pid</th>
+                <th>Seg</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map(({ key, run, depth, children }) => {
+                const parentKey = run.parent ? runKey(run.parent.site, run.parent.run) : null;
+                const originKey = run.origin ? runKey(run.origin.site, run.origin.run) : null;
+                // A fork is created on the site of its source. A fork that migrated
+                // keeps `forked_from`, and its source stays where the fork was made,
+                // which can be more than one migration away.
+                const sourceKey = run.forked_from ? forkSourceKey(run, known) : null;
+                const blocked = pauseBlocked(run, events[key]);
+                return (
+                  <tr key={key} className="run-row" aria-selected={key === selected} data-in-tree={tree.includes(key)} data-depth={depth}
+                    data-testid="run-row" data-run={run.id} data-site={run.site} data-status={run.status}
+                    onClick={() => {
+                      // Clicking the row that is already selected collapses it,
+                      // so the same click that opened a run closes it again.
+                      // The selection does not change, so the effect above does
+                      // not reopen it.
+                      if (key === selected && children > 0 && isOpen(key)) {
+                        toggle(key);
+                        return;
+                      }
+                      onSelect(key);
+                    }}>
+                    <td style={depth > 0 ? { paddingLeft: 4 + Math.min(depth, 3) * 14 } : undefined}>
+                      <StatusBadge status={run.status} />
+                    </td>
+                    <td><SiteChip site={run.site} /></td>
+                    <td>
+                      <div className="fn" title={run.function}>
+                        {children > 0 && (
+                          <button className="group-toggle" data-testid="group-toggle" aria-expanded={isOpen(key)}
+                            title={`${heldTitle(held.get(key) ?? [])}. Click to ${isOpen(key) ? "hide" : "show"} them.`}
+                            onClick={(event) => { event.stopPropagation(); toggle(key); }}>
+                            {isOpen(key) ? "▾" : "▸"} {(held.get(key) ?? []).length}
+                          </button>
+                        )}
+                        {run.function}
+                      </div>
+                      <div className="rel mono">
+                        {run.id}
+                        {shortHash(run.program_hash, 8) && (
+                          <span className="prog" data-testid="row-program" title={`program ${run.program_hash}`}> · prog {shortHash(run.program_hash, 8)}</span>
+                        )}
+                      </div>
+                      {children > 0 && !isOpen(key) && (
+                        <div className="rel rollup" data-testid="run-rollup" title={heldTitle(held.get(key) ?? [])}>
+                          {rollup(held.get(key) ?? [])}
+                        </div>
+                      )}
+                      {run.status === "sleeping" && <div className="rel"><WakeLine run={run} now={now} /></div>}
+                      {run.parent && (
+                        <div className="rel mono" data-testid="child-of" title={`remote child of ${run.parent.site}/${run.parent.run}`}>
+                          {/* The column fits about 19 characters, so the relation is a glyph plus the link. */}
+                          <span aria-label="child of">↳</span>{" "}
+                          <button disabled={parentKey === null || !known.has(parentKey)} title={`child of ${run.parent.site}/${run.parent.run}, call ${run.parent.call_id}`}
+                            onClick={(event) => { event.stopPropagation(); if (parentKey) onSelect(parentKey); }}>
+                            {run.parent.site}/{run.parent.run}
+                          </button>
+                        </div>
+                      )}
+                      {run.forked_from && (
+                        <div className="rel mono" data-testid="forked-from" title={`fork of ${run.forked_from.run} at snapshot #${run.forked_from.n}`}>
+                          <span aria-label="fork of">⑂</span>{" "}
+                          <button disabled={sourceKey === null || !known.has(sourceKey)} title={`fork of ${run.forked_from.run} at snapshot #${run.forked_from.n}`}
+                            onClick={(event) => { event.stopPropagation(); if (sourceKey) onSelect(sourceKey); }}>
+                            {run.forked_from.run} #{run.forked_from.n}
+                          </button>
+                        </div>
+                      )}
+                      {run.origin && (
+                        <div className="rel mono">
+                          ⇢ from{" "}
+                          <button disabled={originKey === null || !known.has(originKey)}
+                            onClick={(event) => { event.stopPropagation(); if (originKey) onSelect(originKey); }}>
+                            {run.origin.site}
+                          </button>
+                        </div>
+                      )}
+                      {blocked && (
+                        <div className="rel blocked-reason" data-testid="row-blocked-reason" title={`${blocked.reason}\n${blocked.path.join(" › ")}`}>
+                          blocked ×{blocked.attempts}: {blocked.reason}
+                        </div>
+                      )}
+                    </td>
+                    <td><span className="badge-d" data-on={run.durable} title={run.durable ? "durable" : "not durable"}>D</span></td>
+                    <td className="mono num">{run.pid ?? "—"}</td>
+                    <td className="mono num">{run.segment}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+      <Controls sites={sites} run={current} blocked={pauseBlocked(current, selected ? events[selected] : undefined)} api={api} selectedSnapshot={selectedSnapshot}
+        onRunResponse={onRunResponse} coach={coach && coach.run === selected ? coach : null} now={now} />
+    </section>
+  );
+}
+
+
+/** "2 ✓ · 1 ⊘" for the runs a collapsed row holds, in a fixed status order. */
+function rollup(runs: readonly Run[]): string {
+  const counts = new Map<RunStatus, number>();
+  for (const run of runs) counts.set(run.status, (counts.get(run.status) ?? 0) + 1);
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([status, count]) => `${count} ${GLYPHS[status] ?? "?"}`)
+    .join(" · ");
+}
+
+/** The sentence behind the rollup, naming each run it counts. */
+function heldTitle(runs: readonly Run[]): string {
+  if (runs.length === 0) return "no related runs";
+  const kind = (run: Run): string =>
+    run.parent ? "remote child" : run.forked_from ? "fork" : run.migrated_to ? "record it left behind" : "related run";
+  const lines = runs.map((run) => `  ${run.site}/${run.id} ${run.function} — ${run.status} (${kind(run)})`);
+  return [`${runs.length} run${runs.length === 1 ? "" : "s"} under this one:`, ...lines].join("\n");
+}
+
+interface ControlButton {
+  action: RunAction;
+  /** The destination of `resume_on`. */
+  site?: Site;
+  label: string;
+  danger?: boolean;
+  title: string;
+}
+
+/** One "Resume on <site>" button for every site other than the one that holds the run (section 8.4). */
+function controlButtons(sites: readonly SiteEntry[], run: Run | null): ControlButton[] {
+  return [
+    { action: "pause", label: "Pause", title: "Write a snapshot at the next clean point and end the process" },
+    { action: "resume_here", label: "Resume here", title: "Start the next segment on this site from the latest snapshot. A sleeping run wakes before its timer" },
+    // Without a run the buttons are disabled. They name the targets of a run on the first site,
+    // so that the row of buttons keeps its size when a run is selected.
+    ...resumeTargets(sites, run ?? { site: sites[0]?.name ?? "" }).map((site): ControlButton => ({
+      action: "resume_on",
+      site,
+      label: `Resume on ${site}`,
+      title: `Send the snapshot to ${site} and resume there`,
+    })),
+    { action: "kill", label: "Kill process", danger: true, title: "End the worker process without a snapshot" },
+    { action: "cancel", label: "Cancel", title: "Cancel the run. A run without a process is cancelled on the site server, and its remote children are cancelled too" },
+    { action: "fork", label: "Fork", title: "Create a new paused run from a snapshot of this run" },
+  ];
+}
+
+function Controls({
+  sites,
+  run,
+  blocked,
+  api,
+  selectedSnapshot,
+  onRunResponse,
+  coach,
+  now,
+}: {
+  sites: readonly SiteEntry[];
+  run: Run | null;
+  blocked: ReturnType<typeof pauseBlocked>;
+  api: Api;
+  selectedSnapshot: SnapshotRef | null;
+  onRunResponse: Props["onRunResponse"];
+  coach: CoachTarget | null;
+  now: number;
+}) {
+  const [busy, setBusy] = useState<RunAction | null>(null);
+  const buttons = controlButtons(sites, run);
+  const [error, setError] = useState<string | null>(null);
+  const valid = validActions(run);
+  const runId = run ? runKey(run.site, run.id) : null;
+  const status = run?.status;
+  // An error describes one attempt. It is stale once the run is another one or has moved on.
+  useEffect(() => setError(null), [runId, status]);
+
+  const forkSnapshot =
+    run && selectedSnapshot && selectedSnapshot.run === run.id && selectedSnapshot.site === run.site ? selectedSnapshot.n : undefined;
+
+  const send = async ({ action, site }: ControlButton): Promise<void> => {
+    if (!run) return;
+    setBusy(action);
+    setError(null);
+    try {
+      const options = action === "fork" ? { snapshot: forkSnapshot } : action === "resume_on" ? { site } : undefined;
+      const response = await api.command(run.site, run.id, action, options);
+      onRunResponse(response, run.site, action === "fork");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // Autoplay: the scenario guide presses the control that it points at, once per nonce.
+  const coached = coach ? buttons.find((button) => button.action === coach.action && (coach.site === undefined || button.site === coach.site)) : undefined;
+  const pressNonce = coach?.nonce ?? null;
+  const coachedEnabled = coached !== undefined && valid[coached.action] && busy === null;
+  const [pressed, setPressed] = useState<number | null>(null);
+  useEffect(() => {
+    if (pressNonce === null || pressed === pressNonce || !coached || !coachedEnabled) return;
+    setPressed(pressNonce);
+    void send(coached);
+    // `send` and `coached` follow the run and the registry. Only a new nonce presses.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pressNonce, coachedEnabled]);
+
+  return (
+    <div className="controls" data-testid="controls">
+      <div className="target">
+        {run ? (
+          <>
+            <SiteChip site={run.site} />
+            <span className="mono">{run.id}</span>
+            <StatusBadge status={run.status} />
+            <WakeLine run={run} now={now} />
+            {shortHash(run.program_hash) && (
+              <span className="mono muted" data-testid="program-hash" title={`program ${run.program_hash}\nThe SHA-256 of the compiled program. A site runs it from its program store without compiling.`}>
+                prog {shortHash(run.program_hash)}
+              </span>
+            )}
+            {run.error && <span className="muted clip" title={run.error}>{run.error}</span>}
+          </>
+        ) : (
+          <span className="muted">No run selected</span>
+        )}
+      </div>
+      {blocked && (
+        <div className="blocked-reason blocked-line" data-testid="blocked-reason"
+          title={`${blocked.reason}\n${blocked.path.join(" › ")}\nThe worker retries at its next yield. The status stays pausing until a snapshot succeeds.`}>
+          snapshot blocked ×{blocked.attempts}: {blocked.reason}
+        </div>
+      )}
+      <div className="buttons">
+        {buttons.map((button) => (
+          <button key={`${button.action}:${button.site ?? ""}`} className={`btn${button.danger ? " danger" : ""}`} title={button.title}
+            data-action={button.action} data-target-site={button.site} disabled={!valid[button.action] || busy !== null} onClick={() => void send(button)}
+            data-coach={coach && button === coached ? coach.mode : undefined}>
+            {button.label}
+            {button.action === "fork" && forkSnapshot !== undefined ? ` #${forkSnapshot}` : ""}
+          </button>
+        ))}
+      </div>
+      {error && <div className="error-line" role="alert" data-testid="command-error">{error}</div>}
+    </div>
+  );
+}

@@ -11,6 +11,7 @@
 //! The instructions that the VM runs are defined in [`Instruction`] enum.
 
 pub mod bytecode;
+pub mod cancel_token;
 pub mod errors;
 pub mod float_order;
 pub mod head_walk;
@@ -22,6 +23,7 @@ pub mod link;
 pub mod relink;
 mod roots;
 pub mod runtime_compile;
+pub mod snapshot_ctx;
 pub mod task_group;
 pub mod type_head;
 pub mod types;
@@ -29,6 +31,7 @@ pub mod unit;
 
 pub use bex_str::BexStr;
 pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp};
+pub use cancel_token::CancelTokenData;
 pub use heap_ptr::HeapPtr;
 pub use indexable::{
     GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
@@ -46,7 +49,9 @@ pub use runtime_compile::{
     RuntimeSessionStepKind, RuntimeSourceSpan, RuntimeTypeMount, SessionContract, SessionEvalLease,
     SessionVisibleKind, SessionVisibleSymbol,
 };
-pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};
+pub use task_group::{
+    TaskGroupInner, TaskGroupMemberSnapshot, TaskGroupPermit, TaskGroupSnapshot, TaskGroupTicket,
+};
 pub use type_head::TypeHead;
 
 // ── The runtime's instantiation of the `baml_type` family ────────────────────

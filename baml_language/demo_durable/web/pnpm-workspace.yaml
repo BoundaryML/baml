@@ -1,0 +1,6 @@
+# Keeps this demo out of the repository-level pnpm workspace, so that
+# `pnpm install` here installs only the demo's dependencies.
+packages:
+  - "."
+onlyBuiltDependencies:
+  - esbuild

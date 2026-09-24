@@ -2477,7 +2477,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 target,
                 unwind: _,
             } => {
+                let await_span = self.current_debug_span;
                 unwrap_infallible(pull_semantics::walk_await_future(self, future));
+                // Pulling the future may install the defining statement's span
+                // (an inlined virtual local). Restore the terminator's span so
+                // the await opcode, which is where a thread parks, maps to the
+                // `await` expression rather than to where the future was made.
+                self.set_debug_span(await_span, false);
                 self.emit(Instruction::Await);
 
                 self.emit_store_place(destination);
@@ -2492,7 +2498,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             } => {
                 // Push the array of futures, then AWAIT_ANY pops it and pushes
                 // the winning `int` index (BEP-034 `baml.future.__await_any`).
+                let await_span = self.current_debug_span;
                 self.emit_operand_pull(futures);
+                // Same span restore as `Terminator::Await`.
+                self.set_debug_span(await_span, false);
                 self.emit(Instruction::AwaitAny);
 
                 self.emit_store_place(destination);

@@ -118,6 +118,8 @@ bex_vm_types = { path = "crates/bex_vm_types" }
 bex_external_types = { path = "crates/bex_external_types" }
 bex_heap = { path = "crates/bex_heap" }
 bex_sap = { path = "crates/bex_sap" }
+bex_program_store = { path = "crates/bex_program_store" }
+bex_snapshot = { path = "crates/bex_snapshot" }
 bridge_ctypes = { path = "crates/bridge_ctypes", default-features = false }
 bridge_cffi = { path = "crates/bridge_cffi", default-features = false }
 sys_wasm = { path = "crates/sys_wasm" }
@@ -254,6 +256,9 @@ strsim = { version = "0.11.1" }
 syn = { version = "2", features = [ "full" ] }
 tar = "0.4"
 zip = { version = "2", default-features = false, features = [ "deflate" ] }
+# Snapshot payload compression (`bex_snapshot`). Already in the lock file
+# through arrow-ipc, so this adds no new crate to the build graph.
+zstd = { version = "0.13" }
 taplo = { version = "0.13" }
 tempfile = { version = "3" }
 time = { version = "0.3", features = [ "formatting", "macros", "parsing" ] }
