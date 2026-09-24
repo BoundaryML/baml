@@ -333,7 +333,8 @@ function readout(run: Run, rules: int?) -> string throws never {
     };
     let lines = [
         "  " + `Ended because: ${why}`,
-        "  " + `Questions: ${run.answers.length()} — you committed on ${run.answers.length() - held} and withheld on ${held}`,
+        "  "
+            + `Questions: ${run.answers.length()} — you committed on ${run.answers.length() - held} and withheld on ${held}`,
         "  " + `Right: ${right} of the ${run.answers.length() - held} you committed on`,
     ];
     match (run.ended) {
@@ -353,7 +354,8 @@ function readout(run: Run, rules: int?) -> string throws never {
                 null => {},
             }
             lines.push(
-                "  " + `A naive misconception your errors resembled: ${e.suspected ?? "none stood out"}`,
+                "  "
+                    + `A naive misconception your errors resembled: ${e.suspected ?? "none stood out"}`,
             );
         },
         null => {},
