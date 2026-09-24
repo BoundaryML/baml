@@ -12,7 +12,14 @@ class ModelTurnInput {
     output_type: reflect.Type,
 }
 
+/// A provider-decoded output. The wrapper distinguishes a decoded null from
+/// absence. Runners check its runtime type before returning it to callers.
+class ParsedOutput {
+    value: unknown,
+}
+
 class ModelTurn {
+    parsed_output: ParsedOutput?,
     content: root.content.ModelBlock[],
     stop_reason: root.content.StopReason,
     usage: root.events.Usage?,

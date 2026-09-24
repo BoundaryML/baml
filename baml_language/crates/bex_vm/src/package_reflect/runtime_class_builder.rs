@@ -751,10 +751,9 @@ fn planned_pending_type(
             if roots.len() != 1 || class_name(vm, roots[0]).as_deref() != Some(PENDING_FQN) {
                 return Err("a pending type composite has invalid native state".into());
             }
-            Ok(bex_vm_types::RealizedTy::List(
-                Box::new(planned_pending_type(vm, roots[0], plans)?),
-                baml_type::TyAttr::default(),
-            ))
+            Ok(bex_vm_types::RealizedTy::List(Box::new(
+                planned_pending_type(vm, roots[0], plans)?,
+            )))
         }
         PendingOp::Optional => {
             if roots.len() != 1 || class_name(vm, roots[0]).as_deref() != Some(PENDING_FQN) {
@@ -762,16 +761,13 @@ fn planned_pending_type(
             }
             let base = planned_pending_type(vm, roots[0], plans)?;
             let mut members = match base {
-                bex_vm_types::RealizedTy::Union(members, _) => members.into_vec(),
+                bex_vm_types::RealizedTy::Union(members) => members.into_vec(),
                 other => vec![other],
             };
             if !members.iter().any(bex_vm_types::RealizedTy::is_null) {
                 members.push(bex_vm_types::RealizedTy::null());
             }
-            Ok(bex_vm_types::RealizedTy::Union(
-                members.into(),
-                baml_type::TyAttr::default(),
-            ))
+            Ok(bex_vm_types::RealizedTy::Union(members.into()))
         }
         PendingOp::Union => {
             if roots.is_empty() {
@@ -787,10 +783,7 @@ fn planned_pending_type(
                     }
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            Ok(bex_vm_types::RealizedTy::Union(
-                members.into(),
-                baml_type::TyAttr::default(),
-            ))
+            Ok(bex_vm_types::RealizedTy::Union(members.into()))
         }
     }
 }
@@ -870,8 +863,10 @@ fn build_group(
             alias: None,
             docstring: None,
             other: IndexMap::new(),
+            // A runtime-built class cannot declare streaming behaviour yet:
+            // the builder's metadata surface has no slot for it.
+            stream_done: false,
             type_tag,
-            ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
             owner: HeapPtr::null(),
@@ -879,7 +874,6 @@ fn build_group(
         let ty = bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(ptr, type_tag),
             Box::new([]),
-            baml_type::TyAttr::default(),
         );
         identities.insert(node.id, ClassIdentityPlan { ty: ty.clone() });
         plans.insert(node.id, ClassPlan { ptr, ty });
@@ -940,6 +934,8 @@ fn build_group(
                 docstring: field.docstring.clone(),
                 other: field.other.clone(),
                 skip: false,
+                stream_done: false,
+                must_exist: false,
                 runtime_type: Some(type_value),
             });
         }
@@ -1005,32 +1001,27 @@ fn resolve_pending_if_ready(vm: &mut BexVm, pending: Value) -> Result<Option<Val
                 values.push(reflected_type_row(vm, root)?.type_value.ty);
             }
             let ty = match handle.op {
-                PendingOp::Array => bex_vm_types::RealizedTy::List(
-                    Box::new(
-                        values
-                            .into_iter()
-                            .next()
-                            .ok_or_else(|| "a pending array has no element".to_string())?,
-                    ),
-                    baml_type::TyAttr::default(),
-                ),
+                PendingOp::Array => bex_vm_types::RealizedTy::List(Box::new(
+                    values
+                        .into_iter()
+                        .next()
+                        .ok_or_else(|| "a pending array has no element".to_string())?,
+                )),
                 PendingOp::Optional => {
                     let value = values
                         .into_iter()
                         .next()
                         .ok_or_else(|| "a pending optional has no base".to_string())?;
                     let mut members = match value {
-                        bex_vm_types::RealizedTy::Union(members, _) => members.into_vec(),
+                        bex_vm_types::RealizedTy::Union(members) => members.into_vec(),
                         other => vec![other],
                     };
                     if !members.iter().any(bex_vm_types::RealizedTy::is_null) {
                         members.push(bex_vm_types::RealizedTy::null());
                     }
-                    bex_vm_types::RealizedTy::Union(members.into(), baml_type::TyAttr::default())
+                    bex_vm_types::RealizedTy::Union(members.into())
                 }
-                PendingOp::Union => {
-                    bex_vm_types::RealizedTy::Union(values.into(), baml_type::TyAttr::default())
-                }
+                PendingOp::Union => bex_vm_types::RealizedTy::Union(values.into()),
                 PendingOp::Direct => unreachable!(),
             };
             Value::object(vm.tlab.alloc_type(TypeValue::new(ty)))

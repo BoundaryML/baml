@@ -1,4 +1,4 @@
-//! Snapshot hash format 1: XXH3-128, seed zero, little-endian digest bytes.
+//! Snapshot hash format 2: XXH3-128, seed zero, little-endian digest bytes.
 //!
 //! Values/entries are hashed as they are appended. A container definition uses
 //! these range digests and explicit object-reference numbers. Freezing folds the
@@ -6,7 +6,7 @@
 //! This graph format handles cycles without recursive Merkle dependencies.
 //! Object numbering follows capture discovery order; map/argument order matters.
 //! Leaf indexes, allocator addresses, capacities and string rope shape do not.
-//! Borsh's current type/attribute encoding is part of version 1: changes to it
+//! Borsh's current attribute-free type encoding is part of version 2: changes to it
 //! require a hash-format version change. Hash equality is not proof of delivery.
 use std::io::{self, Write};
 
@@ -36,7 +36,7 @@ pub(super) struct Hasher(Xxh3);
 impl Hasher {
     pub(super) fn new(kind: u8) -> Self {
         let mut h = Self(Xxh3::new());
-        h.0.update(b"baml.snapshot.xxh3-128.v1\0");
+        h.0.update(b"baml.snapshot.xxh3-128.v2\0");
         h.byte(kind);
         h
     }

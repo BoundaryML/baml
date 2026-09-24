@@ -6,7 +6,10 @@ import {
   flattenCliCommands,
 } from '../lib/generated-content/cli-routes.ts';
 import { EXPLICIT_DOCUMENT_QUERY } from '../lib/generated-content/document-store.ts';
-import { directRouteChildren } from '../lib/generated-content/routes.ts';
+import {
+  directRouteChildren,
+  packageDocumentPath,
+} from '../lib/generated-content/routes.ts';
 import type { CliCommandNodeInput } from '../lib/generated-content/schemas.ts';
 import {
   canonicalVersionToRouteVersion,
@@ -91,4 +94,19 @@ test('explicit-version SSR uses one route query with exactly one snapshot join',
   assert.match(EXPLICIT_DOCUMENT_QUERY, /routes\.version = \$1/);
   assert.match(EXPLICIT_DOCUMENT_QUERY, /routes\.path = \$2/);
   assert.match(EXPLICIT_DOCUMENT_QUERY, /doc_snapshots/);
+});
+
+test('package lookup normalizes encoded stream names and confines segments', () => {
+  assert.equal(packageDocumentPath(undefined), 'baml/packages');
+  assert.equal(
+    packageDocumentPath(['ai', 'Agent$stream']),
+    'baml/packages/ai/Agent$stream',
+  );
+  assert.equal(
+    packageDocumentPath(['ai', 'Agent%24stream']),
+    'baml/packages/ai/Agent$stream',
+  );
+  for (const invalid of ['%', '..', '%2f', 'Agent%2524stream', 'foo.bar']) {
+    assert.equal(packageDocumentPath(['ai', invalid]), null);
+  }
 });

@@ -36,6 +36,10 @@ pub(crate) fn verbose() -> bool {
     VERBOSE.load(Ordering::Relaxed) > 0
 }
 
+pub(crate) fn quiet() -> bool {
+    QUIET.load(Ordering::Relaxed)
+}
+
 pub(crate) fn print_verbose(args: std::fmt::Arguments<'_>) {
     if verbose() && !QUIET.load(Ordering::Relaxed) {
         eprintln!("{args}");

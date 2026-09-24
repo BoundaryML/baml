@@ -606,7 +606,7 @@ function oai_stream_text() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let stream = ai.stream.from_spec<string | null, string>(
+            let stream = ai.stream.from_spec<string>(
                 OaiEcho@spec("Say pong."),
                 client = cl,
             );
@@ -627,7 +627,7 @@ test "oai_stream_text" {
 // One streamed run to completion, as a plain call so a `catch_all` at the call
 // site is unambiguous.
 function _oai_stream_final(cl: openai.ResponsesClient) -> string {
-    let stream = ai.stream.from_spec<string | null, string>(
+    let stream = ai.stream.from_spec<string>(
         OaiEcho@spec("Say pong."),
         client = cl,
     );
@@ -639,25 +639,27 @@ function oai_stream_time_to_first_token_timeout_ms() -> string {
     root.llm_mock.mock_sse_serve(
         [root.llm_mock.sse_data(completed)],
         (mock: root.llm_mock.MockSseServer) -> {
+            // The mock holds the first event for 10s, so only the 20ms TTFT can
+            // end this call, however slow the machine is.
             let cl = openai.ResponsesClient.new(
                 model = "gpt-4o-mini",
                 api_key = "test-key",
                 base_url = mock.base_url(),
-                request_timeout_ms = 1000,
+                request_timeout_ms = 15000,
                 time_to_first_token_timeout_ms = 20,
             );
             let outcome = _oai_stream_final(cl) catch_all (e) {
-                let timeout: baml.errors.Timeout => "Timeout",
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.duration_ms ?? -1}`,
                 _ => `other:${e.to_string()}`,
             };
             `${cl.time_to_first_token_timeout_ms ?? -1}|${outcome}`
         },
-        first_event_delay_ms = 200,
+        first_event_delay_ms = 10000,
     )
 }
 
 test "oai_stream_time_to_first_token_timeout_ms" {
-    assert.equal(oai_stream_time_to_first_token_timeout_ms(), "20|Timeout")
+    assert.equal(oai_stream_time_to_first_token_timeout_ms(), "20|Timeout:20")
 }
 
 // A stream whose text arrives ONLY as `output_text.done` still yields it.
@@ -1072,7 +1074,7 @@ function oai_live_answers() -> bool {
 }
 
 function oai_live_streams() -> bool {
-    let stream = ai.stream.from_spec<string | null, string>(
+    let stream = ai.stream.from_spec<string>(
         OaiEcho@spec("Say pong."),
         client = _oai_live_client(),
     );

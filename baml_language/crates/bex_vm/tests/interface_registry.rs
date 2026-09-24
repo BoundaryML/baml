@@ -12,8 +12,7 @@ use bex_vm_types::{Object, TyTemplate, types::Program};
 
 /// The head type name of a for-type pattern (`Dog` for `Dog`, `Wrap` for
 /// `Wrap<T>`). Matching on this — rather than a substring of the rendered
-/// pattern — keeps distinct names like `Dog` and `HotDog` (and `$stream`
-/// companions, which have a distinct head name) from colliding.
+/// pattern — keeps distinct names like `Dog` and `HotDog` from colliding.
 ///
 /// A head in a not-yet-loaded `Program` is a tag with no pointer, so the name
 /// comes from the pooled declaration carrying that tag — the same association

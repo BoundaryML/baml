@@ -11,7 +11,7 @@
 //! Layering (mirrors rust-analyzer's `hir-def -> hir-ty -> hir`):
 //!
 //! - This crate may depend on `baml_compiler2_ast`, `baml_compiler2_hir`,
-//!   `baml_compiler2_ppir` and `baml_type`.
+//!   `baml_compiler2_hir` and `baml_type`.
 //! - It must NEVER depend on `baml_compiler2_mir` or
 //!   `baml_compiler2_emit`. Until the cutover slice, nothing outside the test
 //!   harness in `baml_tests` consumes it, and every existing compiler snapshot
@@ -29,6 +29,7 @@ pub mod coherence;
 pub mod defaults;
 pub mod diagnostics;
 pub mod exhaustiveness;
+pub mod extern_loc;
 pub mod facts;
 pub mod ide;
 pub mod impls;

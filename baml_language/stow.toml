@@ -84,7 +84,8 @@ reason = "Use thiserror for proper error types in library crates."
 # baml namespace configuration
 [[namespaces]]
 name = "baml"
-approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "type", "query"]
+# `fmt` is the formatter, `baml_fmt`, and its browser build, `baml_fmt_wasm`.
+approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "type", "query", "fmt"]
 # The type provider crate: `hir_ty` is one name (rust-analyzer's crate of
 # the same shape), not a prefix + word.
 approved_suffixes = ["artifact", "compiler2_hir_ty"]

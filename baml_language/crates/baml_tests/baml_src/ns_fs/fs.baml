@@ -11,33 +11,11 @@
 // idempotent mkdir(recursive:true) so the suite stays safe to re-run and safe
 // under the parallel .baml runner.
 //
-// Tests left in Rust (not converted):
-//
-//   Should-error tests (cannot catch ExternalOpFailed in BAML — fs op failures
-//   are fatal engine errors, not BAML-level catchable throws):
-//     fs_open_nonexistent_file
-//     fs_file_write_on_readonly_errors
-//     fs_remove_nonexistent_errors
-//     fs_file_read_negative_n_errors
-//     fs_file_close_invalidates_handle
-//     fs_write_wrapper_closes_on_error
-//     fs_read_nonexistent_errors
-//     fs_file_seek_negative_errors
-//     fs_read_dir_nonexistent_errors
-//     fs_read_dir_on_file_errors
-//     fs_mkdir_non_recursive_errors_when_parent_missing
-//     fs_mkdir_non_recursive_errors_when_dir_exists
-//     fs_mkdir_recursive_errors_when_leaf_is_file
-//
-//   Other non-convertible tests:
-//     fs_file_invalid_mode        — tests a compile-time type error ("x" is not
-//                                   in the mode union); the Rust test uses
-//                                   #[should_panic] to catch a compile-time panic.
-//                                   No BAML equivalent.
-//     fs_read_dir_reports_symlink_flag — `baml.fs.symlink` could create the
-//                                   link now, but creating one on Windows needs
-//                                   privileges CI does not grant, so the test
-//                                   stays Unix-only in Rust.
+// Six Unix host-state tests remain in `crates/baml_tests/tests/fs.rs`: they
+// inspect real symlink identity/targets or exact permission bits, including
+// proving that a rejected chmod did not mutate the file. The catchable
+// language-level error contracts are covered below; see the Rust-survivor
+// ledger for the exact non-native boundary.
 
 // ============================================================================
 // open + read (text)

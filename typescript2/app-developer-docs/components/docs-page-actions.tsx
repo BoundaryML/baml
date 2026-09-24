@@ -12,8 +12,9 @@ import {
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-
+import { useOptionalBookPerspective } from '@/components/book-perspective-provider';
 import { useCopyFeedback } from '@/components/use-copy-feedback';
+import { BOOK_PERSPECTIVE_PARAM } from '@/lib/content/book-perspectives';
 import { documentationPages } from '@/lib/navigation';
 import { siteConfig } from '@/lib/site-config';
 
@@ -26,6 +27,7 @@ Help me understand how to use it. Be ready to explain concepts, give examples, o
 
 export function DocsPageActions() {
   const pathname = usePathname();
+  const perspective = useOptionalBookPerspective()?.requested;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { copiedAction, copy } = useCopyFeedback<'page'>();
@@ -37,7 +39,10 @@ export function DocsPageActions() {
     pageIndex >= 0 && pageIndex < documentationPages.length - 1
       ? documentationPages[pageIndex + 1]
       : null;
-  const pageUrl = new URL(pathname, siteConfig.url).toString();
+  const shareUrl = new URL(pathname, siteConfig.url);
+  if (perspective)
+    shareUrl.searchParams.set(BOOK_PERSPECTIVE_PARAM, perspective);
+  const pageUrl = shareUrl.toString();
 
   const copyPage = async () => {
     const content = document.querySelector<HTMLElement>('[data-docs-content]');

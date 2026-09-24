@@ -29,7 +29,7 @@ export type CodeAnnotation = {
   label: string;
   kind: 'success' | 'syntax' | 'recovery';
   occurrence?: number;
-  mark?: 'underbrace' | 'circle' | 'bracket';
+  mark?: 'underbrace' | 'circle' | 'bracket' | 'left-bar';
 };
 
 type AnnotationToken = {
@@ -123,13 +123,25 @@ export function renderAnnotatedSnippet({
     };
   });
   const perLine = lines.map((_, i) =>
-    resolved.filter((a) => a.b.line === i).sort((a, b) => b.a.col - a.a.col),
+    resolved
+      .filter((a) => a.b.line === i)
+      .sort(
+        (a, b) =>
+          Number(a.mark === 'left-bar') - Number(b.mark === 'left-bar') ||
+          b.a.col - a.a.col,
+      ),
   );
   const lineY: number[] = [];
   let cursor = PAD + titleHeight + FONT;
   for (let i = 0; i < lines.length; i++) {
     lineY.push(cursor);
-    cursor += LINE + perLine[i].length * LANE + (perLine[i].length ? 8 : 0);
+    cursor +=
+      LINE +
+      perLine[i].length * LANE +
+      (perLine[i].length ? 8 : 0) +
+      (perLine[i].some((annotation) => annotation.mark === 'left-bar')
+        ? 16
+        : 0);
   }
   const codeWidth = Math.max(...lines.map((l) => [...l].length)) * CHAR;
   let rightBound = codeX + codeWidth;
@@ -161,7 +173,13 @@ export function renderAnnotatedSnippet({
         let mark: string;
         let leaderX: number;
         let leaderY: number;
-        if (a.a.line !== a.b.line) {
+        if (a.mark === 'left-bar') {
+          const top = lineY[a.a.line] - FONT - 5;
+          const bottom = lineY[a.b.line] + 13;
+          mark = `<path d="M ${x1 - 16} ${top} V ${bottom}" stroke-width="3"/>`;
+          leaderX = x1;
+          leaderY = bottom;
+        } else if (a.a.line !== a.b.line) {
           // A curly brace follows the outside edge of the code block.
           const blockWidth =
             Math.max(
@@ -191,13 +209,14 @@ export function renderAnnotatedSnippet({
           leaderY = baseY + 12;
         }
         const isMultiline = a.a.line !== a.b.line;
-        const labelX = leaderX + 60;
+        const labelX = a.mark === 'left-bar' ? x1 : leaderX + 60;
         // Rightmost targets use the upper label lanes. Curves only run down/right.
-        const finalLabelY = isMultiline ? leaderY + 6 : labelY;
+        const finalLabelY =
+          isMultiline && a.mark !== 'left-bar' ? leaderY + 6 : labelY;
         const endY = finalLabelY - 5;
         const connector = `M ${leaderX} ${leaderY} C ${leaderX + 3} ${endY}, ${labelX - 30} ${endY}, ${labelX - 10} ${endY}`;
         rightBound = Math.max(rightBound, labelX + a.label.length * 8.6);
-        return `<g class="annotation" data-kind="${escapeXml(a.kind)}" stroke="${color}">${mark}<path d="${connector}" stroke-opacity="0.78"/><text x="${labelX}" y="${finalLabelY}" fill="${color}" stroke="none" class="annotation-label">${escapeXml(a.label)}</text></g>`;
+        return `<g class="annotation" data-kind="${escapeXml(a.kind)}" stroke="${color}">${mark}${a.mark === 'left-bar' ? '' : `<path d="${connector}" stroke-opacity="0.78"/>`}<text x="${labelX}" y="${finalLabelY}" fill="${color}" stroke="none" class="annotation-label">${escapeXml(a.label)}</text></g>`;
       }),
     )
     .join('\n');

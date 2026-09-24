@@ -1,4 +1,4 @@
-//! CAS blob format 1. Explicit little-endian scalar tags, not Rust layouts.
+//! CAS blob format 2. Explicit little-endian scalar tags, not Rust layouts.
 //!
 //! Header: `BTELCAS\0`, u32 version, 16 digest bytes, bool limited, u32 object
 //! count, root, then object definitions in `ObjectId` order. Root is tag 0/value
@@ -6,7 +6,7 @@
 //! u32 lengths. Values inline immutable leaf contents; only graph objects use
 //! u32 references. This makes leaf-arena sharing irrelevant to the bytes.
 //!
-//! Value and object tags mirror hash format 1. Type/declaration metadata uses
+//! Value and object tags mirror hash format 2. Type/declaration metadata uses
 //! its Borsh representation. Floats use raw bits (including NaNs). Bigints use
 //! sign (0 negative, 1 zero, 2 positive), u64 bit length, then ceil(bits/64)
 //! little-endian u64 magnitude limbs. Any encoding change needs a version bump.

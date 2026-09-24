@@ -300,9 +300,7 @@ mod tests {
 
     use bex_vm_types::RealizedTy;
     fn ty() -> RealizedTy {
-        RealizedTy::Null {
-            attr: baml_type::TyAttr::default(),
-        }
+        RealizedTy::Null
     }
     fn capture(values: &[Value]) -> Snapshot {
         let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
@@ -461,12 +459,10 @@ mod tests {
             fields: vec![
                 bex_vm_types::ClassField {
                     name: "x".to_string(),
-                    field_type: baml_type::RuntimeTy::Int {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int {
-                        attr: baml_type::TyAttr::default(),
-                    }),
+                    field_type: baml_type::RuntimeTy::Int,
+                    field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int),
+                    must_exist: false,
+                    stream_done: false,
                     description: None,
                     alias: None,
                     docstring: None,
@@ -476,12 +472,10 @@ mod tests {
                 },
                 bex_vm_types::ClassField {
                     name: "y".to_string(),
-                    field_type: baml_type::RuntimeTy::Int {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int {
-                        attr: baml_type::TyAttr::default(),
-                    }),
+                    field_type: baml_type::RuntimeTy::Int,
+                    field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int),
+                    must_exist: false,
+                    stream_done: false,
                     description: None,
                     alias: None,
                     docstring: None,
@@ -495,7 +489,7 @@ mod tests {
             docstring: None,
             other: indexmap::IndexMap::default(),
             type_tag: baml_type::typetag::TypeTag::from_i64(100),
-            ty_attr: baml_type::TyAttr::default(),
+            stream_done: false,
             has_cleanup: false,
             generic_param_count: 1,
             owner: bex_vm_types::HeapPtr::null(),
@@ -535,7 +529,6 @@ mod tests {
             alias: None,
             docstring: None,
             other: indexmap::IndexMap::default(),
-            ty_attr: baml_type::TyAttr::default(),
             owner: bex_vm_types::HeapPtr::null(),
         })));
         let instance = vm.tlab.alloc_instance_with_type_args(
@@ -543,7 +536,6 @@ mod tests {
             Box::new([RealizedTy::Class(
                 bex_vm_types::TypeHead::new(class_ptr, baml_type::typetag::TypeTag::from_i64(100)),
                 Box::new([]),
-                baml_type::TyAttr::default(),
             )]),
             vec![Value::int(10), Value::int(20)],
         );

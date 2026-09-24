@@ -44,7 +44,7 @@ pub const CLEANUP_METHOD: &str = "cleanup";
 pub fn throws_is_effectively_none(throws: Option<&TypeExpr>) -> bool {
     match throws {
         None => true,
-        Some(st) => matches!(st.kind, TypeExprKind::Never { .. }),
+        Some(st) => matches!(st.kind, TypeExprKind::Never),
     }
 }
 
@@ -83,7 +83,7 @@ pub fn has_cleanup_shape(func: &FunctionDef) -> bool {
         && throws_is_effectively_none(func.throws.as_ref())
         && matches!(
             func.return_type.as_ref().map(|st| &st.kind),
-            Some(TypeExprKind::Void { .. })
+            Some(TypeExprKind::Void)
         )
 }
 

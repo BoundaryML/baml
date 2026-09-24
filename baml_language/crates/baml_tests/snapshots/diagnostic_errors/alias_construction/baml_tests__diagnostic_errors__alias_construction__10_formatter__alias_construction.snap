@@ -1,0 +1,31 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// A constructor head is legal wherever the type it denotes would be (see
+// ns_alias_construction for the accepted forms). An alias of anything but a
+// class denotes nothing an object literal can construct, and the report
+// names what it denotes; an alias takes no type arguments of its own, the
+// class's come from the alias's definition.
+
+class Point {
+    x: int,
+    y: int,
+}
+
+type PointAlias = Point;
+
+type Text = string;
+
+type Either = Point | string;
+
+function not_a_class() -> string throws never {
+    Text { value: "x" }
+}
+
+function not_a_class_union() -> Point | string throws never {
+    Either { x: 1, y: 2 }
+}
+
+function alias_takes_no_type_arguments() -> Point throws never {
+    PointAlias<int> { x: 1, y: 2 }
+}

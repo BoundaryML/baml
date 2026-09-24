@@ -45,7 +45,7 @@ use crate::{
         boxed_slice_arg, contains_recursion, path_head, reachable_satellites, unsupported,
         wrapper_arg,
     },
-    emit::{attr_arm, is_doc, member_variants, satellite_name_for, with_attr_arm},
+    emit::{is_doc, member_variants, satellite_name_for},
     parse::{Family, Member, Satellite},
 };
 
@@ -77,7 +77,6 @@ pub(crate) fn gen_interned_member(
         head,
     };
     let mut out = gen_enum(&cx);
-    out.extend(gen_accessors(&cx));
     // Twin satellites, pruned to those reachable through the member's own
     // variants (mirroring the conversion validators' pruning): a satellite
     // reached only through an excluded variant would be a dead type.
@@ -254,31 +253,6 @@ fn mentions_family_or_head(cx: &Cx, ty: &syn::Type) -> bool {
         })
     }
     walk(quote!(#ty), param)
-}
-
-/// The `attr`/`with_attr` accessors. Same arms as the plain members', but the
-/// impl takes no generics — the interned member is monomorphic.
-fn gen_accessors(cx: &Cx) -> TokenStream {
-    let name = &cx.member.name;
-    let attr_arms = member_variants(cx.family, cx.member).map(|v| attr_arm(name, v));
-    let with_arms = member_variants(cx.family, cx.member).map(|v| with_attr_arm(name, v));
-    quote! {
-        impl #name {
-            #[doc = " Borrow this type's streaming/SAP attributes ([`TyAttr`])."]
-            pub fn attr(&self) -> &TyAttr {
-                match self {
-                    #(#attr_arms),*
-                }
-            }
-
-            #[doc = " Return this type with its [`TyAttr`] replaced by `attr`."]
-            pub fn with_attr(self, attr: TyAttr) -> Self {
-                match self {
-                    #(#with_arms),*
-                }
-            }
-        }
-    }
 }
 
 /// The interned twin of a satellite: same fields through the same transform,

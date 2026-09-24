@@ -1,12 +1,17 @@
-//! Based on the compiler-internal type system and SAP annotations: [BEP-006: Semantic Streaming (but better)](https://beps.boundaryml.com/beps/6)
-//! These are the interface used to transform JSON-like data into a typed representation.
+//! The parser-facing model of BAML types.
+//!
+//! Streaming follows [BEP-075: Simplified Streaming](https://beps.boundaryml.com/beps/75):
+//! attributes belong to declarations (`@stream.done` and `@stream.must_exist` on class
+//! fields, `@@stream.done` on classes) and never to type nodes, and every class field has a
+//! default ([`TypeRefDb::field_default`]) that stands in while the input has not reached the
+//! field.
 
 mod convert;
 mod from_literal;
 mod test_macros;
 mod type_name;
 
-use std::{borrow::Cow, fmt::Display};
+use std::{borrow::Cow, fmt, fmt::Display};
 
 pub use convert::*;
 use derive_more::From;
@@ -31,10 +36,6 @@ impl TypeIdent for usize {}
 /// Stores all the "named" types (classes, enums, and type aliases) for lookup.
 pub struct TypeRefDb<'t, N: TypeIdent> {
     /// Types in the database are stored by name.
-    ///
-    /// They do not have annotations attached to their top-level type.
-    /// If there are annotations, they should be lifted by the conversion process (or earlier)
-    /// onto any place where the name is used.
     types: IndexMap<N, TyResolved<'t, N>>,
 }
 
@@ -46,27 +47,15 @@ impl<N: TypeIdent> Default for TypeRefDb<'_, N> {
     }
 }
 impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
+    /// An empty database.
     #[inline]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Tries to add a type to the database. Returns an error if the identifier is already in use.
-    #[cfg(any(test, feature = "manual_db"))]
-    #[inline]
-    pub fn try_add(&mut self, ident: N, ty: TyResolved<'t, N>) -> Result<(), &TyResolved<'t, N>> {
-        self.try_add_inner(ident, ty)
-    }
-
-    /// Private version of [`TypeRefDb::try_add`], not locked behind a feature flag.
-    fn try_add_inner(&mut self, ident: N, ty: TyResolved<'t, N>) -> Result<(), &TyResolved<'t, N>> {
-        match self.types.entry(ident) {
-            indexmap::map::Entry::Occupied(entry) => Err(entry.into_mut()),
-            indexmap::map::Entry::Vacant(entry) => {
-                entry.insert(ty);
-                Ok(())
-            }
-        }
+    /// A database of the given named types.
+    pub fn from_types(types: IndexMap<N, TyResolved<'t, N>>) -> Self {
+        Self { types }
     }
 
     /// Unwraps a [`Ty`] into a [`TyResolvedRef`].
@@ -90,13 +79,198 @@ impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
         self.types.get(ident).map(TyResolved::as_ref)
     }
 
-    /// Like [`TypeRefDb::resolve`], but maps the result to keep the type annotations.
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn resolve_with_meta(
+    /// What a class field holds while its object is incomplete and no (partial) value has
+    /// arrived: the declaration's [`AnnotatedField::default`] if it pins one, otherwise
+    /// [`TypeRefDb::partial_default`] of the field's type.
+    ///
+    /// # Errors
+    /// The field's type names something the database does not contain.
+    pub fn field_default(
         &'t self,
-        ty: TyWithMeta<&'t Ty<'t, N>, &'t TypeAnnotations<'t, N>>,
-    ) -> Result<TyWithMeta<TyResolvedRef<'t, N>, &'t TypeAnnotations<'t, N>>, &'t N> {
-        self.resolve(ty.ty).map(|res| TyWithMeta::new(res, ty.meta))
+        field: &'t AnnotatedField<'t, N>,
+    ) -> Result<Cow<'t, DefaultValue<N>>, &'t N> {
+        match &field.default {
+            Some(default) => Ok(Cow::Borrowed(default)),
+            None => self.partial_default(&field.ty).map(Cow::Owned),
+        }
+    }
+
+    /// BEP-075's field-default table over `ty`: nullable types → `null`, literals → the
+    /// literal, `string` → `""`, arrays and maps → empty, a one-variant enum → its variant, a
+    /// class → all of its fields' defaults, and everything else (numbers, `bool`, media, other
+    /// enums, non-nullable unions, a class with a `never` field or containing itself) →
+    /// [`DefaultValue::Never`].
+    ///
+    /// # Errors
+    /// `ty` names something the database does not contain.
+    pub fn partial_default(&'t self, ty: &'t Ty<'t, N>) -> Result<DefaultValue<N>, &'t N> {
+        DefaultDeriver {
+            db: self,
+            stack: Vec::new(),
+        }
+        .partial(ty)
+    }
+
+    /// What a complete object may omit: `null` for nullable types and an empty container for
+    /// arrays and maps. Anything else is required ([`DefaultValue::Never`]).
+    ///
+    /// # Errors
+    /// `ty` names something the database does not contain.
+    pub fn missing_default(&'t self, ty: &'t Ty<'t, N>) -> Result<DefaultValue<N>, &'t N> {
+        DefaultDeriver {
+            db: self,
+            stack: Vec::new(),
+        }
+        .missing(ty)
+    }
+}
+
+/// Derives field defaults over a database (BEP-075's field-default table).
+///
+/// `stack` holds the classes and aliases currently being derived: a type that needs its own
+/// default to be inhabited has none.
+struct DefaultDeriver<'t, N: TypeIdent> {
+    db: &'t TypeRefDb<'t, N>,
+    stack: Vec<N>,
+}
+
+impl<'t, N: TypeIdent> DefaultDeriver<'t, N> {
+    /// Runs `derive` on the resolution of `ty`, guarding named entries against cycles.
+    fn resolved(
+        &mut self,
+        ty: &'t Ty<'t, N>,
+        derive: fn(&mut Self, TyResolvedRef<'t, N>) -> Result<DefaultValue<N>, &'t N>,
+    ) -> Result<DefaultValue<N>, &'t N> {
+        match ty {
+            Ty::Resolved(resolved) => derive(self, resolved.as_ref()),
+            Ty::ResolvedRef(resolved) => derive(self, *resolved),
+            Ty::Unresolved(name) => {
+                let Some(resolved) = self.db.types.get(name) else {
+                    return Err(name);
+                };
+                if let TyResolved::Class(class) = resolved {
+                    // Classes guard themselves by declaration name.
+                    return derive(self, TyResolvedRef::Class(class));
+                }
+                if self.stack.contains(name) {
+                    return Ok(DefaultValue::Never);
+                }
+                self.stack.push(name.clone());
+                let default = derive(self, resolved.as_ref());
+                self.stack.pop();
+                default
+            }
+        }
+    }
+
+    fn partial(&mut self, ty: &'t Ty<'t, N>) -> Result<DefaultValue<N>, &'t N> {
+        self.resolved(ty, Self::partial_resolved)
+    }
+
+    fn partial_resolved(&mut self, ty: TyResolvedRef<'t, N>) -> Result<DefaultValue<N>, &'t N> {
+        Ok(match ty {
+            TyResolvedRef::Null(_) => DefaultValue::Null,
+            TyResolvedRef::Int(_)
+            | TyResolvedRef::Bigint(_)
+            | TyResolvedRef::Float(_)
+            | TyResolvedRef::Bool(_)
+            | TyResolvedRef::Media(_) => DefaultValue::Never,
+            TyResolvedRef::String(_) => DefaultValue::String(String::new()),
+            TyResolvedRef::LiteralString(lit) => DefaultValue::String(lit.0.to_string()),
+            TyResolvedRef::LiteralInt(lit) => DefaultValue::Int(lit.0),
+            TyResolvedRef::LiteralBigint(lit) => DefaultValue::Bigint(lit.0.clone()),
+            TyResolvedRef::LiteralBool(lit) => DefaultValue::Bool(lit.0),
+            TyResolvedRef::Array(_) => DefaultValue::EmptyArray,
+            TyResolvedRef::Map(_) => DefaultValue::EmptyMap,
+            // A one-variant enum is the same type as its variant literal, so it defaults
+            // the same way.
+            TyResolvedRef::Enum(e) => match e.variants.as_slice() {
+                [only] => DefaultValue::EnumVariant {
+                    enum_name: e.name.clone(),
+                    variant_name: only.name.to_string(),
+                },
+                _ => DefaultValue::Never,
+            },
+            TyResolvedRef::EnumVariant(ev) => DefaultValue::EnumVariant {
+                enum_name: ev.name.clone(),
+                variant_name: ev.value.name.to_string(),
+            },
+            TyResolvedRef::Union(u) => self.union_default(u)?,
+            TyResolvedRef::Class(c) => self.class_default(c)?,
+            TyResolvedRef::StreamState(s) => match self.partial(&s.value)? {
+                DefaultValue::Never => DefaultValue::Never,
+                inner => DefaultValue::StreamStatePending(Box::new(inner)),
+            },
+        })
+    }
+
+    /// `null` when the union is nullable, otherwise `never`.
+    fn union_default(&mut self, union: &'t UnionTy<'t, N>) -> Result<DefaultValue<N>, &'t N> {
+        for variant in &union.variants {
+            if self.partial(variant)? == DefaultValue::Null {
+                return Ok(DefaultValue::Null);
+            }
+        }
+        Ok(DefaultValue::Never)
+    }
+
+    /// Every field's default, or `never` if any field has none (or the class contains itself).
+    fn class_default(&mut self, class: &'t ClassTy<'t, N>) -> Result<DefaultValue<N>, &'t N> {
+        if self.stack.contains(&class.name) {
+            return Ok(DefaultValue::Never);
+        }
+        self.stack.push(class.name.clone());
+        let mut fields = IndexMap::with_capacity(class.fields.len());
+        let mut default = DefaultValue::Never;
+        for field in &class.fields {
+            let field_default = match &field.default {
+                Some(pinned) => pinned.clone(),
+                None => self.partial(&field.ty)?,
+            };
+            if field_default == DefaultValue::Never {
+                fields.clear();
+                break;
+            }
+            fields.insert(field.name.to_string(), field_default);
+        }
+        if fields.len() == class.fields.len() {
+            default = DefaultValue::Object {
+                name: class.name.clone(),
+                fields,
+            };
+        }
+        self.stack.pop();
+        Ok(default)
+    }
+
+    fn missing(&mut self, ty: &'t Ty<'t, N>) -> Result<DefaultValue<N>, &'t N> {
+        self.resolved(ty, Self::missing_resolved)
+    }
+
+    fn missing_resolved(&mut self, ty: TyResolvedRef<'t, N>) -> Result<DefaultValue<N>, &'t N> {
+        Ok(match ty {
+            TyResolvedRef::Null(_) => DefaultValue::Null,
+            TyResolvedRef::Union(u) => self.union_default(u)?,
+            TyResolvedRef::Array(_) => DefaultValue::EmptyArray,
+            TyResolvedRef::Map(_) => DefaultValue::EmptyMap,
+            TyResolvedRef::StreamState(s) => match self.missing(&s.value)? {
+                DefaultValue::Never => DefaultValue::Never,
+                inner => DefaultValue::StreamStatePending(Box::new(inner)),
+            },
+            TyResolvedRef::Int(_)
+            | TyResolvedRef::Bigint(_)
+            | TyResolvedRef::Float(_)
+            | TyResolvedRef::String(_)
+            | TyResolvedRef::Bool(_)
+            | TyResolvedRef::Media(_)
+            | TyResolvedRef::LiteralString(_)
+            | TyResolvedRef::LiteralInt(_)
+            | TyResolvedRef::LiteralBigint(_)
+            | TyResolvedRef::LiteralBool(_)
+            | TyResolvedRef::Class(_)
+            | TyResolvedRef::Enum(_)
+            | TyResolvedRef::EnumVariant(_) => DefaultValue::Never,
+        })
     }
 }
 
@@ -250,7 +424,7 @@ impl<'t, N: TypeIdent> TyResolvedRef<'t, N> {
         match self {
             TyResolvedRef::Null(..) => true,
             TyResolvedRef::Union(u) => u.is_optional(db),
-            TyResolvedRef::StreamState(s) => s.value.ty.is_optional(db),
+            TyResolvedRef::StreamState(s) => s.value.is_optional(db),
             _ => false,
         }
     }
@@ -311,44 +485,6 @@ impl<N: TypeIdent> PartialEq for Ty<'_, N> {
         }
     }
 }
-
-/// Represents a type with additional metadata.
-pub struct TyWithMeta<T, M> {
-    pub ty: T,
-    pub meta: M,
-}
-impl<T, M> TyWithMeta<T, M> {
-    pub const fn new(ty: T, meta: M) -> Self {
-        Self { ty, meta }
-    }
-    pub const fn as_ref(&self) -> TyWithMeta<&T, &M> {
-        TyWithMeta {
-            ty: &self.ty,
-            meta: &self.meta,
-        }
-    }
-    pub fn map_ty<U, F: FnOnce(T) -> U>(self, f: F) -> TyWithMeta<U, M> {
-        TyWithMeta {
-            ty: f(self.ty),
-            meta: self.meta,
-        }
-    }
-}
-impl<T: Clone, M: Clone> Clone for TyWithMeta<T, M> {
-    fn clone(&self) -> Self {
-        Self {
-            ty: self.ty.clone(),
-            meta: self.meta.clone(),
-        }
-    }
-}
-impl<T: PartialEq, M: PartialEq> PartialEq for TyWithMeta<T, M> {
-    fn eq(&self, other: &Self) -> bool {
-        self.ty == other.ty && self.meta == other.meta
-    }
-}
-
-pub type AnnotatedTy<'t, N> = TyWithMeta<Ty<'t, N>, TypeAnnotations<'t, N>>;
 
 #[derive(Clone, Copy, PartialEq, Eq, From)]
 pub enum PrimitiveTy {
@@ -537,7 +673,7 @@ where
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
 #[derive(Clone, PartialEq)]
 pub struct ArrayTy<'t, N: TypeIdent> {
-    pub ty: Box<AnnotatedTy<'t, N>>,
+    pub ty: Box<Ty<'t, N>>,
 }
 impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for ArrayTy<'t, N>
 where
@@ -549,8 +685,8 @@ where
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
 #[derive(Clone, PartialEq)]
 pub struct MapTy<'t, N: TypeIdent> {
-    pub key: Box<AnnotatedTy<'t, N>>,
-    pub value: Box<AnnotatedTy<'t, N>>,
+    pub key: Box<Ty<'t, N>>,
+    pub value: Box<Ty<'t, N>>,
 }
 impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for MapTy<'t, N>
 where
@@ -559,7 +695,7 @@ where
     type Value = BamlMap<'s, 'v, 't, N>;
 }
 impl<'t, N: TypeIdent> MapTy<'t, N> {
-    pub fn new(key: AnnotatedTy<'t, N>, value: AnnotatedTy<'t, N>) -> Self {
+    pub fn new(key: Ty<'t, N>, value: Ty<'t, N>) -> Self {
         Self {
             key: Box::new(key),
             value: Box::new(value),
@@ -573,6 +709,8 @@ pub struct ClassTy<'t, N: TypeIdent> {
     pub name: N,
     /// Not used in determining equality, as classes should be identical if their names are the same.
     pub fields: Vec<AnnotatedField<'t, N>>,
+    /// `@@stream.done`: an incomplete object never parses as this class.
+    pub stream_done: bool,
 }
 impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for ClassTy<'t, N>
 where
@@ -626,14 +764,14 @@ impl<N: TypeIdent> PartialEq for EnumVariantTy<'_, N> {
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
 #[derive(Clone, PartialEq)]
 pub struct UnionTy<'t, N: TypeIdent> {
-    pub variants: Vec<AnnotatedTy<'t, N>>,
+    pub variants: Vec<Ty<'t, N>>,
 }
 impl<'t, N: TypeIdent> UnionTy<'t, N> {
     /// Returns true if any of the variants are `null`.
     ///
     /// Requires `ctx` in case we need to look up type aliases that may contain optional unions.
     pub fn is_optional(&self, db: &'t TypeRefDb<'t, N>) -> bool {
-        self.variants.iter().any(|v| v.ty.is_optional(db))
+        self.variants.iter().any(|v| v.is_optional(db))
     }
 }
 impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for UnionTy<'t, N>
@@ -646,7 +784,7 @@ where
 /// Represents that the value should be wrapped in a stream state enum.
 #[derive(Clone, PartialEq)]
 pub struct StreamStateTy<'t, N: TypeIdent> {
-    pub value: Box<AnnotatedTy<'t, N>>,
+    pub value: Box<Ty<'t, N>>,
 }
 impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for StreamStateTy<'t, N>
 where
@@ -655,54 +793,24 @@ where
     type Value = BamlStreamState<'s, 'v, 't, N>;
 }
 
-/// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
-#[derive(Clone, PartialEq)]
-pub struct TypeAnnotations<'t, N: TypeIdent> {
-    /// Represents the behavior when streaming and incomplete.
-    ///
-    /// - If `None`, the partial value will be used.
-    /// - If `Some(never)`, the value should be excluded until done
-    ///   (will be handled by the parent, such as [`AnnotatedField::class_in_progress_field_missing`]).
-    /// - If `Some(<value>)`, this is the value to use when streaming and the value is incomplete.
-    ///
-    /// Example:
-    /// If `Some("Loading...")`, then `"Loading..."` should be used until done.
-    pub in_progress: Option<AttrLiteral<'t, N>>,
-
-    /// If true, then `null` values should be rejected even if the annotated type is nullable.
-    ///
-    /// This is used to indicate that while fill-in values may be `null`,
-    /// a value from the input stream may not be parsed as `null`.
-    pub parse_without_null: bool,
-}
-impl<N: TypeIdent> Default for TypeAnnotations<'_, N> {
-    fn default() -> Self {
-        Self {
-            in_progress: None,
-            parse_without_null: false,
-        }
-    }
-}
-
+/// A class field as declared: its type plus the declaration attributes that shape parsing.
+///
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
 #[derive(Clone)]
 pub struct AnnotatedField<'t, N: TypeIdent> {
     pub name: Cow<'t, str>,
-    pub ty: AnnotatedTy<'t, N>,
-    /// If the parent object is incomplete and this field has not yet been started, use this value instead.
-    /// If it is `never` then this causes the entire class to be excluded until present.
-    ///
-    /// - Should always be `null` for optional fields.
-    /// - Should always be `Pending(<value>)` (or `never`) for `StreamState` fields.
-    pub class_in_progress_field_missing: AttrLiteral<'t, N>,
-    /// If the parent object is complete and this field is missing, use this value instead.
-    /// If it is `never` then this causes an error.
-    ///
-    /// - Should always be `null` for optional fields.
-    pub class_completed_field_missing: AttrLiteral<'t, N>,
+    pub ty: Ty<'t, N>,
     /// Aliases for the field name.
     /// If any are present, the real name is not used for matching.
     pub aliases: Vec<Cow<'t, str>>,
+    /// `@stream.done`: an incomplete value is treated as not supplied, so the field keeps its
+    /// default until the value completes.
+    pub stream_done: bool,
+    /// What the field holds while its object is incomplete and no (partial) value has arrived.
+    /// `None` derives it from the type ([`TypeRefDb::partial_default`]); a declaration can pin
+    /// it instead: `@stream.must_exist` is `Some(DefaultValue::Never)`, so the class has no
+    /// partial parse until the field is present.
+    pub default: Option<DefaultValue<N>>,
 }
 impl<N: TypeIdent> AnnotatedField<'_, N> {
     /// Checks if an input key matches the field exactly (including aliases).
@@ -724,38 +832,282 @@ pub struct AnnotatedEnumVariant<'t> {
     pub aliases: Vec<Cow<'t, str>>,
 }
 
-/// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
+/// A value derived from a type to stand in for a class field the input has not supplied.
 ///
-/// Used in attributes like `@sap.in_progress(...)` and `@sap.class_completed_field_missing(...)`
+/// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
 #[derive(Clone, From, PartialEq)]
-pub enum AttrLiteral<'t, N: TypeIdent> {
-    /// the `never` bottom type.
-    /// Generally used to indicate that the value should be excluded,
-    /// and if it is required then parent should return an error.
+pub enum DefaultValue<N: TypeIdent> {
+    /// The type has no default (`never`), so its container has no value either.
     Never,
-    /// the `null` type
     Null,
     #[from(i64)]
     Int(i64),
     Bigint(num_bigint::BigInt),
-    #[from(f64)]
-    Float(f64),
-    #[from(&'t str, String, Cow<'t, str>)]
-    String(Cow<'t, str>),
+    #[from(&str, String)]
+    String(String),
     #[from(bool)]
     Bool(bool),
-    Array(Vec<AttrLiteral<'t, N>>),
+    EmptyArray,
+    EmptyMap,
+    /// A class whose every field has a default.
     Object {
-        name: &'t N,
-        data: IndexMap<Cow<'t, str>, AttrLiteral<'t, N>>,
+        name: N,
+        fields: IndexMap<String, DefaultValue<N>>,
     },
-
-    Map(IndexMap<Cow<'t, str>, AttrLiteral<'t, N>>),
     EnumVariant {
-        enum_name: &'t N,
-        variant_name: Cow<'t, str>,
+        enum_name: N,
+        variant_name: String,
     },
-    StreamStatePending(Box<AttrLiteral<'t, N>>),
-    StreamStateIncomplete(Box<AttrLiteral<'t, N>>),
-    StreamStateComplete(Box<AttrLiteral<'t, N>>),
+    /// A `StreamState` field that has not started, around the inner type's default.
+    StreamStatePending(Box<DefaultValue<N>>),
+}
+
+impl<N: TypeIdent> fmt::Debug for DefaultValue<N> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DefaultValue::Never => f.write_str("never"),
+            DefaultValue::Null => f.write_str("null"),
+            DefaultValue::Int(i) => write!(f, "{i}"),
+            DefaultValue::Bigint(b) => write!(f, "{b}n"),
+            DefaultValue::String(s) => write!(f, "{s:?}"),
+            DefaultValue::Bool(b) => write!(f, "{b}"),
+            DefaultValue::EmptyArray => f.write_str("[]"),
+            DefaultValue::EmptyMap => f.write_str("{}"),
+            DefaultValue::Object { name, fields } => {
+                write!(f, "{name} ")?;
+                f.debug_map().entries(fields.iter()).finish()
+            }
+            DefaultValue::EnumVariant {
+                enum_name,
+                variant_name,
+            } => write!(f, "{enum_name}.{variant_name}"),
+            DefaultValue::StreamStatePending(inner) => write!(f, "Pending({inner:?})"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::baml_db;
+
+    type Db = TypeRefDb<'static, &'static str>;
+
+    fn field<'a>(
+        db: &'a Db,
+        class: &'static str,
+        field: usize,
+    ) -> &'a AnnotatedField<'a, &'static str> {
+        let Some(TyResolvedRef::Class(class)) = db.resolve_name(&class) else {
+            panic!("{class} is a class in the db");
+        };
+        &class.fields[field]
+    }
+
+    fn partial(db: &Db, class: &'static str, index: usize) -> DefaultValue<&'static str> {
+        db.field_default(field(db, class, index))
+            .expect("field type resolves")
+            .into_owned()
+    }
+
+    fn missing(db: &Db, class: &'static str, index: usize) -> DefaultValue<&'static str> {
+        db.missing_default(&field(db, class, index).ty)
+            .expect("field type resolves")
+    }
+
+    #[test]
+    fn every_row_of_the_default_table() {
+        let db = baml_db! {
+            enum One { Only }
+            enum Many { A, B }
+            class Row {
+                nullable: (int | null),
+                literal_str: "resume",
+                literal_int: 7,
+                literal_bool: true,
+                text: string,
+                list: [int],
+                dict: map<string, int>,
+                number: int,
+                big: bigint,
+                real: float,
+                flag: bool,
+                one: One,
+                one_variant: Many.A,
+                many: Many,
+                non_nullable_union: (string | int),
+                state: StreamState<string>,
+                never_state: StreamState<int>,
+            }
+        };
+        let expected: [(DefaultValue<&str>, DefaultValue<&str>); 17] = [
+            (DefaultValue::Null, DefaultValue::Null),
+            (DefaultValue::String("resume".into()), DefaultValue::Never),
+            (DefaultValue::Int(7), DefaultValue::Never),
+            (DefaultValue::Bool(true), DefaultValue::Never),
+            (DefaultValue::String(String::new()), DefaultValue::Never),
+            (DefaultValue::EmptyArray, DefaultValue::EmptyArray),
+            (DefaultValue::EmptyMap, DefaultValue::EmptyMap),
+            (DefaultValue::Never, DefaultValue::Never),
+            (DefaultValue::Never, DefaultValue::Never),
+            (DefaultValue::Never, DefaultValue::Never),
+            (DefaultValue::Never, DefaultValue::Never),
+            (
+                DefaultValue::EnumVariant {
+                    enum_name: "One",
+                    variant_name: "Only".into(),
+                },
+                DefaultValue::Never,
+            ),
+            (
+                DefaultValue::EnumVariant {
+                    enum_name: "Many",
+                    variant_name: "A".into(),
+                },
+                DefaultValue::Never,
+            ),
+            (DefaultValue::Never, DefaultValue::Never),
+            (DefaultValue::Never, DefaultValue::Never),
+            (
+                DefaultValue::StreamStatePending(Box::new(DefaultValue::String(String::new()))),
+                DefaultValue::Never,
+            ),
+            (DefaultValue::Never, DefaultValue::Never),
+        ];
+        for (index, (partial_default, missing_default)) in expected.into_iter().enumerate() {
+            assert_eq!(
+                partial(&db, "Row", index),
+                partial_default,
+                "field {index} partial"
+            );
+            assert_eq!(
+                missing(&db, "Row", index),
+                missing_default,
+                "field {index} missing"
+            );
+        }
+    }
+
+    #[test]
+    fn class_defaults_recurse_and_stop_at_the_first_never() {
+        let db = baml_db! {
+            class Leaf {
+                label: string,
+                tags: [string],
+            }
+            class Branch {
+                leaf: Leaf,
+                count: (int | null),
+            }
+            class Broken {
+                leaf: Leaf,
+                count: int,
+            }
+            class Holder {
+                branch: Branch,
+                broken: Broken,
+            }
+        };
+        assert_eq!(
+            partial(&db, "Holder", 0),
+            DefaultValue::Object {
+                name: "Branch",
+                fields: IndexMap::from([
+                    (
+                        "leaf".to_string(),
+                        DefaultValue::Object {
+                            name: "Leaf",
+                            fields: IndexMap::from([
+                                ("label".to_string(), DefaultValue::String(String::new())),
+                                ("tags".to_string(), DefaultValue::EmptyArray),
+                            ]),
+                        },
+                    ),
+                    ("count".to_string(), DefaultValue::Null),
+                ]),
+            }
+        );
+        assert_eq!(partial(&db, "Holder", 1), DefaultValue::Never);
+        assert_eq!(missing(&db, "Holder", 0), DefaultValue::Never);
+    }
+
+    #[test]
+    fn declaration_attributes_shape_the_defaults() {
+        let db = baml_db! {
+            class Item {
+                id: string @stream.must_exist,
+                body: string @stream.done,
+            }
+        };
+        assert_eq!(partial(&db, "Item", 0), DefaultValue::Never);
+        assert_eq!(missing(&db, "Item", 0), DefaultValue::Never);
+        // `@stream.done` changes when the default is used, not what it is.
+        assert_eq!(partial(&db, "Item", 1), DefaultValue::String(String::new()));
+    }
+
+    #[test]
+    fn self_reference_is_never_but_indirection_is_fine() {
+        let db = baml_db! {
+            class Node {
+                next: Node,
+            }
+            class Tree {
+                children: [Tree],
+                parent: (Tree | null),
+            }
+            class Holder {
+                node: Node,
+                tree: Tree,
+            }
+        };
+        assert_eq!(partial(&db, "Holder", 0), DefaultValue::Never);
+        assert_eq!(
+            partial(&db, "Holder", 1),
+            DefaultValue::Object {
+                name: "Tree",
+                fields: IndexMap::from([
+                    ("children".to_string(), DefaultValue::EmptyArray),
+                    ("parent".to_string(), DefaultValue::Null),
+                ]),
+            }
+        );
+    }
+
+    #[test]
+    fn alias_cycles_terminate_and_keep_nullability() {
+        let db = baml_db! {
+            type MaybeText = (TextRef | null);
+            type TextRef = (MaybeText | int);
+            type Json = (int | string | null | JsonList);
+            type JsonList = [Json];
+            class Holder {
+                maybe: MaybeText,
+                text_ref: TextRef,
+                json: Json,
+                list: JsonList,
+            }
+        };
+        assert_eq!(partial(&db, "Holder", 0), DefaultValue::Null);
+        // `TextRef` is nullable only through `MaybeText`, which is nullable through `TextRef`.
+        assert_eq!(partial(&db, "Holder", 1), DefaultValue::Null);
+        assert_eq!(partial(&db, "Holder", 2), DefaultValue::Null);
+        assert_eq!(partial(&db, "Holder", 3), DefaultValue::EmptyArray);
+    }
+
+    #[test]
+    fn a_dangling_field_type_is_an_error() {
+        let db = baml_db! {
+            class Holder {
+                missing: Nowhere,
+            }
+        };
+        assert_eq!(
+            db.field_default(field(&db, "Holder", 0)).err(),
+            Some(&"Nowhere")
+        );
+        assert_eq!(
+            db.missing_default(&field(&db, "Holder", 0).ty).err(),
+            Some(&"Nowhere")
+        );
+    }
 }

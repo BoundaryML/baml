@@ -219,9 +219,7 @@ fn graph_hashes_preserve_cycles_aliases_and_reset_on_reuse() {
         };
         b.set_object(first, SnapshotObject::Cell(SnapshotValue::Object(root)));
         b.set_object(second, SnapshotObject::Cell(SnapshotValue::Object(root)));
-        let ty = b.push_type(baml_type::RealizedTy::Int {
-            attr: baml_type::TyAttr::default(),
-        });
+        let ty = b.push_type(baml_type::RealizedTy::Int);
         let start = b.value_start();
         b.push_value(SnapshotValue::Object(first));
         b.push_value(SnapshotValue::Object(second));

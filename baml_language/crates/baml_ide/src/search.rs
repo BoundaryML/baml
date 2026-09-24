@@ -12,19 +12,25 @@
 //! The ranked mode is lexical, not semantic, and the limit is worth stating
 //! plainly: a query only finds a symbol that shares a word with its name or
 //! its prose. Reaching past that needs a semantic index, which this is not.
+//!
+//! Only the ranked mode reads the stdlib's `_` convention
+//! ([`crate::symbols::Internals`]): it SUGGESTS what to look at, so the
+//! stdlib's internal helpers would bury the answer. Substring mode must not
+//! — `describe` resolves an exact name through it, and a lookup that hid
+//! what it was asked for would be broken, not tidy.
 
 use baml_base::{Name, SourceFile, SourceRoot};
 use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
+    item_data,
     package::package_items,
 };
 use baml_compiler2_hir_ty::render::Viewpoint;
-use baml_compiler2_ppir::item_data;
 use text_size::TextRange;
 
 use crate::{
     outline::{OutlineItem, file_outline},
-    symbols::is_synthesized,
+    symbols::{Internals, Surface, surface_of},
 };
 
 // ── Substring mode (workspace/symbol) ────────────────────────────────────────
@@ -49,7 +55,7 @@ pub struct SymbolInfo {
 /// Callers choose the visible file set for their feature — typically every
 /// `Workspace` root's files, or `compiler2_all_files` to include the stdlib.
 pub fn search_symbols(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     files: &[SourceFile],
     query: &str,
 ) -> Vec<SymbolInfo> {
@@ -119,12 +125,15 @@ pub struct SearchHit {
 /// own package as `root`, a dependency by the viewer's edge name). Results
 /// are sorted best-first (ties by path) and truncated to `limit`.
 pub fn search_ranked(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     viewer: SourceRoot,
     packages: &[SourceRoot],
     query: &str,
     limit: usize,
 ) -> Vec<SearchHit> {
+    // Read before tokenizing: `haystack` splits on punctuation, so the `_`
+    // that spells the request is gone by the time the query is words.
+    let internals = Internals::for_query(query);
     let query = query_tokens(query);
     if query.is_empty() {
         return Vec::new();
@@ -132,6 +141,9 @@ pub fn search_ranked(
 
     let mut hits: Vec<SearchHit> = Vec::new();
     for candidate in ranked_candidates(db, viewer, packages) {
+        if internals.hides(db, &candidate.leaf, candidate.declared_in) {
+            continue;
+        }
         let leaf = haystack(&candidate.leaf);
         let owner = haystack(&candidate.path);
         let docs = candidate
@@ -289,12 +301,32 @@ struct Candidate {
     /// The full dotted path, shown to the reader and scored weakly.
     path: String,
     docstring: Option<String>,
+    /// The source file declaring it, which is what says whether the `_`
+    /// convention applies.
+    declared_in: SourceFile,
+}
+
+/// What describe's ranked search can land on, stated once.
+///
+/// A search SUGGESTS: it answers "what does this?", so anything a reader
+/// cannot write is noise. That is the whole difference from a listing,
+/// which addresses rather than suggests — carriers stay, because `baml.Int`
+/// really is the documentation for `int`.
+/// The stdlib's `_` mark is deliberately NOT decided here: a candidate can
+/// be a MEMBER (`ZonedDateTime._offset_ns`), which has no [`Definition`] to
+/// classify, so `search_ranked` applies [`Internals`] to items and members
+/// alike in one place.
+fn is_searchable(db: &dyn baml_compiler2_hir::Db, name: &Name, def: Definition<'_>) -> bool {
+    match surface_of(db, name, def) {
+        Surface::LanguageInternal | Surface::Synthetic | Surface::Companion => false,
+        Surface::AliasedCarrier | Surface::StdlibInternal | Surface::Public => true,
+    }
 }
 
 /// Everything in `packages` the ranked search can land on, addressed from
 /// `viewer`.
 fn ranked_candidates(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     viewer: SourceRoot,
     packages: &[SourceRoot],
 ) -> Vec<Candidate> {
@@ -308,7 +340,7 @@ fn ranked_candidates(
         let items = package_items(db, package);
         for (ns_path, ns_items) in &items.namespaces {
             for (name, def) in ns_items.types.iter().chain(ns_items.values.iter()) {
-                if is_synthesized(db, name, *def) {
+                if !is_searchable(db, name, *def) {
                     continue;
                 }
                 let path = dotted(prefix, ns_path, name.as_str());
@@ -339,6 +371,7 @@ fn ranked_candidates(
                         leaf: func.name.as_str().to_string(),
                         path: format!("{for_display}.{}", func.name.as_str()),
                         docstring: func.docstring.clone(),
+                        declared_in: file,
                     });
                 }
             }
@@ -357,19 +390,19 @@ fn dotted(prefix: &str, ns_path: &[Name], name: &str) -> String {
 
 /// The item itself plus its members, per definition kind.
 fn collect_definition_candidates(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     def: Definition<'_>,
     name: &Name,
     path: &str,
     out: &mut Vec<Candidate>,
 ) {
-    use baml_compiler2_ast::ast::FunctionOrigin;
-
+    let declared_in = def.file(db);
     let member = |name: &str, kind: &'static str, docstring: Option<&String>| Candidate {
         kind,
         leaf: name.to_string(),
         path: format!("{path}.{name}"),
         docstring: docstring.cloned(),
+        declared_in,
     };
 
     let item_docstring = match def {
@@ -383,7 +416,7 @@ fn collect_definition_candidates(
             );
             for &method in &class.methods {
                 let func = item_data::function_data(db, method);
-                if !matches!(func.metadata.origin, FunctionOrigin::UserDefined) {
+                if !is_searchable(db, &func.name, Definition::Function(method)) {
                     continue;
                 }
                 out.push(member(
@@ -435,10 +468,7 @@ fn collect_definition_candidates(
         Definition::TypeAlias(loc) => item_data::type_alias_data(db, loc).docstring.clone(),
         // Contributions without firewall docstring readers today; still
         // findable by name.
-        Definition::TemplateString(_)
-        | Definition::Client(_)
-        | Definition::RetryPolicy(_)
-        | Definition::Let(_) => None,
+        Definition::Let(_) => None,
     };
 
     out.push(Candidate {
@@ -446,6 +476,7 @@ fn collect_definition_candidates(
         leaf: name.as_str().to_string(),
         path: path.to_string(),
         docstring: item_docstring,
+        declared_in,
     });
 }
 
@@ -456,9 +487,6 @@ fn def_kind(def: Definition<'_>) -> DefinitionKind {
         Definition::Interface(_) => DefinitionKind::Interface,
         Definition::TypeAlias(_) => DefinitionKind::TypeAlias,
         Definition::Function(_) => DefinitionKind::Function,
-        Definition::TemplateString(_) => DefinitionKind::TemplateString,
-        Definition::Client(_) => DefinitionKind::Client,
-        Definition::RetryPolicy(_) => DefinitionKind::RetryPolicy,
         Definition::Let(_) => DefinitionKind::Let,
     }
 }
@@ -558,6 +586,35 @@ enum Mood {
                 "query {query:?} should lead with the type, got: {hits:?}"
             );
         }
+    }
+
+    /// The stdlib's `_` helpers are hundreds of results a query never
+    /// meant; a search that named one gets it back.
+    #[test]
+    fn ranked_search_hides_the_stdlibs_internals_until_one_is_named() {
+        let test = project();
+        let baml = baml_compiler2_hir::package::lang_roots(&test.db)
+            .get(baml_base::LangPackage::Baml)
+            .unwrap_or_else(|| unreachable!("the stdlib installs the `baml` package"));
+        let packages = [baml];
+
+        let hidden = search_ranked(&test.db, test.package, &packages, "tz_offset_at", 20);
+        assert!(
+            !hidden.is_empty(),
+            "the query still finds the public surface"
+        );
+        assert!(
+            !hidden.iter().any(|hit| hit.path.contains("._")),
+            "the stdlib's internals stay out, got: {hidden:?}"
+        );
+
+        let named = search_ranked(&test.db, test.package, &packages, "_tz_offset_at", 20);
+        assert!(
+            named
+                .iter()
+                .any(|hit| hit.path == "baml.time._tz_offset_at"),
+            "naming one reaches it, got: {named:?}"
+        );
     }
 
     #[test]

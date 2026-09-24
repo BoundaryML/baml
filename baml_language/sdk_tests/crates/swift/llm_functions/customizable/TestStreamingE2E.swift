@@ -3,7 +3,7 @@
 // checked-in SSE recordings; no LLM keys.
 //
 // `stream_e2e_extract_stream` is the flat SDK streaming projection:
-// an ordinary function returning `BamlStream<Partial, Final>`. `next()`
+// an ordinary function returning `BamlStream<Value>`. `next()`
 // yields `.value(partial)` until the engine's `ai.stream.Done` sentinel
 // surfaces as `.finished` (a partial can legitimately be nil, hence
 // the enum rather than Optional).
