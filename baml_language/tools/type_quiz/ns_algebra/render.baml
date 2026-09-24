@@ -150,7 +150,7 @@ function render_params(params: string[]) -> string throws never {
 function render_class_decl(d: ClassDecl) -> string throws never {
     let fields = d.fields
         .map((f) -> {
-            "    " + `${f.name}: ${render(f.ty)},\n`
+            `    ${f.name}: ${render(f.ty)},\n`
         })
         .join("");
     let impls = d.impls
@@ -165,13 +165,13 @@ function render_class_decl(d: ClassDecl) -> string throws never {
 /// inside the block (`type Held = int`), not arguments in the angle-bracket
 /// list an existential spells them in.
 function render_impl(i: Impl) -> string throws never {
-    let head = "    " + `implements ${i.iface.name}${render_args(i.args)}`;
+    let head = `    implements ${i.iface.name}${render_args(i.args)}`;
     if (i.pins.length() == 0) {
         `${head} {}\n`
     } else {
         let pins = i.pins
             .map((p) -> {
-                "        " + `type ${p.name} = ${render(p.ty)}\n`
+                `        type ${p.name} = ${render(p.ty)}\n`
             })
             .join("");
         `${head} {\n${pins}    }\n`
@@ -181,7 +181,7 @@ function render_impl(i: Impl) -> string throws never {
 function render_enum_decl(d: EnumDecl) -> string throws never {
     let variants = d.variants
         .map((v) -> {
-            "    " + `${v},\n`
+            `    ${v},\n`
         })
         .join("");
     `enum ${d.name} {\n${variants}}`
@@ -191,8 +191,8 @@ function render_iface_decl(d: IfaceDecl) -> string throws never {
     let assoc = d.assoc
         .map((a) -> {
             match (a.default) {
-                let t: Ty => "    " + `type ${a.name} = ${render(t)}\n`,
-                null => "    " + `type ${a.name}\n`,
+                let t: Ty => `    type ${a.name} = ${render(t)}\n`,
+                null => `    type ${a.name}\n`,
             }
         })
         .join("");
@@ -210,7 +210,7 @@ function render_requires(bounds: Iface[]) -> string throws never {
                 render_iface(i)
             })
             .join(", ");
-        " " + `requires ${names}`
+        ` requires ${names}`
     }
 }
 

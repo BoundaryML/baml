@@ -203,8 +203,7 @@ function probe(site: SiteKind, source: Ty, target: Ty, names: SiteNames) -> Prob
     match (site) {
         SiteKind.Let => {
             around(
-                `${decls}function ${names.function_name}${binders}(${v}: ${s}) -> void {\n    let ${names.target}: ${t} =`
-                    + " ",
+                `${decls}function ${names.function_name}${binders}(${v}: ${s}) -> void {\n    let ${names.target}: ${t} = `,
                 v,
                 `;\n}\n`,
             )
@@ -218,17 +217,16 @@ function probe(site: SiteKind, source: Ty, target: Ty, names: SiteNames) -> Prob
         },
         SiteKind.Return => {
             around(
-                `${decls}function ${names.function_name}${binders}(${v}: ${s}) -> ${t}` + " ",
+                `${decls}function ${names.function_name}${binders}(${v}: ${s}) -> ${t} `,
                 `{\n    ${v}\n}`,
                 `\n`,
             )
         },
         SiteKind.Field => {
             around(
-                `${decls}class ${names.holder} {\n    ${names.target}: ${t},\n}\n\nfunction ${names.function_name}${binders}(${v}: ${s}) -> void {\n    let ${names.instance} = ${names.holder} { ${names.target}:`
-                    + " ",
+                `${decls}class ${names.holder} {\n    ${names.target}: ${t},\n}\n\nfunction ${names.function_name}${binders}(${v}: ${s}) -> void {\n    let ${names.instance} = ${names.holder} { ${names.target}: `,
                 v,
-                " " + `};\n}\n`,
+                ` };\n}\n`,
             )
         },
         SiteKind.ArrayElement => {

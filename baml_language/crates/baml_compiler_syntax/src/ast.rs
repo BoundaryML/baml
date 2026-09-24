@@ -1334,7 +1334,10 @@ impl BacktickStringLiteral {
         // "Whitespace inside `${...}` is preserved verbatim"), then split the
         // dedented result back into text segments and reattach the parts in
         // order.
-        if !parts.is_empty() {
+        if parts
+            .iter()
+            .any(|part| matches!(part, FlatPart::Text(text) if text.contains('\n') || text.contains('\r')))
+        {
             // Pick a placeholder that doesn't appear in user content
             // (ultrareview bug_006). Walk the PUA range U+E000..U+F8FF and
             // use the first codepoint not present in any text chunk.

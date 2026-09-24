@@ -1,8 +1,7 @@
 //! Backtick-string dedenting.
 //!
 //! [`dedent_backtick`] is the whole surface: multi-line auto-dedent for BEP-049
-//! backtick string literals. Its whitespace behavior intentionally matches the
-//! legacy hash-string pipeline so migrating delimiters does not change values.
+//! backtick string literals.
 
 /// Leading whitespace, ending on a character boundary.
 fn leading_whitespace(line: &str) -> &str {
@@ -27,17 +26,20 @@ fn common_prefix<'a>(a: &'a str, b: &str) -> &'a str {
 
 /// Strip the layout of a backtick string literal (BEP-049 §12).
 ///
-/// This mirrors the legacy hash-string pipeline, in order:
-///
 /// 1. Normalize `\r\n` and lone `\r` to `\n` (§AA, TypeScript parity).
-/// 2. Remove every leading line break and all body-final whitespace.
-/// 3. Strip the longest exact leading-whitespace prefix shared by nonblank
+/// 2. Return single-line literals unchanged.
+/// 3. For multiline literals, remove every leading line break and all
+///    body-final whitespace.
+/// 4. Strip the longest exact leading-whitespace prefix shared by nonblank
 ///    lines, empty whitespace-only lines, and discard leading empty lines.
 ///
 /// Dedenting runs on raw literal text before escapes are decoded. An authored
 /// `\n` is therefore two non-whitespace characters here and survives the trim.
 pub fn dedent_backtick(text: &str) -> String {
     let normalized = normalize_newlines(text);
+    if !normalized.contains('\n') {
+        return normalized.into_owned();
+    }
     let body = normalized.trim_start_matches('\n').trim_end();
     let lines: Vec<&str> = body.lines().collect();
     let strip = common_indent(&lines);
@@ -157,8 +159,8 @@ mod tests {
     }
 
     #[test]
-    fn backtick_single_line_matches_hash_string_dedent() {
-        assert_eq!(dedent_backtick("  hello  "), "hello");
+    fn backtick_single_line_preserves_boundary_whitespace() {
+        assert_eq!(dedent_backtick("  hello  "), "  hello  ");
     }
 
     #[test]
@@ -219,73 +221,67 @@ mod tests {
         assert_eq!(dedent_backtick("\r\n    a\r\n    b\r\n"), "a\nb");
     }
 
-    // Ported from engine/bstd/src/dedent.rs, which defined the dedent behavior
-    // used by legacy hash strings.
-    mod legacy_hash_string_dedent {
-        use super::*;
-
-        #[test]
-        fn test_basic_dedent() {
-            let input = r#"
+    #[test]
+    fn test_basic_dedent() {
+        let input = r#"
             hello
             world
             "#;
-            let expected = r#"hello
+        let expected = r#"hello
 world"#;
-            assert_eq!(dedent_backtick(input), expected);
-        }
+        assert_eq!(dedent_backtick(input), expected);
+    }
 
-        #[test]
-        fn test_mixed_indentation() {
-            let input = r#"
+    #[test]
+    fn test_mixed_indentation() {
+        let input = r#"
             first line
                 indented line
             back to first level
         "#;
-            let expected = r#"first line
+        let expected = r#"first line
     indented line
 back to first level"#;
-            assert_eq!(dedent_backtick(input), expected);
-        }
+        assert_eq!(dedent_backtick(input), expected);
+    }
 
-        #[test]
-        fn test_empty_lines() {
-            let input = ["", "        line1", "", "        ", "        line2"].join("\n");
-            let expected = r#"line1
+    #[test]
+    fn test_empty_lines() {
+        let input = ["", "        line1", "", "        ", "        line2"].join("\n");
+        let expected = r#"line1
 
 
 line2"#;
-            assert_eq!(dedent_backtick(&input), expected);
-        }
+        assert_eq!(dedent_backtick(&input), expected);
+    }
 
-        #[test]
-        fn test_no_indentation() {
-            assert_eq!(dedent_backtick("hello\nworld"), "hello\nworld");
-        }
+    #[test]
+    fn test_no_indentation() {
+        assert_eq!(dedent_backtick("hello\nworld"), "hello\nworld");
+    }
 
-        #[test]
-        fn test_different_line_starts() {
-            let input = r#"
+    #[test]
+    fn test_different_line_starts() {
+        let input = r#"
             def function():
                 # comment
                 print("hello")
             "#;
-            let expected = r#"def function():
+        let expected = r#"def function():
     # comment
     print("hello")"#;
-            assert_eq!(dedent_backtick(input), expected);
-        }
+        assert_eq!(dedent_backtick(input), expected);
+    }
 
-        #[test]
-        fn test_tabs_and_spaces() {
-            let input = "\n    mixed\n\t\tindentation";
-            let expected = "    mixed\n\t\tindentation";
-            assert_eq!(dedent_backtick(input), expected);
-        }
+    #[test]
+    fn test_tabs_and_spaces() {
+        let input = "\n    mixed\n\t\tindentation";
+        let expected = "    mixed\n\t\tindentation";
+        assert_eq!(dedent_backtick(input), expected);
+    }
 
-        #[test]
-        fn test_single_line() {
-            assert_eq!(dedent_backtick("    single line"), "single line");
-        }
+    #[test]
+    fn test_single_line_preserves_indentation() {
+        assert_eq!(dedent_backtick("    single line"), "    single line");
     }
 }

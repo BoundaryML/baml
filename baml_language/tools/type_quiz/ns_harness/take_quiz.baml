@@ -182,10 +182,10 @@ function ask(asked: root.Asked, marked: root.Marked?, index: int) -> string thro
             };
             lines.push(`Last question: you said ${m.said}. ${verdict} ${compiled}`);
             for (let because in m.because) {
-                lines.push("  " + `· ${because}`);
+                lines.push(`  · ${because}`);
             }
             if (m.difference != "") {
-                lines.push("  " + `· ${m.difference}`);
+                lines.push(`  · ${m.difference}`);
             }
             lines.push("");
         },
@@ -332,30 +332,28 @@ function readout(run: Run, rules: int?) -> string throws never {
         null => `the harness stopped it (${run.stopped ?? "?"})`,
     };
     let lines = [
-        "  " + `Ended because: ${why}`,
-        "  "
-            + `Questions: ${run.answers.length()} — you committed on ${run.answers.length() - held} and withheld on ${held}`,
-        "  " + `Right: ${right} of the ${run.answers.length() - held} you committed on`,
+        `  Ended because: ${why}`,
+        `  Questions: ${run.answers.length()} — you committed on ${run.answers.length() - held} and withheld on ${held}`,
+        `  Right: ${right} of the ${run.answers.length() - held} you committed on`,
     ];
     match (run.ended) {
         let e: root.Ended => {
             let of = match (rules) {
-                let n: int => " of " + `${n}`,
+                let n: int => ` of ${n}`,
                 null => "",
             };
-            lines.push("  " + `Rules it will now bet on you for: ${e.mastered.length()}${of}`);
+            lines.push(`  Rules it will now bet on you for: ${e.mastered.length()}${of}`);
             if (e.shaky.length() > 0) {
-                lines.push("  " + `Least certain of: ${e.shaky.slice(0, 4).join(", ")}`);
+                lines.push(`  Least certain of: ${e.shaky.slice(0, 4).join(", ")}`);
             }
             match (e.commits_unsure) {
                 let c: float => {
-                    lines.push("  " + `How often you committed to an answer you did not have: ${c}`)
+                    lines.push(`  How often you committed to an answer you did not have: ${c}`)
                 },
                 null => {},
             }
             lines.push(
-                "  "
-                    + `A naive misconception your errors resembled: ${e.suspected ?? "none stood out"}`,
+                `  A naive misconception your errors resembled: ${e.suspected ?? "none stood out"}`,
             );
         },
         null => {},

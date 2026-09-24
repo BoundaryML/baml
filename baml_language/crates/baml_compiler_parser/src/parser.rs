@@ -12759,7 +12759,7 @@ function Demo() -> string {
     }
 
     #[test]
-    fn backtick_segments_hash_compatible_trim_around_interpolations() {
+    fn backtick_segments_trim_layout_around_interpolations() {
         use baml_compiler_syntax::{BacktickSegment, BacktickStringLiteral};
         use rowan::ast::AstNode;
 

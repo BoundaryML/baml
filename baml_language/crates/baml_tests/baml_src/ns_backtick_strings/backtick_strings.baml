@@ -376,8 +376,7 @@ test "backtick_interp_class_without_to_string_renders_structurally" {
     assert.equal(bt_point_structural(), "p = Point { x: 1, y: 2 }")
 }
 
-// (K) Backtick string as a parameter's default value. Legacy-compatible
-// dedent treats single-line boundary spaces as layout.
+// (K) Backtick string as a parameter's default value.
 function bt_case_k_greet(name: string, prefix: string = `Hello, `) -> string {
     prefix + name
 }
@@ -387,7 +386,15 @@ function bt_case_k() -> string {
 }
 
 test "backtick_case_k_default_parameter_value" {
-    assert.equal(bt_case_k(), "Hello,world")
+    assert.equal(bt_case_k(), "Hello, world")
+}
+
+function bt_single_line_boundary_whitespace(name: string) -> string {
+    `  Hello, ${name}!  `
+}
+
+test "backtick_single_line_preserves_boundary_whitespace" {
+    assert.equal(bt_single_line_boundary_whitespace("world"), "  Hello, world!  ")
 }
 
 // (L) Backtick used as an expression-statement (value discarded).
@@ -976,14 +983,14 @@ test "backtick_keeps_repeated_trailing_escaped_newlines" {
     assert.equal(bt_keeps_repeated_trailing_escaped_newlines(), "LANG=C\n\n")
 }
 
-// `\n` and `\t` are two source characters each. They survive the raw-text
-// trim even though single-line boundary spaces are removed.
+// `\n` and `\t` are two source characters each, and a single-line literal is
+// not dedented, so its boundary spaces are preserved too.
 function bt_escape_not_indentation() -> string {
     ` a\n b\t `
 }
 
 test "backtick_escape_does_not_look_like_indentation" {
-    assert.equal(bt_escape_not_indentation(), "a\n b\t")
+    assert.equal(bt_escape_not_indentation(), " a\n b\t ")
 }
 
 // The same escape on a literal that really is dedented: the shared indent goes,
@@ -999,8 +1006,8 @@ test "backtick_multiline_keeps_trailing_escaped_newline" {
     assert.equal(bt_multiline_keeps_trailing_escaped_newline(), "line one\nline two\n")
 }
 
-// Legacy-compatible dedent discards blank lines at the body boundary. Use an
-// authored `\n` escape when the runtime value needs a trailing newline.
+// Dedent discards blank lines at the body boundary. Use an authored `\n`
+// escape when the runtime value needs a trailing newline.
 function bt_blank_line_before_closer() -> string {
     `
     line one

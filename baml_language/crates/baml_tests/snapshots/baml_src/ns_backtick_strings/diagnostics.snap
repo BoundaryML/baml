@@ -14,7 +14,7 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[backtick_strings.baml:448:12]
- 448 │     `x: ${ throw "boom" }`
+     ╭─[backtick_strings.baml:455:12]
+ 455 │     `x: ${ throw "boom" }`
      ·            ────────────
      ╰────

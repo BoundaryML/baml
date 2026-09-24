@@ -2168,7 +2168,7 @@ function Demo() -> string {
     }
 
     #[test]
-    fn backtick_hash_compatible_trim_keeps_escaped_newline() {
+    fn backtick_boundary_trim_keeps_escaped_newline() {
         let source = r#"
 function Demo() -> string {
     `hostname\n`
@@ -2204,18 +2204,18 @@ function Demo() -> string {
     }
 
     #[test]
-    fn backtick_single_line_matches_hash_string_dedent() {
+    fn backtick_single_line_preserves_boundary_whitespace() {
         let source = r#"
 function Demo() -> string {
     `  padded content  `
 }
 "#;
         let items = parse_and_lower(source);
-        assert_eq!(extract_first_string_literal(items), "padded content");
+        assert_eq!(extract_first_string_literal(items), "  padded content  ");
     }
 
     #[test]
-    fn backtick_multiline_matches_hash_string_edge_trimming() {
+    fn backtick_multiline_trims_boundary_layout() {
         let source = [
             "function Demo() -> string {",
             "    `",
