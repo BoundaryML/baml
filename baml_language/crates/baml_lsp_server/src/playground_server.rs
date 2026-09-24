@@ -1967,11 +1967,15 @@ async fn handle_ws_in_message(
         WsInMessage::ReadTelemetryMedia { request_id, .. }
         | WsInMessage::ListExecutions { request_id, .. }
         | WsInMessage::OpenExecution { request_id, .. } => {
-            send_ws(sink, &WsOutMessage::CommandError {
-                code: "profilingUnavailable".to_string(),
-                message: "Profiling is currently unavailable.".to_string(),
-                request_id,
-            }).await;
+            send_ws(
+                sink,
+                &WsOutMessage::CommandError {
+                    code: "profilingUnavailable".to_string(),
+                    message: "Profiling is currently unavailable.".to_string(),
+                    request_id,
+                },
+            )
+            .await;
         }
 
         WsInMessage::Snapshot {
