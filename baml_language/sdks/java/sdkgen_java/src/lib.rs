@@ -1656,10 +1656,10 @@ mod tests {
         pool.insert(resp.clone(), class_sym(&resp, &[], 5));
         let out = emit_sdk(&pool);
         assert!(!out.contains_key(&PathBuf::from("baml/media/Image.java")));
-        assert!(!out.contains_key(&PathBuf::from("vendor/ai/stream/Stream.java")));
-        assert!(!out.contains_key(&PathBuf::from("vendor/ai/stream/Done.java")));
-        assert!(!out.contains_key(&PathBuf::from("vendor/ai/Prompt.java")));
-        assert!(!out.contains_key(&PathBuf::from("vendor/ai/FunctionSpec.java")));
+        assert!(!out.contains_key(&PathBuf::from("ai/stream/Stream.java")));
+        assert!(!out.contains_key(&PathBuf::from("ai/stream/Done.java")));
+        assert!(!out.contains_key(&PathBuf::from("ai/Prompt.java")));
+        assert!(!out.contains_key(&PathBuf::from("ai/FunctionSpec.java")));
         assert!(out.contains_key(&PathBuf::from("baml/http/Response.java")));
     }
 

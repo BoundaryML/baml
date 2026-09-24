@@ -197,6 +197,16 @@ mod tests {
     }
 
     #[test]
+    fn ai_and_reflect_use_builtin_roots_with_target_escaping() {
+        for package in ["ai", "reflect"] {
+            assert_eq!(
+                route(&name(package, &["void"], "Thing")).segments,
+                [package, "void$"]
+            );
+        }
+    }
+
+    #[test]
     fn vendor_routes_under_vendor_pkg() {
         let pp = route(&name("aws", &["s3"], "Bucket"));
         assert_eq!(
