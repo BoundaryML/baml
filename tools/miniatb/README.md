@@ -12,7 +12,11 @@ Slack / PostHog / GitHub
 ```
 
 A passing bug repro means **not reproduced**, not **already fixed**. Features are
-investigated even when their example runs. Invalid or unsupported repros stop
+classified before reproduction and go directly to source investigation without
+creating or replaying a test. Confirmed feature requests become tickets for
+maintainer review, with no reproduction entries and no automatic fix attempt.
+Investigation checks whether the requested capability already exists.
+Invalid or unsupported bug repros stop
 without a ticket. Tickets contain a two-sentence description, four investigation
 sentences with source links, and the native BAML repro with its execution output.
 
@@ -74,11 +78,14 @@ publishing; it does not interrupt an in-flight push.
 
 PostHog and GitHub poll every 60 seconds with a five-minute overlap. GitHub PRs
 and closed issues are excluded. Updates to queued reports do not start new runs.
-Dedup compares the latest 100 unresolved issues in the same dataset, including
-in-progress and deferred fixes. Duplicate reports attach to the existing ticket.
+Dedup compares the latest 100 unresolved issues of the same kind in the same dataset,
+including in-progress and deferred fixes. Bugs match by failure mechanism; features
+match by desired capability and compatible scope, not merely a shared subsystem.
+Duplicate reports attach to the existing ticket without inventing a reproduction.
 
-The first shepherd notification follows the fix attempt and includes the draft
-PR or explains that no PR was produced. Failed fixes leave the ticket deferred.
+For bugs, the first shepherd notification follows the fix attempt and includes
+the draft PR or explains that no PR was produced. Failed fixes leave the ticket
+deferred. Feature tickets remain open and are announced as ready for review.
 
 ## Verification and operation
 

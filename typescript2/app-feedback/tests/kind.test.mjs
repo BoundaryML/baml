@@ -44,6 +44,11 @@ test('a feature request leads with its kind and shows a proposed feature, a bug 
   expect(bugHtml).toContain('Resolution plan');
   expect(bugHtml).not.toContain('Feature request');
   expect(featureHtml).toContain('Proposed feature');
+  expect(featureHtml).toContain('Capability investigation');
+  expect(featureHtml).toContain(
+    'No reproduction required for this feature request.',
+  );
+  expect(bugHtml).toContain('No repro attached.');
   expect(featureHtml.indexOf('Feature request')).toBeLessThan(
     featureHtml.indexOf(feature.id),
   );

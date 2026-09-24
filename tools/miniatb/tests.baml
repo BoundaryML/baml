@@ -11,6 +11,113 @@ function example_ticket() -> Ticket {
     }
 }
 
+test "pure feature requests never generate or replay a reproduction" {
+    let generated = false;
+    let replayed = false;
+    let evidence = collect_reproduction(
+        Kind.Feature,
+        () -> {
+            generated = true;
+            Repro {
+                kind: Kind.Bug,
+                files: {},
+                command: "test",
+                explanation: "not called",
+                blocker: null,
+            }
+        },
+        (_) -> {
+            replayed = true;
+            Execution { exit_code: 1, stdout: "", stderr: "not called" }
+        },
+    );
+    assert.is_true(!generated && !replayed);
+    assert.equal(evidence.repro, null);
+    assert.equal(evidence.execution, null);
+    assert.equal(stored_repros(evidence.repro, evidence.execution, "0.20.0"), []);
+}
+
+test "bug reports still replay and preserve execution evidence" {
+    let sample = Repro {
+        kind: Kind.Bug,
+        files: { "main.baml": "test" },
+        command: "test",
+        explanation: "Expected behavior fails",
+        blocker: null,
+    };
+    let replayed = false;
+    let evidence = collect_reproduction(
+        Kind.Bug,
+        () -> {
+            sample
+        },
+        (repro) -> {
+            assert.equal(repro, sample);
+            replayed = true;
+            Execution { exit_code: 1, stdout: "assertion failed", stderr: "" }
+        },
+    );
+    assert.is_true(replayed);
+    let rows = stored_repros(evidence.repro, evidence.execution, "0.20.0");
+    assert.equal(rows.length(), 1);
+    assert.equal(baml.json.path<string>(rows[0], ".result"), "fails");
+    assert.equal(baml.json.path<string>(rows[0], ".command"), "baml test");
+    assert.equal(baml.json.path<string>(rows[0], ".verified_version"), "0.20.0");
+}
+
+test "blocked bugs do not replay or fabricate successful evidence" {
+    let replayed = false;
+    let evidence = collect_reproduction(
+        Kind.Bug,
+        () -> {
+            Repro {
+                kind: Kind.Bug,
+                files: {},
+                command: "test",
+                explanation: "blocked",
+                blocker: "Unsupported SDK",
+            }
+        },
+        (_) -> {
+            replayed = true;
+            Execution { exit_code: 0, stdout: "", stderr: "" }
+        },
+    );
+    assert.is_true(!replayed);
+    assert.equal(evidence.repro?.blocker, "Unsupported SDK");
+    assert.equal(evidence.execution, null);
+    let rejected = false;
+    stored_repros(evidence.repro, evidence.execution, "0.20.0") catch_all (_) {
+        _ => {
+            rejected = true;
+        }
+    };
+    assert.is_true(rejected);
+}
+
+test "feature tickets roundtrip without evidence and cannot enter the bug fixer" {
+    let issue = Issue {
+        id: "ISSUE-feature",
+        feedback: runtime_fixture("feature"),
+        classification: classification_from(null, Kind.Feature),
+        workspace: Workspace { id: "feature", version: "0.20.0", revision: "fixture", branch: "bammy/feature" },
+        ticket: example_ticket(),
+        repro: null,
+        execution: null,
+    };
+    let saved = baml.json.from_json<Issue>(issue.to_json());
+    assert.equal(saved.repro, null);
+    assert.equal(saved.execution, null);
+    let blocked = false;
+    perform_fix(saved) catch_all (error) {
+        _ => {
+            assert.contains(error.to_string(), "Feature requests without a repro");
+            blocked = true;
+        }
+    };
+    assert.is_true(blocked);
+}
+
 test "ticket format is concise" {
     assert.is_true(valid_ticket(example_ticket()))
 }

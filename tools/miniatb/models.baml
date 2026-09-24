@@ -63,6 +63,11 @@ class Repro {
     blocker: string?,
 }
 
+class ReproEvidence {
+    repro: Repro?,
+    execution: Execution?,
+}
+
 class Investigation {
     sentences: string[],
     confirms_report: bool,
@@ -80,8 +85,8 @@ class Issue {
     classification: Classification,
     workspace: Workspace,
     ticket: Ticket,
-    repro: Repro,
-    execution: Execution,
+    repro: Repro?,
+    execution: Execution?,
 }
 
 class Fix {

@@ -16,6 +16,10 @@ function propose_fix(issue: Issue) -> Fix {
 }
 
 function perform_fix(issue: Issue) -> string? {
+    require(
+        issue.repro != null && issue.execution != null,
+        "Feature requests without a repro require an implementation plan and acceptance tests before fixing",
+    );
     let row = load_issue_row(issue.id);
     if (baml.json.path_or<string>(row, ".status.state", "") == "cancelled") {
         return null;
@@ -89,6 +93,15 @@ function fix_issue(issue: Issue) -> string? {
 
 /// Runs the writable fix worker before the first shepherd notification.
 function autofix(issue: Issue) -> void {
+    if (issue.classification.kind == Kind.Feature && issue.repro == null) {
+        record(
+            "fix",
+            "skipped",
+            { "reason": "Feature request ready for maintainer review; no bug reproduction" }
+                .to_json(),
+        );
+        return;
+    }
     let id = issue.workspace.id;
     if let blocker: string = autofix_blocker(
         baml.env.get("MINIATB_ALLOW_PUSH"),
@@ -195,6 +208,11 @@ function autofix_blocker(
 
 /// Discard generated source files after building, then replay the original report.
 function verify_fix(issue: Issue) -> void {
+    let original = if let repro: Repro = issue.repro {
+        repro
+    } else {
+        throw baml.errors.InvalidArgument { message: "Cannot verify a fix without a reproduction" }
+    };
     record("verify_fix", "running", baml.json.parse("{}"));
     let revision = safe_exec("git", ["-C", run_dir() + "/worktree", "rev-parse", "HEAD"]);
     require(
@@ -216,7 +234,7 @@ function verify_fix(issue: Issue) -> void {
     );
     record("build_fix", "completed", built.to_json());
     require(built.exit_code == 0, "Modified CLI did not build; refusing publication");
-    let result = replay(issue.repro, cli = run_dir() + "/scratch/verified-cli");
+    let result = replay(original, cli = run_dir() + "/scratch/verified-cli");
     record(
         "verify_fix",
         if (result.exit_code == 0) {

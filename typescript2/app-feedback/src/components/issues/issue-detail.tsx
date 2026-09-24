@@ -265,7 +265,13 @@ export function IssueDetail({
           <Section title="Brief description">
             <FormattedText text={sections.brief} />
           </Section>
-          <Section title="What's going wrong">
+          <Section
+            title={
+              issue.kind === 'feature'
+                ? 'Capability investigation'
+                : "What's going wrong"
+            }
+          >
             <FormattedText
               citations={sourceCitations(locations, revision)}
               text={
@@ -278,7 +284,9 @@ export function IssueDetail({
           <Section title={`Repros (${issue.repros.length})`}>
             {issue.repros.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No repro attached.
+                {issue.kind === 'feature'
+                  ? 'No reproduction required for this feature request.'
+                  : 'No repro attached.'}
               </p>
             ) : (
               <ReproTabs repros={issue.repros} />

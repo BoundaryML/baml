@@ -275,7 +275,11 @@ function announce_issue(issue: Issue) -> Issue {
         + " <"
         + issue_url(issue.id)
         + "|View issue>"
-        + fix_notice(pr);
+        + if (issue.classification.kind == Kind.Feature && issue.repro == null) {
+            " Feature request ready for review."
+        } else {
+            fix_notice(pr)
+        };
     let ts = post_slack(issue.feedback, text);
     if (ts != null) {
         issue.feedback.thread = ts;

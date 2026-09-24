@@ -35,6 +35,36 @@ function difficulty_text(difficulty: Difficulty?) -> string? {
     }
 }
 
+/// Feature requests have no fabricated test command, result, or reproduction entry.
+function stored_repros(repro: Repro?, execution: Execution?, version: string) -> json[] {
+    if let sample: Repro = repro {
+        if let result: Execution = execution {
+            return [
+                {
+                    "files": sample.files.to_json(),
+                    "command": "baml " + sample.command,
+                    "expectation": if (sample.command == "test") {
+                        { "check": "requires_inspection", "instructions": sample.explanation }
+                            .to_json()
+                    } else {
+                        { "check": "should_compile" }.to_json()
+                    },
+                    "result": if (result.exit_code == 0) {
+                        "passes"
+                    } else {
+                        "fails"
+                    },
+                    "verified_version": version,
+                    "observed": result.stdout + "\n" + result.stderr,
+                }
+                    .to_json(),
+            ];
+        }
+    }
+    require(repro == null && execution == null, "Incomplete reproduction evidence");
+    []
+}
+
 function save_issue(issue: root.Issue) -> null {
     let feedback_id = report_id(issue.feedback);
     upsert(
@@ -56,25 +86,7 @@ function save_issue(issue: root.Issue) -> null {
             "comments": baml.json.parse("[]"),
             "slack_channel": issue.feedback.channel,
             "slack_ts": issue.feedback.thread,
-            "repros": [
-                {
-                    "files": issue.repro.files.to_json(),
-                    "command": "baml " + issue.repro.command,
-                    "expectation": if (issue.repro.command == "test") {
-                        { "check": "requires_inspection", "instructions": issue.repro.explanation }
-                            .to_json()
-                    } else {
-                        { "check": "should_compile" }.to_json()
-                    },
-                    "result": if (issue.execution.exit_code == 0) {
-                        "passes"
-                    } else {
-                        "fails"
-                    },
-                    "verified_version": issue.workspace.version,
-                    "observed": issue.execution.stdout + "\n" + issue.execution.stderr,
-                },
-            ],
+            "repros": stored_repros(issue.repro, issue.execution, issue.workspace.version).to_json(),
         }
             .to_json(),
     );
@@ -299,12 +311,14 @@ class ExistingIssue {
     description: string,
 }
 
-function existing_issues() -> ExistingIssue[] {
+function existing_issues(kind: Kind) -> ExistingIssue[] {
     baml.json.from_json<ExistingIssue[]>(
         store(
             "GET",
             "issues?dataset=eq."
                 + dataset()
+                + "&kind=eq."
+                + kind.to_string().to_lower_case()
                 + "&status->>state=in.("
                 + dedup_states().join(",")
                 + ")&order=updated_at.desc&limit=100&select=id,description",
@@ -320,26 +334,9 @@ function link_duplicate(issue: Issue, id: string) -> void {
     if (!ids.includes(report)) {
         ids.push(report);
         let repros = baml.json.path_or<json[]>(row, ".repros", []);
-        repros.push(
-            {
-                "files": issue.repro.files.to_json(),
-                "command": "baml " + issue.repro.command,
-                "expectation": if (issue.repro.command == "test") {
-                    { "check": "requires_inspection", "instructions": issue.repro.explanation }
-                        .to_json()
-                } else {
-                    { "check": "should_compile" }.to_json()
-                },
-                "verified_version": issue.workspace.version,
-                "result": if (issue.execution.exit_code == 0) {
-                    "passes"
-                } else {
-                    "fails"
-                },
-                "observed": issue.execution.stdout + "\n" + issue.execution.stderr,
-            }
-                .to_json(),
-        );
+        for (let repro in stored_repros(issue.repro, issue.execution, issue.workspace.version)) {
+            repros.push(repro);
+        }
         let updated = baml.json.path<string>(row, ".updated_at");
         let changed = baml.json.from_json<json[]>(
             store(
