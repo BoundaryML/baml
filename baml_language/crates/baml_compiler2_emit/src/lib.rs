@@ -4,6 +4,7 @@
 
 mod analysis;
 mod emit;
+mod items;
 mod pull_semantics;
 mod stack_carry;
 #[cfg(any(debug_assertions, test))]
@@ -16,13 +17,9 @@ use baml_base::{Name, Span};
 use baml_compiler2_ast::TypeExpr;
 // HIR item-data firewall — enumeration + lookup queries in place of the raw
 // item tree.
-use baml_compiler2_hir::{
-    body::function_body,
-    item_data::{
-        GenericParamData, class_data, enum_data, file_classes, file_enums, file_functions,
-        file_impls, file_interfaces, file_lets, function_data, function_llm_meta, impl_block_data,
-        interface_data,
-    },
+use baml_compiler2_hir::item_data::{
+    GenericParamData, class_data, enum_data, file_classes, file_enums, file_functions, file_impls,
+    file_interfaces, file_lets, function_data, function_llm_meta, interface_data,
 };
 use baml_compiler2_hir::{
     contributions::Definition,
@@ -35,15 +32,14 @@ use baml_compiler2_hir::{
 };
 use baml_compiler2_mir::{
     BuiltinKind, MirFunctionBody, MirFunctionKind, Operand, Place, ResolvedAliases,
-    RuntimeLowering, Rvalue, StatementKind, definition_link_name, lower_function, lower_let_body,
+    RuntimeLowering, Rvalue, StatementKind, definition_link_name, lower_function,
     memory::{self, CellId},
     native_key_for,
 };
 use baml_type::{ParamTy, RuntimeTy};
 use bex_vm_types::{
-    Bytecode, CaptureCategory, Class, ClassField, ConstValue, Enum, EnumVariant, Function,
-    FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, GlobalIndex, Instruction,
-    InterfaceBound, Object, ObjectIndex, ObjectPool, Program,
+    Bytecode, CaptureCategory, ConstValue, Function, FunctionCaptureProps, FunctionKind,
+    FunctionMeta, FunctionOrigin, GlobalIndex, Object, ObjectIndex, ObjectPool, Program,
     legacy_unit::{
         CompilationUnit, LocalRef, ProgramImplRuleFrag, ProgramMethodImplFrag, ProgramPackageFrag,
         Symbol, SymbolKind,
@@ -80,251 +76,6 @@ fn runtime_lowering<'a>(
     }
 }
 
-/// Build the runtime [`InterfaceDef`](bex_vm_types::types::InterfaceDef) signature
-/// — generic-param bounds, `requires`, associated-type bounds, fields, and method
-/// signatures — for one interface, from its item-tree declaration.
-///
-/// Type expressions are lowered in the interface's own scope (so its generic
-/// params resolve to `TypeVar`s) and narrowed to runtime types via
-/// [`baml_type::lower_to_runtime`] — the faithful converter that preserves type
-/// vars for reflection, NOT the value-erasing `convert_tir_ty_for_runtime`. Bound
-/// and `requires` targets become [`baml_type::RuntimeInterface`] (via
-/// `RuntimeInterface::new`, which canonicalizes associated-binding order).
-fn build_interface_def(
-    db: &dyn baml_compiler2_mir::Db,
-    iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'_>,
-    iface_tn: &baml_type::DeclName,
-    // Minted by the caller through `claim_type_tag`, not derived here, so every
-    // head passes the one collision detector.
-    type_tag: baml_type::typetag::TypeTag,
-    resolved: &RuntimeLowering<'_>,
-) -> bex_vm_types::types::InterfaceDef {
-    use baml_compiler2_hir::{
-        item_data::{FunctionParamData, function_data, interface_data},
-        type_ref::{TypeRefId, TypeRefStore},
-    };
-    use baml_type::RuntimeInterface;
-    use bex_vm_types::types::{InterfaceDef, InterfaceFieldDef, InterfaceMethodDef};
-
-    let file = iface_loc.file(db);
-    let iface_wire = resolved.wire(iface_tn);
-    let interface = interface_data(db, iface_loc);
-    let generics = &interface.generic_params;
-    let interface_frame_params = baml_compiler2_hir_ty::lower::interface_frame(db, iface_loc);
-    // The interface scope's own param env: `Self` (slot 0) bounded by the
-    // interface itself plus declared param bounds - the single env every
-    // interface-scoped lowering shares (associated types are not slots), so
-    // `Self.Item` projections resolve here exactly as in signature lowering.
-    let decl_ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file)
-        .with_frame(interface_frame_params.clone())
-        .with_bounds(baml_compiler2_hir_ty::lower::interface_scope_bounds(
-            db, iface_loc,
-        ));
-
-    // Lower a type ref in `ctx` and narrow to a runtime type. Diagnostics are
-    // not collected: emit only runs on a checked program, so the declaration
-    // is already validated. `lower_to_runtime` rejects only the
-    // error-recovery sentinels, which a checked program cannot contain, so a
-    // failure means a compiler bug and must not be papered over by dropping
-    // the entry (that would renumber positional arguments).
-    let lower_rt = |ctx: &baml_compiler2_hir_ty::lower::LowerCtx<'_>,
-                    store: &TypeRefStore,
-                    id: TypeRefId|
-     -> bex_vm_types::RuntimeTy {
-        let ty = baml_compiler2_hir_ty::lower::reject_holes(&ctx.lower_type_ref(store, id));
-        let runtime = baml_type::lower_to_runtime(&ty, resolved.aliases)
-            .unwrap_or_else(|e| {
-                unreachable!("interface `{iface_wire}` declares a non-runtime type: {e:?}")
-            })
-            .map_heads(&mut |decl| resolved.wire(decl));
-        bex_vm_types::anchor_runtime_ty(&runtime)
-    };
-    // Lower an interface bound / `requires` target / associated-type bound.
-    // These are constraint heads: hir keeps written pins only (no eager
-    // default realization). A target that is not an interface was rejected
-    // upstream (E0145 / E0133) and yields `None`.
-    let lower_iface = |ctx: &baml_compiler2_hir_ty::lower::LowerCtx<'_>,
-                       store: &TypeRefStore,
-                       id: TypeRefId|
-     -> Option<bex_vm_types::RuntimeInterface> {
-        // ConstraintHead, per the contract above: the default (existential)
-        // position eagerly realizes omitted associated defaults and fills
-        // the rest with Error sentinels — a bound like `type A extends
-        // Iface` with unpinned associated types would panic `to_runtime`.
-        let lowered = baml_compiler2_hir_ty::lower::reject_holes(&ctx.lower_type_ref_at(
-            store,
-            id,
-            baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
-        ));
-        let baml_type::Ty::Interface(qtn, args, assoc) = lowered else {
-            return None;
-        };
-        let to_runtime = |t: &baml_type::Ty| {
-            baml_type::lower_to_runtime(t, resolved.aliases)
-                .unwrap_or_else(|e| {
-                    unreachable!(
-                        "interface `{iface_wire}` declares a non-runtime constraint: {e:?}"
-                    )
-                })
-                .map_heads(&mut |decl| resolved.wire(decl))
-        };
-        let generics = args.iter().map(to_runtime).collect();
-        let associated_types = assoc
-            .iter()
-            .map(|(n, t)| (n.clone(), to_runtime(t)))
-            .collect();
-        Some(bex_vm_types::anchor_interface(&RuntimeInterface::new(
-            resolved.wire(&qtn),
-            generics,
-            associated_types,
-        )))
-    };
-    // A method's runtime signature: Required params -> positional `args`,
-    // optional (defaulted) params -> `kwargs`; the `self` receiver is
-    // dropped; absent return/throws lower to `Void`.
-    let build_method = |ctx: &baml_compiler2_hir_ty::lower::LowerCtx<'_>,
-                        store: &TypeRefStore,
-                        name: &Name,
-                        params: &[FunctionParamData],
-                        return_type: Option<TypeRefId>,
-                        throws: Option<TypeRefId>|
-     -> InterfaceMethodDef {
-        // An untyped parameter is a syntax-level error, so it cannot reach
-        // emit; the top type keeps the positional layout intact if one did.
-        let unannotated = || bex_vm_types::RuntimeTy::Unknown;
-        let void = || bex_vm_types::RuntimeTy::Void;
-        let mut args = Vec::new();
-        let mut kwargs = Vec::new();
-        for p in params {
-            if p.name.as_str() == "self" {
-                continue;
-            }
-            let ty = p
-                .type_ref
-                .map_or_else(unannotated, |id| lower_rt(ctx, store, id));
-            if p.has_default {
-                kwargs.push((p.name.clone(), ty));
-            } else {
-                args.push(ty);
-            }
-        }
-        InterfaceMethodDef {
-            name: name.clone(),
-            args,
-            kwargs,
-            returns: return_type.map_or_else(void, |id| lower_rt(ctx, store, id)),
-            errors: throws.map_or_else(void, |id| lower_rt(ctx, store, id)),
-            // Functions are pooled after interfaces, so the default's object
-            // index is not known yet; `build_packages` back-fills it once the
-            // pool is complete (the same pass that folds defaults into rules).
-            default: None,
-            default_fn: bex_vm_types::HeapPtr::null(),
-        }
-    };
-
-    // `T extends A & B` is a conjunction; every conjunct that resolves to an
-    // interface is emitted so the runtime enforces all of them.
-    let store = &interface.type_refs;
-    let args = generics
-        .iter()
-        .map(|declared| {
-            let bounds = declared
-                .bounds
-                .iter()
-                .filter_map(|&id| lower_iface(&decl_ctx, store, id))
-                .collect();
-            (declared.name.clone(), bounds)
-        })
-        .collect();
-    let requires = interface
-        .requires
-        .iter()
-        .filter_map(|&id| lower_iface(&decl_ctx, store, id))
-        .collect();
-    let assoc = interface
-        .associated_types
-        .iter()
-        .filter_map(|at| {
-            at.bound
-                .and_then(|id| lower_iface(&decl_ctx, store, id))
-                .map(|ri| (at.name.clone(), ri))
-        })
-        .collect();
-    // This list is the interface's field *index space*: `RuntimeImplRule::field_links`
-    // is baked parallel to it, so every declared field keeps its slot. A field always
-    // carries a type — an untyped one is a syntax-level error that cannot reach emit.
-    let fields = interface
-        .fields
-        .iter()
-        .map(|f| InterfaceFieldDef {
-            name: f.name.clone(),
-            ty: lower_rt(&decl_ctx, store, f.type_ref),
-        })
-        .collect();
-    let mut methods: Vec<InterfaceMethodDef> = interface
-        .required_methods
-        .iter()
-        .map(|m| {
-            let mut scope = interface_frame_params.clone();
-            let own_names: Vec<Name> = m.generic_params.iter().map(|p| p.name.clone()).collect();
-            ParamTy::extend_frame(&mut scope, &own_names);
-            let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file)
-                .with_frame(scope)
-                .with_bounds(baml_compiler2_hir_ty::lower::interface_scope_bounds(
-                    db, iface_loc,
-                ));
-            build_method(&ctx, store, &m.name, &m.params, m.return_type, m.throws)
-        })
-        .collect();
-    methods.extend(interface.default_methods.iter().map(|&loc| {
-        let f = function_data(db, loc);
-        // The method's full frame and bounds (its own params plus the
-        // interface scope's, `function_generic_bounds`' interface arm).
-        let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, loc.file(db))
-            .with_frame(baml_compiler2_hir_ty::lower::function_generic_frame(
-                db, loc,
-            ))
-            .with_bounds(baml_compiler2_hir_ty::lower::function_generic_bounds(
-                db, loc,
-            ));
-        build_method(
-            &ctx,
-            &f.type_refs,
-            &f.name,
-            &f.params,
-            f.return_type,
-            f.throws,
-        )
-    }));
-
-    InterfaceDef {
-        type_tag,
-        name: iface_wire,
-        args,
-        requires,
-        assoc,
-        fields,
-        methods,
-        // Static declarations have no owning runtime package.
-        owner: bex_vm_types::HeapPtr::null(),
-    }
-}
-
-/// Build the program-wide interface-implementation registry for the runtime
-/// resolver.
-///
-/// Bakes every interface impl as a `RuntimeImplRule` carrying the implementor
-/// pattern (`TyTemplate`, generic params → `TypeArgRef`), the per-param bounds,
-/// the interface args/associated bindings, and the method FQNs. The runtime
-/// resolver matches a value's concrete type against these (rustc-style
-/// selection) to dispatch an interface method — operator overloading today;
-/// reflection once unified. Built from the item tree in two parts: (a)
-/// out-of-body `implements_for` blocks; (b) methods folded onto a class.
-/// An interface's generic parameter names paired with its declared
-/// associated-type members in order, each with its lowered default (if any) —
-/// the [`build_packages`] prepass entry per assoc-carrying interface.
-type IfaceAssocDecls = (ParamTy, Vec<ParamTy>, Vec<(Name, Option<baml_type::Ty>)>);
-
 /// The source-less package surface captured before MIR/codegen starts.
 ///
 /// Some interface leaves share salsa queries with function lowering. Capture
@@ -338,8 +89,6 @@ struct PackageExportArtifact {
 
 /// Read-only whole-project facts consumed while assembling runtime packages.
 struct PackageBuildMetadata<'a, 'db> {
-    /// Field-name → slot for each emitted class, keyed by rendered FQN.
-    class_field_indices: &'a HashMap<String, HashMap<String, usize>>,
     /// Typed source-less export artifacts captured before parallel codegen.
     package_exports: &'a indexmap::IndexMap<Name, PackageExportArtifact>,
     /// The provenance-typed placement registry — the structural channel rule
@@ -350,8 +99,6 @@ struct PackageBuildMetadata<'a, 'db> {
     /// only for NAMED items (exported callables, `$init_test` chainers, and
     /// mount-boundary spellings), never for bodies.
     function_indices: &'a HashMap<String, usize>,
-    /// The pool so far, for reading a MOUNTED interface's `default` operands.
-    objects: &'a [Object],
 }
 
 fn external_call_target_name(
@@ -478,8 +225,6 @@ fn capture_package_exports(
 #[derive(Clone, Copy)]
 struct InterfaceBodyStore<'a, 'db> {
     placements: &'a FunctionPlacements<'db>,
-    interface_indices: &'a HashMap<baml_type::TypeName, usize>,
-    objects: &'a [Object],
 }
 
 impl<'db> InterfaceBodyStore<'_, 'db> {
@@ -488,10 +233,7 @@ impl<'db> InterfaceBodyStore<'_, 'db> {
     /// TYPE: its placeholder index is past the pool, so writing it into an
     /// object operand (the default backfill) would dangle — the clean unit
     /// already carries the real operand.
-    fn interface_body(
-        &self,
-        loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    ) -> Option<ObjectIndex> {
+    fn interface_body(self, loc: baml_compiler2_hir::loc::FunctionLoc<'db>) -> Option<ObjectIndex> {
         self.placements
             .get(&loc)
             .and_then(|placement| placement.pooled_object())
@@ -505,676 +247,119 @@ impl<'db> InterfaceBodyStore<'_, 'db> {
     /// carries them) — but must never reach object-operand position; use
     /// [`Self::interface_body`] there.
     fn interface_body_reference(
-        &self,
+        self,
         loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     ) -> Option<ObjectIndex> {
         self.placements
             .get(&loc)
             .map(|placement| ObjectIndex::from_raw(placement.reference_object()))
     }
-
-    /// The default body of `iface_tn.method`. `live` is the declaration when
-    /// this emit sees one (`None` for an interface known only as a mounted
-    /// surface).
-    fn interface_default(
-        &self,
-        live: Option<baml_compiler2_hir::loc::FunctionLoc<'db>>,
-        iface_tn: &baml_type::TypeName,
-        method: &Name,
-    ) -> Option<ObjectIndex> {
-        live.and_then(|loc| self.interface_body(loc)).or_else(|| {
-            let iface_idx = *self.interface_indices.get(iface_tn)?;
-            let Some(Object::Interface(def)) = self.objects.get(iface_idx) else {
-                return None;
-            };
-            def.methods
-                .iter()
-                .find(|m| m.name == *method)
-                .and_then(|m| m.default)
-        })
-    }
 }
 
-/// Generic-parameter bound sets, keyed by the declared parameter.
-type ImplBoundsMap = rustc_hash::FxHashMap<baml_type::ParamTy, Vec<baml_type::Interface>>;
-
-type IfaceParts = (
-    baml_type::TypeName,
-    Vec<bex_vm_types::TyTemplate>,
-    Vec<(Name, bex_vm_types::TyTemplate)>,
-);
-
-/// Split a lowered interface type into its base `TypeName` plus its args /
-/// associated bindings as `TyTemplate`s (generic params → `TypeArgRef`).
-fn split_interface(
-    iface_ty: &baml_type::Ty,
-    resolved: &RuntimeLowering<'_>,
-    generics: &[ParamTy],
-) -> Option<IfaceParts> {
-    let baml_type::Ty::Interface(qtn, args, assoc) = iface_ty else {
-        return None;
-    };
-    let arg_templates = args
-        .iter()
-        .map(|a| {
-            bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
-                a, resolved, generics,
-            ))
-        })
-        .collect();
-    let assoc_templates = assoc
-        .iter()
-        .map(|(n, t)| {
-            (
-                n.clone(),
-                bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
-                    t, resolved, generics,
-                )),
-            )
-        })
-        .collect();
-    Some((resolved.wire(qtn), arg_templates, assoc_templates))
-}
-
-/// The lowered head of one `implements` block's baked rule — the pieces that
-/// identify the rule. `(iface_tn, for_ty_pattern, interface_args)` is the
-/// rule's COHERENCE KEY (unique per interface for accepted programs).
+/// Assemble the per-package runtime structure from the pool this emit
+/// built: every `implements` block baked as a rule against its interface's
+/// pooled object, each package's exported callables and interface blob, and
+/// the interface-default operands the interface pass could not fill (the
+/// bodies were pooled after the interfaces).
 ///
-/// Shared by `build_packages` (which bakes the rule from it) and
-/// `decompose_units` (which pairs each baked rule back to its declaring file
-/// through the same key), so the two can never drift.
-struct ImplRuleTarget {
-    iface_tn: baml_type::TypeName,
-    /// The full lowered target (`Ty::Interface`), for the bake's
-    /// argument/associated-binding work.
-    iface_ty: baml_type::Ty,
-    interface_args: Vec<bex_vm_types::TyTemplate>,
-    /// The target's WRITTEN associated pins only (block-level pins are folded
-    /// in by the bake).
-    interface_assoc: Vec<(Name, bex_vm_types::TyTemplate)>,
-    for_ty: baml_type::Ty,
-    for_ty_pattern: bex_vm_types::TyTemplate,
-    impl_params: Vec<ParamTy>,
-    impl_bounds: ImplBoundsMap,
-    /// Each declared param's bound conjunction, in frame order, each
-    /// conjunction canonically sorted — the constraint-set third of the
-    /// rule's [`ImplCoherenceKey`]. The bake stores exactly this, so a rule
-    /// and its declaring block cannot disagree on it.
-    generic_param_bounds: Vec<Vec<InterfaceBound>>,
-}
-
-impl ImplRuleTarget {
-    /// The block's identity key (see [`ImplCoherenceKey`]'s invariant).
-    fn coherence_key(&self) -> bex_vm_types::ImplCoherenceKey {
-        bex_vm_types::ImplCoherenceKey {
-            for_ty_pattern: self.for_ty_pattern.clone(),
-            interface_args: self.interface_args.clone(),
-            generic_param_bounds: self.generic_param_bounds.clone(),
-        }
-    }
-}
-
-/// Lower one `implements` block's target and for-type. `None` when the target
-/// does not lower to an interface (already diagnosed upstream), or when a
-/// declared bound failed to lower: the uniform bound surface
-/// (`impl_generic_bounds`) keeps only bounds that lower to interfaces —
-/// E0145 / unresolved-name diagnostics own the rest — so a declared/lowered
-/// count mismatch means the declared rule is NARROWER than anything bakeable.
-/// Baking without the bound WIDENS the rule; declining here drops the whole
-/// rule from BOTH the bake and the decompose attribution (the two callers),
-/// which loses a dispatch — recoverable — and can never over-match or
-/// mis-attribute. Fires only on programs that already carry diagnostics and
-/// never reach a runnable artifact.
-fn impl_rule_target<'db>(
-    db: &'db dyn baml_compiler2_mir::Db,
-    file: baml_base::SourceFile,
-    impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
-    resolved: &RuntimeLowering<'_>,
-) -> Option<ImplRuleTarget> {
-    let block = baml_compiler2_hir::item_data::impl_block_data(db, impl_loc);
-    let store = &block.type_refs;
-    let impl_params = baml_compiler2_hir_ty::lower::impl_frame(db, impl_loc);
-    let impl_bounds = baml_compiler2_hir_ty::lower::impl_generic_bounds(db, impl_loc);
-    // The target is a constraint, not an existential: it carries only its
-    // written inline pins (unwritten members bake their declared defaults).
-    let iface_ty = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file)
-        .with_frame(impl_params.clone())
-        .with_bounds(impl_bounds.clone())
-        .lower_type_ref_at(
-            store,
-            block.interface_target,
-            baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
-        );
-    let iface_ty = baml_compiler2_hir_ty::lower::reject_holes(&iface_ty);
-    let (iface_tn, interface_args, interface_assoc) =
-        split_interface(&iface_ty, resolved, &impl_params)?;
-    // The implementor: `Self` in `Ty` space, off the UNIFORM impl surface —
-    // `impl_self_ty` (with `impl_frame`/`impl_generic_bounds` above) owns the
-    // in-body-vs-free distinction; emit never matches the subject.
-    let for_ty = baml_compiler2_hir_ty::lower::impl_self_ty(db, impl_loc);
-    let for_ty_pattern = bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
-        &for_ty,
-        resolved,
-        &impl_params,
-    ));
-    // Fail closed on a bound the LOWERING dropped (doc above).
-    let (declared_generics, _) =
-        baml_compiler2_hir::item_data::impl_declared_generics(db, impl_loc);
-    let declared_bound_count: usize = declared_generics.iter().map(|g| g.bounds.len()).sum();
-    let lowered_bound_count: usize = impl_params
-        .iter()
-        .map(|param| impl_bounds.get(param).map_or(0, Vec::len))
-        .sum();
-    if lowered_bound_count != declared_bound_count {
-        return None;
-    }
-    // Each declared param's bound conjunction, converted through the same
-    // `split_interface` road as the target. The Option-collect is a second
-    // belt on the same law (a bound that does not split drops the rule);
-    // with the arity gate above it should never fire. Each conjunction is
-    // sorted canonically so a written reorder cannot fork the identity key.
-    let generic_param_bounds: Option<Vec<Vec<InterfaceBound>>> = impl_params
-        .iter()
-        .map(|param| {
-            let mut bounds: Vec<InterfaceBound> = impl_bounds
-                .get(param)
-                .into_iter()
-                .flatten()
-                .map(|bound| {
-                    split_interface(&bound.to_ty(), resolved, &impl_params).map(
-                        |(interface, args, assoc)| InterfaceBound {
-                            interface: bex_vm_types::TypeHead::of_name(&interface),
-                            args,
-                            assoc,
-                        },
-                    )
-                })
-                .collect::<Option<_>>()?;
-            bounds.sort_by_cached_key(|bound| format!("{bound:?}"));
-            Some(bounds)
-        })
-        .collect();
-    let generic_param_bounds = generic_param_bounds?;
-    Some(ImplRuleTarget {
-        iface_tn,
-        iface_ty,
-        interface_args,
-        interface_assoc,
-        for_ty,
-        for_ty_pattern,
-        impl_params,
-        impl_bounds,
-        generic_param_bounds,
-    })
-}
-
+/// Rule method tables are PROVIDED-ONLY: an implementing rule adopts a
+/// default at RESOLUTION time, through the interface object's bound
+/// `default_fn`, never through a baked row (a default body is generic over
+/// `Self`, so calling it on the concrete value dispatches its inner
+/// `self.m()` calls back to the impl).
 fn build_packages<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
-    roots: &[baml_base::SourceRoot],
     all_files: &[baml_base::SourceFile],
     alias_caches: &HashMap<baml_base::SourceRoot, ResolvedAliases>,
     interface_indices: &HashMap<baml_type::TypeName, usize>,
-    // Threaded emit state, including the field-name → slot map for every
-    // emitted class. That map is the *same* one the class pass built
-    // `Class::fields` from, threaded in rather than recomputed: a second
-    // derivation of the layout that drifted would make every virtual field
-    // access read the wrong slot, silently.
     metadata: &PackageBuildMetadata<'_, 'db>,
     program_packages: &mut indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
 ) -> Vec<InterfaceDefaultBackfill> {
-    use baml_compiler2_hir::{
-        item_data::AssociatedTypeBindingData,
-        type_ref::{TypeRefId, TypeRefStore},
-    };
     use baml_compiler2_hir_ty::lower::qualify_def;
-    use baml_type as ty;
     use bex_vm_types::{
         ObjectIndex,
         types::{ProgramImplRule, ProgramMethodImpl},
     };
-    type BoundsMap = ImplBoundsMap;
 
-    let class_field_indices = metadata.class_field_indices;
     let package_exports = metadata.package_exports;
     let function_indices = metadata.function_indices;
-
     let interface_bodies = InterfaceBodyStore {
         placements: metadata.placements,
-        interface_indices,
-        objects: metadata.objects,
     };
-
-    // Per interface, its default methods, feeding ONLY the interface-side
-    // backfill (`InterfaceMethodDef.default`): rule method tables are
-    // PROVIDED-ONLY — an implementing rule adopts a default at RESOLUTION
-    // time, through the interface object's bound `default_fn`, never through
-    // a baked row (a default body is generic over `Self`, so calling it on
-    // the concrete value dispatches its inner `self.m()` calls back to the
-    // impl). Built across all files since an interface may live in a
-    // different file/package than its consumers.
-    // The value is the declaration when this emit sees one, `None` for an
-    // interface known only as a mounted surface (whose pooled object already
-    // carries its own `default` operands).
-    let mut iface_defaults: indexmap::IndexMap<
-        baml_type::TypeName,
-        indexmap::IndexMap<Name, Option<baml_compiler2_hir::loc::FunctionLoc<'db>>>,
-    > = indexmap::IndexMap::new();
-    // Per interface, its generic parameter names and its declared
-    // associated-type members *in order*, each with its default (lowered once
-    // with symbolic `Self` by the shared query) where one is declared. Rule
-    // construction bakes the default into every impl that leaves the member
-    // unpinned, so the registry answers every declared member identically —
-    // pinned or defaulted. Associated types are NOT frame slots (an adopted
-    // default's frame is `[Self ++ interface generic args]`; a body's
-    // `Self.Assoc` lowers as a projection), so this table is the RULE's
-    // reduction source for those projections, never a frame filler.
-    let mut iface_assoc_decls: indexmap::IndexMap<baml_type::TypeName, IfaceAssocDecls> =
-        indexmap::IndexMap::new();
-    // Per field-bearing interface, its declared field names **in declaration order** —
-    // the index space `RuntimeImplRule::field_links` is baked against, and the same
-    // order `build_interface_def` gives `InterfaceDef::fields`. Interfaces with no
-    // fields are absent (their impls get an empty table).
-    let mut iface_field_decls: indexmap::IndexMap<baml_type::TypeName, Vec<Name>> =
-        indexmap::IndexMap::new();
     let spelling = spelling(db);
-    for file in all_files {
-        for &iface_loc in file_interfaces(db, *file) {
+
+    // The interface objects themselves were pooled before their default
+    // bodies were, so they still carry `default: None`; hand back what to
+    // fill in now that every function has an index. Only interfaces pooled
+    // BY THIS EMIT are addressed — a mounted artifact's interfaces already
+    // carry theirs — and a Stage-6 clean body, never pooled here, fills
+    // nothing (the clean unit carries the real operand). A spliced interface
+    // already carries its `default`; re-stating it is an identity write.
+    let mut interface_default_backfill = Vec::new();
+    for &file in all_files {
+        for &iface_loc in file_interfaces(db, file) {
             let iface_data = interface_data(db, iface_loc);
             let iface_tn = spelling.wire(&qualify_def(
                 db,
                 Definition::Interface(iface_loc),
                 &iface_data.name,
             ));
-            if !iface_data.fields.is_empty() {
-                iface_field_decls
-                    .entry(iface_tn.clone())
-                    .or_insert_with(|| iface_data.fields.iter().map(|f| f.name.clone()).collect());
-            }
-            if !iface_data.associated_types.is_empty() {
-                iface_assoc_decls
-                    .entry(iface_tn.clone())
-                    .or_insert_with(|| {
-                        let frame_params =
-                            baml_compiler2_hir_ty::lower::interface_frame(db, iface_loc);
-                        let self_param = frame_params
-                            .first()
-                            .expect("interface frame starts with Self")
-                            .clone();
-                        (
-                            self_param,
-                            baml_compiler2_hir_ty::lower::interface_declared_params(db, iface_loc),
-                            iface_data
-                                .associated_types
-                                .iter()
-                                .map(|assoc| {
-                                    (
-                                        assoc.name.clone(),
-                                        baml_compiler2_hir_ty::interfaces::
-                                            interface_associated_type_default(
-                                                db,
-                                                iface_loc,
-                                                assoc.name.clone(),
-                                            )
-                                            .map(|(ty, _decl_site_diags)| ty),
-                                    )
-                                })
-                                .collect(),
-                        )
-                    });
-            }
-            if iface_data.default_methods.is_empty() {
-                continue;
-            }
-            let entry = iface_defaults.entry(iface_tn).or_default();
-            for &m in &iface_data.default_methods {
-                entry.insert(function_data(db, m).name.clone(), Some(m));
-            }
-        }
-    }
-    // Source-less interfaces participate in consumer-owned impl rules through
-    // exactly the same runtime tables.  Seed their declaration facts from the
-    // mounted artifact before walking the consumer's source blocks: otherwise
-    // `class Local { implements dep.I {} }` would prove membership at check
-    // time but emit neither adopted defaults nor virtual-field links.
-    for &package_root in roots {
-        let Some(interface) =
-            baml_compiler2_hir_ty::package_interface::mounted_interface(db, package_root)
-        else {
-            continue;
-        };
-        for exported in interface
-            .types
-            .values()
-            .flat_map(|namespace| namespace.values())
-        {
-            let baml_compiler2_hir_ty::package_interface::ExportedType::Interface {
-                qtn,
-                self_param,
-                generic_params,
-                associated_types,
-                fields,
-                default_methods,
-                ..
-            } = exported
-            else {
+            let Some(&iface_idx) = interface_indices.get(&iface_tn) else {
                 continue;
             };
-            let qtn = spelling.wire(qtn);
-            if !fields.is_empty() {
-                iface_field_decls
-                    .entry(qtn.clone())
-                    .or_insert_with(|| fields.iter().map(|(name, ..)| name.clone()).collect());
-            }
-            if !associated_types.is_empty() {
-                iface_assoc_decls.entry(qtn.clone()).or_insert_with(|| {
-                    (
-                        self_param.clone(),
-                        generic_params.clone(),
-                        associated_types
-                            .iter()
-                            .map(|assoc| (assoc.name.clone(), assoc.default.clone()))
-                            .collect(),
-                    )
-                });
-            }
-            if !default_methods.is_empty() {
-                let defaults = iface_defaults.entry(qtn.clone()).or_default();
-                for method in default_methods {
-                    defaults.entry(method.name.clone()).or_insert(None);
-                }
-            }
-        }
-    }
-    // Complete a rule's associated bindings: every declared member the impl
-    // leaves unpinned is baked from the interface's declared default,
-    // substituted at this impl — `Self` := the for-type, the interface's
-    // params := the target's arguments — so the registry answers every
-    // declared member identically, pinned or defaulted. A Self-referencing
-    // default (`type Items = Self.Item[]`) keeps its projections symbolic in
-    // the baked template; the runtime reduces them back through this same
-    // rule at realization time (fuel-bounded against cycles). A member with
-    // neither pin nor default is a diagnosed incomplete impl and stays absent.
-    let complete_interface_assoc =
-        |interface_assoc: &mut Vec<(Name, bex_vm_types::TyTemplate)>,
-         iface_tn: &baml_type::TypeName,
-         iface_arg_tys: &[ty::Ty],
-         for_ty: &ty::Ty,
-         generics: &[ParamTy],
-         resolved: &RuntimeLowering<'_>| {
-            let Some((self_param, params, decls)) = iface_assoc_decls.get(iface_tn) else {
-                return;
-            };
-            for (name, default) in decls {
-                if interface_assoc.iter().any(|(an, _)| an == name) {
-                    continue;
-                }
-                let Some(default) = default else {
+            for &body in &iface_data.default_methods {
+                let Some(default) = interface_bodies.interface_body(body) else {
                     continue;
                 };
-                let mut bindings: rustc_hash::FxHashMap<ParamTy, ty::Ty> =
-                    rustc_hash::FxHashMap::default();
-                bindings.insert(self_param.clone(), for_ty.clone());
-                for (param, arg) in params.iter().zip(iface_arg_tys) {
-                    bindings.insert(param.clone(), arg.clone());
-                }
-                let completed = baml_type::unify::substitute_ty(default, &bindings);
-                interface_assoc.push((
-                    name.clone(),
-                    bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
-                        &completed, resolved, generics,
-                    )),
-                ));
-            }
-        };
-    // The interface objects themselves were pooled before their default bodies
-    // were, so they still carry `default: None`; hand back what to fill in now
-    // that every function has an index. Only interfaces pooled *by this emit*
-    // are addressed — a mounted artifact's interfaces already carry theirs.
-    let interface_default_backfill: Vec<InterfaceDefaultBackfill> = iface_defaults
-        .iter()
-        .filter_map(|(iface_tn, defaults)| {
-            let iface_idx = *interface_indices.get(iface_tn)?;
-            Some(defaults.iter().filter_map(move |(name, &live)| {
-                Some(InterfaceDefaultBackfill {
+                interface_default_backfill.push(InterfaceDefaultBackfill {
                     interface: ObjectIndex::from_raw(iface_idx),
-                    method: name.clone(),
-                    // A spliced interface already carries its `default`;
-                    // re-stating it here is an identity write.
-                    default: interface_bodies.interface_default(live, iface_tn, name)?,
-                })
-            }))
-        })
-        .flatten()
-        .collect();
+                    method: function_data(db, body).name.clone(),
+                    default,
+                });
+            }
+        }
+    }
 
     for file in all_files {
         let pkg_info = file_package(db, *file);
-        let _pkg_items = baml_compiler2_hir::package::package_items(db, pkg_info.root);
         let resolved = &runtime_lowering(db, alias_caches, pkg_info.root);
-        // Lower a type ref (in the owner's `TypeRefStore`) in this file's
-        // namespace, discarding diagnostics (these targets were already validated
-        // upstream). `bounds` carries the enclosing impl's/class's generic-param
-        // bounds so a bound-typevar projection in a binding value — the
-        // `implements<T extends Iface> Other for T[] { type E = T.Assoc }` shape,
-        // which only user code writes now — determines its interface instead of
-        // erasing.
-        let lower = |store: &TypeRefStore,
-                     id: TypeRefId,
-                     generics: &[ParamTy],
-                     bounds: &BoundsMap|
-         -> ty::Ty {
-            baml_compiler2_hir_ty::lower::reject_holes(
-                &baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, *file)
-                    .with_frame(generics.to_vec())
-                    .with_bounds(bounds.clone())
-                    .lower_type_ref(store, id),
-            )
-        };
-        // Associated-type bindings written in an `implements` block body
-        // (`type Item = int`) live beside the target, not in it (`split_interface`
-        // only sees the target), so fold them into the implemented interface's
-        // bindings here. Prefer `impl_data`'s canonical checked value: it lowers
-        // bindings in declaration order with `Self` carrying the pins resolved so
-        // far, so `type Item = int; type Items = Self.Item[]` becomes `int[]`.
-        // Mounted interfaces have no source `InterfaceLoc`; their equivalent
-        // canonical values live in the loc-free `impl_facts` surface. Re-lowering
-        // a raw binding in the plain impl scope loses the earlier witness and
-        // leaves an error-recovery projection that RuntimeTy cannot represent.
-        let lower_assoc = |impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
-                           store: &TypeRefStore,
-                           bindings: &[AssociatedTypeBindingData],
-                           generics: &[ParamTy],
-                           bounds: &BoundsMap|
-         -> Vec<(Name, bex_vm_types::TyTemplate)> {
-            let canonical = baml_compiler2_hir_ty::interfaces::impl_data(db, impl_loc)
-                .as_ref()
-                .ok();
-            let loc_free = baml_compiler2_hir_ty::impls::impl_facts(db, impl_loc).for_display();
-            bindings
-                .iter()
-                .filter_map(|b| {
-                    let ty = canonical
-                        .and_then(|data| {
-                            data.associated_types
-                                .iter()
-                                .find(|(name, _)| *name == b.name)
-                                .map(|(_, ty)| ty.clone())
-                        })
-                        .or_else(|| {
-                            loc_free.and_then(|facts| {
-                                facts
-                                    .associated_types
-                                    .iter()
-                                    .find(|(name, _)| *name == b.name)
-                                    .map(|(_, ty)| ty.to_plain())
-                            })
-                        })
-                        .or_else(|| b.type_ref.map(|id| lower(store, id, generics, bounds)))?;
-                    Some((
-                        b.name.clone(),
-                        bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
-                            &ty, resolved, generics,
-                        )),
-                    ))
-                })
-                .collect()
-        };
-
-        // ONE rule per `implements` block, whatever its spelling
-        // (TYPE_SYSTEM.md: in-class and out-of-body impls are one form). The
-        // subject decides only where the owner frame, bounds, and field table
-        // come from: an in-class block borrows the enclosing CLASS's generics
-        // and links its fields; a free block declares its own generics and
-        // never has fields to link (E0126). Driving off the blocks keeps a
-        // field-only (method-less) impl registered — membership matters for
-        // reflection and bound checks even when there's nothing to dispatch.
         for &impl_loc in file_impls(db, *file) {
-            let block = impl_block_data(db, impl_loc);
-            let store = &block.type_refs;
             // The rule's identity + lowering context, from the ONE helper the
             // decomposition's rule-attribution replay also uses.
-            let Some(ImplRuleTarget {
-                iface_tn,
-                iface_ty,
-                interface_args,
-                mut interface_assoc,
-                for_ty,
-                for_ty_pattern,
-                impl_params,
-                impl_bounds,
-                generic_param_bounds,
-            }) = impl_rule_target(db, *file, impl_loc, resolved)
-            else {
+            let Some(target) = items::impl_rule_target(db, impl_loc, resolved) else {
                 continue;
             };
-            interface_assoc.extend(lower_assoc(
-                impl_loc,
-                store,
-                &block.associated_type_bindings,
-                &impl_params,
-                &impl_bounds,
-            ));
-            let iface_arg_tys = match &iface_ty {
-                ty::Ty::Interface(_, args, _) => args.clone(),
-                _ => unreachable!("split_interface matched an interface"),
-            };
-            complete_interface_assoc(
-                &mut interface_assoc,
-                &iface_tn,
-                &iface_arg_tys,
-                &for_ty,
-                &impl_params,
-                resolved,
-            );
-            // The constraint set was lowered (and fail-closed gated) inside
-            // `impl_rule_target`, so the bake, the decompose attribution,
-            // and the rule's `ImplCoherenceKey` all carry the identical
-            // canonicalized bounds.
-            // A block's own method is compiled against the owner frame — the
-            // impl's declared generics, which for an in-class block ARE the
-            // class's.
-            let impl_frame: Vec<bex_vm_types::TyTemplate> = (0..u32::try_from(impl_params.len())
-                .expect("generic arity fits u32"))
-                .map(bex_vm_types::TyTemplate::TypeArgRef)
-                .collect();
             let Some(interface_head) = interface_indices
-                .get(&iface_tn)
+                .get(&target.iface_tn)
                 .copied()
                 .map(ObjectIndex::from_raw)
             else {
                 continue;
             };
-            let mut methods = indexmap::IndexMap::new();
-            for &m in &block.methods {
-                let method_name = function_data(db, m).name.clone();
-                // An unindexed body has a `$compiler_intrinsic` /
-                // `$await_any` body Pass 4 never pools — drop just that
-                // method (losing a dispatch, never adding a wrong one). The
-                // stdlib only uses those bodies on free functions, so this is
-                // unreachable today; the debug_assert pins the convention.
-                // TODO: reject intrinsic/await-any bodies inside impl blocks
-                // at lowering (a diagnostic), so the soft-fail here becomes
-                // unrepresentable instead of merely asserted.
-                let Some(fqn) = interface_bodies.interface_body_reference(m) else {
-                    debug_assert!(
-                        matches!(
-                            function_body(db, m).as_ref(),
-                            baml_compiler2_hir::body::FunctionBody::Builtin(
-                                BuiltinKind::Intrinsic | BuiltinKind::AwaitAny
-                            )
-                        ),
-                        "impl method `{method_name}` has no pooled function object",
-                    );
-                    continue;
-                };
-                methods.insert(
-                    method_name,
-                    ProgramMethodImpl {
-                        fqn,
-                        frame: impl_frame.clone(),
-                    },
-                );
-            }
-            // The field table for this block, positional over the interface's
-            // own declared fields. Each entry is the class slot the interface
-            // field reads: the block's explicit `field as class_field` link,
-            // else the same-named class field (the default that
-            // `concrete_interface_field_sources` applies in TIR).
-            //
-            // A name that resolves to no class slot means the class does not
-            // cover the interface field — already E0124, so this program has
-            // diagnostics and cannot reach a runnable artifact. Drop the whole
-            // rule rather than bake a partial table: losing a dispatch is
-            // recoverable, a table whose positions no longer line up with the
-            // interface silently reads the wrong field. Matches the
-            // fail-closed rule-drop convention above.
-            let field_links: Option<Box<[u32]>> = match (
-                iface_field_decls.get(&iface_tn),
-                baml_compiler2_hir::item_data::impl_enclosing_class(db, impl_loc),
-            ) {
-                (None, _) => Some(Box::default()),
-                (Some(_), None) => {
-                    // An out-of-body impl of a field-bearing interface is
-                    // E0126. A rule pairing a field-bearing interface with an
-                    // empty table would read out of the table's range, so the
-                    // rule is dropped whole — same fail-closed convention as
-                    // the arm below.
-                    debug_assert!(
-                        false,
-                        "out-of-body impl of field-bearing interface `{iface_tn}` should be \
-                         rejected by E0126",
-                    );
-                    None
-                }
-                (Some(declared), Some(class)) => {
-                    let class_item = class_data(db, class);
-                    let class_tn =
-                        spelling.wire(&qualify_def(db, Definition::Class(class), &class_item.name));
-                    let class_slots = class_field_indices.get(&class_tn.to_string());
-                    declared
-                        .iter()
-                        .map(|iface_field| {
-                            let class_field = block
-                                .field_links
-                                .iter()
-                                .find(|link| link.interface_field == *iface_field)
-                                .map_or(iface_field, |link| &link.class_field);
-                            let slot = class_slots
-                                .and_then(|slots| slots.get(class_field.as_str()))
-                                .copied();
-                            debug_assert!(
-                                slot.is_some(),
-                                "interface `{iface_tn}` field `{iface_field}` links to \
-                                 `{class_tn}.{class_field}`, which has no runtime slot",
-                            );
-                            slot.map(|s| u32::try_from(s).expect("class field count fits u32"))
-                        })
-                        .collect()
-                }
-            };
-            let Some(field_links) = field_links else {
+            let Some(rule) = items::bake_impl_rule(db, impl_loc, target, resolved) else {
                 continue;
             };
+            let methods = rule
+                .methods
+                .iter()
+                .map(|(name, body)| {
+                    // Every provided method with a body was placed — pooled
+                    // by this emit or the splice, or a clean placeholder in
+                    // reference position.
+                    let fqn = interface_bodies
+                        .interface_body_reference(*body)
+                        .unwrap_or_else(|| {
+                            unreachable!("impl method `{name}` has no pooled function object")
+                        });
+                    (
+                        name.clone(),
+                        ProgramMethodImpl {
+                            fqn,
+                            frame: rule.frame.clone(),
+                        },
+                    )
+                })
+                .collect();
             program_packages
                 .entry(spelling.of(pkg_info.root).clone())
                 .or_default()
@@ -1183,12 +368,12 @@ fn build_packages<'db>(
                 .or_default()
                 .push(ProgramImplRule {
                     interface_head,
-                    for_ty_pattern,
-                    generic_param_bounds,
-                    interface_args,
-                    interface_assoc,
+                    for_ty_pattern: rule.for_ty_pattern,
+                    generic_param_bounds: rule.generic_param_bounds,
+                    interface_args: rule.interface_args,
+                    interface_assoc: rule.interface_assoc,
                     methods,
-                    field_links,
+                    field_links: rule.field_links,
                 });
         }
     }
@@ -1374,12 +559,12 @@ impl UnitReferences {
 }
 
 /// Context for MIR codegen.
-pub(crate) struct MirCodegenContext<'ctx, 'obj> {
+pub(crate) struct MirCodegenContext<'db, 'ctx, 'obj> {
     /// The database link names are rendered through at the codegen boundary.
     pub db: &'ctx dyn baml_compiler2_mir::Db,
     /// The resolution surface every declaration reference goes through
-    /// ([`emit::CodegenRefs`]).
-    pub refs: &'obj mut (dyn emit::CodegenRefs<'ctx> + 'ctx),
+    /// ([`emit::CodegenRefs`]); built once per pass, it outlives the body.
+    pub refs: &'obj mut (dyn emit::CodegenRefs<'db> + 'db),
     pub class_fields: &'ctx ClassFieldSnapshot,
     pub objects: &'obj mut ObjectPool,
     /// Program-absolute index of `objects[0]`: 0 when `objects` is the whole
@@ -1486,52 +671,6 @@ impl std::error::Error for MountedPackageLinkError {
 
 pub use bex_vm_types::Program as ProgramAlias;
 
-/// One entry in the emitted runtime field list for a class. The field type is a
-/// `TypeRefId` into the owning class's `TypeRefStore` (carried alongside).
-type MergedFieldEntry = (
-    String,
-    baml_compiler2_hir::type_ref::TypeRefId,
-    baml_compiler2_hir::item_tree::ClassFieldAttrs,
-    Option<String>,
-    Vec<Name>,
-    Vec<Name>,
-);
-
-/// BEP-044: collect actual runtime fields. Interface fields are views over
-/// class fields, so they never add qualified runtime slots.
-fn collect_class_fields_with_implements(
-    pkg_ns: &[Name],
-    class: &baml_compiler2_hir::item_data::ClassData,
-) -> Vec<MergedFieldEntry> {
-    let mut out: Vec<MergedFieldEntry> = Vec::new();
-    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
-
-    for field in &class.fields {
-        let name = field.name.to_string();
-        if !seen.insert(name.clone()) {
-            continue;
-        }
-        out.push((
-            name,
-            field.type_ref,
-            field.attrs.clone(),
-            field.docstring.clone(),
-            class
-                .generic_params
-                .iter()
-                .map(|param| param.name.clone())
-                .collect(),
-            pkg_ns.to_vec(),
-        ));
-    }
-
-    out
-}
-
-/// Build a `TypeName` from a fully-qualified dotted path.
-///
-/// Emit always fully qualifies — `display_name` keeps the literal package
-/// prefix (`"user.Point"`, `"baml.http.Response"`, `"<vendor>.<…>"`). The
 /// Mint the head identity for the declaration named `fq_name`, rejecting a
 /// hash collision with any head already claimed.
 ///
@@ -1557,12 +696,6 @@ fn claim_type_tag(
         )));
     }
     Ok(tag)
-}
-
-/// codegen-output Python and the runtime see the same `<pkg>.<…>` form
-/// end-to-end. See `12a-namespace-rules.md §5` for the rationale.
-fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
-    baml_type::QualifiedTypeName::from_dotted_path(fq)
 }
 
 /// What one emit compiles: the roots of one program in source-root table
@@ -2686,7 +1819,7 @@ fn decompose_units_after_prefix<'db>(
         for (fi, file) in all_files.iter().enumerate() {
             let resolved = &runtime_lowering(db, &alias_caches, file_package(db, *file).root);
             for &impl_loc in baml_compiler2_hir::item_data::file_impls(db, *file) {
-                let Some(target) = impl_rule_target(db, *file, impl_loc, resolved) else {
+                let Some(target) = items::impl_rule_target(db, impl_loc, resolved) else {
                     continue;
                 };
                 let Some(&iface_idx) = iface_idx_by_tn.get(&target.iface_tn) else {
@@ -3511,10 +2644,13 @@ impl FlatRefs<'_> {
 }
 
 impl<'ctx> emit::CodegenRefs<'ctx> for FlatRefs<'ctx> {
-    fn class(
+    fn class<'a>(
         &mut self,
-        class: baml_compiler2_hir_ty::extern_loc::ClassRef<'ctx>,
-    ) -> Option<ObjectIndex> {
+        class: baml_compiler2_hir_ty::extern_loc::ClassRef<'a>,
+    ) -> Option<ObjectIndex>
+    where
+        'ctx: 'a,
+    {
         let name = baml_compiler2_mir::class_link_name(self.db, class);
         self.class_object_indices
             .get(&name)
@@ -3526,7 +2662,10 @@ impl<'ctx> emit::CodegenRefs<'ctx> for FlatRefs<'ctx> {
         Self::by_spellings(self.class_object_indices, tn).map(ObjectIndex::from_raw)
     }
 
-    fn enum_(&mut self, enum_ref: baml_compiler2_hir_ty::extern_loc::EnumRef<'ctx>) -> ObjectIndex {
+    fn enum_<'a>(&mut self, enum_ref: baml_compiler2_hir_ty::extern_loc::EnumRef<'a>) -> ObjectIndex
+    where
+        'ctx: 'a,
+    {
         let name = baml_compiler2_mir::enum_link_name(self.db, enum_ref);
         // TIR admitted the enum and MIR resolved it to a declaration, so this
         // compilation registered an object for it (a source enum — a mounted
@@ -3544,21 +2683,25 @@ impl<'ctx> emit::CodegenRefs<'ctx> for FlatRefs<'ctx> {
         Self::by_spellings(self.enum_object_indices, tn).map(ObjectIndex::from_raw)
     }
 
-    fn function(
+    fn function<'a>(
         &mut self,
-        func: baml_compiler2_hir_ty::extern_loc::FunctionRef<'ctx>,
-    ) -> Option<GlobalIndex> {
-        self.slots
-            .functions
-            .get(&func)
-            .copied()
-            .map(GlobalIndex::from_raw)
+        func: baml_compiler2_hir_ty::extern_loc::FunctionRef<'a>,
+    ) -> Option<GlobalIndex>
+    where
+        'ctx: 'a,
+    {
+        // The registry outlives the body; read it at the body's lifetime.
+        let functions: &HashMap<baml_compiler2_hir_ty::extern_loc::FunctionRef<'a>, usize> =
+            &self.slots.functions;
+        functions.get(&func).copied().map(GlobalIndex::from_raw)
     }
 
-    fn let_global(&mut self, binding: baml_compiler2_hir::loc::LetLoc<'ctx>) -> GlobalIndex {
-        self.slots
-            .lets
-            .get(&binding)
+    fn let_global<'a>(&mut self, binding: baml_compiler2_hir::loc::LetLoc<'a>) -> GlobalIndex
+    where
+        'ctx: 'a,
+    {
+        let lets: &HashMap<baml_compiler2_hir::loc::LetLoc<'a>, usize> = &self.slots.lets;
+        lets.get(&binding)
             .copied()
             .map(GlobalIndex::from_raw)
             .unwrap_or_else(|| {
@@ -3698,15 +2841,7 @@ fn generate_impl<'db>(
             let mut slot = 0usize;
             for file in builtin_files {
                 for &func_loc in file_functions(db, *file) {
-                    if baml_compiler2_hir::item_data::is_required_interface_method(db, func_loc) {
-                        continue;
-                    }
-                    if matches!(
-                        function_body(db, func_loc).as_ref(),
-                        baml_compiler2_hir::body::FunctionBody::Builtin(
-                            BuiltinKind::Intrinsic | BuiltinKind::AwaitAny
-                        )
-                    ) {
+                    if items::owns_no_slot(db, func_loc) {
                         continue;
                     }
                     let Some(ConstValue::Object(idx)) = base.globals.get(slot) else {
@@ -3818,16 +2953,13 @@ fn generate_impl<'db>(
 
     let interface_default_backfill = build_packages(
         db,
-        &world.roots,
         all_files,
         &alias_caches,
         &tables.interface_object_indices,
         &PackageBuildMetadata {
-            class_field_indices: &tables.classes,
             package_exports: &package_exports,
             placements: &placements,
             function_indices: &program.function_indices,
-            objects: &program.objects,
         },
         &mut tables.program_packages,
     );
@@ -3995,8 +3127,6 @@ fn seed_served_rows<'db>(
     note = "the flat whole-program emitter lane: dies with `decompose` when every lane is `link(emit_units)`"
 )]
 struct EmitTables {
-    /// Class fq-name → (field name → field index) (Pass 2).
-    classes: HashMap<String, HashMap<String, usize>>,
     /// Class fq-name → `ObjectPool` index (Pass 2).
     class_object_indices: HashMap<String, usize>,
     /// Collision detector for content-addressed head type tags: tag → fq-name
@@ -4058,13 +3188,6 @@ impl EmitTables {
             match obj {
                 Object::Class(class) => {
                     let fq = class.name.to_string();
-                    let field_indices = class
-                        .fields
-                        .iter()
-                        .enumerate()
-                        .map(|(i, f)| (f.name.clone(), i))
-                        .collect();
-                    tables.classes.insert(fq.clone(), field_indices);
                     tables.class_object_indices.insert(fq.clone(), idx);
                     tables.type_tags.insert(class.type_tag, fq);
                 }
@@ -4117,18 +3240,8 @@ fn spliced_throws_match(
     cache: &RuntimeLowering<'_>,
 ) -> Result<(), String> {
     for &func_loc in file_functions(db, file) {
-        // Required interface methods are signature-only items: nothing
-        // to compile or index (mirrors their pre-item invisibility here).
-        if baml_compiler2_hir::item_data::is_required_interface_method(db, func_loc) {
-            continue;
-        }
         // Mirror Pass 4's skip set: these never become callable objects.
-        if matches!(
-            function_body(db, func_loc).as_ref(),
-            baml_compiler2_hir::body::FunctionBody::Builtin(
-                BuiltinKind::Intrinsic | BuiltinKind::AwaitAny
-            )
-        ) {
+        if items::owns_no_slot(db, func_loc) {
             continue;
         }
         let fq = definition_link_name(db, Definition::Function(func_loc));
@@ -4173,7 +3286,6 @@ fn emit_file_group<'db>(
     skip_clean: Option<&HashSet<String>>,
 ) -> Result<(), LoweringError> {
     let EmitTables {
-        classes,
         class_object_indices,
         type_tags,
         enum_object_indices,
@@ -4206,30 +3318,10 @@ fn emit_file_group<'db>(
         // `served_row_of_stub`.
         let served = is_served_from_interface(db, file_package(db, *file).root);
         for &func_loc in file_functions(db, *file) {
-            // Required interface methods are signature-only items: nothing
-            // to compile or index (mirrors their pre-item invisibility here).
-            if baml_compiler2_hir::item_data::is_required_interface_method(db, func_loc) {
-                continue;
-            }
-            // Skip intrinsic and await-any functions — they are never called via
-            // a Call instruction (intrinsics lower to StatementKind::Intrinsic;
-            // `__await_any` lowers to a Terminator::AwaitAny). Pass 4 skips them
-            // too, so they must be skipped here as well or the Pass-1 indices
-            // desync from the program.globals array (off-by-one for everything
-            // after the skipped function).
-            //
-            // The kind is read from the span-free `function_body` firewall query
-            // rather than from `lower_function(..).kind`: `lower_function` copies
-            // the body's `Builtin(kind)` into `MirFunctionKind::Builtin(kind)`
-            // verbatim, and fully MIR-lowering every function here just to inspect
-            // that one field would double the total lowering work (Pass 4 lowers
-            // every function again).
-            if matches!(
-                function_body(db, func_loc).as_ref(),
-                baml_compiler2_hir::body::FunctionBody::Builtin(
-                    BuiltinKind::Intrinsic | BuiltinKind::AwaitAny
-                )
-            ) {
+            // Signature-only and never-called declarations own no slot; Pass 4
+            // skips the same set, so the Pass-1 indices and the
+            // `program.globals` array built there agree (see `owns_no_slot`).
+            if items::owns_no_slot(db, func_loc) {
                 continue;
             }
             let previous = slots.functions.insert(
@@ -4291,154 +3383,30 @@ fn emit_file_group<'db>(
     // tracked alongside so impl rules can point at them by index.
 
     // --- Pass 2: Build classes table ---
-    // Maps fully-qualified class name -> (field name -> field index).
-    // Also builds class_object_indices: class fq_name -> object index in program.objects.
+    // Pools every class of the group and registers its object index under
+    // the spellings codegen's tables are read by.
 
     for file in files {
         let pkg_info = file_package(db, *file);
-        let _pkg_items = baml_compiler2_hir::package::package_items(db, pkg_info.root);
         let cache = &runtime_lowering(db, alias_caches, pkg_info.root);
         for &class_loc in file_classes(db, *file) {
             let class = class_data(db, class_loc);
-            let store = &class.type_refs;
-            // Build the fully-qualified name ("user.MyClass" / "baml.ns.MyClass")
+            // The fully-qualified name ("user.MyClass" / "baml.ns.MyClass")
             // through the SAME renderer MIR uses in `class_type_tags_for_project`
             // (`QualifiedTypeName::render_dotted(false)`). The class type-tag is
             // derived from this string, so emit and MIR MUST produce
             // byte-identical output or `Switch`/`JumpTable` dispatch silently
             // mismatches; sharing the one renderer is what pins them together.
-            let fq_name = baml_type::QualifiedTypeName::new(
-                spelling(db).of(pkg_info.root).clone(),
-                pkg_info.namespace_path.clone(),
-                class.name.clone(),
-            )
-            .render_dotted(false);
-
-            let mut field_indices = HashMap::new();
-            let mut fields = Vec::new();
-            // Class-level generic params, used to resolve `T`-references in
-            // field type expressions to `TyTemplate::TypeArgRef(N)`.  When
-            // empty, `tir2_to_template` produces a `Concrete`-equivalent leaf
-            // for every leaf and `field_template == Concrete(field_type)`.
-            let class_generic_params =
-                baml_compiler2_hir_ty::lower::class_generic_frame(db, class_loc);
-            // BEP-044: collect only the class's actual runtime fields.
-            // Interface fields are typed views over class storage, and the
-            // validator enforces/link-checks them before emit.
-            let merged_fields =
-                collect_class_fields_with_implements(&pkg_info.namespace_path, class);
-            // The slot order pooled here is the order MIR bakes field indices
-            // against, read through `hir_ty::layout` — one declaration, one
-            // layout; pinned where both are in hand.
-            debug_assert!(
-                merged_fields.iter().map(|(name, ..)| name.as_str()).eq(
-                    baml_compiler2_hir_ty::layout::class_fields(
-                        db,
-                        baml_compiler2_hir::loc::DeclRef::Source(class_loc)
-                    )
-                    .iter()
-                    .map(|(name, _)| name.as_str())
-                ),
-                "emit's pooled field order for `{fq_name}` differs from the declaration's layout"
-            );
-            for (idx, (name, type_ref, attrs, docstring, _gen_params, _ns)) in
-                merged_fields.iter().enumerate()
-            {
-                field_indices.insert(name.clone(), idx);
-                let (field_type, field_template) = {
-                    let id = type_ref;
-                    {
-                        // Pass `class_generic_params` as the binding context so
-                        // `T`-references inside `class Container<T> { item: T }`
-                        // lower to `Tir2Ty::TypeVar("T")` rather than
-                        // `Tir2Ty::Error`.  This is the input both to the
-                        // erased-`Ty` (TypeVar→Unknown) used by codegen and to
-                        // the `TyTemplate` (TypeVar→TypeArgRef(N)) used by
-                        // typed runtime walking.
-                        let tir_ty = baml_compiler2_hir_ty::lower::reject_holes(
-                            &baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, *file)
-                                .with_frame(class_generic_params.clone())
-                                .lower_type_ref(store, *id),
-                        );
-                        let resolved_ty = cache.convert(&tir_ty);
-                        let template =
-                            bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
-                                &tir_ty,
-                                cache,
-                                &class_generic_params,
-                            ));
-                        (resolved_ty, template)
-                    }
-                };
-                fields.push(ClassField {
-                    name: name.clone(),
-                    field_type: bex_vm_types::anchor_runtime_ty(&field_type),
-                    field_template,
-                    description: attrs.schema.description.clone(),
-                    alias: attrs.schema.alias.clone(),
-                    docstring: docstring.clone(),
-                    // Source attributes are a fixed vocabulary, all of it
-                    // typed; `other` is the runtime class builder's.
-                    other: indexmap::IndexMap::new(),
-                    skip: attrs.skip,
-                    stream_done: attrs.stream_done,
-                    must_exist: attrs.must_exist,
-                    runtime_type: None,
-                });
-            }
-
+            let wire = cache.wire(&baml_compiler2_hir_ty::lower::qualify_def(
+                db,
+                Definition::Class(class_loc),
+                &class.name,
+            ));
+            let fq_name = wire.render_dotted(false);
             let type_tag = claim_type_tag(type_tags, &fq_name)?;
-
-            // BEP-042: does this class define a magic `cleanup(self) -> void`
-            // finalizer? This MUST stay in lockstep with the canonical
-            // `cleanup_guard::has_cleanup_shape` (which validates the AST and
-            // emits E0144): same shape — one `self` param with no default, no
-            // generics, `-> void` return, and no propagating `throws` — on the lowered
-            // HIR `Function`. The `throws` part reuses the shared helper; the rest
-            // is mirrored (the two share field types but not the struct).
-            //
-            // Only DIRECT class methods count — which is exactly what
-            // `class.methods` holds (an `implements`-block method is
-            // Impl-owned and never lands here): the AST guard injector and
-            // the `{class_fqn}.cleanup` GC resolution only cover direct
-            // methods.
-            //
-            // The shape mirrors `cleanup_guard::has_cleanup_shape` over the
-            // span-free `FunctionData`: `throws` is effectively-none when absent or
-            // `never`, and the return must be `void` — read off the function's own
-            // `TypeRefStore`.
-            let has_cleanup = class.methods.iter().any(|&method| {
-                use baml_compiler2_hir::type_ref::TypeRefKind;
-                let func = function_data(db, method);
-                let throws_effectively_none = func
-                    .throws
-                    .is_none_or(|id| matches!(func.type_refs.get(id).kind, TypeRefKind::Never));
-                let returns_void = func
-                    .return_type
-                    .is_some_and(|id| matches!(func.type_refs.get(id).kind, TypeRefKind::Void));
-                func.name.as_str() == baml_compiler2_ast::cleanup_guard::CLEANUP_METHOD
-                    && func.generic_params.is_empty()
-                    && func.params.len() == 1
-                    && func.params[0].name.as_str() == "self"
-                    && !func.params[0].has_default
-                    && throws_effectively_none
-                    && returns_void
-            });
-
-            let class_obj_idx = program.add_object(Object::Class(Box::new(Class {
-                name: bex_vm_types::DeclarationName::Declared(fq_to_type_name(&fq_name)),
-                fields,
-                description: class.attrs.schema.description.clone(),
-                alias: class.attrs.schema.alias.clone(),
-                docstring: class.docstring.clone(),
-                other: indexmap::IndexMap::new(),
-                stream_done: class.attrs.stream_done,
-                type_tag,
-                has_cleanup,
-                methods: indexmap::IndexMap::new(),
-                generic_param_count: class.generic_params.len(),
-                owner: bex_vm_types::HeapPtr::null(),
-            })));
+            let class_obj_idx = program.add_object(Object::Class(Box::new(
+                items::build_class_object(db, class_loc, cache, type_tag),
+            )));
             // Register with fully-qualified name for inter-package lookups.
             class_object_indices.insert(fq_name.clone(), class_obj_idx);
             program_packages
@@ -4452,82 +3420,44 @@ fn emit_file_group<'db>(
                     },
                     ObjectIndex::from_raw(class_obj_idx),
                 );
-            classes.insert(fq_name.clone(), field_indices);
             // MIR TypeName display for user-defined classes omits the local
             // package prefix in diagnostics/snapshots (`display_name`). Register
             // the same key so emit-time type checks can do a direct
             // display-name lookup.
-            let display_name = baml_type::QualifiedTypeName::new(
-                spelling(db).of(pkg_info.root).clone(),
-                pkg_info.namespace_path.clone(),
-                class.name.clone(),
-            )
-            .display_name()
-            .to_string();
             class_object_indices
-                .entry(display_name.clone())
+                .entry(wire.display_name().to_string())
                 .or_insert(class_obj_idx);
             // Also register with the short (unqualified) class name so that MIR aggregates,
             // which store only the local name (e.g., "Point" not "user.Point"), can find it.
-            let short_name = class.name.to_string();
             class_object_indices
-                .entry(short_name.clone())
+                .entry(class.name.to_string())
                 .or_insert(class_obj_idx);
-            // The display- and short-name maps must agree with the emitted
-            // runtime field indices used by the Class object above. Use a
-            // closure that rebuilds the same ordering.
-            let rebuild_indices = || {
-                let merged = collect_class_fields_with_implements(&pkg_info.namespace_path, class);
-                let mut m = HashMap::new();
-                for (idx, (name, _, _, _, _, _)) in merged.iter().enumerate() {
-                    m.insert(name.clone(), idx);
-                }
-                m
-            };
-            classes.entry(display_name).or_insert_with(rebuild_indices);
-            classes.entry(short_name).or_insert_with(rebuild_indices);
         }
     }
 
     // --- Pass 3: Build enums table ---
-    // Maps fully-qualified enum name -> (variant name -> variant index).
+    // Pools every enum of the group; `enum_object_indices` keys it by its
+    // fully-qualified spelling.
 
     for file in files {
         let pkg_info = file_package(db, *file);
+        let cache = &runtime_lowering(db, alias_caches, pkg_info.root);
         for &enum_loc in file_enums(db, *file) {
             let enm = enum_data(db, enum_loc);
             // Same single renderer as the class pass / MIR (see above): keep the
             // fully-qualified name construction identical everywhere so the two
             // never drift.
-            let fq_name = baml_type::QualifiedTypeName::new(
-                spelling(db).of(pkg_info.root).clone(),
-                pkg_info.namespace_path.clone(),
-                enm.name.clone(),
-            )
-            .render_dotted(false);
-
-            let mut variants = Vec::new();
-            for variant in &enm.variants {
-                variants.push(EnumVariant {
-                    name: variant.name.to_string(),
-                    description: variant.attrs.schema.description.clone(),
-                    alias: variant.attrs.schema.alias.clone(),
-                    docstring: variant.docstring.clone(),
-                    other: indexmap::IndexMap::new(),
-                    skip: variant.attrs.skip,
-                });
-            }
-
-            let enum_obj_idx = program.add_object(Object::Enum(Box::new(Enum {
-                name: bex_vm_types::DeclarationName::Declared(fq_to_type_name(&fq_name)),
-                type_tag: claim_type_tag(type_tags, &fq_name)?,
-                variants,
-                description: enm.attrs.schema.description.clone(),
-                alias: enm.attrs.schema.alias.clone(),
-                docstring: enm.docstring.clone(),
-                other: indexmap::IndexMap::new(),
-                owner: bex_vm_types::HeapPtr::null(),
-            })));
+            let fq_name = cache
+                .wire(&baml_compiler2_hir_ty::lower::qualify_def(
+                    db,
+                    Definition::Enum(enum_loc),
+                    &enm.name,
+                ))
+                .render_dotted(false);
+            let type_tag = claim_type_tag(type_tags, &fq_name)?;
+            let enum_obj_idx = program.add_object(Object::Enum(Box::new(
+                items::build_enum_object(db, enum_loc, cache, type_tag),
+            )));
             enum_object_indices.insert(fq_name, enum_obj_idx);
             program_packages
                 .entry(spelling(db).of(pkg_info.root).clone())
@@ -4564,7 +3494,8 @@ fn emit_file_group<'db>(
             // identity does not depend on which kind of declaration produced it.
             let iface_wire = resolved.wire(&iface_tn);
             let iface_tag = claim_type_tag(type_tags, &iface_wire.render_dotted(false))?;
-            let iface_def = build_interface_def(db, iface_loc, &iface_tn, iface_tag, resolved);
+            let iface_def =
+                items::build_interface_def(db, iface_loc, &iface_tn, iface_tag, resolved);
             let iface_obj_idx = program.add_object(Object::Interface(Box::new(iface_def)));
             interface_object_indices.insert(iface_wire, iface_obj_idx);
             program_packages
@@ -4625,28 +3556,10 @@ fn emit_file_group<'db>(
             if !cache.aliases.recursive.contains(&qtn) || !emitted_aliases.insert(qtn.clone()) {
                 continue;
             }
-            let tir_ty = &cache.aliases.aliases[&qtn];
-            let mir_ty = cache.convert(tir_ty);
-            // Aliases have no type-parameter list, so nothing is in scope for the
-            // right-hand side to reference — a non-realized alias body means
-            // lowering produced something impossible, not a program to carry.
-            let wire = spelling(db).wire(&qtn);
-            let definition = baml_type::RealizedTy::try_from(&mir_ty).map_err(|e| {
-                LoweringError::Internal(format!(
-                    "type alias `{}` lowered to a non-realized type (`{}`); aliases \
-                     cannot be generic, so this is a compiler bug",
-                    wire.render_dotted(false),
-                    e.variant,
-                ))
-            })?;
-            let fq_name = wire.render_dotted(false);
+            let wire = cache.wire(&qtn);
+            let type_tag = claim_type_tag(type_tags, &wire.render_dotted(false))?;
             let obj_idx = program.add_object(Object::TypeAlias(Box::new(
-                bex_vm_types::types::TypeAliasDef {
-                    name: wire.clone(),
-                    type_tag: claim_type_tag(type_tags, &fq_name)?,
-                    definition: bex_vm_types::anchor_realized(&definition),
-                    owner: bex_vm_types::HeapPtr::null(),
-                },
+                items::build_alias_object(db, alias_loc, cache, type_tag)?,
             )));
             program_packages
                 .entry(wire.package().clone())
@@ -4854,66 +3767,12 @@ fn emit_file_group<'db>(
                 continue;
             }
 
-            // Build bytecode: for each per-file $init_test_<N>, emit:
-            //   LoadVar 1              // push registry param (slot 1 = first arg; slot 0 is reserved for fn ref)
-            //   Call($init_test_<N>)   // call per-file init with registry
-            //   Pop 1                  // discard null return
-            let mut instructions = Vec::new();
-            let mut constants: Vec<bex_vm_types::ConstValue> = Vec::new();
-            for (_name, global_slot) in init_test_fns {
-                instructions.push(Instruction::LoadVar(1)); // slot 1 = first param ("registry")
-                instructions.push(Instruction::Call {
-                    callee: bex_vm_types::GlobalIndex::from_raw(*global_slot),
-                    ntypeargs: 0,
-                });
-                instructions.push(Instruction::Pop(1));
-            }
-            // Return null
-            let null_const_idx = constants.len();
-            constants.push(bex_vm_types::ConstValue::Null);
-            instructions.push(Instruction::LoadConst(null_const_idx));
-            instructions.push(Instruction::Return);
-
-            let bytecode = Bytecode {
-                instructions,
-                constants,
-                ..Bytecode::default()
-            };
-
-            // Synthesized function uses Span::fake() — same pattern as
-            // $init synthesis at compile_init_function (lib.rs:1085-1103).
-            let chainer_fn = Function {
-                name: "$init_test".to_string(),
-                source_file: String::new(), // synthesized, no source file
-                docstring: None,
-                declared_name: None,
-                arity: 1,
-                real_local_count: 1, // the registry param
-                bytecode,
-                kind: FunctionKind::Bytecode,
-                // local_names is indexed by slot number:
-                //   slot 0 = fn ref (reserved, empty string placeholder)
-                //   slot 1 = first param "registry"
-                local_names: vec![String::new(), "registry".to_string()],
-                debug_locals: Vec::new(),
-                span: Span::fake(),
-                return_type: bex_vm_types::TyTemplate::Null,
-                param_names: vec!["registry".to_string()],
-                param_types: vec![bex_vm_types::TyTemplate::Unknown], // type not needed for chainer dispatch
-                param_has_default: vec![false],
-                display_type_params: Vec::new(),
-                generic_param_bounds: Vec::new(),
-                display_param_types: vec!["unknown".to_string()],
-                display_return_type: "null".to_string(),
-                throws_type: bex_vm_types::TyTemplate::Never,
-                origin: FunctionOrigin::Internal,
-                is_interface_body: false,
-                native_key: None,
-                body_meta: None,
-                capture: FunctionCaptureProps::disabled(),
-                function_id: 0, // assigned at engine init (interim provider)
-                runtime_package: bex_vm_types::HeapPtr::null(),
-            };
+            let chainer_fn = items::build_init_test_chainer(
+                &init_test_fns
+                    .iter()
+                    .map(|(_, slot)| GlobalIndex::from_raw(*slot))
+                    .collect::<Vec<_>>(),
+            );
 
             // The local (workspace) package's chainer is unprefixed — the
             // same `Package::Local` classification the type layer uses.
@@ -5794,7 +4653,13 @@ fn emit_functions_serial<'db>(
                     let mut references = UnitReferences::default();
                     let empty_capture_types = Vec::new();
                     let empty_spawn_capture_indices = HashSet::new();
-                    let lambda_info = compile_lambdas_flat(
+                    let mut refs = FlatRefs {
+                        db,
+                        slots,
+                        class_object_indices,
+                        enum_object_indices,
+                    };
+                    let lambda_info = compile_lambdas(
                         db,
                         &mir.lambdas,
                         Some(body),
@@ -5802,9 +4667,7 @@ fn emit_functions_serial<'db>(
                         &empty_spawn_capture_indices,
                         &line_starts,
                         &source_file,
-                        slots,
-                        class_object_indices,
-                        enum_object_indices,
+                        &mut refs,
                         class_fields,
                         &mut program.objects,
                         0,
@@ -5815,12 +4678,6 @@ fn emit_functions_serial<'db>(
                         lambda_info.iter().map(|(idx, _)| *idx).collect();
                     let lambda_names_vec: Vec<String> =
                         lambda_info.iter().map(|(_, name)| name.clone()).collect();
-                    let mut refs = FlatRefs {
-                        db,
-                        slots,
-                        class_object_indices,
-                        enum_object_indices,
-                    };
                     let ctx = MirCodegenContext {
                         db,
                         refs: &mut refs,
@@ -6150,7 +5007,13 @@ fn emit_functions_parallel<'db>(
                 let mut references = UnitReferences::default();
                 let empty_capture_types = Vec::new();
                 let empty_spawn_capture_indices = HashSet::new();
-                let lambda_info = compile_lambdas_flat(
+                let mut refs = FlatRefs {
+                    db,
+                    slots,
+                    class_object_indices,
+                    enum_object_indices,
+                };
+                let lambda_info = compile_lambdas(
                     db,
                     &item.mir.lambdas,
                     Some(body),
@@ -6158,9 +5021,7 @@ fn emit_functions_parallel<'db>(
                     &empty_spawn_capture_indices,
                     &item.line_starts,
                     &item.source_file,
-                    slots,
-                    class_object_indices,
-                    enum_object_indices,
+                    &mut refs,
                     class_fields,
                     &mut fragment,
                     watermark,
@@ -6171,12 +5032,6 @@ fn emit_functions_parallel<'db>(
                     lambda_info.iter().map(|(idx, _)| *idx).collect();
                 let lambda_names_vec: Vec<String> =
                     lambda_info.iter().map(|(_, name)| name.clone()).collect();
-                let mut refs = FlatRefs {
-                    db,
-                    slots,
-                    class_object_indices,
-                    enum_object_indices,
-                };
                 let ctx = MirCodegenContext {
                     db,
                     refs: &mut refs,
@@ -6516,7 +5371,7 @@ fn register_compiled_function(
 /// only supports lambdas at one level of nesting inside a top-level function.
 /// Nested lambda support (lambdas inside lambdas) comes in a later phase.
 #[allow(clippy::too_many_arguments)]
-fn compile_lambdas_flat<'db>(
+fn compile_lambdas<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     lambdas: &[baml_compiler2_mir::MirFunction<'db>],
     parent_body: Option<&MirFunctionBody<'db>>,
@@ -6524,9 +5379,7 @@ fn compile_lambdas_flat<'db>(
     parent_spawn_capture_indices: &HashSet<usize>,
     line_starts: &[u32],
     source_file: &str,
-    slots: &GlobalSlots<'db>,
-    class_object_indices: &HashMap<String, usize>,
-    enum_object_indices: &HashMap<String, usize>,
+    refs: &mut (dyn emit::CodegenRefs<'db> + 'db),
     class_fields: &ClassFieldSnapshot,
     objects: &mut ObjectPool,
     objects_base: usize,
@@ -6551,7 +5404,7 @@ fn compile_lambdas_flat<'db>(
         let obj_idx = match &lambda.kind {
             MirFunctionKind::Bytecode(body) => {
                 // Recursively compile any nested lambdas within this lambda.
-                let nested_info = compile_lambdas_flat(
+                let nested_info = compile_lambdas(
                     db,
                     &lambda.lambdas,
                     Some(body),
@@ -6559,9 +5412,7 @@ fn compile_lambdas_flat<'db>(
                     &capture_info.spawn_capture_indices,
                     line_starts,
                     source_file,
-                    slots,
-                    class_object_indices,
-                    enum_object_indices,
+                    &mut *refs,
                     class_fields,
                     objects,
                     objects_base,
@@ -6572,15 +5423,9 @@ fn compile_lambdas_flat<'db>(
                     nested_info.iter().map(|(idx, _)| *idx).collect();
                 let nested_names: Vec<String> =
                     nested_info.iter().map(|(_, name)| name.clone()).collect();
-                let mut refs = FlatRefs {
-                    db,
-                    slots,
-                    class_object_indices,
-                    enum_object_indices,
-                };
                 let ctx = MirCodegenContext {
                     db,
-                    refs: &mut refs,
+                    refs: &mut *refs,
                     class_fields,
                     objects,
                     objects_base,
@@ -6635,199 +5480,54 @@ fn compile_init_function<'db>(
     file_references: &mut HashMap<String, UnitReferences>,
     opt: OptLevel,
 ) -> Result<Function, LoweringError> {
-    // Build the $init bytecode: a sequence of Call + StoreGlobal pairs.
-    let mut init_instructions: Vec<Instruction> = Vec::new();
-    let mut init_meta: Vec<bex_vm_types::bytecode::InstructionMeta> = Vec::new();
-    let mut init_constants: Vec<bex_vm_types::ConstValue> = Vec::new();
-
-    for (i, (fq_name, let_loc, file)) in sorted_bindings.iter().enumerate() {
-        // Find the global slot for this let binding.
+    let mut steps = Vec::with_capacity(sorted_bindings.len());
+    for (ordinal, (fq_name, let_loc, file)) in sorted_bindings.iter().enumerate() {
         let Some(&let_slot) = slots.lets.get(let_loc) else {
             return Err(LoweringError::Internal(format!(
                 "no global slot for let binding: {fq_name}"
             )));
         };
-
-        // Lower the let initializer through MIR → MirFunctionBody (+ any lambda children).
-        let maybe_body = lower_let_body(db, *let_loc, opt)
-            .map_err(|error| internal_lowering_error(db, *file, fq_name, &error))?;
-
-        let helper_fn = match maybe_body {
-            Some((mir_body, lambdas)) => {
-                let line_starts = build_line_starts(file.text(db));
-                // Compile lambda children first and collect their object indices.
-                let source_file = relative_source_path(db, *file);
-                // The helper's references are the `let`'s own dependencies:
-                // attribute them to the file that declares the `let`, not to
-                // the synthesized `$init` tail (which is rebuilt every
-                // compile and belongs to no file).
-                let mut references = UnitReferences::default();
-                let empty_capture_types = Vec::new();
-                let empty_spawn_capture_indices = HashSet::new();
-                let lambda_info = compile_lambdas_flat(
-                    db,
-                    &lambdas,
-                    Some(&mir_body),
-                    &empty_capture_types,
-                    &empty_spawn_capture_indices,
-                    &line_starts,
-                    &source_file,
-                    slots,
-                    class_object_indices,
-                    enum_object_indices,
-                    class_fields,
-                    &mut program.objects,
-                    0,
-                    &mut references,
-                    opt,
-                );
-                let lambda_let_obj_indices: Vec<usize> =
-                    lambda_info.iter().map(|(idx, _)| *idx).collect();
-                let lambda_let_names: Vec<String> =
-                    lambda_info.iter().map(|(_, name)| name.clone()).collect();
-                let mut refs = FlatRefs {
-                    db,
-                    slots,
-                    class_object_indices,
-                    enum_object_indices,
-                };
-                let ctx = MirCodegenContext {
-                    db,
-                    refs: &mut refs,
-                    class_fields,
-                    objects: &mut program.objects,
-                    objects_base: 0,
-                    lambda_object_indices: &lambda_let_obj_indices,
-                    lambda_names: &lambda_let_names,
-                    capture_types: &empty_capture_types,
-                    spawn_capture_indices: &empty_spawn_capture_indices,
-                    references: &mut references,
-                };
-                let mut helper = compile_mir_function(&mir_body, 0, None, &line_starts, ctx, opt);
-                helper.name = format!("$init_let_{i}");
-                helper.source_file.clone_from(&source_file);
-                helper.arity = 0;
-                if !source_file.starts_with("<builtin>/") {
-                    file_references
-                        .entry(source_file.clone())
-                        .or_default()
-                        .merge(references);
-                }
-                helper
-            }
-            None => {
-                // No initializer — helper just pushes Null.
-                let mut bytecode = Bytecode::default();
-                // LoadConst(0) → Null constant
-                bytecode.constants.push(bex_vm_types::ConstValue::Null);
-                bytecode.instructions.push(Instruction::LoadConst(0));
-                bytecode.instructions.push(Instruction::Return);
-                Function {
-                    name: format!("$init_let_{i}"),
-                    source_file: String::new(), // synthesized, no source file
-                    docstring: None,
-                    declared_name: None,
-                    arity: 0,
-                    real_local_count: 0,
-                    bytecode,
-                    kind: FunctionKind::Bytecode,
-                    local_names: Vec::new(),
-                    debug_locals: Vec::new(),
-                    span: baml_base::Span::fake(),
-                    return_type: bex_vm_types::TyTemplate::Null,
-                    param_names: Vec::new(),
-                    param_types: Vec::new(),
-                    param_has_default: Vec::new(),
-                    display_type_params: Vec::new(),
-                    generic_param_bounds: Vec::new(),
-                    display_param_types: Vec::new(),
-                    display_return_type: "null".to_string(),
-                    throws_type: bex_vm_types::TyTemplate::Never,
-                    origin: FunctionOrigin::Internal,
-                    is_interface_body: false,
-                    native_key: None,
-                    body_meta: None,
-                    capture: FunctionCaptureProps::disabled(),
-                    function_id: 0, // assigned at engine init (interim provider)
-                    runtime_package: bex_vm_types::HeapPtr::null(),
-                }
-            }
+        // The helper's references are the `let`'s own dependencies:
+        // attribute them to the file that declares the `let`, not to the
+        // synthesized `$init` tail (which is rebuilt every compile and
+        // belongs to no file).
+        let mut references = UnitReferences::default();
+        let mut refs = FlatRefs {
+            db,
+            slots,
+            class_object_indices,
+            enum_object_indices,
         };
-
-        // Register the helper function as an object and a global slot.
-        // This lets $init call it via Call(global_idx).
-        let helper_obj_idx = program.add_object(Object::Function(Box::new(helper_fn)));
-        let helper_global_slot = program.globals.len();
-        program.add_global(bex_vm_types::ConstValue::Object(ObjectIndex::from_raw(
-            helper_obj_idx,
-        )));
-
-        // Emit: Call(helper_global_slot) then StoreGlobal(let_slot)
-        init_instructions.push(Instruction::Call {
-            callee: bex_vm_types::GlobalIndex::from_raw(helper_global_slot),
-            ntypeargs: 0,
-        });
-        init_meta.push(bex_vm_types::bytecode::InstructionMeta {
-            operand: Some(bex_vm_types::bytecode::OperandMeta::Callable(format!(
-                "$init_let_{i}"
-            ))),
-        });
-        init_instructions.push(Instruction::StoreGlobal(
-            bex_vm_types::GlobalIndex::from_raw(let_slot),
-        ));
-        init_meta.push(bex_vm_types::bytecode::InstructionMeta {
-            operand: Some(bex_vm_types::bytecode::OperandMeta::Global(fq_name.clone())),
+        let helper = items::compile_let_helper(
+            db,
+            *let_loc,
+            ordinal,
+            &mut refs,
+            class_fields,
+            &mut program.objects,
+            0,
+            &mut references,
+            opt,
+        )?;
+        let source_file = relative_source_path(db, *file);
+        if !source_file.starts_with("<builtin>/") {
+            file_references
+                .entry(source_file)
+                .or_default()
+                .merge(references);
+        }
+        // Register the helper as an object and a global slot, so `$init` can
+        // `Call` it.
+        let helper_obj_idx = program.add_object(Object::Function(Box::new(helper)));
+        let helper_slot = program.globals.len();
+        program.add_global(ConstValue::Object(ObjectIndex::from_raw(helper_obj_idx)));
+        steps.push(items::InitStep {
+            helper: GlobalIndex::from_raw(helper_slot),
+            target: GlobalIndex::from_raw(let_slot),
+            target_name: fq_name.clone(),
         });
     }
-
-    // Final: push Null and Return (Return pops the top of the eval stack).
-    let null_const_idx = init_constants.len();
-    init_constants.push(bex_vm_types::ConstValue::Null);
-    init_instructions.push(Instruction::LoadConst(null_const_idx));
-    init_meta.push(bex_vm_types::bytecode::InstructionMeta {
-        operand: Some(bex_vm_types::bytecode::OperandMeta::Const(
-            "null".to_string(),
-        )),
-    });
-    init_instructions.push(Instruction::Return);
-    init_meta.push(bex_vm_types::bytecode::InstructionMeta::default());
-
-    let bytecode = Bytecode {
-        instructions: init_instructions,
-        constants: init_constants,
-        meta: init_meta,
-        ..Bytecode::default()
-    };
-
-    Ok(Function {
-        name: "$init".to_string(),
-        source_file: String::new(), // synthesized, no source file
-        docstring: None,
-        declared_name: None,
-        arity: 0,
-        real_local_count: 0,
-        bytecode,
-        kind: FunctionKind::Bytecode,
-        local_names: Vec::new(),
-        debug_locals: Vec::new(),
-        span: baml_base::Span::fake(),
-        return_type: bex_vm_types::TyTemplate::Null,
-        param_names: Vec::new(),
-        param_types: Vec::new(),
-        param_has_default: Vec::new(),
-        display_type_params: Vec::new(),
-        generic_param_bounds: Vec::new(),
-        display_param_types: Vec::new(),
-        display_return_type: "null".to_string(),
-        throws_type: bex_vm_types::TyTemplate::Never,
-        origin: FunctionOrigin::Internal,
-        is_interface_body: false,
-        native_key: None,
-        body_meta: None,
-        capture: FunctionCaptureProps::disabled(),
-        function_id: 0, // assigned at engine init (interim provider)
-        runtime_package: bex_vm_types::HeapPtr::null(),
-    })
+    Ok(items::build_init_function(&steps))
 }
 
 #[cfg(test)]
@@ -7073,7 +5773,7 @@ mod tests {
             db: &db,
             viewpoint: file_package(&db, file).root,
         };
-        build_interface_def(
+        items::build_interface_def(
             &db,
             iface_loc,
             &baml_type::DeclName::in_root(

@@ -291,6 +291,10 @@ enum PendingJumpTarget {
 /// ordinal for its own declarations and an import ordinal for everyone
 /// else's. Codegen sees no spelling either way.
 ///
+/// A resolver is built once for a whole pass and outlives every body it
+/// answers for, so it takes references of any lifetime it outlives (`'db:
+/// 'a`): a body's `'ctx` is always shorter than the resolver's `'db`.
+///
 /// A trait only while two emitters drive one codegen: the per-package
 /// resolver is the only implementation once the flat emitter is gone, and
 /// codegen then holds it directly.
@@ -302,7 +306,9 @@ pub(crate) trait CodegenRefs<'db> {
     /// emitter's stub-skipped mounted class (the `Null`-instance fall-open
     /// at [`StackifyCodegen::alloc_instance_of`]); the per-package resolver
     /// always answers, and the `Option` goes with the flat emitter.
-    fn class(&mut self, class: ClassRef<'db>) -> Option<ObjectIndex>;
+    fn class<'a>(&mut self, class: ClassRef<'a>) -> Option<ObjectIndex>
+    where
+        'db: 'a;
     /// The pooled object of the class `tn` spells — a type template's class
     /// head.
     #[deprecated(
@@ -310,7 +316,9 @@ pub(crate) trait CodegenRefs<'db> {
     )]
     fn class_named(&mut self, tn: &TypeName) -> Option<ObjectIndex>;
     /// The pooled object of `enum_ref`; an emitted enum always has one.
-    fn enum_(&mut self, enum_ref: EnumRef<'db>) -> ObjectIndex;
+    fn enum_<'a>(&mut self, enum_ref: EnumRef<'a>) -> ObjectIndex
+    where
+        'db: 'a;
     /// The pooled object of the enum `tn` spells.
     #[deprecated(
         note = "a by-name door into `enum_`: gone when the world's viewpoint resolver maps a type template's head to its declaration before codegen asks"
@@ -319,13 +327,17 @@ pub(crate) trait CodegenRefs<'db> {
     /// The global slot `func` links as, or `None` when nothing slots it: a
     /// required interface method, an intrinsic, or a served row no lane
     /// slots — the caller's law decides what that means.
-    fn function(&mut self, func: FunctionRef<'db>) -> Option<GlobalIndex>;
+    fn function<'a>(&mut self, func: FunctionRef<'a>) -> Option<GlobalIndex>
+    where
+        'db: 'a;
     /// The global slot of a top-level `let`.
-    fn let_global(&mut self, binding: LetLoc<'db>) -> GlobalIndex;
+    fn let_global<'a>(&mut self, binding: LetLoc<'a>) -> GlobalIndex
+    where
+        'db: 'a;
 }
 
 /// MIR to bytecode compiler with stackification.
-struct StackifyCodegen<'ctx, 'obj> {
+struct StackifyCodegen<'db: 'ctx, 'ctx, 'obj> {
     /// MIR body being compiled.
     body: &'ctx MirFunctionBody<'ctx>,
     /// Arity (parameter count) of the function being compiled.
@@ -335,8 +347,9 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// The database link names are rendered through at this boundary.
     db: &'ctx dyn baml_compiler2_mir::Db,
 
-    /// The resolution surface every declaration reference goes through.
-    refs: &'obj mut (dyn CodegenRefs<'ctx> + 'ctx),
+    /// The resolution surface every declaration reference goes through; it
+    /// outlives the body (`'db: 'ctx`).
+    refs: &'obj mut (dyn CodegenRefs<'db> + 'db),
     /// Read-only snapshot of pooled class field metadata (name + type, in
     /// field order), keyed by every name registered in `class_object_indices`.
     /// Field lookups resolve through this map instead of reading the object
@@ -442,7 +455,7 @@ struct StackifyCodegen<'ctx, 'obj> {
     references: &'obj mut crate::UnitReferences,
 }
 
-impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
+impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
     fn display_string_operand(value: &str) -> String {
         format!("{value:?}")
     }
@@ -453,7 +466,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         body: &'ctx MirFunctionBody<'ctx>,
         arity: usize,
         line_starts: &'ctx [u32],
-        ctx: MirCodegenContext<'ctx, 'obj>,
+        ctx: MirCodegenContext<'db, 'ctx, 'obj>,
         analysis: AnalysisResult<'ctx>,
     ) -> Self {
         // Pre-size the hot output buffers from the MIR's shape. `emit` pushes
@@ -3245,7 +3258,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 }
 
-impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
+impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_> {
     type Error = Infallible;
 
     fn pull_constant(&mut self, constant: &Constant<'ctx>) -> Result<(), Self::Error> {
@@ -3734,7 +3747,7 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
     }
 }
 
-impl<'ctx> StackifyCodegen<'ctx, '_> {
+impl<'db: 'ctx, 'ctx> StackifyCodegen<'db, 'ctx, '_> {
     /// `AllocInstance` for `class`: the `PullSink::alloc_class_instance`
     /// implementation above and the field-copy-set route share it.
     fn alloc_instance_of(&mut self, class: ClassRef<'ctx>, ntypeargs: u16) {
@@ -3768,7 +3781,7 @@ impl<'ctx> StackifyCodegen<'ctx, '_> {
     }
 }
 
-impl<'ctx> StackEffectSink<'ctx> for StackifyCodegen<'ctx, '_> {
+impl<'db: 'ctx, 'ctx> StackEffectSink<'ctx> for StackifyCodegen<'db, 'ctx, '_> {
     fn store_field_value(&mut self, field: usize, name: &str) -> Result<(), Self::Error> {
         let idx = self.emit(Instruction::StoreField(field));
         self.set_operand(idx, OperandMeta::Field(name.to_string()));
@@ -3837,12 +3850,12 @@ fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
 /// This is the main entry point for the optimized MIR-based code generation.
 /// The caller is responsible for filling in `Function::name` after this returns.
 /// If `mir_span` is provided, it is used to set `Function::span`.
-pub(crate) fn compile_mir_function<'mir>(
+pub(crate) fn compile_mir_function<'db: 'mir, 'mir>(
     body: &'mir MirFunctionBody,
     arity: usize,
     mir_span: Option<baml_base::Span>,
     line_starts: &'mir [u32],
-    ctx: MirCodegenContext<'mir, '_>,
+    ctx: MirCodegenContext<'db, 'mir, '_>,
     opt: crate::analysis::OptLevel,
 ) -> Function {
     // Run analysis

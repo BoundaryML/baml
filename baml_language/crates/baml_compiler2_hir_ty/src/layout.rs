@@ -561,6 +561,90 @@ pub fn interface_requires_closure<'db>(
     out
 }
 
+/// The interface's declared fields, by name, in declaration order — the
+/// index space every implementation's `field_links` and every
+/// `VirtualFieldAccess` are baked against (the order [`interface_member`]
+/// indexes).
+pub fn interface_field_names<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    interface: InterfaceRef<'db>,
+) -> Vec<Name> {
+    match interface {
+        DeclRef::Source(interface) => baml_compiler2_hir::item_data::interface_data(db, interface)
+            .fields
+            .iter()
+            .map(|field| field.name.clone())
+            .collect(),
+        DeclRef::External(interface) => extern_interface_row(db, interface)
+            .fields
+            .iter()
+            .map(|(name, ..)| name.clone())
+            .collect(),
+    }
+}
+
+/// An interface's generic frame and its declared associated-type members —
+/// what an implementation needs to bake every declared member, pinned by
+/// the block or completed from the default at the implementor.
+#[derive(Debug, Clone)]
+pub struct InterfaceAssocDecls {
+    /// The `Self` slot of the interface's frame.
+    pub self_param: ParamTy,
+    /// The interface's own declared generic parameters — the frame after
+    /// `Self` (associated types are not slots).
+    pub params: Vec<ParamTy>,
+    /// Every declared associated-type member in declaration order, with its
+    /// default (lowered once, with symbolic `Self`) where one is declared.
+    pub members: Vec<(Name, Option<Ty>)>,
+}
+
+/// `interface`'s frame and associated-type members, whichever lane declares
+/// it.
+pub fn interface_assoc_decls<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    interface: InterfaceRef<'db>,
+) -> InterfaceAssocDecls {
+    match interface {
+        DeclRef::Source(interface) => {
+            let frame = crate::lower::interface_frame(db, interface);
+            let self_param = frame
+                .first()
+                .unwrap_or_else(|| unreachable!("an interface frame starts with `Self`"))
+                .clone();
+            let members = baml_compiler2_hir::item_data::interface_data(db, interface)
+                .associated_types
+                .iter()
+                .map(|assoc| {
+                    let default = crate::interfaces::interface_associated_type_default(
+                        db,
+                        interface,
+                        assoc.name.clone(),
+                    )
+                    .map(|(ty, _declaration_site_diagnostics)| ty);
+                    (assoc.name.clone(), default)
+                })
+                .collect();
+            InterfaceAssocDecls {
+                self_param,
+                params: crate::lower::interface_declared_params(db, interface),
+                members,
+            }
+        }
+        DeclRef::External(interface) => {
+            let row = extern_interface_row(db, interface);
+            InterfaceAssocDecls {
+                self_param: row.self_param.clone(),
+                params: row.generic_params.to_vec(),
+                members: row
+                    .associated_types
+                    .iter()
+                    .map(|assoc| (assoc.name.clone(), assoc.default.clone()))
+                    .collect(),
+            }
+        }
+    }
+}
+
 // ── Alias value ──────────────────────────────────────────────────────────────
 
 /// The type `alias` stands for, resolved one level (an alias body may name
