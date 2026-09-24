@@ -17,8 +17,7 @@ describe('run-store-client', () => {
       client.openExecution('project', 'execution'),
       client.readTelemetryMedia('project', 'cid'),
     ];
-    const message =
-      'Profiling is unavailable: the old runtime tracing pipeline has been removed';
+    const message = 'Profiling is currently unavailable.';
     const rejected = pending.map((request) =>
       expect(request).rejects.toMatchObject({
         code: 'profilingUnavailable',

@@ -929,8 +929,7 @@ self.onmessage = async (event: MessageEvent) => {
     case 'readTelemetryMedia':
       postOut({
         code: 'profilingUnavailable',
-        message:
-          'Profiling is unavailable: the old runtime tracing pipeline has been removed',
+        message: 'Profiling is currently unavailable.',
         requestId: msg.requestId,
         type: 'commandError',
       });

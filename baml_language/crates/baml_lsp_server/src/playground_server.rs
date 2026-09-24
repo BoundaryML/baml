@@ -1969,7 +1969,7 @@ async fn handle_ws_in_message(
         | WsInMessage::OpenExecution { request_id, .. } => {
             send_ws(sink, &WsOutMessage::CommandError {
                 code: "profilingUnavailable".to_string(),
-                message: "Profiling is unavailable: the old runtime tracing pipeline has been removed".to_string(),
+                message: "Profiling is currently unavailable.".to_string(),
                 request_id,
             }).await;
         }

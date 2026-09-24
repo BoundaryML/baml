@@ -1078,7 +1078,7 @@ pattern:
     Full guide: `baml describe patterns`. Match-arm reference: `baml describe match`.
 
 query:
-  summary: "Runtime profiling and profile queries are unavailable."
+  summary: "SQL over the local profile store: `baml query \"SELECT …\"`."
   syntax: |
     baml query "SHOW TABLES"
     baml query "SELECT thread_id, status, total_errors, started_at FROM threads
@@ -1089,8 +1089,11 @@ query:
                 FROM calls WHERE args['customer']['age'] >= 30" --format jsonl
     baml query --schema --table calls
   details: |
-    Runtime profiling and profile queries are currently unavailable.
-    The catalog below describes the retired profile format.
+    Every `baml run`/`baml test` writes an execution profile under
+    `.baml/profiles-v1` (when profiling is enabled — `BAML_PROFILE=0`
+    disables it; `baml run -v` reports the profiler's status);
+    `baml query` binds that store into a fixed snapshot
+    and runs portable SQL (DataFusion dialect) over the versioned catalog.
     Relations (`_v1` names with unversioned aliases): `threads` (one row per
     logical thread; a row with `parent_thread_id IS NULL` is an execution and
     carries status/duration/totals), `call_path_stats` (population-true
