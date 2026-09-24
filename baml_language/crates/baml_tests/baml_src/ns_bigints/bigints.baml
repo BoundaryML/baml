@@ -1,10 +1,11 @@
 // Tests for the `bigint` builtin class (BEP-022).
 //
 // Converted from crates/baml_tests/tests/bigints.rs. Mirrors ns_ints/ints.baml:
-// pure expressions are asserted inline; tests that use locals (let bindings,
-// compound assignment, lambdas, generics with receivers) go through a top-level
-// helper function to avoid the test-block local-boxing VM bug. Value results
-// are compared with `assert.equal`; boolean results are asserted directly.
+// pure expressions are asserted inline; many tests with locals use top-level
+// helpers because of a historical test-block local-boxing bug. The bug no longer
+// reproduces (see ns_test_block_locals), so the indexed-assignment regressions
+// below exercise locals directly in test blocks. Value results are compared
+// with `assert.equal`; boolean results are asserted directly.
 //
 // Throw tests use the `{ <body>; baml.sys.panic("…") } catch (e) { <Type> => null }`
 // pattern. For throws raised by a *pure operator* (`/`, `%`, `<<`, `>>`, `*`),
