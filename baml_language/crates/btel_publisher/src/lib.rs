@@ -1,6 +1,6 @@
 //! Synchronous borrowed-record to Protobuf encoding and aggregate merging.
 //!
-//! One shared accumulation/sealing strategy precedes all destinations. The
+//! One accumulation/sealing strategy feeds the recording's sole sink. The
 //! engine drives this publisher on its chunk processor worker. Delivery is a
 //! completed-file callback; no storage or networking is implemented here.
 
@@ -38,13 +38,16 @@ struct ConversionBuffer {
     pending: PendingMessages,
     spans: encoding::EncodedSpans,
     aggregates: merge::PendingAggregates,
-    estimate: usize,
+    // Cached repeated-message bytes. Span bytes are already materialized.
+    pending_encoded_bytes: usize,
+}
+// Count each newly constructed metadata message once; never rescan the file.
+fn push_message<M: prost::Message>(output: &mut Vec<M>, bytes: &mut usize, tag: u32, value: M) {
+    *bytes = bytes.saturating_add(prost::encoding::message::encoded_len(tag, &value));
+    output.push(value);
 }
 impl ConversionBuffer {
     fn event(&mut self, thread: TelemetryId, event: proto::span_event::Event) {
-        self.estimate = self
-            .estimate
-            .saturating_add(btel_settings::publisher::SPAN_ESTIMATE_BYTES);
         self.spans.event(thread, event);
     }
 
@@ -56,37 +59,54 @@ impl ConversionBuffer {
         started: btel_types::ClockInstant,
         clock: &btel_clock::ClockEpoch,
     ) {
-        // These fixed-schema definitions have a bounded encoded size; no scan
-        // of the growing pending file is performed.
-        self.estimate = self
-            .estimate
-            .saturating_add(btel_settings::publisher::THREAD_ESTIMATE_BYTES);
-        self.pending
-            .definitions
-            .threads
-            .push(proto::ThreadDefinition {
+        push_message(
+            &mut self.pending.definitions.threads,
+            &mut self.pending_encoded_bytes,
+            3,
+            proto::ThreadDefinition {
                 thread_id: id.get(),
                 parent_id: parent.map(TelemetryId::get),
                 spawn_call_path_id: path.get(),
                 started_at_ticks: started.get(),
                 clock_epoch_id: clock.metadata().epoch.get(),
-            });
-        self.pending
-            .definitions
-            .clock_epochs
-            .push(clock::definition(clock.metadata()));
-        self.pending.clock_states.states.push(clock::state(clock));
+            },
+        );
+        push_message(
+            &mut self.pending.definitions.clock_epochs,
+            &mut self.pending_encoded_bytes,
+            4,
+            clock::definition(clock.metadata()),
+        );
+        push_message(
+            &mut self.pending.clock_states.states,
+            &mut self.pending_encoded_bytes,
+            1,
+            clock::state(clock),
+        );
     }
 }
 
 impl ConversionBuffer {
     fn aggregate(&mut self, delta: AggregateDelta) {
-        // One shared recording window before serialization and sink fan-out.
+        // One recording window before serialization and delivery to its sink.
         // Span callbacks do not enter this map: the processor already counted them.
-        self.estimate = self.estimate.saturating_add(
-            self.aggregates.observe(delta, &mut self.pending.aggregates)
-                * btel_settings::publisher::AGGREGATE_ESTIMATE_BYTES,
-        );
+        self.pending_encoded_bytes = self
+            .pending_encoded_bytes
+            .saturating_add(self.aggregates.observe(delta, &mut self.pending.aggregates));
+    }
+
+    fn is_empty(&self) -> bool {
+        self.pending_encoded_bytes == 0 && self.spans.is_empty()
+    }
+
+    fn encoded_size_hint(&self) -> usize {
+        if self.is_empty() {
+            return 0;
+        }
+        self.spans
+            .len()
+            .saturating_add(self.pending_encoded_bytes)
+            .saturating_add(btel_settings::publisher::FILE_ENVELOPE_BYTES)
     }
 
     fn span(&mut self, thread: TelemetryId, record: &SpanRecord<CaptureDeferred, CaptureDeferred>) {
@@ -156,13 +176,11 @@ impl ConversionBuffer {
                 callee,
                 edge,
             } => {
-                self.estimate = self
-                    .estimate
-                    .saturating_add(btel_settings::publisher::CALL_PATH_ESTIMATE_BYTES);
-                self.pending
-                    .definitions
-                    .call_paths
-                    .push(proto::CallPathDefinition {
+                push_message(
+                    &mut self.pending.definitions.call_paths,
+                    &mut self.pending_encoded_bytes,
+                    2,
+                    proto::CallPathDefinition {
                         call_path_id: call_path.get(),
                         thread_id: thread.get(),
                         parent_call_path_id: parent_call_path.get(),
@@ -175,19 +193,22 @@ impl ConversionBuffer {
                             }
                             btel_types::CallPathEdge::Spawn => proto::CallPathEdge::Spawn,
                         } as i32,
-                    });
+                    },
+                );
                 // No heap access here. A later metadata resolver may enrich these
                 // explicit placeholders; GC-collected functions may stay unnamed.
                 for function in [Some(*callee), *visible_caller].into_iter().flatten() {
-                    self.pending
-                        .definitions
-                        .functions
-                        .push(proto::FunctionDefinition {
+                    push_message(
+                        &mut self.pending.definitions.functions,
+                        &mut self.pending_encoded_bytes,
+                        1,
+                        proto::FunctionDefinition {
                             function_id: function.get(),
                             resolution: Some(proto::function_definition::Resolution::Unavailable(
                                 proto::MetadataUnavailable {},
                             )),
-                        });
+                        },
+                    );
                 }
             }
             SpanRecord::FunctionSpanCompletionOk {
@@ -663,9 +684,9 @@ impl ConversionBuffer {
 
     fn take(&mut self) -> PendingMessages {
         self.aggregates.drain_into(&mut self.pending.aggregates);
-        // Reuse a bounded warm map; its allocation remains charged while empty.
+        // Reuse warm map capacity, trimming oversized allocations after bursts.
         self.aggregates.trim();
-        self.estimate = 0;
+        self.pending_encoded_bytes = 0;
         std::mem::take(&mut self.pending)
     }
 }

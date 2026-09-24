@@ -1623,16 +1623,28 @@ impl BexEngine {
             None
         } else {
             #[cfg(not(target_arch = "wasm32"))]
-            let recording = recording.unwrap_or_default();
+            let recording_id = recording.as_ref().map(TelemetryRecording::id);
+            #[cfg(not(target_arch = "wasm32"))]
+            let (runtime, file_sink) = match recording {
+                Some(recording) => recording.start(source_snapshot_id.map(|id| id.0))?,
+                None => (
+                    btel_processor::TelemetryRuntime::new().map_err(|error| {
+                        EngineError::Other(format!("telemetry processor startup: {error}"))
+                    })?,
+                    None,
+                ),
+            };
             Some(EngineTelemetry {
                 policies: Arc::new(bex_vm::telemetry::TelemetryPolicies::with_mode(
                     telemetry_mode,
                 )),
                 clock: btel_clock::ClockRuntime::new(clock_mode),
                 #[cfg(not(target_arch = "wasm32"))]
-                recording_id: recording.id(),
+                recording_id,
                 #[cfg(not(target_arch = "wasm32"))]
-                runtime: recording.start(source_snapshot_id.map(|id| id.0))?,
+                runtime,
+                #[cfg(not(target_arch = "wasm32"))]
+                file_sink,
             })
         };
 
@@ -1652,7 +1664,7 @@ impl BexEngine {
                     Arc::clone(&dynamic_dispatch),
                     Arc::clone(&error_class_ptrs),
                     Arc::clone(&panic_class_ptrs),
-                    telemetry.as_ref().map(EngineTelemetry::new_root),
+                    telemetry.as_ref().and_then(EngineTelemetry::new_root),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -2479,13 +2491,20 @@ impl BexEngine {
             // hold a heap permit while waiting for the telemetry consumer.
             if let Some(telemetry) = &self.telemetry {
                 let runtime = Arc::clone(&telemetry.runtime);
+                let file_sink = telemetry.file_sink.clone();
                 // Once admission closes, cancellation must not reopen the engine.
                 // Transfer the shutdown guard to the joining task so it completes
                 // even if this awaiting caller is dropped.
                 match tokio::task::spawn_blocking(move || {
-                    let result = runtime.finish();
+                    let processing = runtime.finish();
+                    // Drain disk delivery even when processing failed. No VM or
+                    // heap permit survives here; cancellation cannot skip join.
+                    let delivery = file_sink.map_or(Ok(()), |sink| {
+                        sink.finish()
+                            .map_err(|error| btel_processor::RuntimeError(error.to_string()))
+                    });
                     shutdown.complete();
-                    result
+                    delivery.and(processing)
                 })
                 .await
                 {
@@ -3271,7 +3290,7 @@ impl BexEngine {
             Arc::clone(&self.dynamic_dispatch),
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
-            self.telemetry.as_ref().map(EngineTelemetry::new_root),
+            self.telemetry.as_ref().and_then(EngineTelemetry::new_root),
         );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
@@ -4814,13 +4833,9 @@ impl BexEngine {
             Arc::clone(&self.dynamic_dispatch),
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
-            self.telemetry.as_ref().map(|state| {
-                state.new_child(
-                    telemetry
-                        .as_ref()
-                        .expect("enabled parent supplies telemetry spawn context"),
-                )
-            }),
+            self.telemetry
+                .as_ref()
+                .and_then(|state| state.new_child(telemetry.as_ref())),
         );
         child_vm.thread_id = thread_id;
 

@@ -1,7 +1,7 @@
 //! Transport capacities and worker admission. Capacities count records/chunks.
 use std::num::NonZeroUsize;
 /// **Tune first.** Larger chunks amortize handoff only when they fill. Measure actual
-/// records/chunk, sparse polls and visibility latency; revalidate the publisher budget.
+/// records/chunk, sparse polls and visibility latency; check publisher batch size overshoot.
 pub const CHUNK_CAPACITY: NonZeroUsize = NonZeroUsize::new(256).unwrap();
 /// **Tune with processing limits.** Scratch capacity for removing/recycling ready chunks;
 /// raising it cannot override the processor/publisher batch cap.

@@ -163,31 +163,6 @@ fn spans_and_announcements_forward_without_parent_or_definition_lookups() {
 }
 
 #[test]
-fn immutable_bytes_are_shared_and_charged_until_the_last_destination_releases_them() {
-    let files = RefCell::new(Vec::new());
-    let (thread, function, path) = ids();
-    let mut p = RecordingPublisher::new(RecordingId::generate(), config(), |f| {
-        files.borrow_mut().push(f);
-    })
-    .unwrap();
-    metadata(&mut p, thread, function, path);
-    p.flush();
-    let local = files.borrow_mut().pop().unwrap();
-    let bcs = local.clone();
-    assert_eq!(local.bytes().as_ptr(), bcs.bytes().as_ptr());
-    assert_eq!(local.sequence(), bcs.sequence());
-    let charged = p.retained.used.load(Ordering::Acquire);
-    assert!(charged >= local.bytes().len());
-    p.config.max_resident_bytes = nz(p.used());
-    assert_eq!(p.check(1), Err(RecordingError::BudgetExceeded));
-    drop(local);
-    assert_eq!(p.retained.used.load(Ordering::Acquire), charged);
-    drop(bcs);
-    assert_eq!(p.retained.used.load(Ordering::Acquire), 0);
-    assert_eq!(p.check(1), Ok(()));
-}
-
-#[test]
 fn size_boundary_recycles_the_input_chunk_before_handoff() {
     let pool =
         ChunkPool::<btel_records::TimingRecord, SpanRecord<CaptureDeferred, CaptureDeferred>>::new(
@@ -379,106 +354,7 @@ fn thread_lifecycle_and_clock_observations_are_forwarded_without_deduplication()
 }
 
 #[test]
-fn failed_encoding_admission_keeps_the_unsealed_contributions_intact() {
-    let files = RefCell::new(Vec::new());
-    let (thread, function, path) = ids();
-    let mut p = RecordingPublisher::new(RecordingId::generate(), config(), |f| {
-        files.borrow_mut().push(f);
-    })
-    .unwrap();
-    metadata(&mut p, thread, function, path);
-    p.aggregate(delta(path));
-    p.config.max_resident_bytes = nz(p.used());
-    assert_eq!(p.seal(), Err(RecordingError::BudgetExceeded));
-    assert!(files.borrow().is_empty());
-    assert_eq!(p.buffer.pending.aggregates.entries[0].count, 2);
-    p.config.max_resident_bytes = RecordingConfig::default().max_resident_bytes;
-    p.seal().unwrap();
-    assert_eq!(
-        decode(&files.borrow()[0]).aggregates.unwrap().entries[0].count,
-        2
-    );
-}
-
-#[test]
-fn retained_output_exhaustion_fails_the_transport_instead_of_dropping_records() {
-    let pool =
-        ChunkPool::<btel_records::TimingRecord, SpanRecord<CaptureDeferred, CaptureDeferred>>::new(
-            Config {
-                chunk_capacity: nz(8),
-                timing_chunks: nz(1),
-                span_chunks: nz(1),
-                max_producers: nz(1),
-                preallocate: true,
-            },
-        )
-        .unwrap();
-    let files = RefCell::new(Vec::new());
-    let publisher = RecordingPublisher::new(
-        RecordingId::generate(),
-        RecordingConfig {
-            target_bytes: nz(1),
-            max_resident_bytes: nz(1024 * 1024),
-            ..RecordingConfig::default()
-        },
-        |file| files.borrow_mut().push(file),
-    )
-    .unwrap();
-    let mut processor = Processor::with_publisher(pool.bind_consumer().unwrap(), nz(8), publisher);
-    let mut producer = pool.register_producer().unwrap();
-    let thread = allocate_telemetry_id();
-    producer.write_timing(btel_records::TimingRecord::ThreadSelected { thread_id: thread });
-    producer.seal();
-    processor.process_available();
-    let failure = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        for id in 1..1024 {
-            producer.write_timing(btel_records::TimingRecord::FunctionTimingCompletion {
-                call_path: CallPathId::new_non_root(id).unwrap(),
-                entered_at: ClockInstant::from_ticks(1),
-                exited_at: ClockInstant::from_ticks(2),
-                await_time: AwaitDuration::ZERO,
-                outcome: InvocationOutcome::Ok,
-                reentry: false,
-            });
-            producer.seal();
-            processor.process_available();
-            processor.flush();
-        }
-    }))
-    .expect_err("bounded retained output must terminate");
-    assert_eq!(
-        failure.downcast_ref::<RecordingError>(),
-        Some(&RecordingError::BudgetExceeded)
-    );
-    let write_failure = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        producer.write_timing(btel_records::TimingRecord::ThreadSelected { thread_id: thread });
-    }))
-    .expect_err("producer must observe terminal transport failure");
-    assert!(write_failure.is::<bex_chunkedringbuffer::TransportFailed>());
-}
-
-#[test]
-fn warmed_aggregate_capacity_stays_charged_and_is_released_under_pressure() {
-    let mut p = RecordingPublisher::new(RecordingId::generate(), config(), |_| {}).unwrap();
-    for id in 1..512 {
-        p.aggregate(delta(CallPathId::new_non_root(id).unwrap()));
-    }
-    p.flush();
-    let allocation = p.buffer.aggregates.allocation_charge();
-    assert!(allocation > 0);
-    assert_eq!(p.used(), BASE_CHARGE + allocation);
-    p.aggregate(delta(CallPathId::new_non_root(1).unwrap()));
-    p.flush();
-    assert_eq!(p.buffer.aggregates.allocation_charge(), allocation);
-    let reserve = p.batch_charge(1);
-    p.config.max_resident_bytes = nz(p.used() + reserve - 1);
-    p.before_batch(1);
-    assert_eq!(p.buffer.aggregates.allocation_charge(), 0);
-    assert_eq!(p.used(), BASE_CHARGE);
-}
-
-#[test]
-fn encoded_sections_survive_growth_thread_switches_and_failed_sealing() {
+fn encoded_sections_survive_growth_and_thread_switches() {
     let files = RefCell::new(Vec::new());
     let mut p = RecordingPublisher::new(RecordingId::generate(), RecordingConfig::default(), |f| {
         files.borrow_mut().push(f);
@@ -507,11 +383,6 @@ fn encoded_sections_survive_growth_thread_switches_and_failed_sealing() {
         capacity > 4096,
         "exercise relocation with open message lengths"
     );
-    let charged = p.used();
-    p.config.max_resident_bytes = nz(charged);
-    assert_eq!(p.seal(), Err(RecordingError::BudgetExceeded));
-    assert!(files.borrow().is_empty());
-    p.config.max_resident_bytes = RecordingConfig::default().max_resident_bytes;
     p.span(
         a,
         &SpanRecord::FunctionSpanAnnouncement {
@@ -566,41 +437,6 @@ fn encoded_sections_survive_growth_thread_switches_and_failed_sealing() {
 }
 
 #[test]
-fn encoding_growth_is_admitted_before_consuming_a_span() {
-    let mut p = RecordingPublisher::new(RecordingId::generate(), config(), |_| {}).unwrap();
-    let (thread, _, path) = ids();
-    // Admission must cover the new allocation while the old one remains live.
-    p.buffer.spans.reserve(1024 * 1024);
-    p.config.max_resident_bytes = nz(p.used() + 1);
-    let bytes_before = p.buffer.spans.len();
-    assert_eq!(
-        p.reserve_encoding(2 * 1024 * 1024, 0),
-        Err(RecordingError::BudgetExceeded)
-    );
-    assert_eq!(p.buffer.spans.len(), bytes_before);
-    assert_eq!(p.buffer.spans.capacity(), 1024 * 1024);
-    // Growth alone fits, but it must leave room for the record being admitted.
-    p.config.max_resident_bytes = nz(p.used() + 2 * 1024 * 1024 + FILE_OVERHEAD);
-    assert_eq!(
-        p.reserve_encoding(2 * 1024 * 1024, CHUNK_HEADROOM_PER_RECORD),
-        Err(RecordingError::BudgetExceeded)
-    );
-    assert_eq!(p.buffer.spans.capacity(), 1024 * 1024);
-    p.config.max_resident_bytes = RecordingConfig::default().max_resident_bytes;
-    p.span(
-        thread,
-        &SpanRecord::FunctionSpanAnnouncement {
-            id: allocate_telemetry_id(),
-            parent_id: thread,
-            call_path: path,
-            entered_at: ClockInstant::from_ticks(1),
-            captured_inputs: None,
-        },
-    );
-    p.finish_recording().unwrap();
-}
-
-#[test]
 fn batch_reservation_is_lazy_and_sealing_invalidates_unused_credit() {
     let files = RefCell::new(Vec::new());
     let mut p = RecordingPublisher::new(RecordingId::generate(), RecordingConfig::default(), |f| {
@@ -628,7 +464,6 @@ fn batch_reservation_is_lazy_and_sealing_invalidates_unused_credit() {
     for _ in 1..8 {
         p.span(thread, &event);
         assert_eq!(p.buffer.spans.capacity(), capacity);
-        assert!(p.used() <= p.config.max_resident_bytes.get());
     }
     p.after_batch(8);
     p.before_batch(8);
@@ -662,4 +497,109 @@ fn batch_reservation_is_lazy_and_sealing_invalidates_unused_credit() {
             .len(),
         1
     );
+}
+
+#[test]
+fn size_hint_tracks_encoded_bodies_including_merge_growth_and_overflow() {
+    let files = RefCell::new(Vec::new());
+    let (thread, function, path) = ids();
+    let mut p = RecordingPublisher::new(RecordingId::generate(), config(), |f| {
+        files.borrow_mut().push(f);
+    })
+    .unwrap()
+    .with_source_snapshot(Some([255; 32]));
+    // Cover a span-only file, a mixed file and an aggregate-only file. In each,
+    // compare the cached hint with actual output, including protobuf wrappers.
+    for round in 0..3 {
+        if round == 1 {
+            metadata(&mut p, thread, function, path);
+        }
+        if round < 2 {
+            p.span(
+                thread,
+                &SpanRecord::FunctionSpanCompletionOk {
+                    id: allocate_telemetry_id(),
+                    parent_id: thread,
+                    call_path: path,
+                    entered_at: ClockInstant::from_ticks(u64::MAX),
+                    exited_at: ClockInstant::from_ticks(0),
+                    await_time: AwaitDuration::ZERO,
+                    captured_value: None,
+                },
+            );
+        }
+        if round > 0 {
+            // Cross a count varint boundary, introduce previously omitted
+            // fixed64 fields, then overflow: both aggregate rows must survive.
+            for (count, duration, io) in [(127, 0, 0), (1, 9, 7), (u64::MAX, 1, 0)] {
+                p.aggregate(AggregateDelta {
+                    node: CallPathNodeId::new(path, true),
+                    count,
+                    total_duration: ClockDuration::from_ticks(duration),
+                    total_io_duration: AwaitDuration::ZERO
+                        .saturating_add(ClockDuration::from_ticks(io)),
+                });
+            }
+        }
+        let hint = p.buffer.encoded_size_hint();
+        p.flush();
+        let files = files.borrow();
+        let file = files.last().unwrap();
+        assert!(hint >= file.bytes().len());
+        assert!(hint - file.bytes().len() <= settings::FILE_ENVELOPE_BYTES);
+        assert_eq!(p.buffer.encoded_size_hint(), 0);
+        if round > 0 {
+            let entries = decode(file).aggregates.unwrap().entries;
+            assert_eq!(entries.len(), 2);
+            assert_eq!(entries[0].count, 128);
+            assert_eq!(entries[0].total_duration_ticks, 9);
+            assert_eq!(entries[0].total_self_await_ticks, 7);
+            assert_eq!(entries[1].count, u64::MAX);
+        }
+    }
+}
+
+#[test]
+fn thread_heavy_files_seal_near_the_encoded_target() {
+    let files = RefCell::new(Vec::new());
+    let target = 64 * 1024;
+    let mut p = RecordingPublisher::new(
+        RecordingId::generate(),
+        RecordingConfig {
+            target_bytes: nz(target),
+            ..RecordingConfig::default()
+        },
+        |f| {
+            files.borrow_mut().push(f);
+        },
+    )
+    .unwrap();
+    let clock = ClockRuntime::new(ClockMode::Monotonic).start_run();
+    let mut bytes_before_last_batch = 0;
+    for _ in 0..1024 {
+        bytes_before_last_batch = p.buffer.encoded_size_hint();
+        for _ in 0..8 {
+            let thread = allocate_telemetry_id();
+            p.span(
+                thread,
+                &SpanRecord::ThreadSpanAnnouncement {
+                    id: thread,
+                    parent_id: None,
+                    spawn_call_path: CallPathId::ROOT,
+                    started_at: ClockInstant::from_ticks(1),
+                    clock: Arc::clone(&clock),
+                },
+            );
+        }
+        p.after_batch(8);
+        if !files.borrow().is_empty() {
+            break;
+        }
+    }
+    let files = files.borrow();
+    assert_eq!(files.len(), 1);
+    assert!(bytes_before_last_batch < target);
+    assert!(files[0].bytes().len() >= target - settings::FILE_ENVELOPE_BYTES);
+    // A full batch can cross the soft threshold, but not by a factor of four.
+    assert!(files[0].bytes().len() < target + 4096);
 }

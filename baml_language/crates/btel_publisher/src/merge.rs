@@ -1,4 +1,4 @@
-//! Second-level accumulation shared by all destinations of one recording.
+//! Second-level accumulation for one recording and its sole sink.
 //! Only processor deltas enter here; forwarded spans must not be counted again.
 
 use std::collections::hash_map::Entry;
@@ -57,27 +57,13 @@ impl Totals {
 }
 
 /// One map per publisher window, independent of sink count. The recording
-/// publisher charges new entries, overflow spills and retained map capacity.
+/// publisher tracks encoded-size changes, including integer growth and overflow spills.
 #[derive(Default)]
 pub(crate) struct PendingAggregates {
     nodes: FxHashMap<CallPathNodeId, Totals>,
 }
 
 impl PendingAggregates {
-    pub(crate) fn allocation_charge(&self) -> usize {
-        // Hash-table buckets, occupancy bytes, and spare capacity. The factor
-        // covers the table's load factor; BASE_CHARGE covers allocation headers.
-        self.nodes.capacity().saturating_mul(
-            settings::MAP_CHARGE_FACTOR
-                * (std::mem::size_of::<CallPathNodeId>()
-                    + std::mem::size_of::<Totals>()
-                    + settings::MAP_CONTROL_BYTES),
-        )
-    }
-    pub(crate) fn release_empty_capacity(&mut self) {
-        assert!(self.nodes.is_empty());
-        self.nodes = FxHashMap::default();
-    }
     pub(crate) fn trim(&mut self) {
         if self.nodes.capacity() > settings::MAP_SHRINK_THRESHOLD {
             self.nodes.shrink_to(settings::MAP_RETAINED_CAPACITY);
@@ -91,21 +77,28 @@ impl PendingAggregates {
     ) -> usize {
         match self.nodes.entry(delta.node) {
             Entry::Vacant(entry) => {
-                entry.insert(Totals::from_delta(delta));
-                1
+                let totals = Totals::from_delta(delta);
+                let bytes =
+                    prost::encoding::message::encoded_len(1, &totals.into_proto(delta.node));
+                entry.insert(totals);
+                bytes
             }
             Entry::Occupied(mut entry) => {
                 let current = entry.get_mut();
                 if let Some(merged) = current.checked_add(delta) {
+                    let before =
+                        prost::encoding::message::encoded_len(1, &current.into_proto(delta.node));
+                    let after =
+                        prost::encoding::message::encoded_len(1, &merged.into_proto(delta.node));
                     *current = merged;
-                    0
+                    after - before
                 } else {
                     // Preserve all three previous totals together, even when
                     // just one field overflows. Never flush from inside a span
                     // chunk callback or partially apply a failed addition.
                     let previous = std::mem::replace(current, Totals::from_delta(delta));
                     output.entries.push(previous.into_proto(delta.node));
-                    1
+                    prost::encoding::message::encoded_len(1, &current.into_proto(delta.node))
                 }
             }
         }

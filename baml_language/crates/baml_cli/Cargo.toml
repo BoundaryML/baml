@@ -34,6 +34,7 @@ bex_engine = { workspace = true }
 bex_events = { workspace = true }
 bex_project = { workspace = true }
 bex_vm_types = { workspace = true }
+btel_settings = { workspace = true }
 sdkgen_cpp = { workspace = true }
 sdkgen_csharp = { workspace = true }
 sdkgen_go = { workspace = true }
@@ -82,6 +83,7 @@ skip-integ-tests = [  ]
 
 [dev-dependencies]
 baml_tests = { workspace = true }
+btel_file = { workspace = true }
 insta = { workspace = true }
 tempfile = { workspace = true }
 

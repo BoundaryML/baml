@@ -1,14 +1,9 @@
-//! Exercise real VM → chunks → processor → encoded files, without a sink.
+//! Exercise real VM → chunks → processor → encoded files, through the sole local-file sink.
 #![cfg(not(target_arch = "wasm32"))]
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, TelemetryRecording};
-use btel_publisher::{CompletionFlags, RecordingConfig, SealedFile, proto};
-use prost::Message;
+use btel_publisher::{CompletionFlags, RecordingConfig, proto};
 use sys_native::SysOpsExt;
 
 fn context() -> bex_engine::FunctionCallContext {
@@ -38,14 +33,13 @@ async fn execution_reaches_encoded_files_and_shutdown_drains_once() {
         }
     }
     let source = program.source_content_hash;
-    let files = Arc::new(Mutex::new(Vec::<SealedFile>::new()));
-    let received = Arc::clone(&files);
-    let recording = TelemetryRecording::new(
+    let root = tempfile::tempdir().unwrap();
+    let recording = TelemetryRecording::local_files_in(
+        root.path(),
         RecordingConfig {
             flush_interval_duration: Duration::from_secs(3600),
             ..RecordingConfig::default()
         },
-        move |file| received.lock().unwrap().push(file),
     );
     let id = recording.id();
     let engine = Arc::new(
@@ -73,10 +67,12 @@ async fn execution_reaches_encoded_files_and_shutdown_drains_once() {
     .await
     .expect("shutdown must drain without a heap-permit deadlock");
     assert_eq!(engine.telemetry_result(), Some(Ok(())));
-    let count = files.lock().unwrap().len();
+    let directory = engine.telemetry_recording_directory().unwrap();
+    let files = btel_file::read_directory(directory).unwrap().files;
+    let count = files.len();
     engine.shutdown().await;
     assert_eq!(
-        files.lock().unwrap().len(),
+        btel_file::read_directory(directory).unwrap().files.len(),
         count,
         "shutdown must not replay output"
     );
@@ -85,8 +81,7 @@ async fn execution_reaches_encoded_files_and_shutdown_drains_once() {
     let mut completions = HashMap::<u64, u64>::new();
     let mut announcements = 0;
     let mut threads = HashMap::new();
-    for (index, sealed) in files.lock().unwrap().iter().enumerate() {
-        let file = proto::RecordingFile::decode(sealed.bytes()).unwrap();
+    for (index, file) in files.into_iter().enumerate() {
         assert_eq!(file.sequence, index as u64 + 1);
         let header = file.header.unwrap();
         assert_eq!(header.recording_id, id.as_bytes());
@@ -131,142 +126,6 @@ async fn execution_reaches_encoded_files_and_shutdown_drains_once() {
     );
 }
 
-#[tokio::test]
-async fn idle_deadline_delivers_without_another_vm_call() {
-    let program = baml_db::testing::compile_source("function main() -> int { 1 }");
-    let (send, mut receive) = tokio::sync::mpsc::unbounded_channel();
-    let recording = TelemetryRecording::new(
-        RecordingConfig {
-            flush_interval_duration: Duration::from_millis(10),
-            ..RecordingConfig::default()
-        },
-        move |file| send.send(file).unwrap(),
-    );
-    let engine = Arc::new(
-        BexEngine::new_with_telemetry_recording(
-            program,
-            Arc::new(sys_native::SysOps::native()),
-            vec![],
-            None,
-            btel_clock::ClockMode::Monotonic,
-            recording,
-        )
-        .unwrap(),
-    );
-    engine
-        .call_function("main", vec![], context(), true)
-        .await
-        .unwrap();
-    tokio::time::timeout(Duration::from_secs(5), async {
-        loop {
-            let sealed = receive.recv().await.unwrap();
-            let file = proto::RecordingFile::decode(sealed.bytes()).unwrap();
-            if file
-                .aggregates
-                .is_some_and(|batch| !batch.entries.is_empty())
-            {
-                break;
-            }
-        }
-    })
-    .await
-    .expect("idle processor must flush on its deadline");
-    engine.shutdown().await;
-    assert_eq!(engine.telemetry_result(), Some(Ok(())));
-}
-
-#[tokio::test]
-async fn delivery_failure_is_retained_after_shutdown() {
-    let program = baml_db::testing::compile_source("function main() -> int { 1 }");
-    let recording = TelemetryRecording::new(
-        RecordingConfig {
-            flush_interval_duration: Duration::from_secs(3600),
-            ..RecordingConfig::default()
-        },
-        |_| panic!("test delivery failed"),
-    );
-    let engine = Arc::new(
-        BexEngine::new_with_telemetry_recording(
-            program,
-            Arc::new(sys_native::SysOps::native()),
-            vec![],
-            None,
-            btel_clock::ClockMode::Monotonic,
-            recording,
-        )
-        .unwrap(),
-    );
-    engine
-        .call_function("main", vec![], context(), true)
-        .await
-        .unwrap();
-    engine.shutdown().await;
-    let failure = engine.telemetry_result().unwrap().unwrap_err();
-    assert!(failure.to_string().contains("test delivery failed"));
-    engine.shutdown().await;
-    assert_eq!(engine.telemetry_result(), Some(Err(failure)));
-}
-
-#[tokio::test]
-async fn cancelling_shutdown_does_not_reopen_a_closed_transport() {
-    let program = baml_db::testing::compile_source("function main() -> int { 1 }");
-    let (entered, entered_rx) = tokio::sync::oneshot::channel();
-    let mut entered = Some(entered);
-    let (release, released) = std::sync::mpsc::channel();
-    let recording = TelemetryRecording::new(
-        RecordingConfig {
-            flush_interval_duration: Duration::from_secs(3600),
-            ..RecordingConfig::default()
-        },
-        move |_| {
-            if let Some(entered) = entered.take() {
-                entered.send(()).unwrap();
-                // Deliberately stop delivery to cancel shutdown at the join boundary.
-                released.recv_timeout(Duration::from_secs(10)).unwrap();
-            }
-        },
-    );
-    let engine = Arc::new(
-        BexEngine::new_with_telemetry_recording(
-            program,
-            Arc::new(sys_native::SysOps::native()),
-            vec![],
-            None,
-            btel_clock::ClockMode::Monotonic,
-            recording,
-        )
-        .unwrap(),
-    );
-    engine
-        .call_function("main", vec![], context(), true)
-        .await
-        .unwrap();
-    let shutting_down = Arc::clone(&engine);
-    let task = tokio::spawn(async move {
-        shutting_down.shutdown().await;
-    });
-    tokio::time::timeout(Duration::from_secs(5), entered_rx)
-        .await
-        .unwrap()
-        .unwrap();
-    task.abort();
-    assert!(task.await.unwrap_err().is_cancelled());
-    release.send(()).unwrap();
-    tokio::time::timeout(Duration::from_secs(5), engine.shutdown())
-        .await
-        .unwrap();
-    assert_eq!(engine.telemetry_result(), Some(Ok(())));
-    // A subsequent call must reject normally, rather than reach a closed pool.
-    assert!(
-        engine
-            .call_function("main", vec![], context(), true)
-            .await
-            .is_err()
-    );
-}
-
-/// Separate processes exercise the real environment reader without racing other
-/// tests or changing process-global environment while runtime threads exist.
 #[test]
 fn telemetry_environment_modes() {
     const CHILD: &str = "BAML_TEST_TELEMETRY_MODE_CHILD";
@@ -305,15 +164,14 @@ fn telemetry_environment_modes() {
             function main() -> int { let child = spawn { leaf() }; leaf() + (await child) }
             function fail() -> int { baml.sys.exit(7); 1 }
         "#);
-        let files = Arc::new(Mutex::new(Vec::<SealedFile>::new()));
-        let received = Arc::clone(&files);
+        let root = tempfile::tempdir().unwrap();
         let result = BexEngine::new_with_telemetry_recording(program,
             Arc::new(sys_native::SysOps::native()), vec![], None,
             btel_clock::ClockMode::Monotonic,
-            TelemetryRecording::new(RecordingConfig::default(), move |file| received.lock().unwrap().push(file)));
+            TelemetryRecording::local_files_in(root.path(), RecordingConfig::default()));
         if mode == "invalid" {
             assert!(matches!(result, Err(bex_engine::EngineError::Other(message)) if message.contains("BAML_TELEMETRY")));
-            assert!(files.lock().unwrap().is_empty());
+            assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
             return;
         }
         let engine = Arc::new(result.unwrap());
@@ -325,13 +183,12 @@ fn telemetry_environment_modes() {
         if mode == "off" {
             assert_eq!(engine.telemetry_result(), None);
             assert!(engine.reset_telemetry_clock_after_restore().is_none());
-            assert!(files.lock().unwrap().is_empty());
+            assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
             return;
         }
         assert_eq!(engine.telemetry_result(), Some(Ok(())));
         let (mut aggregates, mut spans, mut announcements, mut threads) = (0, 0, 0, 0);
-        for sealed in files.lock().unwrap().iter() {
-            let file = proto::RecordingFile::decode(sealed.bytes()).unwrap();
+        for file in btel_file::read_directory(engine.telemetry_recording_directory().unwrap()).unwrap().files {
             if let Some(batch) = file.aggregates {
                 aggregates += batch.entries.iter().map(|row| row.count).sum::<u64>();
             }

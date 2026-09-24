@@ -12,8 +12,8 @@
 //!   practical experiments; measure throughput, memory and visibility latency.
 //! - **Measure first:** cache sizes, growth/shrink policy, spin counts, shards and
 //!   ID ranges. Changes can regress other workloads; use realistic traces.
-//! - **Sensitive:** clock tolerances, accounting charges and memory bounds.
-//!   Preserve their stated contracts; changing a charge is not a CPU optimization.
+//! - **Sensitive:** clock tolerances and bounded transport capacity.
+//!   Preserve their stated contracts when tuning.
 //! - **Fixed/derived:** encoding bounds, layouts, supported thread/cache topology,
 //!   and values calculated from other settings. Change the implementation or
 //!   source setting first; do not tune these independently.
@@ -57,9 +57,6 @@
 //! - [`transport::MIN_PRODUCER_SLOTS`] is admission capacity, not threads to spawn.
 //!   [`processor::THREADS_PER_RUNTIME`] describes the supported single-consumer
 //!   architecture; adding processors requires an ownership/routing design.
-//! - [`publisher::MAX_RESIDENT_BYTES`] bounds charged memory. Accounting estimates
-//!   and headroom are conservative admission policy, not actual per-event copy
-//!   costs. Lowering their charges does not eliminate allocations or encoding.
 //! - [`clock::DEFAULT_MODE`] selects a backend and can change read cost. Calibration
 //!   intervals/error thresholds govern startup and clock validity; relaxing them
 //!   does not accelerate each raw read. Validation cadence runs at boundaries.
@@ -75,6 +72,7 @@ pub mod clock;
 pub mod encoding;
 pub mod identity;
 pub mod layout;
+pub mod local_files;
 pub mod mode;
 pub mod policy;
 pub mod processor;

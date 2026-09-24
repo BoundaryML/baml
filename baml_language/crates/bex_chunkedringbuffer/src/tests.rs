@@ -606,3 +606,54 @@ fn expired_consumer_deadline_does_not_wait_for_a_live_producer() {
         assert!(reader.drain(nz(8), |_, _| {}, |_, _| {}).complete);
     });
 }
+
+#[test]
+fn disable_releases_capacity_waits_and_discards_private_and_ready_payloads() {
+    model(|| {
+        let pool = ChunkPool::<usize, usize>::new(config(1, 1)).unwrap();
+        let mut consumer = pool.bind_consumer().unwrap();
+        let mut producer = pool.register_producer().unwrap();
+        producer.write_span(1); // The only span allocation is ready, not free.
+        let copy = pool.clone();
+        let stop = thread::spawn(move || copy.disable());
+        producer.write_span(2); // May spin; disabling must release it without panic.
+        producer.write_timing(3);
+        drop(producer);
+        stop.join().unwrap();
+        assert!(pool.is_disabled());
+        assert!(!pool.is_failed());
+        assert!(matches!(pool.reserve_worker(), Err(SetupError::Disabled)));
+        assert!(
+            consumer
+                .drain(nz(8), |_, _| unreachable!(), |_, _| unreachable!())
+                .complete
+        );
+        assert_eq!(pool.stats().ready_chunks, 0);
+        assert_eq!(pool.stats().free_chunks, 0);
+        assert_eq!(pool.stats().active_producers, 0);
+    });
+}
+
+#[test]
+fn disabling_wakes_an_idle_consumer_without_waiting_for_producers() {
+    model(|| {
+        let pool = ChunkPool::<usize, usize>::new(config(4, 1)).unwrap();
+        let mut producer = pool.register_producer().unwrap();
+        producer.write_span(1); // Private, never published after disable.
+        let copy = pool.clone();
+        let reader = thread::spawn(move || {
+            let mut consumer = copy.bind_consumer().unwrap();
+            consumer.wait();
+            assert!(
+                consumer
+                    .drain(nz(8), |_, _| unreachable!(), |_, _| unreachable!())
+                    .complete
+            );
+        });
+        pool.disable();
+        reader.join().unwrap();
+        drop(producer);
+        assert_eq!(pool.stats().ready_chunks, 0);
+        assert!(!pool.is_failed());
+    });
+}

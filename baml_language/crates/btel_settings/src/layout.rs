@@ -17,7 +17,7 @@ pub const SPAN_RECORD_MAX_BYTES: usize = 56;
 /// **Checked layout.** Determines combining-cache slot footprint; review together with its
 /// representation and measurements.
 pub const AGGREGATE_DELTA_BYTES: usize = 32;
-/// **Checked layout.** Second-level totals footprint used in memory accounting.
+/// **Checked layout.** Second-level totals footprint in the publisher map.
 pub const AGGREGATE_TOTALS_BYTES: usize = 24;
 /// **Checked layout.** Per-producer context footprint; review worker-capacity memory when
 /// changing.

@@ -16,7 +16,7 @@ use bex_engine::{
     FunctionCallContextBuilder, logger::TraceLogger,
 };
 use clap::{Args, FromArgMatches};
-use sys_native::{CallId, SysOpsExt};
+use sys_native::CallId;
 
 use crate::{
     bytecode_cache::CacheContext,
@@ -322,12 +322,7 @@ impl TestArgs {
         let cached_engine = cached_program.and_then(|program| {
             // Bytecode-cache hit: the Program carries the in-VM test registry,
             // so the database (typecheck, HIR discovery, emit) is skipped.
-            match BexEngine::new_with_runtime_compiler(
-                program,
-                Arc::new(sys_native::SysOps::native()),
-                Vec::new(),
-                bex_project::runtime_compiler(),
-            ) {
+            match crate::runtime_telemetry::create_engine(program, Vec::new(), session.root()) {
                 Ok(engine) => Some(Arc::new(engine)),
                 Err(error) => {
                     crate::bytecode_cache::cache_debug(format_args!(
@@ -411,11 +406,10 @@ impl TestArgs {
             ));
 
             Arc::new(
-                BexEngine::new_with_runtime_compiler(
+                crate::runtime_telemetry::create_engine(
                     compiled.program,
-                    Arc::new(sys_native::SysOps::native()),
                     Vec::new(),
-                    bex_project::runtime_compiler(),
+                    session.root(),
                 )
                 .map_err(|e| anyhow!("failed to create engine: {e:?}"))?,
             )
