@@ -760,8 +760,8 @@ impl io::IoNamespaceHost for WasmHost {
 /// a value violating the declared `T` surfaces as a catchable
 /// `root.errors.HostCallable` rather than corrupting the VM. Class *field
 /// types* are validated engine-side where the resolved schema is available;
-/// this guard covers scalar discrimination (`int` ≠ `float`), container
-/// recursion, enum identity, and class-name identity.
+/// this guard covers scalar discrimination (including contextual JavaScript
+/// `number` resolution), container recursion, enum identity, and class-name identity.
 ///
 /// When `install_guard` is true, `call_id` owns the in-flight entry installed
 /// by the caller, and a [`WasmInflightGuard`] for it is moved into the async

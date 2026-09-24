@@ -32,6 +32,11 @@ pub fn external_to_outbound(
         // `LowerHex` impl handles the leading-minus sign convention.
         BexExternalValue::Bigint(bi) => Some(BamlValueVariant::BigintValue(format!("{bi:x}"))),
         BexExternalValue::Float(f) => Some(BamlValueVariant::FloatValue(*f)),
+        BexExternalValue::JsNumber(_) => {
+            return Err(CtypesError::InternalError(
+                "JavaScript number reached outbound encoding before type resolution".to_string(),
+            ));
+        }
         BexExternalValue::Bool(b) => Some(BamlValueVariant::BoolValue(*b)),
         BexExternalValue::String(s) => Some(BamlValueVariant::StringValue(s.to_string())),
         BexExternalValue::Array {
@@ -241,6 +246,11 @@ pub(crate) fn artifact_safe_external_to_outbound(
         BexExternalValue::Int(i) => Some(BamlValueVariant::IntValue(*i)),
         BexExternalValue::Bigint(bi) => Some(BamlValueVariant::BigintValue(format!("{bi:x}"))),
         BexExternalValue::Float(f) => Some(BamlValueVariant::FloatValue(*f)),
+        BexExternalValue::JsNumber(_) => {
+            return Err(CtypesError::InternalError(
+                "JavaScript number reached outbound encoding before type resolution".to_string(),
+            ));
+        }
         BexExternalValue::Bool(b) => Some(BamlValueVariant::BoolValue(*b)),
         BexExternalValue::String(s) => Some(BamlValueVariant::StringValue(s.to_string())),
         BexExternalValue::Array {

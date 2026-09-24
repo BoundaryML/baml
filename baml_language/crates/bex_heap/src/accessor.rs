@@ -450,6 +450,7 @@ fn owned_inner(
             BexExternalValue::Int(i) => Ok(BexExternalValue::Int(*i)),
             BexExternalValue::Bigint(b) => Ok(BexExternalValue::Bigint(b.clone())),
             BexExternalValue::Float(f) => Ok(BexExternalValue::Float(*f)),
+            BexExternalValue::JsNumber(f) => Ok(BexExternalValue::JsNumber(*f)),
             BexExternalValue::Bool(b) => Ok(BexExternalValue::Bool(*b)),
             BexExternalValue::String(s) => Ok(BexExternalValue::String(s.clone())),
             BexExternalValue::Array {

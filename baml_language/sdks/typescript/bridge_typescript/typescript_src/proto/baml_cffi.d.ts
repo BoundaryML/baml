@@ -66,6 +66,9 @@ export namespace baml_bridge {
 
                 /** InboundValue promptAstValue */
                 promptAstValue?: (baml_bridge.cffi.v1.IBamlValuePromptAst|null);
+
+                /** InboundValue jsNumberValue */
+                jsNumberValue?: (number|null);
             }
 
             /** Represents an InboundValue. */
@@ -125,8 +128,11 @@ export namespace baml_bridge {
                 /** InboundValue promptAstValue. */
                 public promptAstValue?: (baml_bridge.cffi.v1.IBamlValuePromptAst|null);
 
+                /** InboundValue jsNumberValue. */
+                public jsNumberValue?: (number|null);
+
                 /** InboundValue value. */
-                public value?: ("stringValue"|"intValue"|"floatValue"|"boolValue"|"listValue"|"mapValue"|"classValue"|"enumValue"|"handle"|"uint8arrayValue"|"bigintValue"|"tyValue"|"tyDefValue"|"mediaValue"|"promptAstValue");
+                public value?: ("stringValue"|"intValue"|"floatValue"|"boolValue"|"listValue"|"mapValue"|"classValue"|"enumValue"|"handle"|"uint8arrayValue"|"bigintValue"|"tyValue"|"tyDefValue"|"mediaValue"|"promptAstValue"|"jsNumberValue");
 
                 /**
                  * Creates a new InboundValue instance using the specified properties.

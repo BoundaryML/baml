@@ -1390,6 +1390,7 @@ class InboundValue final : public ::google::protobuf::MessageLite
     kTyDefValue = 14,
     kMediaValue = 15,
     kPromptAstValue = 16,
+    kJsNumberValue = 17,
     VALUE_NOT_SET = 0,
   };
   static constexpr int kIndexInFileMessages = 0;
@@ -1493,6 +1494,7 @@ class InboundValue final : public ::google::protobuf::MessageLite
     kTyDefValueFieldNumber = 14,
     kMediaValueFieldNumber = 15,
     kPromptAstValueFieldNumber = 16,
+    kJsNumberValueFieldNumber = 17,
   };
   // .baml_bridge.cffi.v1.BamlTy value_type = 1;
   bool has_value_type() const;
@@ -1761,6 +1763,17 @@ class InboundValue final : public ::google::protobuf::MessageLite
   ::baml_bridge::cffi::v1::BamlValuePromptAst* PROTOBUF_NONNULL _internal_mutable_prompt_ast_value();
 
   public:
+  // double js_number_value = 17;
+  bool has_js_number_value() const;
+  void clear_js_number_value() ;
+  double js_number_value() const;
+  void set_js_number_value(double value);
+
+  private:
+  double _internal_js_number_value() const;
+  void _internal_set_js_number_value(double value);
+
+  public:
   void clear_value();
   ValueCase value_case() const;
   // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.InboundValue)
@@ -1781,10 +1794,11 @@ class InboundValue final : public ::google::protobuf::MessageLite
   void set_has_ty_def_value();
   void set_has_media_value();
   void set_has_prompt_ast_value();
+  void set_has_js_number_value();
   inline bool has_value() const;
   inline void clear_has_value();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<0, 16,
+  static const ::google::protobuf::internal::TcParseTable<0, 17,
                                    10, 81,
                                    2>
       _table_;
@@ -1825,6 +1839,7 @@ class InboundValue final : public ::google::protobuf::MessageLite
       ::google::protobuf::MessageLite* PROTOBUF_NULLABLE ty_def_value_;
       ::google::protobuf::MessageLite* PROTOBUF_NULLABLE media_value_;
       ::google::protobuf::MessageLite* PROTOBUF_NULLABLE prompt_ast_value_;
+      double js_number_value_;
     } value_;
     ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -3460,6 +3475,39 @@ inline ::baml_bridge::cffi::v1::BamlValuePromptAst* PROTOBUF_NONNULL InboundValu
   ::baml_bridge::cffi::v1::BamlValuePromptAst* _msg = _internal_mutable_prompt_ast_value();
   // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.InboundValue.prompt_ast_value)
   return _msg;
+}
+
+// double js_number_value = 17;
+inline bool InboundValue::has_js_number_value() const {
+  return value_case() == kJsNumberValue;
+}
+inline void InboundValue::set_has_js_number_value() {
+  _impl_._oneof_case_[0] = kJsNumberValue;
+}
+inline void InboundValue::clear_js_number_value() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value_case() == kJsNumberValue) {
+    _impl_.value_.js_number_value_ = 0;
+    clear_has_value();
+  }
+}
+inline double InboundValue::js_number_value() const {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.InboundValue.js_number_value)
+  return _internal_js_number_value();
+}
+inline void InboundValue::set_js_number_value(double value) {
+  if (value_case() != kJsNumberValue) {
+    clear_value();
+    set_has_js_number_value();
+  }
+  _impl_.value_.js_number_value_ = value;
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.InboundValue.js_number_value)
+}
+inline double InboundValue::_internal_js_number_value() const {
+  if (value_case() == kJsNumberValue) {
+    return _impl_.value_.js_number_value_;
+  }
+  return 0;
 }
 
 inline bool InboundValue::has_value() const {
