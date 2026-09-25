@@ -108,6 +108,8 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
     fn alloc_cycle(heap: &Arc<BexHeap>) -> (Tlab, bex_vm_types::HeapPtr, bex_vm_types::HeapPtr) {
         let mut tlab = Tlab::new(Arc::clone(heap));
         let package = Package {
+            name: Name::default(),
+            edges: IndexMap::new(),
             exported_names: Vec::new(),
             classes: IndexMap::new(),
             enums: IndexMap::new(),
@@ -126,7 +128,6 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
                 type_values: IndexMap::new(),
                 diagnostics: Vec::new(),
                 dependencies: Box::new([]),
-                dependency_names: IndexMap::new(),
                 init: None,
                 initialized: true,
             })),
@@ -1037,6 +1038,8 @@ fn test_gen1_container_acquires_young_ref_survives_minor_gc_chain() {
 /// A helper: an otherwise-empty static-shaped package.
 fn empty_package() -> Package {
     Package {
+        name: Name::default(),
+        edges: IndexMap::new(),
         exported_names: Vec::new(),
         classes: IndexMap::new(),
         enums: IndexMap::new(),
@@ -1102,6 +1105,48 @@ fn package_type_aliases_are_traced_and_forwarded() {
         panic!("type_aliases entry does not point at a TypeAlias")
     };
     assert_eq!(alias.name, alias_name);
+}
+
+/// A package's edge table points at the packages it reaches; for a runtime
+/// package those move. The collector must keep them alive through the table
+/// alone and repoint each entry when its target moves.
+#[test]
+fn package_edges_are_traced_and_forwarded() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+    let mut dependency = empty_package();
+    dependency.name = Name::new("lib");
+    let dependency_ptr = tlab.alloc(Object::Package(Box::new(dependency)));
+    let mut package = empty_package();
+    package.edges.insert(Name::new("gadgets"), dependency_ptr);
+    let package_ptr = tlab.alloc(Object::Package(Box::new(package)));
+
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&[package_ptr], CollectionLevel::Minor) };
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
+    let (stats, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
+
+    assert_eq!(
+        stats.live_count, 2,
+        "package and dependency should both survive"
+    );
+    let Object::Package(package) = (unsafe { roots[0].get() }) else {
+        panic!("root was not the package")
+    };
+    let forwarded = *package
+        .edges
+        .get(&Name::new("gadgets"))
+        .expect("edge entry was lost");
+    assert_ne!(
+        forwarded, dependency_ptr,
+        "the dependency moved, so the edge must be repointed"
+    );
+    let Object::Package(dependency) = (unsafe { forwarded.get() }) else {
+        panic!("edge does not point at a package")
+    };
+    assert_eq!(dependency.name, Name::new("lib"));
 }
 
 /// A field's exact-operand `TypeValue` reaches its declaration through a head,

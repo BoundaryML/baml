@@ -209,7 +209,7 @@ fn import_of_one_kind_never_binds_an_export_of_another() {
     consumer.dependencies.push(direct("app", None));
     consumer.global_imports.push(import(1, free_fn("Foo")));
     let set = LinkSet {
-        root: Some(LinkPackageId(1)),
+        root: LinkPackageId(1),
         packages: vec![
             package("app", vec![], &provider, &record),
             package("user", vec![("app", 0)], &consumer, &record),
@@ -231,7 +231,7 @@ fn duplicate_export_is_refused() {
     unit.code.push(func("user.f", vec![Instruction::Return]));
     unit.exports.objects.push((free_fn("f"), LocalRef::Code(1)));
     let set = LinkSet {
-        root: Some(LinkPackageId(0)),
+        root: LinkPackageId(0),
         packages: vec![package("user", vec![], &unit, &record)],
     };
     assert_eq!(
@@ -244,51 +244,72 @@ fn duplicate_export_is_refused() {
 }
 
 #[test]
-fn the_root_is_recorded_by_ordinal_and_must_be_in_the_set() {
+fn the_root_and_every_edge_table_are_recorded_by_ordinal() {
     let record = PackageRecord::default();
     let unit = CompilationUnit::default();
     let packages = || {
         vec![
             package("app", vec![], &unit, &record),
-            package("user", vec![("app", 0)], &unit, &record),
+            package("user", vec![("gadgets", 0)], &unit, &record),
         ]
     };
     let program = link(&LinkSet {
         packages: packages(),
-        root: Some(LinkPackageId(1)),
+        root: LinkPackageId(1),
     })
     .unwrap();
-    assert_eq!(program.root, Some(1));
-    // An empty workspace links no package of its own.
-    let program = link(&LinkSet {
-        packages: packages(),
-        root: None,
-    })
-    .unwrap();
-    assert_eq!(program.root, None);
+    assert_eq!(program.root, 1);
+    assert_eq!(program.packages[0].edges, vec![]);
+    assert_eq!(program.packages[1].edges, vec![(Name::new("gadgets"), 0)]);
     assert!(matches!(
         link(&LinkSet {
             packages: packages(),
-            root: Some(LinkPackageId(2)),
+            root: LinkPackageId(2),
         }),
         Err(LinkError::InvalidUnit(message)) if message.contains("root package 2")
     ));
 }
 
 #[test]
-fn two_packages_with_one_spelling_are_refused() {
+fn two_packages_may_share_a_spelling() {
+    // Names live on edges: the root reaches each `lib` under its own edge
+    // name, and the spelling identifies nothing program-wide.
+    let record = PackageRecord::default();
+    let unit = CompilationUnit::default();
+    let program = link(&LinkSet {
+        packages: vec![
+            package("lib", vec![], &unit, &record),
+            package("lib", vec![], &unit, &record),
+            package("user", vec![("first", 0), ("second", 1)], &unit, &record),
+        ],
+        root: LinkPackageId(2),
+    })
+    .unwrap();
+    assert_eq!(program.packages.len(), 3);
+    assert_eq!(
+        program.packages[2].edges,
+        vec![(Name::new("first"), 0), (Name::new("second"), 1)]
+    );
+}
+
+#[test]
+fn a_package_reaching_two_packages_under_one_name_is_refused() {
     let record = PackageRecord::default();
     let unit = CompilationUnit::default();
     let set = LinkSet {
-        root: Some(LinkPackageId(0)),
         packages: vec![
-            package("user", vec![], &unit, &record),
-            package("user", vec![], &unit, &record),
+            package("a", vec![], &unit, &record),
+            package("b", vec![], &unit, &record),
+            package("user", vec![("lib", 0), ("lib", 1)], &unit, &record),
         ],
+        root: LinkPackageId(2),
     };
     assert_eq!(
         link(&set).err(),
-        Some(LinkError::DuplicatePackageName("user".to_string()))
+        Some(LinkError::DuplicateEdge {
+            package: Name::new("user"),
+            edge: Name::new("lib"),
+        })
     );
 }
 
@@ -298,7 +319,7 @@ fn a_static_unit_importing_its_own_package_is_malformed() {
     let mut unit = unit_with_fn("user.f", vec![load_import(0), Instruction::Return]);
     unit.global_imports.push(import(0, free_fn("f")));
     let set = LinkSet {
-        root: Some(LinkPackageId(0)),
+        root: LinkPackageId(0),
         packages: vec![package("user", vec![], &unit, &record)],
     };
     assert!(matches!(
@@ -344,7 +365,7 @@ fn generic_values_are_interned_by_base_slot_across_packages_and_tails() {
         ..InitTail::default()
     };
     let mut set = LinkSet {
-        root: Some(LinkPackageId(1)),
+        root: LinkPackageId(1),
         packages: vec![
             package("lib", vec![], &lib, &record),
             package("user", vec![("lib", 0)], &user, &record),
@@ -383,7 +404,7 @@ fn dependency_slots_bind_through_edge_tables() {
         .object_imports
         .push(import(1, DeclPath::Class(item("Widget"))));
     let set = LinkSet {
-        root: Some(LinkPackageId(1)),
+        root: LinkPackageId(1),
         packages: vec![
             package("app", vec![], &widget, &record),
             package("user", vec![("gadgets", 0)], &consumer, &record),
@@ -432,7 +453,7 @@ fn transitive_dependencies_bind_through_the_parent_edge_table() {
         .object_imports
         .push(import(2, DeclPath::Class(item("Leaf"))));
     let set = LinkSet {
-        root: Some(LinkPackageId(2)),
+        root: LinkPackageId(2),
         packages: vec![
             package("c", vec![], &leaf, &record),
             package("b", vec![("inner", 0)], &middle, &record),
@@ -479,7 +500,7 @@ fn layout_is_package_major_in_set_order() {
         .push((DeclPath::Let(item("x")), 1));
     let stdlib = package("baml", vec![], &std_unit, &stdlib_record);
     let set = LinkSet {
-        root: Some(LinkPackageId(0)),
+        root: LinkPackageId(0),
         // Listed user-first on purpose: layout follows the SET order, each
         // package's objects contiguous.
         packages: vec![
@@ -552,7 +573,7 @@ fn init_order_is_topological_with_alphabetical_ties() {
     }
     let program = link(&LinkSet {
         packages,
-        root: Some(LinkPackageId(0)),
+        root: LinkPackageId(0),
     })
     .unwrap();
     assert_eq!(program.init_order, vec![1, 2, 0]);
@@ -596,7 +617,7 @@ fn heads_and_switch_keys_relocate_to_the_assigned_tags() {
         .object_imports
         .push(import(1, DeclPath::Class(item("Foo"))));
     let set = LinkSet {
-        root: Some(LinkPackageId(1)),
+        root: LinkPackageId(1),
         packages: vec![
             package("app", vec![], &provider, &record),
             package("user", vec![("app", 0)], &consumer, &record),
@@ -666,7 +687,7 @@ fn impl_body_import_from_a_dependency_is_refused() {
     })));
     unit.global_imports.push(import(1, body));
     let set = LinkSet {
-        root: Some(LinkPackageId(1)),
+        root: LinkPackageId(1),
         packages: vec![
             package("app", vec![], &provider, &record),
             package("user", vec![("app", 0)], &unit, &record),
@@ -696,7 +717,7 @@ fn a_tail_reaches_its_own_packages_declarations_as_imports() {
     let mut user = package("user", vec![], &unit, &record);
     user.tail = Some(&tail);
     let program = link(&LinkSet {
-        root: Some(LinkPackageId(0)),
+        root: LinkPackageId(0),
         packages: vec![user],
     })
     .unwrap();
@@ -753,7 +774,7 @@ fn a_rule_body_aimed_at_a_named_function_is_an_invalid_unit() {
         field_links: Box::new([]),
     });
     let set = LinkSet {
-        root: Some(LinkPackageId(0)),
+        root: LinkPackageId(0),
         packages: vec![package("user", vec![], &unit, &record)],
     };
     assert!(matches!(

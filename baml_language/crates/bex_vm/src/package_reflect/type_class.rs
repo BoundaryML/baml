@@ -1432,6 +1432,8 @@ mod renderability_tests {
 
     fn empty_package() -> bex_vm_types::types::Package {
         bex_vm_types::types::Package {
+            name: baml_type::Name::default(),
+            edges: indexmap::IndexMap::new(),
             exported_names: Vec::new(),
             classes: indexmap::IndexMap::new(),
             enums: indexmap::IndexMap::new(),

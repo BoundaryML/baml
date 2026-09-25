@@ -88,6 +88,30 @@ impl BamlPackageReflect for PackageReflectImpl {
     }
 }
 
+/// A runtime package's edge table: its declared dependencies under their
+/// aliases, then the language packages under their fixed names as the host
+/// image's root reaches them — the runtime mirror of the compiler's edge
+/// table for a package without a manifest, so the package can name exactly
+/// what its compile could.
+fn runtime_edges(
+    vm: &BexVm,
+    declared: &IndexMap<String, HeapPtr>,
+) -> IndexMap<baml_type::Name, HeapPtr> {
+    let mut edges: IndexMap<baml_type::Name, HeapPtr> = declared
+        .iter()
+        .map(|(alias, ptr)| (baml_type::Name::new(alias), *ptr))
+        .collect();
+    for name in baml_builtins2::stdlib_package_names() {
+        let name = baml_type::Name::new(name);
+        if !edges.contains_key(&name)
+            && let Some(ptr) = vm.packages.accessible(&name)
+        {
+            edges.insert(name, ptr);
+        }
+    }
+    edges
+}
+
 fn package_ptr(vm: &BexVm, value: Value) -> Result<HeapPtr, VmRustFnError> {
     let Some(wrapper_ptr) = value.as_object_ptr() else {
         return Err(VmBamlError::InvalidArgument {
@@ -394,7 +418,7 @@ pub(super) fn allocate_runtime_declaration_types(
 /// stdlib package by its fixed name, the class by its item path, the
 /// constructor through the class's method table.
 fn test_collector_constructor(vm: &BexVm) -> Option<HeapPtr> {
-    let package_ptr = vm.packages.package_ptr(&baml_type::Name::new("testing"))?;
+    let package_ptr = vm.packages.accessible(&baml_type::Name::new("testing"))?;
     let Object::Package(package) = vm.get_object(package_ptr) else {
         return None;
     };
@@ -820,6 +844,8 @@ impl BamlClassPackage for PackageReflectImpl {
             Err(error) => return error.into(),
         };
         let package = Package {
+            name: baml_type::Name::new(baml_type::RESERVED_USER_PACKAGE),
+            edges: runtime_edges(vm, &dependencies),
             exported_names: Vec::new(),
             classes: IndexMap::new(),
             enums: IndexMap::new(),
@@ -838,7 +864,6 @@ impl BamlClassPackage for PackageReflectImpl {
                 type_values: IndexMap::new(),
                 diagnostics: artifact.diagnostics,
                 dependencies: dependencies.values().copied().collect(),
-                dependency_names: dependencies,
                 init: None,
                 initialized: false,
             })),
@@ -1426,6 +1451,8 @@ impl BamlClassSession for PackageReflectImpl {
             dependencies.insert(alias.to_string(), package_ptr(vm, *value)?);
         }
         let package = Package {
+            name: baml_type::Name::new(baml_type::RESERVED_USER_PACKAGE),
+            edges: runtime_edges(vm, &dependencies),
             exported_names: Vec::new(),
             classes: IndexMap::new(),
             enums: IndexMap::new(),
@@ -1445,7 +1472,6 @@ impl BamlClassSession for PackageReflectImpl {
                     type_values: IndexMap::new(),
                     diagnostics: Vec::new(),
                     dependencies: dependencies.values().copied().collect(),
-                    dependency_names: dependencies,
                     init: None,
                     // Session cells intentionally stay mutable between evals.
                     initialized: false,

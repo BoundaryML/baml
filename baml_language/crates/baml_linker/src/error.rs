@@ -12,9 +12,9 @@ pub enum LinkError {
     UnknownDependency { package: Name, edge: Name },
     /// A package exports the same declaration twice.
     DuplicateExport { package: Name, path: DeclPath },
-    /// Two declarations render to one key of the flat name maps, or two
-    /// packages share one spelling.
-    DuplicatePackageName(String),
+    /// A package's edge table reaches two packages under one name, so the
+    /// name would resolve to neither.
+    DuplicateEdge { package: Name, edge: Name },
     /// A type switch's hash table could not be solved over the tags the link
     /// assigned its keys (see `MatchHashTable::solve` in `bex_vm_types`).
     UnsolvableSwitch { package: Name, keys: usize },
@@ -44,7 +44,9 @@ impl std::fmt::Display for LinkError {
             Self::DuplicateExport { package, path } => {
                 write!(f, "package `{package}` exports {path} twice")
             }
-            Self::DuplicatePackageName(name) => write!(f, "two packages spelled `{name}`"),
+            Self::DuplicateEdge { package, edge } => {
+                write!(f, "package `{package}` reaches two packages as `{edge}`")
+            }
             Self::UnsolvableSwitch { package, keys } => write!(
                 f,
                 "package `{package}`: no perfect hash separates the {keys} keys of a type switch"

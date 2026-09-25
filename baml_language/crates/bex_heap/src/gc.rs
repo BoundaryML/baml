@@ -678,6 +678,7 @@ impl BexHeap {
                 worklist.extend(package.functions.values().copied());
                 worklist.extend(package.type_aliases.values().copied());
                 worklist.extend(package.mounted_types.values().copied());
+                worklist.extend(package.edges.values().copied());
                 worklist.extend(package.test_init);
                 for (interface, rules) in &package.impl_rules {
                     worklist.push(*interface);
@@ -689,7 +690,6 @@ impl BexHeap {
                         worklist.extend(runtime.objects.iter().copied());
                         worklist.extend(runtime.type_values.values().copied());
                         worklist.extend(runtime.dependencies.iter().copied());
-                        worklist.extend(runtime.dependency_names.values().copied());
                         worklist.extend(runtime.init);
                         worklist.extend(
                             runtime
@@ -932,6 +932,7 @@ impl BexHeap {
                     .chain(package.functions.values_mut())
                     .chain(package.type_aliases.values_mut())
                     .chain(package.mounted_types.values_mut())
+                    .chain(package.edges.values_mut())
                 {
                     if let Some(&new_ptr) = forwarding.get(ptr) {
                         *ptr = new_ptr;
@@ -976,11 +977,6 @@ impl BexHeap {
                             })
                             .collect();
                         for ptr in runtime.dependencies.iter_mut() {
-                            if let Some(&new_ptr) = forwarding.get(ptr) {
-                                *ptr = new_ptr;
-                            }
-                        }
-                        for ptr in runtime.dependency_names.values_mut() {
                             if let Some(&new_ptr) = forwarding.get(ptr) {
                                 *ptr = new_ptr;
                             }
@@ -1338,6 +1334,7 @@ impl BexHeap {
                     .chain(package.functions.values())
                     .chain(package.type_aliases.values())
                     .chain(package.mounted_types.values())
+                    .chain(package.edges.values())
                     .copied();
                 worklist.extend(refs.filter(|ptr| self.generation_of(*ptr).is_young()));
                 worklist.extend(
@@ -1363,7 +1360,6 @@ impl BexHeap {
                                 .iter()
                                 .chain(runtime.type_values.values())
                                 .chain(runtime.dependencies.iter())
-                                .chain(runtime.dependency_names.values())
                                 .copied()
                                 .filter(|ptr| self.generation_of(*ptr).is_young()),
                         );

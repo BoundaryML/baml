@@ -97,10 +97,10 @@ pub struct Program {
     /// in initialization order: every package after the packages it reaches.
     pub init_order: Vec<u32>,
     /// The package the program was compiled for — the world's root — as an
-    /// ordinal into [`Self::packages`]: whose tests a test run collects.
-    /// `None` when the root declares nothing (an empty workspace) and so
-    /// links no package of its own.
-    pub root: Option<u32>,
+    /// ordinal into [`Self::packages`]: the viewpoint every host-supplied
+    /// name resolves from, and whose tests a test run collects. Always
+    /// linked, even when it declares nothing yet.
+    pub root: u32,
 
     /// Conservative source-content identity of the compiled file set
     /// (streams spec §2.3): SHA-256 over the domain string, compiler
@@ -204,19 +204,34 @@ impl Program {
         self.globals.push(value);
     }
 
+    /// The packages a host can name, as the root reaches them: the root under
+    /// its own name, then each package under the root's edge to it. A package
+    /// the root reaches only transitively has no host-facing name.
+    fn root_viewpoint(&self) -> impl Iterator<Item = (&baml_base::Name, &ProgramPackage)> {
+        let root = &self.packages[self.root as usize];
+        std::iter::once((&root.name, root)).chain(
+            root.edges
+                .iter()
+                .map(|(edge, ordinal)| (edge, &self.packages[*ordinal as usize])),
+        )
+    }
+
     /// The executable's callables by rendered name — `pkg.ns.name` for a free
-    /// function, `pkg.ns.Class.name` for a method. The view behind the
+    /// function, `pkg.ns.Class.name` for a method, `pkg` being how the root
+    /// reaches the package (the root by its own name, a dependency by the
+    /// root's edge to it; a transitively reached package has no host-facing
+    /// name). The view behind the
     /// surfaces that legitimately start from a host-supplied name (the run
     /// entry point, test discovery, reflection by name), derived from the
     /// package tables: the executable carries no such spelling, and nothing
     /// resolves through it internally.
     pub fn rendered_callables(&self) -> HashMap<String, RenderedCallable> {
         let mut out = HashMap::new();
-        for package in &self.packages {
+        for (spelling, package) in self.root_viewpoint() {
             for (local, &object) in &package.functions {
                 let path = DeclPath::Function(FnPath::Free(local.clone()));
                 out.insert(
-                    format!("{}.{local}", package.name),
+                    format!("{spelling}.{local}"),
                     RenderedCallable {
                         object,
                         slot: package.globals.get(&path).copied(),
@@ -233,7 +248,7 @@ impl Program {
                         name: method.clone(),
                     });
                     out.insert(
-                        format!("{}.{class_local}.{method}", package.name),
+                        format!("{spelling}.{class_local}.{method}"),
                         RenderedCallable {
                             object: def.function,
                             slot: package.globals.get(&path).copied(),
@@ -249,10 +264,10 @@ impl Program {
     /// the global slot each holds — derived like [`Self::rendered_callables`].
     pub fn rendered_lets(&self) -> HashMap<String, GlobalIndex> {
         let mut out = HashMap::new();
-        for package in &self.packages {
+        for (spelling, package) in self.root_viewpoint() {
             for (path, &slot) in &package.globals {
                 if let DeclPath::Let(local) = path {
-                    out.insert(format!("{}.{local}", package.name), slot);
+                    out.insert(format!("{spelling}.{local}"), slot);
                 }
             }
         }

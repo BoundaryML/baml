@@ -36,6 +36,20 @@ impl std::fmt::Display for LocalName {
 /// Contains lookups for named items defined in the package.
 #[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
 pub struct Package {
+    /// The package's display spelling: what traces and the reflection surface
+    /// print it under, and the name it spells itself by from its own
+    /// viewpoint ([`Self::accessible`]) — the reserved `user` for an unnamed
+    /// root, which is how a host addresses it. Display data: a package's
+    /// identity is its pointer.
+    pub name: Name,
+    /// The package's edge table: every package it reaches, by the name it
+    /// reaches it under — its declared dependencies, then the language
+    /// packages under their fixed names. The runtime mirror of the compiler's
+    /// edge table, and the only way a name becomes a package at run time: a
+    /// host names a package as the world's root reaches it, and a runtime
+    /// package's wire names resolve through its own edges. Names live on
+    /// edges, so two packages may share a spelling.
+    pub edges: IndexMap<Name, HeapPtr>,
     /// Every source-visible exported declaration name, including aliases that
     /// have no heap object of their own.
     pub exported_names: Vec<LocalName>,
@@ -94,6 +108,17 @@ pub enum PackageKind {
 }
 
 impl Package {
+    /// The package `own` — this package, by its own pointer — spells as
+    /// `name`: itself by its own name, else the package its edge `name`
+    /// reaches. Anything else is invisible from here; the runtime mirror of
+    /// the compiler's `accessible_package`.
+    pub fn accessible(&self, own: HeapPtr, name: &Name) -> Option<HeapPtr> {
+        if self.name == *name {
+            return Some(own);
+        }
+        self.edges.get(name).copied()
+    }
+
     pub fn runtime(&self) -> Option<&RuntimePackage> {
         match &self.kind {
             PackageKind::Static => None,
@@ -172,12 +197,10 @@ pub struct RuntimePackage {
     pub type_values: IndexMap<HeapPtr, HeapPtr>,
     /// Compiler warnings retained on a successful package.
     pub diagnostics: Vec<RuntimeCompileDiagnostic>,
-    /// Runtime package objects imported by this image.
+    /// The packages this image declared as dependencies, in declaration
+    /// order — the targets of the package's declared edges
+    /// ([`Package::edges`] also carries the prelude).
     pub dependencies: Box<[HeapPtr]>,
-    /// Direct import alias to runtime package. Kept alongside the dense list so
-    /// runtime type names such as `dep.models.Base` resolve by their compiler
-    /// package identity.
-    pub dependency_names: IndexMap<String, HeapPtr>,
     /// The candidate `$init`, if one exists.
     pub init: Option<HeapPtr>,
     /// False while `$init` may write package globals; true after commit. A
@@ -200,11 +223,19 @@ impl RuntimePackage {
 /// functions are carried as pooled objects referenced by index.
 #[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
 pub struct ProgramPackage {
-    /// The package's display spelling — the package half of the rendered
-    /// name views, and the name the prelude is bound by at load. Display and
-    /// boundary data only: the package's identity in the executable is its
-    /// position in [`Program::packages`](crate::Program::packages).
+    /// The package's display spelling, and the name it spells itself by from
+    /// its own viewpoint. Display data: the package's identity in the
+    /// executable is its position in
+    /// [`Program::packages`](crate::Program::packages), and nothing resolves
+    /// a spelling program-wide — two packages may share one.
     pub name: Name,
+    /// The package's edge table: every package it reaches, by the name it
+    /// reaches it under, as ordinals into
+    /// [`Program::packages`](crate::Program::packages) — its declared
+    /// dependencies, then the language packages under their fixed names.
+    /// A name resolves only from some package's viewpoint; a host's names
+    /// resolve from the root's ([`Program::root`](crate::Program::root)).
+    pub edges: Vec<(Name, u32)>,
     pub exported_names: Vec<LocalName>,
     pub classes: IndexMap<LocalName, ObjectIndex>,
     pub enums: IndexMap<LocalName, ObjectIndex>,

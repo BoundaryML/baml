@@ -1122,9 +1122,9 @@ pub struct BexEngine {
     _globals_permit: bex_heap::InactiveHeapPermit<SharedGlobals>,
     /// Resolved function/class/enum names for lookup
     resolved_function_names: HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>,
-    /// The world's root package — the one the program was compiled for —
-    /// when it linked a package of its own: whose tests a run collects.
-    root_package: Option<HeapPtr>,
+    /// The world's root package — the one the program was compiled for:
+    /// whose tests a run collects.
+    root_package: HeapPtr,
     /// The class that owns each method, from the classes' own method
     /// tables: what tells a callee's class-generic prefix from its own.
     method_owners: HashMap<HeapPtr, HeapPtr>,
@@ -2158,15 +2158,12 @@ impl BexEngine {
         let (heap, package_index) = bex_vm::package_load::build_heap_with_packages(
             compile_time_objects,
             &bytecode.packages,
+            bytecode.root,
         );
         // Shared with every VM so spawned workers see the same package index
         // without re-resolving it.
         let packages = Arc::new(package_index);
-        let root_package = bytecode.root.map(|ordinal| {
-            packages
-                .package_at(ordinal as usize)
-                .unwrap_or_else(|| unreachable!("the root ordinal is a package of the image"))
-        });
+        let root_package = packages.root();
         let method_owners: HashMap<HeapPtr, HeapPtr> = packages
             .package_ptrs()
             .flat_map(|package_ptr| {
@@ -5090,12 +5087,11 @@ impl BexEngine {
     // Test Collection API
     // ========================================================================
 
-    /// The root package's `$init_test` chainer: `None` when the root links no
-    /// package of its own or declares no test blocks.
+    /// The root package's `$init_test` chainer: `None` when the root declares
+    /// no test blocks.
     fn root_test_init(&self) -> Option<HeapPtr> {
-        let package_ptr = self.root_package?;
         // SAFETY: the package index holds compile-time package objects.
-        match unsafe { package_ptr.get() } {
+        match unsafe { self.root_package.get() } {
             Object::Package(package) => package.test_init,
             _ => None,
         }
@@ -7504,7 +7500,7 @@ impl BexEngine {
                 },
             ));
         };
-        let (history, visible, dependency_names, sequence) = {
+        let (history, visible, mounts, sequence) = {
             let Object::Package(package) = vm.get_object_mut(package_ptr) else {
                 return Err(invalid(
                     "Session has an invalid runtime payload".to_string(),
@@ -7518,16 +7514,23 @@ impl BexEngine {
             };
             let sequence = state.submission_counter;
             state.submission_counter = state.submission_counter.saturating_add(1);
-            let dependencies = runtime.dependency_names.clone();
+            // The session's declared mounts: its edges minus the prelude,
+            // which the compile serves from its own embedded interfaces.
+            let mounts = package
+                .edges
+                .iter()
+                .filter(|(_, ptr)| runtime.dependencies.contains(*ptr))
+                .map(|(alias, ptr)| (alias.to_string(), *ptr))
+                .collect::<IndexMap<String, HeapPtr>>();
             (
                 state.history.clone(),
                 state.visible.clone(),
-                dependencies,
+                mounts,
                 sequence,
             )
         };
         let mut packages = IndexMap::new();
-        for (alias, ptr) in dependency_names {
+        for (alias, ptr) in mounts {
             let Object::Package(package) = vm.get_object(ptr) else {
                 return Err(invalid(format!(
                     "Session dependency `{alias}` has an invalid runtime payload"
@@ -7558,7 +7561,7 @@ impl BexEngine {
             lease,
         };
         // A session's dependencies are pinned by the session package itself
-        // (`dependency_names`), which `_finish` binds against.
+        // (its edges), which `_finish` binds against.
         Ok(PendingRuntimeCompile {
             request: bex_vm_types::RuntimeCompileRequest {
                 files: IndexMap::new(),

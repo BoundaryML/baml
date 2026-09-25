@@ -66,18 +66,7 @@ fn rendered_names(program: &bex_vm_types::Program) -> Vec<String> {
 
 /// The workspace package (spelled `user`) and its ordinal in the executable.
 fn user_package(program: &bex_vm_types::Program) -> (u32, &bex_vm_types::types::ProgramPackage) {
-    program
-        .packages
-        .iter()
-        .enumerate()
-        .find(|(_, package)| package.name.as_str() == "user")
-        .map(|(ordinal, package)| {
-            (
-                u32::try_from(ordinal).expect("package ordinal fits in u32"),
-                package,
-            )
-        })
-        .expect("the program has a user package")
+    (program.root, &program.packages[program.root as usize])
 }
 
 #[test]

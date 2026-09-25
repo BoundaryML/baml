@@ -1586,9 +1586,9 @@ pub struct BytecodeProgram {
     /// `vm.packages` index from this, resolving each `ObjectIndex` to a
     /// compile-time `HeapPtr`.
     pub packages: Vec<bex_vm_types::types::ProgramPackage>,
-    /// The world's root package as an ordinal into `packages`, when it links
-    /// one of its own.
-    pub root: Option<u32>,
+    /// The world's root package as an ordinal into `packages`: the viewpoint
+    /// every host-supplied name resolves from.
+    pub root: u32,
 }
 
 /// Convert a compiled `Program` to a `BytecodeProgram` with native functions attached.
@@ -2444,10 +2444,9 @@ impl BexVm {
         unsafe { ptr.get() }
     }
 
-    /// The `Object::Package` for `pkg`, if loaded.
+    /// The `Object::Package` the root spells as `pkg`, if any.
     fn package(&self, pkg: &Name) -> Option<&bex_vm_types::types::Package> {
-        self.get_object(self.packages.package_ptr(pkg)?)
-            .as_package()
+        self.get_object(self.packages.accessible(pkg)?).as_package()
     }
 
     fn package_for_type(&self, qtn: &baml_type::TypeName) -> Option<&bex_vm_types::types::Package> {
@@ -2474,21 +2473,11 @@ impl BexVm {
             if qtn.is_local() {
                 return Some(current);
             }
-            // Runtime-compiled packages link stdlib symbols straight back to
-            // the immutable host image rather than copying stdlib packages
-            // into their dynamic dependency graph. Type/interface lookup must
-            // follow the same edge so virtual dispatch reaches the host's
-            // static, cacheable impl rules. Restrict the fallback to the
-            // compiler-owned stdlib set; undeclared user packages remain
-            // inaccessible.
-            if baml_builtins2::stdlib_package_names().contains(&qtn.package().as_str()) {
-                return self.package(qtn.package());
-            }
-            let runtime = current.runtime()?;
-            if let Some(dependency) = runtime.dependency_names.get(qtn.package().as_str()) {
-                return self.get_object(*dependency).as_package();
-            }
-            return None;
+            // A runtime package's edges carry its declared dependencies and
+            // the host image's prelude, so a name it can write resolves
+            // exactly as its compile resolved it; anything else is invisible.
+            let dependency = current.accessible(current_ptr, qtn.package())?;
+            return self.get_object(dependency).as_package();
         }
         self.package(qtn.package())
     }
@@ -2568,10 +2557,10 @@ impl BexVm {
     }
 
     /// Look up a class, enum, or interface object by its fully-qualified dotted
-    /// name, with the package as the leading segment. For builtin
-    /// (dependency-package) types referenced by constant FQN; not valid for
-    /// `user`-package types, whose rendered name elides the package — use
-    /// [`Self::lookup_type`] there.
+    /// name — the package as the root reaches it, then the item path — from
+    /// the root's viewpoint. For builtin (prelude) types referenced by
+    /// constant FQN; not valid for `user`-package types, whose rendered name
+    /// elides the package — use [`Self::lookup_type`] there.
     pub fn lookup_type_by_fqn(&self, fqn: &str) -> Option<HeapPtr> {
         crate::package_load::lookup_type_by_fqn(&self.packages, fqn)
     }
@@ -3713,8 +3702,11 @@ impl BexVm {
 
         // Create heap with compile-time objects, additionally allocating the
         // per-package `Object::Package` / `Object::ImplRule` objects.
-        let (heap, package_index) =
-            crate::package_load::build_heap_with_packages(compile_time_objects, &bytecode.packages);
+        let (heap, package_index) = crate::package_load::build_heap_with_packages(
+            compile_time_objects,
+            &bytecode.packages,
+            bytecode.root,
+        );
 
         // Convert compile-time globals (ConstValue) to runtime globals (Value).
         // The `from_program` constructor is test-only — we hand the VM an

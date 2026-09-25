@@ -42,6 +42,11 @@ impl Assembler<'_, '_> {
             .iter()
             .map(|package| ProgramPackage {
                 name: package.name.clone(),
+                edges: package
+                    .edges
+                    .iter()
+                    .map(|(edge, id)| (edge.clone(), id.0))
+                    .collect(),
                 ..ProgramPackage::default()
             })
             .collect();
@@ -56,7 +61,7 @@ impl Assembler<'_, '_> {
             package.canonicalize_impl_rules();
         }
         program.packages = packages;
-        program.root = self.set.root.map(|id| id.0);
+        program.root = self.set.root.0;
         Ok(program)
     }
 

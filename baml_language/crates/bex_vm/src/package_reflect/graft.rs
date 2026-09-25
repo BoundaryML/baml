@@ -577,9 +577,6 @@ fn bind_slots(
     let Object::Package(package) = vm.get_object(package_ptr) else {
         unreachable!("a graft target is a package")
     };
-    let runtime = package
-        .runtime()
-        .unwrap_or_else(|| unreachable!("a graft target is a runtime package"));
     entries
         .iter()
         .map(|entry| {
@@ -590,18 +587,14 @@ fn bind_slots(
                     entry.edge
                 )));
             }
-            if let Some(&ptr) = runtime.dependency_names.get(entry.edge.as_str()) {
-                return Ok(ptr);
-            }
-            if baml_builtins2::stdlib_package_names().contains(&entry.edge.as_str())
-                && let Some(ptr) = vm.packages.package_ptr(&entry.edge)
-            {
-                return Ok(ptr);
-            }
-            Err(link_error(format!(
-                "dependency `{}` names no package the compile was given",
-                entry.edge
-            )))
+            // The package's edges are the compile's mounts and the host
+            // image's prelude — exactly what the unit could name.
+            package.edges.get(&entry.edge).copied().ok_or_else(|| {
+                link_error(format!(
+                    "dependency `{}` names no package the compile was given",
+                    entry.edge
+                ))
+            })
         })
         .collect()
 }

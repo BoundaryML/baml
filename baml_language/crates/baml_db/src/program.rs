@@ -122,27 +122,29 @@ pub fn compile_program_with(
     opt: OptLevel,
     cache: &dyn PackageCache,
 ) -> Result<Program, CompileProgramError> {
-    // A root without files declares nothing itself: it is in the program only
-    // when the store serves its output (a mounted package), and then there is
-    // nothing to emit for it.
+    // A dependency without files declares nothing itself: it is in the
+    // program only when the store serves its output (a mounted package), and
+    // then there is nothing to emit for it. The root is always in the program
+    // — it is the viewpoint every host name resolves from — even before it
+    // declares anything.
     let packages = world_roots(db, root)
         .iter()
         .copied()
-        .filter_map(|root| {
-            let emitted = match cache.load(db, root, opt) {
+        .filter_map(|package| {
+            let emitted = match cache.load(db, package, opt) {
                 Some(emitted) => emitted,
-                None if root.files(db).is_empty() => return None,
-                None => match emit_package(db, root, opt) {
+                None if package != root && package.files(db).is_empty() => return None,
+                None => match emit_package(db, package, opt) {
                     Ok(emitted) => {
-                        cache.store(db, root, opt, &emitted);
+                        cache.store(db, package, opt, &emitted);
                         emitted
                     }
                     Err(error) => return Some(Err(error)),
                 },
             };
             Some(Ok(LinkedPackage {
-                root,
-                edges: edge_table(db, root),
+                root: package,
+                edges: edge_table(db, package),
                 emitted,
             }))
         })
@@ -193,6 +195,6 @@ fn link_set<'a>(
                 tail: package.emitted.tail.as_ref(),
             })
             .collect(),
-        root: position(root),
+        root: position(root).unwrap_or_else(|| unreachable!("the root is always in the program")),
     }
 }

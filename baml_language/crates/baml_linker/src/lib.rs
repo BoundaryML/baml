@@ -94,16 +94,16 @@ impl LinkPackageId {
 /// the other packages of the set.
 #[derive(Clone, Debug)]
 pub struct LinkPackage<'a> {
-    /// The package's display spelling: `ProgramPackage::name`, the package
-    /// half of a rendered callable name, and the name the prelude is bound by
-    /// at load. Display and boundary data — a package's link identity is its
-    /// [`LinkPackageId`], and its executable identity its position in
-    /// [`Program::packages`](bex_vm_types::Program::packages). Two packages may
-    /// not share a spelling ([`LinkError::DuplicatePackageName`]): the loader
-    /// binds the prelude by it.
+    /// The package's display spelling: `ProgramPackage::name`. Display data —
+    /// a package's link identity is its [`LinkPackageId`], and its executable
+    /// identity its position in
+    /// [`Program::packages`](bex_vm_types::Program::packages). Names live on
+    /// edges, so two packages may share a spelling.
     pub name: Name,
     /// The package's edge table: every direct dependency and prelude package
-    /// by the name this package reaches it under.
+    /// by the name this package reaches it under. Each name reaches one
+    /// package ([`LinkError::DuplicateEdge`]); the table is carried into the
+    /// executable as the package's viewpoint.
     pub edges: Vec<(Name, LinkPackageId)>,
     pub unit: &'a CompilationUnit,
     pub record: &'a PackageRecord,
@@ -111,12 +111,12 @@ pub struct LinkPackage<'a> {
 }
 
 /// Everything one link consumes: the packages of the world, in world order.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct LinkSet<'a> {
     pub packages: Vec<LinkPackage<'a>>,
-    /// The package the program is compiled for — the world's root — when it
-    /// links a package of its own (an empty workspace declares nothing).
-    pub root: Option<LinkPackageId>,
+    /// The package the program is compiled for — the world's root: the
+    /// viewpoint a host's names resolve from.
+    pub root: LinkPackageId,
 }
 
 impl<'a> LinkSet<'a> {
@@ -207,32 +207,31 @@ impl Linker<'_, '_> {
     }
 
     fn validate(&self) -> Result<(), LinkError> {
-        let mut spellings = HashSet::new();
-        for package in &self.set.packages {
-            if !spellings.insert(&package.name) {
-                return Err(LinkError::DuplicatePackageName(package.name.to_string()));
-            }
-            if let Some((edge, id)) = package
-                .edges
-                .iter()
-                .find(|(_, id)| id.0 as usize >= self.set.packages.len())
-            {
-                return Err(LinkError::invalid(format!(
-                    "package `{}` edge `{edge}` names package {} of {}",
-                    package.name,
-                    id.0,
-                    self.set.packages.len()
-                )));
-            }
-        }
-        if let Some(root) = self.set.root
-            && root.0 as usize >= self.set.packages.len()
-        {
+        if self.set.root.0 as usize >= self.set.packages.len() {
             return Err(LinkError::invalid(format!(
                 "the root package {} is not in the set of {}",
-                root.0,
+                self.set.root.0,
                 self.set.packages.len()
             )));
+        }
+        for package in &self.set.packages {
+            let mut edges = HashSet::new();
+            for (edge, id) in &package.edges {
+                if !edges.insert(edge) {
+                    return Err(LinkError::DuplicateEdge {
+                        package: package.name.clone(),
+                        edge: edge.clone(),
+                    });
+                }
+                if id.0 as usize >= self.set.packages.len() {
+                    return Err(LinkError::invalid(format!(
+                        "package `{}` edge `{edge}` names package {} of {}",
+                        package.name,
+                        id.0,
+                        self.set.packages.len()
+                    )));
+                }
+            }
         }
         Ok(())
     }
