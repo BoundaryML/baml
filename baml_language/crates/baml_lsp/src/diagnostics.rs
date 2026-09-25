@@ -478,11 +478,12 @@ mod tests {
             Diagnostic::warning(DiagnosticId::ConditionAlwaysConstant, "always truthy")
                 .with_primary_span(primary)
                 .with_secondary(secondary, "this branch is unreachable");
-        let path = Path::new("/workspace/main.baml");
+        let workspace = tempfile::tempdir().unwrap();
+        let path = workspace.path().join("main.baml");
         let codecs = HashMap::from([(
             file,
             (
-                path,
+                path.as_path(),
                 PositionCodec::new("true\ndead", PositionEncoding::UTF16),
             ),
         )]);
@@ -506,7 +507,7 @@ mod tests {
             let related = converted.related_information.unwrap();
             assert_eq!(related.len(), 1);
             assert_eq!(related[0].message, "this branch is unreachable");
-            assert_eq!(related[0].location.uri, Url::from_file_path(path).unwrap());
+            assert_eq!(related[0].location.uri, Url::from_file_path(&path).unwrap());
             assert_eq!(
                 related[0].location.range,
                 lsp_types::Range::new(
