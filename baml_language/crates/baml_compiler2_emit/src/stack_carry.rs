@@ -625,12 +625,16 @@ fn simulate_terminator_stack<'db>(
             sim.pop_n(1)
         }
         Terminator::Call {
+            has_trace,
             callee,
             args,
 
             destination,
             ..
         } => {
+            if *has_trace {
+                return false;
+            }
             if args.iter().any(|arg| is_operand_local(arg, carried_local)) {
                 let direct = pull_semantics::resolve_constant_function_item(
                     callee,
@@ -681,7 +685,9 @@ fn simulate_terminator_stack<'db>(
                     classifications,
                     def_use,
                 };
-                if pull_semantics::walk_call_indirect_operands(&mut sink, callee, args).is_err() {
+                if pull_semantics::walk_call_indirect_operands(&mut sink, callee, args, false)
+                    .is_err()
+                {
                     return false;
                 }
 
@@ -693,8 +699,14 @@ fn simulate_terminator_stack<'db>(
             simulate_store_place_stack(destination, sim, classifications)
         }
         Terminator::VirtualCall {
-            args, destination, ..
+            has_trace,
+            args,
+            destination,
+            ..
         } => {
+            if *has_trace {
+                return false;
+            }
             if args.iter().any(|arg| is_operand_local(arg, carried_local)) {
                 let values = args.iter().collect::<Vec<_>>();
                 let trailing = [];
@@ -1732,6 +1744,7 @@ mod tests {
             span: None,
         });
         body.blocks[0].terminator = Some(Terminator::Call {
+            has_trace: false,
             argument_layout: None,
             callee: Operand::Constant(Constant::Null),
             args: vec![],

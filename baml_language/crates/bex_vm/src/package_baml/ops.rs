@@ -540,6 +540,16 @@ impl EqualsDriver {
             #[cfg(feature = "heap_debug")]
             (Object::Sentinel(_), _) => Cmp::NotEqual,
 
+            (Object::RustData(x), Object::RustData(y)) => {
+                match (
+                    x.downcast_ref::<bex_vm_types::trace::SpanId>(),
+                    y.downcast_ref::<bex_vm_types::trace::SpanId>(),
+                ) {
+                    (Some(x), Some(y)) => step(x == y),
+                    _ => step(pa == pb),
+                }
+            }
+
             // By reference:
             (Object::Function(_), Object::Function(_))
             | (Object::Interface(_), Object::Interface(_))
@@ -549,8 +559,7 @@ impl EqualsDriver {
             | (Object::Class(_), Object::Class(_))
             | (Object::Enum(_), Object::Enum(_))
             | (Object::TypeAlias(_), Object::TypeAlias(_))
-            | (Object::UnscheduledFuture(_), Object::UnscheduledFuture(_))
-            | (Object::RustData(_), Object::RustData(_)) => step(pa == pb),
+            | (Object::UnscheduledFuture(_), Object::UnscheduledFuture(_)) => step(pa == pb),
             (
                 Object::Function(_)
                 | Object::Interface(_)

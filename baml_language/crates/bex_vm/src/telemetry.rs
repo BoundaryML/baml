@@ -90,6 +90,7 @@ struct CallPathKey {
 pub struct FrameTelemetry {
     pub entered_at: ClockInstant,
     pub saved_parent_id: TelemetryId,
+    span_id: Option<TelemetryId>,
     pub await_duration: AwaitDuration,
     pub saved_call_path: CallPathId,
     flags: u8,
@@ -99,7 +100,22 @@ const _: () = assert!(size_of::<FrameTelemetry>() == btel_settings::layout::FRAM
 const _: () =
     assert!(size_of::<Option<FrameTelemetry>>() == btel_settings::layout::FRAME_TELEMETRY_BYTES);
 
+/// Invocation-local tracing controls resolved by the call boundary.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TraceConfig {
+    pub mode: Option<InvocationMode>,
+    pub inputs: Option<bool>,
+    pub output: Option<bool>,
+    pub error: Option<bool>,
+    pub reserved_id: Option<TelemetryId>,
+}
+
 impl FrameTelemetry {
+    #[inline(always)]
+    pub const fn span_id(self) -> Option<TelemetryId> {
+        self.span_id
+    }
+
     #[inline(always)]
     pub const fn is_span(self) -> bool {
         self.flags & SPAN != 0
@@ -280,14 +296,54 @@ impl TelemetryState {
         args: &[Value],
         register: impl FnOnce(Option<HeapPtr>, HeapPtr) -> (Option<FunctionId>, FunctionId),
     ) -> Option<FrameTelemetry> {
+        // SAFETY: forwarded unchanged to the trace-aware entry point.
+        unsafe {
+            self.enter_bytecode_with_trace(
+                function,
+                callee,
+                visible_caller,
+                caller_pc,
+                caller_is_observed,
+                args,
+                None,
+                register,
+            )
+        }
+    }
+
+    #[inline(always)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "entry data plus call-local tracing controls and registration hook"
+    )]
+    /// # Safety
+    /// Every argument and its reachable objects must remain live under the VM
+    /// heap permit throughout this call. Capture may traverse that graph.
+    pub unsafe fn enter_bytecode_with_trace(
+        &mut self,
+        function: &Function,
+        callee: HeapPtr,
+        visible_caller: Option<HeapPtr>,
+        caller_pc: u32,
+        caller_is_observed: bool,
+        args: &[Value],
+        trace: Option<TraceConfig>,
+        register: impl FnOnce(Option<HeapPtr>, HeapPtr) -> (Option<FunctionId>, FunctionId),
+    ) -> Option<FrameTelemetry> {
         if function.telemetry_function_id.is_none()
             || !matches!(function.kind, FunctionKind::Bytecode)
         {
             return None;
         }
 
+        let mode_override = trace.and_then(|config| {
+            config
+                .reserved_id
+                .map(|_| InvocationMode::Span)
+                .or(config.mode)
+        });
         let policy_id = function.telemetry_policy_id.load();
-        if policy_id == btel_types::TelemetryPolicyId::NONE {
+        if mode_override.is_none() && policy_id == btel_types::TelemetryPolicyId::NONE {
             if self.auto_level == AutoTelemetryLevel::Low {
                 return None;
             }
@@ -304,11 +360,13 @@ impl TelemetryState {
             }
         }
         let policy = self.policy_by_id(policy_id);
-        let mode = if policy_id == btel_types::TelemetryPolicyId::NONE {
-            InvocationMode::Span
-        } else {
-            default_mode(function, policy)
-        };
+        let mode = mode_override.unwrap_or_else(|| {
+            if policy_id == btel_types::TelemetryPolicyId::NONE {
+                InvocationMode::Span
+            } else {
+                default_mode(function, policy)
+            }
+        });
 
         if mode == InvocationMode::Hidden {
             return None;
@@ -342,23 +400,33 @@ impl TelemetryState {
         if mode == InvocationMode::Span {
             flags |= SPAN;
         }
-        if policy.capture_output || (is_ai && btel_settings::policy::AI_CAPTURE_OUTPUT) {
+        let capture_inputs = policy.capture_inputs
+            || (is_ai && btel_settings::policy::AI_CAPTURE_INPUTS)
+            || trace.is_some_and(|config| config.inputs == Some(true));
+        let capture_output = policy.capture_output
+            || (is_ai && btel_settings::policy::AI_CAPTURE_OUTPUT)
+            || trace.is_some_and(|config| config.output == Some(true));
+        let capture_error = policy.capture_error
+            || (is_ai && btel_settings::policy::AI_CAPTURE_ERROR)
+            || trace.is_some_and(|config| config.error == Some(true));
+        if capture_output {
             flags |= CAPTURE_OUTPUT;
         }
-        if policy.capture_error || (is_ai && btel_settings::policy::AI_CAPTURE_ERROR) {
+        if capture_error {
             flags |= CAPTURE_ERROR;
         }
 
-        let captured_inputs = (mode == InvocationMode::Span
-            && (policy.capture_inputs || (is_ai && btel_settings::policy::AI_CAPTURE_INPUTS)))
+        let captured_inputs = (mode == InvocationMode::Span && capture_inputs)
             .then(|| self.capture(snapshot::Input::FunctionArgs(args)))
             .flatten();
         if captured_inputs.is_some() {
             flags |= REQUIRES_ANNOUNCEMENT;
         }
         let entered_at = self.clock.read();
-        if mode == InvocationMode::Span {
-            let id = allocate_telemetry_id();
+        let span_id = if mode == InvocationMode::Span {
+            let id = trace
+                .and_then(|config| config.reserved_id)
+                .unwrap_or_else(allocate_telemetry_id);
             self.thread.active_id = id;
             self.write_span(SpanRecord::FunctionSpanAnnouncement {
                 id,
@@ -367,12 +435,16 @@ impl TelemetryState {
                 entered_at,
                 captured_inputs,
             });
-        }
+            Some(id)
+        } else {
+            None
+        };
         self.thread.active_call_path = call_path;
 
         Some(FrameTelemetry {
             entered_at,
             saved_parent_id,
+            span_id,
             await_duration: AwaitDuration::ZERO,
             saved_call_path,
             flags,
@@ -415,6 +487,7 @@ impl TelemetryState {
         FrameTelemetry {
             entered_at,
             saved_parent_id: self.thread.active_id,
+            span_id: None,
             await_duration: AwaitDuration::ZERO,
             saved_call_path,
             flags,
@@ -467,7 +540,7 @@ impl TelemetryState {
         if telemetry.is_span() {
             let captured_value =
                 capture_value.and_then(|value| self.capture(snapshot::Input::Value(value)));
-            let id = self.thread.active_id;
+            let id = telemetry.span_id().expect("span frame owns its identity");
             match (
                 outcome,
                 telemetry.is_reentry(),
@@ -914,6 +987,279 @@ mod tests {
         )
     }
 
+    fn trace_entry(
+        state: &mut TelemetryState,
+        function: &Function,
+        trace: Option<TraceConfig>,
+    ) -> Option<FrameTelemetry> {
+        // SAFETY: the argument is immediate and the registration hook never dereferences pointers.
+        unsafe {
+            state.enter_bytecode_with_trace(
+                function,
+                HeapPtr::null(),
+                None,
+                0,
+                false,
+                &[Value::int(7)],
+                trace,
+                |_, _| (None, function.telemetry_function_id.unwrap()),
+            )
+        }
+    }
+
+    #[test]
+    fn invocation_modes_override_defaults_without_changing_policy() {
+        for auto_level in [
+            AutoTelemetryLevel::Low,
+            AutoTelemetryLevel::Medium,
+            AutoTelemetryLevel::High,
+        ] {
+            for mode in [
+                InvocationMode::Hidden,
+                InvocationMode::Timing,
+                InvocationMode::Span,
+            ] {
+                for reserved in [false, true] {
+                    let function = function(FunctionKind::Bytecode, None);
+                    let mut state = test_state(
+                        Arc::new(TelemetryPolicies::with_auto_level(auto_level)),
+                        test_clock(),
+                    );
+                    let reserved_id = reserved.then(allocate_telemetry_id);
+                    let frame = trace_entry(
+                        &mut state,
+                        &function,
+                        Some(TraceConfig {
+                            mode: Some(mode),
+                            reserved_id,
+                            ..TraceConfig::default()
+                        }),
+                    );
+                    assert_eq!(frame.is_some(), reserved || mode != InvocationMode::Hidden);
+                    if let Some(frame) = frame {
+                        assert_eq!(frame.is_span(), reserved || mode == InvocationMode::Span);
+                        assert_eq!(frame.span_id().is_some(), frame.is_span());
+                        if reserved {
+                            assert_eq!(frame.span_id(), reserved_id);
+                        }
+                        unsafe {
+                            state.complete_invocation(
+                                frame,
+                                &function,
+                                InvocationOutcome::Ok,
+                                None,
+                            );
+                        }
+                    }
+                    assert_eq!(
+                        function.telemetry_policy_id.load(),
+                        btel_types::TelemetryPolicyId::NONE
+                    );
+                    let default_frame = trace_entry(&mut state, &function, None);
+                    assert_eq!(
+                        default_frame.is_some(),
+                        auto_level != AutoTelemetryLevel::Low
+                    );
+                    if let Some(frame) = default_frame {
+                        assert_eq!(frame.is_span(), auto_level == AutoTelemetryLevel::High);
+                        unsafe {
+                            state.complete_invocation(
+                                frame,
+                                &function,
+                                InvocationOutcome::Ok,
+                                None,
+                            );
+                        }
+                    }
+                    if let Some(reserved_id) = reserved_id {
+                        assert!(
+                            state.span_records().iter().any(|record| matches!(record,
+                            SpanRecord::FunctionSpanAnnouncement { id, .. } if *id == reserved_id))
+                        );
+                        assert!(
+                            state.span_records().iter().any(|record| matches!(record,
+                            SpanRecord::FunctionSpanCompletionOk { id, .. } if *id == reserved_id))
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn invocation_span_identity_does_not_fall_back_to_ancestor() {
+        let function = function(FunctionKind::Bytecode, None);
+        let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+        let parent = trace_entry(
+            &mut state,
+            &function,
+            Some(TraceConfig {
+                mode: Some(InvocationMode::Span),
+                ..TraceConfig::default()
+            }),
+        )
+        .unwrap();
+        let parent_id = parent.span_id().unwrap();
+        for mode in [
+            InvocationMode::Hidden,
+            InvocationMode::Timing,
+            InvocationMode::Span,
+        ] {
+            let child = trace_entry(
+                &mut state,
+                &function,
+                Some(TraceConfig {
+                    mode: Some(mode),
+                    ..TraceConfig::default()
+                }),
+            );
+            assert_eq!(parent.span_id(), Some(parent_id));
+            assert_ne!(child.and_then(FrameTelemetry::span_id), Some(parent_id));
+            assert_eq!(
+                child.and_then(FrameTelemetry::span_id).is_some(),
+                mode == InvocationMode::Span
+            );
+            if let Some(child) = child {
+                unsafe {
+                    state.complete_invocation(child, &function, InvocationOutcome::Ok, None);
+                }
+            }
+            assert_eq!(state.active_id(), parent_id);
+        }
+        unsafe {
+            state.complete_invocation(parent, &function, InvocationOutcome::Ok, None);
+        }
+    }
+
+    #[test]
+    fn invocation_capture_is_additive_and_records_real_snapshots() {
+        for [capture_inputs, capture_output, capture_error] in [
+            [false, false, false],
+            [true, false, false],
+            [false, true, false],
+            [false, false, true],
+            [true, true, true],
+        ] {
+            for [inputs, output, error] in [
+                [None, None, None],
+                [Some(false), Some(false), Some(false)],
+                [Some(true), Some(false), Some(false)],
+                [Some(false), Some(true), Some(false)],
+                [Some(false), Some(false), Some(true)],
+                [Some(true), Some(true), Some(true)],
+            ] {
+                for outcome in [InvocationOutcome::Ok, InvocationOutcome::Errored] {
+                    let function = function(FunctionKind::Bytecode, None);
+                    let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+                    state
+                        .set_policy(
+                            &function,
+                            TelemetryPolicy {
+                                capture_inputs,
+                                capture_output,
+                                capture_error,
+                                ..TelemetryPolicy::NONE
+                            },
+                        )
+                        .unwrap();
+                    let frame = trace_entry(
+                        &mut state,
+                        &function,
+                        Some(TraceConfig {
+                            mode: Some(InvocationMode::Span),
+                            inputs,
+                            output,
+                            error,
+                            ..TraceConfig::default()
+                        }),
+                    )
+                    .unwrap();
+                    let id = frame.span_id().unwrap();
+                    unsafe {
+                        state.complete_invocation(frame, &function, outcome, Some(Value::int(9)));
+                    }
+                    let expected_inputs = capture_inputs || inputs == Some(true);
+                    let expected_value = match outcome {
+                        InvocationOutcome::Ok => capture_output || output == Some(true),
+                        InvocationOutcome::Errored => capture_error || error == Some(true),
+                        InvocationOutcome::Cancelled => unreachable!(),
+                    };
+                    let inputs = state
+                        .span_records()
+                        .iter()
+                        .find_map(|record| match record {
+                            SpanRecord::FunctionSpanAnnouncement {
+                                id: record_id,
+                                captured_inputs,
+                                ..
+                            } if *record_id == id => Some(captured_inputs),
+                            _ => None,
+                        })
+                        .unwrap();
+                    assert_eq!(inputs.is_some(), expected_inputs);
+                    if let Some(inputs) = inputs {
+                        assert!(matches!(
+                            inputs.roots()[0],
+                            btel_snapshot::SnapshotValue::Int(7)
+                        ));
+                    }
+                    let output = state
+                        .span_records()
+                        .iter()
+                        .find_map(|record| match record {
+                            SpanRecord::FunctionSpanCompletionOk {
+                                id: record_id,
+                                captured_value,
+                                ..
+                            }
+                            | SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement {
+                                id: record_id,
+                                captured_value,
+                                ..
+                            } if *record_id == id && outcome == InvocationOutcome::Ok => {
+                                Some(captured_value)
+                            }
+                            SpanRecord::FunctionSpanCompletionErrored {
+                                id: record_id,
+                                captured_value,
+                                ..
+                            }
+                            | SpanRecord::FunctionSpanCompletionErroredNeedsAnnouncement {
+                                id: record_id,
+                                captured_value,
+                                ..
+                            } if *record_id == id && outcome == InvocationOutcome::Errored => {
+                                Some(captured_value)
+                            }
+                            _ => None,
+                        })
+                        .unwrap();
+                    assert_eq!(output.is_some(), expected_value);
+                    if let Some(output) = output {
+                        assert!(matches!(
+                            output.roots()[0],
+                            btel_snapshot::SnapshotValue::Int(9)
+                        ));
+                    }
+                    let next = trace_entry(
+                        &mut state,
+                        &function,
+                        Some(TraceConfig {
+                            mode: Some(InvocationMode::Span),
+                            ..TraceConfig::default()
+                        }),
+                    )
+                    .unwrap();
+                    assert_eq!(next.flags & CAPTURE_OUTPUT != 0, capture_output);
+                    assert_eq!(next.flags & CAPTURE_ERROR != 0, capture_error);
+                    unsafe {
+                        state.complete_invocation(next, &function, InvocationOutcome::Ok, None);
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn call_path_exhaustion_cannot_resume_with_reused_ids() {
         assert_eq!(allocate_call_path_id(&AtomicU32::new(0)).get(), 1);
@@ -1170,9 +1516,9 @@ mod tests {
         // Heap-debug adds an epoch to HeapPtr; the rest of each frame stays fixed.
         let pointer_bytes = size_of::<HeapPtr>();
         assert!(matches!(pointer_bytes, 8 | 16));
-        assert_eq!(size_of::<crate::vm::BytecodeFrame>(), 88 + pointer_bytes);
+        assert_eq!(size_of::<crate::vm::BytecodeFrame>(), 96 + pointer_bytes);
         assert_eq!(size_of::<crate::vm::NativeFrame>(), 24 + pointer_bytes);
-        assert_eq!(size_of::<crate::vm::Frame>(), 88 + pointer_bytes);
+        assert_eq!(size_of::<crate::vm::Frame>(), 96 + pointer_bytes);
     }
 
     #[test]

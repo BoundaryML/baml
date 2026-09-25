@@ -1,7 +1,7 @@
 packages:
   - baml
   - reflect
-  - boundary
+  - trace
   - testing
   - assert
   - log

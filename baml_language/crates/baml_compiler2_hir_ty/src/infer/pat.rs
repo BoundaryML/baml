@@ -1185,7 +1185,11 @@ impl<'db> InferenceContext<'db> {
         };
 
         let head = crate::lower::class_ty(self.lang(), qtn.clone(), args.clone());
-        let declared = crate::lower::class_field_types(self.db, class);
+        let declared = if self.is_opaque_trace_type(&qtn) {
+            Vec::new()
+        } else {
+            crate::lower::class_field_types(self.db, class)
+        };
         let mut field_covers = true;
         let mut sub_dpats: Vec<Option<DPat>> = vec![None; declared.len()];
         for (name, field_pat) in field_pats {

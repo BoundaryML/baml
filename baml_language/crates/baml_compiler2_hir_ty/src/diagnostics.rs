@@ -337,6 +337,10 @@ pub enum TirTypeError {
     DuplicateNamedArgument { name: Name },
     /// A call supplied a named argument that is not present in the callable type.
     UnknownNamedArgument { name: Name },
+    /// Native and compiler-only calls do not expose a traceable invocation.
+    TraceUnsupportedCall,
+    /// Trace handles have no public constructor or fields.
+    TraceOpaqueValue,
     /// A defaulted parameter was supplied positionally instead of by name.
     DefaultedParamPassedPositionally { name: Name },
     /// A required parameter was omitted.
@@ -1402,6 +1406,18 @@ impl TirTypeError {
                 }
                 TirTypeError::UnknownNamedArgument { name } => {
                     write!(f, "unknown named argument `{name}`")
+                }
+                TirTypeError::TraceUnsupportedCall => {
+                    write!(
+                        f,
+                        "`$trace` is not supported on native, host, or compiler-intrinsic calls"
+                    )
+                }
+                TirTypeError::TraceOpaqueValue => {
+                    write!(
+                        f,
+                        "trace options, reservations, and span IDs are opaque; use their public methods"
+                    )
                 }
                 TirTypeError::DefaultedParamPassedPositionally { name } => {
                     write!(f, "defaulted parameter `{name}` must be passed by name")

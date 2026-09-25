@@ -1278,7 +1278,7 @@ fn is_builtin_function_name(name: &str) -> bool {
         name.split('.').next(),
         Some(
             "baml"
-                | "boundary"
+                | "trace"
                 | "reflect"
                 | "assert"
                 | "testing"

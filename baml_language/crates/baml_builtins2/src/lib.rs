@@ -112,6 +112,7 @@ pub const MANIFESTS: &[BuiltinManifest] = &[
     manifest!("reflect"),
     manifest!("testing"),
     manifest!("assert"),
+    manifest!("trace"),
     manifest!("ai"),
     manifest!("openai"),
     manifest!("anthropic"),
@@ -196,7 +197,8 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("reflect", "ns_primitive/primitive.baml"),
     builtin!("reflect", "ns_function/function.baml"),
     builtin!("reflect", "ns_errors/errors.baml"),
-    // --- boundary package ---
+    // --- trace package ---
+    builtin!("trace", "trace.baml"),
     // --- testing package ---
     builtin!("testing", "types.baml"),
     builtin!("testing", "registry.baml"),

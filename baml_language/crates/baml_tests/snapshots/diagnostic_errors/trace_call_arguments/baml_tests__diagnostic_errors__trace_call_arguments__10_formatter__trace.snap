@@ -1,0 +1,51 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function Target(value: int) -> int {
+    value
+}
+
+function WrongTraceType() -> int {
+    Target(1, $trace = 42)
+}
+
+function DuplicateTrace() -> int {
+    Target(1, $trace = trace.hidden(), $trace = trace.span())
+}
+
+function TraceDoesNotSupplyParameter() -> int {
+    Target($trace = trace.hidden())
+}
+
+function PositionalAfterTrace() -> int {
+    Target($trace = trace.hidden(), 1)
+}
+
+function UnknownReservedArgument() -> int {
+    Target(1, $other = trace.hidden())
+}
+
+function NativeTrace() -> trace.SpanId? {
+    trace.current_span_id($trace = trace.hidden())
+}
+
+function ConstructOptions() -> trace.Options {
+    trace.Options {  }
+}
+
+function ConstructReservation() -> trace.ReservedSpan {
+    trace.ReservedSpan {  }
+}
+
+function ConstructIdentity() -> trace.SpanId {
+    trace.SpanId {  }
+}
+
+function ReadOpaqueField(options: trace.Options) -> unknown {
+    options._handle
+}
+
+function DestructureOpaqueField(options: trace.Options) -> unknown {
+    let trace.Options { _handle } = options;
+    _handle
+}

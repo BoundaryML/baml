@@ -246,14 +246,17 @@ pub(crate) fn walk_call_direct_args<'db, S: PullSink<'db>>(
     Ok(())
 }
 
-/// Shared pull order for indirect calls: `args..., callee`.
+/// Shared pull order for indirect calls: `args..., callee, trace?`.
 pub(crate) fn walk_call_indirect_operands<'db, S: PullSink<'db>>(
     sink: &mut S,
     callee: &Operand<'db>,
     args: &[Operand<'db>],
+    has_trace: bool,
 ) -> Result<(), S::Error> {
-    walk_call_direct_args(sink, args)?;
-    walk_operand_pull(sink, callee)
+    let value_count = args.len() - usize::from(has_trace);
+    walk_call_direct_args(sink, &args[..value_count])?;
+    walk_operand_pull(sink, callee)?;
+    walk_call_direct_args(sink, &args[value_count..])
 }
 
 /// Resolve a call operand to a statically-known function item through
