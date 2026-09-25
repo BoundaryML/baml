@@ -17,6 +17,10 @@ pub enum ParseError {
         message: String,
         span: Span,
     },
+    /// A pipe can belong to a function's return/throws union or join two functions.
+    AmbiguousUnion {
+        span: Span,
+    },
     /// Use of a removed language feature (E0098), e.g. legacy `type_builder`
     /// blocks or `dynamic class`/`dynamic enum` definitions (BEP-066).
     RemovedFeature {

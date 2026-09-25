@@ -11,7 +11,7 @@ use std::{
 use baml_base::Name;
 use baml_compiler_diagnostics::{
     DiagnosticId, DiagnosticIdentifierKind, DiagnosticMessageHighlight, DiagnosticMessageKind,
-    DiagnosticPhase, Severity,
+    DiagnosticPhase, ParseError, Severity,
 };
 use baml_compiler_lexer::{TokenKind, lex_lossless};
 use baml_compiler_syntax::{BlockElement, BlockExpr, SyntaxKind, SyntaxNode};
@@ -1249,6 +1249,42 @@ fn runtime_diagnostic(
     }
 }
 
+fn session_parse_error_diagnostic(
+    error: &ParseError,
+    submission_name: &str,
+    prefix_len: usize,
+) -> RuntimeCompileDiagnostic {
+    let (code, span, message) = match error {
+        ParseError::UnexpectedToken {
+            expected,
+            found,
+            span,
+        } => (
+            DiagnosticId::InvalidSyntax,
+            *span,
+            format!("unexpected token: expected {expected}, found {found}"),
+        ),
+        ParseError::UnexpectedEof { expected, span } => (
+            DiagnosticId::InvalidSyntax,
+            *span,
+            format!("unexpected end of file: expected {expected}"),
+        ),
+        ParseError::InvalidSyntax { message, span }
+        | ParseError::RemovedFeature { message, span } => {
+            (DiagnosticId::InvalidSyntax, *span, message.clone())
+        }
+        ParseError::AmbiguousUnion { span } => (
+            DiagnosticId::AmbiguousUnion,
+            *span,
+            "ambiguous union; use parentheses to make the intended grouping explicit, for example:\n  ((A) -> B) | ((C) -> D)\n  (A) -> (B | (C) -> D)".to_string(),
+        ),
+    };
+    let range = span.range;
+    let start = usize::from(range.start()).saturating_sub(prefix_len);
+    let end = usize::from(range.end()).saturating_sub(prefix_len);
+    runtime_diagnostic(code, submission_name, start, end, message)
+}
+
 fn byte_range(node: &SyntaxNode) -> std::ops::Range<usize> {
     let range = node.text_range();
     usize::from(range.start())..usize::from(range.end())
@@ -1756,33 +1792,10 @@ fn lower_session_submission(
     let wrapped_tokens = lex_lossless(&wrapped, baml_base::FileId::new(0));
     let (wrapped_green, parse_errors) = baml_compiler_parser::parse_file(&wrapped_tokens);
     if let Some(error) = parse_errors.first() {
-        let (span, message) = match error {
-            baml_compiler_diagnostics::ParseError::UnexpectedToken {
-                expected,
-                found,
-                span,
-            } => (
-                *span,
-                format!("unexpected token: expected {expected}, found {found}"),
-            ),
-            baml_compiler_diagnostics::ParseError::UnexpectedEof { expected, span } => (
-                *span,
-                format!("unexpected end of file: expected {expected}"),
-            ),
-            baml_compiler_diagnostics::ParseError::InvalidSyntax { message, span }
-            | baml_compiler_diagnostics::ParseError::RemovedFeature { message, span } => {
-                (*span, message.clone())
-            }
-        };
-        let range = span.range;
-        let start = usize::from(range.start()).saturating_sub(prefix.len());
-        let end = usize::from(range.end()).saturating_sub(prefix.len());
-        return Err(vec![runtime_diagnostic(
-            DiagnosticId::InvalidSyntax,
+        return Err(vec![session_parse_error_diagnostic(
+            error,
             &request.submission_name,
-            start,
-            end,
-            message,
+            prefix.len(),
         )]);
     }
     let wrapped_root = SyntaxNode::new_root(wrapped_green);
@@ -2711,6 +2724,22 @@ mod tests {
     use baml_compiler2_hir_ty::package_interface::{FunctionThrowSets, PackageInterface};
 
     use super::*;
+
+    #[test]
+    fn session_ambiguity_retains_its_error_code_and_pipe_span() {
+        let span = baml_base::Span::new(
+            baml_base::FileId::new(0),
+            rowan::TextRange::new(20.into(), 21.into()),
+        );
+        let diagnostic = session_parse_error_diagnostic(
+            &ParseError::AmbiguousUnion { span },
+            "submission.baml",
+            10,
+        );
+        assert_eq!(diagnostic.code, DiagnosticId::AmbiguousUnion.code());
+        assert_eq!(diagnostic.span.unwrap().start, 10);
+        assert!(diagnostic.message.contains("use parentheses"));
+    }
 
     #[test]
     fn runtime_diagnostic_retains_structured_compiler_metadata() {
