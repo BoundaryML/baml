@@ -822,7 +822,7 @@ fn simulate_terminator_stack<'db>(
             sim.push();
             simulate_store_place_stack(destination, sim, classifications)
         }
-        Terminator::Throw { value } | Terminator::Rethrow { value } => {
+        Terminator::Throw { value } => {
             let mut sink = StackCarryPullSink {
                 sim,
                 carried_local,
@@ -835,19 +835,22 @@ fn simulate_terminator_stack<'db>(
             // THROW consumes the thrown value from the stack when unwinding.
             sim.pop_n(1)
         }
-        Terminator::ThrowIfPanic { value, .. } => {
+        Terminator::Rethrow { value, context }
+        | Terminator::ThrowIfPanic { value, context, .. } => {
             let mut sink = StackCarryPullSink {
                 sim,
                 carried_local,
                 classifications,
                 def_use,
             };
-            if pull_semantics::walk_operand_pull(&mut sink, value).is_err() {
+            if pull_semantics::walk_operand_pull(&mut sink, value).is_err()
+                || pull_semantics::walk_operand_pull(&mut sink, context).is_err()
+            {
                 return false;
             }
-            // ThrowIfPanic loads the value, checks it, and either throws (consuming it)
-            // or continues (consuming it). Either way the stack is clean after.
-            sim.pop_n(1)
+            // RETHROW consumes the value and its context when unwinding;
+            // THROW_IF_PANIC consumes both whether it throws or continues.
+            sim.pop_n(2)
         }
         Terminator::ShortCircuit { operand, .. } => {
             // ShortCircuit peeks the operand (stays on TOS), then conditionally

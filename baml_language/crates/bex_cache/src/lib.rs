@@ -145,8 +145,10 @@ use sha2::{Digest, Sha256};
 /// unit from before this version decodes cleanly and then hands the engine the
 /// wrong object; this constant is what rejects it. `Object`/`ObjectType` also
 /// lost `UnscheduledFuture` from the middle of the enum, renumbering the Borsh
-/// discriminants after it. (It is 17, not 16: version 16 is BEP-075's and
-/// shipped in 0.20.0, so reusing it would admit a released cache entry.)
+/// discriminants after it, and `Rethrow`/`ThrowIfPanic` pop the caught error's
+/// context under its value, with every exception-table entry naming a context
+/// slot. (It is 17, not 16: version 16 is BEP-075's and shipped in 0.20.0, so
+/// reusing it would admit a released cache entry.)
 pub const FORMAT_VERSION: u32 = 17;
 
 const MAGIC: [u8; 4] = *b"BEXC";

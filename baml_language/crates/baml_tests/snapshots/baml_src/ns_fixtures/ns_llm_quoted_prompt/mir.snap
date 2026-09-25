@@ -173,59 +173,60 @@ fn .<lambda(QuotedPrompt@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
     let _2: unknown //  __prompt_render_err
-    let _3: baml.TaggedString //  __spec_tagged_prompt
-    let _4: string[] //  __tt_parts
-    let _5: unknown[] //  __tt_values
-    let _6: string //  __tt_cur
-    let _7: string
-    let _8: int
-    let _9: string[]
-    let _10: string
-    let _11: reflect.Type
-    let _12: string[]
-    let _13: unknown[]
-    let _14: string[]
-    let _15: baml.TaggedString
-    let _16: unknown[]
-    let _17: baml.TaggedString
-    let _18: ai.errors.PromptRenderError
-    let _19: never
+    let _3: unknown
+    let _4: baml.TaggedString //  __spec_tagged_prompt
+    let _5: string[] //  __tt_parts
+    let _6: unknown[] //  __tt_values
+    let _7: string //  __tt_cur
+    let _8: string
+    let _9: int
+    let _10: string[]
+    let _11: string
+    let _12: reflect.Type
+    let _13: string[]
+    let _14: unknown[]
+    let _15: string[]
+    let _16: baml.TaggedString
+    let _17: unknown[]
+    let _18: baml.TaggedString
+    let _19: ai.errors.PromptRenderError
+    let _20: never
 
     bb0 [unwind bb3]: {
-        _4 = []: string[];
-        _5 = []: unknown[];
-        _6 = const "";
-        _7 = copy _6;
-        _6 = copy _7 + const "Write one sentence. Escapes decode:\n\tdone. Interpolation stays literal: ${topic}";
-        _9 = copy _4;
-        _10 = copy _6;
-        _11 = load_type(string);
-        _8 = call const fn baml.Array.push<copy _11>(copy _9, copy _10) -> [bb1, unwind: bb3];
+        _5 = []: string[];
+        _6 = []: unknown[];
+        _7 = const "";
+        _8 = copy _7;
+        _7 = copy _8 + const "Write one sentence. Escapes decode:\n\tdone. Interpolation stays literal: ${topic}";
+        _10 = copy _5;
+        _11 = copy _7;
+        _12 = load_type(string);
+        _9 = call const fn baml.Array.push<copy _12>(copy _10, copy _11) -> [bb1, unwind: bb3];
     }
 
     bb1 [unwind bb3]: {
-        _12 = copy _4;
         _13 = copy _5;
-        _3 = baml.TaggedString { copy _12, copy _13 };
-        _15 = copy _3;
-        _14 = copy _15.0;
-        _17 = copy _3;
-        _16 = copy _17.1;
-        _0 = call const fn ai.internal.assemble_llm_prompt(copy _14, copy _16) -> [bb2, unwind: bb3];
+        _14 = copy _6;
+        _4 = baml.TaggedString { copy _13, copy _14 };
+        _16 = copy _4;
+        _15 = copy _16.0;
+        _18 = copy _4;
+        _17 = copy _18.1;
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _15, copy _17) -> [bb2, unwind: bb3];
     }
 
     bb2: {
         return;
     }
 
-    bb3 [landing _2] [handling bb3]: {
-        throw_if_panic copy _2 -> bb4;
+    bb3 [landing _2, _3] [handling bb3]: {
+        throw_if_panic copy _2 with copy _3 -> bb4;
     }
 
     bb4 [handling bb3]: {
-        _19 = copy _2;
-        _18 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _19 };
-        throw copy _18;
+        _20 = copy _2;
+        _19 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _20 };
+        throw copy _19;
     }
 }
 
@@ -594,110 +595,111 @@ fn .<lambda(BacktickPrompt@spec, 0)>( __spec_output_format: ai.OutputFormat) -> 
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
     let _2: unknown //  __prompt_render_err
-    let _3: ai.internal.SpecCtx // ctx
-    let _4: baml.TaggedString //  __spec_tagged_prompt
-    let _5: string[] //  __tt_parts
-    let _6: unknown[] //  __tt_values
-    let _7: string //  __tt_cur
-    let _8: string
-    let _9: int
-    let _10: string[]
-    let _11: string
-    let _12: reflect.Type
-    let _13: int
-    let _14: unknown[]
-    let _15: string
-    let _16: reflect.Type
-    let _17: int
-    let _18: string[]
-    let _19: ".\nAn escaped marker stays literal and does not warn: ${topic}\n\n"
-    let _20: reflect.Type
-    let _21: int
-    let _22: unknown[]
-    let _23: string
-    let _24: reflect.Type
-    let _25: int
-    let _26: string[]
-    let _27: ""
-    let _28: reflect.Type
-    let _29: string[]
-    let _30: unknown[]
-    let _31: string[]
-    let _32: baml.TaggedString
-    let _33: unknown[]
-    let _34: baml.TaggedString
-    let _35: ai.errors.PromptRenderError
-    let _36: never
+    let _3: unknown
+    let _4: ai.internal.SpecCtx // ctx
+    let _5: baml.TaggedString //  __spec_tagged_prompt
+    let _6: string[] //  __tt_parts
+    let _7: unknown[] //  __tt_values
+    let _8: string //  __tt_cur
+    let _9: string
+    let _10: int
+    let _11: string[]
+    let _12: string
+    let _13: reflect.Type
+    let _14: int
+    let _15: unknown[]
+    let _16: string
+    let _17: reflect.Type
+    let _18: int
+    let _19: string[]
+    let _20: ".\nAn escaped marker stays literal and does not warn: ${topic}\n\n"
+    let _21: reflect.Type
+    let _22: int
+    let _23: unknown[]
+    let _24: string
+    let _25: reflect.Type
+    let _26: int
+    let _27: string[]
+    let _28: ""
+    let _29: reflect.Type
+    let _30: string[]
+    let _31: unknown[]
+    let _32: string[]
+    let _33: baml.TaggedString
+    let _34: unknown[]
+    let _35: baml.TaggedString
+    let _36: ai.errors.PromptRenderError
+    let _37: never
 
     bb0 [unwind bb8]: {
-        _3 = ai.internal.SpecCtx { copy _1 };
-        _5 = []: string[];
-        _6 = []: unknown[];
-        _7 = const "";
-        _8 = copy _7;
-        _7 = copy _8 + const "Write one sentence about ";
-        _10 = copy _5;
-        _11 = copy _7;
-        _12 = load_type(string);
-        _9 = call const fn baml.Array.push<copy _12>(copy _10, copy _11) -> [bb1, unwind: bb8];
+        _4 = ai.internal.SpecCtx { copy _1 };
+        _6 = []: string[];
+        _7 = []: unknown[];
+        _8 = const "";
+        _9 = copy _8;
+        _8 = copy _9 + const "Write one sentence about ";
+        _11 = copy _6;
+        _12 = copy _8;
+        _13 = load_type(string);
+        _10 = call const fn baml.Array.push<copy _13>(copy _11, copy _12) -> [bb1, unwind: bb8];
     }
 
     bb1 [unwind bb8]: {
-        _14 = copy _6;
-        _15 = copy *capture[0];
-        _16 = load_type(unknown);
-        _13 = call const fn baml.Array.push<copy _16>(copy _14, copy _15) -> [bb2, unwind: bb8];
+        _15 = copy _7;
+        _16 = copy *capture[0];
+        _17 = load_type(unknown);
+        _14 = call const fn baml.Array.push<copy _17>(copy _15, copy _16) -> [bb2, unwind: bb8];
     }
 
     bb2 [unwind bb8]: {
-        _7 = const ".\nAn escaped marker stays literal and does not warn: ${topic}\n\n";
-        _18 = copy _5;
-        _19 = copy _7;
-        _20 = load_type(string);
-        _17 = call const fn baml.Array.push<copy _20>(copy _18, copy _19) -> [bb3, unwind: bb8];
+        _8 = const ".\nAn escaped marker stays literal and does not warn: ${topic}\n\n";
+        _19 = copy _6;
+        _20 = copy _8;
+        _21 = load_type(string);
+        _18 = call const fn baml.Array.push<copy _21>(copy _19, copy _20) -> [bb3, unwind: bb8];
     }
 
     bb3 [unwind bb8]: {
-        _7 = const "";
-        _22 = copy _6;
-        _23 = call const fn ai.internal.SpecCtx.output_format(copy _3, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb4, unwind: bb8];
+        _8 = const "";
+        _23 = copy _7;
+        _24 = call const fn ai.internal.SpecCtx.output_format(copy _4, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb4, unwind: bb8];
     }
 
     bb4 [unwind bb8]: {
-        _24 = load_type(unknown);
-        _21 = call const fn baml.Array.push<copy _24>(copy _22, copy _23) -> [bb5, unwind: bb8];
+        _25 = load_type(unknown);
+        _22 = call const fn baml.Array.push<copy _25>(copy _23, copy _24) -> [bb5, unwind: bb8];
     }
 
     bb5 [unwind bb8]: {
-        _26 = copy _5;
-        _27 = copy _7;
-        _28 = load_type(string);
-        _25 = call const fn baml.Array.push<copy _28>(copy _26, copy _27) -> [bb6, unwind: bb8];
+        _27 = copy _6;
+        _28 = copy _8;
+        _29 = load_type(string);
+        _26 = call const fn baml.Array.push<copy _29>(copy _27, copy _28) -> [bb6, unwind: bb8];
     }
 
     bb6 [unwind bb8]: {
-        _29 = copy _5;
         _30 = copy _6;
-        _4 = baml.TaggedString { copy _29, copy _30 };
-        _32 = copy _4;
-        _31 = copy _32.0;
-        _34 = copy _4;
-        _33 = copy _34.1;
-        _0 = call const fn ai.internal.assemble_llm_prompt(copy _31, copy _33) -> [bb7, unwind: bb8];
+        _31 = copy _7;
+        _5 = baml.TaggedString { copy _30, copy _31 };
+        _33 = copy _5;
+        _32 = copy _33.0;
+        _35 = copy _5;
+        _34 = copy _35.1;
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _32, copy _34) -> [bb7, unwind: bb8];
     }
 
     bb7: {
         return;
     }
 
-    bb8 [landing _2] [handling bb8]: {
-        throw_if_panic copy _2 -> bb9;
+    bb8 [landing _2, _3] [handling bb8]: {
+        throw_if_panic copy _2 with copy _3 -> bb9;
     }
 
     bb9 [handling bb8]: {
-        _36 = copy _2;
-        _35 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _36 };
-        throw copy _35;
+        _37 = copy _2;
+        _36 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _37 };
+        throw copy _36;
     }
 }
 

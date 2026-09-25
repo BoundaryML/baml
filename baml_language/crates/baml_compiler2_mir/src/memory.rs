@@ -627,14 +627,12 @@ pub fn terminator_clobbers(model: ClobberModel, terminator: &Terminator<'_>) -> 
 }
 
 /// The resources the VM writes when control enters `block`: a catch handler
-/// receives its error (and context) bindings with no statement saying so.
+/// receives its error and context bindings with no statement saying so.
 pub fn block_entry_clobbers(body: &MirFunctionBody<'_>, block: crate::BlockId) -> Resources {
     let mut out = Resources::default();
     if let Some(landing) = body.blocks[block.0].landing {
         out.locals.insert(landing.error_local);
-        if let Some(local) = landing.context_local {
-            out.locals.insert(local);
-        }
+        out.locals.insert(landing.context_local);
     }
     out
 }

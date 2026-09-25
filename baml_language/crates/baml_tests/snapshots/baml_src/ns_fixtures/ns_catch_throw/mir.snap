@@ -7,13 +7,14 @@ fn user.fixtures.catch_throw.SingleCatchWildcard(x: int) -> string {
     let _0: string // _0 // return
     let _1: int // x // param
     let _2: unknown // e
+    let _3: unknown
 
     bb0 [unwind bb1]: {
         _0 = call const fn user.fixtures.catch_throw.MayFail(copy _1) -> [bb3, unwind: bb1];
     }
 
-    bb1 [landing _2] [handling bb1]: {
-        throw_if_panic copy _2 -> bb2;
+    bb1 [landing _2, _3] [handling bb1]: {
+        throw_if_panic copy _2 with copy _3 -> bb2;
     }
 
     bb2 [handling bb1]: {
@@ -31,25 +32,26 @@ fn user.fixtures.catch_throw.CatchWithFallback(x: int) -> string {
     let _0: string // _0 // return
     let _1: int // x // param
     let _2: unknown
-    let _3: bool
+    let _3: unknown
     let _4: bool
+    let _5: bool
 
     bb0 [unwind bb1]: {
         _0 = call const fn user.fixtures.catch_throw.MayFailIntOrString(copy _1) -> [bb6, unwind: bb1];
     }
 
-    bb1 [landing _2] [handling bb1]: {
-        _3 = is_type(copy _2, string);
-        branch copy _3 -> [bb5, bb2];
+    bb1 [landing _2, _3] [handling bb1]: {
+        _4 = is_type(copy _2, string);
+        branch copy _4 -> [bb5, bb2];
     }
 
     bb2 [handling bb1]: {
-        _4 = is_type(copy _2, int);
-        branch copy _4 -> [bb4, bb3];
+        _5 = is_type(copy _2, int);
+        branch copy _5 -> [bb4, bb3];
     }
 
     bb3 [handling bb1]: {
-        rethrow copy _2;
+        rethrow copy _2 with copy _3;
     }
 
     bb4 [handling bb1]: {

@@ -157,11 +157,11 @@ fn write_local_decl_inline(f: &mut impl Write, id: Local, decl: &LocalDecl) -> f
 fn write_block(f: &mut impl Write, db: &dyn crate::Db, block: &BasicBlock<'_>) -> fmt::Result {
     write!(f, "    {}", block.id)?;
     if let Some(landing) = block.landing {
-        write!(f, " [landing {}", landing.error_local)?;
-        if let Some(context) = landing.context_local {
-            write!(f, ", {context}")?;
-        }
-        write!(f, "]")?;
+        write!(
+            f,
+            " [landing {}, {}]",
+            landing.error_local, landing.context_local
+        )?;
     }
     if let Some(unwind) = block.unwind {
         write!(f, " [unwind {unwind}]")?;
@@ -453,14 +453,22 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
             write_operand(f, db, value)?;
             write!(f, ";")
         }
-        Terminator::Rethrow { value } => {
+        Terminator::Rethrow { value, context } => {
             write!(f, "rethrow ")?;
             write_operand(f, db, value)?;
+            write!(f, " with ")?;
+            write_operand(f, db, context)?;
             write!(f, ";")
         }
-        Terminator::ThrowIfPanic { value, otherwise } => {
+        Terminator::ThrowIfPanic {
+            value,
+            context,
+            otherwise,
+        } => {
             write!(f, "throw_if_panic ")?;
             write_operand(f, db, value)?;
+            write!(f, " with ")?;
+            write_operand(f, db, context)?;
             write!(f, " -> {otherwise};")
         }
         Terminator::ShortCircuit {

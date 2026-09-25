@@ -1020,10 +1020,13 @@ fn collect_uses_in_terminator<'db>(
                 }
             }
         }
-        Terminator::Throw { value }
-        | Terminator::Rethrow { value }
-        | Terminator::ThrowIfPanic { value, .. } => {
+        Terminator::Throw { value } => {
             collect_uses_in_operand(value, block, StatementRef::Terminator, def_use);
+        }
+        Terminator::Rethrow { value, context }
+        | Terminator::ThrowIfPanic { value, context, .. } => {
+            collect_uses_in_operand(value, block, StatementRef::Terminator, def_use);
+            collect_uses_in_operand(context, block, StatementRef::Terminator, def_use);
         }
         Terminator::ShortCircuit {
             operand,
@@ -1408,7 +1411,7 @@ fn classify_locals(
     // context slot. Like parameters, they always have a slot of their own.
     let landing_locals: HashSet<Local> = body
         .handlers()
-        .flat_map(|(_, landing)| std::iter::once(landing.error_local).chain(landing.context_local))
+        .flat_map(|(_, landing)| [landing.error_local, landing.context_local])
         .collect();
 
     for (idx, _local_decl) in body.locals.iter().enumerate() {
@@ -2907,17 +2910,25 @@ mod tests {
         body
     }
 
-    /// Make `bb{handler}` a handler landing the error in `error_local`, and
-    /// `bb{protected}` unwind to it.
+    /// Make `bb{handler}` a handler landing the error in `error_local` (and
+    /// its context in a fresh local), and `bb{protected}` unwind to it.
     fn unwinds_to(
         body: &mut MirFunctionBody<'_>,
         protected: usize,
         handler: usize,
         error_local: Local,
     ) {
+        let context_local = Local(body.locals.len());
+        body.locals.push(LocalDecl {
+            name: None,
+            ty: RuntimeTy::Unknown,
+            span: None,
+            scope_span: None,
+            is_captured: false,
+        });
         body.blocks[handler].landing = Some(Landing {
             error_local,
-            context_local: None,
+            context_local,
         });
         body.blocks[handler].handling = Some(BlockId(handler));
         body.blocks[protected].unwind = Some(BlockId(handler));

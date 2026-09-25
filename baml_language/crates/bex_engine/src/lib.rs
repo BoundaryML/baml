@@ -4683,7 +4683,7 @@ impl BexEngine {
         let thrown = bex_vm::errors::VmThrown {
             value: vm_value,
             throw_kind,
-            language_is_rethrow: false,
+            context: None,
         };
         self.unwind_injected_thrown(thread, call_id, thrown, throws_type)
             .await
@@ -4815,7 +4815,7 @@ impl BexEngine {
                 let thrown = bex_vm::errors::VmThrown {
                     value,
                     throw_kind,
-                    language_is_rethrow: false,
+                    context: None,
                 };
                 self.unwind_injected_thrown(thread, call_id, thrown, throws_type)
                     .await

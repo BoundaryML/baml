@@ -57,7 +57,8 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// would hand the engine the wrong object. The same version covers the
 /// `Object`/`ObjectType` lattice losing `UnscheduledFuture` from the middle of
 /// the enum, which renumbers the Borsh discriminants of every variant declared
-/// after it.
+/// after it, and `Rethrow`/`ThrowIfPanic` popping the caught error's context
+/// under its value, with every exception-table entry naming a context slot.
 pub const FORMAT_VERSION: u32 = 11;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's

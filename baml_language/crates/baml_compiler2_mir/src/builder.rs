@@ -638,15 +638,30 @@ impl<'db> MirBuilder<'db> {
         self.set_terminator(Terminator::Throw { value });
     }
 
-    /// Emit a rethrow terminator for a caught error value.
-    pub(crate) fn rethrow(&mut self, value: Operand<'db>) {
-        self.set_terminator(Terminator::Rethrow { value });
+    /// Emit a rethrow terminator for a caught error value, carrying the
+    /// context its landing wrote into `context` (a landing local, never
+    /// captured).
+    pub(crate) fn rethrow(&mut self, value: Operand<'db>, context: Local) {
+        self.set_terminator(Terminator::Rethrow {
+            value,
+            context: Operand::Copy(Place::Local(context)),
+        });
     }
 
     /// Emit a throw-if-panic terminator: if the value is a panic instance,
-    /// throw it; otherwise continue to `otherwise`.
-    pub(crate) fn throw_if_panic(&mut self, value: Operand<'db>, otherwise: BlockId) {
-        self.set_terminator(Terminator::ThrowIfPanic { value, otherwise });
+    /// rethrow it with its landing's `context`; otherwise continue to
+    /// `otherwise`.
+    pub(crate) fn throw_if_panic(
+        &mut self,
+        value: Operand<'db>,
+        context: Local,
+        otherwise: BlockId,
+    ) {
+        self.set_terminator(Terminator::ThrowIfPanic {
+            value,
+            context: Operand::Copy(Place::Local(context)),
+            otherwise,
+        });
     }
 
     pub(crate) fn sys_op(

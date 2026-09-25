@@ -584,9 +584,10 @@ pub enum Instruction {
     /// Stack: `[error_value]` -> `[]` (control transfers to unwind handler or caller)
     Throw,
 
-    /// Re-throw a caught value on top of the stack.
+    /// Re-throw a caught value with the `baml.errors.Context` it was caught
+    /// with, so it keeps its original trace and cause.
     ///
-    /// Stack: `[error_value]` -> `[]` (control transfers to unwind handler or caller)
+    /// Stack: `[error_value, context]` -> `[]` (control transfers to unwind handler or caller)
     Rethrow,
 
     /// Return from a function.
@@ -667,10 +668,11 @@ pub enum Instruction {
     /// for algorithm references.
     DenseTag(usize),
 
-    /// If the top-of-stack value is a panic instance (`baml.panics.*`), throw it.
-    /// Otherwise pop the value and continue to the next instruction.
+    /// If the caught value is a panic instance (`baml.panics.*`), re-throw it
+    /// with the `baml.errors.Context` it was caught with. Otherwise pop both and
+    /// continue to the next instruction.
     ///
-    /// Stack: `[value]` -> `[]` (continues) or unwinds (throws)
+    /// Stack: `[value, context]` -> `[]` (continues) or unwinds (throws)
     ///
     /// Used in catch handlers before wildcard arms to prevent them from
     /// swallowing panics the programmer didn't explicitly name.
@@ -1864,17 +1866,8 @@ pub struct ExceptionTableEntry {
     pub handler_pc: usize,
     /// Frame-local slot index for the caught error value.
     pub error_slot: usize,
-    /// Frame-local slot for the stack trace value.
-    /// `u32::MAX` means no stack trace binding (catch (e) without second param).
-    pub stack_trace_slot: usize,
-}
-
-impl ExceptionTableEntry {
-    pub const NO_STACK_TRACE: usize = u32::MAX as usize;
-
-    pub fn has_stack_trace_slot(&self) -> bool {
-        self.stack_trace_slot != Self::NO_STACK_TRACE
-    }
+    /// Frame-local slot for the caught error's `baml.errors.Context`.
+    pub context_slot: usize,
 }
 
 /// The event a `log.*` call sends: `{ level, data }`.
@@ -1903,8 +1896,8 @@ fn pc_in_ranges(ranges: &[ShieldRange], pc: usize) -> bool {
 ///
 /// A throw whose PC lies in `[start_pc, end_pc)` happened *during handling of*
 /// the error caught by the owning catch (or while unwinding through a defer
-/// pad). That caught error's materialized `ErrorContext` lives in
-/// `stack_trace_slot` and becomes the new error's `cause`.
+/// pad). That caught error's `baml.errors.Context` lives in `context_slot` and
+/// becomes the new error's `cause`.
 ///
 /// One catch contributes one entry *per handler-body block*. A handler body is
 /// the union of blocks captured at lowering; layout can fragment it across
@@ -1923,16 +1916,8 @@ pub struct HandlerContextEntry {
     pub end_pc: usize,
     /// Handler block PC of the owning catch — the nesting key.
     pub handler_pc: usize,
-    /// Frame-local slot holding the owning catch's `ErrorContext`.
-    /// `ExceptionTableEntry::NO_STACK_TRACE` means the catch bound no `ctx`, so
-    /// there is no context object to chain — the pre-walk stops with `null`.
-    pub stack_trace_slot: usize,
-}
-
-impl HandlerContextEntry {
-    pub fn has_stack_trace_slot(&self) -> bool {
-        self.stack_trace_slot != ExceptionTableEntry::NO_STACK_TRACE
-    }
+    /// Frame-local slot holding the owning catch's `baml.errors.Context`.
+    pub context_slot: usize,
 }
 
 /// Compact jump table: maps discriminant values to i32 byte offsets
@@ -2013,13 +1998,19 @@ impl CompactCode {
 
     /// The innermost handler-body range (byte-offset) covering `pc`, or `None`.
     /// BEP-042 cause-chain pre-walk: a throw here is "during handling of" the
-    /// error whose `ErrorContext` lives in the entry's `stack_trace_slot`.
+    /// error whose `baml.errors.Context` lives in the entry's `context_slot`.
     /// Innermost = largest `handler_pc` among covering ranges.
     pub fn handler_context_for_pc(&self, pc: usize) -> Option<&HandlerContextEntry> {
+        self.handler_contexts_for_pc(pc)
+            .max_by_key(|e| e.handler_pc)
+    }
+
+    /// Every handler whose body covers `pc`: the handlers active there,
+    /// innermost and enclosing alike.
+    pub fn handler_contexts_for_pc(&self, pc: usize) -> impl Iterator<Item = &HandlerContextEntry> {
         self.handler_context_table
             .iter()
-            .filter(|e| pc >= e.start_pc && pc < e.end_pc)
-            .max_by_key(|e| e.handler_pc)
+            .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
     }
 
     /// Whether the code at byte-offset `pc` runs shielded from cancellation.
@@ -2154,13 +2145,19 @@ impl Bytecode {
 
     /// The innermost handler-body range covering `pc`, or `None`.
     /// BEP-042 cause-chain pre-walk: a throw here is "during handling of" the
-    /// error whose `ErrorContext` lives in the entry's `stack_trace_slot`.
+    /// error whose `baml.errors.Context` lives in the entry's `context_slot`.
     /// Innermost = largest `handler_pc` among covering ranges.
     pub fn handler_context_for_pc(&self, pc: usize) -> Option<&HandlerContextEntry> {
+        self.handler_contexts_for_pc(pc)
+            .max_by_key(|e| e.handler_pc)
+    }
+
+    /// Every handler whose body covers `pc`: the handlers active there,
+    /// innermost and enclosing alike.
+    pub fn handler_contexts_for_pc(&self, pc: usize) -> impl Iterator<Item = &HandlerContextEntry> {
         self.handler_context_table
             .iter()
-            .filter(|e| pc >= e.start_pc && pc < e.end_pc)
-            .max_by_key(|e| e.handler_pc)
+            .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
     }
 
     /// Whether the instruction at index `pc` runs shielded from cancellation.
@@ -2489,7 +2486,7 @@ impl Bytecode {
                 end_pc: index_to_offset[entry.end_pc],
                 handler_pc: index_to_offset[entry.handler_pc],
                 error_slot: entry.error_slot,
-                stack_trace_slot: entry.stack_trace_slot,
+                context_slot: entry.context_slot,
             })
             .collect();
 
@@ -2506,7 +2503,7 @@ impl Bytecode {
                     .copied()
                     .unwrap_or(code.len()),
                 handler_pc: index_to_offset[entry.handler_pc],
-                stack_trace_slot: entry.stack_trace_slot,
+                context_slot: entry.context_slot,
             })
             .collect();
 
@@ -3100,14 +3097,14 @@ mod compact_tests {
                 end_pc: 2,
                 handler_pc: 2,
                 error_slot: 0,
-                stack_trace_slot: ExceptionTableEntry::NO_STACK_TRACE,
+                context_slot: 1,
             }],
             shield_table: Vec::new(),
             handler_context_table: vec![HandlerContextEntry {
                 start_pc: 2,
                 end_pc: 3, // one past the last instruction → mapped to total byte length
                 handler_pc: 2,
-                stack_trace_slot: 0,
+                context_slot: 0,
             }],
             compact: None,
         };

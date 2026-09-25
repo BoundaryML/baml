@@ -36,12 +36,14 @@ pub enum OptLevel {
 // ============================================================================
 
 /// What the VM lands in a handler block with: the frame slots it writes the
-/// caught error and, for a `catch (e, ctx)` or a `defer` landing pad, its
-/// `baml.errors.Context` into before jumping to the block.
+/// caught error and its `baml.errors.Context` into before jumping to the
+/// block. The context is the error's identity while it is in flight: a
+/// rethrow from the handler carries it, and a throw during the handler's body
+/// takes it as its cause.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Landing {
     pub error_local: Local,
-    pub context_local: Option<Local>,
+    pub context_local: Local,
 }
 
 /// The bytecode body of a MIR function — blocks, locals, and associated data.
@@ -626,10 +628,13 @@ pub enum Terminator<'db> {
         value: Operand<'db>,
     },
 
-    /// Re-throw a caught error value, preserving its original trace origin.
+    /// Re-throw a caught error value with the context it was caught with, so
+    /// it keeps its original trace and cause.
     Rethrow {
         /// The caught error value to rethrow.
         value: Operand<'db>,
+        /// Its `baml.errors.Context`: the landing's context local.
+        context: Operand<'db>,
     },
 
     /// If the value is a panic instance (`baml.panics.*`), throw it.
@@ -639,6 +644,8 @@ pub enum Terminator<'db> {
     /// panics the programmer didn't explicitly name.
     ThrowIfPanic {
         value: Operand<'db>,
+        /// The value's `baml.errors.Context`, carried by the rethrow.
+        context: Operand<'db>,
         otherwise: BlockId,
     },
 

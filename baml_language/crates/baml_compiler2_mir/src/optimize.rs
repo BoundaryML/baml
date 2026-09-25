@@ -517,10 +517,13 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
                 Terminator::Switch { discriminant, .. } => {
                     scan_operand(discriminant, &mut set);
                 }
-                Terminator::Throw { value }
-                | Terminator::Rethrow { value }
-                | Terminator::ThrowIfPanic { value, .. } => {
+                Terminator::Throw { value } => {
                     scan_operand(value, &mut set);
+                }
+                Terminator::Rethrow { value, context }
+                | Terminator::ThrowIfPanic { value, context, .. } => {
+                    scan_operand(value, &mut set);
+                    scan_operand(context, &mut set);
                 }
                 Terminator::Await {
                     future,
@@ -568,9 +571,8 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
 fn count_local_defs(body: &MirFunctionBody<'_>) -> Vec<usize> {
     let mut defs = vec![0usize; body.locals.len()];
     for (_, landing) in body.handlers() {
-        for local in std::iter::once(landing.error_local).chain(landing.context_local) {
-            defs[local.0] += 1;
-        }
+        defs[landing.error_local.0] += 1;
+        defs[landing.context_local.0] += 1;
     }
 
     for block in &body.blocks {
@@ -620,14 +622,12 @@ fn count_local_uses(body: &MirFunctionBody<'_>) -> Vec<usize> {
         uses[local.0] += 1;
     }
 
-    // The VM also materializes the caught error's `baml.errors.Context` into the
-    // context (second-binding) slot at unwind time, and the BEP-042 cause-chain
-    // pre-walk reads it from an *enclosing* handler — a use the static analysis
-    // can't see. Keep it alive even when the `ctx` binding looks dead.
+    // The VM also writes the caught error's `baml.errors.Context` into the
+    // context slot, and the BEP-042 cause-chain pre-walk reads it from an
+    // *enclosing* handler — a use the static analysis can't see. Keep it alive
+    // even when no binding or rethrow reads it.
     for (_, landing) in body.handlers() {
-        if let Some(ctx_local) = landing.context_local {
-            uses[ctx_local.0] += 1;
-        }
+        uses[landing.context_local.0] += 1;
     }
 
     uses
@@ -830,10 +830,13 @@ fn count_in_terminator(term: &Terminator<'_>, uses: &mut [usize]) {
             // destination is a write (the winning index)
             count_dest_place(destination, uses);
         }
-        Terminator::Throw { value }
-        | Terminator::Rethrow { value }
-        | Terminator::ThrowIfPanic { value, .. } => {
+        Terminator::Throw { value } => {
             count_in_operand(value, uses);
+        }
+        Terminator::Rethrow { value, context }
+        | Terminator::ThrowIfPanic { value, context, .. } => {
+            count_in_operand(value, uses);
+            count_in_operand(context, uses);
         }
         Terminator::ShortCircuit {
             operand,
@@ -1183,10 +1186,13 @@ fn apply_subst_to_terminator<'db>(
             }
         }
         Terminator::Spawn { plan, .. } => apply_subst_to_operand(plan, subst),
-        Terminator::Throw { value }
-        | Terminator::Rethrow { value }
-        | Terminator::ThrowIfPanic { value, .. } => {
+        Terminator::Throw { value } => {
             apply_subst_to_operand(value, subst);
+        }
+        Terminator::Rethrow { value, context }
+        | Terminator::ThrowIfPanic { value, context, .. } => {
+            apply_subst_to_operand(value, subst);
+            apply_subst_to_operand(context, subst);
         }
         Terminator::ShortCircuit { operand, .. } => {
             apply_subst_to_operand(operand, subst);
@@ -1346,21 +1352,15 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
         }
     }
 
-    // Rewrite the handler landings' error + context locals. Both the first
-    // (`e`) and second (`ctx`/`st`) catch bindings have a payload local the VM
-    // writes into; if the context local isn't renumbered alongside the error
-    // local, the emitter computes a stale `stack_trace_slot` and the binding
-    // reads an uninitialized (Null) slot — see BEP-042 baml.errors.Context
-    // nested-catch bug.
+    // Rewrite the handler landings' error + context locals: the VM writes
+    // both, so both are always live (see `count_local_uses`), and a stale one
+    // would make the emitter compute a stale slot — see BEP-042
+    // baml.errors.Context nested-catch bug.
     for block in &mut body.blocks {
         if let Some(landing) = &mut block.landing {
-            if let Some(new_local) = old_to_new[landing.error_local.0] {
-                landing.error_local = new_local;
-            }
-            if let Some(ctx_local) = landing.context_local
-                && let Some(new_local) = old_to_new[ctx_local.0]
-            {
-                landing.context_local = Some(new_local);
+            for local in [&mut landing.error_local, &mut landing.context_local] {
+                *local = old_to_new[local.0]
+                    .unwrap_or_else(|| unreachable!("a landing local is always live"));
             }
         }
     }
@@ -1546,10 +1546,13 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
             remap_operand(futures, map);
             remap_place(destination, map);
         }
-        Terminator::Throw { value }
-        | Terminator::Rethrow { value }
-        | Terminator::ThrowIfPanic { value, .. } => {
+        Terminator::Throw { value } => {
             remap_operand(value, map);
+        }
+        Terminator::Rethrow { value, context }
+        | Terminator::ThrowIfPanic { value, context, .. } => {
+            remap_operand(value, map);
+            remap_operand(context, map);
         }
         Terminator::ShortCircuit {
             operand,
@@ -1818,10 +1821,13 @@ fn verify_mir(
                     check_operand(futures, &blk);
                     check_place(destination, &blk);
                 }
-                Terminator::Throw { value }
-                | Terminator::Rethrow { value }
-                | Terminator::ThrowIfPanic { value, .. } => {
+                Terminator::Throw { value } => {
                     check_operand(value, &blk);
+                }
+                Terminator::Rethrow { value, context }
+                | Terminator::ThrowIfPanic { value, context, .. } => {
+                    check_operand(value, &blk);
+                    check_operand(context, &blk);
                 }
                 Terminator::ShortCircuit {
                     operand,
@@ -1876,7 +1882,7 @@ fn verify_mir(
             );
         }
         if let Some(landing) = block.landing {
-            for local in std::iter::once(landing.error_local).chain(landing.context_local) {
+            for local in [landing.error_local, landing.context_local] {
                 assert!(
                     local.0 < num_locals,
                     "dangling landing local {local} of handler {:?} in MIR function {name}",
@@ -2063,7 +2069,7 @@ fn verify_definite_assignment(
     for (handler, landing) in body.handlers() {
         let defs = handler_defs.entry(handler).or_default();
         defs.push(landing.error_local);
-        defs.extend(landing.context_local);
+        defs.push(landing.context_local);
     }
     for block in &body.blocks {
         if let Some(handler) = block.unwind {
@@ -2345,11 +2351,14 @@ fn verify_definite_assignment(
                 read_operand(&state, futures);
                 write_place(&state, destination);
             }
+            Some(Terminator::Throw { value }) => read_operand(&state, value),
             Some(
-                Terminator::Throw { value }
-                | Terminator::Rethrow { value }
-                | Terminator::ThrowIfPanic { value, .. },
-            ) => read_operand(&state, value),
+                Terminator::Rethrow { value, context }
+                | Terminator::ThrowIfPanic { value, context, .. },
+            ) => {
+                read_operand(&state, value);
+                read_operand(&state, context);
+            }
             Some(Terminator::ShortCircuit {
                 operand,
                 destination,

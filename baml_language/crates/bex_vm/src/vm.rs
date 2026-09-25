@@ -391,9 +391,7 @@ pub(crate) mod tests {
 
             thread_id: 0,
 
-            thrown_value_causes: Vec::new(),
-            thrown_value_contexts: Vec::new(),
-            preserved_throw_contexts: Vec::new(),
+            context_transfers: Vec::new(),
             argv: Arc::from([]),
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
@@ -1321,10 +1319,29 @@ impl RootHaver for Frame {
 /// Other than that, pretty much everything is better in a stack VM, especially
 /// simplicity (we don't even need to figure out which registers to use and when
 /// to use them).
-#[derive(Clone)]
-struct ThrowContext {
-    trace: Arc<[StackFrame]>,
-    cause: Value,
+/// The `baml.errors.Context` of an error the unwinder is carrying, until a
+/// handler lands it.
+enum InFlightContext {
+    /// An error that already has its context: a caught error raised again, an
+    /// error awaited from another task, or a conversion of the error a handler
+    /// is handling.
+    Carried(Value),
+    /// A new failure's trace and cause. The `Context` object is built only if
+    /// a handler lands it.
+    Fresh {
+        trace: Arc<[StackFrame]>,
+        cause: Value,
+    },
+}
+
+/// A conversion (`UnknownError.from` / `with_message`) of the error a handler
+/// is handling: the next new throw of `target` from inside that handler takes
+/// over the handled error's trace and cause, as if it were that error.
+struct ContextTransfer {
+    /// The handler's `baml.errors.Context`, which identifies the handled error.
+    handling: Value,
+    /// The value the conversion produced.
+    target: Value,
 }
 
 /// The parameter list a callable value executes with; see
@@ -1431,28 +1448,11 @@ pub struct BexVm {
     /// here for the explicit completion boundary to finish.
     pending_telemetry_wait: Option<(usize, ClockInstant)>,
 
-    /// BEP-042 cause chain across a transparent re-raise: the `cause` context
-    /// computed at each error value's original (fresh) throw site, keyed by the
-    /// thrown value. A later *rethrow* of the same value (a non-throwing
-    /// `defer` pad re-raising the in-flight error, the no-match fall-through,
-    /// or `throw <binding>`) reuses this instead of re-running the cause walk —
-    /// which from inside a handler body would self-link — so the chain survives
-    /// the re-raise. Stored as values (not raw bits) so GC forwarding preserves
-    /// both key and cause identity; deduplicated by value and cleared, like
-    /// the other throw-state stores, when a fresh entry point is set on an
-    /// empty frame stack.
-    thrown_value_causes: Vec<(Value, Value)>,
-
-    /// Most recently observed context for each thrown value. `UnknownError`
-    /// conversion uses this to transfer the original trace and cause to the
-    /// normalized value.
-    thrown_value_contexts: Vec<(Value, ThrowContext)>,
-
-    /// One-shot context transfers registered by `UnknownError.from` and
-    /// `UnknownError.with_message`. The next fresh throw of the target consumes
-    /// the entry, preserving the source throw site instead of the conversion
-    /// boundary.
-    preserved_throw_contexts: Vec<(Value, ThrowContext)>,
+    /// Context transfers registered by the conversions that ran inside a
+    /// handler still active on this thread (see [`ContextTransfer`]). Stale
+    /// entries, whose handler has finished without throwing the converted
+    /// value, are dropped at the next registration.
+    context_transfers: Vec<ContextTransfer>,
 
     /// Process arguments exposed by `baml.sys.argv()`. Shared across VMs.
     pub argv: Arc<[String]>,
@@ -1995,9 +1995,7 @@ impl BexVm {
 
             thread_id: 0,
 
-            thrown_value_causes: Vec::new(),
-            thrown_value_contexts: Vec::new(),
-            preserved_throw_contexts: Vec::new(),
+            context_transfers: Vec::new(),
             argv,
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
@@ -2162,85 +2160,119 @@ impl BexVm {
         self.take_type_args_below_values(count, 0)
     }
 
-    /// Remember the `cause` context computed at `value`'s original (fresh)
-    /// throw site so a later rethrow of the same value can recover it. The
-    /// stored cause is the error `value` superseded (the enclosing handler's
-    /// context), NEVER `value`'s own materialized context, so it can never form
-    /// a self-link. Keyed by value identity.
-    fn record_throw_cause(&mut self, value: Value, cause: Value) {
-        if cause == Value::NULL {
-            self.thrown_value_causes.retain(|(v, _)| *v != value);
-            return;
-        }
-        if let Some((_, existing)) = self
-            .thrown_value_causes
-            .iter_mut()
-            .find(|(v, _)| *v == value)
-        {
-            *existing = cause;
-        } else {
-            self.thrown_value_causes.push((value, cause));
-        }
+    /// The error a `baml.errors.Context` describes.
+    fn context_error(&self, context: Value) -> Result<Value, VmInternalError> {
+        let instance = self.as_instance(&context)?;
+        Ok(crate::package_baml::view::errors::Context { instance }.error())
     }
 
-    /// The `cause` context recorded for `value` at its fresh throw site, or
-    /// `Value::NULL` if it never superseded an error (a genuine rethrow).
-    fn recorded_throw_cause(&self, value: Value) -> Value {
-        self.thrown_value_causes
+    /// The trace a `baml.errors.Context` records, as the unwinder reports it
+    /// when the error escapes every handler.
+    fn context_trace(&self, context: Value) -> Result<Vec<StackFrame>, VmInternalError> {
+        use crate::package_baml::view::errors;
+
+        let instance = self.as_instance(&context)?;
+        let stack_trace = errors::Context { instance }.stack_trace();
+        let instance = self.as_instance(&stack_trace)?;
+        errors::StackTrace { instance }
+            .frames(self)
             .iter()
-            .find(|(v, _)| *v == value)
-            .map_or(Value::NULL, |(_, cause)| *cause)
+            .map(|frame| {
+                let frame = errors::StackFrame {
+                    instance: self.as_instance(frame)?,
+                };
+                Ok(StackFrame {
+                    function_name: frame.function_name(self).to_string(),
+                    file_path: frame.file(self).to_string(),
+                    error_line: usize::try_from(frame.line()).unwrap_or_default(),
+                })
+            })
+            .collect()
     }
 
-    fn record_throw_context(&mut self, value: Value, trace: Arc<[StackFrame]>, cause: Value) {
-        let context = ThrowContext { trace, cause };
-        if let Some((_, existing)) = self
-            .thrown_value_contexts
-            .iter_mut()
-            .find(|(candidate, _)| *candidate == value)
-        {
-            *existing = context;
-        } else {
-            self.thrown_value_contexts.push((value, context));
-        }
-    }
-
-    fn recorded_throw_context(&self, value: Value) -> Option<ThrowContext> {
-        self.thrown_value_contexts
-            .iter()
-            .find(|(candidate, _)| *candidate == value)
-            .map(|(_, context)| context.clone())
-    }
-
-    /// Transfer the source value's most recently observed throw context to the
-    /// next fresh throw of `target`.
-    pub(crate) fn preserve_throw_context(&mut self, source: Value, target: Value) {
-        let Some(context) = self
-            .thrown_value_contexts
-            .iter()
-            .find(|(candidate, _)| *candidate == source)
-            .map(|(_, context)| context.clone())
-        else {
-            return;
+    /// A `baml.errors.Context` for `error` with `source`'s trace and cause:
+    /// what a conversion of the handled error throws with.
+    fn retargeted_context(
+        &mut self,
+        source: Value,
+        error: Value,
+    ) -> Result<Value, VmInternalError> {
+        let (stack_trace, cause) = {
+            let instance = self.as_instance(&source)?;
+            let source = crate::package_baml::view::errors::Context { instance };
+            (
+                source.stack_trace(),
+                source.cause(self).unwrap_or(Value::NULL),
+            )
         };
-
-        if let Some((_, existing)) = self
-            .preserved_throw_contexts
-            .iter_mut()
-            .find(|(candidate, _)| *candidate == target)
-        {
-            *existing = context;
-        } else {
-            self.preserved_throw_contexts.push((target, context));
-        }
+        Ok(self.alloc_error_value(ErrorClass::Context, vec![error, stack_trace, cause]))
     }
 
-    fn take_preserved_throw_context(&mut self, value: Value) -> Option<ThrowContext> {
+    /// Record that `target` is a conversion of `source`, the error the
+    /// innermost active handler is handling (`UnknownError.from` and
+    /// `with_message`): the next new throw of `target` from inside that
+    /// handler throws with `source`'s trace and cause. A conversion of any
+    /// other value records nothing.
+    pub(crate) fn transfer_context(&mut self, source: Value, target: Value) {
+        let handling = self.find_cause_context();
+        if handling == Value::NULL || self.context_error(handling) != Ok(source) {
+            return;
+        }
+        let active = self.active_handler_contexts();
+        self.context_transfers.retain(|transfer| {
+            transfer.handling != handling && active.contains(&transfer.handling)
+        });
+        self.context_transfers
+            .push(ContextTransfer { handling, target });
+    }
+
+    /// The context a new throw of `value` during handling of the error with
+    /// context `handling` takes over from a conversion, if one was recorded.
+    fn take_context_transfer(&mut self, handling: Value, value: Value) -> Option<Value> {
         let index = self
-            .preserved_throw_contexts
+            .context_transfers
             .iter()
-            .position(|(candidate, _)| *candidate == value)?;
-        Some(self.preserved_throw_contexts.swap_remove(index).1)
+            .position(|transfer| transfer.handling == handling && transfer.target == value)?;
+        Some(self.context_transfers.swap_remove(index).handling)
+    }
+
+    /// The contexts of every handler whose body is running on this thread, in
+    /// every frame and at every nesting depth.
+    fn active_handler_contexts(&self) -> Vec<Value> {
+        let mut contexts = Vec::new();
+        let mut innermost_bc = true;
+        for depth in (0..self.frames.len()).rev() {
+            let Frame::Bytecode(bf) = &self.frames[depth] else {
+                continue;
+            };
+            let pc = if innermost_bc {
+                self.cur_pc
+            } else {
+                bf.faulting_pc
+            };
+            innermost_bc = false;
+            // SAFETY: same `load_function` contract as the unwind walk.
+            let Ok(func) = (unsafe { self.load_function(depth) }) else {
+                continue;
+            };
+            let slots: Vec<usize> = match &func.bytecode.compact {
+                Some(compact) => compact
+                    .handler_contexts_for_pc(pc)
+                    .map(|entry| entry.context_slot)
+                    .collect(),
+                None => func
+                    .bytecode
+                    .handler_contexts_for_pc(pc)
+                    .map(|entry| entry.context_slot)
+                    .collect(),
+            };
+            contexts.extend(
+                slots
+                    .into_iter()
+                    .map(|slot| self.stack[Self::local_slot_stack_index(bf.locals_offset, slot)]),
+            );
+        }
+        contexts
     }
 
     /// The declared element type of `value` when it is an `Object::Array`, else
@@ -3770,9 +3802,7 @@ impl BexVm {
             if let Some(telemetry) = &mut self.telemetry {
                 telemetry.start_thread();
             }
-            self.thrown_value_causes.clear();
-            self.thrown_value_contexts.clear();
-            self.preserved_throw_contexts.clear();
+            self.context_transfers.clear();
         }
 
         // Lower the named bindings onto the positional De Bruijn slot against the
@@ -4711,8 +4741,7 @@ impl BexVm {
     /// Construct a `baml.errors.StackTrace` instance from captured error locations.
     ///
     /// Allocates one `baml.errors.StackFrame` per frame, an array to hold them,
-    /// and the outer `StackTrace` wrapper. Only called when a catch handler binds
-    /// a `stack_trace` parameter.
+    /// and the outer `StackTrace` wrapper.
     pub(crate) fn alloc_stack_trace(&mut self, trace: &[StackFrame]) -> Value {
         // Build StackFrame instances (fields: file, line, function_name)
         let frames: Vec<Value> = trace
@@ -4740,8 +4769,8 @@ impl BexVm {
     /// superseded while unwinding (or `Value::NULL` for a fresh error).
     ///
     /// Field order — error, `stack_trace`, cause — matches the class declared in
-    /// `ns_errors/error_context.baml` (the constructor ABI). Only called when a
-    /// catch handler binds the second `catch (e, ctx)` parameter.
+    /// `ns_errors/error_context.baml` (the constructor ABI). Built when a
+    /// handler first lands a new error, whether or not it binds `ctx`.
     pub(crate) fn alloc_error_context(
         &mut self,
         error: Value,
@@ -5042,14 +5071,12 @@ impl BexVm {
                         Some(StackFrame {
                             function_name: func.name.clone(),
                             file_path: func.source_file.clone(),
-                            function_span: func.span,
                             error_line,
                         })
                     }
                     Frame::Native(_) => Some(StackFrame {
                         function_name: func.name.clone(),
                         file_path: func.source_file.clone(),
-                        function_span: func.span,
                         error_line: 0,
                     }),
                 }
@@ -5080,52 +5107,36 @@ impl BexVm {
     ) -> Result<(), VmError> {
         let exception_value = thrown.value;
         let telemetry_outcome = self.telemetry_outcome_for_exception(exception_value);
-        let is_rethrow = thrown.language_is_rethrow;
 
-        // BEP-042 cause chain: identify the error currently being handled at
-        // the throw site (read-only, before unwinding mutates frames/slots).
-        // If this throw happened inside a handler body, that handler's caught
-        // error becomes the new error's `cause`.
-        //
-        // A *rethrow* re-raises an already-thrown value: a bare re-raise inside
-        // a handler, the no-match fall-through that re-enters this funnel, a
-        // non-throwing `defer` pad's transparent re-raise of the in-flight
-        // error, or `ThrowIfPanic` (all pass `is_rethrow`). None is a *new*
-        // failure "during handling of" the caught error, so none may graft
-        // another link onto the chain by re-running the cause walk here — in
-        // particular the no-match fall-through and the defer pad both re-raise
-        // from inside a handler body, which the walk would mis-read as a
-        // self-link.
-        //
-        // Instead we reuse the cause the value's *original* (fresh) throw site
-        // computed, keyed by the value in `thrown_value_causes`. This preserves
-        // a pre-existing chain across a transparent re-raise (the defer-pad
-        // case: `mid` throws B while handling A, so B's recorded cause is
-        // ErrorContext(A); the pad's re-raise of B recovers A instead of
-        // nulling it) while keeping the deliberate null cause for a genuine
-        // rethrow that never superseded an error (no recorded entry -> NULL).
-        // The recorded value is the superseded error, never the re-raised
-        // value's own context, so this can never form a self-link.
-        let preserved = if is_rethrow {
-            self.recorded_throw_context(exception_value)
-        } else {
-            self.take_preserved_throw_context(exception_value)
+        // BEP-042: the context this error lands with. A caught error raised
+        // again — `throw` of its binding, a catch's no-match fall-through or
+        // `throw_if_panic`, a `defer` pad re-raising the in-flight error — and
+        // one awaited from another task carry the context of their original
+        // throw, trace and cause intact. The context travels with the error,
+        // so two errors that happen to be equal values never share one. It is
+        // the error's only while it describes this value: a binding reassigned
+        // before its `throw` makes that a new throw. A new throw inside a
+        // handler body is "during handling of" that handler's error, which
+        // becomes its cause, unless it throws a conversion of that error
+        // (`UnknownError.from`), which takes over the error's own trace and
+        // cause.
+        let context = match thrown.context {
+            Some(context) if self.context_error(context)? == exception_value => {
+                InFlightContext::Carried(context)
+            }
+            Some(_) | None => {
+                let cause = self.find_cause_context();
+                match self.take_context_transfer(cause, exception_value) {
+                    Some(handled) => {
+                        InFlightContext::Carried(self.retargeted_context(handled, exception_value)?)
+                    }
+                    None => InFlightContext::Fresh {
+                        trace: Arc::from(self.capture_user_stack_trace()),
+                        cause,
+                    },
+                }
+            }
         };
-        let (trace, cause_context) = if let Some(context) = preserved {
-            (context.trace, context.cause)
-        } else {
-            let trace = Arc::from(self.capture_user_stack_trace());
-            let cause = if is_rethrow {
-                self.recorded_throw_cause(exception_value)
-            } else {
-                self.find_cause_context()
-            };
-            (trace, cause)
-        };
-        if !is_rethrow {
-            self.record_throw_cause(exception_value, cause_context);
-            self.record_throw_context(exception_value, Arc::clone(&trace), cause_context);
-        }
 
         // The innermost (first) bytecode frame's faulting PC is the live
         // `cur_pc`; outer frames use the call-site PC they recorded at call time.
@@ -5222,18 +5233,17 @@ impl BexVm {
                     Self::local_slot_stack_index(locals_offset, entry.error_slot);
                 self.stack[error_stack_slot] = exception_value;
 
-                // Store stack trace in stack_trace_slot if the catch clause binds it.
-                if entry.has_stack_trace_slot() {
-                    // BEP-042 Part 3: the second `catch (e, ctx)` binding is an
-                    // `ErrorContext` — the thrown value, its trace, and the
-                    // error it superseded (`cause_context`, computed at the
-                    // funnel top before unwinding).
-                    let ctx_value =
-                        self.alloc_error_context(exception_value, &trace, cause_context);
-                    let ctx_slot =
-                        Self::local_slot_stack_index(locals_offset, entry.stack_trace_slot);
-                    self.stack[ctx_slot] = ctx_value;
-                }
+                // Store the error's `baml.errors.Context` in the context
+                // slot: a rethrow from this handler carries it, and a throw
+                // during its body takes it as its cause.
+                let ctx_value = match &context {
+                    InFlightContext::Carried(context) => *context,
+                    InFlightContext::Fresh { trace, cause } => {
+                        self.alloc_error_context(exception_value, trace, *cause)
+                    }
+                };
+                let ctx_slot = Self::local_slot_stack_index(locals_offset, entry.context_slot);
+                self.stack[ctx_slot] = ctx_value;
 
                 // Jump to the handler.
                 let Frame::Bytecode(bf) = &mut self.frames[depth] else {
@@ -5250,9 +5260,13 @@ impl BexVm {
             // No handler in this frame -- pop it and try the caller.
             if self.frames.len() <= 1 {
                 self.complete_bytecode_invocation(depth, telemetry_outcome, Some(exception_value));
+                let trace = match &context {
+                    InFlightContext::Carried(context) => self.context_trace(*context)?,
+                    InFlightContext::Fresh { trace, .. } => trace.to_vec(),
+                };
                 return Err(VmError::ThrownUnhandled {
                     value: exception_value,
-                    trace: trace.to_vec(),
+                    trace,
                 });
             }
 
@@ -5303,18 +5317,11 @@ impl BexVm {
                 func.bytecode.handler_context_for_pc(pc)
             };
             if let Some(entry) = entry {
-                // The cause is the enclosing handler's `ErrorContext`, which
-                // lives in its context slot — itself a link in the chain (with
-                // its own `cause`). It exists only if that handler bound `ctx`;
-                // a handler that didn't materialize one has no context object
-                // to chain, so we stop with null rather than mis-linking to a
-                // further-out error.
-                if entry.has_stack_trace_slot() {
-                    let slot =
-                        Self::local_slot_stack_index(bf.locals_offset, entry.stack_trace_slot);
-                    return self.stack[slot];
-                }
-                return Value::NULL;
+                // The cause is the enclosing handler's `baml.errors.Context`,
+                // which lives in its context slot — itself a link in the chain
+                // (with its own `cause`).
+                let slot = Self::local_slot_stack_index(bf.locals_offset, entry.context_slot);
+                return self.stack[slot];
             }
         }
         Value::NULL
@@ -6079,7 +6086,7 @@ impl BexVm {
             VmRustFnError::Thrown { value, throw_kind } => VmError::Thrown(VmThrown {
                 value,
                 throw_kind,
-                language_is_rethrow: false,
+                context: None,
             }),
         }
     }
@@ -8209,15 +8216,18 @@ impl BexVm {
                                     // in a stdlib collector may have no user frames of its
                                     // own, so capturing only the awaiter's stack loses it.
                                     let trace = awaiting.error_trace();
-                                    if !trace.is_empty() {
-                                        self.record_throw_context(
+                                    let thrown = if trace.is_empty() {
+                                        VmThrown {
                                             value,
-                                            Arc::from(trace),
-                                            Value::NULL,
-                                        );
-                                        self.preserve_throw_context(value, value);
-                                    }
-                                    return Err(VmError::Thrown(VmThrown::rethrow(value, false)));
+                                            throw_kind: bex_vm_types::errors::ThrowKind::Rethrow,
+                                            context: None,
+                                        }
+                                    } else {
+                                        let context =
+                                            self.alloc_error_context(value, &trace, Value::NULL);
+                                        VmThrown::rethrow(value, context)
+                                    };
+                                    return Err(VmError::Thrown(thrown));
                                 }
                                 FutureRead::Cancelled => {
                                     let value = self.panic_to_exception_value(VmPanic::Cancelled);
@@ -8302,17 +8312,16 @@ impl BexVm {
 
                     // ── Throw ─────────────────────────────────────────────────────
                     OpCode::Throw | OpCode::Rethrow => {
-                        let is_rethrow = op == OpCode::Rethrow;
-                        let value = self.stack.ensure_pop();
+                        let thrown = if op == OpCode::Rethrow {
+                            let context = self.stack.ensure_pop();
+                            VmThrown::rethrow(self.stack.ensure_pop(), context)
+                        } else {
+                            VmThrown::fresh(self.stack.ensure_pop())
+                        };
                         // Save pc before unwinding (handler lookup needs it).
                         if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
                             bf.instruction_ptr = *pc;
                         }
-                        let thrown = if is_rethrow {
-                            VmThrown::rethrow(value, true)
-                        } else {
-                            VmThrown::fresh(value)
-                        };
                         self.try_unwind_exception(frame_idx, function, thrown)?;
                         // A handler was found; sync the local `pc` to its entry.
                         // When the handler is in the SAME frame, the dispatch loop
@@ -8502,6 +8511,7 @@ impl BexVm {
 
                     // ── ThrowIfPanic ──────────────────────────────────────────────
                     OpCode::ThrowIfPanic => {
+                        let context = self.stack.ensure_pop();
                         let value = self.stack.ensure_pop();
                         let is_panic = match value.as_object_ptr() {
                             Some(ptr) => match self.get_object(ptr) {
@@ -8520,7 +8530,7 @@ impl BexVm {
                             self.try_unwind_exception(
                                 frame_idx,
                                 function,
-                                VmThrown::rethrow(value, true),
+                                VmThrown::rethrow(value, context),
                             )?;
                             // Sync the local `pc` to the handler entry (see
                             // OpCode::Throw): a same-frame rethrow — an inner
@@ -9634,18 +9644,9 @@ impl ::bex_vm_types::RootHaver for BexVm {
             });
         }
         roots.extend(self.static_load_type_cache.values().copied());
-        // Both key (thrown value) and cause context are heap pointers.
-        for (value, cause) in &self.thrown_value_causes {
-            roots.extend(value.as_object_ptr());
-            roots.extend(cause.as_object_ptr());
-        }
-        for (value, context) in self
-            .thrown_value_contexts
-            .iter()
-            .chain(&self.preserved_throw_contexts)
-        {
-            roots.extend(value.as_object_ptr());
-            roots.extend(context.cause.as_object_ptr());
+        for transfer in &self.context_transfers {
+            roots.extend(transfer.handling.as_object_ptr());
+            roots.extend(transfer.target.as_object_ptr());
         }
 
         // Frame function pointers (needed once closures are heap-allocated)
@@ -9725,32 +9726,13 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 self.static_virtual_call_cache.insert(key, target);
             }
         }
-        for (value, cause) in &mut self.thrown_value_causes {
-            if let Some(ptr) = value.as_object_ptr()
-                && let Some(&new_ptr) = roots.get(&ptr)
-            {
-                *value = Value::object(new_ptr);
-            }
-            if let Some(ptr) = cause.as_object_ptr()
-                && let Some(&new_ptr) = roots.get(&ptr)
-            {
-                *cause = Value::object(new_ptr);
-            }
-        }
-        for (value, context) in self
-            .thrown_value_contexts
-            .iter_mut()
-            .chain(&mut self.preserved_throw_contexts)
-        {
-            if let Some(ptr) = value.as_object_ptr()
-                && let Some(&new_ptr) = roots.get(&ptr)
-            {
-                *value = Value::object(new_ptr);
-            }
-            if let Some(ptr) = context.cause.as_object_ptr()
-                && let Some(&new_ptr) = roots.get(&ptr)
-            {
-                context.cause = Value::object(new_ptr);
+        for transfer in &mut self.context_transfers {
+            for value in [&mut transfer.handling, &mut transfer.target] {
+                if let Some(ptr) = value.as_object_ptr()
+                    && let Some(&new_ptr) = roots.get(&ptr)
+                {
+                    *value = Value::object(new_ptr);
+                }
             }
         }
 

@@ -2485,13 +2485,19 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit_operand_pull(value);
                 self.emit(Instruction::Throw);
             }
-            Terminator::Rethrow { value } => {
+            Terminator::Rethrow { value, context } => {
                 self.emit_operand_pull(value);
+                self.emit_operand_pull(context);
                 self.emit(Instruction::Rethrow);
             }
 
-            Terminator::ThrowIfPanic { value, otherwise } => {
+            Terminator::ThrowIfPanic {
+                value,
+                context,
+                otherwise,
+            } => {
                 self.emit_operand_pull(value);
+                self.emit_operand_pull(context);
                 self.emit(Instruction::ThrowIfPanic);
                 self.emit_jump_unless_fallthrough(*otherwise);
             }
@@ -2720,24 +2726,24 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
         }
         for (start_pc, end_pc, handler) in coalesced {
-            let (handler_pc, error_slot, stack_trace_slot) = self.landing_slots(mir, handler);
+            let (handler_pc, error_slot, context_slot) = self.landing_slots(mir, handler);
             self.bytecode.exception_table.push(ExceptionTableEntry {
                 start_pc,
                 end_pc,
                 handler_pc,
                 error_slot,
-                stack_trace_slot,
+                context_slot,
             });
         }
         for (start_pc, end_pc, handler) in handling {
-            let (handler_pc, _, stack_trace_slot) = self.landing_slots(mir, handler);
+            let (handler_pc, _, context_slot) = self.landing_slots(mir, handler);
             self.bytecode
                 .handler_context_table
                 .push(HandlerContextEntry {
                     start_pc,
                     end_pc,
                     handler_pc,
-                    stack_trace_slot,
+                    context_slot,
                 });
         }
         self.bytecode.exception_table.sort_by_key(|e| e.start_pc);
@@ -2778,8 +2784,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         mir: &MirFunctionBody<'ctx>,
         handler: BlockId,
     ) -> (usize, usize, usize) {
-        use bex_vm_types::bytecode::ExceptionTableEntry;
-
         let landing = mir
             .block(handler)
             .landing
@@ -2796,11 +2800,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 unreachable!("landing local {local:?} of handler {handler:?} has no slot")
             })
         };
-        let error_slot = slot_of(landing.error_local);
-        let stack_trace_slot = landing
-            .context_local
-            .map_or(ExceptionTableEntry::NO_STACK_TRACE, slot_of);
-        (handler_pc, error_slot, stack_trace_slot)
+        (
+            handler_pc,
+            slot_of(landing.error_local),
+            slot_of(landing.context_local),
+        )
     }
 
     // ========================================================================

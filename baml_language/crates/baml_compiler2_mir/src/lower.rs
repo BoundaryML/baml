@@ -55,10 +55,12 @@ enum SwitchKind {
 enum SwitchOtherwise {
     /// Match expression: goto join (non-exhaustive) or unreachable (exhaustive).
     Match { is_exhaustive: bool },
-    /// Catch expression: rethrow unmatched errors.
-    /// If `needs_throw_if_panic` is true, insert a `throw_if_panic` guard before wildcard body.
+    /// Catch expression: rethrow unmatched errors with their landing's
+    /// context. If `needs_throw_if_panic` is true, insert a `throw_if_panic`
+    /// guard before wildcard body.
     Catch {
         error_local: Local,
+        context_local: Local,
         needs_throw_if_panic: bool,
     },
 }
@@ -1917,7 +1919,12 @@ struct LoweringContext<'db> {
     /// roots, which HIR does not resolve.
     self_binding: Option<BindingId>,
     loop_context: Option<LoopContext>,
-    catch_rethrow_locals: Vec<Local>,
+    /// The locals of the handler arms being lowered that hold a caught error
+    /// (the landing's error local, or a captured binding's own copy), each
+    /// with its landing's context local: `throw` of one is a rethrow that
+    /// carries that context. A lambda body starts with none, since its locals
+    /// are its own.
+    catch_rethrow_locals: Vec<(Local, Local)>,
     exit_block: BlockId,
 
     // THE inference tables: `hir_ty`'s results for this body and, for a
@@ -5275,6 +5282,7 @@ impl<'db> LoweringContext<'db> {
             ),
         );
         let saved_binding_locals = std::mem::take(&mut self.binding_locals);
+        let saved_catch_rethrow_locals = std::mem::take(&mut self.catch_rethrow_locals);
         let saved_exit_block = self.exit_block;
         let saved_loop_context = self.loop_context.take();
         // BEP-042: a lambda body is its own cleanup region — reset the defer
@@ -5450,6 +5458,7 @@ impl<'db> LoweringContext<'db> {
         self.lambda_param_tir_types = saved_lambda_param_tir_types;
         self.builder = saved_builder;
         self.binding_locals = saved_binding_locals;
+        self.catch_rethrow_locals = saved_catch_rethrow_locals;
         self.exit_block = saved_exit_block;
         self.loop_context = saved_loop_context;
         self.defer_stack = saved_defer_stack;
@@ -5821,6 +5830,7 @@ impl<'db> LoweringContext<'db> {
             ),
         );
         let saved_binding_locals = std::mem::take(&mut self.binding_locals);
+        let saved_catch_rethrow_locals = std::mem::take(&mut self.catch_rethrow_locals);
         let saved_exit_block = self.exit_block;
         let saved_loop_context = self.loop_context.take();
         let saved_current_scope = self.current_scope;
@@ -5979,6 +5989,7 @@ impl<'db> LoweringContext<'db> {
         // Restore parent state.
         self.builder = saved_builder;
         self.binding_locals = saved_binding_locals;
+        self.catch_rethrow_locals = saved_catch_rethrow_locals;
         self.exit_block = saved_exit_block;
         self.loop_context = saved_loop_context;
         self.current_scope = saved_current_scope;
@@ -6098,7 +6109,7 @@ impl<'db> LoweringContext<'db> {
                     // unwinding chains onto it (BEP-042 cause chain).
                     let pad = self.builder.create_handler_block(Landing {
                         error_local,
-                        context_local: Some(ctx_local),
+                        context_local: ctx_local,
                     });
                     let armed = ArmedDefer {
                         body,
@@ -6160,12 +6171,15 @@ impl<'db> LoweringContext<'db> {
             // not chain the error onto its own context (a self-link).
             if !self.builder.is_current_terminated() {
                 let error = shared_error.expect("a defer pad implies a shared error local exists");
+                let context =
+                    shared_ctx.expect("a defer pad implies a shared context local exists");
                 debug_assert_eq!(
                     self.builder.unwind(),
                     armed.unwind,
                     "a pad's cascade unwinds to the handler its defer was armed under"
                 );
-                self.builder.rethrow(Operand::Copy(Place::Local(error)));
+                self.builder
+                    .rethrow(Operand::Copy(Place::Local(error)), context);
             }
             self.builder.end_out_of_line(out_of_line);
         }
@@ -6391,11 +6405,7 @@ impl<'db> LoweringContext<'db> {
                 // bound `ctx` unmaterialized (B-611). The exception table
                 // routes the throw to the same handler the static jump would
                 // target — the block's `unwind` — so control flow is unchanged.
-                if self.operand_is_marked_rethrow(&val_op) {
-                    self.builder.rethrow(val_op);
-                } else {
-                    self.builder.throw(val_op);
-                }
+                self.emit_throw(val_op);
                 // Start a dead block for any code after this (unreachable)
                 let dead = self.builder.create_block();
                 self.builder.set_current_block(dead);
@@ -6460,13 +6470,31 @@ impl<'db> LoweringContext<'db> {
         Ok(())
     }
 
-    fn operand_is_marked_rethrow(&self, operand: &Operand<'db>) -> bool {
-        match operand {
-            Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
-                self.catch_rethrow_locals.contains(local)
-            }
-            Operand::Copy(_) | Operand::Move(_) | Operand::Constant(_) => false,
+    /// Throw `value`: a rethrow carrying its landing's context when it reads
+    /// a caught error's local (see `catch_rethrow_locals`), a new throw
+    /// otherwise.
+    fn emit_throw(&mut self, value: Operand<'db>) {
+        match self.caught_error_context(&value) {
+            Some(context) => self.builder.rethrow(value, context),
+            None => self.builder.throw(value),
         }
+    }
+
+    /// The landing context local of the caught error `operand` reads, if it
+    /// reads one.
+    fn caught_error_context(&self, operand: &Operand<'db>) -> Option<Local> {
+        let local = match operand {
+            Operand::Copy(place) | Operand::Move(place) => match place {
+                Place::Local(local) => *local,
+                Place::Deref(cell) => cell.local()?,
+                Place::Capture(_) | Place::Field { .. } | Place::Index { .. } => return None,
+            },
+            Operand::Constant(_) => return None,
+        };
+        self.catch_rethrow_locals
+            .iter()
+            .find(|(caught, _)| *caught == local)
+            .map(|&(_, context)| context)
     }
 
     /// Lower `await expr` into a `Terminator::Await` whose destination is
@@ -12621,11 +12649,7 @@ impl LoweringContext<'_> {
                 // enclosing defer region(s), so the exception table routes it to
                 // the innermost defer pad (BEP-042 Stage 2). We do NOT inline-
                 // replay here — that would double-run the defers.
-                if self.operand_is_marked_rethrow(&val_op) {
-                    self.builder.rethrow(val_op);
-                } else {
-                    self.builder.throw(val_op);
-                }
+                self.emit_throw(val_op);
                 let dead = self.builder.create_block();
                 self.builder.set_current_block(dead);
             }
@@ -13414,12 +13438,16 @@ impl<'db> LoweringContext<'db> {
             // Wildcard arm present
             if let SwitchOtherwise::Catch {
                 error_local,
+                context_local,
                 needs_throw_if_panic: true,
             } = &otherwise
             {
                 let bb_wildcard_body = self.builder.create_block();
-                self.builder
-                    .throw_if_panic(Operand::Copy(Place::Local(*error_local)), bb_wildcard_body);
+                self.builder.throw_if_panic(
+                    Operand::Copy(Place::Local(*error_local)),
+                    *context_local,
+                    bb_wildcard_body,
+                );
                 self.builder.set_current_block(bb_wildcard_body);
             }
             let (pattern, body, _) = arms[idx];
@@ -13438,18 +13466,26 @@ impl<'db> LoweringContext<'db> {
                     SwitchOtherwise::Match { .. } => {
                         self.builder.unreachable();
                     }
-                    SwitchOtherwise::Catch { error_local, .. } => {
+                    SwitchOtherwise::Catch {
+                        error_local,
+                        context_local,
+                        ..
+                    } => {
                         // Even if exhaustive, catch otherwise should rethrow
                         // (the error might not match any arm at runtime).
                         self.builder
-                            .rethrow(Operand::Copy(Place::Local(*error_local)));
+                            .rethrow(Operand::Copy(Place::Local(*error_local)), *context_local);
                     }
                 }
             } else {
                 match &otherwise {
-                    SwitchOtherwise::Catch { error_local, .. } => {
+                    SwitchOtherwise::Catch {
+                        error_local,
+                        context_local,
+                        ..
+                    } => {
                         self.builder
-                            .rethrow(Operand::Copy(Place::Local(*error_local)));
+                            .rethrow(Operand::Copy(Place::Local(*error_local)), *context_local);
                     }
                     SwitchOtherwise::Match { .. } => {
                         self.builder.goto(join);
@@ -15183,11 +15219,11 @@ impl LoweringContext<'_> {
         fn install_clause_bindings(
             ctx: &mut LoweringContext<'_>,
             error_local: Local,
-            stack_trace_local: Option<Local>,
+            context_local: Local,
             clause: &ClauseBindings,
         ) -> Lowered<Option<Local>> {
             let error_copy = install_binding(ctx, clause.error.as_ref(), Some(error_local))?;
-            install_binding(ctx, clause.stack_trace.as_ref(), stack_trace_local)?;
+            install_binding(ctx, clause.stack_trace.as_ref(), Some(context_local))?;
             Ok(error_copy)
         }
 
@@ -15213,17 +15249,17 @@ impl LoweringContext<'_> {
             self.builder
                 .declare_local(single_clause_binding_name, RuntimeTy::Unknown, None);
 
-        let stack_trace_local = clauses
-            .iter()
-            .any(|c| c.stack_trace_binding.is_some())
-            .then(|| self.builder.declare_local(None, RuntimeTy::Unknown, None));
+        // Every landing receives the caught error's context, bound or not: a
+        // rethrow from an arm carries it, and a throw during an arm takes it
+        // as its cause.
+        let context_local = self.builder.declare_local(None, RuntimeTy::Unknown, None);
 
-        // The handler block: the VM lands in it with the error (and context)
+        // The handler block: the VM lands in it with the error and context
         // locals. Created under the outer handler, like `bb_join`, so neither
         // is protected by this catch.
         let bb_handler = self.builder.create_handler_block(Landing {
             error_local,
-            context_local: stack_trace_local,
+            context_local,
         });
 
         let clause_bindings: Vec<ClauseBindings> = clauses
@@ -15287,9 +15323,10 @@ impl LoweringContext<'_> {
                 .begin_out_of_line(bb_handler, outer_unwind, Some(bb_handler));
         let switch_rethrow_mark = self.catch_rethrow_locals.len();
         if let [clause] = clause_bindings.as_slice() {
-            let error_copy = install_clause_bindings(self, error_local, stack_trace_local, clause)?;
-            self.catch_rethrow_locals.push(error_local);
-            self.catch_rethrow_locals.extend(error_copy);
+            let error_copy = install_clause_bindings(self, error_local, context_local, clause)?;
+            self.catch_rethrow_locals.push((error_local, context_local));
+            self.catch_rethrow_locals
+                .extend(error_copy.map(|copy| (copy, context_local)));
         }
         let lowered_as_switch = clauses.len() == 1
             && self.try_lower_as_switch(
@@ -15299,6 +15336,7 @@ impl LoweringContext<'_> {
                 bb_join,
                 SwitchOtherwise::Catch {
                     error_local,
+                    context_local,
                     needs_throw_if_panic,
                 },
                 None,
@@ -15328,8 +15366,11 @@ impl LoweringContext<'_> {
         for &(ref arm, body_block, is_wildcard, _) in &arms_with_blocks {
             if is_wildcard && needs_throw_if_panic {
                 let bb_wildcard = self.builder.create_block();
-                self.builder
-                    .throw_if_panic(Operand::Copy(Place::Local(error_local)), bb_wildcard);
+                self.builder.throw_if_panic(
+                    Operand::Copy(Place::Local(error_local)),
+                    context_local,
+                    bb_wildcard,
+                );
                 self.builder.set_current_block(bb_wildcard);
             }
 
@@ -15341,7 +15382,7 @@ impl LoweringContext<'_> {
         // Rethrow if nothing matched.
         if !self.builder.is_current_terminated() {
             self.builder
-                .rethrow(Operand::Copy(Place::Local(error_local)));
+                .rethrow(Operand::Copy(Place::Local(error_local)), context_local);
         }
 
         // Lower each arm body.
@@ -15350,7 +15391,7 @@ impl LoweringContext<'_> {
             let error_copy = install_clause_bindings(
                 self,
                 error_local,
-                stack_trace_local,
+                context_local,
                 &clause_bindings[clause_idx],
             )?;
             self.bind_pattern(
@@ -15359,8 +15400,9 @@ impl LoweringContext<'_> {
                 DefinitionSite::PatternBinding(arm.pattern),
             )?;
             let rethrow_mark = self.catch_rethrow_locals.len();
-            self.catch_rethrow_locals.push(error_local);
-            self.catch_rethrow_locals.extend(error_copy);
+            self.catch_rethrow_locals.push((error_local, context_local));
+            self.catch_rethrow_locals
+                .extend(error_copy.map(|copy| (copy, context_local)));
             self.lower_expr(arm.body, dest.clone())?;
             self.catch_rethrow_locals.truncate(rethrow_mark);
             if !self.builder.is_current_terminated() {
