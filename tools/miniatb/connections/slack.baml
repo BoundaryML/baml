@@ -177,6 +177,7 @@ function slack_feedback(envelope: json, channel: string) -> Feedback? {
         return null;
     };
     Feedback {
+        slack_event: baml.json.path<json>(envelope, ".event"),
         source: "Slack",
         reported_version: null,
         files: {},
@@ -394,4 +395,32 @@ function fix_notice(pr: string?) -> string {
     } else {
         " Automatic fix did not produce a PR; see the issue timeline for details."
     }
+}
+
+/// Enrich in the worker, after the signed event has been durably acknowledged.
+function enrich_slack_feedback(feedback: Feedback) -> Feedback {
+    if (feedback.source != "Slack" || feedback.slack_event == null) {
+        return feedback;
+    };
+    mkdir(run_dir());
+    let input = run_dir() + "/slack-event.json";
+    let output = run_dir() + "/slack-context.json";
+    write_json(input, feedback.slack_event ?? baml.json.parse("{}"));
+    checked(
+        "node",
+        [app_dir() + "/deployment/slack-context.mjs", input, output],
+        options = baml.sys.ProcessOptions {
+            env: {
+                "PATH": "/usr/local/bin:/usr/bin:/bin",
+                "ATB_SLACK_BOT_TOKEN": baml.env.get("ATB_SLACK_BOT_TOKEN") ?? "",
+                "MINIATB_SLACK_HISTORY_TOKEN": baml.env.get("MINIATB_SLACK_HISTORY_TOKEN") ?? baml.env.get("ATB_SLACK_BOT_TOKEN")
+                    ?? "",
+            },
+            timeout_ms: 600000,
+        },
+    );
+    let context = read_json<json>(output);
+    feedback.description = baml.json.path<string>(context, ".description");
+    feedback.slack_event = null;
+    feedback
 }

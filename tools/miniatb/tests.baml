@@ -560,3 +560,21 @@ test "malformed attachments cannot block the PostHog checkpoint" {
     assert.equal(seen[0].files.get("empty.baml"), "[Attachment could not be decoded]");
     assert.is_true(baml.json.path<bool>(checkpoint, ".complete"));
 }
+
+test "Slack queued reports retain attachment metadata for worker enrichment" {
+    let envelope = baml.json.parse(
+        `
+            {"type":"event_callback","event_id":"Ev-image",
+                    "event":{"type":"app_mention","channel":"C0123456789","ts":"1234.5678",
+                    "thread_ts":"1111.2222","text":"<@U0123456789> see this",
+                    "files":[{"id":"F1","mimetype":"image/png","url_private":"https://files.slack.com/image.png"}]}}
+        `,
+    );
+    let feedback = slack_feedback(envelope, "C0123456789") ?? baml.sys.panic("Missing feedback");
+    let saved = baml.json.from_json<Feedback>(feedback.to_json());
+    assert.equal(
+        baml.json.path<string>(saved.slack_event ?? baml.json.parse("{}"), ".files[0].id"),
+        "F1",
+    );
+    assert.equal(saved.thread, "1111.2222");
+}

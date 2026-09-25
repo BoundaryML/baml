@@ -72,7 +72,22 @@ Claude's machine login lives in `MINIATB_CLAUDE_HOME` (the existing Fly volume u
 Use the website's `.env.example` for its separate OAuth/session/anon-read settings.
 The website never receives the Supabase service key or other controller tokens.
 
-Slack mentions in the configured channel become feedback. Mapped shepherds can
+Slack mentions in the configured channel become feedback. The worker fetches prior
+thread messages (paginated, up to 20 pages) and downloads PNG/JPEG/GIF/WebP attachments
+from the mention and preceding messages. The controller stores a private per-run
+`slack-context.json`; the Claude launcher sends its bytes as base64 image content via
+stream-JSON stdin on each model call. The optional JEV classifier remains text-only.
+Downloads are restricted to HTTPS `files.slack.com`, disallow redirects, and enforce
+5 MiB per image, 15 MiB total, and ten images. Context/download failures fail the job
+rather than silently treating missing evidence as a complete report.
+
+The bot token needs `files:read`. Channel thread history may require a user token
+with `channels:history` / `groups:history`: configure `MINIATB_SLACK_HISTORY_TOKEN`
+for that purpose (otherwise the bot token is used). Tokens must have access to the
+configured channel. These credentials stay in the controller, not the model process.
+Live Slack and Claude CLI interoperability must be verified after deployment.
+
+Mapped shepherds can
 cancel an issue by reacting X to its announcement. Cancellation is checked before
 publishing; it does not interrupt an in-flight push.
 

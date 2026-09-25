@@ -1,4 +1,5 @@
 class Feedback {
+    slack_event: json?,
     source: "Slack" | "BamlFeedback" | "Github",
     reported_version: string?,
     files: map<string, string>,

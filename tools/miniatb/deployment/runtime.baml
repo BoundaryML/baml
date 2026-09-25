@@ -43,6 +43,7 @@ function controller_env(id: string) -> map<string, string> {
             "FEEDBACK_SUPABASE_URL",
             "FEEDBACK_SUPABASE_KEY",
             "ATB_SLACK_BOT_TOKEN",
+            "MINIATB_SLACK_HISTORY_TOKEN",
             "ATB_SLACK_FIX_CHANNEL",
             "ATB2_SLACK_CHANNEL",
             "MINIATB_CLAUDE_HOME",

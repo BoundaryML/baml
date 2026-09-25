@@ -160,6 +160,7 @@ function valid_ticket(ticket: Ticket) -> bool {
 }
 
 function pipeline(feedback: Feedback) -> Issue? {
+    feedback = enrich_slack_feedback(feedback);
     save_report(feedback);
     let workspace = prepare_workspace(feedback);
     record("ingested", "completed", { "source": feedback.source }.to_json());

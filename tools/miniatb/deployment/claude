@@ -1,6 +1,4 @@
 #!/bin/sh
 # Keep service credentials out of the model harness environment.
 cd /app || exit 1
-exec setpriv --reuid=1000 --regid=1000 --clear-groups env -i PATH=/usr/local/bin:/usr/bin:/bin HOME="${MINIATB_CLAUDE_HOME:-/data/claude}" \
-  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
-  /usr/local/bin/claude --strict-mcp-config --setting-sources '' --disable-slash-commands "$@"
+exec node /app/deployment/claude-images.mjs "$@"
