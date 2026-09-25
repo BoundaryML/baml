@@ -1261,6 +1261,7 @@ dependencies = [
  "btel_processor",
  "btel_recorder",
  "btel_settings",
+ "btel_snapshot",
  "btel_types",
  "clap",
  "futures",
