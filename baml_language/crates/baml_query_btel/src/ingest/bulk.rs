@@ -54,6 +54,7 @@ struct FunctionMetadata {
     map_state: Option<i64>,
 }
 
+#[derive(Clone, Copy)]
 struct PathDef {
     thread: u64,
     parent: u32,
@@ -85,6 +86,62 @@ impl PathDef {
     }
 }
 
+/// Summed aggregate deltas of one node while every sum fits `u64`: half
+/// the size of `Totals`, whose `u128` sums take over when one would not.
+#[derive(Clone, Copy, Default)]
+struct SmallTotals {
+    count: u64,
+    duration: u64,
+    self_await: u64,
+    errored: u64,
+    cancelled: u64,
+    evidence: u8,
+    /// The node's sums are in `Bulk::large_aggregates` instead.
+    large: bool,
+}
+
+impl SmallTotals {
+    /// Add a delta; `false` (and unchanged) when a sum would not fit.
+    fn add(&mut self, delta: &Totals) -> bool {
+        let sum = |a: u64, b: u128| u64::try_from(b).ok().and_then(|b| a.checked_add(b));
+        let (Some(count), Some(duration), Some(self_await), Some(errored), Some(cancelled)) = (
+            sum(self.count, delta.count),
+            sum(self.duration, delta.duration),
+            sum(self.self_await, delta.self_await),
+            sum(self.errored, delta.outcomes.errored),
+            sum(self.cancelled, delta.outcomes.cancelled),
+        ) else {
+            return false;
+        };
+        let Ok(evidence) = u8::try_from(i64::from(self.evidence) | delta.outcomes.evidence) else {
+            return false;
+        };
+        *self = Self {
+            count,
+            duration,
+            self_await,
+            errored,
+            cancelled,
+            evidence,
+            large: false,
+        };
+        true
+    }
+
+    fn totals(self) -> Totals {
+        Totals {
+            count: u128::from(self.count),
+            duration: u128::from(self.duration),
+            self_await: u128::from(self.self_await),
+            outcomes: crate::outcomes::Totals {
+                evidence: i64::from(self.evidence),
+                errored: u128::from(self.errored),
+                cancelled: u128::from(self.cancelled),
+            },
+        }
+    }
+}
+
 /// A column derived after every file is merged.
 #[derive(Clone, Copy)]
 enum Derived<T> {
@@ -102,23 +159,92 @@ impl<T> Derived<T> {
     }
 }
 
+// Flags packing a path row's optional fields. There can be millions of
+// rows, so each is kept to 56 bytes.
+const PATH_DEFINED: u8 = 1;
+const PATH_CONFLICT: u8 = 1 << 1;
+const PATH_HAS_CALLER: u8 = 1 << 2;
+const PATH_TICKS_NULL: u8 = 1 << 3;
+const PATH_DEPTH_DONE: u8 = 1 << 4;
+const PATH_DEPTH_NULL: u8 = 1 << 5;
+
+/// A call path: its first definition, or a placeholder for a referenced
+/// path, and its derived depth and child time.
+#[derive(Default)]
 struct PathRow {
-    /// `None`: a placeholder for a referenced path.
-    def: Option<PathDef>,
-    conflict: bool,
-    depth: Derived<i64>,
-    /// Derived: checked sum of synchronous children's normal-node totals.
-    child_ticks: Option<i64>,
+    thread: u64,
+    caller: u64,
+    callee: u64,
+    /// Checked sum of synchronous children's normal-node totals.
+    child_ticks: i64,
+    depth: i64,
+    parent: u32,
+    caller_pc: u32,
+    edge: i32,
+    flags: u8,
 }
 
-impl Default for PathRow {
-    fn default() -> Self {
-        Self {
-            def: None,
-            conflict: false,
-            depth: Derived::Pending,
-            child_ticks: Some(0),
+impl PathRow {
+    fn has(&self, flag: u8) -> bool {
+        self.flags & flag != 0
+    }
+
+    fn set(&mut self, flag: u8, on: bool) {
+        if on {
+            self.flags |= flag;
+        } else {
+            self.flags &= !flag;
         }
+    }
+
+    /// `None`: a placeholder.
+    fn def(&self) -> Option<PathDef> {
+        self.has(PATH_DEFINED).then(|| PathDef {
+            thread: self.thread,
+            parent: self.parent,
+            caller: self.has(PATH_HAS_CALLER).then_some(self.caller),
+            caller_pc: self.caller_pc,
+            callee: self.callee,
+            edge: self.edge,
+        })
+    }
+
+    fn define(&mut self, def: &PathDef) {
+        self.thread = def.thread;
+        self.parent = def.parent;
+        self.caller = def.caller.unwrap_or(0);
+        self.set(PATH_HAS_CALLER, def.caller.is_some());
+        self.caller_pc = def.caller_pc;
+        self.callee = def.callee;
+        self.edge = def.edge;
+        self.set(PATH_DEFINED, true);
+    }
+
+    fn conflict(&self) -> bool {
+        self.has(PATH_CONFLICT)
+    }
+
+    fn depth(&self) -> Derived<i64> {
+        match (self.has(PATH_DEPTH_DONE), self.has(PATH_DEPTH_NULL)) {
+            (false, _) => Derived::Pending,
+            (true, true) => Derived::Done(None),
+            (true, false) => Derived::Done(Some(self.depth)),
+        }
+    }
+
+    fn set_depth(&mut self, depth: Option<i64>) {
+        self.set(PATH_DEPTH_DONE, true);
+        self.set(PATH_DEPTH_NULL, depth.is_none());
+        self.depth = depth.unwrap_or(0);
+    }
+
+    fn child_ticks(&self) -> Option<i64> {
+        (!self.has(PATH_TICKS_NULL)).then_some(self.child_ticks)
+    }
+
+    fn set_child_ticks(&mut self, ticks: Option<i64>) {
+        self.set(PATH_TICKS_NULL, ticks.is_none());
+        self.child_ticks = ticks.unwrap_or(0);
     }
 }
 
@@ -130,27 +256,93 @@ struct ThreadDef {
     epoch: u64,
 }
 
+const THREAD_DEFINED: u16 = 1;
+const THREAD_HAS_PARENT: u16 = 1 << 1;
+const THREAD_HAS_STARTED: u16 = 1 << 2;
+const THREAD_ANNOUNCED: u16 = 1 << 3;
+const THREAD_COMPLETED: u16 = 1 << 4;
+const THREAD_HAS_COMPLETED_TICKS: u16 = 1 << 5;
+const THREAD_COMPLETION_CONFLICT: u16 = 1 << 6;
+const THREAD_CONFLICT: u16 = 1 << 7;
+const THREAD_ROOT_DONE: u16 = 1 << 8;
+const THREAD_HAS_ROOT: u16 = 1 << 9;
+
+/// A thread: its first definition and first completion, or a placeholder,
+/// and its derived execution root. Packed like `PathRow`.
+#[derive(Default)]
 struct ThreadRow {
-    def: Option<ThreadDef>,
-    announced: bool,
-    /// The first completion: its ticks and outcome.
-    completion: Option<(Option<i64>, i64)>,
-    completion_conflict: bool,
-    conflict: bool,
-    /// The execution root.
-    root: Derived<u64>,
+    parent: u64,
+    started: i64,
+    epoch: u64,
+    completed_ticks: i64,
+    outcome: i64,
+    root: u64,
+    spawn_path: u32,
+    flags: u16,
 }
 
-impl Default for ThreadRow {
-    fn default() -> Self {
-        Self {
-            def: None,
-            announced: false,
-            completion: None,
-            completion_conflict: false,
-            conflict: false,
-            root: Derived::Pending,
+impl ThreadRow {
+    fn has(&self, flag: u16) -> bool {
+        self.flags & flag != 0
+    }
+
+    fn set(&mut self, flag: u16, on: bool) {
+        if on {
+            self.flags |= flag;
+        } else {
+            self.flags &= !flag;
         }
+    }
+
+    fn def(&self) -> Option<ThreadDef> {
+        self.has(THREAD_DEFINED).then(|| ThreadDef {
+            parent: self.has(THREAD_HAS_PARENT).then_some(self.parent),
+            spawn_path: self.spawn_path,
+            started: self.has(THREAD_HAS_STARTED).then_some(self.started),
+            epoch: self.epoch,
+        })
+    }
+
+    fn define(&mut self, def: ThreadDef) {
+        self.parent = def.parent.unwrap_or(0);
+        self.set(THREAD_HAS_PARENT, def.parent.is_some());
+        self.spawn_path = def.spawn_path;
+        self.started = def.started.unwrap_or(0);
+        self.set(THREAD_HAS_STARTED, def.started.is_some());
+        self.epoch = def.epoch;
+        self.set(THREAD_DEFINED, true);
+    }
+
+    /// The first completion: its ticks and outcome.
+    fn completion(&self) -> Option<(Option<i64>, i64)> {
+        self.has(THREAD_COMPLETED).then(|| {
+            (
+                self.has(THREAD_HAS_COMPLETED_TICKS)
+                    .then_some(self.completed_ticks),
+                self.outcome,
+            )
+        })
+    }
+
+    fn complete(&mut self, ticks: Option<i64>, outcome: i64) {
+        self.completed_ticks = ticks.unwrap_or(0);
+        self.set(THREAD_HAS_COMPLETED_TICKS, ticks.is_some());
+        self.outcome = outcome;
+        self.set(THREAD_COMPLETED, true);
+    }
+
+    fn root(&self) -> Derived<u64> {
+        match (self.has(THREAD_ROOT_DONE), self.has(THREAD_HAS_ROOT)) {
+            (false, _) => Derived::Pending,
+            (true, false) => Derived::Done(None),
+            (true, true) => Derived::Done(Some(self.root)),
+        }
+    }
+
+    fn set_root(&mut self, root: Option<u64>) {
+        self.set(THREAD_ROOT_DONE, true);
+        self.set(THREAD_HAS_ROOT, root.is_some());
+        self.root = root.unwrap_or(0);
     }
 }
 
@@ -241,7 +433,9 @@ pub(super) struct Bulk {
     epochs: FxHashMap<u64, EpochRow>,
     /// Most severe status and finality per epoch.
     epoch_states: FxHashMap<u64, (i64, bool)>,
-    aggregates: Table<u64, Totals>,
+    aggregates: Table<u64, SmallTotals>,
+    /// Nodes whose sums outgrew `SmallTotals`, summed exactly.
+    large_aggregates: FxHashMap<u64, Totals>,
     calls: Table<u64, CallRow>,
     raises: Table<u64, RaiseRow>,
     frames: BTreeMap<(u64, i64), FrameRow>,
@@ -453,8 +647,17 @@ impl Bulk {
                         "error and cancellation counts exceed completed calls; population outcomes are unavailable",
                     );
                 }
-                let entry = self.aggregates.row(delta.node);
-                *entry = entry.add(totals);
+                let small = self.aggregates.row(delta.node);
+                if !small.large && small.add(&totals) {
+                    continue;
+                }
+                small.large = true;
+                let small = *small;
+                let exact = self
+                    .large_aggregates
+                    .entry(delta.node)
+                    .or_insert_with(|| small.totals());
+                *exact = exact.add(totals);
             }
         }
         if let Some(batch) = &file.errors {
@@ -474,17 +677,19 @@ impl Bulk {
                 for event in &section.events {
                     match event.event.as_ref() {
                         Some(Event::ThreadAnnouncement(_)) => {
-                            self.threads.row(section.thread_id).announced = true;
+                            self.threads
+                                .row(section.thread_id)
+                                .set(THREAD_ANNOUNCED, true);
                         }
                         Some(Event::ThreadCompletion(done)) => {
                             let completed = tick(done.completed_at_ticks);
                             let outcome = i64::from(done.outcome);
                             let row = self.threads.row(section.thread_id);
-                            match row.completion {
-                                None => row.completion = Some((completed, outcome)),
+                            match row.completion() {
+                                None => row.complete(completed, outcome),
                                 Some(first) if first == (completed, outcome) => {}
                                 Some(_) => {
-                                    row.completion_conflict = true;
+                                    row.set(THREAD_COMPLETION_CONFLICT, true);
                                     push_issue(
                                         &mut self.issues,
                                         sequence,
@@ -688,11 +893,11 @@ impl Bulk {
         }
         let def = PathDef::from_wire(path);
         let row = self.paths.row(path.call_path_id);
-        match &row.def {
-            None => row.def = Some(def),
+        match row.def() {
+            None => row.define(&def),
             Some(first) if first.same(&def) => {}
             Some(_) => {
-                row.conflict = true;
+                row.set(PATH_CONFLICT, true);
                 push_issue(
                     &mut self.issues,
                     sequence,
@@ -716,11 +921,11 @@ impl Bulk {
             epoch: thread.clock_epoch_id,
         };
         let row = self.threads.row(thread.thread_id);
-        match row.def {
-            None => row.def = Some(def),
+        match row.def() {
+            None => row.define(def),
             Some(first) if first == def => {}
             Some(_) => {
-                row.conflict = true;
+                row.set(THREAD_CONFLICT, true);
                 push_issue(
                     &mut self.issues,
                     sequence,
@@ -999,14 +1204,14 @@ impl Bulk {
                 let Some(row) = self.threads.get(&current) else {
                     break None;
                 };
-                if let Derived::Done(known) = row.root {
+                if let Derived::Done(known) = row.root() {
                     break known;
                 }
                 if !on_chain.insert(current) {
                     break None;
                 }
                 chain.push(current);
-                let Some(def) = row.def else {
+                let Some(def) = row.def() else {
                     break None;
                 };
                 let Some(parent) = def.parent else {
@@ -1022,7 +1227,10 @@ impl Bulk {
             };
             on_chain.clear();
             for thread in chain.drain(..) {
-                self.threads.get_mut(&thread).expect("walked").root = Derived::Done(resolved);
+                self.threads
+                    .get_mut(&thread)
+                    .expect("walked")
+                    .set_root(resolved);
             }
         }
     }
@@ -1039,10 +1247,10 @@ impl Bulk {
                 let Some(row) = self.paths.get(&current) else {
                     break None;
                 };
-                if let Derived::Done(known) = row.depth {
+                if let Derived::Done(known) = row.depth() {
                     break known;
                 }
-                let Some(def) = &row.def else {
+                let Some(def) = row.def() else {
                     break None;
                 };
                 if !on_chain.insert(current) {
@@ -1058,7 +1266,7 @@ impl Bulk {
             on_chain.clear();
             for (distance, path) in chain.drain(..).rev().enumerate() {
                 let depth = base.map(|base| base + 1 + i64::try_from(distance).unwrap_or(i64::MAX));
-                self.paths.get_mut(&path).expect("walked").depth = Derived::Done(depth);
+                self.paths.get_mut(&path).expect("walked").set_depth(depth);
             }
         }
     }
@@ -1069,11 +1277,11 @@ impl Bulk {
             .paths
             .iter()
             .filter_map(|(child, row)| {
-                let def = row.def.as_ref()?;
+                let def = row.def()?;
                 if def.edge != 1 || def.parent == 0 {
                     return None;
                 }
-                let ticks = match self.aggregates.get(&(u64::from(*child) * 2)) {
+                let ticks = match self.totals(u64::from(*child) * 2) {
                     None => Some(0),
                     Some(totals) => i64::try_from(totals.duration).ok(),
                 };
@@ -1082,10 +1290,11 @@ impl Bulk {
             .collect();
         for (parent, ticks) in contributions {
             if let Some(row) = self.paths.get_mut(&parent) {
-                row.child_ticks = row
-                    .child_ticks
+                let sum = row
+                    .child_ticks()
                     .zip(ticks)
                     .and_then(|(a, b)| a.checked_add(b));
+                row.set_child_ticks(sum);
             }
         }
     }
@@ -1179,20 +1388,6 @@ impl Bulk {
     ) -> Result<(), Error> {
         let mut ids: Vec<u32> = self.paths.keys().copied().collect();
         ids.sort_unstable();
-        // Resolve first: `insert_rows` borrows the resolved sites.
-        let site_of: Vec<Option<usize>> = ids
-            .iter()
-            .map(|path| {
-                self.paths[path].def.as_ref().map(|def| {
-                    sites.site(
-                        def.caller,
-                        Some(i64::from(def.caller_pc)),
-                        SiteState::NoCaller,
-                    )
-                })
-            })
-            .collect();
-        let rows: Vec<usize> = (0..ids.len()).collect();
         insert_rows(
             tx,
             "call_path (rec, call_path_id, defined, thread_id, parent_call_path_id,
@@ -1200,13 +1395,13 @@ impl Bulk {
                direct_child_ticks, site_state, site_file, site_line, site_start, site_end,
                conflict)",
             17,
-            &rows,
-            |b, index| {
-                let path = ids[index];
+            &ids,
+            |b, path| {
                 let row = &self.paths[&path];
                 b.bind(rec)?;
                 b.bind(i64::from(path))?;
-                match &row.def {
+                let def = row.def();
+                match def {
                     None => {
                         b.bind(0)?;
                         b.nulls(7)?;
@@ -1219,15 +1414,22 @@ impl Bulk {
                         b.bind(i64::from(def.caller_pc))?;
                         b.bind(id(def.callee))?;
                         b.bind(def.edge)?;
-                        b.bind(row.depth.value())?;
+                        b.bind(row.depth().value())?;
                     }
                 }
-                b.bind(row.child_ticks)?;
-                match site_of[index] {
+                b.bind(row.child_ticks())?;
+                match def {
                     None => b.nulls(5)?,
-                    Some(site) => b.site(sites.get(site))?,
+                    Some(def) => {
+                        let site = sites.site(
+                            def.caller,
+                            Some(i64::from(def.caller_pc)),
+                            SiteState::NoCaller,
+                        );
+                        b.site(sites.get(site))?;
+                    }
                 }
-                b.bind(row.conflict)
+                b.bind(row.conflict())
             },
         )
     }
@@ -1244,7 +1446,8 @@ impl Bulk {
             &ids,
             |b, thread| {
                 let row = &self.threads[&thread];
-                let def = row.def;
+                let def = row.def();
+                let completion = row.completion();
                 b.bind(rec)?;
                 b.bind(id(thread))?;
                 b.bind(def.is_some())?;
@@ -1252,12 +1455,12 @@ impl Bulk {
                 b.bind(def.map(|d| i64::from(d.spawn_path)))?;
                 b.bind(def.and_then(|d| d.started))?;
                 b.bind(def.map(|d| id(d.epoch)))?;
-                b.bind(row.announced)?;
-                b.bind(row.completion.and_then(|(ticks, _)| ticks))?;
-                b.bind(row.completion.map(|(_, outcome)| outcome))?;
-                b.bind(row.completion_conflict)?;
-                b.bind(row.root.value().map(id))?;
-                b.bind(row.conflict)
+                b.bind(row.has(THREAD_ANNOUNCED))?;
+                b.bind(completion.and_then(|(ticks, _)| ticks))?;
+                b.bind(completion.map(|(_, outcome)| outcome))?;
+                b.bind(row.has(THREAD_COMPLETION_CONFLICT))?;
+                b.bind(row.root().value().map(id))?;
+                b.bind(row.has(THREAD_CONFLICT))
             },
         )
     }
@@ -1304,6 +1507,16 @@ impl Bulk {
         )
     }
 
+    /// A node's exact summed totals.
+    fn totals(&self, node: u64) -> Option<Totals> {
+        let small = self.aggregates.get(&node)?;
+        Some(if small.large {
+            self.large_aggregates[&node]
+        } else {
+            small.totals()
+        })
+    }
+
     fn write_aggregates(&self, tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
         let mut nodes: Vec<u64> = self.aggregates.keys().copied().collect();
         nodes.sort_unstable();
@@ -1316,7 +1529,7 @@ impl Bulk {
             14,
             &nodes,
             |b, node| {
-                let total = self.aggregates[&node];
+                let total = self.totals(node).expect("collected above");
                 let [ok_calls, errored_calls, cancelled_calls] = total.outcomes.counts(total.count);
                 b.bind(rec)?;
                 b.bind(i64::try_from(node).expect("validated 33-bit node"))?;
@@ -1526,7 +1739,7 @@ impl Bulk {
             let mut frames = Vec::new();
             let mut current = path;
             let complete = loop {
-                let Some(def) = self.paths.get(&current).and_then(|p| p.def.as_ref()) else {
+                let Some(def) = self.paths.get(&current).and_then(PathRow::def) else {
                     break false;
                 };
                 if def.caller.is_none() || def.edge != 1 {

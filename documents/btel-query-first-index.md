@@ -2,7 +2,7 @@
 
 The first `baml query` over a recording builds its SQLite index. On this
 branch, the first query over a 228 MB recording took 60 seconds. It now
-takes under 7. Small recordings were already fast and stay fast. Adding a
+takes 6.6. Small recordings were already fast and stay fast. Adding a
 new file to an indexed recording costs the same as before.
 
 Measured 2026-09-25 with release builds of `baml-cli` on a Ryzen 9 5950X,
@@ -10,10 +10,10 @@ recordings on NVMe, the index deleted before each run. Median of three:
 
 | Recording | Size | First query before | Now | Peak memory before → now |
 | --- | ---: | ---: | ---: | ---: |
-| 2,000 calls | 0.5 MB | 0.10 s | 0.06 s | 41 → 43 MB |
-| 500 captured calls, like LLM calls | 0.19 MB | 0.07 s | 0.05 s | 34 → 34 MB |
-| `tiny`: 203,480 calls | 52 MB | 6.7 s | 1.2 s | 251 → 282 MB |
-| `spawn`: 19,992 roots × 32 threads | 228 MB | 60.4 s | 6.7 s | 304 → 904 MB |
+| 2,000 calls | 0.5 MB | 0.10 s | 0.06 s | 41 → 39 MB |
+| 500 captured calls, like LLM calls | 0.19 MB | 0.07 s | 0.05 s | 34 → 32 MB |
+| `tiny`: 203,480 calls | 52 MB | 6.7 s | 1.2 s | 251 → 256 MB |
+| `spawn`: 19,992 roots × 32 threads | 228 MB | 60.4 s | 6.6 s | 304 → 722 MB |
 
 A refresh that finds one new file took 38 ms on `tiny` and 133 ms on
 `spawn`, before and after. One that finds nothing new takes about 9 ms.
@@ -51,6 +51,10 @@ Depths, roots, child time, raise stacks and source locations are computed
 once from the final evidence. Each call site's source location is looked up
 once, not once per call path.
 
+The merge keeps its rows in fixed-size chunks with their optional fields
+packed into flags, so a row of the big tables takes about 60 bytes. Hash
+maps holding the rows directly used more than twice that.
+
 Then every row is written once, in key order, 64 rows per statement, in one
 transaction. When a table gets more new rows than it already has, its
 secondary indexes are dropped and rebuilt afterwards, which is faster than
@@ -86,7 +90,7 @@ set found the source-location bug above.
 
 ## What is left
 
-- Memory. At its peak, the first index of `spawn` uses about 4 bytes of
+- Memory. At its peak, the first index of `spawn` uses about 3 bytes of
   memory per byte of recording. A single refresh merges at most 1 GiB of
   files this way; the rest applies the old way.
 - The remaining time is mostly SQLite writing about 4 million rows, a 330 MB
