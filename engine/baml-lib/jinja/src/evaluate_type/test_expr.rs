@@ -312,6 +312,18 @@ fn test_output_format() {
     );
 
     assert_eq!(
+        assert_evaluates_to!("ctx.output_format(format='toon')", &types),
+        Type::String
+    );
+
+    assert_eq!(
+        assert_fails_to!("ctx.output_format(format='yaml')", &types),
+        vec![
+            "Function 'baml::OutputFormat' expects argument 'format' to be of type (none | literal[\"json\"] | literal[\"toon\"]), but got literal[\"yaml\"]"
+        ]
+    );
+
+    assert_eq!(
         assert_fails_to!(
             "ctx.output_format(prefix='1', always_hoist_enums=1)",
             &types
