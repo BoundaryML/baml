@@ -3,8 +3,7 @@
 //! finished handler must not blur a live one. Real engine recordings.
 //!
 //! The first two tests reproduced review findings before the fix: a false
-//! proven conversion and a lost rethrow link. See
-//! `documents/btel-query-error-origin-review.md`.
+//! proven conversion and a lost rethrow link.
 mod support;
 
 use baml_query_btel::Index;
