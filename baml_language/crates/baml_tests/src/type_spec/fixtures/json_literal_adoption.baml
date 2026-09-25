@@ -38,6 +38,14 @@ function jm_optional() -> baml.json.json? throws never {
     accept_optional_json({"key": {"nested": [1, true, null]}})
 }
 
+class JalOptionalJsonField {
+    data baml.json.json?
+}
+
+function jm_optional_field() -> baml.json.json? throws never {
+    JalOptionalJsonField { data: {"key": {"nested": [1, true, null]}} }.data
+}
+
 function ja_optional() -> baml.json.json? throws never {
     accept_optional_json([1, true, null])
 }
