@@ -1274,25 +1274,9 @@ fn apply_interface_default_backfill(program: &mut Program, backfill: &[Interface
 pub(crate) use emit::compile_mir_function;
 
 fn is_builtin_function_name(name: &str) -> bool {
-    matches!(
-        name.split('.').next(),
-        Some(
-            "baml"
-                | "trace"
-                | "reflect"
-                | "assert"
-                | "testing"
-                | "log"
-                | "env"
-                | "ai"
-                | "openai"
-                | "anthropic"
-                | "google"
-                | "aws"
-                | "vercel"
-                | "claude_code"
-        )
-    )
+    name.split('.')
+        .next()
+        .is_some_and(|package| baml_builtins2::stdlib_package_names().contains(&package))
 }
 
 /// Is `name` a synthesized `$init` / `$init_test` chainer (per package)? These
@@ -6720,6 +6704,24 @@ mod tests {
     use salsa::Setter;
 
     use super::*;
+
+    #[test]
+    fn builtin_function_names_follow_the_stdlib_inventory() {
+        for package in baml_builtins2::stdlib_package_names() {
+            assert!(is_builtin_function_name(&format!(
+                "{package}.nested.function"
+            )));
+        }
+        for name in [
+            "",
+            "root.function",
+            "user.function",
+            "env.function",
+            "boundary.function",
+        ] {
+            assert!(!is_builtin_function_name(name), "{name}");
+        }
+    }
 
     #[salsa::db]
     pub(crate) struct TestDb {

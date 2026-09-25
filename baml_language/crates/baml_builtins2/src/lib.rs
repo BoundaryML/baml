@@ -339,6 +339,41 @@ pub fn reserved_edge_names() -> &'static [&'static str] {
 pub const RESERVED_USER_EDGE_UNTIL_WIRE_CARRIES_IDENTITY: &str = "user";
 
 #[cfg(test)]
+mod package_inventory_tests {
+    use super::*;
+
+    #[test]
+    fn manifests_match_registered_packages() {
+        let mut packages = stdlib_package_names().to_vec();
+        let mut manifests: Vec<_> = MANIFESTS.iter().map(|manifest| manifest.package).collect();
+        packages.sort_unstable();
+        manifests.sort_unstable();
+        assert_eq!(manifests, packages);
+    }
+
+    #[test]
+    fn developer_docs_cover_every_stdlib_package() {
+        #[derive(serde::Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct DocsPackages {
+            packages: Vec<String>,
+        }
+
+        let mut docs: DocsPackages = serde_yaml::from_str(include_str!(
+            "../../../../typescript2/app-developer-docs/content-data/reference/stdlib-packages.yaml"
+        ))
+        .expect("valid developer docs package inventory");
+        let mut packages = stdlib_package_names().to_vec();
+        docs.packages.sort_unstable();
+        packages.sort_unstable();
+        assert_eq!(
+            docs.packages, packages,
+            "update the developer docs package inventory when builtin packages change"
+        );
+    }
+}
+
+#[cfg(test)]
 mod reserved_edge_name_tests {
     use super::*;
 

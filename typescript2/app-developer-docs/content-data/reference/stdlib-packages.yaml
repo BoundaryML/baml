@@ -8,6 +8,7 @@ packages:
   - ai
   - openai
   - anthropic
+  - typesafeai
   - google
   - aws
   - vercel
