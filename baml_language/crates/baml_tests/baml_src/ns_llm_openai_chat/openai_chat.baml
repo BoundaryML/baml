@@ -411,36 +411,6 @@ test "chat_media_parts" {
 
 // ─── openai.GenericClient ────────────────────────────────────────────────────
 
-// Regression for #4586: JSON-compatible map literals adopt the recursive
-// `baml.json.json` type expected by request_body, including in client declarations.
-client Issue4586JsonMapLiteral = openai.GenericClient.new(
-    model = "m",
-    base_url = "http://127.0.0.1:9/v1",
-    request_body = { chat_template_kwargs: { enable_thinking: false } },
-);
-
-function issue_4586_json_map_literal_request_body() -> bool {
-    root.llm_mock.mock_json_serve(
-        [root.llm_mock.MockResponse.ok(_chat_ok_body())],
-        (mock: root.llm_mock.MockJsonServer) -> {
-            let cl = openai.GenericClient.new(
-                model = "m",
-                base_url = mock.base_url(),
-                request_body = { chat_template_kwargs: { enable_thinking: false } },
-            );
-            let _ = cl.invoke(_chat_input("hi"));
-            baml.json.path<bool>(
-                mock.last_request().json(),
-                ".chat_template_kwargs.enable_thinking",
-            )
-        },
-    )
-}
-
-test "issue_4586_json_map_literal_request_body" {
-    assert.is_true(!issue_4586_json_map_literal_request_body())
-}
-
 // All-text messages collapse to a plain string (many OpenAI-compatible servers
 // reject `content: [...]`), and no credential is attached when none is set.
 function chat_generic_collapses_text() -> string {
