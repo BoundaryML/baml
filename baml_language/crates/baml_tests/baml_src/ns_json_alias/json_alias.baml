@@ -71,6 +71,21 @@ test "let_json_map" {
     assert.is_true(json_map_has_key())
 }
 
+class OptionalJsonField {
+    data json?
+}
+
+function nested_map_in_optional_json_field() -> bool {
+    let value = OptionalJsonField {
+        data: { chat_template_kwargs: { enable_thinking: false } },
+    };
+    baml.json.path<bool>(value.data, ".chat_template_kwargs.enable_thinking")
+}
+
+test "nested_map_literal_in_optional_json_field" {
+    assert.is_true(!nested_map_in_optional_json_field())
+}
+
 // ─── 1.7 Exhaustive match against json ───────────────────────────────────────
 
 // The function takes `json` as a parameter; passing `null` should return "null".
