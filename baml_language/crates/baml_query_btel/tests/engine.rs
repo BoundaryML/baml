@@ -12,11 +12,28 @@ fn rows(result: &baml_query_btel::QueryResult) -> Vec<Vec<Json>> {
     result.rows.clone()
 }
 
+const STATS_SQL: &str =
+    "SELECT fqn, SUM(call_count) AS n FROM function_stats GROUP BY fqn ORDER BY n DESC";
+
 fn stats(index: &mut baml_query_btel::Index) -> BTreeMap<String, i64> {
-    let result = sql(
-        index,
-        "SELECT fqn, SUM(call_count) AS n FROM function_stats GROUP BY fqn ORDER BY n DESC",
-    );
+    stats_of(&sql(index, STATS_SQL))
+}
+
+/// Query what is already indexed, without applying new files: a test that
+/// counts every applied file must see each refresh's metrics.
+fn indexed_sql(index: &mut baml_query_btel::Index, text: &str) -> baml_query_btel::QueryResult {
+    let request = baml_query_btel::QueryRequest {
+        sql: text.into(),
+        ..baml_query_btel::QueryRequest::default()
+    };
+    index.query(&request).expect("indexed query")
+}
+
+fn indexed_stats(index: &mut baml_query_btel::Index) -> BTreeMap<String, i64> {
+    stats_of(&indexed_sql(index, STATS_SQL))
+}
+
+fn stats_of(result: &baml_query_btel::QueryResult) -> BTreeMap<String, i64> {
     result
         .rows
         .iter()
@@ -421,7 +438,7 @@ async fn live_recording_applies_each_new_file_exactly_once() {
                 metrics.files_applied + metrics.files_rejected,
                 "only new files are decoded"
             );
-            let totals = stats(&mut index);
+            let totals = indexed_stats(&mut index);
             if totals.get("user.main") == Some(&round)
                 && totals.get("user.Leaf") == Some(&(round * 11))
             {
@@ -438,7 +455,7 @@ async fn live_recording_applies_each_new_file_exactly_once() {
             );
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
-        let recording = sql(&mut index, "SELECT state, indexed_sequence FROM recordings");
+        let recording = indexed_sql(&mut index, "SELECT state, indexed_sequence FROM recordings");
         assert_eq!(recording.rows[0][0], json!("unsealed"));
     }
     engine.shutdown().await;
