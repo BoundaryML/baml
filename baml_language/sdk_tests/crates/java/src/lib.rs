@@ -19,6 +19,7 @@
 sdk_test_harness_runner::java::test_suite! {
     fixture docstrings_etc   { javac: on,    junit: on    }
     fixture function_calls   { javac: on,    junit: on    }
+    fixture hello_world      { javac: on,    junit: on    }
     fixture llm_functions    { javac: on,    junit: on    }
     fixture type_shapes      { javac: on,    junit: on    }
     fixture unsupported_only { javac: later, junit: later }
