@@ -18,6 +18,7 @@ pub const SKIPPED: &[&str] = &["host_reflect"];
 pub const SHARED: &[&str] = &[
     "docstrings_etc",
     "function_calls",
+    "hello_world",
     "llm_functions",
     "type_shapes",
     "unsupported_only",

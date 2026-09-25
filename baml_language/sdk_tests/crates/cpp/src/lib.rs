@@ -7,6 +7,7 @@
 sdk_test_harness_runner::cpp::test_suite! {
     fixture docstrings_etc;
     fixture function_calls;
+    fixture hello_world;
     fixture llm_functions;
     fixture type_shapes;
     fixture unsupported_only;

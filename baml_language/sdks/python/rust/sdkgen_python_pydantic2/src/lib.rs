@@ -22,7 +22,9 @@ use std::{
     rc::Rc,
 };
 
-use baml_codegen_types::{Name, Symbol, SymbolPool, public_interface_tokens};
+use baml_codegen_types::{
+    Name, Symbol, SymbolPool, public_interface_tokens, without_builtin_declarations,
+};
 pub use baml_codegen_types::{NamingConvention, OutputType};
 pub use names::{IdentifierRename, IdentifierRenameReason};
 
@@ -250,6 +252,8 @@ fn to_source_code_internal(
         "sdkgen_python_pydantic2 only supports naming_convention = PreserveCase \
          (got {naming_convention})",
     );
+    let filtered_pool = without_builtin_declarations(pool);
+    let pool = &filtered_pool;
     let mut out: HashMap<PathBuf, String> = HashMap::new();
     let names = Rc::new(PythonNames::build(pool));
 
@@ -914,6 +918,49 @@ mod tests {
         f.arguments.clear();
         f.return_type = return_type;
         Symbol::Function(f)
+    }
+
+    #[test]
+    fn builtin_declarations_are_omitted_but_user_functions_remain() {
+        let mut pool = SymbolPool::new();
+        for package in ["baml", "ai", "reflect", "openai"] {
+            let builtin_source = format!("<builtin>/{package}/sample.baml");
+            let class_name = cg_name(package, &["sample"], "KeptType");
+            let mut builtin_class = class_at(class_name.clone(), &builtin_source, 0);
+            let Symbol::Class(class) = &mut builtin_class else {
+                unreachable!();
+            };
+            class
+                .static_methods
+                .push(bare_func("suppressed_static", &builtin_source, 1));
+            class
+                .instance_methods
+                .push(bare_func("suppressed_method", &builtin_source, 2));
+            pool.insert(class_name, builtin_class);
+            pool.insert(
+                cg_name(package, &["sample"], "suppressed_function"),
+                func_sym("suppressed_function", &builtin_source, 3),
+            );
+        }
+        pool.insert(
+            cg_name("user", &["sample"], "kept_function"),
+            func_sym("kept_function", "user.baml", 0),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        for leaf_path in [
+            "baml/sample",
+            "ai/sample",
+            "reflect/sample",
+            "vendor/openai/sample",
+        ] {
+            for extension in ["py", "pyi"] {
+                assert!(
+                    !out.contains_key(&PathBuf::from(format!("{leaf_path}/__init__.{extension}")))
+                );
+            }
+        }
+        assert!(out[&PathBuf::from("sample/__init__.pyi")].contains("def kept_function("));
     }
 
     #[test]

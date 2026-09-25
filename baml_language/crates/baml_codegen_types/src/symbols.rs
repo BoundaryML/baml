@@ -4,6 +4,35 @@ use crate::{CodegenTypeError, Ty};
 
 pub type SymbolPool = std::collections::HashMap<super::Name, Symbol>;
 
+/// Omit built-in functions and types from generated SDK declarations.
+/// User declarations remain unchanged, including methods on user classes.
+/// Their references to omitted built-in types may be unresolved in the SDK.
+pub fn without_builtin_declarations(pool: &SymbolPool) -> SymbolPool {
+    pool.iter()
+        .filter_map(|(name, symbol)| {
+            let origin = match symbol {
+                Symbol::Function(function) => &function.origin,
+                Symbol::Class(class) => &class.origin,
+                Symbol::Enum(enum_) => &enum_.origin,
+                Symbol::TypeAlias(alias) => &alias.origin,
+            };
+            if origin.source_file_path.starts_with("<builtin>/") {
+                return None;
+            }
+            let mut symbol = symbol.clone();
+            if let Symbol::Class(class) = &mut symbol {
+                class
+                    .static_methods
+                    .retain(|method| !method.origin.source_file_path.starts_with("<builtin>/"));
+                class
+                    .instance_methods
+                    .retain(|method| !method.origin.source_file_path.starts_with("<builtin>/"));
+            }
+            Some((name.clone(), symbol))
+        })
+        .collect()
+}
+
 #[derive(Clone)]
 pub enum Symbol {
     Function(Function),
@@ -377,6 +406,22 @@ mod tests {
         crate::Name::new(BaseName::new("user"), Vec::new(), BaseName::new(value))
     }
 
+    fn function(value: &str, source_file_path: &str) -> Function {
+        Function {
+            name: BaseName::new(value),
+            generic_params: Vec::new(),
+            docstring: None,
+            arguments: Vec::new(),
+            return_type: Ty::Int,
+            throws: None,
+            watchers: Vec::new(),
+            origin: Origin {
+                source_file_path: source_file_path.to_string(),
+                span_start: 0,
+            },
+        }
+    }
+
     fn origin() -> Origin {
         Origin {
             source_file_path: "types.baml".to_string(),
@@ -410,6 +455,119 @@ mod tests {
             instance_methods: Vec::new(),
             origin: origin(),
         })
+    }
+
+    #[test]
+    fn builtin_declaration_filter_keeps_user_declarations() {
+        let builtin_source = "<builtin>/baml/test.baml";
+        let builtin_name =
+            crate::Name::new(BaseName::new("baml"), Vec::new(), BaseName::new("BuiltIn"));
+        let builtin_call =
+            crate::Name::new(BaseName::new("baml"), Vec::new(), BaseName::new("call"));
+        let user_call = name("call");
+        let user_class = name("UserClass");
+        let user_enum = name("UserKind");
+        let user_alias = name("UserAlias");
+        let mut pool = SymbolPool::new();
+        pool.insert(
+            builtin_call.clone(),
+            Symbol::Function(function("call", builtin_source)),
+        );
+        pool.insert(
+            user_call.clone(),
+            Symbol::Function(function("call", "user.baml")),
+        );
+        pool.insert(
+            builtin_name.clone(),
+            Symbol::Class(Class {
+                name: builtin_name.clone(),
+                generic_params: Vec::new(),
+                docstring: None,
+                properties: vec![ClassProperty {
+                    name: BaseName::new("value"),
+                    docstring: None,
+                    ty: Ty::Int,
+                }],
+                static_methods: vec![function("create", builtin_source)],
+                instance_methods: vec![function("read", builtin_source)],
+                origin: Origin {
+                    source_file_path: builtin_source.to_string(),
+                    span_start: 0,
+                },
+            }),
+        );
+        pool.insert(
+            user_class.clone(),
+            Symbol::Class(Class {
+                name: user_class.clone(),
+                generic_params: Vec::new(),
+                docstring: None,
+                properties: Vec::new(),
+                static_methods: Vec::new(),
+                instance_methods: vec![function("read", "user.baml")],
+                origin: origin(),
+            }),
+        );
+        let builtin_enum =
+            crate::Name::new(BaseName::new("baml"), Vec::new(), BaseName::new("Kind"));
+        pool.insert(
+            builtin_enum.clone(),
+            Symbol::Enum(Enum {
+                name: builtin_enum.clone(),
+                docstring: None,
+                variants: Vec::new(),
+                origin: Origin {
+                    source_file_path: builtin_source.to_string(),
+                    span_start: 0,
+                },
+            }),
+        );
+        let builtin_alias =
+            crate::Name::new(BaseName::new("baml"), Vec::new(), BaseName::new("Alias"));
+        pool.insert(
+            builtin_alias.clone(),
+            Symbol::TypeAlias(TypeAlias {
+                name: builtin_alias.clone(),
+                resolves_to: Ty::Int,
+                recursive: false,
+                origin: Origin {
+                    source_file_path: builtin_source.to_string(),
+                    span_start: 0,
+                },
+            }),
+        );
+
+        pool.insert(
+            user_enum.clone(),
+            Symbol::Enum(Enum {
+                name: user_enum.clone(),
+                docstring: None,
+                variants: Vec::new(),
+                origin: origin(),
+            }),
+        );
+        pool.insert(
+            user_alias.clone(),
+            Symbol::TypeAlias(TypeAlias {
+                name: user_alias.clone(),
+                resolves_to: Ty::Int,
+                recursive: false,
+                origin: origin(),
+            }),
+        );
+
+        let filtered = without_builtin_declarations(&pool);
+        assert!(!filtered.contains_key(&builtin_call));
+        assert!(filtered.contains_key(&user_call));
+        assert!(!filtered.contains_key(&builtin_name));
+        assert!(!filtered.contains_key(&builtin_enum));
+        assert!(!filtered.contains_key(&builtin_alias));
+        assert!(filtered.contains_key(&user_enum));
+        assert!(filtered.contains_key(&user_alias));
+        let Symbol::Class(user_class) = &filtered[&user_class] else {
+            panic!("user class was removed");
+        };
+        assert_eq!(user_class.instance_methods.len(), 1);
     }
 
     #[test]
