@@ -6,7 +6,7 @@ mod enums;
 mod expr_fns;
 mod functions;
 pub mod identifiers;
-mod reserved_names;
+pub(crate) mod reserved_names;
 mod template_strings;
 mod tests;
 mod types;
