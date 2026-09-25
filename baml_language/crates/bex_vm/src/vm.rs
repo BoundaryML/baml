@@ -6614,8 +6614,21 @@ impl BexVm {
             return;
         }
         self.finish_pending_telemetry_wait();
+        // Engine-side cancellation can terminate a suspended VM without an
+        // exception value on its stack. Capture the same panic value that the
+        // engine returns, without dispatching it into user code.
+        let error = (outcome == InvocationOutcome::Cancelled
+            && self
+                .frames
+                .iter()
+                .any(|frame| matches!(frame, Frame::Bytecode(frame) if frame.telemetry.is_some()))
+            && self
+                .panic_class_ptrs
+                .get(PanicClass::Cancelled as usize)
+                .is_some_and(|class| !class.is_null()))
+        .then(|| self.panic_to_exception_value(VmPanic::Cancelled));
         for frame_idx in (0..self.frames.len()).rev() {
-            self.complete_bytecode_invocation(frame_idx, outcome, None);
+            self.complete_bytecode_invocation(frame_idx, outcome, error);
         }
         self.telemetry.as_mut().unwrap().complete_thread(outcome);
     }

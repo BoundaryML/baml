@@ -529,7 +529,7 @@ impl TelemetryState {
             {
                 value
             }
-            InvocationOutcome::Errored
+            InvocationOutcome::Errored | InvocationOutcome::Cancelled
                 if telemetry.flags & CAPTURE_ERROR != 0 || policy.capture_error =>
             {
                 value
@@ -1148,7 +1148,11 @@ mod tests {
                 [Some(false), Some(false), Some(true)],
                 [Some(true), Some(true), Some(true)],
             ] {
-                for outcome in [InvocationOutcome::Ok, InvocationOutcome::Errored] {
+                for outcome in [
+                    InvocationOutcome::Ok,
+                    InvocationOutcome::Errored,
+                    InvocationOutcome::Cancelled,
+                ] {
                     let function = function(FunctionKind::Bytecode, None);
                     let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
                     state
@@ -1181,8 +1185,9 @@ mod tests {
                     let expected_inputs = capture_inputs || inputs == Some(true);
                     let expected_value = match outcome {
                         InvocationOutcome::Ok => capture_output || output == Some(true),
-                        InvocationOutcome::Errored => capture_error || error == Some(true),
-                        InvocationOutcome::Cancelled => unreachable!(),
+                        InvocationOutcome::Errored | InvocationOutcome::Cancelled => {
+                            capture_error || error == Some(true)
+                        }
                     };
                     let inputs = state
                         .span_records()
@@ -1229,6 +1234,18 @@ mod tests {
                                 captured_value,
                                 ..
                             } if *record_id == id && outcome == InvocationOutcome::Errored => {
+                                Some(captured_value)
+                            }
+                            SpanRecord::FunctionSpanCompletionCancelled {
+                                id: record_id,
+                                captured_value,
+                                ..
+                            }
+                            | SpanRecord::FunctionSpanCompletionCancelledNeedsAnnouncement {
+                                id: record_id,
+                                captured_value,
+                                ..
+                            } if *record_id == id && outcome == InvocationOutcome::Cancelled => {
                                 Some(captured_value)
                             }
                             _ => None,
