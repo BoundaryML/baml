@@ -314,7 +314,14 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
             }
         };
         let result = _read_result(p);
-        input_error = await input;
+        // Preserve CLI errors: do not await an errored writer future here, because
+        // that would abort this closure before exit status and result.is_error are
+        // interpreted. A normal writer failure is returned as a string by the task.
+        if (input.is_result()) {
+            input_error = await input;
+        } else if (input.is_error()) {
+            input_error = "the stdin writer task did not complete cleanly";
+        }
         result
     }) catch (e) {
         baml.errors.Timeout => {
