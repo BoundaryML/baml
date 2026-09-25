@@ -4936,10 +4936,10 @@ fn js_number_to_vm_int(value: f64) -> Option<i64> {
 
 /// Resolve a JavaScript number against the explicit numeric arms of a union.
 ///
-/// An in-range integral number prefers an exact integer arm, including one
-/// hidden behind an alias. An explicit float arm comes next. Catch-all arms
-/// such as `unknown` and `baml.json.json` are deliberately left to the normal
-/// union selector so they cannot outrank a numeric arm.
+/// An in-range integral number prefers an integer arm, including one hidden
+/// behind a nested union or alias. A float arm comes next. Catch-all arms such
+/// as `unknown` and `baml.json.json` are deliberately left to the normal union
+/// selector so they cannot outrank a numeric arm.
 fn resolve_js_number_for_union(
     value: f64,
     members: &[RuntimeTy],
@@ -4949,12 +4949,24 @@ fn resolve_js_number_for_union(
     if let Some(integer) = js_number_to_vm_int(value) {
         let integer_value = BexExternalValue::Int(integer);
         let matching_literal = members.iter().find(|member| {
-            union_member_resolves_to_int_literal(member, aliases)
-                && value_matches_type_with_definitions(&integer_value, member, aliases, classes)
+            member_admits_numeric_arm(
+                member,
+                &integer_value,
+                |ty| matches!(ty, RuntimeTy::Literal(Literal::Int(_), _)),
+                aliases,
+                classes,
+                &mut std::collections::HashSet::new(),
+            )
         });
         let matching_int = members.iter().find(|member| {
-            union_member_resolves_to_exact_int(member, aliases)
-                && value_matches_type_with_definitions(&integer_value, member, aliases, classes)
+            member_admits_numeric_arm(
+                member,
+                &integer_value,
+                |ty| matches!(ty, RuntimeTy::Int),
+                aliases,
+                classes,
+                &mut std::collections::HashSet::new(),
+            )
         });
         if let Some(member) = matching_literal.or(matching_int) {
             return (integer_value, Some(member.clone()));
@@ -4963,12 +4975,24 @@ fn resolve_js_number_for_union(
 
     let float_value = BexExternalValue::Float(value);
     let matching_literal = members.iter().find(|member| {
-        union_member_resolves_to_float_literal(member, aliases)
-            && value_matches_type_with_definitions(&float_value, member, aliases, classes)
+        member_admits_numeric_arm(
+            member,
+            &float_value,
+            |ty| matches!(ty, RuntimeTy::Literal(Literal::Float(_), _)),
+            aliases,
+            classes,
+            &mut std::collections::HashSet::new(),
+        )
     });
     let matching_float = members.iter().find(|member| {
-        union_member_resolves_to_exact_float(member, aliases)
-            && value_matches_type_with_definitions(&float_value, member, aliases, classes)
+        member_admits_numeric_arm(
+            member,
+            &float_value,
+            |ty| matches!(ty, RuntimeTy::Float),
+            aliases,
+            classes,
+            &mut std::collections::HashSet::new(),
+        )
     });
     if let Some(member) = matching_literal.or(matching_float) {
         return (float_value, Some(member.clone()));
@@ -4977,48 +5001,49 @@ fn resolve_js_number_for_union(
     (BexExternalValue::JsNumber(value), None)
 }
 
-/// Whether a union member is exactly an integer type after alias expansion.
-fn union_member_resolves_to_exact_int(
+/// Find a matching numeric leaf without letting a catch-all sibling make an
+/// unrelated numeric literal appear to match the value.
+fn member_admits_numeric_arm(
     member: &RuntimeTy,
+    value: &BexExternalValue,
+    is_numeric_arm: fn(&RuntimeTy) -> bool,
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+    classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
+    visited_aliases: &mut std::collections::HashSet<baml_type::TypeName>,
 ) -> bool {
-    matches!(
-        resolve_runtime_alias(member, aliases),
-        Some(RuntimeTy::Int | RuntimeTy::Literal(Literal::Int(_), _))
-    )
-}
-
-/// Whether a union member is an integer literal after alias expansion.
-fn union_member_resolves_to_int_literal(
-    member: &RuntimeTy,
-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-) -> bool {
-    matches!(
-        resolve_runtime_alias(member, aliases),
-        Some(RuntimeTy::Literal(Literal::Int(_), _))
-    )
-}
-
-/// Whether a union member is exactly a float type after alias expansion.
-fn union_member_resolves_to_exact_float(
-    member: &RuntimeTy,
-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-) -> bool {
-    matches!(
-        resolve_runtime_alias(member, aliases),
-        Some(RuntimeTy::Float | RuntimeTy::Literal(Literal::Float(_), _))
-    )
-}
-
-/// Whether a union member is a float literal after alias expansion.
-fn union_member_resolves_to_float_literal(
-    member: &RuntimeTy,
-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-) -> bool {
-    matches!(
-        resolve_runtime_alias(member, aliases),
-        Some(RuntimeTy::Literal(Literal::Float(_), _))
-    )
+    match member {
+        RuntimeTy::TypeAlias(name) => {
+            if !visited_aliases.insert(name.clone()) {
+                return false;
+            }
+            let matches = aliases.get(name).is_some_and(|expanded| {
+                member_admits_numeric_arm(
+                    expanded,
+                    value,
+                    is_numeric_arm,
+                    aliases,
+                    classes,
+                    visited_aliases,
+                )
+            });
+            visited_aliases.remove(name);
+            matches
+        }
+        RuntimeTy::Union(members) => members.iter().any(|nested| {
+            member_admits_numeric_arm(
+                nested,
+                value,
+                is_numeric_arm,
+                aliases,
+                classes,
+                visited_aliases,
+            )
+        }),
+        _ => {
+            is_numeric_arm(member)
+                && value_matches_type_with_definitions(value, member, aliases, classes)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -5115,6 +5140,48 @@ mod union_container_selection_tests {
         };
         assert_eq!(metadata.selected_option, alias);
         assert_eq!(*value, BexExternalValue::Int(7));
+    }
+
+    #[test]
+    fn js_number_union_prefers_int_inside_nested_aliases() {
+        let int_or_string = TypeName::from_dotted_path("user.aliases.IntOrString");
+        let float_or_bool = TypeName::from_dotted_path("user.aliases.FloatOrBool");
+        let int_alias = RuntimeTy::TypeAlias(int_or_string.clone());
+        let float_alias = RuntimeTy::TypeAlias(float_or_bool.clone());
+        let aliases = indexmap::IndexMap::from([
+            (
+                int_or_string,
+                RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]),
+            ),
+            (
+                float_or_bool,
+                RuntimeTy::union([RuntimeTy::float(), RuntimeTy::Bool]),
+            ),
+        ]);
+
+        for declared in [
+            RuntimeTy::union([int_alias.clone(), float_alias]),
+            RuntimeTy::union([RuntimeTy::float(), int_alias.clone()]),
+        ] {
+            let coerced = coerce_arg_to_declared_type_with_aliases(
+                BexExternalValue::JsNumber(7.0),
+                &declared,
+                &aliases,
+                &indexmap::IndexMap::new(),
+                crate::InboundUnionAmbiguityPolicy::Reject,
+            )
+            .unwrap();
+
+            let BexExternalValue::Union { value, metadata } = coerced else {
+                panic!("expected an outer union carrier")
+            };
+            assert_eq!(metadata.selected_option, int_alias);
+            let BexExternalValue::Union { value, metadata } = *value else {
+                panic!("expected an inner union carrier")
+            };
+            assert_eq!(metadata.selected_option, RuntimeTy::int());
+            assert_eq!(*value, BexExternalValue::Int(7));
+        }
     }
 
     #[test]
