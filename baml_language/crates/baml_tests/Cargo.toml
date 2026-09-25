@@ -17,7 +17,6 @@ baml_compiler2_emit = { workspace = true }
 baml_compiler2_hir = { workspace = true }
 baml_compiler2_hir_ty = { workspace = true }
 baml_compiler2_mir = { workspace = true }
-baml_compiler2_ppir = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_db = { workspace = true }
 baml_type = { workspace = true }
@@ -75,7 +74,7 @@ name = "runtime_benchmark"
 harness = false
 
 [[bench]]
-name = "profiling_overhead"
+name = "call_overhead"
 harness = false
 
 [[bench]]

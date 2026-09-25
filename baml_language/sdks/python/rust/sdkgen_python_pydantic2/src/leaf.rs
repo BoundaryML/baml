@@ -23,7 +23,7 @@ use crate::{
     },
     names::PythonNames,
     py_string,
-    routing::{LeafPath, route_class_ref},
+    routing::{LeafPath, route},
     translate_ty::{SelfRef, TranslateCtx, translate_ty},
 };
 
@@ -131,12 +131,12 @@ impl LeafBody {
     pub(crate) fn needs_baml_pyhandle(&self) -> bool {
         fn ty_uses_rust_type(ty: &Ty) -> bool {
             match ty {
-                Ty::RustType { .. } => true,
-                Ty::List(inner, _) => ty_uses_rust_type(inner),
+                Ty::RustType => true,
+                Ty::List(inner) => ty_uses_rust_type(inner),
                 Ty::Map { key, value, .. } => ty_uses_rust_type(key) || ty_uses_rust_type(value),
-                Ty::Union(items, _) => items.iter().any(ty_uses_rust_type),
-                Ty::Class(_, args, _) => args.iter().any(ty_uses_rust_type),
-                Ty::Interface(_, generics, associated_types, _) => {
+                Ty::Union(items) => items.iter().any(ty_uses_rust_type),
+                Ty::Class(_, args) => args.iter().any(ty_uses_rust_type),
+                Ty::Interface(_, generics, associated_types) => {
                     generics.iter().any(ty_uses_rust_type)
                         || associated_types.iter().any(|(_, ty)| ty_uses_rust_type(ty))
                 }
@@ -150,7 +150,7 @@ impl LeafBody {
                         || ty_uses_rust_type(ret)
                         || ty_uses_rust_type(throws)
                 }
-                Ty::Future(value, error, _) => ty_uses_rust_type(value) || ty_uses_rust_type(error),
+                Ty::Future(value, error) => ty_uses_rust_type(value) || ty_uses_rust_type(error),
                 _ => false,
             }
         }
@@ -320,7 +320,7 @@ impl LeafBody {
     /// The relative-anchored form (`from .. import <segment>` rather
     /// than `from <root_dots> import <first_segment>`) navigates only
     /// through fully-initialized intermediates: an intra-subtree ref
-    /// like `stream_types/baml/llm` → `stream_types/baml/http` lands
+    /// like `baml/llm` → `baml/http` lands
     /// as `from .. import http`, avoiding the partial-attribute
     /// `AttributeError` that going through the SDK root would trigger
     /// during subpackage init.
@@ -556,17 +556,17 @@ fn collect_optional_callables(
     out: &mut Vec<(Ty, String)>,
 ) {
     match ty {
-        Ty::List(inner, _) => collect_optional_callables(inner, base, seen, out),
+        Ty::List(inner) => collect_optional_callables(inner, base, seen, out),
         Ty::Map { key, value, .. } => {
             collect_optional_callables(key, base, seen, out);
             collect_optional_callables(value, base, seen, out);
         }
-        Ty::Union(items, _) => {
+        Ty::Union(items) => {
             for item in items {
                 collect_optional_callables(item, base, seen, out);
             }
         }
-        Ty::Class(_, args, _) => {
+        Ty::Class(_, args) => {
             for a in args {
                 collect_optional_callables(a, base, seen, out);
             }
@@ -594,21 +594,21 @@ fn collect_root_imports(
     names: Option<&PythonNames>,
 ) {
     match ty {
-        Ty::Class(name, args, _) => {
+        Ty::Class(name, args) => {
             record_name_routing(name, current, out, names);
             for a in args {
                 collect_root_imports(a, current, out, names);
             }
         }
-        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) | Ty::TypeAlias(name, _) => {
+        Ty::Enum(name) | Ty::EnumVariant(name, _) | Ty::TypeAlias(name) => {
             record_name_routing(name, current, out, names);
         }
-        Ty::List(inner, _) => collect_root_imports(inner, current, out, names),
+        Ty::List(inner) => collect_root_imports(inner, current, out, names),
         Ty::Map { key, value, .. } => {
             collect_root_imports(key, current, out, names);
             collect_root_imports(value, current, out, names);
         }
-        Ty::Union(items, _) => {
+        Ty::Union(items) => {
             for item in items {
                 collect_root_imports(item, current, out, names);
             }
@@ -651,22 +651,22 @@ fn collect_root_imports(
                 anchor: "baml".to_string(),
             });
         }
-        Ty::Int { .. }
-        | Ty::Bigint { .. }
-        | Ty::Float { .. }
-        | Ty::String { .. }
-        | Ty::Bool { .. }
-        | Ty::Null { .. }
+        Ty::Int
+        | Ty::Bigint
+        | Ty::Float
+        | Ty::String
+        | Ty::Bool
+        | Ty::Null
         | Ty::Literal(..)
-        | Ty::Uint8Array { .. }
+        | Ty::Uint8Array
         | Ty::TypeVar(..)
-        | Ty::RustType { .. }
-        | Ty::Type { .. }
-        | Ty::Resource { .. }
-        | Ty::PromptAst { .. }
-        | Ty::Unknown { .. }
-        | Ty::Never { .. }
-        | Ty::Void { .. }
+        | Ty::RustType
+        | Ty::Type
+        | Ty::Resource
+        | Ty::PromptAst
+        | Ty::Unknown
+        | Ty::Never
+        | Ty::Void
         | Ty::Interface(..)
         | Ty::Future(..) => {}
     }
@@ -678,10 +678,7 @@ fn record_name_routing(
     out: &mut RootImportSets,
     names: Option<&PythonNames>,
 ) {
-    let routed = names.map_or_else(
-        || route_class_ref(name),
-        |names| names.route_class_ref(name),
-    );
+    let routed = names.map_or_else(|| route(name), |names| names.route(name));
     if routed == *current {
         return;
     }
@@ -692,7 +689,7 @@ fn record_name_routing(
         // here (current is also empty there, so `routed == *current`).
         if !current.segments.is_empty() {
             let projected = names.map_or_else(
-                || name.bare_name().to_string(),
+                || name.name().to_string(),
                 |names| names.symbol(name).into_owned(),
             );
             out.root_names.insert(projected.clone());
@@ -868,94 +865,18 @@ fn split_hoistable_aliases(
     (hoisted, trailing)
 }
 
-/// Whether `name` lands in a leaf under a different logical package than
-/// `leaf`. `stream_types` is a synthetic routing prefix, so compare the source
-/// package beneath it (`ai`, `baml`, ...) rather than treating every partial
-/// type as part of one giant package. The SDK root counts as nobody's outside.
+/// Whether `name` lands in a leaf under a different top-level package than
+/// `leaf`. The SDK root counts as nobody's outside.
 pub(crate) fn routes_outside_package(leaf: &LeafPath, name: &baml_codegen_types::Name) -> bool {
-    let routed = route_class_ref(name);
-    match (
-        logical_package_segment(&leaf.segments),
-        logical_package_segment(&routed.segments),
-    ) {
+    match (leaf.segments.first(), route(name).segments.first()) {
         (Some(current), Some(other)) => current != other,
         _ => false,
     }
 }
 
-fn logical_package_segment(segments: &[String]) -> Option<&str> {
-    match segments {
-        [prefix, package, ..] if prefix == "stream_types" => Some(package),
-        [package, ..] => Some(package),
-        [] => None,
-    }
-}
-
 /// Every named symbol (class, interface, enum, alias) `ty` mentions.
 fn collect_ty_names(ty: &Ty, out: &mut Vec<baml_codegen_types::Name>) {
-    match ty {
-        Ty::TypeAlias(name, _) | Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => {
-            out.push(name.clone());
-        }
-        Ty::Class(name, arguments, _) => {
-            out.push(name.clone());
-            for argument in arguments {
-                collect_ty_names(argument, out);
-            }
-        }
-        Ty::Interface(name, arguments, associated, _) => {
-            out.push(name.clone());
-            for argument in arguments {
-                collect_ty_names(argument, out);
-            }
-            for (_, assoc) in associated {
-                collect_ty_names(assoc, out);
-            }
-        }
-        Ty::List(inner, _) => collect_ty_names(inner, out),
-        Ty::Future(value, error, _) => {
-            collect_ty_names(value, out);
-            collect_ty_names(error, out);
-        }
-        Ty::Map { key, value, .. } => {
-            collect_ty_names(key, out);
-            collect_ty_names(value, out);
-        }
-        Ty::Union(members, _) => {
-            for member in members {
-                collect_ty_names(member, out);
-            }
-        }
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            for param in params {
-                collect_ty_names(&param.ty, out);
-            }
-            collect_ty_names(ret, out);
-            collect_ty_names(throws, out);
-        }
-        Ty::Int { .. }
-        | Ty::Bigint { .. }
-        | Ty::Float { .. }
-        | Ty::String { .. }
-        | Ty::Bool { .. }
-        | Ty::Null { .. }
-        | Ty::Literal(..)
-        | Ty::Uint8Array { .. }
-        | Ty::Media(..)
-        | Ty::TypeVar(..)
-        | Ty::RustType { .. }
-        | Ty::Type { .. }
-        | Ty::Resource { .. }
-        | Ty::PromptAst { .. }
-        | Ty::Unknown { .. }
-        | Ty::Never { .. }
-        | Ty::Void { .. } => {}
-    }
+    ty.visit_heads(&mut |name| out.push(name.clone()));
 }
 
 fn sort_aliases(aliases: Vec<(EmittedSymbol, SortKey)>) -> Vec<(EmittedSymbol, SortKey)> {
@@ -1027,22 +948,22 @@ fn collect_alias_dependencies(
     out: &mut BTreeSet<usize>,
 ) {
     match ty {
-        Ty::TypeAlias(name, _) => {
+        Ty::TypeAlias(name) => {
             if let Some(index) = alias_indices.get(name) {
                 out.insert(*index);
             }
         }
-        Ty::Class(_, arguments, _) => {
+        Ty::Class(_, arguments) => {
             for argument in arguments {
                 collect_alias_dependencies(argument, alias_indices, out);
             }
         }
-        Ty::List(inner, _) => collect_alias_dependencies(inner, alias_indices, out),
+        Ty::List(inner) => collect_alias_dependencies(inner, alias_indices, out),
         Ty::Map { key, value, .. } => {
             collect_alias_dependencies(key, alias_indices, out);
             collect_alias_dependencies(value, alias_indices, out);
         }
-        Ty::Union(members, _) => {
+        Ty::Union(members) => {
             for member in members {
                 collect_alias_dependencies(member, alias_indices, out);
             }
@@ -1053,25 +974,25 @@ fn collect_alias_dependencies(
             }
             collect_alias_dependencies(ret, alias_indices, out);
         }
-        Ty::Int { .. }
-        | Ty::Bigint { .. }
-        | Ty::Float { .. }
-        | Ty::String { .. }
-        | Ty::Bool { .. }
-        | Ty::Null { .. }
+        Ty::Int
+        | Ty::Bigint
+        | Ty::Float
+        | Ty::String
+        | Ty::Bool
+        | Ty::Null
         | Ty::Literal(..)
-        | Ty::Uint8Array { .. }
+        | Ty::Uint8Array
         | Ty::Media(..)
         | Ty::Enum(..)
         | Ty::EnumVariant(..)
         | Ty::TypeVar(..)
-        | Ty::RustType { .. }
-        | Ty::Type { .. }
-        | Ty::Resource { .. }
-        | Ty::PromptAst { .. }
-        | Ty::Unknown { .. }
-        | Ty::Never { .. }
-        | Ty::Void { .. }
+        | Ty::RustType
+        | Ty::Type
+        | Ty::Resource
+        | Ty::PromptAst
+        | Ty::Unknown
+        | Ty::Never
+        | Ty::Void
         | Ty::Interface(..)
         | Ty::Future(..) => {}
     }
@@ -1458,7 +1379,7 @@ fn render_type_alias(
     if a.source.package().as_str() == "baml"
         && a.source.namespace().len() == 1
         && a.source.namespace()[0].as_str() == "json"
-        && a.source.bare_name() == "json"
+        && a.source.name().as_str() == "json"
     {
         let py_name = &a.py_name;
         return format!("{py_name}: typing.TypeAlias = typing.Any\n");
@@ -1978,7 +1899,7 @@ fn walk_generic_inference_positions(
     out: &mut GenericInferencePositions,
 ) {
     match ty {
-        Ty::TypeVar(param, _) => {
+        Ty::TypeVar(param) => {
             let target = if in_closure {
                 &mut out.closure
             } else {
@@ -1998,12 +1919,12 @@ fn walk_generic_inference_positions(
             walk_generic_inference_positions(ret, true, out);
             walk_generic_inference_positions(throws, true, out);
         }
-        Ty::List(inner, _) => walk_generic_inference_positions(inner, in_closure, out),
+        Ty::List(inner) => walk_generic_inference_positions(inner, in_closure, out),
         Ty::Map { key, value, .. } => {
             walk_generic_inference_positions(key, in_closure, out);
             walk_generic_inference_positions(value, in_closure, out);
         }
-        Ty::Union(members, _) => {
+        Ty::Union(members) => {
             let direct_typevar_count = members
                 .iter()
                 .filter(|member| matches!(member, Ty::TypeVar(..)))
@@ -2019,35 +1940,35 @@ fn walk_generic_inference_positions(
                 walk_generic_inference_positions(member, in_closure, out);
             }
         }
-        Ty::Class(_, args, _) => {
+        Ty::Class(_, args) => {
             for arg in args {
                 walk_generic_inference_positions(arg, in_closure, out);
             }
         }
-        Ty::Future(value, error, _) => {
+        Ty::Future(value, error) => {
             walk_generic_inference_positions(value, in_closure, out);
             walk_generic_inference_positions(error, in_closure, out);
         }
-        Ty::Int { .. }
-        | Ty::Bigint { .. }
-        | Ty::Float { .. }
-        | Ty::String { .. }
-        | Ty::Bool { .. }
-        | Ty::Null { .. }
-        | Ty::Uint8Array { .. }
+        Ty::Int
+        | Ty::Bigint
+        | Ty::Float
+        | Ty::String
+        | Ty::Bool
+        | Ty::Null
+        | Ty::Uint8Array
         | Ty::Media(..)
         | Ty::Literal(..)
         | Ty::Interface(..)
         | Ty::Enum(..)
         | Ty::EnumVariant(..)
-        | Ty::RustType { .. }
-        | Ty::Type { .. }
-        | Ty::Resource { .. }
-        | Ty::PromptAst { .. }
-        | Ty::Void { .. }
+        | Ty::RustType
+        | Ty::Type
+        | Ty::Resource
+        | Ty::PromptAst
+        | Ty::Void
         | Ty::TypeAlias(..)
-        | Ty::Unknown { .. }
-        | Ty::Never { .. } => {}
+        | Ty::Unknown
+        | Ty::Never => {}
     }
 }
 

@@ -610,7 +610,6 @@ pub(crate) fn synthesize_llm_spec_body(
                 segments: vec![Name::new("ai"), Name::new("OutputFormat")],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
-                attrs: vec![],
             })
             .at(span),
         ),
@@ -824,7 +823,7 @@ fn synthesize_shorthand_prefixes(ctx: &mut LoweringContext, span: TextRange) -> 
 fn synthesize_shorthand_providers(ctx: &mut LoweringContext, span: TextRange) -> ExprId {
     let prefix_name = Name::new("prefix");
     let model_name = Name::new("model");
-    let string_ty = || (TypeExprKind::String { attrs: vec![] }).at(span);
+    let string_ty = || (TypeExprKind::String).at(span);
     let param = |name: &Name| Param {
         name: name.clone(),
         type_expr: Some(string_ty()),
@@ -840,7 +839,6 @@ fn synthesize_shorthand_providers(ctx: &mut LoweringContext, span: TextRange) ->
             Pattern::Type(
                 (TypeExprKind::Literal {
                     value: baml_base::Literal::String((*prefix).to_string()),
-                    attrs: vec![],
                 })
                 .at(span),
             ),
@@ -891,12 +889,10 @@ fn synthesize_shorthand_providers(ctx: &mut LoweringContext, span: TextRange) ->
         segments: vec![Name::new("ai"), Name::new("Client")],
         generic_args: vec![],
         associated_type_bindings: vec![],
-        attrs: vec![],
     })
     .at(span);
     let return_type = (TypeExprKind::Optional {
         inner: Box::new(client_ty),
-        attrs: vec![],
     })
     .at(span);
     let lambda_span = TextRange::empty(span.end());
@@ -1142,20 +1138,18 @@ pub(crate) fn synthesize_spec_agent_run_body(
     (body, source_map)
 }
 
-/// Synthesize the `@stream` companion body (built at PPIR level, where the
-/// stream-expanded return type is known) — one-turn streaming over the
+/// Synthesize the `@stream` companion body — one-turn streaming over the
 /// function's own spec:
 ///
 /// ```baml
-/// ai.stream.from_spec<Out$stream, Out>(Fn@spec(p1, p2), client = client)
+/// ai.stream.from_spec<Out>(Fn@spec(p1, p2), client = client)
 /// ```
 ///
-/// `type_args` is the explicit `<STREAM_EXPANDED, ORIGINAL>` pair, so the
-/// stdlib reifies both types from its own frame via `reflect.Type.of`.
-/// `client` is the companion's injected `ai.StreamingClient? = null`
-/// override; `from_spec` falls back to the spec's default client when it
-/// is null.
-pub fn synthesize_spec_stream_body(
+/// `type_args` is the explicit `<Out>`, so the stdlib reifies the type from
+/// its own frame via `reflect.Type.of`. `client` is
+/// the companion's injected `ai.stream.StreamingClient? = null` override;
+/// `from_spec` falls back to the spec's default client when it is null.
+pub(crate) fn synthesize_spec_stream_body(
     function_name: &str,
     params: &[Param],
     generic_param_names: &[Name],
@@ -1186,7 +1180,7 @@ pub fn synthesize_spec_stream_body(
         span,
     );
 
-    // ai.stream.from_spec<TS, TF>(spec, client = client, on_event = on_event)
+    // ai.stream.from_spec<Out>(spec, client = client, on_event = on_event)
     let stream_spec_callee = ctx.alloc_expr(
         Expr::Path(vec![
             Name::new("ai"),
@@ -1232,7 +1226,6 @@ fn companion_type_args(
                 segments: vec![name.clone()],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
-                attrs: vec![],
             }
             .at(span)
         })
@@ -1400,14 +1393,6 @@ impl LoweringContext {
 
     /// Lower an associated binding written in this body, collecting its
     /// lowering diagnostics with the body's.
-    ///
-    /// This is the item-level helper, which lowers the binding's right-hand
-    /// side WITHOUT hoisting a union's trailing attributes to the union node.
-    /// The body used to keep its own copy that hoisted, justified only by the
-    /// `unreflect` carriers it had to allocate - and those no longer exist, so
-    /// a body-written `Iface<Item = A | B @attr>` now attaches `@attr` to `B`
-    /// exactly as the same text in a declaration always has: one road, one
-    /// answer.
     fn lower_body_associated_type_binding(
         &mut self,
         binding: &baml_compiler_syntax::ast::AssociatedTypeDecl,
@@ -2836,14 +2821,6 @@ impl LoweringContext {
                     span: token.text_range(),
                 });
         }
-        if let Some(token) = &name_token
-            && token.text() == "$id"
-        {
-            self.diags
-                .push(LoweringDiagnostic::ReservedRuntimeIdBindingName {
-                    span: token.text_range(),
-                });
-        }
 
         let name_span = name_token.as_ref().map(rowan::SyntaxToken::text_range);
         let name = name_token.map(|t| Name::new(t.text()));
@@ -3022,17 +2999,6 @@ impl LoweringContext {
         let pat = match value_pattern {
             Some(child) => self.lower_pattern(&child),
             None => {
-                // Shorthand `{ f }` → bind to a local of the same name. `_`
-                // canonicalises to `Wildcard`, same rule as elsewhere.
-                // A shorthand binding named `$id` would be silently dead
-                // (reads hit the runtime-identity special form first) —
-                // reject it like every other `$id` binding site.
-                if field_name.as_str() == "$id" {
-                    self.diags
-                        .push(LoweringDiagnostic::ReservedRuntimeIdBindingName {
-                            span: field_span,
-                        });
-                }
                 let synth = if field_name.as_str() == "_" {
                     Pattern::Wildcard
                 } else {
@@ -3657,13 +3623,6 @@ impl LoweringContext {
             return self.alloc_expr(Expr::Missing, node.span_range());
         }
 
-        // Check if single segment is a literal keyword.
-        //
-        // Note `$id` is deliberately NOT desugared here: a lone `$id` reaches
-        // the AST as a bare WORD token (the parser only builds PATH_EXPR for
-        // dotted paths), so the special form is owned downstream — TIR types
-        // the read as `string` (builder.rs `infer_path`) and MIR lowers reads
-        // to `baml.id.current()` / writes to `baml.id.set(...)` (lower.rs).
         if segments.len() == 1 {
             match segments[0].0.as_str() {
                 "true" => {
@@ -3807,7 +3766,7 @@ impl LoweringContext {
             })
             .and_then(baml_compiler_syntax::ast::TypeExpr::cast)
             .map(|te| self.lower_body_type_expr(&te))
-            .unwrap_or_else(|| TypeExprKind::Missing { attrs: Vec::new() }.at(node.span_range()));
+            .unwrap_or_else(|| TypeExprKind::Missing.at(node.span_range()));
 
         let id = self.alloc_expr(Expr::Upcast { base, target }, node.span_range());
         if self.needs_chain_wrap.remove(&base) {
@@ -3831,7 +3790,7 @@ impl LoweringContext {
             .children()
             .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
             .map(|te| self.lower_body_type_expr(&te));
-        let missing = || TypeExprKind::Missing { attrs: Vec::new() }.at(span);
+        let missing = || TypeExprKind::Missing.at(span);
         let qself = types.next().unwrap_or_else(missing);
         let interface = types.next().unwrap_or_else(missing);
 
@@ -4480,7 +4439,7 @@ impl LoweringContext {
                 condition: cond,
                 body: loop_body,
                 after: step,
-                origin: LoopOrigin::For,
+                origin: LoopOrigin::For { init },
             },
             after_span,
         );
@@ -4610,17 +4569,9 @@ impl LoweringContext {
 
         let mut stmts: Vec<StmtId> = Vec::new();
         // let __tt_parts: string[] = [];
-        stmts.push(self.tt_let_typed_empty_list(
-            &parts,
-            TypeExprKind::String { attrs: Vec::new() }.at(span),
-            span,
-        ));
+        stmts.push(self.tt_let_typed_empty_list(&parts, TypeExprKind::String.at(span), span));
         // let __tt_values: unknown[] = [];
-        stmts.push(self.tt_let_typed_empty_list(
-            &values,
-            TypeExprKind::Unknown { attrs: Vec::new() }.at(span),
-            span,
-        ));
+        stmts.push(self.tt_let_typed_empty_list(&values, TypeExprKind::Unknown.at(span), span));
         // let __tt_cur = "";
         let at = TextRange::empty(span.start());
         let cur_init = self.alloc_expr(Expr::Literal(Literal::String(String::new())), at);
@@ -4756,7 +4707,7 @@ impl LoweringContext {
                             condition: *cond,
                             body: loop_body,
                             after: *step,
-                            origin: LoopOrigin::For,
+                            origin: LoopOrigin::For { init: *init },
                         },
                         span,
                     );
@@ -4824,7 +4775,6 @@ impl LoweringContext {
         let at = TextRange::empty(span.start());
         let list_ty = TypeExprKind::List {
             inner: Box::new(elem),
-            attrs: Vec::new(),
         }
         .at(span);
         let type_pat = self.alloc_pattern(Pattern::Type(list_ty), at);
@@ -5615,26 +5565,6 @@ impl LoweringContext {
             .find_map(baml_compiler_syntax::ast::TypeExpr::cast)
         {
             Some(type_expr) => {
-                // The parser folds attributes into the type expression for
-                // field declarations; a binding has no field to attach one
-                // to, so none may be written here.
-                for attr in type_expr
-                    .syntax()
-                    .descendants()
-                    .filter(|node| node.kind() == SyntaxKind::ATTRIBUTE)
-                {
-                    let attr_name = attr
-                        .children_with_tokens()
-                        .filter_map(rowan::NodeOrToken::into_token)
-                        .find(|token| token.kind() == SyntaxKind::WORD)
-                        .map(|token| token.text().to_string())
-                        .unwrap_or_default();
-                    self.diags
-                        .push(LoweringDiagnostic::FieldAttributeInTypePosition {
-                            attr_name,
-                            span: attr.text_range(),
-                        });
-                }
                 match Self::whole_unreflect_marker(&type_expr) {
                     Some(marker) => {
                         TypeBindingValue::Runtime(self.lower_unreflect_operand(&marker))
@@ -5660,19 +5590,14 @@ impl LoweringContext {
                                         },
                                     );
                                 }
-                                TypeBindingValue::Static(
-                                    TypeExprKind::Error { attrs: Vec::new() }
-                                        .at(first.text_range()),
-                                )
+                                TypeBindingValue::Static(TypeExprKind::Error.at(first.text_range()))
                             }
                             None => TypeBindingValue::Static(self.lower_body_type_expr(&type_expr)),
                         }
                     }
                 }
             }
-            None => TypeBindingValue::Static(
-                TypeExprKind::Error { attrs: Vec::new() }.at(node.span_range()),
-            ),
+            None => TypeBindingValue::Static(TypeExprKind::Error.at(node.span_range())),
         };
         self.alloc_stmt(Stmt::TypeBinding { name, value }, node.span_range())
     }
@@ -5847,7 +5772,7 @@ impl LoweringContext {
         //
         // C-style is desugared to:
         //   Stmt::Let { ... }   // init
-        //   Stmt::While { condition, body, after: Some(update_stmt), origin: LoopOrigin::For }
+        //   Stmt::While { condition, body, after: Some(update_stmt), origin: LoopOrigin::For { init } }
         // These two statements are wrapped in Expr::Block → Stmt::Expr so the
         // function can return a single StmtId.
         let range = node.span_range();
@@ -6006,7 +5931,7 @@ impl LoweringContext {
                 condition,
                 body,
                 after: after_stmt,
-                origin: LoopOrigin::For,
+                origin: LoopOrigin::For { init: init_stmt },
             },
             range,
         );
@@ -6122,7 +6047,6 @@ impl LoweringContext {
                     segments: vec![Name::new("testing"), Name::new("TestCollector")],
                     generic_args: vec![],
                     associated_type_bindings: vec![],
-                    attrs: vec![],
                 }
                 .at(span),
             ),

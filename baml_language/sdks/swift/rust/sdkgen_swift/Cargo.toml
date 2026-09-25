@@ -15,7 +15,6 @@ baml_base = { workspace = true }
 baml_codegen_types = { workspace = true }
 baml_version = { workspace = true }
 base64 = { workspace = true }
-indexmap = { workspace = true }
 
 [lib]
 doctest = false
@@ -24,4 +23,3 @@ doctest = false
 workspace = true
 
 [dev-dependencies]
-pretty_assertions = { workspace = true }

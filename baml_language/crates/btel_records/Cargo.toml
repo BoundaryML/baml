@@ -1,0 +1,21 @@
+[package]
+name = "btel_records"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "Typed timing and span records for BAML telemetry"
+
+[lints]
+workspace = true
+
+[dependencies]
+btel_clock = { workspace = true }
+btel_settings = { workspace = true }
+btel_snapshot = { workspace = true }
+btel_types = { workspace = true }

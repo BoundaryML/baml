@@ -6,7 +6,7 @@
 //! # Example
 //!
 //! ```ignore
-//! let mut builder = MirBuilder::new(Name::new("my_function"), 1);
+//! let mut builder = MirBuilder::new(FunctionOwner::Function(func_loc), 1);
 //!
 //! // Declare return place and parameter
 //! let ret = builder.declare_local(Some("_return".into()), RuntimeTy::Int, None);
@@ -30,13 +30,16 @@ use baml_base::{Name, Span};
 use baml_type::{RuntimeTy, TyTemplate};
 
 use crate::{
-    BasicBlock, BlockId, CatchRegion, Constant, ItemRef, Local, LocalDecl, MirFunction,
+    BasicBlock, BlockId, CatchRegion, FunctionOwner, Local, LocalDecl, MirFunction,
     MirFunctionBody, MirFunctionKind, Operand, Place, Rvalue, Statement, StatementKind, Terminator,
 };
 
 /// Builder for constructing MIR functions.
 pub(crate) struct MirBuilder<'db> {
-    name: Name,
+    /// Whose body this builder lowers; the built function's identity, and
+    /// the only thing a nested synthetic function or a diagnostic names this
+    /// body by.
+    owner: FunctionOwner<'db>,
     arity: usize,
     blocks: Vec<BasicBlock<'db>>,
     locals: Vec<LocalDecl>,
@@ -48,13 +51,11 @@ pub(crate) struct MirBuilder<'db> {
     pub(crate) catch_regions: Vec<CatchRegion>,
 }
 
-// Some builder utilities are not yet used but will be needed as MIR 2 matures.
-#[allow(dead_code)]
 impl<'db> MirBuilder<'db> {
     /// Create a new MIR builder for a function.
-    pub(crate) fn new(name: Name, arity: usize) -> Self {
+    pub(crate) fn new(owner: FunctionOwner<'db>, arity: usize) -> Self {
         Self {
-            name,
+            owner,
             arity,
             blocks: Vec::new(),
             locals: Vec::new(),
@@ -65,9 +66,8 @@ impl<'db> MirBuilder<'db> {
         }
     }
 
-    /// Return the function name.
-    pub(crate) fn name(&self) -> &Name {
-        &self.name
+    pub(crate) fn owner(&self) -> &FunctionOwner<'db> {
+        &self.owner
     }
 
     /// Set the source span for the function.
@@ -102,14 +102,43 @@ impl<'db> MirBuilder<'db> {
         id
     }
 
+    /// Declare a local a closure captures, and give it its cell.
+    ///
+    /// A non-parameter local is celled right here, in the current block: a
+    /// cell is created where its binding is created, so a declaration that
+    /// runs once per loop iteration hands each iteration's closures their own
+    /// cell. Emit the initializing store after this, never before. A
+    /// parameter (`_1..=_n`) is celled by the frame preamble instead, since the
+    /// caller has already written its value into the slot.
+    pub(crate) fn declare_captured_local(
+        &mut self,
+        name: Option<Name>,
+        ty: RuntimeTy,
+        span: Option<Span>,
+    ) -> Local {
+        let local = Local(self.locals.len());
+        self.locals.push(LocalDecl {
+            name,
+            ty,
+            span,
+            scope_span: None,
+            is_captured: true,
+        });
+        if local.0 > self.arity {
+            self.push_statement(
+                StatementKind::FreshCell {
+                    local,
+                    carry_value: false,
+                },
+                None,
+            );
+        }
+        local
+    }
+
     /// Allocate a temporary (unnamed local).
     pub(crate) fn temp(&mut self, ty: RuntimeTy) -> Local {
         self.declare_local(None, ty, None)
-    }
-
-    /// Get the number of locals declared so far.
-    pub(crate) fn num_locals(&self) -> usize {
-        self.locals.len()
     }
 
     /// Return the declared type of a local variable.
@@ -120,12 +149,14 @@ impl<'db> MirBuilder<'db> {
         self.locals[local.0].ty.clone()
     }
 
-    /// Get a mutable reference to a local declaration.
-    ///
-    /// Used by Phase 4 to set `is_captured = true` after lowering the function body
-    /// but before calling `build()`.
-    pub(crate) fn local_decl_mut(&mut self, local: Local) -> &mut LocalDecl {
-        &mut self.locals[local.0]
+    /// The declaration of a local.
+    pub(crate) fn local_decl(&self, local: Local) -> &LocalDecl {
+        &self.locals[local.0]
+    }
+
+    /// Refine a local's declared type once TIR has a more specific one.
+    pub(crate) fn set_local_ty(&mut self, local: Local, ty: RuntimeTy) {
+        self.locals[local.0].ty = ty;
     }
 
     // ========================================================================
@@ -163,16 +194,6 @@ impl<'db> MirBuilder<'db> {
             .unwrap_or(true)
     }
 
-    /// Get a reference to a block.
-    pub(crate) fn get_block(&self, id: BlockId) -> &BasicBlock<'db> {
-        &self.blocks[id.0]
-    }
-
-    /// Get a mutable reference to a block.
-    pub(crate) fn get_block_mut(&mut self, id: BlockId) -> &mut BasicBlock<'db> {
-        &mut self.blocks[id.0]
-    }
-
     // ========================================================================
     // Statement Emission
     // ========================================================================
@@ -198,11 +219,6 @@ impl<'db> MirBuilder<'db> {
         self.push_statement(StatementKind::Assign { destination, value }, None);
     }
 
-    /// Emit an assignment with span.
-    pub(crate) fn assign_with_span(&mut self, destination: Place, value: Rvalue<'db>, span: Span) {
-        self.push_statement(StatementKind::Assign { destination, value }, Some(span));
-    }
-
     /// Emit an open-world interface-field store.
     pub(crate) fn virtual_field_store(
         &mut self,
@@ -224,26 +240,20 @@ impl<'db> MirBuilder<'db> {
         );
     }
 
-    /// Emit a drop statement.
-    pub(crate) fn drop(&mut self, place: Place) {
-        self.push_statement(StatementKind::Drop(place), None);
-    }
-
-    /// Emit a fresh-cell statement for a loop variable.
-    pub(crate) fn fresh_cell(&mut self, local: Local) {
-        self.push_statement(StatementKind::FreshCell(local), None);
-    }
-
-    /// Emit a nop statement.
-    pub(crate) fn nop(&mut self) {
-        self.push_statement(StatementKind::Nop, None);
-    }
-
-    /// Set debug scope span for a local variable.
-    pub(crate) fn set_local_scope_span(&mut self, local: Local, scope_span: Option<Span>) {
-        if let Some(local_decl) = self.locals.get_mut(local.0) {
-            local_decl.scope_span = scope_span;
-        }
+    /// Give a captured local a new cell holding its current value, so the
+    /// closures that captured the old cell stop sharing it with what follows.
+    pub(crate) fn recell_with_current_value(&mut self, local: Local) {
+        debug_assert!(
+            self.locals[local.0].is_captured,
+            "recell of {local}, which no closure captures"
+        );
+        self.push_statement(
+            StatementKind::FreshCell {
+                local,
+                carry_value: true,
+            },
+            None,
+        );
     }
 
     // ========================================================================
@@ -350,38 +360,13 @@ impl<'db> MirBuilder<'db> {
         self.call_with_type_args(callee, args, 0, destination, target, unwind);
     }
 
-    /// Emit a function call with an explicit type-argument count.
-    ///
-    /// The first `ntypeargs` entries of `args` must be `Object::Type` values
-    /// produced by `Rvalue::LoadType`.  Regular value args follow after them.
+    /// Emit a call whose leading `ntypeargs` operands are runtime types,
+    /// followed by the ordinary value arguments.
     pub(crate) fn call_with_type_args(
         &mut self,
         callee: Operand<'db>,
         args: Vec<Operand<'db>>,
         ntypeargs: usize,
-        destination: Place,
-        target: BlockId,
-        unwind: Option<BlockId>,
-    ) {
-        self.call_with_type_args_and_runtime_id(
-            callee,
-            args,
-            ntypeargs,
-            None,
-            destination,
-            target,
-            unwind,
-        );
-    }
-
-    /// Emit a function call with an optional hidden runtime-id operand.
-    #[expect(clippy::too_many_arguments)]
-    pub(crate) fn call_with_type_args_and_runtime_id(
-        &mut self,
-        callee: Operand<'db>,
-        args: Vec<Operand<'db>>,
-        ntypeargs: usize,
-        runtime_id: Option<Operand<'db>>,
         destination: Place,
         target: BlockId,
         unwind: Option<BlockId>,
@@ -395,7 +380,6 @@ impl<'db> MirBuilder<'db> {
             callee,
             args,
             ntypeargs,
-            runtime_id,
             destination,
             target,
             unwind,
@@ -417,10 +401,7 @@ impl<'db> MirBuilder<'db> {
         }
     }
 
-    /// Emit an open-world virtual interface-method call. The implementation is
-    /// resolved at runtime from the receiver's concrete type (the first `args`
-    /// entry) against `iface`. Used for statically-undetermined receivers
-    /// (bounded type-var / interface-existential / `Self` in a default body).
+    /// Resolve an interface method from the receiver's concrete type at runtime.
     #[expect(clippy::too_many_arguments)]
     pub(crate) fn virtual_call(
         &mut self,
@@ -428,32 +409,6 @@ impl<'db> MirBuilder<'db> {
         method: String,
         args: Vec<Operand<'db>>,
         ntypeargs: usize,
-        destination: Place,
-        target: BlockId,
-        unwind: Option<BlockId>,
-    ) {
-        self.virtual_call_with_runtime_id(
-            iface,
-            method,
-            args,
-            ntypeargs,
-            None,
-            destination,
-            target,
-            unwind,
-        );
-    }
-
-    /// Emit an open-world virtual interface-method call with an optional hidden
-    /// runtime-id operand.
-    #[expect(clippy::too_many_arguments)]
-    pub(crate) fn virtual_call_with_runtime_id(
-        &mut self,
-        iface: baml_type::TyTemplateInterface,
-        method: String,
-        args: Vec<Operand<'db>>,
-        ntypeargs: usize,
-        runtime_id: Option<Operand<'db>>,
         destination: Place,
         target: BlockId,
         unwind: Option<BlockId>,
@@ -472,7 +427,6 @@ impl<'db> MirBuilder<'db> {
             method,
             args,
             ntypeargs,
-            runtime_id,
             destination,
             target,
             unwind,
@@ -500,26 +454,10 @@ impl<'db> MirBuilder<'db> {
         self.set_terminator(Terminator::ThrowIfPanic { value, otherwise });
     }
 
-    /// BEP-034 phase D′: emit a sys-op call. The sys-op is invoked
-    /// inline in the engine (single VM↔engine round trip) and its
-    /// return value is bound directly into `destination`.
     pub(crate) fn sys_op(
         &mut self,
         callee: Operand<'db>,
         args: Vec<Operand<'db>>,
-        destination: Place,
-        target: BlockId,
-        unwind: Option<BlockId>,
-    ) {
-        self.sys_op_with_runtime_id(callee, args, None, destination, target, unwind);
-    }
-
-    /// BEP-034 phase D′ sys-op call with an optional hidden runtime-id operand.
-    pub(crate) fn sys_op_with_runtime_id(
-        &mut self,
-        callee: Operand<'db>,
-        args: Vec<Operand<'db>>,
-        runtime_id: Option<Operand<'db>>,
         destination: Place,
         target: BlockId,
         unwind: Option<BlockId>,
@@ -531,7 +469,6 @@ impl<'db> MirBuilder<'db> {
         self.set_terminator(Terminator::SysOp {
             callee,
             args,
-            runtime_id,
             destination,
             target,
             unwind,
@@ -613,43 +550,16 @@ impl<'db> MirBuilder<'db> {
     // Convenience Helpers
     // ========================================================================
 
-    /// Assign a constant to a place.
-    pub(crate) fn assign_const(&mut self, dest: Place, constant: Constant<'db>) {
-        self.assign(dest, Rvalue::Use(Operand::Constant(constant)));
-    }
-
-    /// Assign an integer constant to a local.
-    pub(crate) fn assign_int(&mut self, dest: Local, value: i64) {
-        self.assign_const(Place::local(dest), Constant::Int(value));
-    }
-
-    /// Assign a boolean constant to a local.
-    pub(crate) fn assign_bool(&mut self, dest: Local, value: bool) {
-        self.assign_const(Place::local(dest), Constant::Bool(value));
-    }
-
-    /// Assign a string constant to a local.
-    pub(crate) fn assign_string(&mut self, dest: Local, value: impl Into<String>) {
-        self.assign_const(Place::local(dest), Constant::String(value.into()));
-    }
-
-    /// Copy one local to another.
-    pub(crate) fn copy_local(&mut self, dest: Local, src: Local) {
-        self.assign(Place::local(dest), Rvalue::Use(Operand::copy_local(src)));
-    }
-
     // ========================================================================
     // Build
     // ========================================================================
 
-    /// Consume the builder and produce the MIR function.
+    /// Consume the builder and produce the MIR function, under the identity
+    /// the builder was opened with.
     ///
     /// Panics if:
     /// - No blocks were created
     /// - Any block is unterminated
-    ///
-    /// The `item_ref` field is set to a placeholder — `lower_function` overwrites
-    /// it with the real fully-qualified reference after calling `build()`.
     pub(crate) fn build(self) -> MirFunction<'db> {
         assert!(!self.blocks.is_empty(), "function has no blocks");
 
@@ -660,11 +570,7 @@ impl<'db> MirBuilder<'db> {
         MirFunction {
             arity: self.arity,
             span: self.span,
-            item_ref: ItemRef::Free {
-                package: baml_base::Name::new(""),
-                namespace: vec![],
-                name: self.name,
-            },
+            identity: self.owner.into_identity(),
             kind: MirFunctionKind::Bytecode(MirFunctionBody {
                 blocks: self.blocks,
                 entry: BlockId(0),
@@ -678,8 +584,8 @@ impl<'db> MirBuilder<'db> {
 
     /// Consume the builder and produce just the `MirFunctionBody`.
     ///
-    /// Used when building a let-binding initializer — the caller holds the
-    /// `arity` and `item_ref` context externally.
+    /// Used when building a let-binding initializer, which is a body and
+    /// never a `MirFunction` of its own.
     pub(crate) fn build_body(self) -> MirFunctionBody<'db> {
         assert!(!self.blocks.is_empty(), "let body has no blocks");
         for (i, block) in self.blocks.iter().enumerate() {
@@ -690,30 +596,6 @@ impl<'db> MirBuilder<'db> {
             entry: BlockId(0),
             locals: self.locals,
             catch_regions: self.catch_regions,
-        }
-    }
-
-    /// Build without checking termination (for incremental construction).
-    ///
-    /// The `item_ref` field is set to a placeholder — `lower_function` overwrites
-    /// it with the real fully-qualified reference after calling `build_unchecked()`.
-    pub(crate) fn build_unchecked(self) -> MirFunction<'db> {
-        MirFunction {
-            arity: self.arity,
-            span: self.span,
-            item_ref: ItemRef::Free {
-                package: baml_base::Name::new(""),
-                namespace: vec![],
-                name: self.name,
-            },
-            kind: MirFunctionKind::Bytecode(MirFunctionBody {
-                blocks: self.blocks,
-                entry: BlockId(0),
-                locals: self.locals,
-                catch_regions: self.catch_regions.clone(),
-            }),
-            lambdas: vec![],
-            signature: None,
         }
     }
 }

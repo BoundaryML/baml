@@ -163,9 +163,9 @@ fn verify_streaming_surface(fixture: &std::path::Path) {
 
     for expected in [
         "BamlFunctionSpec<string> DeterministicSpec(",
-        "BamlStream<string?, string> DeterministicStream(",
+        "BamlStream<string> DeterministicStream(",
         "BamlFunctionSpec<global::CsharpStreaming.StreamEnvelope> StructuredSpec(",
-        "BamlStream<global::CsharpStreaming.StreamEnvelopeStream?, global::CsharpStreaming.StreamEnvelope> StructuredStream(",
+        "BamlStream<global::CsharpStreaming.StreamEnvelope> StructuredStream(",
         "BamlGeneratedContract.CreateStream(",
         "BamlOptional<global::Baml.BamlValue> client = default",
     ] {
@@ -207,13 +207,6 @@ fn verify_streaming_surface(fixture: &std::path::Path) {
             "generated streaming registry omitted exact callable `{expected}`"
         );
     }
-    assert!(
-        generated
-            .join("CsharpStreaming")
-            .join("StreamEnvelopeStream.g.cs")
-            .is_file(),
-        "generated streaming SDK dropped the PPIR Out$stream model"
-    );
 }
 
 fn verify_generics_surface(fixture: &std::path::Path) {
@@ -591,22 +584,6 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
         }
     }
 
-    let local_id = fs::read_to_string(
-        fixture
-            .join("baml_sdk")
-            .join("Boundary")
-            .join("LocalId.g.cs"),
-    )
-    .expect("failed to read generated boundary.LocalId resource surface");
-    for expected in [
-        " : global::System.IDisposable",
-        " Capture(",
-        " CaptureAsync(",
-        " Clone() => new(",
-    ] {
-        assert!(local_id.contains(expected));
-    }
-
     let function_surfaces = [
         (
             "Fs/Functions.g.cs",
@@ -693,16 +670,6 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
             );
         }
     }
-
-    let boundary_functions = fs::read_to_string(
-        fixture
-            .join("baml_sdk")
-            .join("Boundary")
-            .join("Functions.g.cs"),
-    )
-    .expect("failed to read generated boundary function surface");
-    assert!(boundary_functions.contains(" Id("));
-    assert!(boundary_functions.contains(" IdAsync("));
 
     let request = fs::read_to_string(generated.join("Http").join("Request.g.cs"))
         .expect("failed to read generated baml.http.Request structural surface");

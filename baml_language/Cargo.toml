@@ -39,6 +39,10 @@ members = [
   "tools_sccache",
 ]
 exclude = [
+  "vendor/quanta",
+  # Retired profiling pipeline; source retained outside the active build.
+  "crates/bex_prof_store",
+  "crates/baml_query_profiles",
   # Live system-test harnesses are intentionally outside the workspace. They
   # enable native-only tokio/reqwest features such as `fs` and `rt-multi-thread`;
   # keeping them out prevents workspace wasm builds from inheriting those
@@ -67,6 +71,8 @@ version = "0.0.0-beta"
 
 [workspace.dependencies]
 #  Internal dependencies (baml_*)
+btel_bcs = { path = "crates/btel_bcs", default-features = false }
+btel_snapshot = { path = "crates/btel_snapshot" }
 bex_str = { path = "crates/bex_str" }
 baml_base = { path = "crates/baml_base" }
 baml_artifact = { path = "crates/baml_artifact" }
@@ -87,7 +93,6 @@ sdkgen_rust = { path = "sdks/rust/sdkgen_rust" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
 baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
-baml_compiler2_ppir = { path = "crates/baml_compiler2_ppir" }
 baml_compiler2_hir_ty = { path = "crates/baml_compiler2_hir_ty" }
 baml_compiler2_mir = { path = "crates/baml_compiler2_mir" }
 baml_compiler2_emit = { path = "crates/baml_compiler2_emit" }
@@ -101,6 +106,7 @@ bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
 sys_auth = { path = "crates/sys_auth" }
 sys_glob = { path = "crates/sys_glob" }
+sys_regex = { path = "crates/sys_regex" }
 sys_ops = { path = "crates/sys_ops", default-features = false }
 sys_types = { path = "crates/sys_types" }
 sys_native = { path = "crates/sys_native", default-features = false }
@@ -115,6 +121,16 @@ baml_tests = { path = "crates/baml_tests" }
 baml_version = { path = "crates/baml_version" }
 bex_vm = { path = "crates/bex_vm" }
 bex_vm_types = { path = "crates/bex_vm_types" }
+btel_settings = { path = "crates/btel_settings" }
+btel_types = { path = "crates/btel_types" }
+btel_clock = { path = "crates/btel_clock" }
+btel_records = { path = "crates/btel_records" }
+btel_processor = { path = "crates/btel_processor" }
+btel_recorder = { path = "crates/btel_recorder" }
+btel_file = { path = "crates/btel_file" }
+btel_ringbuffer = { path = "crates/btel_ringbuffer" }
+bex_chunkedringbuffer = { path = "crates/bex_chunkedringbuffer" }
+quanta = { path = "vendor/quanta", version = "=0.12.6", default-features = false }
 bex_external_types = { path = "crates/bex_external_types" }
 bex_heap = { path = "crates/bex_heap" }
 bex_sap = { path = "crates/bex_sap" }
@@ -124,9 +140,7 @@ sys_wasm = { path = "crates/sys_wasm" }
 baml_cli = { path = "crates/baml_cli" }
 baml_exec = { path = "crates/baml_exec" }
 bex_events = { path = "crates/bex_events" }
-bex_prof_store = { path = "crates/bex_prof_store" }
 baml_query = { path = "crates/baml_query" }
-baml_query_profiles = { path = "crates/baml_query_profiles" }
 bex_resource_types = { path = "crates/bex_resource_types" }
 darwin-kperf = "0.1.0"
 darwin-kperf-events = "0.1.0"
@@ -158,17 +172,16 @@ bytes = "1"
 bytesize = "2.4.2"
 cargo_metadata = { version = "0.23.1" }
 cbindgen = "=0.29.0"
+cc = "1.2"
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
 console = "0.16"
 console_error_panic_hook = "0.1"
 miette = { version = "7.6", default-features = false, features = [ "fancy-no-syscall" ] }
 owo-colors = "4"
 crossbeam-channel = { version = "0.5" }
-# `CachePadded` for the profiling ring's cache-line-aligned field groups
-# (bex_events::prof, plan D3).
-crossbeam-utils = { version = "0.8" }
 ctrlc = "3.4"
 derive_more = { version = "2.1.1", features = [ "from" ] }
+dirs = "7.0.0"
 divan = { package = "codspeed-divan-compat", version = "*" }
 # Union-find with snapshot/rollback for hir_ty's InferenceTable - the same
 # crate rustc and rust-analyzer build their inference tables on.
@@ -193,9 +206,7 @@ libloading = "0.8"
 libsui = { version = "0.16.4" }
 log = "0.4.20"
 logos = { version = "0.15" }
-# Concurrency model checker for the profiling ring (bex_events::prof). Only a
-# dependency when building with `RUSTFLAGS="--cfg baml_loom"` (see the
-# `[target.'cfg(baml_loom)'.dependencies]` section of bex_events).
+# Reserved concurrency model checker; inactive in normal builds.
 loom = { version = "0.7" }
 lsp-server = "0.7.6"
 lsp-types = "0.95.0"
@@ -214,6 +225,11 @@ protoc-bin-vendored = "3"
 quote = { version = "1" }
 rayon = { version = "1.10" }
 regex = { version = "1.10.2" }
+# Pattern AST/HIR parser, used to report precise spans for a bad pattern.
+regex-syntax = { version = "0.8" }
+# Backtracking regex engine backing `baml.regex.new(..., backtracking = true)`
+# (lookaround, backreferences, bounded recursive subroutines).
+fancy-regex = { version = "0.19" }
 # gitignore-aware directory walking (workspace project discovery in the LSP)
 ignore = { version = "0.4" }
 base64 = "0.22"
@@ -227,6 +243,7 @@ rowan = { version = "0.16" }
 rustls = { version = "0.23.37", default-features = false }
 rustls-pemfile = "2"
 rustc-hash = { version = "2.1" }
+xxhash-rust = { version = "=0.8.15", features = [ "xxh3" ] }
 salsa = { version = "0.26", default-features = false, features = [
   "compact_str",
   "macros",
@@ -285,6 +302,7 @@ jni = "0.21"
 js-sys = "0.3"
 webbrowser = "1.0.5"
 strum = { version = "0.26", features = [ "derive" ] }
+subenum = { version = "1.2.0" }
 pyo3 = { version = "0.28", default-features = false }
 pyo3-async-runtimes = { version = "0.28" }
 pyo3-build-config = "0.28"
@@ -339,7 +357,7 @@ unreachable_pub = "warn"
 unexpected_cfgs = { level = "warn", check-cfg = [
   "cfg(fuzzing)",
   "cfg(codspeed)",
-  # Loom model-checked builds of bex_events::prof (RUSTFLAGS="--cfg baml_loom").
+  # Reserved for concurrency model-checked builds.
   "cfg(baml_loom)",
 ] }
 
@@ -398,7 +416,7 @@ large_stack_arrays = "allow"
 [profile.release]
 lto = "fat"
 codegen-units = 1
-opt-level = "s"   # smallest; try "s" if perf matters
+opt-level = 3     # prioritize runtime speed
 strip = "symbols" # still keep your strip -x in packaging
 # `unwind` for every artifact — see the "Why panic = unwind" note below the
 # profile overrides.
@@ -501,8 +519,7 @@ inherits = "release"
 # Measured cost on `baml-cli`, aarch64-apple-darwin, identical release settings
 # except `panic` (2026-08-18): 24.65 MiB (abort) -> 30.87 MiB (unwind),
 # +6.23 MiB / +25%: `__text` +2.63 MB (landing pads), `__eh_frame` +2.32 MB,
-# `__gcc_except_tab` +1.19 MB, `__unwind_info` +0.32 MB. Nothing else in the
-# profile can shave this — LTO, opt-level and strip are already at their
-# size-minimizing settings — so the size-gate ceilings carry it explicitly
-# (`.cargo/size-gate.toml`). wasm32 is unaffected: it has no unwinding and
-# behaves as `abort` regardless of this setting.
+# `__gcc_except_tab` +1.19 MB, `__unwind_info` +0.32 MB. These measurements used
+# the earlier size-focused release configuration. Release now prioritizes speed
+# with opt-level=3; artifact size budgets are tracked in `.cargo/size-gate.toml`.
+# wasm32 has no unwinding and behaves as `abort` regardless of the panic setting.

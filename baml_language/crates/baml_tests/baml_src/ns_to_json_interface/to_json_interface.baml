@@ -13,12 +13,15 @@
 
 // ─── shared declarations ──────────────────────────────────────────────────────
 
-class User { name string  age int }
+class User {
+    name: string,
+    age: int,
+}
 
 // Implementor with a custom override.
 class Point {
-    x int
-    y int
+    x: int,
+    y: int,
     implements baml.ToJson {
         function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             { "pt": [baml.json.from(self.x), baml.json.from(self.y)] }
@@ -70,7 +73,7 @@ test "default_renders_primitives" {
 
 test "default_renders_containers" {
     assert.equal(baml.json.stringify(baml.json.from([1, 2, 3])), "[1,2,3]");
-    assert.equal(baml.json.stringify(baml.json.from({"a": 1, "b": 2})), "{\"a\":1,\"b\":2}")
+    assert.equal(baml.json.stringify(baml.json.from({ "a": 1, "b": 2 })), "{\"a\":1,\"b\":2}")
 }
 
 // ─── default_renders_class_instance_structurally ──────────────────────────────
@@ -79,7 +82,7 @@ test "default_renders_containers" {
 test "default_renders_class_instance_structurally" {
     assert.equal(
         baml.json.stringify(baml.json.from(User { name: "Ada", age: 30 })),
-        "{\"name\":\"Ada\",\"age\":30}"
+        "{\"name\":\"Ada\",\"age\":30}",
     )
 }
 
@@ -88,12 +91,15 @@ test "default_renders_class_instance_structurally" {
 // body — the same structural rendering a non-implementor gets.
 
 class PointEmptyImpl {
-    x int
-    y int
+    x: int,
+    y: int,
     implements baml.ToJson {}
 }
 
-class PointPlain { x int  y int }
+class PointPlain {
+    x: int,
+    y: int,
+}
 
 function point_empty_impl_str() -> string throws baml.json.SerializationError {
     baml.json.stringify(baml.json.from(PointEmptyImpl { x: 1, y: 2 }))
@@ -113,10 +119,7 @@ test "empty_implementor_matches_nonimplementor" {
 // `to_json` on the value's runtime class and dispatches to the override.
 
 test "implementor_override_is_used" {
-    assert.equal(
-        baml.json.stringify(baml.json.from(Point { x: 1, y: 2 })),
-        "{\"pt\":[1,2]}"
-    )
+    assert.equal(baml.json.stringify(baml.json.from(Point { x: 1, y: 2 })), "{\"pt\":[1,2]}")
 }
 
 // ─── nested_override_is_honored_at_depth ──────────────────────────────────────
@@ -124,7 +127,7 @@ test "implementor_override_is_used" {
 // must render via its override, not structurally.
 
 class Inner {
-    v int
+    v: int,
     implements baml.ToJson {
         function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             { "wrapped": baml.json.from(self.v) }
@@ -132,12 +135,15 @@ class Inner {
     }
 }
 
-class Outer { inner Inner  tag string }
+class Outer {
+    inner: Inner,
+    tag: string,
+}
 
 test "nested_override_is_honored_at_depth" {
     assert.equal(
         baml.json.stringify(baml.json.from(Outer { inner: Inner { v: 7 }, tag: "x" })),
-        "{\"inner\":{\"wrapped\":7},\"tag\":\"x\"}"
+        "{\"inner\":{\"wrapped\":7},\"tag\":\"x\"}",
     )
 }
 
@@ -145,7 +151,7 @@ test "nested_override_is_honored_at_depth" {
 // Override-bearing instances inside a list each render via their override.
 
 class Tag {
-    name string
+    name: string,
     implements baml.ToJson {
         function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             baml.json.from(self.name)
@@ -156,13 +162,17 @@ class Tag {
 test "override_inside_container_is_honored" {
     assert.equal(
         baml.json.stringify(baml.json.from([Tag { name: "a" }, Tag { name: "b" }])),
-        "[\"a\",\"b\"]"
+        "[\"a\",\"b\"]",
     )
 }
 
 // ─── enum_renders_as_variant_name ─────────────────────────────────────────────
 
-enum Color { Red  Green  Blue }
+enum Color {
+    Red,
+    Green,
+    Blue,
+}
 
 test "enum_renders_as_variant_name" {
     assert.equal(baml.json.stringify(baml.json.from(Color.Green)), "\"Green\"")
@@ -179,42 +189,65 @@ test "enum_renders_as_variant_name" {
 // `RuntimeTy::Union` arm delegates to the untyped `value_to_serde`, which
 // mapped enum variants to `null` instead of the variant-name string.
 
-enum E { A  B }
+enum E {
+    A,
+    B,
+}
 
-class C { e E }
+class C {
+    e: E,
+}
 
 test "enum_field_serializes_as_variant_name" {
     // Primary ticket case: `class C { e E }` round-trips through the
     // structural `baml.json.from` path.
-    assert.equal(
-        baml.json.stringify(baml.json.from(C { e: E.A })),
-        "{\"e\":\"A\"}"
-    )
+    assert.equal(baml.json.stringify(baml.json.from(C { e: E.A })), "{\"e\":\"A\"}")
 }
 
-class D { f "X" | "Y" }
+class D {
+    f: "X" | "Y",
+}
 
 test "string_literal_union_field_serializes_as_string" {
     // Primary ticket case: a `"X" | "Y"` field round-trips as the plain string.
-    assert.equal(
-        baml.json.stringify(baml.json.from(D { f: "X" })),
-        "{\"f\":\"X\"}"
-    )
+    assert.equal(baml.json.stringify(baml.json.from(D { f: "X" })), "{\"f\":\"X\"}")
 }
 
-class OptEnum { e E? }
+class OptEnum {
+    e: E?,
+}
 
 test "optional_enum_field_serializes_via_to_string" {
     // Regression: `E?` == `E | null` must preserve the held variant name.
     assert.equal(baml.json.to_string(OptEnum { e: E.A }), "{\"e\":\"A\"}")
 }
 
-enum F { X  Y }
+enum F {
+    X,
+    Y,
+}
 
-class EnumUnion { v E | F }
+class EnumUnion {
+    v: E | F,
+}
 
 test "enum_union_field_serializes_via_to_string" {
     // Regression: a field typed as a union of two enums (`E | F`) must
     // serialize the held variant as its name.
     assert.equal(baml.json.to_string(EnumUnion { v: F.Y }), "{\"v\":\"Y\"}")
+}
+
+test "direct_to_json_method_is_banned" {
+    root.interface_diagnostics.AssertHasDiagnostic(
+        {
+            "direct_to_json_method_is_banned.baml": `
+                class Point {
+                    x int
+                    function to_json(self) -> baml.json.json throws never { 1 }
+                }
+            `,
+        },
+        "",
+        ["to_json", "baml.ToJson"],
+    )
 }

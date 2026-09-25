@@ -48,7 +48,6 @@ sdkgen_typescript_shared = { workspace = true }
 sdkgen_java = { workspace = true }
 sdkgen_rust = { workspace = true }
 baml_codegen_types = { workspace = true }
-baml_type = { workspace = true }
 baml_base = { workspace = true }
 baml_db = { workspace = true }
 baml_ide = { workspace = true }

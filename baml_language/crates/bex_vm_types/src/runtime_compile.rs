@@ -267,12 +267,77 @@ pub enum RuntimeDiagnosticSeverity {
     Info,
 }
 
+/// Compiler phase retained from the structured compiler diagnostic stream.
+///
+/// Runtime-generated diagnostics (linking, mounting, session contracts, and
+/// similar host-side failures) have no compiler phase and therefore carry no
+/// [`RuntimeDiagnosticDetails`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RuntimeDiagnosticPhase {
+    Parse,
+    Hir,
+    Validation,
+    Type,
+}
+
+/// Semantic category attached to a byte range inside diagnostic text.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RuntimeDiagnosticHighlightKind {
+    IdentifierType,
+    IdentifierFunction,
+    IdentifierField,
+    IdentifierVariable,
+    IdentifierEnumVariant,
+    IdentifierAttribute,
+    TypeExpression,
+    Code,
+}
+
+/// A byte range inside a diagnostic message or annotation label.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeDiagnosticHighlight {
+    pub start: u32,
+    pub end: u32,
+    pub kind: RuntimeDiagnosticHighlightKind,
+}
+
 /// A byte range in one of the paths submitted to the compile call.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RuntimeSourceSpan {
     pub file: String,
     pub start: usize,
     pub end: usize,
+}
+
+/// One primary or secondary source annotation on a compiler diagnostic.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeDiagnosticAnnotation {
+    pub span: RuntimeSourceSpan,
+    pub message: Option<String>,
+    pub message_highlights: Vec<RuntimeDiagnosticHighlight>,
+    pub is_primary: bool,
+}
+
+/// One related source location attached to a compiler diagnostic.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeDiagnosticRelatedInfo {
+    pub span: RuntimeSourceSpan,
+    pub message: String,
+    pub message_highlights: Vec<RuntimeDiagnosticHighlight>,
+    pub file_path: Option<String>,
+}
+
+/// Compiler-only diagnostic detail retained while the transient compiler DB
+/// is alive. The legacy flattened `message` and primary `span` remain directly
+/// on [`RuntimeCompileDiagnostic`] for compatibility with existing consumers.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeDiagnosticDetails {
+    pub headline: String,
+    pub primary_label: Option<String>,
+    pub phase: RuntimeDiagnosticPhase,
+    pub message_highlights: Vec<RuntimeDiagnosticHighlight>,
+    pub annotations: Vec<RuntimeDiagnosticAnnotation>,
+    pub related_info: Vec<RuntimeDiagnosticRelatedInfo>,
 }
 
 /// Stable diagnostic data safe to retain after the transient compiler DB drops.
@@ -282,6 +347,7 @@ pub struct RuntimeCompileDiagnostic {
     pub message: String,
     pub severity: RuntimeDiagnosticSeverity,
     pub span: Option<RuntimeSourceSpan>,
+    pub details: Option<Box<RuntimeDiagnosticDetails>>,
 }
 
 /// Successful compiler output retained by the runtime.

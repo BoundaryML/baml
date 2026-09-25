@@ -1,0 +1,19 @@
+[package]
+name = "sys_regex"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Pattern compilation and matching behind `baml.regex`, shared by the compiler and the VM"
+
+[dependencies]
+fancy-regex = { workspace = true }
+regex = { workspace = true }
+regex-syntax = { workspace = true }
+
+[lints]
+workspace = true
+
+[package.metadata.ci]
+wasm_support = true

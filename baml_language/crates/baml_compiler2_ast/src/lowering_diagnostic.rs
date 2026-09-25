@@ -115,11 +115,6 @@ pub enum LoweringDiagnostic {
         span: TextRange,
     },
 
-    /// A field attribute (`@alias`, `@description`, `@skip`) appeared in a type
-    /// expression where only type attributes are valid (e.g. inside parens, on a
-    /// non-final union member, or in a function signature).
-    FieldAttributeInTypePosition { attr_name: String, span: TextRange },
-
     /// A byte string literal contains an invalid escape sequence.
     InvalidByteStringEscape { message: String, span: TextRange },
 
@@ -181,11 +176,6 @@ pub enum LoweringDiagnostic {
     /// `const` is reserved as future language surface and cannot be used as a
     /// binding name.
     ReservedConstBindingName { span: TextRange },
-
-    /// `$id` is the runtime-identity special form (reads lower to
-    /// `baml.id.current()`, writes to `baml.id.set(...)`); a binding named
-    /// `$id` would be silently dead, so it is rejected.
-    ReservedRuntimeIdBindingName { span: TextRange },
 
     /// An assignment operator (`=`, `+=`, …) appeared in expression position,
     /// e.g. `(x = 5)`. Assignment is statement-only in BAML, so the expression
@@ -482,16 +472,6 @@ impl LoweringDiagnostic {
                 *span,
                 "missing options",
             ),
-            LoweringDiagnostic::FieldAttributeInTypePosition { attr_name, span } => (
-                DiagnosticId::FieldAttributeInTypePosition,
-                Severity::Error,
-                format!(
-                    "`@{attr_name}` is only allowed on class fields and enum variants; \
-                     remove it here"
-                ),
-                *span,
-                "field attribute here",
-            ),
             LoweringDiagnostic::InvalidByteStringEscape { message, span } => (
                 DiagnosticId::InvalidByteStringEscape,
                 Severity::Error,
@@ -653,13 +633,6 @@ impl LoweringDiagnostic {
                 "`const` is reserved and cannot be used as a binding name".to_string(),
                 *span,
                 "`const` is reserved here",
-            ),
-            LoweringDiagnostic::ReservedRuntimeIdBindingName { span } => (
-                DiagnosticId::InvalidSyntax,
-                Severity::Error,
-                "`$id` is the runtime identity and cannot be used as a binding name".to_string(),
-                *span,
-                "`$id` is reserved here",
             ),
             LoweringDiagnostic::AssignmentInExpressionPosition { span } => (
                 DiagnosticId::InvalidSyntax,

@@ -18,8 +18,8 @@ use crate::{
         AssociatedTypeBindingDef, AssociatedTypeDef, BuiltinKind, CallArg, EnumDef, Expr, ExprId,
         FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults, ImplementsBlockDef,
         ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Item, LambdaDef, LambdaKind,
-        LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg, TemplateStringDef,
-        TypeAliasDef, TypeExpr, TypeExprKind, VariantDef,
+        LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg, TypeAliasDef, TypeExpr,
+        TypeExprKind, VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -61,8 +61,8 @@ enum TestRegistrationItem {
 /// After this returns, the CST is no longer needed — all structural content
 /// is owned by the returned `Item`s.
 ///
-/// All diagnostics (structural lowering issues, client validation,
-/// field-attr-in-wrong-position) are returned as `LoweringDiagnostic` variants.
+/// All diagnostics (structural lowering issues, client validation) are
+/// returned as `LoweringDiagnostic` variants.
 pub fn lower_file(
     root: &SyntaxNode,
 ) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
@@ -189,9 +189,6 @@ fn lower_file_with_path_and_test_owner_impl(
                 diags.push(LoweringDiagnostic::TemplateStringRemoved {
                     span: child.span_range(),
                 });
-                if let Some(ts) = lower_template_string(&child, &mut diags) {
-                    items.push(Item::TemplateString(ts));
-                }
             }
             baml_compiler_syntax::SyntaxKind::RETRY_POLICY_DEF => {
                 // Legacy `retry_policy` block: retry composes at the client
@@ -292,12 +289,6 @@ fn lower_file_with_path_and_test_owner_impl(
         items.push(Item::Function(init_fn));
     }
 
-    // Post-lowering validation: reject field attrs in invalid type positions.
-    let field_attr_errors = crate::disambiguate::validate_field_attrs(&items);
-    for (attr_name, span) in field_attr_errors {
-        diags.push(LoweringDiagnostic::FieldAttributeInTypePosition { attr_name, span });
-    }
-
     (items, diags, env_var_refs)
 }
 
@@ -309,7 +300,7 @@ fn check_missing_type(
     span: text_size::TextRange,
     diags: &mut Vec<LoweringDiagnostic>,
 ) {
-    if matches!(type_expr.kind, crate::ast::TypeExprKind::Missing { .. }) {
+    if matches!(type_expr.kind, crate::ast::TypeExprKind::Missing) {
         diags.push(LoweringDiagnostic::UnparseableType { context, span });
     }
 }
@@ -338,13 +329,6 @@ fn lower_function(
     };
     let name = Name::new(name_token.text());
     let name_span = name_token.text_range();
-    // A function named `$id` is unreachable through a bare call (`$id()`
-    // resolves to the runtime-identity special form first) — reject the
-    // declaration with the reserved-name diagnostic instead of letting use
-    // sites fail with a misleading "`string` is not a function".
-    if name.as_str() == "$id" {
-        diags.push(LoweringDiagnostic::ReservedRuntimeIdBindingName { span: name_span });
-    }
 
     let generic_params = extract_generic_params_with_bounds(node, diags);
     let parameter_context = format!("function `{}`", name.as_str());
@@ -660,13 +644,7 @@ pub(crate) fn lower_param(
         return None;
     };
     let param_name_str = name_token.text().to_string();
-    // `$id` is the runtime-identity special form; a parameter named `$id`
-    // would be a silently-dead binding (reads hit the special cases first).
-    if param_name_str == "$id" {
-        diags.push(LoweringDiagnostic::ReservedRuntimeIdBindingName {
-            span: name_token.text_range(),
-        });
-    }
+
     Some(Param {
         name: Name::new(&param_name_str),
         type_expr: param.ty().map(|te| {
@@ -745,7 +723,6 @@ pub(crate) fn append_spec_client_param(
         segments: vec![Name::new("ai"), Name::new("Client")],
         generic_args: vec![],
         associated_type_bindings: vec![],
-        attrs: vec![],
     }
     .at(span);
     params.push(Param {
@@ -753,7 +730,6 @@ pub(crate) fn append_spec_client_param(
         type_expr: Some(
             TypeExprKind::Optional {
                 inner: Box::new(client_ty),
-                attrs: vec![],
             }
             .at(span),
         ),
@@ -784,7 +760,6 @@ pub(crate) fn append_spec_on_event_param(
         segments: vec![Name::new("ai"), Name::new("events"), Name::new("Event")],
         generic_args: vec![],
         associated_type_bindings: vec![],
-        attrs: vec![],
     }
     .at(span);
     let listener_ty = TypeExprKind::Function {
@@ -793,9 +768,8 @@ pub(crate) fn append_spec_on_event_param(
             optional: false,
             ty: event_ty,
         }],
-        ret: Box::new(TypeExprKind::Void { attrs: vec![] }.at(span)),
+        ret: Box::new(TypeExprKind::Void.at(span)),
         throws: None,
-        attrs: vec![],
     }
     .at(span);
     params.push(Param {
@@ -803,7 +777,6 @@ pub(crate) fn append_spec_on_event_param(
         type_expr: Some(
             TypeExprKind::Optional {
                 inner: Box::new(listener_ty),
-                attrs: vec![],
             }
             .at(span),
         ),
@@ -912,6 +885,7 @@ pub const SHORTHAND_PROVIDERS: &[(&str, &str, &str)] = &[
     ("ollama", "openai", "OllamaClient"),
     ("openrouter", "openai", "OpenRouterClient"),
     ("anthropic", "anthropic", "Client"),
+    ("typesafeai", "typesafeai", "Client"),
     ("google", "google", "GeminiClient"),
     ("vertex", "google", "VertexClient"),
     ("bedrock", "aws", "BedrockClient"),
@@ -1090,7 +1064,6 @@ fn lower_class(
                 return None;
             };
             let field_name_str = fname.text().to_string();
-            let mut hoisted_field_attrs = Vec::new();
             // A field with no type is already reported by the parser ("field '<name>'
             // is missing a type annotation"), so recover with the error sentinel rather
             // than making the type optional: an absent type is not a kind of type, and
@@ -1098,7 +1071,7 @@ fn lower_class(
             // own stand-in. `Error` suppresses follow-on diagnostics while the rest of
             // the declaration still type-checks.
             let type_expr = f.ty().map_or_else(
-                || TypeExprKind::Error { attrs: Vec::new() }.at(f.syntax().span_range()),
+                || TypeExprKind::Error.at(f.syntax().span_range()),
                 |te| {
                     let mut expr = lower_type_expr::lower_type_expr_node(
                         &te,
@@ -1125,27 +1098,6 @@ fn lower_class(
                         te_span,
                         diags,
                     );
-
-                    // Hoist field attrs from the outermost TypeExpr to FieldDef.
-                    // Only attrs that are direct ATTRIBUTE children of the outermost
-                    // CST TYPE_EXPR are hoistable — attrs nested inside parens or
-                    // generics are not (and will be flagged by validate_field_attrs).
-                    let direct_attr_spans: std::collections::HashSet<text_size::TextRange> = te
-                        .syntax()
-                        .children()
-                        .filter_map(ast::Attribute::cast)
-                        .map(|a| a.syntax().span_range())
-                        .collect();
-
-                    let all_outer_attrs = std::mem::take(expr.attrs_mut());
-                    let (hoist, keep): (Vec<_>, Vec<_>) =
-                        all_outer_attrs.into_iter().partition(|a| {
-                            crate::disambiguate::should_hoist_field_attr(a.name.as_str())
-                                && direct_attr_spans.contains(&a.span)
-                        });
-                    *expr.attrs_mut() = keep;
-                    hoisted_field_attrs = hoist;
-
                     expr.with_span(te_span)
                 },
             );
@@ -1153,7 +1105,7 @@ fn lower_class(
             Some(FieldDef {
                 name: Name::new(&field_name_str),
                 type_expr,
-                attributes: hoisted_field_attrs,
+                attributes: lower_member_attributes(f.attributes()),
                 docstring: field_docstring,
                 span: f.syntax().span_range(),
                 name_span: fname.text_range(),
@@ -1302,7 +1254,7 @@ fn lower_enum(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<
             let variant_docstring = crate::docstring::extract_docstring(v.syntax());
             Some(VariantDef {
                 name: Name::new(vname.text()),
-                attributes: lower_variant_attributes(&v),
+                attributes: lower_member_attributes(v.attributes()),
                 docstring: variant_docstring,
                 span: v.syntax().span_range(),
                 name_span: vname.text_range(),
@@ -1378,7 +1330,7 @@ fn lower_interface(
             // See the class-field site: the parser already reports a missing type, so
             // recover with the error sentinel instead of an optional type.
             let type_expr = f.ty().map_or_else(
-                || TypeExprKind::Error { attrs: Vec::new() }.at(f.syntax().span_range()),
+                || TypeExprKind::Error.at(f.syntax().span_range()),
                 |te| {
                     let mut expr = lower_type_expr::lower_type_expr_node(
                         &te,
@@ -1411,7 +1363,7 @@ fn lower_interface(
             Some(FieldDef {
                 name: Name::new(&field_name_str),
                 type_expr,
-                attributes: lower_attributes_from_node(f.syntax()),
+                attributes: lower_member_attributes(f.attributes()),
                 docstring: crate::docstring::extract_docstring(f.syntax()),
                 span: f.syntax().span_range(),
                 name_span: fname.text_range(),
@@ -1993,8 +1945,7 @@ fn test_owner_from_path(path: Option<&std::path::Path>) -> String {
 /// rather than its `FileId`: a `FileId` is a load-order index that shifts
 /// whenever an earlier file is added (e.g. a new stdlib file), which would
 /// churn every snapshot referencing the name. The path is stable across
-/// compilations. When no path is available (e.g. PPIR, which processes files
-/// individually), uses plain `"$init_test"`.
+/// compilations. When no path is available, uses plain `"$init_test"`.
 fn synthesize_init_test_function(
     registrations: &[TestRegistrationItem],
     file_path: Option<&std::path::Path>,
@@ -2042,7 +1993,6 @@ fn synthesize_init_test_function(
                 segments: vec![Name::new("testing"), Name::new("TestCollector")],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
-                attrs: vec![],
             }
             .at(span),
         ),
@@ -2092,7 +2042,7 @@ fn synthesize_register_call(
                 kind: LambdaKind::Anonymous,
                 params: vec![],
                 defaults: FunctionDefaults::empty(),
-                return_type: Some(crate::ast::TypeExprKind::Void { attrs: vec![] }.at(span)),
+                return_type: Some(crate::ast::TypeExprKind::Void.at(span)),
                 throws: None,
                 body: Some(lambda_body),
                 span,
@@ -2151,7 +2101,6 @@ fn synthesize_register_call(
                         segments: vec![Name::new("testing"), Name::new("TestCollector")],
                         generic_args: vec![],
                         associated_type_bindings: vec![],
-                        attrs: vec![],
                     }
                     .at(span),
                 ),
@@ -2164,7 +2113,7 @@ fn synthesize_register_call(
                 kind: LambdaKind::Anonymous,
                 params: vec![testset_param],
                 defaults: FunctionDefaults::empty(),
-                return_type: Some(crate::ast::TypeExprKind::Void { attrs: vec![] }.at(span)),
+                return_type: Some(crate::ast::TypeExprKind::Void.at(span)),
                 throws: None,
                 body: Some(collector_exprs),
                 span,
@@ -2257,45 +2206,16 @@ fn lower_generator_deprecation(node: &SyntaxNode) -> LoweringDiagnostic {
     LoweringDiagnostic::GeneratorBlockInBaml { name, span }
 }
 
-fn lower_template_string(
-    node: &SyntaxNode,
-    diags: &mut Vec<LoweringDiagnostic>,
-) -> Option<TemplateStringDef> {
-    let ts = ast::TemplateStringDef::cast(node.clone())?;
-    let Some(name_token) = ts.name() else {
-        diags.push(LoweringDiagnostic::MissingItemName {
-            item_kind: "template_string",
-            span: node.span_range(),
-        });
-        return None;
-    };
-
-    let ts_name = name_token.text().to_string();
-    let context = format!("template_string `{ts_name}`");
-    let params = ts
-        .param_list()
-        .map(|pl| lower_params(&pl, &ts_name, &context, diags))
-        .unwrap_or_default();
-
-    Some(TemplateStringDef {
-        name: Name::new(name_token.text()),
-        params,
-        span: node.span_range(),
-        name_span: name_token.text_range(),
-    })
-}
-
 // NOTE: the legacy `client<llm>` / `retry_policy` config-block synthesis
 // (client identity lets, `<Client>$new` companions, provider option tables,
 // retry-policy lets) lived here. Both blocks are removed language surface:
 // clients are plain values (`client Name = <expr>;`) and retry composes at
 // the client boundary via `ai.Retry`. Their CST nodes now lower to a single
-// migration diagnostic each.
+// migration diagnostic each, as does `template_string`.
 
-/// Lower variant-level attributes from an `EnumVariant` node.
-fn lower_variant_attributes(variant: &ast::EnumVariant) -> Vec<RawAttribute> {
-    variant
-        .attributes()
+/// Lower the `@` attributes trailing a field or enum variant.
+fn lower_member_attributes(attributes: impl Iterator<Item = ast::Attribute>) -> Vec<RawAttribute> {
+    attributes
         .filter_map(|attr| lower_attribute(&attr))
         .collect()
 }
@@ -2308,8 +2228,8 @@ fn lower_attributes_from_node(node: &SyntaxNode) -> Vec<RawAttribute> {
         .collect()
 }
 
-/// Lower a single field attribute (single @).
-pub(crate) fn lower_attribute(attr: &ast::Attribute) -> Option<RawAttribute> {
+/// Lower a single field or variant attribute (single @).
+fn lower_attribute(attr: &ast::Attribute) -> Option<RawAttribute> {
     let name_token = attr.name()?;
     let attr_name = attr
         .full_name()

@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    // The generated SDK declares type parameters it does not always use, and
+    // it is not ours to edit. Unused-symbol checking is left to biome, which
+    // reads only the files we write.
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@quiz/sdk": ["./src/baml_sdk/index.ts"],
+      "@quiz/fmt": ["./wasm"]
+    }
+  },
+  "include": ["src", "wasm"]
+}

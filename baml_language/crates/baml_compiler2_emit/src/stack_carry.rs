@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind,
-    Terminator,
+    AggregateKind, BinOp, CellId, Constant, Local, MirFunctionBody, Operand, Place, Rvalue,
+    StatementKind, Terminator,
 };
 use baml_type::{Literal, RuntimeTy, TyTemplate};
 
@@ -189,18 +189,23 @@ fn is_stack_carry_use_safe(
     }
 
     let du = &def_use[&local];
-    if du.uses.len() != 1 {
+    let [raw_use] = du.uses.as_slice() else {
         return false;
-    }
+    };
 
-    let Some(use_loc) = resolve_effective_use_location(&du.uses[0], body, classifications, def_use)
+    let Some(use_loc) = resolve_effective_use_location(raw_use, body, classifications, def_use)
     else {
         return false;
     };
     let mut sim = StackCarrySim::new();
     let mut start_statement = 0;
     let mut current_block = match kind {
-        StackCarryKind::PhiLike => use_loc.block,
+        // `is_stack_covered_phi` proves the value is on the stack on entry to
+        // the block holding the local's one use. Virtual forwarding may move
+        // the effective use into a later block; the walk below must then cover
+        // every block from that entry to the use, so that a branch, or another
+        // value carried above this one, in between keeps this local in a slot.
+        StackCarryKind::PhiLike => raw_use.block,
         StackCarryKind::CallResultImmediate | StackCarryKind::AggregateOperand => {
             let Some(def) = &du.def else {
                 return false;
@@ -501,8 +506,9 @@ fn simulate_statement_stack<'db>(
                     }
                 }
             }
-            Place::Capture(_) => {
-                // StoreCapture: evaluate rvalue (pops 1), no stack-carry interaction.
+            Place::Deref(_) => {
+                // StoreDeref/StoreCapture: evaluate rvalue (pops 1), no
+                // stack-carry interaction.
                 if !simulate_rvalue_pull_stack(
                     value,
                     sim,
@@ -515,6 +521,7 @@ fn simulate_statement_stack<'db>(
                 }
                 sim.pop_n(1)
             }
+            Place::Capture(_) => unreachable!("a bare capture is a pointer nothing stores to"),
             Place::Field { .. } | Place::Index { .. } => {
                 let mut sink = StackCarryPullSink {
                     sim,
@@ -538,7 +545,9 @@ fn simulate_statement_stack<'db>(
             };
             pull_semantics::walk_drop_statement(&mut sink, place).is_ok()
         }
-        StatementKind::FreshCell(_) | StatementKind::Intrinsic { .. } | StatementKind::Nop => true,
+        StatementKind::FreshCell { .. } | StatementKind::Intrinsic { .. } | StatementKind::Nop => {
+            true
+        }
     }
 }
 
@@ -618,7 +627,7 @@ fn simulate_terminator_stack<'db>(
         Terminator::Call {
             callee,
             args,
-            runtime_id,
+
             destination,
             ..
         } => {
@@ -634,9 +643,7 @@ fn simulate_terminator_stack<'db>(
                 if !direct {
                     trailing.push(callee);
                 }
-                if let Some(id) = runtime_id {
-                    trailing.push(id);
-                }
+
                 return simulate_stack_consuming_aggregate(
                     AggregateStackShape {
                         value_operands: &values,
@@ -650,7 +657,6 @@ fn simulate_terminator_stack<'db>(
                     def_use,
                 ) && simulate_store_place_stack(destination, sim, classifications);
             }
-            let runtime_id_slots = usize::from(runtime_id.is_some());
             let direct_call =
                 pull_semantics::resolve_constant_function_item(callee, classifications, def_use)
                     .is_some();
@@ -664,12 +670,8 @@ fn simulate_terminator_stack<'db>(
                 if pull_semantics::walk_call_direct_args(&mut sink, args).is_err() {
                     return false;
                 }
-                if let Some(runtime_id) = runtime_id
-                    && pull_semantics::walk_operand_pull(&mut sink, runtime_id).is_err()
-                {
-                    return false;
-                }
-                if !sim.pop_n(args.len() + runtime_id_slots) {
+
+                if !sim.pop_n(args.len()) {
                     return false;
                 }
             } else {
@@ -682,12 +684,8 @@ fn simulate_terminator_stack<'db>(
                 if pull_semantics::walk_call_indirect_operands(&mut sink, callee, args).is_err() {
                     return false;
                 }
-                if let Some(runtime_id) = runtime_id
-                    && pull_semantics::walk_operand_pull(&mut sink, runtime_id).is_err()
-                {
-                    return false;
-                }
-                if !sim.pop_n(args.len() + 1 + runtime_id_slots) {
+
+                if !sim.pop_n(args.len() + 1) {
                     return false;
                 }
             }
@@ -695,14 +693,11 @@ fn simulate_terminator_stack<'db>(
             simulate_store_place_stack(destination, sim, classifications)
         }
         Terminator::VirtualCall {
-            args,
-            runtime_id,
-            destination,
-            ..
+            args, destination, ..
         } => {
             if args.iter().any(|arg| is_operand_local(arg, carried_local)) {
                 let values = args.iter().collect::<Vec<_>>();
-                let trailing = runtime_id.iter().collect::<Vec<_>>();
+                let trailing = [];
                 return simulate_stack_consuming_aggregate(
                     AggregateStackShape {
                         value_operands: &values,
@@ -732,21 +727,8 @@ fn simulate_terminator_stack<'db>(
             // plus those two operands and pushes the result.
             sim.push();
             sim.push();
-            let runtime_id_slots = if let Some(runtime_id) = runtime_id {
-                let mut sink = StackCarryPullSink {
-                    sim,
-                    carried_local,
-                    classifications,
-                    def_use,
-                };
-                if pull_semantics::walk_operand_pull(&mut sink, runtime_id).is_err() {
-                    return false;
-                }
-                1
-            } else {
-                0
-            };
-            if !sim.pop_n(args.len() + 2 + runtime_id_slots) {
+
+            if !sim.pop_n(args.len() + 2) {
                 return false;
             }
             sim.push();
@@ -755,7 +737,7 @@ fn simulate_terminator_stack<'db>(
         Terminator::SysOp {
             callee,
             args,
-            runtime_id,
+
             destination,
             ..
         } => {
@@ -775,15 +757,7 @@ fn simulate_terminator_stack<'db>(
                 return false;
             }
 
-            let runtime_id_slots = if let Some(runtime_id) = runtime_id {
-                if pull_semantics::walk_operand_pull(&mut sink, runtime_id).is_err() {
-                    return false;
-                }
-                1
-            } else {
-                0
-            };
-            if !sim.pop_n(args.len() + runtime_id_slots) {
+            if !sim.pop_n(args.len()) {
                 return false;
             }
             sim.push();
@@ -930,8 +904,9 @@ fn simulate_store_place_stack(
                 LocalStoreBehavior::KeepOnStack => true,
             }
         }
-        // Capture stores: pop 1 (same as StoreSlot).
-        Place::Capture(_) => sim.pop_n(1),
+        // Stores through a cell: pop 1 (same as StoreSlot).
+        Place::Deref(_) => sim.pop_n(1),
+        Place::Capture(_) => unreachable!("a bare capture is a pointer nothing stores to"),
         Place::Field { .. } | Place::Index { .. } => false,
     }
 }
@@ -1286,6 +1261,7 @@ fn place_mentions_local(place: &Place, local: Local) -> bool {
     match place {
         Place::Local(l) => *l == local,
         Place::Field { base, .. } => place_mentions_local(base, local),
+        Place::Deref(cell) => cell.local() == Some(local),
         Place::Index { base, index, .. } => *index == local || place_mentions_local(base, local),
         Place::Capture(_) => false,
     }
@@ -1332,16 +1308,17 @@ fn numeric_operand_kind<'db>(
 fn numeric_place_kind(body: &MirFunctionBody<'_>, place: &Place) -> Option<NumericKind> {
     match place {
         Place::Local(local) => numeric_ty_kind(&body.local(*local).ty),
+        // A captured local's declared type is the type of the value in its cell.
+        Place::Deref(CellId::Local(local)) => numeric_ty_kind(&body.local(*local).ty),
+        Place::Deref(CellId::Capture(_)) => None,
         Place::Field { .. } | Place::Index { .. } | Place::Capture(_) => None,
     }
 }
 
 fn numeric_ty_kind(ty: &RuntimeTy) -> Option<NumericKind> {
     match ty {
-        RuntimeTy::Int { .. } | RuntimeTy::Literal(Literal::Int(_), _, _) => Some(NumericKind::Int),
-        RuntimeTy::Float { .. } | RuntimeTy::Literal(Literal::Float(_), _, _) => {
-            Some(NumericKind::Float)
-        }
+        RuntimeTy::Int | RuntimeTy::Literal(Literal::Int(_), _) => Some(NumericKind::Int),
+        RuntimeTy::Float | RuntimeTy::Literal(Literal::Float(_), _) => Some(NumericKind::Float),
         _ => None,
     }
 }
@@ -1442,7 +1419,12 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         Ok(())
     }
 
-    fn binary_op(&mut self, _op: baml_compiler2_mir::BinOp) -> Result<(), Self::Error> {
+    fn binary_op(
+        &mut self,
+        _op: baml_compiler2_mir::BinOp,
+        _left: &Operand<'a>,
+        _right: &Operand<'a>,
+    ) -> Result<(), Self::Error> {
         if !self.sim.pop_n(2) {
             return Err(());
         }
@@ -1610,7 +1592,7 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
 
     fn make_generic_function(
         &mut self,
-        _item: &baml_compiler2_mir::ItemRef<'a>,
+        _func: baml_compiler2_hir_ty::extern_loc::FunctionRef<'a>,
         ntypeargs: usize,
     ) -> Result<(), Self::Error> {
         // Pops `ntypeargs` type-arg values, pushes one generic-function object.
@@ -1631,8 +1613,20 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         Ok(())
     }
 
-    fn load_capture(&mut self, _idx: usize) -> Result<(), Self::Error> {
+    fn load_deref_local(&mut self, _local: Local) -> Result<(), Self::Error> {
+        // LoadDeref pushes one value onto the stack.
+        self.sim.push();
+        Ok(())
+    }
+
+    fn load_capture_value(&mut self, _idx: usize) -> Result<(), Self::Error> {
         // LoadCapture pushes one value onto the stack.
+        self.sim.push();
+        Ok(())
+    }
+
+    fn load_capture_ref(&mut self, _idx: usize) -> Result<(), Self::Error> {
+        // CaptureRef pushes one value onto the stack.
         self.sim.push();
         Ok(())
     }
@@ -1670,33 +1664,21 @@ impl<'a> StackEffectSink<'a> for StackCarryPullSink<'a> {
         }
         Ok(())
     }
-
-    fn store_capture_value(&mut self, _idx: usize) -> Result<(), Self::Error> {
-        // StoreCapture pops one value (the value to store into the capture cell).
-        if !self.sim.pop_n(1) {
-            return Err(());
-        }
-        Ok(())
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use baml_compiler2_mir::{AggregateKind, BasicBlock, LocalDecl, Statement};
-    use baml_type::{RealizedTy, TyAttr, TyTemplate};
+    use baml_type::{RealizedTy, TyTemplate};
 
     use super::*;
 
     fn int_ty() -> RuntimeTy {
-        RuntimeTy::Int {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::Int
     }
 
     fn float_ty() -> RuntimeTy {
-        RuntimeTy::Float {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::Float
     }
 
     fn local_decl(ty: RuntimeTy) -> LocalDecl {
@@ -1754,7 +1736,7 @@ mod tests {
             callee: Operand::Constant(Constant::Null),
             args: vec![],
             ntypeargs: 0,
-            runtime_id: None,
+
             destination: Place::Local(right),
             target: BlockId(1),
             unwind: None,

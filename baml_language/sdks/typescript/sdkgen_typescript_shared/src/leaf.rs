@@ -1139,20 +1139,7 @@ mod tests {
             vec![class_sym(
                 "Resume",
                 name("user", &["lorem"], "Resume"),
-                vec![
-                    (
-                        "name",
-                        Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                    ),
-                    (
-                        "age",
-                        Ty::Int {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                    ),
-                ],
+                vec![("name", Ty::String), ("age", Ty::Int)],
             )],
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
@@ -1186,29 +1173,15 @@ mod tests {
                     "extract",
                     "user.lorem.extract",
                     SyncAsync::Sync,
-                    vec![(
-                        "text",
-                        Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                    )],
-                    Ty::Int {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
+                    vec![("text", Ty::String)],
+                    Ty::Int,
                 ),
                 func_sym(
                     "extract_async",
                     "user.lorem.extract",
                     SyncAsync::Async,
-                    vec![(
-                        "text",
-                        Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                    )],
-                    Ty::Int {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
+                    vec![("text", Ty::String)],
+                    Ty::Int,
                 ),
             ],
         );
@@ -1229,35 +1202,23 @@ mod tests {
                 "user.lorem.extract",
                 SyncAsync::Sync,
                 vec![
-                    (
-                        "arg0",
-                        Ty::Int {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                        None,
-                    ),
+                    ("arg0", Ty::Int, None),
                     (
                         "default",
-                        Ty::Int {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
+                        Ty::Int,
                         Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
                             Literal::Int(1),
                         ))),
                     ),
                     (
                         "not-valid",
-                        Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
+                        Ty::String,
                         Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
                             Literal::String("x".to_string()),
                         ))),
                     ),
                 ],
-                Ty::Int {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
+                Ty::Int,
             )],
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
@@ -1276,40 +1237,18 @@ mod tests {
                 "user.lorem.extract",
                 SyncAsync::Sync,
                 vec![
-                    (
-                        "arguments",
-                        Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                        None,
-                    ),
-                    (
-                        "arguments_",
-                        Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                        None,
-                    ),
-                    (
-                        "$opts",
-                        Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                        None,
-                    ),
+                    ("arguments", Ty::String, None),
+                    ("arguments_", Ty::String, None),
+                    ("$opts", Ty::String, None),
                     (
                         "eval",
-                        Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
+                        Ty::String,
                         Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
                             Literal::String("x".to_string()),
                         ))),
                     ),
                 ],
-                Ty::String {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
+                Ty::String,
             )],
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
@@ -1330,11 +1269,7 @@ mod tests {
                 name("user", &["consumer"], "Holder"),
                 vec![(
                     "r",
-                    Ty::Class(
-                        name("user", &["lorem"], "Resume"),
-                        Box::new([]),
-                        baml_base::TyAttr::EMPTY,
-                    ),
+                    Ty::Class(name("user", &["lorem"], "Resume"), Box::new([])),
                 )],
             )],
         );
@@ -1356,11 +1291,6 @@ mod tests {
             ));
         }
         symbols.push(class_sym(
-            "Image$stream",
-            name("baml", &["media"], "Image$stream"),
-            vec![],
-        ));
-        symbols.push(class_sym(
             "UserImage",
             name("user", &["media"], "UserImage"),
             vec![],
@@ -1376,7 +1306,6 @@ mod tests {
                 )));
                 assert!(ts.contains(&format!("export {{ {local_name} }};")));
             }
-            assert!(ts.contains("export class Image$stream {"));
             assert!(ts.contains("export class UserImage {"));
             assert!(!ts.contains("export type Image"));
         }
@@ -1395,31 +1324,23 @@ mod tests {
     #[test]
     fn callable_child_collision_composes_function_with_namespace() {
         let b = body(
-            &["vendor", "boundary"],
+            &["vendor", "factory"],
             vec![
                 func_sym(
                     "id",
-                    "boundary.id",
+                    "factory.id",
                     SyncAsync::Sync,
                     vec![],
-                    Ty::Class(
-                        name("boundary", &[], "LocalId"),
-                        Box::new([]),
-                        baml_base::TyAttr::EMPTY,
-                    ),
+                    Ty::Class(name("factory", &[], "Resource"), Box::new([])),
                 ),
                 func_sym(
                     "id_async",
-                    "boundary.id",
+                    "factory.id",
                     SyncAsync::Async,
                     vec![],
-                    Ty::Class(
-                        name("boundary", &[], "LocalId"),
-                        Box::new([]),
-                        baml_base::TyAttr::EMPTY,
-                    ),
+                    Ty::Class(name("factory", &[], "Resource"), Box::new([])),
                 ),
-                class_sym("LocalId", name("boundary", &[], "LocalId"), vec![]),
+                class_sym("Resource", name("factory", &[], "Resource"), vec![]),
             ],
         );
         let mut kids = BTreeSet::new();
@@ -1428,11 +1349,11 @@ mod tests {
         assert!(ts.contains("import * as __ns_id from \"./id/index.js\";"));
         assert!(!ts.contains("export * as id from \"./id/index.js\";"));
         assert!(ts.contains(
-            "export const id = Object.assign(defineFunction(\"boundary.id\", \"sync\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => LocalId, __ns_id);"
+            "export const id = Object.assign(defineFunction(\"factory.id\", \"sync\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Resource, __ns_id);"
         ));
         assert!(
             ts.contains(
-                "export const id_async = defineFunction(\"boundary.id\", \"async\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Promise<LocalId>;"
+                "export const id_async = defineFunction(\"factory.id\", \"async\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Promise<Resource>;"
             )
         );
     }
@@ -1446,9 +1367,7 @@ mod tests {
                 "user.make_foo",
                 SyncAsync::Sync,
                 vec![],
-                Ty::Int {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
+                Ty::Int,
             )],
         );
         let mut kids = BTreeSet::new();

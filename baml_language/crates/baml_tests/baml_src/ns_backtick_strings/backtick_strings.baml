@@ -389,6 +389,14 @@ test "backtick_case_k_default_parameter_value" {
     assert.equal(bt_case_k(), "Hello, world")
 }
 
+function bt_single_line_boundary_whitespace(name: string) -> string {
+    `  Hello, ${name}!  `
+}
+
+test "backtick_single_line_preserves_boundary_whitespace" {
+    assert.equal(bt_single_line_boundary_whitespace("world"), "  Hello, world!  ")
+}
+
 // (L) Backtick used as an expression-statement (value discarded).
 function bt_case_l() -> int {
     `unused`;
@@ -975,8 +983,8 @@ test "backtick_keeps_repeated_trailing_escaped_newlines" {
     assert.equal(bt_keeps_repeated_trailing_escaped_newlines(), "LANG=C\n\n")
 }
 
-// `\n` and `\t` are two source characters each. Nothing may read them as
-// layout, so the literal spaces around them survive too.
+// `\n` and `\t` are two source characters each, and a single-line literal is
+// not dedented, so its boundary spaces are preserved too.
 function bt_escape_not_indentation() -> string {
     ` a\n b\t `
 }
@@ -998,8 +1006,8 @@ test "backtick_multiline_keeps_trailing_escaped_newline" {
     assert.equal(bt_multiline_keeps_trailing_escaped_newline(), "line one\nline two\n")
 }
 
-// Only one line break belongs to the closing delimiter, so a blank line in
-// front of it is how you ask for a trailing newline without an escape.
+// Dedent discards blank lines at the body boundary. Use an authored `\n`
+// escape when the runtime value needs a trailing newline.
 function bt_blank_line_before_closer() -> string {
     `
     line one
@@ -1007,6 +1015,6 @@ function bt_blank_line_before_closer() -> string {
     `
 }
 
-test "backtick_blank_line_before_closer_is_content" {
-    assert.equal(bt_blank_line_before_closer(), "line one\n")
+test "backtick_blank_line_before_closer_is_layout" {
+    assert.equal(bt_blank_line_before_closer(), "line one")
 }

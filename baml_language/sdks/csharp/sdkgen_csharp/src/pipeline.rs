@@ -5,6 +5,7 @@ use std::{collections::BTreeSet, fmt};
 use baml_codegen_types::Symbol;
 
 use crate::{
+    hash::sha256,
     model::CodegenModel,
     names::CSharpNames,
     output::{GeneratedFile, GeneratedTree, GenerationMetadata},
@@ -287,19 +288,6 @@ fn render_program_carrier(
     Ok(template
         .replace(PROGRAM_BYTES_PLACEHOLDER, &byte_literals)
         .replace(PROGRAM_FINGERPRINT_PLACEHOLDER, fingerprint))
-}
-
-fn sha256(bytes: &[u8]) -> String {
-    use std::fmt::Write as _;
-
-    use sha2::Digest as _;
-
-    sha2::Sha256::digest(bytes)
-        .iter()
-        .fold(String::with_capacity(64), |mut encoded, byte| {
-            write!(&mut encoded, "{byte:02x}").expect("writing to String cannot fail");
-            encoded
-        })
 }
 
 #[cfg(test)]

@@ -15,8 +15,7 @@ use std::sync::{Arc, atomic::AtomicBool};
 use baml_db::testing::compile_source;
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
-    ConstValue, FunctionCaptureProps, GlobalIndex, Instruction, Object, ObjectIndex, RealizedTy,
-    TyTemplate, Value,
+    ConstValue, GlobalIndex, Instruction, Object, ObjectIndex, RealizedTy, TyTemplate, Value,
     bytecode::Bytecode,
     types::{Function, FunctionKind, FunctionOrigin, Program},
 };
@@ -55,12 +54,13 @@ fn inject_function(
         real_local_count: 0,
         bytecode,
         kind: FunctionKind::Bytecode,
+        telemetry_function_id: None,
+        telemetry_registration: bex_vm_types::FunctionRegistration::default(),
+        telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
         local_names: vec![],
         debug_locals: vec![],
         span: baml_type::Span::fake(),
-        return_type: baml_type::TyTemplate::Int {
-            attr: baml_type::TyAttr::default(),
-        },
+        return_type: baml_type::TyTemplate::Int,
         param_names: vec![],
         param_types: vec![],
         param_has_default: vec![],
@@ -68,15 +68,12 @@ fn inject_function(
         generic_param_bounds: vec![],
         display_param_types: vec![],
         display_return_type: "int".to_string(),
-        throws_type: baml_type::TyTemplate::Never {
-            attr: baml_type::TyAttr::default(),
-        },
+        throws_type: baml_type::TyTemplate::Never,
         origin: FunctionOrigin::UserDefined,
         is_interface_body: false,
         native_key: None,
         body_meta: None,
-        capture: FunctionCaptureProps::disabled(),
-        function_id: 0,
+
         runtime_package: bex_vm_types::HeapPtr::null(),
     };
 

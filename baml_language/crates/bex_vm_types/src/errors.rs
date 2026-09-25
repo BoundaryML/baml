@@ -192,6 +192,9 @@ impl VmBamlError {
 /// These are always fatal: they cannot be caught in BAML code.
 #[derive(Debug, Error, PartialEq, Clone)]
 pub enum VmInternalError {
+    #[error(transparent)]
+    FunctionIdExhausted(#[from] btel_types::FunctionIdExhausted),
+
     #[error("invalid argument count: expected {expected}, got {got}")]
     InvalidArgumentCount { expected: usize, got: usize },
 
@@ -342,88 +345,37 @@ pub enum VmInternalError {
     CallLayout(baml_type::LayoutMismatch),
 }
 
-/// Any kind of virtual machine error.
+/// Whether a thrown value is fresh or propagated from an earlier throw.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ProfilerErrorKind {
+pub enum ThrowKind {
     Fresh,
     Rethrow,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum VmUnwindSource {
-    Bytecode,
-    NativeCall,
-    EngineCall,
-    FutureResume,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct VmThrowSite {
-    pub file_id: u32,
-    pub line: u32,
-    pub start_offset: u32,
-    pub end_offset: u32,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct VmUnwindOrigin {
-    pub throw_call_id: u64,
-    pub throw_function_id: u32,
-    pub throw_site: Option<VmThrowSite>,
-    pub source: VmUnwindSource,
-    pub selected_error: bool,
-    pub manual_eligible: bool,
-    pub origin_span_already_terminated: bool,
-}
-
-impl VmUnwindOrigin {
-    #[must_use]
-    pub const fn unresolved(source: VmUnwindSource) -> Self {
-        Self {
-            throw_call_id: 0,
-            throw_function_id: 0,
-            throw_site: None,
-            source,
-            selected_error: false,
-            manual_eligible: false,
-            origin_span_already_terminated: false,
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VmThrown {
     pub value: Value,
-    pub profiler_kind: ProfilerErrorKind,
+    pub throw_kind: ThrowKind,
     pub language_is_rethrow: bool,
-    pub origin: VmUnwindOrigin,
 }
 
 impl VmThrown {
     #[must_use]
-    pub const fn fresh(value: Value, source: VmUnwindSource) -> Self {
+    pub const fn fresh(value: Value) -> Self {
         Self {
             value,
-            profiler_kind: ProfilerErrorKind::Fresh,
+            throw_kind: ThrowKind::Fresh,
             language_is_rethrow: false,
-            origin: VmUnwindOrigin::unresolved(source),
         }
     }
 
     #[must_use]
-    pub const fn rethrow(value: Value, source: VmUnwindSource, language_is_rethrow: bool) -> Self {
+    pub const fn rethrow(value: Value, language_is_rethrow: bool) -> Self {
         Self {
             value,
-            profiler_kind: ProfilerErrorKind::Rethrow,
+            throw_kind: ThrowKind::Rethrow,
             language_is_rethrow,
-            origin: VmUnwindOrigin::unresolved(source),
         }
-    }
-
-    #[must_use]
-    pub const fn with_origin(mut self, origin: VmUnwindOrigin) -> Self {
-        self.origin = origin;
-        self
     }
 }
 
@@ -454,7 +406,7 @@ pub enum VmError {
 impl VmError {
     #[must_use]
     pub const fn thrown_fresh(value: Value) -> Self {
-        Self::Thrown(VmThrown::fresh(value, VmUnwindSource::Bytecode))
+        Self::Thrown(VmThrown::fresh(value))
     }
 }
 
@@ -475,10 +427,7 @@ pub enum VmRustFnError {
     /// (e.g. `baml.json.ParseError`) without going through the
     /// `VmPanic` / `VmBamlError` enumeration machinery.
     #[error("thrown value")]
-    Thrown {
-        value: Value,
-        profiler_kind: ProfilerErrorKind,
-    },
+    Thrown { value: Value, throw_kind: ThrowKind },
 }
 
 impl VmRustFnError {
@@ -486,7 +435,7 @@ impl VmRustFnError {
     pub const fn thrown_fresh(value: Value) -> Self {
         Self::Thrown {
             value,
-            profiler_kind: ProfilerErrorKind::Fresh,
+            throw_kind: ThrowKind::Fresh,
         }
     }
 
@@ -494,7 +443,7 @@ impl VmRustFnError {
     pub const fn thrown_rethrow(value: Value) -> Self {
         Self::Thrown {
             value,
-            profiler_kind: ProfilerErrorKind::Rethrow,
+            throw_kind: ThrowKind::Rethrow,
         }
     }
 }

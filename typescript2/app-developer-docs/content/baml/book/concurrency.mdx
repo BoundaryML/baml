@@ -9,13 +9,9 @@ breadcrumbs:
   - label: "12. Run work concurrently"
 ---
 
-BAML is designed to feel familiar to TypeScript developers, but concurrency is one place where it deliberately takes a different path. In TypeScript, an asynchronous API returns a `Promise`, making asynchrony part of the function's type and the APIs that callers use.
+A direct BAML call waits for its result. Use `spawn` to start the same call concurrently and receive a future that you can await.
 
-BAML keeps functions colorless. The same function can be called directly when the caller should wait or placed in `spawn` when it should run concurrently. Libraries don't need separate synchronous and asynchronous forms, and making one call concurrent doesn't require async signatures throughout the functions that lead to it.
-
-In that respect, BAML works more like Go. Unlike Go's `go` statement, however, `spawn` returns a future that you can await.
-
-This page compares how BAML, TypeScript, and Go start the same external operation concurrently. It then shows how to wait for results, inspect concurrent work, and limit or cancel it. [Concurrency model and task lifecycle](#concurrency-model-and-task-lifecycle) covers future types, errors, ordering, cancellation, and parent-child behavior.
+In TypeScript, an asynchronous API returns a `Promise`. In BAML, concurrency is a choice at the call site; the function keeps the same signature. Libraries don't need separate synchronous and asynchronous forms.
 
 The examples assume familiarity with functions, arrays, lambdas, and [error handling](/baml/book/errors). Each named function adds to the same project. The browser example supplies `simulate_read` and `main`; the later one-line excerpt reuses its variables. File-reading examples require the native CLI or an SDK with filesystem access.
 
@@ -56,13 +52,12 @@ async function readOneDocumentConcurrently(
   secondPath: string,
 ): Promise<string[]> {
   const firstPromise = readFile(firstPath, "utf8")
-  const second = await readFile(secondPath, "utf8")
-  const first = await firstPromise
-  return [first, second]
+  const secondPromise = readFile(secondPath, "utf8")
+  return Promise.all([firstPromise, secondPromise])
 }
 ```
 
-The concurrent function is `async`, returns `Promise<string[]>`, and uses `readFile` instead of `readFileSync`.
+The concurrent function is `async`, returns `Promise<string[]>`, and uses `readFile` instead of `readFileSync`. `Promise.all` observes both promises immediately and returns results in input order. Awaiting one promise before attaching a handler to the other can leave an early rejection unhandled.
 
 ### Go
 
@@ -117,21 +112,25 @@ After you understand the individual futures, `baml.future.all` is a shorter way 
 
 <BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-47"]} />
 
-`baml.future.all` returns the strings in input order: first path, then second path. Completion order can differ. If one read fails, `all` cancels the remaining futures and rethrows the observed error. To wait for every input and inspect each outcome, use `baml.future.all_settled`. It returns `Success<T>`, `Failure<E>`, or `Panicked` for each input, in input order. `Panicked` includes input cancellation.
+`baml.future.all` returns a future. Awaiting it returns the strings in input order: first path, then second path. It observes errors in input order too: an error in the second future waits for the first future to settle before it is observed. On an observed typed error, `all` cancels the remaining futures and rethrows that error.
 
-## Try concurrent work in the browser
+To wait for every input and inspect each outcome, await `baml.future.all_settled`. It collects `Success<T>`, `Failure<E>`, or `Panicked` for each input, in input order. `Panicked` includes input cancellation.
 
-The browser playground doesn't expose a host filesystem. The following complete example simulates two file reads with random delays, so you can run it in the browser:
+<span id="try-concurrent-work-in-the-browser" />
+
+## Simulate concurrent work
+
+To try concurrency without creating files, simulate two reads with random delays. Put this complete example in `baml_src/main.baml` in a [Canary project](/baml/get-started):
 
 <BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-48"]} />
 
-Each run gives the two tasks different delays. The result remains `["contents of notes.md", "contents of outline.md"]` because the code constructs the array in that order, regardless of which task finishes first.
+Run `baml run main`. Each task receives a random delay; the delays may be equal. The result remains `["contents of notes.md", "contents of outline.md"]` because the code constructs the array in that order, regardless of which task finishes first.
 
-The browser can run the example, but it doesn't store local execution telemetry. Use the VS Code extension or CLI to inspect the two tasks as separate lanes.
+Use the VS Code extension or CLI to inspect the named tasks, as shown below.
 
 ## Inspect concurrent work
 
-Add a string after `spawn` to give a thread a useful diagnostic name. The browser example names each task with its path and simulated delay:
+Add a string after `spawn` to give a thread a useful diagnostic name. The simulation names each task with its path and simulated delay:
 
 <BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-49"]} />
 
@@ -188,8 +187,6 @@ If `cancel()` returns `false`, the future was already settled. A successful futu
 For the precise cancellation and parent-child rules, continue to [Cancellation and task lifetimes](#cancellation-and-task-lifetimes).
 
 ## Concurrency model and task lifecycle
-
-The main pattern is short: spawn independent work, keep its future, and await the future when you need the result. The following sections describe the model behind that pattern.
 
 ### Logical threads and runtime workers
 
@@ -248,7 +245,7 @@ If a task body throws, its future records the error. The error reaches the paren
 
 Creating `lookup_future` doesn't throw `LookupFailed` in the parent. `await lookup_future` rethrows it.
 
-For several futures, `baml.future.all` preserves input order, not completion order. If one input fails, it cancels the remaining inputs and rethrows the observed error. `baml.future.all_settled` collects a `Success<T>`, `Failure<E>`, or `Panicked` outcome for every input. An input failure or panic does not cancel the other inputs. Cancelling the collector itself stops the wait.
+For several futures, `baml.future.all` preserves input order, not completion order. It observes inputs in order. On an observed typed error, it cancels the remaining inputs and rethrows that error. Panics propagate without this typed-error cleanup. `baml.future.all_settled` collects a `Success<T>`, `Failure<E>`, or `Panicked` outcome for every input. An input failure or panic does not cancel the other inputs. Cancelling the collector itself stops the wait.
 
 ### Cancellation and task lifetimes
 

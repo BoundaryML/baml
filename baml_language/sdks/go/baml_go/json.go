@@ -3,6 +3,7 @@ package baml_go
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"reflect"
 	"strconv"
 
@@ -12,9 +13,10 @@ import (
 const maxJSONDecodeDepth = 256
 
 // JSON converts an ordinary Go JSON value into the generic ABI tree. Unlike
-// Any, it deliberately rejects every BAML-only extension (bigints, bytes,
+// Any, it deliberately rejects BAML-only extensions other than bigint (bytes,
 // classes, enums, unions, media, and non-finite floats) before native code is
-// entered. The native runtime still performs the final assignability check.
+// entered. Bigints use Go's arbitrary-precision *big.Int. The native runtime
+// still performs the final assignability check.
 func JSON(value any) Input {
 	return encodeJSON(reflect.ValueOf(value), make(map[visit]bool), "$", 0)
 }
@@ -36,6 +38,9 @@ func encodeJSON(value reflect.Value, active map[visit]bool, path string, depth i
 		return NullInput(Null{})
 	}
 	if value.CanInterface() {
+		if integer, ok := value.Interface().(*big.Int); ok {
+			return BigInt(integer)
+		}
 		if _, ok := value.Interface().(InputMarshaler); ok {
 			return InvalidInput(fmt.Sprintf("encode baml.json.json at %s: generated BAML values are not JSON", path))
 		}
@@ -127,8 +132,8 @@ func encodeJSONList(value reflect.Value, active map[visit]bool, path string, dep
 }
 
 // JSON decodes the exact recursive value algebra represented by
-// baml.json.json into ordinary Go values: nil, bool, int64, float64, string,
-// []any, and map[string]any. It treats the outbound ABI as untrusted and
+// baml.json.json into ordinary Go values: nil, bool, int64, *big.Int, float64,
+// string, []any, and map[string]any. It treats the outbound ABI as untrusted and
 // rejects values outside that algebra rather than silently widening them.
 func (value Value) JSON() (any, error) {
 	return decodeJSON(value, "$", 0)
@@ -162,6 +167,12 @@ func decodeJSON(value Value, path string, depth int) (any, error) {
 		return item.BoolValue, nil
 	case *cffi.BamlOutboundValue_IntValue:
 		return item.IntValue, nil
+	case *cffi.BamlOutboundValue_BigintValue:
+		integer, ok := new(big.Int).SetString(item.BigintValue, 16)
+		if !ok {
+			return nil, fmt.Errorf("decode baml.json.json at %s: invalid bigint %q", path, item.BigintValue)
+		}
+		return integer, nil
 	case *cffi.BamlOutboundValue_FloatValue:
 		if math.IsNaN(item.FloatValue) || math.IsInf(item.FloatValue, 0) {
 			return nil, fmt.Errorf("decode baml.json.json at %s: non-finite float %v is not JSON", path, item.FloatValue)
@@ -341,6 +352,7 @@ func isJSONBAMLType(value *cffi.BamlTy, depth int) bool {
 		case cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_NULL,
 			cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_BOOL,
 			cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_INT,
+			cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_BIGINT,
 			cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_FLOAT,
 			cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_STRING:
 			return true
@@ -379,6 +391,9 @@ func isJSONLiteralType(value *cffi.BamlTyLiteral) bool {
 	switch literal := value.Literal.(type) {
 	case *cffi.BamlTyLiteral_StringValue, *cffi.BamlTyLiteral_IntValue, *cffi.BamlTyLiteral_BoolValue:
 		return true
+	case *cffi.BamlTyLiteral_BigintValue:
+		_, ok := new(big.Int).SetString(literal.BigintValue, 10)
+		return ok
 	case *cffi.BamlTyLiteral_FloatValue:
 		parsed, err := strconv.ParseFloat(literal.FloatValue, 64)
 		return err == nil && !math.IsNaN(parsed) && !math.IsInf(parsed, 0)
@@ -405,6 +420,9 @@ func jsonPrimitiveMatchesWire(kind cffi.BamlTyPrimitiveKind, value *cffi.BamlOut
 	case cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_INT:
 		_, ok := value.Value.(*cffi.BamlOutboundValue_IntValue)
 		return ok
+	case cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_BIGINT:
+		_, ok := value.Value.(*cffi.BamlOutboundValue_BigintValue)
+		return ok
 	case cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_FLOAT:
 		_, ok := value.Value.(*cffi.BamlOutboundValue_FloatValue)
 		return ok
@@ -428,6 +446,14 @@ func jsonLiteralTypeMatchesWire(selected *cffi.BamlTyLiteral, value *cffi.BamlOu
 	case *cffi.BamlTyLiteral_IntValue:
 		actual, ok := wire.LiteralValue.Literal.(*cffi.BamlLiteralValue_IntValue)
 		return ok && actual.IntValue == expected.IntValue
+	case *cffi.BamlTyLiteral_BigintValue:
+		actual, ok := wire.LiteralValue.Literal.(*cffi.BamlLiteralValue_BigintValue)
+		if !ok {
+			return false
+		}
+		expectedValue, expectedOK := new(big.Int).SetString(expected.BigintValue, 10)
+		actualValue, actualOK := new(big.Int).SetString(actual.BigintValue, 16)
+		return expectedOK && actualOK && expectedValue.Cmp(actualValue) == 0
 	case *cffi.BamlTyLiteral_FloatValue:
 		actual, ok := wire.LiteralValue.Literal.(*cffi.BamlLiteralValue_FloatValue)
 		return ok && actual.FloatValue == expected.FloatValue
@@ -448,6 +474,12 @@ func decodeJSONLiteral(value *cffi.BamlLiteralValue, path string) (any, error) {
 		return literal.StringValue, nil
 	case *cffi.BamlLiteralValue_IntValue:
 		return literal.IntValue, nil
+	case *cffi.BamlLiteralValue_BigintValue:
+		integer, ok := new(big.Int).SetString(literal.BigintValue, 16)
+		if !ok {
+			return nil, fmt.Errorf("decode baml.json.json at %s: invalid bigint literal %q", path, literal.BigintValue)
+		}
+		return integer, nil
 	case *cffi.BamlLiteralValue_FloatValue:
 		decoded, err := strconv.ParseFloat(literal.FloatValue, 64)
 		if err != nil || math.IsNaN(decoded) || math.IsInf(decoded, 0) {

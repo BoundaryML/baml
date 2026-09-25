@@ -7,13 +7,13 @@
 //! within a package into a single lookup structure — the top-level
 //! cross-file query used by the TIR layer for name resolution.
 
-use baml_base::{LangPackage, LangRoots, Name, SourceFile, SourceRoot, SourceRootKind, Span};
+use baml_base::{LangRoots, Name, SourceFile, SourceRoot, SourceRootKind, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase};
 use baml_type::{DeclName, RESERVED_USER_PACKAGE, TypeName};
 use indexmap::IndexMap;
 
 use crate::{
-    contributions::{Definition, DefinitionKind},
+    contributions::Definition,
     namespace::{NameConflict, NamespaceId, NamespaceItems, namespace_items},
 };
 
@@ -584,9 +584,6 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, root: SourceRoot) -> PackageIt
                 .get(first_segment)
                 .or_else(|| root_ns.values.get(first_segment))
             {
-                if is_allowed_builtin_namespace_shadow(db, root, ns_path, *def) {
-                    continue;
-                }
                 shadows.push(NamespaceShadow {
                     ns_name: first_segment.clone(),
                     ns_path: ns_path.clone(),
@@ -615,55 +612,27 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, root: SourceRoot) -> PackageIt
     }
 }
 
-/// The one allowlisted builtin collision: the stdlib `boundary` package's
-/// root-level `id` function beside its `ns_id/` namespace.
-fn is_allowed_builtin_namespace_shadow(
-    db: &dyn crate::Db,
-    root: SourceRoot,
-    ns_path: &[Name],
-    def: Definition<'_>,
-) -> bool {
-    root.kind(db) == SourceRootKind::Stdlib
-        && lang_roots(db).is(LangPackage::Boundary, root)
-        && ns_path.len() == 1
-        && ns_path[0].as_str() == "id"
-        && def.kind() == DefinitionKind::Function
-        && def.file(db).path(db).to_string_lossy() == "<builtin>/boundary/core.baml"
-}
-
 #[cfg(test)]
 mod tests {
-    use std::{
-        path::PathBuf,
-        sync::atomic::{AtomicU32, Ordering},
-    };
+    use std::path::PathBuf;
 
-    use baml_base::{
-        Dependency, FileId, Name, SourceFile, SourceRoot, SourceRootKind, SourceRootTable,
-    };
+    use baml_base::{Dependency, Name, SourceRoot, SourceRootKind, SourceRootTable};
     use salsa::Setter;
 
-    use super::{
-        dependency_named, is_allowed_builtin_namespace_shadow, package_dependency_closure,
-        package_items,
-    };
+    use super::{dependency_named, package_dependency_closure};
     use crate::Db;
 
     #[salsa::db]
     struct TestDb {
         storage: salsa::Storage<TestDb>,
-        next_file_id: AtomicU32,
         roots: Option<SourceRootTable>,
-        lang_roots: Option<crate::inputs::LangRootsInput>,
     }
 
     impl Default for TestDb {
         fn default() -> Self {
             let mut db = Self {
                 storage: salsa::Storage::default(),
-                next_file_id: AtomicU32::new(0),
                 roots: None,
-                lang_roots: None,
             };
             db.roots = Some(SourceRootTable::new(&db, Vec::new()));
             db
@@ -693,54 +662,6 @@ mod tests {
             table.set_roots(self).to(roots);
             root
         }
-
-        fn add_file_in(
-            &mut self,
-            root: SourceRoot,
-            path: impl Into<PathBuf>,
-            content: &str,
-        ) -> SourceFile {
-            let file_id = FileId::new(self.next_file_id.fetch_add(1, Ordering::SeqCst));
-            let file =
-                SourceFile::new(self, content.to_string(), path.into(), file_id, false, root);
-            let mut files = root.files(self).clone();
-            files.push(file);
-            root.set_files(self).to(files);
-            file
-        }
-
-        fn with_builtins() -> (Self, std::collections::BTreeMap<&'static str, SourceRoot>) {
-            let mut db = Self::default();
-            let mut roots: std::collections::BTreeMap<&str, SourceRoot> =
-                std::collections::BTreeMap::new();
-            for builtin in baml_builtins2::ALL {
-                let root = *roots.entry(builtin.package).or_insert_with(|| {
-                    db.add_root(
-                        PathBuf::from(format!("<builtin>/{}", builtin.package)),
-                        Some(builtin.package),
-                        SourceRootKind::Stdlib,
-                        Vec::new(),
-                    )
-                });
-                db.add_file_in(
-                    root,
-                    PathBuf::from(builtin.virtual_path()),
-                    builtin.contents,
-                );
-            }
-            let lang = baml_base::LangPackage::ALL
-                .into_iter()
-                .filter_map(|package| {
-                    roots
-                        .get(package.manifest_name())
-                        .map(|&root| (package, root))
-                })
-                .fold(baml_base::LangRoots::default(), |lang, (package, root)| {
-                    lang.with(package, root)
-                });
-            db.lang_roots = Some(crate::inputs::LangRootsInput::new(&db, lang));
-            (db, roots)
-        }
     }
 
     #[salsa::db]
@@ -748,60 +669,9 @@ mod tests {
 
     #[salsa::db]
     impl Db for TestDb {
-        fn lang_roots_input(&self) -> Option<crate::inputs::LangRootsInput> {
-            self.lang_roots
-        }
-
         fn source_roots(&self) -> SourceRootTable {
             self.roots.expect("table present from construction")
         }
-    }
-
-    #[test]
-    fn boundary_id_builtin_namespace_shadow_is_allowlisted() {
-        let (db, roots) = TestDb::with_builtins();
-        let boundary = roots["boundary"];
-        let id = baml_base::Name::new("id");
-        let package = package_items(&db, boundary);
-        let root = package.namespaces.get(&Vec::new()).expect("root namespace");
-        let id_namespace = vec![id.clone()];
-
-        let id_def = root.values.get(&id).copied().expect("boundary.id function");
-        assert!(
-            package.namespaces.contains_key(&id_namespace),
-            "boundary.id namespace should exist"
-        );
-        assert!(
-            is_allowed_builtin_namespace_shadow(&db, boundary, &id_namespace, id_def),
-            "boundary.id root function shadowed by boundary.id namespace is the only allowed builtin collision"
-        );
-        assert!(
-            package.shadows().is_empty(),
-            "the allowlisted boundary.id collision should not emit namespace-shadow diagnostics"
-        );
-    }
-
-    #[test]
-    fn builtin_namespace_shadow_allowlist_rejects_other_builtin_collisions() {
-        let (db, roots) = TestDb::with_builtins();
-        let boundary = roots["boundary"];
-        let id = baml_base::Name::new("id");
-        let package = package_items(&db, boundary);
-        let root = package.namespaces.get(&Vec::new()).expect("root namespace");
-        let id_def = root.values.get(&id).copied().expect("boundary.id function");
-
-        assert!(!is_allowed_builtin_namespace_shadow(
-            &db,
-            roots["baml"],
-            std::slice::from_ref(&id),
-            id_def
-        ));
-        assert!(!is_allowed_builtin_namespace_shadow(
-            &db,
-            boundary,
-            &[baml_base::Name::new("other")],
-            id_def
-        ));
     }
 
     #[test]

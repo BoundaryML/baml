@@ -1,10 +1,11 @@
 // Tests for the `bigint` builtin class (BEP-022).
 //
 // Converted from crates/baml_tests/tests/bigints.rs. Mirrors ns_ints/ints.baml:
-// pure expressions are asserted inline; tests that use locals (let bindings,
-// compound assignment, lambdas, generics with receivers) go through a top-level
-// helper function to avoid the test-block local-boxing VM bug. Value results
-// are compared with `assert.equal`; boolean results are asserted directly.
+// pure expressions are asserted inline; many tests with locals use top-level
+// helpers because of a historical test-block local-boxing bug. The bug no longer
+// reproduces (see ns_test_block_locals), so the indexed-assignment regressions
+// below exercise locals directly in test blocks. Value results are compared
+// with `assert.equal`; boolean results are asserted directly.
 //
 // Throw tests use the `{ <body>; baml.sys.panic("…") } catch (e) { <Type> => null }`
 // pattern. For throws raised by a *pure operator* (`/`, `%`, `<<`, `>>`, `*`),
@@ -96,6 +97,33 @@ function bigint_box_caller() -> bigint {
 
 test "test_bigint_generic_method_class_type_arg" {
     assert.equal(bigint_box_caller(), 7n)
+}
+
+class BigintTimer {
+    elapsed bigint
+}
+
+function bigint_clock() -> bigint { 10n }
+
+function bigint_direct_field_subtraction() -> bigint {
+    let started = bigint_clock();
+    let timer = BigintTimer { elapsed: 0n };
+    timer.elapsed = bigint_clock() - started;
+    timer.elapsed
+}
+
+test "test_bigint_subtraction_assigned_directly_to_field" {
+    assert.equal(bigint_direct_field_subtraction(), 0n)
+}
+
+function bigint_compound_field_subtraction() -> bigint {
+    let timer = BigintTimer { elapsed: 15n };
+    timer.elapsed -= 6n;
+    timer.elapsed
+}
+
+test "test_bigint_compound_subtraction_on_field" {
+    assert.equal(bigint_compound_field_subtraction(), 9n)
 }
 
 // ─── generic-path bigint comparison (union operand → generic CmpOp) ──────────
@@ -794,15 +822,14 @@ test "test_bigint_ilog_floor" {
 
 // ─── to_json ──────────────────────────────────────────────────────────────────
 //
-// Bigint values exceed JSON's safe-integer range, so to_json emits a decimal
-// string.
+// Bigint values render as arbitrary-precision JSON numbers.
 
-test "test_bigint_to_json_returns_string" {
-    assert.equal((42n).to_json(), "42")
+test "test_bigint_to_json_returns_number" {
+    assert.equal(baml.json.stringify((42n).to_json()), "42")
 }
 
 test "test_bigint_to_json_large" {
-    assert.equal((99999999999999999999n).to_json(), "99999999999999999999")
+    assert.equal((99999999999999999999n).to_json(), 99999999999999999999n)
 }
 
 // ─── regression: bare-literal method receiver (B-614) ─────────────────────────
@@ -846,4 +873,18 @@ test "bigint_negative_prefixed" {
 // limits that apply to int literals.
 test "bigint_hex_beyond_int_range" {
     assert.equal(0xFFFF_FFFF_FFFF_FFFF_FFFFn, 1208925819614629174706175n)
+}
+
+// ─── regression: bigint binary ops in indexed compound assignments ───────
+
+test "test_bigint_array_entry_subtraction" {
+    let values: bigint[] = [15n];
+    values[0] -= 6n;
+    assert.equal(values[0], 9n)
+}
+
+test "test_bigint_map_entry_addition" {
+    let values: map<string, bigint> = { "remaining": 15n };
+    values["remaining"] += 6n;
+    assert.equal(values["remaining"], 21n)
 }

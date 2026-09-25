@@ -23,6 +23,12 @@ pub struct ClassField {
     pub docstring: Option<String>,
     pub other: IndexMap<String, String>,
     pub skip: bool,
+    /// `@stream.done`: while streaming, the field holds its default until its
+    /// value is complete — an incomplete value is never surfaced.
+    pub stream_done: bool,
+    /// `@stream.must_exist`: the field has no default, so its class has no
+    /// partial parse until the field is present.
+    pub must_exist: bool,
 
     /// The exact `type` operand a runtime-constructed field was built from, so
     /// reflection reads back the definitions it carried, not just its shape.
@@ -53,13 +59,14 @@ pub struct Class {
     pub docstring: Option<String>,
     pub other: IndexMap<String, String>,
 
+    /// `@@stream.done`: while streaming, an instance is never surfaced until
+    /// the whole object is complete.
+    pub stream_done: bool,
+
     /// This class's head identity, content-addressed from its fully-qualified
     /// name at emit time. Both the `TypeTag` instruction's jump-table dispatch
     /// value and the identity a `TypeHead` referring to this class compares by.
     pub type_tag: baml_type::typetag::TypeTag,
-
-    /// Class-level type attribute (e.g., from @@stream.done).
-    pub ty_attr: baml_type::TyAttr,
 
     /// BEP-042: `true` if this class defines a magic `cleanup(self) -> void`
     /// finalizer. Set at emit time. The GC checks this bit to decide whether an

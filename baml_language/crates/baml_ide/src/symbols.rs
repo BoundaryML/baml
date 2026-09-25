@@ -3,9 +3,12 @@
 //! This module provides APIs for listing symbols (functions, classes, enums, etc.)
 //! in a BAML project.
 
-use baml_compiler2_hir::{contributions::Definition, package::package_items};
+use baml_compiler2_hir::{
+    contributions::Definition,
+    item_data::{function_data, function_llm_meta, function_source_map},
+    package::package_items,
+};
 use baml_compiler2_hir_ty::package_interface::package_interface;
-use baml_compiler2_ppir::item_data::{function_data, function_llm_meta, function_source_map};
 use baml_db::{Name, ProjectDatabase};
 
 use crate::{
@@ -36,15 +39,13 @@ pub(crate) enum Surface {
     LanguageInternal,
     /// Spelled with `$`. The lexer takes `$` both leading (the form
     /// `$rust_function` uses) and infix, so these are ordinary identifiers:
-    /// `testing.$invoke_collector` compiles, and `Doc$stream` is a real type
-    /// (`expected int, found Doc$stream`).
+    /// `testing.$invoke_collector` compiles, and a user-written `Doc$partial`
+    /// is a real type (`expected int, found Doc$partial`).
     ///
     /// A NAME heuristic, not a provenance fact — and a weak one. Corpus-wide
     /// it has exactly one inhabitant, `testing.$invoke_collector`, which is
     /// hand-written stdlib with `UserDefined` origin: the compiler's own
     /// provenance says it is ordinary, and only its spelling says otherwise.
-    /// `$`-named TYPES never arrive here at all; PPIR synthesizes them
-    /// instead of lowering them as items.
     Synthetic,
     /// Genuinely compiler-generated: the `@` companions (`summarize@spec`),
     /// which carry `FunctionOrigin::Companion`, so this one IS provenance.
@@ -68,24 +69,17 @@ pub(crate) enum Surface {
 /// The checks run in [`Surface`]'s own order, so a declaration that is
 /// several things is reported as the strongest.
 pub(crate) fn surface_of(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     name: &Name,
     def: Definition<'_>,
 ) -> Surface {
-    // Read function metadata from the CANONICAL item layer, never through
-    // `Definition::is_language_internal`: that indexes HIR's PRE-expansion
-    // item tree, which holds no expansion-minted companion, and completion
-    // enumerates exactly those — indexing it with one panics rather than
-    // answering.
+    // Read function metadata through the item-data firewall.
     let metadata = match def {
         Definition::Function(func) => Some(function_data(db, func).metadata),
         Definition::Class(_)
         | Definition::Enum(_)
         | Definition::Interface(_)
         | Definition::TypeAlias(_)
-        | Definition::TemplateString(_)
-        | Definition::Client(_)
-        | Definition::RetryPolicy(_)
         | Definition::Let(_) => None,
     };
     if metadata.is_some_and(|metadata| metadata.is_language_internal) {
@@ -120,10 +114,10 @@ pub(crate) fn surface_of(
 /// Whether `class` is a builtin's companion carrier that an alias already
 /// reaches, so its own path is a spelling nobody writes.
 fn is_aliased_carrier(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     class: baml_compiler2_hir::loc::ClassLoc<'_>,
 ) -> bool {
-    let data = baml_compiler2_ppir::item_data::class_data(db, class);
+    let data = baml_compiler2_hir::item_data::class_data(db, class);
     let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
     let decl = baml_type::DeclName::in_root(pkg.root, pkg.namespace_path, data.name.clone());
     baml_type::type_kind::builtin_companion_of_decl(
@@ -146,7 +140,7 @@ fn is_aliased_carrier(
 /// accumulator applies [`Internals`] to declarations and members alike in
 /// one place.
 pub(crate) fn offered_in_completion(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     name: &Name,
     def: Definition<'_>,
 ) -> bool {
@@ -209,7 +203,7 @@ impl Internals {
     /// (Both are crate-private, so they are named rather than linked.)
     pub fn hides(
         self,
-        db: &dyn baml_compiler2_ppir::Db,
+        db: &dyn baml_compiler2_hir::Db,
         name: &str,
         declared_in: baml_base::SourceFile,
     ) -> bool {
@@ -221,37 +215,12 @@ impl Internals {
 /// [`Internals::hides`] read it, so a declaration and a member can never
 /// disagree about what the mark means.
 fn is_stdlib_internal(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     name: &str,
     declared_in: baml_base::SourceFile,
 ) -> bool {
     name.starts_with(INTERNAL_PREFIX)
         && declared_in.source_root(db).kind(db) == baml_base::SourceRootKind::Stdlib
-}
-
-/// Symbol kind — locally defined since v1 HIR is removed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SymbolKind {
-    Function,
-    Class,
-    Enum,
-    TypeAlias,
-    Field,
-    EnumVariant,
-    Client,
-    Test,
-    Generator,
-    TemplateString,
-    RetryPolicy,
-}
-
-/// Information about a symbol in the project.
-#[derive(Debug, Clone)]
-pub struct Symbol {
-    pub name: String,
-    pub kind: SymbolKind,
-    pub file_path: std::path::PathBuf,
-    pub span: baml_db::Span,
 }
 
 /// Extended function metadata for the playground.
@@ -378,7 +347,7 @@ pub fn list_functions_with_metadata(
     FunctionListing { functions, types }
 }
 
-fn render_function_signature(function: &baml_compiler2_ppir::item_data::FunctionData) -> String {
+fn render_function_signature(function: &baml_compiler2_hir::item_data::FunctionData) -> String {
     let generic_params = function
         .generic_params
         .iter()
@@ -465,7 +434,7 @@ fn function_source_position(
 /// package info — the spelling every playground surface (CFG, cursor
 /// context, run targets) uses for a function declared in `source_file`.
 pub(crate) fn playground_function_name_for_file(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     source_file: baml_base::SourceFile,
     name: &Name,
 ) -> String {
@@ -476,7 +445,7 @@ pub(crate) fn playground_function_name_for_file(
 /// Whether a declared function name answers to `target_name` in playground
 /// addressing: the bare name, or the namespace-qualified playground name.
 pub(crate) fn function_name_matches_source_name(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     source_file: baml_base::SourceFile,
     name: &Name,
     target_name: &str,
@@ -548,7 +517,7 @@ mod tests {
             .canonicalize()
             .unwrap_or_else(|_| "/tmp".into());
         db.file(
-            &root.join("ns_demo/main.baml"),
+            root.join("ns_demo/main.baml"),
             "\n\nfunction transform<T extends string>(value: T, count: int) -> T throws Error {\n  value\n}",
         );
 

@@ -14,13 +14,8 @@
 //! name from HIR — `"user"` for project files, `"baml"` for stdlib,
 //! `"<vendor>"` for declared external packages.
 //!
-//! `"baml"` routes under `baml/`, anything else under `vendor/<pkg>/`.
-//!
-//! `$stream` companions do **not** get a separate package: `$` is a
-//! valid Java identifier character, so a stream companion keeps its
-//! `$stream`-suffixed name and is emitted beside its base type in the
-//! same package. Routing is therefore independent of the `$stream`
-//! suffix and of the symbol kind.
+//! Core language packages route under their own names; other dependencies route under `vendor/<pkg>/`, as defined by `baml_codegen_types::namespace_segments`.
+//! Routing is independent of the symbol kind.
 //!
 //! Unlike TS (where `sanitize_module_segment` is a no-op), Java package
 //! segments MUST avoid Java's reserved words — the `void` fixture
@@ -163,27 +158,14 @@ pub(crate) fn java_identifier(seg: &str) -> String {
 
 /// Route a pool entry to its package directory (under `baml_sdk/`).
 ///
-/// Routing depends only on the symbol's package + namespace path. The
-/// `$stream` suffix (on companion classes or function companions) does
-/// not influence placement — stream companions live beside their base
-/// type.
+/// Routing depends only on the symbol's package + namespace path.
 pub(crate) fn route(name: &Name) -> PackagePath {
-    let mut segs: Vec<String> = Vec::new();
-
-    match name.package().as_str() {
-        "user" => {}
-        "baml" => segs.push("baml".to_string()),
-        other => {
-            segs.push("vendor".to_string());
-            segs.push(java_identifier(other));
-        }
+    PackagePath {
+        segments: baml_codegen_types::namespace_segments(name)
+            .iter()
+            .map(|segment| java_identifier(segment))
+            .collect(),
     }
-
-    for seg in name.namespace() {
-        segs.push(java_identifier(seg.as_str()));
-    }
-
-    PackagePath { segments: segs }
 }
 
 #[cfg(test)]
@@ -215,6 +197,16 @@ mod tests {
     }
 
     #[test]
+    fn ai_and_reflect_use_builtin_roots_with_target_escaping() {
+        for package in ["ai", "reflect"] {
+            assert_eq!(
+                route(&name(package, &["void"], "Thing")).segments,
+                [package, "void$"]
+            );
+        }
+    }
+
+    #[test]
     fn vendor_routes_under_vendor_pkg() {
         let pp = route(&name("aws", &["s3"], "Bucket"));
         assert_eq!(
@@ -228,12 +220,6 @@ mod tests {
     fn baml_routes_under_baml() {
         let pp = route(&name("baml", &["http"], "Response"));
         assert_eq!(pp.segments, vec!["baml".to_string(), "http".to_string()]);
-    }
-
-    #[test]
-    fn stream_class_routes_to_base_package() {
-        let pp = route(&name("user", &["lorem"], "Resume$stream"));
-        assert_eq!(pp.segments, vec!["lorem".to_string()]);
     }
 
     #[test]
@@ -262,7 +248,7 @@ mod tests {
         assert_eq!(java_identifier("void"), "void$");
         assert_eq!(java_identifier("new"), "new$");
         assert_eq!(java_identifier("helpers"), "helpers");
-        assert_eq!(java_identifier("Resume$stream"), "Resume$stream");
+        assert_eq!(java_identifier("Keep$dollar"), "Keep$dollar");
         assert_eq!(java_identifier("has space"), "has_space");
         assert_eq!(java_identifier("_"), "_$");
     }

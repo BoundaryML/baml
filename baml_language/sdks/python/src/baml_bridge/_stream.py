@@ -44,8 +44,9 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
     evaluate to a parameterized alias whose `isinstance` falls back to the
     unparameterized origin, which is what `proto.py` checks against.
 
-    BAML's `Stream<Partial, Final>` supplies all three host views: raw next,
-    filtered iteration, and final.
+    BAML's `Stream<T>` supplies all three host views from its one type: raw
+    next (`T` or the terminal marker), filtered iteration (non-null `T`), and
+    final (`T`).
     """
 
     def __init__(self, handle: BamlPyHandle) -> None:

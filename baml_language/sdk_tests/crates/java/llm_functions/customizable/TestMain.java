@@ -33,7 +33,7 @@ import baml_bridge.BamlPrompt;
 import baml_sdk.ipsum.Sentiment;
 import baml_sdk.lorem.Resume;
 import baml_sdk.lorem.StreamingDoc;
-import baml_sdk.vendor.ai.PromptMessage;
+import baml_sdk.ai.PromptMessage;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -182,7 +182,7 @@ class TestMain {
 
         // ai.Prompt is runtime-owned, so every generated signature exposes the
         // same portable BamlPrompt type rather than a handle-backed twin.
-        assertFalse(classExists("baml_sdk.vendor.ai.Prompt"));
+        assertFalse(classExists("baml_sdk.ai.Prompt"));
     }
 
     @Test
@@ -197,22 +197,6 @@ class TestMain {
         assertTrue(hasMethod(baml_sdk.lorem.Fns.class, "StreamingExtract_spec_async"));
         assertTrue(hasMethod(baml_sdk.lorem.Fns.class, "StreamingExtract_stream"));
         assertTrue(hasMethod(baml_sdk.lorem.Fns.class, "StreamingExtract_stream_async"));
-    }
-
-    @Test
-    void test_main_stream_types_lorem_leaf_present() {
-        // PPIR synthesizes Class$stream partial models for any class referenced by
-        // an LLM function's return type. Both Resume and StreamingDoc are LLM
-        // return types, so at least one in-package `$stream` partial must exist.
-        // Java keeps the
-        // in-package `$`-preserved naming (`baml_sdk.lorem.StreamingDoc$stream`),
-        // NOT Python's `stream_types.lorem.*` legacy layout. StreamingDoc's
-        // conditional-emit outcome is pinned to "emitted"; Resume's is left to
-        // the conditional-emit rule.
-        boolean hasAny =
-                classExists("baml_sdk.lorem.Resume$stream")
-                        || classExists("baml_sdk.lorem.StreamingDoc$stream");
-        assertTrue(hasAny, "expected at least one in-package $stream partial class in lorem");
     }
 
     @Test

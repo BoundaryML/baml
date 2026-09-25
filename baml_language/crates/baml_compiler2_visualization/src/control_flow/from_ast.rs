@@ -510,7 +510,7 @@ impl<'a> AstGraphBuilder<'a> {
     fn visit_loop(&mut self, condition: ast::ExprId, body: ast::ExprId, origin: ast::LoopOrigin) {
         let keyword = match origin {
             ast::LoopOrigin::While => "while",
-            ast::LoopOrigin::For => "for",
+            ast::LoopOrigin::For { .. } => "for",
         };
         let label = format!(
             "{keyword} ({})",
@@ -1389,11 +1389,12 @@ mod tests {
         let body = make_ast_body(|exprs, stmts, _, _| {
             let cond = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
             let body_expr = exprs.alloc(ast::Expr::Null);
+            let init = stmts.alloc(ast::Stmt::Missing);
             let for_stmt = stmts.alloc(ast::Stmt::While {
                 condition: cond,
                 body: body_expr,
                 after: None,
-                origin: ast::LoopOrigin::For,
+                origin: ast::LoopOrigin::For { init },
             });
             Some(exprs.alloc(ast::Expr::Block {
                 stmts: vec![for_stmt],
@@ -1499,14 +1500,12 @@ mod tests {
             let pat1 = patterns.alloc(ast::Pattern::Type(
                 ast::TypeExprKind::Literal {
                     value: ast::Literal::Int(1),
-                    attrs: vec![],
                 }
                 .at(baml_compiler2_ast::TextRange::default()),
             ));
             let pat2 = patterns.alloc(ast::Pattern::Type(
                 ast::TypeExprKind::Literal {
                     value: ast::Literal::Int(2),
-                    attrs: vec![],
                 }
                 .at(baml_compiler2_ast::TextRange::default()),
             ));
@@ -1562,7 +1561,6 @@ mod tests {
                 segments: vec!["int".into()],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
-                attrs: vec![],
             }
             .at(baml_compiler2_ast::TextRange::default());
             let inner = patterns.alloc(ast::Pattern::Type(int_ty));

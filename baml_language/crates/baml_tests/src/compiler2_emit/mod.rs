@@ -1,13 +1,16 @@
 //! Integration tests for `baml_compiler2_emit`.
 //!
 //! Each test creates a minimal DB, adds a `.baml` file, runs the full
-//! compiler2 pipeline through `generate_project_bytecode`, and verifies
-//! the resulting `Program` has the expected structure.
+//! compiler2 pipeline through the build-time, byte-identical stdlib prefix,
+//! and verifies the resulting `Program` has the expected structure.
 
-use baml_compiler2_emit::generate_project_bytecode;
+use baml_compiler2_emit::generate_project_bytecode_with_stdlib;
 use baml_db::ProjectDatabase;
 
-use crate::engine::TestDbExt;
+use crate::{
+    engine::TestDbExt,
+    stdlib_prefix::{OptLevel, prefix},
+};
 
 const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/compiler2_emit");
 const OPTIONAL_DEFAULTS_SOURCE: &str = r#"
@@ -23,6 +26,7 @@ function main() -> int {
 fn make_db() -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
     db.workspace(std::path::Path::new("."));
+    db.set_seeded_stdlib_interface(prefix(OptLevel::Two).interfaces.clone());
     db
 }
 
@@ -30,7 +34,13 @@ fn compile(db: &ProjectDatabase) -> bex_vm_types::Program {
     let package = db
         .workspace_root()
         .unwrap_or_else(|| unreachable!("`make_db` adds one workspace root"));
-    generate_project_bytecode(db, package).expect("compilation should succeed")
+    generate_project_bytecode_with_stdlib(
+        db,
+        package,
+        OptLevel::Two,
+        &prefix(OptLevel::Two).program,
+    )
+    .expect("compilation should succeed")
 }
 
 #[test]
@@ -84,112 +94,6 @@ function main(x: Foo | int) -> int {
             }),
         "{:?}",
         main.bytecode.instructions
-    );
-}
-
-#[test]
-fn explicit_local_id_selects_runtime_id_bytecodes_only_for_tagged_calls() {
-    use bex_vm_types::Instruction;
-
-    let mut db = make_db();
-    db.file(
-        "test.baml",
-        r#"
-function leaf(n: int) -> int { n }
-
-function main(call_id: boundary.LocalId, sysop_id: boundary.LocalId) -> int throws baml.errors.Io {
-  let plain = leaf(0)
-  let tagged = leaf(1, $id = call_id)
-  baml.sys.sleep(baml.time.Duration.from_milliseconds(0n), $id = sysop_id)
-  plain + tagged
-}
-"#,
-    );
-    let program = compile(&db);
-    let main_idx = program.function_indices["user.main"];
-    let bex_vm_types::Object::Function(main) = &(*program.objects)[main_idx] else {
-        panic!("expected user.main to be a function")
-    };
-
-    assert!(
-        main.bytecode
-            .instructions
-            .iter()
-            .any(|instruction| matches!(instruction, Instruction::Call { .. }))
-    );
-    assert!(
-        main.bytecode
-            .instructions
-            .iter()
-            .any(|instruction| matches!(instruction, Instruction::CallWithRuntimeId { .. }))
-    );
-    assert!(
-        main.bytecode
-            .instructions
-            .iter()
-            .any(|instruction| matches!(instruction, Instruction::SysOpWithRuntimeId(_)))
-    );
-}
-
-#[test]
-fn explicit_local_id_selects_indirect_optional_and_virtual_bytecodes() {
-    use bex_vm_types::Instruction;
-
-    let mut db = make_db();
-    db.file(
-        "test.baml",
-        r#"
-interface Speaker {
-  function speak(self) -> int throws never
-}
-
-class Dog {
-  function speak(self) -> int { 1 }
-}
-
-implements Speaker for Dog {}
-
-function indirect(callback: (int) -> int throws never, id: boundary.LocalId) -> int {
-  callback(1, $id = id)
-}
-
-function optional(callback: ((int) -> int throws never)?, id: boundary.LocalId) -> int? {
-  callback?.(1, $id = id)
-}
-
-function virtual(speaker: Speaker, id: boundary.LocalId) -> int {
-  speaker.speak($id = id)
-}
-"#,
-    );
-    let program = compile(&db);
-
-    for name in ["user.indirect", "user.optional"] {
-        let idx = program.function_indices[name];
-        let bex_vm_types::Object::Function(function) = &(*program.objects)[idx] else {
-            panic!("expected {name} to be a function")
-        };
-        assert!(
-            function
-                .bytecode
-                .instructions
-                .iter()
-                .any(|instruction| matches!(instruction, Instruction::CallIndirectWithRuntimeId)),
-            "{name} did not emit CALL_INDIRECT_WITH_RUNTIME_ID"
-        );
-    }
-
-    let virtual_idx = program.function_indices["user.virtual"];
-    let bex_vm_types::Object::Function(virtual_function) = &(*program.objects)[virtual_idx] else {
-        panic!("expected user.virtual to be a function")
-    };
-    assert!(
-        virtual_function
-            .bytecode
-            .instructions
-            .iter()
-            .any(|instruction| matches!(instruction, Instruction::VirtualCallWithRuntimeId { .. })),
-        "virtual call did not emit VIRTUAL_CALL_WITH_RUNTIME_ID"
     );
 }
 
@@ -548,7 +452,7 @@ function main() -> int { 0 }
         iface.fields[1].ty,
     );
     assert!(
-        matches!(iface.fields[2].ty, baml_type::RuntimeTy::Int { .. }),
+        matches!(iface.fields[2].ty, baml_type::RuntimeTy::Int),
         "field after the projection must keep its own type, got {:?}",
         iface.fields[2].ty,
     );

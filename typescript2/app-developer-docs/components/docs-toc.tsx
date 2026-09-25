@@ -37,7 +37,11 @@ export function DocsToc({ items }: { items: TocItem[] }) {
         Number.parseFloat(
           getComputedStyle(document.documentElement).scrollPaddingTop,
         ) || 0;
-      const threshold = headerHeight + 40;
+      const controlsHeight =
+        document.querySelector('.book-reading-control')?.getBoundingClientRect()
+          .height ?? 0;
+      const threshold =
+        headerHeight + controlsHeight + (controlsHeight ? 60 : 40);
       let current = headings[0]?.href;
       for (const heading of headings) {
         if (heading.element.getBoundingClientRect().top > threshold) break;

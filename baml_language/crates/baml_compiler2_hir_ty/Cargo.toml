@@ -12,10 +12,10 @@ baml_base = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_compiler2_ast = { workspace = true }
 baml_compiler2_hir = { workspace = true }
-baml_compiler2_ppir = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_type = { workspace = true }
 baml_type_runtime = { workspace = true }
+sys_regex = { workspace = true }
 borsh = { workspace = true }
 ena = { workspace = true }
 indexmap = { workspace = true }

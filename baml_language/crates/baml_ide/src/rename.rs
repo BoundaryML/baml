@@ -32,8 +32,13 @@
 
 use baml_base::{Name, SourceFile};
 use baml_compiler_syntax::SyntaxKind;
-use baml_compiler2_hir::loc::{ClassLoc, ImplLoc, InterfaceLoc};
-use baml_compiler2_ppir::item_data::{self, MethodOwner};
+use baml_compiler2_hir::{
+    item_data::{self, MethodOwner},
+    loc::{ClassLoc, DeclRef, ImplLoc, InterfaceLoc},
+};
+use baml_compiler2_hir_ty::extern_loc::{
+    extern_class_row, extern_function_row, extern_interface_row,
+};
 use text_size::TextSize;
 
 use crate::{
@@ -115,7 +120,7 @@ impl std::fmt::Display for RenameError {
 /// the SYMBOL happens here too, so a rename never fails after the reader
 /// has typed a new name — only the name itself can still be rejected.
 pub fn prepare_rename(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     offset: TextSize,
 ) -> Result<Location, RenameError> {
@@ -126,7 +131,7 @@ pub fn prepare_rename(
 ///
 /// Regular function (not cached); the searches underneath are Salsa-cached.
 pub fn rename(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     offset: TextSize,
     new_name: &str,
@@ -179,7 +184,7 @@ struct Renameable<'db> {
 /// The one gate both entry points pass, so `prepareRename` and `rename`
 /// can never disagree about what is renameable.
 fn renameable(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     offset: TextSize,
 ) -> Result<Renameable<'_>, RenameError> {
@@ -197,10 +202,12 @@ fn renameable(
     };
     let name = token.text().to_string();
 
-    // The cursor must address something with a declaration before the group
-    // is worth building.
-    let cursor_declaration = target_definition(db, target).ok_or(RenameError::NotASymbol)?;
+    // The group first: a served package's row member has no declaration
+    // location at all, and the group builder is where that is reported as
+    // what it is — a name outside the workspace — rather than as "no
+    // symbol here". Only then must the cursor's own declaration exist.
     let group = rename_group(db, file, target)?;
+    let cursor_declaration = target_definition(db, target).ok_or(RenameError::NotASymbol)?;
     debug_assert!(
         group.symbols.contains(&target),
         "a rename group always contains the symbol it was built for; \
@@ -287,7 +294,7 @@ impl<'db> RenameGroup<'db> {
 ///   class as match type-patterns. The declarations alone are not a
 ///   rename.
 fn rename_group<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     anchor: SourceFile,
     target: SymbolTarget<'db>,
 ) -> Result<RenameGroup<'db>, RenameError> {
@@ -304,7 +311,9 @@ fn rename_group<'db>(
         // never satisfy an interface — the compiler reports
         // `MissingInterfaceMethod` even when the names match), while an
         // interface's and an impl's are two views of one slot.
-        SymbolTarget::Method { func } => match item_data::method_owner(db, func) {
+        SymbolTarget::Method {
+            func: DeclRef::Source(func),
+        } => match item_data::method_owner(db, func) {
             None | Some(MethodOwner::Class(_)) => Ok(RenameGroup::solo(target)),
             Some(MethodOwner::Interface(iface)) => {
                 let name = &item_data::function_data(db, func).name;
@@ -322,17 +331,48 @@ fn rename_group<'db>(
                 Ok(interface_method_group(db, anchor, iface, name))
             }
         },
-        SymbolTarget::Field { class, field_index } => class_field_group(db, class, field_index),
-        SymbolTarget::InterfaceField { iface, field_index } => {
-            interface_field_group(db, anchor, iface, field_index)
-        }
+        SymbolTarget::Field {
+            class: DeclRef::Source(class),
+            field_index,
+        } => class_field_group(db, class, field_index),
+        SymbolTarget::InterfaceField {
+            iface: DeclRef::Source(iface),
+            field_index,
+        } => interface_field_group(db, anchor, iface, field_index),
+        // A served package's rows are dependency declarations: read-only
+        // context with no source to rewrite.
+        SymbolTarget::Method {
+            func: DeclRef::External(func),
+        } => Err(RenameError::NotInWorkspace {
+            name: extern_function_row(db, func).name.to_string(),
+        }),
+        SymbolTarget::Field {
+            class: DeclRef::External(class),
+            field_index,
+        } => Err(RenameError::NotInWorkspace {
+            name: extern_class_row(db, class)
+                .fields
+                .get(field_index)
+                .map(|(name, ..)| name.to_string())
+                .ok_or(RenameError::NotASymbol)?,
+        }),
+        SymbolTarget::InterfaceField {
+            iface: DeclRef::External(iface),
+            field_index,
+        } => Err(RenameError::NotInWorkspace {
+            name: extern_interface_row(db, iface)
+                .fields
+                .get(field_index)
+                .map(|(name, ..)| name.to_string())
+                .ok_or(RenameError::NotASymbol)?,
+        }),
     }
 }
 
 /// One interface method slot: the interface's own declaration plus every
 /// `implements` block's override of it.
 fn interface_method_group<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     anchor: SourceFile,
     iface: InterfaceLoc<'db>,
     name: &Name,
@@ -343,7 +383,9 @@ fn interface_method_group<'db>(
         .methods
         .iter()
         .filter(|&&func| item_data::function_data(db, func).name == *name)
-        .map(|&func| SymbolTarget::Method { func })
+        .map(|&func| SymbolTarget::Method {
+            func: DeclRef::Source(func),
+        })
         .collect();
     for block in impls_of(db, anchor, iface) {
         symbols.extend(
@@ -351,7 +393,9 @@ fn interface_method_group<'db>(
                 .methods
                 .iter()
                 .filter(|&&func| item_data::function_data(db, func).name == *name)
-                .map(|&func| SymbolTarget::Method { func }),
+                .map(|&func| SymbolTarget::Method {
+                    func: DeclRef::Source(func),
+                }),
         );
     }
     RenameGroup {
@@ -367,7 +411,7 @@ fn interface_method_group<'db>(
 /// no link at all, which couples the two spellings with no token to
 /// rewrite — see [`RenameError::ImplicitInterfaceField`].
 fn interface_field_group<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     anchor: SourceFile,
     iface: InterfaceLoc<'db>,
     field_index: usize,
@@ -418,7 +462,10 @@ fn interface_field_group<'db>(
         }
     }
     Ok(RenameGroup {
-        symbols: vec![SymbolTarget::InterfaceField { iface, field_index }],
+        symbols: vec![SymbolTarget::InterfaceField {
+            iface: DeclRef::Source(iface),
+            field_index,
+        }],
         extra_declarations,
     })
 }
@@ -431,7 +478,7 @@ fn interface_field_group<'db>(
 /// class's own file are the complete set of links that can name this field
 /// — no search of other files can add one.
 fn class_field_group<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     class: ClassLoc<'db>,
     field_index: usize,
 ) -> Result<RenameGroup<'db>, RenameError> {
@@ -477,7 +524,10 @@ fn class_field_group<'db>(
         }
     }
     Ok(RenameGroup {
-        symbols: vec![SymbolTarget::Field { class, field_index }],
+        symbols: vec![SymbolTarget::Field {
+            class: DeclRef::Source(class),
+            field_index,
+        }],
         extra_declarations,
     })
 }
@@ -485,7 +535,7 @@ fn class_field_group<'db>(
 /// The `implements` blocks belonging to `class` — in-body, and the
 /// out-of-body ones the lowering attaches to it.
 fn class_impls<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     class: ClassLoc<'db>,
 ) -> Vec<ImplLoc<'db>> {
     item_data::file_impls(db, class.file(db))
@@ -498,7 +548,7 @@ fn class_impls<'db>(
 /// The interface an `implements` block implements, or `None` when its
 /// header does not resolve to one.
 fn block_interface<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     block: ImplLoc<'db>,
 ) -> Option<InterfaceLoc<'db>> {
     baml_compiler2_hir_ty::interfaces::impl_data(db, block)
@@ -515,7 +565,7 @@ fn block_interface<'db>(
 /// miss it — this is the scope [`crate::usages_at`] searches, expressed as
 /// viewpoints.
 fn impls_of<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     anchor: SourceFile,
     iface: InterfaceLoc<'db>,
 ) -> Vec<ImplLoc<'db>> {
@@ -539,7 +589,7 @@ fn impls_of<'db>(
 
 /// The source text a span covers, or `None` when the span is not inside its
 /// file (which a correct search never produces).
-fn span_text<'db>(db: &'db dyn baml_compiler2_ppir::Db, span: &Location) -> Option<&'db str> {
+fn span_text<'db>(db: &'db dyn baml_compiler2_hir::Db, span: &Location) -> Option<&'db str> {
     span.file
         .text(db)
         .get(std::ops::Range::<usize>::from(span.range))
@@ -974,7 +1024,7 @@ function read(p: P, n: Named, s: Shows) -> string throws never {
             let mut db = baml_db::ProjectDatabase::default();
             let root = std::path::Path::new("/rename-check");
             db.workspace(root);
-            db.file(&root.join("test.baml"), &edited);
+            db.file(root.join("test.baml"), &edited);
             let errors: Vec<String> = baml_db::testing::check_user_files(&db)
                 .iter()
                 .filter(|diagnostic| {

@@ -6,6 +6,8 @@
 
 mod error;
 mod handle_table;
+mod host_value_registry;
+pub use host_value_registry::HostValueRegistry;
 mod traceback;
 mod ty_decode;
 mod ty_encode;

@@ -10,8 +10,8 @@
 // class name "(1, 2)", while `Point` (plain structural) renders with its name
 // "Point { x: 1, y: 2 }".
 //
-// Compile-error diagnostics assertions (like receiver_error_is_not_swallowed)
-// are not expressible as executing BAML tests and are not included here.
+// The receiver-error diagnostic regression formerly kept in Rust now uses
+// `reflect.Package.compile` under `ns_compiler/ns_regression_diagnostics`.
 
 // ─── shared class/interface definitions ───────────────────────────────────────
 

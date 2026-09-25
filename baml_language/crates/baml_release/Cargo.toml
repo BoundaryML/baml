@@ -23,6 +23,7 @@ no-self-update = [  ]
 
 [dependencies]
 anyhow = { workspace = true }
+dirs = { workspace = true }
 flate2 = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking", "rustls" ] }
 serde = { workspace = true, features = [ "derive" ] }
@@ -30,11 +31,9 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 tar = { workspace = true }
 thiserror = { workspace = true }
-toml = { workspace = true }
 zip = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
 
 [package.metadata.ci]
 wasm_support = false

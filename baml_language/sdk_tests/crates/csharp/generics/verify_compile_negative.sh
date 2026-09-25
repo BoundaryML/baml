@@ -37,7 +37,7 @@ verify_negative() {
 
   set +e
   dotnet build "$project" \
-    --configuration Release \
+    --configuration Debug \
     --nologo \
     --no-restore \
     --artifacts-path "$artifacts" \

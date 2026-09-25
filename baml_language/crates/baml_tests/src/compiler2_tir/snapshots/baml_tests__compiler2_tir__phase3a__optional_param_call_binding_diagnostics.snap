@@ -33,3 +33,9 @@ function user.unknown_named() -> string throws never {
   !! 322..340: missing required argument `query`
   !! 322..340: unknown named argument `q`
 }
+function user.positional_then_same_named() -> string throws never {
+  { : string
+    search("cats", query = "dogs") : string
+  }
+  !! 416..422: duplicate named argument `query`
+}

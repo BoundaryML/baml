@@ -1359,6 +1359,15 @@ impl PrintMultiLine for ClassField {
     ///     @alias("theLongField")
     ///     @description("some desc")
     /// ```
+    ///
+    /// A lone attribute instead stays on a single-line type's line when its name
+    /// fits there, wrapping its arguments:
+    ///
+    /// ```baml
+    /// myField string @description(
+    ///     "a long description",
+    /// )
+    /// ```
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let attr_shape = Shape::standalone(
             printer.config.line_width,
@@ -1377,7 +1386,28 @@ impl PrintMultiLine for ClassField {
 
         let (type_leading, type_trailing) = printer.trivia.get_for_element(&self.ty);
         printer.print_trivia_squished(type_leading);
-        printer.print(&self.ty, shape);
+        let ty_info = printer.print(&self.ty, shape.clone());
+
+        if let [attr] = self.attributes.as_slice()
+            && !ty_info.multi_lined
+            && type_trailing.is_empty()
+            && printer.trivia.get_for_element(attr).0.is_empty()
+            && let remaining_width = printer.current_line_remaining_width().saturating_sub(1)
+            && attr.non_wrappable_len() <= remaining_width
+        {
+            printer.print_spaces(1);
+            let attr_shape = Shape {
+                width: remaining_width,
+                indent: shape.indent,
+                first_line_offset: printer
+                    .config
+                    .line_width
+                    .saturating_sub(shape.indent + remaining_width),
+            };
+            printer.print(attr, attr_shape);
+            return PrintInfo::default_multi_lined();
+        }
+
         if !self.attributes.is_empty() {
             // we have attributes, they will be on their own lines so we can print the trailing trivia
             printer.print_trivia_trailing(type_trailing);

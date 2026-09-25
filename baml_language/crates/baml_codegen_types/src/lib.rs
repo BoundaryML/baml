@@ -1,18 +1,23 @@
 //! Types that can now be used in multiple languages
-//! Attributes "don't exist", dual-types (types vs `stream_types`) are now modules
+//! Attributes "don't exist"
 //! Union / Optional / Null invariance guaranteed
 
 mod errors;
 mod generator_fields;
 mod output_writer;
+mod routing;
+mod string_literal;
 mod symbols;
 mod ty;
-
+mod type_queries;
 pub use errors::*;
 pub use generator_fields::*;
 pub use output_writer::*;
+pub use routing::namespace_segments;
+pub use string_literal::quoted_string;
 pub use symbols::*;
 pub use ty::*;
+pub use type_queries::public_interface_tokens;
 
 /// Macro to define an askama template function with less boilerplate.
 ///

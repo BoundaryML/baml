@@ -3,7 +3,8 @@
 use std::sync::Arc;
 
 use baml_compiler_diagnostics::{
-    Diagnostic, DiagnosticId, DiagnosticPhase,
+    Diagnostic, DiagnosticId, DiagnosticIdentifierKind, DiagnosticMessageKind, DiagnosticPhase,
+    Severity,
     runtime_type::{self, DuplicateMemberKind, InvalidIdentifierKind, SerializedKeyContainer},
 };
 use bex_heap::TlabHolder;
@@ -19,7 +20,7 @@ use super::{
     BamlClassEnumReflectTypeView_for_Type, BamlClassEnumType,
     BamlClassFunctionReflectTypeView_for_Type, BamlClassFunctionType,
     BamlClassInterfaceImplementation, BamlClassInterfaceReflectTypeView_for_Type,
-    BamlClassInterfaceType, BamlClassLiteralReflectTypeView_for_Type,
+    BamlClassInterfaceType, BamlClassLiteralReflectTypeView_for_Type, BamlClassLiteralType,
     BamlClassMapReflectTypeView_for_Type, BamlClassMapType,
     BamlClassPrimitiveReflectTypeView_for_Type, BamlClassType,
     BamlClassUnionReflectTypeView_for_Type, BamlClassUnionType, BamlNamespaceArray,
@@ -65,8 +66,9 @@ impl BexVm {
                 alias: class.metadata.alias.clone(),
                 docstring: class.metadata.docstring.clone(),
                 other: class.metadata.other.clone(),
+                // Host type definitions carry no streaming behaviour.
+                stream_done: false,
                 type_tag,
-                ty_attr: baml_type::TyAttr::default(),
                 has_cleanup: false,
                 generic_param_count: class.generic_param_count,
                 owner: bex_vm_types::HeapPtr::null(),
@@ -97,7 +99,6 @@ impl BexVm {
                 docstring: enm.metadata.docstring.clone(),
                 other: enm.metadata.other.clone(),
                 type_tag,
-                ty_attr: baml_type::TyAttr::default(),
                 owner: bex_vm_types::HeapPtr::null(),
             })));
             declared.insert(enm.name.clone(), bex_vm_types::TypeHead::new(ptr, type_tag));
@@ -145,6 +146,8 @@ impl BexVm {
                     docstring: field.metadata.docstring.clone(),
                     other: field.metadata.other.clone(),
                     skip: field.skip,
+                    stream_done: false,
+                    must_exist: false,
                     runtime_type: None,
                 });
             }
@@ -241,7 +244,7 @@ pub(super) fn validate_class_witnesses(
             let present = witnesses.iter().any(|candidate| {
                 matches!(
                     &candidate.interface_ty,
-                    bex_vm_types::RealizedTy::Interface(name, _, _, _)
+                    bex_vm_types::RealizedTy::Interface(name, _, _)
                         if name == &required.name
                 )
             });
@@ -316,7 +319,7 @@ pub(super) fn validate_class_witnesses(
             physical_links.push(u32::try_from(slot).expect("class field count fits u32"));
         }
         let (interface_args, interface_assoc) = match &witness.interface_ty {
-            bex_vm_types::RealizedTy::Interface(_, args, assoc, _) => (args.clone(), assoc.clone()),
+            bex_vm_types::RealizedTy::Interface(_, args, assoc) => (args.clone(), assoc.clone()),
             _ => unreachable!("implementation() only creates interface witnesses"),
         };
         validated.push(ValidatedClassWitness {
@@ -502,6 +505,8 @@ impl BamlNamespaceClass for PackageReflectImpl {
                 docstring: row.docstring,
                 other: row.other,
                 skip: false,
+                stream_done: false,
+                must_exist: false,
                 runtime_type: Some(row.type_value),
             });
         }
@@ -522,8 +527,8 @@ impl BamlNamespaceClass for PackageReflectImpl {
             alias: None,
             docstring: None,
             other: IndexMap::new(),
+            stream_done: false,
             type_tag,
-            ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
             owner: bex_vm_types::HeapPtr::null(),
@@ -534,7 +539,6 @@ impl BamlNamespaceClass for PackageReflectImpl {
         let ty = bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, type_tag),
             Box::new([]),
-            baml_type::TyAttr::default(),
         );
         let rules = prepare_class_witnesses(vm, &ty, witnesses).map_err(|diagnostic| {
             crate::errors::VmRustFnError::thrown_fresh(alloc_compilation_error(vm, &[diagnostic]))
@@ -644,6 +648,7 @@ impl BamlNamespaceEnum for PackageReflectImpl {
             description.map(bex_str::BexStr::as_str),
             docstring.map(bex_str::BexStr::as_str),
             &other,
+            false,
         );
         let name = Value::object(vm.alloc_string(name.clone()));
         copy::r#enum::Value { name, meta }.to_value(vm)
@@ -725,13 +730,9 @@ impl BamlNamespaceEnum for PackageReflectImpl {
             docstring: None,
             other: IndexMap::new(),
             type_tag,
-            ty_attr: baml_type::TyAttr::default(),
             owner: bex_vm_types::HeapPtr::null(),
         })));
-        let ty = bex_vm_types::RealizedTy::Enum(
-            bex_vm_types::TypeHead::new(enum_ptr, type_tag),
-            baml_type::TyAttr::default(),
-        );
+        let ty = bex_vm_types::RealizedTy::Enum(bex_vm_types::TypeHead::new(enum_ptr, type_tag));
         Ok({
             let ty_value = Value::object(vm.tlab.alloc_type(TypeValue::new(ty)));
             alloc_kind_view(vm, baml_type::type_kind::TypeKind::Enum, ty_value)
@@ -824,7 +825,7 @@ impl BamlNamespaceInterface for PackageReflectImpl {
         let Some(interface_ty) = vm.current_call_type_args().first().cloned() else {
             unreachable!("implementation<I> receives one runtime type argument")
         };
-        let bex_vm_types::RealizedTy::Interface(interface_head, _, _, _) = &interface_ty else {
+        let bex_vm_types::RealizedTy::Interface(interface_head, _, _) = &interface_ty else {
             return Err(crate::errors::VmRustFnError::thrown_fresh(
                 alloc_compilation_error(
                     vm,
@@ -879,6 +880,8 @@ impl BamlNamespaceLiteral for PackageReflectImpl {
             baml_type::Literal::Int(value)
         } else if let Some(value) = value.as_bool() {
             baml_type::Literal::Bool(value)
+        } else if let Ok(value) = vm.as_bigint(value) {
+            baml_type::Literal::Bigint((**value).clone())
         } else if let Ok(value) = vm.as_string(value) {
             baml_type::Literal::String(value.to_string())
         } else {
@@ -887,14 +890,11 @@ impl BamlNamespaceLiteral for PackageReflectImpl {
         alloc_runtime_composite(
             vm,
             baml_type::type_kind::TypeKind::Literal,
-            bex_vm_types::RealizedTy::Literal(
-                literal,
-                baml_type::Freshness::Regular,
-                baml_type::TyAttr::default(),
-            ),
+            bex_vm_types::RealizedTy::Literal(literal, baml_type::Freshness::Regular),
         )
     }
 }
+
 impl BamlNamespaceMap for PackageReflectImpl {
     fn new(vm: &mut BexVm, key: &Value, value: &Value) -> Value {
         let key = reflected_type_value(vm, *key);
@@ -905,7 +905,6 @@ impl BamlNamespaceMap for PackageReflectImpl {
             bex_vm_types::RealizedTy::Map {
                 key: Box::new(key.ty),
                 value: Box::new(value.ty),
-                attr: baml_type::TyAttr::default(),
             },
         )
     }
@@ -926,7 +925,7 @@ impl BamlNamespaceUnion for PackageReflectImpl {
         Ok(alloc_runtime_composite(
             vm,
             baml_type::type_kind::TypeKind::Union,
-            bex_vm_types::RealizedTy::Union(members, baml_type::TyAttr::default()),
+            bex_vm_types::RealizedTy::Union(members),
         ))
     }
 }
@@ -950,7 +949,7 @@ fn realize_witness_field_type(
     interface: &InterfaceDef,
     witnessed: &bex_vm_types::RealizedTy,
 ) -> Result<bex_vm_types::RealizedTy, String> {
-    let bex_vm_types::RealizedTy::Interface(head, args, assoc, _) = witnessed else {
+    let bex_vm_types::RealizedTy::Interface(head, args, assoc) = witnessed else {
         unreachable!("implementation() only captures interface types")
     };
     if head.tag() != interface.type_tag {
@@ -970,7 +969,7 @@ fn substitute_witness_field_type(
     use bex_vm_types::RuntimeTy;
 
     match ty {
-        RuntimeTy::TypeVar(param, _) => {
+        RuntimeTy::TypeVar(param) => {
             let Some((index, _)) = interface
                 .args
                 .iter()
@@ -989,7 +988,7 @@ fn substitute_witness_field_type(
             interface: projection_interface,
             member,
             ..
-        } if matches!(&**base, RuntimeTy::TypeVar(param, _) if param.as_str() == "Self")
+        } if matches!(&**base, RuntimeTy::TypeVar(param) if param.as_str() == "Self")
             && projection_interface.name.tag() == interface.type_tag =>
         {
             assoc
@@ -998,35 +997,29 @@ fn substitute_witness_field_type(
                 .map(|(_, ty)| RuntimeTy::from(ty.clone()))
                 .ok_or_else(|| format!("is missing associated binding `{member}`"))
         }
-        RuntimeTy::List(inner, attr) => Ok(RuntimeTy::List(
-            Box::new(substitute_witness_field_type(
-                inner, interface, args, assoc,
-            )?),
-            attr.clone(),
-        )),
-        RuntimeTy::Map { key, value, attr } => Ok(RuntimeTy::Map {
+        RuntimeTy::List(inner) => Ok(RuntimeTy::List(Box::new(substitute_witness_field_type(
+            inner, interface, args, assoc,
+        )?))),
+        RuntimeTy::Map { key, value } => Ok(RuntimeTy::Map {
             key: Box::new(substitute_witness_field_type(key, interface, args, assoc)?),
             value: Box::new(substitute_witness_field_type(
                 value, interface, args, assoc,
             )?),
-            attr: attr.clone(),
         }),
-        RuntimeTy::Union(members, attr) => Ok(RuntimeTy::Union(
+        RuntimeTy::Union(members) => Ok(RuntimeTy::Union(
             members
                 .iter()
                 .map(|member| substitute_witness_field_type(member, interface, args, assoc))
                 .collect::<Result<Box<[_]>, _>>()?,
-            attr.clone(),
         )),
-        RuntimeTy::Class(name, type_args, attr) => Ok(RuntimeTy::Class(
+        RuntimeTy::Class(name, type_args) => Ok(RuntimeTy::Class(
             *name,
             type_args
                 .iter()
                 .map(|arg| substitute_witness_field_type(arg, interface, args, assoc))
                 .collect::<Result<Box<[_]>, _>>()?,
-            attr.clone(),
         )),
-        RuntimeTy::Interface(name, type_args, bindings, attr) => Ok(RuntimeTy::Interface(
+        RuntimeTy::Interface(name, type_args, bindings) => Ok(RuntimeTy::Interface(
             *name,
             type_args
                 .iter()
@@ -1041,13 +1034,11 @@ fn substitute_witness_field_type(
                     ))
                 })
                 .collect::<Result<Box<[_]>, String>>()?,
-            attr.clone(),
         )),
         RuntimeTy::Function {
             params,
             ret,
             throws,
-            attr,
         } => Ok(RuntimeTy::Function {
             params: params
                 .iter()
@@ -1063,22 +1054,19 @@ fn substitute_witness_field_type(
             throws: Box::new(substitute_witness_field_type(
                 throws, interface, args, assoc,
             )?),
-            attr: attr.clone(),
         }),
-        RuntimeTy::Future(value, error, attr) => Ok(RuntimeTy::Future(
+        RuntimeTy::Future(value, error) => Ok(RuntimeTy::Future(
             Box::new(substitute_witness_field_type(
                 value, interface, args, assoc,
             )?),
             Box::new(substitute_witness_field_type(
                 error, interface, args, assoc,
             )?),
-            attr.clone(),
         )),
         RuntimeTy::AssociatedTypeProjection {
             base,
             interface: projection_interface,
             member,
-            attr,
         } => Ok(RuntimeTy::AssociatedTypeProjection {
             base: Box::new(substitute_witness_field_type(base, interface, args, assoc)?),
             interface: Box::new(bex_vm_types::RuntimeInterface::new(
@@ -1100,7 +1088,6 @@ fn substitute_witness_field_type(
                     .collect::<Result<Box<[_]>, String>>()?,
             )),
             member: member.clone(),
-            attr: attr.clone(),
         }),
         // If the full subtree contains no symbolic positions, preserve it
         // exactly (including attributes) without rebuilding every realized leaf.
@@ -1317,7 +1304,7 @@ fn reflected_class(
     let Object::Type(type_value) = vm.get_object(ptr) else {
         unreachable!("view_type_value returns an Object::Type")
     };
-    let bex_vm_types::RealizedTy::Class(head, args, _) = &type_value.ty else {
+    let bex_vm_types::RealizedTy::Class(head, args) = &type_value.ty else {
         unreachable!("a Class-classified type is RealizedTy::Class")
     };
     debug_assert!(head.is_resolved());
@@ -1338,7 +1325,7 @@ fn reflected_enum(
     let Object::Type(type_value) = vm.get_object(ptr) else {
         unreachable!("view_type_value returns an Object::Type")
     };
-    let bex_vm_types::RealizedTy::Enum(head, _) = &type_value.ty else {
+    let bex_vm_types::RealizedTy::Enum(head) = &type_value.ty else {
         unreachable!("an Enum-classified type is RealizedTy::Enum")
     };
     debug_assert!(head.is_resolved());
@@ -1411,6 +1398,7 @@ fn alloc_meta(
     description: Option<&str>,
     docstring: Option<&str>,
     other: &IndexMap<String, String>,
+    skip: bool,
 ) -> Value {
     let mut entries = IndexMap::with_capacity(other.len());
     for (key, value) in other {
@@ -1432,6 +1420,7 @@ fn alloc_meta(
         description,
         docstring,
         other,
+        skip,
     }
     .to_value(vm)
 }
@@ -1477,23 +1466,75 @@ fn alloc_compilation_error_with_span(
     let values = diagnostics
         .iter()
         .map(|diagnostic| {
-            let code = Value::object(vm.alloc_string(diagnostic.code()));
-            let message = Value::object(vm.alloc_string(diagnostic.message.as_str()));
-            let span = span.map_or(Value::NULL, |(file, start, end)| {
-                let file = Value::object(vm.alloc_string(file.as_str()));
-                copy::Span {
-                    file,
-                    start: i64::from(*start),
-                    end: i64::from(*end),
-                }
-                .to_value(vm)
+            let source_span = span.map(|(file, start, end)| bex_vm_types::RuntimeSourceSpan {
+                file: file.clone(),
+                start: usize::try_from(*start).expect("source offsets fit usize"),
+                end: usize::try_from(*end).expect("source offsets fit usize"),
             });
-            copy::Diagnostic {
-                code,
-                span,
-                message,
-            }
-            .to_value(vm)
+            let highlights = diagnostic
+                .message_highlights
+                .iter()
+                .map(|highlight| bex_vm_types::RuntimeDiagnosticHighlight {
+                    start: highlight.start,
+                    end: highlight.end,
+                    kind: match highlight.kind {
+                        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Type) => {
+                            bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierType
+                        }
+                        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Function) => {
+                            bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierFunction
+                        }
+                        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Field) => {
+                            bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierField
+                        }
+                        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Variable) => {
+                            bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierVariable
+                        }
+                        DiagnosticMessageKind::Identifier(
+                            DiagnosticIdentifierKind::EnumVariant,
+                        ) => bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierEnumVariant,
+                        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Attribute) => {
+                            bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierAttribute
+                        }
+                        DiagnosticMessageKind::TypeExpression => {
+                            bex_vm_types::RuntimeDiagnosticHighlightKind::TypeExpression
+                        }
+                        DiagnosticMessageKind::Code => {
+                            bex_vm_types::RuntimeDiagnosticHighlightKind::Code
+                        }
+                    },
+                })
+                .collect();
+            let runtime = bex_vm_types::RuntimeCompileDiagnostic {
+                code: diagnostic.code().to_string(),
+                message: diagnostic.message_with_primary_label().into_owned(),
+                severity: match diagnostic.severity {
+                    Severity::Error => bex_vm_types::RuntimeDiagnosticSeverity::Error,
+                    Severity::Warning => bex_vm_types::RuntimeDiagnosticSeverity::Warning,
+                    Severity::Info => bex_vm_types::RuntimeDiagnosticSeverity::Info,
+                },
+                span: source_span,
+                details: Some(Box::new(bex_vm_types::RuntimeDiagnosticDetails {
+                    headline: diagnostic.message.clone(),
+                    primary_label: diagnostic
+                        .annotations
+                        .iter()
+                        .find(|annotation| annotation.is_primary)
+                        .and_then(|annotation| annotation.message.clone()),
+                    phase: match diagnostic.phase {
+                        DiagnosticPhase::Parse => bex_vm_types::RuntimeDiagnosticPhase::Parse,
+                        DiagnosticPhase::Hir => bex_vm_types::RuntimeDiagnosticPhase::Hir,
+                        DiagnosticPhase::Validation => {
+                            bex_vm_types::RuntimeDiagnosticPhase::Validation
+                        }
+                        DiagnosticPhase::Type => bex_vm_types::RuntimeDiagnosticPhase::Type,
+                    },
+                    message_highlights: highlights,
+                    annotations: Vec::new(),
+                    related_info: Vec::new(),
+                })),
+            };
+            super::reflect::diagnostic_value(vm, &runtime)
         })
         .collect();
     let diagnostic_qtn = baml_type::QualifiedTypeName::from_dotted_path("reflect.Diagnostic");
@@ -1501,7 +1542,6 @@ fn alloc_compilation_error_with_span(
         vm.declaration_head(&diagnostic_qtn)
             .unwrap_or_else(|| unreachable!("`reflect.Diagnostic` is declared by the stdlib")),
         Box::new([]),
-        baml_type::TyAttr::default(),
     );
     let diagnostics = Value::object(vm.alloc_array(diagnostic_ty, values));
     let message = Value::object(vm.alloc_string(message));
@@ -1569,13 +1609,16 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
                         .map_err(|_| "reflect.Meta.other must be map<string, string>".to_string())
                 })
                 .collect::<Result<IndexMap<_, _>, _>>()?;
+            // A row read back from `values()` keeps its skip flag, so
+            // rebuilding an enum from reflected rows does not unskip a variant.
+            let skip = meta.load_field(4).as_bool().unwrap_or(false);
             Ok(EnumVariant {
                 name,
                 alias: optional_string(0)?,
                 description: optional_string(1)?,
                 docstring: optional_string(2)?,
                 other,
-                skip: false,
+                skip,
             })
         }
         _ => Err("reflect.enum.new values must be strings or reflect.enum.Value rows".into()),
@@ -1631,6 +1674,7 @@ impl BamlClassClassType for PackageReflectImpl {
                     field.description.as_deref(),
                     field.docstring.as_deref(),
                     &field.other,
+                    field.skip,
                 );
                 copy::class::Field {
                     name,
@@ -1651,6 +1695,7 @@ impl BamlClassClassType for PackageReflectImpl {
             class.description.as_deref(),
             class.docstring.as_deref(),
             &class.other,
+            false,
         ))
     }
 }
@@ -1669,6 +1714,7 @@ impl BamlClassEnumType for PackageReflectImpl {
                     variant.description.as_deref(),
                     variant.docstring.as_deref(),
                     &variant.other,
+                    variant.skip,
                 );
                 copy::r#enum::Value { name, meta }.to_value(vm)
             })
@@ -1683,7 +1729,40 @@ impl BamlClassEnumType for PackageReflectImpl {
             enm.description.as_deref(),
             enm.docstring.as_deref(),
             &enm.other,
+            false,
         ))
+    }
+}
+
+impl BamlClassLiteralType for PackageReflectImpl {
+    fn value(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
+        let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Literal)?;
+        match ty {
+            bex_vm_types::RealizedTy::Literal(literal, _) => Ok(match literal {
+                baml_type::Literal::String(s) => Value::object(vm.alloc_string(s)),
+                baml_type::Literal::Int(n) => Value::int(n),
+                baml_type::Literal::Bool(b) => Value::bool(b),
+                baml_type::Literal::Bigint(n) => vm.try_alloc_bigint(Arc::new(n))?,
+                baml_type::Literal::Float(s) => Value::object(
+                    vm.alloc_float(
+                        s.parse()
+                            .expect("a float literal has a valid representation"),
+                    ),
+                ),
+            }),
+            bex_vm_types::RealizedTy::EnumVariant(head, name) => {
+                let Object::Enum(enm) = vm.get_object(head.ptr()) else {
+                    unreachable!("an enum variant type's head points at Object::Enum")
+                };
+                let index = enm
+                    .variants
+                    .iter()
+                    .position(|variant| variant.name == name)
+                    .expect("an enum variant type names a declared variant");
+                Ok(Value::object(vm.alloc_variant(head.ptr(), index)))
+            }
+            _ => unreachable!("a Literal-classified type is a literal or enum variant"),
+        }
     }
 }
 
@@ -1693,7 +1772,7 @@ impl BamlClassUnionType for PackageReflectImpl {
         r#type: &Value,
     ) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
         let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Union)?;
-        let bex_vm_types::RealizedTy::Union(members, _) = ty else {
+        let bex_vm_types::RealizedTy::Union(members) = ty else {
             unreachable!("a Union-classified type is RealizedTy::Union")
         };
         Ok(members
@@ -1706,7 +1785,7 @@ impl BamlClassUnionType for PackageReflectImpl {
 impl BamlClassArrayType for PackageReflectImpl {
     fn element_type(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
         let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Array)?;
-        let bex_vm_types::RealizedTy::List(element, _) = ty else {
+        let bex_vm_types::RealizedTy::List(element) = ty else {
             unreachable!("an Array-classified type is RealizedTy::List")
         };
         Ok(Value::object(
@@ -1881,6 +1960,38 @@ class Fresh {}
         .unwrap()
     }
 
+    #[test]
+    fn literal_value_supports_internal_float_literals() {
+        let mut vm = vm();
+        let literal = alloc_runtime_composite(
+            &mut vm,
+            baml_type::type_kind::TypeKind::Literal,
+            RealizedTy::Literal(
+                baml_type::Literal::Float("-1.25".into()),
+                baml_type::Freshness::Regular,
+            ),
+        );
+        let value = <PackageReflectImpl as BamlClassLiteralType>::value(&mut vm, &literal)
+            .expect("a literal view has a value");
+        let Object::Float(value) = vm.get_object(value.as_object_ptr().unwrap()) else {
+            panic!("expected a float value")
+        };
+        assert_eq!(value.to_bits(), (-1.25_f64).to_bits());
+    }
+
+    #[test]
+    fn literal_value_rejects_a_view_with_the_wrong_kind() {
+        let mut vm = vm();
+        let forged = alloc_runtime_composite(
+            &mut vm,
+            baml_type::type_kind::TypeKind::Literal,
+            RealizedTy::Int,
+        );
+        let error = <PackageReflectImpl as BamlClassLiteralType>::value(&mut vm, &forged)
+            .expect_err("the literal view must retain its kind invariant");
+        assert!(matches!(error, crate::errors::VmRustFnError::Panic(_)));
+    }
+
     /// A fresh anonymous class, as `reflect.class.new` allocates one.
     fn fresh_class(vm: &mut BexVm) -> TypeHead {
         let Object::Class(class) = vm.get_object(head(vm, "Fresh").ptr()) else {
@@ -1903,7 +2014,7 @@ class Fresh {}
     }
 
     fn class_ty(head: TypeHead) -> RealizedTy {
-        RealizedTy::Class(head, Box::new([]), baml_type::TyAttr::default())
+        RealizedTy::Class(head, Box::new([]))
     }
 
     #[test]

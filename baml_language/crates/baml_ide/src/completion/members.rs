@@ -8,9 +8,8 @@
 //! already resolved; what remains here is each arm's own filter — which
 //! names a reader can actually write at this position.
 
-use baml_compiler2_hir::contributions::Definition;
+use baml_compiler2_hir::{contributions::Definition, resolve::NamespaceMemberKind};
 use baml_compiler2_hir_ty::method_resolution::MemberDecl;
-use baml_compiler2_ppir::resolve::NamespaceMemberKind;
 
 use super::{
     completions::Completions,
@@ -20,7 +19,7 @@ use super::{
 use crate::symbols;
 
 pub(crate) fn complete(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     target: &DotTarget<'_>,
     kind: PathKind,
     out: &mut Completions<'_>,

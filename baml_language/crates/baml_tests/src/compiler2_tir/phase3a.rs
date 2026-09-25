@@ -8,162 +8,6 @@ use super::support::{make_db, render_tir};
 use crate::engine::TestDbExt;
 
 #[test]
-fn explicit_local_id_is_structural_call_metadata() {
-    use baml_compiler2_hir_ty::infer::ParamBinding;
-    use baml_compiler2_ppir::item_data::{file_functions, function_data};
-
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-function choose<T>(value: T, fallback: T = value) -> T {
-  value
-}
-
-function main(id: boundary.LocalId) -> int {
-  choose(1, $id = id)
-}
-"#,
-    );
-
-    let rendered = render_tir(&db, file);
-    assert!(
-        !rendered.contains("!!"),
-        "a trailing LocalId side channel must compile cleanly:\n{rendered}"
-    );
-
-    let main_loc = *file_functions(&db, file)
-        .iter()
-        .find(|&&loc| function_data(&db, loc).name.as_str() == "main")
-        .expect("main function");
-    let inference = baml_compiler2_hir_ty::infer::infer_body(
-        &db,
-        baml_compiler2_hir::body::BodyOwnerId::Function(main_loc),
-    );
-    let plans = inference.call_plans.iter().collect::<Vec<_>>();
-    assert_eq!(plans.len(), 1, "main contains exactly one call: {rendered}");
-
-    let plan = plans[0].1;
-    assert!(
-        plan.runtime_id.is_some(),
-        "CallPlan must retain the explicit LocalId expression"
-    );
-    assert_eq!(
-        plan.bindings
-            .iter()
-            .filter(|binding| matches!(binding, ParamBinding::Provided { .. }))
-            .count(),
-        1,
-        "the LocalId must not count as an ordinary argument"
-    );
-    assert!(matches!(
-        plan.bindings.as_slice(),
-        [
-            ParamBinding::Provided { param_index: 0, .. },
-            ParamBinding::OmittedDefault { param_index: 1, .. }
-        ]
-    ));
-    assert_eq!(
-        plan.type_args.len(),
-        1,
-        "generic inference must still record only the ordinary argument's T"
-    );
-}
-
-#[test]
-fn explicit_local_id_has_targeted_call_diagnostics() {
-    let cases = [
-        (
-            "positional_after_id",
-            "target($id = id, 1)",
-            "`$id` must be the final call argument",
-        ),
-        (
-            "named_after_id",
-            "target($id = id, x = 1)",
-            "`$id` must be the final call argument",
-        ),
-        (
-            "duplicate_id",
-            "target(1, $id = id, $id = id)",
-            "duplicate `$id` call argument",
-        ),
-        (
-            "wrong_type",
-            "target(1, $id = \"not-a-local-id\")",
-            "`$id` at a call site expects `boundary.LocalId`, got",
-        ),
-        (
-            "missing_ordinary_arg",
-            "target($id = id)",
-            "expected 1 argument(s), got 0",
-        ),
-    ];
-
-    for (label, call, expected) in cases {
-        let mut db = make_db();
-        let source = format!(
-            r#"
-function target(x: int) -> int {{ x }}
-function main(id: boundary.LocalId) -> int {{
-  {call}
-}}
-"#
-        );
-        let file = db.file("test.baml", &source);
-        let rendered = render_tir(&db, file);
-        assert!(
-            rendered.contains(expected),
-            "[{label}] expected {expected:?}, got:\n{rendered}"
-        );
-    }
-}
-
-#[test]
-fn explicit_local_id_preserves_real_named_argument_diagnostics() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-function target(a: int, b: int) -> int { a + b }
-function main(id: boundary.LocalId) -> int {
-  target(a = 1, $id = id)
-}
-"#,
-    );
-
-    let rendered = render_tir(&db, file);
-    assert!(
-        rendered.contains("missing required argument `b`"),
-        "a real named argument must retain per-parameter diagnostics:\n{rendered}"
-    );
-    assert!(
-        !rendered.contains("expected 2 argument(s), got 1"),
-        "the trailing LocalId must not hide the real named argument:\n{rendered}"
-    );
-}
-
-#[test]
-fn explicit_local_id_on_native_target_remains_a_runtime_contract() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-function main(id: boundary.LocalId) -> string {
-  baml.json.to_string(7, $id = id) catch (e) {
-    baml.errors.InvalidArgument => "caught"
-  }
-}
-"#,
-    );
-    let rendered = render_tir(&db, file);
-    assert!(
-        !rendered.contains("!!"),
-        "TIR must allow the VM to throw the catchable native-target error:\n{rendered}"
-    );
-}
-
-#[test]
 fn backtick_llm_function_compiles_to_agent_loop() {
     // Single-path world: a backtick prompt in an LLM function desugars to the
     // ai Agent loop — the direct-call body runs
@@ -317,12 +161,14 @@ fn new_mode_failures_have_good_diagnostics() {
             "expected 1 argument(s), got 0",
         ),
     ];
+    let mut db = make_db();
     for (label, client, body, expect_substr) in cases {
-        let mut db = make_db();
         let src = format!(
             "client C = openai.ResponsesClient.new(model = \"m\", api_key = \"k\");\n\nfunction Greet(name: string) -> string {{\n  {client}\n  {body}\n}}\n"
         );
-        let file = db.file("test.baml", &src);
+        // Keep every case in its own namespace so one database can share the
+        // stdlib setup without duplicate C/Greet declarations.
+        let file = db.file(format!("ns_new_mode_{label}/test.baml"), &src);
         let tir = render_tir(&db, file);
         let diags: Vec<&str> = tir
             .lines()
@@ -430,7 +276,6 @@ fn union_normalization_alias() {
       }
       !! 58..59: type mismatch: expected string, got A
     }
-    type user.A$stream = int | string
     ");
 }
 
@@ -995,13 +840,15 @@ function positional_default() -> string { search("cats", 5) }
 function positional_after_named() -> string { search(query = "cats", 5) }
 function duplicate_named() -> string { search(query = "cats", max = 1, max = 2) }
 function unknown_named() -> string { search(q = "cats") }
+function positional_then_same_named() -> string { search("cats", query = "dogs") }
 "#,
     );
     let tir = render_tir(&db, file);
     insta::assert_snapshot!("optional_param_call_binding_diagnostics", tir);
     assert!(tir.contains("defaulted parameter `max` must be passed by name"));
     assert!(tir.contains("positional arguments cannot appear after named arguments"));
-    assert!(tir.contains("duplicate named argument `max`"));
+    assert_eq!(tir.matches("duplicate named argument `max`").count(), 1);
+    assert_eq!(tir.matches("duplicate named argument `query`").count(), 1);
     assert!(tir.contains("unknown named argument `q`"));
     assert!(tir.contains("missing required argument `query`"));
 }
@@ -1167,9 +1014,6 @@ fn calling_class_as_function() {
         return Foo(1) : !error
       }
       !! 55..58: unresolved name: Foo
-    }
-    class user.Foo$stream {
-      name: string | null
     }
     ");
 }
@@ -1750,14 +1594,6 @@ function f(x: Cat | Dog) -> string { return x.name; }"#,
       }
       !! 114..120: type `Cat | Dog` has no member `name`: its members implement no common interface that declares `name`
     }
-    class user.Cat$stream {
-      name: string | null
-      legs: int | null
-    }
-    class user.Dog$stream {
-      name: string | null
-      legs: int | null
-    }
     ");
 }
 
@@ -1786,14 +1622,6 @@ function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
         return x.whiskers : !error
       }
       !! 116..126: type `Cat | Dog` has no member `whiskers`: its members implement no common interface that declares `whiskers`
-    }
-    class user.Cat$stream {
-      name: string | null
-      whiskers: int | null
-    }
-    class user.Dog$stream {
-      name: string | null
-      tail: bool | null
     }
     ");
 }
@@ -1825,15 +1653,6 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       }
       !! 112..118: type `A | B | C` has no member `name`: its members implement no common interface that declares `name`
     }
-    class user.A$stream {
-      name: string | null
-    }
-    class user.B$stream {
-      name: string | null
-    }
-    class user.C$stream {
-      age: int | null
-    }
     ");
 }
 
@@ -1864,15 +1683,6 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       }
       !! 111..117: type `A | B | C` has no member `name`: its members implement no common interface that declares `name`
     }
-    class user.A$stream {
-      name: string | null
-    }
-    class user.B$stream {
-      age: string | null
-    }
-    class user.C$stream {
-      age: int | null
-    }
     ");
 }
 
@@ -1897,12 +1707,6 @@ function f(x: A | B) -> string { return x.value; }"#,
         return x.value : !error
       }
       !! 87..94: type `A | B` has no member `value`: its members implement no common interface that declares `value`
-    }
-    class user.A$stream {
-      value: int | null
-    }
-    class user.B$stream {
-      value: string | null
     }
     ");
 }
@@ -1950,12 +1754,6 @@ function f(x: A | B | null) -> string { return x.name; }"#,
         return x.name : !error
       }
       !! 95..101: type `A | B | null` has no member `name`: its members implement no common interface that declares `name`
-    }
-    class user.A$stream {
-      name: string | null
-    }
-    class user.B$stream {
-      name: string | null
     }
     ");
 }

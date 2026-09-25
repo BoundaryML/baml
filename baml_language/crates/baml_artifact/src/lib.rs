@@ -39,11 +39,29 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// constant; canary/dev builds were covered by the `BUILD_FINGERPRINT`
 /// equality check, which is exactly the gap this constant exists to close
 /// for stable builds.)
-pub const FORMAT_VERSION: u32 = 7;
+///
+/// Version 8: every type dropped its `TyAttr` payload and the runtime `Class`
+/// and `Enum` their `ty_attr` field (BEP-075 removed type attributes), so the
+/// serialized shape of every type-bearing record changed.
+///
+/// Version 10 combines that layout with the runtime-ID instruction and serialized
+/// function capture-policy removals from the runtime foundation branch (versions
+/// 8 and 9 there). Artifacts from either pre-merge layout must be rejected.
+pub const FORMAT_VERSION: u32 = 10;
 
-/// Git commit used to build this crate, or the canonical BAML version when the
-/// source was built outside a Git checkout.
-pub const BUILD_FINGERPRINT: &str = env!("BAML_ARTIFACT_BUILD_FINGERPRINT");
+/// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
+/// HEAD), or empty when neither was available.
+const BUILD_COMMIT: &str = env!("BAML_ARTIFACT_BUILD_COMMIT");
+
+/// Identity of the build that encodes and accepts artifacts: the Git commit
+/// this crate was built from. Only a channel that does not enforce it (see
+/// [`ENFORCE_BUILD_FINGERPRINT`]) may build without a commit, e.g. from a
+/// source archive; it then falls back to the canonical BAML version.
+pub const BUILD_FINGERPRINT: &str = if BUILD_COMMIT.is_empty() {
+    baml_version::CANONICAL_VERSION
+} else {
+    BUILD_COMMIT
+};
 
 const PREFIX_LEN: usize = MAGIC.len() + size_of::<u32>() + size_of::<u64>();
 
@@ -53,6 +71,14 @@ const PREFIX_LEN: usize = MAGIC.len() + size_of::<u32>() + size_of::<u64>();
 /// [`FORMAT_VERSION`] plus the existing release-version metadata check instead;
 /// an equal-format fingerprint mismatch is accepted there with a warning.
 pub const ENFORCE_BUILD_FINGERPRINT: bool = channel_is(b"canary") || channel_is(b"dev");
+
+// Without a commit, an enforcing build would carry the version as its
+// fingerprint: it would reject every correctly fingerprinted artifact of its
+// own release while accepting any other commitless build of that version.
+const _: () = assert!(
+    !ENFORCE_BUILD_FINGERPRINT || !BUILD_COMMIT.is_empty(),
+    "this channel requires a Git commit fingerprint: build from a Git checkout, or set BAML_GIT_SHA to the commit being built",
+);
 
 const fn channel_is(expected: &[u8]) -> bool {
     let actual = baml_version::CHANNEL.as_bytes();

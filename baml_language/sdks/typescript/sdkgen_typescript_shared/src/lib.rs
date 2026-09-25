@@ -30,101 +30,15 @@ use std::{
     path::PathBuf,
 };
 
-use baml_codegen_types::{Name, Symbol, SymbolPool, Ty};
+use baml_codegen_types::{Name, SymbolPool, public_interface_tokens};
 pub use baml_codegen_types::{NamingConvention, OutputType};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 
 use crate::{
     emit::{build_emitted, typemap_file::render_typemap_module},
     leaf::{LeafBody, group_and_sort, render_index_ts},
-    routing::{LeafPath, route, route_class_ref},
+    routing::{LeafPath, route},
 };
-
-fn collect_interface_tys(ty: &Ty, out: &mut BTreeSet<Name>) {
-    match ty {
-        Ty::Interface(name, generics, associated, _) => {
-            out.insert(name.clone());
-            for nested in generics.iter().chain(associated.iter().map(|(_, ty)| ty)) {
-                collect_interface_tys(nested, out);
-            }
-        }
-        Ty::Class(_, args, _) => args.iter().for_each(|ty| collect_interface_tys(ty, out)),
-        Ty::List(inner, _) => collect_interface_tys(inner, out),
-        Ty::Map { key, value, .. } => {
-            collect_interface_tys(key, out);
-            collect_interface_tys(value, out);
-        }
-        Ty::Union(items, _) => items.iter().for_each(|ty| collect_interface_tys(ty, out)),
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            for param in params {
-                collect_interface_tys(&param.ty, out);
-            }
-            collect_interface_tys(ret, out);
-            collect_interface_tys(throws, out);
-        }
-        Ty::Future(value, error, _) => {
-            collect_interface_tys(value, out);
-            collect_interface_tys(error, out);
-        }
-        Ty::Enum(..)
-        | Ty::EnumVariant(..)
-        | Ty::TypeAlias(..)
-        | Ty::Literal(..)
-        | Ty::Int { .. }
-        | Ty::Bigint { .. }
-        | Ty::Float { .. }
-        | Ty::String { .. }
-        | Ty::Bool { .. }
-        | Ty::Null { .. }
-        | Ty::Uint8Array { .. }
-        | Ty::Media(..)
-        | Ty::TypeVar(..)
-        | Ty::RustType { .. }
-        | Ty::Type { .. }
-        | Ty::Resource { .. }
-        | Ty::PromptAst { .. }
-        | Ty::Void { .. }
-        | Ty::Unknown { .. }
-        | Ty::Never { .. } => {}
-    }
-}
-
-fn public_interface_tokens(pool: &SymbolPool) -> BTreeSet<Name> {
-    fn function(value: &baml_codegen_types::Function, out: &mut BTreeSet<Name>) {
-        for arg in &value.arguments {
-            collect_interface_tys(&arg.ty, out);
-        }
-        collect_interface_tys(&value.return_type, out);
-        if let Some(throws) = &value.throws {
-            collect_interface_tys(throws, out);
-        }
-        for (_, watcher) in &value.watchers {
-            collect_interface_tys(watcher, out);
-        }
-    }
-    let mut out = BTreeSet::new();
-    for symbol in pool.values() {
-        match symbol {
-            Symbol::Function(value) => function(value, &mut out),
-            Symbol::Class(value) => {
-                for property in &value.properties {
-                    collect_interface_tys(&property.ty, &mut out);
-                }
-                for method in value.static_methods.iter().chain(&value.instance_methods) {
-                    function(method, &mut out);
-                }
-            }
-            Symbol::TypeAlias(value) => collect_interface_tys(&value.resolves_to, &mut out),
-            Symbol::Enum(_) => {}
-        }
-    }
-    out
-}
 
 fn render_interface_tokens(tokens: impl Iterator<Item = Name>) -> String {
     let mut out = String::new();
@@ -211,7 +125,7 @@ pub fn to_source_code_with_metadata(
         leaves.insert(route(key));
     }
     for name in &interface_tokens {
-        leaves.insert(route_class_ref(name));
+        leaves.insert(route(name));
     }
 
     // `baml/` and the root leaf are always emitted.
@@ -267,7 +181,7 @@ pub fn to_source_code_with_metadata(
         content.push_str(&render_interface_tokens(
             interface_tokens
                 .iter()
-                .filter(|name| route_class_ref(name) == leaf_path)
+                .filter(|name| route(name) == leaf_path)
                 .cloned(),
         ));
         out.insert(init_ts_path(dir), content);
@@ -353,25 +267,7 @@ fn render_inlinedbaml(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> Stri
 
 /// Render `s` as a TypeScript double-quoted string literal. JS escaping
 /// rules are byte-compatible with Python's for the ASCII range.
-pub(crate) fn ts_string(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
-    for ch in s.chars() {
-        match ch {
-            '\\' => out.push_str("\\\\"),
-            '"' => out.push_str("\\\""),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => {
-                let _ = write!(out, "\\x{:02x}", c as u32);
-            }
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
-}
+pub(crate) use baml_codegen_types::quoted_string as ts_string;
 
 #[cfg(test)]
 mod tests {
@@ -435,14 +331,10 @@ mod tests {
                 injected: false,
                 name: BaseName::new("x"),
                 docstring: None,
-                ty: Ty::Int {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
+                ty: Ty::Int,
                 default: None,
             }],
-            return_type: Ty::Int {
-                attr: baml_base::TyAttr::EMPTY,
-            },
+            return_type: Ty::Int,
             throws: None,
             watchers: Vec::new(),
             origin: origin(span),
@@ -566,21 +458,6 @@ mod tests {
         let root = &out[&PathBuf::from("index.ts")];
         assert!(root.contains("export class Foo {"));
         assert!(!root.contains("export const b"));
-    }
-
-    #[test]
-    fn stream_class_emits_in_base_leaf_with_suffix() {
-        // spec2: `Resume$stream` is emitted beside `Resume` in the `lorem`
-        // leaf, keeping its `$stream` suffix — there is no `stream_types/`.
-        let mut pool = SymbolPool::new();
-        let n = name("user", &["lorem"], "Resume$stream");
-        pool.insert(n.clone(), class_sym(&n, 0));
-        let out = emit_sdk(&pool);
-        assert!(!out.contains_key(&PathBuf::from("stream_types/lorem/index.ts")));
-        let leaf = &out[&PathBuf::from("lorem/index.ts")];
-        assert!(leaf.contains("export class Resume$stream {"));
-        let typemap = &out[&PathBuf::from("_typemap.ts")];
-        assert!(typemap.contains("\"user.lorem.Resume$stream\": () => (__leaf_"));
     }
 
     #[test]

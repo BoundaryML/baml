@@ -140,6 +140,15 @@ mod format_options_tests {
     use super::*;
 
     #[test]
+    fn bigint_literal_unions_preserve_the_suffix() {
+        let source = "function value() -> 9007199254740993n | \"unsure\" { 9007199254740993n }\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("bigint literal union should format");
+        assert!(formatted.contains("-> 9007199254740993n | \"unsure\""));
+        assert_eq!(format(&formatted, &options).unwrap(), formatted);
+    }
+
+    #[test]
     fn default_options_use_the_canonical_four_space_indent() {
         let options = FormatOptions::default();
         assert_eq!(CANONICAL_INDENT_WIDTH, 4);

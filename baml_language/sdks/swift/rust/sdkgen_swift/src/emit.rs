@@ -43,14 +43,12 @@ pub(crate) fn render_type_alias(
         return None;
     }
     let target = translate_ty(&alias.resolves_to, ctx)?;
-    // `@stream` companion aliases strip the suffix like companion
-    // classes do (they route under stream_types, so no collision).
-    let name = escape_ident(key.bare_name());
+    let name = escape_ident(key.name().as_str());
     Some(format!("public typealias {name} = {target}\n"))
 }
 
 pub(crate) fn render_enum(enum_: &Enum, key: &Name) -> String {
-    let name = escape_ident(key.bare_name());
+    let name = escape_ident(key.name().as_str());
     let fqn = key.to_string();
     let doc = enum_
         .docstring
@@ -106,9 +104,7 @@ pub(crate) fn render_class(
     fields: &[RenderedField],
     methods: &[String],
 ) -> String {
-    // `@stream` companion classes strip the suffix (they route under
-    // the stream_types namespace, so no collision with the base type).
-    let name = escape_ident(key.bare_name());
+    let name = escape_ident(key.name().as_str());
     let fqn = key.to_string();
     let doc = class
         .docstring
@@ -292,7 +288,7 @@ pub(crate) fn render_callable(
 
     // The caller allocates a collision-safe Swift name for this scope.
     // The wire FQN keeps `@` verbatim; an `@stream` companion remains an
-    // ordinary function returning `ai.stream.Stream<P, F>` (→ BamlStream).
+    // ordinary function returning `ai.stream.Stream<T>` (→ BamlStream).
     let bare = binding_name;
 
     // Generic functions/methods: emit a Swift generic signature when
@@ -363,7 +359,7 @@ pub(crate) fn render_callable(
         // `never` (diverging: panic/exit) spells as a void function —
         // the call only ever returns by throwing (Python maps both
         // void and never to `None` the same way).
-        Ty::Void { .. } | Ty::Never { .. } => None,
+        Ty::Void | Ty::Never => None,
         Ty::Function { .. } => Some(returned_callable.as_ref()?.0.clone()),
         other => Some(translate_ty(other, ctx)?),
     };
@@ -507,14 +503,10 @@ pub(crate) fn render_callable(
 /// same reason).
 pub(crate) fn ty_contains_type_var(ty: &Ty, name: &str) -> bool {
     match ty {
-        Ty::TypeVar(v, _) => v.as_str() == name,
-        Ty::List(inner, _) => ty_contains_type_var(inner, name),
-        Ty::Map { key, value, .. } => {
-            ty_contains_type_var(key, name) || ty_contains_type_var(value, name)
-        }
-        Ty::Union(members, _) => members.iter().any(|m| ty_contains_type_var(m, name)),
-        Ty::Class(_, args, _) => args.iter().any(|a| ty_contains_type_var(a, name)),
-        _ => false,
+        Ty::TypeVar(v) => v.as_str() == name,
+        // These values are opaque or unsupported, so do not infer from their types.
+        Ty::Function { .. } | Ty::Interface(..) | Ty::Future(..) => false,
+        _ => baml_codegen_types::any_type_child(ty, |child| ty_contains_type_var(child, name)),
     }
 }
 
@@ -541,7 +533,7 @@ pub(crate) fn render_recursive_union_alias(
     arms: &[Ty],
     ctx: &TranslateCtx,
 ) -> Option<String> {
-    let name = escape_ident(key.bare_name());
+    let name = escape_ident(key.name().as_str());
     let arm_tys: Vec<String> = {
         let mut tys = Vec::new();
         for arm in arms {
@@ -633,7 +625,7 @@ pub(crate) fn render_recursive_union_alias(
     out.push_str("\t\t}\n");
     out.push_str("\t\tif let fqn = v.wireClassFQN() {\n");
     for (i, arm) in arms.iter().enumerate() {
-        if let Ty::Class(class_name, _, _) = arm {
+        if let Ty::Class(class_name, _) = arm {
             let _ = writeln!(
                 out,
                 "\t\t\tif fqn == \"{class_name}\" {{ return .t{i}(try {}._bamlDecode(v)) }}",
@@ -660,9 +652,10 @@ pub(crate) fn render_recursive_union_alias(
 /// Unqualified leaf names of a throws contract, for doc rendering.
 fn thrown_leaf_names(ty: &Ty) -> Vec<String> {
     match ty {
-        Ty::Class(name, _, _) => vec![format!("`{}`", name.bare_name())],
-        Ty::Enum(name, _) | Ty::TypeAlias(name, _) => vec![format!("`{}`", name.bare_name())],
-        Ty::Union(members, _) => members.iter().flat_map(thrown_leaf_names).collect(),
+        Ty::Class(name, _) | Ty::Enum(name) | Ty::TypeAlias(name) => {
+            vec![format!("`{}`", name.name())]
+        }
+        Ty::Union(members) => members.iter().flat_map(thrown_leaf_names).collect(),
         _ => Vec::new(),
     }
 }
@@ -698,7 +691,7 @@ fn render_callable_param(
     }
     let invoke = invoke_args.join(", ");
     let (ret_ty, wrapper_body) = match ret {
-        Ty::Void { .. } | Ty::Never { .. } => (
+        Ty::Void | Ty::Never => (
             "Swift.Void".to_string(),
             format!("try await {name}({invoke})\n\t\treturn BamlNull()._bamlEncode()"),
         ),
@@ -741,7 +734,7 @@ fn render_returned_callable(
         }
     }
     let ret_ty = match ret {
-        Ty::Void { .. } | Ty::Never { .. } => "Swift.Void".to_string(),
+        Ty::Void | Ty::Never => "Swift.Void".to_string(),
         other => translate_ty(other, ctx)?,
     };
     let closure_ty = format!(
@@ -778,11 +771,32 @@ fn render_returned_callable(
         body.push_str("\t\tlet _result = try await _function.callRaw(args: _args)\n");
     }
     match ret {
-        Ty::Void { .. } | Ty::Never { .. } => body.push_str("\t\t_ = _result\n\t\treturn ()\n"),
+        Ty::Void | Ty::Never => body.push_str("\t\t_ = _result\n\t\treturn ()\n"),
         _ => {
             let _ = writeln!(body, "\t\treturn try {ret_ty}._bamlDecode(_result)");
         }
     }
     body.push_str("\t}");
     Some((closure_ty, body))
+}
+
+#[cfg(test)]
+mod shared_traversal_tests {
+    use super::*;
+
+    #[test]
+    fn value_inference_traverses_containers_but_not_opaque_signatures() {
+        let variable = || Ty::TypeVar(baml_codegen_types::ParamTy::new(0, "T".into()));
+        assert!(ty_contains_type_var(&Ty::List(Box::new(variable())), "T"));
+        let callable = Ty::Function {
+            params: Box::new([]),
+            ret: Box::new(variable()),
+            throws: Box::new(Ty::Never),
+        };
+        assert!(!ty_contains_type_var(&callable, "T"));
+        assert!(!ty_contains_type_var(
+            &Ty::Future(Box::new(variable()), Box::new(Ty::Never)),
+            "T"
+        ));
+    }
 }

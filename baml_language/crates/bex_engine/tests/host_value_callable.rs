@@ -591,8 +591,8 @@ async fn host_callable_union_envelope_preserves_empty_container_arm_identity() {
             f(value)
         }
     "#;
-    let int_list = RuntimeTy::List(Box::new(RuntimeTy::int()), baml_type::TyAttr::default());
-    let string_list = RuntimeTy::List(Box::new(RuntimeTy::string()), baml_type::TyAttr::default());
+    let int_list = RuntimeTy::List(Box::new(RuntimeTy::int()));
+    let string_list = RuntimeTy::List(Box::new(RuntimeTy::string()));
     let arc = register_host_callable({
         let int_list = int_list.clone();
         let string_list = string_list.clone();
@@ -712,40 +712,6 @@ async fn host_callable_optional_union_is_omitted_or_sent_with_selected_arm() {
         BexExternalValue::Array { ref items, .. }
             if matches!(items.as_slice(), [BexExternalValue::Int(0), BexExternalValue::Int(1)])
     ));
-    drop(arc);
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn explicit_local_id_rejects_host_callable_with_catchable_invalid_argument() {
-    let source = r#"
-        function call_host_with_id(
-            f: (int) -> int throws baml.errors.InvalidArgument,
-            x: int,
-        ) -> string {
-            baml.json.to_string(f(x, $id = boundary.id())) catch (e) {
-                baml.errors.InvalidArgument => "caught"
-            }
-        }
-    "#;
-    let arc = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::Int(999)));
-    let snapshot = compile_for_engine(source);
-    let engine = Arc::new(
-        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
-            .expect("engine construction"),
-    );
-    let result = engine
-        .call_function(
-            "call_host_with_id",
-            vec![
-                BexExternalValue::HostValue(Arc::clone(&arc)),
-                BexExternalValue::Int(1),
-            ],
-            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-            true,
-        )
-        .await
-        .expect("host-callable rejection should be caught in BAML");
-    assert_eq!(result, BexExternalValue::String("caught".into()));
     drop(arc);
 }
 
@@ -1476,7 +1442,7 @@ async fn unhandled_throw_selects_implemented_interface_arm_in_throws_union() {
                 assert!(
                     matches!(
                         &metadata.selected_option,
-                        RuntimeTy::Interface(name, _, _, _) if name.to_string() == "user.Failure"
+                        RuntimeTy::Interface(name, _, _) if name.to_string() == "user.Failure"
                     ),
                     "expected the Failure interface arm, got {:?}",
                     metadata.selected_option,
@@ -1531,7 +1497,7 @@ async fn root_return_selects_implemented_interface_arm_in_union() {
     };
     assert!(matches!(
         &metadata.selected_option,
-        RuntimeTy::Interface(name, _, _, _) if name.to_string() == "user.Failure"
+        RuntimeTy::Interface(name, _, _) if name.to_string() == "user.Failure"
     ));
     assert!(matches!(
         value.as_ref(),
