@@ -46,14 +46,8 @@ const SETTINGS_GRADLE_KTS_TEMPLATE: &str = include_str!("templates/settings.grad
 /// someone is running the Java suite, so a panic here should stop the setup
 /// script outright instead of surfacing later as a separate test.
 pub fn run_all(ctx: &CodegenCtx) {
-    let discovered = fixtures::discover_shared(&ctx.fixtures_root);
-    assert_eq!(
-        discovered,
-        fixtures::SHARED,
-        "the fixture corpus at {} has drifted from `fixtures::SHARED`",
-        ctx.fixtures_root.display()
-    );
-    for fixture in fixtures::SHARED {
+    let fixtures = fixtures::checked_shared(&ctx.fixtures_root);
+    for fixture in fixtures {
         codegen_fixture(&ctx.fixtures_root, fixture, &ctx.crate_dir);
     }
 }

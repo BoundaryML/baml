@@ -137,12 +137,12 @@ pub(crate) enum Commands {
     #[command(about = "Check BAML source files for compiler errors")]
     Check(crate::check_command::CheckArgs),
 
-    #[command(about = "Remove segmented local profiler data")]
+    #[command(about = "Profile cleanup (currently unavailable)")]
     Clean(crate::clean_command::CleanArgs),
 
     #[command(about = "Describe a BAML symbol", name = "describe")]
     Describe(crate::describe_command::DescribeArgs),
-    #[command(about = "Query the local profile store with SQL")]
+    #[command(about = "Profile queries (currently unavailable)")]
     Query(crate::query_command::QueryArgs),
 
     // #[command(about = "Starts a server that translates LLM responses to BAML responses")]
@@ -748,7 +748,7 @@ mod tests {
             (
                 &["test"],
                 &[
-                    "--log <LEVEL>\n          Set the BAML log level; overrides BAML_LOG [default: off] [possible values: off, error,\n          warn, info, debug, trace]",
+                    "--log <LEVEL>\n          Set the BAML log level; overrides BAML_LOG [default: info] [possible values: off, error,\n          warn, info, debug, trace]",
                 ],
             ),
             (

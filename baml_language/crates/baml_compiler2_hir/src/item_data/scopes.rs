@@ -8,10 +8,7 @@
 //! source map. These queries replace that scan.
 
 use crate::{
-    loc::{
-        ClassLoc, ClientLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc, LetLoc, RetryPolicyLoc,
-        TemplateStringLoc, TypeAliasLoc,
-    },
+    loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc, LetLoc, TypeAliasLoc},
     scope::{ItemScopeOwner, ScopeId},
 };
 
@@ -23,9 +20,6 @@ pub enum ScopeOwner<'db> {
     Enum(EnumLoc<'db>),
     Interface(InterfaceLoc<'db>),
     TypeAlias(TypeAliasLoc<'db>),
-    TemplateString(TemplateStringLoc<'db>),
-    Client(ClientLoc<'db>),
-    RetryPolicy(RetryPolicyLoc<'db>),
     Let(LetLoc<'db>),
     Impl(ImplLoc<'db>),
 }
@@ -44,13 +38,6 @@ pub fn scope_owner<'db>(db: &'db dyn crate::Db, scope: ScopeId<'db>) -> Option<S
         ItemScopeOwner::Enum(id) => ScopeOwner::Enum(EnumLoc::new(db, file, id)),
         ItemScopeOwner::Interface(id) => ScopeOwner::Interface(InterfaceLoc::new(db, file, id)),
         ItemScopeOwner::TypeAlias(id) => ScopeOwner::TypeAlias(TypeAliasLoc::new(db, file, id)),
-        ItemScopeOwner::TemplateString(id) => {
-            ScopeOwner::TemplateString(TemplateStringLoc::new(db, file, id))
-        }
-        ItemScopeOwner::Client(id) => ScopeOwner::Client(ClientLoc::new(db, file, id)),
-        ItemScopeOwner::RetryPolicy(id) => {
-            ScopeOwner::RetryPolicy(RetryPolicyLoc::new(db, file, id))
-        }
         ItemScopeOwner::Let(id) => ScopeOwner::Let(LetLoc::new(db, file, id)),
         ItemScopeOwner::Impl(id) => ScopeOwner::Impl(ImplLoc::new(db, file, id)),
     })
@@ -99,12 +86,6 @@ item_scope!(
     let_scope,
     LetLoc,
     Let
-);
-item_scope!(
-    /// The scope opened for `template`'s parameters and body.
-    template_string_scope,
-    TemplateStringLoc,
-    TemplateString
 );
 item_scope!(
     /// The scope opened for an out-of-body `implement I for T` block's generic

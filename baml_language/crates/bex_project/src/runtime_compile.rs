@@ -272,6 +272,15 @@ fn enrich_runtime_mount(
             && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
     }
 
+    /// Whether a consumer can WRITE this row's name. It is the condition
+    /// under which emit is asked for the declaration's object, and so the
+    /// condition under which a link stub is mandatory rather than optional:
+    /// a row nothing can name is dead weight, a row source can name and the
+    /// stub lane cannot spell is a reference with nothing behind it.
+    fn nameable_from_source(namespace: &[Name], name: &Name) -> bool {
+        source_identifier(name) && namespace.iter().all(source_identifier)
+    }
+
     fn write_docstring(source: &mut String, docstring: Option<&str>, indent: &str) {
         let Some(docstring) = docstring.map(str::trim).filter(|docs| !docs.is_empty()) else {
             return;
@@ -530,6 +539,31 @@ fn enrich_runtime_mount(
     let viewpoint = StubViewpoint {
         aliases: all_aliases,
     };
+    // A stub is what gives emit an object for a mounted declaration, and a
+    // consumer can write `app.Color.Red` whenever the enum's own name is
+    // spellable. There is no honest partial stub — the variant list is the
+    // enum's ABI — so a nameable enum carrying a variant that is not a BAML
+    // identifier cannot be served at all. Refuse the mount here, where the
+    // host can catch it and see which row is at fault, instead of letting
+    // the reference type-check against the interface (the served package's
+    // semantic authority) and find no object at emit.
+    let unservable_enum_variant = |namespace: &[Name], name: &Name, variant: &Name| {
+        let mut path = alias.to_string();
+        for segment in namespace.iter().chain(std::iter::once(name)) {
+            path.push('.');
+            path.push_str(segment.as_str());
+        }
+        RuntimeCompileDiagnostic {
+            code: "E_RUNTIME_INTERFACE".to_string(),
+            message: format!(
+                "enum `{path}` cannot be served: variant `{variant}` is not a BAML identifier, \
+                 and an enum a consumer can name must be stubbed in full — rename the variant"
+            ),
+            severity: RuntimeDiagnosticSeverity::Error,
+            span: None,
+            details: None,
+        }
+    };
     let mut stubs = Vec::new();
     for function in interface
         .functions
@@ -566,11 +600,12 @@ fn enrich_runtime_mount(
                         );
                         let mut source = format!("class {export_name}{generic_suffix} {{\n");
                         for (field, ty, attrs) in fields.iter() {
-                            // Source-backed lookup wins before the mounted
-                            // interface in HIR. Preserve every spellable field
-                            // type here so nested projections see the same ABI;
-                            // only genuinely hidden package names degrade to
-                            // `unknown` in the link-only source.
+                            // A served root resolves through its interface,
+                            // never through this stub; the stub exists for
+                            // LINK, whose emit reads these field types.
+                            // Preserve every spellable one so nested
+                            // projections see the same ABI; only genuinely
+                            // hidden package names degrade to `unknown`.
                             let ty = if viewpoint.hides_type(ty) {
                                 "unknown".to_string()
                             } else {
@@ -682,10 +717,16 @@ fn enrich_runtime_mount(
                     stubs.push((namespace, name, source));
                 }
                 ExportedType::Enum { variants, .. } => {
-                    if source_identifier(export_name)
-                        && export_namespace.iter().all(source_identifier)
-                        && variants.iter().all(source_identifier)
-                    {
+                    if nameable_from_source(export_namespace, export_name) {
+                        if let Some(variant) =
+                            variants.iter().find(|variant| !source_identifier(variant))
+                        {
+                            return Err(unservable_enum_variant(
+                                export_namespace,
+                                export_name,
+                                variant,
+                            ));
+                        }
                         let mut source = format!("enum {export_name} {{\n");
                         for variant in variants {
                             writeln!(&mut source, "  {variant}")
@@ -804,6 +845,14 @@ fn enrich_runtime_mount(
     // decompose to an external object reference; runtime linking resolves it
     // to the live declaration. Source-backed lookup wins before the mounted
     // interface in HIR, so preserve spellable field types here as well.
+    // BUG: a class row this arm skips is still NAMEABLE by a consumer — under
+    // a spellable export alias (the alias row inserted below), or by its own
+    // name when only a field is unspellable and that field is optional — and
+    // a literal through that name emits a silent `null` (emit's
+    // `alloc_class_instance` fall-open). The enum arm refuses such a row at
+    // the mount; the class refusal was withheld on the premise that naming
+    // the class requires spelling the unspellable thing, which the two
+    // shapes above disprove. Dies with stub generation.
     for (name, row) in &minted_rows {
         match row {
             ExportedType::Class { fields, .. }
@@ -832,9 +881,10 @@ fn enrich_runtime_mount(
                 source.push_str("}\n");
                 stubs.push((Vec::new(), name.clone(), source));
             }
-            ExportedType::Enum { variants, .. }
-                if source_identifier(name) && variants.iter().all(source_identifier) =>
-            {
+            ExportedType::Enum { variants, .. } if source_identifier(name) => {
+                if let Some(variant) = variants.iter().find(|variant| !source_identifier(variant)) {
+                    return Err(unservable_enum_variant(&[], name, variant));
+                }
                 let mut source = String::new();
                 let docs = minted_docs.get(name);
                 write_docstring(
@@ -861,41 +911,38 @@ fn enrich_runtime_mount(
             | ExportedType::TypeAlias { .. } => {}
         }
     }
+    // The witness rows each nominal root has contributed, by its item name:
+    // a declaration reached under two export names is witnessed ONCE.
+    let mut witnessed: IndexMap<Name, Vec<ExportedImpl<TypeName>>> = IndexMap::new();
     for mount in package.types.drain(..) {
         let root_ty = baml_type::Ty::from(&mount.ty);
-        // The export-name row: an additional spelling of the root declaration
-        // (or, for a structural type, an alias row of its own). It carries the
-        // same qtn as the item row, so both spellings lower to one identity.
-        let exported = match &mount.ty {
+        // The export name is one more spelling of the mounted type, never a
+        // second identity. A nominal root's identity is its item row (the row
+        // the consumer's stub declares), so an export name of its own is a
+        // transparent alias of that row — the same alias row a structural
+        // root gets — and an export name equal to the item name is the item
+        // row itself.
+        let root_item = match &mount.ty {
             baml_type::RealizedTy::Class(qtn, _) | baml_type::RealizedTy::Enum(qtn) => {
-                minted_rows.get(qtn.name()).cloned()
+                if !minted_rows.contains_key(qtn.name()) {
+                    return Err(RuntimeCompileDiagnostic {
+                        code: "E_RUNTIME_INTERFACE".to_string(),
+                        message: format!(
+                            "runtime type `{}` has no structural definition",
+                            mount.export_name
+                        ),
+                        severity: RuntimeDiagnosticSeverity::Error,
+                        span: None,
+                        details: None,
+                    });
+                }
+                Some(qtn.name().clone())
             }
-            _ => Some(ExportedType::TypeAlias {
-                qtn: baml_type::QualifiedTypeName::local(mount.export_name.clone()),
-                resolved: root_ty.clone(),
-            }),
-        }
-        .ok_or_else(|| RuntimeCompileDiagnostic {
-            code: "E_RUNTIME_INTERFACE".to_string(),
-            message: format!(
-                "runtime type `{}` has no structural definition",
-                mount.export_name
-            ),
-            severity: RuntimeDiagnosticSeverity::Error,
-            span: None,
-            details: None,
-        })?;
-        // When the export name is the root declaration's own item name, the
-        // item row already spells it with the same identity.
-        let export_is_root_item = matches!(
-            &mount.ty,
-            baml_type::RealizedTy::Class(qtn, _) | baml_type::RealizedTy::Enum(qtn)
-                if qtn.name() == &mount.export_name
-        );
-        let root_types = interface.types.entry(Vec::new()).or_default();
-        match root_types.get(&mount.export_name) {
-            Some(_) if export_is_root_item => {}
-            Some(_) => {
+            _ => None,
+        };
+        if root_item.as_ref() != Some(&mount.export_name) {
+            let root_types = interface.types.entry(Vec::new()).or_default();
+            if root_types.contains_key(&mount.export_name) {
                 return Err(RuntimeCompileDiagnostic {
                     code: "E0011".to_string(),
                     message: format!("duplicate exported type name `{}`", mount.export_name),
@@ -904,82 +951,69 @@ fn enrich_runtime_mount(
                     details: None,
                 });
             }
-            None => {
-                match &exported {
-                    ExportedType::Class { qtn, fields, .. }
-                        if source_identifier(&mount.export_name)
-                            && fields.iter().all(|(name, ..)| source_identifier(name)) =>
-                    {
-                        let mut source = String::new();
-                        write_docstring(
-                            &mut source,
-                            minted_docs
-                                .get(qtn.name())
-                                .and_then(|docs| docs.declaration.as_deref()),
-                            "",
-                        );
-                        writeln!(&mut source, "class {} {{", mount.export_name)
-                            .expect("writing to String is infallible");
-                        for (field, ty, attrs) in fields {
-                            write_docstring(&mut source, attrs.docstring.as_deref(), "  ");
-                            let ty = if viewpoint.hides_type(ty) {
-                                "unknown".to_string()
-                            } else {
-                                ty.to_string()
-                            };
-                            writeln!(&mut source, "  {field} {ty}")
-                                .expect("writing to String is infallible");
-                        }
-                        source.push_str("}\n");
-                        stubs.push((Vec::new(), mount.export_name.clone(), source));
-                    }
-                    ExportedType::Enum { qtn, variants }
-                        if source_identifier(&mount.export_name)
-                            && variants.iter().all(source_identifier) =>
-                    {
-                        let mut source = String::new();
-                        let docs = minted_docs.get(qtn.name());
-                        write_docstring(
-                            &mut source,
-                            docs.and_then(|docs| docs.declaration.as_deref()),
-                            "",
-                        );
-                        writeln!(&mut source, "enum {} {{", mount.export_name)
-                            .expect("writing to String is infallible");
-                        for variant in variants {
-                            write_docstring(
-                                &mut source,
-                                docs.and_then(|docs| docs.members.get(variant))
-                                    .and_then(|docs| docs.as_deref()),
-                                "  ",
-                            );
-                            writeln!(&mut source, "  {variant}")
-                                .expect("writing to String is infallible");
-                        }
-                        source.push_str("}\n");
-                        stubs.push((Vec::new(), mount.export_name.clone(), source));
-                    }
-                    ExportedType::Class { .. }
-                    | ExportedType::Enum { .. }
-                    | ExportedType::Interface { .. }
-                    | ExportedType::TypeAlias { .. } => {}
-                }
-                interface.namespaces.insert(Vec::new());
-                root_types.insert(mount.export_name.clone(), exported);
-            }
+            interface.namespaces.insert(Vec::new());
+            root_types.insert(
+                mount.export_name.clone(),
+                ExportedType::TypeAlias {
+                    qtn: baml_type::QualifiedTypeName::local(mount.export_name.clone()),
+                    resolved: root_ty.clone(),
+                },
+            );
         }
 
-        for (witness, field_links) in mount.witnesses {
-            interface.impls.push(ExportedImpl {
-                interface: witness.clone(),
+        // A witness is exported only against an interface this mount can
+        // serve: one its own interface declares, or one of a package the
+        // consumer's world can spell. A runtime class may also witness an
+        // interface of the HOST program that created it; that declaration
+        // does not exist in the consumer's world, so the fact has no row to
+        // be exported against — the same law that degrades a field type the
+        // world cannot spell.
+        let serves = |witness: &baml_type::Interface<TypeName>| {
+            !viewpoint.hides_interface(witness)
+                && (!witness.name.is_local()
+                    || matches!(
+                        interface.lookup_type(witness.name.namespace(), witness.name.name()),
+                        Some(ExportedType::Interface { .. })
+                    ))
+        };
+        let rows: Vec<ExportedImpl<TypeName>> = mount
+            .witnesses
+            .into_iter()
+            .filter(|(witness, _)| serves(witness))
+            .map(|(witness, field_links)| ExportedImpl {
+                // The bindings are the row's `associated_types`; the header
+                // names the interface and its arguments only, exactly as a
+                // source impl's does.
+                associated_types: witness.associated_types.to_vec(),
+                interface: baml_type::Interface::new(witness.name, witness.generics, Box::new([])),
                 for_ty_pattern: root_ty.clone(),
                 generic_params: Vec::new(),
                 param_bounds: Vec::new(),
-                associated_types: witness.associated_types.to_vec(),
                 field_links,
                 origin: ExportedImplOrigin::OutOfBody,
                 methods: Vec::new(),
-            });
+            })
+            .collect();
+        // A witness is a fact about the DECLARATION, and the export name is
+        // not part of a row, so a declaration reached under two names (`{
+        // "Alias": t, "Twin": t }`) contributes its rows once; a second copy
+        // would be the same identity twice, which the import refuses as a
+        // duplicate impl. Every mount of one declaration reads the same
+        // witnesses off the class's own impl rules, which the assertion pins.
+        match root_item {
+            Some(root) => match witnessed.entry(root) {
+                indexmap::map::Entry::Occupied(seen) => debug_assert_eq!(
+                    seen.get(),
+                    &rows,
+                    "two mounts of one declaration carry one witness list"
+                ),
+                indexmap::map::Entry::Vacant(slot) => {
+                    interface.impls.extend(rows.iter().cloned());
+                    slot.insert(rows);
+                }
+            },
+            // Witnesses are read off a class; a structural root has none.
+            None => debug_assert!(rows.is_empty(), "a structural root carries no witnesses"),
         }
     }
     stubs.sort();
@@ -2121,8 +2155,7 @@ fn prune_session_init_tail(
         let mut pending = None;
         for instruction in &init.bytecode.instructions {
             match instruction {
-                Instruction::Call { callee, .. }
-                | Instruction::CallWithRuntimeId { callee, .. } => {
+                Instruction::Call { callee, .. } => {
                     pending = selected_slot_map.get(&callee.raw()).copied();
                 }
                 Instruction::StoreGlobal(target) => {
@@ -2389,6 +2422,15 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             for name in
                 mount_references(own_aliases, blob).map_err(|error| mount_error(alias, &error))?
             {
+                // BUG: a sibling mount is matched by the NAME the producer
+                // spelled its dependency by, not by identity. A producer that
+                // reached package `c` as `geometry`, mounted beside `c` under
+                // the name `c`, gets an empty foreign `geometry` root instead
+                // of `c`'s mount — one package, two roots — so its impl rows
+                // of `geometry.Shape` never meet a consumer's `c.Shape` (E0001
+                // at the use site). Names live on edges; the blob must record
+                // its dependencies' identities for this match to be by
+                // identity.
                 let root = match mount_roots.get(name.as_str()) {
                     Some(&root) => root,
                     None => match foreign_roots.get(&name) {
@@ -3143,8 +3185,9 @@ mod tests {
             ],
         };
 
-        let (_, stubs) = enrich_runtime_mount(&[Name::new("app")], &[Name::new("app")], package)
-            .expect("runtime mount enriches");
+        let (interface_blob, stubs) =
+            enrich_runtime_mount(&[Name::new("app")], &[Name::new("app")], package)
+                .expect("runtime mount enriches");
         let sources = stubs
             .into_iter()
             .map(|(_, _, source)| source)
@@ -3155,16 +3198,41 @@ mod tests {
                 && source.contains("  /// Runtime field docs\n  value string")
         }));
         assert!(sources.iter().any(|source| {
-            source.starts_with("/// Runtime class docs\nclass ClassAlias {")
-                && source.contains("  /// Runtime field docs\n  value string")
-        }));
-        assert!(sources.iter().any(|source| {
             source.starts_with("/// Runtime enum docs\nenum RuntimeState {")
                 && source.contains("  /// Runtime variant docs\n  READY")
         }));
-        assert!(sources.iter().any(|source| {
-            source.starts_with("/// Runtime enum docs\nenum StateAlias {")
-                && source.contains("  /// Runtime variant docs\n  READY")
+        // An export name is a spelling of the item row, not a second
+        // declaration: it gets an alias row and no stub of its own.
+        assert!(!sources.iter().any(|source| {
+            source.contains("class ClassAlias") || source.contains("enum StateAlias")
         }));
+        let enriched = baml_artifact::decode::<PackageInterface<TypeName>>(
+            baml_artifact::ArtifactKind::PackageInterface,
+            &interface_blob,
+        )
+        .expect("enriched interface decodes");
+        let root_types = &enriched.types[&Vec::new()];
+        assert!(matches!(
+            &root_types[&Name::new("ClassAlias")],
+            baml_compiler2_hir_ty::package_interface::ExportedType::TypeAlias {
+                resolved: baml_type::Ty::Class(qtn, ..),
+                ..
+            } if qtn.name().as_str() == "RuntimeClass"
+        ));
+        assert!(matches!(
+            &root_types[&Name::new("StateAlias")],
+            baml_compiler2_hir_ty::package_interface::ExportedType::TypeAlias {
+                resolved: baml_type::Ty::Enum(qtn, ..),
+                ..
+            } if qtn.name().as_str() == "RuntimeState"
+        ));
+        assert!(matches!(
+            &root_types[&Name::new("RuntimeClass")],
+            baml_compiler2_hir_ty::package_interface::ExportedType::Class { .. }
+        ));
+        assert!(matches!(
+            &root_types[&Name::new("RuntimeState")],
+            baml_compiler2_hir_ty::package_interface::ExportedType::Enum { .. }
+        ));
     }
 }

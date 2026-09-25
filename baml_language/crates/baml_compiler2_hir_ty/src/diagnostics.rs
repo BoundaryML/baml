@@ -109,7 +109,8 @@ impl Spell for AssocContainer {
 /// interface-existential receiver — see [`TirTypeError::InvalidSelfCallThroughInterface`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelfCallPosition {
-    /// A non-receiver parameter typed with `Self`.
+    /// `Self` in more than one parameter (the `self` receiver counts), or
+    /// nested inside a parameter's type.
     Parameter,
     /// `Self` nested inside an invariant constructor in the return or throws type
     /// (e.g. `-> Self[]`, `-> Box<Self>`); a bare top-level `-> Self` is allowed.
@@ -163,6 +164,19 @@ pub enum TirTypeError {
     /// A mounted callable whose implementation is compiler-owned and has no
     /// location-free link ABI was invoked from a source-less consumer.
     MountedPackageCallUnsupported { path: Name },
+    /// A constant pattern argument to `baml.regex.new` does not compile.
+    /// Checked here so a typo in a literal pattern is a source error rather
+    /// than a throw the program has to reach to discover.
+    InvalidRegexPattern {
+        /// The same classification `baml.regex.Error.kind` carries at runtime.
+        kind: sys_regex::ErrorKind,
+        /// The engine's own one-line diagnostic.
+        message: String,
+        /// Codepoint offset into the pattern where the problem starts, when
+        /// the engine reports one. The pattern is a decoded string literal, so
+        /// this indexes the pattern, not the source line.
+        offset: Option<usize>,
+    },
     /// A shorthand property (`{ name }`) could not resolve its implicit value.
     /// Suggestions are in-scope values with similar names; the diagnostic
     /// renders them as explicit `name: suggestion` mappings.
@@ -196,6 +210,9 @@ pub enum TirTypeError {
         class_name: baml_type::DeclName,
         companion: baml_type::type_kind::BuiltinCompanion,
     },
+    /// A constructor head that is an alias of a type no object literal can
+    /// construct (anything but a class).
+    CannotConstructAlias { name: Name, denotes: baml_type::Ty },
     /// Unreachable code after a diverging statement (return/break/continue).
     DeadCode {
         after: StmtId,
@@ -593,26 +610,41 @@ pub enum TirTypeError {
         member_name: Name,
     },
 
-    /// An interface-existential (or union) receiver cannot call a method that uses
-    /// `Self` outside the receiver position: a non-receiver `Self` parameter (the
-    /// concrete implementor is unknown for those arguments), or `Self` nested inside
-    /// an invariant constructor in the return/throws type (`-> Self[]`, `-> Box<Self>`
-    /// — the impl returns a concretely-tagged container that is NOT a subtype of the
-    /// existential-tagged one; containers are invariant). A bare top-level `-> Self`
-    /// is fine (it collapses covariantly to the receiver). Rust `dyn Trait` parity.
+    /// An erased `Self` (an interface-existential or union) cannot call a
+    /// method that breaks the one-`Self` rule: `Self` in more than one
+    /// parameter or nested in a parameter (the concrete implementor is
+    /// unknown for those arguments), or `Self` nested inside an invariant
+    /// constructor in the return/throws type (`-> Self[]`, `-> Box<Self>` —
+    /// the impl returns a concretely-tagged container that is NOT a subtype
+    /// of the existential-tagged one; containers are invariant). A bare
+    /// top-level `-> Self` is fine (it collapses covariantly). The `self`
+    /// receiver is one `Self`-typed parameter like any other. Rust `dyn
+    /// Trait` parity.
     InvalidSelfCallThroughInterface {
         interface_name: Name,
         method_name: Name,
         position: SelfCallPosition,
     },
 
-    /// A `self`-less interface method referenced with an erased `Self` (an
-    /// interface-existential or union). There is no receiver value to derive
-    /// a concrete implementor from — dispatch is keyed on the `Self` TYPE —
-    /// and an erased type names no single impl.
+    /// An interface method with NO `Self`-typed parameter referenced with an
+    /// erased `Self` (an interface-existential or union). There is no value
+    /// to derive a concrete implementor from — dispatch is keyed on the
+    /// `Self` TYPE — and an erased type names no single impl.
     SelflessMethodNeedsConcreteSelf {
         interface_name: Name,
         method_name: Name,
+        self_ty: baml_type::Ty,
+    },
+
+    /// An object-safe method whose one `Self`-typed parameter is not the
+    /// FIRST, referenced with an erased `Self`. Dispatch on an erased `Self`
+    /// reads the first argument's runtime type; a `Self` elsewhere has no
+    /// dispatch road yet, so the call needs a concrete `Self`.
+    SelfDispatchParamNotFirst {
+        interface_name: Name,
+        method_name: Name,
+        /// Zero-based position of the `Self`-typed parameter.
+        index: usize,
         self_ty: baml_type::Ty,
     },
 
@@ -655,19 +687,7 @@ pub enum TirTypeError {
     /// BEP-044: a value almost satisfies an interface via a blanket impl, but a
     /// generic bound (`T extends Bound`) is not met. Names the failed bound.
     BlanketBoundNotSatisfied { value_type: Ty, bound: Ty },
-    /// `$id` cannot be the target of a compound assignment (`$id += ...`):
-    /// the runtime ID can only be replaced wholesale with an override from
-    /// `baml.id.new()` via `$id = ...`.
-    RuntimeIdCompoundAssignment,
-    /// Member access on `$id` (e.g. `$id.len()`). `$id` reads as a plain
-    /// string value but is not a binding; bind it to a local first.
-    RuntimeIdMemberAccess { member: Name },
-    /// A second `$id` side channel was supplied to one call.
-    DuplicateRuntimeIdArgument,
-    /// `$id` is trailing call metadata and an ordinary argument followed it.
-    RuntimeIdArgumentMustBeLast,
-    /// The `$id` side channel accepts only a `boundary.LocalId`.
-    RuntimeIdArgumentTypeMismatch { got: Ty },
+
     /// An integer literal (or a constant-folded integer expression) is outside
     /// the representable `int` range `[-2^62, 2^62-1]`. `int` is 63-bit; larger
     /// magnitudes need a `bigint` literal (`n` suffix).
@@ -1108,12 +1128,34 @@ impl TirTypeError {
                         );
                     f.write_str(diagnostic.message.as_str())
                 }
+                TirTypeError::CannotConstructAlias { name, denotes } => write!(
+                    f,
+                    "cannot construct `{name}`: it is an alias of `{}`, not a class",
+                    denotes.spell(vp)
+                ),
                 TirTypeError::MountedPackageCallUnsupported { path } => {
                     let diagnostic =
                         baml_compiler_diagnostics::runtime_type::mounted_package_call_unsupported(
                             path.as_str(),
                         );
                     f.write_str(diagnostic.message.as_str())
+                }
+                TirTypeError::InvalidRegexPattern {
+                    kind,
+                    message,
+                    offset,
+                } => {
+                    let headline = match kind {
+                        sys_regex::ErrorKind::Syntax => "invalid regex pattern",
+                        sys_regex::ErrorKind::Unsupported => "unsupported regex construct",
+                        sys_regex::ErrorKind::TooLarge => "regex pattern is too large",
+                    };
+                    match offset {
+                        Some(offset) => {
+                            write!(f, "{headline} at character {offset}: {message}")
+                        }
+                        None => write!(f, "{headline}: {message}"),
+                    }
                 }
                 TirTypeError::DeadCode {
                     unreachable_count, ..
@@ -1847,9 +1889,23 @@ impl TirTypeError {
                     self_ty,
                 } => write!(
                     f,
-                    "method `{method_name}` on interface `{interface_name}` has no `self` receiver, \
-                 so `Self` must be a concrete implementor type — `{}` does not name one; \
-                 write `(SomeImplementor as {interface_name}).{method_name}`",
+                    "method `{method_name}` on interface `{interface_name}` has no `Self`-typed \
+                 parameter to dispatch on, so `Self` must be a concrete implementor type — \
+                 `{}` does not name one; write `(SomeImplementor as \
+                 {interface_name}).{method_name}`",
+                    self_ty.spell(vp)
+                ),
+                TirTypeError::SelfDispatchParamNotFirst {
+                    interface_name,
+                    method_name,
+                    index,
+                    self_ty,
+                } => write!(
+                    f,
+                    "method `{method_name}` on interface `{interface_name}` takes `Self` as \
+                 parameter {index} (counting from 0); an erased `Self` — `{}` — is dispatched \
+                 from the first argument only, so name a concrete `Self`: `(SomeImplementor as \
+                 {interface_name}).{method_name}(...)`",
                     self_ty.spell(vp)
                 ),
                 TirTypeError::InvalidSelfCallThroughInterface {
@@ -1858,7 +1914,9 @@ impl TirTypeError {
                     position,
                 } => {
                     let position = match position {
-                        SelfCallPosition::Parameter => "a parameter",
+                        SelfCallPosition::Parameter => {
+                            "more than one parameter, or nested in a parameter"
+                        }
                         SelfCallPosition::NestedInReturn => {
                             "its return/throws type, nested in a container (e.g. `Self[]`)"
                         }
@@ -1866,8 +1924,8 @@ impl TirTypeError {
                     write!(
                         f,
                         "method `{method_name}` on interface `{interface_name}` uses `Self` in \
-                     {position}, so it requires a concrete receiver, not an \
-                     interface-existential one"
+                     {position}, so it requires a concrete `Self`, not an erased one (an \
+                     interface-existential or union)"
                     )
                 }
                 TirTypeError::DefaultOnRequiredMethod {
@@ -1899,28 +1957,7 @@ impl TirTypeError {
                     value_type.spell(vp),
                     bound.spell(vp)
                 ),
-                TirTypeError::RuntimeIdCompoundAssignment => write!(
-                    f,
-                    "`$id` cannot be the target of a compound assignment; use `$id = ...` with an \
-                 override from `baml.id.new()`"
-                ),
-                TirTypeError::RuntimeIdMemberAccess { member } => write!(
-                    f,
-                    "`$id` is a value, not a binding; bind it to a local before accessing `.{member}` \
-                 (e.g. `let id = $id; id.{member}`)"
-                ),
-                TirTypeError::DuplicateRuntimeIdArgument => {
-                    write!(f, "duplicate `$id` call argument")
-                }
-                TirTypeError::RuntimeIdArgumentMustBeLast => write!(
-                    f,
-                    "`$id` must be the final call argument because it is trailing call metadata"
-                ),
-                TirTypeError::RuntimeIdArgumentTypeMismatch { got } => write!(
-                    f,
-                    "`$id` at a call site expects `boundary.LocalId`, got {}",
-                    got.spell(vp)
-                ),
+
                 TirTypeError::IntegerLiteralOutOfRange { value } => write!(
                     f,
                     "integer literal `{value}` is out of range for `int` \

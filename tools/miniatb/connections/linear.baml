@@ -35,7 +35,7 @@ function export_linear(id: string) -> json {
     let row = load_issue_row(id);
     let directory = data_dir() + "/exports";
     mkdir(directory);
-    let temporary = directory + "/" + baml.id.new() + ".tmp";
+    let temporary = directory + "/" + baml.random.SystemRandom.get().random(16).to_hex() + ".tmp";
     let lock = directory + "/" + id + ".lock";
     baml.fs.write(temporary, "exporting");
     defer { baml.fs.remove(temporary); }

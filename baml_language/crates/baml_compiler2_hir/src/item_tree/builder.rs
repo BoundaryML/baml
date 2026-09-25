@@ -14,15 +14,14 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     ids::{
-        ClassMarker, ClientMarker, EnumMarker, FunctionMarker, ImplMarker, InterfaceMarker,
-        ItemKind, LetMarker, LocalItemId, RetryPolicyMarker, TemplateStringMarker, TypeAliasMarker,
-        hash_impl_key, hash_name,
+        ClassMarker, EnumMarker, FunctionMarker, ImplMarker, InterfaceMarker, ItemKind, LetMarker,
+        LocalItemId, TypeAliasMarker, hash_impl_key, hash_name,
     },
     item_tree::{
-        Class, ClassAttrs, ClassField, ClassFieldAttrs, Client, DefaultExprRef, Enum, EnumAttrs,
+        Class, ClassAttrs, ClassField, ClassFieldAttrs, DefaultExprRef, Enum, EnumAttrs,
         EnumVariant, EnumVariantAttrs, Function, FunctionParam, ImplBlock, ImplSubject,
-        ImplementsBlock, Interface, InterfaceField, InterfaceFieldLink, ItemSpans, ItemTree,
-        ItemTreeSourceMap, Let, MethodOwner, RetryPolicy, TemplateString, TypeAlias,
+        ImplementsBlock, Interface, InterfaceField, InterfaceFieldLink, ItemTree,
+        ItemTreeSourceMap, Let, MethodOwner, TypeAlias,
     },
 };
 
@@ -372,105 +371,6 @@ impl ItemTreeBuilder {
                 type_expr: ta.type_expr.clone(),
                 span: ta.span,
                 docstring: ta.docstring.clone(),
-            },
-        );
-        id
-    }
-
-    pub fn alloc_client(&mut self, c: &ast::ClientDef) -> LocalItemId<ClientMarker> {
-        let id = self.alloc_id(ItemKind::Client, &c.name);
-        self.source_map.client_spans.insert(
-            id,
-            ItemSpans {
-                span: c.span,
-                name_span: c.name_span,
-            },
-        );
-        let provider = c
-            .config_items
-            .iter()
-            .find(|item| item.key.as_str() == "provider")
-            .map(|item| Name::new(item.value.trim().trim_matches('"')));
-        let sub_client_names = c
-            .config_items
-            .iter()
-            .find(|item| item.key.as_str() == "options")
-            .map(|_| Vec::new()) // sub-clients are not parsed from `options`; left empty (unused downstream)
-            .unwrap_or_default();
-        let retry_policy_name = c
-            .config_items
-            .iter()
-            .find(|item| item.key.as_str() == "retry_policy")
-            .map(|item| Name::new(item.value.trim().trim_matches('"')));
-        self.tree.clients.insert(
-            id,
-            Client {
-                name: c.name.clone(),
-                provider,
-                sub_client_names,
-                retry_policy_name,
-                round_robin_start: None,
-            },
-        );
-        id
-    }
-
-    pub fn alloc_template_string(
-        &mut self,
-        ts: &ast::TemplateStringDef,
-    ) -> LocalItemId<TemplateStringMarker> {
-        let id = self.alloc_id(ItemKind::TemplateString, &ts.name);
-        self.source_map
-            .template_string_name_spans
-            .insert(id, ts.name_span);
-        let params = ts
-            .params
-            .iter()
-            .map(|p| FunctionParam {
-                name: p.name.clone(),
-                type_expr: p.type_expr.clone(),
-                default: None,
-                span: p.span,
-                name_span: p.name_span,
-            })
-            .collect();
-        self.tree.template_strings.insert(
-            id,
-            TemplateString {
-                name: ts.name.clone(),
-                params,
-                span: ts.span,
-            },
-        );
-        id
-    }
-
-    pub fn alloc_retry_policy(
-        &mut self,
-        rp: &ast::RetryPolicyDef,
-    ) -> LocalItemId<RetryPolicyMarker> {
-        let id = self.alloc_id(ItemKind::RetryPolicy, &rp.name);
-        self.source_map.retry_policy_spans.insert(
-            id,
-            ItemSpans {
-                span: rp.span,
-                name_span: rp.name_span,
-            },
-        );
-        let get_field = |key: &str| -> Option<String> {
-            rp.config_items
-                .iter()
-                .find(|item| item.key.as_str() == key)
-                .map(|item| item.value.trim().to_string())
-        };
-        self.tree.retry_policies.insert(
-            id,
-            RetryPolicy {
-                name: rp.name.clone(),
-                max_retries: get_field("max_retries"),
-                initial_delay_ms: get_field("initial_delay_ms"),
-                multiplier: get_field("multiplier"),
-                max_delay_ms: get_field("max_delay_ms"),
             },
         );
         id

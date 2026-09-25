@@ -373,6 +373,119 @@ async fn host_callable_returns_int_result() {
     drop(arc);
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_resolves_integral_js_number_to_float() {
+    let source = r#"
+        function measure(f: () -> float) -> float {
+            return f();
+        }
+    "#;
+
+    let arc = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::JsNumber(1.0)));
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "measure",
+            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("integral JavaScript number should satisfy a float return contract");
+
+    let value = match result {
+        BexExternalValue::Float(value) => value,
+        other => panic!("expected Float(1.0), got {other:?}"),
+    };
+    assert!((value - 1.0).abs() < f64::EPSILON);
+    drop(arc);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_resolves_integral_js_number_class_field_to_float() {
+    let source = r#"
+        class Size {
+            width float
+        }
+        function measure(f: () -> Size) -> float {
+            return f().width;
+        }
+    "#;
+
+    let arc = register_host_callable(|_items| {
+        let mut fields = IndexMap::new();
+        fields.insert("width".to_string(), BexExternalValue::JsNumber(612.0));
+        FakeReturn::Ok(BexExternalValue::Instance {
+            class_name: "Size".to_string(),
+            type_args: vec![],
+            fields,
+        })
+    });
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "measure",
+            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("integral class field should satisfy its float contract");
+
+    let value = match result {
+        BexExternalValue::Float(value) => value,
+        other => panic!("expected Float(612.0), got {other:?}"),
+    };
+    assert!((value - 612.0).abs() < f64::EPSILON);
+    drop(arc);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_integral_number_uses_float_in_float_bigint_union() {
+    let source = r#"
+        function measure(f: () -> float | bigint) -> float | bigint {
+            return f();
+        }
+    "#;
+
+    let arc = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::JsNumber(1.0)));
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "measure",
+            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("an integral JavaScript number should select the float arm");
+
+    let BexExternalValue::Union { value, metadata } = result else {
+        panic!("expected selected union result")
+    };
+    assert_eq!(metadata.selected_option, RuntimeTy::float());
+    let BexExternalValue::Float(value) = *value else {
+        panic!("expected a float payload")
+    };
+    assert!((value - 1.0).abs() < f64::EPSILON);
+    drop(arc);
+}
+
 /// A callable that crosses a host boundary may itself be host-owned. APIs such
 /// as the HTTP server retain a callable handle and later ask the engine to
 /// invoke it as a fresh VM root, so that entry path must accept the same
@@ -712,40 +825,6 @@ async fn host_callable_optional_union_is_omitted_or_sent_with_selected_arm() {
         BexExternalValue::Array { ref items, .. }
             if matches!(items.as_slice(), [BexExternalValue::Int(0), BexExternalValue::Int(1)])
     ));
-    drop(arc);
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn explicit_local_id_rejects_host_callable_with_catchable_invalid_argument() {
-    let source = r#"
-        function call_host_with_id(
-            f: (int) -> int throws baml.errors.InvalidArgument,
-            x: int,
-        ) -> string {
-            baml.json.to_string(f(x, $id = boundary.id())) catch (e) {
-                baml.errors.InvalidArgument => "caught"
-            }
-        }
-    "#;
-    let arc = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::Int(999)));
-    let snapshot = compile_for_engine(source);
-    let engine = Arc::new(
-        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
-            .expect("engine construction"),
-    );
-    let result = engine
-        .call_function(
-            "call_host_with_id",
-            vec![
-                BexExternalValue::HostValue(Arc::clone(&arc)),
-                BexExternalValue::Int(1),
-            ],
-            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-            true,
-        )
-        .await
-        .expect("host-callable rejection should be caught in BAML");
-    assert_eq!(result, BexExternalValue::String("caught".into()));
     drop(arc);
 }
 

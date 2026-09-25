@@ -56,10 +56,8 @@ macro_rules! visit_bytecode_index_operands {
             I::LoadGlobal(slot)
             | I::StoreGlobal(slot)
             | I::SysOp(slot)
-            | I::SysOpWithRuntimeId(slot)
             | I::MakeBoundMethod(slot)
             | I::Call { callee: slot, .. }
-            | I::CallWithRuntimeId { callee: slot, .. }
             | I::MakeGenericFunction { function: slot, .. } => {
                 $visit($operand::Global(slot));
             }
@@ -80,7 +78,6 @@ macro_rules! visit_bytecode_index_operands {
             | I::InitSpread(..)
             | I::InitInstance(..)
             | I::VirtualCall { .. }
-            | I::VirtualCallWithRuntimeId { .. }
             | I::MakeVirtualBoundMethod { .. }
             | I::MakeVirtualFunction { .. }
             | I::JumpTable(..)
@@ -142,7 +139,6 @@ macro_rules! visit_bytecode_index_operands {
             | I::Await
             | I::AwaitAny
             | I::CallIndirect
-            | I::CallIndirectWithRuntimeId
             | I::Throw
             | I::Rethrow
             | I::Return
@@ -274,7 +270,7 @@ mod tests {
     use crate::{
         HeapPtr,
         bytecode::{Bytecode, ClassInitPlan},
-        types::{FunctionCaptureProps, FunctionKind, FunctionOrigin},
+        types::{FunctionKind, FunctionOrigin},
     };
 
     fn test_function() -> Function {
@@ -323,6 +319,9 @@ mod tests {
             real_local_count: 0,
             bytecode,
             kind: FunctionKind::Bytecode,
+            telemetry_function_id: None,
+            telemetry_registration: crate::FunctionRegistration::default(),
+            telemetry_policy_id: crate::TelemetryPolicyId::none(),
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_base::Span::fake(),
@@ -339,8 +338,7 @@ mod tests {
             is_interface_body: false,
             native_key: None,
             body_meta: None,
-            capture: FunctionCaptureProps::disabled(),
-            function_id: 0,
+
             runtime_package: HeapPtr::null(),
         }
     }

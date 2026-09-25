@@ -11,19 +11,12 @@
 //! across four `#[pymethods]` blocks is intentional and gives the
 //! generator a concrete target to lower into.
 
-use std::{
-    ffi::{CString, c_char},
-    ptr, slice,
-};
-
-use bridge_cffi::{
-    BamlCffiStatus, Buffer, baml_media_base64, baml_media_file, baml_media_from_base64,
-    baml_media_from_file, baml_media_from_url, baml_media_mime_type, baml_media_url, free_buffer,
-};
-use bridge_ctypes::baml_bridge::cffi::{BamlHandleType, MediaTypeEnum};
+use bex_project::MediaKind;
+use bridge_cffi::handle_cffi::{self, HandleError, HandleParts};
+use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
 use pyo3::{
     Bound, Py, PyAny, PyResult, Python,
-    exceptions::{PyRuntimeError, PyTypeError, PyValueError},
+    exceptions::{PyTypeError, PyValueError},
     prelude::{PyModule, pyclass, pymethods},
     types::PyAnyMethods,
 };
@@ -31,78 +24,37 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use crate::py_handle::{BamlPyHandle, handle_clone, status_to_pyerr};
 
-type MediaConstructor =
-    unsafe extern "C" fn(i32, *const c_char, *const c_char, *mut u64, *mut i32) -> BamlCffiStatus;
-type MediaAccessor = unsafe extern "C" fn(u64, i32, *mut Buffer) -> BamlCffiStatus;
-
-fn c_string(value: String, field: &str) -> PyResult<CString> {
-    CString::new(value).map_err(|_| PyValueError::new_err(format!("{field} cannot contain NUL")))
-}
+type MediaConstructor = fn(MediaKind, &str, Option<&str>) -> Result<HandleParts, HandleError>;
+type MediaAccessor<T> = fn(u64, i32) -> Result<T, HandleError>;
 
 fn create_media(
     constructor: MediaConstructor,
-    media_kind: MediaTypeEnum,
+    media_kind: MediaKind,
     value: String,
     mime_type: Option<String>,
     context: &str,
 ) -> PyResult<(u64, u64)> {
-    let value = c_string(value, context)?;
-    let mime_type = mime_type.map(|s| c_string(s, "mime_type")).transpose()?;
-    let mime_ptr = mime_type
-        .as_ref()
-        .map(|s| s.as_ptr())
-        .unwrap_or_else(ptr::null);
-    let mut key = 0;
-    let mut handle_type = 0;
-    match unsafe {
-        constructor(
-            media_kind as i32,
-            value.as_ptr(),
-            mime_ptr,
-            &mut key,
-            &mut handle_type,
-        )
-    } {
-        BamlCffiStatus::Ok => Ok((key, handle_type as u64)),
-        status => Err(status_to_pyerr(context, status)),
+    // Keep each language's existing argument error and field name.
+    for (field, input) in [
+        (context, value.as_str()),
+        ("mime_type", mime_type.as_deref().unwrap_or_default()),
+    ] {
+        if input.contains('\0') {
+            return Err(PyValueError::new_err(format!("{field} cannot contain NUL")));
+        }
     }
+    let parts = constructor(media_kind, &value, mime_type.as_deref())
+        .map_err(|error| status_to_pyerr(context, error.into()))?;
+    Ok((parts.key, parts.handle_type as u64))
 }
 
-fn buffer_to_option(buf: Buffer) -> PyResult<Option<String>> {
-    if buf.ptr.is_null() {
-        return Ok(None);
-    }
-    let bytes = unsafe { slice::from_raw_parts(buf.ptr as *const u8, buf.len) };
-    let owned = bytes.to_vec();
-    free_buffer(buf);
-    let value = String::from_utf8(owned)
-        .map_err(|_| PyRuntimeError::new_err("media accessor returned invalid UTF-8"))?;
-    Ok(Some(value))
-}
-
-fn media_string_option(
+fn media_string<T>(
     key: u64,
     handle_type: u64,
-    accessor: MediaAccessor,
+    accessor: MediaAccessor<T>,
     context: &str,
-) -> PyResult<Option<String>> {
-    let mut out = Buffer {
-        ptr: ptr::null(),
-        len: 0,
-    };
-    match unsafe { accessor(key, handle_type as i32, &mut out) } {
-        BamlCffiStatus::Ok => buffer_to_option(out),
-        status => Err(status_to_pyerr(context, status)),
-    }
-}
-
-fn media_string(
-    key: u64,
-    handle_type: u64,
-    accessor: MediaAccessor,
-    context: &str,
-) -> PyResult<String> {
-    Ok(media_string_option(key, handle_type, accessor, context)?.unwrap_or_default())
+) -> PyResult<T> {
+    accessor(key, handle_type as i32).map_err(|error| status_to_pyerr(context, error.into()))
 }
 
 // `core_schema.is_instance_schema(cls)` produced via PyO3.
@@ -146,8 +98,13 @@ macro_rules! define_media_pyclass {
             #[staticmethod]
             #[pyo3(signature = (url, mime_type=None))]
             fn from_url(py: Python<'_>, url: String, mime_type: Option<String>) -> PyResult<Self> {
-                let (key, handle_type) =
-                    create_media(baml_media_from_url, $media_kind, url, mime_type, "from_url")?;
+                let (key, handle_type) = create_media(
+                    handle_cffi::media_from_url,
+                    $media_kind,
+                    url,
+                    mime_type,
+                    "from_url",
+                )?;
                 Ok(Self {
                     handle: Py::new(py, BamlPyHandle::new(key, handle_type))?,
                 })
@@ -161,7 +118,7 @@ macro_rules! define_media_pyclass {
                 mime_type: Option<String>,
             ) -> PyResult<Self> {
                 let (key, handle_type) = create_media(
-                    baml_media_from_file,
+                    handle_cffi::media_from_file,
                     $media_kind,
                     file,
                     mime_type,
@@ -180,7 +137,7 @@ macro_rules! define_media_pyclass {
                 mime_type: Option<String>,
             ) -> PyResult<Self> {
                 let (key, handle_type) = create_media(
-                    baml_media_from_base64,
+                    handle_cffi::media_from_base64,
                     $media_kind,
                     base64,
                     mime_type,
@@ -192,19 +149,19 @@ macro_rules! define_media_pyclass {
             }
 
             fn url(&self, py: Python<'_>) -> PyResult<Option<String>> {
-                self.access_optional_string(py, baml_media_url, "url")
+                self.access_optional_string(py, handle_cffi::media_url, "url")
             }
 
             fn file(&self, py: Python<'_>) -> PyResult<Option<String>> {
-                self.access_optional_string(py, baml_media_file, "file")
+                self.access_optional_string(py, handle_cffi::media_file, "file")
             }
 
             fn base64(&self, py: Python<'_>) -> PyResult<String> {
-                self.access_string(py, baml_media_base64, "base64")
+                self.access_string(py, handle_cffi::media_base64, "base64")
             }
 
             fn mime_type(&self, py: Python<'_>) -> PyResult<Option<String>> {
-                self.access_optional_string(py, baml_media_mime_type, "mime_type")
+                self.access_optional_string(py, handle_cffi::media_mime_type, "mime_type")
             }
 
             /// Internal: build a `$name` from a `BamlPyHandle`. Used by
@@ -253,17 +210,17 @@ macro_rules! define_media_pyclass {
             fn access_optional_string(
                 &self,
                 py: Python<'_>,
-                accessor: MediaAccessor,
+                accessor: MediaAccessor<Option<String>>,
                 context: &str,
             ) -> PyResult<Option<String>> {
                 let pyh = self.handle.borrow(py);
-                media_string_option(pyh.handle_key, pyh.handle_type, accessor, context)
+                media_string(pyh.handle_key, pyh.handle_type, accessor, context)
             }
 
             fn access_string(
                 &self,
                 py: Python<'_>,
-                accessor: MediaAccessor,
+                accessor: MediaAccessor<String>,
                 context: &str,
             ) -> PyResult<String> {
                 let pyh = self.handle.borrow(py);
@@ -275,24 +232,20 @@ macro_rules! define_media_pyclass {
 
 define_media_pyclass!(
     BamlImage,
-    MediaTypeEnum::Image,
+    MediaKind::Image,
     BamlHandleType::AdtMediaImage as u64
 );
 define_media_pyclass!(
     BamlAudio,
-    MediaTypeEnum::Audio,
+    MediaKind::Audio,
     BamlHandleType::AdtMediaAudio as u64
 );
 define_media_pyclass!(
     BamlVideo,
-    MediaTypeEnum::Video,
+    MediaKind::Video,
     BamlHandleType::AdtMediaVideo as u64
 );
-define_media_pyclass!(
-    BamlPdf,
-    MediaTypeEnum::Pdf,
-    BamlHandleType::AdtMediaPdf as u64
-);
+define_media_pyclass!(BamlPdf, MediaKind::Pdf, BamlHandleType::AdtMediaPdf as u64);
 
 pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     use pyo3::types::PyModuleMethods;

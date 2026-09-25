@@ -32,51 +32,13 @@ fn render_mir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
     let mut output = String::new();
 
     for func_loc in functions {
-        let mir = lower_function(db, func_loc, OptLevel::Two);
-        writeln!(output, "{}", display_function(mir)).unwrap();
+        let mir = lower_function(db, func_loc, OptLevel::Two)
+            .as_ref()
+            .unwrap_or_else(|error| panic!("MIR lowering failed: {error}"));
+        writeln!(output, "{}", display_function(db, mir)).unwrap();
     }
 
     output
-}
-
-#[test]
-fn explicit_local_id_reaches_direct_and_sysop_mir_terminators() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-function leaf(n: int) -> int { n }
-
-function main(call_id: boundary.LocalId, sysop_id: boundary.LocalId) -> int throws baml.errors.Io {
-  let value = leaf(1, $id = call_id)
-  baml.sys.sleep(baml.time.Duration.from_milliseconds(0n), $id = sysop_id)
-  value
-}
-"#,
-    );
-    let main_loc = *file_functions(&db, file)
-        .iter()
-        .find(|&&loc| function_data(&db, loc).name.as_str() == "main")
-        .expect("main function");
-    let mir = lower_function(&db, main_loc, OptLevel::Two);
-    let MirFunctionKind::Bytecode(body) = &mir.kind else {
-        panic!("main must lower to bytecode")
-    };
-
-    assert!(body.blocks.iter().any(|block| matches!(
-        block.terminator,
-        Some(Terminator::Call {
-            runtime_id: Some(_),
-            ..
-        })
-    )));
-    assert!(body.blocks.iter().any(|block| matches!(
-        block.terminator,
-        Some(Terminator::SysOp {
-            runtime_id: Some(_),
-            ..
-        })
-    )));
 }
 
 #[test]
@@ -126,7 +88,9 @@ function main<T, E>(futures: baml.future.Future<T, E>[]) -> int throws never {
         .iter()
         .find(|&&loc| function_data(&db, loc).name.as_str() == "main")
         .expect("main function");
-    let mir = lower_function(&db, main_loc, OptLevel::Two);
+    let mir = lower_function(&db, main_loc, OptLevel::Two)
+        .as_ref()
+        .unwrap_or_else(|error| panic!("MIR lowering failed: {error}"));
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         panic!("main must lower to bytecode")
     };
@@ -135,7 +99,7 @@ function main<T, E>(futures: baml.future.Future<T, E>[]) -> int throws never {
             .iter()
             .any(|block| matches!(block.terminator, Some(Terminator::Call { .. }))),
         "untrusted mounted builtin did not lower as an ordinary call: {}",
-        display_function(mir)
+        display_function(&db, mir)
     );
     assert!(
         !body
@@ -143,14 +107,12 @@ function main<T, E>(futures: baml.future.Future<T, E>[]) -> int throws never {
             .iter()
             .any(|block| matches!(block.terminator, Some(Terminator::AwaitAny { .. }))),
         "untrusted mounted await-any marker selected compiler-owned lowering: {}",
-        display_function(mir)
+        display_function(&db, mir)
     );
 }
 
 #[test]
 fn mounted_intrinsic_kinds_are_trusted_only_for_precompiled_packages() {
-    use baml_compiler2_hir_ty::callable::ExternalCallTarget;
-
     let mut dependency = make_db();
     dependency.dependency("dependency");
     dependency.file(
@@ -172,26 +134,19 @@ function forged_type_of<T>() -> reflect.Type {
             .root(&Name::new("dependency"))
             .unwrap(),
     );
+    // Model a hostile/corrupt mounted blob that widens its own linkability.
+    // (A row that also claimed a lang address — `log.info`, `reflect.Type.of`
+    // — cannot mount at all: import refuses a target other than the row's
+    // own key; see `hir_ty_package_interface`.)
     let mut configured = 0;
     for exported in interface
         .functions
         .values_mut()
         .flat_map(|namespace| namespace.values_mut())
     {
-        let target = match exported.name.as_str() {
-            "forged_log" => ExternalCallTarget::Free {
-                function: baml_type::TypeName::new(Name::new("log"), Vec::new(), Name::new("info")),
-            },
-            "forged_type_of" => ExternalCallTarget::Free {
-                function: baml_type::TypeName::new(
-                    Name::new("reflect"),
-                    vec![Name::new("Type")],
-                    Name::new("of"),
-                ),
-            },
-            _ => continue,
-        };
-        exported.target = target;
+        if !matches!(exported.name.as_str(), "forged_log" | "forged_type_of") {
+            continue;
+        }
         exported.linkability = ExternalLinkability::Linkable;
         configured += 1;
     }
@@ -219,7 +174,9 @@ function main() -> reflect.Type {
         .iter()
         .find(|&&loc| function_data(&db, loc).name.as_str() == "main")
         .expect("main function");
-    let mir = lower_function(&db, main_loc, OptLevel::Two);
+    let mir = lower_function(&db, main_loc, OptLevel::Two)
+        .as_ref()
+        .unwrap_or_else(|error| panic!("MIR lowering failed: {error}"));
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         panic!("main must lower to bytecode")
     };
@@ -232,7 +189,7 @@ function main() -> reflect.Type {
         call_count,
         2,
         "forged intrinsics did not lower as ordinary calls: {}",
-        display_function(mir)
+        display_function(&db, mir)
     );
     assert!(
         !body
@@ -241,116 +198,19 @@ function main() -> reflect.Type {
             .flat_map(|block| &block.statements)
             .any(|statement| { matches!(&statement.kind, StatementKind::Intrinsic { .. }) }),
         "forged intrinsic metadata selected compiler-owned lowering: {}",
-        display_function(mir)
+        display_function(&db, mir)
     );
-}
-
-#[test]
-fn explicit_local_id_reaches_indirect_optional_and_virtual_calls() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-interface Speaker {
-  function speak(self) -> int throws never
-}
-
-class Dog {
-  implements Speaker {
-    function speak(self) -> int { 1 }
-  }
-}
-
-class Cat {
-  implements Speaker {
-    function speak(self) -> int { 2 }
-  }
-}
-
-function indirect(callback: (int) -> int throws never, id: boundary.LocalId) -> int {
-  callback(1, $id = id)
-}
-
-function optional(callback: ((int) -> int throws never)?, id: boundary.LocalId) -> int? {
-  callback?.(1, $id = id)
-}
-
-function virtual(speaker: Speaker, id: boundary.LocalId) -> int {
-  speaker.speak($id = id)
-}
-
-function union_dispatch(speaker: Dog | Cat, id: boundary.LocalId) -> int {
-  speaker.speak($id = id)
-}
-"#,
-    );
-    let lower_named = |name: &str| {
-        let loc = *file_functions(&db, file)
-            .iter()
-            .find(|&&loc| function_data(&db, loc).name.as_str() == name)
-            .unwrap_or_else(|| panic!("{name} function"));
-        lower_function(&db, loc, OptLevel::Two)
-    };
-
-    for name in ["indirect", "optional"] {
-        let mir = lower_named(name);
-        let MirFunctionKind::Bytecode(body) = &mir.kind else {
-            panic!("{name} must lower to bytecode")
-        };
-        assert!(
-            body.blocks.iter().any(|block| matches!(
-                block.terminator,
-                Some(Terminator::Call {
-                    runtime_id: Some(_),
-                    ..
-                })
-            )),
-            "{name} dropped its runtime ID: {}",
-            display_function(mir)
-        );
-    }
-
-    let virtual_mir = lower_named("virtual");
-    let MirFunctionKind::Bytecode(virtual_body) = &virtual_mir.kind else {
-        panic!("virtual must lower to bytecode")
-    };
+    // The consumer links against the rows' addresses in the mounted package;
+    // the intrinsic markers select no compiler-owned symbol.
+    let rendered = display_function(&db, mir);
     assert!(
-        virtual_body.blocks.iter().any(|block| matches!(
-            block.terminator,
-            Some(Terminator::VirtualCall {
-                runtime_id: Some(_),
-                ..
-            })
-        )),
-        "virtual call dropped its runtime ID: {}",
-        display_function(virtual_mir)
-    );
-
-    // A union receiver dispatches only through the members' shared interface,
-    // and the virtual call must still carry the runtime ID.
-    let union_mir = lower_named("union_dispatch");
-    let MirFunctionKind::Bytecode(union_body) = &union_mir.kind else {
-        panic!("union_dispatch must lower to bytecode")
-    };
-    let union_virtual_calls = union_body
-        .blocks
-        .iter()
-        .filter_map(|block| match block.terminator.as_ref() {
-            Some(Terminator::VirtualCall { runtime_id, .. }) => Some(runtime_id),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    assert!(
-        !union_virtual_calls.is_empty(),
-        "union dispatch lowers through the shared interface's virtual call: {}",
-        display_function(union_mir)
+        rendered.contains("dependency.forged_log")
+            && rendered.contains("dependency.forged_type_of"),
+        "{rendered}"
     );
     assert!(
-        union_virtual_calls
-            .iter()
-            .all(|runtime_id| runtime_id.is_some()),
-        "the union dispatch dropped its runtime ID: {}",
-        display_function(union_mir)
+        !rendered.contains("log.info") && !rendered.contains("reflect.Type.of"),
+        "{rendered}"
     );
 }
 
@@ -767,46 +627,6 @@ function f(t: reflect.Type, value: unknown) -> unknown {
     baml_db::testing::assert_no_diagnostic_errors(&db);
     mir_snapshot!(
         "mounted_loc_free_runtime_call_target_is_explicit",
-        render_mir(&db, file)
-    );
-}
-
-/// Bare `$id` read is a special form: it must lower to a call of
-/// `baml.id.current` — never to a name lookup or a local read.
-#[test]
-fn runtime_id_read_lowers_to_baml_id_current() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-        function f() -> string {
-            $id
-        }
-        "#,
-    );
-    mir_snapshot!(
-        "runtime_id_read_lowers_to_baml_id_current",
-        render_mir(&db, file)
-    );
-}
-
-/// `$id = e` is the write special form: it must lower to `baml.id.set(e)` —
-/// never to an assignment into a (silently dead) temp.
-#[test]
-fn runtime_id_assignment_lowers_to_baml_id_set() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-        function f() -> string {
-            let next = baml.id.new();
-            $id = next;
-            $id
-        }
-        "#,
-    );
-    mir_snapshot!(
-        "runtime_id_assignment_lowers_to_baml_id_set",
         render_mir(&db, file)
     );
 }

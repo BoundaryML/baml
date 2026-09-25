@@ -627,7 +627,7 @@ fn simulate_terminator_stack<'db>(
         Terminator::Call {
             callee,
             args,
-            runtime_id,
+
             destination,
             ..
         } => {
@@ -643,9 +643,7 @@ fn simulate_terminator_stack<'db>(
                 if !direct {
                     trailing.push(callee);
                 }
-                if let Some(id) = runtime_id {
-                    trailing.push(id);
-                }
+
                 return simulate_stack_consuming_aggregate(
                     AggregateStackShape {
                         value_operands: &values,
@@ -659,7 +657,6 @@ fn simulate_terminator_stack<'db>(
                     def_use,
                 ) && simulate_store_place_stack(destination, sim, classifications);
             }
-            let runtime_id_slots = usize::from(runtime_id.is_some());
             let direct_call =
                 pull_semantics::resolve_constant_function_item(callee, classifications, def_use)
                     .is_some();
@@ -673,12 +670,8 @@ fn simulate_terminator_stack<'db>(
                 if pull_semantics::walk_call_direct_args(&mut sink, args).is_err() {
                     return false;
                 }
-                if let Some(runtime_id) = runtime_id
-                    && pull_semantics::walk_operand_pull(&mut sink, runtime_id).is_err()
-                {
-                    return false;
-                }
-                if !sim.pop_n(args.len() + runtime_id_slots) {
+
+                if !sim.pop_n(args.len()) {
                     return false;
                 }
             } else {
@@ -691,12 +684,8 @@ fn simulate_terminator_stack<'db>(
                 if pull_semantics::walk_call_indirect_operands(&mut sink, callee, args).is_err() {
                     return false;
                 }
-                if let Some(runtime_id) = runtime_id
-                    && pull_semantics::walk_operand_pull(&mut sink, runtime_id).is_err()
-                {
-                    return false;
-                }
-                if !sim.pop_n(args.len() + 1 + runtime_id_slots) {
+
+                if !sim.pop_n(args.len() + 1) {
                     return false;
                 }
             }
@@ -704,14 +693,11 @@ fn simulate_terminator_stack<'db>(
             simulate_store_place_stack(destination, sim, classifications)
         }
         Terminator::VirtualCall {
-            args,
-            runtime_id,
-            destination,
-            ..
+            args, destination, ..
         } => {
             if args.iter().any(|arg| is_operand_local(arg, carried_local)) {
                 let values = args.iter().collect::<Vec<_>>();
-                let trailing = runtime_id.iter().collect::<Vec<_>>();
+                let trailing = [];
                 return simulate_stack_consuming_aggregate(
                     AggregateStackShape {
                         value_operands: &values,
@@ -741,21 +727,8 @@ fn simulate_terminator_stack<'db>(
             // plus those two operands and pushes the result.
             sim.push();
             sim.push();
-            let runtime_id_slots = if let Some(runtime_id) = runtime_id {
-                let mut sink = StackCarryPullSink {
-                    sim,
-                    carried_local,
-                    classifications,
-                    def_use,
-                };
-                if pull_semantics::walk_operand_pull(&mut sink, runtime_id).is_err() {
-                    return false;
-                }
-                1
-            } else {
-                0
-            };
-            if !sim.pop_n(args.len() + 2 + runtime_id_slots) {
+
+            if !sim.pop_n(args.len() + 2) {
                 return false;
             }
             sim.push();
@@ -764,7 +737,7 @@ fn simulate_terminator_stack<'db>(
         Terminator::SysOp {
             callee,
             args,
-            runtime_id,
+
             destination,
             ..
         } => {
@@ -784,15 +757,7 @@ fn simulate_terminator_stack<'db>(
                 return false;
             }
 
-            let runtime_id_slots = if let Some(runtime_id) = runtime_id {
-                if pull_semantics::walk_operand_pull(&mut sink, runtime_id).is_err() {
-                    return false;
-                }
-                1
-            } else {
-                0
-            };
-            if !sim.pop_n(args.len() + runtime_id_slots) {
+            if !sim.pop_n(args.len()) {
                 return false;
             }
             sim.push();
@@ -1454,7 +1419,12 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         Ok(())
     }
 
-    fn binary_op(&mut self, _op: baml_compiler2_mir::BinOp) -> Result<(), Self::Error> {
+    fn binary_op(
+        &mut self,
+        _op: baml_compiler2_mir::BinOp,
+        _left: &Operand<'a>,
+        _right: &Operand<'a>,
+    ) -> Result<(), Self::Error> {
         if !self.sim.pop_n(2) {
             return Err(());
         }
@@ -1622,7 +1592,7 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
 
     fn make_generic_function(
         &mut self,
-        _item: &baml_compiler2_mir::ItemRef<'a>,
+        _func: baml_compiler2_hir_ty::extern_loc::FunctionRef<'a>,
         ntypeargs: usize,
     ) -> Result<(), Self::Error> {
         // Pops `ntypeargs` type-arg values, pushes one generic-function object.
@@ -1766,7 +1736,7 @@ mod tests {
             callee: Operand::Constant(Constant::Null),
             args: vec![],
             ntypeargs: 0,
-            runtime_id: None,
+
             destination: Place::Local(right),
             target: BlockId(1),
             unwind: None,

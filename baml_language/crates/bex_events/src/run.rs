@@ -1,5 +1,7 @@
 //! Host run lifecycle, payload, request, and wire-domain state.
 
+pub mod presentation;
+
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{
@@ -13,13 +15,10 @@ use std::{
 #[cfg(target_arch = "wasm32")]
 use web_time::{SystemTime, UNIX_EPOCH};
 
+use crate::value::ValueRef;
 pub use crate::{
-    ids::BoundaryId,
+    ids::{BoundaryId, ThreadRef},
     run_wire::{patch_to_wire, run_summary_to_wire, run_to_wire},
-};
-use crate::{
-    ids::{BexCallId, BexThreadId, CallRef, EngineId, ProcessEuid},
-    value::ValueRef,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -1034,7 +1033,6 @@ impl InMemoryRunStore {
     pub fn ingest_log_value_ref(
         &self,
         boundary_id: BoundaryId,
-        _call: TraceCallKey,
         level: Option<String>,
         message: String,
         source: Option<SourceLocation>,
@@ -1538,26 +1536,6 @@ impl RunStoreInner {
         let id = PayloadId(self.next_payload_id);
         self.next_payload_id = self.next_payload_id.saturating_add(1);
         id
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct TraceCallKey {
-    pub process_euid: ProcessEuid,
-    pub engine_id: EngineId,
-    pub thread_id: BexThreadId,
-    pub call_id: BexCallId,
-}
-
-impl TraceCallKey {
-    #[must_use]
-    pub fn call_ref(self) -> CallRef {
-        CallRef {
-            process_euid: self.process_euid,
-            engine_id: self.engine_id,
-            thread_id: self.thread_id,
-            call_id: self.call_id,
-        }
     }
 }
 

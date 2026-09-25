@@ -110,7 +110,7 @@ function read_json<T>(path: string) -> T {
 
 /// Rename on the same filesystem publishes a complete document atomically.
 function write_json(path: string, value: json) -> void {
-    let temporary = path + "." + baml.id.new() + ".tmp";
+    let temporary = path + "." + baml.random.SystemRandom.get().random(16).to_hex() + ".tmp";
     baml.fs.write(temporary, baml.json.stringify(value));
     defer { if (baml.fs.exists(temporary)) { baml.fs.remove(temporary); } }
     safe_exec("mv", ["-f", "--", temporary, path]);
@@ -146,7 +146,7 @@ function enqueue(feedback: Feedback, directory: string? = null) -> void {
     let queue = (directory ?? data_dir()) + "/queue";
     mkdir(queue);
     let path = queue + "/" + feedback_id(feedback) + ".json";
-    let temporary = queue + "/" + baml.id.new() + ".tmp";
+    let temporary = queue + "/" + baml.random.SystemRandom.get().random(16).to_hex() + ".tmp";
     baml.fs.write(
         temporary,
         baml.json.to_string(Job { feedback: feedback, status: "queued", error: null }),

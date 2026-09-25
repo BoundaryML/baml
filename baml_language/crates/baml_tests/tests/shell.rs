@@ -587,6 +587,8 @@ async fn claude_code_client_preserves_process_wait_timeout() {
                 let cl = claude_code.ClaudeCodeClient.new(
                     model = "offline-timeout-probe",
                     executable = executable,
+                    // Leave room for process startup and result parsing under test load.
+                    // This probe checks the subsequent process-wait timeout.
                     timeout_ms = 2000,
                 );
                 let _ = cl.invoke(timeout_provider_input()) catch_all (e) {

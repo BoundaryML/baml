@@ -80,9 +80,6 @@ pub(crate) fn surface_of(
         | Definition::Enum(_)
         | Definition::Interface(_)
         | Definition::TypeAlias(_)
-        | Definition::TemplateString(_)
-        | Definition::Client(_)
-        | Definition::RetryPolicy(_)
         | Definition::Let(_) => None,
     };
     if metadata.is_some_and(|metadata| metadata.is_language_internal) {
@@ -224,31 +221,6 @@ fn is_stdlib_internal(
 ) -> bool {
     name.starts_with(INTERNAL_PREFIX)
         && declared_in.source_root(db).kind(db) == baml_base::SourceRootKind::Stdlib
-}
-
-/// Symbol kind — locally defined since v1 HIR is removed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SymbolKind {
-    Function,
-    Class,
-    Enum,
-    TypeAlias,
-    Field,
-    EnumVariant,
-    Client,
-    Test,
-    Generator,
-    TemplateString,
-    RetryPolicy,
-}
-
-/// Information about a symbol in the project.
-#[derive(Debug, Clone)]
-pub struct Symbol {
-    pub name: String,
-    pub kind: SymbolKind,
-    pub file_path: std::path::PathBuf,
-    pub span: baml_db::Span,
 }
 
 /// Extended function metadata for the playground.
@@ -545,7 +517,7 @@ mod tests {
             .canonicalize()
             .unwrap_or_else(|_| "/tmp".into());
         db.file(
-            &root.join("ns_demo/main.baml"),
+            root.join("ns_demo/main.baml"),
             "\n\nfunction transform<T extends string>(value: T, count: int) -> T throws Error {\n  value\n}",
         );
 

@@ -1821,8 +1821,6 @@ function f() -> int {
         }
     }
 
-    // ── Phase 1: retry_policy produces Item::Let with LetOrigin::RetryPolicy ──
-
     // ── Postfix type expression tests ────────────────────────────────────────
 
     fn first_type_alias(items: Vec<Item>) -> crate::ast::TypeAliasDef {
@@ -1980,12 +1978,10 @@ function f() -> int {
         );
     }
 
-    // ── Phase 1: retry_policy produces Item::Let with LetOrigin::RetryPolicy ──
-
     #[test]
-    fn retry_policy_produces_let_item_with_retry_policy_origin() {
-        // Renamed behavior: retry_policy blocks are removed; retry composes
-        // at the client boundary (ai.Retry).
+    fn retry_policy_block_lowers_to_a_removal_diagnostic() {
+        // `retry_policy` blocks are removed; retry composes at the client
+        // boundary (ai.Retry).
         let source = r#"
 retry_policy MyRetry {
   max_retries 3
@@ -2172,6 +2168,17 @@ function Demo() -> string {
     }
 
     #[test]
+    fn backtick_single_line_keeps_escaped_newline() {
+        let source = r#"
+function Demo() -> string {
+    `hostname\n`
+}
+"#;
+        let items = parse_and_lower(source);
+        assert_eq!(extract_first_string_literal(items), "hostname\n");
+    }
+
+    #[test]
     fn backtick_escapes_backtick_and_dollar() {
         let source = r#"
 function Demo() -> string {
@@ -2194,6 +2201,35 @@ function Demo() -> string {
 ";
         let items = parse_and_lower(source);
         assert_eq!(extract_first_string_literal(items), "line one\nline two");
+    }
+
+    #[test]
+    fn backtick_single_line_preserves_boundary_whitespace() {
+        let source = r#"
+function Demo() -> string {
+    `  padded content  `
+}
+"#;
+        let items = parse_and_lower(source);
+        assert_eq!(extract_first_string_literal(items), "  padded content  ");
+    }
+
+    #[test]
+    fn backtick_multiline_trims_boundary_layout() {
+        let source = [
+            "function Demo() -> string {",
+            "    `",
+            "",
+            "        line one",
+            "         ",
+            "        line two",
+            "",
+            "    `",
+            "}",
+        ]
+        .join("\n");
+        let items = parse_and_lower(&source);
+        assert_eq!(extract_first_string_literal(items), "line one\n\nline two");
     }
 
     #[test]

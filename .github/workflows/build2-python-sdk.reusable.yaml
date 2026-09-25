@@ -85,6 +85,8 @@ jobs:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
 
+      - uses: ./.github/actions/export-build-fingerprint
+
       - name: Stamp release plan
         env:
           RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
@@ -138,6 +140,9 @@ jobs:
           manylinux: ${{ matrix._.manylinux }}
           # Explicit musl images bypass maturin-action's implicit GHCR defaults.
           container: ${{ matrix._.container }}
+          # The Linux build container only receives allowlisted env prefixes
+          # (CARGO_, RUST, ...); forward the build fingerprint explicitly.
+          docker-options: -e BAML_GIT_SHA
           before-script-linux: |
             if command -v yum &> /dev/null; then
                 yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic

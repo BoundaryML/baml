@@ -239,7 +239,6 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.http.TlsConfig"
         | "baml.glob.Glob"
         | "baml.fs.File"
-        | "boundary.LocalId"
         | "baml.csv.Record"
         | "baml.csv.Reader"
         | "baml.csv.Rows"
@@ -300,14 +299,13 @@ fn is_public_resource_stdlib_function(name: &Name) -> bool {
         return false;
     }
 
-    (name.package().as_str() == "baml"
+    name.package().as_str() == "baml"
         && name.namespace().first().is_some_and(|namespace| {
             matches!(
                 namespace.as_str(),
                 "csv" | "fs" | "glob" | "http" | "net" | "spawn"
             )
-        }))
-        || name.to_string() == "boundary.id"
+        })
 }
 
 fn is_runtime_class_projection(name: &Name) -> bool {
@@ -1814,9 +1812,6 @@ fn require_supported_type_inner(
 fn contains_type_var(ty: &Ty) -> bool {
     match ty {
         Ty::TypeVar(..) => true,
-        Ty::Class(_, arguments) | Ty::Union(arguments) => arguments.iter().any(contains_type_var),
-        Ty::List(item) => contains_type_var(item),
-        Ty::Map { key, value, .. } => contains_type_var(key) || contains_type_var(value),
         Ty::Function {
             params,
             ret,
@@ -1829,7 +1824,7 @@ fn contains_type_var(ty: &Ty) -> bool {
                 || contains_type_var(ret)
                 || (!is_synthetic_effect_type(throws) && contains_type_var(throws))
         }
-        _ => false,
+        _ => baml_codegen_types::any_type_child(ty, contains_type_var),
     }
 }
 
@@ -4470,12 +4465,6 @@ fn namespace_requests(name: &Name, origin: CSharpNameOrigin) -> Vec<CSharpNameRe
         std::iter::once(BaseName::new("Baml"))
             .chain(name.namespace().iter().cloned())
             .collect::<Vec<_>>()
-    } else if name.package().as_str() == "boundary"
-        && (is_resource_projection(name) || is_public_resource_stdlib_function(name))
-    {
-        std::iter::once(BaseName::new("Boundary"))
-            .chain(name.namespace().iter().cloned())
-            .collect::<Vec<_>>()
     } else {
         name.namespace().clone()
     };
@@ -6198,5 +6187,31 @@ mod tests {
         assert!(source.contains("BamlOptional<global::Baml.BamlValue> client = default"));
         assert!(!source.contains("NewStreamAsync"));
         assert!(source.contains("\"user.only_methods.Counter.new@stream\""));
+    }
+}
+
+#[cfg(test)]
+mod shared_traversal_tests {
+    use super::*;
+
+    #[test]
+    fn nested_variables_are_found_but_synthetic_callable_effects_are_not() {
+        let variable = |name: &str| Ty::TypeVar(baml_codegen_types::ParamTy::new(0, name.into()));
+        let callable = |throws| Ty::Function {
+            params: Box::new([]),
+            ret: Box::new(Ty::Int),
+            throws: Box::new(throws),
+        };
+        assert!(!contains_type_var(&callable(variable("__effect_param_0"))));
+        assert!(contains_type_var(&callable(variable("E"))));
+        let interface = Ty::Interface(
+            Name::new("user".into(), vec![], "I".into()),
+            Box::new([]),
+            Box::new([("Item".into(), variable("T"))]),
+        );
+        assert!(contains_type_var(&Ty::Future(
+            Box::new(interface),
+            Box::new(Ty::Never)
+        )));
     }
 }

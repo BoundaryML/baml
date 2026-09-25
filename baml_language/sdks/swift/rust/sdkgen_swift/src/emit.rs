@@ -504,13 +504,9 @@ pub(crate) fn render_callable(
 pub(crate) fn ty_contains_type_var(ty: &Ty, name: &str) -> bool {
     match ty {
         Ty::TypeVar(v) => v.as_str() == name,
-        Ty::List(inner) => ty_contains_type_var(inner, name),
-        Ty::Map { key, value, .. } => {
-            ty_contains_type_var(key, name) || ty_contains_type_var(value, name)
-        }
-        Ty::Union(members) => members.iter().any(|m| ty_contains_type_var(m, name)),
-        Ty::Class(_, args) => args.iter().any(|a| ty_contains_type_var(a, name)),
-        _ => false,
+        // These values are opaque or unsupported, so do not infer from their types.
+        Ty::Function { .. } | Ty::Interface(..) | Ty::Future(..) => false,
+        _ => baml_codegen_types::any_type_child(ty, |child| ty_contains_type_var(child, name)),
     }
 }
 
@@ -782,4 +778,25 @@ fn render_returned_callable(
     }
     body.push_str("\t}");
     Some((closure_ty, body))
+}
+
+#[cfg(test)]
+mod shared_traversal_tests {
+    use super::*;
+
+    #[test]
+    fn value_inference_traverses_containers_but_not_opaque_signatures() {
+        let variable = || Ty::TypeVar(baml_codegen_types::ParamTy::new(0, "T".into()));
+        assert!(ty_contains_type_var(&Ty::List(Box::new(variable())), "T"));
+        let callable = Ty::Function {
+            params: Box::new([]),
+            ret: Box::new(variable()),
+            throws: Box::new(Ty::Never),
+        };
+        assert!(!ty_contains_type_var(&callable, "T"));
+        assert!(!ty_contains_type_var(
+            &Ty::Future(Box::new(variable()), Box::new(Ty::Never)),
+            "T"
+        ));
+    }
 }

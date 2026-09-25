@@ -403,28 +403,19 @@ pub(crate) fn collect_type_vars(ty: &Ty, out: &mut Vec<String>) {
                 out.push(id);
             }
         }
-        Ty::Class(_, args) => {
-            for a in args {
-                collect_type_vars(a, out);
-            }
-        }
-        Ty::List(inner) => collect_type_vars(inner, out),
-        Ty::Map { key, value, .. } => {
-            collect_type_vars(key, out);
-            collect_type_vars(value, out);
-        }
-        Ty::Union(items) => {
-            for i in items {
-                collect_type_vars(i, out);
-            }
-        }
+        // Java callable descriptors do not represent the throws type.
         Ty::Function { params, ret, .. } => {
-            for p in params {
-                collect_type_vars(&p.ty, out);
+            for param in params {
+                collect_type_vars(&param.ty, out);
             }
             collect_type_vars(ret, out);
         }
-        _ => {}
+        _ => {
+            baml_codegen_types::any_type_child(ty, |child| {
+                collect_type_vars(child, out);
+                false
+            });
+        }
     }
 }
 
@@ -1475,5 +1466,23 @@ mod tests {
             tr(&c, TyPosition::TopLevel),
             "baml_sdk.generics.Wrapper<java.lang.@org.jspecify.annotations.Nullable Long>"
         );
+    }
+}
+
+#[cfg(test)]
+mod shared_traversal_tests {
+    use super::*;
+
+    #[test]
+    fn collects_nested_interface_and_future_variables_in_first_appearance_order() {
+        let var = || Ty::TypeVar(baml_codegen_types::ParamTy::new(0, "T".into()));
+        let ty = Ty::Interface(
+            Name::new("user".into(), vec![], "I".into()),
+            Box::new([Ty::Future(Box::new(var()), Box::new(Ty::Never))]),
+            Box::new([("Item".into(), var())]),
+        );
+        let mut names = Vec::new();
+        collect_type_vars(&ty, &mut names);
+        assert_eq!(names, ["T"]);
     }
 }

@@ -322,11 +322,7 @@ impl SymbolId {
             | Definition::Enum(_)
             | Definition::Interface(_)
             | Definition::TypeAlias(_) => IdKind::Type,
-            Definition::Function(_)
-            | Definition::TemplateString(_)
-            | Definition::Client(_)
-            | Definition::RetryPolicy(_)
-            | Definition::Let(_) => IdKind::Value,
+            Definition::Function(_) | Definition::Let(_) => IdKind::Value,
         };
         let name = definition_name(db, def);
         let pkg = baml_compiler2_hir::file_package::file_package(db, definition_file(db, def));
@@ -593,8 +589,8 @@ pub struct AssocBindingExport {
 
 // ── Item records ─────────────────────────────────────────────────────────────
 
-/// The structural kind of an exported item, serialized exactly as the
-/// pre-rework surface layer spelled it.
+/// The structural kind of an exported item, in its wire spelling
+/// (`snake_case`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExportItemKind {
@@ -603,9 +599,6 @@ pub enum ExportItemKind {
     Interface,
     TypeAlias,
     Function,
-    TemplateString,
-    Client,
-    RetryPolicy,
     Global,
 }
 
@@ -616,9 +609,6 @@ fn item_kind(def: Definition<'_>) -> ExportItemKind {
         Definition::Interface(_) => ExportItemKind::Interface,
         Definition::TypeAlias(_) => ExportItemKind::TypeAlias,
         Definition::Function(_) => ExportItemKind::Function,
-        Definition::TemplateString(_) => ExportItemKind::TemplateString,
-        Definition::Client(_) => ExportItemKind::Client,
-        Definition::RetryPolicy(_) => ExportItemKind::RetryPolicy,
         Definition::Let(_) => ExportItemKind::Global,
     }
 }
@@ -746,9 +736,6 @@ fn definition_name(db: &Db, def: Definition<'_>) -> Name {
         Definition::Interface(loc) => item_data::interface_data(db, loc).name.clone(),
         Definition::TypeAlias(loc) => item_data::type_alias_data(db, loc).name.clone(),
         Definition::Function(loc) => item_data::function_data(db, loc).name.clone(),
-        Definition::TemplateString(loc) => item_data::template_string_data(db, loc).name.clone(),
-        Definition::Client(loc) => item_data::client_data(db, loc).name.clone(),
-        Definition::RetryPolicy(loc) => item_data::retry_policy_data(db, loc).name.clone(),
         Definition::Let(loc) => item_data::let_data(db, loc).name.clone(),
     }
 }
@@ -760,9 +747,6 @@ fn definition_file(db: &Db, def: Definition<'_>) -> SourceFile {
         Definition::Interface(loc) => loc.file(db),
         Definition::TypeAlias(loc) => loc.file(db),
         Definition::Function(loc) => loc.file(db),
-        Definition::TemplateString(loc) => loc.file(db),
-        Definition::Client(loc) => loc.file(db),
-        Definition::RetryPolicy(loc) => loc.file(db),
         Definition::Let(loc) => loc.file(db),
     }
 }
@@ -774,16 +758,12 @@ fn definition_span(db: &Db, def: Definition<'_>) -> TextRange {
         Definition::Interface(loc) => item_data::interface_source_map(db, loc).span,
         Definition::TypeAlias(loc) => item_data::type_alias_source_map(db, loc).span,
         Definition::Function(loc) => item_data::function_source_map(db, loc).span,
-        Definition::TemplateString(loc) => item_data::template_string_source_map(db, loc).span,
-        Definition::Client(loc) => item_data::client_source_map(db, loc).span,
-        Definition::RetryPolicy(loc) => item_data::retry_policy_source_map(db, loc).span,
         Definition::Let(loc) => item_data::let_source_map(db, loc).span,
     }
 }
 
-/// The leading `///` docstring, where the kind carries one. Template
-/// strings, clients, tests, retry policies, and globals carry none in the
-/// item data today.
+/// The leading `///` docstring, where the kind carries one. Globals carry
+/// none in the item data today.
 fn definition_docstring<'db>(db: &'db Db, def: Definition<'db>) -> Option<&'db str> {
     match def {
         Definition::Class(loc) => item_data::class_data(db, loc).docstring.as_deref(),
@@ -791,10 +771,7 @@ fn definition_docstring<'db>(db: &'db Db, def: Definition<'db>) -> Option<&'db s
         Definition::Interface(loc) => item_data::interface_data(db, loc).docstring.as_deref(),
         Definition::TypeAlias(loc) => item_data::type_alias_data(db, loc).docstring.as_deref(),
         Definition::Function(loc) => item_data::function_data(db, loc).docstring.as_deref(),
-        Definition::TemplateString(_)
-        | Definition::Client(_)
-        | Definition::RetryPolicy(_)
-        | Definition::Let(_) => None,
+        Definition::Let(_) => None,
     }
 }
 
@@ -1337,10 +1314,7 @@ fn export_item<'db>(
         Definition::Function(function) => ItemDetail::Function {
             signature: function_export(db, function, false, None).signature,
         },
-        Definition::TemplateString(_)
-        | Definition::Client(_)
-        | Definition::RetryPolicy(_)
-        | Definition::Let(_) => ItemDetail::Plain {},
+        Definition::Let(_) => ItemDetail::Plain {},
     };
 
     Some(ItemExport {
@@ -1358,9 +1332,6 @@ fn export_item<'db>(
             | Definition::Enum(_)
             | Definition::Interface(_)
             | Definition::TypeAlias(_)
-            | Definition::TemplateString(_)
-            | Definition::Client(_)
-            | Definition::RetryPolicy(_)
             | Definition::Let(_) => false,
         },
         source: source_export(db, definition_file(db, def), definition_span(db, def)),

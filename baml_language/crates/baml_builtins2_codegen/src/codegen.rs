@@ -2143,12 +2143,7 @@ fn receiver_view_path(recv: &Receiver) -> String {
     }
 }
 
-#[allow(dead_code)]
-fn receiver_input_type(recv: &Receiver) -> String {
-    receiver_input_type_with_vm_usage(recv, VmUsage::None)
-}
-
-/// Like `receiver_input_type` but switches media class receivers to `&Value`
+/// Select the receiver type, switching media class receivers to `&Value`
 /// when `vm_usage == MutRef` — the `view::media::Cls<'_>` view struct holds a
 /// `&Instance` borrowed from `vm`, which would conflict with the `&mut BexVm`
 /// parameter required for mutating-VM methods.  Passing the raw `Value` (which
@@ -2445,7 +2440,9 @@ mod tests {
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
-            output.contains("fn deep_copy(vm: &mut BexVm, value: &Value) -> Value;"),
+            output.contains(
+                "fn deep_copy(vm: &mut BexVm, value: &Value) -> Result<Value, VmRustFnError>;"
+            ),
             "BamlPackageBaml should have deep_copy:\n{output}"
         );
     }
@@ -2488,8 +2485,7 @@ mod tests {
             // with the same name but different VmUsage (e.g.
             // uint8array.to_string vs errors.StackTrace.to_string). The
             // return type matters for zero-param methods, where the params
-            // alone cannot disambiguate (e.g. spawn.CancelToken.new(vm,) vs
-            // baml.id.new()).
+            // alone cannot disambiguate overloaded constructors.
             let params = clean_param_list(b);
             let ret = if b.may_yield {
                 "NativeCallResult".to_string()

@@ -923,15 +923,13 @@ self.onmessage = async (event: MessageEvent) => {
       // response handler so the protocol union is exhaustive.
       return;
 
-    // Telemetry reads `.baml/profiles-v1` on disk, which only the local
-    // toolchain server can reach. The in-browser runtime has no such store.
+    // Profiling is unavailable in both browser and local runtimes.
     case 'listExecutions':
     case 'openExecution':
     case 'readTelemetryMedia':
       postOut({
-        code: 'telemetryUnavailable',
-        message:
-          'Telemetry needs the local profile store, which the in-browser runtime does not have.',
+        code: 'profilingUnavailable',
+        message: 'Profiling is currently unavailable.',
         requestId: msg.requestId,
         type: 'commandError',
       });

@@ -181,15 +181,28 @@ function sit_from(
 
 // ─── what the model concludes ────────────────────────────────────────────────
 
-function expert_report() -> string throws never {
+/// What certifying a perfect learner costs over `sessions`, and what the
+/// first of them concluded about withholding and about the naive models.
+///
+/// Over twelve sittings, not one, and asked as two tests of six. What it
+/// costs varies enormously with the draw — the spread runs from the low
+/// eighties to the budget, and two of the twelve do not finish inside it —
+/// so a single session measures the luck of that session, and the version of
+/// this test that asked one certified by chance. Splitting the twelve is for
+/// the clock rather than the measurement: driving them is the slowest thing
+/// the suite does by a factor of two, and the per-test cap is what it would
+/// meet first.
+///
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if `sessions` is empty, which would be a
+///   report about nothing.
+function expert_report_over(sessions: int[]) -> string throws never {
     let knobs = root.engine.default_knobs();
-    // Over twelve sittings, not one. What it costs to certify a perfect
-    // learner varies enormously with the draw — the spread below runs from
-    // the high thirties to the budget — so a single session measures the luck
-    // of that session, and the version of this test that asked one certified
-    // by chance.
-    let steps = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((session) -> {
-        let sat = sit(expert, knobs, session);
+    let sittings = sessions.map((session) -> {
+        sit(expert, knobs, session)
+    });
+    let steps = sittings.map((sat) -> {
         `${sat.standing.why}:${sat.profile.step}`
     });
     let certified = steps
@@ -197,8 +210,12 @@ function expert_report() -> string throws never {
             step.starts_with("Mastered")
         })
         .length();
-    let sat = sit(expert, knobs, 1);
-    `certified=${certified} of 12 steps=${steps} withheld=${sat.standing.withheld} suspected=${sat.standing.suspected ?? "none"}`
+    // The first sitting of the run, which the map above already sat: reading
+    // `withheld` and `suspected` off a thirteenth sitting of the same session
+    // cost an eighth of this test for a number it had already worked out.
+    let first = sittings.at(0)
+        ?? throw baml.panics.Unreachable { message: "a certification report over no sittings" };
+    `certified=${certified} of ${sessions.length()} steps=${steps} withheld=${first.standing.withheld} suspected=${first.standing.suspected ?? "none"}`
 }
 
 /// Practice asks a fixed number of cases and stops nowhere else: the expert
@@ -359,7 +376,7 @@ function repetition_report() -> string throws never {
 test "learner: the same item comes round again and again" {
     assert.equal(
         repetition_report(),
-        `steps=64 distinct=36 top=["double_contravariance=4", "error_covariant=3", "carried_2=3", "carried_3=3", "map_value_invariant=3"]`,
+        `steps=110 distinct=39 top=["param_contravariant=6", "array_element=6", "double_contravariance=6", "carried_2=5", "return_covariant=5"]`,
     )
 }
 
@@ -380,14 +397,14 @@ function mean_of(values: int[]) -> int throws never {
 test "learner: a learner of the axioms is not marched into depth" {
     assert.equal(
         beginner_escalation_report(),
-        `steps=80 depth_first20=135 depth_last20=150 spread=["1:57", "2:18", "3:3", "4:2", "5:0"] chance_last20=5620`,
+        `steps=140 depth_first20=130 depth_last20=145 spread=["1:105", "2:23", "3:9", "4:3", "5:0"] chance_last20=6690`,
     )
 }
 
 test "learner: the questions stop getting harder once the bank runs out of depth" {
     assert.equal(
         escalation_report(),
-        `steps=64 depth_first20=155 depth_last20=185 spread=["1:40", "2:12", "3:7", "4:3", "5:2"] chance_last20=8195`,
+        `steps=110 depth_first20=140 depth_last20=150 spread=["1:74", "2:18", "3:11", "4:4", "5:3"] chance_last20=8720`,
     )
 }
 
@@ -457,16 +474,31 @@ function beginner_report() -> string throws never {
     `certified=${sat.standing.why == root.engine.Why.Mastered} variance_mastered=${variance.length()} axioms_above_variance=${mean_offset(sat, false) > mean_offset(sat, true)} withheld_some=${sat.standing.withheld > 0.0}`
 }
 
-test "learner: certifying a perfect learner costs 38 to 72 questions, and twice in twelve does not finish" {
-    // The two that do not finish are the measurement, not a fluke to be tuned
-    // away: at this budget a learner who answers everything right is left
-    // uncertified about one sitting in six, and three models that sat the quiz
-    // said independently that it should have had their measure by about
+test "learner: certifying a perfect learner costs 91 to 130 questions over sessions 1 to 6, and one does not finish" {
+    // The two that do not finish across the twelve are the measurement, not a
+    // fluke to be tuned away: at this budget a learner who answers everything
+    // right is still sometimes left uncertified, and three models that sat the
+    // quiz said independently that it should have had their measure by about
     // question twenty-five. Raising the budget hides it; the estimator is
     // where it would be fixed.
+    //
+    // It was one in twelve until a wrap over an equivalence stopped bearing
+    // the wrap's own rule (`root.algebra.transfer_decides`). That rule is now
+    // evidenced only where the wrap decides something — over a strict pair —
+    // so it takes about half as many questions' worth of evidence per
+    // question, and two sittings run out of budget rather than one. The
+    // evidence those cases used to give was never earned: the learner could
+    // answer them without knowing the wrap was invariant.
     assert.equal(
-        expert_report(),
-        `certified=10 of 12 steps=["Mastered:70", "Mastered:70", "Mastered:64", "Mastered:53", "Mastered:38", "Mastered:66", "Mastered:63", "Budget:80", "Mastered:47", "Mastered:65", "Mastered:72", "Budget:80"] withheld=0.0 suspected=none`,
+        expert_report_over([1, 2, 3, 4, 5, 6]),
+        `certified=5 of 6 steps=["Mastered:130", "Mastered:96", "Mastered:110", "Budget:140", "Mastered:91", "Mastered:97"] withheld=0.0 suspected=none`,
+    )
+}
+
+test "learner: certifying a perfect learner costs 81 to 133 questions over sessions 7 to 12, and one does not finish" {
+    assert.equal(
+        expert_report_over([7, 8, 9, 10, 11, 12]),
+        `certified=5 of 6 steps=["Mastered:118", "Mastered:81", "Mastered:99", "Budget:140", "Mastered:110", "Mastered:133"] withheld=0.0 suspected=none`,
     )
 }
 
@@ -478,10 +510,10 @@ test "learner: a learner who never commits is never certified" {
     assert.equal(silent_report(), "why=Stalled mastered=0 committed=0 commits_unsure=2")
 }
 
-test "learner: strict coverage costs more questions than an overall picture" {
+test "learner: strict coverage costs no fewer questions than an overall picture" {
     assert.equal(
         coverage_report(),
-        "loose_first=true loose_done=Mastered loose_steps=64 strict_done=Mastered strict_steps=64 uncertified=0 rules=30",
+        "loose_first=true loose_done=Mastered loose_steps=110 strict_done=Mastered strict_steps=110 uncertified=0 rules=31",
     )
 }
 
@@ -499,14 +531,14 @@ function parity_report() -> string throws never {
 test "learner: answering by an unrelated bit is suspected of no model" {
     assert.equal(
         parity_report(),
-        "suspected=none why=Budget commits_unsure=96 leading=spelling=9,typescript=2,bounds=1,covariant=0,structural=-5",
+        "suspected=none why=Stalled commits_unsure=95 leading=spelling=14,shape=12,bounds=10,covariant=5,typescript=4,structural=0",
     )
 }
 
 test "learner: reasoning as TypeScript does is found out as TypeScript" {
     assert.equal(
         typescripter_report(),
-        "suspected=typescript leading=typescript=60,covariant=21,bounds=6,structural=-5,spelling=-25 taught=true on_point=true both_kinds=true",
+        "suspected=typescript leading=typescript=61,bounds=25,covariant=22,structural=0,shape=-16,spelling=-23 taught=true on_point=true both_kinds=true",
     )
 }
 
@@ -784,49 +816,70 @@ function orders_report() -> string throws never {
 test "orders: every servable rule has one, and only the carrying variance rules reach four or more" {
     assert.equal(
         orders_report(),
-        `rules=30 of 31 by_order=[25, 2, 0, 0, 3] deepest=["variance/function-parameter-contravariant", "variance/function-return-covariant", "variance/function-error-covariant"] never_alone=4`,
+        `rules=31 of 32 by_order=[27, 1, 0, 1, 2] deepest=["variance/function-parameter-contravariant", "variance/function-return-covariant", "variance/function-error-covariant"] never_alone=4`,
     )
 }
 
-// ─── how often each answer comes up ──────────────────────────────────────────
+// ─── what a sitting's questions give away ────────────────────────────────────
 //
-// A sitting asks about three cases in five that compile, so a learner who
-// always says so is right more often than not. It is not the selection's
-// doing and the selection cannot mend it: most of the bank's items answer
-// one way for every case they make (see the bank suite), so the mix of
-// answers IS the mix of items, and forcing the answers even would force the
-// items uneven — measured, insisting enough to move the share at all costs
-// a scripted expert its certification and a beginner every axiom it had.
-// The fix is a bank whose facts do not each answer one way: near misses, in
-// §12 of the plan. This records where it stands until then.
+// The bank is held to saying nothing with its surface (the tells suite), and
+// selection could still undo that, because it prefers some cases to others.
+// It did so twice over until it was kept from seeing the coins that decide a
+// case's answer: it served whichever direction of a draw fooled a naive
+// model — function types rejected ten times in eleven — and whichever fact
+// of a shape held the rule the tracer wanted evidence on, which for an
+// equivalence is always a case that compiles — unions accepted seven times
+// in ten. It reads a draw's castings now (`root.engine.Candidate`), and this
+// holds the questions a learner is actually asked to the bar.
 
-/// Whether the question put at `t` asked for a verdict, and if so whether
-/// its answer was that the program compiles.
-function compiles_of(knobs: root.engine.Knobs, t: root.Taken) -> bool? throws never {
+/// The question put at `t`, as its surface and its answer, when it asked for
+/// a verdict.
+///
+/// The whole surface, by `surface_of`, and not just the words of the source.
+/// A `Case` carries its program and not the pair it was built from, so the
+/// draw is dealt again from the item and the seed to recover it — the same
+/// deal `generate` made, since both are pure functions of that seed. Reading
+/// the words alone would leave this unable to name the features the bank
+/// sweep already records as leaning, and it is precisely selection
+/// over-serving one of those that this is here to catch.
+///
+/// `null` for a question put as a choice, and for an item that is not a
+/// shape — which no sitting serves, every such item being one the compiler
+/// is known to disagree with. The count in the report is what would show
+/// either of those quietly swallowing a question.
+function served_surface(knobs: root.engine.Knobs, t: root.Taken) -> Surfaced? throws never {
     match (root.put_at(knobs, t.item, t.seed).posed) {
         let case: root.engine.Case => {
-            root.engine.verdict_kind(case.key) == root.engine.VerdictKind.Compiles
+            let shape = root.bank.shapes().find((s) -> {
+                `flow/${s.name}` == t.item
+            })
+                ?? return null;
+            let dealt = root.bank.deal(
+                shape,
+                root.algebra.all_sites(),
+                root.engine.Seed { state: root.state_of(t.seed) },
+            )
+                ?? return null;
+            let drawn = dealt.served();
+            Surfaced {
+                fact: t.item,
+                compiles: root.engine.verdict_kind(case.key) == root.engine.VerdictKind.Compiles,
+                features: surface_of(root.bank.cast_of(drawn, drawn.reversed), source_of(case)),
+            }
         },
         root.engine.Choice => null,
     }
 }
 
-/// Of the first sixteen questions of a sitting that asked for a verdict, how
-/// many compiled and how many there were.
+/// The verdict questions among the first `window` of a sitting.
 ///
 /// The sitting is stopped at the window, since running each to its own end
 /// would cost several times as much for nothing.
-function opening(learner: Learner, session: int, window: int) -> int[] throws never {
+function opening(learner: Learner, session: int, window: int) -> Surfaced[] throws never {
     let knobs = root.engine.Knobs { ...root.engine.default_knobs(), practice: true, budget: window };
-    let verdicts = sit(learner, knobs, session).taken.filter_map((t) -> {
-        compiles_of(knobs, t)
-    });
-    let compiled = verdicts
-        .filter((v) -> {
-            v
-        })
-        .length();
-    [compiled, verdicts.length()]
+    sit(learner, knobs, session).taken.filter_map((t) -> {
+        served_surface(knobs, t)
+    })
 }
 
 /// `part` of `whole` as a whole percentage.
@@ -843,30 +896,56 @@ function percent_of(part: int, whole: int) -> int throws never {
     }
 }
 
-/// How many of the opening questions compiled, pooled over three learners
-/// and four sessions, in hundredths.
-function leaning_report() -> string throws never {
-    let learners: Learner[] = [expert, beginner, typescripter];
-    let counted = learners.flat_map((learner) -> {
-        [11, 12, 13, 14].map((session) -> {
-            opening(learner, session, 16)
+/// How often the questions three learners are asked compile, over four
+/// sessions each, and every word of their source that leans more than
+/// fifteen points from that over at least forty questions, with the items
+/// that carry it.
+///
+/// Each learner sits sessions of their own. A session's seed is what draws
+/// the candidates at each step, so learners sharing one are offered the same
+/// cases and mostly take them: twelve sittings over four sessions are nearer
+/// four samples than twelve, and one case asked three times reads as a lean.
+function served_leaning_report() -> string throws never {
+    let sittings: Sitting[] = [
+        Sitting { learner: expert, sessions: [11, 12, 13, 14] },
+        Sitting { learner: beginner, sessions: [21, 22, 23, 24] },
+        Sitting { learner: typescripter, sessions: [31, 32, 33, 34] },
+    ];
+    let asked = sittings.flat_map((sitting) -> {
+        sitting.sessions.flat_map((session) -> {
+            opening(sitting.learner, session, 24)
         })
     });
-    let compiled = counted.reduce(
-        (acc, c) -> {
-            acc + c[0]
-        },
-        0,
-    );
-    let asked = counted.reduce(
-        (acc, c) -> {
-            acc + c[1]
-        },
-        0,
-    );
-    `compiled=${percent_of(compiled, asked)} of=${asked}`
+    // Pass `true` to see which items carry a lean and how often each was
+    // asked, which is where a lean says what it is made of.
+    leaning_of(asked, 40, 15, false)
 }
 
-test "sitting: the answer a question asks about is close to an even split" {
-    assert.equal(leaning_report(), "compiled=63 of=147")
+/// A learner and the sessions they sit.
+class Sitting {
+    learner: Learner,
+    sessions: int[],
+}
+
+test "sitting: nothing well enough seen in a sitting leans more than fifteen points" {
+    // WHAT THIS DOES NOT COVER. `served_surface` now reads the whole surface,
+    // the same `surface_of` the bank sweep uses, so the pair features are in
+    // the vocabulary here — but 237 questions do not see them often enough to
+    // hold them to anything. Measured with the support floor dropped to one:
+    //
+    //   pair:same-spelling          100% of 11
+    //   pair:source-within-target    65% of 23
+    //   kind:literal                 65% of 23
+    //   decl:implements              32% of 19
+    //
+    // The first is the bank's recorded debt showing through, and eleven cases
+    // is no evidence either way: the standard error at that count is about
+    // fifteen points, the width of the whole bar. Lowering the floor would
+    // buy noise, not coverage. What would buy coverage is more sittings, and
+    // driving them is already the slowest thing the suite does.
+    //
+    // So this holds the eight or so features a sitting shows often enough to
+    // judge, and the BANK sweep is what holds the pair features. Selection
+    // over-serving one of them by less than the floor would pass here.
+    assert.equal(served_leaning_report(), `compiles=48% of 237 leaning=[]`)
 }

@@ -641,7 +641,8 @@ fn resolved_call_function<'db>(
     dispatch_bindings: &CfgDispatchBindings,
 ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
     use baml_compiler2_ast::Expr;
-    use baml_compiler2_hir_ty::infer::MemberResolution;
+    use baml_compiler2_hir::loc::DeclRef;
+    use baml_compiler2_hir_ty::infer::{MemberResolution, MethodCallee};
 
     let resolution = inference.member_resolutions.get(&callee).or_else(|| {
         inference
@@ -653,12 +654,27 @@ fn resolved_call_function<'db>(
 
     match resolution {
         Some(
-            MemberResolution::Free { func }
-            | MemberResolution::BoundMethod { func, .. }
-            | MemberResolution::UnboundMethod { func, .. }
-            | MemberResolution::InterfaceConcreteMethod { func, .. },
+            MemberResolution::Free {
+                func: DeclRef::Source(func),
+            }
+            | MemberResolution::Method {
+                callee:
+                    MethodCallee::Inherent(DeclRef::Source(func))
+                    | MethodCallee::Concrete {
+                        func: DeclRef::Source(func),
+                        ..
+                    },
+                ..
+            },
         ) => Some(*func),
-        Some(MemberResolution::InterfaceVirtualMethod { interface, method }) => {
+        Some(MemberResolution::Method {
+            callee:
+                MethodCallee::Virtual {
+                    interface: DeclRef::Source(interface),
+                    method,
+                },
+            ..
+        }) => {
             let receiver = match &body.exprs[callee] {
                 Expr::MemberAccess { base, .. } | Expr::OptionalMemberAccess { base, .. } => {
                     match &body.exprs[*base] {
@@ -674,14 +690,27 @@ fn resolved_call_function<'db>(
             let concrete = dispatch_bindings.get(receiver)?;
             interface_method_impl_loc(db, viewer, concrete, *interface, method)
         }
+        // A served package's callee has no body in this database: no edge.
         Some(
-            MemberResolution::Field { .. }
+            MemberResolution::Free {
+                func: DeclRef::External(_),
+            }
+            | MemberResolution::Method {
+                callee:
+                    MethodCallee::Inherent(DeclRef::External(_))
+                    | MethodCallee::Concrete {
+                        func: DeclRef::External(_),
+                        ..
+                    }
+                    | MethodCallee::Virtual {
+                        interface: DeclRef::External(_),
+                        ..
+                    },
+                ..
+            }
+            | MemberResolution::Field { .. }
             | MemberResolution::Variant { .. }
-            | MemberResolution::InterfaceVirtualField { .. }
-            | MemberResolution::External(_)
-            | MemberResolution::ExternalField { .. }
-            | MemberResolution::ExternalVariant { .. }
-            | MemberResolution::ExternalInterfaceVirtualField { .. },
+            | MemberResolution::InterfaceVirtualField { .. },
         )
         | None => None,
     }
@@ -696,7 +725,7 @@ fn dispatch_bindings_for_call(
     callee: baml_compiler2_hir::loc::FunctionLoc<'_>,
 ) -> CfgDispatchBindings {
     use baml_compiler2_ast::Expr;
-    use baml_compiler2_hir_ty::infer::MemberResolution;
+    use baml_compiler2_hir_ty::infer::{MemberResolution, Receiver};
 
     let params = &baml_compiler2_hir::item_data::function_data(db, callee).params;
     let callee_expr = match &body.exprs[call_expr] {
@@ -712,16 +741,17 @@ fn dispatch_bindings_for_call(
                 .and_then(|segment| segment.resolution.as_ref())
         })
     });
-    // Call plans index only the arguments provided by the caller. A bound
-    // method's declared `self` parameter is implicit, so shift those
-    // indices back into the declaration's full parameter list.
+    // Call plans index only the arguments provided by the caller. A BOUND
+    // access's declared `self` parameter is implicit, so shift those
+    // indices back into the declaration's full parameter list; an unbound
+    // access (`I.m(recv, ..)`) writes `self` as its first argument, so its
+    // plan already indexes the full list.
     let implicit_self = usize::from(matches!(
         resolution,
-        Some(
-            MemberResolution::BoundMethod { .. }
-                | MemberResolution::InterfaceConcreteMethod { .. }
-                | MemberResolution::InterfaceVirtualMethod { .. }
-        )
+        Some(MemberResolution::Method {
+            receiver: Receiver::Bound,
+            ..
+        })
     ));
     let mut bindings = CfgDispatchBindings::new();
     let mut record = |param_index: usize, arg_expr: baml_compiler2_ast::ExprId| {
@@ -769,7 +799,10 @@ fn interface_method_impl_loc<'db>(
     };
     let mut methods = baml_compiler2_hir_ty::impls::impls_for_type(db, viewer, concrete)
         .into_iter()
-        .filter_map(|resolved| resolved.source_block())
+        .filter_map(|resolved| match resolved.block() {
+            baml_compiler2_hir::loc::DeclRef::Source(block) => Some(block),
+            baml_compiler2_hir::loc::DeclRef::External(_) => None,
+        })
         .filter(|block| {
             baml_compiler2_hir_ty::interfaces::impl_data(db, *block)
                 .as_ref()
@@ -1157,6 +1190,65 @@ function observe_an_agent() -> string throws never {
                 node.label == "Run agent steps until completion" || node.node_type == NodeType::Loop
             }),
             "the rendered graph should retain the concrete agent loop"
+        );
+    }
+
+    /// An UNBOUND method call (`Task.run(task, runner)`) writes `self` as
+    /// its first argument, so its plan already indexes the full parameter
+    /// list; only a BOUND access's implicit receiver shifts the indices.
+    /// Mapping `runner` correctly is what lets the concrete `Agent.run`
+    /// body inline through the generic dispatch.
+    #[test]
+    fn unbound_method_calls_map_arguments_without_a_phantom_self() {
+        let (mut db, root) = test_db();
+        db.add_or_update_file_in(
+            root,
+            std::path::Path::new("/cfg-test/unbound.baml"),
+            r#"
+interface Runner<Input> {
+  function run(self, input: Input) -> string throws never
+}
+
+class Task {
+  function run<R extends Runner<Task>>(
+self,
+runner: R,
+  ) -> string throws never {
+//# Dispatch the task to its runner
+runner.run(self)
+  }
+}
+
+class Agent {
+  implements Runner<Task> {
+function run(self, input: Task) -> string throws never {
+  //# Run the agent
+  "done"
+}
+  }
+}
+
+function observe_unbound() -> string throws never {
+  let task = Task {};
+  Task.run(task, Agent {})
+}
+"#,
+        );
+        let graph =
+            build_graph(&db, "observe_unbound").expect("expected graph for observe_unbound");
+        let labels = graph
+            .nodes
+            .values()
+            .map(|node| node.label.as_str())
+            .collect::<Vec<_>>();
+        assert!(
+            labels.contains(&"Dispatch the task to its runner"),
+            "Task.run should be inlined through the unbound call; got {labels:?}"
+        );
+        assert!(
+            labels.contains(&"Run the agent"),
+            "the concrete Agent.run body should be inlined: `runner` maps to the second \
+             argument, not the third; got {labels:?}"
         );
     }
 

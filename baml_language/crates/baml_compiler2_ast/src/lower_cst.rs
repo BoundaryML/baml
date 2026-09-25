@@ -18,8 +18,8 @@ use crate::{
         AssociatedTypeBindingDef, AssociatedTypeDef, BuiltinKind, CallArg, EnumDef, Expr, ExprId,
         FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults, ImplementsBlockDef,
         ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Item, LambdaDef, LambdaKind,
-        LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg, TemplateStringDef,
-        TypeAliasDef, TypeExpr, TypeExprKind, VariantDef,
+        LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg, TypeAliasDef, TypeExpr,
+        TypeExprKind, VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -189,9 +189,6 @@ fn lower_file_with_path_and_test_owner_impl(
                 diags.push(LoweringDiagnostic::TemplateStringRemoved {
                     span: child.span_range(),
                 });
-                if let Some(ts) = lower_template_string(&child, &mut diags) {
-                    items.push(Item::TemplateString(ts));
-                }
             }
             baml_compiler_syntax::SyntaxKind::RETRY_POLICY_DEF => {
                 // Legacy `retry_policy` block: retry composes at the client
@@ -332,13 +329,6 @@ fn lower_function(
     };
     let name = Name::new(name_token.text());
     let name_span = name_token.text_range();
-    // A function named `$id` is unreachable through a bare call (`$id()`
-    // resolves to the runtime-identity special form first) — reject the
-    // declaration with the reserved-name diagnostic instead of letting use
-    // sites fail with a misleading "`string` is not a function".
-    if name.as_str() == "$id" {
-        diags.push(LoweringDiagnostic::ReservedRuntimeIdBindingName { span: name_span });
-    }
 
     let generic_params = extract_generic_params_with_bounds(node, diags);
     let parameter_context = format!("function `{}`", name.as_str());
@@ -654,13 +644,7 @@ pub(crate) fn lower_param(
         return None;
     };
     let param_name_str = name_token.text().to_string();
-    // `$id` is the runtime-identity special form; a parameter named `$id`
-    // would be a silently-dead binding (reads hit the special cases first).
-    if param_name_str == "$id" {
-        diags.push(LoweringDiagnostic::ReservedRuntimeIdBindingName {
-            span: name_token.text_range(),
-        });
-    }
+
     Some(Param {
         name: Name::new(&param_name_str),
         type_expr: param.ty().map(|te| {
@@ -2222,40 +2206,12 @@ fn lower_generator_deprecation(node: &SyntaxNode) -> LoweringDiagnostic {
     LoweringDiagnostic::GeneratorBlockInBaml { name, span }
 }
 
-fn lower_template_string(
-    node: &SyntaxNode,
-    diags: &mut Vec<LoweringDiagnostic>,
-) -> Option<TemplateStringDef> {
-    let ts = ast::TemplateStringDef::cast(node.clone())?;
-    let Some(name_token) = ts.name() else {
-        diags.push(LoweringDiagnostic::MissingItemName {
-            item_kind: "template_string",
-            span: node.span_range(),
-        });
-        return None;
-    };
-
-    let ts_name = name_token.text().to_string();
-    let context = format!("template_string `{ts_name}`");
-    let params = ts
-        .param_list()
-        .map(|pl| lower_params(&pl, &ts_name, &context, diags))
-        .unwrap_or_default();
-
-    Some(TemplateStringDef {
-        name: Name::new(name_token.text()),
-        params,
-        span: node.span_range(),
-        name_span: name_token.text_range(),
-    })
-}
-
 // NOTE: the legacy `client<llm>` / `retry_policy` config-block synthesis
 // (client identity lets, `<Client>$new` companions, provider option tables,
 // retry-policy lets) lived here. Both blocks are removed language surface:
 // clients are plain values (`client Name = <expr>;`) and retry composes at
 // the client boundary via `ai.Retry`. Their CST nodes now lower to a single
-// migration diagnostic each.
+// migration diagnostic each, as does `template_string`.
 
 /// Lower the `@` attributes trailing a field or enum variant.
 fn lower_member_attributes(attributes: impl Iterator<Item = ast::Attribute>) -> Vec<RawAttribute> {

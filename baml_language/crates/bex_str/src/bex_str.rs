@@ -29,7 +29,7 @@ pub enum BexStr {
         offset: u64,
         len: u64,
         char_count: u64,
-        hash: AtomicU64,
+        hash: [AtomicU64; 2],
     },
     /// Deferred concatenation. Flattened on first byte-level access.
     Concat(Arc<ConcatNode>),
@@ -37,8 +37,9 @@ pub enum BexStr {
 
 /// Heap-allocated immutable string data with cached hash.
 pub struct FlatStr {
-    /// 0 = not yet computed. Set atomically on first hash() call.
-    pub(crate) hash: AtomicU64,
+    /// Cached XXH3-128; the high word publishes the immutable low word.
+    /// A zero high word is uncached (that rare digest is simply recomputed).
+    pub(crate) hash: [AtomicU64; 2],
     /// Number of Unicode codepoints. Computed once at construction.
     pub(crate) char_count: u64,
     /// UTF-8 byte data. Tight allocation (no excess capacity).
@@ -79,6 +80,27 @@ impl BexStr {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// Heap allocation bytes retained by this string, excluding `Self` and
+    /// allocator metadata. Shared backing is charged in full, including the
+    /// entire parent of a slice. Concatenations are flattened, as by `as_bytes`,
+    /// so subsequent access cannot increase the retained backing.
+    ///
+    /// Returns `None` on arithmetic overflow.
+    pub fn retained_heap_bytes(&self) -> Option<usize> {
+        fn flat_bytes(flat: &FlatStr) -> Option<usize> {
+            std::mem::size_of::<FlatStr>()
+                .checked_add(2 * std::mem::size_of::<usize>())?
+                .checked_add(flat.data.len())
+        }
+        match self {
+            Self::Inline { .. } => Some(0),
+            Self::Flat(flat) | Self::Slice { parent: flat, .. } => flat_bytes(flat),
+            Self::Concat(node) => std::mem::size_of::<ConcatNode>()
+                .checked_add(2 * std::mem::size_of::<usize>())?
+                .checked_add(flat_bytes(&node.flatten())?),
+        }
     }
 
     /// Byte length. O(1) for all variants.
@@ -138,7 +160,23 @@ impl BexStr {
         }
     }
 
-    /// Returns `&str`. Delegates to `as_bytes()`.
+    /// XXH3-128 (seed zero) of the logical UTF-8 bytes. Heap-backed strings
+    /// cache the result; inline strings compute it directly. The first call on
+    /// a concat flattens it, sharing the flat allocation/cache with its clones.
+    /// This is separate from `Hash`, whose `Borrow<str>` contract must be retained.
+    pub fn content_hash(&self) -> u128 {
+        match self {
+            Self::Inline { len, data } => xxhash_rust::xxh3::xxh3_128(&data[..*len as usize]),
+            Self::Flat(flat) => cached_hash(&flat.hash, &flat.data),
+            Self::Slice { hash, .. } => cached_hash(hash, self.as_bytes()),
+            Self::Concat(node) => {
+                let flat = node.flatten();
+                cached_hash(&flat.hash, &flat.data)
+            }
+        }
+    }
+
+    /// UTF-8 view; concatenations are flattened on first access.
     pub fn as_str(&self) -> &str {
         // SAFETY: BexStr is always constructed from valid UTF-8.
         #[allow(unsafe_code)]
@@ -183,7 +221,7 @@ impl BexStr {
                 offset: start as u64,
                 len: slice_len as u64,
                 char_count: slice_char_count,
-                hash: AtomicU64::new(0),
+                hash: [const { AtomicU64::new(0) }; 2],
             },
             BexStr::Slice { parent, offset, .. } => {
                 // Re-slice: point at SAME parent, adjust offset. Depth stays 1.
@@ -192,7 +230,7 @@ impl BexStr {
                     offset: *offset + start as u64,
                     len: slice_len as u64,
                     char_count: slice_char_count,
-                    hash: AtomicU64::new(0),
+                    hash: [const { AtomicU64::new(0) }; 2],
                 }
             }
             BexStr::Concat(c) => {
@@ -203,7 +241,7 @@ impl BexStr {
                     offset: start as u64,
                     len: slice_len as u64,
                     char_count: slice_char_count,
-                    hash: AtomicU64::new(0),
+                    hash: [const { AtomicU64::new(0) }; 2],
                 }
             }
         }
@@ -241,8 +279,28 @@ impl BexStr {
 
     /// Finds `needle` and returns its codepoint index, or `None`.
     pub fn char_index_of(&self, needle: &str) -> Option<usize> {
-        let byte_idx = self.as_str().find(needle)?;
-        Some(bytecount::num_chars(&self.as_bytes()[..byte_idx]))
+        self.char_index_of_from(needle, 0)
+    }
+
+    /// Finds `needle` starting at codepoint `start`, returning an absolute
+    /// codepoint index. A start past the end returns `None`, even for an empty
+    /// needle. Searches the borrowed suffix without allocating a substring or
+    /// recounting the entire suffix's character metadata.
+    pub fn char_index_of_from(&self, needle: &str, start: usize) -> Option<usize> {
+        let text = self.as_str();
+        let char_len = self.char_count();
+        if start > char_len {
+            return None;
+        }
+        let byte_start = if char_len == text.len() {
+            // Every character is ASCII, so codepoint and byte offsets coincide.
+            start
+        } else {
+            byte_offset_of_nth_codepoint(text.as_bytes(), start)
+        };
+        let suffix = &text[byte_start..];
+        let relative = suffix.find(needle)?;
+        Some(start + bytecount::num_chars(&suffix.as_bytes()[..relative]))
     }
 
     /// Finds the *last* occurrence of `needle` and returns the codepoint index
@@ -310,21 +368,20 @@ impl BexStr {
     }
 
     /// Try to read the cached hash if already computed (non-zero).
-    fn try_get_hash(&self) -> Option<u64> {
-        let h = match self {
-            BexStr::Inline { .. } => return None, // No cache for Inline
-            BexStr::Flat(f) => f.hash.load(Ordering::Relaxed),
-            BexStr::Slice { hash, .. } => hash.load(Ordering::Relaxed),
+    fn try_get_hash(&self) -> Option<u128> {
+        match self {
+            BexStr::Inline { .. } => None, // No cache for Inline
+            BexStr::Flat(f) => read_hash(&f.hash),
+            BexStr::Slice { hash, .. } => read_hash(hash),
             BexStr::Concat(c) => {
                 // If flattened, check the FlatStr's hash
                 let guard = c.state.lock().unwrap();
                 match &*guard {
-                    ConcatState::Flattened(f) => f.hash.load(Ordering::Relaxed),
-                    ConcatState::Deferred { .. } => 0,
+                    ConcatState::Flattened(f) => read_hash(&f.hash),
+                    ConcatState::Deferred { .. } => None,
                 }
             }
-        };
-        if h != 0 { Some(h) } else { None }
+        }
     }
 }
 
@@ -344,7 +401,7 @@ impl ConcatNode {
         let old = std::mem::replace(
             &mut *guard,
             ConcatState::Flattened(Arc::new(FlatStr {
-                hash: AtomicU64::new(0),
+                hash: [const { AtomicU64::new(0) }; 2],
                 char_count: 0,
                 data: Box::new([]),
             })),
@@ -405,7 +462,7 @@ impl ConcatNode {
 
         let char_count = bytecount::num_chars(&buf) as u64;
         let flat = Arc::new(FlatStr {
-            hash: AtomicU64::new(0),
+            hash: [const { AtomicU64::new(0) }; 2],
             char_count,
             data: buf.into_boxed_slice(),
         });
@@ -421,7 +478,7 @@ impl Drop for ConcatNode {
             Ok(s) => std::mem::replace(
                 s,
                 ConcatState::Flattened(Arc::new(FlatStr {
-                    hash: AtomicU64::new(0),
+                    hash: [const { AtomicU64::new(0) }; 2],
                     char_count: 0,
                     data: Box::new([]),
                 })),
@@ -445,7 +502,7 @@ impl Drop for ConcatNode {
                     Ok(s) => std::mem::replace(
                         s,
                         ConcatState::Flattened(Arc::new(FlatStr {
-                            hash: AtomicU64::new(0),
+                            hash: [const { AtomicU64::new(0) }; 2],
                             char_count: 0,
                             data: Box::new([]),
                         })),
@@ -483,7 +540,7 @@ impl Clone for BexStr {
                 offset: *offset,
                 len: *len,
                 char_count: *char_count,
-                hash: AtomicU64::new(hash.load(Ordering::Relaxed)),
+                hash: clone_hash(hash),
             },
             BexStr::Concat(c) => BexStr::Concat(c.clone()),
         }
@@ -577,7 +634,7 @@ impl From<String> for BexStr {
         } else {
             let char_count = bytecount::num_chars(s.as_bytes()) as u64;
             BexStr::Flat(Arc::new(FlatStr {
-                hash: AtomicU64::new(0),
+                hash: [const { AtomicU64::new(0) }; 2],
                 char_count,
                 data: s.into_bytes().into_boxed_slice(),
             }))
@@ -597,7 +654,7 @@ impl From<&str> for BexStr {
         } else {
             let char_count = bytecount::num_chars(s.as_bytes()) as u64;
             BexStr::Flat(Arc::new(FlatStr {
-                hash: AtomicU64::new(0),
+                hash: [const { AtomicU64::new(0) }; 2],
                 char_count,
                 data: s.as_bytes().into(),
             }))
@@ -682,4 +739,31 @@ impl fmt::Display for BexStr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.as_str())
     }
+}
+
+// All writers compute the same digest of immutable bytes. Publishing the high
+// word with Release makes the low word visible; racing writers only repeat
+// identical stores. No torn *different* digest can be observed. Zero-high hashes
+// are returned exactly but not cached, so no valid digest needs remapping.
+fn read_hash(cache: &[AtomicU64; 2]) -> Option<u128> {
+    let high = cache[1].load(Ordering::Acquire);
+    (high != 0).then(|| (u128::from(high) << 64) | u128::from(cache[0].load(Ordering::Relaxed)))
+}
+
+fn cached_hash(cache: &[AtomicU64; 2], bytes: &[u8]) -> u128 {
+    if let Some(hash) = read_hash(cache) {
+        return hash;
+    }
+    let hash = xxhash_rust::xxh3::xxh3_128(bytes);
+    cache[0].store(hash as u64, Ordering::Relaxed);
+    cache[1].store((hash >> 64) as u64, Ordering::Release);
+    hash
+}
+
+fn clone_hash(cache: &[AtomicU64; 2]) -> [AtomicU64; 2] {
+    let hash = read_hash(cache).unwrap_or(0);
+    [
+        AtomicU64::new(hash as u64),
+        AtomicU64::new((hash >> 64) as u64),
+    ]
 }

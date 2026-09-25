@@ -2,7 +2,7 @@ use bex_vm_types::types::{Object, TypeValue, Value};
 use indexmap::IndexMap;
 
 use super::{BamlClassType, PackageReflectImpl, resolve};
-use crate::{BexVm, errors::VmRustFnError};
+use crate::{BexVm, errors::VmRustFnError, vec_ext::VecExt};
 
 impl BamlClassType for PackageReflectImpl {
     /// BEP-066 K-13: `reflect.Type.of_value(v)` — the runtime `type` value describing
@@ -341,7 +341,11 @@ impl RenderDefinitionValidator<'_> {
                         }
                     }
                 }
-                self.class_ancestry.pop();
+                // SAFETY: this visit pushed its frame; child visits remove only theirs.
+                #[allow(unsafe_code)]
+                unsafe {
+                    self.class_ancestry.no_return_pop();
+                };
                 None
             }
             bex_vm_types::RealizedTy::Enum(head) => {

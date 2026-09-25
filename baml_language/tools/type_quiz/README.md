@@ -52,12 +52,72 @@ way is a program the compiler answers the other way about, and the item
 carries it as a *foil*. The two are the same program bar the swap — the
 suite holds them to being the same characters in a different order, and to
 parting company only where the direction of the flow is named — so a learner
-shown both and asked which one compiles can read nothing off their surface.
+shown both and asked which one compiles has little to read off their surface.
+Little, not nothing: the check sets parentheses aside (`letters`), because a
+union needs bracketing as an array's element and not as a parameter, so about
+one pair in twenty-five differs by exactly those two brackets, and there the
+bracketed program is the one that compiles four times in five.
 An equivalence or an unrelated pair reads the same in both directions and so
 has no foil, and neither does anything at the coherence site, where the
-reverse draw is the same two blocks the other way up. Fifteen of the bank's
-thirty-six items pair; twenty-two answer both ways across their seeds, ten
-always compile and four never do.
+reverse draw is the same two blocks the other way up. Twenty-two of the
+bank's forty served items pair, and every one of the forty answers both
+ways across its seeds, which the next section is about.
+
+## What a case's surface may not say
+
+A fact that concludes an equivalence compiles whichever way it flows, and one
+that concludes an unrelated pair never does. A bank built only of those
+teaches its shapes instead of its rules: as first built, a case with a
+recursive alias compiled 93 times in 100 and one with a `map<` 19, three
+questions in five compiled overall, and a learner who had noticed was right
+without reasoning — which the estimator then credited as knowing the rule.
+
+So every fact that answers one way stands beside one that wears its shape
+and answers the other. `A | B` against `B | C` beside a reordered union;
+`A | (B | C)` against `A | B | D` beside a regrouped one; `type A = int |
+A[]` against `type B = string | B[]` beside two spellings of one recursion,
+and `A` against `string | A[]` beside its unfolding; a variant of each of two
+enums beside an enum's own variants; `true | 1` beside `true | false`; a
+literal beside a type it does not belong to, which nothing absorbs; one
+class against itself beside two classes of one shape; `int[]` against
+`unknown[]`, the one place `unknown` is rejected both ways. The wrappers that
+are invariant in their argument draw it from strict pairs and equivalent
+ones alike, so whether `Box<S>` is `Box<T>` turns on whether `S` is `T`. A
+near miss cites the rule that decides it — most often that subtyping is a
+subset relation and neither side is a subset of the other — and not the rule
+it resembles: the explanation says why the compiler answered, and what the
+case resembled is the learner's to notice.
+
+A fact and its near miss are one item, a *shape*: each draw of it is one or
+the other, on a coin. Two separate items would each answer one way, and
+nothing that re-weights items could then be trusted to leave the kinds of
+question balanced — selection re-weights them on every step, for good
+reasons of its own. As one item, the balance is the item's, and every one
+of the forty the bank serves answers both ways. The invariant wrappers are
+shapes too: `Box<S>` against `Box<T>` over a strict pair, which is always
+rejected, beside the same over an equivalent pair, which always compiles.
+
+The suite measures the bank against it (`ns_conformance/tells.baml`). Over
+128 seeds of every fact, no feature of a case's surface — a construct, a
+declaration, a site, a word in the source — may compile more than ten points
+more or less often than cases do overall, and that overall rate is within
+five points of half. What counts as surface is what is on screen before the
+answer: the rule a case turns on is named after it, in the explanation, so an
+equivalence rule still always "compiles" and that is not a tell. This has to
+be a property of the bank because selection cannot buy it: forcing the
+answers even forces the items uneven, which was measured to cost a scripted
+expert its certification.
+
+**Two features still break that bar, and the test records them rather than
+claiming otherwise.** Both are facts about the PAIR rather than about either
+type, which is why a vocabulary of per-type constructs could not see them:
+the two types written *the same way* compiles 90% of the time, and one
+spelling appearing *inside* the other 75%. The first is the sharper of the
+two — an equivalence spelled the same way can only compile at a flow site,
+and no near miss can balance it, since a near miss spelled the same way would
+be the same type. Closing them is bank work and is not done. Until it is, a
+learner who answers "the same words twice, so it compiles" is right nine
+times in ten.
 
 ## What the bank covers
 
@@ -95,8 +155,11 @@ A transfer that maps `Sub`, `Super` and `Unrelated` alike screens off
 everything below it — invariance is exactly that — so `Box<S>` against
 `Box<T>` is answerable knowing only that the two types are written
 differently, and the rule beneath is part of the explanation and no part of
-the question. An equivalence is the exception, since invariance carries it
-through. Each claim carries whether it bears, and the tracer reads only those.
+the question. An equivalence turns it round: invariance carries one through
+unchanged, and so does every other position, so `Box<bool>` against
+`Box<true | false>` turns on knowing the two are one type and not on the
+wrap — which decides nothing there, and is credited to nobody. Each claim
+carries whether it bears, and the tracer reads only those.
 
 Depth therefore comes from wraps that *carry* a relation — a covariant
 position keeps it, a contravariant one turns it round — and the `carried_2`,
@@ -120,16 +183,55 @@ rate instead (`aim`): the rate at which people are said to learn best, as
 against what measuring them asks for. `exposure` penalises an item each time
 it has already been served, so a rule may come round as often as the estimate
 wants it while the same template does not. Both are measured in the suite: a
-perfect learner's questions get deeper over a sitting, no item comes round
-more than four times in sixty-odd questions, and certifying one costs 38 to
-72 questions where it had cost 79 and failed one sitting in two.
+perfect learner's questions do not get shallower over a sitting, no item
+comes round more than six times in a hundred-odd questions, and certifying
+one costs 81 to 133 questions — with two sittings in twelve not certified
+inside the budget at all, for the reason below.
+
+Selection cannot see which way a draw's coins fell. Two coins decide the
+answer — which way a pair flows, and which fact of a shape a draw is — and
+both would be read by a selection that read the case: the naive models are
+lopsided, so it served whichever direction fooled one of them (sittings
+asked about function types that were rejected ten times in eleven), and the
+tracer wants evidence per rule while an equivalence's rule is only ever
+evidenced by a case that compiles, so it served the equivalences (unions
+accepted seven times in ten). Both from a bank in which every kind of
+question answers both ways. So a candidate carries its *castings*: every
+way its draw could have been served, each with the rules the tracer would
+read off it, the models it would fool and the numbers the sampler scores it
+by. Selection reads those and nothing else, and scores the draw as the
+lottery it is: its expected information, and the mean of every other term;
+the bank's score is the mean over castings, and a draw is dropped when any
+casting is past a hard cap. What an answer is evidence about is still the
+case that was served. The suite holds every draw, under every way its coins
+could fall, to scoring the same to the last digit, and every casting to
+holding exactly the rules the tracer reads off its case.
+
+That costs questions, and it is why the default budget is 140. An
+equivalence's rule is evidenced only on the half of its item's draws that
+are the equivalence, so a learner who answers everything right needs 81 to
+133 questions to be certified where they had needed 60 to 68 — the price of
+the kind of question saying nothing about its answer, over the questions a
+learner is actually asked as well as over the bank.
+
+A wrap costs the same way, for the same reason. Invariance carries an
+equivalence through unchanged, so a case putting an equivalence in a `Box`,
+an array or a map turns on the equivalence and not on the wrap: no reading
+of the wrap would answer it differently. The wrap's rule is therefore
+evidenced only where the wrap decides something — over a strict pair — and
+two sittings in twelve now run out of budget rather than one. The evidence
+those cases used to give was never earned.
 
 ## Interestingness
 
 A case is *interesting* when a plausible wrong intuition predicts the wrong
 verdict. Each naive model in `ns_bank/models.baml` is a sparse list of rules
 it disagrees with; replaying a case's derivation under the model gives the
-model's verdict, and a mismatch makes the case a trap for that model. The
+model's verdict, and a mismatch makes the case a trap for that model. One of
+them, `shape`, is the learner the near misses are there for: it reads a case
+as the equivalence it resembles, so every near miss traps it — without which
+they would trap nobody, read as uninteresting, and be served less often than
+the equivalences beside them, putting the lean straight back. The
 sampler scores candidates by traps, rule count, relation flips, and a hinged
 penalty on size, depth, and union width, with a soft penalty on single-rule
 cases every model agrees with. A session fixes each step's verdict on an even
@@ -240,10 +342,13 @@ mise run type-quiz-lint    # layering, banned APIs, wildcard arms
 mise run fmt-type-quiz     # the formatter this package is kept under
 ```
 
-`crates/baml_tests/tests/type_quiz.rs` runs the suite in CI, and the
-`type-quiz-lint` prek hook runs the lint after the formatter. Both of those
-and the `mise` task keep the CLI's home, cache and profile streams under
-`target/`. Invoking `baml-cli test --from tools/type_quiz` directly instead
+`crates/baml_tests/tests/type_quiz.rs` runs all three in CI: the suite, the
+lint, and a check that every source is already what the formatter would
+write. They are tests rather than hooks because a hook gates a commit on the
+one machine that has it installed, and these gate a merge. The formatter
+itself stays a prek hook as well, since a hook can fix what a check can only
+report. Both of those and the `mise` task keep the CLI's home, cache and
+profile streams under `target/`. Invoking `baml-cli test --from tools/type_quiz` directly instead
 leaves a few hundred megabytes of them in `tools/type_quiz/.baml`, which the
 CLI marks ignored but does not clean up.
 
@@ -487,3 +592,25 @@ keeps its number once it has one.
    takes the `Grade` rather than its `understanding`. The encoder would need
    the declared parameter type, which the wire already carries, to lower a
    string against an enum position.
+15. **A `let` annotated with a union that nests a union is checked backwards,
+   and a value of the wrong type gets through.** `let left: bool | (string |
+   int) = right` compiles for a `right` of type `bool | string | bigint`;
+   called with `5n`, the function it sits in returns a value that reflects as
+   `bigint` in a slot typed `bool | string | int`, and an exhaustive `match`
+   over `bool`, `string` and `int` takes the `int` arm. The flat spelling of
+   the same annotation is rejected with E0001, as it should be. The trigger
+   is exact — a top-level union with a parenthesised UNION among its members,
+   which includes the natural `(A | B | C) | null` — and it is the binding
+   only: the same type as a parameter, a field, a return or an array element
+   is checked correctly, as is a union parenthesised whole and a nesting
+   inside an array or a generic argument. Where the initializer shares no
+   member with the annotation the binding is rejected, but reversed —
+   ``expected `bigint`, found `int | string | bool` `` with the span on the
+   annotation — which is what testing the annotation as a refutable pattern
+   against the initializer would say; where they share one, nothing is said.
+   Found by a near miss: the bank had been putting `A | (B | C)` at a binding
+   since it could state associativity, but only ever beside the equivalent
+   `A | B | C`, which compiles either way. Recorded as CD-003 in
+   COMPILER_DIVERGENCE.md, with an item that fails the suite when it is
+   fixed; until then no pair that would spell such an annotation is put at a
+   binding.

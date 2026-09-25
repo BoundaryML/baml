@@ -6,10 +6,10 @@
 //! 3. Infallible operand-prefix materialization at O1 and above
 //! 4. RPO block reordering
 
-use std::collections::{HashMap, HashSet, VecDeque};
-
-#[cfg(debug_assertions)]
-use baml_base::Name;
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    fmt,
+};
 
 use crate::{
     BasicBlock, BlockId, CatchRegion, CellId, Local, MirFunction, MirFunctionBody, MirFunctionKind,
@@ -20,33 +20,37 @@ mod effects;
 mod values;
 
 /// Run all optimization passes on a MIR function.
-pub(crate) fn optimize_function(func: &mut MirFunction, opt: crate::OptLevel) {
+pub(crate) fn optimize_function(
+    db: &dyn crate::Db,
+    func: &mut MirFunction<'_>,
+    opt: crate::OptLevel,
+) {
     let MirFunctionKind::Bytecode(body) = &mut func.kind else {
         return; // nothing to clean up on builtins
     };
     optimize_body(body, func.arity, opt);
 
-    #[cfg(debug_assertions)]
-    verify_mir(body, func.arity, &func.item_ref);
+    // `cfg!`, not `#[cfg]`: the verifier stays type-checked in every
+    // profile and the call folds away in release.
+    if cfg!(debug_assertions) {
+        verify_mir(db, body, func.arity, &func.identity.display(db));
+    }
 }
 
 /// Run all cleanup phases directly on a `MirFunctionBody`.
 ///
 /// Used for let-binding initializers, which are lowered as bodies without
 /// the enclosing `MirFunction` wrapper (arity = 0).
-pub(crate) fn optimize_function_body(body: &mut MirFunctionBody, opt: crate::OptLevel) {
+pub(crate) fn optimize_function_body(
+    db: &dyn crate::Db,
+    body: &mut MirFunctionBody,
+    opt: crate::OptLevel,
+) {
     optimize_body(body, 0, opt);
 
-    #[cfg(debug_assertions)]
-    verify_mir(
-        body,
-        0,
-        &crate::ItemRef::Free {
-            package: Name::new("$init_let"),
-            namespace: vec![],
-            name: Name::new("_"),
-        },
-    );
+    if cfg!(debug_assertions) {
+        verify_mir(db, body, 0, &"$init_let._");
+    }
 }
 
 fn optimize_body(body: &mut MirFunctionBody, arity: usize, opt: crate::OptLevel) {
@@ -491,7 +495,6 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
                 Terminator::Call {
                     callee,
                     args,
-                    runtime_id,
                     destination,
                     ..
                 } => {
@@ -499,31 +502,23 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
                     for a in args {
                         scan_operand(a, &mut set);
                     }
-                    if let Some(runtime_id) = runtime_id {
-                        scan_operand(runtime_id, &mut set);
-                    }
+
                     scan_place(destination, &mut set);
                 }
                 Terminator::VirtualCall {
-                    args,
-                    runtime_id,
-                    destination,
-                    ..
+                    args, destination, ..
                 } => {
                     // No callee operand: the method is resolved at runtime from
                     // `iface` (a type template, not a value local).
                     for a in args {
                         scan_operand(a, &mut set);
                     }
-                    if let Some(runtime_id) = runtime_id {
-                        scan_operand(runtime_id, &mut set);
-                    }
+
                     scan_place(destination, &mut set);
                 }
                 Terminator::SysOp {
                     callee,
                     args,
-                    runtime_id,
                     destination,
                     ..
                 } => {
@@ -531,9 +526,7 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
                     for a in args {
                         scan_operand(a, &mut set);
                     }
-                    if let Some(runtime_id) = runtime_id {
-                        scan_operand(runtime_id, &mut set);
-                    }
+
                     scan_place(destination, &mut set);
                 }
                 Terminator::Spawn {
@@ -811,7 +804,6 @@ fn count_in_terminator(term: &Terminator<'_>, uses: &mut [usize]) {
         Terminator::Call {
             callee,
             args,
-            runtime_id,
             destination,
             ..
         } => {
@@ -819,30 +811,22 @@ fn count_in_terminator(term: &Terminator<'_>, uses: &mut [usize]) {
             for arg in args {
                 count_in_operand(arg, uses);
             }
-            if let Some(runtime_id) = runtime_id {
-                count_in_operand(runtime_id, uses);
-            }
+
             count_dest_place(destination, uses);
         }
         Terminator::VirtualCall {
-            args,
-            runtime_id,
-            destination,
-            ..
+            args, destination, ..
         } => {
             // No callee operand — the method is resolved at runtime from `iface`.
             for arg in args {
                 count_in_operand(arg, uses);
             }
-            if let Some(runtime_id) = runtime_id {
-                count_in_operand(runtime_id, uses);
-            }
+
             count_dest_place(destination, uses);
         }
         Terminator::SysOp {
             callee,
             args,
-            runtime_id,
             destination,
             ..
         } => {
@@ -850,9 +834,7 @@ fn count_in_terminator(term: &Terminator<'_>, uses: &mut [usize]) {
             for arg in args {
                 count_in_operand(arg, uses);
             }
-            if let Some(runtime_id) = runtime_id {
-                count_in_operand(runtime_id, uses);
-            }
+
             count_dest_place(destination, uses);
         }
         Terminator::Spawn {
@@ -1223,43 +1205,22 @@ fn apply_subst_to_terminator<'db>(
         Terminator::Branch { condition, .. } => apply_subst_to_operand(condition, subst),
         Terminator::NarrowBind { source, .. } => apply_subst_to_operand(source, subst),
         Terminator::Switch { discriminant, .. } => apply_subst_to_operand(discriminant, subst),
-        Terminator::Call {
-            callee,
-            args,
-            runtime_id,
-            ..
-        } => {
+        Terminator::Call { callee, args, .. } => {
             apply_subst_to_operand(callee, subst);
             for arg in args {
                 apply_subst_to_operand(arg, subst);
             }
-            if let Some(runtime_id) = runtime_id {
-                apply_subst_to_operand(runtime_id, subst);
-            }
         }
-        Terminator::SysOp {
-            callee,
-            args,
-            runtime_id,
-            ..
-        } => {
+        Terminator::SysOp { callee, args, .. } => {
             apply_subst_to_operand(callee, subst);
             for arg in args {
                 apply_subst_to_operand(arg, subst);
             }
-            if let Some(runtime_id) = runtime_id {
-                apply_subst_to_operand(runtime_id, subst);
-            }
         }
-        Terminator::VirtualCall {
-            args, runtime_id, ..
-        } => {
+        Terminator::VirtualCall { args, .. } => {
             // No callee operand — only the value args are substituted.
             for arg in args {
                 apply_subst_to_operand(arg, subst);
-            }
-            if let Some(runtime_id) = runtime_id {
-                apply_subst_to_operand(runtime_id, subst);
             }
         }
         Terminator::Spawn {
@@ -1581,7 +1542,6 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
         Terminator::Call {
             callee,
             args,
-            runtime_id,
             destination,
             ..
         } => {
@@ -1589,15 +1549,12 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
             for arg in args {
                 remap_operand(arg, map);
             }
-            if let Some(runtime_id) = runtime_id {
-                remap_operand(runtime_id, map);
-            }
+
             remap_place(destination, map);
         }
         Terminator::SysOp {
             callee,
             args,
-            runtime_id,
             destination,
             ..
         } => {
@@ -1605,24 +1562,17 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
             for arg in args {
                 remap_operand(arg, map);
             }
-            if let Some(runtime_id) = runtime_id {
-                remap_operand(runtime_id, map);
-            }
+
             remap_place(destination, map);
         }
         Terminator::VirtualCall {
-            args,
-            runtime_id,
-            destination,
-            ..
+            args, destination, ..
         } => {
             // No callee operand — the method is resolved at runtime from `iface`.
             for arg in args {
                 remap_operand(arg, map);
             }
-            if let Some(runtime_id) = runtime_id {
-                remap_operand(runtime_id, map);
-            }
+
             remap_place(destination, map);
         }
         Terminator::Spawn {
@@ -1678,10 +1628,15 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
 
 /// Verify MIR structural invariants after optimization.
 ///
-/// Debug-only — catches invariant drift between lowering, optimization, and
-/// downstream consumers. Modeled after V1's `verifier.rs`.
-#[cfg(debug_assertions)]
-fn verify_mir(body: &MirFunctionBody<'_>, arity: usize, name: &crate::ItemRef) {
+/// Called only under debug assertions — catches invariant drift between
+/// lowering, optimization, and downstream consumers. Modeled after V1's
+/// `verifier.rs`. `name` is rendered only inside a failing assertion.
+fn verify_mir(
+    db: &dyn crate::Db,
+    body: &MirFunctionBody<'_>,
+    arity: usize,
+    name: &dyn fmt::Display,
+) {
     let num_blocks = body.blocks.len();
     let num_locals = body.locals.len();
 
@@ -1869,7 +1824,6 @@ fn verify_mir(body: &MirFunctionBody<'_>, arity: usize, name: &crate::ItemRef) {
                 Terminator::Call {
                     callee,
                     args,
-                    runtime_id,
                     destination,
                     ..
                 } => {
@@ -1877,30 +1831,22 @@ fn verify_mir(body: &MirFunctionBody<'_>, arity: usize, name: &crate::ItemRef) {
                     for a in args {
                         check_operand(a, &blk);
                     }
-                    if let Some(runtime_id) = runtime_id {
-                        check_operand(runtime_id, &blk);
-                    }
+
                     check_place(destination, &blk);
                 }
                 Terminator::VirtualCall {
-                    args,
-                    runtime_id,
-                    destination,
-                    ..
+                    args, destination, ..
                 } => {
                     // No callee operand — the method is resolved at runtime from `iface`.
                     for a in args {
                         check_operand(a, &blk);
                     }
-                    if let Some(runtime_id) = runtime_id {
-                        check_operand(runtime_id, &blk);
-                    }
+
                     check_place(destination, &blk);
                 }
                 Terminator::SysOp {
                     callee,
                     args,
-                    runtime_id,
                     destination,
                     ..
                 } => {
@@ -1908,9 +1854,7 @@ fn verify_mir(body: &MirFunctionBody<'_>, arity: usize, name: &crate::ItemRef) {
                     for a in args {
                         check_operand(a, &blk);
                     }
-                    if let Some(runtime_id) = runtime_id {
-                        check_operand(runtime_id, &blk);
-                    }
+
                     check_place(destination, &blk);
                 }
                 Terminator::Spawn {
@@ -2017,7 +1961,7 @@ fn verify_mir(body: &MirFunctionBody<'_>, arity: usize, name: &crate::ItemRef) {
     );
 
     // 10. Every read is definitely assigned; every captured access has its cell.
-    verify_definite_assignment(body, arity, name);
+    verify_definite_assignment(db, body, arity, name);
 }
 
 /// Every read of a local is dominated by a write to it, and every read, write,
@@ -2038,8 +1982,12 @@ fn verify_mir(body: &MirFunctionBody<'_>, arity: usize, name: &crate::ItemRef) {
 /// body block's end-of-statements state flows there too; that over-counts
 /// what the handler can rely on only for locals declared inside the protected
 /// body, which the handler cannot name.
-#[cfg(debug_assertions)]
-fn verify_definite_assignment(body: &MirFunctionBody<'_>, arity: usize, name: &crate::ItemRef) {
+fn verify_definite_assignment(
+    db: &dyn crate::Db,
+    body: &MirFunctionBody<'_>,
+    arity: usize,
+    name: &dyn fmt::Display,
+) {
     #[derive(Clone)]
     struct State {
         assigned: Vec<bool>,
@@ -2091,7 +2039,7 @@ fn verify_definite_assignment(body: &MirFunctionBody<'_>, arity: usize, name: &c
                 panic!(
                     "{}\n\n{}",
                     format_args!($($arg)+),
-                    crate::pretty::display_body(body, arity)
+                    crate::pretty::display_body(db, body, arity)
                 );
             }
         };
@@ -2417,14 +2365,12 @@ fn verify_definite_assignment(body: &MirFunctionBody<'_>, arity: usize, name: &c
                 Terminator::Call {
                     callee,
                     args,
-                    runtime_id,
                     destination,
                     ..
                 }
                 | Terminator::SysOp {
                     callee,
                     args,
-                    runtime_id,
                     destination,
                     ..
                 },
@@ -2433,22 +2379,13 @@ fn verify_definite_assignment(body: &MirFunctionBody<'_>, arity: usize, name: &c
                 for arg in args {
                     read_operand(&state, arg);
                 }
-                if let Some(runtime_id) = runtime_id {
-                    read_operand(&state, runtime_id);
-                }
                 write_place(&state, destination);
             }
             Some(Terminator::VirtualCall {
-                args,
-                runtime_id,
-                destination,
-                ..
+                args, destination, ..
             }) => {
                 for arg in args {
                     read_operand(&state, arg);
-                }
-                if let Some(runtime_id) = runtime_id {
-                    read_operand(&state, runtime_id);
                 }
                 write_place(&state, destination);
             }

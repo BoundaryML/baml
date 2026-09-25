@@ -100,10 +100,44 @@ function draw(item: Item, seed: Seed, weights: Weights, count: int) -> Scored[] 
     streams(seed, count).filter_map((s) -> {
         let candidate = generate(item, s)
             ?? return null;
-        let value = score(candidate.features, weights)
+        let value = score_of(candidate, weights)
             ?? return null;
         Scored { item: id, seed: s, candidate, score: value }
     })
+}
+
+/// What `candidate`'s draw scores under `weights`: the mean over its
+/// castings, which is the same whichever of them it was served as. `null`
+/// when any casting is past a hard cap, since a draw that might be served as
+/// something too big to serve is not to be drawn at all.
+///
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if the candidate has no castings. It is
+///   always among its own (`Candidate.new`), so it has at least one.
+function score_of(candidate: Candidate, weights: Weights) -> float? throws never {
+    let castings = candidate.castings;
+    if (castings.length() == 0) {
+        throw baml.panics.Unreachable { message: "a candidate with no way to be served" };
+    }
+    let scores = castings.filter_map((casting) -> {
+        score(casting.features, weights)
+    });
+    if (scores.length() != castings.length()) {
+        return null;
+    }
+    mean(scores)
+}
+
+/// The mean of `values`, which must not be empty.
+function mean(values: float[]) -> float throws never {
+    values.reduce(
+        (acc, value) -> {
+            acc + value
+        },
+        0.0,
+    )
+        / (values.length() * 1.0)
 }
 
 /// A cumulative walk over the candidates' weights: the running total and the

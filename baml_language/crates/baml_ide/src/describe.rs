@@ -22,6 +22,7 @@ use crate::{
     info::type_info_for_definition,
     render,
     search::{SymbolInfo, search_symbols},
+    symbols::Internals,
     usages::usages_at,
 };
 
@@ -129,9 +130,7 @@ pub enum ConcreteTypeKind {
 pub enum ItemKind {
     TypeAlias,
     Function,
-    TemplateString,
     Client,
-    RetryPolicy,
     Let,
 }
 
@@ -163,9 +162,7 @@ impl SymbolKind {
             SymbolKind::Item { kind, .. } => match kind {
                 ItemKind::TypeAlias => DefinitionKind::TypeAlias,
                 ItemKind::Function => DefinitionKind::Function,
-                ItemKind::TemplateString => DefinitionKind::TemplateString,
                 ItemKind::Client => DefinitionKind::Client,
-                ItemKind::RetryPolicy => DefinitionKind::RetryPolicy,
                 ItemKind::Let => DefinitionKind::Let,
             },
             SymbolKind::Member { kind, .. } => match kind {
@@ -238,9 +235,7 @@ fn classify_definition_kind(kind: DefinitionKind) -> KindClass {
         DefinitionKind::Interface => KindClass::Interface,
         DefinitionKind::TypeAlias => KindClass::Item(ItemKind::TypeAlias),
         DefinitionKind::Function => KindClass::Item(ItemKind::Function),
-        DefinitionKind::TemplateString => KindClass::Item(ItemKind::TemplateString),
         DefinitionKind::Client => KindClass::Item(ItemKind::Client),
-        DefinitionKind::RetryPolicy => KindClass::Item(ItemKind::RetryPolicy),
         DefinitionKind::Let => KindClass::Item(ItemKind::Let),
         DefinitionKind::Field => KindClass::Member(MemberKind::Field),
         DefinitionKind::AssociatedType => KindClass::Member(MemberKind::AssociatedType),
@@ -1166,6 +1161,13 @@ fn collect_type_rows(
     definition: Definition<'_>,
 ) -> ((Vec<MethodRef>, Vec<MethodRef>), Vec<ImplRow>) {
     let surface = crate::info::collect_type_surface(db, viewer, definition);
+    let is_visible = |m: &crate::info::CollectedMethod| {
+        let declared_in = m
+            .location
+            .as_ref()
+            .map_or(definition.file(db), |loc| loc.file);
+        !Internals::Hide.hides(db, &m.name, declared_in)
+    };
     let method_ref = |m: crate::info::CollectedMethod| MethodRef {
         name: m.name,
         signature: m.signature,
@@ -1174,7 +1176,7 @@ fn collect_type_rows(
     };
     let mut instance = Vec::new();
     let mut statics = Vec::new();
-    for m in surface.inherent {
+    for m in surface.inherent.into_iter().filter(|m| is_visible(m)) {
         let bucket = if m.is_instance {
             &mut instance
         } else {
@@ -1192,7 +1194,12 @@ fn collect_type_rows(
                 .map(|block| impl_block_location(db, block, ClaimedMention::ForTarget)),
             associated_types: imp.associated_types,
             field_links: imp.field_links,
-            methods: imp.methods.into_iter().map(method_ref).collect(),
+            methods: imp
+                .methods
+                .into_iter()
+                .filter(|m| is_visible(m))
+                .map(method_ref)
+                .collect(),
         })
         .collect();
     ((instance, statics), implementations)
@@ -1565,14 +1572,18 @@ fn describe_type_method(
     // mounted/precompiled impl's method shows in the listing with its
     // signature and nothing more.
     for imp in crate::info::type_impls(db, viewer, definition) {
-        for body in imp.methods {
-            if let crate::info::ImplMethodBody::Source { method, exported } = body
+        for func in imp.methods {
+            if let baml_compiler2_hir::loc::DeclRef::Source(method) = func
                 && baml_compiler2_hir::item_data::function_data(db, method)
                     .name
                     .as_str()
                     == member_name
             {
-                candidates.push((method, exported, Some(imp.label.clone())));
+                candidates.push((
+                    method,
+                    crate::info::impl_method_row(db, func),
+                    Some(imp.label.clone()),
+                ));
             }
         }
     }
@@ -1606,9 +1617,6 @@ fn concrete_type_container(
         Definition::Interface(_)
         | Definition::TypeAlias(_)
         | Definition::Function(_)
-        | Definition::TemplateString(_)
-        | Definition::Client(_)
-        | Definition::RetryPolicy(_)
         | Definition::Let(_) => return None,
     };
     let (cfile, cspan) = crate::syntax::definition_span(db, definition)?;
@@ -1871,7 +1879,6 @@ fn resolve_type_for_item(
             Some(format!("interface {name}{generics}"))
         }
         TypeInfo::TypeAlias { expansion, .. } => Some(expansion),
-        TypeInfo::TemplateString { .. } => Some("template_string".to_string()),
         TypeInfo::LocalVar { ty, .. } => Some(ty),
         TypeInfo::Symbol { declaration, .. } => Some(declaration),
         TypeInfo::Documentation { label, .. } => Some(label),
@@ -1969,24 +1976,8 @@ fn find_dependencies(
                 collect_type_ref_deps(db, file, &alias.type_refs, id, &mut deps, &mut seen);
             }
         }
-        baml_compiler2_hir::contributions::Definition::Client(client_loc) => {
-            // Surface the retry policy reference if present.
-            let client = baml_compiler2_hir::item_data::client_data(db, client_loc);
-            if let Some(ref policy_name) = client.retry_policy_name {
-                let name_str = policy_name.as_str().to_string();
-                if seen.insert(name_str.clone()) {
-                    if let Some(dep) = resolve_dep_from_outline(db, files, &name_str) {
-                        deps.push(dep);
-                    }
-                }
-            }
-        }
-        baml_compiler2_hir::contributions::Definition::TemplateString(_) => {
-            // Template string params are plain names with no types; self-contained.
-        }
-        baml_compiler2_hir::contributions::Definition::RetryPolicy(_)
-        | baml_compiler2_hir::contributions::Definition::Let(_) => {
-            // These don't have meaningful type dependencies for display.
+        baml_compiler2_hir::contributions::Definition::Let(_) => {
+            // Lets don't have meaningful type dependencies for display.
         }
     }
 
@@ -3106,7 +3097,34 @@ implement Other for Robot {
 
         assert_eq!(descs.len(), 1);
         assert_eq!(descs[0].name, "String");
+        let super::SymbolKind::ConcreteType {
+            instance_methods, ..
+        } = &descs[0].kind
+        else {
+            panic!("String should describe a concrete type");
+        };
+        assert!(instance_methods.iter().all(|m| !m.name.starts_with('_')));
         insta::assert_snapshot!(project.format_description(&descs[0]));
+    }
+
+    #[test]
+    fn describe_user_type_keeps_underscore_methods() {
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "types.baml",
+            "class Widget { function _helper(self) -> int throws never { 1 } }",
+        );
+        let project = builder.build();
+        let descs = project.describe("Widget");
+
+        assert_eq!(descs.len(), 1);
+        let super::SymbolKind::ConcreteType {
+            instance_methods, ..
+        } = &descs[0].kind
+        else {
+            panic!("Widget should describe a concrete type");
+        };
+        assert!(instance_methods.iter().any(|m| m.name == "_helper"));
     }
 
     #[test]

@@ -9,7 +9,7 @@ homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
-description = "Event types for BAML runtime observability (spans, function traces)"
+description = "Runtime identities, metadata, and structured logs for BAML"
 
 [lib]
 doctest = false
@@ -18,34 +18,18 @@ doctest = false
 workspace = true
 
 [dependencies]
-bex_prof_store = { workspace = true }
 bex_vm_types = { workspace = true }
+btel_types = { workspace = true }
 sys_types = { workspace = true }
 base64 = { workspace = true }
-crossbeam-channel = { workspace = true }
-crossbeam-utils = { workspace = true }
-hex = { workspace = true }
 prost = { workspace = true }
-rustc-hash = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-smallvec = { workspace = true }
-uuid = { workspace = true }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-fs2 = { workspace = true }
+uuid = { workspace = true, features = [ "v7" ] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 uuid = { workspace = true, features = [ "js" ] }
 web-time = { workspace = true }
-
-[dev-dependencies]
-tempfile = { workspace = true }
-
-# The profiling clock (prof::clock) reads raw hardware ticks in-tree (rdtsc /
-# CNTVCT_EL0 / Instant fallback) — no external time-source dependency, and
-# crucially no pre-main ctor. wasm32 uses the web-time clock for cooperative
-# drains; miri gets the stub because it cannot execute `rdtsc`/`mrs`.
 
 # Protobuf generation remains only for mixed host lifecycle/log history.
 
@@ -53,11 +37,6 @@ tempfile = { workspace = true }
 prost-build = { workspace = true }
 protoc-bin-vendored = { workspace = true }
 
-# Only active under `RUSTFLAGS="--cfg baml_loom"` (the prof ring's model-checking
-# builds); a plain `cargo build` never compiles loom.
+# Reserved for future concurrency model checking; inactive in normal builds.
 [target.'cfg(baml_loom)'.dependencies]
 loom = { workspace = true }
-
-[[bench]]
-name = "prof_clock"
-harness = false

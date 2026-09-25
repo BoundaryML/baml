@@ -36,7 +36,14 @@ pub(crate) trait PullSink<'db> {
     fn load_field(&mut self, field: usize, name: &str) -> Result<(), Self::Error>;
     fn load_index(&mut self, kind: IndexKind) -> Result<(), Self::Error>;
 
-    fn binary_op(&mut self, op: BinOp) -> Result<(), Self::Error>;
+    /// Complete a binary operation after its operands have been pulled. Typed
+    /// code generators can use the operands to select a specialized opcode.
+    fn binary_op(
+        &mut self,
+        op: BinOp,
+        left: &Operand<'db>,
+        right: &Operand<'db>,
+    ) -> Result<(), Self::Error>;
     fn unary_op(&mut self, op: UnaryOp) -> Result<(), Self::Error>;
 
     fn alloc_array(&mut self, element_ty: &TyTemplate, len: usize) -> Result<(), Self::Error>;
@@ -100,7 +107,7 @@ pub(crate) trait PullSink<'db> {
     /// preceding `load_type` calls) and resolves `item` to a function global.
     fn make_generic_function(
         &mut self,
-        item: &baml_compiler2_mir::ItemRef<'db>,
+        func: baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>,
         ntypeargs: usize,
     ) -> Result<(), Self::Error>;
 
@@ -255,7 +262,7 @@ pub(crate) fn resolve_constant_function_item<'db>(
     operand: &Operand<'db>,
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse<'db>>,
-) -> Option<baml_compiler2_mir::ItemRef<'db>> {
+) -> Option<baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>> {
     resolve_constant_function_item_inner(operand, classifications, def_use, &mut HashSet::new())
 }
 
@@ -264,9 +271,9 @@ fn resolve_constant_function_item_inner<'db>(
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse<'db>>,
     visited_locals: &mut HashSet<Local>,
-) -> Option<baml_compiler2_mir::ItemRef<'db>> {
+) -> Option<baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>> {
     match operand {
-        Operand::Constant(Constant::Function(item_ref)) => Some(item_ref.clone()),
+        Operand::Constant(Constant::Function(func)) => Some(*func),
         Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
             if !visited_locals.insert(*local) {
                 return None;
@@ -372,7 +379,7 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
         Rvalue::BinaryOp { op, left, right } => {
             walk_operand_pull(sink, left)?;
             walk_operand_pull(sink, right)?;
-            sink.binary_op(*op)
+            sink.binary_op(*op, left, right)
         }
         Rvalue::UnaryOp { op, operand } => {
             walk_operand_pull(sink, operand)?;
@@ -487,7 +494,7 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
             unreachable!("VirtualFieldAccess must be handled in emit_rvalue_pull")
         }
         Rvalue::MakeGenericFunction {
-            item,
+            func,
             type_arg_templates,
         } => {
             // Push the type-arg templates (resolved against the current frame),
@@ -495,7 +502,7 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
             for template in type_arg_templates {
                 sink.load_type(template)?;
             }
-            sink.make_generic_function(item, type_arg_templates.len())
+            sink.make_generic_function(*func, type_arg_templates.len())
         }
         Rvalue::MakeGenericFunctionFromValue {
             value,

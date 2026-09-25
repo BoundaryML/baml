@@ -1,0 +1,708 @@
+name: Trunk Kiln shadow
+
+on:
+  pull_request:
+  push:
+    branches: ["canary"]
+  workflow_dispatch:
+
+concurrency:
+  group: kiln-shadow-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-test-linux:
+    name: "KILN: cargo test (x86_64-unknown-linux-gnu)"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge
+    timeout-minutes: 60
+    continue-on-error: true
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_NET_RETRY: 10
+      CARGO_TERM_COLOR: always
+      CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+      CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+      RUSTUP_MAX_RETRIES: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Install tools (mise)"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv cargo:cargo-nextest"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
+      - name: "Build tests with --timings"
+        run: cargo nextest run --no-run --all-features --timings --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
+        working-directory: baml_language
+
+      - name: "Run tests with nextest"
+        run: cargo nextest run --profile ci --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
+        working-directory: baml_language
+
+      - name: "Upload test results on failure"
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-failures-linux
+          path: |
+            baml_language/**/*.snap.new
+            baml_language/**/target/nextest/
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats || true
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-test-linux.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-test-linux
+          path: sccache-stats-test-linux.json
+          if-no-files-found: ignore
+
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-linux.html
+        working-directory: baml_language
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-test-linux
+          path: baml_language/target/cargo-timings/cargo-timing-test-linux.html
+          if-no-files-found: ignore
+
+  cargo-test-linux-musl:
+    name: "KILN: cargo test (x86_64-unknown-linux-musl)"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge..memory=high
+    timeout-minutes: 60
+    continue-on-error: true
+    env:
+      CARGO_BUILD_TARGET: x86_64-unknown-linux-musl
+      CARGO_INCREMENTAL: 0
+      CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+      CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+    steps:
+      - uses: actions/checkout@v7
+        with: { clean: false, persist-credentials: false }
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+      - name: "Install Rust toolchain"
+        working-directory: baml_language
+        run: |
+          rustup show
+          rustup target add x86_64-unknown-linux-musl
+      - name: "Work around the stale HashiCorp apt key"
+        run: sudo rm -f /etc/apt/sources.list.d/hashicorp.list
+      - name: "Setup musl cross toolchain"
+        uses: ./.github/actions/setup-musl-cross
+        with:
+          target: x86_64-unknown-linux-musl
+      - name: "Install tools (mise)"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv cargo:cargo-nextest"
+      - name: "Verify sccache"
+        run: sccache --version
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+      - name: "Build tests with --timings"
+        run: cargo build --tests --bin baml-cli --bin baml-pack-host --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+        working-directory: baml_language
+      - name: "Run tests with nextest"
+        run: cargo nextest run --profile ci --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=baml_corpus)'
+        working-directory: baml_language
+        env:
+          BAML_PACK_HOST_PREBUILT: "1"
+      - name: "Upload test results on failure"
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-failures-linux-musl
+          path: |
+            baml_language/**/*.snap.new
+            baml_language/**/target/nextest/
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats || true
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-test-linux-musl.json
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-test-linux-musl
+          path: sccache-stats-test-linux-musl.json
+          if-no-files-found: ignore
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-linux-musl.html
+        working-directory: baml_language
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-test-linux-musl
+          path: baml_language/target/cargo-timings/cargo-timing-test-linux-musl.html
+          if-no-files-found: ignore
+
+  sdk-tests:
+    name: "KILN: sdk tests (${{ matrix.sdk-label }}, ${{ matrix.os-label }})"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge..memory=${{ matrix.memory }}
+    timeout-minutes: ${{ matrix.timeout }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { sdk-label: "typescript", sdk-dir: "typescript", package-name: "sdk_test_typescript", sdk-path: "typescript", install-args: "sccache direnv node npm:pnpm cargo:cargo-nextest", os-label: "linux", timeout: 30, memory: "standard" }
+          - { sdk-label: "csharp", sdk-dir: "csharp", package-name: "sdk_test_csharp", sdk-path: "csharp", install-args: "sccache direnv cargo:cargo-nextest", os-label: "linux", timeout: 30, memory: "high" }
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_NET_RETRY: 10
+      CARGO_TERM_COLOR: always
+      CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+      CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+      RUSTUP_MAX_RETRIES: 10
+      # MSBuild reads environment variables as global properties. The .NET
+      # SDK embeds the git commit into every build by default (SourceLink
+      # json + SourceRevisionId in InformationalVersion), which changes a
+      # CoreCompile input on every push and would defeat the C# MSBuild
+      # cache below for any new commit. Test builds need neither; only
+      # dotnet reads these, so the other SDK matrix legs are unaffected.
+      EnableSourceLink: "false"
+      IncludeSourceRevisionInInformationalVersion: "false"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: false
+          persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+      - name: "Install sdk test tools"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: ${{ matrix.install-args }}
+      - name: "Install .NET SDK"
+        if: matrix.sdk-label == 'csharp'
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.301
+      # The SDK install is freshly stamped every run, and its targets files
+      # and reference packs are MSBuild inputs (e.g. Microsoft.Common.targets
+      # regenerates AssemblyAttributes.cs, a CoreCompile input), which alone
+      # invalidates every output the cache below restores. The SDK's content
+      # is pinned by dotnet-version, so backdating it is safe.
+      - name: "Backdate .NET SDK install"
+        if: matrix.sdk-label == 'csharp'
+        shell: bash
+        run: |
+          dotnet_root="$(dirname "$(readlink -f "$(command -v dotnet)")")"
+          echo "dotnet root: $dotnet_root"
+          find "$dotnet_root" -exec touch -t 200001010000 {} + 2>/dev/null || true
+          if command -v sudo >/dev/null; then
+            sudo find "$dotnet_root" -exec touch -t 200001010000 {} + 2>/dev/null || true
+          fi
+          fresh="$(find "$dotnet_root" -newermt 2001-01-01 | head -5)"
+          if [ -n "$fresh" ]; then
+            echo "WARNING: some SDK files kept fresh mtimes (cache will under-hit):"
+            echo "$fresh"
+          fi
+      # The C# fixtures all build the shared bridge project and, without a
+      # cache, every CI run pays the full set of Roslyn compiles from
+      # scratch (setup.sh builds them as one solution; the tests run with
+      # --no-build). Cache the NuGet package folder and every project's
+      # bin/obj between runs so the setup build is incremental.
+      # MSBuild's up-to-date check is mtime-based and a fresh checkout (plus
+      # the build.rs client regeneration) stamps every input with the
+      # current time, so restoring bin/obj alone changes nothing; the
+      # backdate steps below reset byte-identical inputs to a fixed old
+      # timestamp so cached outputs count as current, while changed files
+      # keep fresh mtimes and rebuild as before. The key never matches
+      # exactly, so every run saves its end state and the next run restores
+      # the newest prior cache via restore-keys.
+      # Split restore/save (instead of plain actions/cache) so a FAILED run
+      # still saves its build state: iterating on a red PR is exactly when
+      # incremental rebuilds matter, and the combined action's post step only
+      # saves on success. The matching save step runs at the end of the job
+      # under `if: always()`.
+      - name: "Restore C# build cache"
+        if: matrix.sdk-label == 'csharp'
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.nuget/packages
+            ~/.baml-csharp-ci
+            baml_language/sdks/csharp/**/obj
+            baml_language/sdks/csharp/**/bin
+            baml_language/sdk_tests/crates/csharp/*/obj
+            baml_language/sdk_tests/crates/csharp/*/bin
+          # The pinned SDK version is part of the key (no versionless
+          # fallback): the backdate step trusts the SDK's content because
+          # dotnet-version pins it, so an SDK bump must start a cold cache
+          # rather than lean on secondary invalidation signals.
+          key: csharp-msbuild-v2-${{ matrix.os-label }}-sdk10.0.301-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: csharp-msbuild-v2-${{ matrix.os-label }}-sdk10.0.301-
+      - name: "Backdate unchanged C# sources"
+        if: matrix.sdk-label == 'csharp'
+        shell: bash
+        run: |
+          "$(command -v python3 || command -v python)" .github/scripts/csharp-mtime-cache.py restore
+      - name: "Test C# NuGet payload comparison"
+        if: matrix.sdk-label == 'csharp'
+        run: |
+          dotnet run --project \
+            baml_language/sdks/csharp/bridge_csharp/tools/Baml.NuGetNormalizer/Baml.NuGetNormalizer.csproj \
+            -- --self-test
+      - name: "Test nightly C# package version"
+        if: matrix.sdk-label == 'csharp' && matrix.os-label == 'linux'
+        env:
+          BAML_LANGUAGE_RELEASED_AT: "2026-07-23T12:34:56Z"
+          BAML_LANGUAGE_VERSION_DATE: "20260723"
+          BAML_LANGUAGE_VERSION_NIGHTLY_LETTER: "h"
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          scripts/baml-language-version plan \
+            --channel nightly \
+            --out "$work/release-plan.json"
+          canonical="$(jq -r .canonical_version "$work/release-plan.json")"
+          nuget="$(jq -r .registry_versions.nuget "$work/release-plan.json")"
+          test "$nuget" = "$canonical"
+
+          scripts/baml-csharp-release-contract matrix \
+            | jq -r '.include[]
+              | "runtimes/\(.rid)/native/\(.canonical)"' \
+            | while IFS= read -r runtime_path; do
+                mkdir -p "$work/native/$(dirname "$runtime_path")"
+                printf 'version-only fixture\n' \
+                  > "$work/native/$runtime_path"
+              done
+          printf '<Project />\n' > "$work/baml-bridge.targets"
+          expected_count="$(scripts/baml-csharp-release-contract matrix \
+            | jq '.include | length')"
+          project=baml_language/sdks/csharp/bridge_csharp/src/Baml.Bridge.csproj
+          # --artifacts-path keeps this version-stamped build out of the
+          # project's regular obj/bin: those are cached across runs for the
+          # sdk tests, and rebuilding the bridge here with different global
+          # properties would churn the cached state (and the bridge dll
+          # mtime every fixture compile depends on) on every run.
+          dotnet build "$project" --configuration Release --nologo \
+            --artifacts-path "$work/artifacts" \
+            -p:NuGetAudit=false \
+            -p:Version="$canonical" \
+            -p:InformationalVersion="$canonical" \
+            -p:PackageVersion="$nuget"
+          dotnet pack "$project" --configuration Release --nologo \
+            --no-build --no-restore \
+            --artifacts-path "$work/artifacts" \
+            --output "$work/package" \
+            -p:NuGetAudit=false \
+            -p:Version="$canonical" \
+            -p:InformationalVersion="$canonical" \
+            -p:PackageVersion="$nuget" \
+            -p:BamlExpectedNativeAssetCount="$expected_count" \
+            -p:BamlNativeAssetRoot="$work/native" \
+            -p:BamlGeneratedTargetsPath="$work/baml-bridge.targets"
+          package="$work/package/baml-bridge.$nuget.nupkg"
+          test -f "$package"
+          test "$(unzip -p "$package" baml-bridge.nuspec \
+            | sed -n 's#.*<version>\([^<]*\)</version>.*#\1#p')" = "$nuget"
+      - name: "Verify sccache"
+        run: sccache --version
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+      - name: "Build tests with --timings"
+        run: cargo test --no-run -p ${{ matrix.package-name }} --all-features --timings
+        working-directory: baml_language
+      # Generating the fixture clients used to be a side effect of the build
+      # above, back when this crate had a build script. It is explicit now, and
+      # must stay ahead of the backdate below so there is something to backdate:
+      # a cold runner has no baml_sdk/ trees, so they land with fresh mtimes.
+      # nextest's setup script regenerates them, but byte-identically, so the
+      # output writer skips the install and these mtimes survive to dotnet.
+      - name: "Generate C# fixture clients"
+        if: matrix.sdk-label == 'csharp'
+        run: cargo run --quiet -p sdk_test_codegen -- csharp
+        working-directory: baml_language
+      # Second pass: the step above writes every fixture's client tree with
+      # fresh mtimes. Re-run the backdate so unchanged generated sources also
+      # count as older than the cached outputs.
+      - name: "Backdate unchanged C# generated clients"
+        if: matrix.sdk-label == 'csharp'
+        shell: bash
+        run: |
+          "$(command -v python3 || command -v python)" .github/scripts/csharp-mtime-cache.py restore
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+      - name: "Run sdk test setup"
+        # The C# crate uses nextest's setup-script hook directly and has no
+        # generated setup_guard test. Its setup still runs before the full suite.
+        if: matrix.sdk-label != 'csharp'
+        run: cargo nextest run -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }}) and test(setup_guard::ran)'
+        working-directory: baml_language
+      - name: "Run sdk tests"
+        if: matrix.sdk-label != 'csharp'
+        run: cargo nextest run --profile ci -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }})'
+        working-directory: baml_language
+      - name: "Run C# sdk tests"
+        if: matrix.sdk-label == 'csharp'
+        run: cargo nextest run --profile ci -p ${{ matrix.package-name }} --all-features --no-fail-fast -E 'package(=${{ matrix.package-name }})'
+        working-directory: baml_language
+      # Record the content hashes the next run's backdate steps compare
+      # against. Runs even on test failure: the bin/obj state saved by the
+      # cache post-step must always be described by a matching manifest.
+      - name: "Record C# build cache manifest"
+        if: always() && matrix.sdk-label == 'csharp'
+        shell: bash
+        run: |
+          "$(command -v python3 || command -v python)" .github/scripts/csharp-mtime-cache.py record
+      # Counterpart of "Restore C# build cache" above; keep path and key in
+      # sync with it. The key is unique per run+attempt, so this save never
+      # collides with an existing entry.
+      - name: "Save C# build cache"
+        if: always() && matrix.sdk-label == 'csharp'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.nuget/packages
+            ~/.baml-csharp-ci
+            baml_language/sdks/csharp/**/obj
+            baml_language/sdks/csharp/**/bin
+            baml_language/sdk_tests/crates/csharp/*/obj
+            baml_language/sdk_tests/crates/csharp/*/bin
+          key: csharp-msbuild-v2-${{ matrix.os-label }}-sdk10.0.301-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: "Upload test results on failure"
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdk-test-failures-${{ matrix.sdk-label }}-${{ matrix.os-label }}
+          path: |
+            baml_language/sdk_tests/crates/${{ matrix.sdk-path }}/*/generated/
+            baml_language/target/nextest/
+          if-no-files-found: ignore
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}.json
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}
+          path: sccache-stats-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}.json
+          if-no-files-found: ignore
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}.html
+        working-directory: baml_language
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}
+          path: baml_language/target/cargo-timings/cargo-timing-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}.html
+          if-no-files-found: ignore
+
+  snapshot-tests:
+    name: "KILN: Compiler and documentation tests"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge
+    timeout-minutes: 30
+    continue-on-error: true
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_NET_RETRY: 10
+      CARGO_TERM_COLOR: always
+      CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+      CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+      RUSTUP_MAX_RETRIES: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: false
+          persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+      - name: "Install tools (mise)"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv python uv cargo:cargo-insta cargo:cargo-nextest"
+      - name: "Verify sccache"
+        run: sccache --version
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+      # --bins includes the normal baml-pack-host executable, not just its
+      # unit-test harness. --tests unifies the test/dev-dependency features
+      # in the same build as both executables. Keep these packages/features
+      # identical to the nextest invocation below.
+      - name: "Build tests and CLI binaries with --timings"
+        run: cargo build --tests --bins -p baml_tests -p baml_cli -p baml_pack_host --all-features --timings
+        working-directory: baml_language
+      # This job owns glibc coverage of baml_tests, baml_cli and baml_pack_host.
+      # Keep the GNU job's --exclude list in sync. The musl job also runs
+      # pack_e2e, so both Linux libc variants exercise the ELF pack path.
+      # `cargo insta` takes no profile flag, hence NEXTEST_PROFILE.
+      - name: "Run compiler, CLI, and snapshot tests"
+        run: cargo insta test --test-runner nextest --dnd -p baml_tests -p baml_cli -p baml_pack_host --all-features --unreferenced=reject
+        working-directory: baml_language
+        env:
+          BAML_PACK_HOST_PREBUILT: "1"
+          NEXTEST_PROFILE: ci
+      - name: "Check for snapshot changes"
+        run: |
+          pathspecs=(
+            ':(glob)baml_language/**/*.snap'
+            ':(glob)baml_language/**/*.snap.new'
+          )
+          if [ -n "$(git status --porcelain -- "${pathspecs[@]}")" ]; then
+            echo "::error::Snapshot tests have uncommitted changes"
+            git diff -- "${pathspecs[@]}"
+            exit 1
+          fi
+      - name: "Upload snapshot failures"
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: snapshot-failures
+          path: |
+            baml_language/**/*.snap
+            baml_language/**/*.snap.new
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node2
+      - name: Compile canonical documentation snippets
+        env:
+          # Require full diagnostics for both valid and intentionally invalid
+          # examples. Do not seed disposable projects during the check pass.
+          BAML_NO_BYTECODE_CACHE: "1"
+          BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
+        run: pnpm --filter app-developer-docs docs:snippets:validate
+        working-directory: typescript2
+      - name: Execute documentation behavior and inferred-signature assertions
+        env:
+          BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
+          # Content-addressed keys include the compiler fingerprint and project
+          # inputs. Reuse the stdlib across examples without writing into source.
+          BAML_CACHE_DIR: ${{ runner.temp }}/baml-documentation-cache
+        run: pnpm --filter app-developer-docs docs:book:validate
+        working-directory: typescript2
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-snapshot.json
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-snapshot
+          path: sccache-stats-snapshot.json
+          if-no-files-found: ignore
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-snapshot.html
+        working-directory: baml_language
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-snapshot
+          path: baml_language/target/cargo-timings/cargo-timing-snapshot.html
+          if-no-files-found: ignore
+
+  sdk_parity_check:
+    name: "KILN: SDK parity lint"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    timeout-minutes: 15
+    continue-on-error: true
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_NET_RETRY: 10
+      CARGO_TERM_COLOR: always
+      RUSTUP_MAX_RETRIES: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: false
+          persist-credentials: false
+          fetch-depth: 0
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "ast-grep"
+      - name: "Install Rust toolchain"
+        working-directory: baml_language
+        run: rustup show
+      - name: "Build local BAML CLI"
+        run: cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
+      - name: "Run SDK parity analysis"
+        run: tools/sdk-parity-lint/run --repo-root . --baseline baml_language/sdk_tests/crates/parity_analysis.md --output baml_language/sdk_tests/crates/parity_analysis.new.md
+      - name: "Upload parity results"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdk-parity-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: baml_language/sdk_tests/crates/parity_analysis.new.md
+          if-no-files-found: ignore
+          retention-days: 14

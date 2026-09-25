@@ -158,6 +158,18 @@ class Knobs {
     strict: bool,
     band: float,
     /// The most questions a sitting may ask.
+    ///
+    /// An item that serves an equivalence half the time and its near miss the
+    /// other half evidences the equivalence's rule on half its draws, so
+    /// certifying one costs about twice the questions it would if selection
+    /// could choose the equivalence — which is the choice it is kept from, so
+    /// the kind of question cannot give its answer away. A wrap over an
+    /// equivalence evidences only the rule it carries, for the same reason:
+    /// the wrap itself decides nothing there.
+    ///
+    /// Measured over twelve sittings: 81 to 133 questions, and two of the
+    /// twelve are not certified inside this budget. Raising it would hide
+    /// that rather than mend it — the estimator is where it would be mended.
     budget: int,
     /// Stop after this many observations that moved no rule's floor, once
     /// at least `minimum` have been made: a sitting is given time to reach
@@ -225,7 +237,7 @@ function default_knobs() -> Knobs throws never {
         confidence: 0.1,
         strict: false,
         band: 1.5,
-        budget: 80,
+        budget: 140,
         stall_after: 20,
         minimum: 40,
         aim: 0.8,
@@ -1105,27 +1117,79 @@ function points_for(knobs: Knobs, verdict_correct: bool?) -> int throws never {
 
 // ─── choosing the next case ──────────────────────────────────────────────────
 
-/// A candidate with the rules the tracer reads it by.
-class Read {
-    scored: Scored,
-    rules: string[],
+/// What one casting of a draw is worth to this learner: the information an
+/// answer to it would carry, the chance they get it right, and every other
+/// term of the fit.
+class Assessed {
+    information: float,
+    success: float,
+    terms: float,
 }
 
-/// How well a case suits this learner now, on top of the bank's own score.
-function fit(profile: Profile, knobs: Knobs, read: Read) -> float throws never {
-    let rules = read.rules;
-    let traps = read.scored.candidate.traps;
-    let p = predict(profile, knobs, rules, traps.length());
-    // Either the aim or the information, never both: they are two answers
-    // to the same question. Drawing in proportion to information raised to
-    // `inform` is a Boltzmann draw over what the answer is worth.
-    let aim = if (knobs.inform > 0.0) {
-        knobs.inform
-            * baml.Float.ln(information(profile, knobs, rules, traps.length()).max(0.000001))
+/// How well a draw suits this learner now, on top of the bank's own score.
+///
+/// A draw is a lottery over its castings — the coins that decide which one
+/// is served are not selection's to see, and they decide the answer — so
+/// this is the lottery's worth: its expected information, or its expected
+/// chance of success when aiming at one, and the mean of every other term.
+/// Every casting of a draw is served equally often, so the mean is the
+/// expectation. Reading the served casting instead would let the preference
+/// follow the coin.
+function fit(profile: Profile, knobs: Knobs, scored: Scored) -> float throws never {
+    fit_from(worths(profile, knobs, [scored]), knobs, profile, scored)
+}
+
+/// `fit`, reading each casting's worth from `table` rather than working it
+/// out again.
+function fit_from(
+    table: Worth[],
+    knobs: Knobs,
+    profile: Profile,
+    scored: Scored,
+) -> float throws never {
+    let each = scored.candidate.castings.map((casting) -> {
+        worth_of(table, casting)
+    });
+    let exposure = 0.0 - knobs.exposure * ((profile.served.get(scored.item) ?? 0) * 1.0);
+    aim_of(
+        knobs,
+        mean(
+            each.map((a) -> {
+                a.information
+            }),
+        ),
+        mean(
+            each.map((a) -> {
+                a.success
+            }),
+        ),
+    )
+        + exposure
+        + mean(
+            each.map((a) -> {
+                a.terms
+            }),
+        )
+}
+
+/// Either the aim or the information, never both: they are two answers to
+/// the same question. Drawing in proportion to information raised to
+/// `inform` is a Boltzmann draw over what the answer is worth.
+///
+/// Its own function so the method calls land on parameters rather than on
+/// locals bound from closure calls (README, compiler issue 9).
+function aim_of(knobs: Knobs, information: float, success: float) -> float throws never {
+    if (knobs.inform > 0.0) {
+        knobs.inform * baml.Float.ln(information.max(0.000001))
     } else {
-        0.0 - 3.0 * (p - knobs.aim).abs()
-    };
-    let exposure = 0.0 - knobs.exposure * ((profile.served.get(read.scored.item) ?? 0) * 1.0);
+        0.0 - 3.0 * (success - knobs.aim).abs()
+    }
+}
+
+/// What one casting would be worth if it were the one served.
+function assessed(profile: Profile, knobs: Knobs, casting: Casting) -> Assessed throws never {
+    let rules = casting.rules;
+    let traps = casting.traps;
     // A case on top of a rule the learner has not got yet says nothing about
     // the rule on top.
     let inner_unready = rules.length() >= 2 && logistic(strength(profile, rules[0])) < 0.55;
@@ -1251,27 +1315,82 @@ function fit(profile: Profile, knobs: Knobs, read: Read) -> float throws never {
     } else {
         0.0
     };
-    aim
-        + exposure
-        + readiness
-        + retired
-        + recency
-        + 0.5 * suspicion.min(4.0)
-        + teaching
-        + 2.0 * unknown
-        + reaching
-        + ladder
-        + finishing
+    Assessed {
+        information: information(profile, knobs, rules, traps.length()),
+        success: predict(profile, knobs, rules, traps.length()),
+        terms: readiness
+            + retired
+            + recency
+            + 0.5 * suspicion.min(4.0)
+            + teaching
+            + 2.0 * unknown
+            + reaching
+            + ladder
+            + finishing,
+    }
 }
 
-/// One of `reads`, drawn proportional to `exp(bank score + fit)`.
-function choose(profile: Profile, knobs: Knobs, reads: Read[], seed: Seed) -> Read? throws never {
-    let rescored = reads.map((read) -> {
-        Scored { ...read.scored, score: read.scored.score + fit(profile, knobs, read) }
-    });
-    let picked = pick(rescored, seed)
-        ?? return null;
-    reads.find((read) -> {
-        read.scored.item == picked.item && read.scored.seed == picked.seed
+/// A casting's worth, keyed by the only parts of it that worth reads.
+class Worth {
+    rules: string[],
+    traps: string[],
+    assessed: Assessed,
+}
+
+/// What each distinct casting among `scored` is worth, each worked out once.
+///
+/// A casting's worth turns on its rules and its traps alone, and the same
+/// ones recur across a batch — both directions of a pair that fools nobody,
+/// the same fact drawn twice — so this is most of what selection would
+/// otherwise repeat. Nothing about the answer changes: the same function
+/// meets the same inputs.
+function worths(profile: Profile, knobs: Knobs, scored: Scored[]) -> Worth[] throws never {
+    let table: Worth[] = [];
+    for (let s in scored) {
+        for (let casting in s.candidate.castings) {
+            let known = table.some((worth) -> {
+                worth.rules == casting.rules && worth.traps == casting.traps
+            });
+            if (!known) {
+                table.push(
+                    Worth {
+                        rules: casting.rules,
+                        traps: casting.traps,
+                        assessed: assessed(profile, knobs, casting),
+                    },
+                );
+            }
+        }
+    }
+    table
+}
+
+/// `casting`'s worth as `table` holds it.
+///
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if `table` was not built from a set of draws
+///   that included `casting`.
+function worth_of(table: Worth[], casting: Casting) -> Assessed throws never {
+    let found = table.find((worth) -> {
+        worth.rules == casting.rules && worth.traps == casting.traps
     })
+        ?? throw baml.panics.Unreachable { message: "a casting its table was not built from" };
+    found.assessed
+}
+
+/// One of `scored`, drawn proportional to `exp(bank score + fit)`.
+function choose(
+    profile: Profile,
+    knobs: Knobs,
+    scored: Scored[],
+    seed: Seed,
+) -> Scored? throws never {
+    let table = worths(profile, knobs, scored);
+    pick(
+        scored.map((s) -> {
+            Scored { ...s, score: s.score + fit_from(table, knobs, profile, s) }
+        }),
+        seed,
+    )
 }

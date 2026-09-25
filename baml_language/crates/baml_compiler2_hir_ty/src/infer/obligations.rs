@@ -29,7 +29,7 @@
 //! table's existing snapshot/rollback when a consumer arrives.
 
 use baml_compiler2_ast::ExprId;
-use baml_type::interned::{InferInterface, InferTy, Ty};
+use baml_type::interned::{InferInterface, InferTy, Ty, TyVocabulary};
 
 use super::InferenceContext;
 
@@ -305,18 +305,13 @@ impl<'db> InferenceContext<'db> {
                     bound
                         .generics
                         .iter()
-                        .map(|ty| crate::impls::substitute_bindings(ty, instantiation))
+                        .map(|ty| ty.substitute_bindings(instantiation))
                         .collect::<Vec<_>>()
                         .into_boxed_slice(),
                     bound
                         .associated_types
                         .iter()
-                        .map(|(name, ty)| {
-                            (
-                                name.clone(),
-                                crate::impls::substitute_bindings(ty, instantiation),
-                            )
-                        })
+                        .map(|(name, ty)| (name.clone(), ty.substitute_bindings(instantiation)))
                         .collect(),
                 );
                 self.register_obligation(Obligation::Implements {
@@ -355,7 +350,7 @@ impl<'db> InferenceContext<'db> {
             .iter()
             .zip(interface.generics.iter())
         {
-            let pattern = crate::impls::substitute_bindings(pattern, &instantiation);
+            let pattern = pattern.substitute_bindings(&instantiation);
             self.table.unify(requested, &pattern).ok()?;
         }
         for (name, requested) in &interface.associated_types {
@@ -363,7 +358,7 @@ impl<'db> InferenceContext<'db> {
                 .associated_types
                 .iter()
                 .find(|(declared, _)| declared == name)
-                .map(|(_, ty)| crate::impls::substitute_bindings(ty, &instantiation))
+                .map(|(_, ty)| ty.as_ty().substitute_bindings(&instantiation))
                 .or_else(|| {
                     let implemented = InferInterface::new(
                         facts.interface.name.clone(),
@@ -371,19 +366,14 @@ impl<'db> InferenceContext<'db> {
                             .interface
                             .generics
                             .iter()
-                            .map(|ty| crate::impls::substitute_bindings(ty, &instantiation))
+                            .map(|ty| ty.substitute_bindings(&instantiation))
                             .collect::<Vec<_>>()
                             .into_boxed_slice(),
                         facts
                             .interface
                             .associated_types
                             .iter()
-                            .map(|(pin, ty)| {
-                                (
-                                    pin.clone(),
-                                    crate::impls::substitute_bindings(ty, &instantiation),
-                                )
-                            })
+                            .map(|(pin, ty)| (pin.clone(), ty.substitute_bindings(&instantiation)))
                             .collect(),
                     );
                     crate::impls::realized_assoc_default(self.db, &implemented, goal, name)
@@ -439,7 +429,10 @@ impl<'db> InferenceContext<'db> {
             .iter()
             .map(|(param, _)| (param.clone(), self.fresh_generic_arg(param)))
             .collect();
-        let for_ty = crate::impls::substitute_bindings(&facts.for_ty_pattern, &instantiation);
+        let for_ty = facts
+            .for_ty_pattern
+            .as_ty()
+            .substitute_bindings(&instantiation);
         self.table.unify(goal, &for_ty).ok()?;
         Some(instantiation)
     }
@@ -518,12 +511,7 @@ impl<'db> InferenceContext<'db> {
             .iter()
             .map(|(pin, ty)| (pin, ty))
             .chain(facts.associated_types.iter().map(|(pin, ty)| (pin, &**ty)))
-            .map(|(pin, ty)| {
-                (
-                    pin.clone(),
-                    crate::impls::substitute_bindings(ty, &instantiation),
-                )
-            })
+            .map(|(pin, ty)| (pin.clone(), ty.substitute_bindings(&instantiation)))
             .collect();
         pins.dedup_by(|(a, _), (b, _)| a == b);
         let implemented = InferInterface::new(
@@ -532,7 +520,7 @@ impl<'db> InferenceContext<'db> {
                 .interface
                 .generics
                 .iter()
-                .map(|arg| crate::impls::substitute_bindings(arg, &instantiation))
+                .map(|arg| arg.substitute_bindings(&instantiation))
                 .collect(),
             pins.into_boxed_slice(),
         );

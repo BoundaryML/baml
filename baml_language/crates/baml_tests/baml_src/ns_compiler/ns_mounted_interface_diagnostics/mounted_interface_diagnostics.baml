@@ -142,3 +142,46 @@ test "foreign field mapping requires the receiver owner" {
         packages = { "webhooks": webhooks },
     )
 }
+
+// A mounted impl-provided method referenced as a value registers its own
+// bounds exactly as the source lane does: an argument type that does not
+// implement the bound is rejected at the reference, never left to fail at
+// dispatch.
+test "mounted bounded impl method as a value rejects an unbounded argument" {
+    let sizing = root.compiler.CompileFixturePackage(
+        {
+            "sizing.baml": `
+                interface Measured {
+                    function measure(self) -> int throws never
+                }
+                interface Sizing {
+                    function of<T extends Measured>(self, item: T) -> int throws never
+                }
+                class Rock {
+                    weight int
+                }
+                class Widget {
+                    x int
+
+                    implements Sizing {
+                        function of<T extends Measured>(self, item: T) -> int throws never {
+                            self.x + item.measure()
+                        }
+                    }
+                }
+            `,
+        },
+    );
+    root.compiler.AssertHasCode(
+        {
+            "main.baml": `
+                function unbounded() -> int throws never {
+                    let f: (sizing.Widget, sizing.Rock) -> int throws never = sizing.Widget.of;
+                    f(sizing.Widget { x: 1 }, sizing.Rock { weight: 2 })
+                }
+            `,
+        },
+        "E0001",
+        packages = { "sizing": sizing },
+    )
+}

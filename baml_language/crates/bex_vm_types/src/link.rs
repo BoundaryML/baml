@@ -1311,7 +1311,7 @@ mod tests {
     use crate::{
         Instruction, Object,
         bytecode::Bytecode,
-        types::{Class, Function, FunctionCaptureProps, FunctionKind, FunctionOrigin},
+        types::{Class, Function, FunctionKind, FunctionOrigin},
         unit::{ExportTable, InitTail, ProgramPackageFrag},
     };
 
@@ -1329,6 +1329,9 @@ mod tests {
             real_local_count: 0,
             bytecode,
             kind: FunctionKind::Bytecode,
+            telemetry_function_id: None,
+            telemetry_registration: crate::FunctionRegistration::default(),
+            telemetry_policy_id: crate::TelemetryPolicyId::none(),
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_base::Span::fake(),
@@ -1345,10 +1348,29 @@ mod tests {
             is_interface_body: false,
             native_key: None,
             body_meta: None,
-            capture: FunctionCaptureProps::disabled(),
-            function_id: 0,
+
             runtime_package: HeapPtr::null(),
         }))
+    }
+
+    #[test]
+    fn function_artifacts_exclude_runtime_policy_and_load_with_none() {
+        let object = func("policy_round_trip", vec![Instruction::Return]);
+        let original_bytes = borsh::to_vec(&object).unwrap();
+        let Object::Function(function) = &object else {
+            unreachable!()
+        };
+        function.telemetry_policy_id.store(17);
+        let bytes = borsh::to_vec(&object).unwrap();
+        assert_eq!(bytes, original_bytes);
+
+        let Object::Function(loaded) = borsh::from_slice::<Object>(&bytes).unwrap() else {
+            unreachable!()
+        };
+        assert_eq!(
+            loaded.telemetry_policy_id.load(),
+            crate::TelemetryPolicyId::NONE
+        );
     }
 
     fn class(name: &str, type_tag: i64) -> Object {

@@ -12,6 +12,8 @@
 //! - `ops` — `BamlClassOps*` (`Equals`/`Compare` for primitives + containers)
 //! - `ops_math` — `BamlClassOps*` (`Add`/`Subtract`/`Multiply`/`Divide`/
 //!   `Remainder`/`Negate` for the numeric primitives)
+//! - `regex` — `BamlClassRegexRegex` + `BamlNamespaceRegex` (pattern
+//!   compilation, matching, splitting, template replacement)
 //! - `root` — `BamlPackageBaml` (`deep_copy`, the numeric-array
 //!   reductions `_sum_int` / `_sum_float` / `_mean_float` / `_median_float`,
 //!   the saturating `_trunc_to_int`, and the `Sortable.sort` fast path
@@ -29,7 +31,6 @@ mod csv;
 mod error_context;
 mod float;
 mod future;
-pub(crate) mod id;
 mod int;
 pub mod json;
 mod map;
@@ -39,6 +40,7 @@ mod ops_bitwise;
 mod ops_math;
 mod prompt;
 mod random;
+mod regex;
 pub(crate) mod resolve;
 pub(crate) use resolve::ImplResolver;
 pub(crate) mod root;
@@ -342,10 +344,6 @@ const VM_NATIVE_PACKAGES: &[(&str, NativeResolver)] = &[
         <crate::package_ai::PackageAiImpl as crate::package_ai::BamlPackageAi>::get_native_fn,
     ),
     (
-        "boundary.",
-        <crate::package_boundary::PackageBoundaryImpl as crate::package_boundary::BamlPackageBoundary>::get_native_fn,
-    ),
-    (
         "reflect.",
         <crate::package_reflect::PackageReflectImpl as crate::package_reflect::BamlPackageReflect>::get_native_fn,
     ),
@@ -416,6 +414,9 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 real_local_count: function.real_local_count,
                 bytecode: function.bytecode,
                 kind,
+                telemetry_function_id: None,
+                telemetry_registration: bex_vm_types::FunctionRegistration::default(),
+                telemetry_policy_id: function.telemetry_policy_id,
                 local_names: function.local_names,
                 debug_locals: function.debug_locals,
                 span: function.span,
@@ -432,8 +433,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 is_interface_body: function.is_interface_body,
                 native_key: function.native_key,
                 body_meta: function.body_meta,
-                capture: function.capture,
-                function_id: 0, // synthetic; not in the profiling function table
+
                 runtime_package: function.runtime_package,
             }))
         }

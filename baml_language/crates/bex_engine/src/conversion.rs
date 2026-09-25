@@ -5,11 +5,11 @@
 //! representation (`BexValue`, `BexExternalValue`).
 
 use ::bex_heap::{BexValue, HeapPermit, PermitProof, TlabHolder};
-use ::bex_vm_types::{HeapPtr, Object, ObjectType, Value, ValueKind};
+use ::bex_vm_types::{HeapPtr, Object, Value, ValueKind, float_order};
 use baml_type::{Literal, Ty};
 use bex_external_types::{
     BexExternalAdt, BexExternalValue, HostValueKind, RuntimeTy, UnionMetadata,
-    is_canonical_json_alias, runtime_ty_structurally_equal, selected_arm_equal,
+    is_canonical_json_alias, js_number_to_i64, runtime_ty_structurally_equal, selected_arm_equal,
     value_satisfies_json,
 };
 use bex_vm::BexVm;
@@ -929,6 +929,16 @@ impl BexEngine {
             BexExternalValue::Int(_) => SynthTy::Known(RuntimeTy::int()),
             BexExternalValue::Bigint(_) => SynthTy::Known(RuntimeTy::Bigint),
             BexExternalValue::Float(_) => SynthTy::Known(RuntimeTy::float()),
+            // An unconstrained integral JavaScript number keeps the Node
+            // bridge's historical `int` inference. Contextual coercion can
+            // still select `float`; a non-integral number is float-only.
+            BexExternalValue::JsNumber(value) => {
+                SynthTy::Known(if js_number_to_vm_int(*value).is_some() {
+                    RuntimeTy::int()
+                } else {
+                    RuntimeTy::float()
+                })
+            }
             BexExternalValue::Bool(_) => SynthTy::Known(RuntimeTy::bool()),
             // A `String` value widens to `string`, never a `Literal` (00b3
             // T2/T45 — `identity("hi")` binds `T = string`).
@@ -1298,6 +1308,31 @@ impl BexEngine {
         )
     }
 
+    /// Materialize a host-callable return using its declared return type.
+    ///
+    /// Host returns have not gone through the entry-point argument coercion
+    /// pass. Resolve their inbound carriers recursively against the declared
+    /// return type before ordinary VM materialization.
+    pub(crate) fn convert_host_return_to_vm_value_with_ty(
+        &self,
+        holder: &mut impl HeapPermit<BexThread>,
+        external: BexExternalValue,
+        expected_ty: Option<&RuntimeTy>,
+    ) -> Result<Value, EngineError> {
+        let external = match expected_ty {
+            Some(expected_ty) => self.coerce_inbound_arg(external, expected_ty)?,
+            None => external,
+        };
+        self.convert_external_to_vm_value_with_ty_and_runtime(
+            holder,
+            external,
+            expected_ty,
+            &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
+            None,
+        )
+    }
+
     /// Materialize an external value using call-local runtime class and enum
     /// side tables in addition to the engine's frozen static definition table.
     /// Recursive calls retain both tables for nested containers and classes.
@@ -1405,6 +1440,16 @@ impl BexEngine {
             BexExternalValue::Float(f) => {
                 Value::object(holder.holder_mut().tlab_mut().alloc(Object::Float(f)))
             }
+            BexExternalValue::JsNumber(f) => match js_number_to_i64(f) {
+                Some(i) => Value::try_int(i).ok_or_else(|| EngineError::TypeMismatch {
+                    message: format!(
+                        "integer {i} is outside the BAML integer range [{}, {}]",
+                        Value::INT_MIN,
+                        Value::INT_MAX
+                    ),
+                })?,
+                None => Value::object(holder.holder_mut().tlab_mut().alloc(Object::Float(f))),
+            },
             BexExternalValue::Bool(b) => Value::bool(b),
             BexExternalValue::String(s) => {
                 Value::object(holder.holder_mut().tlab_mut().alloc_string(s))
@@ -2135,15 +2180,6 @@ impl BexEngine {
                     })
             }
         }
-    }
-
-    /// Convert VM values to `BexExternalValues` for sys ops.
-    ///
-    /// This is simpler than `vm_value_to_external` because sys ops only receive
-    /// primitives, strings, arrays, maps, and resources - not instances/variants.
-    #[allow(unused)]
-    pub(crate) fn vm_args_to_external(vm: &BexVm, args: &[Value]) -> Vec<BexExternalValue> {
-        args.iter().map(|v| vm_arg_to_external(vm, *v)).collect()
     }
 }
 
@@ -3231,6 +3267,8 @@ fn value_matches_type_with_definitions(
         (BexExternalValue::Int(_), RuntimeTy::Int) => true,
         (BexExternalValue::Bigint(_), RuntimeTy::Bigint) => true,
         (BexExternalValue::Float(_), RuntimeTy::Float) => true,
+        (BexExternalValue::JsNumber(value), RuntimeTy::Int) => js_number_to_i64(*value).is_some(),
+        (BexExternalValue::JsNumber(_), RuntimeTy::Float) => true,
         (BexExternalValue::Bool(_), RuntimeTy::Bool) => true,
         (BexExternalValue::String(_), RuntimeTy::String) => true,
         // Literal types match their corresponding runtime values
@@ -3241,6 +3279,12 @@ fn value_matches_type_with_definitions(
             value == expected
         }
         (BexExternalValue::Float(value), RuntimeTy::Literal(Literal::Float(expected), _)) => {
+            float_literal_matches(*value, expected)
+        }
+        (BexExternalValue::JsNumber(value), RuntimeTy::Literal(Literal::Int(expected), _)) => {
+            js_number_to_i64(*value).is_some_and(|value| value == *expected)
+        }
+        (BexExternalValue::JsNumber(value), RuntimeTy::Literal(Literal::Float(expected), _)) => {
             float_literal_matches(*value, expected)
         }
         (BexExternalValue::Uint8Array(_), RuntimeTy::Uint8Array) => true,
@@ -3462,7 +3506,7 @@ fn runtime_ty_compatible(wire: &RuntimeTy, expected: &RuntimeTy) -> bool {
 fn float_literal_matches(value: f64, source: &str) -> bool {
     source
         .parse::<f64>()
-        .is_ok_and(|expected| value.to_bits() == expected.to_bits())
+        .is_ok_and(|expected| float_order::eq(value, expected))
 }
 
 /// Structurally check a generic call's argument against its now-concrete
@@ -3537,6 +3581,7 @@ pub(crate) fn check_generic_arg(
         | BexExternalValue::Int(_)
         | BexExternalValue::Bigint(_)
         | BexExternalValue::Float(_)
+        | BexExternalValue::JsNumber(_)
         | BexExternalValue::Bool(_)
         | BexExternalValue::String(_)
         | BexExternalValue::Uint8Array(_)
@@ -3587,7 +3632,8 @@ impl BexEngine {
     /// This is the engine-side complement to the bridges' shared
     /// `bex_external_types::validate_host_return` guard. The shared guard runs
     /// at the FFI boundary and enforces everything checkable without a schema
-    /// (scalar discrimination including `int` ≠ `float`, container recursion,
+    /// (scalar discrimination including contextual JavaScript `number`
+    /// resolution, container recursion,
     /// enum identity, class-*name* identity). This method adds the one check
     /// the shared guard cannot perform — class *field types* — by resolving
     /// the declared class against the engine's compiled schema
@@ -3826,7 +3872,8 @@ impl BexEngine {
             }
 
             // Scalars and everything else: defer to the schema-free shape
-            // check (int ≠ float, exact tags, literal equality, media).
+            // check (including contextual JavaScript-number resolution,
+            // otherwise exact tags, literal equality, and media).
             _ => {
                 bex_external_types::validate_host_return(value, expected).map_err(|e| e.to_string())
             }
@@ -4059,129 +4106,6 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                 if find_matching_union_member(value, nested).is_some())
         })
     })
-}
-
-/// Convert a VM value to a `BexExternalValue` for sys op arguments.
-///
-/// This is simpler than `vm_value_to_external` because sys ops only receive
-/// primitives, strings, arrays, maps, and resources - not instances/variants.
-pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
-    match value.kind() {
-        ValueKind::OmittedArg => {
-            panic!("Cannot convert omitted argument sentinel to BexExternalValue")
-        }
-        ValueKind::Null => BexExternalValue::Null,
-        ValueKind::Int(i) => BexExternalValue::Int(i),
-        ValueKind::Bool(b) => BexExternalValue::Bool(b),
-        ValueKind::Object(idx) => {
-            let obj = vm.get_object(idx);
-            match obj {
-                Object::Float(f) => BexExternalValue::Float(*f),
-                Object::String(s) => BexExternalValue::String(s.clone()),
-                Object::Array(arr) => {
-                    let snap = arr.to_vec();
-                    let items: Vec<BexExternalValue> =
-                        snap.iter().map(|v| vm_arg_to_external(vm, *v)).collect();
-                    BexExternalValue::Array {
-                        element_type: bex_external_types::RuntimeTy::Null,
-                        items,
-                    }
-                }
-                Object::Map(map) => {
-                    let snap = map.to_index_map();
-                    let entries: indexmap::IndexMap<String, BexExternalValue> = snap
-                        .iter()
-                        .map(|(k, v)| (k.to_string(), vm_arg_to_external(vm, *v)))
-                        .collect();
-                    BexExternalValue::Map {
-                        key_type: bex_external_types::RuntimeTy::String,
-                        value_type: bex_external_types::RuntimeTy::Null,
-                        entries,
-                    }
-                }
-                Object::Instance(instance) => {
-                    // Get class name from the class object
-                    let class_obj = vm.get_object(instance.class);
-                    let class_name = match class_obj {
-                        Object::Class(class) => class.name.to_string(),
-                        _ => panic!("Instance class pointer doesn't point to a Class"),
-                    };
-
-                    // Get field names from class and convert fields
-                    let class_fields = match class_obj {
-                        Object::Class(class) => &class.fields,
-                        _ => panic!("Instance class pointer doesn't point to a Class"),
-                    };
-
-                    let fields: indexmap::IndexMap<String, BexExternalValue> = class_fields
-                        .iter()
-                        .zip(instance.fields.iter())
-                        .map(|(class_field, slot)| {
-                            (
-                                class_field.name.clone(),
-                                vm_arg_to_external(vm, slot.load()),
-                            )
-                        })
-                        .collect();
-
-                    BexExternalValue::Instance {
-                        class_name,
-                        type_args: instance
-                            .class_type_args
-                            .iter()
-                            .filter_map(|arg| {
-                                overlay_wire_ty(&bex_vm_types::RuntimeTy::from(arg)).ok()
-                            })
-                            .collect(),
-                        fields,
-                    }
-                }
-                Object::Bigint(bi) => BexExternalValue::Bigint((**bi).clone()),
-                Object::Uint8Array(bytes) => BexExternalValue::Uint8Array(bytes.to_vec()),
-                Object::Variant(variant) => {
-                    let enum_obj = vm.get_object(variant.enm);
-                    let Object::Enum(enm) = enum_obj else {
-                        panic!("variant.enm doesn't point to an Enum");
-                    };
-                    let variant_name = enm
-                        .variants
-                        .get(variant.index)
-                        .map(|v| v.name.clone())
-                        .unwrap_or_else(|| format!("<variant {}>", variant.index));
-                    BexExternalValue::Variant {
-                        enum_name: enm.name.to_string(),
-                        variant_name,
-                    }
-                }
-                // These types should not appear as sys op arguments.
-                Object::Function(_)
-                | Object::TypeAlias(_)
-                | Object::Interface(_)
-                | Object::Package(_)
-                | Object::ImplRule(_)
-                | Object::Closure(_)
-                | Object::BoundMethod(_)
-                | Object::GenericFunction(_)
-                | Object::HostClosure(_)
-                | Object::Cell(_)
-                | Object::Class(_)
-                | Object::Enum(_)
-                | Object::Future(_)
-                | Object::UnscheduledFuture(_)
-                | Object::RustData(_)
-                | Object::Type(_) => {
-                    panic!(
-                        "Cannot convert object type to BexExternalValue for sys op: {:?}",
-                        ObjectType::of(obj)
-                    )
-                }
-                #[cfg(feature = "heap_debug")]
-                Object::Sentinel(_) => {
-                    panic!("Cannot convert sentinel to BexExternalValue")
-                }
-            }
-        }
-    }
 }
 
 /// Coerce a host-encoded **incoming** value to match the declared param type.
@@ -4801,14 +4725,22 @@ fn coerce_arg_to_declared_type_with_aliases(
         // `value_type`; dynamic bridges use their registered default policy.
         // An annotation was handled by the union-carrier arm above.
         (value, declared @ RuntimeTy::Union(members)) => {
-            let value = coerce_numeric_to_declared_type(value, declared)?;
-            let selected = find_unannotated_inbound_member_with_aliases(
-                &value,
-                members,
-                aliases,
-                classes,
-                ambiguity_policy,
-            )?;
+            let (value, preferred_member) = match value {
+                BexExternalValue::JsNumber(number) => {
+                    resolve_js_number_for_union(number, members, aliases, classes)
+                }
+                value => (coerce_numeric_to_declared_type(value, declared)?, None),
+            };
+            let selected = match preferred_member {
+                Some(member) => member,
+                None => find_unannotated_inbound_member_with_aliases(
+                    &value,
+                    members,
+                    aliases,
+                    classes,
+                    ambiguity_policy,
+                )?,
+            };
             let coerced = coerce_arg_to_declared_type_with_aliases(
                 value,
                 &selected,
@@ -4890,6 +4822,34 @@ fn coerce_numeric_to_declared_type(
     ty: &RuntimeTy,
 ) -> Result<BexExternalValue, EngineError> {
     match (value, ty) {
+        (
+            BexExternalValue::JsNumber(value),
+            RuntimeTy::Int | RuntimeTy::Literal(Literal::Int(_), _),
+        ) => js_number_to_i64(value)
+            .map(BexExternalValue::Int)
+            .ok_or_else(|| EngineError::TypeMismatch {
+                message: format!("JavaScript number {value} is not representable as an int"),
+            }),
+
+        (
+            BexExternalValue::JsNumber(value),
+            RuntimeTy::Float | RuntimeTy::Literal(Literal::Float(_), _),
+        ) => Ok(BexExternalValue::Float(value)),
+
+        // An integral JavaScript number can inhabit either `int` or `float`.
+        // Preserve the historical integer default when an exact int arm is
+        // available; otherwise select a float arm. `bigint` is deliberately
+        // excluded — a JavaScript `bigint` has its own wire variant.
+        (BexExternalValue::JsNumber(value), RuntimeTy::Union(members)) => {
+            let (value, _) = resolve_js_number_for_union(
+                value,
+                members,
+                &indexmap::IndexMap::new(),
+                &indexmap::IndexMap::new(),
+            );
+            Ok(value)
+        }
+
         // Int → Bigint widening (FFI boundary only — `int` is not a subtype of
         // `bigint` in the type system).
         (
@@ -4956,7 +4916,134 @@ fn coerce_numeric_to_declared_type(
             Ok(v)
         }
 
+        // No numeric context selected a representation (for example an
+        // `unknown` slot). Keep Node's historical value-shaped default so a
+        // JavaScript integer infers/materializes as `int`, otherwise `float`.
+        (BexExternalValue::JsNumber(value), _) => Ok(match js_number_to_vm_int(value) {
+            Some(integer) => BexExternalValue::Int(integer),
+            None => BexExternalValue::Float(value),
+        }),
+
         (v, _) => Ok(v),
+    }
+}
+
+/// Convert an integral JavaScript number only when the VM can represent it as
+/// an immediate integer. Larger integral doubles must remain floats.
+fn js_number_to_vm_int(value: f64) -> Option<i64> {
+    js_number_to_i64(value).filter(|integer| Value::try_int(*integer).is_some())
+}
+
+/// Resolve a JavaScript number against the explicit numeric arms of a union.
+///
+/// An in-range integral number prefers an integer arm, including one hidden
+/// behind a nested union or alias. A float arm comes next. Catch-all arms such
+/// as `unknown` and `baml.json.json` are deliberately left to the normal union
+/// selector so they cannot outrank a numeric arm.
+fn resolve_js_number_for_union(
+    value: f64,
+    members: &[RuntimeTy],
+    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+    classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
+) -> (BexExternalValue, Option<RuntimeTy>) {
+    if let Some(integer) = js_number_to_vm_int(value) {
+        let integer_value = BexExternalValue::Int(integer);
+        let matching_literal = members.iter().find(|member| {
+            member_admits_numeric_arm(
+                member,
+                &integer_value,
+                |ty| matches!(ty, RuntimeTy::Literal(Literal::Int(_), _)),
+                aliases,
+                classes,
+                &mut std::collections::HashSet::new(),
+            )
+        });
+        let matching_int = members.iter().find(|member| {
+            member_admits_numeric_arm(
+                member,
+                &integer_value,
+                |ty| matches!(ty, RuntimeTy::Int),
+                aliases,
+                classes,
+                &mut std::collections::HashSet::new(),
+            )
+        });
+        if let Some(member) = matching_literal.or(matching_int) {
+            return (integer_value, Some(member.clone()));
+        }
+    }
+
+    let float_value = BexExternalValue::Float(value);
+    let matching_literal = members.iter().find(|member| {
+        member_admits_numeric_arm(
+            member,
+            &float_value,
+            |ty| matches!(ty, RuntimeTy::Literal(Literal::Float(_), _)),
+            aliases,
+            classes,
+            &mut std::collections::HashSet::new(),
+        )
+    });
+    let matching_float = members.iter().find(|member| {
+        member_admits_numeric_arm(
+            member,
+            &float_value,
+            |ty| matches!(ty, RuntimeTy::Float),
+            aliases,
+            classes,
+            &mut std::collections::HashSet::new(),
+        )
+    });
+    if let Some(member) = matching_literal.or(matching_float) {
+        return (float_value, Some(member.clone()));
+    }
+
+    (BexExternalValue::JsNumber(value), None)
+}
+
+/// Find a matching numeric leaf without letting a catch-all sibling make an
+/// unrelated numeric literal appear to match the value.
+fn member_admits_numeric_arm(
+    member: &RuntimeTy,
+    value: &BexExternalValue,
+    is_numeric_arm: fn(&RuntimeTy) -> bool,
+    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+    classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
+    visited_aliases: &mut std::collections::HashSet<baml_type::TypeName>,
+) -> bool {
+    match member {
+        RuntimeTy::TypeAlias(name) if is_canonical_json_alias(name) => false,
+        RuntimeTy::TypeAlias(name) => {
+            if !visited_aliases.insert(name.clone()) {
+                return false;
+            }
+            let matches = aliases.get(name).is_some_and(|expanded| {
+                member_admits_numeric_arm(
+                    expanded,
+                    value,
+                    is_numeric_arm,
+                    aliases,
+                    classes,
+                    visited_aliases,
+                )
+            });
+            visited_aliases.remove(name);
+            matches
+        }
+        RuntimeTy::Union(members) => members.iter().any(|nested| {
+            member_admits_numeric_arm(
+                nested,
+                value,
+                is_numeric_arm,
+                aliases,
+                classes,
+                visited_aliases,
+            )
+        }),
+        _ => {
+            is_numeric_arm(member)
+                && value_matches_type_with_definitions(value, member, aliases, classes)
+        }
     }
 }
 
@@ -4994,6 +5081,250 @@ mod union_container_selection_tests {
 
     fn float_literal(value: &str) -> RuntimeTy {
         RuntimeTy::Literal(Literal::Float(value.to_string()), Freshness::Regular)
+    }
+
+    #[test]
+    fn js_number_uses_the_declared_numeric_context() {
+        assert_eq!(
+            coerce_numeric_to_declared_type(BexExternalValue::JsNumber(7.0), &RuntimeTy::int())
+                .unwrap(),
+            BexExternalValue::Int(7)
+        );
+        assert_eq!(
+            coerce_numeric_to_declared_type(BexExternalValue::JsNumber(7.0), &RuntimeTy::float())
+                .unwrap(),
+            BexExternalValue::Float(7.0)
+        );
+        assert!(
+            coerce_numeric_to_declared_type(BexExternalValue::JsNumber(7.5), &RuntimeTy::int())
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn js_number_union_prefers_int_but_never_bigint() {
+        let float_then_int = RuntimeTy::Union(Box::new([RuntimeTy::float(), RuntimeTy::int()]));
+        assert_eq!(
+            coerce_numeric_to_declared_type(BexExternalValue::JsNumber(7.0), &float_then_int)
+                .unwrap(),
+            BexExternalValue::Int(7)
+        );
+
+        let bigint_then_float =
+            RuntimeTy::Union(Box::new([RuntimeTy::bigint(), RuntimeTy::float()]));
+        assert_eq!(
+            coerce_numeric_to_declared_type(BexExternalValue::JsNumber(7.0), &bigint_then_float)
+                .unwrap(),
+            BexExternalValue::Float(7.0)
+        );
+    }
+
+    #[test]
+    fn js_number_union_prefers_aliased_int_over_float() {
+        let alias_name = TypeName::from_dotted_path("user.aliases.IntAlias");
+        let alias = RuntimeTy::TypeAlias(alias_name.clone());
+        let mut aliases = indexmap::IndexMap::new();
+        aliases.insert(alias_name, RuntimeTy::int());
+        let declared = RuntimeTy::union([RuntimeTy::float(), alias.clone()]);
+
+        let coerced = coerce_arg_to_declared_type_with_aliases(
+            BexExternalValue::JsNumber(7.0),
+            &declared,
+            &aliases,
+            &indexmap::IndexMap::new(),
+            crate::InboundUnionAmbiguityPolicy::Reject,
+        )
+        .unwrap();
+
+        let BexExternalValue::Union { value, metadata } = coerced else {
+            panic!("expected a selected union carrier")
+        };
+        assert_eq!(metadata.selected_option, alias);
+        assert_eq!(*value, BexExternalValue::Int(7));
+    }
+
+    #[test]
+    fn js_number_union_prefers_int_inside_nested_aliases() {
+        let int_or_string = TypeName::from_dotted_path("user.aliases.IntOrString");
+        let float_or_bool = TypeName::from_dotted_path("user.aliases.FloatOrBool");
+        let int_alias = RuntimeTy::TypeAlias(int_or_string.clone());
+        let float_alias = RuntimeTy::TypeAlias(float_or_bool.clone());
+        let aliases = indexmap::IndexMap::from([
+            (
+                int_or_string,
+                RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]),
+            ),
+            (
+                float_or_bool,
+                RuntimeTy::union([RuntimeTy::float(), RuntimeTy::Bool]),
+            ),
+        ]);
+
+        for declared in [
+            RuntimeTy::union([int_alias.clone(), float_alias]),
+            RuntimeTy::union([RuntimeTy::float(), int_alias.clone()]),
+        ] {
+            let coerced = coerce_arg_to_declared_type_with_aliases(
+                BexExternalValue::JsNumber(7.0),
+                &declared,
+                &aliases,
+                &indexmap::IndexMap::new(),
+                crate::InboundUnionAmbiguityPolicy::Reject,
+            )
+            .unwrap();
+
+            let BexExternalValue::Union { value, metadata } = coerced else {
+                panic!("expected an outer union carrier")
+            };
+            assert_eq!(metadata.selected_option, int_alias);
+            let BexExternalValue::Union { value, metadata } = *value else {
+                panic!("expected an inner union carrier")
+            };
+            assert_eq!(metadata.selected_option, RuntimeTy::int());
+            assert_eq!(*value, BexExternalValue::Int(7));
+        }
+    }
+
+    #[test]
+    fn js_number_union_uses_float_when_integral_value_exceeds_vm_int_range() {
+        let declared = RuntimeTy::union([RuntimeTy::int(), RuntimeTy::float()]);
+        let number = 2_f64.powi(62);
+
+        let coerced =
+            coerce_arg_to_declared_type(BexExternalValue::JsNumber(number), &declared).unwrap();
+
+        let BexExternalValue::Union { value, metadata } = coerced else {
+            panic!("expected a selected union carrier")
+        };
+        assert_eq!(metadata.selected_option, RuntimeTy::float());
+        assert_eq!(*value, BexExternalValue::Float(number));
+    }
+
+    #[test]
+    fn js_number_without_numeric_context_uses_float_beyond_vm_int_range() {
+        let number = 2_f64.powi(62);
+
+        let coerced =
+            coerce_arg_to_declared_type(BexExternalValue::JsNumber(number), &RuntimeTy::unknown())
+                .unwrap();
+
+        assert_eq!(coerced, BexExternalValue::Float(number));
+    }
+
+    #[test]
+    fn js_number_union_prefers_float_over_catch_all_arms() {
+        for catch_all in [json_ty(), RuntimeTy::unknown()] {
+            let declared = RuntimeTy::union([catch_all, RuntimeTy::float()]);
+            let coerced = coerce_arg_to_declared_type_with_aliases(
+                BexExternalValue::JsNumber(7.0),
+                &declared,
+                &indexmap::IndexMap::new(),
+                &indexmap::IndexMap::new(),
+                crate::InboundUnionAmbiguityPolicy::SelectDefault,
+            )
+            .unwrap();
+
+            let BexExternalValue::Union { value, metadata } = coerced else {
+                panic!("expected a selected union carrier")
+            };
+            assert_eq!(metadata.selected_option, RuntimeTy::float());
+            assert_eq!(*value, BexExternalValue::Float(7.0));
+        }
+    }
+
+    #[test]
+    fn js_number_union_prefers_numeric_arms_over_registered_json_alias() {
+        let json = json_ty();
+        let RuntimeTy::TypeAlias(json_name) = &json else {
+            unreachable!()
+        };
+        let aliases = indexmap::IndexMap::from([(
+            json_name.clone(),
+            RuntimeTy::union([RuntimeTy::int(), RuntimeTy::float(), RuntimeTy::string()]),
+        )]);
+
+        for (declared, expected) in [
+            (
+                RuntimeTy::union([json.clone(), RuntimeTy::float()]),
+                RuntimeTy::float(),
+            ),
+            (
+                RuntimeTy::union([json.clone(), RuntimeTy::int()]),
+                RuntimeTy::int(),
+            ),
+        ] {
+            let coerced = coerce_arg_to_declared_type_with_aliases(
+                BexExternalValue::JsNumber(7.0),
+                &declared,
+                &aliases,
+                &indexmap::IndexMap::new(),
+                crate::InboundUnionAmbiguityPolicy::Reject,
+            )
+            .unwrap();
+
+            let BexExternalValue::Union { value, metadata } = coerced else {
+                panic!("expected a selected union carrier")
+            };
+            assert_eq!(metadata.selected_option, expected);
+            assert_eq!(
+                *value,
+                if expected == RuntimeTy::int() {
+                    BexExternalValue::Int(7)
+                } else {
+                    BexExternalValue::Float(7.0)
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn js_number_union_prefers_matching_numeric_literals() {
+        let int_literal = RuntimeTy::Literal(Literal::Int(7), Freshness::Regular);
+        let declared = RuntimeTy::union([RuntimeTy::int(), int_literal.clone()]);
+        let coerced = coerce_arg_to_declared_type_with_policy(
+            BexExternalValue::JsNumber(7.0),
+            &declared,
+            crate::InboundUnionAmbiguityPolicy::SelectDefault,
+        )
+        .unwrap();
+        let BexExternalValue::Union { value, metadata } = coerced else {
+            panic!("expected a selected integer union carrier")
+        };
+        assert_eq!(metadata.selected_option, int_literal);
+        assert_eq!(*value, BexExternalValue::Int(7));
+
+        let float_literal_ty = float_literal("7.5");
+        let declared = RuntimeTy::union([RuntimeTy::float(), float_literal_ty.clone()]);
+        let coerced = coerce_arg_to_declared_type_with_policy(
+            BexExternalValue::JsNumber(7.5),
+            &declared,
+            crate::InboundUnionAmbiguityPolicy::SelectDefault,
+        )
+        .unwrap();
+        let BexExternalValue::Union { value, metadata } = coerced else {
+            panic!("expected a selected float union carrier")
+        };
+        assert_eq!(metadata.selected_option, float_literal_ty);
+        assert_eq!(*value, BexExternalValue::Float(7.5));
+    }
+
+    #[test]
+    fn js_number_resolution_is_recursive_for_containers() {
+        let values = BexExternalValue::Array {
+            element_type: RuntimeTy::unknown(),
+            items: vec![
+                BexExternalValue::JsNumber(1.0),
+                BexExternalValue::JsNumber(2.5),
+            ],
+        };
+        let coerced = coerce_arg_to_declared_type(values, &list(RuntimeTy::float())).unwrap();
+        let BexExternalValue::Array { items, .. } = coerced else {
+            panic!("expected a list")
+        };
+        assert_eq!(
+            items,
+            vec![BexExternalValue::Float(1.0), BexExternalValue::Float(2.5)]
+        );
     }
 
     fn media_ty(kind: MediaKind) -> RuntimeTy {
@@ -5349,14 +5680,14 @@ mod union_container_selection_tests {
     }
 
     #[test]
-    fn float_literal_matching_preserves_negative_zero_and_decimal_precision() {
+    fn float_literal_matching_uses_baml_equality_and_preserves_decimal_precision() {
         let negative_zero = float_literal("-0.0");
         let precise = float_literal("1.2345678901234567e-300");
         assert!(value_matches_type(
             &BexExternalValue::Float(-0.0),
             &negative_zero
         ));
-        assert!(!value_matches_type(
+        assert!(value_matches_type(
             &BexExternalValue::Float(0.0),
             &negative_zero
         ));
