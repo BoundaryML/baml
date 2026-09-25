@@ -6,6 +6,9 @@ use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, Teleme
 use btel_recorder::{CompletionFlags, RecordingConfig, proto};
 use sys_native::SysOpsExt;
 
+#[path = "telemetry_recording/trace_matrix.rs"]
+mod trace_matrix;
+
 fn context() -> bex_engine::FunctionCallContext {
     FunctionCallContextBuilder::new(sys_types::CallId::next()).build()
 }
