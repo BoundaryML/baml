@@ -534,7 +534,6 @@ fn drain_wasm_logs(
 
         if let Some(patch) = run_store.ingest_log_value_ref(
             encoded.boundary_id,
-            encoded.call,
             encoded.metadata.level,
             encoded
                 .metadata
@@ -746,7 +745,7 @@ impl BamlWasmRuntime {
             .with_logger(logger.clone())
             .build();
         wasm_bindgen_futures::spawn_local(async move {
-            match bex_project::Bex::call_function_with_trace(
+            match bex_project::Bex::call_function_with_outcome(
                 bex,
                 &function_name,
                 kwargs.into(),
@@ -867,7 +866,7 @@ impl BamlWasmRuntime {
             .with_logger(logger.clone())
             .build();
         wasm_bindgen_futures::spawn_local(async move {
-            match bex_project::Bex::call_function_with_trace(
+            match bex_project::Bex::call_function_with_outcome(
                 bex,
                 &function_name,
                 kwargs.into(),
@@ -1439,7 +1438,7 @@ async fn run_collected_test(
 ) -> Result<bex_project::BexCallResult, bex_project::EngineError> {
     lease
         .engine
-        .call_function_with_trace(
+        .call_function_with_outcome(
             "testing.TestRegistry.run_test",
             vec![
                 bex_project::BexExternalValue::Handle(lease.handle.clone()),
@@ -1454,10 +1453,10 @@ async fn run_collected_test(
 #[cfg(test)]
 mod history_tests {
     use bex_events::{
-        ids::{BexCallId, BexThreadId, EngineId, ProcessEuid},
+        ids::{BexThreadId, EngineId, ProcessEuid},
         run::{
             ExecutionRequest, PayloadKind, ProjectGeneration, RunPatchChange, RunRequestSummary,
-            RunStatus, RunTimeAnchor, StartGuard, TraceCallKey,
+            RunStatus, RunTimeAnchor, StartGuard, ThreadRef,
         },
     };
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -1486,12 +1485,11 @@ mod history_tests {
         }
     }
 
-    fn root_trace() -> TraceCallKey {
-        TraceCallKey {
+    fn root_trace() -> ThreadRef {
+        ThreadRef {
             process_euid: ProcessEuid([4; 16]),
             engine_id: EngineId(9),
             thread_id: BexThreadId(1),
-            call_id: BexCallId(2),
         }
     }
 

@@ -63,9 +63,7 @@ async fn call(engine: &Arc<BexEngine>, name: &str, args: Vec<Ext>, copy: bool) -
         .call_function(
             name,
             args,
-            FunctionCallContextBuilder::new(sys_types::CallId::next())
-                .suppress_internal_profile()
-                .build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             copy,
         )
         .await
@@ -244,7 +242,6 @@ async fn cancellation_after_pressure_does_not_latch_the_checker() {
                 vec![],
                 FunctionCallContextBuilder::new(sys_types::CallId::next())
                     .with_cancel_token(running_token)
-                    .suppress_internal_profile()
                     .build(),
                 true,
             )

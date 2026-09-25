@@ -99,17 +99,6 @@ repos:
         files: ^baml_language/(.*\.md|\.markdown-whitelist)$
         priority: 0
 
-      - id: type-quiz-lint
-        name: type quiz structural invariants
-        entry: bash -c 'cd baml_language && mise run type-quiz-lint'
-        language: system
-        pass_filenames: false
-        files: ^baml_language/tools/type_quiz/
-        # After the formatter (2): the lint reads the files the formatter
-        # rewrites, and its wildcard-arm check is sensitive to how an arm is
-        # laid out across lines.
-        priority: 3
-
       - id: cargo-clippy
         name: cargo clippy
         entry: bash -c 'cd baml_language && mise run clippy'

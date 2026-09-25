@@ -131,34 +131,20 @@ test('reference page rows reject routes that diverge from the qualified name', (
   );
 });
 
-test('only the compiler-allowlisted boundary.id namespace landing page is hidden', () => {
+test('function and namespace route collisions are rejected', () => {
   const collidingItems = [
+    { id: 'V:example.factory', kind: 'function' as const, name: 'factory' },
     {
-      id: 'V:boundary.id',
+      id: 'V:example.factory.open',
       kind: 'function' as const,
-      name: 'id',
-    },
-    {
-      id: 'V:boundary.id.current',
-      kind: 'function' as const,
-      name: 'current',
-      namespace: ['id'],
+      name: 'open',
+      namespace: ['factory'],
     },
   ];
 
-  const boundaryPages = buildReferencePages('boundary', 1, collidingItems, []);
-  assert.deepEqual(
-    boundaryPages.map((page) => [page.qualifiedName, page.pageKind]),
-    [
-      ['boundary', 'package'],
-      ['boundary.id', 'function'],
-      ['boundary.id.current', 'function'],
-    ],
-  );
-
   assert.throws(
-    () => buildReferencePages('not_boundary', 1, collidingItems, []),
-    /Projected package route collision: not_boundary\/id/,
+    () => buildReferencePages('example', 1, collidingItems, []),
+    /Projected package route collision: example\/factory/,
   );
 });
 

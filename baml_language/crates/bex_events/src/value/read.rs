@@ -186,11 +186,10 @@ mod tests {
             body: vec![1, 2, 3],
             blob_ref: None,
             event: LogEventRecord {
-                call: crate::run::TraceCallKey {
+                call: crate::run::ThreadRef {
                     process_euid: crate::ids::ProcessEuid([1; 16]),
                     engine_id: crate::ids::EngineId(1),
                     thread_id: crate::ids::BexThreadId(1),
-                    call_id: crate::ids::BexCallId(1),
                 },
                 level: None,
                 source: None,

@@ -374,27 +374,50 @@ test "rules: reflection sees the generators" {
 
 // ─── every rule can be drilled ───────────────────────────────────────────────
 
-/// The rules of each case the bank produces over the first four seeds of
-/// every item, with the rule its site contributed dropped: what is left is
-/// the type-system content of the case.
+/// The rules of each case the bank can produce, with the rule its site
+/// contributed dropped: what is left is the type-system content of the case.
+///
+/// Every fact over its first four seeds, and every item over its first four.
+/// The facts, because an item of several facts serves one of them per draw
+/// and which is a coin: a sweep of items alone would find a rule or miss it
+/// by the luck of the draw. The items, because two of them are not flow
+/// items and have no fact to sweep.
 function own_traces() -> string[][] throws never {
-    root.bank.items().flat_map((item) -> {
+    let from_facts = root.bank.facts().flat_map((fact) -> {
+        baml.iter.Range.new(0, 4)
+            .filter_map((i) -> {
+                let drawn = root.bank.draw_flow(
+                    fact,
+                    root.algebra.all_sites(),
+                    root.engine.seed_for(`flow/${fact.name}`, i),
+                )
+                    ?? return null;
+                own_rules(root.bank.flowed(drawn, drawn.reversed).case)
+            })
+            .collect()
+    });
+    let from_items = root.bank.items().flat_map((item) -> {
         let id = item.id();
         baml.iter.Range.new(0, 4)
             .filter_map((i) -> {
                 let candidate = root.engine.generate(item, root.engine.seed_for(id, i))
                     ?? return null;
-                let own: string[] = candidate.case.trace
-                    .map((claim) -> {
-                        claim.rule.name
-                    })
-                    .filter((name) -> {
-                        !root.bank.is_site_rule(name)
-                    });
-                own
+                own_rules(candidate.case)
             })
             .collect()
-    })
+    });
+    from_facts.concat(from_items)
+}
+
+/// Every rule of `case`'s trace but the one its site contributed.
+function own_rules(case: root.engine.Case) -> string[] throws never {
+    case.trace
+        .map((claim) -> {
+            claim.rule.name
+        })
+        .filter((name) -> {
+            !root.bank.is_site_rule(name)
+        })
 }
 
 /// The fewest rules in any trace `rule` concludes, or `null` when it
@@ -680,19 +703,22 @@ function trap_faults(seeds: int) -> string[] throws never {
                 let drawn = root.bank.draw_flow(fact, root.algebra.all_sites(), seed)
                     ?? return none;
                 let one = root.bank.flowed(drawn, drawn.reversed);
-                let traps = root.bank.flow_traps(drawn.d, one);
-                root.bank.models().filter_map((model) -> {
-                    let says = root.bank.predicted(drawn.d, one, model)
+                let traps = root.bank.flow_traps(drawn.d, one.cast);
+                // What the case itself says, not the cast it was made from:
+                // the key is what a learner is marked against.
+                let compiles = root.engine.verdict_kind(one.case.key) == root.engine.VerdictKind.Compiles;
+                root.bank.beliefs(drawn.d).filter_map((belief) -> {
+                    let says = root.bank.predicted(belief, one.cast)
                         ?? return null;
                     let listed = traps.some((id) -> {
-                        id == model.id
+                        id == belief.model
                     });
-                    if (listed == (says != one.compiles)) {
+                    if (listed == (says != compiles)) {
                         null
                     } else if (listed) {
-                        `${fact.name}#${i} ${model.id}: listed, but it answers as the key does`
+                        `${fact.name}#${i} ${belief.model}: listed, but it answers as the key does`
                     } else {
-                        `${fact.name}#${i} ${model.id}: answers against the key, but is not listed`
+                        `${fact.name}#${i} ${belief.model}: answers against the key, but is not listed`
                     }
                 })
             })
@@ -721,7 +747,7 @@ function trap_witness() -> string throws never {
                     return null;
                 }
                 let one = root.bank.flowed(drawn, drawn.reversed);
-                `compiles=${one.compiles} traps=${root.bank.flow_traps(drawn.d, one)}`
+                `compiles=${one.cast.compiles} traps=${root.bank.flow_traps(drawn.d, one.cast)}`
             })
             .collect()
             .at(0)
@@ -734,7 +760,7 @@ test "traps: nobody is fooled by a conflict every model predicts" {
 }
 
 test "pairs: every foil is the same program a step away, answering the other way" {
-    assert.equal(pairing_report(), "cases=160 paired=72 items=18 of 40 mixed=[] faults=")
+    assert.equal(pairing_report(), "cases=168 paired=88 items=22 of 42 mixed=[] faults=")
 }
 
 // ─── how many ways an item can answer ────────────────────────────────────────
@@ -743,15 +769,11 @@ test "pairs: every foil is the same program a step away, answering the other way
 /// over the first eight seeds of each.
 ///
 /// A fact that concludes an equivalence or an unrelated pair reads the same
-/// in both directions, so every case it makes answers the same way, and the
-/// shape of such a case tells a learner the answer without their having to
-/// reason about it. Two things have narrowed it. The interface and generic
-/// facts are strict, so each answers both ways; and the coherence site asks
-/// the equivalence facts the other question, where being the same type is
-/// what the compiler objects to, so a fact that always compiled as a flow is
-/// rejected as a pair of `implements` blocks. Two items in five still answer
-/// one way, and near misses — a case a step away from an equivalence and
-/// therefore not one — are what would narrow it further.
+/// in both directions, so every case it makes answers the same way, and
+/// such a fact served as an item of its own is a kind of question whose
+/// answer is known before it is read. So no such fact is served on its own:
+/// each is one of a shape, beside a fact of its shape that answers the other
+/// way. None of the items answers one way.
 function items_answering_report() -> string throws never {
     let counted = root.bank.items()
         .filter((item) -> {
@@ -833,7 +855,7 @@ function depth_report() -> string throws never {
 }
 
 test "bank: nearly every case it can draw turns on a single rule" {
-    assert.equal(depth_report(), `cases=312 rules=["0:0", "1:232", "2:48", "3:16", "4:8", "5:8"]`)
+    assert.equal(depth_report(), `cases=320 rules=["0:0", "1:256", "2:32", "3:16", "4:8", "5:8"]`)
 }
 
 // ─── which sites the bank reaches ────────────────────────────────────────────
@@ -878,10 +900,60 @@ function sites_reached_report() -> string throws never {
 }
 
 test "bank: the coherence site takes the smaller share of the bank's cases" {
-    assert.equal(sites_reached_report(), "coherence=13 flow=299 other=0")
+    assert.equal(sites_reached_report(), "coherence=5 flow=315 other=0")
 }
 
-test "bank: two items in five answer the same way every time" {
-    assert.equal(items_answering_report(), "always=10 never=4 both=25")
+test "bank: every item answers both ways" {
+    assert.equal(items_answering_report(), "always=0 never=0 both=40")
+}
+
+// ─── every fact reaches the compiler ─────────────────────────────────────────
+
+/// Every fact the bank can serve, both directions, over the first `seeds`
+/// seeds of its shape, put to the compiler.
+///
+/// The item gate — `conforms`, in the engine suite — asks an item for the
+/// case it serves, and which fact of a shape that is falls to a coin. Two
+/// seeds of a two-member item therefore leave one of its facts unasked about
+/// half the time, and `deal` being a pure function of its seed, permanently
+/// rather than flakily: the fact stays unasked until the seeds move. Raising
+/// the seed count would make the gap unlikely, never impossible, so this
+/// enumerates the members instead of drawing them.
+///
+/// The two gates answer different questions and both are wanted. That one
+/// holds an item to the status it declares, divergences and foils included;
+/// this one holds every fact a learner can be shown to agreeing with the
+/// compiler, which is the claim the tool is built on.
+///
+/// Every shape is served as a `Verified` item (`registry.items()`), so every
+/// member must agree. A shape that ever declared a divergence would want
+/// reconciling here and at the gate alike.
+function unverified_facts(seeds: int) -> string[] throws never {
+    root.bank.shapes().flat_map((shape) -> {
+        let members = shape.members();
+        let id = `flow/${shape.name}`;
+        baml.iter.Range.new(0, seeds)
+            .flat_map((i) -> {
+                let none: string[] = [];
+                let dealt = root.bank.deal(shape, root.algebra.all_sites(), root.engine.seed_for(id, i))
+                    ?? return none;
+                baml.iter.Range.new(0, dealt.all.length()).collect().flat_map((m) -> {
+                    [false, true].filter_map((reversed) -> {
+                        let case = root.bank.flowed(dealt.all[m], reversed).case;
+                        let outcome = root.engine.verify(case);
+                        if (root.engine.agrees(outcome)) {
+                            null
+                        } else {
+                            `${members[m].name}#${i} reversed=${reversed}: ${outcome}`
+                        }
+                    })
+                })
+            })
+            .collect()
+    })
+}
+
+test "bank: every fact the bank can serve agrees with the compiler" {
+    assert.equal(unverified_facts(3).join("\n"), "")
 }
 

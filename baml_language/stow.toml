@@ -112,12 +112,7 @@ pattern.exclude = ["bex_vm_types"]
 # (shared executor + packed-binary runtime host) and sit at the same
 # application boundary as `baml_cli` — they need direct access to the
 # engine, events, and VM types.
-# `baml_query_profiles` is the profile-store provider for `baml query`
-# (TASK/baml-query-scope.md §3.1): the ONE crate that binds
-# `.baml/profiles-v1` through `bex_prof_store`'s readers. The SQL core
-# (`baml_query`) stays backend-neutral and is barred from bex_* by its
-# own manifest-allowlist test.
-allowed_crates = ["bridge_cffi", "baml_cli", "baml_exec", "baml_pack_host", "baml_query_profiles"]
+allowed_crates = ["bridge_cffi", "baml_cli", "baml_exec", "baml_pack_host"]
 reason = "baml_* crates should not depend on bex_* crates."
 
 [[namespaces.dependency_rules]]
@@ -149,6 +144,11 @@ name_exceptions = { "google-cloud-auth" = "forked_google_cloud_auth" }
 name = "bex"
 approved_prefixes = ["events", "prof"]
 link_crates = ["baml_type", "sys_types"]
+
+# Btel telemetry pipeline crates. The producer starts with `btel_types`;
+# transport, processing, and publication crates will join this family later.
+[[namespaces]]
+name = "btel"
 
 # lsp namespace configuration
 [[namespaces]]

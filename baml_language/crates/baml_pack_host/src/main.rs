@@ -91,11 +91,15 @@ fn run_single(envelope: PackEnvelope) -> ExitCode {
 
     let argv = build_argv(&target.subcommand_name);
 
-    let engine = match BexEngine::new_with_runtime_compiler(
+    let engine = match BexEngine::new_with_telemetry_recording(
         envelope.program,
         Arc::new(sys_native::SysOps::native()),
         argv.clone(),
-        bex_project::runtime_compiler(),
+        Some(bex_project::runtime_compiler()),
+        btel_settings::clock::DEFAULT_MODE,
+        bex_engine::TelemetryRecording::user_files(
+            btel_settings::publisher::RecordingConfig::default(),
+        ),
     ) {
         Ok(e) => Arc::new(e),
         Err(e) => {
@@ -165,11 +169,15 @@ fn run_subcommand(envelope: PackEnvelope) -> ExitCode {
     bootstrap_argv.push(String::new());
     bootstrap_argv.extend(trailing.iter().cloned());
 
-    let mut engine = match BexEngine::new_with_runtime_compiler(
+    let mut engine = match BexEngine::new_with_telemetry_recording(
         envelope.program,
         Arc::new(sys_native::SysOps::native()),
         bootstrap_argv,
-        bex_project::runtime_compiler(),
+        Some(bex_project::runtime_compiler()),
+        btel_settings::clock::DEFAULT_MODE,
+        bex_engine::TelemetryRecording::user_files(
+            btel_settings::publisher::RecordingConfig::default(),
+        ),
     ) {
         Ok(e) => e,
         Err(e) => {
@@ -265,6 +273,9 @@ fn finalize_dispatch(
         output_format,
     ));
     rt.block_on(engine.shutdown());
+    if let Some(Err(error)) = engine.telemetry_result() {
+        eprintln!("Warning: telemetry recording failed: {error}");
+    }
     let mut unhandled_spawn_failed = false;
     for report in engine.take_unhandled_spawn_errors() {
         if report.cancelled {
@@ -276,10 +287,6 @@ fn finalize_dispatch(
             unhandled_spawn_failed = true;
         }
     }
-
-    // Drain the direct profiling consumer before exit (no-op when profiling
-    // is off). `baml.sys.exit()` paths bypass this explicit host flush.
-    bex_events::prof::flush_and_join(std::time::Duration::from_secs(10));
 
     match result {
         Ok(DispatchResult::Ok) if !unhandled_spawn_failed => ExitCode::SUCCESS,

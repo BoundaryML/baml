@@ -1,0 +1,14 @@
+{
+  "prepare_path": "/v1/recordings/07070707070707070707070707070707/uploads:prepare",
+  "prepare_headers": {
+    "authorization": "Bearer golden-prepare-token",
+    "content-type": "application/json",
+    "idempotency-key": "07070707070707070707070707070707:1"
+  },
+  "uploads": [],
+  "forbidden_body": {
+    "body_file": "recording.hex",
+    "length": 232,
+    "sha256": "dd0ee3d010eb0a2c36ccee89d52167dda8974998b591d47695e20a7a9f2d69a0"
+  }
+}

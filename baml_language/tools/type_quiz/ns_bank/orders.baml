@@ -17,17 +17,23 @@ function rule_orders(seeds: int) -> root.engine.RuleOrder[] throws never {
             .filter_map((i) -> {
                 let candidate = root.engine.generate(item, root.engine.seed_for(id, i))
                     ?? return null;
+                // Every casting, not the one served: which member of a shape
+                // a draw serves is a coin, and orders read off the served
+                // case alone would find a rule or miss it by its luck.
+                //
                 // The claims the answer TURNS ON, which is what the learner
                 // is credited with when they get the case right. Measuring
                 // the whole trace instead would set an order no sitting can
                 // reach, and a rule whose order cannot be reached can never
                 // be mastered and never stops being shaky.
-                let own: string[] = root.engine.rules_of(candidate.case).filter((name) -> {
-                    !is_site_rule(name)
-                });
-                own
+                candidate.castings.map((casting) -> {
+                    casting.rules
+                })
             })
             .collect()
+            .flat_map((rules) -> {
+                rules
+            })
     });
     rules().filter_map((rule) -> {
         if (is_site_rule(rule.name)) {

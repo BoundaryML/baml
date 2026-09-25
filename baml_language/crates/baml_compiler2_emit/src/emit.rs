@@ -19,9 +19,8 @@ use baml_compiler2_mir::{
 };
 use baml_type::{RealizedTy, RuntimeTy, TyTemplate, TypeName};
 use bex_vm_types::{
-    BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionCaptureProps, FunctionKind,
-    FunctionOrigin, GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool,
-    UnaryOp as VmUnaryOp,
+    BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
+    GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
     bytecode::{
         ClassInitPlan, DebugLocalScope, FieldCopy, FieldCopySet, InstructionMeta, JumpTableData,
         LineTableEntry, MatchHashEntry, MatchHashTable, OperandMeta,
@@ -985,6 +984,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             real_local_count: self.real_local_count,
             bytecode: self.bytecode,
             kind: FunctionKind::Bytecode,
+            telemetry_function_id: None,
+            telemetry_registration: bex_vm_types::FunctionRegistration::default(),
+            telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
             local_names: self.slot_names,
             debug_locals,
             span: Span::fake(),
@@ -1001,8 +1003,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             is_interface_body: false, // set from the item tree by attach_function_metadata
             native_key: None,
             body_meta: None,
-            capture: FunctionCaptureProps::disabled(),
-            function_id: 0, // assigned at engine init (interim provider)
+
             runtime_package: bex_vm_types::HeapPtr::null(),
         };
         // The layout-baking bit is a pure function of the finished bytecode's
@@ -1747,7 +1748,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.emit(Instruction::Copy(0));
         unwrap_infallible(self.load_field(*field, &name));
         self.emit_operand_pull(right);
-        self.emit(Self::binop_instruction(*op));
+        let instruction = self
+            .try_specialize_binary_op(*op, left, right)
+            .unwrap_or_else(|| Self::binop_instruction(*op));
+        self.emit(instruction);
         unwrap_infallible(self.store_field_value(*field, &name));
         true
     }
@@ -1804,15 +1808,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 return;
             }
             if self.try_emit_class_aggregate_field_copy_sets(name, type_arg_templates, fields) {
-                return;
-            }
-        }
-        // Specialize BinaryOp when both operand types are statically known.
-        if let Rvalue::BinaryOp { op, left, right } = rvalue {
-            if let Some(specialized) = self.try_specialize_binary_op(*op, left, right) {
-                self.emit_operand_pull(left);
-                self.emit_operand_pull(right);
-                self.emit(specialized);
                 return;
             }
         }
@@ -2305,7 +2300,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 callee,
                 args,
                 ntypeargs,
-                runtime_id,
+
                 destination,
                 target,
                 unwind: _,
@@ -2324,19 +2319,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                 if let Some(global_callee) = global_callee {
                     unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                    if let Some(runtime_id) = runtime_id {
-                        unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
-                    }
-                    let instruction = if runtime_id.is_some() {
-                        Instruction::CallWithRuntimeId {
-                            callee: global_callee,
-                            ntypeargs,
-                        }
-                    } else {
-                        Instruction::Call {
-                            callee: global_callee,
-                            ntypeargs,
-                        }
+
+                    let instruction = Instruction::Call {
+                        callee: global_callee,
+                        ntypeargs,
                     };
                     // Pulling nested argument producers may install their own
                     // debug spans. Restore the terminator's enclosing call span
@@ -2365,12 +2351,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     unwrap_infallible(pull_semantics::walk_call_indirect_operands(
                         self, callee, args,
                     ));
-                    let instruction = if let Some(runtime_id) = runtime_id {
-                        unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
-                        Instruction::CallIndirectWithRuntimeId
-                    } else {
-                        Instruction::CallIndirect
-                    };
+                    let instruction = Instruction::CallIndirect;
                     self.set_debug_span(call_span, false);
                     let inst = self.emit(instruction);
                     self.record_call_layout(inst, argument_layout.as_ref());
@@ -2385,7 +2366,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 method,
                 args,
                 ntypeargs,
-                runtime_id,
+
                 destination,
                 target,
                 unwind: _,
@@ -2402,19 +2383,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let inst = self.emit(Instruction::LoadType(iface_const));
                 self.set_operand(inst, OperandMeta::Const(iface.to_string()));
                 self.emit_constant(&Constant::String(method.clone()));
-                if let Some(runtime_id) = runtime_id {
-                    unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
-                }
+
                 let nargs = args.len() - ntypeargs;
                 let nargs = u16::try_from(nargs)
                     .unwrap_or_else(|_| unreachable!("a call's argument count fits in u16"));
                 let ntypeargs = u16::try_from(*ntypeargs)
                     .unwrap_or_else(|_| unreachable!("a call's type-argument count fits in u16"));
-                let instruction = if runtime_id.is_some() {
-                    Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs }
-                } else {
-                    Instruction::VirtualCall { nargs, ntypeargs }
-                };
+                let instruction = Instruction::VirtualCall { nargs, ntypeargs };
                 let inst = self.emit(instruction);
                 self.record_call_layout(inst, argument_layout.as_ref());
                 self.set_operand(inst, OperandMeta::Callable(method.clone()));
@@ -2433,7 +2408,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Terminator::SysOp {
                 callee,
                 args,
-                runtime_id,
                 destination,
                 target,
                 unwind: _,
@@ -2453,14 +2427,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     });
 
                 unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                if let Some(runtime_id) = runtime_id {
-                    unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
-                }
-                let inst = if runtime_id.is_some() {
-                    self.emit(Instruction::SysOpWithRuntimeId(global_callee))
-                } else {
-                    self.emit(Instruction::SysOp(global_callee))
-                };
+
+                let inst = self.emit(Instruction::SysOp(global_callee));
                 if let Some(func) = callee_item {
                     self.set_operand(
                         inst,
@@ -3291,9 +3259,6 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
                 // MakeClosure, MakeBoundMethod, MakeVirtualBoundMethod, and
                 // VirtualFieldAccess are materialized only by `emit_rvalue_pull`
                 // (`walk_rvalue_pull` panics on them), so route through it.
-                // BinaryOp must be routed through `emit_rvalue_pull` so that the
-                // type-aware specialization in `try_specialize_binary_op` can fire
-                // (e.g. emitting `CmpBigintOp` instead of the generic `CmpOp`).
                 // Class aggregates may use emitter-only spread helpers, so they
                 // also need to flow through `emit_rvalue_pull` when inlined.
                 if matches!(
@@ -3303,7 +3268,6 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
                         | Rvalue::MakeVirtualBoundMethod { .. }
                         | Rvalue::MakeVirtualFunction { .. }
                         | Rvalue::VirtualFieldAccess { .. }
-                        | Rvalue::BinaryOp { .. }
                         | Rvalue::Aggregate {
                             kind: baml_compiler2_mir::AggregateKind::Class { .. },
                             ..
@@ -3359,8 +3323,17 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
         Ok(())
     }
 
-    fn binary_op(&mut self, op: BinOp) -> Result<(), Self::Error> {
-        self.emit(Self::binop_instruction(op));
+    /// Select a type-specialized binary instruction when operand types permit it.
+    fn binary_op(
+        &mut self,
+        op: BinOp,
+        left: &Operand<'ctx>,
+        right: &Operand<'ctx>,
+    ) -> Result<(), Self::Error> {
+        let instruction = self
+            .try_specialize_binary_op(op, left, right)
+            .unwrap_or_else(|| Self::binop_instruction(op));
+        self.emit(instruction);
         Ok(())
     }
 

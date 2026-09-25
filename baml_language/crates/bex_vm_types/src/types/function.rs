@@ -120,66 +120,20 @@ impl FunctionOrigin {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
-pub enum CaptureOption {
-    #[default]
-    Disabled,
-    Auto,
-    Enabled,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum CaptureCategory {
-    Input,
-    Output,
-    Error,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
-pub struct FunctionCaptureProps {
-    pub inputs: CaptureOption,
-    pub output: CaptureOption,
-    pub error: CaptureOption,
-}
-
-impl FunctionCaptureProps {
-    #[must_use]
-    pub const fn disabled() -> Self {
-        Self {
-            inputs: CaptureOption::Disabled,
-            output: CaptureOption::Disabled,
-            error: CaptureOption::Disabled,
-        }
-    }
-
-    #[must_use]
-    pub const fn option(self, category: CaptureCategory) -> CaptureOption {
-        match category {
-            CaptureCategory::Input => self.inputs,
-            CaptureCategory::Output => self.output,
-            CaptureCategory::Error => self.error,
-        }
-    }
-
-    #[must_use]
-    pub const fn with_option(mut self, category: CaptureCategory, option: CaptureOption) -> Self {
-        match category {
-            CaptureCategory::Input => self.inputs = option,
-            CaptureCategory::Output => self.output = option,
-            CaptureCategory::Error => self.error = option,
-        }
-        self
-    }
-
-    #[must_use]
-    pub const fn with_auto(self, category: CaptureCategory) -> Self {
-        self.with_option(category, CaptureOption::Auto)
-    }
-}
-
 /// Represents any Baml function.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Function {
+    /// Telemetry-only identity. None means unsupported in an executable object.
+    /// Loaders assign IDs to supported compiler templates before execution;
+    /// synthetic entry wrappers stay unsupported. Moving GC preserves identity.
+    /// Serialized programs never carry runtime identities.
+    #[borsh(skip)]
+    pub telemetry_function_id: Option<btel_types::FunctionId>,
+
+    /// Published once on first telemetry reference; moving GC preserves it.
+    #[borsh(skip)]
+    pub telemetry_registration: btel_types::FunctionRegistration,
+
     /// Function name.
     pub name: String,
 
@@ -218,6 +172,12 @@ pub struct Function {
 
     /// Type of function.
     pub kind: FunctionKind,
+
+    /// Current immutable/resolved telemetry policy. This runtime-only atomic
+    /// is not serialized; loaded programs begin at policy zero and the engine
+    /// may publish a newer policy while calls are in flight.
+    #[borsh(skip)]
+    pub telemetry_policy_id: btel_types::TelemetryPolicyId,
 
     /// Local variable names indexed by slot number.
     ///
@@ -312,20 +272,6 @@ pub struct Function {
 
     /// LLM-specific metadata (prompt template, client name). `None` for non-LLM functions.
     pub body_meta: Option<FunctionMeta>,
-
-    /// Capture policy hints for this function. Hosts resolve `Auto` against
-    /// boundary defaults; ordinary functions default to disabled.
-    pub capture: FunctionCaptureProps,
-
-    /// Per-run profiling id (`0` = unassigned), written into the BEX event
-    /// stream's `CallFunction` records and resolved through the per-run
-    /// function table registered with the direct consumer. Assigned by the engine's
-    /// interim provider at construction (plan §2.6); the M0 id table moves
-    /// assignment to compile time. `#[borsh(skip)]` keeps it out of the pack
-    /// envelope — it is runtime-only state, and skipping it leaves the wire
-    /// format unchanged.
-    #[borsh(skip)]
-    pub function_id: u32,
 
     /// Owning runtime package for dynamically grafted functions. Static
     /// functions use null and address operands through the engine image.
@@ -515,5 +461,111 @@ impl Function {
                 .iter()
                 .enumerate()
                 .all(|(index, slot)| slot.as_deref() == self.optional_param_name(index))
+    }
+}
+
+impl Function {
+    /// Copy metadata while the registered function is live and protected from GC.
+    /// No runtime heap references escape in the returned value.
+    pub fn runtime_metadata(&self) -> Option<btel_types::FunctionMetadata> {
+        let function_id = self.telemetry_function_id?;
+        let fqn = self.name.clone();
+        let owner_type = derive_owner_type_definition_key(&fqn);
+        let (parent_function, lambda_path) = derive_lambda_metadata(&fqn);
+        let mut parts = fqn.split('.').map(str::to_string).collect::<Vec<_>>();
+        let display_name = parts.last().cloned().unwrap_or_else(|| fqn.clone());
+        let package_name = if parts.len() > 1 {
+            Some(parts.remove(0))
+        } else {
+            None
+        };
+        let namespace = if parts.len() > 1 {
+            parts[..parts.len() - 1].to_vec()
+        } else {
+            Vec::new()
+        };
+        let source_file = (!self.source_file.is_empty()).then(|| self.source_file.clone());
+        let source_span = Some(btel_types::SourceSpan {
+            file_id: self.span.file_id.as_u32(),
+            start: self.span.range.start().into(),
+            end: self.span.range.end().into(),
+        });
+
+        Some(btel_types::FunctionMetadata {
+            function_id,
+            fqn: fqn.clone(),
+            display_name,
+            source_file,
+            source_span,
+            kind: self.kind.into(),
+            origin: self.origin.into(),
+            owner_type,
+            parent_function,
+            lambda_path,
+            definition_key: Some(btel_types::DefinitionKey(format!("function:{fqn}"))),
+            package_name,
+            namespace,
+        })
+    }
+}
+
+// TODO(bep-053): replace with compiler-owned metadata — capital-letter
+// sniffing on FQN segments is an acknowledged-interim heuristic and must not
+// become load-bearing.
+fn derive_owner_type_definition_key(fqn: &str) -> Option<btel_types::DefinitionKey> {
+    let parts = fqn.split('.').collect::<Vec<_>>();
+    if parts.len() < 3 {
+        return None;
+    }
+
+    let owner = parts[parts.len() - 2];
+    if !owner
+        .chars()
+        .next()
+        .is_some_and(|ch| ch.is_ascii_uppercase())
+    {
+        return None;
+    }
+
+    Some(btel_types::DefinitionKey(format!(
+        "class:{}",
+        parts[..parts.len() - 1].join(".")
+    )))
+}
+
+// TODO(bep-053): replace with compiler-owned lambda identity — the
+// `find("<lambda")` name sniff is an acknowledged-interim heuristic.
+fn derive_lambda_metadata(fqn: &str) -> (Option<btel_types::DefinitionKey>, Option<String>) {
+    let Some(lambda_start) = fqn.find("<lambda") else {
+        return (None, None);
+    };
+
+    let parent = fqn[..lambda_start].trim_end_matches(['.', ':']).to_string();
+    let parent_function =
+        (!parent.is_empty()).then(|| btel_types::DefinitionKey(format!("function:{parent}")));
+    let lambda_path = Some(fqn[lambda_start..].to_string());
+    (parent_function, lambda_path)
+}
+
+impl From<crate::FunctionKind> for btel_types::RuntimeFunctionKind {
+    fn from(value: crate::FunctionKind) -> Self {
+        match value {
+            crate::FunctionKind::Bytecode => Self::Bytecode,
+            crate::FunctionKind::SysOp(op) => Self::SysOp(format!("{op:?}")),
+            crate::FunctionKind::NativeUnresolved => Self::NativeUnresolved,
+            crate::FunctionKind::Native(_) => Self::Native,
+        }
+    }
+}
+
+impl From<crate::FunctionOrigin> for btel_types::RuntimeFunctionOrigin {
+    fn from(value: crate::FunctionOrigin) -> Self {
+        match value {
+            crate::FunctionOrigin::UserDefined => Self::UserDefined,
+            crate::FunctionOrigin::Companion => Self::Companion,
+            crate::FunctionOrigin::Internal => Self::Internal,
+            crate::FunctionOrigin::Builtin => Self::Builtin,
+            crate::FunctionOrigin::AutoDerive => Self::AutoDerive,
+        }
     }
 }

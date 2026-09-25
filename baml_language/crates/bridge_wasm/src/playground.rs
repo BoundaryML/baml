@@ -63,7 +63,7 @@ impl PlaygroundState {
     /// Install a freshly built engine, retiring whatever it replaces.
     fn install(&mut self, source_revision: SourceRevision, engine: BexEngine) {
         self.shutdown();
-        engine.activate_profiling();
+
         self.next_generation += 1;
         self.installed = Some(InstalledEngine {
             source_revision,
@@ -171,11 +171,11 @@ pub(crate) fn rebuild(
         }
         return;
     };
-    match BexEngine::new_with_deferred_profiling_and_runtime_compiler(
+    match BexEngine::new_with_runtime_compiler(
         *program,
         Arc::clone(sys_ops),
         Vec::new(),
-        Some(bex_project::runtime_compiler()),
+        bex_project::runtime_compiler(),
     ) {
         Ok(engine) => {
             engine.set_unhandled_spawn_error_handler(Some(Arc::new(|error| {

@@ -15,7 +15,6 @@ use bex_engine::{
     BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder,
     logger::{TraceLogDrainReport, TraceLogger},
 };
-use bex_events::prof::backend::{ProfilerConfig, ProfilerSession};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -25,19 +24,9 @@ async fn run_main_with_logs(
     source: &str,
 ) -> (Result<BexExternalValue, EngineError>, TraceLogDrainReport) {
     let snapshot = compile_for_engine(source);
-    let (profiler_session, diagnostic) = ProfilerSession::from_config(ProfilerConfig {
-        enabled: false,
-        ..ProfilerConfig::default()
-    });
-    assert!(diagnostic.is_none());
     let engine = Arc::new(
-        BexEngine::new_with_profiler_session(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            Vec::new(),
-            profiler_session,
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
     );
     let logs = TraceLogger::bounded(16);
     let result = engine
@@ -80,4 +69,77 @@ async fn structured_log_executes_without_faulting() {
     assert_eq!(report.logs[2].body, "[1, 2, 3]");
     assert_eq!(report.logs[3].metadata.level.as_deref(), Some("error"));
     assert_eq!(report.logs[3].body, r#"{"user": "ada", "role": "admin"}"#);
+}
+
+#[tokio::test]
+async fn structured_logs_survive_nested_calls_and_exception_unwind() {
+    let (result, report) = run_main_with_logs(
+        r#"
+        function child() -> int throws string {
+            log.info("child");
+            throw "failed";
+        }
+        function main() -> int {
+            log.info("before");
+            let value = child() catch (e) { _ => 7 };
+            log.info("after");
+            value
+        }
+    "#,
+    )
+    .await;
+    assert_eq!(result.unwrap(), BexExternalValue::Int(7));
+    assert!(report.failures.is_empty());
+    assert_eq!(
+        report
+            .logs
+            .iter()
+            .map(|log| log.body.as_str())
+            .collect::<Vec<_>>(),
+        ["before", "child", "after"]
+    );
+    assert!(report.logs.iter().all(|log| log.metadata.source.is_some()));
+}
+
+#[tokio::test]
+async fn log_records_keep_run_and_thread_identity_across_spawn() {
+    let snapshot = compile_for_engine(
+        r#"
+        function main() -> int {
+            log.info("root");
+            let task = spawn { log.info("child"); 7 };
+            let result = await task;
+            log.info("root again");
+            result
+        }
+    "#,
+    );
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new()).unwrap(),
+    );
+    let logs = TraceLogger::bounded(16);
+    let value = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_logger(logs.clone())
+                .build(),
+            true,
+        )
+        .await
+        .unwrap();
+    assert_eq!(value, BexExternalValue::Int(7));
+    let report = logs.drain_encoded_logs();
+    assert!(report.failures.is_empty());
+    assert_eq!(report.logs.len(), 3);
+    let root = &report.logs[0];
+    let child = &report.logs[1];
+    let resumed = &report.logs[2];
+    assert_eq!(root.boundary_id, child.boundary_id);
+    assert_eq!(root.boundary_id, resumed.boundary_id);
+    assert_eq!(root.call, resumed.call);
+    assert_eq!(root.call.process_euid, child.call.process_euid);
+    assert_eq!(root.call.engine_id, child.call.engine_id);
+    assert_ne!(root.call.thread_id, child.call.thread_id);
 }

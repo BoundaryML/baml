@@ -407,9 +407,7 @@ mod tests {
             .call_function(
                 "Tiny",
                 vec![],
-                FunctionCallContextBuilder::new(sys_types::CallId::next())
-                    .suppress_internal_profile()
-                    .build(),
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
                 false,
             )
             .await
@@ -774,9 +772,7 @@ mod tests {
             .call_function(
                 "Detached",
                 vec![],
-                FunctionCallContextBuilder::new(sys_types::CallId::next())
-                    .suppress_internal_profile()
-                    .build(),
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
                 true,
             )
             .await

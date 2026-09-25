@@ -5,7 +5,3 @@
 
 pub mod backend;
 pub mod clock;
-pub mod config;
-pub mod record;
-
-pub use config::ProfConfig;

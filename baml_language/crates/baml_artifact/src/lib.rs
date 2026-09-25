@@ -44,7 +44,11 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// and `Enum` their `ty_attr` field (BEP-075 removed type attributes), so the
 /// serialized shape of every type-bearing record changed.
 ///
-/// Version 9 adds `Bytecode::shield_table` (the PC ranges of `defer` bodies,
+/// Version 10 combines that layout with the runtime-ID instruction and serialized
+/// function capture-policy removals from the runtime foundation branch (versions
+/// 8 and 9 there). Artifacts from either pre-merge layout must be rejected.
+///
+/// Version 11 adds `Bytecode::shield_table` (the PC ranges of `defer` bodies,
 /// which run shielded from cancellation), and changes what the `Spawn` opcode
 /// yields: the VM now pushes a `baml.spawn.Plan` for the engine to start,
 /// where it used to push a pre-allocated `UnscheduledFuture`. Both take that
@@ -53,10 +57,8 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// would hand the engine the wrong object. The same version covers the
 /// `Object`/`ObjectType` lattice losing `UnscheduledFuture` from the middle of
 /// the enum, which renumbers the Borsh discriminants of every variant declared
-/// after it. (It is 9, not 8: version 8 is BEP-075's and shipped in 0.20.0.
-/// Landing this change under that number would accept a released artifact
-/// whose `Spawn` instruction decodes identically and then mis-executes.)
-pub const FORMAT_VERSION: u32 = 9;
+/// after it.
+pub const FORMAT_VERSION: u32 = 11;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

@@ -1,10 +1,11 @@
 // Tests for the `bigint` builtin class (BEP-022).
 //
 // Converted from crates/baml_tests/tests/bigints.rs. Mirrors ns_ints/ints.baml:
-// pure expressions are asserted inline; tests that use locals (let bindings,
-// compound assignment, lambdas, generics with receivers) go through a top-level
-// helper function to avoid the test-block local-boxing VM bug. Value results
-// are compared with `assert.equal`; boolean results are asserted directly.
+// pure expressions are asserted inline; many tests with locals use top-level
+// helpers because of a historical test-block local-boxing bug. The bug no longer
+// reproduces (see ns_test_block_locals), so the indexed-assignment regressions
+// below exercise locals directly in test blocks. Value results are compared
+// with `assert.equal`; boolean results are asserted directly.
 //
 // Throw tests use the `{ <body>; baml.sys.panic("…") } catch (e) { <Type> => null }`
 // pattern. For throws raised by a *pure operator* (`/`, `%`, `<<`, `>>`, `*`),
@@ -96,6 +97,33 @@ function bigint_box_caller() -> bigint {
 
 test "test_bigint_generic_method_class_type_arg" {
     assert.equal(bigint_box_caller(), 7n)
+}
+
+class BigintTimer {
+    elapsed bigint
+}
+
+function bigint_clock() -> bigint { 10n }
+
+function bigint_direct_field_subtraction() -> bigint {
+    let started = bigint_clock();
+    let timer = BigintTimer { elapsed: 0n };
+    timer.elapsed = bigint_clock() - started;
+    timer.elapsed
+}
+
+test "test_bigint_subtraction_assigned_directly_to_field" {
+    assert.equal(bigint_direct_field_subtraction(), 0n)
+}
+
+function bigint_compound_field_subtraction() -> bigint {
+    let timer = BigintTimer { elapsed: 15n };
+    timer.elapsed -= 6n;
+    timer.elapsed
+}
+
+test "test_bigint_compound_subtraction_on_field" {
+    assert.equal(bigint_compound_field_subtraction(), 9n)
 }
 
 // ─── generic-path bigint comparison (union operand → generic CmpOp) ──────────
@@ -847,14 +875,28 @@ test "bigint_hex_beyond_int_range" {
     assert.equal(0xFFFF_FFFF_FFFF_FFFF_FFFFn, 1208925819614629174706175n)
 }
 
+// ─── regression: bigint binary ops in indexed compound assignments ───────
+
+test "test_bigint_array_entry_subtraction" {
+    let values: bigint[] = [15n];
+    values[0] -= 6n;
+    assert.equal(values[0], 9n)
+}
+
+test "test_bigint_map_entry_addition" {
+    let values: map<string, bigint> = { "remaining": 15n };
+    values["remaining"] += 6n;
+    assert.equal(values["remaining"], 21n)
+}
+
 // ─── generic binop path (specialization declined) ─────────────────────────────
 //
 // Emit normally routes bigint arithmetic to the specialized `*Bigint` opcodes.
-// Two shapes make it decline and fall back to the generic `bin_op`: an operand
-// read from a cell a spawned closure shares (the #3583 race guard), and a
-// field compound-assignment. Both used to fail at runtime because the generic
-// handler had no bigint arm (BAMLGH-78, BAMLGH-79); these pin every operator
-// on that path, plus `<` which always worked and is the control.
+// An operand read from a cell a spawned closure shares makes it decline (the
+// #3583 race guard) and fall back to the generic `bin_op`, which used to fail
+// at runtime because the generic handler had no bigint arm (BAMLGH-79); these
+// pin every operator on that path, plus `<` which always worked and is the
+// control.
 
 function bigint_spawn_captured_add(n: bigint) -> bigint { let p = spawn { n + 1n }; await p }
 function bigint_spawn_captured_sub(n: bigint) -> bigint { let p = spawn { n - 1n }; await p }
@@ -919,44 +961,4 @@ test "bigint_generic_path_spawn_captured_div_by_zero" {
     } catch (e) {
         baml.panics.DivisionByZero => null
     }
-}
-
-class BigintFieldBox {
-    elapsed bigint
-}
-
-function bigint_field_box_started() -> bigint { 10n }
-function bigint_field_box_now() -> bigint { 25n }
-
-// BAMLGH-78: a subtraction of two call results assigned straight into a field.
-function bigint_field_assign_from_calls() -> bigint {
-    let started = bigint_field_box_started();
-    let box = BigintFieldBox { elapsed: 0n };
-    box.elapsed = bigint_field_box_now() - started;
-    box.elapsed
-}
-
-test "bigint_generic_path_field_assign_from_calls" {
-    assert.equal(bigint_field_assign_from_calls(), 15n)
-}
-
-// The copy-aware field store (`box.f = box.f - 1n`) always emits the generic op.
-function bigint_field_compound_sub() -> bigint {
-    let box = BigintFieldBox { elapsed: 10n };
-    box.elapsed = box.elapsed - 1n;
-    box.elapsed
-}
-
-test "bigint_generic_path_field_compound_sub" {
-    assert.equal(bigint_field_compound_sub(), 9n)
-}
-
-function bigint_field_compound_add_assign() -> bigint {
-    let box = BigintFieldBox { elapsed: 10n };
-    box.elapsed += 5n;
-    box.elapsed
-}
-
-test "bigint_generic_path_field_compound_add_assign" {
-    assert.equal(bigint_field_compound_add_assign(), 15n)
 }

@@ -21,7 +21,7 @@ function create_issue(fb: Feedback) -> Issue? {
     let draft = write_issue(fb, repro, run);
     //# assemble the issue
     Issue {
-        id: "ISSUE-" + baml.id.new(),
+        id: "ISSUE-" + baml.random.SystemRandom.get().random(16).to_hex(),
         title: draft.title,
         description: draft.description,
         shepherd: null,

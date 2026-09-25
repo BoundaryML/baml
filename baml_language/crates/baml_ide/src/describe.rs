@@ -22,6 +22,7 @@ use crate::{
     info::type_info_for_definition,
     render,
     search::{SymbolInfo, search_symbols},
+    symbols::Internals,
     usages::usages_at,
 };
 
@@ -1160,6 +1161,13 @@ fn collect_type_rows(
     definition: Definition<'_>,
 ) -> ((Vec<MethodRef>, Vec<MethodRef>), Vec<ImplRow>) {
     let surface = crate::info::collect_type_surface(db, viewer, definition);
+    let is_visible = |m: &crate::info::CollectedMethod| {
+        let declared_in = m
+            .location
+            .as_ref()
+            .map_or(definition.file(db), |loc| loc.file);
+        !Internals::Hide.hides(db, &m.name, declared_in)
+    };
     let method_ref = |m: crate::info::CollectedMethod| MethodRef {
         name: m.name,
         signature: m.signature,
@@ -1168,7 +1176,7 @@ fn collect_type_rows(
     };
     let mut instance = Vec::new();
     let mut statics = Vec::new();
-    for m in surface.inherent {
+    for m in surface.inherent.into_iter().filter(|m| is_visible(m)) {
         let bucket = if m.is_instance {
             &mut instance
         } else {
@@ -1186,7 +1194,12 @@ fn collect_type_rows(
                 .map(|block| impl_block_location(db, block, ClaimedMention::ForTarget)),
             associated_types: imp.associated_types,
             field_links: imp.field_links,
-            methods: imp.methods.into_iter().map(method_ref).collect(),
+            methods: imp
+                .methods
+                .into_iter()
+                .filter(|m| is_visible(m))
+                .map(method_ref)
+                .collect(),
         })
         .collect();
     ((instance, statics), implementations)
@@ -3084,7 +3097,34 @@ implement Other for Robot {
 
         assert_eq!(descs.len(), 1);
         assert_eq!(descs[0].name, "String");
+        let super::SymbolKind::ConcreteType {
+            instance_methods, ..
+        } = &descs[0].kind
+        else {
+            panic!("String should describe a concrete type");
+        };
+        assert!(instance_methods.iter().all(|m| !m.name.starts_with('_')));
         insta::assert_snapshot!(project.format_description(&descs[0]));
+    }
+
+    #[test]
+    fn describe_user_type_keeps_underscore_methods() {
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "types.baml",
+            "class Widget { function _helper(self) -> int throws never { 1 } }",
+        );
+        let project = builder.build();
+        let descs = project.describe("Widget");
+
+        assert_eq!(descs.len(), 1);
+        let super::SymbolKind::ConcreteType {
+            instance_methods, ..
+        } = &descs[0].kind
+        else {
+            panic!("Widget should describe a concrete type");
+        };
+        assert!(instance_methods.iter().any(|m| m.name == "_helper"));
     }
 
     #[test]

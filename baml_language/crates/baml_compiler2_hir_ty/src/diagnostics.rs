@@ -164,6 +164,19 @@ pub enum TirTypeError {
     /// A mounted callable whose implementation is compiler-owned and has no
     /// location-free link ABI was invoked from a source-less consumer.
     MountedPackageCallUnsupported { path: Name },
+    /// A constant pattern argument to `baml.regex.new` does not compile.
+    /// Checked here so a typo in a literal pattern is a source error rather
+    /// than a throw the program has to reach to discover.
+    InvalidRegexPattern {
+        /// The same classification `baml.regex.Error.kind` carries at runtime.
+        kind: sys_regex::ErrorKind,
+        /// The engine's own one-line diagnostic.
+        message: String,
+        /// Codepoint offset into the pattern where the problem starts, when
+        /// the engine reports one. The pattern is a decoded string literal, so
+        /// this indexes the pattern, not the source line.
+        offset: Option<usize>,
+    },
     /// A shorthand property (`{ name }`) could not resolve its implicit value.
     /// Suggestions are in-scope values with similar names; the diagnostic
     /// renders them as explicit `name: suggestion` mappings.
@@ -685,19 +698,6 @@ pub enum TirTypeError {
         /// The interface as far as inference determined it.
         interface: Ty,
     },
-    /// `$id` cannot be the target of a compound assignment (`$id += ...`):
-    /// the runtime ID can only be replaced wholesale with an override from
-    /// `baml.id.new()` via `$id = ...`.
-    RuntimeIdCompoundAssignment,
-    /// Member access on `$id` (e.g. `$id.len()`). `$id` reads as a plain
-    /// string value but is not a binding; bind it to a local first.
-    RuntimeIdMemberAccess { member: Name },
-    /// A second `$id` side channel was supplied to one call.
-    DuplicateRuntimeIdArgument,
-    /// `$id` is trailing call metadata and an ordinary argument followed it.
-    RuntimeIdArgumentMustBeLast,
-    /// The `$id` side channel accepts only a `boundary.LocalId`.
-    RuntimeIdArgumentTypeMismatch { got: Ty },
     /// An integer literal (or a constant-folded integer expression) is outside
     /// the representable `int` range `[-2^62, 2^62-1]`. `int` is 63-bit; larger
     /// magnitudes need a `bigint` literal (`n` suffix).
@@ -1155,6 +1155,23 @@ impl TirTypeError {
                             path.as_str(),
                         );
                     f.write_str(diagnostic.message.as_str())
+                }
+                TirTypeError::InvalidRegexPattern {
+                    kind,
+                    message,
+                    offset,
+                } => {
+                    let headline = match kind {
+                        sys_regex::ErrorKind::Syntax => "invalid regex pattern",
+                        sys_regex::ErrorKind::Unsupported => "unsupported regex construct",
+                        sys_regex::ErrorKind::TooLarge => "regex pattern is too large",
+                    };
+                    match offset {
+                        Some(offset) => {
+                            write!(f, "{headline} at character {offset}: {message}")
+                        }
+                        None => write!(f, "{headline}: {message}"),
+                    }
                 }
                 TirTypeError::DeadCode {
                     unreachable_count, ..
@@ -1954,28 +1971,6 @@ impl TirTypeError {
                  `{}` implement `{}`",
                     value_type.spell(vp),
                     interface.spell(vp)
-                ),
-                TirTypeError::RuntimeIdCompoundAssignment => write!(
-                    f,
-                    "`$id` cannot be the target of a compound assignment; use `$id = ...` with an \
-                 override from `baml.id.new()`"
-                ),
-                TirTypeError::RuntimeIdMemberAccess { member } => write!(
-                    f,
-                    "`$id` is a value, not a binding; bind it to a local before accessing `.{member}` \
-                 (e.g. `let id = $id; id.{member}`)"
-                ),
-                TirTypeError::DuplicateRuntimeIdArgument => {
-                    write!(f, "duplicate `$id` call argument")
-                }
-                TirTypeError::RuntimeIdArgumentMustBeLast => write!(
-                    f,
-                    "`$id` must be the final call argument because it is trailing call metadata"
-                ),
-                TirTypeError::RuntimeIdArgumentTypeMismatch { got } => write!(
-                    f,
-                    "`$id` at a call site expects `boundary.LocalId`, got {}",
-                    got.spell(vp)
                 ),
                 TirTypeError::IntegerLiteralOutOfRange { value } => write!(
                     f,

@@ -180,6 +180,45 @@ test "not_null_true" { assert.is_true(tr_not(null)) }
 test "not_empty_true" { assert.is_true(tr_not("")) }
 test "not_value_false" { assert.is_true(!(tr_not("x"))) }
 
+class TrOptionalFlag {
+    abstained bool,
+}
+
+class TrOptionalDoc {
+    flag TrOptionalFlag?,
+}
+
+function tr_not_optional_flag(d: TrOptionalDoc) -> bool {
+    !d.flag?.abstained
+}
+
+test "not_optional_flag_false_true" {
+    assert.is_true(tr_not_optional_flag(TrOptionalDoc { flag: TrOptionalFlag { abstained: false } }))
+}
+
+test "not_optional_flag_true_false" {
+    assert.is_true(!(tr_not_optional_flag(TrOptionalDoc { flag: TrOptionalFlag { abstained: true } })))
+}
+
+test "not_optional_flag_null_true" {
+    assert.is_true(tr_not_optional_flag(TrOptionalDoc { flag: null }))
+}
+
+// Use an explicit fallback when null should differ from false. Here the
+// predicate means "the flag exists and is not abstained", so a missing flag
+// must return false instead of `!null`'s true.
+function tr_present_and_not_abstained(d: TrOptionalDoc) -> bool {
+    !(d.flag?.abstained ?? true)
+}
+
+test "present_and_not_abstained_present_true" {
+    assert.is_true(tr_present_and_not_abstained(TrOptionalDoc { flag: TrOptionalFlag { abstained: false } }))
+}
+
+test "present_and_not_abstained_null_false" {
+    assert.is_true(!(tr_present_and_not_abstained(TrOptionalDoc { flag: null })))
+}
+
 // ============================================================================
 // 5. while and match guards
 // ============================================================================

@@ -22,9 +22,6 @@ pub enum LangPackage {
     /// LLM functions and clients; the `client:` desugar and prompt lowering
     /// name its declarations.
     Ai,
-    /// The `boundary` package, whose root-level `id` function is the one
-    /// allowlisted namespace shadow.
-    Boundary,
     /// The `log` package, whose `info`/`debug`/`warn`/`error` are the
     /// compiler intrinsics MIR lowers to log statements.
     Log,
@@ -48,13 +45,7 @@ pub enum LangPackage {
 pub const DESUGAR_PATH_ROOTS: &[&str] = &[LangPackage::Baml.manifest_name()];
 
 impl LangPackage {
-    pub const ALL: [Self; 5] = [
-        Self::Baml,
-        Self::Reflect,
-        Self::Ai,
-        Self::Boundary,
-        Self::Log,
-    ];
+    pub const ALL: [Self; 4] = [Self::Baml, Self::Reflect, Self::Ai, Self::Log];
 
     /// The package's `[package].name` in the stdlib manifests — the ONE
     /// spelling the installer matches to find the root.
@@ -63,7 +54,6 @@ impl LangPackage {
             Self::Baml => "baml",
             Self::Reflect => "reflect",
             Self::Ai => "ai",
-            Self::Boundary => "boundary",
             Self::Log => "log",
         }
     }
@@ -77,7 +67,6 @@ pub struct LangRoots {
     baml: Option<SourceRoot>,
     reflect: Option<SourceRoot>,
     ai: Option<SourceRoot>,
-    boundary: Option<SourceRoot>,
     log: Option<SourceRoot>,
 }
 
@@ -89,7 +78,6 @@ impl LangRoots {
             LangPackage::Baml => self.baml,
             LangPackage::Reflect => self.reflect,
             LangPackage::Ai => self.ai,
-            LangPackage::Boundary => self.boundary,
             LangPackage::Log => self.log,
         }
     }
@@ -107,7 +95,6 @@ impl LangRoots {
             LangPackage::Baml => &mut self.baml,
             LangPackage::Reflect => &mut self.reflect,
             LangPackage::Ai => &mut self.ai,
-            LangPackage::Boundary => &mut self.boundary,
             LangPackage::Log => &mut self.log,
         };
         *slot = Some(root);

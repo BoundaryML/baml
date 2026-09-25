@@ -1,0 +1,63 @@
+[package]
+name = "quanta"
+version = "0.12.6"
+authors = ["Toby Lawrence <toby@nuclearfurnace.com>"]
+edition = "2021"
+rust-version = "1.87"
+resolver = "3"
+
+license = "MIT"
+
+description = "high-speed timing library"
+
+homepage = "https://github.com/metrics-rs/quanta"
+repository = "https://github.com/metrics-rs/quanta"
+documentation = "https://docs.rs/quanta"
+
+readme = false
+
+keywords = ["rdtsc", "timing", "nanosecond"]
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lib]
+bench = false
+
+[features]
+default = ["flaky_tests", "mock"]
+flaky_tests = []
+mock = []
+prost = ["prost-types"]
+
+[dependencies]
+prost-types = { version = "0.11", default-features = false, optional = true }
+portable-atomic = { version = "1", default-features = false, features = ["fallback"] }
+
+[target.'cfg(target_arch = "x86")'.dependencies]
+raw-cpuid = "11.0"
+
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+raw-cpuid = "11.0"
+
+[target.'cfg(any(target_os = "emscripten", not(any(target_os = "windows", target_arch = "wasm32"))))'.dependencies]
+libc = "0.2.183"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_System_Performance"] }
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+web-sys = { version = "0.3", features = ["Window", "Performance"] }
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "wasi", target_env = "p1"))'.dependencies]
+wasip1 = "1"
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "wasi", target_env = "p2"))'.dependencies]
+wasip2 = "1"
+
+[dev-dependencies]
+average = "0.14"
+serial_test = "3"
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dev-dependencies]
+wasm-bindgen-test = "0.3"

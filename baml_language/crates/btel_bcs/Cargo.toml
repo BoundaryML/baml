@@ -1,0 +1,44 @@
+[package]
+name = "btel_bcs"
+version = { workspace = true }
+publish = false
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+description = "Bounded direct-upload delivery for Btel recordings"
+
+[lints]
+workspace = true
+
+[features]
+default = [ "aws-crypto" ]
+aws-crypto = [ "reqwest/rustls", "rustls/aws_lc_rs", "rustls/std" ]
+ring-crypto = [ "reqwest/rustls-no-provider", "rustls/ring", "rustls/std" ]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+btel_processor = { workspace = true }
+btel_recorder = { workspace = true }
+btel_records = { workspace = true }
+btel_settings = { workspace = true }
+btel_snapshot = { workspace = true }
+btel_types = { workspace = true }
+bytes = { workspace = true }
+futures = { workspace = true }
+hex = { workspace = true }
+prost = { workspace = true }
+reqwest = { workspace = true }
+rustls = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tokio = { workspace = true, features = [ "rt", "sync", "time", "net", "macros" ] }
+uuid = { workspace = true }
+
+[build-dependencies]
+prost-build = { workspace = true }
+protoc-bin-vendored = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+btel_clock = { workspace = true }
+tokio = { workspace = true, features = [ "rt-multi-thread", "test-util" ] }
+wiremock = { workspace = true }

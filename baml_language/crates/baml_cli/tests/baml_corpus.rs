@@ -46,9 +46,6 @@ fn baml_test() {
         .env("BAML_CLI_ALLOW_DIRECT", "1")
         .env("BAML_HOME", &home)
         .env("BAML_CACHE_DIR", &cache_dir)
-        // The profiler otherwise lands `<project>/.baml/profiles-v1` in the
-        // corpus source tree.
-        .env("BAML_PROFILE_DIR", tmp.path().join("profiles-v1"))
         .status()
         .expect("baml_cli test should not fail");
     assert!(status.success());

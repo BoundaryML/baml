@@ -433,10 +433,6 @@ Require(
     limit.ActiveCount() == 0 && limit.QueuedCount() == 0,
     "Limit state methods changed");
 
-using Boundary.LocalId localId = Boundary.Functions.Id();
-using Boundary.LocalId capturedId = localId.Capture(inputs: true, output: false, error: true);
-Require(!capturedId.IsClosed, "boundary.LocalId.capture returned a closed resource");
-
 _ = csvReader.Close();
 
 clonedGlob.Dispose();

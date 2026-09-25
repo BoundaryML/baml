@@ -48,21 +48,6 @@ interface DeclarationRecord {
   routePath: string;
 }
 
-// The compiler intentionally allows this one namespace shadow while the
-// underlying compiler bug is fixed elsewhere. Keep the portal exception just
-// as narrow: the declaration and namespace descendants remain routable, but
-// the colliding synthetic namespace landing page is not projected.
-function isHiddenNamespacePage(
-  packageName: string,
-  namespacePath: readonly string[],
-): boolean {
-  return (
-    packageName === 'boundary' &&
-    namespacePath.length === 1 &&
-    namespacePath[0] === 'id'
-  );
-}
-
 type ProjectedMemberAnchor = ReturnType<typeof createMemberAnchors>[number] & {
   memberKind: string;
 };
@@ -289,10 +274,7 @@ export function buildReferencePages(
     ...[...namespaceKeys]
       .filter((key) => {
         const namespacePath = key.split('.');
-        return (
-          namespacePath.length === 1 &&
-          !isHiddenNamespacePage(packageName, namespacePath)
-        );
+        return namespacePath.length === 1;
       })
       .map((key) => childForNamespace([key])),
     ...declarations
@@ -322,17 +304,13 @@ export function buildReferencePages(
 
   for (const key of [...namespaceKeys].sort()) {
     const namespacePath = key.split('.');
-    if (isHiddenNamespacePage(packageName, namespacePath)) {
-      continue;
-    }
     const qualifiedName = [packageName, ...namespacePath].join('.');
     const childNamespaces = [...namespaceKeys]
       .map((candidate) => candidate.split('.'))
       .filter(
         (candidate) =>
           candidate.length === namespacePath.length + 1 &&
-          candidate.slice(0, -1).join('.') === key &&
-          !isHiddenNamespacePage(packageName, candidate),
+          candidate.slice(0, -1).join('.') === key,
       )
       .map(childForNamespace);
     const childDeclarations = declarations

@@ -116,9 +116,7 @@ impl Policy {
 }
 
 fn context() -> bex_engine::FunctionCallContext {
-    FunctionCallContextBuilder::new(sys_types::CallId::next())
-        .suppress_internal_profile()
-        .build()
+    FunctionCallContextBuilder::new(sys_types::CallId::next()).build()
 }
 
 #[cfg(target_os = "macos")]

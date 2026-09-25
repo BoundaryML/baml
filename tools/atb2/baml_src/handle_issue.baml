@@ -246,7 +246,7 @@ function check_cli() -> string {
 /// Write the repro to a scratch project and run it with check_cli().
 function check_on_canary(r: Repro, n: int) -> Verdict {
     //# write the repro to a scratch project
-    let dir = atb2_home() + "/repro-check/" + baml.id.new();
+    let dir = atb2_home() + "/repro-check/" + baml.random.SystemRandom.get().random(16).to_hex();
     baml.fs.mkdir(dir + "/baml_src", baml.fs.MkdirOptions { recursive: true });
     defer {
         baml.fs.remove_dir_all(dir) catch (_) {

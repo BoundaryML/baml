@@ -1,0 +1,17 @@
+{
+  "plan_id": "cloud-v1-recording-only",
+  "expires_at_unix_ms": 4102444800000,
+  "uploads": [
+    {
+      "upload_id": "recording",
+      "client_target_id": 0,
+      "object_key": "org-fixture/cloud-v1-recording-only/recording",
+      "presigned_put_url": "https://uploads.invalid/cloud-v1/recording-only/recording?capability=fixed-v1",
+      "expires_at_unix_ms": 4102444800000,
+      "required_headers": {"x-bcs-fixture": "cloud-v1", "x-amz-meta-upload-id": "recording"},
+      "kind": "recording",
+      "candidate_indices": []
+    }
+  ],
+  "cas": []
+}

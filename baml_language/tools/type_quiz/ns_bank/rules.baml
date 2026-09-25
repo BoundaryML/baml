@@ -90,6 +90,19 @@ function never_omitted_from_unions() -> root.engine.Rule throws never {
 
 // ─── subtyping cases ─────────────────────────────────────────────────────────
 
+/// The principle every unrelated pair rests on: subtyping is a subset
+/// relation, so two types neither of whose values all belong to the other are
+/// related neither way. This is what decides the near misses — a union with a
+/// member swapped for a different one, a recursive alias over a different
+/// leaf — where no narrower rule speaks.
+function subset_based() -> root.engine.Rule throws never {
+    rule(
+        "subtyping/subset-based",
+        section("Subtyping Rules"),
+        "Subtyping in BAML is subset-based, not inheritance-based.",
+    )
+}
+
 function never_bottom_rule() -> root.engine.Rule throws never {
     rule(
         "subtyping/never-bottom",
@@ -328,6 +341,7 @@ function rules() -> root.engine.Rule[] throws never {
         concrete_types_atomic(),
         literal_subtype_of_concrete(),
         never_omitted_from_unions(),
+        subset_based(),
         never_bottom_rule(),
         unknown_top_rule(),
         identity_rule(),

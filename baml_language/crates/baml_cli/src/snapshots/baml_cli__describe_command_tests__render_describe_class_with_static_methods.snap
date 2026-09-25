@@ -15,6 +15,6 @@ static_methods:
   function make() -> Counter throws never  methods.baml:22-24
 
 implementations (1):
-  implement<T> Concrete for T  <builtin>/baml/core.baml:20
+  implement<T> Concrete for T  <builtin>/baml/core.baml:21
 
 references (0):

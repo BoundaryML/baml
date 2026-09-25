@@ -16,6 +16,10 @@ bex_heap = { workspace = true }
 bex_str = { workspace = true }
 bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
+btel_clock = { workspace = true }
+btel_processor = { workspace = true }
+btel_settings = { workspace = true }
+btel_types = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
 async-trait = { workspace = true }
@@ -32,11 +36,17 @@ web-time = { workspace = true }
 
 # Native-only: tokio runtime for spawning async tasks
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+btel_bcs = { workspace = true }
+btel_recorder = { workspace = true }
+btel_file = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "rt", "macros", "time" ] }
 
 # WASM-only: wasm-bindgen-futures for spawning async tasks
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+btel_file = { workspace = true, features = [ "test-support" ] }
 
 [dev-dependencies]
 baml_db = { workspace = true }
@@ -44,6 +54,8 @@ bex_resource_types = { workspace = true }
 bridge_ctypes = { workspace = true }
 sys_native = { workspace = true, features = [ "bundle-http", "aws-crypto" ] }
 anyhow = { workspace = true }
+borsh = { workspace = true }
+clap = { workspace = true }
 indexmap = { workspace = true }
 prost = { workspace = true }
 serde_json = { workspace = true }
@@ -60,8 +72,8 @@ gc_profiling = [ "bex_heap/gc_profiling" ]
 # `sys_native` is a dev-dependency only, so feature propagation here would
 # be a no-op for downstream consumers; its crypto feature is set directly
 # on the `[dev-dependencies]` entry above.
-aws-crypto = [ "sys_ops/aws-crypto" ]
-ring-crypto = [ "sys_ops/ring-crypto" ]
+aws-crypto = [ "sys_ops/aws-crypto", "btel_bcs/aws-crypto" ]
+ring-crypto = [ "sys_ops/ring-crypto", "btel_bcs/ring-crypto" ]
 heap_debug = [
   "bex_vm/heap_debug",
   "bex_heap/heap_debug",

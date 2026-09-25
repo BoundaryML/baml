@@ -417,8 +417,8 @@ fn run_valid_project_outputs_only_program_output() {
     );
 }
 
-/// `baml run` keeps logs silent by default and streams the selected levels
-/// before printing the target's return value when `--log` or `BAML_LOG` enables them.
+/// `baml run` defaults to INFO and streams the selected levels before printing
+/// the target's return value. `--log` and `BAML_LOG` override the default.
 #[test]
 fn run_log_sources_surface_filtered_logs_for_targets_and_expressions() {
     let built = &common::baml_cli();
@@ -455,43 +455,65 @@ function logged_conversion(input: LoggedConversion) -> LoggedConversion {
 "#,
     );
 
-    let expression = run_baml_cli(
-        built,
-        tmp.path(),
-        &[
-            "run",
-            "--from",
-            ".",
-            "--log",
-            "INFO",
-            "-e",
-            r#"log.info("expression-detail"); 7"#,
-        ],
-    );
-    assert!(
-        expression.status.success(),
-        "logged expression failed; stdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&expression.stdout),
-        String::from_utf8_lossy(&expression.stderr),
-    );
-    let stdout = String::from_utf8_lossy(&expression.stdout);
-    assert!(
-        stdout.contains("[INFO] expression-detail"),
-        "stdout: {stdout}"
-    );
-    let lines: Vec<_> = stdout.lines().collect();
-    let log_line = lines
-        .iter()
-        .position(|line| line.contains("[INFO] expression-detail"))
-        .expect("expression log");
-    let result_line = lines
-        .iter()
-        .position(|line| line.trim() == "7")
-        .expect("expression return value");
-    assert!(
-        log_line < result_line,
-        "expression logs must be flushed before the return value: {stdout}"
-    );
+    let expression_source = r#"
+log.debug("expression-debug-detail");
+log.info("expression-info-detail");
+log.warn("expression-warn-detail");
+log.error("expression-error-detail");
+7
+"#;
+    let log_lines = [
+        "[DEBUG] expression-debug-detail",
+        "[INFO] expression-info-detail",
+        "[WARN] expression-warn-detail",
+        "[ERROR] expression-error-detail",
+    ];
+    for (threshold, expected) in [
+        (None, [false, true, true, true]),
+        (Some("OFF"), [false, false, false, false]),
+        (Some("ERROR"), [false, false, false, true]),
+        (Some("WARN"), [false, false, true, true]),
+        (Some("INFO"), [false, true, true, true]),
+        (Some("DEBUG"), [true, true, true, true]),
+        (Some("TRACE"), [true, true, true, true]),
+    ] {
+        let mut args = vec!["run", "--from", "."];
+        if let Some(threshold) = threshold {
+            args.extend(["--log", threshold]);
+        }
+        args.extend(["-e", expression_source]);
+
+        let expression = run_baml_cli(built, tmp.path(), &args);
+        assert!(
+            expression.status.success(),
+            "logged expression failed at threshold {threshold:?}; stdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&expression.stdout),
+            String::from_utf8_lossy(&expression.stderr),
+        );
+        let stdout = String::from_utf8_lossy(&expression.stdout);
+        let lines: Vec<_> = stdout.lines().collect();
+        let result_line = lines
+            .iter()
+            .position(|line| line.trim() == "7")
+            .expect("expression return value");
+        for (log_line, should_be_visible) in log_lines.into_iter().zip(expected) {
+            assert_eq!(
+                stdout.contains(log_line),
+                should_be_visible,
+                "unexpected discovery for `{log_line}` at threshold {threshold:?}; stdout: {stdout}"
+            );
+            if should_be_visible {
+                let log_line = lines
+                    .iter()
+                    .position(|line| line.contains(log_line))
+                    .expect("visible expression log");
+                assert!(
+                    log_line < result_line,
+                    "expression logs must be flushed before the return value at threshold {threshold:?}: {stdout}"
+                );
+            }
+        }
+    }
 
     let conversion = run_baml_cli_with_env(
         built,
@@ -839,8 +861,8 @@ test "passes" {
     common::assert_no_compile_file_status(&String::from_utf8_lossy(&output.stderr));
 }
 
-/// BAML log events stay silent by default and become stdout lines only when
-/// the caller opts into a level threshold with `--log` or `BAML_LOG`.
+/// BAML test log events default to INFO and remain configurable through
+/// `--log` or `BAML_LOG` without changing test exit codes.
 #[test]
 fn test_log_sources_route_filtered_baml_logs_to_stdout_without_changing_exit_codes() {
     let built = &common::baml_cli();
@@ -865,37 +887,20 @@ test "fails" {
 "#,
     );
 
-    let quiet = run_baml_cli(built, tmp.path(), &["test", "--from", ".", "-i", "::logs"]);
-    assert!(
-        quiet.status.success(),
-        "expected default log mode to pass; stdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&quiet.stdout),
-        String::from_utf8_lossy(&quiet.stderr),
-    );
-    let quiet_stdout = String::from_utf8_lossy(&quiet.stdout);
-    let quiet_stderr = String::from_utf8_lossy(&quiet.stderr);
-    assert!(quiet_stdout.contains("PASS"), "stdout: {quiet_stdout}");
-    assert!(
-        format!("{quiet_stdout}{quiet_stderr}").contains("1 passed, 0 failed, 1 total"),
-        "stdout: {quiet_stdout}\nstderr: {quiet_stderr}"
-    );
-    assert!(!quiet_stdout.contains("detail"), "stdout: {quiet_stdout}");
-
-    // Uppercase is intentional: this is the documented shell spelling and
-    // guards clap's case-insensitive value parsing.
-    let info = run_baml_cli_with_env(
-        built,
-        tmp.path(),
-        &["test", "--from", ".", "-i", "::logs"],
-        &[("BAML_LOG", "INFO")],
-    );
+    let info = run_baml_cli(built, tmp.path(), &["test", "--from", ".", "-i", "::logs"]);
     assert!(
         info.status.success(),
-        "expected BAML_LOG=INFO to pass; stdout: {}\nstderr: {}",
+        "expected default INFO log mode to pass; stdout: {}\nstderr: {}",
         String::from_utf8_lossy(&info.stdout),
         String::from_utf8_lossy(&info.stderr),
     );
     let stdout = String::from_utf8_lossy(&info.stdout);
+    let stderr = String::from_utf8_lossy(&info.stderr);
+    assert!(stdout.contains("PASS"), "stdout: {stdout}");
+    assert!(
+        format!("{stdout}{stderr}").contains("1 passed, 0 failed, 1 total"),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
     assert!(stdout.contains("[INFO] info-detail"), "stdout: {stdout}");
     assert!(stdout.contains("[WARN] warn-detail"), "stdout: {stdout}");
     assert!(
@@ -914,6 +919,42 @@ test "fails" {
         stdout.find("[ERROR] error-detail") < stdout.find("PASS"),
         "the final captured log must be printed before the test report: {stdout}"
     );
+
+    let quiet = run_baml_cli(
+        built,
+        tmp.path(),
+        &["test", "--from", ".", "-i", "::logs", "--log", "OFF"],
+    );
+    assert!(
+        quiet.status.success(),
+        "expected --log OFF to pass; stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&quiet.stdout),
+        String::from_utf8_lossy(&quiet.stderr),
+    );
+    let quiet_stdout = String::from_utf8_lossy(&quiet.stdout);
+    assert!(quiet_stdout.contains("PASS"), "stdout: {quiet_stdout}");
+    assert!(!quiet_stdout.contains("detail"), "stdout: {quiet_stdout}");
+
+    // Uppercase is intentional: this is the documented shell spelling and
+    // guards clap's case-insensitive environment value parsing.
+    let error = run_baml_cli_with_env(
+        built,
+        tmp.path(),
+        &["test", "--from", ".", "-i", "::logs"],
+        &[("BAML_LOG", "ERROR")],
+    );
+    assert!(error.status.success(), "BAML_LOG=ERROR must pass");
+    let error_stdout = String::from_utf8_lossy(&error.stdout);
+    assert!(
+        error_stdout.contains("[ERROR] error-detail"),
+        "stdout: {error_stdout}"
+    );
+    for filtered in ["debug-detail", "info-detail", "warn-detail"] {
+        assert!(
+            !error_stdout.contains(filtered),
+            "BAML_LOG=ERROR leaked `{filtered}`: {error_stdout}"
+        );
+    }
 
     let failure = run_baml_cli(
         built,
@@ -1736,6 +1777,152 @@ fn run_expr_without_baml_toml_picks_up_baml_src_context() {
     assert!(
         stdout.contains("42"),
         "Expected the result `42`, got:\n{stdout}"
+    );
+}
+
+/// `--file` supplies hermetic standalone context to `-e`, just as
+/// `--project` supplies project context.
+#[test]
+fn run_expr_picks_up_standalone_file_context() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("defines_foo.baml"),
+        "function foo() -> int {\n  42\n}\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["run", "--file", "defines_foo.baml", "-e", "foo()"],
+    );
+
+    assert!(
+        output.status.success(),
+        "Expected exit 0 for `run --file defines_foo.baml -e 'foo()'`, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "42");
+}
+
+/// The synthetic expression source must not replace a selected standalone
+/// file that happens to use the same default filename.
+#[test]
+fn run_expr_preserves_standalone_file_named_expr() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("__expr__.baml"),
+        "function foo() -> int {\n  42\n}\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["run", "--file", "__expr__.baml", "-e", "foo()"],
+    );
+
+    assert!(
+        output.status.success(),
+        "Expected declarations from `__expr__.baml` to remain available\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "42");
+}
+
+/// An explicitly selected standalone file is always compiled with the
+/// expression, even when the expression does not reference its declarations.
+#[test]
+fn run_expr_checks_standalone_file_context() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("__expr__.baml"),
+        "function broken() -> MissingType {\n  1\n}\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["run", "--file", "__expr__.baml", "-e", "2 + 2"],
+    );
+
+    assert!(
+        !output.status.success(),
+        "Expected the standalone file's error to fail expression evaluation\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("MissingType"),
+        "Expected diagnostics from the standalone file, got:\n{}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
+/// Project fallback must not replace a real root-level source file with the
+/// synthetic expression source when their default paths collide.
+#[test]
+fn run_expr_preserves_project_file_named_expr() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        tmp.path().join("__expr__.baml"),
+        "function foo() -> int {\n  42\n}\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["run", "-e", "foo()", "--from", "."]);
+
+    assert!(
+        output.status.success(),
+        "Expected declarations from the project `__expr__.baml` to remain available\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "42");
+}
+
+/// Diagnostics from a colliding root-level project source must also survive
+/// creation of the synthetic expression source.
+#[test]
+fn run_expr_checks_project_file_named_expr() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        tmp.path().join("__expr__.baml"),
+        "function broken() -> MissingType {\n  1\n}\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["run", "-e", "broken()", "--from", "."]);
+
+    assert!(
+        !output.status.success(),
+        "Expected the project file's error to fail expression evaluation\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("MissingType"),
+        "Expected diagnostics from the project file, got:\n{}",
+        String::from_utf8_lossy(&output.stderr),
     );
 }
 

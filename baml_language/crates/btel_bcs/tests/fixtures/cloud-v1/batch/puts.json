@@ -1,0 +1,28 @@
+{
+  "prepare_path": "/v1/recordings/07070707070707070707070707070707/uploads:prepare",
+  "prepare_headers": {
+    "authorization": "Bearer golden-prepare-token",
+    "content-type": "application/json",
+    "idempotency-key": "07070707070707070707070707070707:1"
+  },
+  "uploads": [
+    {
+      "upload_id": "recording",
+      "path": "/cloud-v1/batch/recording",
+      "query": "capability=fixed-v1",
+      "headers": {"content-type": "application/x-protobuf", "x-bcs-fixture": "cloud-v1", "x-amz-meta-upload-id": "recording"},
+      "body_file": "recording.hex",
+      "length": 180,
+      "sha256": "bf2bc6cd7241681bf019dfecc93d4447ad07e7df71c2313cb85f023db2fde0f9"
+    },
+    {
+      "upload_id": "batch",
+      "path": "/cloud-v1/batch/batch",
+      "query": "capability=fixed-v1",
+      "headers": {"content-type": "application/x-protobuf", "x-bcs-fixture": "cloud-v1", "x-amz-meta-upload-id": "batch"},
+      "body_file": "batch.hex",
+      "length": 227,
+      "sha256": "8ae1d5d6f967729bdf2845c2b4a80af5b974f0bb7d6df441f18848a81c3d4ffe"
+    }
+  ]
+}

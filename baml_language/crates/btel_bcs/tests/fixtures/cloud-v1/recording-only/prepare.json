@@ -1,0 +1,15 @@
+{
+  "recording": {
+    "recording_id": "07070707070707070707070707070707",
+    "recording_file_sequence": 1,
+    "encoded_length": 36,
+    "sha256": "81eb7a16da7f492c3df6faf6bac4c823c0d388d472b1ab4c5ec543d8fe136056"
+  },
+  "candidates": [],
+  "proposed_uploads": [
+    {"client_target_id": 0, "kind": "recording", "candidate_indices": []}
+  ],
+  "producer_session_id": "11111111-2222-4333-8444-555555555555",
+  "liveness_sequence": 1,
+  "state": "RUNNING"
+}

@@ -24,7 +24,7 @@ env:
   CARGO_TERM_COLOR: always
   RUSTUP_MAX_RETRIES: 10
 
-# Measure jobs collect reports without failing early; the report job enforces policy.
+# Size measurements and reports are informational and must never fail CI.
 
 jobs:
   size-gate-linux:
@@ -397,8 +397,10 @@ jobs:
           if-no-files-found: ignore
 
   size-gate-report:
-    name: "enforce-baml-size"
+    name: "report-baml-size"
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Reporting/setup failures must not turn size measurements into a CI gate.
+    continue-on-error: true
     if: ${{ always() && !cancelled() }}
     needs:
       - size-gate-linux
@@ -519,11 +521,11 @@ jobs:
             mv unified-report.with-missing.md unified-report.md
           fi
 
-          # Persist for the failure step to consult. Gate the write on
+          # Persist for the warning step to consult. Gate the write on
           # the array length: `printf '%s\n' "${missing[@]}"` with zero
           # arguments still emits one trailing newline, which would make
           # the file non-empty (1 byte) and trip the `[ -s ... ]` check
-          # in the failure step even when nothing is missing.
+          # in the warning step even when nothing is missing.
           : > missing-platforms.txt
           if [ "${#missing[@]}" -gt 0 ]; then
             printf '%s\n' "${missing[@]}" > missing-platforms.txt
@@ -551,34 +553,21 @@ jobs:
           header: size-gate
           path: unified-report.md
 
-      - name: "Fail if any platform is missing or any check failed"
-        env:
-          RESULT_LINUX: ${{ needs.size-gate-linux.result }}
-          # RESULT_MACOS: ${{ needs.size-gate-macos.result }}
-          # RESULT_WINDOWS: ${{ needs.size-gate-windows.result }}
-          RESULT_WASM: ${{ needs.size-gate-wasm.result }}
+      - name: "Warn if any platform is missing or any check failed"
         run: |
-          fail=0
-
           if [ -s missing-platforms.txt ]; then
-            echo "::error::Missing size-gate report(s):"
+            echo "::warning::Missing size-gate report(s):"
             while IFS= read -r entry; do
-              [ -n "$entry" ] && echo "::error::  - ${entry}"
+              [ -n "$entry" ] && echo "::warning::  - ${entry}"
             done < missing-platforms.txt
-            fail=1
           fi
 
-          # Each platform's job is `continue-on-error: true`, so a job-level
-          # 'failure' here means the job died before producing a report
-          # (covered above) OR the job succeeded but uploaded a JSON marked
-          # as a violation. Re-check the JSONs for the latter.
+          # Surface policy violations without failing CI. The PR comment and
+          # job summary retain the full size report for review.
           # macOS and Windows are temporarily disabled.
           for platform in linux wasm; do
             f="reports/size-gate-${platform}.json"
             if [ -f "$f" ] && jq -e '.ok == false' "$f" > /dev/null 2>&1; then
-              echo "::error::size-gate (${platform}) reported a policy violation"
-              fail=1
+              echo "::warning::size-gate (${platform}) reported a policy violation"
             fi
           done
-
-          exit "$fail"

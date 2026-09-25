@@ -2,7 +2,7 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
-function deep_copy  (baml.deep_copy)  <builtin>/baml/core.baml:10-12
+function deep_copy  (baml.deep_copy)  <builtin>/baml/core.baml:11-13
 
 /// Returns a deep copy of `value`: nested arrays, maps, and class instances
 /// are cloned recursively.

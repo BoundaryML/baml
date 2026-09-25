@@ -127,7 +127,7 @@ function put(
     knobs: Knobs,
     seed: Seed,
 ) -> Put throws never {
-    let alone = Put { posed: candidate.case, traps: candidate.traps };
+    let alone = Put { posed: candidate.case, traps: candidate.served.traps };
     if (!choosing(knobs, seed)) {
         return alone;
     }
@@ -137,6 +137,25 @@ function put(
     let choice = contrast(candidate.case, found, order.value == 0)
         ?? return alone;
     Put { posed: choice, traps: choice.traps }
+}
+
+/// How a candidate already in hand is put at `seed`.
+///
+/// Everything `put` needs beyond the candidate follows from the item and the
+/// seed it was drawn from, so a caller holding those three needs nothing
+/// else. Selection holds the candidate it drew, and generating it a second
+/// time to put it is the most expensive thing a step would otherwise do
+/// twice; `put_at`, whose caller has only an id and a seed, generates it
+/// because it has to.
+function put_drawn(knobs: Knobs, item: Item, seed: Seed, candidate: Candidate) -> Put throws never {
+    put(
+        candidate,
+        () -> {
+            foil_of(item, seed)
+        },
+        knobs,
+        pose_seed(seed.state),
+    )
 }
 
 /// `case` and its `foil` as a choice, or `null` when the two do not in fact

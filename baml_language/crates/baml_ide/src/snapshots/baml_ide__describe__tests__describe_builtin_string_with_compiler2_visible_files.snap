@@ -53,8 +53,8 @@ methods:
   function lines(self) -> string[] throws never
   /// Returns the characters in `[start, end)`.
   function slice(self, start: int, end: int) -> string throws never
-  /// Replaces the first occurrence of `search` with `replacement`.
-  function replace(self, search: string, replacement: string) -> string throws never
+  /// Replaces the first occurrence of `search`.
+  function replace(self, search: string | baml.regex.Regex, replacement: string) -> string throws never
   /// Returns the character index of the first occurrence of `search`, or `null`
   function index_of(self, search: string) -> int | null throws never
   /// Returns the character index at which the last occurrence of `search` starts,
@@ -65,8 +65,8 @@ methods:
   function code_point_at(self, index: int) -> int | null throws never
   /// Returns `self` repeated `count` times. A negative `count` counts as 0.
   function repeat(self, count: int) -> string throws never
-  /// Replaces every occurrence of `search` with `replacement`.
-  function replace_all(self, search: string, replacement: string) -> string throws never
+  /// Replaces every occurrence of `search`.
+  function replace_all(self, search: string | baml.regex.Regex, replacement: string) -> string throws never
   /// Returns true if every character is numeric per Unicode: general categories
   function is_numeric(self) -> bool throws never
   /// Returns true if every character has the Unicode `Alphabetic` property.

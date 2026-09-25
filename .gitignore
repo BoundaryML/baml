@@ -176,6 +176,8 @@ third_party
 
 baml_repl_history.txt
 trace_events_debug.json
+**/.baml/btel/recordings/
+**/.baml/btel/cas/
 debug_events*
 
 result
@@ -199,6 +201,11 @@ baml_language/sdks/typescript/bridge_typescript/dist/*.node
 
 # Local developer-docs planning artifacts
 /DEVELOPER_DOCS_*.md
+
+# Pinned telemetry clock dependency (source and license only).
+!/baml_language/vendor/
+/baml_language/vendor/*
+!/baml_language/vendor/quanta/
 
 # JUnit reports for Trunk Flaky Tests uploads (nextest writes its own under
 # baml_language/target/, already ignored).

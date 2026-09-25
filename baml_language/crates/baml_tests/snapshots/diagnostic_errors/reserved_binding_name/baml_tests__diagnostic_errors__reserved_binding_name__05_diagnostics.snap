@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] E0174
+  [hir] E0176
 
   × `baml` cannot be used as a binding name: the compiler spells `baml` when it lowers syntax such as `spawn` and `$env`, and this binding would shadow it. A class or function may still be named
   │ `baml`.
@@ -12,7 +12,7 @@ source: crates/baml_tests/src/generated_tests.rs
    ·         ╰── reserved binding name
    ╰────
 
-  [hir] E0174
+  [hir] E0176
 
   × `baml` cannot be used as a binding name: the compiler spells `baml` when it lowers syntax such as `spawn` and `$env`, and this binding would shadow it. A class or function may still be named
   │ `baml`.
@@ -22,7 +22,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                      ╰── reserved binding name
     ╰────
 
-  [hir] E0174
+  [hir] E0176
 
   × `baml` cannot be used as a binding name: the compiler spells `baml` when it lowers syntax such as `spawn` and `$env`, and this binding would shadow it. A class or function may still be named
   │ `baml`.
@@ -32,7 +32,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                ╰── reserved binding name
     ╰────
 
-  [hir] E0174
+  [hir] E0176
 
   × `baml` cannot be used as a binding name: the compiler spells `baml` when it lowers syntax such as `spawn` and `$env`, and this binding would shadow it. A class or function may still be named
   │ `baml`.
@@ -42,7 +42,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                 ╰── reserved binding name
     ╰────
 
-  [hir] E0174
+  [hir] E0176
 
   × `baml` cannot be used as a binding name: the compiler spells `baml` when it lowers syntax such as `spawn` and `$env`, and this binding would shadow it. A class or function may still be named
   │ `baml`.
@@ -52,7 +52,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ·              ╰── reserved binding name
     ╰────
 
-  [hir] E0174
+  [hir] E0176
 
   × `baml` cannot be used as a binding name: the compiler spells `baml` when it lowers syntax such as `spawn` and `$env`, and this binding would shadow it. A class or function may still be named
   │ `baml`.

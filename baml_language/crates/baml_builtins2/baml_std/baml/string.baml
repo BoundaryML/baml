@@ -303,19 +303,32 @@ class String {
         $rust_function
     }
 
-    /// Replaces the first occurrence of `search` with `replacement`.
+    /// Replaces the first occurrence of `search`.
     ///
-    /// JavaScript's [`replace`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/replace)
-    /// given a string pattern. Python's `str.replace` replaces every occurrence
-    /// unless given a count, so this is `s.replace(search, replacement, 1)`.
+    /// `search` is either a `string`, matched literally, or a
+    /// `baml.regex.Regex`, matched as a pattern. `replacement` is a `string`.
+    ///
+    /// With a `baml.regex.Regex` search, a `string` replacement is a template:
+    /// `$0` is the whole match, `$1`..`$n` the numbered groups, `$name` and
+    /// `${name}` the named ones, and `$$` a literal `$`. A group that did not
+    /// participate — or does not exist — expands to nothing. `$1abc` names a
+    /// group `1abc`; write `${1}abc` to delimit group `1`.
+    ///
+    /// With a literal `string` search, a `string` replacement stays literal:
+    /// `$1` in existing code keeps meaning `$1`.
     ///
     /// # Examples
-    ///
-    /// ```baml
-    /// "hello world".replace("world", "universe")  // "hello universe"
     /// ```
-    function replace(self, search: string, replacement: string) -> string throws never {
-        $rust_function
+    /// "a.b".replace(".", "-")                                  // "a-b"
+    /// "a.b".replace(baml.regex.new("."), "-")              // "-.b"
+    /// "5 cm".replace(baml.regex.new("(\\d+) cm"), "${1}mm") // "5mm"
+    /// ```
+    function replace(
+        self,
+        search: string | root.regex.Regex,
+        replacement: string,
+    ) -> string throws never {
+        root.regex._replace(self._as_string(), search, replacement, false)
     }
 
     /// Returns the character index of the first occurrence of `search`, or `null`
@@ -424,17 +437,50 @@ class String {
         $rust_function
     }
 
-    /// Replaces every occurrence of `search` with `replacement`.
+    /// Replaces every occurrence of `search`.
     ///
-    /// Python's [`str.replace`](https://docs.python.org/3/library/stdtypes.html#str.replace),
-    /// JavaScript's [`replaceAll`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/replaceAll).
+    /// Same search and replacement rules as `replace`, applied to every
+    /// non-overlapping match instead of only the first. With a pattern that
+    /// can match the empty string the scan still terminates: it advances one
+    /// codepoint past an empty match.
     ///
     /// # Examples
-    ///
-    /// ```baml
-    /// "hello world".replace_all("l", "L")  // "heLLo worLd"
     /// ```
-    function replace_all(self, search: string, replacement: string) -> string throws never {
+    /// "a.b.c".replace_all(".", "-")                       // "a-b-c"
+    /// "a1b2".replace_all(baml.regex.new("\\d"), "#") // "a#b#"
+    /// ```
+    function replace_all(
+        self,
+        search: string | root.regex.Regex,
+        replacement: string,
+    ) -> string throws never {
+        root.regex._replace(self._as_string(), search, replacement, true)
+    }
+
+    /// (internal) `self` as the `string` primitive.
+    ///
+    /// Inside a `class String` body `self` is the class, not the primitive, so
+    /// it cannot be handed to an API declared over `string` — `baml.regex`'s
+    /// methods, here. A whole-length `slice` is the cheap way across:
+    /// `substring` hands back a view of the same bytes, where interpolation
+    /// would route through `string.from`'s override-honoring walker and copy.
+    function _as_string(self) -> string throws never {
+        self.slice(0, self.length())
+    }
+
+    /// (internal) `replace` restricted to a literal search and a literal replacement.
+    /// Called from `baml.regex._replace`, which owns the dispatch.
+    function _replace_literal(self, search: string, replacement: string) -> string throws never {
+        $rust_function
+    }
+
+    /// (internal) `replace_all` restricted to a literal search and a literal replacement.
+    /// Called from `baml.regex._replace`, which owns the dispatch.
+    function _replace_all_literal(
+        self,
+        search: string,
+        replacement: string,
+    ) -> string throws never {
         $rust_function
     }
 

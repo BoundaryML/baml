@@ -59,10 +59,7 @@ fn main() {
         // SAFETY: single-threaded before divan or the engine reads the env.
         unsafe { std::env::set_var("DIVAN_MAX_TIME", "3") };
     }
-    if std::env::var_os("BAML_PROFILE").is_none() {
-        // SAFETY: as above; profiling must not contaminate wall-clock results.
-        unsafe { std::env::set_var("BAML_PROFILE", "0") };
-    }
+
     divan::main();
 }
 

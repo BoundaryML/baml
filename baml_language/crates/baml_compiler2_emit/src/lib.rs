@@ -41,9 +41,9 @@ use baml_compiler2_mir::{
 };
 use baml_type::{ParamTy, RuntimeTy};
 use bex_vm_types::{
-    Bytecode, CaptureCategory, Class, ClassField, ConstValue, Enum, EnumVariant, Function,
-    FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, GlobalIndex, Instruction,
-    InterfaceBound, Object, ObjectIndex, ObjectPool, Program,
+    Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionKind,
+    FunctionMeta, FunctionOrigin, GlobalIndex, Instruction, InterfaceBound, Object, ObjectIndex,
+    ObjectPool, Program,
     unit::{
         CompilationUnit, LocalRef, ProgramImplRuleFrag, ProgramMethodImplFrag, ProgramPackageFrag,
         Symbol, SymbolKind,
@@ -4756,6 +4756,9 @@ fn emit_file_group<'db>(
                 real_local_count: 1, // the registry param
                 bytecode,
                 kind: FunctionKind::Bytecode,
+                telemetry_function_id: None,
+                telemetry_registration: bex_vm_types::FunctionRegistration::default(),
+                telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
                 // local_names is indexed by slot number:
                 //   slot 0 = fn ref (reserved, empty string placeholder)
                 //   slot 1 = first param "registry"
@@ -4775,8 +4778,7 @@ fn emit_file_group<'db>(
                 is_interface_body: false,
                 native_key: None,
                 body_meta: None,
-                capture: FunctionCaptureProps::disabled(),
-                function_id: 0, // assigned at engine init (interim provider)
+
                 runtime_package: bex_vm_types::HeapPtr::null(),
             };
 
@@ -6270,6 +6272,9 @@ fn builtin_emit_function(
         real_local_count: 0,
         bytecode: Bytecode::default(),
         kind,
+        telemetry_function_id: None,
+        telemetry_registration: bex_vm_types::FunctionRegistration::default(),
+        telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: Span::fake(),
@@ -6286,8 +6291,7 @@ fn builtin_emit_function(
         is_interface_body: false, // set from the item tree by attach_function_metadata
         native_key,
         body_meta: None,
-        capture: FunctionCaptureProps::disabled(),
-        function_id: 0, // assigned at engine init (interim provider)
+
         runtime_package: bex_vm_types::HeapPtr::null(),
     })
 }
@@ -6328,10 +6332,6 @@ fn attach_function_metadata<'db>(
         compiled_fn.body_meta = Some(FunctionMeta::Llm {
             client: client.to_string(),
         });
-        compiled_fn.capture = FunctionCaptureProps::disabled()
-            .with_auto(CaptureCategory::Input)
-            .with_auto(CaptureCategory::Output)
-            .with_auto(CaptureCategory::Error);
     }
 }
 
@@ -6604,6 +6604,9 @@ fn compile_init_function<'db>(
                     real_local_count: 0,
                     bytecode,
                     kind: FunctionKind::Bytecode,
+                    telemetry_function_id: None,
+                    telemetry_registration: bex_vm_types::FunctionRegistration::default(),
+                    telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
                     local_names: Vec::new(),
                     debug_locals: Vec::new(),
                     span: baml_base::Span::fake(),
@@ -6620,8 +6623,7 @@ fn compile_init_function<'db>(
                     is_interface_body: false,
                     native_key: None,
                     body_meta: None,
-                    capture: FunctionCaptureProps::disabled(),
-                    function_id: 0, // assigned at engine init (interim provider)
+
                     runtime_package: bex_vm_types::HeapPtr::null(),
                 }
             }
@@ -6681,6 +6683,9 @@ fn compile_init_function<'db>(
         real_local_count: 0,
         bytecode,
         kind: FunctionKind::Bytecode,
+        telemetry_function_id: None,
+        telemetry_registration: bex_vm_types::FunctionRegistration::default(),
+        telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: baml_base::Span::fake(),
@@ -6697,8 +6702,7 @@ fn compile_init_function<'db>(
         is_interface_body: false,
         native_key: None,
         body_meta: None,
-        capture: FunctionCaptureProps::disabled(),
-        function_id: 0, // assigned at engine init (interim provider)
+
         runtime_package: bex_vm_types::HeapPtr::null(),
     })
 }

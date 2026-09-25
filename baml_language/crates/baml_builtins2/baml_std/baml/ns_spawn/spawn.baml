@@ -104,7 +104,9 @@ class Plan<T, E> {
     ) -> Plan<Output, Error> throws never {
         let body = self.body;
         Plan<Output, Error> {
-            body: () -> Output throws Error { wrapper(body) },
+            body: () -> Output throws Error {
+                wrapper(body)
+            },
             name: self.name,
             limits: self.limits,
             cancel_tokens: self.cancel_tokens,

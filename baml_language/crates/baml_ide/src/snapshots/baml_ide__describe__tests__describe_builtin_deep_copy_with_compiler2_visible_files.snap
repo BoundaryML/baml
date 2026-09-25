@@ -2,7 +2,7 @@
 source: crates/baml_ide/src/describe.rs
 expression: "project.format_description(&descs[0])"
 ---
-function deep_copy  (baml.deep_copy)  core.baml:10
+function deep_copy  (baml.deep_copy)  core.baml:11
 /// Returns a deep copy of `value`: nested arrays, maps, and class instances
 /// are cloned recursively.
 ///

@@ -144,8 +144,22 @@ pub struct SpawnLaunch {
     pub root: bool,
 }
 
+/// The callable a launch `plan` (a `baml.spawn.Plan<T, E>` instance) runs.
+pub fn plan_body(vm: &BexVm, plan: Value) -> Result<HeapPtr, VmInternalError> {
+    let body = view::spawn::Plan {
+        instance: vm.as_instance(&plan)?,
+    }
+    .body();
+    body.as_object_ptr()
+        .ok_or_else(|| VmInternalError::TypeError {
+            expected: ObjectType::Closure.into(),
+            got: vm.type_of(&body),
+        })
+}
+
 /// Read the launch `plan` (a `baml.spawn.Plan<T, E>` instance) describes.
 pub fn spawn_launch(vm: &BexVm, plan: Value) -> Result<SpawnLaunch, VmInternalError> {
+    let body = plan_body(vm, plan)?;
     let instance = vm.as_instance(&plan)?;
     let [returns, throws] = &*instance.class_type_args else {
         return Err(VmInternalError::InvalidArgumentCount {
@@ -154,13 +168,6 @@ pub fn spawn_launch(vm: &BexVm, plan: Value) -> Result<SpawnLaunch, VmInternalEr
         });
     };
     let plan = view::spawn::Plan { instance };
-    let body = plan.body();
-    let body = body
-        .as_object_ptr()
-        .ok_or_else(|| VmInternalError::TypeError {
-            expected: ObjectType::Closure.into(),
-            got: vm.type_of(&body),
-        })?;
     let limits = plan
         .limits(vm)
         .iter()

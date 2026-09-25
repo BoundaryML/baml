@@ -1,0 +1,18 @@
+[package]
+name = "btel_snapshot"
+version = { workspace = true }
+publish = false
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_type = { workspace = true }
+bex_str = { workspace = true }
+btel_settings = { workspace = true }
+borsh = { workspace = true }
+num-bigint = { workspace = true }
+xxhash-rust = { workspace = true }

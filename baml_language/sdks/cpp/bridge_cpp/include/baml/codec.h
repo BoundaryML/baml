@@ -168,7 +168,11 @@ inline bigint_radix_digits<Base> bigint_radix_slice(
     const bigint_radix_digits<Base>& value, std::size_t begin,
     std::size_t end) {
   if (begin >= value.size()) return {};
-  end = std::min(end, value.size());
+  // `(std::min)` and `(std::max)`, here and below: <windows.h> defines `min`
+  // and `max` as function-like macros, and the loader header includes it
+  // before this one. The parentheses keep the macro from swallowing the call
+  // in every Windows consumer's build.
+  end = (std::min)(end, value.size());
   bigint_radix_digits<Base> result(value.begin() + begin, value.begin() + end);
   bigint_radix_normalize<Base>(result);
   return result;
@@ -200,11 +204,11 @@ inline bigint_radix_digits<Base> bigint_radix_multiply(
     const bigint_radix_digits<Base>& rhs) {
   constexpr std::size_t kKaratsubaThreshold = 32;
   if (lhs.empty() || rhs.empty()) return {};
-  if (std::min(lhs.size(), rhs.size()) <= kKaratsubaThreshold) {
+  if ((std::min)(lhs.size(), rhs.size()) <= kKaratsubaThreshold) {
     return bigint_radix_multiply_schoolbook<Base>(lhs, rhs);
   }
 
-  const std::size_t split = std::max(lhs.size(), rhs.size()) / 2;
+  const std::size_t split = (std::max)(lhs.size(), rhs.size()) / 2;
   const bigint_radix_digits<Base> lhs_low =
       bigint_radix_slice<Base>(lhs, 0, split);
   const bigint_radix_digits<Base> lhs_high =
