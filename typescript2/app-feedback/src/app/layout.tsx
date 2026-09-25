@@ -1,17 +1,22 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import Link from "next/link";
-import Script from "next/script";
-import "./globals.css";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { THEME_STORAGE_KEY } from "@/lib/theme";
+import type { Metadata } from 'next';
+import { Geist, Geist_Mono } from 'next/font/google';
+import Link from 'next/link';
+import Script from 'next/script';
+import { currentUser } from '@/lib/auth';
+import './globals.css';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { THEME_STORAGE_KEY } from '@/lib/theme';
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+const geistSans = Geist({ subsets: ['latin'], variable: '--font-geist-sans' });
+const geistMono = Geist_Mono({
+  subsets: ['latin'],
+  variable: '--font-geist-mono',
+});
 
 export const metadata: Metadata = {
-  title: "BAML Feedback",
-  description: "Issues from user feedback and how far the pipeline has taken each one",
+  description:
+    'Issues from user feedback and how far the pipeline has taken each one',
+  title: 'BAML Feedback',
 };
 
 const themeInitScript = `
@@ -30,26 +35,39 @@ const themeInitScript = `
 })();
 `;
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
+  const user = await currentUser();
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
         <Script id="theme-init" strategy="beforeInteractive">
           {themeInitScript}
         </Script>
         <header className="border-b">
           <div className="max-w-[1400px] mx-auto px-4 h-14 flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-3">
-              <span className="font-mono text-xs px-1.5 py-0.5 rounded border bg-muted">atb2</span>
+            <Link className="flex items-center gap-3" href="/">
+              <span className="font-mono text-xs px-1.5 py-0.5 rounded border bg-muted">
+                atb2
+              </span>
               <span className="font-semibold">BAML Feedback</span>
             </Link>
             <nav className="flex items-center gap-5 text-sm text-muted-foreground">
-              <Link href="/" className="text-foreground">
+              <Link className="text-foreground" href="/">
                 Issues
               </Link>
-              <span className="cursor-default">Feedback</span>
-              <span className="cursor-default">Evals</span>
-              <span className="text-xs border rounded px-1.5 py-0.5">mock</span>
+              <Link href="/feedback">Reports</Link>
+              <Link href="/intuition">Intuition</Link>
+              <Link href="/runs">Runs</Link>
+              <Link href="/agents">Agents</Link>
+              {user ? (
+                <span className="text-foreground">@{user}</span>
+              ) : (
+                <a href="/api/auth/github">Sign in</a>
+              )}
             </nav>
           </div>
         </header>

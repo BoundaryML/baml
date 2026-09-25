@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+# cgroup v2 requires the controller to leave the parent before child limits are enabled.
+if [ -f /sys/fs/cgroup/cgroup.controllers ]; then
+  mkdir -p /sys/fs/cgroup/miniatb-controller
+  printf '%s\n' "$$" > /sys/fs/cgroup/miniatb-controller/cgroup.procs
+  printf '%s\n' '+memory +pids +cpu' > /sys/fs/cgroup/cgroup.subtree_control
+fi
+mkdir -p "${MINIATB_DATA:-/data/miniatb}"
+exec flock --nonblock --close "${MINIATB_DATA:-/data/miniatb}/receiver.lock" \
+  /opt/baml/bin/baml-cli run --directory /app --agent-skill-check off serve

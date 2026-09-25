@@ -1,30 +1,52 @@
-import { IssueList } from "@/components/issues/issue-list";
-import { StatTiles } from "@/components/issues/stat-tiles";
-import { dataSource, loadIssues, REVALIDATE_S } from "@/lib/db";
+import Link from 'next/link';
+import { IssueList } from '@/components/issues/issue-list';
+import { LiveUpdates } from '@/components/issues/live-updates';
+import { currentUser } from '@/lib/auth';
+import { loadIssues, loadPendingReports } from '@/lib/db';
 
-// On demand, never prerendered at build: the data source is decided by the
-// server's environment. revalidate = 0 keeps the route dynamic while the
-// fetch-level cache in db.ts (REVALIDATE_S) still bounds the reads.
 export const revalidate = 0;
-
-export default async function Home() {
-  const issues = await loadIssues();
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
+  const [issues, user, query] = await Promise.all([
+    loadIssues(),
+    currentUser(),
+    searchParams,
+  ]);
+  const mine = Boolean(user) && query.view !== 'all';
+  const linked = new Set(
+    issues.flatMap((issue) =>
+      issue.feedback_ids.map((id) => `${issue.dataset ?? 'live'}:${id}`),
+    ),
+  );
+  const reports = mine
+    ? []
+    : (await loadPendingReports()).filter(
+        (report) => !linked.has(`${report.dataset}:${report.id}`),
+      );
+  const shown = mine
+    ? issues.filter(
+        (issue) =>
+          issue.shepherd?.replace(/^@/, '').toLowerCase() ===
+          user!.toLowerCase(),
+      )
+    : issues;
   return (
     <main className="max-w-[1400px] mx-auto px-4 py-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Issues</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Every issue triaged from user feedback, and how far the pipeline has taken it: triage,
-          routing, difficulty, then the agent&apos;s design pass, fix pass, the gate and the PR.
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {dataSource === "supabase"
-            ? `Live from the atb2 store, refreshed every ${REVALIDATE_S}s.`
-            : "Mock data: set FEEDBACK_SUPABASE_URL and FEEDBACK_SUPABASE_ANON_KEY to read the store."}
-        </p>
+      <LiveUpdates />
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">
+          {mine ? 'Your issues' : 'All Confirmed Feedback Requests'}
+        </h1>
+        {user && (
+          <Link className="text-sm underline" href={mine ? '/?view=all' : '/'}>
+            {mine ? 'All Confirmed Feedback Requests' : 'Your issues'}
+          </Link>
+        )}
       </div>
-      <StatTiles issues={issues} />
-      <IssueList issues={issues} />
+      <IssueList compact={mine} issues={shown} pendingReports={reports} />
     </main>
   );
 }

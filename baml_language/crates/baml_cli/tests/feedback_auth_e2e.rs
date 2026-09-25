@@ -622,6 +622,30 @@ fn status_list_view_read_the_local_store() {
     assert_eq!(records.len(), 1, "{records:?}");
     let id = records[0]["id"].as_str().unwrap().to_string();
     assert_eq!(records[0]["status"], "anonymous", "{records:?}");
+    assert_eq!(records[0]["resolution"], "triaging", "{records:?}");
+    assert_eq!(records[0]["issues"], serde_json::json!([]));
+
+    // A cached published fix augments delivery state and survives an offline lookup.
+    let report_id = records[0]["event_uuid"].as_str().unwrap();
+    std::fs::write(
+        home.path().join("feedback-resolutions.json"),
+        serde_json::json!({"reports": {report_id: [{"issue_id": "ISSUE-baml_id_1_fixture",
+            "state": "shipped", "fixed_in": "9999.0.0"}]}})
+        .to_string(),
+    )
+    .unwrap();
+    let (ok, out) = run_baml(
+        home.path(),
+        &base,
+        &["feedback", "view", &id, "--json"],
+        None,
+    );
+    assert!(ok, "{out}");
+    let json_span = &out[out.find('{').unwrap()..=out.rfind('}').unwrap()];
+    let record: Value = serde_json::from_str(json_span).unwrap();
+    assert_eq!(record["status"], "anonymous");
+    assert_eq!(record["resolution"], "fixed");
+    assert_eq!(record["issues"][0]["fixed_in"], "9999.0.0");
 
     // list --status filters.
     let (ok, out) = run_baml(

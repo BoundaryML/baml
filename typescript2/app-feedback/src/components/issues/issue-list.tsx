@@ -1,38 +1,59 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { ArrowUpDown, Columns3, LayoutList, Search } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import type { Difficulty, Issue, StatusState, Subsystem } from "@/lib/types";
-import { progress, relativeTime, stageInfo } from "@/lib/pipeline";
-import { DifficultyBadge, StatusBadge, SubsystemBadge } from "./issue-status";
-import { PipelineStrip } from "./pipeline-strip";
+import { ArrowUpDown, Columns3, LayoutList, Search } from 'lucide-react';
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import type { PendingReport } from '@/lib/db';
+import { boardPhase, progress, relativeTime, stageInfo } from '@/lib/pipeline';
+import type { Difficulty, Issue, StatusState, Subsystem } from '@/lib/types';
+import {
+  DifficultyBadge,
+  KindBadge,
+  StatusBadge,
+  SubsystemBadge,
+} from './issue-status';
+import { PipelineStrip } from './pipeline-strip';
+import { StatTiles } from './stat-tiles';
 
-type ViewMode = "list" | "board";
+type ViewMode = 'list' | 'board';
 
-const STATUS_OPTIONS: { value: StatusState | "all"; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "open", label: "Open" },
-  { value: "in_progress", label: "In progress" },
-  { value: "merged", label: "Merged" },
-  { value: "shipped", label: "Shipped" },
-  { value: "deferred", label: "Deferred" },
-  { value: "rejected", label: "Rejected" },
+const STATUS_OPTIONS: { value: StatusState | 'all'; label: string }[] = [
+  { label: 'All', value: 'all' },
+  { label: 'Open', value: 'open' },
+  { label: 'In progress', value: 'in_progress' },
+  { label: 'Merged', value: 'merged' },
+  { label: 'Shipped', value: 'shipped' },
+  { label: 'Deferred', value: 'deferred' },
+  { label: 'Rejected', value: 'rejected' },
 ];
 
-const SUBSYSTEMS: Subsystem[] = ["Syntax", "Compiler", "Runtime", "StdLibrary", "Tooling", "Unknown"];
-const DIFFICULTIES: Difficulty[] = ["Trivial", "Easy", "Medium", "Hard"];
+const SUBSYSTEMS: Subsystem[] = [
+  'Syntax',
+  'Compiler',
+  'Runtime',
+  'StdLibrary',
+  'Tooling',
+  'Unknown',
+];
+const DIFFICULTIES: Difficulty[] = ['Trivial', 'Easy', 'Medium', 'Hard'];
 
-const BOARD_COLUMNS: { state: StatusState; label: string; color: string }[] = [
-  { state: "open", label: "Open", color: "bg-blue-500" },
-  { state: "in_progress", label: "In progress", color: "bg-amber-500" },
-  { state: "merged", label: "Merged", color: "bg-purple-500" },
-  { state: "shipped", label: "Shipped", color: "bg-green-600" },
-  { state: "deferred", label: "Deferred", color: "bg-slate-500" },
-  { state: "rejected", label: "Rejected", color: "bg-red-500" },
+const BOARD_COLUMNS = [
+  { color: 'bg-slate-400', label: 'Ingested', state: 'ingested' },
+  { color: 'bg-sky-500', label: 'Enriching', state: 'enriching' },
+  { color: 'bg-cyan-500', label: 'Investigation', state: 'investigating' },
+  { color: 'bg-blue-500', label: 'Routing & difficulty', state: 'organizing' },
+  { color: 'bg-violet-500', label: 'Ready for fix', state: 'ready' },
+  { color: 'bg-amber-500', label: 'Design', state: 'design' },
+  { color: 'bg-orange-500', label: 'Fixing', state: 'fix' },
+  { color: 'bg-emerald-500', label: 'PR opened', state: 'pr' },
+  { color: 'bg-rose-500', label: 'Needs attention', state: 'attention' },
+  { color: 'bg-purple-500', label: 'Merged', state: 'merged' },
+  { color: 'bg-green-600', label: 'Shipped', state: 'shipped' },
+  { color: 'bg-slate-500', label: 'Deferred', state: 'deferred' },
+  { color: 'bg-red-500', label: 'Rejected', state: 'rejected' },
 ];
 
 /** The clock the relative times are measured against; ticks every minute, the
@@ -49,22 +70,27 @@ function useNow() {
 
 function IssueRow({ issue, now }: { issue: Issue; now: number }) {
   const stages = stageInfo(issue);
-  const current = stages.find((s) => s.state === "running") ?? stages.find((s) => s.state === "failed");
+  const current =
+    stages.find((s) => s.state === 'running') ??
+    stages.find((s) => s.state === 'failed');
   return (
     <Link
-      href={`/issues/${issue.id}`}
       className="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_180px_150px] items-center gap-4 px-4 py-3 border-b last:border-b-0 hover:bg-accent/50 transition-colors"
+      href={`/issues/${issue.id}`}
     >
       <div className="min-w-0">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="font-mono text-xs text-muted-foreground shrink-0">{issue.id}</span>
+          <span className="font-mono text-xs text-muted-foreground shrink-0">
+            {issue.id}
+          </span>
           <span className="font-medium truncate">{issue.title}</span>
         </div>
         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {issue.kind === 'feature' && <KindBadge kind="feature" />}
           <SubsystemBadge subsystem={issue.subsystem} />
           <DifficultyBadge difficulty={issue.difficulty} />
-          {issue.dataset === "eval" && <EvalBadge />}
-          <span>{issue.shepherd ? `@${issue.shepherd}` : "unassigned"}</span>
+          {issue.dataset === 'eval' && <EvalBadge />}
+          <span>{issue.shepherd ? `@${issue.shepherd}` : 'unassigned'}</span>
           <span>·</span>
           <span>v{issue.version}</span>
           {now > 0 && (
@@ -78,7 +104,9 @@ function IssueRow({ issue, now }: { issue: Issue; now: number }) {
       <div className="hidden sm:block">
         <PipelineStrip stages={stages} />
         <div className="mt-1 text-[11px] text-muted-foreground truncate">
-          {current ? `${current.stage}: ${current.detail}` : `${Math.round(progress(issue) * 100)}% through the pipeline`}
+          {current
+            ? `${current.stage}: ${current.detail}`
+            : `${Math.round(progress(issue) * 100)}% through the pipeline`}
         </div>
       </div>
       <div className="justify-self-end">
@@ -91,14 +119,17 @@ function IssueRow({ issue, now }: { issue: Issue; now: number }) {
 function BoardCard({ issue }: { issue: Issue }) {
   return (
     <Link
-      href={`/issues/${issue.id}`}
       className="block rounded-md border bg-card p-3 hover:bg-accent/50 transition-colors"
+      href={`/issues/${issue.id}`}
     >
       <div className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
         {issue.id}
-        {issue.dataset === "eval" && <EvalBadge />}
+        {issue.kind === 'feature' && <KindBadge kind="feature" />}
+        {issue.dataset === 'eval' && <EvalBadge />}
       </div>
-      <div className="mt-0.5 text-sm font-medium leading-snug line-clamp-2">{issue.title}</div>
+      <div className="mt-0.5 text-sm font-medium leading-snug line-clamp-2">
+        {issue.title}
+      </div>
       <div className="mt-2 flex items-center justify-between gap-2">
         <PipelineStrip stages={stageInfo(issue)} />
         <DifficultyBadge difficulty={issue.difficulty} />
@@ -107,50 +138,72 @@ function BoardCard({ issue }: { issue: Issue }) {
   );
 }
 
-export function IssueList({ issues }: { issues: Issue[] }) {
+export function IssueList({
+  issues,
+  pendingReports = [],
+  compact = false,
+}: {
+  issues: Issue[];
+  pendingReports?: PendingReport[];
+  compact?: boolean;
+}) {
   const now = useNow();
-  const [status, setStatus] = useState<StatusState | "all">("all");
-  const [subsystem, setSubsystem] = useState<Subsystem | "all">("all");
-  const [difficulty, setDifficulty] = useState<Difficulty | "all">("all");
-  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<StatusState | 'all'>('all');
+  const [subsystem, setSubsystem] = useState<Subsystem | 'all'>('all');
+  const [difficulty, setDifficulty] = useState<Difficulty | 'all'>('all');
+  const [query, setQuery] = useState('');
   const [oldestFirst, setOldestFirst] = useState(false);
-  const [view, setView] = useState<ViewMode>("list");
+  const [view, setView] = useState<ViewMode>('list');
   const [showEval, setShowEval] = useState(false);
-  const evalCount = useMemo(() => issues.filter((i) => i.dataset === "eval").length, [issues]);
+  const evalCount = useMemo(
+    () =>
+      issues.filter((i) => i.dataset === 'eval').length +
+      pendingReports.filter((r) => r.dataset === 'eval').length,
+    [issues, pendingReports],
+  );
+
+  const datasetIssues = useMemo(
+    () => issues.filter((i) => showEval || i.dataset !== 'eval'),
+    [issues, showEval],
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return issues
-      .filter((i) => showEval || i.dataset !== "eval")
-      .filter((i) => view === "board" || status === "all" || i.status.state === status)
-      .filter((i) => subsystem === "all" || i.subsystem === subsystem)
-      .filter((i) => difficulty === "all" || i.difficulty === difficulty)
+    return datasetIssues
+      .filter(
+        (i) =>
+          view === 'board' || status === 'all' || i.status.state === status,
+      )
+      .filter((i) => subsystem === 'all' || i.subsystem === subsystem)
+      .filter((i) => difficulty === 'all' || i.difficulty === difficulty)
       .filter(
         (i) =>
           !q ||
           i.title.toLowerCase().includes(q) ||
           i.id.toLowerCase().includes(q) ||
-          (i.shepherd ?? "").toLowerCase().includes(q),
+          (i.kind === 'feature' && 'feature request'.includes(q)) ||
+          (i.shepherd ?? '').toLowerCase().includes(q),
       )
       .sort((a, b) =>
         oldestFirst
           ? a.updated_at.localeCompare(b.updated_at)
           : b.updated_at.localeCompare(a.updated_at),
       );
-  }, [issues, status, subsystem, difficulty, query, oldestFirst, view, showEval]);
+  }, [datasetIssues, status, subsystem, difficulty, query, oldestFirst, view]);
 
   return (
     <div className="space-y-4">
+      {!compact && <StatTiles issues={datasetIssues} />}
       <div className="flex flex-col gap-3">
         <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
-          {view === "list" ? (
+          {view === 'list' ? (
             <div className="flex flex-wrap gap-1.5">
               {STATUS_OPTIONS.map((o) => (
                 <Badge
-                  key={o.value}
-                  variant={status === o.value ? "default" : "outline"}
                   className="cursor-pointer select-none"
+                  key={o.value}
                   onClick={() => setStatus(o.value)}
+                  variant={status === o.value ? 'default' : 'outline'}
                 >
                   {o.label}
                 </Badge>
@@ -163,32 +216,37 @@ export function IssueList({ issues }: { issues: Issue[] }) {
             <div className="relative flex-1 lg:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
+                className="pl-9"
+                onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search issues, ids, shepherds"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="pl-9"
               />
             </div>
-            <Button variant="outline" size="sm" onClick={() => setOldestFirst((v) => !v)} className="shrink-0">
+            <Button
+              className="shrink-0"
+              onClick={() => setOldestFirst((v) => !v)}
+              size="sm"
+              variant="outline"
+            >
               <ArrowUpDown className="h-4 w-4" />
-              {oldestFirst ? "Oldest" : "Newest"}
+              {oldestFirst ? 'Oldest' : 'Newest'}
             </Button>
             <div className="flex border rounded-md">
               <Button
-                variant={view === "list" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setView("list")}
-                className="rounded-r-none"
                 aria-label="List view"
+                className="rounded-r-none"
+                onClick={() => setView('list')}
+                size="sm"
+                variant={view === 'list' ? 'default' : 'ghost'}
               >
                 <LayoutList className="h-4 w-4" />
               </Button>
               <Button
-                variant={view === "board" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setView("board")}
-                className="rounded-l-none"
                 aria-label="Board view"
+                className="rounded-l-none"
+                onClick={() => setView('board')}
+                size="sm"
+                variant={view === 'board' ? 'default' : 'ghost'}
               >
                 <Columns3 className="h-4 w-4" />
               </Button>
@@ -196,13 +254,18 @@ export function IssueList({ issues }: { issues: Issue[] }) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
-          <label className="flex items-center gap-1.5" htmlFor="filter-subsystem">
+          <label
+            className="flex items-center gap-1.5"
+            htmlFor="filter-subsystem"
+          >
             subsystem
             <select
-              id="filter-subsystem"
-              value={subsystem}
-              onChange={(e) => setSubsystem(e.target.value as Subsystem | "all")}
               className="rounded border bg-background px-1.5 py-0.5 text-xs text-foreground"
+              id="filter-subsystem"
+              onChange={(e) =>
+                setSubsystem(e.target.value as Subsystem | 'all')
+              }
+              value={subsystem}
             >
               <option value="all">all</option>
               {SUBSYSTEMS.map((s) => (
@@ -212,13 +275,18 @@ export function IssueList({ issues }: { issues: Issue[] }) {
               ))}
             </select>
           </label>
-          <label className="flex items-center gap-1.5" htmlFor="filter-difficulty">
+          <label
+            className="flex items-center gap-1.5"
+            htmlFor="filter-difficulty"
+          >
             difficulty
             <select
-              id="filter-difficulty"
-              value={difficulty}
-              onChange={(e) => setDifficulty(e.target.value as Difficulty | "all")}
               className="rounded border bg-background px-1.5 py-0.5 text-xs text-foreground"
+              id="filter-difficulty"
+              onChange={(e) =>
+                setDifficulty(e.target.value as Difficulty | 'all')
+              }
+              value={difficulty}
             >
               <option value="all">all</option>
               {DIFFICULTIES.map((d) => (
@@ -231,12 +299,12 @@ export function IssueList({ issues }: { issues: Issue[] }) {
           {evalCount > 0 && (
             <label className="flex items-center gap-1.5 cursor-pointer select-none">
               <input
-                type="checkbox"
                 checked={showEval}
-                onChange={(e) => setShowEval(e.target.checked)}
                 className="accent-foreground"
+                onChange={(e) => setShowEval(e.target.checked)}
+                type="checkbox"
               />
-              show {evalCount} eval {evalCount === 1 ? "row" : "rows"}
+              show {evalCount} eval {evalCount === 1 ? 'row' : 'rows'}
             </label>
           )}
           <span className="ml-auto flex items-center gap-3">
@@ -248,7 +316,7 @@ export function IssueList({ issues }: { issues: Issue[] }) {
         </div>
       </div>
 
-      {view === "list" ? (
+      {view === 'list' ? (
         filtered.length > 0 ? (
           <div className="rounded-lg border bg-card">
             <div className="hidden sm:grid grid-cols-[minmax(0,1fr)_180px_150px] gap-4 px-4 py-2 border-b text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -257,27 +325,54 @@ export function IssueList({ issues }: { issues: Issue[] }) {
               <span className="justify-self-end">Status</span>
             </div>
             {filtered.map((i) => (
-              <IssueRow key={i.id} issue={i} now={now} />
+              <IssueRow issue={i} key={i.id} now={now} />
             ))}
           </div>
         ) : (
-          <div className="text-center py-12 text-muted-foreground">No issues match.</div>
+          <div className="text-center py-12 text-muted-foreground">
+            No issues match.
+          </div>
         )
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className="grid grid-flow-col auto-cols-[260px] gap-4 overflow-x-auto pb-4">
           {BOARD_COLUMNS.map((col) => {
-            const items = filtered.filter((i) => i.status.state === col.state);
+            const items = filtered.filter((i) => boardPhase(i) === col.state);
+            const reports = pendingReports.filter(
+              (r) =>
+                r.phase === col.state &&
+                (showEval || r.dataset !== 'eval') &&
+                subsystem === 'all' &&
+                difficulty === 'all' &&
+                (!query.trim() ||
+                  `${r.title} ${r.id}`
+                    .toLowerCase()
+                    .includes(query.trim().toLowerCase())),
+            );
             return (
-              <div key={col.state} className="flex flex-col min-h-[160px]">
+              <div className="flex flex-col min-h-[160px]" key={col.state}>
                 <div className="flex items-center gap-2 mb-2 pb-2 border-b">
                   <div className={`w-2.5 h-2.5 rounded-full ${col.color}`} />
                   <h3 className="font-medium text-sm">{col.label}</h3>
-                  <span className="text-xs text-muted-foreground ml-auto tabular-nums">{items.length}</span>
+                  <span className="text-xs text-muted-foreground ml-auto tabular-nums">
+                    {items.length + reports.length}
+                  </span>
                 </div>
                 <div className="flex flex-col gap-2 flex-1">
+                  {reports.map((report) => (
+                    <Link
+                      className="block rounded-md border bg-card p-3 text-sm hover:bg-accent/50"
+                      href={`/feedback/${encodeURIComponent(report.id)}`}
+                      key={report.id}
+                    >
+                      <span className="text-xs text-muted-foreground">
+                        Report{report.dataset === 'eval' ? ' · eval' : ''}
+                      </span>
+                      <p className="mt-1 font-medium">{report.title}</p>
+                    </Link>
+                  ))}
                   {items.length > 0 ? (
-                    items.map((i) => <BoardCard key={i.id} issue={i} />)
-                  ) : (
+                    items.map((i) => <BoardCard issue={i} key={i.id} />)
+                  ) : reports.length ? null : (
                     <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground bg-muted/30 rounded-md">
                       none
                     </div>
@@ -295,7 +390,11 @@ export function IssueList({ issues }: { issues: Issue[] }) {
 /** Rows the evals wrote (dataset = eval): never a real user's report. */
 function EvalBadge() {
   return (
-    <Badge variant="outline" className="border-dashed text-[10px] uppercase tracking-wide" title="Written by the evals, not a real report">
+    <Badge
+      className="border-dashed text-[10px] uppercase tracking-wide"
+      title="Written by the evals, not a real report"
+      variant="outline"
+    >
       eval
     </Badge>
   );

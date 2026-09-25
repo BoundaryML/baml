@@ -1,37 +1,16 @@
-# app-feedback
+# Feedback website
 
-A view over the atb2 feedback pipeline (`tools/atb2`): every issue triaged from
-user feedback, and how far the pipeline has taken each one.
+The issue and report interface for MiniATB, with views for historical ATB2 records.
 
-## Data
+- `/`: your issues or all confirmed feedback requests, with filters and a board.
+- `/issues/[id]`: short description, investigation with source citations, native
+  repros, PromptFiddle links, feedback side panel, comments and decision timeline.
+- `/feedback`: original reports and their ticket or recorded no-issue reason.
+- `/agents`: authenticated live transcripts with terminal-style tool output.
+- `/runs`, `/prs`, `/proposals`: existing ATB2 run and PR records. MiniATB does not
+  yet implement every producer for these historical pages.
 
-The pages read the atb2 store in Supabase (`tools/atb2/db/schema.sql`) through
-PostgREST with the anon key, which sees issues, runs and events but never a
-reporter's identity. `src/lib/db.ts` is the whole data layer; the view
-`issues_with_outcome` gives each issue its latest `handle_issue` run.
-
-```sh
-FEEDBACK_SUPABASE_URL=https://igraichzcidsylvzkjlc.supabase.co   # as in Infisical (boundary-tools)
-FEEDBACK_SUPABASE_ANON_KEY=...                                     # the anon key, never the service key
-```
-
-Without those two variables the pages render `src/lib/mock-data.ts` and say
-so under the title. Results are cached for 30 seconds.
-
-The types in `src/lib/types.ts` mirror `models.baml` (`Issue`, `IssueStatus`)
-and `handle_issue.baml` (`HandleOutcome`); the BAML side owns the shape.
-
-## Pages
-
-- `/` all issues. Stat tiles, status / subsystem / difficulty filters, search,
-  list and board views. Every row carries a pipeline strip: one segment per
-  stage (triaged, organized, gauged, design pass, fix pass, gate, PR), colored
-  done / running / failed / pending.
-- `/issues/[id]` one issue: description, repros, resolution plan, design doc,
-  comments, the pipeline timeline, and the last `handle_issue` run (outcome,
-  turns, time, gate steps, PR).
-
-## Run
+## Local development
 
 ```sh
 cd typescript2
@@ -39,5 +18,25 @@ pnpm install
 pnpm --filter app-feedback dev
 ```
 
-Built on the same stack and theme tokens as `app-beps` (Next 15, Tailwind v4,
-shadcn primitives) so the two read as one family of tools.
+Copy `.env.example` to a local environment file and fill in server-side settings.
+The Supabase **anon** key reads existing public views. Do not give this app the
+Supabase service-role key. GitHub OAuth verifies BoundaryML organization membership
+before issuing a signed, expiring session cookie. Register the callback at
+`<ATB2_UI_URL>/api/auth/github/callback`.
+
+Comments, Linear export and transcripts use authenticated, HMAC-signed requests to
+`ATB2_RUNNER_URL`, defaulting to `https://atb2-runner.fly.dev`. The shared
+`ATB2_UI_RUNNER_SECRET` must match the runner and contain at least 32 characters.
+`ATB2_UI_SESSION_SECRET` is a separate key of at least 32 characters. Mutations
+check the same-origin request and the runner scopes access to its configured
+dataset. There is no website approval gate.
+
+## Checks
+
+```sh
+bun test ./tests
+bun run typecheck
+bun run build
+```
+
+See `tools/miniatb/README.md` for the implemented pipeline and remaining parity gaps.
