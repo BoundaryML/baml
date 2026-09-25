@@ -30,7 +30,7 @@ use std::{
     path::PathBuf,
 };
 
-use baml_codegen_types::{Name, SymbolPool, public_interface_tokens};
+use baml_codegen_types::{Name, SymbolPool, public_interface_tokens, without_builtin_functions};
 pub use baml_codegen_types::{NamingConvention, OutputType};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 
@@ -116,6 +116,8 @@ pub fn to_source_code_with_metadata(
         "sdkgen_typescript only supports naming_convention = PreserveCase \
          (got {naming_convention})",
     );
+    let filtered_pool = without_builtin_functions(pool);
+    let pool = &filtered_pool;
     let mut out: HashMap<PathBuf, String> = HashMap::new();
     let interface_tokens = public_interface_tokens(pool);
 
@@ -348,6 +350,55 @@ mod tests {
             NamingConvention::PreserveCase,
             GeneratorConfig::new("@boundaryml/baml-bridge"),
         )
+    }
+
+    #[test]
+    fn builtin_functions_are_omitted_but_types_and_user_functions_remain() {
+        let mut pool = SymbolPool::new();
+        for package in ["baml", "ai", "reflect", "openai"] {
+            let builtin_source = format!("<builtin>/{package}/sample.baml");
+            let builtin_function = |bare: &str, span| {
+                let Symbol::Function(mut function) = func_sym(span) else {
+                    unreachable!();
+                };
+                function.name = BaseName::new(bare);
+                function.origin.source_file_path = builtin_source.clone();
+                function
+            };
+            let class_name = name(package, &["sample"], "KeptType");
+            let mut builtin_class = class_sym(&class_name, 0);
+            let Symbol::Class(class) = &mut builtin_class else {
+                unreachable!();
+            };
+            class.origin.source_file_path = builtin_source.clone();
+            class
+                .static_methods
+                .push(builtin_function("suppressed_static", 1));
+            class
+                .instance_methods
+                .push(builtin_function("suppressed_method", 2));
+            pool.insert(class_name, builtin_class);
+            pool.insert(
+                name(package, &["sample"], "suppressed_function"),
+                Symbol::Function(builtin_function("suppressed_function", 3)),
+            );
+        }
+        pool.insert(name("user", &["sample"], "extract_resume"), func_sym(0));
+
+        let out = emit_sdk(&pool);
+        for leaf_path in [
+            "baml/sample",
+            "ai/sample",
+            "reflect/sample",
+            "vendor/openai/sample",
+        ] {
+            let leaf = &out[&PathBuf::from(format!("{leaf_path}/index.ts"))];
+            assert!(leaf.contains("export class KeptType"));
+            assert!(!leaf.contains("suppressed_function"));
+            assert!(!leaf.contains("suppressed_static"));
+            assert!(!leaf.contains("suppressed_method"));
+        }
+        assert!(out[&PathBuf::from("sample/index.ts")].contains("export const extract_resume"));
     }
 
     #[test]
