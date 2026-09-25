@@ -465,6 +465,22 @@ impl Function {
 }
 
 impl Function {
+    /// Names for the argument slots telemetry captures: `arity` slots, with a
+    /// method's `self` receiver first. Only declaration names are used; `None`
+    /// when they do not name every slot, e.g. synthesized bodies.
+    pub fn telemetry_argument_layout(&self) -> Option<btel_types::ArgumentLayout> {
+        (self.param_names.len() == self.arity).then(|| btel_types::ArgumentLayout {
+            slots: self
+                .param_names
+                .iter()
+                .map(|name| btel_types::ArgumentSlot {
+                    receiver: name == "self",
+                    name: Some(name.clone()),
+                })
+                .collect(),
+        })
+    }
+
     /// Copy metadata while the registered function is live and protected from GC.
     /// No runtime heap references escape in the returned value.
     pub fn runtime_metadata(&self) -> Option<btel_types::FunctionMetadata> {
@@ -505,6 +521,34 @@ impl Function {
             definition_key: Some(btel_types::DefinitionKey(format!("function:{fqn}"))),
             package_name,
             namespace,
+            argument_layout: self.telemetry_argument_layout(),
+            source_map: self.telemetry_source_map(),
+        })
+    }
+
+    /// The executed (compact) code's line table, in the byte-offset PCs that
+    /// call paths and error evidence record. `None` before lowering and for
+    /// functions without bytecode. Out-of-range values saturate, and the
+    /// reader rejects them.
+    pub fn telemetry_source_map(&self) -> Option<btel_types::SourceMap> {
+        if !matches!(self.kind, FunctionKind::Bytecode) {
+            return None;
+        }
+        let compact = self.bytecode.compact.as_ref()?;
+        let clamp = |value: usize| u32::try_from(value).unwrap_or(u32::MAX);
+        Some(btel_types::SourceMap {
+            code_bytes: clamp(compact.code.len()),
+            entries: compact
+                .line_table
+                .iter()
+                .map(|entry| btel_types::SourceMapEntry {
+                    pc: clamp(entry.pc),
+                    file_id: entry.span.file_id.as_u32(),
+                    start: entry.span.range.start().into(),
+                    end: entry.span.range.end().into(),
+                    line: clamp(entry.line),
+                })
+                .collect(),
         })
     }
 }

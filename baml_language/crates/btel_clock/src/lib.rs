@@ -299,6 +299,28 @@ impl ClockEpoch {
         }
     }
 
+    /// Cold lifecycle query for recording finality, never called by producers.
+    /// `Some` once every attached thread has finished: children attach while
+    /// their parent is still attached, so a settled run cannot gain threads.
+    /// Restore, mode changes and faults skip settled runs under the same lock,
+    /// so the returned status cannot change afterwards.
+    pub fn settled_status(&self) -> Option<TimingStatus> {
+        // Unsettled runs may be validating; never contend with their probes.
+        if !self.is_settled() {
+            return None;
+        }
+        let _guard = self
+            .validation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Some(self.status())
+    }
+
+    fn is_settled(&self) -> bool {
+        self.active_threads.load(Ordering::Acquire) == 0
+            && self.has_finished.load(Ordering::Acquire)
+    }
+
     fn invalidate(&self, reason: TimingStatus) {
         let _ = self.status.compare_exchange(
             TimingStatus::Valid as u8,
@@ -458,9 +480,12 @@ impl ClockRuntime {
 
     fn invalidate_active(state: &RuntimeState, reason: TimingStatus) {
         for epoch in state.epochs.iter().filter_map(Weak::upgrade) {
-            if epoch.active_threads.load(Ordering::Acquire) != 0
-                || !epoch.has_finished.load(Ordering::Acquire)
-            {
+            // Decide and invalidate atomically with respect to `settled_status`.
+            let _guard = epoch
+                .validation
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if !epoch.is_settled() {
                 epoch.invalidate(reason);
             }
         }

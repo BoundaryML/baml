@@ -159,7 +159,11 @@ export function useTelemetry({
   }, [project]);
 
   const rows = useMemo(() => executions.map(toExecutionRow), [executions]);
-  const anyRunning = rows.some((row) => row.status === 'running');
+  // An incomplete execution may still be recording, and only a re-read can
+  // show its end arriving, so it is polled like a running one.
+  const anyRunning = rows.some(
+    (row) => row.status === 'running' || row.status === 'incomplete',
+  );
 
   useEffect(() => {
     if (!active || !project || !anyRunning) return;

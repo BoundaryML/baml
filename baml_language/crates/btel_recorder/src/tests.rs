@@ -392,6 +392,9 @@ fn converted_output_outlives_recycled_chunks_and_preserves_selector_context() {
     let child = allocate_telemetry_id();
     let path = CallPathId::new_non_root(1).unwrap();
     let clock = ClockRuntime::new(ClockMode::Monotonic).start_run();
+    // The run's only thread finished before its completion is converted.
+    clock.attach_thread();
+    clock.finish_thread();
     let function = btel_types::FunctionIdAllocator::default()
         .allocate()
         .unwrap();
@@ -440,7 +443,7 @@ fn converted_output_outlives_recycled_chunks_and_preserves_selector_context() {
     assert_eq!(
         Arc::strong_count(&clock),
         1,
-        "converter did not retain epoch ownership"
+        "converter did not retain a settled epoch"
     );
     assert!(
         batches.borrow().is_empty(),
@@ -517,7 +520,7 @@ fn converted_output_outlives_recycled_chunks_and_preserves_selector_context() {
         Some(proto::function_definition::Resolution::Unavailable(_))
     ));
     assert_eq!(batch.definitions.call_paths[0].caller_pc, u32::MAX);
-    assert!(!batch.clock_states.states[0].r#final);
+    assert!(batch.clock_states.states[0].r#final);
     let encoded = batch.spans.encode_to_vec();
     assert_eq!(
         proto::SpanBatch::decode(encoded.as_slice()).unwrap(),
@@ -526,7 +529,7 @@ fn converted_output_outlives_recycled_chunks_and_preserves_selector_context() {
 }
 
 #[test]
-fn clock_snapshots_are_owned_immutable_and_never_claim_finality() {
+fn clock_snapshots_are_owned_immutable_and_final_only_once_settled() {
     let runtime = ClockRuntime::new(ClockMode::Monotonic);
     let epoch = runtime.start_run();
     epoch.attach_thread();
@@ -552,7 +555,11 @@ fn clock_snapshots_are_owned_immutable_and_never_claim_finality() {
     let utc = before.utc.unwrap().unix_nanos.unwrap();
     let recovered = (i128::from(utc.high) << 64) | i128::from(utc.low);
     assert_eq!(recovered, epoch.metadata().utc.unix_nanos.get());
+    assert!(!clock::state(&epoch).r#final);
     epoch.finish_thread();
+    let settled = clock::state(&epoch);
+    assert!(settled.r#final);
+    assert_eq!(settled.status, expected_status);
 }
 
 #[test]
@@ -562,22 +569,28 @@ fn second_level_merging_preserves_all_contributions_and_resets_windows() {
     use btel_types::CallPathNodeId;
     let mut batches = Vec::new();
     let mut publisher = ProtobufPublisher::new(|batch| batches.push(batch));
-    let mut expected = BTreeMap::<u64, [u128; 3]>::new();
+    let mut expected = BTreeMap::<u64, [u128; 5]>::new();
     for i in 0..600_u32 {
         let path = CallPathId::new_non_root((1 + i % 65) | ((i % 2) << 31)).unwrap();
         let node = CallPathNodeId::new(path, i % 3 == 0);
+        let errored = u64::from(i % 4 == 1);
+        let cancelled = u64::from(i % 4 == 2);
         let delta = AggregateDelta {
             node,
             count: 1,
             total_duration: ClockDuration::from_ticks(u64::from(i)),
             total_io_duration: AwaitDuration::ZERO
                 .saturating_add(ClockDuration::from_ticks(u64::from(i % 19))),
+            errored,
+            cancelled,
         };
         publisher.aggregate(delta);
         let totals = expected.entry(node.get()).or_default();
         totals[0] += 1;
         totals[1] += u128::from(i);
         totals[2] += u128::from(i % 19);
+        totals[3] += u128::from(errored);
+        totals[4] += u128::from(cancelled);
     }
     publisher.flush();
     publisher.flush();
@@ -588,6 +601,8 @@ fn second_level_merging_preserves_all_contributions_and_resets_windows() {
         count: 7,
         total_duration: ClockDuration::from_ticks(13),
         total_io_duration: AwaitDuration::ZERO,
+        errored: 2,
+        cancelled: 3,
     });
     publisher.flush();
     drop(publisher);
@@ -601,12 +616,15 @@ fn second_level_merging_preserves_all_contributions_and_resets_windows() {
     let actual: BTreeMap<_, _> = first
         .iter()
         .map(|d| {
+            let outcomes = d.outcomes.unwrap();
             (
                 d.node,
                 [
                     u128::from(d.count),
                     u128::from(d.total_duration_ticks),
                     u128::from(d.total_self_await_ticks),
+                    u128::from(outcomes.errored),
+                    u128::from(outcomes.cancelled),
                 ],
             )
         })
@@ -618,7 +636,11 @@ fn second_level_merging_preserves_all_contributions_and_resets_windows() {
             node: node.get(),
             count: 7,
             total_duration_ticks: 13,
-            total_self_await_ticks: 0
+            total_self_await_ticks: 0,
+            outcomes: Some(proto::AggregateOutcomes {
+                errored: 2,
+                cancelled: 3
+            }),
         }]
     );
 }
@@ -628,20 +650,24 @@ fn overflow_spills_whole_delta_without_partial_updates_or_mid_callback_flush() {
     use btel_types::CallPathNodeId;
     let batches = RefCell::new(Vec::new());
     let mut publisher = ProtobufPublisher::new(|batch| batches.borrow_mut().push(batch));
-    let mut expected = std::collections::BTreeMap::<u64, [u128; 3]>::new();
+    let mut expected = std::collections::BTreeMap::<u64, [u128; 5]>::new();
+    // [count, duration, self await, errored, cancelled]. Valid outcome counters
+    // overflow only with their count; they must split with it, not saturate.
     for (raw, values) in [
-        (1, [u64::MAX, 4, 6]),
-        (2, [2, u64::MAX, 6]),
-        (3, [2, 4, u64::MAX]),
+        (1, [u64::MAX, 4, 6, u64::MAX - 1, 1]),
+        (2, [2, u64::MAX, 6, 1, 1]),
+        (3, [2, 4, u64::MAX, 0, 2]),
     ] {
         let node = CallPathNodeId::new(CallPathId::new_non_root(raw).unwrap(), raw % 2 == 0);
-        for values in [values, [1, 1, 1], [2, 3, 4]] {
+        for values in [values, [1, 1, 1, 1, 0], [2, 3, 4, 0, 2]] {
             publisher.aggregate(AggregateDelta {
                 node,
                 count: values[0],
                 total_duration: ClockDuration::from_ticks(values[1]),
                 total_io_duration: AwaitDuration::ZERO
                     .saturating_add(ClockDuration::from_ticks(values[2])),
+                errored: values[3],
+                cancelled: values[4],
             });
             for (total, value) in expected
                 .entry(node.get())
@@ -666,17 +692,123 @@ fn overflow_spills_whole_delta_without_partial_updates_or_mid_callback_flush() {
         6,
         "one spill and one remainder per node"
     );
-    let mut actual = std::collections::BTreeMap::<u64, [u128; 3]>::new();
+    let mut actual = std::collections::BTreeMap::<u64, [u128; 5]>::new();
     for d in &batches[0].aggregates.entries {
+        let outcomes = d.outcomes.unwrap();
+        assert!(
+            u128::from(outcomes.errored) + u128::from(outcomes.cancelled) <= u128::from(d.count)
+        );
         for (total, value) in actual.entry(d.node).or_default().iter_mut().zip([
             d.count,
             d.total_duration_ticks,
             d.total_self_await_ticks,
+            outcomes.errored,
+            outcomes.cancelled,
         ]) {
             *total += u128::from(value);
         }
     }
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn outcomes_are_present_at_zero_and_absence_stays_distinguishable() {
+    use btel_types::CallPathNodeId;
+    let mut buffer = ConversionBuffer::default();
+    let node = CallPathNodeId::new(CallPathId::new_non_root(3).unwrap(), false);
+    buffer.aggregate(AggregateDelta {
+        node,
+        count: 4,
+        ..AggregateDelta::default()
+    });
+    let pending = buffer.pending_encoded_bytes;
+    let batch = buffer.take().aggregates;
+    // The cached size includes the empty outcomes message exactly.
+    assert_eq!(pending, batch.encoded_len());
+    let [entry] = batch.entries.as_slice() else {
+        panic!("one entry expected")
+    };
+    assert_eq!(
+        entry.outcomes,
+        Some(proto::AggregateOutcomes {
+            errored: 0,
+            cancelled: 0
+        })
+    );
+    // Field 5, length 0: all four completions succeeded.
+    let bytes = entry.encode_to_vec();
+    assert!(bytes.ends_with(&[0x2a, 0x00]));
+    let decoded = proto::AggregateDelta::decode(bytes.as_slice()).unwrap();
+    assert_eq!(decoded.outcomes, entry.outcomes);
+    // An older producer's entry has no field 5: outcomes are unknown, not zero.
+    let old = proto::AggregateDelta {
+        outcomes: None,
+        ..*entry
+    }
+    .encode_to_vec();
+    assert_eq!(old.len() + 2, bytes.len());
+    assert_eq!(
+        proto::AggregateDelta::decode(old.as_slice())
+            .unwrap()
+            .outcomes,
+        None
+    );
+}
+
+#[test]
+fn outcome_merge_growth_and_spills_keep_exact_encoded_size() {
+    use btel_types::CallPathNodeId;
+    let node = CallPathNodeId::new(CallPathId::new_non_root(9).unwrap(), true);
+    // Grow errored and cancelled across varint widths, then spill on overflow.
+    let deltas = [
+        (1, 0, 0),
+        (127, 127, 0),
+        (1, 0, 1),
+        (1 << 14, 0, 1 << 14),
+        (u64::MAX, 1 << 40, 1),
+    ]
+    .map(|(count, errored, cancelled)| AggregateDelta {
+        node,
+        count,
+        errored,
+        cancelled,
+        ..AggregateDelta::default()
+    });
+    // After every prefix, the cached size equals the sealed batch exactly.
+    let mut entries = Vec::new();
+    for prefix in 1..=deltas.len() {
+        let mut buffer = ConversionBuffer::default();
+        for delta in &deltas[..prefix] {
+            buffer.aggregate(*delta);
+        }
+        let pending = buffer.pending_encoded_bytes;
+        let batch = buffer.take().aggregates;
+        assert_eq!(pending, batch.encoded_len(), "prefix {prefix}");
+        entries = batch.entries;
+    }
+    let outcomes: Vec<_> = entries
+        .iter()
+        .map(|entry| (entry.count, entry.outcomes.unwrap()))
+        .collect();
+    assert_eq!(
+        outcomes,
+        [
+            (
+                129 + (1 << 14),
+                proto::AggregateOutcomes {
+                    errored: 127,
+                    cancelled: 1 + (1 << 14)
+                }
+            ),
+            (
+                u64::MAX,
+                proto::AggregateOutcomes {
+                    errored: 1 << 40,
+                    cancelled: 1
+                }
+            ),
+        ]
+    );
 }
 
 fn snapshot() -> btel_snapshot::Snapshot {

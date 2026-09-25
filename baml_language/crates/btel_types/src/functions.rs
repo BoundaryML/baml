@@ -61,6 +61,24 @@ pub enum RuntimeFunctionOrigin {
     AutoDerive,
 }
 
+/// One captured argument slot, in the callee's parameter-slot order.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ArgumentSlot {
+    /// Declared parameter name. `None` when the slot has no recorded name.
+    pub name: Option<String>,
+    /// The method receiver slot.
+    pub receiver: bool,
+}
+
+/// Names for the slots of a captured argument snapshot. Cold definition
+/// metadata only: the VM captures slots, never names. An empty layout is a
+/// known zero-slot function, distinct from `FunctionMetadata::argument_layout`
+/// being `None` (layout unknown).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ArgumentLayout {
+    pub slots: Vec<ArgumentSlot>,
+}
+
 /// Metadata for one compiled function, identified within this program.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FunctionMetadata {
@@ -77,6 +95,34 @@ pub struct FunctionMetadata {
     pub definition_key: Option<DefinitionKey>,
     pub package_name: Option<String>,
     pub namespace: Vec<String>,
+    /// Slot names for captured inputs; `None` when they cannot be determined.
+    pub argument_layout: Option<ArgumentLayout>,
+    /// PC-to-source table of the code the VM executes; `None` when the
+    /// function has no compact code (native functions, unlowered bytecode).
+    pub source_map: Option<SourceMap>,
+}
+
+/// Line table of one function's compact bytecode. PCs are byte offsets into
+/// that code, the same coordinate as call-path and error PCs. Entries are
+/// sorted by PC and each applies until the next one. Cold metadata: copied
+/// once per recording, never consulted by the VM.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SourceMap {
+    /// Length of the compact code; a valid PC is below it.
+    pub code_bytes: u32,
+    pub entries: Vec<SourceMapEntry>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SourceMapEntry {
+    pub pc: u32,
+    /// Compiler-local file of this span; normally the function's own file.
+    pub file_id: u32,
+    /// Half-open byte range in that file.
+    pub start: u32,
+    pub end: u32,
+    /// One-based line of `start`.
+    pub line: u32,
 }
 
 /// Owned snapshot of available functions, sorted by ID. Collected IDs may be absent.

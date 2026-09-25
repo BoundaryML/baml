@@ -66,6 +66,20 @@ impl BexHeap {
         FunctionMetadataTable { functions }
     }
 
+    /// Metadata for compile-time functions only. They are never moved or
+    /// collected after sealing, so no permit is needed. Sorted by ID; dynamic
+    /// functions (runtime-compiled or grafted) are absent.
+    pub fn static_function_metadata(&self) -> FunctionMetadataTable {
+        let functions = (0..self.compile_time_len())
+            .filter_map(|index| match self.compile_time_object(index) {
+                Object::Function(function) => function.runtime_metadata(),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        debug_assert!(functions.is_sorted_by_key(|f| f.function_id));
+        FunctionMetadataTable { functions }
+    }
+
     /// Only called at the GC safepoint, after tracing/finalizer preservation
     /// and before swapping or destroying from-space. Never marks anything live.
     pub(crate) fn update_function_lookup(

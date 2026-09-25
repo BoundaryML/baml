@@ -97,9 +97,24 @@ async fn local_recording_is_readable_while_running_and_shutdown_finishes_disk_de
     assert!(read.issues.is_empty(), "{:?}", read.issues);
     assert!(read.files.len() > prefix.files.len());
     assert!(
-        !read.has_recording_end,
-        "durable files do not invent recording finality"
+        read.has_recording_end,
+        "normal shutdown ends the recording once every run settled"
     );
+    assert!(read.files.last().unwrap().end.is_some());
+    let defined: std::collections::BTreeSet<u64> = read
+        .files
+        .iter()
+        .flat_map(|file| &file.definitions.as_ref().unwrap().clock_epochs)
+        .map(|epoch| epoch.epoch_id)
+        .collect();
+    let finals: std::collections::BTreeSet<u64> = read
+        .files
+        .iter()
+        .flat_map(|file| &file.clock_states.as_ref().unwrap().states)
+        .filter(|state| state.r#final)
+        .map(|state| state.epoch_id)
+        .collect();
+    assert_eq!(defined, finals, "every recorded run's clock is final");
     let (mut announcements, mut spans, mut threads, mut aggregate_count, mut clocks) =
         (0, 0, 0, 0, 0);
     let mut span_counts = std::collections::HashMap::<u64, u64>::new();

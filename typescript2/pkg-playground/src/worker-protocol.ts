@@ -530,6 +530,11 @@ export interface TelemetryExecution {
   /** Human label for whatever started this run. */
   sourceLabel: string | null;
   revisionId: string | null;
+  /**
+   * `incomplete`: no end is recorded, and nothing says whether the run is
+   * still going or stopped before writing one. Unlike `running`, it makes no
+   * liveness claim.
+   */
   status:
     | 'running'
     | 'abandoned'
@@ -537,6 +542,7 @@ export interface TelemetryExecution {
     | 'failed'
     | 'cancelled'
     | 'panicked'
+    | 'incomplete'
     | null;
   /**
    * `complete` | `no_root_ended` | `root_started_lost` | `index_corrupt`.
@@ -554,7 +560,16 @@ export interface TelemetryExecution {
   /** Calls kept as spans. The shortfall against `totalCalls` is the gap. */
   callsRetained: number | null;
   threadsTotal: number | null;
+  /**
+   * Whether recorded source locations match today's files: `verified` when
+   * the recording's source identity equals the program the playground has
+   * built now, `stale` when it differs, `unverified` when either is unknown.
+   * Absent on older backends, which is `unverified`.
+   */
+  sourceState?: SourceVerification;
 }
+
+export type SourceVerification = 'verified' | 'stale' | 'unverified';
 
 /** One logical thread. Root threads are executions. */
 export interface TelemetryThread {
@@ -564,6 +579,8 @@ export interface TelemetryThread {
   spawnFqn: string | null;
   spawnSiteFile: string | null;
   spawnSiteLine: number | null;
+  /** `resolved`, `not_spawned`, or why the spawn expression is unknown. */
+  spawnSiteState?: string | null;
   name: string | null;
   kind: 'root' | 'spawn' | null;
   startedNs: number | null;
@@ -590,12 +607,27 @@ export interface TelemetryCallPath {
   callSiteLine: number | null;
   callSiteStart: number | null;
   callSiteEnd: number | null;
+  /** `resolved`, `no_caller`, or why the call expression is unknown. */
+  callSiteState?: string | null;
   /** Population entries: the denominator for any rate or mean. */
   callsStarted: number | null;
+  /**
+   * Completed invocations of this context. BTEL recordings count
+   * completions, not starts: an unfinished call is not counted yet.
+   */
+  completedCalls?: number | null;
   callsSelected: number | null;
   completedOk: number | null;
   completedError: number | null;
   completedCancelled: number | null;
+  /** Outcome evidence for the indexed population; absent on older backends. */
+  outcomeState?:
+    | 'recorded'
+    | 'none_observed'
+    | 'not_recorded'
+    | 'partial'
+    | 'invalid'
+    | 'overflow';
   inclusiveNs: number | null;
   directChildNs: number | null;
   awaitNs: number | null;
@@ -623,10 +655,23 @@ export interface TelemetryCall {
   edgeKind: 'root' | 'call' | 'spawn' | null;
   callSiteFile: string | null;
   callSiteLine: number | null;
+  /**
+   * `resolved`, or why this invocation has no site: `recursive_reentry` is
+   * a direct recursive call, whose own site is not recorded.
+   */
+  callSiteState?: string | null;
+  /** The occurrence whose raise failed this call, when proven. */
+  errorOccurrenceId?: string | null;
+  /** A recorded raise failed this call. */
+  errorLinked?: boolean;
   startedNs: number | null;
   endedNs: number | null;
   durationNs: number | null;
-  status: 'ok' | 'errored' | 'cancelled' | 'exited' | null;
+  /**
+   * Null means the call never returned (older backends). `incomplete`
+   * means no end is recorded for it, with no claim that it is still running.
+   */
+  status: 'ok' | 'errored' | 'cancelled' | 'exited' | 'incomplete' | null;
   /** Why this call was kept: `root` | `llm` | `manual`. */
   selectionReasons: string[];
   /**
@@ -662,17 +707,58 @@ export interface TelemetryMedia {
   bytesLen: number | null;
 }
 
-/** One captured error. */
+/**
+ * One captured error.
+ *
+ * `grain` says what the entry is. `throw` (the default when absent) is a
+ * recorded throw occurrence, with its origin, stack and propagation.
+ * `errored_call` is only an error value seen on one retained call that ended
+ * in an error: the recording has no throw identity, site or propagation
+ * links, so the throw fields stay null, several entries may come from one
+ * throw, and entries with equal values may still be different throws.
+ */
 export interface TelemetryErrorCapture {
   errorId: string;
+  grain?: 'throw' | 'errored_call';
+  /** For `errored_call`: the retained call the value was seen on. */
+  callId?: string | null;
+  callFqn?: string | null;
+  callThreadId?: string | null;
   throwCallId: string | null;
   throwThreadId: string | null;
   throwCallPathId: string | null;
   throwFqn: string | null;
   throwSiteFile: string | null;
   throwSiteLine: number | null;
+  throwSiteStart?: number | null;
+  throwSiteEnd?: number | null;
+  /** `resolved`, or why the raise site is unknown. */
+  throwSiteState?: string | null;
   /** `fresh` | `rethrow`. */
   kind: string | null;
+  /**
+   * What raised it: `throw`, `rethrow`, `panic_rethrow`, `await`,
+   * `await_cancelled`, `native_boundary` and `host_boundary` (the site is
+   * the BAML call that entered native or host code), `runtime`.
+   */
+  raiseKind?: string | null;
+  /**
+   * `fresh` starts an error. `ambiguous` and `unresolved` passed one along
+   * without a proven origin; they are not distinct errors.
+   */
+  originState?: 'fresh' | 'proven' | 'ambiguous' | 'unresolved' | null;
+  originVia?: string | null;
+  originCandidates?: number | null;
+  unresolvedReason?: string | null;
+  /** `caught` | `unhandled` | `escaped_to_native` | `aborted` | `end_not_indexed`. */
+  unwindResult?: string | null;
+  handlerFqn?: string | null;
+  /** Raises proven to pass this error along, in order: rethrows and awaits. */
+  propagation?: TelemetryErrorStep[];
+  /** Retained calls this error failed. */
+  failedCallIds?: string[];
+  /** A trace the VM carried from an earlier throw: names, no identities. */
+  inheritedStack?: string[];
   source: string | null;
   valueState: string | null;
   valueCid: string | null;
@@ -686,6 +772,23 @@ export interface TelemetryErrorCapture {
    * `valueState` distinguishes.
    */
   value: string | null;
+}
+
+/** One raise that passed an error along. */
+export interface TelemetryErrorStep {
+  raiseId: string;
+  kind: string | null;
+  fqn: string | null;
+  threadId: string | null;
+  site: {
+    state: string | null;
+    file: string | null;
+    line: number | null;
+    start: number | null;
+    end: number | null;
+  };
+  result: string | null;
+  handlerFqn: string | null;
 }
 
 /** One execution's evidence, in the four grains the catalog serves. */

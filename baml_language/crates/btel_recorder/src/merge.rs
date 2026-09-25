@@ -10,11 +10,14 @@ use rustc_hash::FxHashMap;
 
 use crate::proto;
 
+/// Success stays implicit: `count - errored - cancelled`.
 #[derive(Clone, Copy)]
 struct Totals {
     count: u64,
     duration: ClockDuration,
     self_await: AwaitDuration,
+    errored: u64,
+    cancelled: u64,
 }
 
 const _: () =
@@ -26,6 +29,8 @@ impl Totals {
             count: delta.count,
             duration: delta.total_duration,
             self_await: delta.total_io_duration,
+            errored: delta.errored,
+            cancelled: delta.cancelled,
         }
     }
 
@@ -43,6 +48,8 @@ impl Totals {
                     .get()
                     .checked_add(delta.total_io_duration.get().get())?,
             )),
+            errored: self.errored.checked_add(delta.errored)?,
+            cancelled: self.cancelled.checked_add(delta.cancelled)?,
         })
     }
 
@@ -52,6 +59,11 @@ impl Totals {
             count: self.count,
             total_duration_ticks: self.duration.get(),
             total_self_await_ticks: self.self_await.get().get(),
+            // Present even when both are zero: presence means "all counted".
+            outcomes: Some(proto::AggregateOutcomes {
+                errored: self.errored,
+                cancelled: self.cancelled,
+            }),
         }
     }
 }
@@ -93,7 +105,7 @@ impl PendingAggregates {
                     *current = merged;
                     after - before
                 } else {
-                    // Preserve all three previous totals together, even when
+                    // Preserve all previous totals together, even when
                     // just one field overflows. Never flush from inside a span
                     // chunk callback or partially apply a failed addition.
                     let previous = std::mem::replace(current, Totals::from_delta(delta));

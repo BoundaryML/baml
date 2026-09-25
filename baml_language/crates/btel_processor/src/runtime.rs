@@ -13,9 +13,10 @@ use std::{
 use bex_chunkedringbuffer::{
     ChunkPool, Config, Producer, SetupError, Stats, TransportFailed, WorkerSlot,
 };
-use btel_records::{SpanRecord, TimingRecord};
+use btel_records::{FutureErrorLink, FutureErrorLookup, SpanRecord, TimingRecord};
 use btel_snapshot::Snapshot;
 use btel_types::TelemetryId;
+use rustc_hash::FxHashMap;
 
 use crate::{NoSinkPublisher, Processor, Publisher};
 
@@ -101,6 +102,64 @@ pub struct TelemetryRuntime {
     pool: Pool,
     worker: Mutex<Option<std::thread::JoinHandle<()>>>,
     result: Arc<RuntimeStatus>,
+    /// The publisher asked for exception-path evidence. Fixed at startup.
+    error_evidence: bool,
+    /// Failed futures' escaping raises, shared by every VM of this engine.
+    /// Exception path only; see `FutureErrorLinks`.
+    future_errors: Mutex<FutureErrorLinks>,
+}
+
+/// Bounded, engine-scoped map from a failed future to the raise that failed
+/// it. Written before the future wakes its awaiters; reading never removes
+/// an entry, so every await of that future finds it. The oldest entry is
+/// evicted when full; a lookup that misses an evicted future says so.
+pub struct FutureErrorLinks {
+    links: FxHashMap<u64, FutureErrorLink>,
+    order: std::collections::VecDeque<u64>,
+    capacity: usize,
+    /// Highest evicted future key; misses at or below it may be evictions.
+    evicted_through: Option<u64>,
+}
+
+impl FutureErrorLinks {
+    pub fn new(capacity: usize) -> Self {
+        Self {
+            links: FxHashMap::default(),
+            order: std::collections::VecDeque::new(),
+            capacity: capacity.max(1),
+            evicted_through: None,
+        }
+    }
+
+    pub fn insert(&mut self, future: u64, link: FutureErrorLink) {
+        if self.links.insert(future, link).is_some() {
+            return;
+        }
+        self.order.push_back(future);
+        while self.order.len() > self.capacity {
+            let evicted = self.order.pop_front().expect("over capacity");
+            self.links.remove(&evicted);
+            self.evicted_through = Some(self.evicted_through.map_or(evicted, |e| e.max(evicted)));
+        }
+    }
+
+    pub fn get(&self, future: u64) -> FutureErrorLookup {
+        match self.links.get(&future) {
+            Some(link) => FutureErrorLookup::Found(*link),
+            None if self.evicted_through.is_some_and(|e| future <= e) => {
+                FutureErrorLookup::PossiblyEvicted
+            }
+            None => FutureErrorLookup::Missing,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.links.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.links.is_empty()
+    }
 }
 
 impl TelemetryRuntime {
@@ -228,7 +287,37 @@ impl TelemetryRuntime {
             pool,
             worker: Mutex::new(Some(worker)),
             result,
+            error_evidence: P::ERROR_EVIDENCE,
+            future_errors: Mutex::new(FutureErrorLinks::new(
+                btel_settings::processor::FUTURE_ERROR_LINKS,
+            )),
         }))
+    }
+
+    /// Whether producers should build exception-path evidence: the publisher
+    /// records it and recording has not been disabled.
+    #[inline]
+    pub fn wants_error_evidence(&self) -> bool {
+        self.error_evidence && !self.pool.is_disabled()
+    }
+
+    /// Store a failed future's escaping raise. Exception path only.
+    pub fn link_future_error(&self, future: u64, link: FutureErrorLink) {
+        if !self.wants_error_evidence() {
+            return;
+        }
+        self.future_errors
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(future, link);
+    }
+
+    /// The raise that failed `future`, for a failed await. Never removes it.
+    pub fn future_error(&self, future: u64) -> FutureErrorLookup {
+        self.future_errors
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(future)
     }
 
     /// Bind on the current OS thread for a synchronous VM operation. The scope
@@ -503,6 +592,8 @@ mod tests {
             pool: pool.clone(),
             worker: Mutex::new(None),
             result: Arc::new(RuntimeStatus::default()),
+            error_evidence: true,
+            future_errors: Mutex::new(FutureErrorLinks::new(4)),
         });
         (runtime, pool)
     }

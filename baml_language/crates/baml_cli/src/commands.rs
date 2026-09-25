@@ -142,7 +142,7 @@ pub(crate) enum Commands {
 
     #[command(about = "Describe a BAML symbol", name = "describe")]
     Describe(crate::describe_command::DescribeArgs),
-    #[command(about = "Profile queries (currently unavailable)")]
+    #[command(about = "Query BTEL recordings with SQL")]
     Query(crate::query_command::QueryArgs),
 
     // #[command(about = "Starts a server that translates LLM responses to BAML responses")]

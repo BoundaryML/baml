@@ -29,6 +29,8 @@ pub use btel_types::{
 use btel_types::{FunctionId, allocate_telemetry_id};
 use rustc_hash::FxHashMap;
 
+mod errors;
+pub(crate) use errors::{ActiveHandler, ErrorBook, FrameScope, LandingMatch};
 mod policy;
 pub use policy::{TelemetryPolicies, TelemetryPolicy};
 
@@ -148,6 +150,8 @@ pub struct TelemetryState {
     clock: Arc<ClockEpoch>,
     #[cfg(not(target_arch = "wasm32"))]
     runtime: Arc<btel_processor::TelemetryRuntime>,
+    /// Exception-path bookkeeping, allocated by the first recorded raise.
+    errors: Option<Box<ErrorBook>>,
     #[cfg(test)]
     timing_records: Vec<TimingRecord>,
     #[cfg(test)]
@@ -188,6 +192,7 @@ impl TelemetryState {
             clock,
             #[cfg(not(target_arch = "wasm32"))]
             runtime,
+            errors: None,
             #[cfg(test)]
             timing_records: Vec::new(),
             #[cfg(test)]
@@ -236,6 +241,11 @@ impl TelemetryState {
     #[inline(always)]
     pub fn active_id(&self) -> TelemetryId {
         self.thread.active_id
+    }
+
+    /// The innermost observed frame's call path; `ROOT` outside any.
+    pub(crate) fn active_call_path(&self) -> CallPathId {
+        self.thread.active_call_path
     }
 
     pub fn spawn_context(
@@ -433,6 +443,24 @@ impl TelemetryState {
         value: Option<Value>,
     ) {
         let exited_at = self.clock.read();
+        // SAFETY: forwarded from the caller.
+        unsafe { self.complete_invocation_at(telemetry, function, outcome, value, exited_at) }
+    }
+
+    /// `complete_invocation` with an exit instant this thread already read
+    /// from its clock: the frames one unwind pops share the raise's instant.
+    ///
+    /// # Safety
+    /// As `complete_invocation`.
+    #[inline(always)]
+    pub unsafe fn complete_invocation_at(
+        &mut self,
+        telemetry: FrameTelemetry,
+        function: &Function,
+        outcome: InvocationOutcome,
+        value: Option<Value>,
+        exited_at: ClockInstant,
+    ) {
         let call_path = self.thread.active_call_path;
         let policy_id = function.telemetry_policy_id.load();
         if !telemetry.is_span() && policy_id == btel_types::TelemetryPolicyId::NONE {
@@ -790,6 +818,67 @@ impl TelemetryState {
         self.runtime.is_disabled()
     }
 
+    /// Whether raises should be recorded: a recording publisher is attached
+    /// and recording is still enabled. Exception path only.
+    #[cold]
+    pub(crate) fn error_evidence(&self) -> bool {
+        #[cfg(test)]
+        if FORCE_ERROR_EVIDENCE.with(std::cell::Cell::get) {
+            return true;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.runtime.wants_error_evidence();
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = self;
+            false
+        }
+    }
+
+    #[cold]
+    pub(crate) fn error_book(&mut self) -> &mut ErrorBook {
+        self.errors.get_or_insert_with(Box::default)
+    }
+
+    /// Clear notes when a fresh top-level run starts on an empty stack.
+    pub(crate) fn clear_error_book(&mut self) {
+        if let Some(book) = &mut self.errors {
+            book.clear();
+        }
+    }
+
+    pub(crate) fn error_book_ref(&self) -> Option<&ErrorBook> {
+        self.errors.as_deref()
+    }
+
+    pub(crate) fn take_escaped_error(&mut self) -> Option<btel_records::FutureErrorLink> {
+        self.errors.as_mut().and_then(|book| book.take_escaped())
+    }
+
+    /// Emit an exception-path record for this thread.
+    #[cold]
+    pub(crate) fn write_error_record(&mut self, record: VmSpanRecord) {
+        self.write_span(record);
+    }
+
+    /// The raise that failed `future`, stored by the thread that settled it.
+    pub(crate) fn future_error(&self, future: u64) -> btel_records::FutureErrorLookup {
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.runtime.future_error(future);
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = (self, future);
+            btel_records::FutureErrorLookup::Missing
+        }
+    }
+
+    pub(crate) fn link_future_error(&self, future: u64, link: btel_records::FutureErrorLink) {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.runtime.link_future_error(future, link);
+        #[cfg(target_arch = "wasm32")]
+        let _ = (self, future, link);
+    }
+
     /// Release clock bookkeeping without claiming that this thread completed.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn abandon(&mut self) {
@@ -888,6 +977,13 @@ fn default_mode(function: &Function, policy: TelemetryPolicy) -> InvocationMode 
         }
         FunctionKind::Bytecode => BYTECODE_DEFAULT_MODE,
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Unit tests keep records locally; this makes their VMs build raises
+    /// even though the shared test runtime has no recording publisher.
+    pub(crate) static FORCE_ERROR_EVIDENCE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
@@ -1134,6 +1230,39 @@ mod tests {
             body_meta,
             runtime_package: HeapPtr::null(),
         }
+    }
+
+    #[test]
+    fn argument_layout_is_absent_unless_declaration_names_cover_every_slot() {
+        let mut declared = function(FunctionKind::Bytecode, None);
+        declared.arity = 2;
+        declared.param_names = vec!["self".into(), "customer".into()];
+        let layout = declared
+            .runtime_metadata()
+            .unwrap()
+            .argument_layout
+            .unwrap();
+        assert_eq!(
+            layout
+                .slots
+                .iter()
+                .map(|slot| (slot.name.as_deref(), slot.receiver))
+                .collect::<Vec<_>>(),
+            [(Some("self"), true), (Some("customer"), false)]
+        );
+        // A synthesized body with slots but no declaration names: unknown,
+        // never a guessed or empty layout.
+        let mut synthesized = function(FunctionKind::Bytecode, None);
+        synthesized.arity = 1;
+        assert_eq!(
+            synthesized.runtime_metadata().unwrap().argument_layout,
+            None
+        );
+        let empty = function(FunctionKind::Bytecode, None);
+        assert_eq!(
+            empty.runtime_metadata().unwrap().argument_layout,
+            Some(btel_types::ArgumentLayout::default())
+        );
     }
 
     #[test]

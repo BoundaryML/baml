@@ -28,6 +28,7 @@ pub mod engine;
 pub mod lsp_ingress;
 pub mod lsp_runtime;
 pub mod native_lsp_sender;
+pub mod playground_btel;
 pub mod playground_env;
 pub mod playground_http;
 pub mod playground_io;
@@ -997,7 +998,7 @@ mod tests {
             .unwrap_or_else(|e| unreachable!("the fixture compiles: {e}"));
 
         let engine = Arc::new(
-            engine::construct_engine_candidate(program, sys_ops, baml_lsp::SourceRevision(1))
+            engine::construct_engine_candidate(program, sys_ops, baml_lsp::SourceRevision(1), None)
                 .unwrap_or_else(|e| unreachable!("the engine constructs: {e}"))
                 .into_engine(),
         );
@@ -1214,6 +1215,7 @@ mod tests {
                 program,
                 Arc::new(platform.for_root(&root)),
                 baml_lsp::SourceRevision(1),
+                None,
             )
             .unwrap_or_else(|e| unreachable!("the engine constructs: {e}"))
             .into_engine();

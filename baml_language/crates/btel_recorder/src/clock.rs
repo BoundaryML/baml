@@ -53,17 +53,19 @@ pub(crate) fn definition(m: &EpochMetadata) -> proto::ClockEpochDefinition {
     }
 }
 
+/// Latest observation. Final only once the epoch itself reports every attached
+/// thread finished; one thread's completion is not proof the epoch settled.
 pub(crate) fn state(epoch: &btel_clock::ClockEpoch) -> proto::ClockEpochState {
+    let settled = epoch.settled_status();
     proto::ClockEpochState {
         epoch_id: epoch.metadata().epoch.get(),
-        status: match epoch.status() {
+        status: match settled.unwrap_or_else(|| epoch.status()) {
             TimingStatus::Valid => proto::TimingStatus::Valid,
             TimingStatus::Restored => proto::TimingStatus::Restored,
             TimingStatus::Discontinuity => proto::TimingStatus::Discontinuity,
             TimingStatus::Uncertain => proto::TimingStatus::Uncertain,
             TimingStatus::ModeChanged => proto::TimingStatus::ModeChanged,
         } as i32,
-        // Observing a thread completion is not proof the entire epoch settled.
-        r#final: false,
+        r#final: settled.is_some(),
     }
 }

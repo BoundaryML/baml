@@ -2434,12 +2434,16 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // runtime `OpCode::Spawn` pops them in reverse. Config is null
                 // when there is no `with` clause, so a fixed five values are
                 // always pushed (BEP-034 spawn options).
+                let spawn_span = self.current_debug_span;
                 self.emit_operand_pull(closure);
                 self.emit_operand_pull(name);
                 let null_config = Operand::Constant(Constant::Null);
                 self.emit_operand_pull(config.as_deref().unwrap_or(&null_config));
                 unwrap_infallible(self.load_type(&future_ty.returns));
                 unwrap_infallible(self.load_type(&future_ty.throws));
+                // As for calls: operands may install nested spans; the spawn
+                // opcode belongs to the whole spawn expression.
+                self.set_debug_span(spawn_span, false);
                 self.emit(Instruction::Spawn);
                 self.emit_store_place(future);
                 self.emit_jump_unless_fallthrough(*resume);
@@ -2451,7 +2455,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 target,
                 unwind: _,
             } => {
+                let await_span = self.current_debug_span;
                 unwrap_infallible(pull_semantics::walk_await_future(self, future));
+                self.set_debug_span(await_span, false);
                 self.emit(Instruction::Await);
 
                 self.emit_store_place(destination);
@@ -2473,17 +2479,25 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit_jump_unless_fallthrough(*target);
             }
 
+            // The raising opcode belongs to the throw itself, not to the last
+            // nested span its operand installed.
             Terminator::Throw { value } => {
+                let throw_span = self.current_debug_span;
                 self.emit_operand_pull(value);
+                self.set_debug_span(throw_span, false);
                 self.emit(Instruction::Throw);
             }
             Terminator::Rethrow { value } => {
+                let throw_span = self.current_debug_span;
                 self.emit_operand_pull(value);
+                self.set_debug_span(throw_span, false);
                 self.emit(Instruction::Rethrow);
             }
 
             Terminator::ThrowIfPanic { value, otherwise } => {
+                let throw_span = self.current_debug_span;
                 self.emit_operand_pull(value);
+                self.set_debug_span(throw_span, false);
                 self.emit(Instruction::ThrowIfPanic);
                 self.emit_jump_unless_fallthrough(*otherwise);
             }
@@ -3227,7 +3241,11 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
 
         let action = match classification {
             LocalClassification::Virtual => {
-                // Attribute inlined virtual loads to their defining statement.
+                // Attribute inlined virtual loads to their defining statement,
+                // then give the consumer back its own span: the instruction that
+                // uses this operand (a division, a call) belongs to the consuming
+                // expression, not to its last inlined operand.
+                let consumer_span = self.current_debug_span;
                 self.set_debug_span(self.def_span_for_local(local), false);
                 // Inline the definition rvalue at use site.
                 let rvalue = self.analysis.def_use[&local]
@@ -3253,9 +3271,11 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
                         }
                 ) {
                     self.emit_rvalue_pull(&rvalue);
-                    return Ok(LocalPullAction::Done);
+                } else {
+                    pull_semantics::walk_rvalue_pull(self, &rvalue)?;
                 }
-                LocalPullAction::Inline(Box::new(rvalue))
+                self.set_debug_span(consumer_span, false);
+                LocalPullAction::Done
             }
             LocalClassification::PhiLike
             | LocalClassification::ReturnPhi

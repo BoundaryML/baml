@@ -59,6 +59,31 @@ completion values, not function-argument captures. The zero-candidate recording
 contains no snapshot references. These are recording fragments: definition and
 thread/clock metadata need not be in the same file.
 
+The query-reader integration advances the recording header from 2.0 to 2.1
+for optional argument-layout metadata. These fixtures include that minor-version
+field: each source recording gained exactly the two bytes `10 01` and its header
+length changed from 20 to 22. All other embedded recording bytes and all CAS
+bytes/IDs are unchanged. Recording envelopes were independently re-encoded with
+the vendored `protoc`; their lengths/digests and the prepare metadata were updated
+accordingly. Server plans, dispositions and CAS-only envelopes are unchanged.
+
+Source maps and error evidence advance the header from 2.1 to 2.2. Each source
+recording changed exactly one byte: the header's `10 01` became `10 02`. No
+length changed. Error-free recordings carry no error section, so nothing else
+moved. Recording and envelope digests and the prepare metadata were updated to
+match; server plans, dispositions and CAS bytes are unchanged.
+
+Aggregate outcome counts add `AggregateDelta.outcomes` (field 5) without a minor
+bump. Readers detect it by presence. The recorder always writes it, even when
+both counters are zero, so each source recording's single aggregate entry gained
+exactly the two bytes `2a 00`, and the aggregate batch and entry lengths each grew
+by two (`22 04 0a 02` became `22 06 0a 04`). All other recording bytes and all
+CAS bytes/IDs are unchanged. Each recording envelope changed only in its embedded
+recording and that field's length varint. It decodes and re-encodes to the same
+bytes with the vendored `protoc`. Envelope lengths/digests and the prepare
+metadata were updated to match. Server plans, dispositions and CAS-only envelopes
+are unchanged.
+
 The integration-test binary reserves telemetry IDs once and asserts exact numeric
 IDs 1 through 6. Thread/parent ID is 1, completion IDs are 2 through 6, call-path
 ID is 7, and entered/exited ticks are 100/200. No machine clock epoch, random span
@@ -87,6 +112,17 @@ independently with the same vendored `protoc`, then decoded and re-encoded for
 byte equality. Source and envelope SHA-256s changed; all byte lengths remained
 unchanged. Server response plans, dispositions, placement, and headers did not
 change. The zero-candidate recording and its envelope remain byte-identical.
+
+Merging the CAS v2 refresh with the header 2.2 and aggregate outcome changes
+above regenerated the sources with the source-inspection command. CAS blobs and
+snapshot IDs equal the v2 refresh byte for byte. Each recording equals the v2
+refresh's recording with the header and outcome bytes described above, and it
+equals the header 2.2 recording with each snapshot ID replaced by its v2 ID.
+Recording envelopes were re-encoded with the same vendored `protoc` from the v2
+refresh's envelopes, replacing only `recording_file`. They decode and re-encode
+to the same bytes. Only recording and recording-envelope lengths and digests
+changed in prepare and puts metadata; lengths equal the header 2.2 fixtures.
+Server plans, dispositions and CAS-only envelopes are the v2 refresh's.
 
 Tests independently check envelope version, IDs, ordered membership, recording
 presence and exact source bytes, CAS format version and exact blob bytes, each

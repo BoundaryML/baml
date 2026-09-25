@@ -1626,7 +1626,11 @@ impl BexEngine {
                 let recording_id = recording.as_ref().map(TelemetryRecording::id);
                 #[cfg(not(target_arch = "wasm32"))]
                 let (runtime, delivery) = match recording {
-                    Some(recording) => recording.start(source_snapshot_id.map(|id| id.0))?,
+                    // Compile-time metadata is copied once, before any VM executes.
+                    Some(recording) => recording.start(
+                        source_snapshot_id.map(|id| id.0),
+                        Arc::new(heap.static_function_metadata()),
+                    )?,
                     None => (
                         btel_processor::TelemetryRuntime::new().map_err(|error| {
                             EngineError::Other(format!("telemetry processor startup: {error}"))
@@ -1854,6 +1858,12 @@ impl BexEngine {
     #[must_use]
     pub fn engine_id(&self) -> EngineId {
         self.engine_id
+    }
+
+    /// Content identity of the source this engine's program was compiled
+    /// from, when the compiler stamped one. Recordings carry the same value.
+    pub fn source_snapshot_id(&self) -> Option<[u8; 32]> {
+        self.source_snapshot_id.map(|id| id.0)
     }
 
     /// Owned snapshot of registered telemetry functions. Unobserved dynamic
@@ -4376,6 +4386,9 @@ impl BexEngine {
         trace: Vec<bex_vm::StackFrame>,
     ) -> Result<(), EngineError> {
         let child_cancel = thread.vm_thread_cancel().clone();
+        // Before any awaiter can observe the error: record which raise failed
+        // this future, so every await of it can name the error's origin.
+        thread.vm.link_escaped_error_to_future(future_id);
         let mut guard = self.futures.acquire(thread.proof()).await;
         guard.err_future(future_id, value, trace)?;
         drop(guard);

@@ -5235,6 +5235,7 @@ impl<'db> LoweringContext<'db> {
             kind: SyntheticKind::Lambda,
             ordinal: self.synthetic_ordinals.next(SyntheticKind::Lambda),
         };
+        let lambda_definition_span = self.span_for_expr(expr_id);
 
         // Find the lambda's FileScopeId from the HIR index.
         // The HIR builder registered a ScopeKind::Lambda at the lambda expression's span.
@@ -5330,6 +5331,11 @@ impl<'db> LoweringContext<'db> {
             FunctionOwner::Synthetic(Box::new(lambda_identity.clone())),
             arity,
         );
+        // The lambda's definition span is its expression, so its metadata
+        // names the file its body's line table points into.
+        if let Some(span) = lambda_definition_span {
+            self.builder.set_span(span);
+        }
 
         // Keep the checked parameter types for interface dispatch inside the
         // lambda, including inferred parameters and enclosing generic bounds.
