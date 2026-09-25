@@ -451,7 +451,7 @@ async fn interleaved_deep_unwinds_link_each_call_to_its_own_raise() {
     assert_eq!(children.rows.len(), 8);
     for row in &children.rows {
         assert_eq!(row[1], 121, "{row:?}");
-        assert_eq!(row[3], "truncated");
+        assert_eq!(row[3], "partial");
         assert!(row[2].as_i64().unwrap() > 64);
         assert_eq!(row[4], 0, "a call linked to another thread's raise");
     }
@@ -543,4 +543,56 @@ async fn a_collection_between_catch_and_rethrow_keeps_the_origin() {
     assert_eq!(rows.rows[1][0], "rethrow");
     assert_eq!(rows.rows[1][1], "proven");
     assert_eq!(rows.rows[1][2], rows.rows[0][3]);
+}
+
+/// Stacks come from the raising frame's call path: each caller at its call
+/// site, up to the thread's first frame, through retained and timing-only
+/// frames alike. Direct recursion shares one path, so its repeated frames
+/// are listed once and the stack says it is partial.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn stacks_name_each_caller_at_its_call_site() {
+    let project = tempfile::tempdir().unwrap();
+    let source = r#"
+        class Failure { code int }
+        function Thrower(n: int) -> int throws Failure { throw Failure { code: n } }
+        function Middle(n: int) -> int throws Failure { Thrower(n) + 1 }
+        function Recur(n: int) -> int throws Failure {
+            if (n == 0) { Thrower(n) } else { Recur(n - 1) + 1 }
+        }
+        function main(n: int) -> int {
+            let a = Middle(n) catch (e) { Failure => 1 };
+            let b = Recur(3) catch (e) { Failure => 1 };
+            a + b
+        }
+    "#;
+    let results = record_program(project.path(), source, &["Middle"], &[("main", 1)]).await;
+    assert_eq!(results, vec![Ok(BexExternalValue::Int(2))]);
+    let mut index = index(project.path());
+    let stacks = sql(
+        &mut index,
+        "SELECT e.stack_depth, e.stack_state,
+           (SELECT group_concat(frame, ' < ') FROM (
+              SELECT f.fqn || ':' || f.site_line || ':' || f.site_state AS frame
+              FROM error_frames f WHERE f.raise_id = e.raise_id ORDER BY f.position))
+         FROM error_raises e ORDER BY e.raised_ticks",
+    );
+    assert_eq!(
+        stacks.rows,
+        [
+            [
+                Json::from(3),
+                Json::from("complete"),
+                Json::from(
+                    "user.Thrower:3:resolved < user.Middle:4:resolved < user.main:9:resolved"
+                ),
+            ],
+            [
+                Json::from(6),
+                Json::from("partial"),
+                Json::from(
+                    "user.Thrower:3:resolved < user.Recur:6:resolved < user.main:10:resolved"
+                ),
+            ],
+        ]
+    );
 }

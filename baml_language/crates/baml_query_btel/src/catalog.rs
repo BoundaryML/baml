@@ -929,7 +929,7 @@ pub const ERROR_RAISES: Relation = Relation {
         col(
             "stack_state",
             "text",
-            "complete or truncated (error_frames keeps the innermost 64)",
+            "complete; partial: error_frames lists fewer frames than stack_depth (native frames and direct recursion are not on call paths; at most 64 are listed); path_missing: the call path naming the stack is not indexed yet",
         ),
         col(
             "inherited_trace",
@@ -984,8 +984,13 @@ SELECT __btel_pubid(r.recording_id, e.raise_id) AS raise_id,
    WHERE l.rec = e.rec AND l.raise_id = e.raise_id AND l.role = 2) AS failed_calls,
   e.frame_count AS stack_depth,
   CASE WHEN e.frame_count IS NULL THEN NULL
-    WHEN e.frame_count > (SELECT COUNT(*) FROM main.error_frame x
-      WHERE x.rec = e.rec AND x.raise_id = e.raise_id) THEN 'truncated'
+    WHEN e.call_path_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM main.raise_path q
+      WHERE q.rec = e.rec AND q.call_path_id = e.call_path_id AND q.built = 1)
+      THEN 'path_missing'
+    WHEN e.frame_count > IIF(e.call_path_id IS NULL,
+      (SELECT COUNT(*) FROM main.error_frame x WHERE x.rec = e.rec AND x.raise_id = e.raise_id),
+      1 + (SELECT COUNT(*) FROM main.raise_path_frame s
+        WHERE s.rec = e.rec AND s.call_path_id = e.call_path_id)) THEN 'partial'
     ELSE 'complete' END AS stack_state,
   e.inherited AS inherited_trace,
   CASE WHEN e.inherited IS NULL THEN 'none'
@@ -1101,7 +1106,7 @@ WHERE e.defined = 1 AND e.origin_state = 1",
 
 pub const ERROR_FRAMES: Relation = Relation {
     name: "error_frames",
-    doc: "The stack of each raise when unwinding started, innermost first (position 0), with sites resolved in the recorded source maps. At most 64 frames per raise.",
+    doc: "The stack of each raise when unwinding started, innermost first (position 0), with sites resolved in the recorded source maps. At most 64 frames per raise. Usually derived from the raising frame's call path, which omits native frames and lists direct recursion once; error_raises.stack_state says whether frames are missing.",
     columns: &[
         col("raise_id", "text", ""),
         col("recording_id", "text", ""),
@@ -1132,8 +1137,25 @@ SELECT __btel_pubid(r.recording_id, x.raise_id) AS raise_id,
   __btel_sid(r.recording_id, 'f', x.function_id) AS function_id,
   f.fqn, x.pc, x.native,
   x.site_state, x.site_file, x.site_line, x.site_start, x.site_end
-FROM main.error_frame x
-JOIN main.recording r ON r.rec = x.rec
+FROM (
+  SELECT rec, raise_id, position, function_id, pc, native,
+    site_state, site_file, site_line, site_start, site_end
+  FROM main.error_frame
+  UNION ALL
+  SELECT e.rec, e.raise_id, 0, e.function_id, e.pc, 0,
+    e.site_state, e.site_file, e.site_line, e.site_start, e.site_end
+  FROM main.error_raise e WHERE e.call_path_id IS NOT NULL
+  UNION ALL
+  SELECT e.rec, e.raise_id, s.position, p.caller_function_id, p.caller_pc, 0,
+    p.site_state, p.site_file, p.site_line, p.site_start, p.site_end
+  -- Raises drive: raise_path_frame and call_path are keyed lookups, and
+  -- error_raise has no call-path index to cost every import.
+  FROM main.error_raise e
+  CROSS JOIN main.raise_path_frame s ON s.rec = e.rec AND s.call_path_id = e.call_path_id
+  JOIN main.call_path p ON p.rec = s.rec AND p.call_path_id = s.frame_path_id
+  WHERE e.call_path_id IS NOT NULL
+) x
+CROSS JOIN main.recording r ON r.rec = x.rec
 LEFT JOIN main.function_def f ON f.rec = x.rec AND f.function_id = x.function_id",
 };
 

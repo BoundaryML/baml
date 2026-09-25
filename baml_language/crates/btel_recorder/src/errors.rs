@@ -8,12 +8,12 @@
 //! interleaved between them (other producers' chunks), so state is kept per
 //! thread, never as one global "current error".
 use btel_records::{
-    ErrorRaise, OriginVia, RaiseKind, RaiseOrigin, SpanRecord, UnresolvedOrigin, UnwindResult,
+    OriginVia, RaiseKind, RaiseOrigin, RaiseStack, SpanRecord, UnresolvedOrigin, UnwindResult,
 };
 use btel_snapshot::Snapshot;
-use btel_types::{FunctionId, TelemetryId};
+use btel_types::{CallPathId, FunctionId, TelemetryId};
 
-use crate::{ConversionBuffer, proto, push_message};
+use crate::{ConversionBuffer, proto};
 
 struct ActiveUnwind {
     thread: TelemetryId,
@@ -24,29 +24,89 @@ struct ActiveUnwind {
     first_late: Option<TelemetryId>,
 }
 
-/// At most one unwind per telemetry thread; usually empty.
+/// Evidence the VM emits just before a raise's fixed-size record, on the
+/// same thread: a non-fresh origin, and rarely an explicit stack or an
+/// inherited trace.
+struct PendingRaise {
+    thread: TelemetryId,
+    raise: TelemetryId,
+    origin: Option<RaiseOrigin>,
+    frames: Vec<proto::ErrorFrame>,
+    inherited: Vec<proto::InheritedFrame>,
+    inherited_count: u32,
+}
+
+/// At most one unwind and one pending raise per telemetry thread; usually
+/// empty.
 #[derive(Default)]
-pub(crate) struct ActiveUnwinds(Vec<ActiveUnwind>);
+pub(crate) struct ActiveUnwinds {
+    active: Vec<ActiveUnwind>,
+    pending: Vec<PendingRaise>,
+}
 
 impl ActiveUnwinds {
     pub(crate) fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.active.is_empty()
     }
     pub(crate) fn clear_thread(&mut self, thread: TelemetryId) {
-        self.0.retain(|unwind| unwind.thread != thread);
+        self.active.retain(|unwind| unwind.thread != thread);
+        self.pending.retain(|pending| pending.thread != thread);
     }
     fn get_mut(&mut self, thread: TelemetryId) -> Option<&mut ActiveUnwind> {
-        self.0.iter_mut().find(|unwind| unwind.thread == thread)
+        self.active
+            .iter_mut()
+            .find(|unwind| unwind.thread == thread)
+    }
+    /// The thread's pending evidence for `raise`, replacing any left over
+    /// from a raise whose record never arrived.
+    fn pending_mut(&mut self, thread: TelemetryId, raise: TelemetryId) -> &mut PendingRaise {
+        let index = match self.pending.iter().position(|p| p.thread == thread) {
+            Some(index) if self.pending[index].raise == raise => index,
+            Some(index) => {
+                self.pending[index] = PendingRaise::new(thread, raise);
+                index
+            }
+            None => {
+                self.pending.push(PendingRaise::new(thread, raise));
+                self.pending.len() - 1
+            }
+        };
+        &mut self.pending[index]
+    }
+    fn take_pending(&mut self, thread: TelemetryId, raise: TelemetryId) -> Option<PendingRaise> {
+        let index = self.pending.iter().position(|p| p.thread == thread)?;
+        let pending = self.pending.swap_remove(index);
+        (pending.raise == raise).then_some(pending)
+    }
+}
+
+impl PendingRaise {
+    fn new(thread: TelemetryId, raise: TelemetryId) -> Self {
+        Self {
+            thread,
+            raise,
+            origin: None,
+            frames: Vec::new(),
+            inherited: Vec::new(),
+            inherited_count: 0,
+        }
     }
 }
 
 impl ConversionBuffer {
+    /// Append one `ErrorBatch` field; repeated fields may interleave.
+    fn push_error(&mut self, tag: u32, message: &impl prost::Message) {
+        let before = self.pending.errors.len();
+        prost::encoding::message::encode(tag, message, &mut self.pending.errors);
+        self.pending_encoded_bytes = self
+            .pending_encoded_bytes
+            .saturating_add(self.pending.errors.len() - before);
+    }
+
     fn link(&mut self, raise: TelemetryId, call: TelemetryId, role: proto::ErrorLinkRole) {
-        push_message(
-            &mut self.pending.errors.call_links,
-            &mut self.pending_encoded_bytes,
+        self.push_error(
             2,
-            proto::ErrorCallLink {
+            &proto::ErrorCallLink {
                 raise_id: raise.get(),
                 call_id: call.get(),
                 role: role as i32,
@@ -75,30 +135,100 @@ impl ConversionBuffer {
         self.link(raise, done.id, proto::ErrorLinkRole::Unwound);
     }
 
-    pub(crate) fn error_raised(&mut self, thread: TelemetryId, raise: &ErrorRaise) {
+    pub(crate) fn error_raise_origin(
+        &mut self,
+        thread: TelemetryId,
+        raise: TelemetryId,
+        origin: RaiseOrigin,
+    ) {
+        self.unwinds.pending_mut(thread, raise).origin = Some(origin);
+    }
+
+    pub(crate) fn error_raise_stack(&mut self, thread: TelemetryId, stack: &RaiseStack) {
+        // A call path's functions were defined with it; an explicit stack
+        // names functions of its own.
+        for function in stack.frames.iter().filter_map(|frame| frame.function) {
+            self.define_function(function);
+        }
+        let pending = self.unwinds.pending_mut(thread, stack.raise_id);
+        pending.frames = stack
+            .frames
+            .iter()
+            .map(|frame| proto::ErrorFrame {
+                function_id: frame.function.map(FunctionId::get),
+                pc: frame.pc,
+                native: frame.native,
+            })
+            .collect();
+        pending.inherited = stack
+            .inherited
+            .iter()
+            .map(|frame| proto::InheritedFrame {
+                function_name: frame.function_name.clone(),
+                file: frame.file.clone(),
+                line: frame.line,
+            })
+            .collect();
+        pending.inherited_count = stack.inherited_count;
+    }
+
+    pub(crate) fn error_raised(
+        &mut self,
+        thread: TelemetryId,
+        record: &SpanRecord<Snapshot, Snapshot>,
+    ) {
+        let &SpanRecord::ErrorRaised {
+            raise_id,
+            raised_at,
+            kind,
+            function,
+            pc,
+            raise_call,
+            raise_frame_may_promote,
+            call_path,
+            frame_count,
+        } = record
+        else {
+            unreachable!("dispatched on ErrorRaised");
+        };
+        let pending = self.unwinds.take_pending(thread, raise_id);
         // A previous raise on this thread without an end keeps no claim.
         self.unwinds.clear_thread(thread);
-        for function in raise
-            .function
-            .into_iter()
-            .chain(raise.frames.iter().filter_map(|frame| frame.function))
+        // A call path published its callee, the raise function, with it.
+        if call_path == CallPathId::ROOT
+            && let Some(function) = function
         {
             self.define_function(function);
         }
-        let message = raise_message(thread, raise);
-        push_message(
-            &mut self.pending.errors.raises,
-            &mut self.pending_encoded_bytes,
-            1,
-            message,
-        );
-        if let Some(call) = raise.raise_call {
-            self.link(raise.raise_id, call, proto::ErrorLinkRole::RaiseFrame);
+        let mut message = proto::ErrorRaise {
+            raise_id: raise_id.get(),
+            thread_id: thread.get(),
+            raised_at_ticks: raised_at.get(),
+            kind: raise_kind(kind) as i32,
+            function_id: function.map(FunctionId::get),
+            pc,
+            call_path_id: (call_path != CallPathId::ROOT).then(|| call_path.get()),
+            frame_count,
+            ..proto::ErrorRaise::default()
+        };
+        let origin = pending
+            .as_ref()
+            .and_then(|pending| pending.origin)
+            .unwrap_or(RaiseOrigin::Fresh);
+        set_origin(&mut message, origin);
+        if let Some(pending) = pending {
+            message.frames = pending.frames;
+            message.inherited_frames = pending.inherited;
+            message.inherited_frame_count = pending.inherited_count;
         }
-        self.unwinds.0.push(ActiveUnwind {
+        self.push_error(1, &message);
+        if let Some(call) = raise_call {
+            self.link(raise_id, call, proto::ErrorLinkRole::RaiseFrame);
+        }
+        self.unwinds.active.push(ActiveUnwind {
             thread,
-            raise: raise.raise_id,
-            awaiting_raise_frame: raise.raise_frame_may_promote && raise.raise_call.is_none(),
+            raise: raise_id,
+            awaiting_raise_frame: raise_frame_may_promote && raise_call.is_none(),
             completions: 0,
             first_late: None,
         });
@@ -134,11 +264,9 @@ impl ConversionBuffer {
         if let Some(function) = handler_function {
             self.define_function(function);
         }
-        push_message(
-            &mut self.pending.errors.unwind_ends,
-            &mut self.pending_encoded_bytes,
+        self.push_error(
             3,
-            proto::ErrorUnwindEnd {
+            &proto::ErrorUnwindEnd {
                 raise_id: raise.get(),
                 result: match result {
                     UnwindResult::Caught => proto::UnwindResult::Caught,
@@ -162,46 +290,21 @@ fn via(via: OriginVia) -> proto::OriginVia {
     }
 }
 
-fn raise_message(thread: TelemetryId, raise: &ErrorRaise) -> proto::ErrorRaise {
-    let mut message = proto::ErrorRaise {
-        raise_id: raise.raise_id.get(),
-        thread_id: thread.get(),
-        raised_at_ticks: raise.raised_at.get(),
-        kind: match raise.kind {
-            RaiseKind::Throw => proto::RaiseKind::Throw,
-            RaiseKind::Rethrow => proto::RaiseKind::Rethrow,
-            RaiseKind::PanicRethrow => proto::RaiseKind::PanicRethrow,
-            RaiseKind::Await => proto::RaiseKind::Await,
-            RaiseKind::AwaitCancelled => proto::RaiseKind::AwaitCancelled,
-            RaiseKind::NativeBoundary => proto::RaiseKind::NativeBoundary,
-            RaiseKind::HostBoundary => proto::RaiseKind::HostBoundary,
-            RaiseKind::Runtime => proto::RaiseKind::Runtime,
-        } as i32,
-        function_id: raise.function.map(FunctionId::get),
-        pc: raise.pc,
-        frames: raise
-            .frames
-            .iter()
-            .map(|frame| proto::ErrorFrame {
-                function_id: frame.function.map(FunctionId::get),
-                pc: frame.pc,
-                native: frame.native,
-            })
-            .collect(),
-        frame_count: raise.frame_count,
-        inherited_frames: raise
-            .inherited
-            .iter()
-            .map(|frame| proto::InheritedFrame {
-                function_name: frame.function_name.clone(),
-                file: frame.file.clone(),
-                line: frame.line,
-            })
-            .collect(),
-        inherited_frame_count: raise.inherited_count,
-        ..proto::ErrorRaise::default()
-    };
-    match raise.origin {
+fn raise_kind(kind: RaiseKind) -> proto::RaiseKind {
+    match kind {
+        RaiseKind::Throw => proto::RaiseKind::Throw,
+        RaiseKind::Rethrow => proto::RaiseKind::Rethrow,
+        RaiseKind::PanicRethrow => proto::RaiseKind::PanicRethrow,
+        RaiseKind::Await => proto::RaiseKind::Await,
+        RaiseKind::AwaitCancelled => proto::RaiseKind::AwaitCancelled,
+        RaiseKind::NativeBoundary => proto::RaiseKind::NativeBoundary,
+        RaiseKind::HostBoundary => proto::RaiseKind::HostBoundary,
+        RaiseKind::Runtime => proto::RaiseKind::Runtime,
+    }
+}
+
+fn set_origin(message: &mut proto::ErrorRaise, origin: RaiseOrigin) {
+    match origin {
         RaiseOrigin::Fresh => message.origin_state = proto::OriginState::Fresh as i32,
         RaiseOrigin::Proven {
             origin,
@@ -234,13 +337,12 @@ fn raise_message(thread: TelemetryId, raise: &ErrorRaise) -> proto::ErrorRaise {
             } as i32;
         }
     }
-    message
 }
 
 #[cfg(test)]
 mod tests {
-    use btel_records::{ErrorFrame, OriginVia, RaiseOrigin};
-    use btel_types::{AwaitDuration, CallPathId, ClockInstant, allocate_telemetry_id};
+    use btel_records::{ErrorFrame, InheritedFrame, OriginVia, RaiseOrigin};
+    use btel_types::{AwaitDuration, ClockInstant, allocate_telemetry_id};
     use prost::Message as _;
 
     use super::*;
@@ -249,7 +351,7 @@ mod tests {
     type Record = SpanRecord<Snapshot, Snapshot>;
 
     fn raise(id: TelemetryId, may_promote: bool, call: Option<TelemetryId>) -> Record {
-        SpanRecord::ErrorRaised(Box::new(ErrorRaise {
+        SpanRecord::ErrorRaised {
             raise_id: id,
             raised_at: ClockInstant::from_ticks(5),
             kind: RaiseKind::Throw,
@@ -257,16 +359,9 @@ mod tests {
             pc: Some(3),
             raise_call: call,
             raise_frame_may_promote: may_promote,
-            origin: RaiseOrigin::Fresh,
-            frames: vec![ErrorFrame {
-                function: None,
-                pc: Some(3),
-                native: false,
-            }],
+            call_path: CallPathId::new_non_root(4).unwrap(),
             frame_count: 1,
-            inherited: Vec::new(),
-            inherited_count: 0,
-        }))
+        }
     }
 
     fn failed(id: TelemetryId, parent: TelemetryId, late: bool) -> Record {
@@ -449,20 +544,85 @@ mod tests {
         assert!(file(&mut builder).errors.is_none());
 
         let origin = allocate_telemetry_id();
-        let mut record = raise(allocate_telemetry_id(), false, None);
-        if let SpanRecord::ErrorRaised(raise) = &mut record {
-            raise.origin = RaiseOrigin::Proven {
-                origin,
-                previous: None,
-                via: OriginVia::Await,
-            };
-        }
-        builder.span_reference(thread, &record);
+        let raise_id = allocate_telemetry_id();
+        builder.span_reference(
+            thread,
+            &SpanRecord::ErrorRaiseOrigin {
+                raise_id,
+                origin: RaiseOrigin::Proven {
+                    origin,
+                    previous: None,
+                    via: OriginVia::Await,
+                },
+            },
+        );
+        builder.span_reference(thread, &raise(raise_id, false, None));
         let file = file(&mut builder);
         let raise = &file.errors.unwrap().raises[0];
         assert_eq!(raise.origin_state, proto::OriginState::Proven as i32);
         assert_eq!(raise.origin_raise_id, Some(origin.get()));
         assert_eq!(raise.previous_raise_id, None);
         assert_eq!(raise.origin_via, proto::OriginVia::Await as i32);
+        assert_eq!(raise.call_path_id, Some(4));
+        assert!(raise.frames.is_empty());
+    }
+
+    #[test]
+    fn preceding_evidence_joins_only_its_own_raise() {
+        let mut builder =
+            RecordingBuilder::new(RecordingId::generate(), RecordingConfig::default()).unwrap();
+        let [a, b] = [allocate_telemetry_id(), allocate_telemetry_id()];
+        let [stale, listed, other] = [
+            allocate_telemetry_id(),
+            allocate_telemetry_id(),
+            allocate_telemetry_id(),
+        ];
+        let stack = |raise_id| {
+            SpanRecord::ErrorRaiseStack(Box::new(RaiseStack {
+                raise_id,
+                frames: vec![ErrorFrame {
+                    function: None,
+                    pc: None,
+                    native: true,
+                }],
+                inherited: vec![InheritedFrame {
+                    function_name: "f".into(),
+                    file: "a.baml".into(),
+                    line: 2,
+                }],
+                inherited_count: 3,
+            }))
+        };
+        // Evidence of a raise whose record never arrived is replaced; another
+        // thread's evidence never attaches here.
+        builder.span_reference(
+            a,
+            &SpanRecord::ErrorRaiseOrigin {
+                raise_id: stale,
+                origin: RaiseOrigin::Ambiguous {
+                    candidates: 2,
+                    via: OriginVia::Rethrow,
+                },
+            },
+        );
+        builder.span_reference(b, &stack(other));
+        builder.span_reference(a, &stack(listed));
+        let mut record = raise(listed, false, None);
+        if let SpanRecord::ErrorRaised { call_path, .. } = &mut record {
+            *call_path = CallPathId::ROOT;
+        }
+        builder.span_reference(a, &record);
+        builder.span_reference(b, &raise(allocate_telemetry_id(), false, None));
+        let errors = file(&mut builder).errors.unwrap();
+        let [first, second] = errors.raises.as_slice() else {
+            panic!("two raises");
+        };
+        assert_eq!(first.raise_id, listed.get());
+        assert_eq!(first.origin_state, proto::OriginState::Fresh as i32);
+        assert_eq!(first.call_path_id, None);
+        assert_eq!(first.frames.len(), 1);
+        assert_eq!(first.inherited_frame_count, 3);
+        assert_eq!(second.call_path_id, Some(4));
+        assert!(second.frames.is_empty() && second.inherited_frames.is_empty());
     }
 }

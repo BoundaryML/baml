@@ -657,6 +657,8 @@ struct Applier<'t> {
     /// defined paths and raises, and everything that names a function whose
     /// definition arrived in this batch.
     sites: sites::Pending,
+    /// Call paths new raises name as their stacks.
+    raise_paths: HashSet<u32>,
 }
 
 impl<'t> Applier<'t> {
@@ -671,6 +673,7 @@ impl<'t> Applier<'t> {
             touched_paths: false,
             changed_children: HashSet::new(),
             sites: sites::Pending::default(),
+            raise_paths: HashSet::new(),
         }
     }
 
@@ -1381,6 +1384,7 @@ impl<'t> Applier<'t> {
             resolve_depths(self.tx, self.rec)?;
         }
         self.reduce_child_time()?;
+        errors::build_raise_paths(self.tx, self.rec, &self.raise_paths, self.touched_paths)?;
         sites::resolve(self.tx, self.rec, &self.sites)?;
         Ok(())
     }

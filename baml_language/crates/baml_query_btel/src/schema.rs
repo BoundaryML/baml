@@ -15,7 +15,7 @@
 //!   visible; they never make a thread a root or a path a top-level path.
 
 /// Physical layout of these tables. Change on any DDL change.
-pub const SCHEMA_VERSION: i64 = 6;
+pub const SCHEMA_VERSION: i64 = 7;
 /// Interpretation of evidence into rows. Change when reconciliation changes
 /// meaning without a DDL change; either mismatch rebuilds the index.
 pub const NORMALIZATION_VERSION: i64 = 1;
@@ -277,6 +277,9 @@ CREATE TABLE error_raise (
   origin_candidates INTEGER,
   unresolved_reason INTEGER,
   frame_count INTEGER,
+  -- The raising frame's call path: the stack is function_id at pc, then
+  -- the callers raise_path_frame lists. NULL when error_frame lists it.
+  call_path_id INTEGER,
   inherited_count INTEGER,
   -- JSON array of {function, file, line}; NULL when none was recorded.
   inherited TEXT,
@@ -306,7 +309,30 @@ CREATE INDEX error_raise_by_function ON error_raise (rec, function_id);
 CREATE INDEX error_raise_by_handler ON error_raise (rec, handler_function_id);
 CREATE INDEX error_raise_by_thread ON error_raise (rec, thread_id);
 
--- A raise's live stack, innermost first (position 0).
+-- Call paths that name raise stacks (error_raise.call_path_id). built = 1
+-- once raise_path_frame lists the path's callers; 0 while a path it walks
+-- through is not defined yet. One row per path, not per raise.
+CREATE TABLE raise_path (
+  rec INTEGER NOT NULL,
+  call_path_id INTEGER NOT NULL,
+  built INTEGER NOT NULL,
+  PRIMARY KEY (rec, call_path_id)
+) STRICT, WITHOUT ROWID;
+CREATE INDEX raise_path_unbuilt ON raise_path (rec) WHERE built = 0;
+
+-- The callers on a raise path, innermost first. Position 1 is the raising
+-- frame's caller: frame_path_id's caller_function_id at its caller_pc, with
+-- that path's call site. Ends at the thread's first frame, at most 63 rows.
+CREATE TABLE raise_path_frame (
+  rec INTEGER NOT NULL,
+  call_path_id INTEGER NOT NULL,
+  position INTEGER NOT NULL,
+  frame_path_id INTEGER NOT NULL,
+  PRIMARY KEY (rec, call_path_id, position)
+) STRICT, WITHOUT ROWID;
+
+-- A raise's live stack, innermost first (position 0), when it was recorded
+-- explicitly because no call path covered it.
 CREATE TABLE error_frame (
   rec INTEGER NOT NULL,
   raise_id BLOB NOT NULL,
@@ -362,6 +388,8 @@ pub const FACT_TABLES: &[&str] = &[
     "aggregate",
     "call",
     "error_raise",
+    "raise_path",
+    "raise_path_frame",
     "error_frame",
     "error_link",
     "issue",
@@ -381,6 +409,8 @@ pub const ALL_TABLES: &[&str] = &[
     "aggregate",
     "call",
     "error_raise",
+    "raise_path",
+    "raise_path_frame",
     "error_frame",
     "error_link",
     "issue",

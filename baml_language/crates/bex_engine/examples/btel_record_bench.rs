@@ -137,7 +137,13 @@ async fn main() {
             Arc::new(sys_native::SysOps::native()),
             vec![],
             None,
-            btel_clock::ClockMode::Monotonic,
+            // Monotonic by default so results compare with earlier reports;
+            // `BTEL_BENCH_CLOCK=auto` measures the production default.
+            if std::env::var("BTEL_BENCH_CLOCK").as_deref() == Ok("auto") {
+                btel_clock::ClockMode::Auto
+            } else {
+                btel_clock::ClockMode::Monotonic
+            },
             TelemetryRecording::local_files(project, config),
         )
         .unwrap(),

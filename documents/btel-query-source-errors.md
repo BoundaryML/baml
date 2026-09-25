@@ -205,13 +205,25 @@ which raise failed each one; the tests below cover that.
 
 ### Transport
 
-- The VM emits one boxed `ErrorRaised` span record when unwinding starts and
-  one scalar `ErrorUnwindEnded` when it stops. The failed-call completions in
-  between are unchanged. A throw caught in the same frame has a raise and an
-  end, and no failed call.
+- The VM emits one `ErrorRaised` span record when unwinding starts and one
+  `ErrorUnwindEnded` when it stops. Both fit the normal span slot, so a
+  fresh raise allocates nothing. The failed-call completions in between are
+  unchanged. A throw caught in the same frame has a raise and an end, and
+  no failed call.
+- The raise does not copy the stack. It names the raising frame's call
+  path, which the producer already keeps for every observed call: that
+  path's callers, each at its call site, are the stack. If some bytecode
+  frame on the thread has no telemetry (for example with
+  `BAML_TELEMETRY=low`), the VM lists the frames explicitly instead.
+- A rethrow or await sends its origin in a small `ErrorRaiseOrigin` record
+  just before the raise. Only an explicit stack or an inherited trace goes
+  in a boxed `ErrorRaiseStack` record. The recorder joins them to the raise
+  that follows on the same thread.
 - The raise frame may be timing-only and get promoted when it completes; its
-  call ID only exists then. The VM emits a scalar marker right after
-  completing that frame, and the recorder attaches the promoted ID.
+  call ID only exists then. If its function has a policy that could promote
+  it, the VM emits a scalar marker right after completing that frame, and
+  the recorder attaches the promoted ID. A frame without a policy is never
+  promoted, so it gets no marker.
 - The recorder keeps one active unwind per telemetry thread and links every
   function completion on that thread to it until its end. A thread
   completion or a new raise on the thread clears an unwind that never
@@ -219,8 +231,10 @@ which raise failed each one; the tests below cover that.
   a raise and its end, in the same or other chunks; they are never linked.
 - Raises, links and ends go to a separate error section of the file,
   counted like other metadata. They never use the fixed 128-byte span-event
-  reservation. A stack keeps its innermost 64 frames and says how many there
-  were. A file without errors has no error section.
+  reservation. The recorder encodes each message once as it arrives and
+  writes the section's bytes when it seals the file. An explicit stack keeps
+  its innermost 64 frames. Every raise says how many frames there were. A
+  file without errors has no error section.
 - Only publishers that write recordings ask for error evidence. With no
   recording, or after recording is disabled, the VM builds none.
 
@@ -233,7 +247,10 @@ which raise failed each one; the tests below cover that.
 - `error_occurrences`: one row per fresh raise, with how many raises passed
   it along, the calls they failed, how many escaped, and the captured error
   value of a failed call.
-- `error_frames`: each raise's stack, innermost first, with sites.
+- `error_frames`: each raise's stack, innermost first, with sites. A stack
+  from a call path lists each caller at its call site. It leaves out native
+  frames and lists direct recursion once, so `error_raises.stack_state` is
+  `partial` when it lists fewer frames than the raise counted.
 - `error_call_links`: the raise frame's call and every call a raise unwound.
 - `call_paths`, `threads` and `calls` gain site columns with a state.
   `calls` also gains `error_raise_id`, `error_occurrence_id` and
@@ -272,7 +289,8 @@ pulling operands.
 - Executable `Function`, `BytecodeFrame`/`Frame` (still asserted at 88 bytes
   plus a pointer), `FrameTelemetry` (32), `Future`, value and GC layouts.
 - `TimingRecord` stays 32 bytes. The span slot stays 56 bytes, 8-aligned;
-  the boxed raise is one pointer. A test asserts both.
+  the raise record fits in it and the rare boxed stack is one pointer. A
+  test asserts both.
 - No instruction, call, return, await or spawn path gained work. The vm.rs
   diff touches only the unwinder, host injection, and one `Option` check
   when a top-level run starts on an empty stack. `UnknownError` context
@@ -283,20 +301,25 @@ pulling operands.
 - `btel_types::FunctionMetadata` gains `source_map`. The static table
   copied at recording startup now includes every compile-time function's
   line table.
-- `btel_records::SpanRecord` gains `ErrorRaised(Box<ErrorRaise>)`,
+- `btel_records::SpanRecord` gains `ErrorRaiseOrigin`,
+  `ErrorRaiseStack(Box<RaiseStack>)`, `ErrorRaised`,
   `ErrorRaiseFrameCompleted` and `ErrorUnwindEnded`, plus the owned
-  `ErrorRaise`, frame, origin and link types.
+  `RaiseStack`, frame, origin and link types.
 - `btel_processor::Publisher` gains `ERROR_EVIDENCE` (default false).
   `TelemetryRuntime` gains that flag and the bounded future-link store.
 - `bex_vm::telemetry::TelemetryState` gains one pointer: the landing notes
   and escaped raise, allocated on the first recorded raise.
-- The recorder's conversion buffer gains the active-unwind list and the
-  error section.
+- The recorder's conversion buffer gains the active-unwind list, the
+  evidence waiting for its raise, and the encoded error section.
 - Wire format minor 2: `FunctionMetadata.source_map` (field 15) and
-  `RecordingFile.errors` (field 8). `UnresolvedReason` includes
+  `RecordingFile.errors` (field 8). `ErrorRaise.call_path_id` (field 18)
+  names a stack; `frames` (field 14) is only used without it. `UnresolvedReason` includes
   `SOURCE_NOT_RECORDED` (6) for conversions. Readers accept any minor.
-- Index schema 6: source maps on `function_def`, site columns on
-  `call_path`, and tables `error_raise`, `error_frame`, `error_link`.
+- Index schema 7: source maps on `function_def`, site columns on
+  `call_path`, and tables `error_raise`, `error_frame`, `error_link`,
+  `raise_path` and `raise_path_frame`. The callers of a call path are listed
+  once per path, not once per raise, when every path up to the thread's
+  first frame is indexed.
 
 ### Other changed files
 
@@ -336,8 +359,10 @@ pulling operands.
   raise. If the unwinder itself fails, the raise ends `aborted`.
 - A cancelled child that never ran an await records no raise of its own.
   The parent's await raises `await_cancelled`.
-- Stacks keep 64 frames; inherited traces keep 16, with names and files
+- Stacks list 64 frames; inherited traces keep 16, with names and files
   clipped to 256 bytes.
+- A stack from a call path has no native frames, and direct recursion
+  appears once. `stack_depth` still counts every frame.
 - The defer pad's rethrow is placed at the block that ran the defers.
 - A native function that fails after one of its callbacks returned is
   located with the PC the unwinder uses for that frame. That path was not
@@ -423,6 +448,11 @@ Results:
 - The CLI demo above ran on a debug `baml-cli` built from this worktree.
 
 ## Performance
+
+The throw numbers below are from the first version, which copied each
+stack into a boxed record. Raises now name their call path instead; see
+[btel-query-throw-performance.md](btel-query-throw-performance.md) for
+what a raise costs now.
 
 Paired release binaries on this workstation (AMD Ryzen 9 5950X), Rust
 1.98.0, `CARGO_INCREMENTAL=0`, with the existing short harness:

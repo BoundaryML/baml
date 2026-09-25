@@ -496,3 +496,108 @@ fn error_evidence_arrives_in_pieces_and_bad_records_are_explicit() {
         [vec![json!(prefix(200)), json!(1), json!(1)]]
     );
 }
+
+/// A raise names its stack by call path; the callers are listed once every
+/// path up to the thread's first frame is indexed, in whichever file that
+/// arrives.
+#[test]
+fn a_call_path_stack_is_listed_once_its_ancestors_arrive() {
+    let project = tempfile::tempdir().unwrap();
+    let recording = Recording::new(project.path(), 5, 2);
+    let path = |id, parent, caller, pc, callee| proto::CallPathDefinition {
+        call_path_id: id,
+        thread_id: THREAD,
+        parent_call_path_id: parent,
+        visible_caller_function_id: caller,
+        caller_pc: pc,
+        callee_function_id: callee,
+        edge: proto::CallPathEdge::Synchronous as i32,
+    };
+    let mut definitions = base();
+    definitions.functions = vec![
+        metadata(CALLER, "user.Caller", Some(map(FILE))),
+        metadata(CALLEE, "user.Callee", Some(map(FILE))),
+    ];
+    // Callee, called by Caller at PC 12; Caller's own path comes later.
+    definitions.call_paths = vec![path(2, 1, Some(CALLER), 12, CALLEE)];
+    recording.write(
+        1,
+        proto::RecordingFile {
+            definitions: Some(definitions),
+            errors: Some(proto::ErrorBatch {
+                raises: vec![proto::ErrorRaise {
+                    function_id: Some(CALLEE),
+                    pc: Some(2),
+                    frames: vec![],
+                    call_path_id: Some(2),
+                    ..raise(300, None)
+                }],
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+    let mut index = open(project.path());
+    let state = "SELECT stack_depth, stack_state FROM error_raises";
+    let frames = "SELECT position, fqn, native, site_state, site_line FROM error_frames
+        ORDER BY position";
+    assert_eq!(
+        rows(&mut index, state),
+        [vec![json!(2), json!("path_missing")]]
+    );
+    let raising = vec![
+        json!(0),
+        json!("user.Callee"),
+        json!(0),
+        json!("resolved"),
+        json!(4),
+    ];
+    assert_eq!(rows(&mut index, frames), std::slice::from_ref(&raising));
+
+    // Caller's path: the thread's first frame, with no caller of its own.
+    recording.write(
+        2,
+        proto::RecordingFile {
+            definitions: Some(proto::Definitions {
+                call_paths: vec![path(1, 0, None, 0, CALLER)],
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+    assert_eq!(rows(&mut index, state), [vec![json!(2), json!("complete")]]);
+    assert_eq!(
+        rows(&mut index, frames),
+        [
+            raising,
+            vec![
+                json!(1),
+                json!("user.Caller"),
+                json!(0),
+                json!("resolved"),
+                json!(5)
+            ]
+        ]
+    );
+    // A stack is either a call path or explicit frames, never both.
+    recording.write(
+        3,
+        proto::RecordingFile {
+            errors: Some(proto::ErrorBatch {
+                raises: vec![proto::ErrorRaise {
+                    call_path_id: Some(2),
+                    ..raise(301, None)
+                }],
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+    assert_eq!(
+        rows(
+            &mut index,
+            "SELECT COUNT(*) FROM issues WHERE code = 'error_evidence_invalid'"
+        ),
+        [vec![json!(1)]]
+    );
+}

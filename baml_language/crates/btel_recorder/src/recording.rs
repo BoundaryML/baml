@@ -11,6 +11,9 @@ pub use settings::RecordingConfig;
 use web_time::Instant;
 
 use crate::{ConversionBuffer, proto};
+
+/// `RecordingFile.errors`, written from pre-encoded bytes after the rest.
+const ERRORS_FIELD: u32 = 8;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RecordingId([u8; 16]);
 impl RecordingId {
@@ -221,10 +224,18 @@ impl RecordingBuilder {
             spans: self.buffer.spans.is_empty().then(proto::SpanBatch::default),
             clock_states: Some(ready.clock_states),
             end: end.then_some(proto::RecordingEnd {}),
-            // Absent without exceptions, so error-free files keep their bytes.
-            errors: (ready.errors != proto::ErrorBatch::default()).then_some(ready.errors),
+            // Appended below from its pre-encoded body.
+            errors: None,
         };
-        let length = file.encoded_len();
+        // Absent without exceptions, so error-free files keep their bytes.
+        let errors_len = if ready.errors.is_empty() {
+            0
+        } else {
+            prost::encoding::key_len(ERRORS_FIELD)
+                + prost::encoding::encoded_len_varint(ready.errors.len() as u64)
+                + ready.errors.len()
+        };
+        let length = file.encoded_len() + errors_len;
         self.reserve_encoding(length)?;
         let mut bytes = self.buffer.spans.finish();
         let metadata_start = bytes.len();
@@ -244,6 +255,15 @@ impl RecordingBuilder {
         }
         let metadata = metadata_start..bytes.len();
         file.encode_raw(&mut bytes);
+        if errors_len != 0 {
+            prost::encoding::encode_key(
+                ERRORS_FIELD,
+                prost::encoding::WireType::LengthDelimited,
+                &mut bytes,
+            );
+            prost::encoding::encode_varint(ready.errors.len() as u64, &mut bytes);
+            bytes.extend_from_slice(&ready.errors);
+        }
         let sealed = SealedFile {
             id: self.id,
             sequence,

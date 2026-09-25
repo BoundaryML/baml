@@ -243,6 +243,11 @@ impl TelemetryState {
         self.thread.active_id
     }
 
+    /// The innermost observed frame's call path; `ROOT` outside any.
+    pub(crate) fn active_call_path(&self) -> CallPathId {
+        self.thread.active_call_path
+    }
+
     pub fn spawn_context(
         &mut self,
         visible_caller: Option<HeapPtr>,

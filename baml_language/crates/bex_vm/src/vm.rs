@@ -5121,6 +5121,7 @@ impl BexVm {
         let mut evidence = self.begin_error_evidence(
             &thrown,
             entry,
+            Some((*frame_idx, *function)),
             preserved.as_ref(),
             !is_rethrow && preserved.is_some(),
         );
@@ -6647,7 +6648,9 @@ impl BexVm {
     /// An injected failure with no bytecode frame to unwind still is a raise.
     #[cold]
     fn record_unwound_without_frames(&mut self, thrown: &VmThrown) {
-        if let Some(evidence) = self.begin_error_evidence(thrown, RaiseEntry::Host, None, false) {
+        if let Some(evidence) =
+            self.begin_error_evidence(thrown, RaiseEntry::Host, None, None, false)
+        {
             self.error_not_caught(evidence, btel_records::UnwindResult::Unhandled);
         }
     }

@@ -349,12 +349,20 @@ message ErrorRaise {
   uint32 origin_candidates = 11; // AMBIGUOUS: distinct origins that matched.
   UnresolvedReason unresolved_reason = 12; // UNRESOLVED only.
   reserved 13;
-  repeated ErrorFrame frames = 14; // Live stack, innermost first, bounded.
-  uint32 frame_count = 15;      // Frames on the stack; more than listed means truncated.
+  // Live stack, innermost first, bounded. Only without call_path_id: some
+  // bytecode frame was not observed, or no bytecode frame raised.
+  repeated ErrorFrame frames = 14;
+  uint32 frame_count = 15;      // Frames on the stack, native ones included.
   // Diagnostic trace the VM carried from an earlier throw, recorded only
   // when the origin is not proven. Weaker evidence: names and lines, no IDs.
   repeated InheritedFrame inherited_frames = 16;
   uint32 inherited_frame_count = 17;
+  // The raising frame's call path, when every bytecode frame on the thread
+  // was observed. The stack is function_id at pc, then each path's caller at
+  // its caller_pc, up to the thread's first frame. Native frames are not on
+  // call paths, and direct recursion shares one path: frame_count can exceed
+  // the frames it names.
+  optional uint32 call_path_id = 18;
 }
 
 message ErrorFrame {

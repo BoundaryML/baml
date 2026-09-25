@@ -58,6 +58,9 @@ impl Applier<'_> {
             || !origin_ok
             || raise.function_id == Some(0)
             || raise.frames.len() > usize::try_from(raise.frame_count).unwrap_or(usize::MAX)
+            // A call path names the stack; explicit frames replace it.
+            || raise.call_path_id == Some(0)
+            || (raise.call_path_id.is_some() && !raise.frames.is_empty())
         {
             return self.invalid_error(sequence, "error raise");
         }
@@ -88,6 +91,10 @@ impl Applier<'_> {
         }
         self.references.threads.insert(raise.thread_id);
         self.references.functions.extend(raise.function_id);
+        if let Some(path) = raise.call_path_id {
+            self.references.paths.insert(path);
+            self.raise_paths.insert(path);
+        }
         let inherited = (!raise.inherited_frames.is_empty()).then(|| {
             serde_json::Value::Array(
                 raise
@@ -109,9 +116,9 @@ impl Applier<'_> {
                 "INSERT INTO error_raise (rec, raise_id, defined, sequence, thread_id, raised_ticks,
                    kind, function_id, pc, origin_state, origin_raise_id, previous_raise_id,
                    origin_via, origin_candidates, unresolved_reason, frame_count, inherited_count,
-                   inherited, evidence)
+                   inherited, evidence, call_path_id)
                  VALUES (?1, ?2, 1, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-                   ?17, ?18)
+                   ?17, ?18, ?19)
                  ON CONFLICT (rec, raise_id) DO UPDATE SET defined = 1,
                    sequence = excluded.sequence, thread_id = excluded.thread_id,
                    raised_ticks = excluded.raised_ticks, kind = excluded.kind,
@@ -122,7 +129,8 @@ impl Applier<'_> {
                    origin_candidates = excluded.origin_candidates,
                    unresolved_reason = excluded.unresolved_reason,
                    frame_count = excluded.frame_count, inherited_count = excluded.inherited_count,
-                   inherited = excluded.inherited, evidence = excluded.evidence",
+                   inherited = excluded.inherited, evidence = excluded.evidence,
+                   call_path_id = excluded.call_path_id",
             )?
             .execute(params![
                 self.rec,
@@ -142,7 +150,8 @@ impl Applier<'_> {
                 raise.frame_count,
                 raise.inherited_frame_count,
                 inherited,
-                encoded
+                encoded,
+                raise.call_path_id.map(i64::from)
             ])?;
         let mut frame = self.tx.prepare_cached(
             "INSERT OR REPLACE INTO error_frame (rec, raise_id, position, function_id, pc, native)
@@ -272,4 +281,83 @@ impl Applier<'_> {
         self.sites.ends.insert(end.raise_id);
         Ok(())
     }
+}
+
+/// Callers listed per raise path; with the raising frame, `MAX_ERROR_FRAMES`.
+const MAX_PATH_CALLERS: usize = 63;
+
+/// List the callers of raise paths whose walk is now possible: every path
+/// from the raising one up to the thread's first frame is defined. Runs when
+/// this batch named new raise paths or defined call paths; each path is
+/// built once, however many raises name it.
+pub(super) fn build_raise_paths(
+    tx: &rusqlite::Transaction<'_>,
+    rec: i64,
+    new_paths: &std::collections::HashSet<u32>,
+    touched_paths: bool,
+) -> Result<(), Error> {
+    for path in new_paths {
+        tx.prepare_cached(
+            "INSERT OR IGNORE INTO raise_path (rec, call_path_id, built) VALUES (?1, ?2, 0)",
+        )?
+        .execute(params![rec, i64::from(*path)])?;
+    }
+    if new_paths.is_empty() && !touched_paths {
+        return Ok(());
+    }
+    let unbuilt: Vec<i64> = tx
+        .prepare_cached(
+            "SELECT call_path_id FROM raise_path INDEXED BY raise_path_unbuilt
+             WHERE rec = ?1 AND built = 0",
+        )?
+        .query_map([rec], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    let mut step = tx.prepare_cached(
+        "SELECT defined, parent_call_path_id, caller_function_id IS NOT NULL, edge
+         FROM call_path WHERE rec = ?1 AND call_path_id = ?2",
+    )?;
+    for path in unbuilt {
+        // Each frame is the caller named by a path; the walk ends at a path
+        // without a caller (a thread's first frame) or at a spawn edge.
+        let mut frames = Vec::new();
+        let mut current = path;
+        let complete = loop {
+            let row: Option<(i64, Option<i64>, bool, Option<i64>)> = step
+                .query_row(params![rec, current], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+                })
+                .optional()?;
+            let Some((1, parent, has_caller, edge)) = row else {
+                break false;
+            };
+            if !has_caller || edge != Some(1) {
+                break true;
+            }
+            frames.push(current);
+            match parent {
+                Some(parent) if parent != 0 && frames.len() < MAX_PATH_CALLERS => {
+                    current = parent;
+                }
+                _ => break true,
+            }
+        };
+        if !complete {
+            continue;
+        }
+        let mut insert = tx.prepare_cached(
+            "INSERT OR REPLACE INTO raise_path_frame (rec, call_path_id, position, frame_path_id)
+             VALUES (?1, ?2, ?3, ?4)",
+        )?;
+        for (index, frame) in frames.iter().enumerate() {
+            insert.execute(params![
+                rec,
+                path,
+                i64::try_from(index + 1).unwrap_or(i64::MAX),
+                frame
+            ])?;
+        }
+        tx.prepare_cached("UPDATE raise_path SET built = 1 WHERE rec = ?1 AND call_path_id = ?2")?
+            .execute(params![rec, path])?;
+    }
+    Ok(())
 }

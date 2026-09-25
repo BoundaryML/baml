@@ -36,7 +36,10 @@ struct PendingMessages {
     definitions: proto::Definitions,
     aggregates: proto::AggregateBatch,
     clock_states: proto::ClockStateBatch,
-    errors: proto::ErrorBatch,
+    /// `ErrorBatch` body, encoded as each message arrives: a throw-heavy
+    /// program sends one raise and one end per throw, and prost would
+    /// otherwise recompute every nested length several times per file.
+    errors: Vec<u8>,
 }
 
 /// Worker-local conversion state. The recording publisher drains this after
@@ -205,7 +208,11 @@ impl ConversionBuffer {
                 // A raise that never ended cannot claim anything after its thread.
                 self.unwinds.clear_thread(thread);
             }
-            SpanRecord::ErrorRaised(raise) => self.error_raised(thread, raise),
+            SpanRecord::ErrorRaiseOrigin { raise_id, origin } => {
+                self.error_raise_origin(thread, *raise_id, *origin);
+            }
+            SpanRecord::ErrorRaiseStack(stack) => self.error_raise_stack(thread, stack),
+            SpanRecord::ErrorRaised { .. } => self.error_raised(thread, record),
             SpanRecord::ErrorRaiseFrameCompleted { raise_id } => {
                 self.error_raise_frame_completed(thread, *raise_id);
             }

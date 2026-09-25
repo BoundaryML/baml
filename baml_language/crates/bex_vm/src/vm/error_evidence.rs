@@ -11,16 +11,16 @@
 use std::sync::Arc;
 
 use bex_vm_types::{
-    Object,
+    Function, Object,
     bytecode::OpCode,
     errors::{StackFrame, ThrowKind, VmThrown},
 };
 use btel_records::{
-    ErrorFrame, ErrorRaise, FutureErrorLink, FutureErrorLookup, InheritedFrame, MAX_ERROR_FRAMES,
+    ErrorFrame, FutureErrorLink, FutureErrorLookup, InheritedFrame, MAX_ERROR_FRAMES,
     MAX_INHERITED_FRAMES, MAX_INHERITED_TEXT_BYTES, OriginEvidence, OriginVia, RaiseKind,
-    RaiseOrigin, SpanRecord, UnresolvedOrigin, UnwindResult,
+    RaiseOrigin, RaiseStack, SpanRecord, UnresolvedOrigin, UnwindResult,
 };
-use btel_types::{FunctionId, TelemetryId, allocate_telemetry_id};
+use btel_types::{CallPathId, FunctionId, TelemetryId, TelemetryPolicyId, allocate_telemetry_id};
 
 use super::{BexVm, Frame, ThrowContext};
 use crate::telemetry::{ActiveHandler, FrameScope, LandingMatch};
@@ -164,18 +164,19 @@ impl BexVm {
         unsafe { self.heap.register_telemetry_function(ptr) }
     }
 
-    fn frame_opcode(&self, frame_idx: usize, pc: usize) -> Option<OpCode> {
-        // SAFETY: the bytecode frame roots its function under the permit.
-        let function = unsafe { self.load_function(frame_idx) }.ok()?;
-        let byte = *function.bytecode.compact.as_ref()?.code.get(pc)?;
-        OpCode::try_from(byte).ok()
-    }
-
-    fn raise_kind(&self, entry: RaiseEntry, frame: Option<usize>, thrown: &VmThrown) -> RaiseKind {
+    fn raise_kind(
+        &self,
+        entry: RaiseEntry,
+        function: Option<&Function>,
+        thrown: &VmThrown,
+    ) -> RaiseKind {
         if entry == RaiseEntry::Host {
             return RaiseKind::HostBoundary;
         }
-        match frame.and_then(|frame| self.frame_opcode(frame, self.cur_pc)) {
+        let opcode = function
+            .and_then(|function| function.bytecode.compact.as_ref()?.code.get(self.cur_pc))
+            .and_then(|byte| OpCode::try_from(*byte).ok());
+        match opcode {
             Some(OpCode::Throw) => RaiseKind::Throw,
             Some(OpCode::Rethrow) => RaiseKind::Rethrow,
             Some(OpCode::ThrowIfPanic) => RaiseKind::PanicRethrow,
@@ -334,10 +335,9 @@ impl BexVm {
     }
 
     /// Live stack, innermost first: the same frames and PCs the unwinder and
-    /// diagnostic traces use.
-    fn error_frames(&self, raise_frame: Option<usize>) -> (Vec<ErrorFrame>, u32) {
-        let total = u32::try_from(self.frames.len()).unwrap_or(u32::MAX);
-        let frames = (0..self.frames.len())
+    /// diagnostic traces use. Only for raises without a call path.
+    fn error_frames(&self, raise_frame: Option<usize>) -> Vec<ErrorFrame> {
+        (0..self.frames.len())
             .rev()
             .take(MAX_ERROR_FRAMES)
             .map(|idx| match &self.frames[idx] {
@@ -363,19 +363,34 @@ impl BexVm {
                     native: true,
                 },
             })
-            .collect();
-        (frames, total)
+            .collect()
+    }
+
+    /// Whether every bytecode frame on this thread has telemetry, so each one
+    /// is on the active call path: its callers name the whole stack, native
+    /// frames and direct recursion aside. Reads only the frames the unwinder
+    /// just walked; never a function object.
+    fn stack_is_observed(&self) -> bool {
+        self.frames.iter().all(|frame| match frame {
+            Frame::Bytecode(frame) => frame.telemetry.is_some(),
+            Frame::Native(_) => true,
+        })
     }
 
     /// Record the start of an unwind. `carried_context` is the throw context
     /// the unwinder consumed or read for this raise: its trace becomes
-    /// inherited evidence when the origin cannot be proven.
+    /// inherited evidence when the origin cannot be proven. `current` is the
+    /// unwinder's frame and its already loaded function.
+    ///
+    /// A fresh raise with every frame observed emits one fixed-size record
+    /// and allocates nothing: its stack is the active call path.
     #[cold]
     #[inline(never)]
     pub(super) fn begin_error_evidence(
         &mut self,
         thrown: &VmThrown,
         entry: RaiseEntry,
+        current: Option<(usize, &'static Function)>,
         carried_context: Option<&ThrowContext>,
         consumed_preserved: bool,
     ) -> Option<UnwindEvidence> {
@@ -395,7 +410,13 @@ impl BexVm {
             .frames
             .iter()
             .rposition(|frame| matches!(frame, Frame::Bytecode(_)));
-        let kind = self.raise_kind(entry, raise_frame, thrown);
+        let raise_function = match (raise_frame, current) {
+            (Some(frame), Some((idx, function))) if frame == idx => Some(function),
+            // SAFETY: the bytecode frame roots its function under the permit.
+            (Some(frame), _) => unsafe { self.load_function(frame) }.ok(),
+            (None, _) => None,
+        };
+        let kind = self.raise_kind(entry, raise_function, thrown);
         let origin = match kind {
             RaiseKind::Rethrow | RaiseKind::PanicRethrow => {
                 self.rethrow_origin(raise_frame, thrown.value)
@@ -416,51 +437,85 @@ impl BexVm {
             },
             _ => RaiseOrigin::Fresh,
         };
-        let (frames, frame_count) = self.error_frames(raise_frame);
-        let inherited_trace: Option<&Arc<[StackFrame]>> = match origin {
-            RaiseOrigin::Fresh | RaiseOrigin::Proven { .. } => None,
-            _ => carried_context.map(|context| &context.trace),
-        };
         let raise_telemetry = raise_frame.and_then(|idx| match &self.frames[idx] {
             Frame::Bytecode(frame) => frame.telemetry,
             Frame::Native(_) => None,
         });
-        let function = raise_frame.and_then(|idx| self.frame_registered_function(idx));
+        // An observed raise frame owns the active call path, and defining
+        // that path registered its function.
+        let on_path = raise_telemetry.is_some() && self.stack_is_observed();
+        let (function, frames) = if on_path {
+            (
+                raise_function.and_then(|function| function.telemetry_function_id),
+                Vec::new(),
+            )
+        } else {
+            (
+                raise_frame.and_then(|idx| self.frame_registered_function(idx)),
+                self.error_frames(raise_frame),
+            )
+        };
+        let inherited_trace: Option<&Arc<[StackFrame]>> = match origin {
+            RaiseOrigin::Fresh | RaiseOrigin::Proven { .. } => None,
+            _ => carried_context.map(|context| &context.trace),
+        };
+        let inherited: Vec<InheritedFrame> = inherited_trace
+            .map(|trace| {
+                trace
+                    .iter()
+                    .take(MAX_INHERITED_FRAMES)
+                    .map(|frame| InheritedFrame {
+                        function_name: clip(&frame.function_name),
+                        file: clip(&frame.file_path),
+                        line: u32::try_from(frame.error_line).unwrap_or(u32::MAX),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let inherited_count =
+            inherited_trace.map_or(0, |trace| u32::try_from(trace.len()).unwrap_or(u32::MAX));
+        // Completion promotes a timing-only frame only through its function's
+        // policy; without one the marker could never name anything.
+        let may_promote = raise_telemetry.is_some_and(|frame| !frame.is_span())
+            && raise_function.is_some_and(|function| {
+                function.telemetry_policy_id.load() != TelemetryPolicyId::NONE
+            });
         let pc = raise_frame.map(|_| u32::try_from(self.cur_pc).unwrap_or(u32::MAX));
+        let frame_count = u32::try_from(self.frames.len()).unwrap_or(u32::MAX);
         let telemetry = self.telemetry.as_mut().expect("checked above");
-        let raise = ErrorRaise {
+        if origin != RaiseOrigin::Fresh {
+            telemetry.write_error_record(SpanRecord::ErrorRaiseOrigin { raise_id, origin });
+        }
+        if !frames.is_empty() || !inherited.is_empty() {
+            telemetry.write_error_record(SpanRecord::ErrorRaiseStack(Box::new(RaiseStack {
+                raise_id,
+                frames,
+                inherited,
+                inherited_count,
+            })));
+        }
+        let raised_at = telemetry.clock().read();
+        // The raise frame is the innermost frame, so when it is a span it is
+        // the thread's active span.
+        let raise_call = raise_telemetry
+            .filter(|frame| frame.is_span())
+            .map(|_| telemetry.active_id());
+        let call_path = if on_path {
+            telemetry.active_call_path()
+        } else {
+            CallPathId::ROOT
+        };
+        telemetry.write_error_record(SpanRecord::ErrorRaised {
             raise_id,
-            raised_at: telemetry.clock().read(),
+            raised_at,
             kind,
             function,
             pc,
-            // The raise frame is the innermost frame, so when it is a span
-            // it is the thread's active span.
-            raise_call: raise_telemetry
-                .filter(|frame| frame.is_span())
-                .map(|_| telemetry.active_id()),
-            raise_frame_may_promote: raise_telemetry.is_some_and(|frame| !frame.is_span()),
-            origin,
-            frames,
+            raise_call,
+            raise_frame_may_promote: may_promote,
+            call_path,
             frame_count,
-            inherited: inherited_trace
-                .map(|trace| {
-                    trace
-                        .iter()
-                        .take(MAX_INHERITED_FRAMES)
-                        .map(|frame| InheritedFrame {
-                            function_name: clip(&frame.function_name),
-                            file: clip(&frame.file_path),
-                            line: u32::try_from(frame.error_line).unwrap_or(u32::MAX),
-                        })
-                        .collect()
-                })
-                .unwrap_or_default(),
-            inherited_count: inherited_trace
-                .map_or(0, |trace| u32::try_from(trace.len()).unwrap_or(u32::MAX)),
-        };
-        let may_promote = raise.raise_frame_may_promote;
-        telemetry.write_error_record(SpanRecord::ErrorRaised(Box::new(raise)));
+        });
         Some(UnwindEvidence {
             raise: raise_id,
             origin: origin_evidence(raise_id, origin),
@@ -493,14 +548,14 @@ impl BexVm {
         slot: usize,
         handler_pc: usize,
     ) {
-        let landed = self.frame_telemetry_function(depth);
+        // The same ID a note lookup reads back with `frame_telemetry_function`.
         let handler_function = self.frame_registered_function(depth);
         let Some(telemetry) = &mut self.telemetry else {
             return;
         };
         telemetry.error_book().land(
             depth,
-            landed,
+            handler_function,
             handler_pc,
             slot,
             evidence.raise,
@@ -557,11 +612,15 @@ mod tests {
     use std::sync::{Arc, atomic::AtomicBool};
 
     use bex_vm_types::Object;
-    use btel_records::{ErrorRaise, SpanRecord, TimingRecord, UnwindResult};
+    use btel_records::{SpanRecord, TimingRecord, UnwindResult};
+    use btel_settings::mode::AutoTelemetryLevel;
+    use btel_types::CallPathId;
 
     use crate::{
         BexVm, VmExecState,
-        telemetry::{FORCE_ERROR_EVIDENCE, TelemetryPolicy},
+        telemetry::{
+            FORCE_ERROR_EVIDENCE, TelemetryPolicies, TelemetryPolicy, TelemetryState, test_runtime,
+        },
     };
 
     const SOURCE: &str = r#"
@@ -570,14 +629,20 @@ mod tests {
         function Main() -> int { Thrower(1) catch (e) { Failure => 0 } }
     "#;
 
-    /// Run `Main` with `Thrower` promoted on error, returning span records.
-    fn run(evidence: bool) -> Vec<String> {
+    /// Run `Main` at `level`, with `Thrower` promoted on error when
+    /// `promote`, returning the exception-path span records.
+    fn run(evidence: bool, promote: bool, level: AutoTelemetryLevel) -> Vec<String> {
         FORCE_ERROR_EVIDENCE.with(|force| force.set(evidence));
         let program = baml_db::testing::compile_source(SOURCE);
         let entry = program.function_index("user.Main").unwrap();
         let thrower = program.function_index("user.Thrower").unwrap();
         let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
-        {
+        vm.telemetry = Some(TelemetryState::new_root(
+            Arc::new(TelemetryPolicies::with_auto_level(level)),
+            btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
+            test_runtime(),
+        ));
+        if promote {
             // SAFETY: the compile-time function is live and never collected.
             let Object::Function(function) = (unsafe { vm.heap.compile_time_ptr(thrower).get() })
             else {
@@ -611,17 +676,21 @@ mod tests {
             .span_records()
             .iter()
             .filter_map(|record| match record {
-                SpanRecord::ErrorRaised(raise) => {
-                    let ErrorRaise {
-                        raise_call,
-                        raise_frame_may_promote,
-                        ..
-                    } = raise.as_ref();
-                    Some(format!(
-                        "raise call={} promote={raise_frame_may_promote}",
-                        raise_call.is_some()
-                    ))
+                SpanRecord::ErrorRaiseOrigin { .. } => Some("origin".into()),
+                SpanRecord::ErrorRaiseStack(stack) => {
+                    Some(format!("stack frames={}", stack.frames.len()))
                 }
+                SpanRecord::ErrorRaised {
+                    raise_call,
+                    raise_frame_may_promote,
+                    call_path,
+                    frame_count,
+                    ..
+                } => Some(format!(
+                    "raise call={} promote={raise_frame_may_promote} path={} count={frame_count}",
+                    raise_call.is_some(),
+                    *call_path != CallPathId::ROOT,
+                )),
                 SpanRecord::LateFunctionSpanCompletionErrored { .. } => Some("late".into()),
                 SpanRecord::ErrorRaiseFrameCompleted { .. } => Some("marker".into()),
                 SpanRecord::ErrorUnwindEnded {
@@ -640,9 +709,9 @@ mod tests {
     #[test]
     fn a_promoted_raise_frame_completes_before_its_marker() {
         assert_eq!(
-            run(true),
+            run(true, true, AutoTelemetryLevel::Medium),
             [
-                "raise call=false promote=true",
+                "raise call=false promote=true path=true count=2",
                 "late",
                 "marker",
                 "end caught=true frames=1",
@@ -651,8 +720,33 @@ mod tests {
     }
 
     #[test]
+    fn an_observed_stack_is_named_by_its_call_path_alone() {
+        // No policy can promote the timing-only raise frame: no marker.
+        assert_eq!(
+            run(true, false, AutoTelemetryLevel::Medium),
+            [
+                "raise call=false promote=false path=true count=2",
+                "end caught=true frames=1",
+            ]
+        );
+    }
+
+    #[test]
+    fn unobserved_frames_are_listed_explicitly() {
+        // Low telemetry observes neither frame, so no call path covers them.
+        assert_eq!(
+            run(true, false, AutoTelemetryLevel::Low),
+            [
+                "stack frames=2",
+                "raise call=false promote=false path=false count=2",
+                "end caught=true frames=1",
+            ]
+        );
+    }
+
+    #[test]
     fn no_raise_evidence_is_built_without_a_recording() {
         // The shared test runtime has no recording publisher.
-        assert_eq!(run(false), ["late"]);
+        assert_eq!(run(false, true, AutoTelemetryLevel::Medium), ["late"]);
     }
 }

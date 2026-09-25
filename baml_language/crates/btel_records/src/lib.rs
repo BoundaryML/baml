@@ -257,9 +257,38 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         callee: FunctionId,
         edge: CallPathEdge,
     },
-    /// Exception path only: unwinding started. Boxed so a bounded stack never
-    /// widens the slot. Completions until the matching end belong to it.
-    ErrorRaised(Box<ErrorRaise>),
+    /// Exception path only: how the raise that the next `ErrorRaised` on this
+    /// thread starts relates to earlier ones. Absent for a fresh raise.
+    ErrorRaiseOrigin {
+        raise_id: TelemetryId,
+        origin: RaiseOrigin,
+    },
+    /// Exception path only, rare: evidence of the next `ErrorRaised` on this
+    /// thread that does not fit its slot. Boxed so it never widens the slot.
+    ErrorRaiseStack(Box<RaiseStack>),
+    /// Exception path only: unwinding started. Completions until the matching
+    /// end belong to it. Fixed size: every raise has one, so it allocates
+    /// nothing. Its stack is `call_path` and that path's callers.
+    ErrorRaised {
+        raise_id: TelemetryId,
+        raised_at: ClockInstant,
+        kind: RaiseKind,
+        /// Innermost bytecode frame and its live PC (compact byte offset).
+        function: Option<FunctionId>,
+        pc: Option<u32>,
+        /// That frame's retained call, when it was a span at raise time.
+        raise_call: Option<TelemetryId>,
+        /// That frame was timing-only and its function has a policy, so its
+        /// completion may promote it: an `ErrorRaiseFrameCompleted` marker
+        /// then follows the completion.
+        raise_frame_may_promote: bool,
+        /// The raise frame's call path when every bytecode frame on the
+        /// thread was observed: the path and its callers are the stack.
+        /// `ROOT` otherwise; a preceding `ErrorRaiseStack` then lists it.
+        call_path: CallPathId,
+        /// Frames on the stack, native ones included.
+        frame_count: u32,
+    },
     /// Exception path only: the raise frame, which was timing-only and could
     /// be promoted, has completed. A late completion just before this marker
     /// is that frame's call.
@@ -274,25 +303,15 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
     },
 }
 
-/// One observed start of unwinding. Owned and bounded; contains no VM
-/// pointers. Every raise has its own ID, even for equal values.
+/// A raise's evidence that does not fit its fixed-size record. Owned and
+/// bounded; contains no VM pointers.
 #[derive(Debug)]
-pub struct ErrorRaise {
+pub struct RaiseStack {
     pub raise_id: TelemetryId,
-    pub raised_at: ClockInstant,
-    pub kind: RaiseKind,
-    /// Innermost bytecode frame and its live PC (compact byte offset).
-    pub function: Option<FunctionId>,
-    pub pc: Option<u32>,
-    /// That frame's retained call, when it was a span at raise time.
-    pub raise_call: Option<TelemetryId>,
-    /// That frame was timing-only: its completion may promote it, and an
-    /// `ErrorRaiseFrameCompleted` marker then follows the completion.
-    pub raise_frame_may_promote: bool,
-    pub origin: RaiseOrigin,
-    /// Live stack, innermost first, at most `MAX_ERROR_FRAMES`.
+    /// Live stack, innermost first, at most `MAX_ERROR_FRAMES`, when the
+    /// raise has no call path: some bytecode frame was not observed, or no
+    /// bytecode frame raised. Empty when the call path describes it.
     pub frames: Vec<ErrorFrame>,
-    pub frame_count: u32,
     /// Diagnostic trace carried from an earlier throw, only when the origin
     /// is not proven. At most `MAX_INHERITED_FRAMES`, strings clipped.
     pub inherited: Vec<InheritedFrame>,
@@ -419,15 +438,16 @@ mod layout_tests {
 
     use super::*;
 
-    /// Exception evidence is boxed: the span slot keeps the exact size and
-    /// alignment it had before error records existed.
+    /// A raise fits the span slot inline and rare evidence is boxed: the
+    /// slot keeps the exact size and alignment it had before error records
+    /// existed.
     #[test]
     fn error_variants_keep_the_span_slot() {
         type Span = SpanRecord<btel_snapshot::Snapshot, btel_snapshot::Snapshot>;
         assert_eq!(size_of::<Span>(), 56);
         assert_eq!(align_of::<Span>(), 8);
         assert_eq!(size_of::<TimingRecord>(), 32);
-        assert_eq!(size_of::<Box<ErrorRaise>>(), 8);
+        assert_eq!(size_of::<Box<RaiseStack>>(), 8);
     }
 }
 
@@ -876,7 +896,9 @@ impl<C> SpanRecord<C, C> {
             | Self::ThreadSpanAnnouncement { .. }
             | Self::ThreadSpanCompletion { .. }
             | Self::CallPathDefined { .. }
-            | Self::ErrorRaised(_)
+            | Self::ErrorRaiseOrigin { .. }
+            | Self::ErrorRaiseStack(_)
+            | Self::ErrorRaised { .. }
             | Self::ErrorRaiseFrameCompleted { .. }
             | Self::ErrorUnwindEnded { .. } => None,
         }
