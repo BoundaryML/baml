@@ -147,4 +147,25 @@ mod tests {
         let class_ts = ir_class_to_ts_stream(class, &pkg);
         assert_eq!(class_ts.fields[0].docstring, Some("ds".to_string()));
     }
+
+    #[test]
+    fn test_class_docstring_escapes_jsdoc_end_delimiter() {
+        use askama::Template;
+        let ir = make_test_ir(
+            r#"
+        /// normal doc */ export const injected = 1; /*
+        class Foo {
+            bar string
+        }
+        "#,
+        )
+        .expect("Valid IR");
+        let ir = std::sync::Arc::new(ir);
+        let class = ir.find_class("Foo").unwrap().item;
+        let pkg = CurrentRenderPackage::new("baml_client", ir.clone());
+        let class_ts = ir_class_to_ts(class, &pkg);
+        let rendered = class_ts.render().expect("Render should succeed");
+        assert!(rendered.contains(r#"normal doc *\/ export const injected = 1; /*"#));
+        assert!(!rendered.contains("normal doc */"));
+    }
 }
