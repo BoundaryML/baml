@@ -28,6 +28,7 @@ no-self-update = [ "baml_release/no-self-update" ]
 [dependencies]
 baml_release = { workspace = true }
 anyhow = { workspace = true }
+clap = { workspace = true }
 console = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking", "rustls" ] }
 serde = { workspace = true, features = [ "derive" ] }

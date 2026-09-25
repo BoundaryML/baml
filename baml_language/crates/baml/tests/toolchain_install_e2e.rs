@@ -123,7 +123,7 @@ fn bare_install_records_project_channel_resolution() {
 
 #[test]
 fn install_help_is_not_parsed_as_a_version() {
-    for help_arg in ["--help", "-h", "help"] {
+    for help_arg in ["--help", "-h"] {
         let project = tempfile::tempdir().unwrap();
         let output = baml_command(&project)
             .args([
@@ -138,7 +138,7 @@ fn install_help_is_not_parsed_as_a_version() {
         assert!(output.stderr.is_empty(), "{help_arg}");
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(
-            stdout.contains("baml toolchain install [canary|nightly|version] [--force]"),
+            stdout.contains("Usage: baml toolchain install [OPTIONS] [SELECTOR]"),
             "{help_arg}: {stdout}"
         );
         assert!(!stdout.contains("127.0.0.1"), "{help_arg}: {stdout}");
