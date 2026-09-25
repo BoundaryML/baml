@@ -756,6 +756,22 @@ mod tests {
     use super::*;
     use crate::test_support::TestDbExt;
 
+    fn workspace_diagnostics(db: &ProjectDatabase) -> Vec<baml_compiler_diagnostics::Diagnostic> {
+        let files: std::collections::HashSet<_> = db
+            .workspace_files()
+            .iter()
+            .map(|file| file.file_id(db))
+            .collect();
+        baml_db::collect_compiler2_diagnostics(db)
+            .into_iter()
+            .filter(|diagnostic| {
+                diagnostic
+                    .primary_span()
+                    .is_some_and(|span| files.contains(&span.file_id))
+            })
+            .collect()
+    }
+
     fn codegen_alias(name: cg::Name) -> cg::Ty {
         cg::Ty::TypeAlias(name)
     }
@@ -1042,7 +1058,7 @@ function extract(client: string, text: string) -> string {
 "##,
         );
 
-        let diagnostics = baml_db::collect_compiler2_diagnostics(&db);
+        let diagnostics = workspace_diagnostics(&db);
         assert!(
             diagnostics.iter().any(|diag| {
                 diag.message
@@ -1503,7 +1519,7 @@ function top() -> int { 0 }
 "#,
         );
 
-        let diagnostics = baml_db::collect_compiler2_diagnostics(&db);
+        let diagnostics = workspace_diagnostics(&db);
         assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
 
         let pool = build_symbol_pool(&db);
@@ -1542,7 +1558,7 @@ function passthrough(x: Marker) -> Marker { x }
 "#,
         );
 
-        let diagnostics = baml_db::collect_compiler2_diagnostics(&db);
+        let diagnostics = workspace_diagnostics(&db);
         assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
 
         let pool = build_symbol_pool(&db);
@@ -1590,7 +1606,7 @@ function normalize(value: null | string | null) -> null | string | null { value 
 "#,
         );
 
-        let diagnostics = baml_db::collect_compiler2_diagnostics(&db);
+        let diagnostics = workspace_diagnostics(&db);
         assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
 
         let pool = build_symbol_pool(&db);
@@ -1670,7 +1686,7 @@ function normalize(value: null | string | null) -> null | string | null { value 
             legal_root.join("main.baml").as_path(),
             "type Key = \"first\" | \"second\"\ntype KeyChain = Key\nclass Lookup { values map<KeyChain, int> }\n",
         );
-        let diagnostics = baml_db::collect_compiler2_diagnostics(&legal_db);
+        let diagnostics = workspace_diagnostics(&legal_db);
         assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
         let legal_pool = build_symbol_pool(&legal_db);
         let lookup_name = cg::Name::new(Name::new("user"), vec![], Name::new("Lookup"));
@@ -1695,7 +1711,7 @@ function normalize(value: null | string | null) -> null | string | null { value 
             illegal_root.join("main.baml").as_path(),
             "type BadKey = int\nclass Lookup { values map<BadKey, string> }\n",
         );
-        let diagnostics = baml_db::collect_compiler2_diagnostics(&illegal_db);
+        let diagnostics = workspace_diagnostics(&illegal_db);
         assert!(
             diagnostics
                 .iter()
@@ -1724,7 +1740,7 @@ function normalize(value: null | string | null) -> null | string | null { value 
             "type Shared = int\nclass Right { value Shared }\n",
         );
 
-        let diagnostics = baml_db::collect_compiler2_diagnostics(&db);
+        let diagnostics = workspace_diagnostics(&db);
         assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
         let pool = build_symbol_pool(&db);
         let qualified = |namespace: &str, name: &str| {

@@ -1587,7 +1587,9 @@ fn new_tir_diagnostic(
     if let TirTypeError::UncalledFunctionInCondition { suggestion, .. } = error {
         let mut label = "did you mean to call this function?".to_string();
         if let Some(suggestion) = suggestion {
-            label.push_str(&format!(" Replace with `{suggestion}`"));
+            label.push_str(" Replace with `");
+            label.push_str(suggestion);
+            label.push('`');
         }
         return Diagnostic::warning(DiagnosticId::ConditionAlwaysConstant, message)
             .with_primary(span, label)

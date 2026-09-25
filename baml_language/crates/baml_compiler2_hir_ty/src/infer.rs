@@ -2299,8 +2299,20 @@ impl<'db> InferenceContext<'db> {
             Expr::Block { stmts, tail_expr } => {
                 let type_scope = self.scoped_type_bindings.len();
                 let entry_diverges = self.diverges;
+                let mut deferred_writes = rustc_hash::FxHashSet::default();
+                let mut deferred_diverges = false;
                 for stmt in stmts {
+                    if let Stmt::Defer { body: deferred } = body.stmts[*stmt] {
+                        deferred_writes.extend(self.assigned_bindings(body, deferred));
+                    }
                     self.infer_stmt(body, *stmt);
+                    if let Stmt::Defer { body: deferred } = body.stmts[*stmt] {
+                        deferred_diverges |= self
+                            .result
+                            .type_of_expr
+                            .get(&deferred)
+                            .is_some_and(|ty| matches!(ty.kind(), InferTy::Never));
+                    }
                 }
                 let ty = match tail_expr {
                     Some(tail) => self.infer_expr(body, *tail, expected),
@@ -2312,6 +2324,17 @@ impl<'db> InferenceContext<'db> {
                         Ty::never()
                     }
                     None => Ty::void(),
+                };
+                // Defers run after the tail value is evaluated. Their writes
+                // may change outer locals before the enclosing code resumes.
+                for binding in deferred_writes {
+                    self.flow.remove(&binding);
+                }
+                let ty = if deferred_diverges {
+                    self.diverges = Diverges::Always;
+                    Ty::never()
+                } else {
+                    ty
                 };
                 self.finish_scoped_type_bindings(type_scope, expr, *tail_expr, ty, expected)
             }
@@ -2845,9 +2868,15 @@ impl<'db> InferenceContext<'db> {
                 // BEP-042: the defer body runs at scope exit; escaping
                 // control flow is rejected (loop-aware - a loop opened
                 // inside the defer may break/continue freely).
+                // Registration-time facts need not hold when the defer runs,
+                // and its writes and divergence do not happen at registration.
+                let saved_flow = std::mem::take(&mut self.flow);
+                let saved_diverges = std::mem::replace(&mut self.diverges, Diverges::Maybe);
                 self.defer_loop_floors.push(self.loop_depth);
                 self.infer_expr(body, *defer_body, &Expectation::Discarded);
                 self.defer_loop_floors.pop();
+                self.flow = saved_flow;
+                self.diverges = saved_diverges;
             }
             Stmt::Assign { target, value } => {
                 self.infer_assign(body, *target, *value, None);
@@ -2884,16 +2913,17 @@ impl<'db> InferenceContext<'db> {
                 // `break` binds to this loop: then there is no zero-iteration
                 // path and no exit edge, so the loop DIVERGES and everything
                 // after it is unreachable - no false facts to apply.
+                let has_break = Self::loop_body_breaks(body, *loop_body, *after);
                 let never_exits =
                     self.condition_is_statically_true(body, *condition, &condition_ty)
-                        && !Self::loop_body_breaks(body, *loop_body, *after);
+                        && !has_break;
                 self.diverges = saved.or(if never_exits {
                     Diverges::Always
                 } else {
                     Diverges::Maybe
                 });
                 self.flow = entry_flow;
-                if !never_exits {
+                if !never_exits && !has_break {
                     self.apply_facts(&facts.when_false);
                 }
             }
@@ -10008,6 +10038,18 @@ impl<'db> InferenceContext<'db> {
         clauses: &[baml_compiler2_ast::CatchClause],
         expected: &Expectation,
     ) -> Ty {
+        // An exception can leave the base at any point, and a handler may
+        // assign outer locals (including through a defer at its block exit).
+        let mut entry_flow = self.flow.clone();
+        let mut writes = self.assigned_bindings(body, base);
+        for clause in clauses {
+            for &arm in &clause.arms {
+                writes.extend(self.assigned_bindings(body, body.catch_arms[arm].body));
+            }
+        }
+        for binding in writes {
+            entry_flow.remove(&binding);
+        }
         let branch_expectation = expected.adjust_for_branches(&mut self.table);
         // Caught values need not satisfy the enclosing callable's contract.
         self.throws_channels.push(ThrowsChannel::default());
@@ -10020,6 +10062,7 @@ impl<'db> InferenceContext<'db> {
         // An arm's binding would carry the fact's type past the block that
         // scoped it.
         let channel = self.drop_escaping_effects(channel, None);
+        self.flow = entry_flow;
         // catch discharges a SET of throw FACTS, never a value of a
         // union type (match scrutinizes values; catch removes facts):
         // each contribution finalizes and top-level unions split into
@@ -11336,7 +11379,7 @@ impl<'db> InferenceContext<'db> {
                             diags.push(Self::uncalled_function_diagnostic(
                                 body,
                                 expr,
-                                params.iter().all(|param| param.is_optional()),
+                                params.iter().all(baml_type::FunctionParamTy::is_optional),
                             ));
                             continue;
                         }
