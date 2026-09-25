@@ -30,7 +30,7 @@ use std::{
     path::PathBuf,
 };
 
-use baml_codegen_types::{Name, SymbolPool, public_interface_tokens, without_builtin_functions};
+use baml_codegen_types::{Name, SymbolPool, public_interface_tokens, without_builtin_declarations};
 pub use baml_codegen_types::{NamingConvention, OutputType};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 
@@ -116,7 +116,7 @@ pub fn to_source_code_with_metadata(
         "sdkgen_typescript only supports naming_convention = PreserveCase \
          (got {naming_convention})",
     );
-    let filtered_pool = without_builtin_functions(pool);
+    let filtered_pool = without_builtin_declarations(pool);
     let pool = &filtered_pool;
     let mut out: HashMap<PathBuf, String> = HashMap::new();
     let interface_tokens = public_interface_tokens(pool);
@@ -353,7 +353,7 @@ mod tests {
     }
 
     #[test]
-    fn builtin_functions_are_omitted_but_types_and_user_functions_remain() {
+    fn builtin_declarations_are_omitted_but_user_functions_remain() {
         let mut pool = SymbolPool::new();
         for package in ["baml", "ai", "reflect", "openai"] {
             let builtin_source = format!("<builtin>/{package}/sample.baml");
@@ -392,11 +392,7 @@ mod tests {
             "reflect/sample",
             "vendor/openai/sample",
         ] {
-            let leaf = &out[&PathBuf::from(format!("{leaf_path}/index.ts"))];
-            assert!(leaf.contains("export class KeptType"));
-            assert!(!leaf.contains("suppressed_function"));
-            assert!(!leaf.contains("suppressed_static"));
-            assert!(!leaf.contains("suppressed_method"));
+            assert!(!out.contains_key(&PathBuf::from(format!("{leaf_path}/index.ts"))));
         }
         assert!(out[&PathBuf::from("sample/index.ts")].contains("export const extract_resume"));
     }

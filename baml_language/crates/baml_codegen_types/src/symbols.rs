@@ -4,29 +4,30 @@ use crate::{CodegenTypeError, Ty};
 
 pub type SymbolPool = std::collections::HashMap<super::Name, Symbol>;
 
-/// Keep built-in types in generated SDKs without emitting their functions.
+/// Omit built-in functions and types from generated SDK declarations.
 /// User declarations remain unchanged, including methods on user classes.
-pub fn without_builtin_functions(pool: &SymbolPool) -> SymbolPool {
+/// Their references to omitted built-in types may be unresolved in the SDK.
+pub fn without_builtin_declarations(pool: &SymbolPool) -> SymbolPool {
     pool.iter()
         .filter_map(|(name, symbol)| {
-            let symbol = match symbol {
-                Symbol::Function(function)
-                    if function.origin.source_file_path.starts_with("<builtin>/") =>
-                {
-                    return None;
-                }
-                Symbol::Class(class) => {
-                    let mut class = class.clone();
-                    class
-                        .static_methods
-                        .retain(|method| !method.origin.source_file_path.starts_with("<builtin>/"));
-                    class
-                        .instance_methods
-                        .retain(|method| !method.origin.source_file_path.starts_with("<builtin>/"));
-                    Symbol::Class(class)
-                }
-                _ => symbol.clone(),
+            let origin = match symbol {
+                Symbol::Function(function) => &function.origin,
+                Symbol::Class(class) => &class.origin,
+                Symbol::Enum(enum_) => &enum_.origin,
+                Symbol::TypeAlias(alias) => &alias.origin,
             };
+            if origin.source_file_path.starts_with("<builtin>/") {
+                return None;
+            }
+            let mut symbol = symbol.clone();
+            if let Symbol::Class(class) = &mut symbol {
+                class
+                    .static_methods
+                    .retain(|method| !method.origin.source_file_path.starts_with("<builtin>/"));
+                class
+                    .instance_methods
+                    .retain(|method| !method.origin.source_file_path.starts_with("<builtin>/"));
+            }
             Some((name.clone(), symbol))
         })
         .collect()
@@ -457,7 +458,7 @@ mod tests {
     }
 
     #[test]
-    fn builtin_function_filter_keeps_types_and_user_functions() {
+    fn builtin_declaration_filter_keeps_user_declarations() {
         let builtin_source = "<builtin>/baml/test.baml";
         let builtin_name =
             crate::Name::new(BaseName::new("baml"), Vec::new(), BaseName::new("BuiltIn"));
@@ -465,6 +466,8 @@ mod tests {
             crate::Name::new(BaseName::new("baml"), Vec::new(), BaseName::new("call"));
         let user_call = name("call");
         let user_class = name("UserClass");
+        let user_enum = name("UserKind");
+        let user_alias = name("UserAlias");
         let mut pool = SymbolPool::new();
         pool.insert(
             builtin_call.clone(),
@@ -534,17 +537,33 @@ mod tests {
             }),
         );
 
-        let filtered = without_builtin_functions(&pool);
+        pool.insert(
+            user_enum.clone(),
+            Symbol::Enum(Enum {
+                name: user_enum.clone(),
+                docstring: None,
+                variants: Vec::new(),
+                origin: origin(),
+            }),
+        );
+        pool.insert(
+            user_alias.clone(),
+            Symbol::TypeAlias(TypeAlias {
+                name: user_alias.clone(),
+                resolves_to: Ty::Int,
+                recursive: false,
+                origin: origin(),
+            }),
+        );
+
+        let filtered = without_builtin_declarations(&pool);
         assert!(!filtered.contains_key(&builtin_call));
         assert!(filtered.contains_key(&user_call));
-        assert!(filtered.contains_key(&builtin_enum));
-        assert!(filtered.contains_key(&builtin_alias));
-        let Symbol::Class(builtin_class) = &filtered[&builtin_name] else {
-            panic!("built-in class was removed");
-        };
-        assert_eq!(builtin_class.properties.len(), 1);
-        assert!(builtin_class.static_methods.is_empty());
-        assert!(builtin_class.instance_methods.is_empty());
+        assert!(!filtered.contains_key(&builtin_name));
+        assert!(!filtered.contains_key(&builtin_enum));
+        assert!(!filtered.contains_key(&builtin_alias));
+        assert!(filtered.contains_key(&user_enum));
+        assert!(filtered.contains_key(&user_alias));
         let Symbol::Class(user_class) = &filtered[&user_class] else {
             panic!("user class was removed");
         };

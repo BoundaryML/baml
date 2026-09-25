@@ -23,7 +23,7 @@ use std::{
 };
 
 use baml_codegen_types::{
-    Name, Symbol, SymbolPool, public_interface_tokens, without_builtin_functions,
+    Name, Symbol, SymbolPool, public_interface_tokens, without_builtin_declarations,
 };
 pub use baml_codegen_types::{NamingConvention, OutputType};
 pub use names::{IdentifierRename, IdentifierRenameReason};
@@ -252,7 +252,7 @@ fn to_source_code_internal(
         "sdkgen_python_pydantic2 only supports naming_convention = PreserveCase \
          (got {naming_convention})",
     );
-    let filtered_pool = without_builtin_functions(pool);
+    let filtered_pool = without_builtin_declarations(pool);
     let pool = &filtered_pool;
     let mut out: HashMap<PathBuf, String> = HashMap::new();
     let names = Rc::new(PythonNames::build(pool));
@@ -921,7 +921,7 @@ mod tests {
     }
 
     #[test]
-    fn builtin_functions_are_omitted_but_types_and_user_functions_remain() {
+    fn builtin_declarations_are_omitted_but_user_functions_remain() {
         let mut pool = SymbolPool::new();
         for package in ["baml", "ai", "reflect", "openai"] {
             let builtin_source = format!("<builtin>/{package}/sample.baml");
@@ -955,11 +955,9 @@ mod tests {
             "vendor/openai/sample",
         ] {
             for extension in ["py", "pyi"] {
-                let leaf = &out[&PathBuf::from(format!("{leaf_path}/__init__.{extension}"))];
-                assert!(leaf.contains("class KeptType"));
-                assert!(!leaf.contains("suppressed_function"));
-                assert!(!leaf.contains("suppressed_static"));
-                assert!(!leaf.contains("suppressed_method"));
+                assert!(
+                    !out.contains_key(&PathBuf::from(format!("{leaf_path}/__init__.{extension}")))
+                );
             }
         }
         assert!(out[&PathBuf::from("sample/__init__.pyi")].contains("def kept_function("));
