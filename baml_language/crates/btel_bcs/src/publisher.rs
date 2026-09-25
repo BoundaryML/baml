@@ -90,6 +90,14 @@ struct PendingFile {
     snapshots: PendingSnapshots,
 }
 
+/// Whether servicing seals the open file. Only `End` claims `RecordingEnd`.
+#[derive(Clone, Copy)]
+enum Seal {
+    IfDue,
+    Now,
+    End,
+}
+
 impl CloudPublisher {
     pub fn new(
         id: RecordingId,
@@ -137,6 +145,16 @@ impl CloudPublisher {
     #[must_use]
     pub fn with_source_snapshot(mut self, source_snapshot_id: Option<[u8; 32]>) -> Self {
         self.recording = self.recording.with_source_snapshot(source_snapshot_id);
+        self
+    }
+
+    /// Owned function definitions copied before execution, shared with the recording builder.
+    #[must_use]
+    pub fn with_function_metadata(
+        mut self,
+        functions: std::sync::Arc<btel_types::FunctionMetadataTable>,
+    ) -> Self {
+        self.recording = self.recording.with_function_metadata(functions);
         self
     }
 
@@ -282,7 +300,7 @@ impl CloudPublisher {
                 || self.pending.bytes >= self.config.retained_bytes_target
                 || self.recording.encoded_size_hint() >= self.recording_target)
         {
-            let sealed = self.recording.finish_recording();
+            let sealed = self.recording.flush_recording();
             self.stage(sealed);
         }
     }
@@ -293,16 +311,16 @@ impl CloudPublisher {
         }
     }
 
-    fn service(&mut self, now: Instant, force: bool) {
+    fn service(&mut self, now: Instant, seal: Seal) {
         self.progress();
         if self.delivery.is_disabled() {
             self.fail(DeliveryError::Closed);
         }
         if self.failure.is_none() {
-            let sealed = if force {
-                self.recording.finish_recording()
-            } else {
-                self.recording.flush_if_due(now)
+            let sealed = match seal {
+                Seal::IfDue => self.recording.flush_if_due(now),
+                Seal::Now => self.recording.flush_recording(),
+                Seal::End => self.recording.end_recording(),
             };
             self.stage(sealed);
         }
@@ -334,6 +352,7 @@ impl CloudPublisher {
 
 impl Publisher<Snapshot, Snapshot> for CloudPublisher {
     const DETACH_RECORDS: bool = true;
+    const ERROR_EVIDENCE: bool = true;
 
     fn before_detached_span(&mut self, record: &SpanRecord<Snapshot, Snapshot>) {
         self.progress();
@@ -358,7 +377,7 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
                         self.retained_bytes.saturating_add(bytes) > self.config.max_retained_bytes
                     })
                 {
-                    self.service(Instant::now(), true);
+                    self.service(Instant::now(), Seal::Now);
                 }
             }
         }
@@ -366,7 +385,7 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
 
     fn after_detached_span(&mut self) {
         if !self.staged.is_empty() || self.failure.is_some() {
-            self.service(Instant::now(), false);
+            self.service(Instant::now(), Seal::IfDue);
         }
     }
 
@@ -411,7 +430,7 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
     }
 
     fn after_batch(&mut self, _records: usize) {
-        self.service(Instant::now(), false);
+        self.service(Instant::now(), Seal::IfDue);
     }
 
     fn max_chunks_per_batch(&self) -> usize {
@@ -431,11 +450,16 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
     }
 
     fn flush(&mut self) {
-        self.service(Instant::now(), true);
+        self.service(Instant::now(), Seal::Now);
     }
 
+    /// Input is exhausted. The last file carries `RecordingEnd` once every
+    /// observed clock epoch settled (see `RecordingBuilder::end_recording`).
+    /// It is submitted after every earlier file, but uploads run concurrently
+    /// and earlier files or blobs may still be lost: the end declares the file
+    /// count, not their arrival. A failed recording submits nothing more.
     fn finish(&mut self) {
-        self.flush();
+        self.service(Instant::now(), Seal::End);
     }
 }
 
@@ -763,7 +787,7 @@ mod tests {
             count: 1,
             ..AggregateDelta::default()
         });
-        let sealed = publisher.recording.finish_recording();
+        let sealed = publisher.recording.flush_recording();
         publisher.stage(sealed);
         assert_eq!(publisher.staged.len(), 1);
         assert!(!delivery.handle().is_disabled());
@@ -786,7 +810,7 @@ mod tests {
                 edge: btel_types::CallPathEdge::Synchronous,
             },
         );
-        let sealed = publisher.recording.finish_recording();
+        let sealed = publisher.recording.flush_recording();
         publisher.stage(sealed);
         assert_eq!(publisher.failure, None);
         assert_eq!(publisher.staged.len(), 1);
@@ -837,7 +861,7 @@ mod tests {
                 );
             };
             define(&mut publisher, 1);
-            let first = publisher.recording.finish_recording();
+            let first = publisher.recording.flush_recording();
             publisher.stage(first);
             assert_eq!(publisher.staged.len(), 1);
             if rejection == "plans" {
@@ -846,7 +870,7 @@ mod tests {
                         count: 1,
                         ..AggregateDelta::default()
                     });
-                    let sealed = publisher.recording.finish_recording();
+                    let sealed = publisher.recording.flush_recording();
                     publisher.stage(sealed);
                 }
             } else if rejection == "bytes" {
@@ -860,7 +884,7 @@ mod tests {
                     capture(&mut publisher, &pool, value);
                 }
             } else {
-                let sealed = publisher.recording.finish_recording();
+                let sealed = publisher.recording.flush_recording();
                 publisher.stage(sealed);
             }
             assert_eq!(delivery.handle().loss_count(), 1, "{rejection}");
@@ -879,7 +903,7 @@ mod tests {
                 count: 1,
                 ..AggregateDelta::default()
             });
-            let sealed = publisher.recording.finish_recording();
+            let sealed = publisher.recording.flush_recording();
             publisher.stage(sealed);
             assert_eq!(publisher.staged.len(), 1);
             let decoded =

@@ -124,6 +124,61 @@ fn restore_invalidates_active_intervals_but_keeps_completed_mappings() {
 }
 
 #[test]
+fn only_runs_whose_threads_all_finished_report_a_settled_status() {
+    let runtime = ClockRuntime::new(ClockMode::Monotonic);
+    let never_attached = runtime.start_run();
+    assert_eq!(never_attached.settled_status(), None);
+
+    let run = runtime.start_run();
+    run.attach_thread();
+    // A child attaches while its parent is attached; one finished thread is
+    // not a settled run.
+    run.attach_thread();
+    run.finish_thread();
+    assert_eq!(run.settled_status(), None);
+    run.finish_thread();
+    let settled = run.settled_status().expect("every thread finished");
+    runtime.reset_after_restore();
+    assert_eq!(run.status(), settled);
+    assert_eq!(run.settled_status(), Some(settled));
+
+    // An invalid run is still unsettled while a thread remains attached.
+    let invalid = runtime.start_run();
+    invalid.attach_thread();
+    runtime.reset_after_restore();
+    assert_eq!(invalid.status(), TimingStatus::Restored);
+    assert_eq!(invalid.settled_status(), None);
+    invalid.finish_thread();
+    assert_eq!(invalid.settled_status(), Some(TimingStatus::Restored));
+}
+
+#[test]
+fn a_settled_status_survives_restores_racing_the_last_thread() {
+    let runtime = Arc::new(ClockRuntime::new(ClockMode::Monotonic));
+    for _ in 0..200 {
+        let epoch = runtime.start_run();
+        epoch.attach_thread();
+        let restore = {
+            let runtime = Arc::clone(&runtime);
+            std::thread::spawn(move || drop(runtime.reset_after_restore()))
+        };
+        let finish = {
+            let epoch = Arc::clone(&epoch);
+            std::thread::spawn(move || epoch.finish_thread())
+        };
+        let observed = loop {
+            if let Some(status) = epoch.settled_status() {
+                break status;
+            }
+            std::hint::spin_loop();
+        };
+        restore.join().unwrap();
+        finish.join().unwrap();
+        assert_eq!(epoch.status(), observed);
+    }
+}
+
+#[test]
 fn fault_switches_future_runs_to_os_without_reinterpreting_active_records() {
     let runtime = ClockRuntime::new(ClockMode::Monotonic);
     let epoch = runtime.start_run();

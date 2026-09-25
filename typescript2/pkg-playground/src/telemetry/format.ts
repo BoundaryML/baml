@@ -18,6 +18,19 @@ export function formatCount(value: number | null): string {
   return value == null ? '' : value.toLocaleString();
 }
 
+/** Shown where a number is not recorded, so it never reads as zero or blank. */
+export const UNKNOWN = '—';
+
+/** A count for display: the number, or the unknown marker. */
+export function countText(value: number | null): string {
+  return value == null ? UNKNOWN : value.toLocaleString();
+}
+
+/** A duration for display: the duration, or the unknown marker. */
+export function durationText(ms: number | null): string {
+  return ms == null ? UNKNOWN : formatDuration(ms);
+}
+
 /** HH:MM:SS.mmm on the execution's own clock. */
 export function formatClock(epochMs: number): string {
   const date = new Date(epochMs);
@@ -65,6 +78,10 @@ export function statusStyles(status: TelemetryStatus): string {
   if (status === 'cancelled') {
     return 'text-vsc-yellow bg-vsc-yellow/10 border-vsc-yellow/25';
   }
+  // No end recorded: neither success nor failure, and not known to run.
+  if (status === 'incomplete') {
+    return 'text-vsc-text-muted bg-vsc-bg border-vsc-border';
+  }
   return 'text-vsc-green bg-vsc-green/10 border-vsc-green/25';
 }
 
@@ -90,7 +107,8 @@ export type DurationSummary =
   | {
       kind: 'sample';
       retained: number;
-      total: number;
+      /** Null when the path's call count is not recorded. */
+      total: number | null;
       min: number;
       median: number;
       max: number;
@@ -98,7 +116,7 @@ export type DurationSummary =
 
 export function summarizeDurations(
   spans: SpanNode[],
-  totalCalls: number,
+  totalCalls: number | null,
 ): DurationSummary {
   const durations = spans
     .map((span) => span.durationMs)
@@ -114,7 +132,8 @@ export function summarizeDurations(
     return durations[index];
   };
 
-  if (durations.length >= totalCalls) {
+  // Without a count, the retained calls cannot be shown to be all of them.
+  if (totalCalls != null && durations.length >= totalCalls) {
     return {
       count: durations.length,
       kind: 'population',

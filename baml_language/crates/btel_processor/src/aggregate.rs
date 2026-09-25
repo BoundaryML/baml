@@ -4,6 +4,9 @@ use btel_types::{AwaitDuration, CallPathNodeId, ClockDuration};
 /// Raw sums retain the call path's immutable clock context. Never add these
 /// across paths/epochs before conversion. Missing clock metadata is unresolved,
 /// not a zero duration. Counts remain usable if the epoch is later invalidated.
+///
+/// `errored` and `cancelled` count completions by outcome within `count`; the
+/// rest succeeded. Their sum never exceeds `count`.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[repr(C)]
 pub struct AggregateDelta {
@@ -11,6 +14,8 @@ pub struct AggregateDelta {
     pub count: u64,
     pub total_duration: ClockDuration,
     pub total_io_duration: AwaitDuration,
+    pub errored: u64,
+    pub cancelled: u64,
 }
 
 const _: () =
@@ -44,6 +49,8 @@ impl AggregateDelta {
                     .get()
                     .checked_add(other.total_io_duration.get().get())?,
             )),
+            errored: self.errored.checked_add(other.errored)?,
+            cancelled: self.cancelled.checked_add(other.cancelled)?,
         })
     }
 }

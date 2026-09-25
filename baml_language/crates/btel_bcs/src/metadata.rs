@@ -143,7 +143,7 @@ mod tests {
             count: 1,
             ..AggregateDelta::default()
         });
-        builder.finish_recording().unwrap().unwrap()
+        builder.flush_recording().unwrap().unwrap()
     }
 
     #[test]

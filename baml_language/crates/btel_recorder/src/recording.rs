@@ -30,6 +30,8 @@ pub enum RecordingError {
     InvalidConfig,
     EncodingTooLarge,
     SequenceExhausted,
+    /// Input arrived after `RecordingBuilder::end_recording`.
+    InputAfterEnd,
 }
 impl fmt::Display for RecordingError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -85,7 +87,9 @@ impl SealedFile {
 
 /// Sink-independent encoding, capture deduplication and recording sequencing.
 /// Drain snapshots after input chunk recycling and before delivering sealed files.
-/// Size/time sealing does not claim `RecordingEnd` or finality.
+/// Size/time sealing and `flush_recording` never claim `RecordingEnd`; only
+/// `end_recording` does, once no further input can arrive and every observed
+/// clock epoch is final.
 /// Encoding errors are terminal; discard this builder rather than retrying.
 pub struct RecordingBuilder {
     id: RecordingId,
@@ -99,6 +103,7 @@ pub struct RecordingBuilder {
     pending_span_reservation: usize,
     span_credit: usize,
     metadata_replay: bool,
+    ended: bool,
 }
 impl RecordingBuilder {
     pub fn new(id: RecordingId, config: RecordingConfig) -> Result<Self, RecordingError> {
@@ -120,6 +125,7 @@ impl RecordingBuilder {
             pending_span_reservation: 0,
             span_credit: 0,
             metadata_replay: false,
+            ended: false,
         })
     }
     /// Expose essential metadata separately for a bounded best-effort cloud journal.
@@ -133,6 +139,17 @@ impl RecordingBuilder {
     #[must_use]
     pub fn with_source_snapshot(mut self, source_snapshot_id: Option<[u8; 32]>) -> Self {
         self.source_snapshot_id = source_snapshot_id;
+        self
+    }
+    /// Owned metadata for functions known before execution. Each referenced
+    /// function's definition is published once per recording; other functions
+    /// keep `MetadataUnavailable` placeholders.
+    #[must_use]
+    pub fn with_function_metadata(
+        mut self,
+        functions: std::sync::Arc<btel_types::FunctionMetadataTable>,
+    ) -> Self {
+        self.buffer.functions.set_table(functions);
         self
     }
 
@@ -174,9 +191,17 @@ impl RecordingBuilder {
         self.span_credit = 0;
         self.pending_span_reservation = 0;
     }
-    fn seal(&mut self) -> Result<Option<SealedFile>, RecordingError> {
+    fn seal(&mut self, end: bool) -> Result<Option<SealedFile>, RecordingError> {
         self.clear_batch();
-        if self.buffer.is_empty() {
+        if self.ended {
+            return if self.buffer.is_empty() {
+                Ok(None)
+            } else {
+                Err(RecordingError::InputAfterEnd)
+            };
+        }
+        // The terminal file exists even when nothing else is pending.
+        if !end && self.buffer.is_empty() {
             return Ok(None);
         }
         let sequence = self
@@ -195,7 +220,9 @@ impl RecordingBuilder {
             aggregates: Some(ready.aggregates),
             spans: self.buffer.spans.is_empty().then(proto::SpanBatch::default),
             clock_states: Some(ready.clock_states),
-            end: None,
+            end: end.then_some(proto::RecordingEnd {}),
+            // Absent without exceptions, so error-free files keep their bytes.
+            errors: (ready.errors != proto::ErrorBatch::default()).then_some(ready.errors),
         };
         let length = file.encoded_len();
         self.reserve_encoding(length)?;
@@ -238,20 +265,44 @@ impl RecordingBuilder {
             || self.buffer.encoded_size_hint() >= self.config.target_bytes.get()
             || self.deadline.is_some_and(|deadline| now >= deadline)
         {
-            let file = self.seal()?;
+            // Final clock states ride on files sealed anyway.
+            if !self.buffer.is_empty() {
+                self.buffer.observe_unsettled_clocks(false);
+            }
+            let file = self.seal(false)?;
             self.deadline = None;
             return Ok(file);
         }
         Ok(None)
     }
-    /// Seal consumed input. Missing references do not block emission; readers
-    /// resolve them later. Final epoch status/RecordingEnd integration is separate.
-    /// Also usable for an early flush; subsequent input continues the sequence.
+    /// Seal consumed input now. Missing references do not block emission;
+    /// readers resolve them later. Not recording completion: subsequent input
+    /// continues the sequence. `None` when nothing is pending.
     /// Callers using `Self::span` must drain `Self::take_snapshots` first, outside
     /// borrowed input chunks. Callers using `Self::span_reference` may seal
     /// during a chunk, but must defer sink delivery until the chunk is recycled.
-    pub fn finish_recording(&mut self) -> Result<Option<SealedFile>, RecordingError> {
+    pub fn flush_recording(&mut self) -> Result<Option<SealedFile>, RecordingError> {
         self.service(Instant::now(), true)
+    }
+
+    /// Call once input is exhausted. Seals pending input with `RecordingEnd`
+    /// only if every clock epoch this recording observed has settled; the file
+    /// then exists even when nothing else is pending, so an empty recording or
+    /// one whose last data was already sealed still ends. Otherwise it seals
+    /// pending input and each unsettled epoch's latest, non-final status
+    /// without an end, leaving the recording unsealed; a later call may end it.
+    /// After the end, repeated calls return `None` and any new input is
+    /// `InputAfterEnd`. Same snapshot and delivery ordering rules as
+    /// `Self::flush_recording`.
+    pub fn end_recording(&mut self) -> Result<Option<SealedFile>, RecordingError> {
+        if self.ended {
+            return self.seal(false);
+        }
+        let settled = self.buffer.observe_unsettled_clocks(true);
+        let file = self.seal(settled)?;
+        self.ended = settled;
+        self.deadline = None;
+        Ok(file)
     }
     pub fn aggregate(&mut self, delta: AggregateDelta) {
         self.buffer.aggregate(delta);
@@ -353,25 +404,47 @@ impl<F: FnMut(SealedFile), C: FnMut(Snapshot)> RecordingPublisher<F, C> {
         self.builder = self.builder.with_source_snapshot(source_snapshot_id);
         self
     }
+
+    /// Owned function definitions copied before execution, shared with the recording builder.
+    #[must_use]
+    pub fn with_function_metadata(
+        mut self,
+        functions: std::sync::Arc<btel_types::FunctionMetadataTable>,
+    ) -> Self {
+        self.builder = self.builder.with_function_metadata(functions);
+        self
+    }
     fn snapshots(&mut self) {
         for snapshot in self.builder.take_snapshots() {
             (self.receive_snapshot)(snapshot);
         }
     }
-    fn service(&mut self, now: Instant, force: bool) -> Result<(), RecordingError> {
-        self.snapshots();
-        if let Some(file) = self.builder.service(now, force)? {
+    fn deliver(&mut self, file: Option<SealedFile>) {
+        if let Some(file) = file {
             (self.receive)(file);
         }
+    }
+    /// Forced flush; the recording continues.
+    pub fn flush_recording(&mut self) -> Result<(), RecordingError> {
+        self.snapshots();
+        let file = self.builder.flush_recording()?;
+        self.deliver(file);
         Ok(())
     }
-    pub fn finish_recording(&mut self) -> Result<(), RecordingError> {
-        self.service(Instant::now(), true)
+    /// Deliver the terminal file, or the unsealed remainder while clock epochs
+    /// are unsettled. See `RecordingBuilder::end_recording`.
+    pub fn end_recording(&mut self) -> Result<(), RecordingError> {
+        self.snapshots();
+        let file = self.builder.end_recording()?;
+        self.deliver(file);
+        Ok(())
     }
 }
 impl<F: FnMut(SealedFile), C: FnMut(Snapshot)> Publisher<Snapshot, Snapshot>
     for RecordingPublisher<F, C>
 {
+    const ERROR_EVIDENCE: bool = true;
+
     fn aggregate(&mut self, delta: AggregateDelta) {
         self.builder.aggregate(delta);
     }
@@ -386,9 +459,8 @@ impl<F: FnMut(SealedFile), C: FnMut(Snapshot)> Publisher<Snapshot, Snapshot>
     }
     fn after_batch(&mut self, records: usize) {
         self.snapshots();
-        if let Some(file) = terminal(self.builder.after_batch(records)) {
-            (self.receive)(file);
-        }
+        let file = terminal(self.builder.after_batch(records));
+        self.deliver(file);
     }
     fn max_chunks_per_batch(&self) -> usize {
         settings::MAX_BATCH_CHUNKS
@@ -400,10 +472,11 @@ impl<F: FnMut(SealedFile), C: FnMut(Snapshot)> Publisher<Snapshot, Snapshot>
         self.builder.deadline()
     }
     fn flush(&mut self) {
-        terminal(self.finish_recording());
+        terminal(self.flush_recording());
     }
+    /// Input is exhausted: the recording ends once its clock epochs settled.
     fn finish(&mut self) {
-        terminal(self.finish_recording());
+        terminal(self.end_recording());
     }
 }
 

@@ -22,6 +22,10 @@ pub const NO_SINK_MAX_NODES: NonZeroUsize = NonZeroUsize::new(4096).unwrap();
 pub const THREADS_PER_RUNTIME: usize = 1;
 /// **Fixed protocol.** One worker sends one startup acknowledgement.
 pub const STARTUP_CHANNEL_CAPACITY: usize = 1;
+/// **Memory bound, exception path only.** Failed futures whose escaping raise an
+/// engine remembers for later awaits. Older entries are evicted first; an await
+/// of an evicted future reports its origin as unavailable, never guessed.
+pub const FUTURE_ERROR_LINKS: usize = 4096;
 /// **Sentinel.** A publisher may impose no further processing-batch restriction.
 pub const UNLIMITED_PUBLISHER_BATCH: usize = usize::MAX;
 const _: () = assert!(COMBINING_SLOTS > 1 && COMBINING_SLOTS.is_power_of_two());

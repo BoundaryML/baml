@@ -726,8 +726,10 @@ impl PlaygroundSeam {
         // against this root: the process serves every project at once and
         // never changes directory.
         let sys_ops = Arc::new(self.platform.for_root(root));
+        // Playground runs record to the project's `.baml/btel`, like `baml run`.
+        let recording_root = root.to_path_buf();
         let candidate = tokio::task::spawn_blocking(move || {
-            construct_engine_candidate(*program, sys_ops, revision)
+            construct_engine_candidate(*program, sys_ops, revision, Some(&recording_root))
         })
         .await;
         let candidate = match candidate {
@@ -936,6 +938,15 @@ impl PlaygroundSeam {
     /// Expand one lazy test set in place and re-push the tree. Fire-and-forget
     /// from the wire's perspective: the result arrives as a
     /// `TestCollectionResult` notification.
+    /// Source identity of `project`'s installed program, if one is built.
+    pub fn installed_source_snapshot(&self, project: &str) -> Option<[u8; 32]> {
+        let root = std::fs::canonicalize(project).ok()?;
+        self.runtimes
+            .existing(&root)
+            .or_else(|| self.runtimes.existing(Path::new(project)))?
+            .installed_source_snapshot()
+    }
+
     pub async fn expand_test_set(self: &Arc<Self>, project: &str, generation: u64, name: &str) {
         let lease = match self.lease_registry(project, generation).await {
             Ok(lease) => lease,

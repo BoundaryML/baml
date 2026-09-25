@@ -214,6 +214,7 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
     assert_eq!(prepares.len(), puts.len());
     let mut references = BTreeSet::new();
     let mut offered = BTreeSet::new();
+    let mut named_functions = BTreeSet::new();
     let (mut announcements, mut completions, mut threads, mut uploaded, mut skipped) =
         (0, 0, 0, 0, 0);
     for (index, request) in prepares.iter().enumerate() {
@@ -255,7 +256,18 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
         let file = proto::RecordingFile::decode(bytes.as_slice()).unwrap();
         assert_eq!(file.sequence, sequence);
         assert_eq!(file.header.unwrap().recording_id, recording_id.as_bytes());
-        assert!(file.end.is_none());
+        // Normal shutdown settles every run: the last uploaded file ends it.
+        assert_eq!(file.end.is_some(), index + 1 == prepares.len());
+        for definition in file.definitions.unwrap_or_default().functions {
+            if let Some(proto::function_definition::Resolution::Metadata(metadata)) =
+                definition.resolution
+            {
+                if metadata.fqn == "user.leaf" || metadata.fqn == "user.main" {
+                    assert!(metadata.argument_layout.as_ref().unwrap().slots.is_empty());
+                    named_functions.insert(metadata.fqn);
+                }
+            }
+        }
         for section in file.spans.unwrap().sections {
             for event in section.events {
                 match event.event.unwrap() {
@@ -309,6 +321,10 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
             assert_eq!(&object.blob[12..28], object.snapshot_id);
         }
     }
+    assert_eq!(
+        named_functions,
+        BTreeSet::from(["user.leaf".to_owned(), "user.main".to_owned()])
+    );
     assert_eq!((announcements, completions), (2, 2));
     assert!(threads >= 2);
     assert!(uploaded > 0 && skipped > 0);

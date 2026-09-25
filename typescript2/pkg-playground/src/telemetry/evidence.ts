@@ -28,15 +28,30 @@
 
 import type {
   ExecutionTelemetry,
+  SourceVerification,
   TelemetryCall,
   TelemetryCallPath,
   TelemetryErrorCapture,
+  TelemetryErrorStep,
   TelemetryExecution,
   TelemetryThread,
 } from '../worker-protocol';
 
-/** Status vocabulary shared by executions, spans, and threads. */
-export type TelemetryStatus = 'succeeded' | 'failed' | 'running' | 'cancelled';
+export type { SourceVerification } from '../worker-protocol';
+
+/**
+ * Status vocabulary shared by executions, spans, and threads.
+ *
+ * `incomplete` means no end is recorded. Unlike `running`, it does not claim
+ * the work is still in flight: the recording may simply stop before the end
+ * was written, and nothing says which.
+ */
+export type TelemetryStatus =
+  | 'succeeded'
+  | 'failed'
+  | 'running'
+  | 'cancelled'
+  | 'incomplete';
 
 /** What kind of call a row stands for; drives glyph and colour. */
 export type CallKind = 'baml' | 'llm' | 'host' | 'spawn';
@@ -98,11 +113,19 @@ export interface ContextNode {
   /** Fully qualified name: `user.` marks the reader's own code. */
   fqn: string | null;
   kind: CallKind;
-  /** Population entries: the denominator for any mean or rate. */
-  enters: number;
-  errors: number;
-  totalMs: number;
-  selfMs: number;
+  /**
+   * Population entries: the denominator for any mean or rate. Null when the
+   * recording has no count (never shown as zero).
+   */
+  enters: number | null;
+  /** Errored calls in the population; null when outcomes are not recorded. */
+  errors: number | null;
+  ok: number | null;
+  cancelled: number | null;
+  outcomeState: TelemetryCallPath['outcomeState'] | null;
+  totalMs: number | null;
+  /** Null when self time is not supported by the evidence. */
+  selfMs: number | null;
   awaitMs: number | null;
   /**
    * Waiting anywhere in this path's subtree, not just its own frame.
@@ -111,9 +134,9 @@ export interface ContextNode {
    * is always deep runtime plumbing: `baml.http._send`, never the model call
    * that led there. So a frame's own `awaitMs` is zero for essentially all
    * user code, and only the subtree total can answer "how much of this was
-   * spent waiting".
+   * spent waiting". Null when any wait in the subtree is unknown.
    */
-  subtreeAwaitMs: number;
+  subtreeAwaitMs: number | null;
   /** Reached through a spawn edge, so it overlaps its parent in time. */
   spawn: boolean;
   /** A synthetic row standing in for paths the tree could not keep apart. */
@@ -126,11 +149,17 @@ export interface ContextNode {
   source: SourceRef | null;
 }
 
+/**
+ * A recorded source location. It points into the program that ran, which
+ * `verification` compares with the program built now: a `stale` or
+ * `unverified` line may no longer be where the code is.
+ */
 export interface SourceRef {
   file: string;
   line: number | null;
   start: number | null;
   end: number | null;
+  verification: SourceVerification;
 }
 
 /** One retained call: exact evidence. */
@@ -203,6 +232,8 @@ export interface ThreadLane {
   lastMs: number | null;
   status: TelemetryStatus | null;
   spawnedBy: { atMs: number | null; fn: string | null; thread: string } | null;
+  /** The spawn expression in the spawning function, when recorded. */
+  spawnSite: SourceRef | null;
   /**
    * Time this lane spent running vs waiting. The store attributes both per
    * call path, not per thread, so these stay null and the lane renders
@@ -219,16 +250,56 @@ export interface ThreadLane {
  * unwinds through every frame above it, so one capture commonly marks many
  * calls as errored. Conflating the two is how a UI reports "8 errors" for
  * one bug.
+ *
+ * `grain` says which one this is. `throw` is a recorded throw occurrence
+ * with its origin and stack. `erroredCall` is only an error value observed
+ * on one retained call that ended in an error: where it was thrown, and
+ * whether several such rows come from one throw, is not recorded, so these
+ * rows are never counted as distinct errors or merged by equal values.
  */
+export type ErrorGrain = 'throw' | 'erroredCall';
+
 export interface ErrorCapture {
   id: string;
-  /** The function that raised it. */
+  grain: ErrorGrain;
+  /**
+   * For a throw, the function that raised it. For an errored call, the
+   * function of the call that ended with it (not necessarily the thrower).
+   */
   fn: string | null;
-  /** Nearest retained span that raised it, for pivoting into Trace. */
+  /**
+   * For a throw, the nearest retained span that raised it; for an errored
+   * call, that call. Either way, where Trace pivots to.
+   */
   callId: string | null;
   threadId: string | null;
   /** `fresh` for a new throw, `rethrow` for one passed along. */
   kind: string | null;
+  /**
+   * `fresh` is a distinct error. `ambiguous` and `unresolved` raises passed
+   * an error along without a proven origin: shown, never counted as errors.
+   * Null from backends that do not say.
+   */
+  originState: 'fresh' | 'proven' | 'ambiguous' | 'unresolved' | null;
+  /** How many different origins matched an ambiguous raise. */
+  originCandidates: number | null;
+  unresolvedReason: string | null;
+  /** What raised it, e.g. `throw`, `runtime`, `native_boundary`. */
+  raiseKind: string | null;
+  /**
+   * The site is the BAML call that entered native or host code, not a
+   * location inside that code.
+   */
+  boundary: boolean;
+  /** Raises that passed this error along, in order. */
+  propagation: ErrorStep[];
+  /** `caught`, `unhandled`, ... for the raise that started it. */
+  unwindResult: string | null;
+  handlerFn: string | null;
+  /** Retained calls this error failed. */
+  failedCallIds: string[];
+  /** A trace the VM carried from an earlier throw: names only. */
+  inheritedStack: string[];
   /** Where it came from: bytecode, native_call, engine_call, future_resume. */
   source: string | null;
   source_location: SourceRef | null;
@@ -242,12 +313,23 @@ export interface ErrorCapture {
   valueUnavailable: ValueAvailability | null;
 }
 
+/** One rethrow or await that passed an error along. */
+export interface ErrorStep {
+  raiseId: string;
+  kind: string | null;
+  fn: string | null;
+  threadId: string | null;
+  source: SourceRef | null;
+  result: string | null;
+  handlerFn: string | null;
+}
+
 export interface Evidence {
   contexts: ContextNode[];
   spans: SpanNode[];
   gaps: GapInfo[];
   threads: ThreadLane[];
-  /** Captured errors, root cause first. */
+  /** Captured errors, root cause first. Both grains; see `ErrorCapture`. */
   errors: ErrorCapture[];
   /** Execution wall time, from the root span or the thread lanes. */
   durationMs: number | null;
@@ -255,8 +337,8 @@ export interface Evidence {
   cpuMs: number | null;
   /** Sum of await time: attributed waiting. */
   awaitMs: number | null;
-  /** Total calls the counts cover, including folded rows. */
-  totalCalls: number;
+  /** Total calls the counts cover, including folded rows; null if unknown. */
+  totalCalls: number | null;
   /** Calls retained as spans. */
   retainedCalls: number;
   /** True once the execution sealed and published its evidence. */
@@ -315,6 +397,8 @@ function statusOf(status: string | null | undefined): TelemetryStatus {
       return 'cancelled';
     case 'running':
       return 'running';
+    case 'incomplete':
+      return 'incomplete';
     // An abandoned execution never sealed: its writer died or the records
     // were lost. That is closer to a failure than to a success, and calling
     // it succeeded would be a lie.
@@ -406,7 +490,11 @@ function recordsWereLost(
   status: string | null,
 ): boolean {
   if (indexState == null || indexState === 'complete') return false;
-  if (indexState === 'no_root_ended') return status !== 'running';
+  // No end recorded, and nothing says whether the run is still going or its
+  // writer stopped: that is missing evidence, not proven loss.
+  if (indexState === 'no_root_ended') {
+    return status !== 'running' && status !== 'incomplete';
+  }
   return true;
 }
 
@@ -509,8 +597,10 @@ export function buildEvidence(
   const offsetMs = (ns: number | null): number =>
     ns == null ? 0 : (ns - zeroNs) / NS_PER_MS;
 
+  const verification: SourceVerification =
+    telemetry.execution?.sourceState ?? 'unverified';
   const contexts = telemetry.callPaths.map((path) =>
-    toContext(path, llmFunctions),
+    toContext(path, llmFunctions, verification),
   );
   assignSubtreeAwait(contexts);
   const threadNames = new Map(
@@ -520,17 +610,18 @@ export function buildEvidence(
     ]),
   );
   const spans = telemetry.calls.map((call) =>
-    toSpan(call, offsetMs, threadNames, llmFunctions),
+    toSpan(call, offsetMs, threadNames, llmFunctions, verification),
   );
   reparentToRetainedAncestors(spans, telemetry.threads);
 
   const gaps = buildGaps(contexts, spans);
   const threads = telemetry.threads.map((thread) =>
-    toThread(thread, offsetMs, telemetry.threads),
+    toThread(thread, offsetMs, telemetry.threads, verification),
   );
 
   // Self and await are disjoint parts of inclusive time per context, so
-  // these sums attribute every nanosecond once.
+  // these sums attribute every nanosecond once. A total over contexts whose
+  // share is unknown would claim a measurement that does not exist.
   const cpuNs = sumOf(telemetry.callPaths, (path) => path.selfNs);
   const awaitNs = sumOf(telemetry.callPaths, (path) => path.awaitNs);
 
@@ -552,7 +643,9 @@ export function buildEvidence(
     contexts,
     cpuMs: cpuNs == null ? null : cpuNs / NS_PER_MS,
     durationMs,
-    errors: telemetry.errors.map(toErrorCapture),
+    errors: telemetry.errors.map((capture) =>
+      toErrorCapture(capture, verification),
+    ),
     gaps,
     indexComplete: telemetry.execution?.indexState === 'complete',
     recordsLost: recordsWereLost(
@@ -563,23 +656,30 @@ export function buildEvidence(
     spans,
     threads,
     timingComplete: contexts.every((context) => context.timingComplete),
-    totalCalls: contexts.reduce((sum, context) => sum + context.enters, 0),
+    totalCalls:
+      sumOf(contexts, (context) => context.enters) ??
+      (contexts.length === 0 ? 0 : null),
     // Content ids are known; serving bodies over this connection is not
     // wired yet, and the inspectors distinguish that from "never captured".
     valuesReadable: false,
   };
 }
 
-function sumOf<T>(rows: T[], pick: (row: T) => number | null): number | null {
+/**
+ * A total, or null when there is nothing to total or any part is unknown.
+ * Skipping unknown parts would present a partial sum as the whole.
+ */
+export function sumOf<T>(
+  rows: T[],
+  pick: (row: T) => number | null,
+): number | null {
   let total = 0;
-  let sawOne = false;
   for (const row of rows) {
     const value = pick(row);
-    if (value == null) continue;
+    if (value == null) return null;
     total += value;
-    sawOne = true;
   }
-  return sawOne ? total : null;
+  return rows.length > 0 ? total : null;
 }
 
 /**
@@ -620,18 +720,69 @@ function parseErrorValue(raw: string | null): unknown {
   return parsed;
 }
 
-function toErrorCapture(capture: TelemetryErrorCapture): ErrorCapture {
-  const unavailable = availability(capture.valueState, capture.valueCid);
+function toErrorStep(
+  step: TelemetryErrorStep,
+  verification: SourceVerification,
+): ErrorStep {
   return {
-    callId: capture.throwCallId,
-    fn: capture.throwFqn ? shortFunctionName(capture.throwFqn) : null,
+    fn: step.fqn ? shortFunctionName(step.fqn) : null,
+    handlerFn: step.handlerFqn ? shortFunctionName(step.handlerFqn) : null,
+    kind: step.kind,
+    raiseId: step.raiseId,
+    result: step.result,
+    source: sourceRef(
+      step.site.file,
+      step.site.line,
+      step.site.start,
+      step.site.end,
+      verification,
+    ),
+    threadId: step.threadId,
+  };
+}
+
+function toErrorCapture(
+  capture: TelemetryErrorCapture,
+  verification: SourceVerification,
+): ErrorCapture {
+  const unavailable = availability(capture.valueState, capture.valueCid);
+  // Backends that predate `grain` only ever sent throw captures.
+  const erroredCall = capture.grain === 'errored_call';
+  const fqn = erroredCall ? (capture.callFqn ?? null) : capture.throwFqn;
+  const raiseKind = capture.raiseKind ?? null;
+  return {
+    boundary: raiseKind === 'native_boundary' || raiseKind === 'host_boundary',
+    callId: erroredCall ? (capture.callId ?? null) : capture.throwCallId,
+    failedCallIds: capture.failedCallIds ?? [],
+    fn: fqn ? shortFunctionName(fqn) : null,
+    grain: erroredCall ? 'erroredCall' : 'throw',
+    handlerFn: capture.handlerFqn
+      ? shortFunctionName(capture.handlerFqn)
+      : null,
     id: capture.errorId,
+    inheritedStack: capture.inheritedStack ?? [],
     kind: capture.kind,
+    originCandidates: capture.originCandidates ?? null,
+    originState: capture.originState ?? null,
+    propagation: (capture.propagation ?? []).map((step) =>
+      toErrorStep(step, verification),
+    ),
+    raiseKind,
     source: capture.source,
-    source_location: sourceRef(capture.throwSiteFile, capture.throwSiteLine),
+    source_location: sourceRef(
+      capture.throwSiteFile,
+      capture.throwSiteLine,
+      capture.throwSiteStart ?? null,
+      capture.throwSiteEnd ?? null,
+      verification,
+    ),
     stack: capture.stack,
     stackComplete: capture.stackComplete ?? false,
-    threadId: capture.throwThreadId,
+    threadId: erroredCall
+      ? (capture.callThreadId ?? null)
+      : capture.throwThreadId,
+    unresolvedReason: capture.unresolvedReason ?? null,
+    unwindResult: capture.unwindResult ?? null,
     value: parseErrorValue(capture.value),
     valueUnavailable: capture.value == null ? unavailable : null,
   };
@@ -640,12 +791,16 @@ function toErrorCapture(capture: TelemetryErrorCapture): ErrorCapture {
 function toContext(
   path: TelemetryCallPath,
   llmFunctions: ReadonlySet<string>,
+  verification: SourceVerification,
 ): ContextNode {
   const folded = path.overflowReason != null;
   return {
     awaitMs: ms(path.awaitNs),
-    enters: path.callsStarted ?? 0,
-    errors: path.completedError ?? 0,
+    cancelled: path.completedCancelled,
+    // BTEL recordings carry completed counts, not starts. Neither is null
+    // turned into zero: an unknown count is not "no calls".
+    enters: path.callsStarted ?? path.completedCalls ?? null,
+    errors: path.completedError,
     fn: path.fqn
       ? shortFunctionName(path.fqn)
       : folded
@@ -655,19 +810,22 @@ function toContext(
     fqn: path.fqn,
     id: path.callPathId,
     kind: callKind(path.fqn, path.edgeKind, llmFunctions),
+    ok: path.completedOk,
+    outcomeState: path.outcomeState ?? null,
     parentId: path.parentCallPathId,
-    selfMs: ms(path.selfNs) ?? 0,
+    selfMs: ms(path.selfNs),
     source: sourceRef(
       path.callSiteFile,
       path.callSiteLine,
       path.callSiteStart,
       path.callSiteEnd,
+      verification,
     ),
     spawn: path.edgeKind === 'spawn',
     // Filled in once the whole tree is known.
-    subtreeAwaitMs: 0,
+    subtreeAwaitMs: null,
     timingComplete: path.timingComplete ?? false,
-    totalMs: ms(path.inclusiveNs) ?? 0,
+    totalMs: ms(path.inclusiveNs),
   };
 }
 
@@ -694,10 +852,10 @@ function assignSubtreeAwait(contexts: ContextNode[]): void {
   // outer loop then contributed 0 upward, silently dropping that whole
   // subtree's waiting. `CALL_PATHS_SQL` has no ORDER BY, so which rows hit
   // that path was down to whatever order the query returned.
-  const computed = new Map<string, number>();
+  const computed = new Map<string, number | null>();
   const inProgress = new Set<string>();
 
-  const total = (context: ContextNode): number => {
+  const total = (context: ContextNode): number | null => {
     const done = computed.get(context.id);
     if (done !== undefined) return done;
     // A cycle would be a malformed tree; contributing zero for the back
@@ -705,9 +863,11 @@ function assignSubtreeAwait(contexts: ContextNode[]): void {
     if (inProgress.has(context.id)) return 0;
     inProgress.add(context.id);
 
-    let sum = context.awaitMs ?? 0;
+    // Any unknown wait below makes the subtree's total unknown.
+    let sum: number | null = context.awaitMs;
     for (const child of childrenOf.get(context.id) ?? []) {
-      sum += total(child);
+      const childSum = total(child);
+      sum = sum == null || childSum == null ? null : sum + childSum;
     }
 
     inProgress.delete(context.id);
@@ -722,10 +882,11 @@ function assignSubtreeAwait(contexts: ContextNode[]): void {
 function sourceRef(
   file: string | null,
   line: number | null,
-  start: number | null = null,
-  end: number | null = null,
+  start: number | null,
+  end: number | null,
+  verification: SourceVerification,
 ): SourceRef | null {
-  return file ? { end, file, line, start } : null;
+  return file ? { end, file, line, start, verification } : null;
 }
 
 function toSpan(
@@ -733,6 +894,7 @@ function toSpan(
   offsetMs: (ns: number | null) => number,
   threadNames: Map<string, string>,
   llmFunctions: ReadonlySet<string>,
+  verification: SourceVerification,
 ): SpanNode {
   return {
     contextId: call.callPathId,
@@ -743,7 +905,15 @@ function toSpan(
     kind: callKind(call.fqn, call.edgeKind, llmFunctions),
     parentId: call.parentCallId,
     reasons: call.selectionReasons,
-    source: sourceRef(call.callSiteFile, call.callSiteLine),
+    // Null for a direct recursive call: its own site is not recorded, and
+    // the enclosing call's site would be the wrong expression.
+    source: sourceRef(
+      call.callSiteFile,
+      call.callSiteLine,
+      null,
+      null,
+      verification,
+    ),
     startMs: offsetMs(call.startedNs),
     status: statusOf(call.status),
     threadId: call.threadId,
@@ -891,7 +1061,8 @@ function buildGaps(contexts: ContextNode[], spans: SpanNode[]): GapInfo[] {
   }
   const gaps: GapInfo[] = [];
   for (const context of contexts) {
-    if (context.folded) continue;
+    // Without a count there is no subtraction to make.
+    if (context.folded || context.enters == null) continue;
     const retained = retainedByContext.get(context.id) ?? 0;
     const missing = context.enters - retained;
     if (missing > 0) {
@@ -925,6 +1096,7 @@ function toThread(
   thread: TelemetryThread,
   offsetMs: (ns: number | null) => number,
   threads: TelemetryThread[],
+  verification: SourceVerification,
 ): ThreadLane {
   const parent = thread.parentThreadId
     ? threads.find((other) => other.threadId === thread.parentThreadId)
@@ -943,6 +1115,13 @@ function toThread(
           thread: parent ? threadLabel(parent, threads) : thread.parentThreadId,
         }
       : null,
+    spawnSite: sourceRef(
+      thread.spawnSiteFile,
+      thread.spawnSiteLine,
+      null,
+      null,
+      verification,
+    ),
     status: threadStatusOf(thread.endStatus),
   };
 }

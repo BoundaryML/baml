@@ -1327,6 +1327,9 @@ struct ThrowContext {
     cause: Value,
 }
 
+mod error_evidence;
+use error_evidence::RaiseEntry;
+
 /// The parameter list a callable value executes with; see
 /// [`BexVm::callee_params`].
 enum CalleeParams<'a> {
@@ -3744,6 +3747,7 @@ impl BexVm {
         if self.frames.is_empty() {
             if let Some(telemetry) = &mut self.telemetry {
                 telemetry.start_thread();
+                telemetry.clear_error_book();
             }
             self.thrown_value_causes.clear();
             self.thrown_value_contexts.clear();
@@ -5070,6 +5074,16 @@ impl BexVm {
         function: &mut &'static Function,
         thrown: VmThrown,
     ) -> Result<(), VmError> {
+        self.unwind_exception(frame_idx, function, thrown, RaiseEntry::Vm)
+    }
+
+    fn unwind_exception(
+        &mut self,
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+        thrown: VmThrown,
+        entry: RaiseEntry,
+    ) -> Result<(), VmError> {
         let exception_value = thrown.value;
         let telemetry_outcome = self.telemetry_outcome_for_exception(exception_value);
         let is_rethrow = thrown.language_is_rethrow;
@@ -5103,6 +5117,13 @@ impl BexVm {
         } else {
             self.take_preserved_throw_context(exception_value)
         };
+        // Exception-path telemetry; `None` unless a recording wants raises.
+        let mut evidence = self.begin_error_evidence(
+            &thrown,
+            entry,
+            preserved.as_ref(),
+            !is_rethrow && preserved.is_some(),
+        );
         let (trace, cause_context) = if let Some(context) = preserved {
             (context.trace, context.cause)
         } else {
@@ -5138,6 +5159,12 @@ impl BexVm {
             if matches!(frame, Frame::Native(_)) {
                 if self.frames.len() <= 1 {
                     // No bytecode handler remains for this native entry frame.
+                    if let Some(evidence) = evidence.take() {
+                        self.error_not_caught(
+                            evidence,
+                            btel_records::UnwindResult::EscapedToNative,
+                        );
+                    }
                     return Err(VmError::thrown_fresh(exception_value));
                 }
                 // SAFETY: the branch above established that at least two frames remain.
@@ -5162,7 +5189,15 @@ impl BexVm {
 
             // Load the function for this frame to access its exception table.
             // SAFETY: See `load_function` doc comment.
-            let frame_function = unsafe { self.load_function(depth)? };
+            let frame_function = match unsafe { self.load_function(depth) } {
+                Ok(frame_function) => frame_function,
+                Err(error) => {
+                    if let Some(evidence) = evidence.take() {
+                        self.error_not_caught(evidence, btel_records::UnwindResult::Aborted);
+                    }
+                    return Err(error.into());
+                }
+            };
 
             // Find the INNERMOST exception table entry covering this PC: the
             // NARROWEST range — the largest `start_pc`, then the smallest
@@ -5227,6 +5262,10 @@ impl BexVm {
                     self.stack[ctx_slot] = ctx_value;
                 }
 
+                if let Some(evidence) = evidence.take() {
+                    self.error_caught(evidence, depth, error_stack_slot.raw(), entry.handler_pc);
+                }
+
                 // Jump to the handler.
                 let Frame::Bytecode(bf) = &mut self.frames[depth] else {
                     unreachable!("frame at depth is Bytecode");
@@ -5242,6 +5281,10 @@ impl BexVm {
             // No handler in this frame -- pop it and try the caller.
             if self.frames.len() <= 1 {
                 self.complete_bytecode_invocation(depth, telemetry_outcome, Some(exception_value));
+                if let Some(mut evidence) = evidence.take() {
+                    self.error_frame_unwound(&mut evidence, depth);
+                    self.error_not_caught(evidence, btel_records::UnwindResult::Unhandled);
+                }
                 return Err(VmError::ThrownUnhandled {
                     value: exception_value,
                     trace: trace.to_vec(),
@@ -5249,6 +5292,9 @@ impl BexVm {
             }
 
             self.complete_bytecode_invocation(depth, telemetry_outcome, Some(exception_value));
+            if let Some(evidence) = &mut evidence {
+                self.error_frame_unwound(evidence, depth);
+            }
             let popped = self.frames.pop().expect("frame stack is not empty");
             match popped {
                 Frame::Bytecode(bf) => {
@@ -6566,6 +6612,7 @@ impl BexVm {
         self.finish_pending_telemetry_wait();
         let exception_value = thrown.value;
         if self.frames.is_empty() {
+            self.record_unwound_without_frames(&thrown);
             let trace = self.capture_user_stack_trace();
             return Err(VmError::ThrownUnhandled {
                 value: exception_value,
@@ -6580,6 +6627,7 @@ impl BexVm {
         let mut seed_idx = self.frames.len() - 1;
         while !matches!(&self.frames[seed_idx], Frame::Bytecode(_)) {
             if seed_idx == 0 {
+                self.record_unwound_without_frames(&thrown);
                 let trace = self.capture_user_stack_trace();
                 return Err(VmError::ThrownUnhandled {
                     value: exception_value,
@@ -6593,7 +6641,15 @@ impl BexVm {
         // Bytecode frame whose `function` pointer is valid for `&'static
         // Function` while we hold `&mut self`.
         let mut function = unsafe { self.load_function(seed_idx)? };
-        self.try_unwind_exception(&mut frame_idx, &mut function, thrown)
+        self.unwind_exception(&mut frame_idx, &mut function, thrown, RaiseEntry::Host)
+    }
+
+    /// An injected failure with no bytecode frame to unwind still is a raise.
+    #[cold]
+    fn record_unwound_without_frames(&mut self, thrown: &VmThrown) {
+        if let Some(evidence) = self.begin_error_evidence(thrown, RaiseEntry::Host, None, false) {
+            self.error_not_caught(evidence, btel_records::UnwindResult::Unhandled);
+        }
     }
 
     #[allow(clippy::inline_always)] // Measured: 20-40% speedup from inlining the dispatch loop

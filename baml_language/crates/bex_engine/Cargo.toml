@@ -47,6 +47,7 @@ wasm-bindgen-futures = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 btel_file = { workspace = true, features = [ "test-support" ] }
+btel_snapshot = { workspace = true }
 
 [dev-dependencies]
 baml_db = { workspace = true }

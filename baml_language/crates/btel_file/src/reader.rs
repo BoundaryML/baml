@@ -34,20 +34,16 @@ pub struct RecordingRead {
 /// Files published during listing may appear on the next read. Unresolved
 /// references can be satisfied by later files, or remain missing after data loss.
 pub fn read_directory(directory: &Path) -> io::Result<RecordingRead> {
-    let id_text = directory.file_name().and_then(|s| s.to_str()).unwrap_or("");
-    let mut bytes = [0; 16];
-    if id_text.len() != 32 || !id_text.is_ascii() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "expected a recording ID directory",
-        ));
-    }
-    for (i, byte) in bytes.iter_mut().enumerate() {
-        *byte = u8::from_str_radix(&id_text[i * 2..i * 2 + 2], 16)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
-    }
-    let id = RecordingId::from_bytes(bytes)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "zero recording ID"))?;
+    let id = directory
+        .file_name()
+        .and_then(|s| s.to_str())
+        .and_then(parse_recording_id)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "expected a recording ID directory",
+            )
+        })?;
     let mut read = RecordingRead {
         recording_id: id,
         files: Vec::new(),
@@ -67,17 +63,11 @@ pub fn read_directory(directory: &Path) -> io::Result<RecordingRead> {
             continue;
         }
         let file = (|| -> Result<proto::RecordingFile, String> {
-            let stem = path
-                .file_stem()
+            let sequence = path
+                .file_name()
                 .and_then(|s| s.to_str())
+                .and_then(parse_sequence_file_name)
                 .ok_or("invalid sequence filename")?;
-            if stem.len() != 20 || !stem.bytes().all(|c| c.is_ascii_digit()) {
-                return Err("invalid sequence filename".into());
-            }
-            let sequence = stem.parse::<u64>().map_err(|e| e.to_string())?;
-            if sequence == 0 {
-                return Err("zero sequence".into());
-            }
             if !fs::symlink_metadata(&path)
                 .map_err(|e| e.to_string())?
                 .is_file()
@@ -85,77 +75,12 @@ pub fn read_directory(directory: &Path) -> io::Result<RecordingRead> {
                 return Err("not a regular file".into());
             }
             let bytes = fs::read(&path).map_err(|e| e.to_string())?;
-            let file = proto::RecordingFile::decode(bytes.as_slice()).map_err(|e| e.to_string())?;
-            let header = file.header.as_ref().ok_or("missing recording header")?;
-            if header.format_major != btel_settings::encoding::FORMAT_MAJOR {
-                return Err("unsupported format major".into());
-            }
-            if header.recording_id != id.as_bytes() {
-                return Err("recording identity mismatch".into());
-            }
-            if header
-                .source_snapshot_id
-                .as_ref()
-                .is_some_and(|id| id.len() != 32)
-            {
-                return Err("invalid source snapshot ID".into());
-            }
-            if file.sequence != sequence {
-                return Err("file sequence does not match filename".into());
-            }
-            validate_definitions(&file)?;
+            let file = validate_file(&bytes, id, sequence)?;
             if let Some(previous) = read.files.first() {
-                if previous.header.as_ref().unwrap().source_snapshot_id != header.source_snapshot_id
+                if previous.header.as_ref().unwrap().source_snapshot_id
+                    != file.header.as_ref().unwrap().source_snapshot_id
                 {
                     return Err("source snapshot changed within recording".into());
-                }
-            }
-            if let Some(batch) = &file.aggregates {
-                for row in &batch.entries {
-                    if !valid_node(row.node) || row.count == 0 {
-                        return Err("invalid aggregate identity/count".into());
-                    }
-                }
-            }
-            if let Some(spans) = &file.spans {
-                for section in &spans.sections {
-                    if section.thread_id == 0 {
-                        return Err("zero thread identity".into());
-                    }
-                    for record in &section.events {
-                        use proto::span_event::Event;
-                        match &record.event {
-                            Some(
-                                Event::FunctionCompletion(done)
-                                | Event::LateFunctionCompletion(done),
-                            ) => {
-                                let late =
-                                    matches!(record.event, Some(Event::LateFunctionCompletion(_)));
-                                if done.id == 0
-                                    || done.parent_id == 0
-                                    || !valid_node(done.node)
-                                    || CompletionFlags::from_wire(done.completion_flags, late)
-                                        .is_none()
-                                {
-                                    return Err("invalid function completion".into());
-                                }
-                            }
-                            Some(Event::FunctionAnnouncement(entry))
-                                if entry.id == 0
-                                    || entry.parent_id == 0
-                                    || entry.call_path_id == 0 =>
-                            {
-                                return Err("invalid function announcement".into());
-                            }
-                            Some(Event::ThreadCompletion(done))
-                                if !(1..=3).contains(&done.outcome) =>
-                            {
-                                return Err("invalid thread outcome".into());
-                            }
-                            None => return Err("missing span event".into()),
-                            _ => {}
-                        }
-                    }
                 }
             }
             Ok(file)
@@ -181,6 +106,99 @@ pub fn read_directory(directory: &Path) -> io::Result<RecordingRead> {
     }
     check_references(&mut read);
     Ok(read)
+}
+
+/// Parse a `<recording-id>` directory name: 32 lowercase-or-uppercase hex
+/// digits naming a nonzero ID.
+pub fn parse_recording_id(name: &str) -> Option<RecordingId> {
+    if name.len() != 32 || !name.is_ascii() {
+        return None;
+    }
+    let mut bytes = [0; 16];
+    for (i, byte) in bytes.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(&name[i * 2..i * 2 + 2], 16).ok()?;
+    }
+    RecordingId::from_bytes(bytes)
+}
+
+/// Parse a completed file name, `<20-digit sequence>.btel`. Zero is invalid.
+pub fn parse_sequence_file_name(name: &str) -> Option<u64> {
+    let stem = name.strip_suffix(".btel")?;
+    if stem.len() != 20 || !stem.bytes().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    stem.parse::<u64>().ok().filter(|&sequence| sequence != 0)
+}
+
+/// Decode and validate one completed file's bytes against the identity its
+/// location implies. Covers the header, identities, flags and definitions of
+/// this file alone; cross-file references are the caller's concern.
+/// Successful decoding is not proof of content integrity: the format has no
+/// checksum.
+pub fn validate_file(
+    bytes: &[u8],
+    id: RecordingId,
+    sequence: u64,
+) -> Result<proto::RecordingFile, String> {
+    let file = proto::RecordingFile::decode(bytes).map_err(|e| e.to_string())?;
+    let header = file.header.as_ref().ok_or("missing recording header")?;
+    if header.format_major != btel_settings::encoding::FORMAT_MAJOR {
+        return Err("unsupported format major".into());
+    }
+    if header.recording_id != id.as_bytes() {
+        return Err("recording identity mismatch".into());
+    }
+    if header
+        .source_snapshot_id
+        .as_ref()
+        .is_some_and(|id| id.len() != 32)
+    {
+        return Err("invalid source snapshot ID".into());
+    }
+    if file.sequence != sequence {
+        return Err("file sequence does not match filename".into());
+    }
+    validate_definitions(&file)?;
+    if let Some(batch) = &file.aggregates {
+        for row in &batch.entries {
+            if !valid_node(row.node) || row.count == 0 {
+                return Err("invalid aggregate identity/count".into());
+            }
+        }
+    }
+    if let Some(spans) = &file.spans {
+        for section in &spans.sections {
+            if section.thread_id == 0 {
+                return Err("zero thread identity".into());
+            }
+            for record in &section.events {
+                use proto::span_event::Event;
+                match &record.event {
+                    Some(Event::FunctionCompletion(done) | Event::LateFunctionCompletion(done)) => {
+                        let late = matches!(record.event, Some(Event::LateFunctionCompletion(_)));
+                        if done.id == 0
+                            || done.parent_id == 0
+                            || !valid_node(done.node)
+                            || CompletionFlags::from_wire(done.completion_flags, late).is_none()
+                        {
+                            return Err("invalid function completion".into());
+                        }
+                    }
+                    Some(Event::FunctionAnnouncement(entry))
+                        if entry.id == 0 || entry.parent_id == 0 || entry.call_path_id == 0 =>
+                    {
+                        return Err("invalid function announcement".into());
+                    }
+                    Some(Event::ThreadCompletion(done)) if !(1..=3).contains(&done.outcome) => {
+                        return Err("invalid thread outcome".into());
+                    }
+                    None => return Err("missing span event".into()),
+                    _ => {}
+                }
+            }
+        }
+    }
+    Ok(file)
 }
 
 fn valid_node(node: u64) -> bool {

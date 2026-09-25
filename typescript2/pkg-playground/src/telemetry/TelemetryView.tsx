@@ -31,6 +31,7 @@ import {
   ChevronRight,
   ChevronUp,
   Circle,
+  CircleDashed,
   Flame,
   FlaskConical,
   GitBranch,
@@ -64,8 +65,10 @@ import type {
   ThreadLane,
   ValueAvailability,
 } from './evidence';
-import { maxOf } from './evidence';
+import { maxOf, sumOf } from './evidence';
 import {
+  countText,
+  durationText,
   formatClock,
   formatCount,
   formatDuration,
@@ -74,7 +77,20 @@ import {
   LLM_PURPLE,
   statusStyles,
   summarizeDurations,
+  UNKNOWN,
 } from './format';
+
+/** The known values of a list; unknown ones are left out, never zeroed. */
+function knownValues(values: (number | null)[]): number[] {
+  return values.filter((value): value is number => value != null);
+}
+
+/** A retained call's duration, or why it has none. */
+function spanDurationText(span: SpanNode): string {
+  if (span.durationMs != null) return formatDuration(span.durationMs);
+  // `running` is a liveness claim; `incomplete` only says no end is recorded.
+  return span.status === 'running' ? 'running' : 'no end recorded';
+}
 
 type ViewMode = 'overview' | 'trace' | 'timings';
 
@@ -88,6 +104,9 @@ const StatusIcon: FC<{ status: TelemetryStatus; className?: string }> = ({
 }) => {
   if (status === 'running') {
     return <Loader2 className={cn('h-3.5 w-3.5 animate-spin', className)} />;
+  }
+  if (status === 'incomplete') {
+    return <CircleDashed className={cn('h-3.5 w-3.5', className)} />;
   }
   // Cancelled reads as a failure that was not ours: same glyph, amber.
   if (status === 'failed' || status === 'cancelled') {
@@ -130,17 +149,37 @@ const KindGlyph: FC<{ fn: string; kind: CallKind }> = ({ fn, kind }) => {
   );
 };
 
+/** What a recorded location's verification means for opening it now. */
+function sourceVerificationNote(source: SourceRef): string {
+  switch (source.verification) {
+    case 'verified':
+      return 'Recorded location; the source is unchanged since this run.';
+    case 'stale':
+      return 'Recorded location. The source has changed since this run, so this line may no longer be where the code is.';
+    default:
+      return 'Recorded location, not checked against the current source.';
+  }
+}
+
 const SourceLink: FC<{
   source: SourceRef;
   onOpen?: (file: string, line: number | null) => void;
-}> = ({ source, onOpen }) => (
+  className?: string;
+}> = ({ source, onOpen, className = 'mt-2' }) => (
   <button
-    className="mt-2 truncate font-vsc-mono text-[11px] text-vsc-accent hover:underline"
+    className={cn(
+      'truncate font-vsc-mono text-[11px] text-vsc-accent hover:underline',
+      className,
+    )}
     onClick={() => onOpen?.(source.file, source.line)}
+    title={sourceVerificationNote(source)}
     type="button"
   >
     {source.file}
     {source.line != null && `:${source.line}`}
+    {source.verification === 'stale' && (
+      <span className="ml-1 text-vsc-yellow">(changed since run)</span>
+    )}
   </button>
 );
 
@@ -793,6 +832,7 @@ const ExecutionDetail: FC<{
             <OverviewTab
               evidence={evidence}
               execution={execution}
+              onOpenSource={onOpenSource}
               openContext={openContext}
               openSpan={openSpan}
             />
@@ -866,30 +906,50 @@ const RunningExecution: FC<{ execution: ExecutionRow }> = ({ execution }) => (
 // Overview
 // ---------------------------------------------------------------------------
 
-const OverviewTab: FC<{
+export const OverviewTab: FC<{
   execution: ExecutionRow;
   evidence: Evidence;
   openContext: (contextId: string) => void;
   openSpan: (span: SpanNode) => void;
-}> = ({ execution, evidence, openContext, openSpan }) => {
+  onOpenSource?: (file: string, line: number | null) => void;
+}> = ({ execution, evidence, openContext, openSpan, onOpenSource }) => {
   const rootTotal = Math.max(
     1,
     maxOf(
-      evidence.contexts
-        .filter((context) => context.parentId == null)
-        .map((context) => context.totalMs),
+      knownValues(
+        evidence.contexts
+          .filter((context) => context.parentId == null)
+          .map((context) => context.totalMs),
+      ),
     ),
   );
+  // Only contexts with a supported self time can be ranked by it.
   const hotContexts = evidence.contexts
-    .filter((context) => !context.folded && context.parentId != null)
-    .sort((left, right) => right.selfMs - left.selfMs)
+    .filter(
+      (context) =>
+        !context.folded && context.parentId != null && context.selfMs != null,
+    )
+    .sort((left, right) => (right.selfMs ?? 0) - (left.selfMs ?? 0))
     .slice(0, 5);
 
   // The recorded error captures are the truth about what went wrong. An
   // earlier version walked failing spans instead, which only ever saw the
   // calls capture policy happened to retain and could not name the error at
-  // all. Captures carry the throw site, the whole stack, and the value.
-  const errors = evidence.errors;
+  // all. Throw captures carry the throw site, the whole stack, and the value.
+  // Recordings without throw identity send errored-call entries instead:
+  // an error value seen on one retained call, with no origin, which must not
+  // be presented as a distinct error.
+  const throwCaptures = evidence.errors.filter(
+    (error) => error.grain === 'throw',
+  );
+  // Raises that passed an error along without a proven origin are shown but
+  // are not distinct errors: they may belong to one already listed.
+  const distinctErrors = throwCaptures.filter(
+    (error) => error.originState == null || error.originState === 'fresh',
+  );
+  const erroredCallErrors = evidence.errors.filter(
+    (error) => error.grain === 'erroredCall',
+  );
   const erroredSpans = evidence.spans.filter(
     (span) => span.status === 'failed',
   );
@@ -899,25 +959,57 @@ const OverviewTab: FC<{
   const erroredContexts = useMemo(
     () =>
       evidence.contexts
-        .filter((context) => context.errors > 0)
-        .sort((left, right) => right.errors - left.errors),
+        .filter((context) => context.errors != null && context.errors > 0)
+        .sort((left, right) => (right.errors ?? 0) - (left.errors ?? 0)),
     [evidence.contexts],
   );
 
   // `execution.errors` counts errored CALLS, not errors: one throw marks
   // every frame it unwinds through. Reporting that number as "errors" turns
   // one bug into eight, and subtracting one for the failure is not a fix.
-  const totalErrors = execution.errors ?? 0;
+  // The list omits this rollup. On opening a run, use context outcomes only
+  // when they cover its full completed population. Missing/limited context
+  // results, unknown outcomes and unsafe integer sums remain unknown.
+  const contextErrors = sumOf(evidence.contexts, (context) => context.errors);
+  const totalErrors =
+    execution.errors ??
+    (execution.calls != null &&
+    Number.isSafeInteger(execution.calls) &&
+    evidence.totalCalls === execution.calls &&
+    contextErrors != null &&
+    Number.isSafeInteger(contextErrors)
+      ? contextErrors
+      : null);
 
   const wall = evidence.durationMs;
-  const accounted = (evidence.cpuMs ?? 0) + (evidence.awaitMs ?? 0);
+  const accounted =
+    evidence.cpuMs != null && evidence.awaitMs != null
+      ? evidence.cpuMs + evidence.awaitMs
+      : null;
 
   return (
     <div className="space-y-3 px-3 py-3">
-      {errors.length > 0 && (
+      {throwCaptures.length > 0 && (
         <ErrorsPanel
-          erroredCalls={erroredSpans.length || (execution.errors ?? 0)}
-          errors={errors}
+          distinctCount={distinctErrors.length}
+          erroredCalls={
+            erroredSpans.length > 0 ? erroredSpans.length : totalErrors
+          }
+          errors={throwCaptures}
+          failed={execution.status === 'failed'}
+          onOpenSource={onOpenSource}
+          onOpenSpan={(callId) => {
+            const span = evidence.spans.find((other) => other.id === callId);
+            if (span) openSpan(span);
+          }}
+          spanIds={new Set(evidence.spans.map((span) => span.id))}
+          target={execution.target}
+        />
+      )}
+
+      {erroredCallErrors.length > 0 && (
+        <ErroredCallsPanel
+          entries={erroredCallErrors}
           failed={execution.status === 'failed'}
           onOpenSpan={(callId) => {
             const span = evidence.spans.find((other) => other.id === callId);
@@ -928,34 +1020,45 @@ const OverviewTab: FC<{
         />
       )}
 
-      {errors.length === 0 && execution.status === 'failed' && (
-        <section className="rounded-md border border-vsc-red/30 bg-vsc-red/5 px-3 py-2.5">
-          <div className="flex items-start gap-2">
-            <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-vsc-red" />
-            <div className="min-w-0">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-vsc-red">
-                Execution failed
-              </div>
-              <div className="mt-0.5 font-vsc-mono text-[15px] font-semibold text-vsc-text-bright">
-                {execution.target}
-              </div>
-              {/* The run failed but no capture reached the store, which is a
+      {throwCaptures.length === 0 &&
+        erroredCallErrors.length === 0 &&
+        execution.status === 'failed' && (
+          <section className="rounded-md border border-vsc-red/30 bg-vsc-red/5 px-3 py-2.5">
+            <div className="flex items-start gap-2">
+              <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-vsc-red" />
+              <div className="min-w-0">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-vsc-red">
+                  Execution failed
+                </div>
+                <div className="mt-0.5 font-vsc-mono text-[15px] font-semibold text-vsc-text-bright">
+                  {execution.target}
+                </div>
+                {/* The run failed but no capture reached the store, which is a
                   different situation from a failure we can explain. */}
-              <div className="mt-1 text-[12px] text-vsc-text-muted">
-                No error was captured for this execution, so there is nothing
-                here to say what went wrong.
+                <div className="mt-1 text-[12px] text-vsc-text-muted">
+                  No error was captured for this execution, so there is nothing
+                  here to say what went wrong.
+                </div>
               </div>
             </div>
-          </div>
-        </section>
-      )}
+          </section>
+        )}
 
-      {!evidence.indexComplete && (
+      {evidence.recordsLost ? (
         <div className="flex items-start gap-2 rounded border border-vsc-yellow/25 bg-vsc-yellow/5 px-3 py-2 text-[12px] text-vsc-yellow">
           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           Records were lost for this execution, so every count below is a floor
           rather than a total.
         </div>
+      ) : (
+        !evidence.indexComplete && (
+          <div className="flex items-start gap-2 rounded border border-vsc-border bg-vsc-surface px-3 py-2 text-[12px] text-vsc-text-muted">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            No end is recorded for this execution. It may still be running, or
+            it stopped before writing one; everything below covers the evidence
+            indexed so far.
+          </div>
+        )
       )}
 
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
@@ -988,21 +1091,48 @@ const OverviewTab: FC<{
               : formatDuration(evidence.awaitMs)
           }
         />
-        <Stat
-          hint={`Distinct errors captured. One throw unwinds through every frame above it, which is why ${totalErrors.toLocaleString()} calls are marked errored.`}
-          label="Errors"
-          tone={errors.length > 0 ? 'text-vsc-red' : undefined}
-          value={
-            errors.length > 0
-              ? `${errors.length}`
-              : totalErrors > 0
-                ? 'none captured'
-                : '0'
-          }
-        />
+        {throwCaptures.length === 0 ? (
+          <Stat
+            hint={
+              totalErrors == null
+                ? 'Retained calls that ended in an error. The full population error count is unavailable; one error can end several calls.'
+                : 'Completed invocations that ended in an error, including calls without retained spans. One throw can fail several invocations; this is not a count of distinct throws.'
+            }
+            label="Errored calls"
+            tone={
+              (totalErrors ?? erroredSpans.length) > 0
+                ? 'text-vsc-red'
+                : undefined
+            }
+            value={
+              totalErrors == null
+                ? `${erroredSpans.length} retained`
+                : totalErrors.toLocaleString()
+            }
+          />
+        ) : (
+          <Stat
+            hint={`Distinct errors recorded. One throw unwinds through every frame above it, which is why ${countText(totalErrors)} calls are marked errored.${
+              distinctErrors.length < throwCaptures.length
+                ? ` ${throwCaptures.length - distinctErrors.length} more raise(s) passed an error along without a proven origin and are not counted.`
+                : ''
+            }`}
+            label="Errors"
+            tone={throwCaptures.length > 0 ? 'text-vsc-red' : undefined}
+            value={
+              distinctErrors.length > 0
+                ? `${distinctErrors.length}`
+                : throwCaptures.length > 0
+                  ? 'origin unknown'
+                  : (totalErrors ?? 0) > 0
+                    ? 'none captured'
+                    : '0'
+            }
+          />
+        )}
       </div>
 
-      {wall != null && accounted > wall * 1.05 && (
+      {wall != null && accounted != null && accounted > wall * 1.05 && (
         <p className="text-[11px] text-vsc-text-faint">
           Running and waiting time add up to more than wall time because work
           ran on {evidence.threads.length} threads at once.
@@ -1018,7 +1148,7 @@ const OverviewTab: FC<{
             {hotContexts.map((context) => {
               const share = Math.min(
                 100,
-                Math.round((context.selfMs / rootTotal) * 100),
+                Math.round(((context.selfMs ?? 0) / rootTotal) * 100),
               );
               return (
                 <button
@@ -1034,8 +1164,11 @@ const OverviewTab: FC<{
                         {context.fn}
                       </div>
                       <div className="truncate text-[11px] text-vsc-text-faint">
-                        {context.enters.toLocaleString()} calls
-                        {context.errors > 0 &&
+                        {context.enters == null
+                          ? 'call count not recorded'
+                          : `${context.enters.toLocaleString()} calls`}
+                        {context.errors != null &&
+                          context.errors > 0 &&
                           `, ${context.errors.toLocaleString()} errors`}
                       </div>
                     </div>
@@ -1069,7 +1202,9 @@ const OverviewTab: FC<{
         <Panel
           subtitle={
             erroredSpans.length > 0
-              ? 'retained calls the throw unwound through, opens Trace'
+              ? throwCaptures.length > 0
+                ? 'retained calls the throw unwound through, opens Trace'
+                : 'retained calls that ended in an error, opens Trace'
               : 'call paths that recorded errors, opens Timings'
           }
           title="Errored calls"
@@ -1111,16 +1246,18 @@ const OverviewTab: FC<{
                     {context.fn}
                   </span>
                   <span className="ml-auto shrink-0 font-vsc-mono text-[11px] text-vsc-text-faint">
-                    {context.errors} of {context.enters.toLocaleString()}
+                    {context.errors} of {countText(context.enters)}
                   </span>
                 </button>
               ))}
             </div>
           ) : (
             <div className="px-3 py-6 text-center text-[12px] text-vsc-text-faint">
-              {totalErrors > 0
-                ? 'Calls errored, but nothing recorded where.'
-                : 'No call errored.'}
+              {totalErrors == null
+                ? 'No retained call errored. The full population error count is unavailable.'
+                : totalErrors > 0
+                  ? 'Calls errored, but nothing recorded where.'
+                  : 'No call errored.'}
             </div>
           )}
         </Panel>
@@ -1128,6 +1265,7 @@ const OverviewTab: FC<{
 
       {evidence.threads.length > 1 && (
         <ThreadsPanel
+          onOpenSource={onOpenSource}
           threads={evidence.threads}
           wallMs={Math.max(1, wall ?? rootTotal)}
         />
@@ -1147,12 +1285,25 @@ const OverviewTab: FC<{
  */
 const ErrorsPanel: FC<{
   errors: ErrorCapture[];
-  erroredCalls: number;
+  /** Errors with their own origin; the rest passed one along unproven. */
+  distinctCount: number;
+  /** Null when how many calls errored is not recorded. */
+  erroredCalls: number | null;
   failed: boolean;
   target: string;
   spanIds: ReadonlySet<string>;
   onOpenSpan: (callId: string) => void;
-}> = ({ errors, erroredCalls, failed, target, spanIds, onOpenSpan }) => (
+  onOpenSource?: (file: string, line: number | null) => void;
+}> = ({
+  errors,
+  distinctCount,
+  erroredCalls,
+  failed,
+  target,
+  spanIds,
+  onOpenSpan,
+  onOpenSource,
+}) => (
   <section
     className={cn(
       'overflow-hidden rounded-md border',
@@ -1181,8 +1332,11 @@ const ErrorsPanel: FC<{
           {target}
         </div>
         <div className="mt-0.5 text-[12px] text-vsc-text-muted">
-          {errors.length === 1 ? '1 error' : `${errors.length} errors`}
-          {erroredCalls > 0 &&
+          {distinctCount === 1 ? '1 error' : `${distinctCount} errors`}
+          {errors.length > distinctCount &&
+            `, plus ${errors.length - distinctCount} raise${errors.length - distinctCount === 1 ? '' : 's'} with an unproven origin`}
+          {erroredCalls != null &&
+            erroredCalls > 0 &&
             `, which failed ${erroredCalls === 1 ? '1 call' : `${erroredCalls} calls`} on the way up`}
         </div>
       </div>
@@ -1192,9 +1346,101 @@ const ErrorsPanel: FC<{
         <ErrorCaptureView
           error={error}
           key={error.id}
+          onOpenSource={onOpenSource}
           onOpenSpan={onOpenSpan}
           spanIds={spanIds}
         />
+      ))}
+    </div>
+  </section>
+);
+
+/**
+ * Error values seen on retained calls that ended in an error, from
+ * recordings that keep no throw occurrences.
+ *
+ * Each row is one call, not one error. One throw can end several of these
+ * calls, and two equal values can still be two throws, so rows are neither
+ * counted as errors nor merged, and nothing here names where anything was
+ * thrown.
+ */
+const ErroredCallsPanel: FC<{
+  entries: ErrorCapture[];
+  failed: boolean;
+  target: string;
+  spanIds: ReadonlySet<string>;
+  onOpenSpan: (callId: string) => void;
+}> = ({ entries, failed, target, spanIds, onOpenSpan }) => (
+  <section
+    className={cn(
+      'overflow-hidden rounded-md border',
+      failed
+        ? 'border-vsc-red/30 bg-vsc-red/5'
+        : 'border-vsc-yellow/25 bg-vsc-yellow/5',
+    )}
+  >
+    <div className="flex items-start gap-2 px-3 py-2.5">
+      <XCircle
+        className={cn(
+          'mt-0.5 h-4 w-4 shrink-0',
+          failed ? 'text-vsc-red' : 'text-vsc-yellow',
+        )}
+      />
+      <div className="min-w-0 flex-1">
+        <div
+          className={cn(
+            'text-[11px] font-semibold uppercase tracking-wide',
+            failed ? 'text-vsc-red' : 'text-vsc-yellow',
+          )}
+        >
+          {failed ? 'Execution failed' : 'Retained calls ended in errors'}
+        </div>
+        <div className="mt-0.5 truncate font-vsc-mono text-[15px] font-semibold text-vsc-text-bright">
+          {target}
+        </div>
+        <div className="mt-0.5 text-[12px] text-vsc-text-muted">
+          {entries.length === 1
+            ? '1 retained call ended in an error.'
+            : `${entries.length} retained calls ended in an error.`}{' '}
+          Where an error was thrown is not recorded, and one error can end
+          several of these calls.
+        </div>
+      </div>
+    </div>
+    <div className="divide-y divide-vsc-red/15 border-t border-vsc-red/15">
+      {entries.map((entry) => (
+        <div className="px-3 py-2.5" key={entry.id}>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-vsc-mono text-[13px] font-semibold text-vsc-text-bright">
+              {entry.fn ?? 'unknown function'}
+            </span>
+            <Pill title="The call ended with this error. It is not necessarily where the error was thrown.">
+              errored call
+            </Pill>
+            {entry.callId != null && spanIds.has(entry.callId) && (
+              <button
+                className="ml-auto shrink-0 text-[12px] text-vsc-accent hover:underline"
+                onClick={() => onOpenSpan(entry.callId as string)}
+                type="button"
+              >
+                Trace <ArrowRight className="ml-0.5 inline h-3 w-3" />
+              </button>
+            )}
+          </div>
+          {entry.value != null ? (
+            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded border border-vsc-red/20 bg-vsc-bg p-2 font-vsc-mono text-[11px] leading-4 text-vsc-text">
+              {typeof entry.value === 'string'
+                ? entry.value
+                : JSON.stringify(entry.value, null, 2)}
+            </pre>
+          ) : (
+            <div className="mt-2 rounded border border-dashed border-vsc-border p-2 text-[12px] text-vsc-text-faint">
+              {entry.valueUnavailable?.state === 'lost'
+                ? `The error value was recorded but could not be read (${entry.valueUnavailable.reason}).`
+                : 'No error value was captured for this call.'}
+            </div>
+          )}
+        </div>
       ))}
     </div>
   </section>
@@ -1205,11 +1451,64 @@ function isBuiltinFrame(fqn: string): boolean {
   return !fqn.startsWith('user.');
 }
 
+/** Words for a raise's origin state, for a pill and its explanation. */
+function originNote(
+  error: ErrorCapture,
+): { label: string; title: string } | null {
+  switch (error.originState) {
+    case 'ambiguous':
+      return {
+        label: 'origin ambiguous',
+        title: `A caught error was raised again, but ${error.originCandidates ?? 'several'} recorded throws could be its source, so it is not attributed to any of them.`,
+      };
+    case 'unresolved':
+      return {
+        label: 'origin not recorded',
+        title: `This raise passed an error along, but the recording does not prove which throw it came from (${error.unresolvedReason ?? 'no evidence'}).`,
+      };
+    default:
+      return null;
+  }
+}
+
+/** How one raise passed the error along. */
+function stepVerb(kind: string | null): string {
+  switch (kind) {
+    case 'await':
+      return 'awaited in';
+    case 'throw':
+      return 'converted in';
+    default:
+      return 'rethrown in';
+  }
+}
+
+function unwindText(
+  result: string | null,
+  handler: string | null,
+): string | null {
+  switch (result) {
+    case 'caught':
+      return handler ? `caught in ${handler}` : 'caught';
+    case 'unhandled':
+      return 'not caught on its thread';
+    case 'escaped_to_native':
+      return 'returned to a native caller';
+    case 'aborted':
+      return 'unwinding failed';
+    case 'end_not_indexed':
+      return 'still unwinding when the recording ended';
+    default:
+      return null;
+  }
+}
+
 const ErrorCaptureView: FC<{
   error: ErrorCapture;
   spanIds: ReadonlySet<string>;
   onOpenSpan: (callId: string) => void;
-}> = ({ error, spanIds, onOpenSpan }) => {
+  onOpenSource?: (file: string, line: number | null) => void;
+}> = ({ error, spanIds, onOpenSpan, onOpenSource }) => {
   const [showAllFrames, setShowAllFrames] = useState(false);
   // The user's own frames are what they can act on; the runtime and provider
   // frames below them are usually noise, so they collapse by default.
@@ -1225,16 +1524,33 @@ const ErrorCaptureView: FC<{
         <span className="font-vsc-mono text-[13px] font-semibold text-vsc-text-bright">
           {error.fn ?? 'unknown function'}
         </span>
-        {error.source_location && (
-          <span className="font-vsc-mono text-[11px] text-vsc-text-faint">
-            {error.source_location.file}
-            {error.source_location.line != null &&
-              `:${error.source_location.line}`}
-          </span>
-        )}
+        {error.source_location &&
+          (error.boundary ? (
+            <span className="flex min-w-0 items-center gap-1 text-[11px] text-vsc-text-faint">
+              {error.raiseKind === 'host_boundary'
+                ? 'failed in the host call at'
+                : 'failed in the native call at'}
+              <SourceLink
+                className=""
+                onOpen={onOpenSource}
+                source={error.source_location}
+              />
+            </span>
+          ) : (
+            <SourceLink
+              className=""
+              onOpen={onOpenSource}
+              source={error.source_location}
+            />
+          ))}
         {error.kind === 'rethrow' && (
           <Pill title="Passed along from an earlier throw rather than raised here">
             rethrow
+          </Pill>
+        )}
+        {originNote(error) && (
+          <Pill className="text-vsc-yellow" title={originNote(error)?.title}>
+            {originNote(error)?.label}
           </Pill>
         )}
         {canOpen && (
@@ -1305,6 +1621,57 @@ const ErrorCaptureView: FC<{
           </p>
         )}
       </div>
+
+      {(error.propagation.length > 0 ||
+        unwindText(error.unwindResult, error.handlerFn)) && (
+        <div className="mt-2">
+          <SectionHeading>After it was raised</SectionHeading>
+          <div className="space-y-0.5 text-[12px]">
+            {unwindText(error.unwindResult, error.handlerFn) && (
+              <div className="text-vsc-text-muted">
+                {unwindText(error.unwindResult, error.handlerFn)}
+              </div>
+            )}
+            {error.propagation.map((step) => (
+              <div
+                className="flex flex-wrap items-baseline gap-1.5 text-vsc-text-muted"
+                key={step.raiseId}
+              >
+                <span>
+                  {stepVerb(step.kind)} {step.fn ?? 'unknown function'}
+                </span>
+                {step.source && (
+                  <SourceLink
+                    className=""
+                    onOpen={onOpenSource}
+                    source={step.source}
+                  />
+                )}
+                {unwindText(step.result, step.handlerFn) && (
+                  <span className="text-vsc-text-faint">
+                    , {unwindText(step.result, step.handlerFn)}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {error.inheritedStack.length > 0 && error.originState !== 'fresh' && (
+        <div className="mt-2">
+          <SectionHeading>Trace carried from an earlier throw</SectionHeading>
+          <p className="text-[11px] text-vsc-text-faint">
+            Names and lines the runtime kept, not a recorded throw.
+          </p>
+          <div className="space-y-0.5 font-vsc-mono text-[12px] text-vsc-text-muted">
+            {error.inheritedStack.map((frame, index) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: a trace can repeat a frame
+              <div key={`${frame}-${index}`}>{frame}</div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1313,10 +1680,11 @@ const ErrorCaptureView: FC<{
  * Threads, drawn like a trace: each lane starts at its real offset on the
  * execution clock, indented under the thread that spawned it.
  */
-const ThreadsPanel: FC<{ threads: ThreadLane[]; wallMs: number }> = ({
-  threads,
-  wallMs,
-}) => {
+const ThreadsPanel: FC<{
+  threads: ThreadLane[];
+  wallMs: number;
+  onOpenSource?: (file: string, line: number | null) => void;
+}> = ({ threads, wallMs, onOpenSource }) => {
   const ordered = [...threads].sort(
     (left, right) => left.firstMs - right.firstMs,
   );
@@ -1346,6 +1714,13 @@ const ThreadsPanel: FC<{ threads: ThreadLane[]; wallMs: number }> = ({
                       spawned by {lane.spawnedBy.fn} at +
                       {formatDuration(lane.spawnedBy.atMs)}
                     </span>
+                  )}
+                  {lane.spawnSite && (
+                    <SourceLink
+                      className=""
+                      onOpen={onOpenSource}
+                      source={lane.spawnSite}
+                    />
                   )}
                   {lane.status === 'cancelled' && (
                     <XCircle className="h-3.5 w-3.5 shrink-0 text-vsc-yellow" />
@@ -1721,7 +2096,7 @@ const SpanRowView: FC<{
           span.status === 'failed' ? 'text-vsc-red' : 'text-vsc-text-muted',
         )}
       >
-        {formatDuration(span.durationMs) || 'running'}
+        {spanDurationText(span)}
       </span>
     </div>
   );
@@ -1793,10 +2168,7 @@ const SpanInspector: FC<{
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <Stat label="Started" value={`+${formatDuration(span.startMs)}`} />
-          <Stat
-            label="Duration"
-            value={formatDuration(span.durationMs) || 'running'}
-          />
+          <Stat label="Duration" value={spanDurationText(span)} />
         </div>
         {span.source && (
           <SourceLink onOpen={onOpenSource} source={span.source} />
@@ -1829,11 +2201,17 @@ const SpanInspector: FC<{
           <div className="flex items-center gap-2 text-[12px] text-vsc-text-muted">
             <Sigma className="h-3.5 w-3.5 shrink-0" />
             <span className="min-w-0 flex-1">
-              This path ran{' '}
-              <span className="font-vsc-mono text-vsc-text">
-                {context.enters.toLocaleString()}
-              </span>{' '}
-              times here, {retained} retained
+              {context.enters == null ? (
+                <>This path's call count is not recorded; {retained} retained</>
+              ) : (
+                <>
+                  This path ran{' '}
+                  <span className="font-vsc-mono text-vsc-text">
+                    {context.enters.toLocaleString()}
+                  </span>{' '}
+                  times here, {retained} retained
+                </>
+              )}
             </span>
             <button
               className="shrink-0 text-vsc-accent hover:underline"
@@ -1929,11 +2307,11 @@ const TimingsTab: FC<{
   // Only offer the running view when some wait was actually recorded;
   // otherwise the two modes are the same picture under different names.
   const awaitKnown = evidence.contexts.some(
-    (context) => context.subtreeAwaitMs > 0,
+    (context) => (context.subtreeAwaitMs ?? 0) > 0,
   );
   const compare = useCallback(
     (left: ContextNode, right: ContextNode) => {
-      const value = (context: ContextNode): number => {
+      const value = (context: ContextNode): number | null => {
         switch (sortKey) {
           case 'calls':
             return context.enters;
@@ -1945,9 +2323,11 @@ const TimingsTab: FC<{
             return context.totalMs;
         }
       };
-      return ascending
-        ? value(left) - value(right)
-        : value(right) - value(left);
+      // Unknown values sort last in either direction: they are not the
+      // smallest or the largest, just not recorded.
+      const [a, b] = [value(left), value(right)];
+      if (a == null || b == null) return a == null ? (b == null ? 0 : 1) : -1;
+      return ascending ? a - b : b - a;
     },
     [ascending, sortKey],
   );
@@ -1960,26 +2340,32 @@ const TimingsTab: FC<{
     () =>
       buildContextTree(
         evidence.contexts,
-        (left, right) => right.totalMs - left.totalMs,
+        (left, right) => (right.totalMs ?? -1) - (left.totalMs ?? -1),
       ),
     [evidence.contexts],
   );
   // Elapsed, or elapsed minus every wait inside the call. Subtracting only
   // the frame's own wait would change nothing for user code, because the
   // frame that suspends is always a transport leaf far below it.
+  // Null when the width is not known: the flame draws only measured time.
   const metric = useCallback(
-    (context: ContextNode): number =>
-      includeAwait
-        ? context.totalMs
-        : Math.max(0, context.totalMs - context.subtreeAwaitMs),
+    (context: ContextNode): number | null => {
+      if (includeAwait) return context.totalMs;
+      if (context.totalMs == null || context.subtreeAwaitMs == null) {
+        return null;
+      }
+      return Math.max(0, context.totalMs - context.subtreeAwaitMs);
+    },
     [includeAwait],
   );
   const rootTotalMs = Math.max(
     1,
     maxOf(
-      evidence.contexts
-        .filter((context) => context.parentId == null)
-        .map((context) => context.totalMs),
+      knownValues(
+        evidence.contexts
+          .filter((context) => context.parentId == null)
+          .map((context) => context.totalMs),
+      ),
     ),
   );
   const selected =
@@ -2013,7 +2399,9 @@ const TimingsTab: FC<{
           <span>Where time went</span>
           <Pill title="These counts cover every call, retained or not">
             <Sigma className="h-3 w-3" />
-            all {evidence.totalCalls.toLocaleString()} calls
+            {evidence.totalCalls == null
+              ? 'call counts not recorded'
+              : `all ${evidence.totalCalls.toLocaleString()} calls`}
           </Pill>
           <div className="ml-auto flex items-center gap-3">
             <ModeToggle
@@ -2327,11 +2715,14 @@ export interface FlameSlot {
 export function layoutChildren(
   node: ContextTreeNode,
   parentPx: number,
-  metric: (context: ContextNode) => number,
+  metric: (context: ContextNode) => number | null,
 ): { slots: FlameSlot[]; foldedCount: number; foldedFraction: number } {
-  const own = metric(node.context);
+  // Unknown time takes no width: the flame draws measured time only, and
+  // the table beside it lists contexts whose time is not recorded.
+  const width = (context: ContextNode): number => metric(context) ?? 0;
+  const own = width(node.context);
   const childSum = node.children.reduce(
-    (sum, child) => sum + metric(child.context),
+    (sum, child) => sum + width(child.context),
     0,
   );
   const scale = childSum > own && childSum > 0 ? own / childSum : 1;
@@ -2340,7 +2731,7 @@ export function layoutChildren(
   let foldedFraction = 0;
 
   for (const child of node.children) {
-    const fraction = own > 0 ? (metric(child.context) * scale) / own : 0;
+    const fraction = own > 0 ? (width(child.context) * scale) / own : 0;
     if (fraction * parentPx < FLAME_MIN_PX) {
       foldedCount += 1;
       foldedFraction += fraction;
@@ -2421,7 +2812,7 @@ const FlameGraph: FC<{
   roots: ContextTreeNode[];
   selectedId: string | null;
   onSelect: (id: string) => void;
-  metric: (context: ContextNode) => number;
+  metric: (context: ContextNode) => number | null;
   userOnly: boolean;
 }> = ({ roots, selectedId, onSelect, metric, userOnly }) => {
   const [zoomId, setZoomId] = useState<string | null>(null);
@@ -2447,7 +2838,10 @@ const FlameGraph: FC<{
   const zoomed = zoomId ? findNode(shown, zoomId) : null;
   const trail = zoomId ? (pathToNode(shown, zoomId) ?? []) : [];
   const visibleRoots = zoomed ? [zoomed] : shown;
-  const total = Math.max(1, maxOf(visibleRoots.map((r) => metric(r.context))));
+  const total = Math.max(
+    1,
+    maxOf(knownValues(visibleRoots.map((r) => metric(r.context)))),
+  );
 
   // A zoom that survives a toggle would point at a node no longer shown.
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset on toggle
@@ -2494,7 +2888,7 @@ const FlameGraph: FC<{
             node={root}
             onSelect={onSelect}
             onZoom={setZoomId}
-            pxWidth={(metric(root.context) / total) * width}
+            pxWidth={((metric(root.context) ?? 0) / total) * width}
             selectedId={selectedId}
           />
         ))}
@@ -2510,7 +2904,7 @@ const FlameNode: FC<{
   selectedId: string | null;
   onSelect: (id: string) => void;
   onZoom: (id: string) => void;
-  metric: (context: ContextNode) => number;
+  metric: (context: ContextNode) => number | null;
 }> = ({ node, pxWidth, selectedId, onSelect, onZoom, metric }) => {
   const { context } = node;
   const { slots, foldedCount, foldedFraction } = layoutChildren(
@@ -2536,7 +2930,7 @@ const FlameNode: FC<{
             ? 'var(--vsc-text-faint, #777)'
             : functionColor(context.fn, context.kind),
         }}
-        title={`${context.fn}\n${context.enters.toLocaleString()} calls, ${formatDuration(context.totalMs)} total, ${formatDuration(context.selfMs)} self\nDouble-click to zoom in`}
+        title={`${context.fn}\n${countText(context.enters)} calls, ${durationText(context.totalMs)} total, ${durationText(context.selfMs)} self\nDouble-click to zoom in`}
         type="button"
       >
         {pxWidth >= FLAME_LABEL_MIN_PX && context.fn}
@@ -2616,10 +3010,10 @@ const ContextTreeRows: FC<{
   const retained = evidence.spans.filter(
     (span) => span.contextId === context.id,
   ).length;
-  const share = Math.min(
-    100,
-    Math.round((context.totalMs / rootTotalMs) * 100),
-  );
+  const share =
+    context.totalMs == null
+      ? null
+      : Math.min(100, Math.round((context.totalMs / rootTotalMs) * 100));
   return (
     <>
       <div
@@ -2675,7 +3069,7 @@ const ContextTreeRows: FC<{
         </div>
         {/* Share, with the bar that makes it comparable at a glance. */}
         <div className="flex items-center justify-end gap-1.5 pr-1">
-          {!context.folded && (
+          {!context.folded && share != null && (
             <>
               <span className="h-1 w-10 shrink-0 rounded bg-vsc-bg">
                 <span
@@ -2690,11 +3084,20 @@ const ContextTreeRows: FC<{
           )}
         </div>
         <span className="self-center text-right font-vsc-mono text-vsc-text-muted">
-          {context.enters.toLocaleString()}
+          {countText(context.enters)}
         </span>
-        <span className="self-center text-right font-vsc-mono font-semibold text-vsc-red">
-          {context.errors > 0 ? context.errors.toLocaleString() : ''}
-        </span>
+        {context.errors == null ? (
+          <span
+            className="self-center text-right font-vsc-mono text-vsc-text-faint"
+            title={outcomeHint(context)}
+          >
+            {UNKNOWN}
+          </span>
+        ) : (
+          <span className="self-center text-right font-vsc-mono font-semibold text-vsc-red">
+            {context.errors > 0 ? context.errors.toLocaleString() : ''}
+          </span>
+        )}
         <span
           className={cn(
             'self-center text-right font-vsc-mono text-vsc-text-muted',
@@ -2706,18 +3109,18 @@ const ContextTreeRows: FC<{
               : 'Timing for this path is incomplete: a counter saturated or self time underflowed'
           }
         >
-          {formatDuration(context.totalMs)}
+          {durationText(context.totalMs)}
         </span>
         <span className="self-center text-right font-vsc-mono text-vsc-text-muted">
-          {formatDuration(context.selfMs)}
+          {durationText(context.selfMs)}
         </span>
         <span className="self-center text-right">
           {retained > 0 ? (
             <span
               className="rounded border border-vsc-accent/25 bg-vsc-accent/5 px-1.5 py-0.5 font-vsc-mono text-[11px] text-vsc-accent"
-              title={`${retained} of ${context.enters.toLocaleString()} calls retained as spans`}
+              title={`${retained} of ${countText(context.enters)} calls retained as spans`}
             >
-              {retained}/{context.enters.toLocaleString()}
+              {retained}/{countText(context.enters)}
             </span>
           ) : null}
         </span>
@@ -2741,6 +3144,27 @@ const ContextTreeRows: FC<{
   );
 };
 
+function outcomeHint(context: ContextNode): string {
+  switch (context.outcomeState) {
+    case 'partial':
+      return 'Some completed calls lack outcome evidence, so population outcome totals are unavailable.';
+    case 'invalid':
+      return 'Recorded outcome counts are inconsistent; population totals are unavailable.';
+    case 'overflow':
+      return 'One or more population counts exceed the query integer range.';
+    case 'none_observed':
+      return 'No completed invocations have been indexed for this context yet.';
+    case 'recorded':
+      return 'Completed invocations in the indexed recording, including calls without retained spans. Errored calls are not distinct throws.';
+    default:
+      return context.errors != null ||
+        context.ok != null ||
+        context.cancelled != null
+        ? 'Recorded completion counts. Errored calls are not distinct throws.'
+        : 'Population outcomes are not recorded for this context; retained calls show their outcomes in Trace.';
+  }
+}
+
 function contextPath(evidence: Evidence, context: ContextNode): string[] {
   const path: string[] = [];
   const seen = new Set<string>();
@@ -2756,7 +3180,7 @@ function contextPath(evidence: Evidence, context: ContextNode): string[] {
   return path;
 }
 
-const ContextInspector: FC<{
+export const ContextInspector: FC<{
   context: ContextNode | null;
   evidence: Evidence;
   openSpan: (span: SpanNode) => void;
@@ -2776,10 +3200,12 @@ const ContextInspector: FC<{
   const distribution = summarizeDurations(exemplars, context.enters);
   const path = contextPath(evidence, context);
   const signature = signatures?.get(context.fn);
-  const childMs = Math.max(
-    0,
-    context.totalMs - context.selfMs - (context.awaitMs ?? 0),
-  );
+  // Time in children is what remains; unknown if any part is.
+  const childMs =
+    context.totalMs != null && context.selfMs != null && context.awaitMs != null
+      ? Math.max(0, context.totalMs - context.selfMs - context.awaitMs)
+      : null;
+  const barMs = context.totalMs == null ? null : Math.max(1, context.totalMs);
 
   return (
     <aside className="flex min-w-[320px] flex-1 flex-col overflow-auto bg-vsc-bg">
@@ -2820,50 +3246,100 @@ const ContextInspector: FC<{
 
       <div className="min-h-0 flex-1 space-y-3 overflow-auto p-3">
         <div className="grid grid-cols-2 gap-2">
-          <Stat label="Calls" value={context.enters.toLocaleString()} />
           <Stat
-            label="Errors"
-            tone={context.errors > 0 ? 'text-vsc-red' : undefined}
-            value={context.errors.toLocaleString()}
+            hint={
+              context.enters == null
+                ? 'The recording has no call count for this path'
+                : undefined
+            }
+            label="Calls"
+            value={
+              context.enters == null
+                ? 'not recorded'
+                : context.enters.toLocaleString()
+            }
+          />
+          <Stat
+            hint={outcomeHint(context)}
+            label="Errored calls"
+            tone={
+              context.errors != null && context.errors > 0
+                ? 'text-vsc-red'
+                : undefined
+            }
+            value={
+              context.errors == null
+                ? 'not recorded'
+                : context.errors.toLocaleString()
+            }
+          />
+          <Stat
+            hint={outcomeHint(context)}
+            label="Succeeded"
+            value={
+              context.ok == null ? 'not recorded' : context.ok.toLocaleString()
+            }
+          />
+          <Stat
+            hint={outcomeHint(context)}
+            label="Cancelled"
+            value={
+              context.cancelled == null
+                ? 'not recorded'
+                : context.cancelled.toLocaleString()
+            }
           />
         </div>
+
+        {context.outcomeState != null &&
+          !['recorded', 'none_observed'].includes(context.outcomeState) && (
+            <p className="text-[11px] text-vsc-text-faint">
+              {outcomeHint(context)}
+            </p>
+          )}
 
         {/* Where this path's own time went, as one bar rather than three
             disconnected boxes. Running, waiting, and time in children are
             disjoint parts of the total, so they genuinely compose. */}
         <div>
           <SectionHeading>
-            Time in this path: {formatDuration(context.totalMs)}
+            Time in this path:{' '}
+            {context.totalMs == null
+              ? 'not recorded'
+              : formatDuration(context.totalMs)}
           </SectionHeading>
-          <div className="flex h-2.5 overflow-hidden rounded bg-vsc-bg">
-            <span
-              className="bg-vsc-accent"
-              style={{
-                width: `${(context.selfMs / Math.max(1, context.totalMs)) * 100}%`,
-              }}
-              title={`Running ${formatDuration(context.selfMs)}`}
-            />
-            <span
-              className="bg-vsc-yellow/70"
-              style={{
-                width: `${((context.awaitMs ?? 0) / Math.max(1, context.totalMs)) * 100}%`,
-              }}
-              title={`Waiting ${formatDuration(context.awaitMs)}`}
-            />
-            <span
-              className="bg-vsc-border"
-              style={{
-                width: `${(childMs / Math.max(1, context.totalMs)) * 100}%`,
-              }}
-              title={`In calls it made ${formatDuration(childMs)}`}
-            />
-          </div>
+          {/* Drawn only when every part is known: a bar with an unknown
+              part left out would show the known parts as the whole. */}
+          {barMs != null &&
+            context.selfMs != null &&
+            context.awaitMs != null &&
+            childMs != null && (
+              <div className="flex h-2.5 overflow-hidden rounded bg-vsc-bg">
+                <span
+                  className="bg-vsc-accent"
+                  style={{ width: `${(context.selfMs / barMs) * 100}%` }}
+                  title={`Running ${formatDuration(context.selfMs)}`}
+                />
+                <span
+                  className="bg-vsc-yellow/70"
+                  style={{ width: `${(context.awaitMs / barMs) * 100}%` }}
+                  title={`Waiting ${formatDuration(context.awaitMs)}`}
+                />
+                <span
+                  className="bg-vsc-border"
+                  style={{ width: `${(childMs / barMs) * 100}%` }}
+                  title={`In calls it made ${formatDuration(childMs)}`}
+                />
+              </div>
+            )}
           <div className="mt-1.5 space-y-0.5 text-[11px]">
             <div className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-sm bg-vsc-accent" />
               <span className="text-vsc-text-muted">running</span>
               <span className="ml-auto font-vsc-mono">
-                {formatDuration(context.selfMs)}
+                {context.selfMs == null
+                  ? 'not recorded'
+                  : formatDuration(context.selfMs)}
               </span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -2881,7 +3357,7 @@ const ContextInspector: FC<{
               <span className="h-2 w-2 rounded-sm bg-vsc-border" />
               <span className="text-vsc-text-muted">in calls it made</span>
               <span className="ml-auto font-vsc-mono">
-                {formatDuration(childMs)}
+                {childMs == null ? 'not recorded' : formatDuration(childMs)}
               </span>
             </div>
           </div>
@@ -2914,9 +3390,9 @@ const ContextInspector: FC<{
               {/* Quantiles over a policy-chosen subset would describe the
                   sample and be read as the population. */}
               <p className="mt-1.5 text-[11px] text-vsc-text-faint">
-                From the {distribution.retained} retained of{' '}
-                {distribution.total.toLocaleString()} calls, so this is a
-                sample, not a distribution over all of them.
+                {distribution.total == null
+                  ? `From the ${distribution.retained} retained calls. The path's call count is not recorded, so this is a sample, not a distribution over all of them.`
+                  : `From the ${distribution.retained} retained of ${distribution.total.toLocaleString()} calls, so this is a sample, not a distribution over all of them.`}
               </p>
             </>
           ) : (
@@ -2929,8 +3405,8 @@ const ContextInspector: FC<{
 
         <div>
           <SectionHeading>
-            Retained calls: {exemplars.length} of{' '}
-            {context.enters.toLocaleString()}
+            Retained calls: {exemplars.length}
+            {context.enters != null && ` of ${context.enters.toLocaleString()}`}
           </SectionHeading>
           {exemplars.length > 0 ? (
             <div className="space-y-1">
@@ -2956,7 +3432,7 @@ const ContextInspector: FC<{
                   </span>
                 </button>
               ))}
-              {exemplars.length < context.enters && (
+              {context.enters != null && exemplars.length < context.enters && (
                 <div className="rounded border border-dashed border-vsc-border-subtle px-2 py-1.5 text-[11px] text-vsc-text-faint">
                   The other{' '}
                   {(context.enters - exemplars.length).toLocaleString()} calls

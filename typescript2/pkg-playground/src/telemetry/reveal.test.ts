@@ -6,6 +6,7 @@ import { ancestorIdsOf } from './TelemetryView';
 function context(id: string, parentId: string | null): ContextNode {
   return {
     awaitMs: 0,
+    cancelled: 0,
     enters: 1,
     errors: 0,
     fn: id,
@@ -13,6 +14,8 @@ function context(id: string, parentId: string | null): ContextNode {
     fqn: `user.${id}`,
     id,
     kind: 'baml',
+    ok: 1,
+    outcomeState: null,
     parentId,
     selfMs: 0,
     source: null,

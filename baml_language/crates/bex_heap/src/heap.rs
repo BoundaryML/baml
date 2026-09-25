@@ -573,6 +573,12 @@ impl BexHeap {
         self.compile_time.len()
     }
 
+    /// Borrow a compile-time object. These slots are immutable after sealing
+    /// and are never moved or collected.
+    pub(crate) fn compile_time_object(&self, index: usize) -> &Object {
+        &self.compile_time[index]
+    }
+
     /// Get the compile-time boundary index (alias for compile_time_len).
     ///
     /// Objects before this index are permanent. Objects at or after
