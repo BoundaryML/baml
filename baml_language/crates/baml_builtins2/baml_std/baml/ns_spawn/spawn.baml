@@ -3,10 +3,12 @@
 
 /// A one-shot cancellation handle backed by a runtime cancellation token.
 ///
-/// Using one as a spawn modifier links it into the task's own token: once
-/// fired, the task's next checkpoint (an `await` or an IO call) panics with
-/// `baml.panics.Cancelled`. Once cancelled, a token stays cancelled forever,
-/// and a task spawned with it after that starts cancelled.
+/// Using one as a spawn modifier links it into the task: once fired, the
+/// task's next checkpoint (an `await` or an IO call) panics with
+/// `baml.panics.Cancelled`, and so does that of every task it spawns other
+/// than a `Root` one, even after the task itself has finished. Once cancelled,
+/// a token stays cancelled forever, and a task spawned with it after that
+/// starts cancelled.
 ///
 /// # Examples
 ///

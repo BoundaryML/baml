@@ -3,10 +3,10 @@
 // Helpers are top-level functions (test-block locals hit the known
 // local-boxing VM bug; see ns_cancel_cascade/cancel_cascade.baml).
 //
-// Only deterministic, `await`-based assertions live here: a CancelToken fires
-// the spawn's effective token via an async watcher, so reading `f.state()`
-// immediately after `tok.cancel()` would race the watcher. `await` blocks
-// until the future settles, so its outcome is deterministic.
+// Only deterministic, `await`-based assertions live here: a cancelled task
+// settles its own future once it unwinds, so reading `f.state()` right after
+// `tok.cancel()` would race it. `await` blocks until the future settles, so
+// its outcome is deterministic.
 
 // Awaiting a token-cancelled spawn re-throws `Cancelled`, which is catchable.
 function await_token_cancelled_catches() -> int {
@@ -132,4 +132,47 @@ function spawn_with_any_cancelled_by_the_composite() -> int {
 
 test "spawn_with_any_cancelled_by_the_composite" {
     assert.equal(spawn_with_any_cancelled_by_the_composite(), 0)
+}
+
+// A token linked into a task cancels the tasks it spawned too, for as long as
+// they run, including after the task that linked it has finished.
+function linked_token_reaches_a_descendant() -> int {
+    let token = baml.spawn.CancelToken.new();
+    let children: baml.future.Future<int, baml.errors.Io>[] = [];
+    let parent = spawn with token {
+        children.push(spawn {
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+            7
+        });
+        0
+    };
+    await parent;
+    // Let the parent's task end, not only settle its future.
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+    let _ = token.cancel();
+    (await children[0]) catch (e) { baml.panics.Cancelled => -1 }
+}
+
+test "linked_token_reaches_a_descendant" {
+    assert.equal(linked_token_reaches_a_descendant(), -1)
+}
+
+// ...but not a `Root` one, which has no cancellation parent.
+function linked_token_skips_a_rooted_descendant() -> int {
+    let token = baml.spawn.CancelToken.new();
+    let children: baml.future.Future<int, baml.errors.Io>[] = [];
+    let parent = spawn with token {
+        children.push(spawn with baml.spawn.Root.new() {
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+            7
+        });
+        0
+    };
+    await parent;
+    let _ = token.cancel();
+    (await children[0]) catch (e) { baml.panics.Cancelled => -1 }
+}
+
+test "linked_token_skips_a_rooted_descendant" {
+    assert.equal(linked_token_skips_a_rooted_descendant(), 7)
 }

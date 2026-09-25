@@ -6,19 +6,89 @@
 //! B adds child threads and routes child completions through
 //! `settles_future`.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use ::bex_heap::{Tlab, TlabHolder};
 use ::bex_vm_types::{HeapPtr, RootHaver, types::FutureId};
 use bex_vm::BexVm;
 use tokio_util::sync::CancellationToken;
 
+/// What cancels a task: its own token, and every token linked into it.
+///
+/// `own` is what the task's future cancels, what its parent's cancellation
+/// reaches (it is a child token of the parent's), and what the task fires when
+/// it fails or is cancelled, so the cancellation cascades to its children.
+/// `linked` holds the tokens its plan links in (`spawn with token`) and those
+/// it inherits from its parent, so a linked token reaches every descendant for
+/// as long as that descendant runs, including after the task that linked it
+/// has finished. The task is cancelled once any of them has fired.
+#[derive(Clone)]
+pub struct TaskCancel {
+    own: CancellationToken,
+    linked: Arc<[CancellationToken]>,
+}
+
+impl TaskCancel {
+    /// A root call's: cancelled through the host's token alone.
+    pub fn root(own: CancellationToken) -> Self {
+        Self {
+            own,
+            linked: Arc::from([]),
+        }
+    }
+
+    /// A task with no cancellation parent (a rooted spawn, or one started by
+    /// cleanup code): a fresh token, and `linked`.
+    pub fn detached(linked: impl IntoIterator<Item = CancellationToken>) -> Self {
+        Self {
+            own: CancellationToken::new(),
+            linked: linked.into_iter().collect(),
+        }
+    }
+
+    /// A child task's: cancelled with this task, and by `linked` too.
+    #[must_use]
+    pub fn child(&self, linked: impl IntoIterator<Item = CancellationToken>) -> Self {
+        Self {
+            own: self.own.child_token(),
+            linked: self.linked.iter().cloned().chain(linked).collect(),
+        }
+    }
+
+    /// The task's own token: what its future's `cancel()` fires.
+    pub fn own(&self) -> &CancellationToken {
+        &self.own
+    }
+
+    /// Every token whose firing cancels the task.
+    pub fn tokens(&self) -> impl Iterator<Item = &CancellationToken> {
+        std::iter::once(&self.own).chain(self.linked.iter())
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.tokens().any(CancellationToken::is_cancelled)
+    }
+
+    /// Completes once any token that cancels the task has fired.
+    pub async fn cancelled(&self) {
+        if self.linked.is_empty() {
+            return self.own.cancelled().await;
+        }
+        futures::future::select_all(self.tokens().map(|token| Box::pin(token.cancelled()))).await;
+    }
+
+    /// Cancel the task and, through its own token, its descendants.
+    pub fn cancel(&self) {
+        self.own.cancel();
+    }
+}
+
 /// A BEX virtual-machine instance plus the scheduling metadata that
 /// distinguishes a root call from a spawned child.
 pub struct BexThread {
     pub vm: BexVm,
     pub name: Option<String>,
-    pub cancel: CancellationToken,
+    pub cancel: TaskCancel,
     /// The token the thread's in-flight sys-op observes — never `cancel`
     /// itself: whether the thread is shielded is read only once `cancel`
     /// fires, and a shielded thread's cleanup runs its sys-ops to
@@ -30,7 +100,7 @@ pub struct BexThread {
 
 impl BexThread {
     /// Build a root thread with no future to settle.
-    pub fn new_root(vm: BexVm, cancel: CancellationToken) -> Self {
+    pub fn new_root(vm: BexVm, cancel: TaskCancel) -> Self {
         Self {
             vm,
             name: None,
@@ -43,7 +113,7 @@ impl BexThread {
     /// Build a child thread that will settle `future_id` when its body terminates.
     pub fn new_child(
         vm: BexVm,
-        cancel: CancellationToken,
+        cancel: TaskCancel,
         name: Option<String>,
         settles_future: FutureId,
     ) -> Self {
@@ -69,8 +139,8 @@ impl BexThread {
         std::mem::replace(&mut self.sysop_cancel, CancellationToken::new()).cancel();
     }
 
-    /// This thread's own cancellation token.
-    pub fn vm_thread_cancel(&self) -> &CancellationToken {
+    /// What cancels this thread.
+    pub fn vm_thread_cancel(&self) -> &TaskCancel {
         &self.cancel
     }
 

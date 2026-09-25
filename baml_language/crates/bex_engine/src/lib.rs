@@ -181,7 +181,7 @@ impl Drop for ParkRequestGuard {
 use crate::logger::{TraceLogMetadata, TraceLogger};
 pub use crate::{
     future::{FutureManager, FutureManagerGuard, FutureManagerInner},
-    thread::BexThread,
+    thread::{BexThread, TaskCancel},
 };
 
 /// Definitions attached to runtime-minted type arguments for one sys-op call.
@@ -1050,14 +1050,15 @@ struct SpawnRequest {
     /// The task's cancellation parent is the runtime, not the spawner
     /// (a plan under `baml.spawn.Root`).
     root: bool,
+    /// Tokens the plan links in: any of them firing cancels the task and its
+    /// descendants.
+    linked: Vec<CancellationToken>,
 }
 
 /// What a spawned task runs, and what stands between it and running.
 struct SpawnedBody {
     /// The callable the task enters: the plan's body, `() -> T throws E`.
     entry: HeapPtr,
-    /// Tokens linked into the task's own: any of them firing cancels it.
-    linked_cancel: Vec<CancellationToken>,
     gate: EntryGate,
 }
 
@@ -3340,7 +3341,6 @@ impl BexEngine {
             host_call_id,
             boundary,
             logger,
-            cancel,
             copy_objects,
         )
         .await
@@ -3371,7 +3371,7 @@ impl BexEngine {
         // Spawned children build their own `BexThread`s in `spawn_thread`.
         let mut vm = vm;
         vm.thread_id = self.next_bex_thread_id().0;
-        let root_thread = BexThread::new_root(vm, cancel);
+        let root_thread = BexThread::new_root(vm, TaskCancel::root(cancel));
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
         inactive.acquire().await
     }
@@ -3396,7 +3396,6 @@ impl BexEngine {
 
         logger: TraceLogger,
 
-        cancel: CancellationToken,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
         // Finish fallible host type narrowing before setting the entry frame.
@@ -3467,7 +3466,6 @@ impl BexEngine {
                 thread,
                 host_call_id,
                 log_capture,
-                &cancel,
                 copy_objects,
             )
             .await
@@ -3936,7 +3934,6 @@ impl BexEngine {
             host_call_id,
             boundary,
             logger,
-            cancel,
             copy_objects,
         )
         .await
@@ -4703,7 +4700,7 @@ impl BexEngine {
     async fn park<T>(
         self: &Arc<Self>,
         active: &mut Option<ActiveHeapPermit<BexThread>>,
-        cancel: &CancellationToken,
+        cancel: &TaskCancel,
         wait: impl std::future::Future<Output = T>,
     ) -> Park<T> {
         use bex_vm::telemetry::{ClockDuration, ClockInstant};
@@ -4890,7 +4887,7 @@ impl BexEngine {
         request: SpawnRequest,
         telemetry: Option<bex_vm::telemetry::ThreadSpawnContext>,
         call_id: CallId,
-        cancel: &CancellationToken,
+        cancel: &TaskCancel,
         log_capture: Option<&LogCaptureContext>,
     ) -> Result<(), EngineError> {
         let SpawnRequest {
@@ -4899,20 +4896,22 @@ impl BexEngine {
             returns,
             throws,
             root,
+            linked,
         } = request;
-        // Each spawned thread gets a child cancel token so parent →
-        // child cascade falls out of the token tree without bespoke
-        // tracking. A rooted spawn (`baml.spawn.Root`) instead gets a
-        // fresh, independent token so the parent's cancellation (and
-        // unhandled-throw cascade) does NOT reach it — it behaves
-        // like a top-level task. So does a spawn from inside a
+        // Each spawned task is cancelled with its parent: its own token is a
+        // child of the parent's, so parent → child cascade falls out of the
+        // token tree, and it inherits the tokens linked into the parent. A
+        // rooted spawn (`baml.spawn.Root`) instead starts with a fresh,
+        // independent token and none of the parent's, so the parent's
+        // cancellation (and unhandled-throw cascade) does NOT reach it — it
+        // behaves like a top-level task. So does a spawn from inside a
         // shield: cleanup that delegates must not hand its work a
-        // token that has already fired; the child stays
-        // cancellable through its own handle and token.
+        // cancellation that has already fired; the child stays cancellable
+        // through its own handle and token.
         let child_cancel = if root || thread.vm_thread_is_shielded() {
-            CancellationToken::new()
+            TaskCancel::detached(linked)
         } else {
-            cancel.child_token()
+            cancel.child(linked)
         };
         let child_thread_id = self.next_bex_thread_id().0;
         // Provenance for shutdown leak reports: the written spawn
@@ -4941,7 +4940,7 @@ impl BexEngine {
         let future_ptr = {
             let mut guard = self.futures.acquire(thread.proof()).await;
             let (future_id, future_ptr) =
-                guard.new_future(returns, throws, child_cancel.clone(), spawn_origin);
+                guard.new_future(returns, throws, child_cancel.own().clone(), spawn_origin);
             drop(guard);
             Arc::clone(self)
                 .spawn_thread(
@@ -4971,7 +4970,6 @@ impl BexEngine {
         Ok(SpawnRequest {
             body: SpawnedBody {
                 entry: launch.body,
-                linked_cancel: launch.cancel,
                 gate: if launch.limits.is_empty() {
                     EntryGate::Open
                 } else {
@@ -4982,6 +4980,7 @@ impl BexEngine {
             returns: launch.returns,
             throws: launch.throws,
             root: launch.root,
+            linked: launch.cancel,
         })
     }
 
@@ -5005,7 +5004,7 @@ impl BexEngine {
     )]
     fn spawn_thread(
         self: Arc<Self>,
-        child_cancel: CancellationToken,
+        child_cancel: TaskCancel,
         body: SpawnedBody,
         name: Option<String>,
         call_id: CallId,
@@ -5041,7 +5040,7 @@ impl BexEngine {
     #[allow(clippy::too_many_arguments)]
     async fn spawn_thread_inner(
         self: Arc<Self>,
-        child_cancel: CancellationToken,
+        child_cancel: TaskCancel,
         body: SpawnedBody,
         name: Option<String>,
         call_id: CallId,
@@ -5054,56 +5053,10 @@ impl BexEngine {
         // Count the producer until its task exits, even if its future was
         // cancelled or removed earlier. Created before the task is scheduled.
         let work_guard = self.bex_work.register_work();
-        let SpawnedBody {
-            entry,
-            linked_cancel,
-            gate,
-        } = body;
-        // A queued task waits on every token that cancels it, not only on its
-        // own: the forwarders below are tasks, and until one has run, a slot
-        // released by its token's other launches could admit this one.
-        let cancelled_by: Vec<CancellationToken> = std::iter::once(child_cancel.clone())
-            .chain(linked_cancel.iter().cloned())
-            .collect();
-        // A token that has already fired cancels the task before it starts,
-        // not whenever its forwarder happens to run.
-        if linked_cancel.iter().any(CancellationToken::is_cancelled) {
-            child_cancel.cancel();
-        }
-
-        // Link each user-provided `CancelToken` into this spawn's effective
-        // token: firing one cancels the child. (The token itself — fresh for a
-        // root task, a child of the parent's otherwise — is derived at the
-        // dispatch site, where the future is also allocated.)
-        //
-        // A forwarder must end with the TASK, not with either token: a body
-        // that completes normally fires neither — `child_cancel` must not
-        // fire, since the task's attached children outlive it — and a linked
-        // token may live for the whole program. So each forwarder also ends
-        // on a done signal whose guard the task owns: it fires however the
-        // task ends — completed, aborted, or dropped before its first poll,
-        // since the guard is built here and moved in rather than created by
-        // the task's body.
-        let end_linked_forwarders = (!linked_cancel.is_empty()).then(|| {
-            let done = CancellationToken::new();
-            for user in linked_cancel {
-                let linked = child_cancel.clone();
-                let done = done.clone();
-                let watcher = async move {
-                    tokio::select! {
-                        biased;
-                        () = user.cancelled() => linked.cancel(),
-                        () = linked.cancelled() => {}
-                        () = done.cancelled() => {}
-                    }
-                };
-                #[cfg(not(target_arch = "wasm32"))]
-                tokio::spawn(watcher);
-                #[cfg(target_arch = "wasm32")]
-                wasm_bindgen_futures::spawn_local(watcher);
-            }
-            done.drop_guard()
-        });
+        let SpawnedBody { entry, gate } = body;
+        // A queued task waits on every token that cancels it, so a launch
+        // cancelled while it waits is never admitted.
+        let cancelled_by: Vec<CancellationToken> = child_cancel.tokens().cloned().collect();
 
         // Register with the entry gate *synchronously*, here (before the body
         // task is polled), so a count read right after `spawn` already
@@ -5142,8 +5095,6 @@ impl BexEngine {
         let engine = self;
         let return_type = RuntimeTy::Null;
         let task = async move {
-            // Owned by the task: dropping it ends the forwarders above.
-            let _end_linked_forwarders = end_linked_forwarders;
             // If this spawn is gated, park here — WITHOUT the heap permit, so a
             // queued task doesn't block GC — until it is admitted. A task
             // cancelled while queued settles its future `Cancelled` and never
@@ -5172,15 +5123,7 @@ impl BexEngine {
             let permit = inactive.acquire().await;
 
             match engine
-                .run_thread_event_loop(
-                    return_type,
-                    None,
-                    permit,
-                    call_id,
-                    log_capture,
-                    &child_cancel,
-                    true,
-                )
+                .run_thread_event_loop(return_type, None, permit, call_id, log_capture, true)
                 .await
             {
                 Ok(ThreadOutcome::SettledChild(_)) => {}
@@ -5248,7 +5191,6 @@ impl BexEngine {
         thread: ActiveHeapPermit<BexThread>,
         call_id: CallId,
         log_capture: Option<LogCaptureContext>,
-        cancel: &CancellationToken,
         copy_objects: bool,
     ) -> Result<ThreadOutcome, EngineError> {
         let execution = self.run_thread_event_loop_inner(
@@ -5257,7 +5199,6 @@ impl BexEngine {
             thread,
             call_id,
             log_capture,
-            cancel,
             copy_objects,
         );
         #[cfg(not(target_arch = "wasm32"))]
@@ -5278,10 +5219,12 @@ impl BexEngine {
         call_id: CallId,
 
         log_capture: Option<LogCaptureContext>,
-        cancel: &CancellationToken,
         copy_objects: bool,
     ) -> Result<ThreadOutcome, EngineError> {
         use bex_vm::telemetry::InvocationOutcome;
+
+        let cancel = thread.vm_thread_cancel().clone();
+        let cancel = &cancel;
 
         // The completion boundary owns the VM even when execution propagates
         // an error with `?` or returns early. Only the non-fallible parking

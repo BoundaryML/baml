@@ -110,15 +110,7 @@ async fn conversion_errors_and_terminal_outcomes_finalize() {
             cancel.cancel();
         }
         let result = engine
-            .run_thread_event_loop(
-                return_type,
-                throws_type,
-                thread,
-                CallId::next(),
-                None,
-                &cancel,
-                true,
-            )
+            .run_thread_event_loop(return_type, throws_type, thread, CallId::next(), None, true)
             .await;
         if source.contains("baml.sys.exit") {
             assert!(matches!(result, Err(EngineError::Exit { code: 7 })));
@@ -165,15 +157,7 @@ async fn ready_and_suspended_sysop_failures_finalize() {
         let thread = entry(&engine, &cancel, &[]).await;
         let id = thread.vm.thread_id;
         let result = engine
-            .run_thread_event_loop(
-                RuntimeTy::int(),
-                None,
-                thread,
-                CallId::next(),
-                None,
-                &cancel,
-                true,
-            )
+            .run_thread_event_loop(RuntimeTy::int(), None, thread, CallId::next(), None, true)
             .await;
         assert!(result.is_err());
         assert_completed(&engine, &[(id, InvocationOutcome::Errored)]);
@@ -203,15 +187,7 @@ async fn await_lookup_failure_finalizes() {
             .set_entry_point(*function, &[Value::object(future)]);
         let id = thread.vm.thread_id;
         let result = engine
-            .run_thread_event_loop(
-                RuntimeTy::int(),
-                None,
-                thread,
-                CallId::next(),
-                None,
-                &cancel,
-                true,
-            )
+            .run_thread_event_loop(RuntimeTy::int(), None, thread, CallId::next(), None, true)
             .await;
         assert!(matches!(result, Err(EngineError::FutureNotFound { .. })));
         assert_completed(&engine, &[(id, InvocationOutcome::Errored)]);
@@ -245,7 +221,6 @@ async fn suspended_await_failure_and_cancellation_finalize() {
                 thread,
                 CallId::next(),
                 None,
-                &cancel,
                 true,
             );
             tokio::pin!(running);
@@ -432,15 +407,7 @@ async fn child_internal_error_settles_and_finishes_both_threads() {
     // inside a dispatched child and propagation through its parent's await.
     let thread = entry(&engine, &cancel, &[Value::int(7)]).await;
     let result = engine
-        .run_thread_event_loop(
-            RuntimeTy::int(),
-            None,
-            thread,
-            CallId::next(),
-            None,
-            &cancel,
-            true,
-        )
+        .run_thread_event_loop(RuntimeTy::int(), None, thread, CallId::next(), None, true)
         .await;
     assert!(result.is_err());
     assert_completed(
@@ -474,15 +441,7 @@ async fn clock_restore_invalidates_inflight_timing_without_changing_execution() 
     assert_eq!(old.status(), TimingStatus::Restored);
     assert_ne!(replacement.metadata().epoch, old.metadata().epoch);
     let result = engine
-        .run_thread_event_loop(
-            RuntimeTy::int(),
-            None,
-            thread,
-            CallId::next(),
-            None,
-            &cancel,
-            true,
-        )
+        .run_thread_event_loop(RuntimeTy::int(), None, thread, CallId::next(), None, true)
         .await;
     assert!(matches!(
         result,

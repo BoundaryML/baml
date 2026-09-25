@@ -217,11 +217,11 @@ function         baml.regex.new                   <builtin>/baml/ns_regex/regex.
 function         baml.regex.escape                <builtin>/baml/ns_regex/regex.baml:268
 function         baml.sap.parse                   <builtin>/baml/ns_sap/sap.baml:41
 function         baml.sap.parse_type              <builtin>/baml/ns_sap/sap.baml:54
-class            baml.spawn.CancelToken           <builtin>/baml/ns_spawn/spawn.baml:21
-interface        baml.spawn.Modifier              <builtin>/baml/ns_spawn/spawn.baml:58
-class            baml.spawn.Plan                  <builtin>/baml/ns_spawn/spawn.baml:76
-class            baml.spawn.Limit                 <builtin>/baml/ns_spawn/spawn.baml:144
-class            baml.spawn.Root                  <builtin>/baml/ns_spawn/spawn.baml:181
+class            baml.spawn.CancelToken           <builtin>/baml/ns_spawn/spawn.baml:23
+interface        baml.spawn.Modifier              <builtin>/baml/ns_spawn/spawn.baml:60
+class            baml.spawn.Plan                  <builtin>/baml/ns_spawn/spawn.baml:78
+class            baml.spawn.Limit                 <builtin>/baml/ns_spawn/spawn.baml:146
+class            baml.spawn.Root                  <builtin>/baml/ns_spawn/spawn.baml:183
 class            baml.sys.ProcessOptions          <builtin>/baml/ns_sys/sys.baml:2
 enum             baml.sys.StderrMode              <builtin>/baml/ns_sys/sys.baml:18
 class            baml.sys.ShellOutput             <builtin>/baml/ns_sys/sys.baml:29
