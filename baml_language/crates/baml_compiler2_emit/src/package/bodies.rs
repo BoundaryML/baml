@@ -23,7 +23,7 @@ use super::TypePass;
 use crate::{
     ClassFieldSnapshot, FnSeed, GenericFunctionInterner, LoweringError, MirCodegenContext,
     OptLevel, attach_function_metadata, build_line_starts, builtin_emit_function, compile_lambdas,
-    emit::{CodegenRefs, compile_mir_function},
+    emit::compile_mir_function,
     lower_seed_mirs, lowered,
     refs::{ImportTables, LocalTables, Own, PackageRefs},
     relative_source_path,
@@ -67,7 +67,7 @@ impl RefTables {
 #[expect(clippy::too_many_arguments)]
 fn compile_body<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
-    refs: &mut (dyn CodegenRefs<'db> + 'db),
+    refs: &mut PackageRefs<'_, 'db>,
     class_fields: &ClassFieldSnapshot<'db>,
     objects: &mut ObjectPool,
     objects_base: usize,

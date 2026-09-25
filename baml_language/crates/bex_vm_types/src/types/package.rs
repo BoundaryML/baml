@@ -150,12 +150,6 @@ pub struct RuntimePackage {
     /// Linked local object table. Imported entries point into static or other
     /// runtime packages; owned entries point back into this package's graph.
     pub objects: Box<[HeapPtr]>,
-    /// Newest-wins dynamic object link table. Old objects stay in `objects`,
-    /// while later submissions resolve a repeated source name to this entry.
-    #[deprecated(
-        note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
-    )]
-    pub object_names: IndexMap<String, HeapPtr>,
     /// Package-local global slots, mutable only while `$init` is running.
     pub globals: Box<[AtomicValueSlot]>,
     /// The interface bodies this package pools, by their key: where each sits
@@ -165,11 +159,6 @@ pub struct RuntimePackage {
     /// default, and a provided body is dispatched through its rule, never
     /// addressed.
     pub bodies: IndexMap<crate::BodyKey, BodyIndices>,
-    /// Fully-qualified function/let name to this image's local global slot.
-    #[deprecated(
-        note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
-    )]
-    pub global_names: IndexMap<String, usize>,
     /// Created-once reflected class, enum, and interface type values, keyed by
     /// the declaration each one names.
     ///

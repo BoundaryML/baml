@@ -116,7 +116,7 @@ use bex_vm::{
     VmExecState,
 };
 use bex_vm_types::{
-    FunctionMeta, FunctionOrigin, GlobalIndex, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
+    FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
     TaskGroupInner, UnscheduledFuture, Value, ValueKind, VmGlobals,
 };
 // Re-export CancellationToken for callers.
@@ -2149,43 +2149,10 @@ impl BexEngine {
         // Create the unified heap with compile-time objects, additionally
         // allocating the per-package `Object::Package` / `Object::ImplRule`
         // objects and the `vm.packages` index.
-        let (heap, mut package_index) = bex_vm::package_load::build_heap_with_packages(
+        let (heap, package_index) = bex_vm::package_load::build_heap_with_packages(
             compile_time_objects,
             &bytecode.packages,
         );
-        // Interface bodies are absent from the image-symbol tables. A runtime
-        // compilation still consumes static impl methods — their SIGNATURES
-        // (possibly subtype refinements of the interface's) through the
-        // package-interface blob, and their bodies through the virtual road,
-        // whose rule tables carry body POINTERS (`MethodImpl::fqn`, bound at
-        // load) with adopted defaults on the interface's `default_fn`. No
-        // current lowering emits a name-addressed reference to a static body:
-        // mount stubs are class/enum skeletons (no impl blocks), so a mounted
-        // impl method has no source lane and every call to one is virtual. A
-        // future devirtualized direct call must reference the body
-        // rule-relatively, never through a revived name entry here.
-        let image_objects = bytecode
-            .resolved_function_names
-            .iter()
-            .map(|(name, (idx, _))| (name.clone(), heap.compile_time_ptr(idx.into_raw())))
-            .chain(
-                class_indices
-                    .iter()
-                    .map(|(name, idx)| (name.clone(), heap.compile_time_ptr(*idx))),
-            )
-            .chain(
-                enum_indices
-                    .iter()
-                    .map(|(name, idx)| (name.clone(), heap.compile_time_ptr(*idx))),
-            )
-            .collect();
-        let image_globals = bytecode
-            .function_global_indices
-            .iter()
-            .chain(&bytecode.let_global_indices)
-            .map(|(name, idx)| (name.clone(), GlobalIndex::from_raw(*idx)))
-            .collect();
-        package_index.install_image_symbols(image_objects, image_globals);
         // Shared with every VM so spawned workers see the same package index
         // without re-resolving it.
         let packages = Arc::new(package_index);

@@ -10,9 +10,9 @@ use std::{
 };
 
 use baml_base::Span;
-use baml_compiler2_hir::loc::{DeclRef, LetLoc};
+use baml_compiler2_hir::loc::DeclRef;
 use baml_compiler2_hir_ty::{
-    extern_loc::{ClassRef, EnumRef, FunctionRef},
+    extern_loc::{ClassRef, FunctionRef},
     layout,
 };
 use baml_compiler2_mir::{
@@ -23,7 +23,7 @@ use baml_compiler2_mir::{
 use baml_type::{RealizedTy, RuntimeTy, TyTemplate, TypeName};
 use bex_vm_types::{
     BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionCaptureProps, FunctionKind,
-    FunctionOrigin, GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, TypeHead,
+    FunctionOrigin, GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool,
     UnaryOp as VmUnaryOp,
     bytecode::{
         ClassInitPlan, DebugLocalScope, FieldCopy, FieldCopySet, InstructionMeta, JumpTableData,
@@ -204,6 +204,7 @@ use crate::{
     pull_semantics::{
         self, LocalAssignBehavior, LocalPullAction, LocalStoreBehavior, PullSink, StackEffectSink,
     },
+    refs::PackageRefs,
 };
 
 // ============================================================================
@@ -233,99 +234,8 @@ enum PendingJumpTarget {
     Trap,
 }
 
-/// The one surface codegen reaches the rest of the program through: every
-/// declaration a body references, by identity, to the index it links as. The
-/// flat whole-program emitter answers from its pooled tables
-/// ([`crate::FlatRefs`]); the per-package emitter answers with a local
-/// ordinal for its own declarations and an import ordinal for everyone
-/// else's. Codegen sees no spelling either way.
-///
-/// A resolver is built once for a whole pass and outlives every body it
-/// answers for, so it takes references of any lifetime it outlives (`'db:
-/// 'a`): a body's `'ctx` is always shorter than the resolver's `'db`.
-///
-/// A trait only while two emitters drive one codegen: the per-package
-/// resolver is the only implementation once the flat emitter is gone, and
-/// codegen then holds it directly.
-/// The one place a compile-time type name becomes a runtime head.
-///
-/// The per-package resolver answers with the declaration's object operand —
-/// a head in a unit IS an operand, relocated and tagged by the linker or
-/// grafter — and the flat emitter with the content tag its lane still mints.
-/// Every runtime type emit produces goes through one of these, so no type
-/// carries a head its lane cannot bind.
-pub(crate) trait Anchor {
-    /// The head of the declaration `tn` spells.
-    fn head(&mut self, tn: &TypeName) -> TypeHead;
-
-    fn anchor_template(&mut self, ty: &TyTemplate) -> bex_vm_types::TyTemplate {
-        ty.map_heads(&mut |tn: &TypeName| self.head(tn))
-    }
-
-    fn anchor_runtime_ty(&mut self, ty: &RuntimeTy) -> bex_vm_types::RuntimeTy {
-        ty.map_heads(&mut |tn: &TypeName| self.head(tn))
-    }
-
-    fn anchor_realized(&mut self, ty: &RealizedTy) -> bex_vm_types::RealizedTy {
-        ty.map_heads(&mut |tn: &TypeName| self.head(tn))
-    }
-
-    fn anchor_interface(
-        &mut self,
-        interface: &baml_type::RuntimeInterface,
-    ) -> bex_vm_types::RuntimeInterface {
-        interface.map_heads(&mut |tn: &TypeName| self.head(tn))
-    }
-}
-
-#[deprecated(
-    note = "polymorphic only while the flat emitter is the byte-identity oracle; collapses into the per-package resolver when that emitter is deleted"
-)]
-pub(crate) trait CodegenRefs<'db>: Anchor {
-    /// The pooled object of `class`. `None` exists only for the flat
-    /// emitter's stub-skipped mounted class (the `Null`-instance fall-open
-    /// at [`StackifyCodegen::alloc_instance_of`]); the per-package resolver
-    /// always answers, and the `Option` goes with the flat emitter.
-    fn class<'a>(&mut self, class: ClassRef<'a>) -> Option<ObjectIndex>
-    where
-        'db: 'a;
-    /// The pooled object of the class `tn` spells — a type template's class
-    /// head.
-    #[deprecated(
-        note = "a by-name door into `class`: gone when the world's viewpoint resolver maps a type template's head to its declaration before codegen asks"
-    )]
-    fn class_named(&mut self, tn: &TypeName) -> Option<ObjectIndex>;
-    /// The pooled object of `enum_ref`; an emitted enum always has one.
-    fn enum_<'a>(&mut self, enum_ref: EnumRef<'a>) -> ObjectIndex
-    where
-        'db: 'a;
-    /// The pooled object of the enum `tn` spells.
-    #[deprecated(
-        note = "a by-name door into `enum_`: gone when the world's viewpoint resolver maps a type template's head to its declaration before codegen asks"
-    )]
-    fn enum_named(&mut self, tn: &TypeName) -> Option<ObjectIndex>;
-    /// The global slot `func` links as, or `None` when nothing slots it: a
-    /// required interface method, an intrinsic, or a served row no lane
-    /// slots — the caller's law decides what that means.
-    fn function<'a>(&mut self, func: FunctionRef<'a>) -> Option<GlobalIndex>
-    where
-        'db: 'a;
-    /// The global slot of a top-level `let`.
-    fn let_global<'a>(&mut self, binding: LetLoc<'a>) -> GlobalIndex
-    where
-        'db: 'a;
-    /// The class declaration `tn` spells, for its layout facts; `None` when
-    /// `tn` names no class in this lane's reach.
-    fn class_ref(&self, tn: &TypeName) -> Option<ClassRef<'db>>;
-    /// A class arm's switch key: the declaration's operand for the
-    /// per-package resolver, the flat emitter's content tag for its lane.
-    fn switch_key<'a>(&mut self, class: ClassRef<'a>) -> SwitchKey
-    where
-        'db: 'a;
-}
-
 /// MIR to bytecode compiler with stackification.
-struct StackifyCodegen<'db: 'ctx, 'ctx, 'obj> {
+struct StackifyCodegen<'db: 'ctx, 'ctx, 'obj, 'w> {
     /// MIR body being compiled.
     body: &'ctx MirFunctionBody<'ctx>,
     /// Arity (parameter count) of the function being compiled.
@@ -337,9 +247,9 @@ struct StackifyCodegen<'db: 'ctx, 'ctx, 'obj> {
 
     /// The resolution surface every declaration reference goes through; it
     /// outlives the body (`'db: 'ctx`).
-    refs: &'obj mut (dyn CodegenRefs<'db> + 'db),
+    refs: &'obj mut PackageRefs<'w, 'db>,
     /// Read-only snapshot of pooled class field metadata (name + type, in
-    /// field order), keyed by every name registered in `class_object_indices`.
+    /// field order), by declaration.
     /// Field lookups resolve through this map instead of reading the object
     /// pool, so codegen never reads pool contents (parallel emit compiles
     /// against fragment pools that don't contain the pre-existing objects).
@@ -438,7 +348,7 @@ struct StackifyCodegen<'db: 'ctx, 'ctx, 'obj> {
     spawn_captured_captures: HashSet<usize>,
 }
 
-impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
+impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
     fn display_string_operand(value: &str) -> String {
         format!("{value:?}")
     }
@@ -449,7 +359,7 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
         body: &'ctx MirFunctionBody<'ctx>,
         arity: usize,
         line_starts: &'ctx [u32],
-        ctx: MirCodegenContext<'db, 'ctx, 'obj>,
+        ctx: MirCodegenContext<'db, 'ctx, 'obj, 'w>,
         analysis: AnalysisResult<'ctx>,
     ) -> Self {
         // Pre-size the hot output buffers from the MIR's shape. `emit` pushes
@@ -530,7 +440,8 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
     }
 
     fn class_object_index_for_type_name(&mut self, tn: &TypeName) -> Option<usize> {
-        self.refs.class_named(tn).map(ObjectIndex::raw)
+        let class = self.refs.class_ref(tn)?;
+        Some(self.refs.class(class).raw())
     }
 
     /// A MIR switch key as this lane's bytecode states it.
@@ -557,7 +468,8 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
     /// enum identity (`ConstValue::Object`) rather than the shared `ENUM` tag,
     /// which cannot distinguish two enum types (`Color` vs `Status`).
     fn enum_object_index_for_type_name(&mut self, tn: &TypeName) -> Option<usize> {
-        self.refs.enum_named(tn).map(ObjectIndex::raw)
+        let enum_ref = self.refs.enum_ref(tn)?;
+        Some(self.refs.enum_(enum_ref).raw())
     }
 
     /// Resolve the type of a MIR Place by walking from the root local through projections.
@@ -1522,35 +1434,23 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
 
     fn emit_init_instance(&mut self, class: ClassRef<'ctx>, ntypeargs: u16, field_count: usize) {
         let class_name = &baml_compiler2_mir::class_link_name(self.db, class);
-        if let Some(class_obj_idx) = self.refs.class(class) {
-            let fields = (0..field_count).collect::<Vec<_>>();
-            let display_fields = fields
-                .iter()
-                .map(|field_idx| format!(".{}", self.class_field_name(class, *field_idx)))
-                .collect::<Vec<_>>();
-            let plan_idx = self.bytecode.class_init_plans.len();
-            self.bytecode.class_init_plans.push(ClassInitPlan {
-                class_obj: class_obj_idx,
-                ntypeargs,
-                fields,
-            });
-            let inst = self.emit(Instruction::InitInstance(plan_idx));
-            self.set_operand(
-                inst,
-                OperandMeta::Object(format!("{class_name} {}", display_fields.join(", "))),
-            );
-        } else {
-            let total_inputs = field_count + usize::from(ntypeargs);
-            if total_inputs > 0 {
-                self.emit(Instruction::Pop(total_inputs));
-            }
-            let null_idx = self.add_constant(bex_vm_types::ConstValue::Null);
-            let inst = self.emit(bex_vm_types::Instruction::LoadConst(null_idx));
-            self.set_operand(
-                inst,
-                OperandMeta::Const(format!("null /* unknown class: {class_name} */")),
-            );
-        }
+        let class_obj_idx = self.refs.class(class);
+        let fields = (0..field_count).collect::<Vec<_>>();
+        let display_fields = fields
+            .iter()
+            .map(|field_idx| format!(".{}", self.class_field_name(class, *field_idx)))
+            .collect::<Vec<_>>();
+        let plan_idx = self.bytecode.class_init_plans.len();
+        self.bytecode.class_init_plans.push(ClassInitPlan {
+            class_obj: class_obj_idx,
+            ntypeargs,
+            fields,
+        });
+        let inst = self.emit(Instruction::InitInstance(plan_idx));
+        self.set_operand(
+            inst,
+            OperandMeta::Object(format!("{class_name} {}", display_fields.join(", "))),
+        );
     }
 
     fn field_copy_operand<'a>(operand: &'a Operand<'_>) -> Option<(&'a Place, usize)> {
@@ -1761,18 +1661,6 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
             fields,
         } = rvalue
         {
-            if self.refs.class(*class).is_none() {
-                for field in fields {
-                    self.emit_operand_pull(field);
-                }
-                let ntypeargs = u16::try_from(type_arg_templates.len())
-                    .expect("type_arg_templates count fits in u16");
-                for template in type_arg_templates {
-                    unwrap_infallible(self.load_type(template));
-                }
-                self.emit_init_instance(*class, ntypeargs, fields.len());
-                return;
-            }
             if self.try_emit_class_aggregate_init_instance(*class, type_arg_templates, fields) {
                 return;
             }
@@ -1894,7 +1782,7 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
     /// slot; callers fall back or panic per their own law. An interface body
     /// reaching codegen unslotted is a loud panic, never a fallback.
     fn try_function_global_index(&mut self, func: FunctionRef<'ctx>) -> Option<usize> {
-        let slot = self.refs.function(func).map(GlobalIndex::raw);
+        let slot = self.refs.function_slot(func).map(GlobalIndex::raw);
         if slot.is_none()
             && let DeclRef::Source(decl) = func
             && baml_compiler2_mir::function_is_interface_body(self.db, decl)
@@ -2060,12 +1948,10 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
             Constant::EnumVariant { enum_ref, index } => {
                 let enum_name_str = baml_compiler2_mir::enum_link_name(self.db, *enum_ref);
                 // TIR admitted the enum and MIR resolved it to a declaration
-                // (`enum_ref_of`), so this compilation registered an object
-                // for it: a source enum — a mounted package's link stub
-                // included, the mount boundary having refused any enum it
-                // can name but cannot stub — in Pass 4, or a seeded pool
-                // object of the precompiled stdlib. A miss is an internal
-                // error, never a `Null` where a variant belongs.
+                // (`enum_ref_of`), so the resolver answers with its object: a
+                // local ordinal for this package's own enum, an import
+                // ordinal for a dependency's. A miss is an internal error,
+                // never a `Null` where a variant belongs.
                 let enum_obj_idx = self.refs.enum_(*enum_ref);
 
                 // The discriminant travels in the constant; the name is
@@ -2196,9 +2082,8 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
                 exhaustive,
                 arm_names,
             } => {
-                // Each arm's key as this lane states it: a kind's fixed tag,
-                // or a class declaration by operand (the per-package lane) /
-                // by the flat lane's content tag.
+                // Each arm's key: a kind's fixed tag, or a class declaration
+                // by operand.
                 let resolved: Vec<(SwitchKey, BlockId)> = arms
                     .iter()
                     .map(|(key, block)| (self.resolve_switch_key(*key), *block))
@@ -3241,7 +3126,7 @@ impl<'db: 'ctx, 'ctx, 'obj> StackifyCodegen<'db, 'ctx, 'obj> {
     }
 }
 
-impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_> {
+impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
     type Error = Infallible;
 
     fn pull_constant(&mut self, constant: &Constant<'ctx>) -> Result<(), Self::Error> {
@@ -3730,40 +3615,21 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_> {
     }
 }
 
-impl<'db: 'ctx, 'ctx> StackifyCodegen<'db, 'ctx, '_> {
+impl<'db: 'ctx, 'ctx> StackifyCodegen<'db, 'ctx, '_, '_> {
     /// `AllocInstance` for `class`: the `PullSink::alloc_class_instance`
     /// implementation above and the field-copy-set route share it.
     fn alloc_instance_of(&mut self, class: ClassRef<'ctx>, ntypeargs: u16) {
         let class_name = &baml_compiler2_mir::class_link_name(self.db, class);
-        if let Some(class_obj_idx) = self.refs.class(class) {
-            let inst = self.emit(Instruction::AllocInstance {
-                class_obj: class_obj_idx,
-                ntypeargs,
-            });
-            self.set_operand(inst, OperandMeta::Object(class_name.clone()));
-        } else {
-            // BUG: the class MIR resolved the literal to has no pooled object
-            // under its wire spelling, and the literal becomes a silent
-            // `null`. MIR refuses a literal with no declaration behind it, so
-            // the only way here is a runtime-mounted class whose link stub was
-            // skipped (its own name or a field name is not a BAML identifier)
-            // yet which a consumer can still name — through a spellable export
-            // alias, or by omitting the unspellable field when it is optional.
-            // The enum twin (`Constant::EnumVariant`) is refused at the mount
-            // instead; this one dies with stub generation, once class objects
-            // are placed by identity and a missing placement is an internal
-            // error.
-            let null_idx = self.add_constant(bex_vm_types::ConstValue::Null);
-            let inst = self.emit(bex_vm_types::Instruction::LoadConst(null_idx));
-            self.set_operand(
-                inst,
-                OperandMeta::Const(format!("null /* unknown class: {class_name} */")),
-            );
-        }
+        let class_obj_idx = self.refs.class(class);
+        let inst = self.emit(Instruction::AllocInstance {
+            class_obj: class_obj_idx,
+            ntypeargs,
+        });
+        self.set_operand(inst, OperandMeta::Object(class_name.clone()));
     }
 }
 
-impl<'db: 'ctx, 'ctx> StackEffectSink<'ctx> for StackifyCodegen<'db, 'ctx, '_> {
+impl<'db: 'ctx, 'ctx> StackEffectSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
     fn store_field_value(&mut self, field: usize, name: &str) -> Result<(), Self::Error> {
         let idx = self.emit(Instruction::StoreField(field));
         self.set_operand(idx, OperandMeta::Field(name.to_string()));
@@ -3837,7 +3703,7 @@ pub(crate) fn compile_mir_function<'db: 'mir, 'mir>(
     arity: usize,
     mir_span: Option<baml_base::Span>,
     line_starts: &'mir [u32],
-    ctx: MirCodegenContext<'db, 'mir, '_>,
+    ctx: MirCodegenContext<'db, 'mir, '_, '_>,
     opt: crate::analysis::OptLevel,
 ) -> Function {
     // Run analysis
@@ -3910,9 +3776,6 @@ mod tests {
             catch_regions: Vec::new(),
         };
 
-        let slots = crate::GlobalSlots::default();
-        let class_object_indices = HashMap::new();
-        let enum_object_indices = HashMap::new();
         let class_fields = HashMap::new();
         let mut objects = ObjectPool::default();
         let lambda_object_indices = Vec::new();
@@ -3922,13 +3785,7 @@ mod tests {
         let line_starts = [0];
 
         let db = crate::tests::TestDb::default();
-        let mut refs = crate::FlatRefs {
-            db: &db,
-            root: db.workspace(),
-            slots: &slots,
-            class_object_indices: &class_object_indices,
-            enum_object_indices: &enum_object_indices,
-        };
+        let mut refs = crate::refs::PackageRefs::new(&db, db.workspace(), crate::refs::Own::Tail);
         let function = compile_mir_function(
             &body,
             1,

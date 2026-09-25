@@ -25,24 +25,22 @@ fn the_loader_never_resolves_by_rendered_name() {
     }
 }
 
-/// The reflection module keeps exactly one name boundary: the test
-/// collector's constructor is looked up by its fully qualified name until the
-/// executable's rendered views are derived at load.
+/// The reflection module resolves nothing by rendered name either: the test
+/// collector's constructor, its last name boundary, now comes through the
+/// prelude package's tables.
 #[test]
-fn the_reflection_module_keeps_one_name_boundary() {
+fn the_reflection_module_resolves_nothing_by_rendered_name() {
     for needle in [
         "split_once",
         "\"user.",
+        "object_by_name",
         "global_by_name",
         "package_name(",
         "dependency_named",
         "link_dynamic",
+        "object_names",
+        "global_names",
     ] {
         assert!(!REFLECT.contains(needle), "reflect.rs mentions `{needle}`");
     }
-    assert_eq!(
-        REFLECT.matches("object_by_name").count(),
-        1,
-        "reflect.rs resolves by rendered name somewhere new"
-    );
 }

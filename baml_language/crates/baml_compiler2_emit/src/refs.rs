@@ -37,10 +37,7 @@ use bex_vm_types::{
     bytecode::SwitchKey, types::LocalName,
 };
 
-use crate::{
-    emit::{Anchor, CodegenRefs},
-    items::{impl_rule_target, owns_no_slot},
-};
+use crate::items::{impl_rule_target, owns_no_slot};
 
 // ── Declaration coordinates ──────────────────────────────────────────────────
 
@@ -544,9 +541,7 @@ impl<'w, 'db> PackageRefs<'w, 'db> {
     fn declaration_object(&mut self, head: &DeclName) -> ObjectIndex {
         let db = self.db;
         if let Some(class) = layout::class_ref_of(db, head) {
-            return self
-                .class(class)
-                .unwrap_or_else(|| unreachable!("the per-package resolver answers every class"));
+            return self.class(class);
         }
         if let Some(enum_ref) = layout::enum_ref_of(db, head) {
             return self.enum_(enum_ref);
@@ -596,7 +591,7 @@ impl<'w, 'db> PackageRefs<'w, 'db> {
 
     /// The global slot of a slot-owning function, local or imported; `None`
     /// when the declaration owns none.
-    fn function_slot<'a>(&mut self, function: FunctionRef<'a>) -> Option<GlobalIndex>
+    pub(crate) fn function_slot<'a>(&mut self, function: FunctionRef<'a>) -> Option<GlobalIndex>
     where
         'db: 'a,
     {
@@ -635,25 +630,23 @@ impl<'w, 'db> PackageRefs<'w, 'db> {
     }
 }
 
-impl<'db> CodegenRefs<'db> for PackageRefs<'_, 'db> {
-    fn class<'a>(&mut self, class: ClassRef<'a>) -> Option<ObjectIndex>
+impl<'db> PackageRefs<'_, 'db> {
+    /// The pooled object of `class`: a local ordinal for this package's own
+    /// declaration, an import ordinal otherwise. Every class has one.
+    pub(crate) fn class<'a>(&mut self, class: ClassRef<'a>) -> ObjectIndex
     where
         'db: 'a,
     {
         let head = class_head(self.db, class);
         let path = DeclPath::Class(item_path(&head));
-        Some(self.type_object(&head, path, |tables| match class {
+        self.type_object(&head, path, |tables| match class {
             DeclRef::Source(class) => tables.class(class),
             DeclRef::External(_) => None,
-        }))
+        })
     }
 
-    fn class_named(&mut self, tn: &TypeName) -> Option<ObjectIndex> {
-        let class = self.class_ref(tn)?;
-        self.class(class)
-    }
-
-    fn enum_<'a>(&mut self, enum_ref: EnumRef<'a>) -> ObjectIndex
+    /// The pooled object of `enum_ref`; an emitted enum always has one.
+    pub(crate) fn enum_<'a>(&mut self, enum_ref: EnumRef<'a>) -> ObjectIndex
     where
         'db: 'a,
     {
@@ -665,20 +658,8 @@ impl<'db> CodegenRefs<'db> for PackageRefs<'_, 'db> {
         })
     }
 
-    fn enum_named(&mut self, tn: &TypeName) -> Option<ObjectIndex> {
-        let head = spelling(self.db).resolve(self.db, self.root, tn)?;
-        let enum_ref = layout::enum_ref_of(self.db, &head)?;
-        Some(self.enum_(enum_ref))
-    }
-
-    fn function<'a>(&mut self, func: FunctionRef<'a>) -> Option<GlobalIndex>
-    where
-        'db: 'a,
-    {
-        self.function_slot(func)
-    }
-
-    fn let_global<'a>(&mut self, binding: LetLoc<'a>) -> GlobalIndex
+    /// The global slot of a top-level `let`.
+    pub(crate) fn let_global<'a>(&mut self, binding: LetLoc<'a>) -> GlobalIndex
     where
         'db: 'a,
     {
@@ -707,24 +688,57 @@ impl<'db> CodegenRefs<'db> for PackageRefs<'_, 'db> {
         self.import_global(root, DeclPath::Let(item_path(&head)))
     }
 
-    fn class_ref(&self, tn: &TypeName) -> Option<ClassRef<'db>> {
+    /// The class declaration `tn` spells, for its layout facts; `None` when
+    /// `tn` names no class in this package's reach.
+    pub(crate) fn class_ref(&self, tn: &TypeName) -> Option<ClassRef<'db>> {
         let head = spelling(self.db).resolve(self.db, self.root, tn)?;
         layout::class_ref_of(self.db, &head)
     }
 
-    fn switch_key<'a>(&mut self, class: ClassRef<'a>) -> SwitchKey
+    /// The enum `tn` spells, resolved at this package's viewpoint.
+    pub(crate) fn enum_ref(&self, tn: &TypeName) -> Option<EnumRef<'db>> {
+        let head = spelling(self.db).resolve(self.db, self.root, tn)?;
+        layout::enum_ref_of(self.db, &head)
+    }
+
+    /// A class arm's switch key: the declaration's operand, which the linker
+    /// or grafter solves against the tag it assigns.
+    pub(crate) fn switch_key<'a>(&mut self, class: ClassRef<'a>) -> SwitchKey
     where
         'db: 'a,
     {
-        SwitchKey::Declaration(
-            self.class(class)
-                .unwrap_or_else(|| unreachable!("the per-package resolver answers every class")),
-        )
+        SwitchKey::Declaration(self.class(class))
     }
-}
 
-impl Anchor for PackageRefs<'_, '_> {
-    fn head(&mut self, tn: &TypeName) -> TypeHead {
-        Self::head(self, tn)
+    // The one place a compile-time type name becomes a runtime head: every
+    // runtime type emit produces goes through one of these, so no type
+    // carries a head the linker or grafter cannot bind.
+
+    pub(crate) fn anchor_template(
+        &mut self,
+        ty: &baml_type::TyTemplate,
+    ) -> bex_vm_types::TyTemplate {
+        ty.map_heads(&mut |tn: &TypeName| self.head(tn))
+    }
+
+    pub(crate) fn anchor_runtime_ty(
+        &mut self,
+        ty: &baml_type::RuntimeTy,
+    ) -> bex_vm_types::RuntimeTy {
+        ty.map_heads(&mut |tn: &TypeName| self.head(tn))
+    }
+
+    pub(crate) fn anchor_realized(
+        &mut self,
+        ty: &baml_type::RealizedTy,
+    ) -> bex_vm_types::RealizedTy {
+        ty.map_heads(&mut |tn: &TypeName| self.head(tn))
+    }
+
+    pub(crate) fn anchor_interface(
+        &mut self,
+        interface: &baml_type::RuntimeInterface,
+    ) -> bex_vm_types::RuntimeInterface {
+        interface.map_heads(&mut |tn: &TypeName| self.head(tn))
     }
 }

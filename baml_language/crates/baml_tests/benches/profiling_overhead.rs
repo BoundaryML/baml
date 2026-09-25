@@ -12,8 +12,8 @@
 //!
 use std::{path::Path, sync::Arc, time::Duration};
 
-use baml_compiler2_emit::generate_project_bytecode;
-use baml_db::ProjectDatabase;
+use baml_compiler2_emit::OptLevel;
+use baml_db::{ProjectDatabase, compile_program};
 use baml_tests::engine::TestDbExt;
 use bex_engine::{BexEngine, FunctionCallContextBuilder, logger::TraceLogger};
 use bex_events::prof::backend::{DiskBudget, ProfilerConfig, ProfilerSession, list_executions};
@@ -54,7 +54,8 @@ fn compile_source(
     let mut db = ProjectDatabase::new();
     let package = db.workspace(Path::new("."));
     db.file("bench.baml", source);
-    let bytecode = generate_project_bytecode(&db, package).expect("benchmark compilation failed");
+    let bytecode =
+        compile_program(&db, package, OptLevel::Two).expect("benchmark compilation failed");
     let store = tempfile::Builder::new()
         .prefix("baml-profiling-overhead-bench-")
         .tempdir()

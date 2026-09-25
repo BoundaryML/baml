@@ -5320,7 +5320,7 @@ mod union_container_selection_tests {
         let done_class = alloc_class(
             &mut tlab,
             DeclarationName::Declared(done_name.clone()),
-            baml_type::typetag::TypeTag::of_head(&done_name.render_dotted(false)),
+            baml_type::typetag::TypeTag::of_static_index(0),
         );
         let done_value = Value::object(tlab.alloc_instance(done_class, Vec::new()));
 

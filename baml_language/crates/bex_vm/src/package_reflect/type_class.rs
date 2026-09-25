@@ -1527,9 +1527,8 @@ mod renderability_tests {
     fn full_realized_type_family_has_an_explicit_renderability_classification() {
         // Heads never reach the classifier — it matches on variant shape alone —
         // so an unresolved one is the honest stand-in for "some declaration".
-        let name = bex_vm_types::TypeHead::of_name(&baml_type::TypeName::local(
-            baml_type::Name::new("Example"),
-        ));
+        let name =
+            bex_vm_types::TypeHead::unresolved_operand(bex_vm_types::ObjectIndex::from_raw(0));
         let non_data = vec![
             bex_vm_types::RealizedTy::Uint8Array,
             bex_vm_types::RealizedTy::EnumVariant(name, baml_type::Name::new("VALUE")),

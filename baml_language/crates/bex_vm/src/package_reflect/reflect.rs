@@ -390,6 +390,28 @@ pub(super) fn allocate_runtime_declaration_types(
         .collect()
 }
 
+/// `testing.TestCollector.new`, through the prelude package's tables: the
+/// stdlib package by its fixed name, the class by its item path, the
+/// constructor through the class's method table.
+fn test_collector_constructor(vm: &BexVm) -> Option<HeapPtr> {
+    let package_ptr = vm.packages.package_ptr(&baml_type::Name::new("testing"))?;
+    let Object::Package(package) = vm.get_object(package_ptr) else {
+        return None;
+    };
+    let class_ptr = *package.classes.get(&LocalName {
+        namespace: Vec::new(),
+        name: baml_type::Name::new("TestCollector"),
+    })?;
+    let Object::Class(class) = vm.get_object(class_ptr) else {
+        return None;
+    };
+    let constructor = class
+        .methods
+        .get(&baml_type::Name::new("new"))?
+        .function_ptr;
+    (!constructor.is_null()).then_some(constructor)
+}
+
 fn package_function_value(vm: &mut BexVm, package_ptr: HeapPtr, name: &LocalName) -> Option<Value> {
     // The slot table is the one road for both kinds of package: a runtime
     // package's own slots, a static package's mirror of the program's.
@@ -811,9 +833,7 @@ impl BamlClassPackage for PackageReflectImpl {
             mounted_types: IndexMap::new(),
             kind: PackageKind::Runtime(Box::new(RuntimePackage {
                 objects: Box::new([]),
-                object_names: IndexMap::new(),
                 globals: Box::new([]),
-                global_names: IndexMap::new(),
                 bodies: IndexMap::new(),
                 type_values: IndexMap::new(),
                 diagnostics: artifact.diagnostics,
@@ -1148,7 +1168,7 @@ impl BamlClassPackage for PackageReflectImpl {
         let Some(test_init) = test_init else {
             return NativeCallResult::Done(empty_tests(vm));
         };
-        let Some(constructor) = vm.packages.object_by_name("testing.TestCollector.new") else {
+        let Some(constructor) = test_collector_constructor(vm) else {
             return NativeCallResult::Done(empty_tests(vm));
         };
         let prefix = Value::object(vm.alloc_string(""));
@@ -1178,33 +1198,6 @@ impl BamlClassPackage for PackageReflectImpl {
     }
 }
 
-/// Give every owned grafted declaration its own runtime identity.
-///
-/// A runtime-compiled declaration is generative: two compiles of one source
-/// are two types, and a declaration spelled like a static one is not that
-/// static type (`TYPE_SYSTEM.md` — nominal identity is the declaration, not the
-/// spelling). Emit content-addresses tags from names, so without this two
-/// same-named declarations would be tag-equal — reminting to a counter tag
-/// makes each graft's declarations identity-distinct by construction.
-///
-/// BUG: this is NOT safe against every baked tag. Emit's `is_type` road does
-/// answer `None` for declared heads (`realized_type_tag`) and `IsType` arms
-/// compare pointers, but the flat lane's `SwitchKind::TypeTag` road bakes the
-/// CONTENT class tag of every class arm (`FlatRefs::switch_key`) into a
-/// `MatchHashTable` as a `SwitchKey::Kind` — and a `match` with four or more
-/// bare class type patterns (`A => .., B => .., C => .., D => ..`) takes that
-/// road. The `TypeTag` instruction then pushes the REMINTED tag (an own
-/// class) or the linker-assigned tag (a host class), no key matches, and an
-/// exhaustive match reaches its `unreachable` otherwise block: verified
-/// 2026-09-23 by execution — `baml.panics.Unreachable { "unreachable code
-/// executed" }` from a `reflect.Package.compile`d function whose static twin
-/// passes. The unit format already carries the fix: the per-package emitter
-/// writes class keys as `SwitchKey::Declaration` operands, which the loader
-/// solves against the tags it assigns exactly as the static linker does; it
-/// lands here when the graft consumes that format.
-///
-/// Returns the `old content tag → reminted head` rows the head bind uses to
-/// bridge the plan's internal references onto the new identities.
 /// The dependencies a `Package._finish` binds: the packages the artifact was
 /// compiled against, by the alias the compile spelled each under. The
 /// caller's `packages` must be exactly that map — same aliases, same package
@@ -1447,9 +1440,7 @@ impl BamlClassSession for PackageReflectImpl {
             kind: PackageKind::Session {
                 runtime: Box::new(RuntimePackage {
                     objects: Box::new([]),
-                    object_names: IndexMap::new(),
                     globals: Box::new([]),
-                    global_names: IndexMap::new(),
                     bodies: IndexMap::new(),
                     type_values: IndexMap::new(),
                     diagnostics: Vec::new(),

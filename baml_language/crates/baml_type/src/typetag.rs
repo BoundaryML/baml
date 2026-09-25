@@ -151,30 +151,6 @@ impl TypeTag {
         }
     }
 
-    /// The content-addressed tag the flat whole-program emitter mints for a
-    /// declared head: `CLASS_BASE + (fnv1a64(fq_name) & 47 bits)`.
-    ///
-    /// Only the flat emitter and the graft that consumes its units still
-    /// derive an identity from a spelling. Everything else names a declaration
-    /// by operand and reads the tag off the declaration once it is loaded.
-    #[deprecated(
-        note = "a tag derived from a spelling: the flat emitter's identity; dies with it (the linker and grafter assign tags)"
-    )]
-    #[must_use]
-    pub fn of_head(fq_name: &str) -> Self {
-        const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
-        const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
-        let mut h = FNV_OFFSET;
-        for byte in fq_name.as_bytes() {
-            h ^= u64::from(*byte);
-            h = h.wrapping_mul(FNV_PRIME);
-        }
-        #[allow(clippy::cast_possible_wrap)]
-        {
-            Self(CLASS_BASE + (h & ((1 << STATIC_BITS) - 1)) as i64)
-        }
-    }
-
     /// A fresh tag for a head created or loaded at run time, drawn from a
     /// monotonic counter in the reserved range above [`DYNAMIC_BASE`].
     ///

@@ -22,7 +22,7 @@ use std::{
 use baml_type::{MediaKind, Name};
 use bex_heap::{BexHeap, Generation};
 use bex_vm_types::{
-    GlobalIndex, HeapPtr, Object, ObjectIndex, TypeHead,
+    HeapPtr, Object, ObjectIndex, TypeHead,
     types::{
         LocalName, MethodImpl, Package, PackageKind, ProgramImplRule, ProgramPackage,
         RuntimeImplRule,
@@ -314,47 +314,9 @@ pub struct PackageIndex {
     /// Canonical `Object::Interface` pointer → every `Object::ImplRule` of that
     /// interface in the program, in package-load order.
     impl_rules: IndexMap<HeapPtr, Vec<HeapPtr>>,
-    /// Static image object symbols used by the runtime linker.
-    #[deprecated(
-        note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
-    )]
-    objects_by_name: HashMap<String, HeapPtr>,
-    /// Static image global symbols used by the runtime linker.
-    #[deprecated(
-        note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
-    )]
-    globals_by_name: HashMap<String, GlobalIndex>,
 }
 
 impl PackageIndex {
-    #[deprecated(
-        note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
-    )]
-    pub fn install_image_symbols(
-        &mut self,
-        objects_by_name: HashMap<String, HeapPtr>,
-        globals_by_name: HashMap<String, GlobalIndex>,
-    ) {
-        self.objects_by_name = objects_by_name;
-        self.globals_by_name = globals_by_name;
-    }
-
-    #[deprecated(
-        note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
-    )]
-    pub fn object_by_name(&self, name: &str) -> Option<HeapPtr> {
-        self.objects_by_name
-            .get(name)
-            .copied()
-            .or_else(|| lookup_type_by_fqn(self, name))
-    }
-
-    #[deprecated(
-        note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
-    )]
-    pub fn global_by_name(&self, name: &str) -> Option<GlobalIndex> {
-        self.globals_by_name.get(name).copied()
-    }
     /// The `Object::Package` pointer of the package at `ordinal` in the
     /// executable — the position `LoadCurrentPackage` carries.
     pub fn package_at(&self, ordinal: usize) -> Option<HeapPtr> {
@@ -369,16 +331,6 @@ impl PackageIndex {
     /// Every loaded package's `Object::Package` pointer.
     pub fn package_ptrs(&self) -> impl Iterator<Item = HeapPtr> + '_ {
         self.by_name.values().copied()
-    }
-
-    /// The canonical static package name for a package pointer.
-    #[deprecated(
-        note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
-    )]
-    pub fn package_name(&self, package: HeapPtr) -> Option<&Name> {
-        self.by_name
-            .iter()
-            .find_map(|(name, &ptr)| (ptr == package).then_some(name))
     }
 
     /// Every loaded package, by name.

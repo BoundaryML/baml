@@ -121,9 +121,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             mounted_types: IndexMap::new(),
             kind: PackageKind::Runtime(Box::new(RuntimePackage {
                 objects: Box::new([]),
-                object_names: IndexMap::new(),
                 globals: Box::new([]),
-                global_names: IndexMap::new(),
                 bodies: indexmap::IndexMap::new(),
                 type_values: IndexMap::new(),
                 diagnostics: Vec::new(),
@@ -135,7 +133,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
         };
         let package_ptr = tlab.alloc(Object::Package(Box::new(package)));
         let class_name = QualifiedTypeName::local(Name::new("RuntimeClass"));
-        let type_tag = baml_type::typetag::TypeTag::of_head("RuntimeClass");
+        let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             name: bex_vm_types::DeclarationName::Declared(class_name.clone()),
             fields: Vec::new(),
@@ -1064,7 +1062,7 @@ fn package_type_aliases_are_traced_and_forwarded() {
     let alias_name = QualifiedTypeName::local(Name::new("SessionAlias"));
     let alias_ptr = tlab.alloc(Object::TypeAlias(Box::new(TypeAliasDef {
         name: alias_name.clone(),
-        type_tag: baml_type::typetag::TypeTag::of_head("SessionAlias"),
+        type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
         definition: RealizedTy::int(),
         owner: bex_vm_types::HeapPtr::null(),
     })));
@@ -1149,7 +1147,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         docstring: None,
         other: IndexMap::new(),
         stream_done: false,
-        type_tag: baml_type::typetag::TypeTag::of_head("FieldOwner"),
+        type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
         has_cleanup: false,
         methods: IndexMap::new(),
         generic_param_count: 0,
@@ -1210,7 +1208,7 @@ fn impl_rule_edges_are_traced_and_forwarded() {
     let iface_name = QualifiedTypeName::local(Name::new("Runtime"));
     let iface_ptr = tlab.alloc(Object::Interface(Box::new(InterfaceDef {
         name: iface_name.clone(),
-        type_tag: baml_type::typetag::TypeTag::of_head("Runtime"),
+        type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
         args: Vec::new(),
         requires: Vec::new(),
         assoc: Vec::new(),
@@ -1275,7 +1273,7 @@ fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
     let body_ptr = tlab.alloc_string("default body".to_string());
     let iface_ptr = tlab.alloc(Object::Interface(Box::new(InterfaceDef {
         name: QualifiedTypeName::local(Name::new("SessionIface")),
-        type_tag: baml_type::typetag::TypeTag::of_head("SessionIface"),
+        type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
         args: Vec::new(),
         requires: Vec::new(),
         assoc: Vec::new(),
@@ -1352,7 +1350,7 @@ fn class_method_bodies_are_traced_and_forwarded() {
         docstring: None,
         other: IndexMap::new(),
         stream_done: false,
-        type_tag: baml_type::typetag::TypeTag::of_head("SessionClass"),
+        type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
         has_cleanup: false,
         methods,
         generic_param_count: 0,
@@ -1401,7 +1399,7 @@ fn type_alias_owner_is_traced_and_forwarded() {
     let package_ptr = tlab.alloc(Object::Package(Box::new(empty_package())));
     let alias_ptr = tlab.alloc(Object::TypeAlias(Box::new(TypeAliasDef {
         name: QualifiedTypeName::local(Name::new("OwnedAlias")),
-        type_tag: baml_type::typetag::TypeTag::of_head("OwnedAlias"),
+        type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
         definition: RealizedTy::int(),
         owner: package_ptr,
     })));
@@ -1439,7 +1437,7 @@ fn future_output_type_heads_are_traced_and_forwarded() {
     let mut tlab = Tlab::new(Arc::clone(&heap));
 
     let class_name = QualifiedTypeName::local(Name::new("SpawnOut"));
-    let type_tag = baml_type::typetag::TypeTag::of_head("SpawnOut");
+    let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
     let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
         name: bex_vm_types::DeclarationName::Declared(class_name),
         fields: Vec::new(),

@@ -4,12 +4,9 @@
 //! package's synthesized functions — a `let` initializer's helper, the
 //! `$init` that runs them, the `$init_test` chainer.
 //!
-//! None of them knows how an emitter lays a pool out. A builder answers with
-//! the object; the caller pools it, claims its head's tag, and resolves the
-//! identities a rule carries through its own tables — the flat emitter's
-//! rendered-name maps today, the per-package emitter's local-or-import
-//! ordinals next. Sharing the builders is what keeps the two from drifting
-//! while both exist.
+//! None of them knows how the emitter lays a pool out. A builder answers with
+//! the object; the caller pools it and resolves the identities a rule
+//! carries through the package's local-or-import ordinals.
 
 use std::collections::HashSet;
 
@@ -32,15 +29,15 @@ use baml_compiler2_mir::{
 use baml_type::{DeclName, ParamTy, Ty, TypeName, typetag::TypeTag};
 use bex_vm_types::{
     Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionCaptureProps,
-    FunctionKind, FunctionOrigin, GlobalIndex, ImplBodyCoherence, ImplCoherenceKey, Instruction,
-    InterfaceBound, ObjectPool, SpelledBound, TyTemplate,
+    FunctionKind, FunctionOrigin, GlobalIndex, ImplBodyCoherence, Instruction, InterfaceBound,
+    ObjectPool, SpelledBound, TyTemplate,
     bytecode::{InstructionMeta, OperandMeta},
     types::TypeAliasDef,
 };
 
 use crate::{
-    ClassFieldSnapshot, LoweringError, MirCodegenContext, OptLevel,
-    emit::{Anchor, CodegenRefs, compile_mir_function},
+    ClassFieldSnapshot, LoweringError, MirCodegenContext, OptLevel, emit::compile_mir_function,
+    refs::PackageRefs,
 };
 
 // ── The slot law ─────────────────────────────────────────────────────────────
@@ -125,7 +122,7 @@ pub(crate) fn build_class_object<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     class_loc: ClassLoc<'db>,
     cache: &RuntimeLowering<'_>,
-    anchor: &mut dyn Anchor,
+    anchor: &mut PackageRefs<'_, '_>,
     type_tag: TypeTag,
 ) -> Class {
     let class = class_data(db, class_loc);
@@ -246,7 +243,7 @@ pub(crate) fn build_alias_object<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     alias_loc: TypeAliasLoc<'db>,
     cache: &RuntimeLowering<'_>,
-    anchor: &mut dyn Anchor,
+    anchor: &mut PackageRefs<'_, '_>,
     type_tag: TypeTag,
 ) -> Result<TypeAliasDef, LoweringError> {
     let alias_data = type_alias_data(db, alias_loc);
@@ -290,7 +287,7 @@ pub(crate) fn build_interface_def(
     // The declaration's own tag as the caller's lane states it.
     type_tag: TypeTag,
     resolved: &RuntimeLowering<'_>,
-    anchor: &mut dyn Anchor,
+    anchor: &mut PackageRefs<'_, '_>,
 ) -> bex_vm_types::types::InterfaceDef {
     use baml_compiler2_hir::item_data::FunctionParamData;
     use baml_type::{RuntimeInterface, RuntimeTy};
@@ -625,7 +622,10 @@ impl ImplRuleTarget<'_> {
 }
 
 /// One spelled bound at a lane's head.
-pub(crate) fn anchor_bound(anchor: &mut dyn Anchor, bound: &SpelledBound) -> InterfaceBound {
+pub(crate) fn anchor_bound(
+    anchor: &mut PackageRefs<'_, '_>,
+    bound: &SpelledBound,
+) -> InterfaceBound {
     InterfaceBound {
         interface: anchor.head(&bound.interface),
         args: bound
@@ -637,32 +637,6 @@ pub(crate) fn anchor_bound(anchor: &mut dyn Anchor, bound: &SpelledBound) -> Int
             .assoc
             .iter()
             .map(|(name, ty)| (name.clone(), anchor.anchor_template(ty)))
-            .collect(),
-    }
-}
-
-/// A block's coherence identity at a lane's head — the key a baked rule
-/// carries ([`ProgramImplRule::coherence_key`](bex_vm_types::types::ProgramImplRule::coherence_key)).
-pub(crate) fn anchor_coherence(
-    anchor: &mut dyn Anchor,
-    key: &ImplBodyCoherence,
-) -> ImplCoherenceKey {
-    ImplCoherenceKey {
-        for_ty_pattern: anchor.anchor_template(&key.for_ty_pattern),
-        interface_args: key
-            .interface_args
-            .iter()
-            .map(|arg| anchor.anchor_template(arg))
-            .collect(),
-        generic_param_bounds: key
-            .generic_param_bounds
-            .iter()
-            .map(|bounds| {
-                bounds
-                    .iter()
-                    .map(|bound| anchor_bound(anchor, bound))
-                    .collect()
-            })
             .collect(),
     }
 }
@@ -807,7 +781,7 @@ pub(crate) fn bake_impl_rule<'db>(
     impl_loc: ImplLoc<'db>,
     target: ImplRuleTarget<'db>,
     resolved: &RuntimeLowering<'_>,
-    anchor: &mut dyn Anchor,
+    anchor: &mut PackageRefs<'_, '_>,
 ) -> Option<ImplRuleParts<'db>> {
     let block = impl_block_data(db, impl_loc);
     let ImplRuleTarget {
@@ -1091,7 +1065,7 @@ pub(crate) fn compile_let_helper<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     binding: LetLoc<'db>,
     ordinal: usize,
-    refs: &mut (dyn CodegenRefs<'db> + 'db),
+    refs: &mut PackageRefs<'_, 'db>,
     class_fields: &ClassFieldSnapshot<'db>,
     objects: &mut ObjectPool,
     objects_base: usize,

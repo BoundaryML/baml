@@ -18,8 +18,6 @@ pub mod heap_ptr;
 pub mod identity;
 pub mod indexable;
 pub mod lazy_biased_mutex;
-pub mod legacy_link;
-pub mod legacy_unit;
 pub mod relink;
 mod roots;
 pub mod runtime_compile;

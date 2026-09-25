@@ -162,25 +162,13 @@ impl TypeHead {
         )
     }
 
-    /// The unresolved head the flat whole-program emitter mints for a
-    /// fully-qualified name: a content-addressed tag, the one identity that
-    /// emitter and the graft consuming its units share. Every other producer
-    /// names a declaration by operand ([`Self::unresolved_operand`]).
-    #[deprecated(
-        note = "a head derived from a spelling: the flat emitter's identity; dies with it (heads are declaration operands in a unit)"
-    )]
-    #[must_use]
-    pub fn of_name(name: &baml_type::TypeName) -> Self {
-        Self::unresolved(TypeTag::of_head(&name.render_dotted(false)))
-    }
-
     /// The fully-qualified name of the declaration this head points at, or
     /// `None` if the head is unresolved, does not point at a declaration, or
     /// points at an anonymous (runtime-created) declaration — which has no
     /// qualified name for any name-keyed consumer to use.
     ///
-    /// The inverse of [`of_name`](Self::of_name), and the boundary conversion: a
-    /// head is a live pointer into this process's heap, so anything leaving the
+    /// The boundary conversion: a head is a live pointer into this process's
+    /// heap, so anything leaving the
     /// VM — an FFI payload, a serialized artifact, a host-facing value —
     /// converts back to names first. Pair it with `try_map_heads` to carry a
     /// whole type across.

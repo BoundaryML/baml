@@ -664,3 +664,54 @@ fn a_tail_reaches_its_own_packages_declarations_as_imports() {
         }
     );
 }
+
+/// An impl rule's provided body must be an interface body: a unit whose rule
+/// aims a method at a NAMED function is refused at link, never dispatched to
+/// the wrong arity and frame convention.
+#[test]
+fn a_rule_body_aimed_at_a_named_function_is_an_invalid_unit() {
+    use baml_linker_types::{ProgramImplRuleFrag, ProgramMethodImplFrag};
+    use bex_vm_types::types::InterfaceDef;
+
+    let record = PackageRecord::default();
+    let mut unit = unit_with_fn("user.named", vec![Instruction::Return]);
+    unit.interfaces
+        .push(Object::Interface(Box::new(InterfaceDef {
+            name: baml_type::TypeName::local(Name::new("Greeter")),
+            type_tag: TypeHead::unresolved_operand(ObjectIndex::from_raw(0)).tag(),
+            args: Vec::new(),
+            requires: Vec::new(),
+            assoc: Vec::new(),
+            fields: Vec::new(),
+            methods: Vec::new(),
+            owner: bex_vm_types::HeapPtr::null(),
+        })));
+    unit.exports
+        .objects
+        .push((DeclPath::Interface(item("Greeter")), LocalRef::Interface(0)));
+    unit.impl_rules.push(ProgramImplRuleFrag {
+        // Unit convention: the interface bucket follows the (empty) class and
+        // enum buckets, so the interface is object 0; code offset 0 is the
+        // named function.
+        interface_head: ObjectIndex::from_raw(0),
+        for_ty_pattern: baml_type::TyTemplate::Int,
+        generic_param_bounds: Vec::new(),
+        interface_args: Vec::new(),
+        interface_assoc: Vec::new(),
+        methods: vec![(
+            Name::new("greet"),
+            ProgramMethodImplFrag {
+                code_offset: 0,
+                frame: Vec::new(),
+            },
+        )],
+        field_links: Box::new([]),
+    });
+    let set = LinkSet {
+        packages: vec![package("user", vec![], &unit, &record)],
+    };
+    assert!(matches!(
+        link(&set),
+        Err(LinkError::InvalidUnit(message)) if message.contains("not an interface body")
+    ));
+}

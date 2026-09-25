@@ -542,49 +542,6 @@ impl BexHeap {
         }
     }
 
-    /// A transient tag → declaration index over the compile-time pool, for a
-    /// caller running its own bind over freshly grafted objects (the runtime
-    /// twin of [`Self::bind_type_heads`]). Built per call and dropped by the
-    /// caller: pointer-first lookup means no tag index survives into the VM.
-    ///
-    /// Each declaration is indexed under its live tag AND under the content
-    /// tag of its declared name — the flat emitter's consumers still spell a
-    /// host declaration by that hash, while the host image's tags are the
-    /// linker's — and every entry is the declaration's own head, both halves
-    /// off the object, so a head that lands here adopts its identity rather
-    /// than keeping the spelling it arrived with.
-    #[deprecated(
-        note = "the graft's tag-index fallback for binding heads: the graft binds heads from the import table, then this is deleted"
-    )]
-    pub fn compile_time_declaration_index(
-        &self,
-    ) -> HashMap<baml_type::typetag::TypeTag, bex_vm_types::TypeHead> {
-        let mut by_tag = HashMap::with_capacity(self.compile_time.len() / 4);
-        for index in 0..self.compile_time.len() {
-            let object = &self.compile_time[index];
-            let Some(tag) = Self::declaration_tag(object) else {
-                continue;
-            };
-            let bound = bex_vm_types::TypeHead::new(self.compile_time_ptr(index), tag);
-            by_tag.insert(tag, bound);
-            let declared = match object {
-                Object::Class(class) => class.name.declared().cloned(),
-                Object::Enum(enm) => enm.name.declared().cloned(),
-                Object::Interface(interface) => Some(interface.name.clone()),
-                Object::TypeAlias(alias) => Some(alias.name.clone()),
-                _ => None,
-            };
-            if let Some(name) = declared {
-                by_tag
-                    .entry(baml_type::typetag::TypeTag::of_head(
-                        &name.render_dotted(false),
-                    ))
-                    .or_insert(bound);
-            }
-        }
-        by_tag
-    }
-
     /// Get the number of compile-time objects.
     pub fn compile_time_len(&self) -> usize {
         self.compile_time.len()

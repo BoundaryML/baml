@@ -9,11 +9,11 @@
 fn baml_test() {
     // Isolate the CLI's bytecode cache and home per run. Without this, the CLI
     // writes `<project>/.baml/cache` straight into the source tree that the
-    // `corpus_snapshots`/`emit_determinism`/`link_units_oracle` tests scan
+    // `corpus_snapshots`/`emit_determinism` tests scan
     // concurrently, and successive runs share (and can corrupt) that cache.
     let tmp = tempfile::tempdir().expect("tempdir for corpus cache");
     // The bytecode cache lives under the cargo target dir -- outside the source
-    // tree the `corpus_snapshots`/`emit_determinism`/`link_units_oracle` tests
+    // tree the `corpus_snapshots`/`emit_determinism` tests
     // scan -- and stays warm across runs, so an unchanged corpus recompiles
     // nothing. It is content-addressed with the compiler fingerprint in the
     // key, so staleness is a miss, never a wrong hit. Passing it through the

@@ -687,7 +687,6 @@ impl BexHeap {
                     PackageKind::Static => {}
                     PackageKind::Runtime(runtime) | PackageKind::Session { runtime, .. } => {
                         worklist.extend(runtime.objects.iter().copied());
-                        worklist.extend(runtime.object_names.values().copied());
                         worklist.extend(runtime.type_values.values().copied());
                         worklist.extend(runtime.dependencies.iter().copied());
                         worklist.extend(runtime.dependency_names.values().copied());
@@ -959,11 +958,6 @@ impl BexHeap {
                     PackageKind::Static => {}
                     PackageKind::Runtime(runtime) | PackageKind::Session { runtime, .. } => {
                         for ptr in runtime.objects.iter_mut() {
-                            if let Some(&new_ptr) = forwarding.get(ptr) {
-                                *ptr = new_ptr;
-                            }
-                        }
-                        for ptr in runtime.object_names.values_mut() {
                             if let Some(&new_ptr) = forwarding.get(ptr) {
                                 *ptr = new_ptr;
                             }
@@ -1367,7 +1361,6 @@ impl BexHeap {
                             runtime
                                 .objects
                                 .iter()
-                                .chain(runtime.object_names.values())
                                 .chain(runtime.type_values.values())
                                 .chain(runtime.dependencies.iter())
                                 .chain(runtime.dependency_names.values())

@@ -3,8 +3,7 @@
 //!
 //! The SOURCE path puts the rich `app` fixture and the consumer in one database.
 //! The BLOB path compiles `app` independently into its check artifact (borsh of
-//! `PackageInterface`) and run artifact (its `EmittedPackage`; the flat lane's
-//! `CompilationUnit`s for the unit-level invariants below), then mounts the
+//! `PackageInterface`) and run artifact (its `EmittedPackage`), then mounts the
 //! former in a fresh source-less consumer database and links the latter through
 //! `compile_program_with`, served for the mount.
 //!
@@ -25,10 +24,7 @@
 //! unchanged.
 
 use baml_base::Name;
-use baml_compiler2_emit::{
-    MountedPackageLinkError, OptLevel, emit_package, emit_units,
-    generate_project_bytecode_with_mounted_units, generate_project_bytecode_with_opt,
-};
+use baml_compiler2_emit::{OptLevel, emit_package};
 use baml_compiler2_hir_ty::package_interface::{ExportedType, PackageInterface, export_interface};
 use baml_db::{
     EmittedPackage, PackageCache, ProjectDatabase, collect_diagnostics, compile_program,
@@ -36,7 +32,7 @@ use baml_db::{
 };
 use baml_tests::engine::{TestDbExt, run_compiled};
 use bex_engine::BexExternalValue;
-use bex_vm_types::{Program, legacy_unit::CompilationUnit};
+use bex_vm_types::Program;
 use indexmap::IndexMap;
 
 const ROOT: &str = "/mounted-parity";
@@ -162,7 +158,6 @@ struct LibraryArtifacts {
     interface: PackageInterface<baml_type::TypeName>,
     /// `app`'s run artifact: what a store serves for its mount.
     emitted: EmittedPackage,
-    units: Vec<CompilationUnit>,
 }
 
 /// The store the blob path compiles against: it serves `app`'s output —
@@ -212,12 +207,10 @@ fn library_artifacts() -> LibraryArtifacts {
         "interface blob must round-trip exactly"
     );
     let emitted = emit_package(&db, app, OPT).expect("emit the app package");
-    let units = emit_units(&db, package(&db), OPT).expect("emit independent app units");
     LibraryArtifacts {
         blob,
         interface,
         emitted,
-        units,
     }
 }
 
@@ -464,168 +457,6 @@ class Broken {
     }
 }
 
-const ARTIFACT_USER: &str = r#"
-class Local {
-    name string
-    implements app.Named {}
-}
-
-function status_score(status: app.Status) -> int throws never {
-    match status {
-        app.Status.Active => 1
-        app.Status.Retired => 2
-    }
-}
-
-function main() -> int throws never {
-    let widget = app.Widget { name: "artifact", value: 20 }
-    let boxed = app.Box<app.Widget> { value: widget }
-    let enum_score = status_score(app.Status.Active)
-    let boxed_score = if boxed.inner_name() == "artifact" { 1 } else { 0 }
-    let tagged = app.tag_of(Local { name: "local" })
-    let tagged_score = if tagged == "any" { 1 } else { 0 }
-    app.measure_twice(widget)
-        + enum_score
-        + boxed_score
-        + tagged_score
-}
-"#;
-
-fn unit<'a>(units: &'a [CompilationUnit], path: &str) -> &'a CompilationUnit {
-    units
-        .iter()
-        .find(|unit| unit.source_file == path)
-        .unwrap_or_else(|| panic!("missing unit `{path}`"))
-}
-
-#[track_caller]
-fn assert_bytes_identical(label: &str, left: &[u8], right: &[u8]) {
-    if left == right {
-        return;
-    }
-    let first_difference = left
-        .iter()
-        .zip(right)
-        .position(|(left, right)| left != right)
-        .unwrap_or_else(|| left.len().min(right.len()));
-    panic!(
-        "{label}: byte streams differ first at {first_difference} (left len {}, right len {})",
-        left.len(),
-        right.len()
-    );
-}
-
-fn normalize_object_debug_file_ids(object: &mut bex_vm_types::Object) {
-    let bex_vm_types::Object::Function(function) = object else {
-        return;
-    };
-    let normalized = baml_base::FileId::new(0);
-    function.span.file_id = normalized;
-    for entry in &mut function.bytecode.line_table {
-        entry.span.file_id = normalized;
-    }
-    for local in &mut function.debug_locals {
-        local.scope_span.file_id = normalized;
-    }
-}
-
-fn normalized_unit(mut unit: CompilationUnit) -> CompilationUnit {
-    for object in &mut unit.code {
-        normalize_object_debug_file_ids(object);
-    }
-    if let Some(tail) = &mut unit.init_tail {
-        for object in &mut tail.objects {
-            normalize_object_debug_file_ids(object);
-        }
-    }
-    unit
-}
-
-fn normalized_program(mut program: Program) -> Program {
-    for object in program.objects.iter_mut() {
-        normalize_object_debug_file_ids(object);
-    }
-    program
-}
-
-#[test]
-fn emitted_program_dependency_and_consumer_units_are_byte_identical() {
-    let artifacts = library_artifacts();
-    let source_db = source_db(ARTIFACT_USER);
-    assert_no_diagnostic_errors(&source_db);
-    let source_program = generate_project_bytecode_with_opt(&source_db, package(&source_db), OPT)
-        .expect("source program");
-    let source_units = emit_units(&source_db, package(&source_db), OPT).expect("source units");
-
-    let blob_db = blob_db(ARTIFACT_USER, artifacts.blob.clone());
-    assert_no_diagnostic_errors(&blob_db);
-    // The blob side decomposes with ITS OWN db's coordinates (the
-    // same-frame artifacts API), never against the source db: decompose
-    // consumes the generating emit's declaration-keyed placements, and a
-    // foreign db has none for this program. (The pre-coordinates version
-    // of this oracle exploited the old Pass-1 replay to decompose a
-    // foreign program — that road no longer exists, on purpose.)
-    let (blob_program, blob_units) =
-        baml_compiler2_emit::generate_project_bytecode_with_mounted_units_artifacts(
-            &blob_db,
-            package(&blob_db),
-            OPT,
-            &artifacts.units,
-        )
-        .expect("blob program");
-
-    let source_program_bytes = borsh::to_vec(&source_program).expect("serialize source program");
-    let blob_program_bytes = borsh::to_vec(&blob_program).expect("serialize blob program");
-    let source_user = unit(&source_units, "main.baml");
-    let blob_user = unit(&blob_units, "main.baml");
-    assert_ne!(
-        borsh::to_vec(source_user).expect("serialize raw source user unit"),
-        borsh::to_vec(blob_user).expect("serialize raw blob user unit"),
-        "the fixture must keep the database-local FileId distinction visible"
-    );
-    assert_bytes_identical(
-        "consumer unit after debug FileId normalization",
-        &borsh::to_vec(&normalized_unit(source_user.clone()))
-            .expect("serialize normalized source user unit"),
-        &borsh::to_vec(&normalized_unit(blob_user.clone()))
-            .expect("serialize normalized blob user unit"),
-    );
-
-    let imported_app_symbols: Vec<&str> = source_user
-        .object_imports
-        .iter()
-        .chain(&source_user.global_imports)
-        .map(|symbol| symbol.fq_name.as_str())
-        .filter(|name| name.starts_with("app."))
-        .collect();
-    assert!(
-        !imported_app_symbols.is_empty(),
-        "consumer must exercise symbolic app imports"
-    );
-    assert_eq!(source_user.object_imports, blob_user.object_imports);
-    assert_eq!(source_user.global_imports, blob_user.global_imports);
-
-    let source_app = unit(&source_units, "<builtin>/app/lib.baml");
-    let independent_app = unit(&artifacts.units, "<builtin>/app/lib.baml");
-    assert_bytes_identical(
-        "independent library unit",
-        &borsh::to_vec(source_app).expect("serialize source app unit"),
-        &borsh::to_vec(independent_app).expect("serialize independent app unit"),
-    );
-
-    assert_ne!(
-        source_program_bytes, blob_program_bytes,
-        "raw programs retain the consumer database's debug FileId"
-    );
-    assert_bytes_identical(
-        "linked program after debug FileId normalization",
-        &borsh::to_vec(&normalized_program(source_program))
-            .expect("serialize normalized source program"),
-        &borsh::to_vec(&normalized_program(blob_program))
-            .expect("serialize normalized blob program"),
-    );
-}
-
 #[test]
 fn exported_impl_method_preserves_synthetic_callback_effect_params() {
     let artifacts = library_artifacts();
@@ -651,23 +482,6 @@ fn exported_impl_method_preserves_synthetic_callback_effect_params() {
         apply.generic_params[0].name()
     ));
     assert_eq!(apply.generic_param_bounds, vec![Vec::new()]);
-}
-
-#[test]
-fn mounted_unit_api_preserves_dependency_link_errors() {
-    let artifacts = library_artifacts();
-    let mut duplicate_units = artifacts.units.clone();
-    duplicate_units.push(unit(&artifacts.units, "<builtin>/app/lib.baml").clone());
-    let db = blob_db("function main() -> int { 0 }", artifacts.blob);
-    let error =
-        generate_project_bytecode_with_mounted_units(&db, package(&db), OPT, &duplicate_units)
-            .expect_err("duplicate dependency export must fail before consumer emit");
-    assert!(matches!(
-        error,
-        MountedPackageLinkError::DependencyLink(
-            bex_vm_types::legacy_link::LinkError::DuplicateExport(_)
-        )
-    ));
 }
 
 #[test]

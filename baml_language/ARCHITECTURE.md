@@ -821,4 +821,4 @@ When implementing a new feature, walk through these questions in order:
 | HIR | `baml_compiler2_hir` | No | `file_semantic_index`, `namespace_items`, `package_items` | No |
 | TIR | `baml_compiler2_tir` | No | `infer_scope_types`, `resolve_name_at` | No |
 | MIR | `baml_compiler2_mir` | Yes (AST → CFG) | `lower_function`, `lower_let_body` | Yes |
-| Emit | `baml_compiler2_emit` | Yes (MIR → bytecode) | `generate_project_bytecode` | Yes (bytecode) |
+| Emit | `baml_compiler2_emit` | Yes (MIR → bytecode) | `emit_package` | Yes (bytecode) |

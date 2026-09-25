@@ -9,10 +9,7 @@
 
 use std::path::{Path, PathBuf};
 
-use baml_compiler2_emit::{
-    OptLevel, generate_project_bytecode_with_opt, generate_project_bytecode_with_stdlib,
-    generate_stdlib_program,
-};
+use baml_compiler2_emit::OptLevel;
 use baml_db::{ProjectDatabase, compile_program, discover_baml_files};
 use baml_tests::engine::TestDbExt;
 use bex_vm_types::RuntimeCompileRequest;
@@ -129,85 +126,6 @@ fn parallel_emit_is_byte_identical_to_serial() {
             diff_at,
             &serial[diff_at.saturating_sub(8)..(diff_at + 8).min(serial.len())],
             &parallel[diff_at.saturating_sub(8)..(diff_at + 8).min(parallel.len())],
-        );
-    }
-}
-
-/// The workspace root the fixture builder added: the package whose program
-/// the test compiles.
-fn package(db: &ProjectDatabase) -> baml_db::SourceRoot {
-    db.workspace_root()
-        .unwrap_or_else(|| unreachable!("the fixture builder adds one workspace root"))
-}
-
-fn build_db(root: &Path, sources: &[(PathBuf, String)]) -> ProjectDatabase {
-    let mut db = ProjectDatabase::new();
-    db.workspace(root);
-    for (path, content) in sources {
-        db.file(path, content);
-    }
-    db
-}
-
-/// The precompiled-stdlib splice oracle of the flat emitter (the runtime
-/// compiler's lane until it loads per-package outputs): compiling on top of a
-/// stdlib `Program` slice must be byte-identical to a full compile.
-///
-/// The base is built from the *empty* project's database and spliced into the
-/// *full baml_src* compile — proving the stdlib slice is genuinely
-/// user-independent (same bytes regardless of which project's db produced
-/// it), not merely reusable within one project.
-#[test]
-fn stdlib_splice_is_byte_identical_to_full_compile() {
-    let empty_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("projects/empty");
-    let empty_sources = read_project(&empty_root);
-    let base = generate_stdlib_program(&build_db(&empty_root, &empty_sources), OptLevel::Two)
-        .expect("stdlib compile failed");
-    let base_bytes = borsh::to_vec(&base).expect("serialize stdlib base");
-
-    for root in [
-        empty_root.clone(),
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src"),
-    ] {
-        let sources = read_project(&root);
-        // The flat emitter's own full compile: the splice reproduces THAT
-        // image (the per-package lane fills the identity tables the flat
-        // emitter never does, so it is not the comparand here).
-        let flat_db = build_db(&root, &sources);
-        let full = generate_project_bytecode_with_opt(&flat_db, package(&flat_db), OptLevel::Two)
-            .unwrap_or_else(|e| panic!("flat compile of {} failed: {e:?}", root.display()));
-        let full = borsh::to_vec(&full).expect("serialize flat program");
-
-        let db = build_db(&root, &sources);
-        let spliced =
-            generate_project_bytecode_with_stdlib(&db, package(&db), OptLevel::Two, &base)
-                .unwrap_or_else(|e| panic!("splice compile of {} failed: {e:?}", root.display()));
-        let spliced = borsh::to_vec(&spliced).expect("serialize spliced program");
-
-        assert_eq!(
-            full.len(),
-            spliced.len(),
-            "splice output length differs from full compile for {}",
-            root.display()
-        );
-        assert!(
-            full == spliced,
-            "splice output differs from full compile for {} (first diff at byte {})",
-            root.display(),
-            full.iter()
-                .zip(spliced.iter())
-                .position(|(a, b)| a != b)
-                .unwrap_or(0),
-        );
-
-        // The stdlib slice must also be reproducible from THIS project's db.
-        let rebuilt = generate_stdlib_program(&build_db(&root, &sources), OptLevel::Two)
-            .expect("stdlib recompile failed");
-        let rebuilt = borsh::to_vec(&rebuilt).expect("serialize rebuilt base");
-        assert!(
-            rebuilt == base_bytes,
-            "stdlib slice is not user-independent: differs when built from {}",
-            root.display()
         );
     }
 }

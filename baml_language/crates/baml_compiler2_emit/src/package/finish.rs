@@ -33,7 +33,6 @@ use super::{
 };
 use crate::{
     ClassFieldSnapshot, LoweringError, OptLevel,
-    emit::CodegenRefs,
     items::{
         InitStep, bake_impl_rule, build_init_function, build_init_test_chainer, compile_let_helper,
         impl_rule_target,
@@ -417,7 +416,7 @@ fn emit_tail<'db>(
                 continue;
             }
             let slot = refs
-                .function(DeclRef::Source(function))
+                .function_slot(DeclRef::Source(function))
                 .unwrap_or_else(|| unreachable!("a test initializer owns a slot"));
             parts.push(slot);
         }
