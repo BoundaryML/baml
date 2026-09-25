@@ -114,6 +114,51 @@ fn literal_truthiness(lit: &Literal) -> Truthiness {
 }
 
 impl<'db> InferenceContext<'db> {
+    pub(super) fn uncalled_function_diagnostic(
+        body: &ExprBody,
+        expr: ExprId,
+        accepts_no_args: bool,
+    ) -> crate::diagnostics::TirDiagnostic<'db> {
+        use crate::diagnostics::{
+            DiagnosticLocation, DiagnosticSeverity, RelatedLocation, RelatedNote, TirDiagnostic,
+            TirTypeError,
+        };
+
+        let name = body.display_expr(expr);
+        // Only propose an exact replacement for expressions we can render as
+        // a callee, and functions that need no arguments.
+        let suggestion = (accepts_no_args
+            && matches!(
+                body.exprs[expr],
+                Expr::Path(_)
+                    | Expr::MemberAccess { .. }
+                    | Expr::GenericApply { .. }
+                    | Expr::QualifiedPath { .. }
+                    | Expr::Index { .. }
+                    | Expr::Call { .. }
+            ))
+        .then(|| format!("{name}()"));
+        let unreachable = body.exprs.iter().find_map(|(_, parent)| match parent {
+            Expr::If {
+                condition,
+                else_branch,
+                ..
+            } if *condition == expr => *else_branch,
+            _ => None,
+        });
+        TirDiagnostic {
+            error: TirTypeError::UncalledFunctionInCondition { name, suggestion },
+            severity: DiagnosticSeverity::Warning,
+            primary: DiagnosticLocation::Expr(expr),
+            related: unreachable
+                .map(|branch| {
+                    RelatedNote::new(RelatedLocation::Expr(branch), "this branch is unreachable")
+                })
+                .into_iter()
+                .collect(),
+        }
+    }
+
     /// Type a condition position (`if`/`while`/guard, and `&&`/`||`
     /// operands): any type is accepted, a non-`bool` records the Truthy
     /// adjustment for MIR, `void` is a mismatch (there is no value to

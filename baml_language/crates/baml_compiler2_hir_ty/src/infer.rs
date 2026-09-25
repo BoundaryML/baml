@@ -1642,7 +1642,7 @@ fn infer_body_impl<'db>(
     } else if let Some(expr_body) = body.expr_body() {
         ctx.infer_expr_body(expr_body);
     }
-    ctx.finish()
+    ctx.finish(body.expr_body())
 }
 
 /// Which bounded-var classes a finish-fixpoint round may commit: the
@@ -10689,7 +10689,7 @@ impl<'db> InferenceContext<'db> {
         diagnostics
     }
 
-    fn finish(mut self) -> InferenceResult<'db> {
+    fn finish(mut self, body: Option<&ExprBody>) -> InferenceResult<'db> {
         // The fulfillment fixpoint: solve what FULL bounds determine,
         // attempt obligations, re-drive the deferred residue, repeat
         // while any side progresses (rustc re-runs stalled obligations
@@ -11377,11 +11377,17 @@ impl<'db> InferenceContext<'db> {
                         ty,
                         always_true,
                     } => {
+                        let ty = self.plain_finalized(&ty);
+                        if let (Some(body), baml_type::Ty::Function { params, .. }) = (body, &ty) {
+                            diags.push(Self::uncalled_function_diagnostic(
+                                body,
+                                expr,
+                                params.iter().all(|param| param.is_optional()),
+                            ));
+                            continue;
+                        }
                         diags.push(TirDiagnostic {
-                            error: TirTypeError::ConditionAlwaysConstant {
-                                ty: self.plain_finalized(&ty),
-                                always_true,
-                            },
+                            error: TirTypeError::ConditionAlwaysConstant { ty, always_true },
                             severity: DiagnosticSeverity::Warning,
                             primary: DiagnosticLocation::Expr(expr),
                             related: Vec::new(),

@@ -1547,6 +1547,12 @@ fn tir_rendered_to_diagnostic_with_message(
             range: related.range,
         };
         let message = related.message;
+        if matches!(
+            rendered.error,
+            TirTypeError::UncalledFunctionInCondition { .. }
+        ) {
+            return diag.with_secondary(span, message);
+        }
         let diag = if unknown_member_access_member.is_some() {
             diag.with_secondary(span, message.clone())
         } else {
@@ -1576,6 +1582,15 @@ fn new_tir_diagnostic(
     span: Span,
     warning: bool,
 ) -> Diagnostic {
+    if let TirTypeError::UncalledFunctionInCondition { suggestion, .. } = error {
+        let mut label = "did you mean to call this function?".to_string();
+        if let Some(suggestion) = suggestion {
+            label.push_str(&format!(" Replace with `{suggestion}`"));
+        }
+        return Diagnostic::warning(DiagnosticId::ConditionAlwaysConstant, message)
+            .with_primary(span, label)
+            .with_phase(DiagnosticPhase::Type);
+    }
     if let TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } = error {
         return runtime_type::computed_generic_argument_requires_unreflect(name.as_str())
             .with_primary_span(span)
@@ -1879,7 +1894,8 @@ fn tir_type_error_to_diagnostic_id(
             DiagnosticId::CannotConstructBuiltinCompanion
         }
         TirTypeError::DeadCode { .. } => DiagnosticId::UnreachableCode,
-        TirTypeError::ConditionAlwaysConstant { .. } => DiagnosticId::ConditionAlwaysConstant,
+        TirTypeError::ConditionAlwaysConstant { .. }
+        | TirTypeError::UncalledFunctionInCondition { .. } => DiagnosticId::ConditionAlwaysConstant,
         TirTypeError::VoidUsedAsValue => DiagnosticId::TypeMismatch,
         TirTypeError::VoidFunctionResultUsed => DiagnosticId::TypeMismatch,
         TirTypeError::SpawnWithNotATransformer { .. } => DiagnosticId::TypeMismatch,

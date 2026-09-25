@@ -561,6 +561,11 @@ pub enum TirTypeError {
     /// B-1563 truthiness: a non-literal condition whose static type decides
     /// the branch - the test is constant, so one arm is dead.
     ConditionAlwaysConstant { ty: Ty, always_true: bool },
+    /// A function value tested without being called.
+    UncalledFunctionInCondition {
+        name: String,
+        suggestion: Option<String>,
+    },
 
     /// BEP-044 §"Method Disambiguation": an unqualified call resolves to
     /// a method declared by two or more interfaces — the receiver carries
@@ -1764,6 +1769,9 @@ impl TirTypeError {
                 ),
                 TirTypeError::OutputFormatNotCalled => {
                     write!(f, "`output_format` must be called; use `output_format()`")
+                }
+                TirTypeError::UncalledFunctionInCondition { name, .. } => {
+                    write!(f, "function `{name}` is always truthy")
                 }
                 TirTypeError::ConditionAlwaysConstant { ty, always_true } => {
                     let (always, never) = if *always_true {
