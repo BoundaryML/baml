@@ -239,6 +239,7 @@ impl GlobalState {
     pub fn spawn_discovery(&self, folder: PathBuf) {
         let fs = Arc::clone(self.fs());
         let handle = self.handle();
+        let started_at = self.revision();
         let open: HashSet<PathBuf> = self.open_documents().keys().cloned().collect();
         self.io_executor().spawn_job(Box::new(move || {
             let roots = fs
@@ -247,6 +248,7 @@ impl GlobalState {
                 .map(|root| load_root(fs.as_ref(), root, &open))
                 .collect();
             handle.post(OwnerEvent::RootsLoaded {
+                started_at,
                 folder: Some(folder),
                 roots,
             });
@@ -263,6 +265,7 @@ impl GlobalState {
         }
         let fs = Arc::clone(self.fs());
         let handle = self.handle();
+        let started_at = self.revision();
         self.io_executor().spawn_job(Box::new(move || {
             let files = paths
                 .into_iter()
@@ -277,7 +280,7 @@ impl GlobalState {
                     }
                 })
                 .collect();
-            handle.post(OwnerEvent::FilesReloaded { files });
+            handle.post(OwnerEvent::FilesReloaded { started_at, files });
         }));
     }
 }
