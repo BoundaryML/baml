@@ -829,7 +829,10 @@ impl TelemetryState {
         #[cfg(not(target_arch = "wasm32"))]
         return self.runtime.wants_error_evidence();
         #[cfg(target_arch = "wasm32")]
-        false
+        {
+            let _ = self;
+            false
+        }
     }
 
     #[cold]
@@ -864,7 +867,7 @@ impl TelemetryState {
         return self.runtime.future_error(future);
         #[cfg(target_arch = "wasm32")]
         {
-            let _ = future;
+            let _ = (self, future);
             btel_records::FutureErrorLookup::Missing
         }
     }
@@ -873,7 +876,7 @@ impl TelemetryState {
         #[cfg(not(target_arch = "wasm32"))]
         self.runtime.link_future_error(future, link);
         #[cfg(target_arch = "wasm32")]
-        let _ = (future, link);
+        let _ = (self, future, link);
     }
 
     /// Release clock bookkeeping without claiming that this thread completed.

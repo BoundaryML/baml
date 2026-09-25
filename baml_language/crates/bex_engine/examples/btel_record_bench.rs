@@ -35,6 +35,7 @@ fn files(root: &Path) -> Vec<std::path::PathBuf> {
 }
 
 /// Process CPU seconds and peak RSS bytes (Linux `getrusage`).
+#[cfg(unix)]
 fn usage() -> (f64, u64) {
     let mut usage = std::mem::MaybeUninit::<libc::rusage>::uninit();
     // SAFETY: getrusage fills the provided struct for RUSAGE_SELF.
@@ -48,6 +49,12 @@ fn usage() -> (f64, u64) {
         + usage.ru_stime.tv_sec as f64
         + (usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) as f64 / 1e6;
     (cpu, usage.ru_maxrss as u64 * 1024)
+}
+
+/// Not measured without `getrusage`.
+#[cfg(not(unix))]
+fn usage() -> (f64, u64) {
+    (0.0, 0)
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
