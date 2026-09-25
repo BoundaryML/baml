@@ -132,10 +132,21 @@ const nextConfig = {
         destination: '/',
         permanent: true,
       },
+      // Keep the public quiz link on boundaryml.com while normalizing to a
+      // directory path so relative quiz assets load correctly.
+      {
+        source: '/type-system-quiz',
+        destination: '/type-system-quiz/',
+        permanent: false,
+      },
     ];
   },
   async rewrites() {
     return [
+      {
+        source: '/type-system-quiz/:path*',
+        destination: 'https://boundaryml.github.io/baml/type-quiz/:path*',
+      },
       {
         source: '/relay-JkOu/static/:path*',
         destination: 'https://us-assets.i.posthog.com/static/:path*',
