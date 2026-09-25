@@ -103,14 +103,13 @@ function all_settled<T, E>(
     spawn {
         let outcomes: (baml.future.Success<T> | baml.future.Failure<E> | baml.future.Panicked)[] = [];
         for (let f in futures) {
+            // Wait for `f` to settle. Only the collector's own cancellation
+            // ends this wait early, and it propagates, stopping the collection.
+            let _ = baml.future.__await_any([f]);
+            // `f` has settled, so awaiting it only reads its outcome: a panic
+            // caught here, `Cancelled` included, is the input's.
             let value = (await f) catch_all_panics (e, context) {
                 let panic: baml.panics.Panic => {
-                    // An `await` of a future that has not settled throws only
-                    // for the collector's own cancellation, which this
-                    // catch-all would otherwise record as the input's outcome.
-                    if (!f.is_settled()) {
-                        throw e
-                    }
                     outcomes.push(baml.future.Panicked { panic: panic, context: context });
                     continue;
                 },
@@ -303,6 +302,10 @@ function with_timeout<T, E>(
     defer {
         deadline.cancel()
     }
+    // Wait for `work` to settle. Only the caller's own cancellation ends this
+    // wait early, and it propagates as itself, never as a timeout.
+    let _ = baml.future.__await_any([work]);
+    // `work` has settled, so awaiting it only reads its outcome.
     (await work) catch (e) {
         baml.panics.Cancelled => {
             if (!token.is_cancelled()) {

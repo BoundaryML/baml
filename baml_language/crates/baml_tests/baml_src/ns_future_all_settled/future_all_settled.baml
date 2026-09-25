@@ -202,3 +202,30 @@ test "cancelling_the_collector_stops_waiting_without_cancelling_inputs" {
         "collector cancelled:7",
     )
 }
+
+// Cancelling the collector is never an input's outcome, even when the input
+// settles at the same moment: here the input cancels the collector as its last
+// act, so the collector wakes to its own cancellation and a settled input at
+// once.
+function fas_collector_cancelled_as_input_settles() -> string {
+    let collectors: baml.future.Future<
+        (baml.future.Success<int> | baml.future.Failure<FasFailed | baml.errors.Io> | baml.future.Panicked)[],
+        never,
+    >[] = [];
+    let input = spawn {
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(20));
+        collectors[0].cancel();
+        fas_value(7)
+    };
+    collectors.push(baml.future.all_settled([input]));
+    {
+        await collectors[0];
+        "recorded as an input outcome"
+    } catch (e) {
+        baml.panics.Cancelled => "collector cancelled",
+    }
+}
+
+test "the_collectors_own_cancellation_is_not_an_input_outcome" {
+    assert.equal(fas_collector_cancelled_as_input_settles(), "collector cancelled")
+}
