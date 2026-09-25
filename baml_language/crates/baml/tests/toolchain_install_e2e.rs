@@ -53,6 +53,7 @@ fn serve_manifest(version: &str, channel: &str) -> (String, thread::JoinHandle<(
                 Err(error) => panic!("manifest listener failed: {error}"),
             }
         };
+        stream.set_nonblocking(false).unwrap();
         let mut request = [0; 1024];
         let bytes_read = stream.read(&mut request).unwrap();
         assert!(bytes_read > 0);
