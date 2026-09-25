@@ -55,3 +55,15 @@ test "the artifact keeps its dependencies alive across a collection" {
     let main = pkg.get_function<() -> int>("root.main") ?? throw "missing main";
     assert.equal(main(), 42)
 }
+
+test "finish refuses the base of the view the artifact was compiled against" {
+    let base = dependency();
+    let view = base.with_types({ "Answer": reflect.Type.of<int>() });
+    let refused = reflect.Package._compile(consumer_files(), { "dep": view });
+    assert.is_true(finish_is_refused(refused, { "dep": base }));
+    // A refused finish consumed its artifact, as any finish does.
+    let artifact = reflect.Package._compile(consumer_files(), { "dep": view });
+    let pkg = reflect.Package._finish(artifact, { "dep": view });
+    let main = pkg.get_function<() -> int>("root.main") ?? throw "missing main";
+    assert.equal(main(), 42)
+}

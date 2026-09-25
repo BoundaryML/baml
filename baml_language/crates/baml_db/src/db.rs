@@ -839,6 +839,13 @@ impl ProjectDatabase {
     /// leaves the file attributed to the wrong package.
     fn upsert_file(&mut self, root: SourceRoot, path: &Path, text: &str) -> (SourceFile, bool) {
         let path = canonicalize_lossy(path);
+        // A served root is its interface alone: consumers read its items from
+        // the interface, so a file under it would be read by nothing.
+        debug_assert!(
+            root.interface(self).is_none(),
+            "a served root has no files: `{}`",
+            path.display()
+        );
 
         if let Some(&existing) = self.file_map.get(&path) {
             // Skip the setter when the text is unchanged: a Salsa set always
