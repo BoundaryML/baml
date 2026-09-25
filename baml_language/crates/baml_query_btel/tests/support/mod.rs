@@ -197,6 +197,17 @@ pub async fn record_program(
     captured: &[&str],
     calls: &[(&str, i64)],
 ) -> Vec<Result<BexExternalValue, String>> {
+    record_program_with(project, source, captured, calls, RecordingConfig::default()).await
+}
+
+/// `record_program` with a recording configuration, e.g. small files.
+pub async fn record_program_with(
+    project: &Path,
+    source: &str,
+    captured: &[&str],
+    calls: &[(&str, i64)],
+    config: RecordingConfig,
+) -> Vec<Result<BexExternalValue, String>> {
     let mut program = baml_db::testing::compile_source(source);
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(f) = object
@@ -217,7 +228,7 @@ pub async fn record_program(
             vec![],
             None,
             btel_clock::ClockMode::Monotonic,
-            TelemetryRecording::local_files(project, RecordingConfig::default()),
+            TelemetryRecording::local_files(project, config),
         )
         .expect("engine"),
     );

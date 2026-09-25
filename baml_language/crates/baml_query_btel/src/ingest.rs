@@ -2,12 +2,15 @@
 //!
 //! Each refresh takes one finite discovery snapshot. For every recording it
 //! checks the already-applied prefix against the ledger by file metadata,
-//! then applies the contiguous run of new files from the watermark, in
-//! bounded groups. One group is one transaction: facts, reduced totals,
-//! issues, ledger rows and the watermark commit together, so a crash
-//! before commit retries the files and a crash after commit skips them.
-//! A changed or vanished applied file rebuilds that recording from its
-//! remaining valid prefix, inside the same kind of transaction.
+//! then applies the contiguous run of new files from the watermark. A
+//! recording with no indexed facts (new, or rebuilt) has nothing to
+//! reconcile against: its files merge in memory (`bulk`) and every row is
+//! written once, in one transaction. Later files apply in bounded groups,
+//! reconciled row by row against what is indexed. Either way, one group is
+//! one transaction: facts, reduced totals, issues, ledger rows and the
+//! watermark commit together, so a crash before commit retries the files
+//! and a crash after commit skips them. A changed or vanished applied file
+//! rebuilds that recording from its remaining valid prefix.
 use std::{
     collections::{HashMap, HashSet},
     time::{Duration, Instant},
@@ -27,6 +30,7 @@ use serde::Serialize;
 
 use crate::{Error, store};
 
+mod bulk;
 mod errors;
 mod sites;
 
@@ -40,6 +44,10 @@ pub struct RefreshOptions {
     pub batch_bytes: u64,
     /// Hash every applied file instead of trusting unchanged metadata.
     pub verify_contents: bool,
+    /// A recording with no indexed facts is first merged in memory, up to
+    /// this many bytes of files; the rest applies in bounded groups. Zero
+    /// applies every file in bounded groups.
+    pub fresh_bytes: u64,
 }
 impl Default for RefreshOptions {
     fn default() -> Self {
@@ -49,6 +57,7 @@ impl Default for RefreshOptions {
             batch_files: 256,
             batch_bytes: 32 << 20,
             verify_contents: false,
+            fresh_bytes: 1 << 30,
         }
     }
 }
@@ -161,6 +170,21 @@ pub fn refresh(
     let (_lock, waited) =
         store::WriterLock::acquire(&store::lock_path(layout), options.lock_timeout)?;
     metrics.lock_wait_ms = ms(waited);
+    conn.pragma_update(None, "cache_size", store::REFRESH_CACHE_KIB)?;
+    let result = refresh_locked(conn, layout, options, &mut metrics);
+    // Shrinking the cache releases the pages the refresh held.
+    conn.pragma_update(None, "cache_size", store::QUERY_CACHE_KIB)?;
+    result?;
+    metrics.total_ms = ms(started.elapsed());
+    Ok(metrics)
+}
+
+fn refresh_locked(
+    conn: &mut Connection,
+    layout: &SourceLayout,
+    options: &RefreshOptions,
+    metrics: &mut RefreshMetrics,
+) -> Result<(), Error> {
     metrics.schema_rebuilt = store::ensure_schema(conn)?;
 
     let discovery_started = Instant::now();
@@ -188,11 +212,10 @@ pub fn refresh(
             recording,
             known.get(recording.id.as_bytes()),
             options,
-            &mut metrics,
+            metrics,
         )?;
     }
-    metrics.total_ms = ms(started.elapsed());
-    Ok(metrics)
+    Ok(())
 }
 
 fn load_known(conn: &Connection) -> Result<HashMap<[u8; 16], Known>, Error> {
@@ -367,6 +390,21 @@ fn reconcile(
     let mut first_transaction = true;
     let mut blocked_invalid: Option<(u64, String)> = None;
     let mut cursor = 0;
+    if (known.is_none() || rebuild) && options.fresh_bytes > 0 {
+        let fresh = apply_fresh(
+            conn, recording, rec, rebuild, &pending, &frontier, options, metrics,
+        )?;
+        if fresh.stop || fresh.consumed >= pending.len() {
+            return Ok(());
+        }
+        // Beyond the in-memory budget: the rest applies incrementally.
+        rec = Some(fresh.rec);
+        rebuild = false;
+        first_transaction = false;
+        cursor = fresh.consumed;
+        terminal = fresh.terminal;
+        source_snapshot = fresh.source_snapshot;
+    }
     loop {
         // Read and validate one bounded group outside the transaction.
         let read_started = Instant::now();
@@ -576,6 +614,214 @@ fn reconcile(
     Ok(())
 }
 
+/// The frontier after applying, given the blocking invalid file and the
+/// terminal sequence.
+type FrontierOf<'a> = dyn Fn(&Option<(u64, String)>, Option<u64>) -> Frontier + 'a;
+
+/// What the fresh path applied, for continuing incrementally.
+struct Fresh {
+    rec: i64,
+    consumed: usize,
+    /// An invalid file or the end stopped the recording's prefix.
+    stop: bool,
+    terminal: Option<u64>,
+    source_snapshot: Option<Vec<u8>>,
+}
+
+/// One applied file's ledger evidence.
+struct Applied<'a> {
+    found: &'a DiscoveredFile,
+    len: u64,
+    content_hash: Vec<u8>,
+    format_minor: u32,
+    source_snapshot: Option<Vec<u8>>,
+    end: bool,
+}
+
+/// First index of a recording, new or rebuilt: no facts to reconcile
+/// against, so files merge in memory (`bulk`) and every row is written
+/// once, in one transaction with the ledger and watermark. Stops at an
+/// invalid file, the end, or `fresh_bytes`.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the reconcile state it continues"
+)]
+fn apply_fresh<'p>(
+    conn: &mut Connection,
+    recording: &DiscoveredRecording,
+    rec: Option<i64>,
+    rebuild: bool,
+    pending: &[&'p DiscoveredFile],
+    frontier: &FrontierOf<'_>,
+    options: &RefreshOptions,
+    metrics: &mut RefreshMetrics,
+) -> Result<Fresh, Error> {
+    let mut merged = bulk::Bulk::default();
+    let mut applied: Vec<Applied<'p>> = Vec::new();
+    let mut invalid: Option<(&DiscoveredFile, String)> = None;
+    let mut first_snapshot: Option<Option<Vec<u8>>> = None;
+    let mut bytes = 0;
+    for found in pending {
+        if !applied.is_empty() && bytes >= options.fresh_bytes {
+            break;
+        }
+        let read_started = Instant::now();
+        metrics.files_decoded += 1;
+        let read = file::read_file(
+            &found.path,
+            recording.id,
+            found.sequence,
+            options.max_file_bytes,
+        );
+        metrics.read_ms += ms(read_started.elapsed());
+        let read = match read {
+            Ok(read) => read,
+            Err(error) => {
+                invalid = Some((found, error.to_string()));
+                break;
+            }
+        };
+        metrics.bytes_read += read.len;
+        let header = read.file.header.as_ref().expect("validated header");
+        let snapshot = header.source_snapshot_id.clone();
+        if first_snapshot.get_or_insert_with(|| snapshot.clone()) != &snapshot {
+            invalid = Some((found, "source snapshot changed within recording".into()));
+            break;
+        }
+        let apply_started = Instant::now();
+        merged.apply(found.sequence, &read.file);
+        metrics.apply_ms += ms(apply_started.elapsed());
+        bytes += read.len;
+        let end = read.file.end.is_some();
+        applied.push(Applied {
+            found,
+            len: read.len,
+            content_hash: read.content_hash.to_vec(),
+            format_minor: header.format_minor,
+            source_snapshot: snapshot,
+            end,
+        });
+        if end {
+            break;
+        }
+    }
+
+    let apply_started = Instant::now();
+    let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+    let rec = match rec {
+        Some(rec) => rec,
+        None => {
+            tx.execute(
+                "INSERT INTO recording (recording_id) VALUES (?1)",
+                [recording.id.as_bytes().as_slice()],
+            )?;
+            tx.last_insert_rowid()
+        }
+    };
+    if rebuild {
+        delete_facts(&tx, rec)?;
+        tx.execute(
+            "UPDATE recording SET indexed_sequence = 0, terminal_sequence = NULL,
+               source_snapshot_id = NULL, indexed_bytes = 0, format_minor = 0,
+               generation = generation + 1
+             WHERE rec = ?1",
+            [rec],
+        )?;
+    }
+    merged.write(&tx, rec)?;
+    let mut terminal = None;
+    let mut source_snapshot = None;
+    for file in &applied {
+        let sequence = sequence_i64(file.found.sequence)?;
+        tx.execute(
+            "INSERT INTO ledger (rec, sequence, size, modified_ns, device, inode, content_hash)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                rec,
+                sequence,
+                saturating(file.len),
+                i64::try_from(file.found.stamp.modified_ns).ok(),
+                id(file.found.stamp.device),
+                id(file.found.stamp.inode),
+                file.content_hash
+            ],
+        )?;
+        tx.execute(
+            "DELETE FROM rejected WHERE rec = ?1 AND sequence = ?2",
+            params![rec, sequence],
+        )?;
+        tx.execute(
+            "UPDATE recording SET indexed_sequence = ?2,
+               indexed_bytes = indexed_bytes + ?3,
+               format_minor = MAX(format_minor, ?4),
+               source_snapshot_id = COALESCE(source_snapshot_id, ?5),
+               terminal_sequence = CASE WHEN ?6 THEN ?2 ELSE terminal_sequence END
+             WHERE rec = ?1",
+            params![
+                rec,
+                sequence,
+                saturating(file.len),
+                i64::from(file.format_minor),
+                file.source_snapshot.as_deref(),
+                file.end
+            ],
+        )?;
+        if source_snapshot.is_none() {
+            source_snapshot.clone_from(&file.source_snapshot);
+        }
+        if file.end {
+            terminal = Some(file.found.sequence);
+        }
+        metrics.files_applied += 1;
+    }
+    let mut blocked_invalid = None;
+    if let Some((found, reason)) = &invalid {
+        tx.execute(
+            "INSERT OR REPLACE INTO rejected (rec, sequence, size, modified_ns, device, inode, reason)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                rec,
+                sequence_i64(found.sequence)?,
+                saturating(found.stamp.size),
+                i64::try_from(found.stamp.modified_ns).ok(),
+                id(found.stamp.device),
+                id(found.stamp.inode),
+                reason
+            ],
+        )?;
+        metrics.files_rejected += 1;
+        blocked_invalid = Some((found.sequence, reason.clone()));
+    }
+    let state = frontier(&blocked_invalid, terminal);
+    tx.execute(
+        "UPDATE recording SET observed_sequence = ?2, blocked_sequence = ?3,
+           blocked_reason = ?4, partial_files = ?5, files_after_end = ?6
+         WHERE rec = ?1",
+        params![
+            rec,
+            sequence_i64(state.observed)?,
+            state.blocked_sequence.map(sequence_i64).transpose()?,
+            state.blocked_reason,
+            saturating(state.partial_files),
+            saturating(state.after_end)
+        ],
+    )?;
+    metrics.apply_ms += ms(apply_started.elapsed());
+    let commit_started = Instant::now();
+    fault::point("before_commit");
+    tx.commit()?;
+    fault::point("after_commit");
+    metrics.commit_ms += ms(commit_started.elapsed());
+    metrics.transactions += 1;
+    Ok(Fresh {
+        rec,
+        consumed: applied.len() + usize::from(invalid.is_some()),
+        stop: invalid.is_some() || terminal.is_some(),
+        terminal,
+        source_snapshot,
+    })
+}
+
 /// The source fingerprint of the first readable file in `group`, if any.
 fn group_first_snapshot<'g>(group: &'g [Candidate<'_>]) -> Option<&'g FileRead> {
     group.iter().find_map(|candidate| match candidate {
@@ -650,9 +896,10 @@ struct Applier<'t> {
     references: References,
     touched_threads: bool,
     touched_paths: bool,
-    /// Children whose definition or normal-node duration changed. Resolve
-    /// their parents after applying the whole batch (evidence can be late).
-    changed_children: HashSet<u32>,
+    /// Synchronous children newly defined in this transaction, to their
+    /// parent: each adds its whole normal-node total to its parent's child
+    /// time once, and its later deltas after that.
+    defined_children: HashMap<u32, u32>,
     /// Rows whose recorded PCs need (re)resolving after this batch: newly
     /// defined paths and raises, and everything that names a function whose
     /// definition arrived in this batch.
@@ -671,7 +918,7 @@ impl<'t> Applier<'t> {
             references: References::default(),
             touched_threads: false,
             touched_paths: false,
-            changed_children: HashSet::new(),
+            defined_children: HashMap::new(),
             sites: sites::Pending::default(),
             raise_paths: HashSet::new(),
         }
@@ -731,10 +978,6 @@ impl<'t> Applier<'t> {
         }
         if let Some(batch) = &file.aggregates {
             for delta in &batch.entries {
-                let (path, reentry) = evidence::split_node(delta.node);
-                if !reentry {
-                    self.changed_children.insert(path);
-                }
                 self.references
                     .paths
                     .insert(evidence::split_node(delta.node).0);
@@ -953,6 +1196,8 @@ impl<'t> Applier<'t> {
                                 "UPDATE function_def SET conflict = 1 WHERE rec = ?1 AND function_id = ?2",
                             )?
                             .execute(params![self.rec, function_id])?;
+                        // Sites already resolved in it are no longer trustworthy.
+                        self.sites.conflicted.insert(function.function_id);
                         self.issue(
                             sequence,
                             "function_metadata_conflict",
@@ -1073,7 +1318,6 @@ impl<'t> Applier<'t> {
     fn call_path(&mut self, sequence: u64, path: &proto::CallPathDefinition) -> Result<(), Error> {
         self.touched_paths = true;
         self.sites.paths.insert(path.call_path_id);
-        self.changed_children.insert(path.call_path_id);
         self.references.threads.insert(path.thread_id);
         self.references.functions.insert(path.callee_function_id);
         self.references
@@ -1100,7 +1344,13 @@ impl<'t> Applier<'t> {
                  VALUES (?1, ?2, 1, ?3, ?4, ?5, ?6, ?7, ?8)",
             )?
             .execute(values)?;
+        let defines_child =
+            path.edge == proto::CallPathEdge::Synchronous as i32 && path.parent_call_path_id != 0;
         if inserted > 0 {
+            if defines_child {
+                self.defined_children
+                    .insert(path.call_path_id, path.parent_call_path_id);
+            }
             return Ok(());
         }
         // A placeholder from an earlier reference: fill it in.
@@ -1113,6 +1363,10 @@ impl<'t> Applier<'t> {
             )?
             .execute(values)?;
         if upgraded > 0 {
+            if defines_child {
+                self.defined_children
+                    .insert(path.call_path_id, path.parent_call_path_id);
+            }
             return Ok(());
         }
         let same: bool = self
@@ -1383,41 +1637,67 @@ impl<'t> Applier<'t> {
         if self.touched_paths {
             resolve_depths(self.tx, self.rec)?;
         }
-        self.reduce_child_time()?;
+        self.add_child_time()?;
         errors::build_raise_paths(self.tx, self.rec, &self.raise_paths, self.touched_paths)?;
         sites::resolve(self.tx, self.rec, &self.sites)?;
         Ok(())
     }
 
-    /// Recompute only affected parent sums, once per transaction. Looking
-    /// up the retained definition handles deltas before definitions and
-    /// conflicting definitions in exactly the same way as the public view.
-    /// Keep ticks, not converted durations: later clock invalidation must
-    /// still make every derived time unavailable immediately.
-    fn reduce_child_time(&self) -> Result<(), Error> {
-        let mut parents = HashSet::new();
-        let mut lookup = self.tx.prepare_cached(
+    /// Add this transaction's evidence to parents' child time: the whole
+    /// normal-node total of each newly defined synchronous child, and the
+    /// normal-node delta of each child defined earlier. Every child's total
+    /// is counted once, whichever order its definition and deltas arrive in,
+    /// so the checked sum matches summing every child from scratch. Runs
+    /// after the totals are flushed and parent placeholders exist.
+    fn add_child_time(&self) -> Result<(), Error> {
+        let mut additions: HashMap<u32, Option<i64>> = HashMap::new();
+        let mut add = |parent: u32, ticks: Option<i64>| {
+            let sum = additions.entry(parent).or_insert(Some(0));
+            *sum = sum.zip(ticks).and_then(|(a, b)| a.checked_add(b));
+        };
+        let mut total = self
+            .tx
+            .prepare_cached("SELECT duration_ticks FROM aggregate WHERE rec = ?1 AND node = ?2")?;
+        for (child, parent) in &self.defined_children {
+            let ticks: Option<Option<i64>> = total
+                .query_row(params![self.rec, i64::from(*child) * 2], |r| r.get(0))
+                .optional()?;
+            add(*parent, ticks.unwrap_or(Some(0)));
+        }
+        let mut parent_of = self.tx.prepare_cached(
             "SELECT parent_call_path_id FROM call_path
-             WHERE rec = ?1 AND call_path_id = ?2 AND edge = 1 AND parent_call_path_id != 0",
+             WHERE rec = ?1 AND call_path_id = ?2 AND defined = 1 AND edge = 1
+               AND parent_call_path_id != 0",
         )?;
-        for child in &self.changed_children {
-            if let Some(parent) = lookup
-                .query_row(params![self.rec, i64::from(*child)], |r| r.get::<_, i64>(0))
-                .optional()?
-            {
-                parents.insert(parent);
+        for (node, delta) in &self.aggregates {
+            let (child, reentry) = evidence::split_node(*node);
+            if reentry || self.defined_children.contains_key(&child) {
+                continue;
+            }
+            let parent: Option<i64> = parent_of
+                .query_row(params![self.rec, i64::from(child)], |r| r.get(0))
+                .optional()?;
+            if let Some(parent) = parent.and_then(|p| u32::try_from(p).ok()) {
+                add(parent, i64::try_from(delta.duration).ok());
             }
         }
-        let mut update = self.tx.prepare_cached(
-            "UPDATE call_path SET direct_child_ticks =
-               (SELECT __btel_sum(IIF(a.rec IS NULL, 0, a.duration_ticks))
-                FROM call_path c
-                LEFT JOIN aggregate a ON a.rec = c.rec AND a.node = c.call_path_id * 2
-                WHERE c.rec = ?1 AND c.parent_call_path_id = ?2 AND c.edge = 1)
-             WHERE rec = ?1 AND call_path_id = ?2",
+        let mut current = self.tx.prepare_cached(
+            "SELECT direct_child_ticks FROM call_path WHERE rec = ?1 AND call_path_id = ?2",
         )?;
-        for parent in parents {
-            update.execute(params![self.rec, parent])?;
+        let mut update = self.tx.prepare_cached(
+            "UPDATE call_path SET direct_child_ticks = ?3 WHERE rec = ?1 AND call_path_id = ?2",
+        )?;
+        for (parent, ticks) in additions {
+            let Some(existing) = current
+                .query_row(params![self.rec, i64::from(parent)], |r| {
+                    r.get::<_, Option<i64>>(0)
+                })
+                .optional()?
+            else {
+                continue;
+            };
+            let sum = existing.zip(ticks).and_then(|(a, b)| a.checked_add(b));
+            update.execute(params![self.rec, i64::from(parent), sum])?;
         }
         Ok(())
     }

@@ -567,7 +567,9 @@ different 64 KiB argument every time, so every call writes a new blob.
    51 MB recording takes 2.9 s, and on a 226 MB recording it takes 13 s. It
    writes 2.5 times the recording's size to disk, and the finished index is
    1.1 to 1.5 times the recording's size. `tiny` records about as fast as
-   this, so a reader running during `tiny` only just keeps up.
+   this, so a reader running during `tiny` only just keeps up. (Superseded:
+   a recording's first index is now built in memory; see
+   [btel-query-first-index.md](btel-query-first-index.md).)
 2. The views cost about 2 µs per row, every query. `SELECT count(*) FROM calls`
    takes 1.05 s on 514,560 calls, even when the refresh before it took 24 ms.
    `function_stats` grouped by function takes 2.8 s on the `spawn` recording.

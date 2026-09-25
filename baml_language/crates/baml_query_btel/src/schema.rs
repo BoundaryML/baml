@@ -15,7 +15,7 @@
 //!   visible; they never make a thread a root or a path a top-level path.
 
 /// Physical layout of these tables. Change on any DDL change.
-pub const SCHEMA_VERSION: i64 = 7;
+pub const SCHEMA_VERSION: i64 = 8;
 /// Interpretation of evidence into rows. Change when reconciliation changes
 /// meaning without a DDL change; either mismatch rebuilds the index.
 pub const NORMALIZATION_VERSION: i64 = 1;
@@ -130,10 +130,10 @@ CREATE TABLE call_path (
   edge INTEGER,
   -- Distance from a top-level path (0), once every ancestor is defined.
   depth INTEGER,
-  -- Sum of synchronous children's normal-node duration totals. Reduced
-  -- when an affected child's evidence changes, in the same transaction.
-  -- Reentry and spawn time are excluded. NULL means overflow; nanoseconds
-  -- and clock validity are still evaluated at query time.
+  -- Sum of synchronous children's normal-node duration totals: a child
+  -- adds its total when it is defined, then each later delta, in the same
+  -- transaction. Reentry and spawn time are excluded. NULL means overflow;
+  -- nanoseconds and clock validity are still evaluated at query time.
   direct_child_ticks INTEGER DEFAULT 0,
   -- The call or spawn expression at caller_pc, resolved in the caller's
   -- recorded source map (btel_reader::source_map::SiteState labels). NULL
@@ -147,12 +147,15 @@ CREATE TABLE call_path (
   conflict INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (rec, call_path_id)
 ) STRICT, WITHOUT ROWID;
-CREATE INDEX call_path_by_caller ON call_path (rec, caller_function_id);
 -- Covers the executions view's entry-function lookup: without statistics,
 -- SQLite otherwise prefers scanning the recording's primary-key range.
 CREATE INDEX call_path_by_thread
   ON call_path (rec, thread_id, parent_call_path_id, edge, callee_function_id);
-CREATE INDEX call_path_by_parent ON call_path (rec, parent_call_path_id, edge);
+-- Paths whose site a later definition of their caller can still change.
+-- A first definition only changes unresolved sites; a conflicting one
+-- scans the recording's paths instead.
+CREATE INDEX call_path_unsited ON call_path (rec, caller_function_id)
+  WHERE site_state != 'resolved';
 -- Paths still waiting for a depth: resolution touches only these.
 CREATE INDEX call_path_undepthed ON call_path (rec) WHERE depth IS NULL;
 

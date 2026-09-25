@@ -16,6 +16,9 @@ pub(super) struct Pending {
     pub(super) paths: HashSet<u32>,
     /// Functions whose metadata was indexed in this batch.
     pub(super) functions: HashSet<u64>,
+    /// Functions whose metadata turned out conflicted in this batch: every
+    /// site in them changes, resolved or not.
+    pub(super) conflicted: HashSet<u64>,
     /// Newly defined raises: their site and stack frames.
     pub(super) raises: HashSet<u64>,
     /// Raises whose unwind end arrived: their handler site.
@@ -26,29 +29,32 @@ impl Pending {
     fn is_empty(&self) -> bool {
         self.paths.is_empty()
             && self.functions.is_empty()
+            && self.conflicted.is_empty()
             && self.raises.is_empty()
             && self.ends.is_empty()
     }
 }
 
-struct Source {
-    state: i64,
-    conflict: bool,
-    file: Option<String>,
-    map_state: Option<i64>,
-    map: Option<SourceMap>,
+/// What a site needs from its function's indexed definition.
+pub(super) struct Source {
+    pub(super) state: i64,
+    pub(super) conflict: bool,
+    pub(super) file: Option<String>,
+    pub(super) map_state: Option<i64>,
+    pub(super) map: Option<SourceMap>,
 }
 
+#[derive(Clone)]
 pub(super) struct Site {
-    state: &'static str,
-    file: Option<String>,
-    line: Option<i64>,
-    start: Option<i64>,
-    end: Option<i64>,
+    pub(super) state: &'static str,
+    pub(super) file: Option<String>,
+    pub(super) line: Option<i64>,
+    pub(super) start: Option<i64>,
+    pub(super) end: Option<i64>,
 }
 
 impl Site {
-    fn missing(state: SiteState) -> Self {
+    pub(super) fn missing(state: SiteState) -> Self {
         Self {
             state: state.label(),
             file: None,
@@ -56,6 +62,45 @@ impl Site {
             start: None,
             end: None,
         }
+    }
+}
+
+/// The site of `pc` in a function whose definition is `source` (`None`:
+/// not indexed at all). Callers handle a site with no function recorded.
+pub(super) fn site_in(source: Option<&Source>, pc: Option<i64>) -> Site {
+    let Some(source) = source else {
+        return Site::missing(SiteState::FunctionUnresolved);
+    };
+    let state = match (source.state, source.conflict, source.map_state) {
+        (0, ..) => SiteState::FunctionUnresolved,
+        (1, ..) => SiteState::FunctionUnavailable,
+        (_, true, _) => SiteState::FunctionConflicted,
+        (_, _, None) => SiteState::NoSourceMap,
+        (_, _, Some(2)) => SiteState::InvalidSourceMap,
+        _ if source.file.is_none() => SiteState::NoSourceFile,
+        _ => SiteState::Resolved,
+    };
+    if state != SiteState::Resolved {
+        return Site::missing(state);
+    }
+    let Some(map) = &source.map else {
+        return Site::missing(SiteState::InvalidSourceMap);
+    };
+    let Some(pc) = pc else {
+        return Site::missing(SiteState::NoPc);
+    };
+    let resolved = u32::try_from(pc)
+        .map_err(|_| SiteState::PcOutOfRange)
+        .and_then(|pc| map.resolve(pc));
+    match resolved {
+        Ok(site) => Site {
+            state: SiteState::Resolved.label(),
+            file: source.file.clone(),
+            line: Some(i64::from(site.line)),
+            start: Some(i64::from(site.start)),
+            end: Some(i64::from(site.end)),
+        },
+        Err(state) => Site::missing(state),
     }
 }
 
@@ -100,40 +145,7 @@ impl Resolver<'_> {
         let Some(function) = function else {
             return Ok(Site::missing(absent));
         };
-        let Some(source) = self.source(function)? else {
-            return Ok(Site::missing(SiteState::FunctionUnresolved));
-        };
-        let state = match (source.state, source.conflict, source.map_state) {
-            (0, ..) => SiteState::FunctionUnresolved,
-            (1, ..) => SiteState::FunctionUnavailable,
-            (_, true, _) => SiteState::FunctionConflicted,
-            (_, _, None) => SiteState::NoSourceMap,
-            (_, _, Some(2)) => SiteState::InvalidSourceMap,
-            _ if source.file.is_none() => SiteState::NoSourceFile,
-            _ => SiteState::Resolved,
-        };
-        if state != SiteState::Resolved {
-            return Ok(Site::missing(state));
-        }
-        let Some(map) = &source.map else {
-            return Ok(Site::missing(SiteState::InvalidSourceMap));
-        };
-        let Some(pc) = pc else {
-            return Ok(Site::missing(SiteState::NoPc));
-        };
-        let resolved = u32::try_from(pc)
-            .map_err(|_| SiteState::PcOutOfRange)
-            .and_then(|pc| map.resolve(pc));
-        Ok(match resolved {
-            Ok(site) => Site {
-                state: SiteState::Resolved.label(),
-                file: source.file.clone(),
-                line: Some(i64::from(site.line)),
-                start: Some(i64::from(site.start)),
-                end: Some(i64::from(site.end)),
-            },
-            Err(state) => Site::missing(state),
-        })
+        Ok(site_in(self.source(function)?, pc))
     }
 }
 
@@ -170,16 +182,29 @@ pub(super) fn resolve(tx: &Transaction<'_>, rec: i64, pending: &Pending) -> Resu
     // Call and spawn sites, in the caller's map.
     let mut paths: HashSet<i64> = pending.paths.iter().map(|p| i64::from(*p)).collect();
     {
-        let mut by_caller = tx.prepare_cached(
-            "SELECT call_path_id FROM call_path INDEXED BY call_path_by_caller
-             WHERE rec = ?1 AND caller_function_id = ?2",
+        let mut unsited = tx.prepare_cached(
+            "SELECT call_path_id FROM call_path INDEXED BY call_path_unsited
+             WHERE rec = ?1 AND caller_function_id = ?2 AND site_state != 'resolved'",
         )?;
         for function in &pending.functions {
-            for path in by_caller.query_map(params![rec, id(*function)], |r| r.get::<_, i64>(0))? {
+            for path in unsited.query_map(params![rec, id(*function)], |r| r.get::<_, i64>(0))? {
+                paths.insert(path?);
+            }
+        }
+        let mut every = tx.prepare_cached(
+            "SELECT call_path_id FROM call_path WHERE rec = ?1 AND caller_function_id = ?2",
+        )?;
+        for function in &pending.conflicted {
+            for path in every.query_map(params![rec, id(*function)], |r| r.get::<_, i64>(0))? {
                 paths.insert(path?);
             }
         }
     }
+    let functions: HashSet<u64> = pending
+        .functions
+        .union(&pending.conflicted)
+        .copied()
+        .collect();
     for path in paths {
         let row: Option<(i64, Option<Vec<u8>>, Option<i64>)> = tx
             .prepare_cached(
@@ -211,7 +236,7 @@ pub(super) fn resolve(tx: &Transaction<'_>, rec: i64, pending: &Pending) -> Resu
         "SELECT raise_id FROM error_raise INDEXED BY error_raise_by_function
          WHERE rec = ?1 AND function_id = ?2",
         rec,
-        &pending.functions,
+        &functions,
         &mut raises,
     )?;
     for raise in &raises {
@@ -256,7 +281,7 @@ pub(super) fn resolve(tx: &Transaction<'_>, rec: i64, pending: &Pending) -> Resu
             "SELECT raise_id, position FROM error_frame INDEXED BY error_frame_by_function
              WHERE rec = ?1 AND function_id = ?2",
         )?;
-        for function in &pending.functions {
+        for function in &functions {
             for row in of_function.query_map(params![rec, id(*function)], |r| {
                 Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, i64>(1)?))
             })? {
@@ -300,7 +325,7 @@ pub(super) fn resolve(tx: &Transaction<'_>, rec: i64, pending: &Pending) -> Resu
         "SELECT raise_id FROM error_raise INDEXED BY error_raise_by_handler
          WHERE rec = ?1 AND handler_function_id = ?2",
         rec,
-        &pending.functions,
+        &functions,
         &mut ends,
     )?;
     for raise in ends {

@@ -15,6 +15,12 @@ use crate::{
 };
 
 pub const DATABASE_FILE: &str = "query.sqlite";
+
+/// Page cache between refreshes, in KiB (negative: SQLite's KiB unit).
+pub(crate) const QUERY_CACHE_KIB: i64 = -65_536;
+/// Page cache while applying files: an index transaction touches pages all
+/// over large tables, and a first index writes all of them before commit.
+pub(crate) const REFRESH_CACHE_KIB: i64 = -131_072;
 pub const LOCK_FILE: &str = "query.lock";
 
 /// Serializes database creation, rebuilds and reconciliation across
@@ -112,6 +118,7 @@ pub fn open(
     }
     conn.pragma_update(None, "synchronous", "normal")?;
     conn.pragma_update(None, "temp_store", "memory")?;
+    conn.pragma_update(None, "cache_size", QUERY_CACHE_KIB)?;
     conn.pragma_update(None, "wal_autocheckpoint", options.wal_autocheckpoint)?;
     Ok(conn)
 }
