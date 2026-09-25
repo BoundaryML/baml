@@ -5012,6 +5012,7 @@ fn member_admits_numeric_arm(
     visited_aliases: &mut std::collections::HashSet<baml_type::TypeName>,
 ) -> bool {
     match member {
+        RuntimeTy::TypeAlias(name) if is_canonical_json_alias(name) => false,
         RuntimeTy::TypeAlias(name) => {
             if !visited_aliases.insert(name.clone()) {
                 return false;
@@ -5228,6 +5229,51 @@ mod union_container_selection_tests {
             };
             assert_eq!(metadata.selected_option, RuntimeTy::float());
             assert_eq!(*value, BexExternalValue::Float(7.0));
+        }
+    }
+
+    #[test]
+    fn js_number_union_prefers_numeric_arms_over_registered_json_alias() {
+        let json = json_ty();
+        let RuntimeTy::TypeAlias(json_name) = &json else {
+            unreachable!()
+        };
+        let aliases = indexmap::IndexMap::from([(
+            json_name.clone(),
+            RuntimeTy::union([RuntimeTy::int(), RuntimeTy::float(), RuntimeTy::string()]),
+        )]);
+
+        for (declared, expected) in [
+            (
+                RuntimeTy::union([json.clone(), RuntimeTy::float()]),
+                RuntimeTy::float(),
+            ),
+            (
+                RuntimeTy::union([json.clone(), RuntimeTy::int()]),
+                RuntimeTy::int(),
+            ),
+        ] {
+            let coerced = coerce_arg_to_declared_type_with_aliases(
+                BexExternalValue::JsNumber(7.0),
+                &declared,
+                &aliases,
+                &indexmap::IndexMap::new(),
+                crate::InboundUnionAmbiguityPolicy::Reject,
+            )
+            .unwrap();
+
+            let BexExternalValue::Union { value, metadata } = coerced else {
+                panic!("expected a selected union carrier")
+            };
+            assert_eq!(metadata.selected_option, expected);
+            assert_eq!(
+                *value,
+                if expected == RuntimeTy::int() {
+                    BexExternalValue::Int(7)
+                } else {
+                    BexExternalValue::Float(7.0)
+                }
+            );
         }
     }
 
