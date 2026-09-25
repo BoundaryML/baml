@@ -28,7 +28,11 @@ use std::{
     process::{Command, Output},
 };
 
+mod command;
+pub mod csharp;
 pub mod fixtures;
+
+pub use command::{assert_stdout_contains, run_command};
 
 /// Test-side helper. Runs `cmd` inside
 /// `<CARGO_MANIFEST_DIR>/<fixture>/generated/`, panicking on
@@ -152,33 +156,23 @@ pub fn run_go_test(fixture: &str) {
     let workspace_root = workspace_root_from_manifest(&manifest);
     let go = resolve_mise_tool("go").unwrap_or_else(|_| PathBuf::from("go"));
 
-    let output = Command::new(&go)
-        .args(["test", "./..."])
-        .current_dir(&dir)
-        .env_remove("GOROOT")
-        .env("CGO_ENABLED", "1")
-        .env("GOCACHE", workspace_root.join("target/go-build-cache"))
-        .env("GOMODCACHE", workspace_root.join("target/go-mod-cache"))
-        // Go makes module-cache directories read-only by default, and
-        // deleting a file needs write permission on its PARENT directory —
-        // so `cargo clean` aborts on the first file under `target/
-        // go-mod-cache` with "Permission denied", leaving the whole Rust
-        // target tree behind. `-modcacherw` keeps those directories
-        // writable, which is exactly what this flag exists for.
-        .env("GOFLAGS", "-modcacherw")
-        .env("BAML_RUNTIME_PATH", go_runtime_library(workspace_root))
-        .output()
-        .unwrap_or_else(|e| {
-            panic!(
-                "failed to spawn `{}` for fixture `{fixture}`: {e}",
-                go.display()
-            )
-        });
-    assert!(
-        output.status.success(),
-        "fixture `{fixture}` `go test ./...` failed:\nstdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
+    run_command(
+        Command::new(&go)
+            .args(["test", "./..."])
+            .current_dir(&dir)
+            .env_remove("GOROOT")
+            .env("CGO_ENABLED", "1")
+            .env("GOCACHE", workspace_root.join("target/go-build-cache"))
+            .env("GOMODCACHE", workspace_root.join("target/go-mod-cache"))
+            // Go makes module-cache directories read-only by default, and
+            // deleting a file needs write permission on its PARENT directory —
+            // so `cargo clean` aborts on the first file under `target/
+            // go-mod-cache` with "Permission denied", leaving the whole Rust
+            // target tree behind. `-modcacherw` keeps those directories
+            // writable, which is exactly what this flag exists for.
+            .env("GOFLAGS", "-modcacherw")
+            .env("BAML_RUNTIME_PATH", go_runtime_library(workspace_root)),
+        &format!("fixture `{fixture}` `{}` test ./...", go.display()),
     );
 }
 
@@ -218,11 +212,10 @@ pub fn run_workspace_cmd(relative_dir: &str, cmd: &str, cache_subdir: &str, cach
 
     let output = run_test_process(prog, &args, &dir, &cache_dir, cache_env_var, &[])
         .unwrap_or_else(|e| panic!("failed to spawn `{cmd}` in `{relative_dir}`: {e}"));
-    assert!(
-        output.status.success(),
-        "workspace command `{cmd}` in `{relative_dir}` failed:\nstdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
+    command::assert_exit_status(
+        &output,
+        &format!("workspace command `{cmd}` in `{relative_dir}`"),
+        &[],
     );
 }
 
@@ -307,16 +300,10 @@ fn run_test_cmd_with_env_allowing_exit_codes(
 
     let output = run_test_process(prog, &args, &dir, &cache_dir, cache_env_var, extra_env)
         .unwrap_or_else(|e| panic!("failed to spawn `{cmd}` for fixture `{fixture}`: {e}"));
-    let accepted = output.status.success()
-        || output
-            .status
-            .code()
-            .is_some_and(|code| allowed_exit_codes.contains(&code));
-    assert!(
-        accepted,
-        "fixture `{fixture}` `{cmd}` failed:\nstdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
+    command::assert_exit_status(
+        &output,
+        &format!("fixture `{fixture}` `{cmd}`"),
+        allowed_exit_codes,
     );
 }
 

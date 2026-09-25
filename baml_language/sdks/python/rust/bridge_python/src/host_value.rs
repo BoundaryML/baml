@@ -41,13 +41,7 @@
 //! [`host_release_callback`] fires and removes the registry entry — the
 //! Python callable's refcount drops to zero and the GC reclaims it.
 
-use std::{
-    collections::HashMap,
-    sync::{
-        LazyLock, Mutex,
-        atomic::{AtomicU64, Ordering},
-    },
-};
+use std::sync::LazyLock;
 
 use bridge_cffi::complete_host_call;
 use bridge_ctypes::baml_bridge::cffi::{
@@ -68,24 +62,8 @@ use pyo3_stub_gen::derive::gen_stub_pyfunction;
 /// The key is a freshly-allocated `u64` (never 0). Removal happens in
 /// [`host_release_callback`] when Rust drops its last clone of the
 /// corresponding `HostValueArc`.
-struct Registry {
-    next_key: AtomicU64,
-    table: Mutex<HashMap<u64, Py<PyAny>>>,
-}
-
-static REGISTRY: LazyLock<Registry> = LazyLock::new(|| Registry {
-    next_key: AtomicU64::new(1),
-    table: Mutex::new(HashMap::new()),
-});
-
-fn next_key() -> u64 {
-    loop {
-        let k = REGISTRY.next_key.fetch_add(1, Ordering::Relaxed);
-        if k != 0 {
-            return k;
-        }
-    }
-}
+static REGISTRY: LazyLock<bridge_ctypes::HostValueRegistry<Py<PyAny>>> =
+    LazyLock::new(bridge_ctypes::HostValueRegistry::default);
 
 /// Insert a Python callable into the registry and return its key.
 ///
@@ -95,9 +73,7 @@ fn next_key() -> u64 {
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub fn register_host_callable(callable: Py<PyAny>) -> u64 {
-    let key = next_key();
-    REGISTRY.table.lock().unwrap().insert(key, callable);
-    key
+    REGISTRY.insert(callable)
 }
 
 /// Insert an arbitrary host Python object into the registry and return its key.
@@ -109,9 +85,7 @@ pub fn register_host_callable(callable: Py<PyAny>) -> u64 {
 /// callable entries (keys are globally unique), and the same
 /// `host_release_callback` releases either kind on last-Arc-drop.
 fn register_host_opaque(value: Py<PyAny>) -> u64 {
-    let key = next_key();
-    REGISTRY.table.lock().unwrap().insert(key, value);
-    key
+    REGISTRY.insert(value)
 }
 
 /// Remove and drop the registry entry for `host_value_key` (if present).
@@ -120,7 +94,7 @@ fn register_host_opaque(value: Py<PyAny>) -> u64 {
 /// the encoder's rollback path ([`release_host_callable`]). Dropping the
 /// `Py<PyAny>` requires the GIL.
 fn drop_registry_entry(host_value_key: u64) {
-    let popped: Option<Py<PyAny>> = match REGISTRY.table.lock() {
+    let popped: Option<Py<PyAny>> = match REGISTRY.lock() {
         Ok(mut t) => t.remove(&host_value_key),
         Err(e) => {
             // Poisoning means an earlier panic occurred while holding the
@@ -177,7 +151,7 @@ pub fn lookup_host_value(
     {
         return None;
     }
-    let table = match REGISTRY.table.lock() {
+    let table = match REGISTRY.lock() {
         Ok(t) => t,
         Err(e) => {
             // Poisoned: an earlier panic happened while holding the lock.
@@ -259,7 +233,6 @@ pub extern "C" fn host_dispatch_callback(
     // `dispatch_in_python` to invoke the callable.
     let callable: Py<PyAny> = match Python::attach(|py| -> Result<Py<PyAny>, String> {
         let table = REGISTRY
-            .table
             .lock()
             .map_err(|e| format!("host-callable registry mutex poisoned: {e}"))?;
         match table.get(&host_value_key) {
@@ -466,7 +439,7 @@ fn rollback_failed_encode(registered: &Bound<'_, PyList>, cloned_handles: &Bound
     }
     for item in cloned_handles.iter() {
         if let Ok(key) = item.extract::<u64>() {
-            let _ = bridge_cffi::handle::release_handle(key);
+            let _ = bridge_cffi::handle_cffi::release_handle(key);
         }
     }
 }

@@ -33,7 +33,7 @@ import baml_bridge.BamlPrompt;
 import baml_sdk.ipsum.Sentiment;
 import baml_sdk.lorem.Resume;
 import baml_sdk.lorem.StreamingDoc;
-import baml_sdk.vendor.ai.PromptMessage;
+import baml_sdk.ai.PromptMessage;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -182,7 +182,7 @@ class TestMain {
 
         // ai.Prompt is runtime-owned, so every generated signature exposes the
         // same portable BamlPrompt type rather than a handle-backed twin.
-        assertFalse(classExists("baml_sdk.vendor.ai.Prompt"));
+        assertFalse(classExists("baml_sdk.ai.Prompt"));
     }
 
     @Test

@@ -27,14 +27,14 @@ esac
 # --no-build, which is what makes it safe for nextest to run them
 # concurrently — at test time no MSBuild processes exist to race on the
 # bridge's shared obj/ (the historical reason this suite was serialized).
-dotnet build Fixtures.slnx --configuration Release -m --nologo
+dotnet build Fixtures.slnx --configuration Debug -m --nologo
 
 # The documentation consumer swaps its package reference for a project
 # reference via these properties, so it cannot ride along in the solution
 # build; its test passes the same properties with --no-build.
 dotnet build \
   "$workspace_root/sdks/csharp/bridge_csharp/tests/Baml.Bridge.DocumentationConsumer/Baml.Bridge.DocumentationConsumer.csproj" \
-  --configuration Release --nologo \
+  --configuration Debug --nologo \
   "-p:BamlBridgeProjectReference=$workspace_root/sdks/csharp/bridge_csharp/src/Baml.Bridge.csproj" \
   "-p:BamlGeneratedSourceRoot=$(pwd)/basic_calls/baml_sdk"
 

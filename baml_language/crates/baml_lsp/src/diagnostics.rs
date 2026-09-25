@@ -375,3 +375,68 @@ fn send_publish(
         Err(error) => tracing::error!(%error, "publishDiagnostics params did not serialize"),
     }
 }
+
+/// Flatten diagnostics into the playground's one-line messages, in input order.
+/// Hosts may sort the result before projecting into their wire types.
+pub fn playground_diagnostics(
+    documents: &[PublishableDocument],
+) -> impl Iterator<Item = (&'static str, String)> + '_ {
+    documents.iter().flat_map(|document| {
+        let filename = document
+            .path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        document.diagnostics.iter().map(move |diagnostic| {
+            let severity = match diagnostic.severity {
+                Some(lsp_types::DiagnosticSeverity::ERROR) => "error",
+                Some(lsp_types::DiagnosticSeverity::WARNING) => "warning",
+                _ => "info",
+            };
+            (
+                severity,
+                format!(
+                    "{filename}:{}: {}",
+                    diagnostic.range.start.line + 1,
+                    diagnostic.message
+                ),
+            )
+        })
+    })
+}
+
+#[cfg(test)]
+mod playground_tests {
+    use super::*;
+    #[test]
+    fn messages_preserve_document_order_and_one_based_lines() {
+        let documents = [
+            PublishableDocument {
+                path: PathBuf::from("z/file.baml"),
+                diagnostics: vec![lsp_types::Diagnostic {
+                    range: lsp_types::Range::new(
+                        lsp_types::Position::new(4, 2),
+                        lsp_types::Position::new(4, 3),
+                    ),
+                    severity: Some(lsp_types::DiagnosticSeverity::WARNING),
+                    message: "last".into(),
+                    ..Default::default()
+                }],
+            },
+            PublishableDocument {
+                path: PathBuf::from("a.baml"),
+                diagnostics: vec![lsp_types::Diagnostic {
+                    message: "first".into(),
+                    ..Default::default()
+                }],
+            },
+        ];
+        assert_eq!(
+            playground_diagnostics(&documents).collect::<Vec<_>>(),
+            vec![
+                ("warning", "file.baml:5: last".into()),
+                ("info", "a.baml:1: first".into())
+            ]
+        );
+    }
+}

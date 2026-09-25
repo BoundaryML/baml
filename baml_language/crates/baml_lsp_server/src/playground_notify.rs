@@ -233,25 +233,7 @@ pub fn build_project_update(
 pub fn flatten_diagnostics(
     documents: &[baml_lsp::diagnostics::PublishableDocument],
 ) -> Vec<ProjectDiagnostic> {
-    let mut out = Vec::new();
-    for doc in documents {
-        let filename = doc
-            .path
-            .file_name()
-            .map(|f| f.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        for d in &doc.diagnostics {
-            let severity = match d.severity {
-                Some(lsp_types::DiagnosticSeverity::ERROR) => "error",
-                Some(lsp_types::DiagnosticSeverity::WARNING) => "warning",
-                _ => "info",
-            };
-            let line = d.range.start.line + 1;
-            out.push(ProjectDiagnostic {
-                severity,
-                message: format!("{filename}:{line}: {}", d.message),
-            });
-        }
-    }
-    out
+    baml_lsp::diagnostics::playground_diagnostics(documents)
+        .map(|(severity, message)| ProjectDiagnostic { severity, message })
+        .collect()
 }

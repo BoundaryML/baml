@@ -3,7 +3,10 @@
 use std::sync::Arc;
 
 use bex_project::{BexExternalAdt, MediaKind, MediaValue};
-use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, baml_bridge::cffi::BamlHandleType};
+use bridge_ctypes::{
+    CffiHandleTableEntry, HANDLE_TABLE,
+    baml_bridge::cffi::{BamlHandleType, MediaTypeEnum},
+};
 
 /// An owned handle-table key and its protocol type tag.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -196,6 +199,18 @@ pub fn media_mime_type(key: u64, handle_type: i32) -> Result<Option<String>, Han
     Ok(resolve_media(key, handle_type)?.mime_type())
 }
 
+/// Convert a protocol media discriminant, rejecting unspecified and unknown values.
+pub fn media_kind_from_proto(media_kind: i32) -> Option<MediaKind> {
+    match media_kind {
+        x if x == MediaTypeEnum::Image as i32 => Some(MediaKind::Image),
+        x if x == MediaTypeEnum::Audio as i32 => Some(MediaKind::Audio),
+        x if x == MediaTypeEnum::Pdf as i32 => Some(MediaKind::Pdf),
+        x if x == MediaTypeEnum::Video as i32 => Some(MediaKind::Video),
+        x if x == MediaTypeEnum::Other as i32 => Some(MediaKind::Generic),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -244,5 +259,25 @@ mod tests {
     fn clone_and_release_reject_invalid_handles() {
         assert_eq!(clone_handle(u64::MAX), Err(HandleError::InvalidHandle));
         assert_eq!(release_handle(u64::MAX), Err(HandleError::InvalidHandle));
+    }
+}
+
+#[cfg(test)]
+mod media_kind_tests {
+    use super::*;
+    #[test]
+    fn protocol_kinds_include_generic_but_reject_unspecified_and_unknown() {
+        for (proto, kind) in [
+            (MediaTypeEnum::Image, MediaKind::Image),
+            (MediaTypeEnum::Audio, MediaKind::Audio),
+            (MediaTypeEnum::Pdf, MediaKind::Pdf),
+            (MediaTypeEnum::Video, MediaKind::Video),
+            (MediaTypeEnum::Other, MediaKind::Generic),
+        ] {
+            assert_eq!(media_kind_from_proto(proto as i32), Some(kind));
+        }
+        for value in [MediaTypeEnum::MediaTypeUnspecified as i32, -1, i32::MAX] {
+            assert_eq!(media_kind_from_proto(value), None);
+        }
     }
 }

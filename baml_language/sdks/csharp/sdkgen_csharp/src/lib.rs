@@ -3,6 +3,7 @@
 //! Identifier allocation, file routing, and C# validation are completed before
 //! the shared SDK output writer installs the generated tree.
 
+mod hash;
 pub mod names;
 pub mod pipeline;
 pub mod routing;

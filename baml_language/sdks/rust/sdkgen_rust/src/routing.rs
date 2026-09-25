@@ -4,7 +4,7 @@
 //! The package of the codegen-facing `Name` is `Local` for project files
 //! (`is_local()`), `"baml"` for stdlib, `"<vendor>"` for declared external
 //! packages. Local symbols route to the crate root's namespace tree,
-//! `"baml"` under `baml/`, anything else under `vendor/<pkg>/` — the same
+//! core language packages under their own names, other dependencies under `vendor/<pkg>/` — the same
 //! placement rules as the python and typescript emitters.
 
 use baml_codegen_types::Name;
@@ -28,20 +28,12 @@ impl LeafPath {
 
 /// Route a pool entry to the module its Rust items are emitted in.
 pub(crate) fn route(name: &Name) -> LeafPath {
-    let mut segments = Vec::new();
-    if !name.is_local() {
-        match name.package().as_str() {
-            "baml" => segments.push("baml".to_string()),
-            vendor => {
-                segments.push("vendor".to_string());
-                segments.push(idents::dir_segment(vendor));
-            }
-        }
+    LeafPath {
+        segments: baml_codegen_types::namespace_segments(name)
+            .iter()
+            .map(|segment| idents::dir_segment(segment))
+            .collect(),
     }
-    for seg in name.namespace() {
-        segments.push(idents::dir_segment(seg.as_str()));
-    }
-    LeafPath { segments }
 }
 
 #[cfg(test)]
@@ -68,6 +60,16 @@ mod tests {
             route(&name("baml", &["http"], "Response")).segments,
             ["baml", "http"]
         );
+    }
+
+    #[test]
+    fn ai_and_reflect_use_builtin_roots_with_target_escaping() {
+        for package in ["ai", "reflect"] {
+            assert_eq!(
+                route(&name(package, &["crate"], "Thing")).segments,
+                [package, "crate_"]
+            );
+        }
     }
 
     #[test]

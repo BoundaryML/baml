@@ -35,7 +35,7 @@ $NativeLibrary = Join-Path $TargetDir "debug/bridge_cffi.dll"
 # bridge's shared obj/ (the historical reason this suite was serialized).
 Push-Location $CrateDir
 try {
-    dotnet build Fixtures.slnx --configuration Release -m --nologo
+    dotnet build Fixtures.slnx --configuration Debug -m --nologo
     if ($LASTEXITCODE -ne 0) {
         throw "dotnet build Fixtures.slnx failed with exit code $LASTEXITCODE"
     }
@@ -46,7 +46,7 @@ try {
     $DocConsumer = Join-Path $WorkspaceRoot "sdks/csharp/bridge_csharp/tests/Baml.Bridge.DocumentationConsumer/Baml.Bridge.DocumentationConsumer.csproj"
     $BridgeProject = Join-Path $WorkspaceRoot "sdks/csharp/bridge_csharp/src/Baml.Bridge.csproj"
     $GeneratedRoot = Join-Path $CrateDir "basic_calls/baml_sdk"
-    dotnet build $DocConsumer --configuration Release --nologo `
+    dotnet build $DocConsumer --configuration Debug --nologo `
         "-p:BamlBridgeProjectReference=$BridgeProject" `
         "-p:BamlGeneratedSourceRoot=$GeneratedRoot"
     if ($LASTEXITCODE -ne 0) {

@@ -29,13 +29,7 @@ const WORKER_STARTUP_TEST: &str = include_str!("templates/worker_startup.test.ts
 /// copied from there into local Web and Workers trees. Nothing is ever written
 /// back into the sibling.
 pub fn run_all(ctx: &CodegenCtx) {
-    let discovered = fixtures::discover_shared(&ctx.fixtures_root);
-    assert_eq!(
-        discovered,
-        fixtures::SHARED,
-        "the fixture corpus at {} has drifted from `fixtures::SHARED`",
-        ctx.fixtures_root.display()
-    );
+    let fixtures = fixtures::checked_shared(&ctx.fixtures_root);
 
     let sources_root = ctx
         .crate_dir
@@ -48,7 +42,7 @@ pub fn run_all(ctx: &CodegenCtx) {
         sources_root.display()
     );
 
-    for fixture in fixtures::SHARED {
+    for fixture in fixtures {
         let custom = sources_root.join(fixture).join("customizable");
         codegen_fixture(&ctx.fixtures_root, fixture, &ctx.crate_dir, &custom);
     }

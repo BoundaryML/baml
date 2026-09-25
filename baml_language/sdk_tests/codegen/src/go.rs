@@ -72,15 +72,9 @@ fn ty_callable(params: Vec<Ty>, ret: Ty) -> Ty {
 /// someone is running the Go suite, so a panic here should stop the setup
 /// script outright instead of surfacing later as a separate test.
 pub fn run_all(ctx: &CodegenCtx) {
-    let discovered = fixtures::discover_shared(&ctx.fixtures_root);
-    assert_eq!(
-        discovered,
-        fixtures::SHARED,
-        "the fixture corpus at {} has drifted from `fixtures::SHARED`",
-        ctx.fixtures_root.display()
-    );
+    let fixtures = fixtures::checked_shared(&ctx.fixtures_root);
 
-    for fixture in fixtures::SHARED {
+    for fixture in fixtures {
         let loaded = load_fixture(&ctx.fixtures_root, fixture);
         let output = sdkgen_go::to_source_code_with_bytecode(
             &loaded.pool,

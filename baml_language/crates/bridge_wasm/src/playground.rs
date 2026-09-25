@@ -284,29 +284,10 @@ pub(crate) fn project_update(
 fn flatten_diagnostics(
     documents: &[baml_lsp::diagnostics::PublishableDocument],
 ) -> Vec<ProjectDiagnostic> {
-    let mut out: Vec<ProjectDiagnostic> = documents
-        .iter()
-        .flat_map(|document| {
-            let filename = document
-                .path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            document.diagnostics.iter().map(move |diagnostic| {
-                let severity = match diagnostic.severity {
-                    Some(lsp_types::DiagnosticSeverity::ERROR) => "error",
-                    Some(lsp_types::DiagnosticSeverity::WARNING) => "warning",
-                    _ => "info",
-                };
-                ProjectDiagnostic {
-                    severity: severity.to_string(),
-                    message: format!(
-                        "{filename}:{}: {}",
-                        diagnostic.range.start.line + 1,
-                        diagnostic.message
-                    ),
-                }
-            })
+    let mut out: Vec<_> = baml_lsp::diagnostics::playground_diagnostics(documents)
+        .map(|(severity, message)| ProjectDiagnostic {
+            severity: severity.to_owned(),
+            message,
         })
         .collect();
     out.sort_by(|a, b| a.message.cmp(&b.message));
