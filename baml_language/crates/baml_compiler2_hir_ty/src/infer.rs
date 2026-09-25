@@ -19,6 +19,7 @@
 pub(crate) mod flow;
 pub(crate) mod obligations;
 pub(crate) mod pat;
+mod reachability;
 pub(crate) mod truthy;
 pub mod unify;
 
@@ -1184,10 +1185,6 @@ enum PendingDiag<'db> {
     VoidResultUsed {
         expr: ExprId,
     },
-    DeadCode {
-        at: baml_compiler2_ast::StmtId,
-        unreachable_count: usize,
-    },
 
     UnknownPatternField {
         pat: PatId,
@@ -2302,51 +2299,8 @@ impl<'db> InferenceContext<'db> {
             Expr::Block { stmts, tail_expr } => {
                 let type_scope = self.scoped_type_bindings.len();
                 let entry_diverges = self.diverges;
-                let mut first_unreachable: Option<usize> = None;
-                for (index, stmt) in stmts.iter().enumerate() {
-                    // Dead code counts only after a syntactic TERMINATOR
-                    // statement (return/throw/break/continue) - a
-                    // never-typed call is divergence the checker knows,
-                    // not noise the user wrote past.
-                    if first_unreachable.is_none()
-                        && entry_diverges == Diverges::Maybe
-                        && self.diverges == Diverges::Always
-                        && index > 0
-                        && (matches!(
-                            body.stmts[stmts[index - 1]],
-                            Stmt::Return { .. } | Stmt::Throw { .. } | Stmt::Break | Stmt::Continue
-                        ) || matches!(
-                            &body.stmts[stmts[index - 1]],
-                            Stmt::Let {
-                                initializer: Some(init),
-                                ..
-                            } if matches!(body.exprs[*init], Expr::Throw { .. })
-                        ))
-                    {
-                        first_unreachable = Some(index);
-                    }
+                for stmt in stmts {
                     self.infer_stmt(body, *stmt);
-                }
-                // The block TAIL counts too: `throw "x"` followed by a
-                // tail `0` leaves the tail unreachable even with no
-                // trailing statements.
-                let tail_after_diverge = first_unreachable.is_none()
-                    && tail_expr.is_some()
-                    && !stmts.is_empty()
-                    && matches!(
-                        &body.stmts[*stmts.last().expect("nonempty")],
-                        Stmt::Return { .. } | Stmt::Throw { .. } | Stmt::Break | Stmt::Continue
-                    );
-                if let Some(index) = first_unreachable {
-                    self.pending_diags.push(PendingDiag::DeadCode {
-                        at: stmts[index],
-                        unreachable_count: stmts.len() - index + usize::from(tail_expr.is_some()),
-                    });
-                } else if tail_after_diverge {
-                    self.pending_diags.push(PendingDiag::DeadCode {
-                        at: *stmts.last().expect("nonempty"),
-                        unreachable_count: 1,
-                    });
                 }
                 let ty = match tail_expr {
                     Some(tail) => self.infer_expr(body, *tail, expected),
@@ -11387,7 +11341,10 @@ impl<'db> InferenceContext<'db> {
                             continue;
                         }
                         diags.push(TirDiagnostic {
-                            error: TirTypeError::ConditionAlwaysConstant { ty, always_true },
+                            error: TirTypeError::ConditionAlwaysConstant {
+                                ty: Some(ty),
+                                always_true,
+                            },
                             severity: DiagnosticSeverity::Warning,
                             primary: DiagnosticLocation::Expr(expr),
                             related: Vec::new(),
@@ -11406,21 +11363,6 @@ impl<'db> InferenceContext<'db> {
                         expr,
                     ),
 
-                    PendingDiag::DeadCode {
-                        at,
-                        unreachable_count,
-                    } => {
-                        diags.push(TirDiagnostic {
-                            error: TirTypeError::DeadCode {
-                                after: at,
-                                unreachable_count,
-                            },
-                            severity: DiagnosticSeverity::Warning,
-                            primary: DiagnosticLocation::Stmt(at),
-                            related: Vec::new(),
-                        });
-                        continue;
-                    }
                     PendingDiag::UnknownPatternField {
                         pat,
                         class_name,
@@ -11916,6 +11858,9 @@ impl<'db> InferenceContext<'db> {
                     primary: DiagnosticLocation::Expr(expr),
                     related: Vec::new(),
                 });
+            }
+            if let Some(body) = body {
+                reachability::add_diagnostics(body, &result, &mut diags);
             }
             // The finish fixpoint may re-attempt a failing obligation
             // once per round - identical findings collapse to one.

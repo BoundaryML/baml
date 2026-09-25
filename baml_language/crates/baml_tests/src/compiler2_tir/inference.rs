@@ -489,7 +489,7 @@ fn package_interface_exports_optional_param_mode() {
 #[test]
 fn cross_file_out_of_body_implements_class_target_is_registered() {
     let mut db = make_db();
-    db.file(
+    let types_file = db.file(
         "types.baml",
         r#"
 class Dog {
@@ -518,7 +518,14 @@ implements ToJson for Dog {
         "cross-file class target must remain a first-class out-of-body impl record"
     );
 
-    let diagnostics = baml_db::collect_compiler2_diagnostics(&db);
+    let diagnostics: Vec<_> = baml_db::collect_compiler2_diagnostics(&db)
+        .into_iter()
+        .filter(|diagnostic| {
+            diagnostic.primary_span().is_some_and(|span| {
+                [types_file.file_id(&db), impl_file.file_id(&db)].contains(&span.file_id)
+            })
+        })
+        .collect();
     assert!(
         diagnostics.is_empty(),
         "cross-file class target should not produce diagnostics: {diagnostics:#?}"

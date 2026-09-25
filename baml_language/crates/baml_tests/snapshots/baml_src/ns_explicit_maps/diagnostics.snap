@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+    ╭─[explicit_maps.baml:44:9]
+ 44 │     if (true) {}
+    ·         ────
+    ╰────

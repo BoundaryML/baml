@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+    ╭─[precedence.baml:10:11]
+ 10 │   let d = true || false && false;  // Should be true (AND before OR)
+    ·           ────    ───────┬──────
+    ·             │            ╰── this expression is unreachable
+    ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always falsy: a value of type `false` can never be truthy
+    ╭─[precedence.baml:10:19]
+ 10 │   let d = true || false && false;  // Should be true (AND before OR)
+    ·                   ─────    ──┬──
+    ·                     │        ╰── this expression is unreachable
+    ╰────

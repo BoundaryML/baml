@@ -1550,6 +1550,8 @@ fn tir_rendered_to_diagnostic_with_message(
         if matches!(
             rendered.error,
             TirTypeError::UncalledFunctionInCondition { .. }
+                | TirTypeError::ConditionAlwaysConstant { .. }
+                | TirTypeError::ComparisonAlwaysDisjoint { .. }
         ) {
             return diag.with_secondary(span, message);
         }

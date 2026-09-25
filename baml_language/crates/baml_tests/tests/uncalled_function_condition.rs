@@ -21,8 +21,15 @@ function main() -> string {
 "#;
     let mut db = ProjectDatabase::new();
     db.workspace(Path::new("/uncalled-function"));
-    db.file(Path::new("/uncalled-function/main.baml"), source);
-    let diagnostics = collect_compiler2_diagnostics(&db);
+    let file = db.file(Path::new("/uncalled-function/main.baml"), source);
+    let diagnostics: Vec<_> = collect_compiler2_diagnostics(&db)
+        .into_iter()
+        .filter(|diagnostic| {
+            diagnostic
+                .primary_span()
+                .is_some_and(|span| span.file_id == file.file_id(&db))
+        })
+        .collect();
     assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
     let diagnostic = &diagnostics[0];
     let file_id = diagnostic.primary_span().unwrap().file_id;

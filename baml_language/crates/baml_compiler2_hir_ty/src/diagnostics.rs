@@ -214,10 +214,7 @@ pub enum TirTypeError {
     /// construct (anything but a class).
     CannotConstructAlias { name: Name, denotes: baml_type::Ty },
     /// Unreachable code after a diverging statement (return/break/continue).
-    DeadCode {
-        after: StmtId,
-        unreachable_count: usize,
-    },
+    DeadCode { unreachable_count: usize },
     /// A `void` expression (e.g. `if` without `else`) was used where a value
     /// is required — assigned to a variable, passed as an argument, or returned.
     VoidUsedAsValue,
@@ -558,9 +555,9 @@ pub enum TirTypeError {
     /// BEP-049 §11: an untagged `${expr}` interpolates a value whose type has
     /// no `to_string` method, so it can't be implicitly stringified.
     TypeNotInterpolatable { ty: Ty },
-    /// B-1563 truthiness: a non-literal condition whose static type decides
-    /// the branch - the test is constant, so one arm is dead.
-    ConditionAlwaysConstant { ty: Ty, always_true: bool },
+    /// A condition whose truthiness is statically known. The type is included
+    /// when it alone proves the result (rather than boolean composition).
+    ConditionAlwaysConstant { ty: Option<Ty>, always_true: bool },
     /// A function value tested without being called.
     UncalledFunctionInCondition {
         name: String,
@@ -1779,11 +1776,15 @@ impl TirTypeError {
                     } else {
                         ("falsy", "truthy")
                     };
-                    write!(
-                        f,
-                        "this condition is always {always}: a value of type `{}` can never be {never}",
-                        ty.spell(vp)
-                    )
+                    write!(f, "this condition is always {always}")?;
+                    if let Some(ty) = ty {
+                        write!(
+                            f,
+                            ": a value of type `{}` can never be {never}",
+                            ty.spell(vp)
+                        )?;
+                    }
+                    Ok(())
                 }
                 TirTypeError::TypeNotInterpolatable { ty } => write!(
                     f,

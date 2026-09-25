@@ -2,6 +2,21 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+    ╭─[edge_cases.baml:63:25]
+ 63 │         let inner = if (true) {
+    ·                         ────
+    ╰────
+    ╭─[edge_cases.baml:73:16]
+ 73 │ ╭─▶         } else {
+ 74 │ │               //### Inside Else
+ 75 │ │               "else value"
+ 76 │ ├─▶         };
+    · ╰──── this branch is unreachable
+    ╰────
+
   [type] E0001
 
   × mismatched types

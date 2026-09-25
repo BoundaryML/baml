@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+    ╭─[control_flow.baml:61:9]
+ 61 │         i = 100;
+    ·         ───────
+    ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+    ╭─[control_flow.baml:77:5]
+ 77 │     999
+    ·     ───
+    ╰────
