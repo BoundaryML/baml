@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+   ╭─[tagged_template_with_interp_for_and_if_survives_front_end.baml:7:69]
+ 7 │     sql`SELECT ${1} ${for (let x in items)}col_${x}, ${endfor}${if (true)}WHERE 1${else}ALL${endif}`
+   ·     ────────────────────────────────────────────────┬────────────────────────────────────────────────
+   ·                                                     ╰── this branch is unreachable
+   ╰────

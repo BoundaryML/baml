@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+    ╭─[soundness.baml:29:15]
+ 29 │     100 - if (2 > 1) { 7 } else { 3 }
+    ·               ─────             ──┬──
+    ·                 │                 ╰── this branch is unreachable
+    ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+    ╭─[soundness.baml:36:9]
+ 36 │     if (1 == 1) {
+    ·         ──────
+    ╰────

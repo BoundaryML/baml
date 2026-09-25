@@ -1,0 +1,31 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[property_shorthand_binders.baml:102:9]
+ 102 │     if (true) {
+     ·         ────
+     ╰────
+     ╭─[property_shorthand_binders.baml:106:12]
+ 106 │ ╭─▶     } else {
+ 107 │ │           "NONE"
+ 108 │ ├─▶     }
+     · ╰──── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[property_shorthand_binders.baml:187:9]
+ 187 │     if (true) {
+     ·         ────
+     ╰────
+     ╭─[property_shorthand_binders.baml:191:12]
+ 191 │ ╭─▶     } else {
+ 192 │ │           "NONE"
+ 193 │ ├─▶     }
+     · ╰──── this branch is unreachable
+     ╰────

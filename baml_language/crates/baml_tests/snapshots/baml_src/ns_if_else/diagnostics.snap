@@ -1,0 +1,225 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[if_else.baml:137:9]
+ 137 │     if (true) {
+     ·         ────
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[if_else.baml:146:9]
+ 146 │     if (true) {
+     ·         ────
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[if_else.baml:155:9]
+ 155 │     if (true) { x = 1; }
+     ·         ────
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always falsy: a value of type `false` can never be truthy
+     ╭─[if_else.baml:156:9]
+ 156 │     if (false) { x = 2; }
+     ·         ─────  ─────┬────
+     ·           │         ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[if_else.baml:172:22]
+ 172 │     assert.equal(if (true) { 1 } else { 2 }, 1)
+     ·                      ────             ──┬──
+     ·                        │                ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always falsy: a value of type `false` can never be truthy
+     ╭─[if_else.baml:176:22]
+ 176 │     assert.equal(if (false) { 1 } else { 2 }, 2)
+     ·                      ─────  ──┬──
+     ·                        │      ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[if_else.baml:180:22]
+ 180 │     assert.equal(if (1 < 2) { 10 } else { 20 }, 10)
+     ·                      ─────              ───┬──
+     ·                        │                   ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[if_else.baml:184:22]
+ 184 │     assert.equal(if (5 == 5) { 100 } else { 200 }, 100)
+     ·                      ──────               ───┬───
+     ·                         │                    ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[if_else.baml:189:17]
+ 189 │     let x = if (true) { 42 } else { 0 };
+     ·                 ────              ──┬──
+     ·                   │                 ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[if_else.baml:195:22]
+ 195 │     assert.equal(if (true) { let a = 1; a } else { let b = 2; b }, 1)
+     ·                      ────                        ────────┬───────
+     ·                        │                                 ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[if_else.baml:217:22]
+ 217 │     assert.equal(if (true) { if (false) { 1 } else { 2 } } else { 3 }, 2)
+     ·                      ────                                       ──┬──
+     ·                        │                                          ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always falsy: a value of type `false` can never be truthy
+     ╭─[if_else.baml:217:34]
+ 217 │     assert.equal(if (true) { if (false) { 1 } else { 2 } } else { 3 }, 2)
+     ·                                  ─────  ──┬──
+     ·                                    │      ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always falsy: a value of type `false` can never be truthy
+     ╭─[if_else.baml:221:22]
+ 221 │     assert.equal(if (false) { 1 } else if (false) { 2 } else { 3 }, 3)
+     ·                      ─────  ──┬──
+     ·                        │      ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always falsy: a value of type `false` can never be truthy
+     ╭─[if_else.baml:221:44]
+ 221 │     assert.equal(if (false) { 1 } else if (false) { 2 } else { 3 }, 3)
+     ·                                            ─────  ──┬──
+     ·                                              │      ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[if_else.baml:260:22]
+ 260 │     assert.equal(if (true) { if_else_identity(42) } else { 0 }, 42)
+     ·                      ────                                ──┬──
+     ·                        │                                   ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[if_else.baml:264:22]
+ 264 │     assert.equal(if (1 + 1 == 2) { 100 } else { 0 }, 100)
+     ·                      ──────────               ──┬──
+     ·                           │                     ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[if_else.baml:268:22]
+ 268 │     assert.equal(if (true && true) { 1 } else { 0 }, 1)
+     ·                      ────────────             ──┬──
+     ·                            │                    ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[if_else.baml:272:22]
+ 272 │     assert.equal(if (false || true) { 1 } else { 0 }, 1)
+     ·                      ─────────────             ──┬──
+     ·                            │                     ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[if_else.baml:278:26]
+ 278 │     assert.equal(1 + if (true) { 2 } else { 3 }, 3)
+     ·                          ────             ──┬──
+     ·                            │                ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always falsy: a value of type `false` can never be truthy
+     ╭─[if_else.baml:282:39]
+ 282 │     assert.equal(if_else_identity(if (false) { 10 } else { 20 }), 20)
+     ·                                       ─────  ───┬──
+     ·                                         │       ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always falsy: a value of type `false` can never be truthy
+     ╭─[if_else.baml:289:19]
+ 289 │     let tmp = if (false) { 10 } else { 20 };
+     ·                   ─────  ───┬──
+     ·                     │       ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[if_else.baml:298:23]
+ 298 │     assert.equal((if (true) { 1 } else { 2 }) + (if (false) { 3 } else { 4 }), 5)
+     ·                       ────             ──┬──
+     ·                         │                ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always falsy: a value of type `false` can never be truthy
+     ╭─[if_else.baml:298:54]
+ 298 │     assert.equal((if (true) { 1 } else { 2 }) + (if (false) { 3 } else { 4 }), 5)
+     ·                                                      ─────  ──┬──
+     ·                                                        │      ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[if_else.baml:302:22]
+ 302 │     assert.equal(if (true) { 1 } else { 2 } + if (false) { 3 } else { 4 }, 5)
+     ·                      ────             ──┬──
+     ·                        │                ╰── this branch is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always falsy: a value of type `false` can never be truthy
+     ╭─[if_else.baml:302:51]
+ 302 │     assert.equal(if (true) { 1 } else { 2 } + if (false) { 3 } else { 4 }, 5)
+     ·                                                   ─────  ──┬──
+     ·                                                     │      ╰── this branch is unreachable
+     ╰────

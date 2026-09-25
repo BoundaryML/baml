@@ -5,9 +5,10 @@
 //! `null`, `0`, `0n`, `0.0`/`-0.0`, `""`, `[]`, `{}`, and an empty byte
 //! array. Everything else - including `NaN`, class instances, enum
 //! variants, functions, and media - is truthy. `void` conditions are an
-//! error (the value does not exist), and a condition whose STATIC type
-//! decides the branch is a warning (TS 5.6's 2872/2873) unless the
-//! condition is a written literal (`while (true)` stays idiomatic).
+//! error (the value does not exist), and a condition whose static type
+//! decides the branch is a warning. The reachability pass also diagnoses
+//! written constants and labels the unreachable code; `while (true)`
+//! stays idiomatic.
 //!
 //! Layering: the checker DECIDES here and records an [`Adjust::Truthy`]
 //! adjustment on the
@@ -52,9 +53,11 @@ pub(crate) fn truthiness(ty: &Ty) -> Truthiness {
         | InferTy::Uint8Array
         | InferTy::List(..)
         | InferTy::Map { .. } => Truthiness::Runtime,
+        // An interface can be implemented by falsy primitives. Its existential
+        // value is not necessarily a truthy class instance.
+        InferTy::Interface(..) => Truthiness::Runtime,
         // Heap values with no falsy inhabitant.
         InferTy::Class(..)
-        | InferTy::Interface(..)
         | InferTy::Enum(..)
         | InferTy::EnumVariant(..)
         | InferTy::Media(..)
@@ -114,6 +117,37 @@ fn literal_truthiness(lit: &Literal) -> Truthiness {
 }
 
 impl<'db> InferenceContext<'db> {
+    pub(super) fn uncalled_function_diagnostic(
+        body: &ExprBody,
+        expr: ExprId,
+        accepts_no_args: bool,
+    ) -> crate::diagnostics::TirDiagnostic<'db> {
+        use crate::diagnostics::{
+            DiagnosticLocation, DiagnosticSeverity, TirDiagnostic, TirTypeError,
+        };
+
+        let name = body.display_expr(expr);
+        // Only propose an exact replacement for expressions we can render as
+        // a callee, and functions that need no arguments.
+        let suggestion = (accepts_no_args
+            && matches!(
+                body.exprs[expr],
+                Expr::Path(_)
+                    | Expr::MemberAccess { .. }
+                    | Expr::GenericApply { .. }
+                    | Expr::QualifiedPath { .. }
+                    | Expr::Index { .. }
+                    | Expr::Call { .. }
+            ))
+        .then(|| format!("{name}()"));
+        TirDiagnostic {
+            error: TirTypeError::UncalledFunctionInCondition { name, suggestion },
+            severity: DiagnosticSeverity::Warning,
+            primary: DiagnosticLocation::Expr(expr),
+            related: Vec::new(),
+        }
+    }
+
     /// Type a condition position (`if`/`while`/guard, and `&&`/`||`
     /// operands): any type is accepted, a non-`bool` records the Truthy
     /// adjustment for MIR, `void` is a mismatch (there is no value to

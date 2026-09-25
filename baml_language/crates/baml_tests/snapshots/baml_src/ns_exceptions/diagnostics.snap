@@ -29,17 +29,17 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[exceptions.baml:443:9]
- 443 │         throw "something went wrong";
-     ·         ─────────────────────────────
+     ╭─[exceptions.baml:444:9]
+ 444 │         baml.sys.panic("expected throw")
+     ·         ────────────────────────────────
      ╰────
 
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[exceptions.baml:452:9]
- 452 │         throw 42;
-     ·         ─────────
+     ╭─[exceptions.baml:453:9]
+ 453 │         baml.sys.panic("expected throw")
+     ·         ────────────────────────────────
      ╰────
 
   [type] E0063

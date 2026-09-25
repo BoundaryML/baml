@@ -5,7 +5,7 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[catch_throw.baml:112:5]
- 112 │     throw "error"
+     ╭─[catch_throw.baml:113:5]
+ 113 │     "unreachable"
      ·     ─────────────
      ╰────
