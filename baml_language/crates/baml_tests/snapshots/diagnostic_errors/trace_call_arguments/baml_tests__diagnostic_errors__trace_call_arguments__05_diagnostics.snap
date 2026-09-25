@@ -59,42 +59,58 @@ source: crates/baml_tests/src/generated_tests.rs
     ·   ──────────────────────────────────────────────
     ╰────
 
-  [type] E0001
+  [type] E0005
 
-  × trace options, reservations, and span IDs are opaque; use their public methods
+  × `$trace` is not supported on native, host, or compiler-intrinsic calls
     ╭─[trace.baml:30:3]
- 30 │   trace.Options {}
-    ·   ────────────────
+ 30 │   trace.current_span_id?.($trace = trace.hidden())
+    ·   ────────────────────────────────────────────────
+    ╰────
+
+  [type] E0004
+
+  × did you mean `trace.current_span_id($trace = trace.hidden())`? `trace.current_span_id?.($trace = trace.hidden())` is unnecessary, because `trace.current_span_id` cannot be null
+    ╭─[trace.baml:30:3]
+ 30 │   trace.current_span_id?.($trace = trace.hidden())
+    ·   ────────────────────────────────────────────────
     ╰────
 
   [type] E0001
 
   × trace options, reservations, and span IDs are opaque; use their public methods
     ╭─[trace.baml:34:3]
- 34 │   trace.ReservedSpan {}
-    ·   ─────────────────────
+ 34 │   trace.Options {}
+    ·   ────────────────
     ╰────
 
   [type] E0001
 
   × trace options, reservations, and span IDs are opaque; use their public methods
     ╭─[trace.baml:38:3]
- 38 │   trace.SpanId {}
-    ·   ───────────────
+ 38 │   trace.ReservedSpan {}
+    ·   ─────────────────────
     ╰────
 
   [type] E0001
 
   × trace options, reservations, and span IDs are opaque; use their public methods
     ╭─[trace.baml:42:3]
- 42 │   options._handle
+ 42 │   trace.SpanId {}
+    ·   ───────────────
+    ╰────
+
+  [type] E0001
+
+  × trace options, reservations, and span IDs are opaque; use their public methods
+    ╭─[trace.baml:46:3]
+ 46 │   options._handle
     ·   ───────────────
     ╰────
 
   [type] E0007
 
   × class `trace.Options` has no field `_handle`
-    ╭─[trace.baml:46:3]
- 46 │   let trace.Options { _handle } = options
+    ╭─[trace.baml:50:3]
+ 50 │   let trace.Options { _handle } = options
     ·   ─────────────────────────────
     ╰────

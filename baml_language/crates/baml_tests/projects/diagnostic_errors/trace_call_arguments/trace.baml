@@ -26,6 +26,10 @@ function NativeTrace() -> trace.SpanId? {
   trace.current_span_id($trace = trace.hidden())
 }
 
+function OptionalNativeTrace() -> trace.SpanId? {
+  trace.current_span_id?.($trace = trace.hidden())
+}
+
 function ConstructOptions() -> trace.Options {
   trace.Options {}
 }

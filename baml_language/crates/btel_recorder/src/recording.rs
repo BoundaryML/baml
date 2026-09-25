@@ -5,13 +5,13 @@ use btel_processor::{AggregateDelta, Publisher};
 use btel_records::SpanRecord;
 use btel_settings::{encoding, publisher as settings};
 use btel_snapshot::Snapshot;
+pub use btel_types::RecordingId;
 use btel_types::TelemetryId;
 use prost::Message;
 pub use settings::RecordingConfig;
 use web_time::Instant;
 
 use crate::{ConversionBuffer, proto};
-pub use btel_types::RecordingId;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RecordingError {

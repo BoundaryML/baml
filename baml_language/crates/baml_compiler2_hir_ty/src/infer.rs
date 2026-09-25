@@ -5225,38 +5225,6 @@ impl<'db> InferenceContext<'db> {
     ) -> Ty {
         let (callee_fn_ty, bound_receiver) = self.infer_callee(body, call, callee);
         self.report_mounted_reserved_call(call, callee);
-        if args.iter().any(|arg| {
-            arg.label
-                .as_ref()
-                .is_some_and(|label| label.as_str() == "$trace")
-        }) {
-            let callable = self
-                .result
-                .member_resolutions
-                .get(&callee)
-                .or_else(|| {
-                    self.result
-                        .path_resolutions
-                        .get(&callee)
-                        .and_then(|path| path.segments.last())
-                        .and_then(|segment| segment.resolution.as_ref())
-                })
-                .and_then(|resolution| resolution.callable(self.db));
-            let unsupported = match callable {
-                Some(DeclRef::Source(function)) => matches!(
-                    baml_compiler2_hir::body::function_body(self.db, function).as_ref(),
-                    baml_compiler2_hir::body::FunctionBody::Builtin(_)
-                ),
-                Some(DeclRef::External(function)) => extern_function_row(self.db, function)
-                    .builtin_kind
-                    .is_some(),
-                None => false,
-            };
-            if unsupported {
-                self.pending_diags
-                    .push(PendingDiag::TraceUnsupportedCall { expr: call });
-            }
-        }
         self.seed_implicit_llm_schema(body, call, callee, args);
         let ret = self.check_call_args(body, call, callee, &callee_fn_ty, bound_receiver, args);
         self.report_constant_regex_pattern(body, call, callee);
@@ -5654,6 +5622,34 @@ impl<'db> InferenceContext<'db> {
                         .push(PendingDiag::PositionalAfterNamed { expr: arg.expr });
                 }
                 ordinary_args.push(arg.clone());
+            }
+        }
+        if seen_trace {
+            let callable = self
+                .result
+                .member_resolutions
+                .get(&callee)
+                .or_else(|| {
+                    self.result
+                        .path_resolutions
+                        .get(&callee)
+                        .and_then(|path| path.segments.last())
+                        .and_then(|segment| segment.resolution.as_ref())
+                })
+                .and_then(|resolution| resolution.callable(self.db));
+            let unsupported = match callable {
+                Some(DeclRef::Source(function)) => matches!(
+                    baml_compiler2_hir::body::function_body(self.db, function).as_ref(),
+                    baml_compiler2_hir::body::FunctionBody::Builtin(_)
+                ),
+                Some(DeclRef::External(function)) => extern_function_row(self.db, function)
+                    .builtin_kind
+                    .is_some(),
+                None => false,
+            };
+            if unsupported {
+                self.pending_diags
+                    .push(PendingDiag::TraceUnsupportedCall { expr: call });
             }
         }
         let args = ordinary_args.as_slice();
