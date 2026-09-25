@@ -1,0 +1,116 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+   ╭─[trace.baml:6:22]
+ 6 │   Target(1, $trace = 42)
+   ·                      ─┬
+   ·                       ╰── expected `trace.Options | trace.ReservedSpan`, found `42`
+   ╰────
+
+  [type] E0005
+
+  × duplicate named argument `$trace`
+    ╭─[trace.baml:10:47]
+ 10 │   Target(1, $trace = trace.hidden(), $trace = trace.span())
+    ·                                               ────────────
+    ╰────
+
+  [type] E0005
+
+  × expected 1 argument(s), got 0
+    ╭─[trace.baml:14:3]
+ 14 │   Target($trace = trace.hidden())
+    ·   ───────────────────────────────
+    ╰────
+
+  [type] E0005
+
+  × positional arguments cannot appear after named arguments
+    ╭─[trace.baml:18:35]
+ 18 │   Target($trace = trace.hidden(), 1)
+    ·                                   ─
+    ╰────
+
+  [type] E0005
+
+  × expected 1 argument(s), got 2
+    ╭─[trace.baml:22:3]
+ 22 │   Target(1, $other = trace.hidden())
+    ·   ──────────────────────────────────
+    ╰────
+
+  [type] E0005
+
+  × unknown named argument `$other`
+    ╭─[trace.baml:22:3]
+ 22 │   Target(1, $other = trace.hidden())
+    ·   ──────────────────────────────────
+    ╰────
+
+  [type] E0005
+
+  × `$trace` is not supported on native, host, or compiler-intrinsic calls
+    ╭─[trace.baml:26:3]
+ 26 │   trace.current_span_id($trace = trace.hidden())
+    ·   ──────────────────────────────────────────────
+    ╰────
+
+  [type] E0005
+
+  × `$trace` is not supported on native, host, or compiler-intrinsic calls
+    ╭─[trace.baml:30:3]
+ 30 │   trace.current_span_id?.($trace = trace.hidden())
+    ·   ────────────────────────────────────────────────
+    ╰────
+
+  [type] E0004
+
+  × did you mean `trace.current_span_id($trace = trace.hidden())`? `trace.current_span_id?.($trace = trace.hidden())` is unnecessary, because `trace.current_span_id` cannot be null
+    ╭─[trace.baml:30:3]
+ 30 │   trace.current_span_id?.($trace = trace.hidden())
+    ·   ────────────────────────────────────────────────
+    ╰────
+
+  [type] E0001
+
+  × trace options, reservations, and span IDs are opaque; use their public methods
+    ╭─[trace.baml:34:3]
+ 34 │   trace.Options {}
+    ·   ────────────────
+    ╰────
+
+  [type] E0001
+
+  × trace options, reservations, and span IDs are opaque; use their public methods
+    ╭─[trace.baml:38:3]
+ 38 │   trace.ReservedSpan {}
+    ·   ─────────────────────
+    ╰────
+
+  [type] E0001
+
+  × trace options, reservations, and span IDs are opaque; use their public methods
+    ╭─[trace.baml:42:3]
+ 42 │   trace.SpanId {}
+    ·   ───────────────
+    ╰────
+
+  [type] E0001
+
+  × trace options, reservations, and span IDs are opaque; use their public methods
+    ╭─[trace.baml:46:3]
+ 46 │   options._handle
+    ·   ───────────────
+    ╰────
+
+  [type] E0007
+
+  × class `trace.Options` has no field `_handle`
+    ╭─[trace.baml:50:3]
+ 50 │   let trace.Options { _handle } = options
+    ·   ─────────────────────────────
+    ╰────

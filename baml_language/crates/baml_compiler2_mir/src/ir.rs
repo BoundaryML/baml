@@ -483,6 +483,9 @@ pub enum Terminator<'db> {
 
     /// Call a function.
     Call {
+        /// Whether the final `args` operand is an invocation trace attachment,
+        /// rather than a callee parameter.
+        has_trace: bool,
         /// The value slots this site was checked against, leading type
         /// arguments excluded. `None` only for compiler-synthesized calls,
         /// whose operands are already in the callee's own layout.
@@ -520,6 +523,8 @@ pub enum Terminator<'db> {
     /// materialized. This is the open-world replacement for the old
     /// compile-time type-tag switch.
     VirtualCall {
+        /// Whether the final `args` operand is an invocation trace attachment.
+        has_trace: bool,
         /// The value slots this site was checked against (receiver included,
         /// type arguments excluded); see [`Terminator::Call::argument_layout`].
         argument_layout: Option<baml_type::CallLayout>,

@@ -2277,6 +2277,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
 
             Terminator::Call {
+                has_trace,
                 argument_layout,
                 callee,
                 args,
@@ -2300,6 +2301,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                 if let Some(global_callee) = global_callee {
                     unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
+                    if *has_trace {
+                        self.emit(Instruction::SetCallTrace);
+                    }
 
                     let instruction = Instruction::Call {
                         callee: global_callee,
@@ -2330,8 +2334,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         "indirect calls require an explicit caller layout"
                     );
                     unwrap_infallible(pull_semantics::walk_call_indirect_operands(
-                        self, callee, args,
+                        self, callee, args, *has_trace,
                     ));
+                    if *has_trace {
+                        self.emit(Instruction::SetCallTrace);
+                    }
                     let instruction = Instruction::CallIndirect;
                     self.set_debug_span(call_span, false);
                     let inst = self.emit(instruction);
@@ -2342,6 +2349,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
 
             Terminator::VirtualCall {
+                has_trace,
                 argument_layout,
                 iface,
                 method,
@@ -2357,15 +2365,20 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // `OpCode::VirtualCall` expects: it pops the method name, then the
                 // interface, then the `ntypeargs` method type args, then reads the
                 // receiver (first value arg) to resolve the impl at runtime.
-                unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
+                let value_args = &args[..args.len() - usize::from(*has_trace)];
+                unwrap_infallible(pull_semantics::walk_call_direct_args(self, value_args));
                 let iface_const = self.add_constant(ConstValue::Type(
                     bex_vm_types::anchor_template(&iface.to_template()),
                 ));
                 let inst = self.emit(Instruction::LoadType(iface_const));
                 self.set_operand(inst, OperandMeta::Const(iface.to_string()));
                 self.emit_constant(&Constant::String(method.clone()));
+                if *has_trace {
+                    self.emit_operand_pull(args.last().expect("trace attachment"));
+                    self.emit(Instruction::SetCallTrace);
+                }
 
-                let nargs = args.len() - ntypeargs;
+                let nargs = value_args.len() - ntypeargs;
                 let nargs = u16::try_from(nargs)
                     .unwrap_or_else(|_| unreachable!("a call's argument count fits in u16"));
                 let ntypeargs = u16::try_from(*ntypeargs)

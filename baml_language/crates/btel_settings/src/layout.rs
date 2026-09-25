@@ -7,7 +7,7 @@ pub struct Padded<T>(pub T);
 pub const CACHE_ALIGNMENT: usize = align_of::<Padded<()>>();
 /// **Checked layout.** Change the frame representation first; editing this assertion target
 /// does not reduce runtime storage.
-pub const FRAME_TELEMETRY_BYTES: usize = 32;
+pub const FRAME_TELEMETRY_BYTES: usize = 40;
 /// **Checked layout.** Bound for compact timing storage; change record representation before
 /// adjusting.
 pub const TIMING_RECORD_MAX_BYTES: usize = 32;

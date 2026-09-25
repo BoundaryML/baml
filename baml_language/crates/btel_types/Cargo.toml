@@ -17,6 +17,10 @@ doctest = false
 [dependencies]
 btel_settings = { workspace = true }
 rustc-hash = { workspace = true }
+uuid = { workspace = true, features = [ "v4" ] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { workspace = true, features = [ "js" ] }
 
 [lints]
 workspace = true

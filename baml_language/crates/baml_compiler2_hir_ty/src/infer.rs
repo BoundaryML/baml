@@ -44,7 +44,7 @@ use baml_compiler2_hir::{
 /// block-scoped binding; the bit itself is defined with `ParamTy`.
 pub(crate) use baml_type::SCOPED_PARAM_BIT;
 use baml_type::{
-    Freshness, Int63, Literal,
+    Freshness, Int63, Literal, Name,
     interned::{ClosedTy, InferInterface, InferTy, Ty},
     normalize::canonical_union_interned,
 };
@@ -985,6 +985,12 @@ enum PendingDiag<'db> {
     UnknownNamedArg {
         expr: ExprId,
         name: baml_type::Name,
+    },
+    TraceUnsupportedCall {
+        expr: ExprId,
+    },
+    TraceOpaqueValue {
+        expr: ExprId,
     },
     RefutableLet {
         pat: PatId,
@@ -5567,6 +5573,70 @@ impl<'db> InferenceContext<'db> {
         bound_receiver: bool,
         args: &[baml_compiler2_ast::CallArg],
     ) -> Ty {
+        let mut seen_trace = false;
+        let mut ordinary_args = Vec::with_capacity(args.len());
+        for arg in args {
+            if arg
+                .label
+                .as_ref()
+                .is_some_and(|label| label.as_str() == "$trace")
+            {
+                if seen_trace {
+                    self.pending_diags.push(PendingDiag::DuplicateNamedArg {
+                        expr: arg.expr,
+                        name: Name::new("$trace"),
+                    });
+                }
+                seen_trace = true;
+                let expected =
+                    self.lang()
+                        .get(baml_base::LangPackage::Trace)
+                        .map_or_else(Ty::error, |root| {
+                            syntactic_union(&["Options", "ReservedSpan"].map(|name| {
+                                Ty::intern(InferTy::Class(
+                                    baml_type::DeclName::in_root(root, vec![], Name::new(name)),
+                                    Box::new([]),
+                                ))
+                            }))
+                        });
+                self.check_expr(body, arg.expr, &expected);
+            } else {
+                if seen_trace && arg.label.is_none() {
+                    self.pending_diags
+                        .push(PendingDiag::PositionalAfterNamed { expr: arg.expr });
+                }
+                ordinary_args.push(arg.clone());
+            }
+        }
+        if seen_trace {
+            let callable = self
+                .result
+                .member_resolutions
+                .get(&callee)
+                .or_else(|| {
+                    self.result
+                        .path_resolutions
+                        .get(&callee)
+                        .and_then(|path| path.segments.last())
+                        .and_then(|segment| segment.resolution.as_ref())
+                })
+                .and_then(|resolution| resolution.callable(self.db));
+            let unsupported = match callable {
+                Some(DeclRef::Source(function)) => matches!(
+                    baml_compiler2_hir::body::function_body(self.db, function).as_ref(),
+                    baml_compiler2_hir::body::FunctionBody::Builtin(_)
+                ),
+                Some(DeclRef::External(function)) => extern_function_row(self.db, function)
+                    .builtin_kind
+                    .is_some(),
+                None => false,
+            };
+            if unsupported {
+                self.pending_diags
+                    .push(PendingDiag::TraceUnsupportedCall { expr: call });
+            }
+        }
+        let args = ordinary_args.as_slice();
         // The call is a STRUCTURE demand on the callee (rustc's
         // `check_call` structurally resolves before matching
         // callability): `inc2` holding a still-unsolved `?T` bounded
@@ -8695,6 +8765,11 @@ impl<'db> InferenceContext<'db> {
     ) -> Ty {
         let db = self.db;
         let class_name = crate::lower::class_qualified_name(db, class);
+        if self.is_opaque_trace_type(&class_name) {
+            self.pending_diags
+                .push(PendingDiag::TraceOpaqueValue { expr: object });
+            return Ty::error();
+        }
         if baml_type::type_kind::is_type_kind_class_decl(self.lang(), &class_name) {
             for field in fields {
                 self.infer_expr(body, field.value, &Expectation::None);
@@ -8861,6 +8936,11 @@ impl<'db> InferenceContext<'db> {
         let db = self.db;
         let row = crate::extern_loc::extern_class_row(db, class);
         let class_name = class.head(db).clone();
+        if self.is_opaque_trace_type(&class_name) {
+            self.pending_diags
+                .push(PendingDiag::TraceOpaqueValue { expr: object });
+            return Ty::error();
+        }
         let exported_fields = row.fields;
         let generic_params = row.generic_params;
         let generic_param_bounds = row.generic_param_bounds;
@@ -9023,6 +9103,12 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
+    fn is_opaque_trace_type(&self, name: &baml_type::DeclName) -> bool {
+        self.lang().is(baml_base::LangPackage::Trace, name.root())
+            && name.namespace().is_empty()
+            && matches!(name.name().as_str(), "Options" | "ReservedSpan" | "SpanId")
+    }
+
     /// The resolution core behind [`InferenceContext::field_access`]:
     /// hands the resolution BACK instead of recording, so the union arm
     /// can drop its per-member recursion's resolutions (one expression,
@@ -9038,6 +9124,14 @@ impl<'db> InferenceContext<'db> {
         // answers as its union and an alias-of-class answers as the
         // class - every arm below sees the target.
         let resolved = self.structurally_resolve(base_ty);
+        if member.as_str() == "_handle"
+            && let InferTy::Class(name, _) = resolved.kind()
+            && self.is_opaque_trace_type(name)
+        {
+            self.pending_diags
+                .push(PendingDiag::TraceOpaqueValue { expr: at });
+            return (Ty::error(), None);
+        }
         // A union behaves as the intersection existential over the
         // interfaces every arm provides (TIR's rule): `member` resolves
         // through the SINGLE shared interface that declares it -
@@ -11315,6 +11409,12 @@ impl<'db> InferenceContext<'db> {
                     } => (TirTypeError::ArgumentCountMismatch { expected, got }, expr),
                     PendingDiag::UnknownNamedArg { expr, name } => {
                         (TirTypeError::UnknownNamedArgument { name }, expr)
+                    }
+                    PendingDiag::TraceUnsupportedCall { expr } => {
+                        (TirTypeError::TraceUnsupportedCall, expr)
+                    }
+                    PendingDiag::TraceOpaqueValue { expr } => {
+                        (TirTypeError::TraceOpaqueValue, expr)
                     }
                     PendingDiag::OperatorNotApplicable {
                         expr,

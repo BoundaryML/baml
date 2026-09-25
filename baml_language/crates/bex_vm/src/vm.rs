@@ -395,6 +395,7 @@ pub(crate) mod tests {
             thrown_value_contexts: Vec::new(),
             preserved_throw_contexts: Vec::new(),
             argv: Arc::from([]),
+            pending_call_trace: None,
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
             static_load_type_cache: HashMap::new(),
@@ -405,6 +406,7 @@ pub(crate) mod tests {
                 #[cfg(not(target_arch = "wasm32"))]
                 crate::telemetry::test_runtime(),
             )),
+            trace_scope: btel_types::RecordingId::generate(),
             pending_telemetry_wait: None,
             packages: Arc::new(crate::package_load::PackageIndex::default()),
             dynamic_dispatch: Arc::new(crate::package_load::DynDispatchTables::default()),
@@ -455,6 +457,57 @@ pub(crate) mod tests {
         let native_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(0));
         vm.globals = VmGlobals::Owned(GlobalPool::from_vec(vec![Value::object(native_ptr)]));
         (vm, native_ptr)
+    }
+
+    #[test]
+    fn public_span_identity_uses_the_emitted_local_id() {
+        use bex_vm_types::{ConstValue, bytecode::Instruction, trace::SpanId};
+
+        use crate::telemetry::{SpanRecord, TelemetryPolicy};
+
+        let Object::Function(mut function) = native_function_object() else {
+            unreachable!()
+        };
+        function.kind = FunctionKind::Bytecode;
+        function.bytecode = Bytecode {
+            instructions: vec![Instruction::LoadConst(0), Instruction::Return],
+            constants: vec![ConstValue::Int(42)],
+            ..Bytecode::default()
+        };
+        function.bytecode.compact = Some(function.bytecode.lower_to_compact());
+        let mut vm = test_vm(vec![Object::Function(function)]);
+        let entry = vm.idx_to_ptr(ObjectIndex::from_raw(0));
+        let Object::Function(function) = vm.get_object(entry) else {
+            unreachable!()
+        };
+        vm.telemetry
+            .as_ref()
+            .unwrap()
+            .set_policy(
+                function,
+                TelemetryPolicy {
+                    span_from_entry: true,
+                    ..TelemetryPolicy::NONE
+                },
+            )
+            .unwrap();
+        vm.set_entry_point(entry, &[]);
+        let public_id = vm.current_span_id().unwrap();
+        assert!(
+            matches!(vm.exec().unwrap(), VmExecState::Complete(value) if value == Value::int(42))
+        );
+        let local_id = vm
+            .telemetry
+            .as_ref()
+            .unwrap()
+            .span_records()
+            .iter()
+            .find_map(|record| match record {
+                SpanRecord::FunctionSpanCompletionOk { id, .. } => Some(*id),
+                _ => None,
+            })
+            .expect("completed span");
+        assert_eq!(public_id, SpanId::new(vm.trace_scope, local_id));
     }
 
     #[test]
@@ -1425,6 +1478,7 @@ pub struct BexVm {
 
     /// VM-owned producer state. It deliberately has no transport or buffer.
     telemetry: Option<TelemetryState>,
+    pub(crate) trace_scope: btel_types::RecordingId,
 
     /// Starts at VM Await suspension, or when the engine receives an async
     /// sys-op. Taken across the heap-permit release; lookup failures leave it
@@ -1470,6 +1524,7 @@ pub struct BexVm {
     /// Saved/restored across nested `Call` instructions; native handlers that
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
+    pending_call_trace: Option<crate::telemetry::TraceConfig>,
     pending_call_type_args: Vec<bex_vm_types::RealizedTy>,
     pending_call_type_values: Vec<Option<TypeValue>>,
 
@@ -1968,6 +2023,7 @@ impl BexVm {
         error_class_ptrs: Arc<[HeapPtr]>,
         panic_class_ptrs: Arc<[HeapPtr]>,
         telemetry: Option<TelemetryState>,
+        trace_scope: btel_types::RecordingId,
     ) -> Self {
         // Defer the first TLAB chunk reservation until the first `tlab.alloc`,
         // which the engine reaches only after the VM has been registered as a
@@ -2007,11 +2063,13 @@ impl BexVm {
             thrown_value_contexts: Vec::new(),
             preserved_throw_contexts: Vec::new(),
             argv,
+            pending_call_trace: None,
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
             telemetry,
+            trace_scope,
             pending_telemetry_wait: None,
             packages,
             dynamic_dispatch,
@@ -2041,6 +2099,66 @@ impl BexVm {
     /// any call dispatch context.
     pub fn current_call_type_args(&self) -> &[bex_vm_types::RealizedTy] {
         &self.pending_call_type_args
+    }
+
+    pub(crate) fn current_span_id(&self) -> Option<bex_vm_types::trace::SpanId> {
+        self.telemetry.as_ref()?;
+        let Frame::Bytecode(frame) = self.frames.last()? else {
+            return None;
+        };
+        frame
+            .telemetry?
+            .span_id()
+            .map(|local| bex_vm_types::trace::SpanId::new(self.trace_scope, local))
+    }
+
+    fn trace_attachment_error(&mut self, message: &str) -> VmError {
+        VmError::thrown_fresh(self.panic_to_exception_value(VmPanic::UserPanic {
+            message: message.to_owned(),
+        }))
+    }
+
+    fn trace_config(&mut self, value: Value) -> Result<crate::telemetry::TraceConfig, VmError> {
+        use bex_vm_types::trace::{ReservationError, ReservedSpanData, TraceOptionsData};
+
+        let handle = self
+            .as_instance(&value)
+            .ok()
+            .and_then(|instance| (!instance.fields.is_empty()).then(|| instance.load_field(0)));
+        let Some(handle) = handle else {
+            return Err(
+                self.trace_attachment_error("$trace expects trace.Options or trace.ReservedSpan")
+            );
+        };
+        let (options, reserved_id) =
+            if let Ok(options) = self.as_rust_data::<TraceOptionsData>(&handle) {
+                (*options, None)
+            } else if let Ok(reservation) = self.as_rust_data::<ReservedSpanData>(&handle) {
+                let local = match reservation.attach(self.trace_scope) {
+                    Ok(local) => local,
+                    Err(error) => {
+                        return Err(self.trace_attachment_error(match error {
+                            ReservationError::WrongScope => {
+                                "trace.ReservedSpan belongs to a different runtime"
+                            }
+                            ReservationError::AlreadyAttached => {
+                                "trace.ReservedSpan can only be attached once"
+                            }
+                        }));
+                    }
+                };
+                (reservation.options, Some(local))
+            } else {
+                return Err(self
+                    .trace_attachment_error("$trace expects trace.Options or trace.ReservedSpan"));
+            };
+        Ok(crate::telemetry::TraceConfig {
+            mode: options.mode,
+            inputs: options.inputs,
+            output: options.output,
+            error: options.error,
+            reserved_id,
+        })
     }
 
     /// The `type` value a type-operand position received. Every such
@@ -3635,6 +3753,7 @@ impl BexVm {
                     }
                 })?,
             )),
+            btel_types::RecordingId::generate(),
         ))
     }
 
@@ -5675,6 +5794,7 @@ impl BexVm {
         frame_idx: &mut usize,
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
+        let trace = self.pending_call_trace.take();
         // Record the caller's call-site PC before descending. Once a callee
         // frame is pushed, this (now-outer) frame is no longer the innermost, so
         // its live PC must be persisted into `faulting_pc` for correct unwinding
@@ -5702,6 +5822,11 @@ impl BexVm {
         // the engine completes the op, exactly as for a bytecode callback's
         // return value.
         if matches!(callee_object, Object::HostClosure(_)) {
+            if trace.is_some() {
+                return Err(
+                    self.trace_attachment_error("$trace is not supported on host functions")
+                );
+            }
             let user_args: Vec<Value> = self.stack.drain(locals_offset..).collect();
             let state = self.host_closure_call_sysop(callee_ptr, user_args);
             return Ok(Some(state));
@@ -5786,6 +5911,11 @@ impl BexVm {
         // skip it but it's an easy and fast check.
         let callee_arity = callee.arity;
         let callee_kind = callee.kind;
+        if trace.is_some() && !matches!(callee_kind, FunctionKind::Bytecode) {
+            return Err(self.trace_attachment_error(
+                "$trace is not supported on native functions or system operations",
+            ));
+        }
         if arg_count != callee_arity {
             return Err(VmInternalError::InvalidArgumentCount {
                 expected: callee_arity,
@@ -5955,13 +6085,14 @@ impl BexVm {
                         [locals_offset.raw()..locals_offset.raw().saturating_add(arg_count)];
                     // SAFETY: arguments and callable remain live under the heap permit.
                     self.telemetry.as_mut().and_then(|telemetry| unsafe {
-                        telemetry.enter_bytecode(
+                        telemetry.enter_bytecode_with_trace(
                             callee,
                             callee_fn_ptr,
                             actual_caller,
                             caller_pc,
                             caller_is_observed,
                             args,
+                            trace,
                             |caller, callee| {
                                 Self::register_call_path_functions(&self.heap, caller, callee)
                             },
@@ -6483,8 +6614,21 @@ impl BexVm {
             return;
         }
         self.finish_pending_telemetry_wait();
+        // Engine-side cancellation can terminate a suspended VM without an
+        // exception value on its stack. Capture the same panic value that the
+        // engine returns, without dispatching it into user code.
+        let error = (outcome == InvocationOutcome::Cancelled
+            && self
+                .frames
+                .iter()
+                .any(|frame| matches!(frame, Frame::Bytecode(frame) if frame.telemetry.is_some()))
+            && self
+                .panic_class_ptrs
+                .get(PanicClass::Cancelled as usize)
+                .is_some_and(|class| !class.is_null()))
+        .then(|| self.panic_to_exception_value(VmPanic::Cancelled));
         for frame_idx in (0..self.frames.len()).rev() {
-            self.complete_bytecode_invocation(frame_idx, outcome, None);
+            self.complete_bytecode_invocation(frame_idx, outcome, error);
         }
         self.telemetry.as_mut().unwrap().complete_thread(outcome);
     }
@@ -6959,6 +7103,9 @@ impl BexVm {
                     &mut code,
                     &mut dispatch_frame_idx,
                 );
+                if step_result.is_err() {
+                    self.pending_call_trace = None;
+                }
 
                 match step_result {
                     Ok(None) if frame_idx == dispatch_frame_idx => {
@@ -7555,6 +7702,11 @@ impl BexVm {
 
                     // ── SysOp (BEP-034 phase D′) ──────────────────────────────────
                     OpCode::SysOp => {
+                        if self.pending_call_trace.take().is_some() {
+                            return Err(self.trace_attachment_error(
+                                "$trace is not supported on system operations",
+                            ));
+                        }
                         let raw = { read_u32_unchecked(code, pc) };
 
                         let callee = bex_vm_types::GlobalIndex::from_raw(raw as usize);
@@ -7657,6 +7809,10 @@ impl BexVm {
                     }
 
                     // ── Call ──────────────────────────────────────────────────────
+                    OpCode::SetCallTrace => {
+                        let value = self.stack.ensure_pop();
+                        self.pending_call_trace = Some(self.trace_config(value)?);
+                    }
                     OpCode::Call | OpCode::CallExactArgs => {
                         let raw = read_u32_unchecked(code, pc);
                         let ntypeargs = usize::from(read_u16_unchecked(code, pc));
@@ -7666,6 +7822,7 @@ impl BexVm {
                             self.load_global_in(function.runtime_package, callee_global);
 
                         if op == OpCode::CallExactArgs
+                            && self.pending_call_trace.is_none()
                             && self.pending_call_type_args.is_empty()
                             && self.pending_call_type_values.is_empty()
                         {
@@ -8022,6 +8179,11 @@ impl BexVm {
                         let obj = self.get_object(callee_ptr);
 
                         if let Object::HostClosure(host_closure) = obj {
+                            if self.pending_call_trace.is_some() {
+                                return Err(self.trace_attachment_error(
+                                    "$trace is not supported on host functions",
+                                ));
+                            }
                             // Host-callable dispatch via a single-yield sys-op. See
                             // `Instruction::CallIndirect` / `host_closure_call_sysop`
                             // for the args-layout rationale.

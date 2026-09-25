@@ -94,14 +94,16 @@ fn codegen_fixture(fixtures_root: &Path, fixture: &str, crate_dir: &Path, custom
     overlay.file("vitest.integration.config.ts", VITEST_INTEGRATION_CONFIG);
     overlay.file(
         "worker_startup.test.ts",
-        WORKER_STARTUP_TEST.replace(
-            "__EXPECTED_BODY__",
-            if fixture == "function_calls" {
-                "hello world"
-            } else {
-                "sdk-test-typescript-workers"
-            },
-        ),
+        WORKER_STARTUP_TEST
+            .replace(
+                "__EXPECTED_BODY__",
+                if fixture == "function_calls" {
+                    "hello world"
+                } else {
+                    "sdk-test-typescript-workers"
+                },
+            )
+            .replace("__FIXTURE__", fixture),
     );
     overlay.file(
         "wrangler.jsonc",
@@ -117,10 +119,13 @@ fn codegen_fixture(fixtures_root: &Path, fixture: &str, crate_dir: &Path, custom
     overlay.file(
         "worker.js",
         if fixture == "function_calls" {
-            r#"import { worker_runtime_smoke } from "./workers/baml_sdk/index.js";
+            r#"import { worker_runtime_smoke, worker_startup_span_identity } from "./workers/baml_sdk/index.js";
 
 export default {
-  fetch() {
+  fetch(request) {
+    if (new URL(request.url).pathname === "/reserved-span") {
+      return new Response(String(worker_startup_span_identity()));
+    }
     return new Response(worker_runtime_smoke());
   },
 };

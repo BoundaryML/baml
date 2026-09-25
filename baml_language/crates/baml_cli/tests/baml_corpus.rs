@@ -7,6 +7,21 @@
 /// Execute `baml test`
 #[test]
 fn baml_test() {
+    run_baml_tests(
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../baml_tests/baml_src"),
+        "medium",
+    );
+}
+
+#[test]
+fn tracing_disabled() {
+    run_baml_tests(
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/trace_disabled"),
+        "off",
+    );
+}
+
+fn run_baml_tests(project: &str, telemetry: &str) {
     // Isolate the CLI's bytecode cache and home per run. Without this, the CLI
     // writes `<project>/.baml/cache` straight into the source tree that the
     // `corpus_snapshots`/`emit_determinism`/`link_units_oracle` tests scan
@@ -38,12 +53,9 @@ fn baml_test() {
     std::fs::create_dir_all(&home).unwrap();
     std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_baml-cli"))
-        .args([
-            "test",
-            "--from",
-            concat!(env!("CARGO_MANIFEST_DIR"), "/../baml_tests/baml_src"),
-        ])
+        .args(["test", "--from", project])
         .env("BAML_CLI_ALLOW_DIRECT", "1")
+        .env("BAML_TELEMETRY", telemetry)
         .env("BAML_HOME", &home)
         .env("BAML_CACHE_DIR", &cache_dir)
         .status()

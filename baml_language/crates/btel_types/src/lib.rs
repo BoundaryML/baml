@@ -11,6 +11,7 @@
 
 mod function_lookup;
 mod functions;
+mod recording;
 use std::{
     cell::Cell,
     mem::size_of,
@@ -21,6 +22,7 @@ use std::{
 use btel_settings::identity::ID_RANGE_SIZE;
 pub use function_lookup::{FunctionLookup, FunctionRegistration};
 pub use functions::*;
+pub use recording::RecordingId;
 
 /// Identity of an individually identified telemetry graph node.
 ///
