@@ -114,6 +114,7 @@ impl TryFrom<BexExternalValue> for CffiHandleTableEntry {
             | BexExternalValue::Int(_)
             | BexExternalValue::Bigint(_)
             | BexExternalValue::Float(_)
+            | BexExternalValue::JsNumber(_)
             | BexExternalValue::Bool(_)
             | BexExternalValue::String(_)
             | BexExternalValue::Array { .. }
