@@ -124,6 +124,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
                 object_names: IndexMap::new(),
                 globals: Box::new([]),
                 global_names: IndexMap::new(),
+                bodies: indexmap::IndexMap::new(),
                 type_values: IndexMap::new(),
                 diagnostics: Vec::new(),
                 dependencies: Box::new([]),

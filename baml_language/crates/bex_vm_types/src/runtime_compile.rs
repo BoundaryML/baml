@@ -12,8 +12,6 @@ use std::sync::{
 use baml_type::{Interface, Name, RealizedTy, Ty, TypeName};
 use indexmap::IndexMap;
 
-use crate::legacy_unit::CompilationUnit;
-
 /// Compiler-neutral structural projection of one runtime class definition.
 ///
 /// `name` is the declaration's bare item name; the compile world spells it
@@ -144,51 +142,6 @@ pub struct RuntimeSessionCompileRequest {
     pub expected: SessionContract,
     /// Keeps the one-eval permit live across compile and execution.
     pub lease: SessionEvalLease,
-}
-
-/// What one emitted initializer commits when it returns successfully.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RuntimeSessionStep {
-    /// Fully-qualified generated global receiving the initializer result.
-    pub global: String,
-    /// Existing Session cell to update after this initializer succeeds. `None`
-    /// means the generated global itself receives the value.
-    pub commit_global: Option<String>,
-    pub kind: RuntimeSessionStepKind,
-}
-
-/// The two legal commit shapes of a Session initializer step.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum RuntimeSessionStepKind {
-    Expression,
-    Binding {
-        /// Source-visible binding committed by this step.
-        name: String,
-        symbol: SessionVisibleSymbol,
-        /// Replayed source fragment appended only after this step succeeds.
-        replay_source: String,
-    },
-}
-
-/// Compiler-owned Session metadata retained after the fresh database drops.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RuntimeSessionCompileArtifact {
-    pub submission_name: String,
-    /// Hoisted declarations are committed before the first initializer runs.
-    pub declaration_source: String,
-    pub declarations: IndexMap<String, SessionVisibleSymbol>,
-    pub steps: Vec<RuntimeSessionStep>,
-    /// The step whose value is the submission's observable result.
-    pub result_step: Option<usize>,
-    /// Current-submission initializer helpers in execution order. `helper_slot`
-    /// addresses the anonymous helper-slot list retained in the pruned tail.
-    pub initializers: Vec<RuntimeSessionInitializer>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RuntimeSessionInitializer {
-    pub helper_slot: u32,
-    pub target_global: String,
 }
 
 /// RAII permit for S-9. Every cancellation/error path releases the busy bit
@@ -348,28 +301,4 @@ pub struct RuntimeCompileDiagnostic {
     pub severity: RuntimeDiagnosticSeverity,
     pub span: Option<RuntimeSourceSpan>,
     pub details: Option<Box<RuntimeDiagnosticDetails>>,
-}
-
-/// Successful compiler output retained by the runtime.
-#[derive(Debug)]
-pub struct RuntimeCompileArtifact {
-    /// Relocatable user units. Builtin/dependency definitions remain imports.
-    pub units: Vec<CompilationUnit>,
-    /// Versioned artifact containing the enriched check surface for mounting
-    /// this package in a later compile.
-    pub interface_blob: Vec<u8>,
-    /// Non-error diagnostics produced by the successful compilation.
-    pub diagnostics: Vec<RuntimeCompileDiagnostic>,
-    pub kind: ArtifactKind,
-}
-
-/// Which runtime compilation door produced an artifact.
-#[derive(Debug)]
-pub enum ArtifactKind {
-    Package,
-    Session {
-        meta: RuntimeSessionCompileArtifact,
-        /// S-9 permit transferred from the request to the successful artifact.
-        lease: SessionEvalLease,
-    },
 }

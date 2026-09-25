@@ -135,6 +135,15 @@ pub struct SessionState {
     pub submission_counter: u64,
 }
 
+/// Where one of a runtime package's interface bodies sits in its image.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BodyIndices {
+    /// The body's function in [`RuntimePackage::objects`].
+    pub object: usize,
+    /// The body's slot in [`RuntimePackage::globals`].
+    pub global: usize,
+}
+
 /// Runtime-only package image grafted into the moving heap.
 #[derive(Clone, Debug, Default)]
 pub struct RuntimePackage {
@@ -149,6 +158,13 @@ pub struct RuntimePackage {
     pub object_names: IndexMap<String, HeapPtr>,
     /// Package-local global slots, mutable only while `$init` is running.
     pub globals: Box<[AtomicValueSlot]>,
+    /// The interface bodies this package pools, by their key: where each sits
+    /// in [`Self::objects`] and [`Self::globals`]. Package-private: the tail
+    /// and a later session submission reach a body through it. Across
+    /// packages a default body is reached through its interface's bound
+    /// default, and a provided body is dispatched through its rule, never
+    /// addressed.
+    pub bodies: IndexMap<crate::BodyKey, BodyIndices>,
     /// Fully-qualified function/let name to this image's local global slot.
     #[deprecated(
         note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"

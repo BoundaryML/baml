@@ -145,7 +145,7 @@ pub trait RuntimeCompiler: Send + Sync + 'static {
     fn compile(
         &self,
         request: bex_vm_types::RuntimeCompileRequest,
-    ) -> Result<bex_vm_types::RuntimeCompileArtifact, Vec<bex_vm_types::RuntimeCompileDiagnostic>>;
+    ) -> Result<bex_vm::RuntimeCompileArtifact, Vec<bex_vm_types::RuntimeCompileDiagnostic>>;
 }
 
 /// Runtime-owned schema data for one sys-op plus handles that keep every

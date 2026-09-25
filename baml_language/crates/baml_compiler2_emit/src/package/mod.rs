@@ -34,7 +34,9 @@ use baml_compiler2_hir::{
 };
 use baml_compiler2_hir_ty::{layout, lower::qualify_def};
 use baml_compiler2_mir::RuntimeLowering;
-use baml_linker_types::{EmittedPackage, ExportTable, LocalRef};
+use baml_linker_types::{
+    EmittedPackage, EmittedSubmission, ExportTable, LocalRef, SessionInitializer,
+};
 use bex_vm_types::{DeclPath, Object};
 
 use crate::{
@@ -64,6 +66,69 @@ pub fn emit_package(
     root: SourceRoot,
     opt: OptLevel,
 ) -> Result<EmittedPackage, LoweringError> {
+    let (package, initializers) = emit(db, root, Scope::Package, opt)?;
+    debug_assert!(
+        initializers.is_empty(),
+        "a package runs its `let`s from its `$init`, recording no initializers"
+    );
+    Ok(package)
+}
+
+/// Compile one submission of a session package: the submission file's
+/// declarations against the session package's earlier ones (imports at
+/// `SELF`) and the interfaces of the packages it reaches. The submission's
+/// `let`s come back as recorded initializers rather than an `$init`.
+///
+/// # Errors
+///
+/// As [`emit_package`].
+pub fn emit_session_submission(
+    db: &dyn crate::Db,
+    root: SourceRoot,
+    submission: SourceFile,
+    opt: OptLevel,
+) -> Result<EmittedSubmission, LoweringError> {
+    let (package, initializers) = emit(db, root, Scope::Submission(submission), opt)?;
+    Ok(EmittedSubmission {
+        package,
+        initializers,
+    })
+}
+
+/// Which of a package's declarations a unit holds as its own.
+#[derive(Clone, Copy)]
+pub(crate) enum Scope {
+    /// Every declaration of the package.
+    Package,
+    /// One session submission's file. The package's other declarations —
+    /// earlier submissions, live in the session package — are reached as
+    /// imports at `SELF`, and the file's `let`s are recorded as initializers.
+    Submission(SourceFile),
+}
+
+impl Scope {
+    fn files(self, db: &dyn crate::Db, root: SourceRoot) -> Vec<SourceFile> {
+        match self {
+            Self::Package => root.files(db).clone(),
+            Self::Submission(file) => vec![file],
+        }
+    }
+
+    /// How a resolver over `tables` answers the package's declarations.
+    pub(crate) fn own<'w, 'db>(self, tables: &'w LocalTables<'db>) -> Own<'w, 'db> {
+        match self {
+            Self::Package => Own::Unit(tables),
+            Self::Submission(_) => Own::Session(tables),
+        }
+    }
+}
+
+fn emit(
+    db: &dyn crate::Db,
+    root: SourceRoot,
+    scope: Scope,
+    opt: OptLevel,
+) -> Result<(EmittedPackage, Vec<SessionInitializer>), LoweringError> {
     let reach = visible_packages(db, root);
     // Every wire name a lowered type carries is resolved back to its
     // declaration through this table, so it must be injective over the
@@ -75,7 +140,7 @@ pub fn emit_package(
         )));
     }
     let class_fields = class_field_snapshot(db, reach);
-    let (types, refs) = type_pass(db, root)?;
+    let (types, refs) = type_pass(db, root, scope)?;
     let bodies = bodies::emit_bodies(db, &class_fields, &types, refs, opt)?;
     finish::finish(db, &class_fields, types, bodies, opt)
 }
@@ -109,6 +174,7 @@ pub(crate) fn class_field_snapshot<'db>(
 /// pooled, nothing compiled yet.
 pub(crate) struct TypePass<'db> {
     pub(crate) root: SourceRoot,
+    pub(crate) scope: Scope,
     pub(crate) files: Vec<SourceFile>,
     pub(crate) tables: LocalTables<'db>,
     pub(crate) classes: Vec<Object>,
@@ -131,8 +197,9 @@ pub(crate) struct TypePass<'db> {
 fn type_pass(
     db: &dyn crate::Db,
     root: SourceRoot,
+    scope: Scope,
 ) -> Result<(TypePass<'_>, RefTables), LoweringError> {
-    let files: Vec<SourceFile> = root.files(db).clone();
+    let files: Vec<SourceFile> = scope.files(db, root);
     let lowering = RuntimeLowering::of(db, root);
     let mut tables = LocalTables::default();
     let mut exports = ExportTable::default();
@@ -240,7 +307,7 @@ fn type_pass(
     // Building: every type the declarations carry resolves through the
     // completed tables. A declaration's own tag field is its operand.
     let bucket_index = |k: usize| u32::try_from(k).expect("bucket fits u32");
-    let mut refs = PackageRefs::new(db, root, Own::Unit(&tables));
+    let mut refs = PackageRefs::new(db, root, scope.own(&tables));
     let classes = class_locs
         .iter()
         .enumerate()
@@ -284,6 +351,7 @@ fn type_pass(
     Ok((
         TypePass {
             root,
+            scope,
             files,
             tables,
             classes,

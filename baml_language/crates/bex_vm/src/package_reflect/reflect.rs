@@ -9,7 +9,7 @@
 //! [`crate::package_reflect::type_class`].
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::{Arc, atomic::AtomicBool},
 };
 
@@ -20,24 +20,22 @@ use baml_compiler_diagnostics::{
 use baml_type::{normalize, normalize::TypeContext};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    ArtifactKind, AtomicValueSlot, HeapPtr, Interface, Object, RealizedTy, RuntimeCompileArtifact,
-    RuntimeSessionCompileArtifact, RuntimeSessionStepKind, SessionEvalLease, Ty, TyTemplate,
-    legacy_link::link_dynamic,
-    relink::{IndexOperand, visit_object_operands},
-    types::{
-        LocalName, MethodImpl, Package, PackageKind, RuntimeImplRule, RuntimePackage, SessionState,
-        TypeValue, Value,
-    },
+    DeclPath, FnPath, HeapPtr, Interface, Object, RealizedTy, SessionEvalLease, Ty, TyTemplate,
+    types::{LocalName, Package, PackageKind, RuntimePackage, SessionState, TypeValue, Value},
 };
 use indexmap::IndexMap;
 
 use super::{
     BamlClassPackage, BamlClassSession, BamlPackageReflect, Continuation, ImplResolver,
     NativeCallResult, PackageReflectImpl, copy,
+    graft::{LoadTarget, load_package},
 };
 use crate::{
     BexVm,
-    compile_artifact::{PinnedArtifact, RuntimeCompileArtifactSlot},
+    compile_artifact::{
+        ArtifactKind, PinnedArtifact, RuntimeCompileArtifact, RuntimeCompileArtifactSlot,
+        RuntimeSessionCompileArtifact, RuntimeSessionStepKind,
+    },
     errors::{VmBamlError, VmRustFnError},
     vm::CallableSignature,
 };
@@ -336,9 +334,8 @@ fn package_interface_type(
     super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Interface, ty_value)
 }
 
-fn allocate_runtime_declaration_types(
+pub(super) fn allocate_runtime_declaration_types(
     vm: &mut BexVm,
-    package_ptr: HeapPtr,
     classes: &IndexMap<LocalName, HeapPtr>,
     enums: &IndexMap<LocalName, HeapPtr>,
     interfaces: &IndexMap<LocalName, HeapPtr>,
@@ -381,57 +378,33 @@ fn allocate_runtime_declaration_types(
         })
         .collect::<Vec<_>>();
 
-    let mut type_values = IndexMap::new();
     // Each type value's head points at the declaration it names, so the value
-    // reaches its definition without a side table; the declaration's own `owner`
-    // is what keeps the package (and so its globals and dependencies) alive.
-    for (class_ptr, ty) in class_rows {
-        let type_ptr = vm.alloc_type(TypeValue::new(ty));
-        let Object::Class(class) = vm.get_object_mut(class_ptr) else {
-            unreachable!("runtime package class pointer changed kind")
-        };
-        class.owner = package_ptr;
-        type_values.insert(class_ptr, type_ptr);
-    }
-    for (enum_ptr, ty) in enum_rows {
-        let type_ptr = vm.alloc_type(TypeValue::new(ty));
-        let Object::Enum(enm) = vm.get_object_mut(enum_ptr) else {
-            unreachable!("runtime package enum pointer changed kind")
-        };
-        enm.owner = package_ptr;
-        type_values.insert(enum_ptr, type_ptr);
-    }
-    for (interface_ptr, ty) in interface_rows {
-        let type_ptr = vm.alloc_type(TypeValue::new(ty));
-        type_values.insert(interface_ptr, type_ptr);
-    }
-    type_values
+    // reaches its definition without a side table; the declaration's own
+    // `owner`, set when the loader adopted it, is what keeps the package (and
+    // so its globals and dependencies) alive.
+    class_rows
+        .into_iter()
+        .chain(enum_rows)
+        .chain(interface_rows)
+        .map(|(declaration, ty)| (declaration, vm.alloc_type(TypeValue::new(ty))))
+        .collect()
 }
 
 fn package_function_value(vm: &mut BexVm, package_ptr: HeapPtr, name: &LocalName) -> Option<Value> {
-    let local = name
-        .namespace
-        .iter()
-        .map(baml_type::Name::as_str)
-        .chain(std::iter::once(name.name.as_str()))
-        .collect::<Vec<_>>()
-        .join(".");
+    // The slot table is the one road for both kinds of package: a runtime
+    // package's own slots, a static package's mirror of the program's.
     let (slot, runtime_package) = match vm.get_object(package_ptr) {
-        Object::Package(package) => match package.runtime() {
-            Some(runtime) => {
-                let slot = runtime
-                    .global_names
-                    .get(&format!("user.{local}"))
-                    .or_else(|| runtime.global_names.get(&local));
-                let slot = slot?;
-                (bex_vm_types::GlobalIndex::from_raw(*slot), package_ptr)
-            }
-            None => {
-                let package = vm.packages.package_name(package_ptr)?;
-                let slot = vm.packages.global_by_name(&format!("{package}.{local}"))?;
-                (slot, HeapPtr::null())
-            }
-        },
+        Object::Package(package) => {
+            let slot = *package
+                .globals
+                .get(&DeclPath::Function(FnPath::Free(name.clone())))?;
+            let owner = if package.runtime().is_some() {
+                package_ptr
+            } else {
+                HeapPtr::null()
+            };
+            (bex_vm_types::GlobalIndex::from_raw(slot), owner)
+        }
         _ => return None,
     };
     Some(Value::object(vm.alloc(Object::GenericFunction(
@@ -497,94 +470,6 @@ fn check_function_contract(
             "function `{name}` has type `{actual}`, which is not a subtype of requested contract `{expected}`"
         ),
     ))
-}
-
-#[deprecated(
-    note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
-)]
-fn dependency_object(vm: &BexVm, package_ptr: HeapPtr, local: &str) -> Option<HeapPtr> {
-    let Object::Package(package) = vm.get_object(package_ptr) else {
-        return None;
-    };
-    let local_name = local_name(local)?;
-    package
-        .classes
-        .get(&local_name)
-        .or_else(|| package.enums.get(&local_name))
-        .or_else(|| package.interfaces.get(&local_name))
-        .or_else(|| package.functions.get(&local_name))
-        .copied()
-        .or_else(|| mounted_declaration(vm, package, local))
-        .or_else(|| dependency_named_object(vm, package_ptr, package, local))
-}
-
-/// Resolve `local` against a package's canonical object names: the lane for a
-/// declaration the package's item tables do not row under its own name. A
-/// class-inherent method is the case today — a consumer's static call imports
-/// it as `<alias>.<Class>.<method>`, the class-qualified spelling the emitter
-/// registered the function under — so it resolves exactly as the global lane
-/// resolves an alias-qualified global: `user.<local>` for a runtime image,
-/// `<canonical package>.<local>` for a static one.
-#[deprecated(
-    note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
-)]
-fn dependency_named_object(
-    vm: &BexVm,
-    package_ptr: HeapPtr,
-    package: &bex_vm_types::types::Package,
-    local: &str,
-) -> Option<HeapPtr> {
-    if let Some(runtime) = package.runtime() {
-        runtime
-            .object_names
-            .get(&format!("user.{local}"))
-            .or_else(|| runtime.object_names.get(local))
-            .copied()
-    } else {
-        let canonical = vm.packages.package_name(package_ptr)?;
-        vm.packages.object_by_name(&format!("{canonical}.{local}"))
-    }
-}
-
-/// Resolve `local` against a package's mount surface: the export name of a
-/// mounted type resolves to the declaration it is headed at, and the item name
-/// of any runtime declaration a mounted type reaches resolves to that
-/// declaration. This is the linker's name boundary for declarations that have
-/// no spelling of their own — the mount surface is the only place a consumer
-/// compile can name them, and its blob rows are spelled `alias.<item name>`.
-fn mounted_declaration(
-    vm: &BexVm,
-    package: &bex_vm_types::types::Package,
-    local: &str,
-) -> Option<HeapPtr> {
-    let head_declaration = |value: &bex_vm_types::types::TypeValue| match &value.ty {
-        RealizedTy::Class(head, ..) | RealizedTy::Enum(head, ..) => {
-            head.is_resolved().then(|| head.ptr())
-        }
-        _ => None,
-    };
-    if let Some(&type_ptr) = package.mounted_types.get(local)
-        && let Object::Type(value) = vm.get_object(type_ptr)
-        && let Some(ptr) = head_declaration(value)
-    {
-        return Some(ptr);
-    }
-    for &type_ptr in package.mounted_types.values() {
-        let Object::Type(value) = vm.get_object(type_ptr) else {
-            continue;
-        };
-        for ptr in crate::reachable::runtime_definitions(vm, &value.ty) {
-            let item = match vm.get_object(ptr) {
-                Object::Class(class) => class.name.item_name(),
-                Object::Enum(enm) => enm.name.item_name(),
-                _ => continue,
-            };
-            if item.as_str() == local {
-                return Some(ptr);
-            }
-        }
-    }
-    None
 }
 
 fn reflected_class_ty(vm: &BexVm, fqn: &str) -> RealizedTy {
@@ -888,7 +773,6 @@ impl Continuation for FinishPackageTests {
 }
 
 impl BamlClassPackage for PackageReflectImpl {
-    #[allow(clippy::too_many_lines)]
     fn _finish(
         vm: &mut BexVm,
         artifact: &Value,
@@ -909,29 +793,12 @@ impl BamlClassPackage for PackageReflectImpl {
             })
             .into();
         }
-        let plan = match link_dynamic(&artifact.units) {
-            Ok(plan) => plan,
-            Err(error) => {
-                return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                    message: format!("runtime link failed: {error}"),
-                })
-                .into();
-            }
-        };
         let dependencies = match pinned_dependencies(vm, &pins, packages) {
             Ok(dependencies) => dependencies,
             Err(error) => return error.into(),
         };
-
-        let program_package = plan
-            .program
-            .packages
-            .iter()
-            .find(|package| package.name.as_str() == "user")
-            .cloned()
-            .unwrap_or_default();
         let package = Package {
-            exported_names: program_package.exported_names.clone(),
+            exported_names: Vec::new(),
             classes: IndexMap::new(),
             enums: IndexMap::new(),
             interfaces: IndexMap::new(),
@@ -947,318 +814,26 @@ impl BamlClassPackage for PackageReflectImpl {
                 object_names: IndexMap::new(),
                 globals: Box::new([]),
                 global_names: IndexMap::new(),
+                bodies: IndexMap::new(),
                 type_values: IndexMap::new(),
                 diagnostics: artifact.diagnostics,
                 dependencies: dependencies.values().copied().collect(),
-                dependency_names: dependencies.clone(),
+                dependency_names: dependencies,
                 init: None,
                 initialized: false,
             })),
         };
         let package_ptr = vm.alloc(Object::Package(Box::new(package)));
-
-        let external_objects: std::collections::HashMap<usize, _> = plan
-            .external_objects
-            .iter()
-            .map(|(index, symbol)| (index.raw(), symbol))
-            .collect();
-        let mut objects = Vec::with_capacity(plan.program.objects.len());
-        for (index, object) in plan.program.objects.iter().enumerate() {
-            // A plan-declared external MUST resolve (generic functions are
-            // the carve-out: their value objects re-intern locally). The
-            // import planner only mints a symbol for a name the compile
-            // could see, so a miss is link skew — grafting the linker's
-            // `"<runtime-import>"` placeholder as a live object would
-            // surface later as an inscrutable error at first use.
-            if let Some(symbol) = external_objects.get(&index)
-                && !matches!(
-                    symbol.kind,
-                    bex_vm_types::legacy_unit::SymbolKind::GenericFn
-                )
-            {
-                let resolved = vm.packages.object_by_name(&symbol.fq_name).or_else(|| {
-                    // Alias-qualified names — a dependency's own exports and
-                    // its mount surface — resolve through the dependency.
-                    let (alias, local) = symbol.fq_name.split_once('.')?;
-                    dependency_object(vm, *dependencies.get(alias)?, local)
-                });
-                let Some(ptr) = resolved else {
-                    return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                        message: format!(
-                            "Package link could not resolve object `{}`",
-                            symbol.fq_name
-                        ),
-                    })
-                    .into();
-                };
-                objects.push(ptr);
-                continue;
-            }
-            let mut object = object.clone();
-            match &mut object {
-                Object::Function(function) => {
-                    function.runtime_package = package_ptr;
-                    function.bytecode.compact = Some(function.bytecode.lower_to_compact());
-                }
-                Object::GenericFunction(function) => {
-                    function.runtime_package = package_ptr;
-                }
-                // Member back-edges: reaching a declaration keeps its package
-                // alive (globals, dependencies, sibling declarations).
-                Object::Interface(interface) => interface.owner = package_ptr,
-                Object::TypeAlias(alias) => alias.owner = package_ptr,
-                _ => {}
-            }
-            objects.push(vm.alloc(object));
-        }
-        // Runtime identities are generative: remint before anything reads a
-        // declaration's tag, so every downstream read sees the real identity.
-        let owned_declarations: Vec<HeapPtr> = objects
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| !external_objects.contains_key(index))
-            .map(|(_, ptr)| *ptr)
-            .collect();
-        let reminted = remint_grafted_declarations(vm, &owned_declarations);
-
-        // Compile-time heap construction resolves `ConstValue::Object` into
-        // stable pointers before execution. Dynamic functions need the same
-        // pass after every linked object has been grafted. Keep any boxed float
-        // constants in the package-owned object graph as well.
-        let function_ptrs = objects
-            .iter()
-            .enumerate()
-            // External prefix entries are already-live functions. Their
-            // constants are resolved against the owning static/dynamic image,
-            // not against this newly linked candidate's object vector.
-            .filter(|(index, _)| !external_objects.contains_key(index))
-            .map(|(_, ptr)| *ptr)
-            .filter(|ptr| matches!(vm.get_object(*ptr), Object::Function(_)))
-            .collect::<Vec<_>>();
-        for function_ptr in function_ptrs {
-            let constants = match vm.get_object(function_ptr) {
-                Object::Function(function) => function.bytecode.constants.clone(),
-                _ => unreachable!(),
+        let loaded =
+            match load_package(vm, package_ptr, LoadTarget::Package, &artifact.emitted, &[]) {
+                Ok(loaded) => loaded,
+                Err(error) => return error.into(),
             };
-            let mut resolved = Vec::with_capacity(constants.len());
-            for constant in constants {
-                let value = match constant {
-                    bex_vm_types::ConstValue::Type(_)
-                    | bex_vm_types::ConstValue::ClassWithTypeArgs { .. }
-                    | bex_vm_types::ConstValue::Literal(_) => Value::NULL,
-                    bex_vm_types::ConstValue::Float(value) => {
-                        let ptr = vm.alloc_float(value);
-                        objects.push(ptr);
-                        Value::object(ptr)
-                    }
-                    other => other.to_value(|index| objects[index.raw()]),
-                };
-                resolved.push(value);
-            }
-            let Object::Function(function) = vm.get_object_mut(function_ptr) else {
-                unreachable!()
-            };
-            function.bytecode.resolved_constants = resolved;
-        }
-        bind_interface_defaults(
-            vm,
-            objects
-                .iter()
-                .enumerate()
-                .filter(|(index, _)| !external_objects.contains_key(index))
-                .map(|(_, ptr)| *ptr),
-            |index| objects[index.raw()],
-        );
-
-        let external_globals: std::collections::HashMap<usize, _> = plan
-            .external_globals
-            .iter()
-            .map(|(index, symbol)| (index.raw(), symbol))
-            .collect();
-        let mut globals = Vec::with_capacity(plan.program.globals.len());
-        for (index, value) in plan.program.globals.iter().enumerate() {
-            // Same law as the object lane: a plan-declared external global
-            // MUST resolve — falling through would materialize the plan's
-            // placeholder const as a silent `null` global.
-            if let Some(symbol) = external_globals.get(&index) {
-                let resolved = vm
-                    .packages
-                    .global_by_name(&symbol.fq_name)
-                    .map(|index| vm.globals.get(vm.proof(), index))
-                    .or_else(|| {
-                        let (alias, local) = symbol.fq_name.split_once('.')?;
-                        let Object::Package(package) = vm.get_object(*dependencies.get(alias)?)
-                        else {
-                            return None;
-                        };
-                        if let Some(runtime) = package.runtime() {
-                            let index = runtime
-                                .global_names
-                                .get(&format!("user.{local}"))
-                                .or_else(|| runtime.global_names.get(local))?;
-                            runtime.load_global(*index)
-                        } else {
-                            let canonical = vm.packages.package_name(*dependencies.get(alias)?)?;
-                            let index = vm
-                                .packages
-                                .global_by_name(&format!("{canonical}.{local}"))?;
-                            Some(vm.globals.get(vm.proof(), index))
-                        }
-                    });
-                let Some(value) = resolved else {
-                    return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                        message: format!(
-                            "Package link could not resolve global `{}`",
-                            symbol.fq_name
-                        ),
-                    })
-                    .into();
-                };
-                globals.push(AtomicValueSlot::new(value));
-                continue;
-            }
-            let value = match value {
-                bex_vm_types::ConstValue::Float(value) => Value::object(vm.alloc_float(*value)),
-                other => other.to_value(|index| objects[index.raw()]),
-            };
-            globals.push(AtomicValueSlot::new(value));
-        }
-
-        let classes = program_package
-            .classes
-            .iter()
-            .map(|(name, index)| (name.clone(), objects[index.raw()]))
-            .collect::<IndexMap<_, _>>();
-        let enums = program_package
-            .enums
-            .iter()
-            .map(|(name, index)| (name.clone(), objects[index.raw()]))
-            .collect::<IndexMap<_, _>>();
-        let interfaces = program_package
-            .interfaces
-            .iter()
-            .map(|(name, index)| (name.clone(), objects[index.raw()]))
-            .collect::<IndexMap<_, _>>();
-        // A recursive alias is a pooled declaration and relocates exactly like
-        // a class; published so a dependent can reach it through this
-        // package's tables (a consumer's `app.Tree` head binds to it).
-        let type_aliases = program_package
-            .type_aliases
-            .iter()
-            .map(|(name, index)| (name.clone(), objects[index.raw()]))
-            .collect::<IndexMap<_, _>>();
-        let mut impl_rules = IndexMap::new();
-        for (interface_index, rules) in &program_package.impl_rules {
-            let interface_ptr = objects[interface_index.raw()];
-            let mut pointers = Vec::with_capacity(rules.len());
-            for rule in rules {
-                let runtime_rule = RuntimeImplRule {
-                    interface_head: objects[rule.interface_head.raw()],
-                    for_ty_pattern: rule.for_ty_pattern.clone(),
-                    generic_param_bounds: rule.generic_param_bounds.clone(),
-                    interface_args: rule.interface_args.clone(),
-                    interface_assoc: rule.interface_assoc.clone(),
-                    methods: rule
-                        .methods
-                        .iter()
-                        .map(|(name, method)| {
-                            (
-                                name.clone(),
-                                MethodImpl {
-                                    fqn: objects[method.fqn.raw()],
-                                    frame: method.frame.clone(),
-                                },
-                            )
-                        })
-                        .collect(),
-                    field_links: rule.field_links.clone(),
-                };
-                let pointer = vm.alloc(Object::ImplRule(Box::new(runtime_rule)));
-                objects.push(pointer);
-                pointers.push(pointer);
-            }
-            impl_rules.insert(interface_ptr, pointers);
-        }
-        // Every owned object now exists — including the impl rules, whose
-        // patterns carry heads — so the graft can bind and prove totality.
-        let owned_for_bind: Vec<HeapPtr> = objects
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| !external_objects.contains_key(index))
-            .map(|(_, ptr)| *ptr)
-            .collect();
-        let mut named_surfaces = Vec::new();
-        for (alias, &dep_ptr) in &dependencies {
-            dependency_named_declarations(vm, alias, dep_ptr, &mut named_surfaces);
-        }
-        if let Err(error) =
-            bind_graft_type_heads(vm, &objects, &owned_for_bind, &named_surfaces, &reminted)
-        {
-            return error.into();
-        }
-        let functions = program_package
-            .functions
-            .iter()
-            .map(|(name, index)| (name.clone(), objects[index.raw()]))
-            .collect::<IndexMap<_, _>>();
-        // `global_names` is the runtime package's *link* table: a consumer
-        // mounting this package resolves its imports here. Interface bodies
-        // do not publish: a consumer reaches this package's impl methods
-        // through the virtual road (rule tables carry body pointers; adopted
-        // defaults resolve through the interface's `default_fn`) and checks
-        // their signatures through the package-interface blob — no current
-        // lowering emits a name-addressed body reference against a mounted
-        // surface. A future devirtualized direct call must reference the
-        // body rule-relatively, never by name.
-        let global_names = plan
-            .program
-            .function_global_indices
-            .iter()
-            .chain(&plan.program.let_global_indices)
-            .filter(|(name, _)| name.starts_with("user."))
-            .map(|(name, index)| (name.clone(), *index))
-            .collect::<IndexMap<_, _>>();
-        // The object-lane twin of `global_names`: every named function this
-        // package compiled, under its canonical spelling. A consumer's static
-        // call to a class-inherent method imports the function object by that
-        // class-qualified name, which no item table rows (see
-        // `dependency_named_object`).
-        let object_names = plan
-            .program
-            .function_indices
-            .iter()
-            .filter(|(name, _)| name.starts_with("user."))
-            .map(|(name, index)| (name.clone(), objects[*index]))
-            .collect::<IndexMap<_, _>>();
-        let init = plan
-            .program
-            .package_init_order
-            .iter()
-            .find(|name| name.as_str() == "$init" || name.starts_with("user.$init"))
-            .and_then(|name| plan.program.function_indices.get(name))
-            .map(|index| objects[*index]);
-        let test_init = program_package.test_init.map(|index| objects[index.raw()]);
-
-        let type_values =
-            allocate_runtime_declaration_types(vm, package_ptr, &classes, &enums, &interfaces);
-
         let Object::Package(package) = vm.get_object_mut(package_ptr) else {
             unreachable!("package was just allocated")
         };
-        package.classes = classes;
-        package.enums = enums;
-        package.interfaces = interfaces;
-        package.type_aliases = type_aliases;
-        package.impl_rules = impl_rules;
-        package.functions = functions;
-        package.test_init = test_init;
-        let runtime = package.runtime_mut().expect("runtime package image");
-        runtime.objects = objects.into_boxed_slice();
-        runtime.object_names = object_names;
-        runtime.globals = globals.into_boxed_slice();
-        runtime.global_names = global_names;
-        runtime.type_values = type_values;
-        runtime.init = init;
+        package.test_init = loaded.test_init;
+        package.runtime_mut().expect("runtime package image").init = loaded.init;
 
         let wrapper = copy::Package {
             _inner: Value::object(package_ptr),
@@ -1267,7 +842,7 @@ impl BamlClassPackage for PackageReflectImpl {
         let wrapper_ptr = wrapper
             .as_object_ptr()
             .expect("Package copy helper allocates an instance");
-        if let Some(init) = init {
+        if let Some(init) = loaded.init {
             NativeCallResult::YieldToCall {
                 callee: init,
                 args: Vec::new(),
@@ -1675,275 +1250,6 @@ fn pinned_dependencies(
     Ok(dependencies)
 }
 
-fn remint_grafted_declarations(
-    vm: &mut BexVm,
-    owned: &[HeapPtr],
-) -> Vec<(baml_type::typetag::TypeTag, bex_vm_types::TypeHead)> {
-    let mut reminted = Vec::new();
-    for &ptr in owned {
-        let fresh = baml_type::typetag::TypeTag::fresh_dynamic();
-        let old = match vm.get_object_mut(ptr) {
-            Object::Class(class) => std::mem::replace(&mut class.type_tag, fresh),
-            Object::Enum(enm) => std::mem::replace(&mut enm.type_tag, fresh),
-            Object::Interface(interface) => std::mem::replace(&mut interface.type_tag, fresh),
-            Object::TypeAlias(alias) => std::mem::replace(&mut alias.type_tag, fresh),
-            _ => continue,
-        };
-        reminted.push((old, bex_vm_types::TypeHead::new(ptr, fresh)));
-    }
-    reminted
-}
-
-/// Collect every declaration a graft can legitimately name through `alias`,
-/// as `(fq_name, declaration)` rows for [`bind_graft_type_heads`]'s
-/// named-surface bridge: the dependency's exported declarations and its
-/// mounted types (whose values are `Object::Type`s wrapping the declaration's
-/// own head). Non-declarations are filtered by the bind itself.
-#[deprecated(
-    note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
-)]
-fn dependency_named_declarations(
-    vm: &BexVm,
-    alias: &str,
-    package_ptr: HeapPtr,
-    out: &mut Vec<(String, HeapPtr)>,
-) {
-    let Object::Package(package) = vm.get_object(package_ptr) else {
-        return;
-    };
-    let fq = |local: &bex_vm_types::types::LocalName| -> String {
-        std::iter::once(alias)
-            .chain(local.namespace.iter().map(baml_type::Name::as_str))
-            .chain(std::iter::once(local.name.as_str()))
-            .collect::<Vec<_>>()
-            .join(".")
-    };
-    for (local, &ptr) in package
-        .classes
-        .iter()
-        .chain(&package.enums)
-        .chain(&package.interfaces)
-        .chain(&package.type_aliases)
-    {
-        out.push((fq(local), ptr));
-    }
-    for (name, &type_ptr) in &package.mounted_types {
-        let Object::Type(value) = vm.get_object(type_ptr) else {
-            continue;
-        };
-        let head = match &value.ty {
-            RealizedTy::Class(head, _) => head,
-            RealizedTy::Enum(head) => head,
-            RealizedTy::Interface(head, _, _) => head,
-            RealizedTy::TypeAlias(head) => head,
-            _ => continue,
-        };
-        if head.is_resolved() {
-            out.push((format!("{alias}.{name}"), head.ptr()));
-        }
-        // Every runtime declaration the mounted type reaches is spelled
-        // `alias.<item name>` in the consumer compile world (the blob rows
-        // name it that way), so index those spellings too.
-        for ptr in crate::reachable::runtime_definitions(vm, &value.ty) {
-            let item = match vm.get_object(ptr) {
-                Object::Class(class) => class.name.item_name(),
-                Object::Enum(enm) => enm.name.item_name(),
-                _ => continue,
-            };
-            out.push((format!("{alias}.{item}"), ptr));
-        }
-    }
-}
-
-/// Bind every type head an owned grafted object carries to the declaration it
-/// names — the runtime-package twin of [`bex_heap::BexHeap::bind_type_heads`].
-///
-/// A runtime compile's emit mints heads tag-only (the flat emitter's content
-/// tags), so each grafted object arrives carrying unresolved heads. Tags
-/// resolve against the plan pool first (`plan_objects` spans it — its own
-/// declarations *and* the live external ones its symbols imported, so a
-/// reference into an earlier eval lands on that eval's object), then against
-/// a transient index over the compile-time pool for the type-only references
-/// no import symbol carries, keyed by the content tag of each declaration's
-/// name as well as its live tag. Both indices are built here and dropped
-/// here, and every hit adopts the declaration's own head.
-///
-/// A tag nothing declares is a link error, not a head to leave dangling: an
-/// unresolved head is untraceable by the collector and unresolvable by
-/// dispatch.
-fn bind_graft_type_heads(
-    vm: &mut BexVm,
-    plan_objects: &[HeapPtr],
-    owned: &[HeapPtr],
-    named_surfaces: &[(String, HeapPtr)],
-    reminted: &[(baml_type::typetag::TypeTag, bex_vm_types::TypeHead)],
-) -> Result<(), VmRustFnError> {
-    // Every entry carries BOTH halves off the target declaration: a head that
-    // lands here adopts the declaration's identity, not just its address. For
-    // a plan-local or compile-time target the two tags coincide; for a
-    // runtime-created target reached by name they do not, and the live tag is
-    // the identity.
-    let mut by_tag: std::collections::HashMap<baml_type::typetag::TypeTag, bex_vm_types::TypeHead> =
-        std::collections::HashMap::new();
-    // Reminted rows first: a plan-internal reference spells its sibling by the
-    // emit-time content tag, and must land on the reminted identity — the
-    // plan's own declaration wins that spelling over any same-named surface.
-    for &(old_tag, head) in reminted {
-        by_tag.insert(old_tag, head);
-        by_tag.insert(head.tag(), head);
-    }
-    for &ptr in plan_objects {
-        if let Some(tag) = bex_heap::BexHeap::declaration_tag(vm.get_object(ptr)) {
-            by_tag
-                .entry(tag)
-                .or_insert_with(|| bex_vm_types::TypeHead::new(ptr, tag));
-        }
-    }
-    // A declaration reachable by *name* — a dependency's export, a mounted
-    // type, an earlier eval's declaration — may be runtime-created, in which
-    // case its live tag is a counter mint while the head naming it carries a
-    // content tag. Emit spells such a reference by whichever name it resolved
-    // to — the surface's mount name or the declaration's own (synthesized)
-    // name — so each declaration is indexed under both spellings' tags, plus
-    // its live tag for a head that already carries the identity.
-    for (fq_name, ptr) in named_surfaces {
-        let object = vm.get_object(*ptr);
-        let Some(live_tag) = bex_heap::BexHeap::declaration_tag(object) else {
-            continue;
-        };
-        let bound = bex_vm_types::TypeHead::new(*ptr, live_tag);
-        // An anonymous declaration has no spelling of its own — it is only
-        // reachable through the surface names it was mounted under.
-        let declared = match object {
-            Object::Class(class) => class.name.declared().cloned(),
-            Object::Enum(enm) => enm.name.declared().cloned(),
-            Object::Interface(interface) => Some(interface.name.clone()),
-            Object::TypeAlias(alias) => Some(alias.name.clone()),
-            _ => None,
-        };
-        if let Some(name) = declared {
-            by_tag
-                .entry(baml_type::typetag::TypeTag::of_head(
-                    &name.render_dotted(false),
-                ))
-                .or_insert(bound);
-        }
-        by_tag
-            .entry(baml_type::typetag::TypeTag::of_head(fq_name))
-            .or_insert(bound);
-        by_tag.entry(live_tag).or_insert(bound);
-    }
-    let compile_time = vm.heap.compile_time_declaration_index();
-    let mut unbound: Vec<baml_type::typetag::TypeTag> = Vec::new();
-    for &ptr in owned {
-        bex_vm_types::head_walk::visit_object_heads_mut(vm.get_object_mut(ptr), &mut |head| {
-            if head.is_resolved() {
-                return;
-            }
-            // Both indexes hand back the declaration's own head: a head
-            // spelled by a content tag lands on the linker-assigned identity.
-            if let Some(&bound) = by_tag
-                .get(&head.tag())
-                .or_else(|| compile_time.get(&head.tag()))
-            {
-                *head = bound;
-            } else {
-                unbound.push(head.tag());
-            }
-        });
-    }
-    if unbound.is_empty() {
-        return Ok(());
-    }
-    unbound.sort_unstable();
-    unbound.dedup();
-    Err(VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-        message: format!(
-            "runtime link produced type references nothing declares (tags {unbound:?})"
-        ),
-    }))
-}
-
-/// Bind each freshly grafted interface's default-method bodies from the pool
-/// index its emit wrote to the heap pointer the object landed at — the
-/// runtime-package twin of the compile-time heap's own resolution pass.
-/// `resolve` maps a plan-local `ObjectIndex` to its live pointer.
-fn bind_interface_defaults(
-    vm: &mut BexVm,
-    candidates: impl Iterator<Item = HeapPtr>,
-    resolve: impl Fn(bex_vm_types::ObjectIndex) -> HeapPtr,
-) {
-    let interfaces = candidates
-        .filter(|ptr| matches!(vm.get_object(*ptr), Object::Interface(_)))
-        .collect::<Vec<_>>();
-    for interface_ptr in interfaces {
-        let Object::Interface(interface) = vm.get_object_mut(interface_ptr) else {
-            unreachable!()
-        };
-        for method in &mut interface.methods {
-            if let Some(default) = method.default {
-                method.default_fn = resolve(default);
-            }
-        }
-    }
-}
-
-fn session_external_object(
-    vm: &BexVm,
-    session: HeapPtr,
-    dependencies: &IndexMap<String, HeapPtr>,
-    name: &str,
-) -> Option<HeapPtr> {
-    if let Object::Package(package) = vm.get_object(session)
-        && let Some(pointer) = package
-            .runtime()
-            .and_then(|runtime| runtime.object_names.get(name))
-    {
-        return Some(*pointer);
-    }
-    vm.packages.object_by_name(name).or_else(|| {
-        let (alias, local) = name.split_once('.')?;
-        dependency_object(vm, *dependencies.get(alias)?, local)
-    })
-}
-
-fn session_external_global(
-    vm: &BexVm,
-    session: HeapPtr,
-    dependencies: &IndexMap<String, HeapPtr>,
-    name: &str,
-) -> Option<Value> {
-    if let Object::Package(package) = vm.get_object(session)
-        && let Some(runtime) = package.runtime()
-        && let Some(index) = runtime.global_names.get(name)
-    {
-        return runtime.load_global(*index);
-    }
-    vm.packages
-        .global_by_name(name)
-        .map(|index| vm.globals.get(vm.proof(), index))
-        .or_else(|| {
-            let (alias, local) = name.split_once('.')?;
-            let dependency = *dependencies.get(alias)?;
-            let Object::Package(package) = vm.get_object(dependency) else {
-                return None;
-            };
-            if let Some(runtime) = package.runtime() {
-                let index = runtime
-                    .global_names
-                    .get(&format!("user.{local}"))
-                    .or_else(|| runtime.global_names.get(local))?;
-                runtime.load_global(*index)
-            } else {
-                let package_name = vm.packages.package_name(dependency)?;
-                let index = vm
-                    .packages
-                    .global_by_name(&format!("{package_name}.{local}"))?;
-                Some(vm.globals.get(vm.proof(), index))
-            }
-        })
-}
-
 #[derive(Clone, Copy)]
 struct SessionAction {
     helper: HeapPtr,
@@ -2047,406 +1353,45 @@ impl Continuation for SessionExecution {
     }
 }
 
+/// Graft one submission onto the session package: load it (earlier
+/// submissions bind as `SELF` imports, a `let` to its cell), then pair each
+/// recorded initializer with the step it commits.
 fn graft_session_submission(
     vm: &mut BexVm,
     package_ptr: HeapPtr,
     artifact: &RuntimeCompileArtifact,
     metadata: &RuntimeSessionCompileArtifact,
 ) -> Result<Vec<SessionAction>, VmRustFnError> {
-    let plan = link_dynamic(&artifact.units).map_err(|error| VmBamlError::InvalidArgument {
-        message: format!("Session runtime link failed: {error}"),
-    })?;
-    let (dependencies, existing_globals, existing_objects, existing_len, runtime_objects) = {
-        let Object::Package(package) = vm.get_object(package_ptr) else {
-            unreachable!("Session payload is a Package")
-        };
-        let runtime = package.runtime().expect("Session runtime image");
-        (
-            runtime.dependency_names.clone(),
-            runtime.global_names.clone(),
-            runtime.object_names.clone(),
-            runtime.globals.len(),
-            runtime.objects.to_vec(),
-        )
-    };
-    let external_objects = plan
-        .external_objects
-        .iter()
-        .map(|(index, symbol)| (index.raw(), symbol))
-        .collect::<HashMap<_, _>>();
-    let external_globals = plan
-        .external_globals
-        .iter()
-        .map(|(index, symbol)| (index.raw(), symbol))
-        .collect::<HashMap<_, _>>();
-
-    // Assign stable Session slots first. Imports of prior Session cells reuse
-    // their old slot; every new definition gets a fresh slot, which is the
-    // cell/shadowing boundary.
-    let mut global_map = vec![0usize; plan.program.globals.len()];
-    let mut next_global = existing_len;
-    let mut imported_values = HashMap::<usize, Value>::new();
-    let mut cached_import_names = Vec::<(String, usize)>::new();
-    for (plan_index, stable_slot) in global_map.iter_mut().enumerate() {
-        if let Some(symbol) = external_globals.get(&plan_index) {
-            if let Some(&stable) = existing_globals.get(&symbol.fq_name) {
-                *stable_slot = stable;
-                continue;
-            }
-            let value = session_external_global(vm, package_ptr, &dependencies, &symbol.fq_name)
-                .ok_or_else(|| VmBamlError::InvalidArgument {
-                    message: format!("Session link could not resolve global `{}`", symbol.fq_name),
-                })?;
-            *stable_slot = next_global;
-            imported_values.insert(plan_index, value);
-            cached_import_names.push((symbol.fq_name.clone(), next_global));
-            next_global += 1;
-        } else {
-            *stable_slot = next_global;
-            next_global += 1;
-        }
-    }
-
-    // Allocate all owned objects before patching any object operands so cycles
-    // and mutually-recursive declarations have a complete pointer map.
-    let mut objects = Vec::with_capacity(plan.program.objects.len());
-    let mut owned = Vec::new();
-    for (index, object) in plan.program.objects.iter().enumerate() {
-        // A plan-declared external MUST resolve (generic functions are the
-        // carve-out: their value objects re-intern locally) — the same law
-        // the global loop above already enforces. Falling through would
-        // graft the linker's `"<runtime-import>"` placeholder as a live
-        // object.
-        if let Some(symbol) = external_objects.get(&index)
-            && !matches!(
-                symbol.kind,
-                bex_vm_types::legacy_unit::SymbolKind::GenericFn
-            )
-        {
-            let pointer = existing_objects
-                .get(&symbol.fq_name)
-                .copied()
-                .or_else(|| {
-                    session_external_object(vm, package_ptr, &dependencies, &symbol.fq_name)
-                })
-                .ok_or_else(|| VmBamlError::InvalidArgument {
-                    message: format!("Session link could not resolve object `{}`", symbol.fq_name),
-                })?;
-            objects.push(pointer);
-            continue;
-        }
-        let pointer = vm.alloc(object.clone());
-        objects.push(pointer);
-        owned.push(pointer);
-    }
-    // Runtime identities are generative: remint before anything reads a
-    // declaration's tag (`allocate_runtime_declaration_types` builds this
-    // eval's `type` values off them below).
-    let reminted = remint_grafted_declarations(vm, &owned);
-    let mut object_map = vec![0usize; objects.len()];
-    let mut appended_objects = Vec::new();
-    for (index, pointer) in objects.iter().copied().enumerate() {
-        if let Some(stable) = runtime_objects
-            .iter()
-            .position(|existing| *existing == pointer)
-        {
-            object_map[index] = stable;
-        } else {
-            object_map[index] = runtime_objects.len() + appended_objects.len();
-            appended_objects.push(pointer);
-        }
-    }
-    let stable_objects = runtime_objects
-        .iter()
-        .copied()
-        .chain(appended_objects.iter().copied())
-        .collect::<Vec<_>>();
-    for pointer in &owned {
-        let object = vm.get_object_mut(*pointer);
-        visit_object_operands(object, |operand| match operand {
-            IndexOperand::Object(index) => {
-                *index = bex_vm_types::ObjectIndex::from_raw(object_map[index.raw()]);
-            }
-            IndexOperand::Global(index) => {
-                *index = bex_vm_types::GlobalIndex::from_raw(global_map[index.raw()]);
-            }
-        });
-        match object {
-            Object::Function(function) => {
-                function.runtime_package = package_ptr;
-                function.bytecode.compact = Some(function.bytecode.lower_to_compact());
-            }
-            Object::GenericFunction(function) => function.runtime_package = package_ptr,
-            // Member back-edges, as in `Package.compile` above.
-            Object::Interface(interface) => interface.owner = package_ptr,
-            Object::TypeAlias(alias) => alias.owner = package_ptr,
-            _ => {}
-        }
-    }
-
-    let function_ptrs = owned
-        .iter()
-        .copied()
-        .filter(|pointer| matches!(vm.get_object(*pointer), Object::Function(_)))
-        .collect::<Vec<_>>();
-    let mut extra_owned = Vec::new();
-    for function_ptr in function_ptrs {
-        let constants = match vm.get_object(function_ptr) {
-            Object::Function(function) => function.bytecode.constants.clone(),
-            _ => unreachable!(),
-        };
-        let mut resolved = Vec::with_capacity(constants.len());
-        for constant in constants {
-            let value = match constant {
-                bex_vm_types::ConstValue::Type(_)
-                | bex_vm_types::ConstValue::ClassWithTypeArgs { .. }
-                | bex_vm_types::ConstValue::Literal(_) => Value::NULL,
-                bex_vm_types::ConstValue::Float(value) => {
-                    let pointer = vm.alloc_float(value);
-                    extra_owned.push(pointer);
-                    Value::object(pointer)
-                }
-                other => other.to_value(|index| stable_objects[index.raw()]),
-            };
-            resolved.push(value);
-        }
-        let Object::Function(function) = vm.get_object_mut(function_ptr) else {
-            unreachable!()
-        };
-        function.bytecode.resolved_constants = resolved;
-    }
-    bind_interface_defaults(vm, owned.iter().copied(), |index| {
-        stable_objects[index.raw()]
-    });
-
-    let mut appended = vec![Value::NULL; next_global - existing_len];
-    for (plan_index, constant) in plan.program.globals.iter().enumerate() {
-        let stable = global_map[plan_index];
-        if stable < existing_len {
-            continue;
-        }
-        let value = if let Some(value) = imported_values.get(&plan_index) {
-            *value
-        } else {
-            match constant {
-                bex_vm_types::ConstValue::Float(value) => {
-                    let pointer = vm.alloc_float(*value);
-                    extra_owned.push(pointer);
-                    Value::object(pointer)
-                }
-                other => other.to_value(|index| objects[index.raw()]),
-            }
-        };
-        appended[stable - existing_len] = value;
-    }
-
-    let program_package = plan
-        .program
-        .packages
-        .iter()
-        .find(|package| package.name.as_str() == "user")
-        .cloned()
-        .unwrap_or_default();
-    let new_classes = program_package
-        .classes
-        .iter()
-        .map(|(name, index)| (name.clone(), objects[index.raw()]))
-        .collect::<IndexMap<_, _>>();
-    let new_enums = program_package
-        .enums
-        .iter()
-        .map(|(name, index)| (name.clone(), objects[index.raw()]))
-        .collect::<IndexMap<_, _>>();
-    let new_interfaces = program_package
-        .interfaces
-        .iter()
-        .map(|(name, index)| (name.clone(), objects[index.raw()]))
-        .collect::<IndexMap<_, _>>();
-    // Recursive aliases are pooled declarations now, so they relocate exactly
-    // like classes: resolve each index against the freshly linked image.
-    let new_type_aliases = program_package
-        .type_aliases
-        .iter()
-        .map(|(name, index)| (name.clone(), objects[index.raw()]))
-        .collect::<IndexMap<_, _>>();
-    let new_type_values = allocate_runtime_declaration_types(
+    let loaded = load_package(
         vm,
         package_ptr,
-        &new_classes,
-        &new_enums,
-        &new_interfaces,
-    );
-    let new_functions = program_package
-        .functions
-        .iter()
-        .map(|(name, index)| (name.clone(), objects[index.raw()]))
-        .collect::<IndexMap<_, _>>();
-    let mut new_impl_rules = IndexMap::<HeapPtr, Vec<HeapPtr>>::new();
-    for (interface_index, rules) in &program_package.impl_rules {
-        let interface = objects[interface_index.raw()];
-        let mut pointers = Vec::new();
-        for rule in rules {
-            let runtime_rule = RuntimeImplRule {
-                interface_head: objects[rule.interface_head.raw()],
-                for_ty_pattern: rule.for_ty_pattern.clone(),
-                generic_param_bounds: rule.generic_param_bounds.clone(),
-                interface_args: rule.interface_args.clone(),
-                interface_assoc: rule.interface_assoc.clone(),
-                methods: rule
-                    .methods
-                    .iter()
-                    .map(|(name, method)| {
-                        (
-                            name.clone(),
-                            MethodImpl {
-                                fqn: objects[method.fqn.raw()],
-                                frame: method.frame.clone(),
-                            },
-                        )
-                    })
-                    .collect(),
-                field_links: rule.field_links.clone(),
-            };
-            let pointer = vm.alloc(Object::ImplRule(Box::new(runtime_rule)));
-            extra_owned.push(pointer);
-            pointers.push(pointer);
-        }
-        new_impl_rules.insert(interface, pointers);
-    }
-    // Every owned object now exists — including the impl rules, whose patterns
-    // carry heads — so the graft can bind and prove totality. `extra_owned`'s
-    // boxed floats carry no heads and pass through the walk untouched.
-    let bind_set: Vec<HeapPtr> = owned.iter().chain(&extra_owned).copied().collect();
-    let mut named_surfaces = Vec::new();
-    for (alias, &dep_ptr) in &dependencies {
-        dependency_named_declarations(vm, alias, dep_ptr, &mut named_surfaces);
-    }
-    // A session's earlier evals published their declarations under fully
-    // qualified names; a later eval's type positions name them the same way.
-    if let Object::Package(package) = vm.get_object(package_ptr)
-        && let Some(runtime) = package.runtime()
-    {
-        named_surfaces.extend(
-            runtime
-                .object_names
-                .iter()
-                .map(|(name, &ptr)| (name.clone(), ptr)),
-        );
-    }
-    bind_graft_type_heads(vm, &objects, &bind_set, &named_surfaces, &reminted)?;
-
-    let mut object_name_updates = IndexMap::new();
-    for (name, index) in &plan.program.function_indices {
-        if name.starts_with("user.") {
-            object_name_updates.insert(name.clone(), objects[*index]);
-        }
-    }
-    for (name, pointer) in new_classes.iter().chain(&new_enums).chain(&new_interfaces) {
-        object_name_updates.insert(
-            format!(
-                "user.{}",
-                display_local_name(name).trim_start_matches("root.")
-            ),
-            *pointer,
-        );
-    }
-    // Interface bodies do not publish (see the `Package.compile` twin): a
-    // later eval reaches this eval's impl methods only through the virtual
-    // road — earlier-eval declarations are mounted surfaces with no source
-    // lane, so no static body reference can even be lowered against them.
-    let global_name_updates = plan
-        .program
-        .function_global_indices
-        .iter()
-        .chain(&plan.program.let_global_indices)
-        .filter(|(name, _)| name.starts_with("user."))
-        .map(|(name, index)| (name.clone(), global_map[*index]))
-        .collect::<Vec<_>>();
-
-    let named_slots = plan
-        .program
-        .function_global_indices
-        .values()
-        .chain(plan.program.let_global_indices.values())
-        .copied()
-        .collect::<HashSet<_>>();
-    let helper_globals = plan
-        .program
-        .globals
-        .iter()
-        .enumerate()
-        .filter(|(index, _)| !named_slots.contains(index))
-        .filter_map(|(_, value)| match value {
-            bex_vm_types::ConstValue::Object(index) => match &plan.program.objects[*index] {
-                // An interface body owns an unnamed slot but is not an init
-                // helper — including it would shift every positional
-                // `helper_slot` ordinal the compile side assigned.
-                Object::Function(function)
-                    if function.source_file == metadata.submission_name
-                        && !function.is_interface_body =>
-                {
-                    Some(objects[index.raw()])
-                }
-                _ => None,
-            },
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    let step_by_global = metadata
+        LoadTarget::Session,
+        &artifact.emitted,
+        &metadata.initializers,
+    )?;
+    let step_by_global: HashMap<&LocalName, usize> = metadata
         .steps
         .iter()
         .enumerate()
-        .map(|(index, step)| (step.global.as_str(), index))
-        .collect::<HashMap<_, _>>();
-    let actions = metadata
-        .initializers
-        .iter()
-        .map(|initializer| {
-            let helper = helper_globals
-                .get(initializer.helper_slot as usize)
-                .copied()
-                .ok_or_else(|| VmBamlError::InvalidArgument {
-                    message: "Session initializer helper was not linked".to_string(),
-                })?;
-            let plan_global = plan
-                .program
-                .let_global_indices
-                .get(&initializer.target_global)
-                .ok_or_else(|| VmBamlError::InvalidArgument {
-                    message: format!(
-                        "Session initializer target `{}` was not linked",
-                        initializer.target_global
-                    ),
-                })?;
-            let step = step_by_global
-                .get(initializer.target_global.as_str())
-                .copied();
-            let target = step
-                .and_then(|index| metadata.steps[index].commit_global.as_ref())
-                .and_then(|name| existing_globals.get(name))
-                .copied()
-                .unwrap_or(global_map[*plan_global]);
-            Ok(SessionAction {
-                helper,
-                target,
-                step,
-            })
-        })
-        .collect::<Result<Vec<_>, VmBamlError>>()?;
+        .map(|(index, step)| (&step.global, index))
+        .collect();
     let Object::Package(package) = vm.get_object_mut(package_ptr) else {
-        unreachable!()
+        unreachable!("Session payload is a Package")
     };
-    package.classes.extend(new_classes);
-    package.enums.extend(new_enums);
-    package.interfaces.extend(new_interfaces);
-    package.functions.extend(new_functions);
-    package.type_aliases.extend(new_type_aliases);
-    for (interface, rules) in new_impl_rules {
-        package
-            .impl_rules
-            .entry(interface)
-            .or_default()
-            .extend(rules);
+    let mut actions = Vec::with_capacity(loaded.initializers.len());
+    for ((helper, slot), initializer) in loaded.initializers.iter().zip(&metadata.initializers) {
+        let step = step_by_global.get(&initializer.target).copied();
+        // An assignment commits into the cell it names, not the step's own
+        // slot.
+        let target = step
+            .and_then(|index| metadata.steps[index].commit_global.as_ref())
+            .and_then(|commit| package.globals.get(&DeclPath::Let(commit.clone())).copied())
+            .unwrap_or(*slot);
+        actions.push(SessionAction {
+            helper: *helper,
+            target,
+            step,
+        });
     }
     package.interface_blob.clone_from(&artifact.interface_blob);
     let PackageKind::Session { runtime, state } = &mut package.kind else {
@@ -2459,26 +1404,11 @@ fn graft_session_submission(
         );
     }
     state.visible.extend(metadata.declarations.clone());
-    let mut globals = runtime.globals.to_vec();
-    globals.extend(appended.into_iter().map(AtomicValueSlot::new));
-    runtime.globals = globals.into_boxed_slice();
-    let mut retained_objects = runtime.objects.to_vec();
-    retained_objects.extend(appended_objects);
-    retained_objects.extend(extra_owned);
-    runtime.objects = retained_objects.into_boxed_slice();
-    runtime.object_names.extend(object_name_updates);
-    runtime.global_names.extend(cached_import_names);
-    runtime.global_names.extend(global_name_updates);
-    // Every declaration submission is generative: it creates fresh declarations
-    // owned by the Session package. Overwriting a visible name updates only the
-    // newest lookup; values and functions from older submissions keep pointing
-    // at the declarations they were built against.
-    runtime.type_values.extend(new_type_values);
     runtime.diagnostics.clone_from(&artifact.diagnostics);
-    // The maps above now hold fresh young pointers inside a package object that
-    // may itself have been promoted long ago. Without dirtying its card, a minor
-    // collection would never rescan it and the new declarations would be
-    // collected out from under the session.
+    // The tables above now hold fresh young pointers inside a package object
+    // that may itself have been promoted long ago. Without dirtying its card,
+    // a minor collection would never rescan it and the new declarations
+    // would be collected out from under the session.
     vm.tlab.heap().conservative_write_barrier(package_ptr);
     Ok(actions)
 }
@@ -2520,6 +1450,7 @@ impl BamlClassSession for PackageReflectImpl {
                     object_names: IndexMap::new(),
                     globals: Box::new([]),
                     global_names: IndexMap::new(),
+                    bodies: IndexMap::new(),
                     type_values: IndexMap::new(),
                     diagnostics: Vec::new(),
                     dependencies: dependencies.values().copied().collect(),

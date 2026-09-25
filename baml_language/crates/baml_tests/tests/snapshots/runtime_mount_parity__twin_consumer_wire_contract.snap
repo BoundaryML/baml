@@ -2,14 +2,16 @@
 source: crates/baml_tests/tests/runtime_mount_parity.rs
 expression: wire_contract(mounted_unit)
 ---
-unit main.baml (package user)
-import object Enum app.Level
-import object Class app.Widget
-import global Function app.make
-import global Function app.Widget.bump
-import global Function app.Widget.of
-import global Function baml.String.from
-export object user.level_name = Code(2)
-export object user.summary = Code(12)
-export global user.level_name = 0
-export global user.summary = 1
+dep @1 app via @0
+dep @2 baml via @0
+import object @1 enum Level
+import object @1 class Widget
+import object @1 interface Describable
+import global @1 function make
+import global @1 method Widget.bump
+import global @1 method Widget.of
+import global @2 method String.from
+export object function level_name = Code(2)
+export object function summary = Code(12)
+export global function level_name = 0
+export global function summary = 1

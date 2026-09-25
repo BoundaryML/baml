@@ -6355,6 +6355,12 @@ impl<'db> InferenceContext<'db> {
         member: &baml_type::Name,
     ) -> Option<crate::method_resolution::InterfaceMember<'db>> {
         let (target, self_ty) = self.default_receiver_target()?;
+        // BUG: only a SOURCE interface's default is reachable here. An impl
+        // of a MOUNTED interface cannot delegate to that interface's default
+        // body (`default.m()` reports E0003, unresolved name), although the
+        // exported row carries the method and the runtime loader binds a
+        // mounted default body (`DeclPath::InterfaceBody(BodyKey::Default)`
+        // at the mount's dependency slot) — resolve the member from the row.
         let Some(baml_compiler2_hir::contributions::Definition::Interface(interface)) =
             self.facts.definition_of(&target.name)
         else {

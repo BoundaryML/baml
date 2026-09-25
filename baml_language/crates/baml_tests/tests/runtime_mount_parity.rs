@@ -5,12 +5,11 @@
 //!
 //! The runtime lane has no other oracle over the consumer unit it emits
 //! (the corpus observes runtime VALUES; `snapshots/baml_src` holds host
-//! diagnostics only), so this is what pins "emit produces the same image
-//! from the row identities" through the stub-deletion and unit-format
-//! cutovers: the wire contract per item kind — every import symbol the
-//! consumer writes, every name it records — is a pure function of the
-//! dependency's declarations and the consumer's edge name, whichever way the
-//! dependency is reached.
+//! diagnostics only), so this is what pins "emit produces the same unit from
+//! the row identities": the wire contract per item kind — every dependency
+//! slot and import key the consumer writes, every export it records — is a
+//! pure function of the dependency's declarations and the consumer's edge
+//! name, whichever lane serves the dependency.
 //!
 //! Two shapes:
 //!
@@ -26,13 +25,13 @@
 use std::path::Path;
 
 use baml_base::Name;
-use baml_compiler2_emit::{OptLevel, emit_units};
+use baml_compiler2_emit::{OptLevel, emit_package};
 use baml_db::{ProjectDatabase, testing::assert_no_diagnostic_errors};
+use baml_linker_types::CompilationUnit;
 use baml_tests::engine::TestDbExt;
 use bex_vm_types::{
     RuntimeCompileRequest, RuntimeMountedClass, RuntimeMountedEnum, RuntimeMountedFieldAttrs,
     RuntimeMountedVariantAttrs, RuntimePackageIdentity, RuntimePackageMount, RuntimeTypeMount,
-    legacy_unit::CompilationUnit,
 };
 
 /// The runtime compile's opt level (`bex_project::precompiled_stdlib_config`):
@@ -40,7 +39,7 @@ use bex_vm_types::{
 const OPT: OptLevel = OptLevel::One;
 
 /// A dependency exercising every declaration kind a consumer reaches by a
-/// wire symbol: a class (fields, an inherent static and method), an enum, an
+/// wire key: a class (fields, an inherent static and method), an enum, an
 /// interface with a required and a default method, an in-body impl, a free
 /// function, and a class-typed return.
 const LIB: &str = r##"
@@ -123,25 +122,10 @@ fn request(
     }
 }
 
-fn runtime_compile(request: RuntimeCompileRequest) -> bex_vm_types::RuntimeCompileArtifact {
+fn runtime_compile(request: RuntimeCompileRequest) -> bex_vm::RuntimeCompileArtifact {
     bex_project::runtime_compiler()
         .compile(request)
         .unwrap_or_else(|diagnostics| panic!("runtime compile failed: {diagnostics:#?}"))
-}
-
-/// The one consumer unit of an artifact (a runtime compile keeps only the
-/// consumer's units).
-fn consumer_unit(units: &[CompilationUnit]) -> &CompilationUnit {
-    let [unit] = units else {
-        panic!(
-            "expected exactly one consumer unit, got {:?}",
-            units
-                .iter()
-                .map(|unit| &unit.source_file)
-                .collect::<Vec<_>>()
-        );
-    };
-    unit
 }
 
 fn mount(interface_blob: Vec<u8>, types: Vec<RuntimeTypeMount>) -> RuntimePackageMount {
@@ -152,10 +136,13 @@ fn mount(interface_blob: Vec<u8>, types: Vec<RuntimeTypeMount>) -> RuntimePackag
     }
 }
 
+/// The unit with every database-local debug `FileId` normalized: the two
+/// lanes number `main.baml` differently, and nothing else about the
+/// consumer's bytes may differ.
 fn normalized_unit(mut unit: CompilationUnit) -> CompilationUnit {
-    let normalize = |object: &mut bex_vm_types::Object| {
+    for object in &mut unit.code {
         let bex_vm_types::Object::Function(function) = object else {
-            return;
+            continue;
         };
         let normalized = baml_base::FileId::new(0);
         function.span.file_id = normalized;
@@ -164,14 +151,6 @@ fn normalized_unit(mut unit: CompilationUnit) -> CompilationUnit {
         }
         for local in &mut function.debug_locals {
             local.scope_span.file_id = normalized;
-        }
-    };
-    for object in &mut unit.code {
-        normalize(object);
-    }
-    if let Some(tail) = &mut unit.init_tail {
-        for object in &mut tail.objects {
-            normalize(object);
         }
     }
     unit
@@ -193,36 +172,43 @@ fn assert_bytes_identical(label: &str, left: &[u8], right: &[u8]) {
     );
 }
 
-/// The wire contract a consumer unit writes: what it imports, by kind and
-/// symbol; what it exports; its impl rules. Rendered one fact per line,
-/// sorted where the source order carries no meaning, so the golden reads as
-/// a table.
+/// The wire contract a consumer unit writes: the packages it reaches, by
+/// slot; what it imports, by slot and path; what it exports; its impl rules.
+/// Rendered one fact per line so the golden reads as a table.
 fn wire_contract(unit: &CompilationUnit) -> String {
     let mut lines = Vec::new();
-    lines.push(format!(
-        "unit {} (package {})",
-        unit.source_file, unit.package
-    ));
-    for symbol in &unit.object_imports {
+    for (index, entry) in unit.dependencies.iter().enumerate() {
         lines.push(format!(
-            "import object {:?} {}",
-            symbol.kind, symbol.fq_name
+            "dep @{} {} via @{}",
+            index + 1,
+            entry.edge,
+            entry.via.0
         ));
     }
-    for symbol in &unit.global_imports {
+    for entry in &unit.object_imports {
         lines.push(format!(
-            "import global {:?} {}",
-            symbol.kind, symbol.fq_name
+            "import object @{} {}",
+            entry.key.dep.0, entry.key.path
         ));
     }
-    for (name, local) in &unit.exports.objects {
-        lines.push(format!("export object {name} = {local:?}"));
+    for entry in &unit.global_imports {
+        lines.push(format!(
+            "import global @{} {}",
+            entry.key.dep.0, entry.key.path
+        ));
     }
-    for (name, slot) in &unit.exports.globals {
-        lines.push(format!("export global {name} = {slot}"));
+    for (path, local) in &unit.exports.objects {
+        lines.push(format!("export object {path} = {local:?}"));
     }
-    for (interface, rules) in &unit.package_fragment.impl_rules {
-        lines.push(format!("impl rules for {interface}: {}", rules.len()));
+    for (path, slot) in &unit.exports.globals {
+        lines.push(format!("export global {path} = {slot}"));
+    }
+    for rule in &unit.impl_rules {
+        lines.push(format!(
+            "impl rule for object {} with {} provided methods",
+            rule.interface_head.raw(),
+            rule.methods.len()
+        ));
     }
     lines.join("\n") + "\n"
 }
@@ -236,7 +222,7 @@ fn runtime_mount_consumer_unit_is_byte_identical_to_the_source_dependency_compil
         &[("main.baml", CONSUMER)],
         vec![("app", mount(library.interface_blob, Vec::new()))],
     ));
-    let mounted_unit = consumer_unit(&mounted.units);
+    let mounted_unit = &mounted.emitted.unit;
 
     // The source lane: the same dependency as a source-bearing `app` root
     // beside the consumer, everything compiled at once.
@@ -247,27 +233,27 @@ fn runtime_mount_consumer_unit_is_byte_identical_to_the_source_dependency_compil
     db.file("<builtin>/app/lib.baml", LIB);
     db.file(root.join("main.baml"), CONSUMER);
     assert_no_diagnostic_errors(&db);
-    let source_units: Vec<CompilationUnit> = emit_units(&db, workspace, OPT)
-        .expect("source-lane emit")
-        .into_iter()
-        .filter(|unit| unit.package.as_str() == "user")
-        .collect();
-    let source_unit = consumer_unit(&source_units);
+    let source = emit_package(&db, workspace, OPT).expect("source-lane emit");
+    let source_unit = &source.unit;
 
-    let app_imports: Vec<&str> = mounted_unit
-        .object_imports
+    let app_slot = mounted_unit
+        .dependencies
         .iter()
-        .chain(&mounted_unit.global_imports)
-        .map(|symbol| symbol.fq_name.as_str())
-        .filter(|name| name.starts_with("app."))
-        .collect();
+        .position(|entry| entry.edge.as_str() == "app")
+        .map(baml_linker_types::DepSlot::of_dependency_index)
+        .expect("the consumer reaches `app`");
     assert!(
-        !app_imports.is_empty(),
-        "the consumer must reach the dependency through symbolic imports"
+        mounted_unit
+            .object_imports
+            .iter()
+            .chain(&mounted_unit.global_imports)
+            .any(|entry| entry.key.dep == app_slot),
+        "the consumer must reach the dependency through imports at its slot"
     );
+    assert_eq!(source_unit.dependencies, mounted_unit.dependencies);
     assert_eq!(source_unit.object_imports, mounted_unit.object_imports);
     assert_eq!(source_unit.global_imports, mounted_unit.global_imports);
-    assert_eq!(source_unit.referenced_names, mounted_unit.referenced_names);
+    assert_eq!(source_unit.exports, mounted_unit.exports);
     assert_bytes_identical(
         "consumer unit after debug FileId normalization",
         &borsh::to_vec(&normalized_unit(source_unit.clone())).expect("serialize source unit"),
@@ -310,7 +296,7 @@ fn with_types_consumer_wire_contract_is_pinned() {
             ty: baml_type::RealizedTy::Class(class_qtn, Box::new([])),
             classes: vec![RuntimeMountedClass {
                 name: Name::new("Minted"),
-                tag: baml_type::typetag::TypeTag::of_head("runtime.Minted"),
+                tag: baml_type::typetag::TypeTag::fresh_dynamic(),
                 docstring: Some("A minted class".to_string()),
                 fields: vec![(
                     Name::new("value"),
@@ -327,7 +313,7 @@ fn with_types_consumer_wire_contract_is_pinned() {
             classes: Vec::new(),
             enums: vec![RuntimeMountedEnum {
                 name: Name::new("Level"),
-                tag: baml_type::typetag::TypeTag::of_head("runtime.Level"),
+                tag: baml_type::typetag::TypeTag::fresh_dynamic(),
                 docstring: None,
                 variants: vec![
                     (Name::new("Low"), RuntimeMountedVariantAttrs::default()),
@@ -356,6 +342,6 @@ function render(level: app.Level) -> string throws never {
     ));
     insta::assert_snapshot!(
         "with_types_consumer_wire_contract",
-        wire_contract(consumer_unit(&artifact.units))
+        wire_contract(&artifact.emitted.unit)
     );
 }

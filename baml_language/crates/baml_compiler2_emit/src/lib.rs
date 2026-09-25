@@ -47,7 +47,7 @@ use bex_vm_types::{
         Symbol, SymbolKind,
     },
 };
-pub use package::emit_package;
+pub use package::{emit_package, emit_session_submission};
 
 /// The source-less package surface captured before MIR/codegen starts.
 ///

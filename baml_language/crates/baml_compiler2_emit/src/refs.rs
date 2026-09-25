@@ -426,7 +426,12 @@ impl<'db> LocalTables<'db> {
 /// (locals); a tail is a separate table and reaches them as imports at
 /// [`DepSlot::SELF`].
 pub(crate) enum Own<'w, 'db> {
+    /// A package's unit: every declaration of the package is a local.
     Unit(&'w LocalTables<'db>),
+    /// A session submission's unit: the submission's declarations are
+    /// locals, and the package's others — earlier submissions, live in the
+    /// session package — are imports at `SELF`.
+    Session(&'w LocalTables<'db>),
     Tail,
 }
 
@@ -508,6 +513,11 @@ impl<'w, 'db> PackageRefs<'w, 'db> {
                         .unwrap_or_else(|| {
                             unreachable!("the package's own {path} was not pooled")
                         });
+                }
+                Own::Session(tables) => {
+                    if let Some(k) = local(tables) {
+                        return ObjectIndex::from_raw(k as usize);
+                    }
                 }
                 Own::Tail => {}
             }
@@ -606,6 +616,11 @@ impl<'w, 'db> PackageRefs<'w, 'db> {
                             });
                             return Some(GlobalIndex::from_raw(slot as usize));
                         }
+                        Own::Session(tables) => {
+                            if let Some(slot) = tables.function_slot(function) {
+                                return Some(GlobalIndex::from_raw(slot as usize));
+                            }
+                        }
                         Own::Tail => {}
                     }
                 }
@@ -675,6 +690,11 @@ impl<'db> CodegenRefs<'db> for PackageRefs<'_, 'db> {
                         .let_slot(binding)
                         .unwrap_or_else(|| unreachable!("a `let` of this package was not slotted"));
                     return GlobalIndex::from_raw(slot as usize);
+                }
+                Own::Session(tables) => {
+                    if let Some(slot) = tables.let_slot(binding) {
+                        return GlobalIndex::from_raw(slot as usize);
+                    }
                 }
                 Own::Tail => {}
             }

@@ -27,7 +27,10 @@ mod type_match;
 pub mod types;
 pub mod vm;
 
-pub use compile_artifact::{PinnedArtifact, RuntimeCompileArtifactSlot};
+pub use compile_artifact::{
+    ArtifactKind, PinnedArtifact, RuntimeCompileArtifact, RuntimeCompileArtifactSlot,
+    RuntimeSessionCompileArtifact, RuntimeSessionStep, RuntimeSessionStepKind,
+};
 pub use errors::{StackFrame, VmPanic, format_traceback};
 pub use indexable::EvalStack;
 pub use package_baml::NativeFunction;

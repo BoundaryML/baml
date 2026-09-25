@@ -8,18 +8,19 @@ use baml_compiler2_hir::{
     contributions::Definition,
     item_data::{
         class_data, file_classes, file_functions, file_impls, file_interfaces, function_data,
-        interface_data,
+        interface_data, let_data,
     },
     loc::{DeclRef, FunctionLoc, LetLoc},
 };
 use baml_compiler2_hir_ty::{
     callable::ExternalCallTarget,
+    lower::qualify_def,
     package_interface::{export_interface, package_interface},
 };
 use baml_compiler2_mir::{RuntimeLowering, definition_link_name};
 use baml_linker_types::{
     CompilationUnit, EmittedPackage, ExportTable, InitTail, LocalRef, PackageRecord,
-    ProgramImplRuleFrag, ProgramMethodImplFrag,
+    ProgramImplRuleFrag, ProgramMethodImplFrag, SessionInitializer,
 };
 use bex_vm_types::{
     ClassMethodDef, DeclPath, FnPath, Function, GlobalIndex, Object, ObjectIndex, ObjectPool,
@@ -27,7 +28,7 @@ use bex_vm_types::{
 };
 
 use super::{
-    TypePass,
+    Scope, TypePass,
     bodies::{BodyPass, RefTables},
 };
 use crate::{
@@ -49,9 +50,10 @@ pub(super) fn finish<'db>(
     types: TypePass<'db>,
     bodies: BodyPass<'db>,
     opt: OptLevel,
-) -> Result<EmittedPackage, LoweringError> {
+) -> Result<(EmittedPackage, Vec<SessionInitializer>), LoweringError> {
     let TypePass {
         root,
+        scope,
         files,
         tables,
         mut classes,
@@ -75,27 +77,36 @@ pub(super) fn finish<'db>(
     export_functions(&mut exports, &slotted, &offsets);
     fill_interface_defaults(db, &files, &tables, &mut interfaces, &placed);
     fill_class_methods(db, &files, &tables, &mut classes, &placed);
-    let mut refs = refs.attach(db, root, Own::Unit(&tables));
+    let mut refs = refs.attach(db, root, scope.own(&tables));
     let impl_rules = bake_rules(db, root, &files, &offsets, &mut refs);
     let record = package_record(db, root, &exports);
-    let tail = emit_tail(db, class_fields, root, &files, &lets, opt)?.map(seal_tail);
+    let (tail, initializers) = match emit_tail(db, class_fields, root, &files, &lets, opt, scope)? {
+        Some(parts) => (
+            Some(seal_tail((parts.tail, parts.refs))),
+            parts.initializers,
+        ),
+        None => (None, Vec::new()),
+    };
 
-    Ok(EmittedPackage {
-        unit: CompilationUnit {
-            dependencies: refs.deps.into_entries(),
-            classes,
-            enums,
-            interfaces,
-            type_alias_objects: aliases,
-            code: code.into_iter().collect(),
-            object_imports: refs.imports.objects.into_entries(),
-            global_imports: refs.imports.globals.into_entries(),
-            exports,
-            impl_rules,
+    Ok((
+        EmittedPackage {
+            unit: CompilationUnit {
+                dependencies: refs.deps.into_entries(),
+                classes,
+                enums,
+                interfaces,
+                type_alias_objects: aliases,
+                code: code.into_iter().collect(),
+                object_imports: refs.imports.objects.into_entries(),
+                global_imports: refs.imports.globals.into_entries(),
+                exports,
+                impl_rules,
+            },
+            record,
+            tail,
         },
-        record,
-        tail,
-    })
+        initializers,
+    ))
 }
 
 /// Where each compiled function sits in the unit's object space.
@@ -307,9 +318,19 @@ fn package_record(db: &dyn crate::Db, root: SourceRoot, exports: &ExportTable) -
     }
 }
 
+/// A tail before its tables are sealed, with what a submission's tail
+/// records in place of an `$init`.
+struct TailParts {
+    tail: InitTail,
+    refs: RefTables,
+    initializers: Vec<SessionInitializer>,
+}
+
 /// The package's `$init` / `$init_test` tail, compiled against a resolver of
 /// its own in which the package's declarations are imports at `SELF`.
-/// `None` when the package has neither `let`s nor tests.
+/// `None` when the package has neither `let`s nor tests. A submission's
+/// tail holds the helpers of ITS `let`s only, recorded as initializers in
+/// dependency order instead of chained by an `$init`.
 fn emit_tail<'db>(
     db: &'db dyn crate::Db,
     class_fields: &ClassFieldSnapshot<'db>,
@@ -317,7 +338,8 @@ fn emit_tail<'db>(
     files: &[SourceFile],
     lets: &[LetLoc<'db>],
     opt: OptLevel,
-) -> Result<Option<(InitTail, RefTables)>, LoweringError> {
+    scope: Scope,
+) -> Result<Option<TailParts>, LoweringError> {
     let mut refs = PackageRefs::new(db, root, Own::Tail);
     let mut objects = ObjectPool::default();
     let mut slot_objects: Vec<u32> = Vec::new();
@@ -342,6 +364,7 @@ fn emit_tail<'db>(
         .collect();
     let sorted = topological_sort_lets(db, &bindings)?;
     let mut init = None;
+    let mut initializers = Vec::new();
     if !sorted.is_empty() {
         let mut steps = Vec::with_capacity(sorted.len());
         for (ordinal, (fq_name, binding, _)) in sorted.iter().enumerate() {
@@ -356,15 +379,29 @@ fn emit_tail<'db>(
                 opt,
             )?;
             let (_, helper_slot) = pool(&mut objects, &mut slot_objects, helper);
-            let target = refs.let_global(*binding);
-            steps.push(InitStep {
-                helper: GlobalIndex::from_raw(helper_slot as usize),
-                target,
-                target_name: fq_name.clone(),
-            });
+            match scope {
+                Scope::Package => {
+                    let target = refs.let_global(*binding);
+                    steps.push(InitStep {
+                        helper: GlobalIndex::from_raw(helper_slot as usize),
+                        target,
+                        target_name: fq_name.clone(),
+                    });
+                }
+                Scope::Submission(_) => {
+                    let head =
+                        qualify_def(db, Definition::Let(*binding), &let_data(db, *binding).name);
+                    initializers.push(SessionInitializer {
+                        helper: helper_slot,
+                        target: item_path(&head),
+                    });
+                }
+            }
         }
-        let (index, _) = pool(&mut objects, &mut slot_objects, build_init_function(&steps));
-        init = Some(index);
+        if matches!(scope, Scope::Package) {
+            let (index, _) = pool(&mut objects, &mut slot_objects, build_init_function(&steps));
+            init = Some(index);
+        }
     }
 
     // The test part: the chainer over the package's per-file test
@@ -395,11 +432,11 @@ fn emit_tail<'db>(
         init_test = Some(index);
     }
 
-    if init.is_none() && init_test.is_none() {
+    if objects.is_empty() {
         return Ok(None);
     }
-    Ok(Some((
-        InitTail {
+    Ok(Some(TailParts {
+        tail: InitTail {
             dependencies: Vec::new(),
             objects: objects.into_iter().collect(),
             object_imports: Vec::new(),
@@ -410,6 +447,7 @@ fn emit_tail<'db>(
             test_objects_start,
             test_slots_start,
         },
-        RefTables::of(refs),
-    )))
+        refs: RefTables::of(refs),
+        initializers,
+    }))
 }

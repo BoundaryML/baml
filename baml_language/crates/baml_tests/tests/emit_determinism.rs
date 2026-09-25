@@ -10,12 +10,12 @@
 use std::path::{Path, PathBuf};
 
 use baml_compiler2_emit::{
-    OptLevel, emit_units, generate_project_bytecode_with_opt,
-    generate_project_bytecode_with_stdlib, generate_stdlib_program,
+    OptLevel, generate_project_bytecode_with_opt, generate_project_bytecode_with_stdlib,
+    generate_stdlib_program,
 };
 use baml_db::{ProjectDatabase, compile_program, discover_baml_files};
 use baml_tests::engine::TestDbExt;
-use bex_vm_types::{RuntimeCompileRequest, legacy_unit::CompilationUnit};
+use bex_vm_types::RuntimeCompileRequest;
 
 /// Read every `.baml` file under `root` into memory, in discovery order.
 fn read_project(root: &Path) -> Vec<(PathBuf, String)> {
@@ -212,10 +212,14 @@ fn stdlib_splice_is_byte_identical_to_full_compile() {
     }
 }
 
-fn normalize_unit_file_ids(mut unit: CompilationUnit) -> CompilationUnit {
-    let normalize_object = |object: &mut bex_vm_types::Object| {
+/// A package unit with every database-local debug `FileId` normalized: the
+/// two lanes number `main.baml` differently, and nothing else may differ.
+fn normalize_package_unit(
+    mut unit: baml_linker_types::CompilationUnit,
+) -> baml_linker_types::CompilationUnit {
+    for object in &mut unit.code {
         let bex_vm_types::Object::Function(function) = object else {
-            return;
+            continue;
         };
         let normalized = baml_base::FileId::new(0);
         function.span.file_id = normalized;
@@ -225,20 +229,13 @@ fn normalize_unit_file_ids(mut unit: CompilationUnit) -> CompilationUnit {
         for local in &mut function.debug_locals {
             local.scope_span.file_id = normalized;
         }
-    };
-    for object in &mut unit.code {
-        normalize_object(object);
-    }
-    if let Some(tail) = &mut unit.init_tail {
-        for object in &mut tail.objects {
-            normalize_object(object);
-        }
     }
     unit
 }
 
-/// Exercise the actual source-less-stdlib runtime compiler branch and compare
-/// its Package.compile artifact with the legacy full-source compile oracle.
+/// The runtime compiler — its stdlib served from the embedded interface
+/// blobs — emits the same package unit as a full-source compile of the same
+/// package.
 #[test]
 fn package_compile_prefix_artifact_is_byte_identical_to_full_compile() {
     let source = r#"
@@ -263,27 +260,14 @@ function count(value: RuntimeValue) -> int throws never {
     let mut full_db = ProjectDatabase::new();
     let full_package = full_db.workspace(root);
     full_db.file(root.join("main.baml"), source);
-    let full_user_units = emit_units(&full_db, full_package, OptLevel::One)
-        .expect("compile Package artifact from full stdlib sources")
-        .into_iter()
-        .filter(|unit| unit.package.as_str() == "user")
-        .collect::<Vec<_>>();
+    let full = baml_compiler2_emit::emit_package(&full_db, full_package, OptLevel::One)
+        .expect("compile Package artifact from full stdlib sources");
 
     assert_eq!(
-        prefix_artifact.units.len(),
-        1,
-        "expected one prefix user unit"
-    );
-    assert_eq!(
-        full_user_units.len(),
-        1,
-        "expected one full-compile user unit"
-    );
-    assert_eq!(
-        borsh::to_vec(&normalize_unit_file_ids(prefix_artifact.units[0].clone()))
+        borsh::to_vec(&normalize_package_unit(prefix_artifact.emitted.unit))
             .expect("serialize normalized prefix unit"),
-        borsh::to_vec(&normalize_unit_file_ids(full_user_units[0].clone()))
+        borsh::to_vec(&normalize_package_unit(full.unit))
             .expect("serialize normalized full-compile unit"),
-        "Package.compile prefix artifact differs from the old full-source path",
+        "Package.compile artifact differs from the full-source compile",
     );
 }

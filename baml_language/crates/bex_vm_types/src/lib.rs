@@ -35,15 +35,13 @@ pub use indexable::{
 };
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use runtime_compile::{
-    ArtifactKind, RuntimeCompileArtifact, RuntimeCompileDiagnostic, RuntimeCompileMode,
-    RuntimeCompileRequest, RuntimeDiagnosticAnnotation, RuntimeDiagnosticDetails,
-    RuntimeDiagnosticHighlight, RuntimeDiagnosticHighlightKind, RuntimeDiagnosticPhase,
-    RuntimeDiagnosticRelatedInfo, RuntimeDiagnosticSeverity, RuntimeMountedClass,
-    RuntimeMountedEnum, RuntimeMountedFieldAttrs, RuntimeMountedVariantAttrs,
-    RuntimePackageIdentity, RuntimePackageMount, RuntimeSessionCompileArtifact,
-    RuntimeSessionCompileRequest, RuntimeSessionInitializer, RuntimeSessionStep,
-    RuntimeSessionStepKind, RuntimeSourceSpan, RuntimeTypeMount, SessionContract, SessionEvalLease,
-    SessionVisibleKind, SessionVisibleSymbol,
+    RuntimeCompileDiagnostic, RuntimeCompileMode, RuntimeCompileRequest,
+    RuntimeDiagnosticAnnotation, RuntimeDiagnosticDetails, RuntimeDiagnosticHighlight,
+    RuntimeDiagnosticHighlightKind, RuntimeDiagnosticPhase, RuntimeDiagnosticRelatedInfo,
+    RuntimeDiagnosticSeverity, RuntimeMountedClass, RuntimeMountedEnum, RuntimeMountedFieldAttrs,
+    RuntimeMountedVariantAttrs, RuntimePackageIdentity, RuntimePackageMount,
+    RuntimeSessionCompileRequest, RuntimeSourceSpan, RuntimeTypeMount, SessionContract,
+    SessionEvalLease, SessionVisibleKind, SessionVisibleSymbol,
 };
 pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};
 pub use type_head::TypeHead;
@@ -131,8 +129,8 @@ pub fn name_headed_realized(ty: &RealizedTy) -> Result<baml_type::RealizedTy, Un
     ty.try_map_heads(&mut |head| head.declared_name().ok_or(UnnameableHead(head.tag())))
 }
 pub use types::{
-    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BodyKey, BoundMethod,
-    CaptureCategory, CaptureOption, Class, ClassField, ClassMethodDef, CleanupLatch,
+    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BodyIndices, BodyKey,
+    BoundMethod, CaptureCategory, CaptureOption, Class, ClassField, ClassMethodDef, CleanupLatch,
     ClientBuildMeta, ClientBuildType, ConstValue, DeclPath, DeclarationName, Enum, EnumVariant,
     FnPath, Function, FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, Future,
     FutureRead, GenericFunction, HostClosure, ImplBodyCoherence, ImplBodyKey, ImplCoherenceKey,

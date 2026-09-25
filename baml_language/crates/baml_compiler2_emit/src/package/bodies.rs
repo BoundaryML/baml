@@ -143,7 +143,7 @@ fn emit_bodies_serial<'db>(
     opt: OptLevel,
 ) -> Result<BodyPass<'db>, LoweringError> {
     let base = types.tables.code_base() as usize;
-    let mut refs = refs.attach(db, types.root, Own::Unit(&types.tables));
+    let mut refs = refs.attach(db, types.root, types.scope.own(&types.tables));
     let mut code = ObjectPool::default();
     let mut offsets = HashMap::new();
     let lowering = RuntimeLowering::of(db, types.root);
@@ -273,6 +273,7 @@ fn emit_bodies_parallel<'db>(
     let mirs = lower_seed_mirs(db, &seeds, opt)?;
     let base = types.tables.code_base() as usize;
     let root = types.root;
+    let scope = types.scope;
     let tables = &types.tables;
 
     let handle_seed = std::sync::Mutex::new(db.parallel_db_handle().unwrap_or_else(|| {
@@ -295,7 +296,7 @@ fn emit_bodies_parallel<'db>(
                     // Builtins mint nothing; Stage C constructs them serially.
                     return None;
                 };
-                let mut refs = PackageRefs::new(db, root, Own::Unit(tables));
+                let mut refs = PackageRefs::new(db, root, scope.own(tables));
                 let mut fragment = ObjectPool::default();
                 let function = compile_body(
                     db,
@@ -318,7 +319,7 @@ fn emit_bodies_parallel<'db>(
         )
         .collect();
 
-    let mut refs = refs.attach(db, root, Own::Unit(tables));
+    let mut refs = refs.attach(db, root, scope.own(tables));
     let mut code = ObjectPool::default();
     let mut offsets = HashMap::new();
     let mut intern = GenericFunctionInterner::default();

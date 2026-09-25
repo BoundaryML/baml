@@ -345,3 +345,24 @@ pub struct EmittedPackage {
     pub record: PackageRecord,
     pub tail: Option<InitTail>,
 }
+
+/// One `let` of a session submission, as the emitter recorded it: the tail
+/// slot of the helper computing its value, and the binding it commits to.
+/// A submission's initializers are listed in execution (dependency) order;
+/// the session runs them one by one, so a throw commits the steps before it
+/// and nothing after — which is why a submission's tail carries no `$init`.
+#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct SessionInitializer {
+    pub helper: u32,
+    pub target: ItemPath,
+}
+
+/// One session submission's compiled output: the unit holds the
+/// submission's own declarations and reaches the session package's earlier
+/// ones as imports at [`DepSlot::SELF`]; the tail holds the submission's
+/// `let` helpers, addressed by [`Self::initializers`].
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
+pub struct EmittedSubmission {
+    pub package: EmittedPackage,
+    pub initializers: Vec<SessionInitializer>,
+}
