@@ -125,6 +125,44 @@ pub fn new(
     sys_ops: SysOps,
     files: std::collections::HashMap<crate::fs::FsPath, String>,
 ) -> Result<Arc<impl Bex>, RuntimeError> {
+    let engine = prepare(root_path, sys_ops, files)?.build()?;
+    engine.set_unhandled_spawn_error_handler(Some(Arc::new(|error| {
+        let cancelled = error.cancelled;
+        let error = error.into_engine_error();
+        if cancelled {
+            log::warn!("cancelled spawned task failed: {error}");
+        } else {
+            log::error!("unhandled spawned task failed: {error}");
+        }
+    })));
+    Ok(engine)
+}
+
+/// A validated program whose engine and package initializers have not run yet.
+pub struct PreparedRuntime {
+    program: Program,
+    sys_ops: SysOps,
+}
+
+impl PreparedRuntime {
+    pub fn build(self) -> Result<Arc<BexEngine>, RuntimeError> {
+        let engine = BexEngine::new_with_runtime_compiler(
+            self.program,
+            Arc::new(self.sys_ops),
+            Vec::new(),
+            runtime_compiler(),
+        )?;
+        Ok(Arc::new(engine))
+    }
+}
+
+/// Compile and validate sources without executing package initializers.
+#[allow(clippy::needless_pass_by_value)]
+pub fn prepare(
+    root_path: vfs::VfsPath,
+    sys_ops: SysOps,
+    files: std::collections::HashMap<crate::fs::FsPath, String>,
+) -> Result<PreparedRuntime, RuntimeError> {
     let mut db = baml_db::ProjectDatabase::new();
     db.ensure_stdlib_sources();
     let root = db
@@ -168,23 +206,7 @@ pub fn new(
             message: e.to_string(),
         })?;
 
-    let engine = bex_engine::BexEngine::new_with_runtime_compiler(
-        program,
-        Arc::new(sys_ops),
-        Vec::new(),
-        runtime_compiler(),
-    )?;
-    engine.set_unhandled_spawn_error_handler(Some(Arc::new(|error| {
-        let cancelled = error.cancelled;
-        let error = error.into_engine_error();
-        if cancelled {
-            log::warn!("cancelled spawned task failed: {error}");
-        } else {
-            log::error!("unhandled spawned task failed: {error}");
-        }
-    })));
-
-    Ok(Arc::new(engine))
+    Ok(PreparedRuntime { program, sys_ops })
 }
 
 /// Initialize a runtime from a versioned BAML program artifact rather than
@@ -195,19 +217,21 @@ pub fn new(
 /// it instead of reaching into `bex_engine` / `bex_vm_types` themselves.
 #[allow(clippy::needless_pass_by_value)]
 pub fn new_from_bytecode(bytecode: &[u8], sys_ops: SysOps) -> Result<Arc<dyn Bex>, RuntimeError> {
+    Ok(prepare_from_bytecode(bytecode, sys_ops)?.build()?)
+}
+
+/// Validate and decode a program artifact without executing package initializers.
+pub fn prepare_from_bytecode(
+    bytecode: &[u8],
+    sys_ops: SysOps,
+) -> Result<PreparedRuntime, RuntimeError> {
     let program: bex_vm_types::Program =
         baml_artifact::decode(baml_artifact::ArtifactKind::Program, bytecode).map_err(|e| {
             RuntimeError::Compilation {
                 message: format!("Failed to deserialize BAML bytecode: {e}"),
             }
         })?;
-    let engine = bex_engine::BexEngine::new_with_runtime_compiler(
-        program,
-        Arc::new(sys_ops),
-        Vec::new(),
-        runtime_compiler(),
-    )?;
-    Ok(Arc::new(engine))
+    Ok(PreparedRuntime { program, sys_ops })
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
@@ -215,6 +239,41 @@ mod bytecode_artifact_tests {
     use sys_native::SysOpsExt as _;
 
     use super::*;
+
+    #[test]
+    fn preparation_defers_package_execution_but_eager_constructors_do_not() {
+        let root = vfs::VfsPath::new(vfs::MemoryFS::new());
+        let files = HashMap::from([(
+            FsPath::from_str("/p/a.baml".to_string()),
+            r#"
+client StartupClient = openai.ResponsesClient.new(model = fail_startup());
+
+function fail_startup() -> string {
+    baml.sys.panic("package initializer failed")
+}
+"#
+            .to_string(),
+        )]);
+        let prepared = prepare(root.clone(), sys_ops::SysOps::native(), files.clone()).unwrap();
+        let bytecode =
+            baml_artifact::encode(baml_artifact::ArtifactKind::Program, &prepared.program).unwrap();
+        let decoded = prepare_from_bytecode(&bytecode, sys_ops::SysOps::native()).unwrap();
+
+        for result in [prepared.build(), decoded.build()] {
+            assert!(matches!(
+                result,
+                Err(RuntimeError::Engine(EngineError::InitFailed(_)))
+            ));
+        }
+        assert!(matches!(
+            new(root, sys_ops::SysOps::native(), files),
+            Err(RuntimeError::Engine(EngineError::InitFailed(_)))
+        ));
+        assert!(matches!(
+            new_from_bytecode(&bytecode, sys_ops::SysOps::native()),
+            Err(RuntimeError::Engine(EngineError::InitFailed(_)))
+        ));
+    }
 
     #[test]
     fn synchronous_build_returns_rendered_source_diagnostics() {

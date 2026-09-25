@@ -12,12 +12,11 @@ pub fn stage_runtime_bytecode(
 ) -> Result<(), JsValue> {
     let sys_ops = sys_wasm::build()
         .map_err(|error| crate::errors::setup_error(crate::errors::CLIENT, error))?;
-    bridge_cffi::initialize_runtime_from_bytecode_with_sys_ops(
+    bridge_cffi::stage_runtime_from_bytecode_with_sys_ops(
         bytecode,
         embedded_baml_toml.as_deref(),
         sys_ops,
     )
-    .map(|_| ())
     .map_err(|error| crate::errors::bridge_error(&error))
 }
 
@@ -32,8 +31,7 @@ pub fn stage_runtime_sources(root_path: &str, files: JsValue) -> Result<(), JsVa
         })?;
     let sys_ops = sys_wasm::build()
         .map_err(|error| crate::errors::setup_error(crate::errors::CLIENT, error))?;
-    bridge_cffi::initialize_runtime_from_files_with_sys_ops(root_path, files, sys_ops)
-        .map(|_| ())
+    bridge_cffi::stage_runtime_from_files_with_sys_ops(root_path, files, sys_ops)
         .map_err(|error| crate::errors::bridge_error(&error))
 }
 

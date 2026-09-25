@@ -37,6 +37,18 @@ function PhaseSevenWait(callback: () -> string throws never) -> string {
 }
 `;
 
+const SOURCE_INIT_FAILURE = `
+client StartupClient = openai.ResponsesClient.new(model = fail_startup());
+
+function fail_startup() -> string {
+  baml.sys.panic("package initializer failed")
+}
+
+function StartupValue() -> int {
+  1
+}
+`;
+
 function encodeResult(result: baml_bridge.cffi.v1.IBamlOutboundResult): Uint8Array {
   return Uint8Array.from(BamlOutboundResult.encode(BamlOutboundResult.create(result)).finish());
 }
@@ -68,6 +80,7 @@ describe("Web runtime and setup errors", () => {
 
   it("initializes from sources and replaces the singleton atomically", async () => {
     BamlRuntime.initializeRuntime(".", { "main.baml": SOURCE_A });
+    expect(() => BamlRuntime.initializeRuntimeFromBytecode(new Uint8Array([1, 2, 3]))).toThrow(/Failed to deserialize BAML bytecode/);
     expect(callFunctionSync(getRuntime(), "PhaseSevenValue", {}).result()).toBe("runtime-a");
 
     expect(() => BamlRuntime.initializeRuntime(".", { "broken.baml": "this is not BAML" })).toThrow(BamlClientError);
@@ -88,6 +101,28 @@ describe("Web runtime and setup errors", () => {
     await expect(oldCall.then((result) => result.result())).resolves.toBe("old-runtime-finished");
     expect(callFunctionSync(getRuntime(), "PhaseSevenValue", {}).result()).toBe("runtime-c");
   }, 20_000);
+
+  it("reports package initialization failures at the runtime's execution boundary", async () => {
+    BamlRuntime.initializeRuntime(".", { "main.baml": SOURCE_A });
+    expect(callFunctionSync(getRuntime(), "PhaseSevenValue", {}).result()).toBe("runtime-a");
+    const initialize = () => BamlRuntime.initializeRuntime(".", { "main.baml": SOURCE_INIT_FAILURE });
+
+    // Workers forbid entropy during module evaluation, so only that host defers $init.
+    if (import.meta.env.BAML_TEST_RUNTIME === "workers") {
+      expect(initialize).not.toThrow();
+      const invoke = () => callFunctionSync(getRuntime(), "StartupValue", {}).result();
+      expect(invoke).toThrow(/Package initialization failed/);
+      expect(invoke).toThrow(/Package initialization failed/);
+      await expect(callFunction(getRuntime(), "StartupValue", {}).then((result) => result.result()))
+        .rejects.toThrow(/Package initialization failed/);
+    } else {
+      expect(initialize).toThrow(/Package initialization failed/);
+      expect(callFunctionSync(getRuntime(), "PhaseSevenValue", {}).result()).toBe("runtime-a");
+    }
+
+    BamlRuntime.initializeRuntime(".", { "main.baml": SOURCE_C });
+    expect(callFunctionSync(getRuntime(), "PhaseSevenValue", {}).result()).toBe("runtime-c");
+  }, 30_000);
 });
 
 describe("Web structured call errors", () => {

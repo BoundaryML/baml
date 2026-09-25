@@ -10,6 +10,7 @@ export default defineConfig({
     },
   },
   test: {
+    env: { BAML_TEST_RUNTIME: "web" },
     include: ["tests/*.test.ts"],
     browser: {
       enabled: true,

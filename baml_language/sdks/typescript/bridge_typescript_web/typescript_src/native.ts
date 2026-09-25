@@ -376,6 +376,14 @@ export class HostSpanManager {
   contextDepth(): number { return 0; }
 }
 
+/**
+ * Browsers initialize eagerly. The workerd entry point validates sources or
+ * bytecode immediately, but builds the engine and runs package initializers on
+ * the first function call, which must run inside a Worker handler.
+ *
+ * Failed validation preserves the previous runtime. After successful staging,
+ * an initializer failure is reported by calls until another runtime is staged.
+ */
 export class BamlRuntime {
   static initializeRuntimeFromBytecode(bytecode: Uint8Array, embeddedBamlToml?: string): BamlRuntime {
     ensureWebSysopsConfigured();
