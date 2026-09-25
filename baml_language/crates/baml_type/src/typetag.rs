@@ -132,8 +132,12 @@ impl TypeTag {
     #[must_use]
     #[expect(clippy::cast_possible_wrap, reason = "bounded by STATIC_BITS above")]
     pub const fn of_static_index(index: usize) -> Self {
+        // Bounded in the tag's own width: `usize` may be narrower than the
+        // static range (wasm32), where `1usize << STATIC_BITS` does not even
+        // compile.
+        let index = index as u64;
         assert!(
-            index < (1usize << STATIC_BITS),
+            index < (1u64 << STATIC_BITS),
             "a static image cannot hold 2^47 declarations"
         );
         Self(CLASS_BASE + index as i64)

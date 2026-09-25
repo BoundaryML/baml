@@ -37,6 +37,49 @@ fn compile(db: &ProjectDatabase) -> bex_vm_types::Program {
         .expect("compilation should succeed")
 }
 
+/// The object index of the callable rendered `name` — `pkg.ns.name` for a
+/// free function, `pkg.ns.Class.name` for a method — from the package tables.
+fn callable(program: &bex_vm_types::Program, name: &str) -> usize {
+    program
+        .rendered_callables()
+        .get(name)
+        .unwrap_or_else(|| {
+            panic!(
+                "`{name}` is not a callable of the program; callables: {:?}",
+                rendered_names(program)
+            )
+        })
+        .object
+        .raw()
+}
+
+fn has_callable(program: &bex_vm_types::Program, name: &str) -> bool {
+    program.rendered_callables().contains_key(name)
+}
+
+/// Every rendered callable name, sorted, for diagnostics.
+fn rendered_names(program: &bex_vm_types::Program) -> Vec<String> {
+    let mut names: Vec<String> = program.rendered_callables().into_keys().collect();
+    names.sort();
+    names
+}
+
+/// The workspace package (spelled `user`) and its ordinal in the executable.
+fn user_package(program: &bex_vm_types::Program) -> (u32, &bex_vm_types::types::ProgramPackage) {
+    program
+        .packages
+        .iter()
+        .enumerate()
+        .find(|(_, package)| package.name.as_str() == "user")
+        .map(|(ordinal, package)| {
+            (
+                u32::try_from(ordinal).expect("package ordinal fits in u32"),
+                package,
+            )
+        })
+        .expect("the program has a user package")
+}
+
 #[test]
 fn typed_pattern_emits_atomic_narrow_bind() {
     use bex_vm_types::Instruction;
@@ -57,7 +100,7 @@ function main(x: Foo | int) -> int {
 "#,
     );
     let program = compile(&db);
-    let main_idx = program.function_indices["user.main"];
+    let main_idx = callable(&program, "user.main");
     let bex_vm_types::Object::Function(main) = &(*program.objects)[main_idx] else {
         panic!("expected user.main to be a function")
     };
@@ -110,7 +153,7 @@ function main(call_id: boundary.LocalId, sysop_id: boundary.LocalId) -> int thro
 "#,
     );
     let program = compile(&db);
-    let main_idx = program.function_indices["user.main"];
+    let main_idx = callable(&program, "user.main");
     let bex_vm_types::Object::Function(main) = &(*program.objects)[main_idx] else {
         panic!("expected user.main to be a function")
     };
@@ -169,7 +212,7 @@ function virtual(speaker: Speaker, id: boundary.LocalId) -> int {
     let program = compile(&db);
 
     for name in ["user.indirect", "user.optional"] {
-        let idx = program.function_indices[name];
+        let idx = callable(&program, name);
         let bex_vm_types::Object::Function(function) = &(*program.objects)[idx] else {
             panic!("expected {name} to be a function")
         };
@@ -183,7 +226,7 @@ function virtual(speaker: Speaker, id: boundary.LocalId) -> int {
         );
     }
 
-    let virtual_idx = program.function_indices["user.virtual"];
+    let virtual_idx = callable(&program, "user.virtual");
     let bex_vm_types::Object::Function(virtual_function) = &(*program.objects)[virtual_idx] else {
         panic!("expected user.virtual to be a function")
     };
@@ -212,9 +255,9 @@ fn simple_function_compiles() {
     );
     let program = compile(&db);
     assert!(
-        program.function_indices.contains_key("user.greet"),
-        "expected 'user.greet' in function_indices, got: {:?}",
-        program.function_indices.keys().collect::<Vec<_>>()
+        has_callable(&program, "user.greet"),
+        "expected `user.greet` among the callables, got: {:?}",
+        rendered_names(&program)
     );
 }
 
@@ -224,23 +267,16 @@ fn builtin_functions_included() {
     db.file("test.baml", "function f() -> string { return \"x\"; }");
     let program = compile(&db);
     // Builtins from the baml and env packages should be present
-    let has_baml = program
-        .function_global_indices
-        .keys()
-        .any(|k| k.starts_with("baml."));
-    let has_baml_env = program
-        .function_global_indices
-        .keys()
-        .any(|k| k.starts_with("baml.env."));
+    let names = rendered_names(&program);
+    let has_baml = names.iter().any(|k| k.starts_with("baml."));
+    let has_baml_env = names.iter().any(|k| k.starts_with("baml.env."));
     assert!(
         has_baml,
-        "expected at least one 'baml.*' function, got: {:?}",
-        program.function_global_indices.keys().collect::<Vec<_>>()
+        "expected at least one 'baml.*' function, got: {names:?}"
     );
     assert!(
         has_baml_env,
-        "expected at least one 'baml.env.*' function, got: {:?}",
-        program.function_global_indices.keys().collect::<Vec<_>>()
+        "expected at least one 'baml.env.*' function, got: {names:?}"
     );
 }
 
@@ -256,9 +292,9 @@ fn enum_variant_lookup() {
     );
     let program = compile(&db);
     assert!(
-        program.function_indices.contains_key("user.pick"),
-        "expected 'user.pick' in function_indices, got: {:?}",
-        program.function_indices.keys().collect::<Vec<_>>()
+        has_callable(&program, "user.pick"),
+        "expected `user.pick` among the callables, got: {:?}",
+        rendered_names(&program)
     );
 }
 
@@ -274,9 +310,9 @@ fn class_field_lookup() {
     );
     let program = compile(&db);
     assert!(
-        program.function_indices.contains_key("user.origin"),
-        "expected 'user.origin' in function_indices, got: {:?}",
-        program.function_indices.keys().collect::<Vec<_>>()
+        has_callable(&program, "user.origin"),
+        "expected `user.origin` among the callables, got: {:?}",
+        rendered_names(&program)
     );
 }
 
@@ -286,7 +322,7 @@ fn optional_param_metadata_and_omitted_sentinel_emit() {
     db.file("test.baml", OPTIONAL_DEFAULTS_SOURCE);
     let program = compile(&db);
 
-    let add_idx = program.function_indices["user.add"];
+    let add_idx = callable(&program, "user.add");
     let bex_vm_types::Object::Function(add) = &(*program.objects)[add_idx] else {
         panic!("expected user.add to be a function");
     };
@@ -299,7 +335,7 @@ fn optional_param_metadata_and_omitted_sentinel_emit() {
         "expected default prologue to compare against OmittedArg"
     );
 
-    let main_idx = program.function_indices["user.main"];
+    let main_idx = callable(&program, "user.main");
     let bex_vm_types::Object::Function(main) = &(*program.objects)[main_idx] else {
         panic!("expected user.main to be a function");
     };
@@ -331,9 +367,8 @@ fn optional_defaults_emit_snapshot() {
 // and exercise the same let-binding infrastructure.
 
 /// Verify that a client declaration:
-/// - Produces a let binding with a global slot (appears in `let_global_indices`)
-/// - Causes `$init` to appear in `program.function_indices`
-/// - Causes `$init` to appear in `program.package_init_order`
+/// - Produces a let binding with a global slot
+/// - Gives the user package an `$init`, scheduled in the init order
 #[test]
 fn let_binding_global_slot_and_init_function() {
     let mut db = make_db();
@@ -347,37 +382,31 @@ fn let_binding_global_slot_and_init_function() {
 
     let program = compile(&db);
 
-    // The client let binding should have a global slot allocated in let_global_indices
-    let has_let_slot = program
-        .let_global_indices
-        .keys()
-        .any(|k| k.contains("MyClient"));
+    // The client let binding owns a global slot.
+    let lets = program.rendered_lets();
     assert!(
-        has_let_slot,
-        "expected 'MyClient' in let_global_indices, got: {:?}",
-        program.let_global_indices.keys().collect::<Vec<_>>()
+        lets.keys().any(|k| k.contains("MyClient")),
+        "expected 'MyClient' among the lets, got: {:?}",
+        lets.keys().collect::<Vec<_>>()
     );
 
-    // $init should be synthesized
-    let has_init = program.function_indices.contains_key("$init");
+    // $init should be synthesized and scheduled.
+    let (ordinal, user) = user_package(&program);
     assert!(
-        has_init,
-        "expected '$init' in function_indices, got: {:?}",
-        program.function_indices.keys().collect::<Vec<_>>()
+        user.init.is_some(),
+        "expected the user package to own an `$init`"
     );
-
-    // $init should be in package_init_order
     assert!(
-        program.package_init_order.contains(&"$init".to_string()),
-        "expected '$init' in package_init_order, got: {:?}",
-        program.package_init_order
+        program.init_order.contains(&ordinal),
+        "expected the user package in the init order, got: {:?}",
+        program.init_order
     );
 }
 
 // ─── Phase 4.6 $init_test chainer tests ───────────────────────────────────────
 
 /// Verify that when a file contains `test` blocks, a root `$init_test` chainer
-/// is synthesized in `program.function_indices` with `arity: 1`.
+/// is the user package's `test_init`, with `arity: 1`.
 #[test]
 fn init_test_chainer_synthesized_when_tests_present() {
     let mut db = make_db();
@@ -396,22 +425,21 @@ fn init_test_chainer_synthesized_when_tests_present() {
 
     let program = compile(&db);
 
-    // The root $init_test chainer should be present in function_indices
+    // The root $init_test chainer is the user package's test init, and it
+    // owns a global slot.
+    let (_, user) = user_package(&program);
+    let test_init = user
+        .test_init
+        .expect("expected the user package to own an `$init_test` after test block synthesis");
     assert!(
-        program.function_indices.contains_key("$init_test"),
-        "expected '$init_test' in function_indices after test block synthesis, got: {:?}",
-        program.function_indices.keys().collect::<Vec<_>>()
-    );
-
-    // The chainer should also appear in function_global_indices
-    assert!(
-        program.function_global_indices.contains_key("$init_test"),
-        "expected '$init_test' in function_global_indices, got: {:?}",
-        program.function_global_indices.keys().collect::<Vec<_>>()
+        program
+            .globals
+            .contains(&bex_vm_types::ConstValue::Object(test_init)),
+        "expected `$init_test` to own a global slot"
     );
 
     // Verify the chainer function has arity 1 (takes the registry parameter)
-    let fn_obj_idx = program.function_indices["$init_test"];
+    let fn_obj_idx = test_init.raw();
     // program.objects derefs to Vec<Object> via Deref, so a plain usize index works.
     let fn_obj = &(*program.objects)[fn_obj_idx];
     let bex_vm_types::Object::Function(chainer) = fn_obj else {
@@ -439,14 +467,13 @@ fn no_init_test_chainer_when_no_tests() {
     let program = compile(&db);
 
     assert!(
-        !program.function_indices.contains_key("$init_test"),
-        "expected no '$init_test' in function_indices when no test blocks present, got: {:?}",
-        program.function_indices.keys().collect::<Vec<_>>()
+        user_package(&program).1.test_init.is_none(),
+        "expected no `$init_test` when no test blocks are present"
     );
 }
 
 /// Verify that multiple client declarations:
-/// - Both get global slots in `let_global_indices`
+/// - Both own global slots
 /// - `$init` is synthesized to initialize them
 #[test]
 fn multiple_let_bindings_with_valid_dependencies() {
@@ -462,30 +489,23 @@ fn multiple_let_bindings_with_valid_dependencies() {
 
     let program = compile(&db);
 
-    // Both clients should have global slots in let_global_indices
-    let has_a = program
-        .let_global_indices
-        .keys()
-        .any(|k| k.contains("ClientA"));
-    let has_b = program
-        .let_global_indices
-        .keys()
-        .any(|k| k.contains("ClientB"));
+    // Both clients own global slots.
+    let lets = program.rendered_lets();
     assert!(
-        has_a,
-        "expected 'ClientA' in let_global_indices, got: {:?}",
-        program.let_global_indices.keys().collect::<Vec<_>>()
+        lets.keys().any(|k| k.contains("ClientA")),
+        "expected 'ClientA' among the lets, got: {:?}",
+        lets.keys().collect::<Vec<_>>()
     );
     assert!(
-        has_b,
-        "expected 'ClientB' in let_global_indices, got: {:?}",
-        program.let_global_indices.keys().collect::<Vec<_>>()
+        lets.keys().any(|k| k.contains("ClientB")),
+        "expected 'ClientB' among the lets, got: {:?}",
+        lets.keys().collect::<Vec<_>>()
     );
 
     // $init should be synthesized
     assert!(
-        program.function_indices.contains_key("$init"),
-        "expected '$init' in function_indices"
+        user_package(&program).1.init.is_some(),
+        "expected the user package to own an `$init`"
     );
 }
 

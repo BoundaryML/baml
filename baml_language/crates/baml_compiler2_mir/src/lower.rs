@@ -1301,9 +1301,8 @@ pub fn native_key_for<'db>(
 /// An interface body is not itself a logical item — it belongs to every
 /// `implements`
 /// relation that selects it — so it gets no runtime name: emit pools and slots
-/// it like any function, but excludes it from every name map
-/// (`Program::function_indices` / `function_global_indices`) and marks its
-/// `Function::is_interface_body`. The [`definition_link_name`] spelling for a body
+/// it like any function, but it enters no package table (so no rendered view
+/// of the executable names it) and carries `Function::is_interface_body`. The [`definition_link_name`] spelling for a body
 /// is display-only plus a link-internal unit-export key — the latter makes
 /// it load-bearing as a KEY: it must be unique (coherence + the canonical
 /// rendering guarantee it; decompose enforces it).

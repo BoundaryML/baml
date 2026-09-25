@@ -42,7 +42,10 @@ pub use type_alias::*;
 pub use type_value::*;
 pub use value::*;
 
-use crate::{heap_ptr::HeapPtr, indexable::ObjectPool};
+use crate::{
+    heap_ptr::HeapPtr,
+    indexable::{GlobalIndex, ObjectIndex, ObjectPool},
+};
 
 // ============================================================================
 // Type Tags for Jump Table Dispatch
@@ -78,55 +81,6 @@ pub struct Program {
     /// `StoreGlobal` against the still-mutable pool. See `Instruction::StoreGlobal`.
     pub globals: Vec<ConstValue>,
 
-    /// Maps function names to their object indices.
-    ///
-    /// Interface-machinery bodies — impl-block methods (in-class or free) and
-    /// interface default-method bodies — are excluded: such a body is pooled
-    /// and
-    /// slotted like any function but is not a table-addressable item (each
-    /// body's [`Function::is_interface_body`](crate::Function::is_interface_body)
-    /// marks it). Where a compile boundary needs a body's coordinates, it
-    /// reads them structurally: the declaration-keyed placement registry
-    /// (unit decomposition — same process, same emit), the Pass-1 slot
-    /// replay over the artifact's globals (the stdlib splice, the one
-    /// genuine cross-process boundary), or the impl-rule tables / the
-    /// interface's `default` operand (rule baking, dispatch).
-    #[deprecated(
-        note = "flat name map of the executable: consumers re-express over the identity tables (`ProgramPackage::globals` and the per-package declaration tables), then it is deleted"
-    )]
-    pub function_indices: HashMap<String, usize>,
-
-    /// Maps function names to their global indices.
-    /// Used for dynamic function lookup at runtime.
-    ///
-    /// Interface-machinery bodies are excluded (see
-    /// [`Self::function_indices`]).
-    #[deprecated(
-        note = "flat name map of the executable: consumers re-express over the identity tables (`ProgramPackage::globals` and the per-package declaration tables), then it is deleted"
-    )]
-    pub function_global_indices: HashMap<String, usize>,
-
-    /// Maps let-binding fully-qualified names to their global slot indices.
-    /// E.g., `"user.my_const" -> 5`. Populated in Pass 1; slots hold `ConstValue::Null`
-    /// until `$init` runs at load time via `StoreGlobal`.
-    #[deprecated(
-        note = "flat name map of the executable: consumers re-express over the identity tables (`ProgramPackage::globals` and the per-package declaration tables), then it is deleted"
-    )]
-    pub let_global_indices: HashMap<String, usize>,
-
-    /// Client build metadata for constructing full client trees at runtime.
-    /// Keyed by client name.
-    #[deprecated(note = "never written; deleted with the unit-format switch")]
-    pub client_metadata: HashMap<String, ClientBuildMeta>,
-
-    /// Ordered list of `$init` function names to run at load time.
-    /// E.g., `["baml.$init", "$init"]` — builtins before user package.
-    /// Empty when there are no top-level let bindings in any package.
-    #[deprecated(
-        note = "rendered `$init` order: the loader runs `ProgramPackage::init` in package order instead, then it is deleted"
-    )]
-    pub package_init_order: Vec<String>,
-
     /// Per-package program structure (global-index-keyed), by package
     /// ordinal. A package's identity in the executable is its position here;
     /// its `name` is display metadata (and the spelling the prelude is bound
@@ -139,6 +93,14 @@ pub struct Program {
     /// order-independent). The single source of truth for interface dispatch,
     /// named-item lookup, and recursive-alias rendering.
     pub packages: Vec<ProgramPackage>,
+    /// The packages whose `$init` runs, as ordinals into [`Self::packages`],
+    /// in initialization order: every package after the packages it reaches.
+    pub init_order: Vec<u32>,
+    /// The package the program was compiled for — the world's root — as an
+    /// ordinal into [`Self::packages`]: whose tests a test run collects.
+    /// `None` when the root declares nothing (an empty workspace) and so
+    /// links no package of its own.
+    pub root: Option<u32>,
 
     /// Conservative source-content identity of the compiled file set
     /// (streams spec §2.3): SHA-256 over the domain string, compiler
@@ -242,10 +204,69 @@ impl Program {
         self.globals.push(value);
     }
 
-    /// Look up a function's object index by name.
-    pub fn function_index(&self, name: &str) -> Option<usize> {
-        self.function_indices.get(name).copied()
+    /// The executable's callables by rendered name — `pkg.ns.name` for a free
+    /// function, `pkg.ns.Class.name` for a method. The view behind the
+    /// surfaces that legitimately start from a host-supplied name (the run
+    /// entry point, test discovery, reflection by name), derived from the
+    /// package tables: the executable carries no such spelling, and nothing
+    /// resolves through it internally.
+    pub fn rendered_callables(&self) -> HashMap<String, RenderedCallable> {
+        let mut out = HashMap::new();
+        for package in &self.packages {
+            for (local, &object) in &package.functions {
+                let path = DeclPath::Function(FnPath::Free(local.clone()));
+                out.insert(
+                    format!("{}.{local}", package.name),
+                    RenderedCallable {
+                        object,
+                        slot: package.globals.get(&path).copied(),
+                    },
+                );
+            }
+            for (class_local, &class_index) in &package.classes {
+                let Some(Object::Class(class)) = self.objects.get(class_index.raw()) else {
+                    unreachable!("a package's class table indexes class objects")
+                };
+                for (method, def) in &class.methods {
+                    let path = DeclPath::Function(FnPath::Method {
+                        class: class_local.clone(),
+                        name: method.clone(),
+                    });
+                    out.insert(
+                        format!("{}.{class_local}.{method}", package.name),
+                        RenderedCallable {
+                            object: def.function,
+                            slot: package.globals.get(&path).copied(),
+                        },
+                    );
+                }
+            }
+        }
+        out
     }
+
+    /// The executable's top-level `let`s by rendered name (`pkg.ns.name`) to
+    /// the global slot each holds — derived like [`Self::rendered_callables`].
+    pub fn rendered_lets(&self) -> HashMap<String, GlobalIndex> {
+        let mut out = HashMap::new();
+        for package in &self.packages {
+            for (path, &slot) in &package.globals {
+                if let DeclPath::Let(local) = path {
+                    out.insert(format!("{}.{local}", package.name), slot);
+                }
+            }
+        }
+        out
+    }
+}
+
+/// A callable of the executable as a host names it: its function object and
+/// the global slot it links as — `None` for a callable nothing slots (an
+/// intrinsic).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RenderedCallable {
+    pub object: ObjectIndex,
+    pub slot: Option<GlobalIndex>,
 }
 
 // ============================================================================

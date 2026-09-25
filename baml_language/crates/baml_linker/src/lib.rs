@@ -42,19 +42,18 @@
 //! — so a package's objects are one contiguous range and its position in the
 //! set is its position in the image. Init parts EXECUTE in package
 //! initialization order — a Kahn sort over the set's edges with alphabetical
-//! ties — which the rendered `package_init_order` view records; placement
+//! ties — which `Program::init_order` records as package ordinals; placement
 //! does not encode it. A generic-function VALUE (`foo<int>` as data) is
 //! emitted once per unit and interned here by `(base function's absolute
 //! slot, type args by declaration identity)` across code and tails: the first
 //! copy in layout order is placed, every later copy is a shadow whose
 //! references redirect to it.
 //!
-//! # The rendered views
+//! # No rendered views
 //!
-//! The image's flat name maps (`function_indices`, `function_global_indices`,
-//! `let_global_indices`, `package_init_order`) are filled from the export
-//! tables as RENDERED VIEWS for the consumers that legitimately start from a
-//! user-supplied name; nothing in the link resolves through them.
+//! The image carries no name map. A consumer that legitimately starts from a
+//! host-supplied name derives its view from the package tables at load
+//! (`Program::rendered_callables`); nothing in the link renders a spelling.
 
 use std::{
     collections::HashSet,
@@ -96,12 +95,12 @@ impl LinkPackageId {
 #[derive(Clone, Debug)]
 pub struct LinkPackage<'a> {
     /// The package's display spelling: `ProgramPackage::name`, the package
-    /// half of the rendered name views, and the name the prelude is bound by
+    /// half of a rendered callable name, and the name the prelude is bound by
     /// at load. Display and boundary data — a package's link identity is its
     /// [`LinkPackageId`], and its executable identity its position in
     /// [`Program::packages`](bex_vm_types::Program::packages). Two packages may
-    /// not share a spelling
-    /// ([`LinkError::DuplicateLinkName`]), or the rendered views would collide.
+    /// not share a spelling ([`LinkError::DuplicatePackageName`]): the loader
+    /// binds the prelude by it.
     pub name: Name,
     /// The package's edge table: every direct dependency and prelude package
     /// by the name this package reaches it under.
@@ -115,6 +114,9 @@ pub struct LinkPackage<'a> {
 #[derive(Clone, Debug, Default)]
 pub struct LinkSet<'a> {
     pub packages: Vec<LinkPackage<'a>>,
+    /// The package the program is compiled for — the world's root — when it
+    /// links a package of its own (an empty workspace declares nothing).
+    pub root: Option<LinkPackageId>,
 }
 
 impl<'a> LinkSet<'a> {
@@ -208,7 +210,7 @@ impl Linker<'_, '_> {
         let mut spellings = HashSet::new();
         for package in &self.set.packages {
             if !spellings.insert(&package.name) {
-                return Err(LinkError::DuplicateLinkName(package.name.to_string()));
+                return Err(LinkError::DuplicatePackageName(package.name.to_string()));
             }
             if let Some((edge, id)) = package
                 .edges
@@ -222,6 +224,15 @@ impl Linker<'_, '_> {
                     self.set.packages.len()
                 )));
             }
+        }
+        if let Some(root) = self.set.root
+            && root.0 as usize >= self.set.packages.len()
+        {
+            return Err(LinkError::invalid(format!(
+                "the root package {} is not in the set of {}",
+                root.0,
+                self.set.packages.len()
+            )));
         }
         Ok(())
     }

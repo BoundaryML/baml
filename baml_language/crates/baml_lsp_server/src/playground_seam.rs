@@ -828,26 +828,19 @@ impl PlaygroundSeam {
     pub async fn collect_tests(self: &Arc<Self>, root: &Path) {
         let root_path = root.to_path_buf();
         let runtimes = Arc::clone(&self.runtimes);
-        // The ticket and the root's package name come from one owner
-        // continuation: `collect_tests` addresses the engine by package, and
-        // that must be the package the engine was emitted for.
+        // The ticket comes from one owner continuation: the engine collects
+        // the tests of the package it was emitted for, so the ticket alone
+        // addresses them.
         let begun = self
             .call(move |state| {
                 let revision = state.revision();
-                let package = state
-                    .roots()
-                    .workspace_roots()
-                    .find(|entry| entry.path == root_path)?
-                    .spelling
-                    .to_string();
-                let ticket = runtimes
+                runtimes
                     .existing(&root_path)?
-                    .begin_test_collection(revision)?;
-                Some((ticket, package))
+                    .begin_test_collection(revision)
             })
             .await
             .flatten();
-        let Some((ticket, package)) = begun else {
+        let Some(ticket) = begun else {
             tracing::debug!("collect_tests: no current engine for {}", root.display());
             return;
         };
@@ -856,8 +849,7 @@ impl PlaygroundSeam {
         let runtime = self.runtimes.runtime(root);
         let project = root.to_string_lossy().into_owned();
         tokio::spawn(async move {
-            seam.run_test_collection(&runtime, ticket, project, package)
-                .await;
+            seam.run_test_collection(&runtime, ticket, project).await;
         });
     }
 
@@ -866,17 +858,13 @@ impl PlaygroundSeam {
         runtime: &ProjectRuntime,
         ticket: CollectionTicket,
         project: String,
-        package: String,
     ) {
         let call_id = sys_types::CallId::next();
         let generation = ticket.generation;
         let engine = Arc::clone(&ticket.engine);
         let cancel = ticket.cancel.clone();
 
-        let registry = match engine
-            .collect_tests(&package, call_id, cancel.clone())
-            .await
-        {
+        let registry = match engine.collect_tests(call_id, cancel.clone()).await {
             Ok(registry) => registry,
             Err(error) => {
                 // A stale or cancelled collection emits nothing; a failure for

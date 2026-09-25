@@ -414,7 +414,6 @@ pub(crate) struct CollectionTicket {
     pub(crate) generation: u64,
     collection_epoch: u64,
     pub(crate) engine: Arc<BexEngine>,
-    pub(crate) package: String,
 }
 
 /// A registry checked out for work (running a test, expanding a set).
@@ -458,7 +457,6 @@ impl PlaygroundState {
     pub(crate) fn begin_test_collection(
         &mut self,
         revision: SourceRevision,
-        package: String,
     ) -> Option<CollectionTicket> {
         let installed = self.installed.as_ref()?;
         if installed.source_revision != revision {
@@ -469,7 +467,6 @@ impl PlaygroundState {
             generation: installed.generation,
             collection_epoch: self.collection_epoch,
             engine: Arc::clone(&installed.engine),
-            package,
         })
     }
 
@@ -616,15 +613,13 @@ pub(crate) fn bex_value_to_json(value: &bex_project::BexExternalValue) -> serde_
     }
 }
 
-/// The workspace root's path and package name, as the playground addresses it.
-pub(crate) fn workspace_root(state: &GlobalState) -> Option<(String, String)> {
+/// The workspace root's path, as the playground addresses it.
+pub(crate) fn workspace_root(state: &GlobalState) -> Option<String> {
     read(state, |snap| {
-        snap.roots().workspace_roots().next().map(|entry| {
-            (
-                entry.path.to_string_lossy().into_owned(),
-                entry.spelling.to_string(),
-            )
-        })
+        snap.roots()
+            .workspace_roots()
+            .next()
+            .map(|entry| entry.path.to_string_lossy().into_owned())
     })
     .flatten()
 }

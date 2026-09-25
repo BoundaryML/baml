@@ -147,7 +147,7 @@ pub fn compile_program_with(
             }))
         })
         .collect::<Result<Vec<_>, LoweringError>>()?;
-    let mut program = link(&link_set(db, &packages))?;
+    let mut program = link(&link_set(db, &packages, root))?;
     program.source_content_hash = Some(project_source_content_hash(db, root));
     Ok(program)
 }
@@ -166,7 +166,11 @@ struct LinkedPackage {
 /// The link set of the program's packages: each in program order under the
 /// program's spelling of it, its edges resolved to set positions (an edge to
 /// a package that emitted no output is dropped — nothing imports from it).
-fn link_set<'a>(db: &dyn baml_compiler2_hir::Db, packages: &'a [LinkedPackage]) -> LinkSet<'a> {
+fn link_set<'a>(
+    db: &dyn baml_compiler2_hir::Db,
+    packages: &'a [LinkedPackage],
+    root: SourceRoot,
+) -> LinkSet<'a> {
     let spelling = spelling(db);
     let position = |root: SourceRoot| {
         packages
@@ -189,5 +193,6 @@ fn link_set<'a>(db: &dyn baml_compiler2_hir::Db, packages: &'a [LinkedPackage]) 
                 tail: package.emitted.tail.as_ref(),
             })
             .collect(),
+        root: position(root),
     }
 }

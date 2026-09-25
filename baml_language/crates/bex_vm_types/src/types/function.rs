@@ -293,10 +293,9 @@ pub struct Function {
     /// An interface body is pooled and slotted like any function —
     /// statically resolved
     /// calls stay direct `Call(GlobalIndex)` — but it is not itself a logical
-    /// item, so it has no name anywhere: bodies are excluded from
-    /// `Program::function_indices` / `function_global_indices` and every
-    /// runtime name scan skips them; compile boundaries recover a body's
-    /// coordinates structurally (Pass-1 slot replay + the globals array).
+    /// item, so it has no name anywhere: bodies enter no package table, so no
+    /// rendered view of the executable names them, and every runtime name
+    /// scan skips them.
     /// [`Self::name`] on an interface body is display-only (traces,
     /// snapshots).
     pub is_interface_body: bool,

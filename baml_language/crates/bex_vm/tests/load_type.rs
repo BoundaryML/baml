@@ -39,7 +39,7 @@ fn inject_function(
     fn_name: &str,
     instructions: Vec<Instruction>,
     constants: Vec<ConstValue>,
-) -> usize {
+) -> (usize, usize) {
     let bytecode = Bytecode {
         instructions,
         constants,
@@ -78,15 +78,9 @@ fn inject_function(
 
     let fn_obj_idx = program.add_object(Object::Function(Box::new(func)));
     let global_slot = program.globals.len();
-    program
-        .function_indices
-        .insert(fn_name.to_string(), fn_obj_idx);
     program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));
-    program
-        .function_global_indices
-        .insert(fn_name.to_string(), global_slot);
 
-    fn_obj_idx
+    (fn_obj_idx, global_slot)
 }
 
 /// Compile a base program, inject the test function, and run to completion.
@@ -98,11 +92,7 @@ fn run_with_bytecode_keep_vm(
     constants: Vec<ConstValue>,
 ) -> (Value, BexVm) {
     let mut program = compile_source(STUB_SOURCE);
-    inject_function(&mut program, fn_name, instructions, constants);
-
-    let function_index = program
-        .function_index(fn_name)
-        .unwrap_or_else(|| panic!("function {fn_name:?} not found"));
+    let (function_index, _) = inject_function(&mut program, fn_name, instructions, constants);
 
     let mut vm =
         BexVm::from_program(program, Arc::new(AtomicBool::new(false))).expect("from_program");
@@ -203,15 +193,12 @@ fn load_type_type_arg_ref_substitutes_from_frame() {
     let fn_name = "user.test_typeargref";
 
     let mut program = compile_source(STUB_SOURCE);
-    let fn_obj_idx = inject_function(
+    let (function_index, _) = inject_function(
         &mut program,
         fn_name,
         vec![Instruction::LoadType(0), Instruction::Return],
         vec![ConstValue::Type(template)],
     );
-
-    let function_index = program.function_index(fn_name).expect("function not found");
-    assert_eq!(function_index, fn_obj_idx);
 
     let mut vm =
         BexVm::from_program(program, Arc::new(AtomicBool::new(false))).expect("from_program");
@@ -265,15 +252,12 @@ fn load_type_array_of_type_arg_ref() {
     let fn_name = "user.test_array_typearg";
 
     let mut program = compile_source(STUB_SOURCE);
-    let fn_obj_idx = inject_function(
+    let (function_index, _) = inject_function(
         &mut program,
         fn_name,
         vec![Instruction::LoadType(0), Instruction::Return],
         vec![ConstValue::Type(template)],
     );
-
-    let function_index = program.function_index(fn_name).expect("function not found");
-    assert_eq!(function_index, fn_obj_idx);
 
     let mut vm =
         BexVm::from_program(program, Arc::new(AtomicBool::new(false))).expect("from_program");
@@ -335,7 +319,7 @@ fn call_ntypeargs_threads_type_arg_into_callee() {
     let mut program = compile_source(STUB_SOURCE);
 
     // Register inner function first so we know its global slot.
-    let inner_obj_idx = inject_function(
+    let (_inner_obj_idx, inner_global_slot) = inject_function(
         &mut program,
         fn_inner,
         vec![
@@ -345,14 +329,8 @@ fn call_ntypeargs_threads_type_arg_into_callee() {
         ],
         vec![ConstValue::Type(TyTemplate::TypeArgRef(0))],
     );
-    let inner_global_slot = program
-        .function_global_indices
-        .get(fn_inner)
-        .copied()
-        .expect("inner global slot");
-
     // Outer function: push type arg (string), call inner with ntypeargs=1
-    inject_function(
+    let (outer_idx, _) = inject_function(
         &mut program,
         fn_outer,
         vec![
@@ -367,9 +345,6 @@ fn call_ntypeargs_threads_type_arg_into_callee() {
             baml_type::RealizedTy::string(),
         ))],
     );
-    let _ = inner_obj_idx; // suppress unused warning
-
-    let outer_idx = program.function_index(fn_outer).expect("outer not found");
 
     let mut vm =
         BexVm::from_program(program, Arc::new(AtomicBool::new(false))).expect("from_program");

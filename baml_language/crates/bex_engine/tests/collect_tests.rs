@@ -41,7 +41,7 @@ async fn collect_tests_returns_registry_handle() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -59,7 +59,7 @@ async fn collect_tests_no_tests_returns_null() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -82,7 +82,7 @@ async fn collect_tests_with_testset_returns_handle() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -105,7 +105,7 @@ async fn collect_tests_nested_testset_returns_handle() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -128,7 +128,7 @@ async fn collect_tests_dynamic_name_returns_handle() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -267,7 +267,7 @@ async fn collect_tests_run_test_catches_typed_throwing_body() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -310,7 +310,7 @@ async fn collect_tests_run_test_catches_assertion_panic() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -342,7 +342,7 @@ async fn collect_tests_quorum_runner_passes_and_fails() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
     expand_testset(&engine, registry.clone(), "root::suite")
@@ -376,7 +376,7 @@ async fn collect_tests_retry_stops_after_first_success() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
     expand_testset(&engine, registry.clone(), "root::suite")
@@ -408,7 +408,7 @@ async fn collect_tests_pass_rate_runner_uses_child_outcomes() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -438,7 +438,7 @@ async fn collect_tests_fail_fast_stops_after_first_failure() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -477,7 +477,7 @@ async fn collect_tests_sequential_runs_children_in_source_order() {
 
     let engine = make_engine(&source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -505,7 +505,7 @@ async fn collect_tests_testset_inline_for_loop_expands() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -536,7 +536,7 @@ async fn collect_tests_testset_let_then_for_loop_expands() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -564,7 +564,7 @@ async fn collect_tests_testset_let_array_index_in_name_and_body() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -597,7 +597,7 @@ async fn collect_tests_testset_let_then_while_loop() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -629,7 +629,7 @@ async fn collect_tests_testset_let_used_in_test_name_concat() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -659,7 +659,7 @@ async fn collect_tests_testset_let_then_if_condition() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -689,7 +689,7 @@ async fn collect_tests_multiple_testsets_returns_handle() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -712,7 +712,7 @@ async fn serialize_registry_with_unexpanded_testsets() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -754,7 +754,7 @@ async fn collect_tests_testset_for_loop_with_nested_testset_variable_name() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -790,7 +790,7 @@ async fn collect_tests_testset_for_loop_test_uses_loop_var() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -827,7 +827,7 @@ async fn collect_tests_top_level_testset_with_string_concat_name() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -878,7 +878,7 @@ async fn collect_tests_testset_with_function_call_and_field_access() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -967,7 +967,7 @@ async fn collect_tests_user_exact_file_full_lifecycle() {
 
     // Step 1: Collect tests
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -1040,7 +1040,7 @@ async fn collect_tests_expand_nested_testsets_full_depth() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -1089,7 +1089,7 @@ async fn test_body_let_local_resolves_to_binding() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -1151,7 +1151,7 @@ async fn collect_tests_run_all_parallel_class_spreads_keep_local_slots_in_bounds
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -1196,7 +1196,7 @@ async fn test_bodies_reuse_same_let_name_without_conflict() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 
@@ -1229,7 +1229,7 @@ async fn testset_let_capture_and_shadowing_resolve_correctly() {
 
     let engine = make_engine(source);
     let registry = engine
-        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .collect_tests(CallId::next(), CancellationToken::default())
         .await
         .expect("collect_tests should succeed");
 

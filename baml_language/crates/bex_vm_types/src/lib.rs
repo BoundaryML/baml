@@ -134,9 +134,10 @@ pub use types::{
     FutureRead, GenericFunction, HostClosure, ImplBodyCoherence, ImplBodyKey, ImplCoherenceKey,
     Instance, InterfaceBound, InterfaceKey, ItemPath, LockedContainer, LockedReadGuard,
     LockedWriteGuard, MapContainer, MapReadGuard, MapWriteGuard, MediaValue, Object, ObjectType,
-    PanicClass, Program, PromptAst, RetryPolicyMeta, SpelledBound, SysOp, SysOpErrorCategory,
-    SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard,
-    UnscheduledFuture, Value, ValueKind, Variant, format_float, sys_op_for_path, type_tags,
+    PanicClass, Program, PromptAst, RenderedCallable, RetryPolicyMeta, SpelledBound, SysOp,
+    SysOpErrorCategory, SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard,
+    Uint8ArrayWriteGuard, UnscheduledFuture, Value, ValueKind, Variant, format_float,
+    sys_op_for_path, type_tags,
 };
 
 /// Used to check if the VM should yield early.

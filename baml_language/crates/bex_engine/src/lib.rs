@@ -1122,6 +1122,12 @@ pub struct BexEngine {
     _globals_permit: bex_heap::InactiveHeapPermit<SharedGlobals>,
     /// Resolved function/class/enum names for lookup
     resolved_function_names: HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>,
+    /// The world's root package — the one the program was compiled for —
+    /// when it linked a package of its own: whose tests a run collects.
+    root_package: Option<HeapPtr>,
+    /// The class that owns each method, from the classes' own method
+    /// tables: what tells a callee's class-generic prefix from its own.
+    method_owners: HashMap<HeapPtr, HeapPtr>,
     /// Resolved class names for instance allocation (`IndexMap` preserves definition order)
     resolved_class_names: indexmap::IndexMap<String, HeapPtr>,
     /// Resolved enum names for variant allocation (`IndexMap` preserves definition order)
@@ -2073,8 +2079,8 @@ impl BexEngine {
         let engine_id = Self::next_engine_id();
         let program_metadata = Self::build_program_metadata(&bytecode_program);
 
-        // Extract package_init_order before consuming bytecode_program.
-        let package_init_order = bytecode_program.package_init_order.clone();
+        // The init order, before the executable is consumed.
+        let init_order = bytecode_program.init_order.clone();
 
         // Convert the pure bytecode to a VM-ready program with native functions attached
         let bytecode =
@@ -2156,6 +2162,32 @@ impl BexEngine {
         // Shared with every VM so spawned workers see the same package index
         // without re-resolving it.
         let packages = Arc::new(package_index);
+        let root_package = bytecode.root.map(|ordinal| {
+            packages
+                .package_at(ordinal as usize)
+                .unwrap_or_else(|| unreachable!("the root ordinal is a package of the image"))
+        });
+        let method_owners: HashMap<HeapPtr, HeapPtr> = packages
+            .package_ptrs()
+            .flat_map(|package_ptr| {
+                // SAFETY: the package index holds compile-time package objects.
+                let Object::Package(package) = (unsafe { package_ptr.get() }) else {
+                    unreachable!("the package index holds packages")
+                };
+                package.classes.values().copied().collect::<Vec<_>>()
+            })
+            .flat_map(|class_ptr| {
+                // SAFETY: a package's class table holds compile-time class objects.
+                let Object::Class(class) = (unsafe { class_ptr.get() }) else {
+                    unreachable!("a package's class table holds classes")
+                };
+                class
+                    .methods
+                    .values()
+                    .map(|method| (method.function_ptr, class_ptr))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
         let dynamic_dispatch = Arc::new(bex_vm::package_load::DynDispatchTables::default());
         // Resolve the builtin error/panic class pointers once; shared with every
         // spawned VM rather than re-resolved per `BexVm::new`.
@@ -2218,8 +2250,14 @@ impl BexEngine {
         // $init evaluates top-level let-binding initializers and stores their
         // results into the global slots via StoreGlobal instructions.
         // This must run before any user code calls LoadGlobal on let-bound names.
-        for init_name in &package_init_order {
-            if let Some((init_ptr, _kind)) = resolved_function_names.get(init_name.as_str()) {
+        for &ordinal in &init_order {
+            let package = &bytecode.packages[ordinal as usize];
+            let init_name = &package.name;
+            let init = package
+                .init
+                .unwrap_or_else(|| unreachable!("the init order lists packages with an `$init`"));
+            let init_ptr = &heap.compile_time_ptr(init.into_raw());
+            {
                 let mut vm = BexVm::new(
                     Arc::clone(&heap),
                     VmGlobals::Owned(globals_pool.clone()),
@@ -2257,12 +2295,12 @@ impl BexEngine {
                         }
                         Ok(other) => {
                             return Err(EngineError::InitFailed(format!(
-                                "$init function '{init_name}' yielded unexpectedly: {other:?}"
+                                "`$init` of package `{init_name}` yielded unexpectedly: {other:?}"
                             )));
                         }
                         Err(e) => {
                             return Err(EngineError::InitFailed(format!(
-                                "$init function '{init_name}' failed: {e}"
+                                "`$init` of package `{init_name}` failed: {e}"
                             )));
                         }
                     }
@@ -2329,7 +2367,6 @@ impl BexEngine {
 
         let sys_op_ctx = sys_types::EngineSysOpContext {
             llm_functions: Arc::new(llm_functions),
-            function_global_indices: Arc::new(bytecode.function_global_indices),
             class_definitions: Arc::new(class_definitions),
             enum_definitions: Arc::new(enum_definitions),
             type_alias_definitions: Arc::new(
@@ -2362,6 +2399,8 @@ impl BexEngine {
             globals,
             _globals_permit: globals_permit,
             resolved_function_names,
+            root_package,
+            method_owners,
             resolved_class_names,
             resolved_enum_names,
             sys_ops,
@@ -3616,6 +3655,24 @@ impl BexEngine {
         self: &Arc<Self>,
         function_name: &str,
         args: Vec<BexCallArg>,
+        call_ctx: FunctionCallContext,
+        copy_objects: bool,
+    ) -> Result<BexCallResult, EngineError> {
+        let (function, kind) = self.lookup_function(function_name)?;
+        self.call_resolved_with_trace(function, kind, function_name, args, call_ctx, copy_objects)
+            .await
+    }
+
+    /// Call a function resolved by identity — the name boundary is
+    /// [`Self::lookup_function`]; a package's `$init_test`, which no host
+    /// names, arrives here straight from its package table. `function_name`
+    /// labels diagnostics only.
+    async fn call_resolved_with_trace(
+        self: &Arc<Self>,
+        function_index: HeapPtr,
+        kind: bex_vm_types::FunctionKind,
+        function_name: &str,
+        args: Vec<BexCallArg>,
         FunctionCallContext {
             host_call_id,
             boundary,
@@ -3641,21 +3698,19 @@ impl BexEngine {
         }
         Box::pin(self.collect_before_call(&call_work.work_guard)).await;
 
-        let (function_index, kind) = self.lookup_function(function_name)?;
         if matches!(kind, bex_vm_types::FunctionKind::NativeUnresolved) {
             return Err(EngineError::NotInvokableAsEntry {
                 name: function_name.to_string(),
                 kind: format!("{kind:?}"),
             });
         }
-        self.validate_bound_args(function_name, &args)?;
-        let mut return_type = self
-            .function_return_type(function_name)
-            .unwrap_or(RuntimeTy::Null);
-        let throws_type = self.function_throws_type(function_name);
+        Self::validate_bound_args(function_index, function_name, &args)?;
+        let mut return_type =
+            Self::function_return_type_of(function_index).unwrap_or(RuntimeTy::Null);
+        let throws_type = Self::function_throws_type_of(function_index);
 
         // Declared parameter types (TypeVars unsubstituted).
-        let params = self.function_params(function_name)?;
+        let params = Self::function_params_of(function_index)?;
         let declared_param_types: Vec<RuntimeTy> =
             params.iter().map(|(_, ty, _)| (*ty).clone()).collect();
 
@@ -3720,7 +3775,7 @@ impl BexEngine {
         // step below mutates `type_args` and is gated on this flag. The
         // (unsubstituted) `return_type` is used; self-receiver substitution does
         // not change whether the callee is generic.
-        let declared_generic_params = self.function_generic_params(function_name);
+        let declared_generic_params = Self::function_generic_params_of(function_index);
         let callee_is_generic = !declared_generic_params.is_empty()
             || declared_param_types
                 .iter()
@@ -3894,7 +3949,7 @@ impl BexEngine {
             //       catches a param/return type var the bindings didn't cover,
             //       including an instance method whose receiver failed to supply
             //       its class type args.
-            let missing_declared = if self.is_class_method(function_name) {
+            let missing_declared = if self.method_owner(function_index).is_some() {
                 // Demand the method's OWN generic params (the suffix after the
                 // class prefix). Inherited class params ride on the receiver (an
                 // instance method) or are phantom (a static), so they're never
@@ -3902,7 +3957,7 @@ impl BexEngine {
                 // ARE demanded — so rule 3 (no value position ⇒ must-specify)
                 // fires for a method's body-only own var (`reflect_t<T>()`), which
                 // check (2)'s signature scan misses.
-                let class_prefix = self.enclosing_class_generic_param_count(function_name);
+                let class_prefix = self.enclosing_class_generic_param_count(function_index);
                 declared_generic_params
                     .iter()
                     .skip(class_prefix)
@@ -4765,11 +4820,11 @@ impl BexEngine {
     }
 
     fn validate_bound_args(
-        &self,
+        function: HeapPtr,
         function_name: &str,
         args: &[BexCallArg],
     ) -> Result<(), EngineError> {
-        let params = self.function_params(function_name)?;
+        let params = Self::function_params_of(function)?;
         if args.len() != params.len() {
             return Err(EngineError::TypeMismatch {
                 message: format!(
@@ -4827,8 +4882,12 @@ impl BexEngine {
     pub fn function_return_type(&self, name: &str) -> Option<RuntimeTy> {
         let resolved = self.resolve_function_name(name)?;
         let (ptr, _kind) = self.resolved_function_names.get(resolved)?;
-        // SAFETY: ptr is from resolved_function_names, a compile-time object
-        let obj = unsafe { ptr.get() };
+        Self::function_return_type_of(*ptr)
+    }
+
+    fn function_return_type_of(function: HeapPtr) -> Option<RuntimeTy> {
+        // SAFETY: a resolved function is a compile-time object.
+        let obj = unsafe { function.get() };
         match obj {
             Object::Function(func) => {
                 crate::conversion::to_wire_ty(&declared_symbolic(&func.return_type, func)).ok()
@@ -4838,11 +4897,9 @@ impl BexEngine {
     }
 
     /// Get the inferred throws type for a function by dereferencing its heap object.
-    fn function_throws_type(&self, name: &str) -> Option<RuntimeTy> {
-        let resolved = self.resolve_function_name(name)?;
-        let (ptr, _kind) = self.resolved_function_names.get(resolved)?;
-        // SAFETY: ptr is from resolved_function_names, a compile-time object
-        let obj = unsafe { ptr.get() };
+    fn function_throws_type_of(function: HeapPtr) -> Option<RuntimeTy> {
+        // SAFETY: a resolved function is a compile-time object.
+        let obj = unsafe { function.get() };
         match obj {
             Object::Function(func) => match &func.throws_type {
                 baml_type::TyTemplate::Never => None,
@@ -4865,8 +4922,14 @@ impl BexEngine {
                 .ok_or(EngineError::FunctionNotFound {
                     name: name.to_string(),
                 })?;
-        // SAFETY: ptr is from resolved_function_names, a compile-time object
-        let obj = unsafe { ptr.get() };
+        Self::function_params_of(*ptr)
+    }
+
+    fn function_params_of(
+        function: HeapPtr,
+    ) -> Result<Vec<(&'static str, RuntimeTy, bool)>, EngineError> {
+        // SAFETY: a resolved function is a compile-time object.
+        let obj = unsafe { function.get() };
         match obj {
             Object::Function(func) => Ok(func
                 .param_names
@@ -4893,15 +4956,9 @@ impl BexEngine {
     /// `Function`'s `display_type_params`, so it includes type params that
     /// appear only in the body (e.g. `one_type_arg<T>()` whose `T` shows up
     /// solely via `reflect.Type.of<T>()`), which a signature-only scan misses.
-    fn function_generic_params(&self, name: &str) -> Vec<String> {
-        let Some(resolved) = self.resolve_function_name(name) else {
-            return vec![];
-        };
-        let Some((ptr, _kind)) = self.resolved_function_names.get(resolved) else {
-            return vec![];
-        };
-        // SAFETY: ptr is from resolved_function_names, a compile-time object.
-        match unsafe { ptr.get() } {
+    fn function_generic_params_of(function: HeapPtr) -> Vec<String> {
+        // SAFETY: a resolved function is a compile-time object.
+        match unsafe { function.get() } {
             Object::Function(func) => func
                 .display_type_params
                 .iter()
@@ -4913,67 +4970,27 @@ impl BexEngine {
         }
     }
 
-    /// Whether `function_name` resolves to a method on a class (its FQN's parent
-    /// segment names a registered class), as opposed to a free function. Used to
-    /// scope Gate A's declared-param completeness check (1): a method's
-    /// `display_type_params` are De Bruijn-ordered as *class params first, then
-    /// the method's own*, and those leading class params are never bound *by
-    /// name* in `type_args` — a static never binds them, and an instance
-    /// method's ride on the receiver (the wire instance's class args, or a
-    /// generic `self` handle), not the named channel. Demanding each appear in
-    /// `type_args` would wrongly reject, so check (1) is skipped for class
-    /// methods; their own params still fall to check (2), which scans the
-    /// signature (and catches a class param the receiver failed to supply).
-    /// Free functions have no such prefix.
-    fn is_class_method(&self, function_name: &str) -> bool {
-        let Some(resolved) = self.resolve_function_name(function_name) else {
-            return false;
-        };
-        let Some(idx) = resolved.rfind('.') else {
-            return false;
-        };
-        let parent = &resolved[..idx];
-        self.resolved_class_names.contains_key(parent)
-            || self
-                .resolved_class_names
-                .contains_key(&format!("user.{parent}"))
-            || parent
-                .strip_prefix("user.")
-                .is_some_and(|p| self.resolved_class_names.contains_key(p))
+    /// The class that declares the method at `function`, from the classes'
+    /// own method tables; `None` for a free function.
+    fn method_owner(&self, function: HeapPtr) -> Option<HeapPtr> {
+        self.method_owners.get(&function).copied()
     }
 
-    /// Number of generic params declared by the class that *encloses*
-    /// `function_name` — the De Bruijn class-prefix length on a method's
-    /// `display_type_params` (`GenericBox<T>.new` ⇒ 1, `Helper.reflect_t` ⇒ 0).
-    /// `0` for free functions or when the parent isn't a registered class. Gate A
-    /// uses it to split a method's *own* generic params (which it must demand —
-    /// rule 3) from inherited class params (which ride on the receiver / are
-    /// phantom on a static, so are never bound by name).
-    fn enclosing_class_generic_param_count(&self, function_name: &str) -> usize {
-        let Some(resolved) = self.resolve_function_name(function_name) else {
-            return 0;
-        };
-        let Some(idx) = resolved.rfind('.') else {
-            return 0;
-        };
-        let parent = &resolved[..idx];
-        let class_ptr = self
-            .resolved_class_names
-            .get(parent)
-            .or_else(|| self.resolved_class_names.get(&format!("user.{parent}")))
-            .or_else(|| {
-                parent
-                    .strip_prefix("user.")
-                    .and_then(|p| self.resolved_class_names.get(p))
-            });
-        let Some(ptr) = class_ptr else {
-            return 0;
-        };
-        // SAFETY: ptr is from resolved_class_names, a compile-time object.
-        match unsafe { ptr.get() } {
-            Object::Class(class) => class.generic_param_count,
-            _ => 0,
-        }
+    /// Number of generic params declared by the class that owns `function` —
+    /// the De Bruijn class-prefix length on a method's `display_type_params`
+    /// (`GenericBox<T>.new` ⇒ 1, `Helper.reflect_t` ⇒ 0); `0` for a free
+    /// function. Gate A uses it to split a method's *own* generic params
+    /// (which it must demand — rule 3) from inherited class params (which
+    /// ride on the receiver / are phantom on a static, so are never bound by
+    /// name).
+    fn enclosing_class_generic_param_count(&self, function: HeapPtr) -> usize {
+        self.method_owner(function).map_or(0, |class| {
+            // SAFETY: a method owner is a compile-time class object.
+            match unsafe { class.get() } {
+                Object::Class(class) => class.generic_param_count,
+                _ => 0,
+            }
+        })
     }
 
     /// Check if a function exists by name (tries exact then "user." prefix).
@@ -5073,34 +5090,37 @@ impl BexEngine {
     // Test Collection API
     // ========================================================================
 
-    /// Collect all tests for a package by invoking `{package}.$init_test(collector)`.
+    /// The root package's `$init_test` chainer: `None` when the root links no
+    /// package of its own or declares no test blocks.
+    fn root_test_init(&self) -> Option<HeapPtr> {
+        let package_ptr = self.root_package?;
+        // SAFETY: the package index holds compile-time package objects.
+        match unsafe { package_ptr.get() } {
+            Object::Package(package) => package.test_init,
+            _ => None,
+        }
+    }
+
+    /// Collect the root package's tests by invoking its `$init_test(collector)`.
     ///
     /// Returns a `BexExternalValue::Handle` pointing to a live `testing.TestRegistry`
     /// heap object (GC-rooted), or `BexExternalValue::Null` if the package has no tests.
     ///
-    /// If the package has no test blocks, `$init_test` will not exist in the program
+    /// If the root has no test blocks, `$init_test` will not exist in the program
     /// and `Null` is returned immediately.
     ///
     /// # Arguments
     ///
-    /// - `package`: The package name (e.g. `"user"`).
     /// - `cancel`: A [`CancellationToken`] for caller-controlled cancellation.
     pub async fn collect_tests(
         self: &Arc<Self>,
-        package: &str,
         call_id: CallId,
         cancel: CancellationToken,
     ) -> Result<BexExternalValue, EngineError> {
-        let init_test_name = if package == "user" {
-            "$init_test".to_string()
-        } else {
-            format!("{package}.$init_test")
-        };
-
-        // If no $init_test function exists, this package has no tests.
-        if self.lookup_function(&init_test_name).is_err() {
+        // A root with no test blocks has no `$init_test`.
+        let Some(test_init) = self.root_test_init() else {
             return Ok(BexExternalValue::Null);
-        }
+        };
 
         let ctx = || {
             FunctionCallContextBuilder::new(call_id)
@@ -5119,14 +5139,20 @@ impl BexEngine {
             )
             .await?;
 
-        // Step 2: Populate the collector in-place via $init_test
-        self.call_function(
-            &init_test_name,
-            vec![collector.clone()],
+        // Step 2: Populate the collector in-place via $init_test. The call's
+        // outer error is the entry failing to start; its `value` is the run
+        // itself, where a registration throw (a reserved `::` in a test name)
+        // surfaces and must fail discovery rather than yield an empty registry.
+        self.call_resolved_with_trace(
+            test_init,
+            bex_vm_types::FunctionKind::Bytecode,
+            "$init_test",
+            vec![BexCallArg::Provided(Box::new(collector.clone()))],
             ctx(),
             true, // return value is null, doesn't matter
         )
-        .await?;
+        .await?
+        .value?;
 
         // Step 3: Wrap in a TestRegistry
         let registry = self

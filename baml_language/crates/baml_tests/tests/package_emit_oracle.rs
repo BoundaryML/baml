@@ -1,8 +1,8 @@
 //! The per-package emitter's oracle: every package of a program emitted on
 //! its own and linked (`baml_db::compile_program`) carries the executable's
 //! three identity tables (`Class.methods`, `ProgramPackage::{globals, init}`),
-//! each asserted positively against the rendered views the linker still
-//! derives beside them. Beyond identity: emission is deterministic, the
+//! each asserted positively against the view derived from them at load and
+//! the ordinal init order. Beyond identity: emission is deterministic, the
 //! parallel code pass reproduces the serial one, and a package's unit is a
 //! pure function of its own sources and its dependencies' interfaces — a
 //! stdlib package's unit is the same bytes whatever user package sits above
@@ -71,17 +71,13 @@ fn package(db: &ProjectDatabase) -> baml_db::SourceRoot {
 /// slot table, and a structural `$init` wherever the rendered init order
 /// names one.
 fn assert_identity_tables(label: &str, program: &Program) {
-    for package in &program.packages {
-        let rendered_init = if package.name.as_str() == "user" {
-            "$init".to_string()
-        } else {
-            format!("{}.$init", package.name)
-        };
-        let has_rendered = program.package_init_order.contains(&rendered_init);
+    let callables = program.rendered_callables();
+    for (ordinal, package) in program.packages.iter().enumerate() {
+        let ordinal = u32::try_from(ordinal).expect("package ordinal fits in u32");
         assert_eq!(
             package.init.is_some(),
-            has_rendered,
-            "{label}: package `{}` init table disagrees with the rendered order",
+            program.init_order.contains(&ordinal),
+            "{label}: package `{}` init table disagrees with the init order",
             package.name
         );
         if let Some(init) = package.init {
@@ -91,10 +87,11 @@ fn assert_identity_tables(label: &str, program: &Program) {
                 package.name
             );
         }
-        let rendered_slots = program
-            .function_global_indices
+        let rendered_slots = callables
             .iter()
-            .filter(|(name, _)| name.starts_with(&format!("{}.", package.name)))
+            .filter(|(name, callable)| {
+                name.starts_with(&format!("{}.", package.name)) && callable.slot.is_some()
+            })
             .count();
         assert!(
             package.globals.len() >= rendered_slots,

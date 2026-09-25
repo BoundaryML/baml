@@ -63,9 +63,8 @@ fn thrown_parameter_named_like_a_catch_binding_is_not_a_rethrow() {
     );
     baml_db::testing::assert_no_diagnostic_errors(&db);
     let program = compile_program(&db);
-    let idx = program
-        .function_index("user.f")
-        .expect("user.f should be compiled");
+    let idx =
+        baml_tests::engine::function_index(&program, "user.f").expect("user.f should be compiled");
     let Some(bex_vm_types::Object::Function(func)) = program.objects.get(idx) else {
         panic!("user.f should resolve to a function object");
     };

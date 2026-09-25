@@ -442,30 +442,29 @@ impl TestArgs {
         // `run_filtered` / `list_filtered`.
         reporter.spin("Discovering", "tests");
         let discovery_started = std::time::Instant::now();
-        let registry =
-            match rt.block_on(engine.collect_tests("user", CallId::next(), cancel.clone())) {
-                Ok(BexExternalValue::Null) => None,
-                Ok(handle @ BexExternalValue::Handle(_)) => Some(handle),
-                Ok(other) => {
-                    reporter.warning(format_args!(
-                        "unexpected collect_tests result: {}",
-                        other.type_name()
-                    ));
-                    None
-                }
-                Err(e) => {
-                    // A failure resolving the registry (vs. a project with no
-                    // tests, which returns Null) is a real error — don't silently
-                    // continue as if there were no testset tests.
-                    reporter.abandon();
-                    crate::reporter::print_error(format_args!("testset discovery failed: {e}"));
-                    return Ok(if finish_engine(&run_ctx, &reporter) != 0 {
-                        crate::ExitCode::TestFailure
-                    } else {
-                        crate::ExitCode::Other
-                    });
-                }
-            };
+        let registry = match rt.block_on(engine.collect_tests(CallId::next(), cancel.clone())) {
+            Ok(BexExternalValue::Null) => None,
+            Ok(handle @ BexExternalValue::Handle(_)) => Some(handle),
+            Ok(other) => {
+                reporter.warning(format_args!(
+                    "unexpected collect_tests result: {}",
+                    other.type_name()
+                ));
+                None
+            }
+            Err(e) => {
+                // A failure resolving the registry (vs. a project with no
+                // tests, which returns Null) is a real error — don't silently
+                // continue as if there were no testset tests.
+                reporter.abandon();
+                crate::reporter::print_error(format_args!("testset discovery failed: {e}"));
+                return Ok(if finish_engine(&run_ctx, &reporter) != 0 {
+                    crate::ExitCode::TestFailure
+                } else {
+                    crate::ExitCode::Other
+                });
+            }
+        };
 
         crate::reporter::print_verbose(format_args!(
             "discovered tests in {:.2?} (test registry: {})",

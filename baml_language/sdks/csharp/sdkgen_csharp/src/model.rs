@@ -53,7 +53,7 @@ impl RuntimeCallableIdentities {
             baml_artifact::decode(baml_artifact::ArtifactKind::Program, bytes)
                 .map_err(|error| format!("failed to decode compiled BAML program: {error}"))?;
         Ok(Self {
-            function_names: program.function_indices.into_keys().collect(),
+            function_names: program.rendered_callables().into_keys().collect(),
         })
     }
 

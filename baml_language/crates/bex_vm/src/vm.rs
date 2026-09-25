@@ -1577,19 +1577,18 @@ pub struct BytecodeProgram {
     pub objects: ObjectPool,
     /// Compile-time globals (converted to runtime Values in `BexEngine::new`).
     pub globals: Vec<bex_vm_types::ConstValue>,
+    /// The executable's callables by rendered name, derived from the package
+    /// tables ([`bex_vm_types::Program::rendered_callables`]): the view behind
+    /// every surface that starts from a host-supplied name.
     pub resolved_function_names: HashMap<String, (ObjectIndex, FunctionKind)>,
-    /// Maps function names to their global indices.
-    /// Used for dynamic function lookup at runtime.
-    pub function_global_indices: HashMap<String, usize>,
-    /// Maps top-level let names to their global indices.
-    pub let_global_indices: HashMap<String, usize>,
-    /// Client build metadata, passed through to `SysOpContext`.
-    pub client_metadata: HashMap<String, bex_vm_types::ClientBuildMeta>,
     /// Per-package program structure (global-index-keyed). The loader allocates
     /// the heap `Object::Package` / `Object::ImplRule` objects and the
     /// `vm.packages` index from this, resolving each `ObjectIndex` to a
     /// compile-time `HeapPtr`.
     pub packages: Vec<bex_vm_types::types::ProgramPackage>,
+    /// The world's root package as an ordinal into `packages`, when it links
+    /// one of its own.
+    pub root: Option<u32>,
 }
 
 /// Convert a compiled `Program` to a `BytecodeProgram` with native functions attached.
@@ -1598,6 +1597,7 @@ pub struct BytecodeProgram {
 /// 1. Attaches native function implementations to builtin functions
 /// 2. Builds resolved name lookups for functions, classes, and enums
 pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram, VmInternalError> {
+    let callables = program.rendered_callables();
     // Convert objects, attaching native functions
     let mut objects: Vec<Object> = program
         .objects
@@ -1616,29 +1616,25 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
         }
     }
 
-    // Build the function-name lookup by scanning objects. Classes and enums are
-    // resolved through `packages` at runtime, so they need no separate index here.
-    // Interface bodies are anonymous at runtime — their `name` is display-only —
-    // so they never enter a name-resolution surface (entry points, suffix
-    // matching, engine lookups).
-    let mut resolved_function_names = HashMap::new();
-    for (idx, obj) in objects.iter().enumerate() {
-        if let Object::Function(func) = obj
-            && !func.is_interface_body
-        {
-            resolved_function_names
-                .insert(func.name.clone(), (ObjectIndex::from_raw(idx), func.kind));
-        }
-    }
+    // The by-name view of the executable's callables, from the package
+    // tables: declared functions and class methods only. Lambdas, helpers,
+    // and interface bodies own no name a host can start from.
+    let resolved_function_names = callables
+        .into_iter()
+        .map(|(name, callable)| {
+            let Object::Function(function) = &objects[callable.object.raw()] else {
+                unreachable!("a rendered callable is a function object")
+            };
+            (name, (callable.object, function.kind))
+        })
+        .collect();
 
     Ok(BytecodeProgram {
         objects: ObjectPool::from_vec(objects),
         globals: program.globals,
         resolved_function_names,
-        function_global_indices: program.function_global_indices,
-        let_global_indices: program.let_global_indices,
-        client_metadata: program.client_metadata,
         packages: program.packages,
+        root: program.root,
     })
 }
 

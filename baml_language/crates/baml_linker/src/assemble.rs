@@ -1,12 +1,11 @@
 //! Assembly: every object placed in layout order with its tag assigned, the
-//! slots filled, the rendered views and package tables written.
+//! slots filled, the package tables and the init order written.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
-use baml_base::Name;
 use baml_type::typetag::TypeTag;
 use bex_vm_types::{
-    ConstValue, DeclPath, FnPath, GlobalIndex, Object, ObjectIndex, Program,
+    ConstValue, DeclPath, GlobalIndex, Object, ObjectIndex, Program,
     types::{ProgramImplRule, ProgramMethodImpl, ProgramPackage},
 };
 
@@ -30,63 +29,6 @@ pub(super) struct Assembler<'l, 'a> {
     pub(super) tails: PerPackage<Imports>,
 }
 
-/// The rendered name views, with collision detection.
-#[derive(Default)]
-#[deprecated(
-    note = "a rendered view of the flat name maps, kept only while the loader and engine still start from them; derived at load or deleted with the maps"
-)]
-struct Views {
-    claimed: HashSet<String>,
-}
-
-impl Views {
-    fn claim(&mut self, name: String) -> Result<String, LinkError> {
-        if self.claimed.insert(name.clone()) {
-            Ok(name)
-        } else {
-            Err(LinkError::DuplicateLinkName(name))
-        }
-    }
-}
-
-/// Rendered form of a declaration for the flat name maps: `pkg.ns.name` for
-/// a free function or `let`, `pkg.ns.Class.name` for a method. Interface
-/// bodies and types have no entry there.
-#[deprecated(
-    note = "a rendered view of the flat name maps, kept only while the loader and engine still start from them; derived at load or deleted with the maps"
-)]
-fn rendered_link_name(package: &Name, path: &DeclPath) -> Option<String> {
-    let (namespace, tail): (&[Name], Vec<&str>) = match path {
-        DeclPath::Function(FnPath::Free(item)) | DeclPath::Let(item) => {
-            (&item.namespace, vec![item.name.as_str()])
-        }
-        DeclPath::Function(FnPath::Method { class, name }) => {
-            (&class.namespace, vec![class.name.as_str(), name.as_str()])
-        }
-        DeclPath::Class(_)
-        | DeclPath::Enum(_)
-        | DeclPath::Interface(_)
-        | DeclPath::TypeAlias(_)
-        | DeclPath::InterfaceBody(_) => return None,
-    };
-    let parts = std::iter::once(package.as_str())
-        .chain(namespace.iter().map(Name::as_str))
-        .chain(tail);
-    Some(parts.collect::<Vec<_>>().join("."))
-}
-
-/// The rendered name of a package's synthesized `$init` / `$init_test`: bare
-/// for the local (workspace) package, package-prefixed otherwise.
-#[deprecated(
-    note = "rendered `$init` order: the loader runs `ProgramPackage::init` in package order instead, then it is deleted"
-)]
-fn synthesized_name(package: &Name, base: &str) -> String {
-    match baml_type::Package::from_name(package.clone()) {
-        baml_type::Package::Local => base.to_string(),
-        baml_type::Package::Dep(_) => format!("{package}.{base}"),
-    }
-}
-
 impl Assembler<'_, '_> {
     pub(super) fn assemble(self) -> Result<Program, LinkError> {
         let mut program = Program::new();
@@ -103,18 +45,18 @@ impl Assembler<'_, '_> {
                 ..ProgramPackage::default()
             })
             .collect();
-        let mut views = Views::default();
         for (id, package) in self.set.ids().zip(&mut packages) {
-            self.fill_slots(id, &mut program, package, &mut views)?;
+            self.fill_slots(id, &mut program, package)?;
             self.fill_tables(id, package);
             self.fill_record(id, package)?;
             self.fill_impl_rules(id, &program, package)?;
         }
-        self.fill_tails(&mut program, &mut packages, &mut views)?;
+        self.fill_tails(&mut program, &mut packages)?;
         for package in &mut packages {
             package.canonicalize_impl_rules();
         }
         program.packages = packages;
+        program.root = self.set.root.map(|id| id.0);
         Ok(program)
     }
 
@@ -175,14 +117,12 @@ impl Assembler<'_, '_> {
         Ok(())
     }
 
-    /// Fill a unit's global slots, its rendered views, and its package's own
-    /// slot table.
+    /// Fill a unit's global slots and its package's own slot table.
     fn fill_slots(
         &self,
         id: LinkPackageId,
         program: &mut Program,
         package: &mut ProgramPackage,
-        views: &mut Views,
     ) -> Result<(), LinkError> {
         let name = self.set.name(id);
         for (path, flat) in &self.set.package(id).unit.exports.globals {
@@ -197,19 +137,9 @@ impl Assembler<'_, '_> {
                         )));
                     };
                     program.globals[slot] = ConstValue::Object(ObjectIndex::from_raw(abs));
-                    if let Some(rendered) = rendered_link_name(name, path) {
-                        let rendered = views.claim(rendered)?;
-                        program.function_indices.insert(rendered.clone(), abs);
-                        program.function_global_indices.insert(rendered, slot);
-                    }
                 }
-                DeclPath::Let(_) => {
-                    let rendered = rendered_link_name(name, path)
-                        .unwrap_or_else(|| unreachable!("a let renders"));
-                    program
-                        .let_global_indices
-                        .insert(views.claim(rendered)?, slot);
-                }
+                // A `let`'s slot is filled by its package's `$init`.
+                DeclPath::Let(_) => {}
                 _ => unreachable!("the partition was validated"),
             }
             if !matches!(path, DeclPath::InterfaceBody(_)) {
@@ -360,16 +290,14 @@ impl Assembler<'_, '_> {
         Ok(())
     }
 
-    /// Fill every tail's slots, its `$init` / `$init_test` views, and the
-    /// package's structural init references. The rendered init order lists
-    /// the packages in initialization order, whatever their placement.
+    /// Fill every tail's slots and the package's structural init references.
+    /// The init order lists the packages in initialization order, whatever
+    /// their placement.
     fn fill_tails(
         &self,
         program: &mut Program,
         packages: &mut [ProgramPackage],
-        views: &mut Views,
     ) -> Result<(), LinkError> {
-        let mut init_names: HashMap<LinkPackageId, String> = HashMap::new();
         for &id in self.order.members() {
             for part in LayoutOrder::parts(self.set, id) {
                 let space = self.tail_space(id);
@@ -391,29 +319,19 @@ impl Assembler<'_, '_> {
                     )));
                 };
                 let abs = space.objects[named as usize].abs();
-                let rendered =
-                    views.claim(synthesized_name(space.name, part.synthesized_name()))?;
-                program.function_indices.insert(rendered.clone(), abs);
-                program
-                    .function_global_indices
-                    .insert(rendered.clone(), slot_base + ordinal);
+                debug_assert_eq!(
+                    program.globals[slot_base + ordinal],
+                    ConstValue::Object(ObjectIndex::from_raw(abs)),
+                    "the named part's slot holds its object"
+                );
                 let package = &mut packages[id.0 as usize];
                 match part {
-                    TailPart::Init => {
-                        package.init = Some(ObjectIndex::from_raw(abs));
-                        init_names.insert(id, rendered);
-                    }
+                    TailPart::Init => package.init = Some(ObjectIndex::from_raw(abs)),
                     TailPart::Test => package.test_init = Some(ObjectIndex::from_raw(abs)),
                 }
             }
         }
-        for id in self.order.init_order() {
-            program.package_init_order.push(
-                init_names
-                    .remove(id)
-                    .unwrap_or_else(|| unreachable!("every ordered init part was placed")),
-            );
-        }
+        program.init_order = self.order.init_order().iter().map(|id| id.0).collect();
         debug_assert!(
             self.order
                 .test_order()
