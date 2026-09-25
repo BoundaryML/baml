@@ -8,10 +8,11 @@
 //! interleaved between them (other producers' chunks), so state is kept per
 //! thread, never as one global "current error".
 use btel_records::{
-    OriginVia, RaiseKind, RaiseOrigin, RaiseStack, SpanRecord, UnresolvedOrigin, UnwindResult,
+    NO_PC, OriginVia, RaiseKind, RaiseOrigin, RaiseStack, SpanRecord, UnresolvedOrigin,
+    UnwindResult,
 };
 use btel_snapshot::Snapshot;
-use btel_types::{CallPathId, FunctionId, TelemetryId};
+use btel_types::{CallPathId, ClockInstant, FunctionId, TelemetryId};
 
 use crate::{ConversionBuffer, proto};
 
@@ -22,6 +23,17 @@ struct ActiveUnwind {
     awaiting_raise_frame: bool,
     completions: u32,
     first_late: Option<TelemetryId>,
+}
+
+/// The start fields both raise records share.
+struct RaiseStart {
+    raise_id: TelemetryId,
+    raised_at: ClockInstant,
+    kind: RaiseKind,
+    function: Option<FunctionId>,
+    pc: Option<u32>,
+    call_path: CallPathId,
+    frame_count: u32,
 }
 
 /// Evidence the VM emits just before a raise's fixed-size record, on the
@@ -172,25 +184,69 @@ impl ConversionBuffer {
         pending.inherited_count = stack.inherited_count;
     }
 
+    /// `ErrorRaised`, or the start of `ErrorRaisedAndEnded`.
     pub(crate) fn error_raised(
         &mut self,
         thread: TelemetryId,
         record: &SpanRecord<Snapshot, Snapshot>,
     ) {
-        let &SpanRecord::ErrorRaised {
+        let (raise, raise_call, raise_frame_may_promote) = match *record {
+            SpanRecord::ErrorRaised {
+                raise_id,
+                raised_at,
+                kind,
+                function,
+                pc,
+                raise_call,
+                raise_frame_may_promote,
+                call_path,
+                frame_count,
+            } => (
+                RaiseStart {
+                    raise_id,
+                    raised_at,
+                    kind,
+                    function,
+                    pc,
+                    call_path,
+                    frame_count,
+                },
+                raise_call,
+                raise_frame_may_promote,
+            ),
+            SpanRecord::ErrorRaisedAndEnded {
+                raise_id,
+                raised_at,
+                kind,
+                function,
+                pc,
+                call_path,
+                frame_count,
+                ..
+            } => (
+                RaiseStart {
+                    raise_id,
+                    raised_at,
+                    kind,
+                    function,
+                    pc: (pc != NO_PC).then_some(pc),
+                    call_path,
+                    frame_count,
+                },
+                None,
+                false,
+            ),
+            _ => unreachable!("dispatched on a raise record"),
+        };
+        let RaiseStart {
             raise_id,
             raised_at,
             kind,
             function,
             pc,
-            raise_call,
-            raise_frame_may_promote,
             call_path,
             frame_count,
-        } = record
-        else {
-            unreachable!("dispatched on ErrorRaised");
-        };
+        } = raise;
         let pending = self.unwinds.take_pending(thread, raise_id);
         // A previous raise on this thread without an end keeps no claim.
         self.unwinds.clear_thread(thread);
@@ -624,5 +680,54 @@ mod tests {
         assert_eq!(first.inherited_frame_count, 3);
         assert_eq!(second.call_path_id, Some(4));
         assert!(second.frames.is_empty() && second.inherited_frames.is_empty());
+    }
+
+    #[test]
+    fn a_raise_and_its_end_in_one_record_encode_like_two() {
+        let mut builder =
+            RecordingBuilder::new(RecordingId::generate(), RecordingConfig::default()).unwrap();
+        let thread = allocate_telemetry_id();
+        let raise_id = allocate_telemetry_id();
+        builder.span_reference(
+            thread,
+            &SpanRecord::ErrorRaisedAndEnded {
+                raise_id,
+                raised_at: ClockInstant::from_ticks(5),
+                kind: RaiseKind::Throw,
+                function: None,
+                pc: 3,
+                call_path: CallPathId::new_non_root(4).unwrap(),
+                frame_count: 2,
+                result: UnwindResult::Caught,
+                handler_function: None,
+                handler_pc: 9,
+                unwound_frames: 1,
+            },
+        );
+        // The unwind is over: a later completion on the thread is not linked.
+        builder.span_reference(thread, &failed(allocate_telemetry_id(), thread, false));
+        let file = file(&mut builder);
+        assert!(links(&file).is_empty());
+        let errors = file.errors.unwrap();
+        let (raise, end) = (&errors.raises[0], &errors.unwind_ends[0]);
+        assert_eq!(
+            (
+                raise.raise_id,
+                raise.pc,
+                raise.call_path_id,
+                raise.frame_count
+            ),
+            (raise_id.get(), Some(3), Some(4), 2)
+        );
+        assert_eq!(raise.origin_state, proto::OriginState::Fresh as i32);
+        assert_eq!(
+            (end.raise_id, end.result, end.handler_pc, end.unwound_frames),
+            (
+                raise_id.get(),
+                proto::UnwindResult::Caught as i32,
+                Some(9),
+                1
+            )
+        );
     }
 }

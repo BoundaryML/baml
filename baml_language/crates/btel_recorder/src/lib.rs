@@ -213,6 +213,24 @@ impl ConversionBuffer {
             }
             SpanRecord::ErrorRaiseStack(stack) => self.error_raise_stack(thread, stack),
             SpanRecord::ErrorRaised { .. } => self.error_raised(thread, record),
+            SpanRecord::ErrorRaisedAndEnded {
+                raise_id,
+                result,
+                handler_function,
+                handler_pc,
+                unwound_frames,
+                ..
+            } => {
+                self.error_raised(thread, record);
+                self.error_unwind_ended(
+                    thread,
+                    *raise_id,
+                    *result,
+                    *handler_function,
+                    (*handler_pc != btel_records::NO_PC).then_some(*handler_pc),
+                    *unwound_frames,
+                );
+            }
             SpanRecord::ErrorRaiseFrameCompleted { raise_id } => {
                 self.error_raise_frame_completed(thread, *raise_id);
             }

@@ -210,6 +210,11 @@ which raise failed each one; the tests below cover that.
   fresh raise allocates nothing. The failed-call completions in between are
   unchanged. A throw caught in the same frame has a raise and an end, and
   no failed call.
+- When the unwind completes no retained call, the VM writes the raise and
+  its end as one `ErrorRaisedAndEnded` record. The recorder writes the same
+  two messages either way.
+- While raises are recorded, the frames one unwind pops exit at the
+  raise's time: one clock read per raise instead of one per popped frame.
 - The raise does not copy the stack. It names the raising frame's call
   path, which the producer already keeps for every observed call: that
   path's callers, each at its call site, are the stack. If some bytecode

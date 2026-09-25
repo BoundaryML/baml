@@ -5264,7 +5264,13 @@ impl BexVm {
                 }
 
                 if let Some(evidence) = evidence.take() {
-                    self.error_caught(evidence, depth, error_stack_slot.raw(), entry.handler_pc);
+                    self.error_caught(
+                        evidence,
+                        depth,
+                        frame_function,
+                        error_stack_slot.raw(),
+                        entry.handler_pc,
+                    );
                 }
 
                 // Jump to the handler.
@@ -5280,10 +5286,18 @@ impl BexVm {
             }
 
             // No handler in this frame -- pop it and try the caller.
+            self.complete_unwound_frame(
+                depth,
+                frame_function,
+                telemetry_outcome,
+                exception_value,
+                evidence.as_mut(),
+            );
+            if let Some(evidence) = &mut evidence {
+                self.error_frame_unwound(evidence, depth);
+            }
             if self.frames.len() <= 1 {
-                self.complete_bytecode_invocation(depth, telemetry_outcome, Some(exception_value));
-                if let Some(mut evidence) = evidence.take() {
-                    self.error_frame_unwound(&mut evidence, depth);
+                if let Some(evidence) = evidence.take() {
                     self.error_not_caught(evidence, btel_records::UnwindResult::Unhandled);
                 }
                 return Err(VmError::ThrownUnhandled {
@@ -5292,10 +5306,6 @@ impl BexVm {
                 });
             }
 
-            self.complete_bytecode_invocation(depth, telemetry_outcome, Some(exception_value));
-            if let Some(evidence) = &mut evidence {
-                self.error_frame_unwound(evidence, depth);
-            }
             let popped = self.frames.pop().expect("frame stack is not empty");
             match popped {
                 Frame::Bytecode(bf) => {
@@ -6396,6 +6406,56 @@ impl BexVm {
         let function = unsafe { self.load_function(frame_idx) }
             .expect("bytecode frame must retain its function through completion");
         self.complete_bytecode_invocation_with_function(function, telemetry, outcome, value);
+    }
+
+    /// Complete a bytecode frame the unwinder is about to pop, with the
+    /// function it already loaded. While a raise is recorded, the frame exits
+    /// at the raise's instant: no code runs between one unwind's pops, so one
+    /// clock read serves the raise and every frame it pops.
+    fn complete_unwound_frame(
+        &mut self,
+        frame_idx: usize,
+        function: &Function,
+        outcome: InvocationOutcome,
+        value: Value,
+        evidence: Option<&mut error_evidence::UnwindEvidence>,
+    ) {
+        let telemetry = match self.frames.get_mut(frame_idx) {
+            Some(Frame::Bytecode(frame)) => frame.telemetry.take(),
+            _ => None,
+        };
+        let Some(telemetry) = telemetry else {
+            return;
+        };
+        // A retained call's completion, including a late promotion, must
+        // follow its raise's record.
+        let exited_at = evidence.map(|evidence| {
+            if evidence.holds_raise()
+                && (telemetry.is_span()
+                    || function.telemetry_policy_id.load() != btel_types::TelemetryPolicyId::NONE)
+            {
+                self.release_held_raise(evidence);
+            }
+            evidence.raised_at()
+        });
+        let state = self
+            .telemetry
+            .as_mut()
+            .expect("observed invocation has telemetry");
+        // SAFETY: the unwinder holds the heap permit, and the frame and the
+        // error stay rooted until after producer completion.
+        unsafe {
+            match exited_at {
+                Some(exited_at) => state.complete_invocation_at(
+                    telemetry,
+                    function,
+                    outcome,
+                    Some(value),
+                    exited_at,
+                ),
+                None => state.complete_invocation(telemetry, function, outcome, Some(value)),
+            }
+        }
     }
 
     #[allow(clippy::inline_always, reason = "measured producer return fast path")]

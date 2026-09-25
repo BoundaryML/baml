@@ -289,6 +289,23 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         /// Frames on the stack, native ones included.
         frame_count: u32,
     },
+    /// Exception path only: a raise whose unwind completed no retained call,
+    /// so nothing had to sit between its start and its end. Stands for
+    /// `ErrorRaised` then `ErrorUnwindEnded` in one slot; the raise frame
+    /// was not a span and could not be promoted. PCs are `NO_PC` when absent.
+    ErrorRaisedAndEnded {
+        raise_id: TelemetryId,
+        raised_at: ClockInstant,
+        kind: RaiseKind,
+        function: Option<FunctionId>,
+        pc: u32,
+        call_path: CallPathId,
+        frame_count: u32,
+        result: UnwindResult,
+        handler_function: Option<FunctionId>,
+        handler_pc: u32,
+        unwound_frames: u32,
+    },
     /// Exception path only: the raise frame, which was timing-only and could
     /// be promoted, has completed. A late completion just before this marker
     /// is that frame's call.
@@ -302,6 +319,10 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         unwound_frames: u32,
     },
 }
+
+/// An absent PC in `SpanRecord::ErrorRaisedAndEnded`. Compact code never
+/// reaches it; larger PCs already saturate to it.
+pub const NO_PC: u32 = u32::MAX;
 
 /// A raise's evidence that does not fit its fixed-size record. Owned and
 /// bounded; contains no VM pointers.
@@ -899,6 +920,7 @@ impl<C> SpanRecord<C, C> {
             | Self::ErrorRaiseOrigin { .. }
             | Self::ErrorRaiseStack(_)
             | Self::ErrorRaised { .. }
+            | Self::ErrorRaisedAndEnded { .. }
             | Self::ErrorRaiseFrameCompleted { .. }
             | Self::ErrorUnwindEnded { .. } => None,
         }

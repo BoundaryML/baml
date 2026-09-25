@@ -17,10 +17,12 @@ use bex_vm_types::{
 };
 use btel_records::{
     ErrorFrame, FutureErrorLink, FutureErrorLookup, InheritedFrame, MAX_ERROR_FRAMES,
-    MAX_INHERITED_FRAMES, MAX_INHERITED_TEXT_BYTES, OriginEvidence, OriginVia, RaiseKind,
+    MAX_INHERITED_FRAMES, MAX_INHERITED_TEXT_BYTES, NO_PC, OriginEvidence, OriginVia, RaiseKind,
     RaiseOrigin, RaiseStack, SpanRecord, UnresolvedOrigin, UnwindResult,
 };
-use btel_types::{CallPathId, FunctionId, TelemetryId, TelemetryPolicyId, allocate_telemetry_id};
+use btel_types::{
+    CallPathId, ClockInstant, FunctionId, TelemetryId, TelemetryPolicyId, allocate_telemetry_id,
+};
 
 use super::{BexVm, Frame, ThrowContext};
 use crate::telemetry::{ActiveHandler, FrameScope, LandingMatch};
@@ -38,10 +40,39 @@ pub(super) enum RaiseEntry {
 #[derive(Clone, Copy)]
 pub(super) struct UnwindEvidence {
     raise: TelemetryId,
+    /// Also the exit instant of every frame this unwind pops.
+    raised_at: ClockInstant,
     origin: OriginEvidence,
     raise_frame: Option<usize>,
+    /// Every bytecode frame was observed, so defining their call paths
+    /// registered their functions.
+    on_path: bool,
     may_promote: bool,
     unwound: u32,
+    /// The raise's record, not written yet. Until a retained call completes,
+    /// nothing has to sit between the raise and its end, so both can share
+    /// one record.
+    held: Option<HeldRaise>,
+}
+
+/// An `ErrorRaised` whose raise frame was neither a span nor promotable.
+#[derive(Clone, Copy)]
+struct HeldRaise {
+    kind: RaiseKind,
+    function: Option<FunctionId>,
+    pc: Option<u32>,
+    call_path: CallPathId,
+    frame_count: u32,
+}
+
+impl UnwindEvidence {
+    pub(super) fn raised_at(&self) -> ClockInstant {
+        self.raised_at
+    }
+
+    pub(super) fn holds_raise(&self) -> bool {
+        self.held.is_some()
+    }
 }
 
 fn clip(text: &str) -> String {
@@ -53,6 +84,26 @@ fn clip(text: &str) -> String {
         end -= 1;
     }
     text[..end].to_owned()
+}
+
+fn raised(
+    raise_id: TelemetryId,
+    raised_at: ClockInstant,
+    held: HeldRaise,
+    raise_call: Option<TelemetryId>,
+    raise_frame_may_promote: bool,
+) -> SpanRecord<btel_snapshot::Snapshot, btel_snapshot::Snapshot> {
+    SpanRecord::ErrorRaised {
+        raise_id,
+        raised_at,
+        kind: held.kind,
+        function: held.function,
+        pc: held.pc,
+        raise_call,
+        raise_frame_may_promote,
+        call_path: held.call_path,
+        frame_count: held.frame_count,
+    }
 }
 
 fn origin_evidence(raise: TelemetryId, origin: RaiseOrigin) -> OriginEvidence {
@@ -505,51 +556,127 @@ impl BexVm {
         } else {
             CallPathId::ROOT
         };
-        telemetry.write_error_record(SpanRecord::ErrorRaised {
-            raise_id,
-            raised_at,
+        let held = HeldRaise {
             kind,
             function,
             pc,
-            raise_call,
-            raise_frame_may_promote: may_promote,
             call_path,
             frame_count,
-        });
+        };
+        // A span raise frame completes as a retained call of this raise, and a
+        // promotable one needs its marker: both need the raise written first.
+        let held = if raise_call.is_some() || may_promote {
+            telemetry.write_error_record(raised(
+                raise_id,
+                raised_at,
+                held,
+                raise_call,
+                may_promote,
+            ));
+            None
+        } else {
+            Some(held)
+        };
         Some(UnwindEvidence {
             raise: raise_id,
+            raised_at,
             origin: origin_evidence(raise_id, origin),
             raise_frame,
+            on_path,
             may_promote,
             unwound: 0,
+            held,
         })
     }
 
-    /// A bytecode frame was completed and popped by this unwind.
+    /// Write a held raise before a record that must follow it: a retained
+    /// call this unwind completes.
     #[cold]
-    pub(super) fn error_frame_unwound(&mut self, evidence: &mut UnwindEvidence, depth: usize) {
-        evidence.unwound = evidence.unwound.saturating_add(1);
-        if evidence.may_promote && evidence.raise_frame == Some(depth) {
-            evidence.may_promote = false;
-            if let Some(telemetry) = &mut self.telemetry {
-                telemetry.write_error_record(SpanRecord::ErrorRaiseFrameCompleted {
-                    raise_id: evidence.raise,
-                });
-            }
+    pub(super) fn release_held_raise(&mut self, evidence: &mut UnwindEvidence) {
+        if let (Some(held), Some(telemetry)) = (evidence.held.take(), &mut self.telemetry) {
+            telemetry.write_error_record(raised(
+                evidence.raise,
+                evidence.raised_at,
+                held,
+                None,
+                false,
+            ));
         }
     }
 
-    /// Unwinding stored the error in a handler's slot.
+    /// The unwind's end: alone, or with its held raise in one record.
+    fn write_unwind_end(
+        &mut self,
+        evidence: UnwindEvidence,
+        result: UnwindResult,
+        handler_function: Option<FunctionId>,
+        handler_pc: Option<u32>,
+    ) {
+        let Some(telemetry) = &mut self.telemetry else {
+            return;
+        };
+        let record = match evidence.held {
+            Some(held) => SpanRecord::ErrorRaisedAndEnded {
+                raise_id: evidence.raise,
+                raised_at: evidence.raised_at,
+                kind: held.kind,
+                function: held.function,
+                pc: held.pc.unwrap_or(NO_PC),
+                call_path: held.call_path,
+                frame_count: held.frame_count,
+                result,
+                handler_function,
+                handler_pc: handler_pc.unwrap_or(NO_PC),
+                unwound_frames: evidence.unwound,
+            },
+            None => SpanRecord::ErrorUnwindEnded {
+                raise_id: evidence.raise,
+                result,
+                handler_function,
+                handler_pc,
+                unwound_frames: evidence.unwound,
+            },
+        };
+        telemetry.write_error_record(record);
+    }
+
+    /// A bytecode frame was completed and popped by this unwind. Runs once
+    /// per popped frame, so only the marker is out of line.
+    #[inline]
+    pub(super) fn error_frame_unwound(&mut self, evidence: &mut UnwindEvidence, depth: usize) {
+        evidence.unwound = evidence.unwound.saturating_add(1);
+        if evidence.may_promote && evidence.raise_frame == Some(depth) {
+            self.error_raise_frame_completed(evidence);
+        }
+    }
+
+    #[cold]
+    fn error_raise_frame_completed(&mut self, evidence: &mut UnwindEvidence) {
+        evidence.may_promote = false;
+        if let Some(telemetry) = &mut self.telemetry {
+            telemetry.write_error_record(SpanRecord::ErrorRaiseFrameCompleted {
+                raise_id: evidence.raise,
+            });
+        }
+    }
+
+    /// Unwinding stored the error in a handler's slot of frame `depth`, whose
+    /// function the unwinder loaded.
     #[cold]
     pub(super) fn error_caught(
         &mut self,
         evidence: UnwindEvidence,
         depth: usize,
+        function: &Function,
         slot: usize,
         handler_pc: usize,
     ) {
         // The same ID a note lookup reads back with `frame_telemetry_function`.
-        let handler_function = self.frame_registered_function(depth);
+        let handler_function = if evidence.on_path {
+            function.telemetry_function_id
+        } else {
+            self.frame_registered_function(depth)
+        };
         let Some(telemetry) = &mut self.telemetry else {
             return;
         };
@@ -561,13 +688,12 @@ impl BexVm {
             evidence.raise,
             evidence.origin,
         );
-        telemetry.write_error_record(SpanRecord::ErrorUnwindEnded {
-            raise_id: evidence.raise,
-            result: UnwindResult::Caught,
+        self.write_unwind_end(
+            evidence,
+            UnwindResult::Caught,
             handler_function,
-            handler_pc: u32::try_from(handler_pc).ok(),
-            unwound_frames: evidence.unwound,
-        });
+            u32::try_from(handler_pc).ok(),
+        );
     }
 
     /// Unwinding stopped without a handler, or failed.
@@ -585,13 +711,7 @@ impl BexVm {
                 origin: evidence.origin,
             });
         }
-        telemetry.write_error_record(SpanRecord::ErrorUnwindEnded {
-            raise_id: evidence.raise,
-            result,
-            handler_function: None,
-            handler_pc: None,
-            unwound_frames: evidence.unwound,
-        });
+        self.write_unwind_end(evidence, result, None, None);
     }
 
     /// Before a failed spawned thread settles its future, store the raise that
@@ -629,28 +749,58 @@ mod tests {
         function Main() -> int { Thrower(1) catch (e) { Failure => 0 } }
     "#;
 
-    /// Run `Main` at `level`, with `Thrower` promoted on error when
-    /// `promote`, returning the exception-path span records.
+    const THROUGH_SPAN: &str = r#"
+        class Failure { code int }
+        function Thrower(n: int) -> int throws Failure { throw Failure { code: n } }
+        function Middle(n: int) -> int throws Failure { Thrower(n) + 1 }
+        function Main() -> int { Middle(1) catch (e) { Failure => 0 } }
+    "#;
+
+    const PROMOTE_ERRORS: TelemetryPolicy = TelemetryPolicy {
+        promote_errors: true,
+        ..TelemetryPolicy::NONE
+    };
+
+    const SPAN: TelemetryPolicy = TelemetryPolicy {
+        span_from_entry: true,
+        ..TelemetryPolicy::NONE
+    };
+
+    /// Run `Main` of `SOURCE` at `level`, with `Thrower` promoted on error
+    /// when `promote`, returning the exception-path span records.
     fn run(evidence: bool, promote: bool, level: AutoTelemetryLevel) -> Vec<String> {
+        let policies: &[(&str, TelemetryPolicy)] = if promote {
+            &[("user.Thrower", PROMOTE_ERRORS)]
+        } else {
+            &[]
+        };
+        run_source(SOURCE, evidence, level, policies)
+    }
+
+    fn run_source(
+        source: &str,
+        evidence: bool,
+        level: AutoTelemetryLevel,
+        policies: &[(&str, TelemetryPolicy)],
+    ) -> Vec<String> {
         FORCE_ERROR_EVIDENCE.with(|force| force.set(evidence));
-        let program = baml_db::testing::compile_source(SOURCE);
+        let program = baml_db::testing::compile_source(source);
         let entry = program.function_index("user.Main").unwrap();
-        let thrower = program.function_index("user.Thrower").unwrap();
+        let targets: Vec<_> = policies
+            .iter()
+            .map(|(name, policy)| (program.function_index(name).unwrap(), *policy))
+            .collect();
         let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
         vm.telemetry = Some(TelemetryState::new_root(
             Arc::new(TelemetryPolicies::with_auto_level(level)),
             btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
             test_runtime(),
         ));
-        if promote {
+        for (index, policy) in targets {
             // SAFETY: the compile-time function is live and never collected.
-            let Object::Function(function) = (unsafe { vm.heap.compile_time_ptr(thrower).get() })
+            let Object::Function(function) = (unsafe { vm.heap.compile_time_ptr(index).get() })
             else {
                 unreachable!()
-            };
-            let policy = TelemetryPolicy {
-                promote_errors: true,
-                ..TelemetryPolicy::NONE
             };
             vm.telemetry
                 .as_ref()
@@ -691,6 +841,18 @@ mod tests {
                     raise_call.is_some(),
                     *call_path != CallPathId::ROOT,
                 )),
+                SpanRecord::ErrorRaisedAndEnded {
+                    call_path,
+                    frame_count,
+                    result,
+                    unwound_frames,
+                    ..
+                } => Some(format!(
+                    "raise+end path={} count={frame_count} caught={} frames={unwound_frames}",
+                    *call_path != CallPathId::ROOT,
+                    *result == UnwindResult::Caught
+                )),
+                SpanRecord::FunctionSpanCompletionErrored { .. } => Some("failed".into()),
                 SpanRecord::LateFunctionSpanCompletionErrored { .. } => Some("late".into()),
                 SpanRecord::ErrorRaiseFrameCompleted { .. } => Some("marker".into()),
                 SpanRecord::ErrorUnwindEnded {
@@ -721,12 +883,29 @@ mod tests {
 
     #[test]
     fn an_observed_stack_is_named_by_its_call_path_alone() {
-        // No policy can promote the timing-only raise frame: no marker.
+        // No policy can promote the timing-only raise frame, and no retained
+        // call completes: one record for the raise and its end.
         assert_eq!(
             run(true, false, AutoTelemetryLevel::Medium),
+            ["raise+end path=true count=2 caught=true frames=1"]
+        );
+    }
+
+    #[test]
+    fn a_retained_call_completes_after_its_raise() {
+        // The raise waits through the timing-only frame, then is written
+        // before the retained call it failed.
+        assert_eq!(
+            run_source(
+                THROUGH_SPAN,
+                true,
+                AutoTelemetryLevel::Medium,
+                &[("user.Middle", SPAN)]
+            ),
             [
-                "raise call=false promote=false path=true count=2",
-                "end caught=true frames=1",
+                "raise call=false promote=false path=true count=3",
+                "failed",
+                "end caught=true frames=2",
             ]
         );
     }
@@ -738,8 +917,7 @@ mod tests {
             run(true, false, AutoTelemetryLevel::Low),
             [
                 "stack frames=2",
-                "raise call=false promote=false path=false count=2",
-                "end caught=true frames=1",
+                "raise+end path=false count=2 caught=true frames=1",
             ]
         );
     }

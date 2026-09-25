@@ -443,6 +443,24 @@ impl TelemetryState {
         value: Option<Value>,
     ) {
         let exited_at = self.clock.read();
+        // SAFETY: forwarded from the caller.
+        unsafe { self.complete_invocation_at(telemetry, function, outcome, value, exited_at) }
+    }
+
+    /// `complete_invocation` with an exit instant this thread already read
+    /// from its clock: the frames one unwind pops share the raise's instant.
+    ///
+    /// # Safety
+    /// As `complete_invocation`.
+    #[inline(always)]
+    pub unsafe fn complete_invocation_at(
+        &mut self,
+        telemetry: FrameTelemetry,
+        function: &Function,
+        outcome: InvocationOutcome,
+        value: Option<Value>,
+        exited_at: ClockInstant,
+    ) {
         let call_path = self.thread.active_call_path;
         let policy_id = function.telemetry_policy_id.load();
         if !telemetry.is_span() && policy_id == btel_types::TelemetryPolicyId::NONE {

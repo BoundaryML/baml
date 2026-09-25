@@ -1,10 +1,10 @@
 # What a recorded raise costs
 
 With a recording on, a program that throws a lot ran about 25% slower on
-this branch than on the BTEL stack below it (#4958). This report says where
-that time went and what changed. Programs that do not throw are not
-affected: the successful call, return and await paths run the same code as
-before.
+this branch than on the BTEL stack below it (#4958). It now runs as fast as
+#4958. This report says where the time went and what changed. Programs
+that do not throw are not affected: the successful call, return and await
+paths run the same code as before.
 
 Measured 2026-09-25 on a Ryzen 9 5950X with `perf` (this time with
 `perf_event_paranoid` lowered, so the numbers come from a profiler rather
@@ -23,27 +23,31 @@ Execution time with a recording on, median of 7 pinned runs (cores 8–15):
 
 | Clock | #4958 | Branch before | Branch now |
 | --- | ---: | ---: | ---: |
-| `Auto` (the production default) | 134.4 ms | 166.3 ms (+23.7%) | 146.0 ms (+8.6%) |
-| `Monotonic` (the harness default) | 152.6 ms | 191.5 ms (+25.5%) | 171.6 ms (+12.5%) |
+| `Auto` (the production default) | 135.2 ms | 166.3 ms (+23.7%) | 133.7 ms (−1.1%) |
+| `Monotonic` (the harness default) | 151.8 ms | 191.5 ms (+25.5%) | 149.7 ms (−1.4%) |
+
+The "before" column comes from an earlier batch of the same binaries. A
+second batch measured `Auto` at 134.9 ms for #4958 and 135.5 ms now
+(+0.4%). Differences this small are noise.
 
 The harness reads time with `clock_gettime`, which costs more than the TSC
 read that `Auto` uses in production. `BTEL_BENCH_CLOCK=auto` now selects
 `Auto`; the default stays `Monotonic` so older reports stay comparable.
 
 The recording went from 72.5 to 48.5 bytes per raise (15.8 MB → 10.9 MB per
-run). Process CPU, including the recorder thread, went from 293 to 223 ms
-(#4958: 181 ms). With telemetry off, all three builds run the same.
+run). Process CPU, including the recorder thread, went from 293 to 208 ms
+(#4958: 182 ms). The rest of that CPU is the recorder encoding and writing
+the raises, on its own thread.
 
-Workloads that do not throw, `Monotonic`, median of 5:
+Workloads that do not throw, `Auto`, median of 5:
 
 | Workload | #4958 | Branch now | Change |
 | --- | ---: | ---: | ---: |
-| tiny | 884.9 ms | 881.2 ms | −0.4% |
-| spawn | 393.0 ms | 391.0 ms | −0.5% |
-| dense | 673.3 ms | 602.8 ms | −10.5% |
+| tiny | 896.1 ms | 877.3 ms | −2.1% |
+| dense | 566.2 ms | 576.1 ms | +1.7% |
+| spawn | 389.1 ms | 383.7 ms | −1.4% |
 
-`dense` moves a lot between runs of the same binary. Its difference is not a
-speedup.
+These are within the spread of repeated runs of one binary.
 
 ## Where the time went
 
@@ -77,12 +81,31 @@ raise allocates nothing. A rethrow or an await sends its origin in a small
 record just before the raise. Only two rare cases still allocate: a stack
 the call path cannot describe, and an inherited trace.
 
+One clock read now serves the whole unwind. The unwinder used to read the
+clock again for every frame it popped, to stamp that frame's exit. No code
+runs between those pops, so while raises are recorded, the popped frames
+exit at the raise's time. In this workload that is one read per raise
+instead of four. Runs without a recording keep reading per frame.
+
+The raise and its end usually share one record. The recorder needs the
+raise before the retained calls the unwind completes, so it can link them.
+When the unwind completes no retained call, nothing has to go between them,
+so the VM writes a single `ErrorRaisedAndEnded` record at the end. If a
+retained call is about to complete, the VM writes the raise first, as
+before. Timing-only frames report through the separate timing stream and
+never need this. Each span record costs a cache line that the recorder
+thread last touched, so this matters more than the instruction count
+suggests. The file format does not change: the recorder still writes a
+raise and an end.
+
 Smaller changes:
 
 - The raise-frame marker is only sent when the raise frame's function has
   a policy. Without a policy the frame can never be promoted, so the
   marker could never name anything. In this workload that saves one record
   per raise.
+- The unwinder completes popped frames with the function it already
+  loaded, instead of loading it a second time.
 - The raise kind is decoded from the function the unwinder already holds.
 - On a catch, the handler's function ID is looked up once instead of twice.
 - The recorder encodes each error message once, as it arrives, and writes
@@ -109,14 +132,14 @@ reads it.
 
 ## What is left
 
-The thread running BAML still spends about 50–75 ns more per raise than on
-#4958. That is one clock read, two record writes and the landing note for
-the catch. Removing any of them would mean recording less: the raise's
-time, its end, or the evidence that proves a rethrow's origin.
+The thread running BAML still does some work per raise: one record write,
+the landing note for the catch, and the raise's bookkeeping. It is now
+paid for by the clock reads and function loads the unwinder no longer
+does, at least for a stack like this benchmark's.
 
-The recording is still about 48 bytes per raise larger. Most of it is IDs:
-the raise ID appears in both the raise and its end, and the thread ID in
-every raise.
+The recorder thread still spends CPU on every raise, and the recording is
+about 48 bytes per raise larger. Most of those bytes are IDs: the raise ID
+appears in both the raise and its end, and the thread ID in every raise.
 
 ## Reproduce
 
