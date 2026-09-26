@@ -5,7 +5,7 @@
 //! field-object constructor); the five runtime-owned stdlib types
 //! (media + stream) instead re-export from the configured runtime package.
 
-use baml_codegen_types::{Name, Ty};
+use baml_sdkgen_types::{Name, Ty};
 
 use crate::emit::method::TypeScriptMethodBinding;
 

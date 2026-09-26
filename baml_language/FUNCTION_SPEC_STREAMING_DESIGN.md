@@ -712,7 +712,7 @@ then replayed mixed files surgically using the slices below.
 
 | Slice to remove | Principal paths/symbols | Replacement |
 |---|---|---|
-| Authored-function operation metadata | `baml_codegen_types::FunctionOperations`, `SpecOperation`, `StreamOperation` | Ordinary companion symbols/signatures |
+| Authored-function operation metadata | `baml_sdkgen_types::FunctionOperations`, `SpecOperation`, `StreamOperation` | Ordinary companion symbols/signatures |
 | Symbol-pool projection reconstruction | operation maps and derived control args in `baml_ide/src/symbol_pool.rs` | filter by `FunctionOrigin`; generator reads companion symbol |
 | Wire operation selector | `FunctionOperation` and `CallFunctionArgs.operation` | exact `function_name` FQN |
 | Engine semantic dispatcher | `FunctionOperation::{Direct,Spec,Stream}`, `*_operation` entry switching | ordinary function lookup/call |

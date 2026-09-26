@@ -22,8 +22,8 @@ use std::{
     rc::Rc,
 };
 
-use baml_codegen_types::{Name, Symbol, SymbolPool, public_interface_tokens};
-pub use baml_codegen_types::{NamingConvention, OutputType};
+use baml_sdkgen_types::{Name, Symbol, SymbolPool, public_interface_tokens};
+pub use baml_sdkgen_types::{NamingConvention, OutputType};
 pub use names::{IdentifierRename, IdentifierRenameReason};
 
 use crate::{
@@ -751,7 +751,7 @@ fn render_inlinedbaml_bytecode(bytecode: &[u8], embedded_baml_toml: Option<&str>
 /// Render `s` as a Python string literal. Uses a regular double-quoted
 /// form with the usual `\\`, `\"`, `\n`, `\r`, `\t` escapes so the result
 /// round-trips through `ast.literal_eval` and is byte-identical.
-pub(crate) use baml_codegen_types::quoted_string as py_string;
+pub(crate) use baml_sdkgen_types::quoted_string as py_string;
 
 /// Render bytes as adjacent Python bytes literals. Chunking keeps generated
 /// lines manageable without adding any runtime decode step.
@@ -797,7 +797,7 @@ fn symbol_name(sym: &Symbol) -> Option<&Name> {
 #[cfg(test)]
 mod tests {
     use baml_base::Name as BaseName;
-    use baml_codegen_types::{
+    use baml_sdkgen_types::{
         Class, ClassProperty, DefaultLiteral, Enum, EnumVariant, Function, FunctionArgument,
         FunctionArgumentDefault, Origin, Ty, TypeAlias,
     };
@@ -826,7 +826,7 @@ mod tests {
     }
 
     fn type_var(name: BaseName) -> Ty {
-        Ty::TypeVar(baml_codegen_types::ParamTy::new(0, name))
+        Ty::TypeVar(baml_sdkgen_types::ParamTy::new(0, name))
     }
 
     fn list(inner: Box<Ty>) -> Ty {
@@ -3565,7 +3565,7 @@ mod tests {
                         name: BaseName::new("callback"),
                         docstring: None,
                         ty: Ty::Function {
-                            params: Box::new([baml_codegen_types::CallableParam::required(
+                            params: Box::new([baml_sdkgen_types::CallableParam::required(
                                 None,
                                 type_var(BaseName::new("T")),
                             )]),

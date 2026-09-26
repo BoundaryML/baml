@@ -1,4 +1,4 @@
-//! Routing: turns a `baml_codegen_types::Name` into the leaf `__init__.py`
+//! Routing: turns a `baml_sdkgen_types::Name` into the leaf `__init__.py`
 //! path (under `baml_sdk/`) where that symbol's Python representation
 //! lives. Single source of truth for per-symbol placement; G1 uses this
 //! to enumerate leaves and interior directories, and later phases reuse
@@ -13,12 +13,12 @@
 //! a `.baml` source-syntax keyword (substituted to the current package
 //! during HIR resolution) and never appears as `Name::pkg`.
 //!
-//! Core language packages route under their own names; other dependencies route under `vendor/<pkg>/`, as defined by `baml_codegen_types::namespace_segments`.
+//! Core language packages route under their own names; other dependencies route under `vendor/<pkg>/`, as defined by `baml_sdkgen_types::namespace_segments`.
 
 #[cfg(test)]
 use std::path::PathBuf;
 
-use baml_codegen_types::Name;
+use baml_sdkgen_types::Name;
 
 #[cfg(test)]
 use crate::names::PYTHON_KEYWORDS;
@@ -86,7 +86,7 @@ pub(crate) fn route(name: &Name) -> LeafPath {
     }
 }
 
-pub(crate) use baml_codegen_types::namespace_segments as raw_route_segments;
+pub(crate) use baml_sdkgen_types::namespace_segments as raw_route_segments;
 
 #[cfg(test)]
 mod tests {

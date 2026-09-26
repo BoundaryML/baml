@@ -39,8 +39,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use baml_codegen_types::{GeneratedOutputFile, SymbolPool, write_generated_output};
 use baml_db::{ProjectDatabase, SourceRootSpec, baml_compiler_diagnostics::Severity};
+use baml_sdkgen_types::{GeneratedOutputFile, SymbolPool, write_generated_output};
 
 pub mod cpp;
 pub mod csharp;
@@ -118,7 +118,7 @@ pub(crate) fn write_codegen_output<C>(
 fn install<C>(
     output_directory: &Path,
     output: impl IntoIterator<Item = (PathBuf, C)>,
-) -> Result<(), baml_codegen_types::OutputWriterError>
+) -> Result<(), baml_sdkgen_types::OutputWriterError>
 where
     C: AsRef<[u8]>,
 {

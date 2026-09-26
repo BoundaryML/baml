@@ -7,7 +7,7 @@ use std::{
 };
 
 use baml_base::Name as BaseName;
-use baml_codegen_types::Name;
+use baml_sdkgen_types::Name;
 
 use crate::model::{CallableIdentity, CallableVariant};
 

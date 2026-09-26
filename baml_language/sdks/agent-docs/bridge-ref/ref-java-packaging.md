@@ -58,7 +58,7 @@ homebrew/AUR). npm uses OIDC trusted publishing with channel→dist-tag
   `release-baml-language.yml` as `build-java-sdk` / `publish-maven`.
 - **CLI:** covered by the wrapper/toolchain tier; nothing to ship via
   Maven. What Java *does* need is a `"java"` `OutputType` variant in
-  `baml_codegen_types::generator_fields` plus a dispatch arm in
+  `baml_sdkgen_types::generator_fields` plus a dispatch arm in
   `crates/baml_cli/src/generate.rs` calling
   `sdkgen_java::to_source_code_with_bytecode`.
 

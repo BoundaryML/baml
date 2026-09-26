@@ -2,7 +2,7 @@
 
 use std::{collections::BTreeSet, fmt};
 
-use baml_codegen_types::Symbol;
+use baml_sdkgen_types::Symbol;
 
 use crate::{
     hash::sha256,
@@ -295,7 +295,7 @@ mod tests {
     use std::collections::HashMap;
 
     use baml_base::Name as BaseName;
-    use baml_codegen_types::{Name, SymbolPool, write_generated_output};
+    use baml_sdkgen_types::{Name, SymbolPool, write_generated_output};
     use tempfile::TempDir;
 
     use super::*;

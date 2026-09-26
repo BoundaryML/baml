@@ -2,7 +2,7 @@
 //!
 //! Emits `export enum Foo { … }` with `<VARIANT> = "<value>"` members.
 
-use baml_codegen_types::Name;
+use baml_sdkgen_types::Name;
 
 pub(crate) struct TypeScriptEnum {
     pub(crate) name: String,

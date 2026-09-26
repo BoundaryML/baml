@@ -23,7 +23,7 @@ use std::{
 #[cfg(test)]
 use baml_base::Literal;
 use baml_base::{MediaKind, Name as BaseName};
-use baml_codegen_types::{
+use baml_sdkgen_types::{
     Class, ClassProperty, Enum, Function, FunctionArgument, Name, NamingConvention, Symbol,
     SymbolPool, Ty, TypeAlias,
 };
@@ -5073,7 +5073,7 @@ mod tests {
     use std::process::Command;
 
     use baml_base::Name as BaseName;
-    use baml_codegen_types::{
+    use baml_sdkgen_types::{
         CallableParam, Class, ClassProperty, CodegenFunctionParamMode, DefaultLiteral, EnumVariant,
         Freshness, FunctionArgument, FunctionArgumentDefault, Name, Origin,
     };
@@ -5174,7 +5174,7 @@ mod tests {
     }
 
     fn ty_type_var(name: BaseName) -> Ty {
-        Ty::TypeVar(baml_codegen_types::ParamTy::new(0, name))
+        Ty::TypeVar(baml_sdkgen_types::ParamTy::new(0, name))
     }
 
     fn ty_media(kind: baml_base::MediaKind) -> Ty {

@@ -162,11 +162,11 @@
 <path fill="none" stroke="#444444" d="M1344.88,-391.34C1344.88,-365.51 1344.88,-322 1344.88,-322 1344.88,-322 1277.59,-322 1277.59,-322"/>
 <polygon fill="#444444" stroke="#444444" points="1277.59,-319.55 1270.59,-322 1277.59,-324.45 1277.59,-319.55"/>
 </g>
-<!-- baml_codegen_types -->
+<!-- baml_sdkgen_types -->
 <g id="node5" class="node">
-<title>baml_codegen_types</title>
+<title>baml_sdkgen_types</title>
 <polygon fill="#9fdfde" stroke="#971a1a" stroke-width="2" points="2014,-898 1896,-898 1896,-862 2014,-862 2014,-898"/>
-<text xml:space="preserve" text-anchor="middle" x="1955" y="-875.55" font-family="Helvetica,sans-Serif" font-size="11.00">baml_codegen_types</text>
+<text xml:space="preserve" text-anchor="middle" x="1955" y="-875.55" font-family="Helvetica,sans-Serif" font-size="11.00">baml_sdkgen_types</text>
 </g>
 <!-- baml_type -->
 <g id="node23" class="node">
@@ -174,15 +174,15 @@
 <polygon fill="#e4cdcd" stroke="#971a1a" stroke-width="2" points="2013.75,-240 1948.25,-240 1948.25,-204 2013.75,-204 2013.75,-240"/>
 <text xml:space="preserve" text-anchor="middle" x="1981" y="-217.55" font-family="Helvetica,sans-Serif" font-size="11.00">baml_type</text>
 </g>
-<!-- baml_codegen_types&#45;&gt;baml_type -->
+<!-- baml_sdkgen_types&#45;&gt;baml_type -->
 <g id="edge33" class="edge">
-<title>baml_codegen_types&#45;&gt;baml_type</title>
+<title>baml_sdkgen_types&#45;&gt;baml_type</title>
 <path fill="none" stroke="#444444" d="M1970.3,-861.02C1970.3,-861.02 1970.3,-249.26 1970.3,-249.26"/>
 <polygon fill="#444444" stroke="#444444" points="1972.75,-249.26 1970.3,-242.26 1967.85,-249.26 1972.75,-249.26"/>
 </g>
-<!-- baml_codegen_types&#45;&gt;baml_serde_json -->
+<!-- baml_sdkgen_types&#45;&gt;baml_serde_json -->
 <g id="edge34" class="edge">
-<title>baml_codegen_types&#45;&gt;baml_serde_json</title>
+<title>baml_sdkgen_types&#45;&gt;baml_serde_json</title>
 <path fill="none" stroke="#444444" d="M1959.43,-861.23C1959.43,-759.11 1959.43,-275 1959.43,-275 1959.43,-275 1186.85,-275 1186.85,-275 1186.85,-275 1186.85,-155.43 1186.85,-155.43"/>
 <polygon fill="#444444" stroke="#444444" points="1189.3,-155.43 1186.85,-148.43 1184.4,-155.43 1189.3,-155.43"/>
 </g>
@@ -432,9 +432,9 @@
 <path fill="none" stroke="#444444" d="M1695.44,-861.06C1695.44,-861.06 1695.44,-625.37 1695.44,-625.37"/>
 <polygon fill="#444444" stroke="#444444" points="1697.89,-625.37 1695.44,-618.37 1692.99,-625.37 1697.89,-625.37"/>
 </g>
-<!-- baml_project&#45;&gt;baml_codegen_types -->
+<!-- baml_project&#45;&gt;baml_sdkgen_types -->
 <g id="edge83" class="edge">
-<title>baml_project&#45;&gt;baml_codegen_types</title>
+<title>baml_project&#45;&gt;baml_sdkgen_types</title>
 <path fill="none" stroke="#444444" d="M1944.86,-955.43C1944.86,-955.43 1944.86,-907.37 1944.86,-907.37"/>
 <polygon fill="#444444" stroke="#444444" points="1947.31,-907.37 1944.86,-900.37 1942.41,-907.37 1947.31,-907.37"/>
 </g>
@@ -1527,9 +1527,9 @@
 <path fill="none" stroke="#1a4c97" stroke-width="1.5" stroke-dasharray="5,2" d="M7926,-1143.01C7926,-1001.65 7926,-119 7926,-119 7926,-119 2024.19,-119 2024.19,-119"/>
 <polygon fill="#1a4c97" stroke="#1a4c97" stroke-width="1.5" points="2024.19,-116.55 2017.19,-119 2024.19,-121.45 2024.19,-116.55"/>
 </g>
-<!-- sdkgen_cpp&#45;&gt;baml_codegen_types -->
+<!-- sdkgen_cpp&#45;&gt;baml_sdkgen_types -->
 <g id="edge196" class="edge">
-<title>sdkgen_cpp&#45;&gt;baml_codegen_types</title>
+<title>sdkgen_cpp&#45;&gt;baml_sdkgen_types</title>
 <path fill="none" stroke="#1a4c97" stroke-width="1.5" stroke-dasharray="5,2" d="M7906.62,-1143.26C7906.62,-1088.57 7906.62,-933 7906.62,-933 7906.62,-933 1996.53,-933 1996.53,-933 1996.53,-933 1996.53,-908.11 1996.53,-908.11"/>
 <polygon fill="#1a4c97" stroke="#1a4c97" stroke-width="1.5" points="1998.98,-908.11 1996.53,-901.11 1994.08,-908.11 1998.98,-908.11"/>
 </g>
@@ -1551,9 +1551,9 @@
 <path fill="none" stroke="#1a4c97" stroke-width="1.5" stroke-dasharray="5,2" d="M7404.62,-955.34C7404.62,-831.85 7404.62,-137 7404.62,-137 7404.62,-137 2024.27,-137 2024.27,-137"/>
 <polygon fill="#1a4c97" stroke="#1a4c97" stroke-width="1.5" points="2024.27,-134.55 2017.27,-137 2024.27,-139.45 2024.27,-134.55"/>
 </g>
-<!-- sdkgen_csharp&#45;&gt;baml_codegen_types -->
+<!-- sdkgen_csharp&#45;&gt;baml_sdkgen_types -->
 <g id="edge199" class="edge">
-<title>sdkgen_csharp&#45;&gt;baml_codegen_types</title>
+<title>sdkgen_csharp&#45;&gt;baml_sdkgen_types</title>
 <path fill="none" stroke="#1a4c97" stroke-width="1.5" stroke-dasharray="5,2" d="M7351.38,-955.1C7351.38,-951.07 7351.38,-948 7351.38,-948 7351.38,-948 1962.08,-948 1962.08,-948 1962.08,-948 1962.08,-908.21 1962.08,-908.21"/>
 <polygon fill="#1a4c97" stroke="#1a4c97" stroke-width="1.5" points="1964.53,-908.21 1962.08,-901.21 1959.63,-908.21 1964.53,-908.21"/>
 </g>
@@ -1581,9 +1581,9 @@
 <polygon fill="#cdd6e4" stroke="#1a4c97" stroke-width="2" points="7275.25,-992 7206.75,-992 7206.75,-956 7275.25,-956 7275.25,-992"/>
 <text xml:space="preserve" text-anchor="middle" x="7241" y="-969.55" font-family="Helvetica,sans-Serif" font-size="11.00">sdkgen_go</text>
 </g>
-<!-- sdkgen_go&#45;&gt;baml_codegen_types -->
+<!-- sdkgen_go&#45;&gt;baml_sdkgen_types -->
 <g id="edge202" class="edge">
-<title>sdkgen_go&#45;&gt;baml_codegen_types</title>
+<title>sdkgen_go&#45;&gt;baml_sdkgen_types</title>
 <path fill="none" stroke="#1a4c97" stroke-width="1.5" stroke-dasharray="5,2" d="M7241,-955.06C7241,-953.21 7241,-952 7241,-952 7241,-952 1953.47,-952 1953.47,-952 1953.47,-952 1953.47,-908.19 1953.47,-908.19"/>
 <polygon fill="#1a4c97" stroke="#1a4c97" stroke-width="1.5" points="1955.92,-908.19 1953.47,-901.19 1951.02,-908.19 1955.92,-908.19"/>
 </g>
@@ -1605,9 +1605,9 @@
 <path fill="none" stroke="#1a4c97" stroke-width="1.5" stroke-dasharray="5,2" d="M7530.67,-955.26C7530.67,-831.17 7530.67,-133 7530.67,-133 7530.67,-133 2024.35,-133 2024.35,-133"/>
 <polygon fill="#1a4c97" stroke="#1a4c97" stroke-width="1.5" points="2024.35,-130.55 2017.35,-133 2024.35,-135.45 2024.35,-130.55"/>
 </g>
-<!-- sdkgen_java&#45;&gt;baml_codegen_types -->
+<!-- sdkgen_java&#45;&gt;baml_sdkgen_types -->
 <g id="edge205" class="edge">
-<title>sdkgen_java&#45;&gt;baml_codegen_types</title>
+<title>sdkgen_java&#45;&gt;baml_sdkgen_types</title>
 <path fill="none" stroke="#1a4c97" stroke-width="1.5" stroke-dasharray="5,2" d="M7505.33,-955.17C7505.33,-949.14 7505.33,-944 7505.33,-944 7505.33,-944 1970.69,-944 1970.69,-944 1970.69,-944 1970.69,-908.13 1970.69,-908.13"/>
 <polygon fill="#1a4c97" stroke="#1a4c97" stroke-width="1.5" points="1973.14,-908.13 1970.69,-901.13 1968.24,-908.13 1973.14,-908.13"/>
 </g>
@@ -1623,9 +1623,9 @@
 <path fill="none" stroke="#1a4c97" stroke-width="1.5" stroke-dasharray="5,2" d="M7707.42,-955.14C7707.42,-830.32 7707.42,-128 7707.42,-128 7707.42,-128 2024.36,-128 2024.36,-128"/>
 <polygon fill="#1a4c97" stroke="#1a4c97" stroke-width="1.5" points="2024.36,-125.55 2017.36,-128 2024.36,-130.45 2024.36,-125.55"/>
 </g>
-<!-- sdkgen_python_pydantic2&#45;&gt;baml_codegen_types -->
+<!-- sdkgen_python_pydantic2&#45;&gt;baml_sdkgen_types -->
 <g id="edge207" class="edge">
-<title>sdkgen_python_pydantic2&#45;&gt;baml_codegen_types</title>
+<title>sdkgen_python_pydantic2&#45;&gt;baml_sdkgen_types</title>
 <path fill="none" stroke="#1a4c97" stroke-width="1.5" stroke-dasharray="5,2" d="M7660.58,-955.19C7660.58,-947.78 7660.58,-941 7660.58,-941 7660.58,-941 1979.31,-941 1979.31,-941 1979.31,-941 1979.31,-908.24 1979.31,-908.24"/>
 <polygon fill="#1a4c97" stroke="#1a4c97" stroke-width="1.5" points="1981.76,-908.24 1979.31,-901.24 1976.86,-908.24 1981.76,-908.24"/>
 </g>
@@ -1641,9 +1641,9 @@
 <path fill="none" stroke="#1a4c97" stroke-width="1.5" stroke-dasharray="5,2" d="M7862.42,-955.05C7862.42,-829.64 7862.42,-124 7862.42,-124 7862.42,-124 2024.19,-124 2024.19,-124"/>
 <polygon fill="#1a4c97" stroke="#1a4c97" stroke-width="1.5" points="2024.19,-121.55 2017.19,-124 2024.19,-126.45 2024.19,-121.55"/>
 </g>
-<!-- sdkgen_rust&#45;&gt;baml_codegen_types -->
+<!-- sdkgen_rust&#45;&gt;baml_sdkgen_types -->
 <g id="edge209" class="edge">
-<title>sdkgen_rust&#45;&gt;baml_codegen_types</title>
+<title>sdkgen_rust&#45;&gt;baml_sdkgen_types</title>
 <path fill="none" stroke="#1a4c97" stroke-width="1.5" stroke-dasharray="5,2" d="M7837.58,-955.07C7837.58,-945.96 7837.58,-937 7837.58,-937 7837.58,-937 1987.92,-937 1987.92,-937 1987.92,-937 1987.92,-908.25 1987.92,-908.25"/>
 <polygon fill="#1a4c97" stroke="#1a4c97" stroke-width="1.5" points="1990.37,-908.25 1987.92,-901.25 1985.47,-908.25 1990.37,-908.25"/>
 </g>
@@ -1659,9 +1659,9 @@
 <path fill="none" stroke="#1a4c97" stroke-width="1.5" stroke-dasharray="5,2" d="M8067.19,-1143.24C8067.19,-1105.72 8067.19,-1025 8067.19,-1025 8067.19,-1025 2880.86,-1025 2880.86,-1025 2880.86,-1025 2880.86,-142 2880.86,-142 2880.86,-142 2024.31,-142 2024.31,-142"/>
 <polygon fill="#1a4c97" stroke="#1a4c97" stroke-width="1.5" points="2024.31,-139.55 2017.31,-142 2024.31,-144.45 2024.31,-139.55"/>
 </g>
-<!-- sdkgen_swift&#45;&gt;baml_codegen_types -->
+<!-- sdkgen_swift&#45;&gt;baml_sdkgen_types -->
 <g id="edge211" class="edge">
-<title>sdkgen_swift&#45;&gt;baml_codegen_types</title>
+<title>sdkgen_swift&#45;&gt;baml_sdkgen_types</title>
 <path fill="none" stroke="#1a4c97" stroke-width="1.5" stroke-dasharray="5,2" d="M8047.75,-1143.25C8047.75,-1109.5 8047.75,-1042 8047.75,-1042 8047.75,-1042 1908.71,-1042 1908.71,-1042 1908.71,-1042 1908.71,-908.17 1908.71,-908.17"/>
 <polygon fill="#1a4c97" stroke="#1a4c97" stroke-width="1.5" points="1911.16,-908.17 1908.71,-901.17 1906.26,-908.17 1911.16,-908.17"/>
 </g>
@@ -1683,9 +1683,9 @@
 <path fill="none" stroke="#1a4c97" stroke-width="1.5" stroke-dasharray="5,2" d="M8039.54,-955.26C8039.54,-829.64 8039.54,-115 8039.54,-115 8039.54,-115 2024.48,-115 2024.48,-115"/>
 <polygon fill="#1a4c97" stroke="#1a4c97" stroke-width="1.5" points="2024.48,-112.55 2017.48,-115 2024.48,-117.45 2024.48,-112.55"/>
 </g>
-<!-- sdkgen_typescript_shared&#45;&gt;baml_codegen_types -->
+<!-- sdkgen_typescript_shared&#45;&gt;baml_sdkgen_types -->
 <g id="edge214" class="edge">
-<title>sdkgen_typescript_shared&#45;&gt;baml_codegen_types</title>
+<title>sdkgen_typescript_shared&#45;&gt;baml_sdkgen_types</title>
 <path fill="none" stroke="#1a4c97" stroke-width="1.5" stroke-dasharray="5,2" d="M7992.46,-955.18C7992.46,-942.85 7992.46,-929 7992.46,-929 7992.46,-929 2005.14,-929 2005.14,-929 2005.14,-929 2005.14,-908.07 2005.14,-908.07"/>
 <polygon fill="#1a4c97" stroke="#1a4c97" stroke-width="1.5" points="2007.59,-908.07 2005.14,-901.07 2002.69,-908.07 2007.59,-908.07"/>
 </g>

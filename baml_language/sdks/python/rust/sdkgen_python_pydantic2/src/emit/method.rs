@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use baml_codegen_types::{FunctionArgumentDefault, Ty};
+use baml_sdkgen_types::{FunctionArgumentDefault, Ty};
 
 use crate::emit::function::SyncAsync;
 
