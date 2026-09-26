@@ -1126,14 +1126,6 @@ test "float_abs_negative_zero" {
     assert.equal((-0.0).abs().to_string(), "0.0")
 }
 
-test "float_signed_zero_literals_positive_first" {
-    assert.equal((0.0).to_string() + "," + (-0.0).to_string(), "0.0,-0.0")
-}
-
-test "float_signed_zero_literals_negative_first" {
-    assert.equal((-0.0).to_string() + "," + (0.0).to_string(), "-0.0,0.0")
-}
-
 // ─── signum ───────────────────────────────────────────────────────────────────
 // Sign test, not a comparison against zero: never returns 0.0 or NaN, and the
 // sign of ±0.0 counts. Native, because no BAML-level operator can see a zero's
@@ -1436,4 +1428,12 @@ test "float_epsilon_is_the_gap_above_one" {
 
 test "float_epsilon_is_not_smallest_positive" {
     assert.is_true(5e-324 < float.epsilon())
+}
+
+test "float_signed_zero_literals_positive_first" {
+    assert.equal((0.0).to_string() + "," + (-0.0).to_string(), "0.0,-0.0")
+}
+
+test "float_signed_zero_literals_negative_first" {
+    assert.equal((-0.0).to_string() + "," + (0.0).to_string(), "-0.0,0.0")
 }
