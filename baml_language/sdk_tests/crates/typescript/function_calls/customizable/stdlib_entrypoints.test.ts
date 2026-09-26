@@ -1,10 +1,7 @@
-// TypeScript correspondent to test_stdlib_entrypoints.py: stdlib functions of
-// different `FunctionKind`s are callable as entry points (directly from the
-// host), not only from inside BAML. Each gets its sync + `_async` binding.
+// TypeScript correspondent to test_stdlib_entrypoints.py: compiler intrinsics
+// never surface as host-callable entry points.
 import "./baml_sdk/index.js";
 import { describe, it, expect } from "vitest";
-import { argv, argv_async } from "./baml_sdk/baml/sys/index.js";
-import { exists, exists_async } from "./baml_sdk/baml/fs/index.js";
 import { isTestRuntime } from "./test_runtime.js";
 
 let existsSync: typeof import("node:fs").existsSync;
@@ -22,33 +19,6 @@ function generatedSdkFile(relPath: string): string | null {
   if (!existsSync(path)) return null;
   return readFileSync(path, "utf8");
 }
-
-describe("function_calls — portable stdlib entry points", () => {
-  // `baml.sys.argv() -> string[]` is a native `$rust_function`
-  // (FunctionKind::Native). Calling it as an entry point should run the native
-  // and return the argument array, not reject with `NotInvokableAsEntry`. The
-  // fixture host passes no program arguments, so the array is legitimately
-  // empty — the shape is what this asserts.
-  it("stdlib_entrypoints_native_baml_sys_argv_is_callable_as_an_entry_point", async () => {
-    expect(Array.isArray(argv())).toBe(true);
-    expect(Array.isArray(await argv_async())).toBe(true);
-  });
-});
-
-// The positive exists case depends on Node's local filesystem capability.
-describe.runIf(isTestRuntime("node"))(
-  "function_calls — Node filesystem stdlib entry points",
-  () => {
-    // `baml.fs.exists(path: string) -> bool` is a `$rust_io_function`
-    // (FunctionKind::SysOp). Calling it as an entry point should run the
-    // filesystem sysop and return a bool. `.` is the generated fixture
-    // directory on the test host.
-    it("stdlib_entrypoints_sysop_fs_exists_callable_as_entry_point", async () => {
-      expect(exists(".")).toBe(true);
-      expect(await exists_async(".")).toBe(true);
-    });
-  },
-);
 
 // Inspecting generated TypeScript source requires Node's local filesystem APIs.
 describe.runIf(isTestRuntime("node"))(
