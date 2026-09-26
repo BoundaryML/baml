@@ -4,16 +4,23 @@ use std::collections::HashMap;
 
 use wasm_bindgen::prelude::*;
 
+/// Stage a runtime from precompiled BAML bytecode: a raw artifact
+/// (`Uint8Array`), or the encoded string generated SDKs embed (decoded
+/// natively, never in JavaScript).
 #[wasm_bindgen(js_name = stageRuntimeBytecode)]
 #[allow(clippy::needless_pass_by_value)] // wasm-bindgen requires an owned optional string at the JS boundary.
 pub fn stage_runtime_bytecode(
-    bytecode: &[u8],
+    bytecode: JsValue,
     embedded_baml_toml: Option<String>,
 ) -> Result<(), JsValue> {
+    let bytecode = match bytecode.as_string() {
+        Some(encoded) => encoded.into_bytes(),
+        None => js_sys::Uint8Array::new(&bytecode).to_vec(),
+    };
     let sys_ops = sys_wasm::build()
         .map_err(|error| crate::errors::setup_error(crate::errors::CLIENT, error))?;
-    bridge_cffi::initialize_runtime_from_bytecode_with_sys_ops(
-        bytecode,
+    bridge_cffi::initialize_runtime_from_blob_with_sys_ops(
+        &bytecode,
         embedded_baml_toml.as_deref(),
         sys_ops,
     )

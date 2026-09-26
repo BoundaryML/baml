@@ -233,6 +233,8 @@ fancy-regex = { version = "0.19" }
 # gitignore-aware directory walking (workspace project discovery in the LSP)
 ignore = { version = "0.4" }
 base64 = "0.22"
+# LZ4 frames compress the bytecode that generated SDKs embed.
+lz4_flex = { version = "0.13" }
 mime_guess = "2"
 bytecount = "0.6"
 reqwest = { version = "0.13.1", default-features = false, features = [

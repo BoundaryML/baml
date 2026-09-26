@@ -125,7 +125,12 @@ export function seedFunctionRefHandle(global_index: number): bigint;
 
 export function seedGenericMediaHandle(): bigint;
 
-export function stageRuntimeBytecode(bytecode: Uint8Array, embedded_baml_toml?: string | null): void;
+/**
+ * Stage a runtime from precompiled BAML bytecode: a raw artifact
+ * (`Uint8Array`), or the encoded string generated SDKs embed (decoded
+ * natively, never in JavaScript).
+ */
+export function stageRuntimeBytecode(bytecode: any, embedded_baml_toml?: string | null): void;
 
 export function stageRuntimeSources(root_path: string, files: any): void;
 
@@ -154,7 +159,7 @@ export interface InitOutput {
     readonly mediaUrl: (a: bigint, b: number) => [number, number, number, number];
     readonly callFunction: (a: number, b: number) => any;
     readonly callFunctionSync: (a: number, b: number) => [number, number];
-    readonly stageRuntimeBytecode: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly stageRuntimeBytecode: (a: any, b: number, c: number) => [number, number];
     readonly stageRuntimeSources: (a: number, b: number, c: any) => [number, number];
     readonly _testHandleTableEntryCount: () => [number, number, number];
     readonly cloneHandle: (a: bigint) => [bigint, number, number];
