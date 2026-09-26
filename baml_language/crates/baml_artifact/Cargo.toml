@@ -25,5 +25,6 @@ workspace = true
 baml_version = { workspace = true }
 borsh = { workspace = true }
 log = { workspace = true }
+lz4_flex = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }

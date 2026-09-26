@@ -411,13 +411,14 @@ fn to_source_code_internal(
         with_package(&root, &anchor_body),
     );
 
-    // Compiled BAML bytecode as a base64 text resource. Base64 keeps
-    // the emitter's `HashMap<PathBuf, String>` contract (raw bytecode
-    // is not valid UTF-8) and dodges Java's 64KB static-initializer /
-    // constant-pool limits that rule out a byte-array literal.
+    // Compiled BAML bytecode (LZ4-compressed, which the bridge undoes)
+    // as a base64 text resource. Base64 keeps the emitter's
+    // `HashMap<PathBuf, String>` contract (raw bytecode is not valid
+    // UTF-8) and dodges Java's 64KB static-initializer / constant-pool
+    // limits that rule out a byte-array literal.
     out.insert(
         PathBuf::from("inlinedbaml.b64"),
-        base64_encode(baml_bytecode),
+        baml_codegen_types::embedded_bytecode_base64(baml_bytecode),
     );
     if let Some(embedded_baml_toml) = embedded_baml_toml {
         out.insert(
@@ -601,35 +602,6 @@ fn java_file_path(pkg: &PackagePath, ident: &str) -> PathBuf {
 
 fn with_package(pkg: &PackagePath, body: &str) -> String {
     format!("package {};\n\n{body}", pkg.java_package())
-}
-
-/// Standard-alphabet base64 with padding, dependency-free. The
-/// bytecode payload is written once per fixture at build time, so
-/// encoder throughput is irrelevant.
-fn base64_encode(data: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
-    for chunk in data.chunks(3) {
-        let b = [
-            chunk[0],
-            chunk.get(1).copied().unwrap_or(0),
-            chunk.get(2).copied().unwrap_or(0),
-        ];
-        let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
-        out.push(ALPHABET[(n >> 18) as usize & 63] as char);
-        out.push(ALPHABET[(n >> 12) as usize & 63] as char);
-        out.push(if chunk.len() > 1 {
-            ALPHABET[(n >> 6) as usize & 63] as char
-        } else {
-            '='
-        });
-        out.push(if chunk.len() > 2 {
-            ALPHABET[n as usize & 63] as char
-        } else {
-            '='
-        });
-    }
-    out
 }
 
 #[cfg(test)]
@@ -1670,15 +1642,10 @@ mod tests {
             &[0, 1, 2, 253, 254, 255],
             NamingConvention::PreserveCase,
         );
-        assert_eq!(out[&PathBuf::from("inlinedbaml.b64")], "AAEC/f7/");
-    }
-
-    #[test]
-    fn base64_padding() {
-        assert_eq!(base64_encode(b""), "");
-        assert_eq!(base64_encode(b"f"), "Zg==");
-        assert_eq!(base64_encode(b"fo"), "Zm8=");
-        assert_eq!(base64_encode(b"foo"), "Zm9v");
+        assert_eq!(
+            out[&PathBuf::from("inlinedbaml.b64")],
+            baml_codegen_types::embedded_bytecode_base64(&[0, 1, 2, 253, 254, 255])
+        );
     }
 
     // -- explicit generics: emitter surface ----------------------------------

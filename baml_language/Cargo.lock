@@ -599,6 +599,7 @@ dependencies = [
  "baml_version",
  "borsh",
  "log",
+ "lz4_flex",
  "sha2",
  "thiserror 2.0.18",
 ]
@@ -722,8 +723,10 @@ dependencies = [
 name = "baml_codegen_types"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_artifact",
  "baml_base",
  "baml_type",
+ "base64",
  "fs2",
  "serde",
  "serde_json",
@@ -6680,6 +6683,7 @@ dependencies = [
 name = "sdkgen_swift"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_artifact",
  "baml_base",
  "baml_codegen_types",
  "baml_version",
@@ -6690,6 +6694,7 @@ dependencies = [
 name = "sdkgen_typescript_shared"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_artifact",
  "baml_base",
  "baml_codegen_types",
  "base64",

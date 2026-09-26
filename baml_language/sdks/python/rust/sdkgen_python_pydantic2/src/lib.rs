@@ -740,9 +740,12 @@ fn render_baml_source_files(files: &[UserBamlFile]) -> String {
 }
 
 fn render_inlinedbaml_bytecode(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> String {
-    let mut out = String::from("from __future__ import annotations\n\nBYTECODE: bytes = ");
-    out.push_str(&py_bytes(bytecode));
-    out.push_str("\nEMBEDDED_BAML_TOML: str | None = ");
+    // One base64 line of LZ4-compressed bytecode; the bridge decompresses it.
+    let mut out = String::from(
+        "from __future__ import annotations\n\nimport base64\n\nBYTECODE: bytes = base64.b64decode(\"",
+    );
+    out.push_str(&baml_codegen_types::embedded_bytecode_base64(bytecode));
+    out.push_str("\")\nEMBEDDED_BAML_TOML: str | None = ");
     out.push_str(
         &embedded_baml_toml
             .map(py_string)
@@ -756,32 +759,6 @@ fn render_inlinedbaml_bytecode(bytecode: &[u8], embedded_baml_toml: Option<&str>
 /// form with the usual `\\`, `\"`, `\n`, `\r`, `\t` escapes so the result
 /// round-trips through `ast.literal_eval` and is byte-identical.
 pub(crate) use baml_codegen_types::quoted_string as py_string;
-
-/// Render bytes as adjacent Python bytes literals. Chunking keeps generated
-/// lines manageable without adding any runtime decode step.
-pub(crate) fn py_bytes(bytes: &[u8]) -> String {
-    const CHUNK_SIZE: usize = 80;
-
-    if bytes.is_empty() {
-        return "b\"\"".to_string();
-    }
-
-    let mut out = String::from("(\n");
-    for chunk in bytes.chunks(CHUNK_SIZE) {
-        out.push_str("    b\"");
-        for &byte in chunk {
-            match byte {
-                b'\\' => out.push_str("\\\\"),
-                b'"' => out.push_str("\\\""),
-                0x20..=0x7e => out.push(byte as char),
-                _ => write!(out, "\\x{byte:02x}").unwrap(),
-            }
-        }
-        out.push_str("\"\n");
-    }
-    out.push(')');
-    out
-}
 
 /// Return the `cg::Name` that keys a given symbol in the pool. Not
 /// load-bearing today (we iterate `pool.keys()` directly), but kept
@@ -1827,8 +1804,10 @@ mod tests {
 
         let inl = &out[&PathBuf::from("_inlinedbaml.py")];
         assert!(inl.starts_with(HEADER));
-        assert!(inl.contains("BYTECODE: bytes = ("));
-        assert!(inl.contains("b\"\\x00BAML\\\"\\x0a\\xff\""));
+        assert!(inl.contains(&format!(
+            "BYTECODE: bytes = base64.b64decode(\"{}\")\n",
+            baml_codegen_types::embedded_bytecode_base64(bytecode)
+        )));
         assert!(!inl.contains("FILES: dict[str, str]"));
 
         let sources = &out[&PathBuf::from("_baml_sources.py")];
@@ -1857,7 +1836,7 @@ mod tests {
         );
 
         let inlined = &out[&PathBuf::from("_inlinedbaml.py")];
-        assert!(inlined.contains("BYTECODE: bytes = ("));
+        assert!(inlined.contains("BYTECODE: bytes = base64.b64decode(\""));
         assert!(inlined.contains("EMBEDDED_BAML_TOML: str | None = "));
         assert!(!inlined.contains("function a()"));
 
