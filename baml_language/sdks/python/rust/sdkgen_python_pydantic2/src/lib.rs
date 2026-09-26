@@ -981,6 +981,16 @@ mod tests {
         assert!(root.contains("from ._typemap import _TYPE_MAP"));
         assert!(root.contains("set_type_map(_TYPE_MAP)"));
         assert!(root.contains("from . import reflect as reflect"));
+        // The error wrappers stay importable from `baml` with no built-in
+        // types generated there.
+        for file in ["baml/__init__.py", "baml/__init__.pyi"] {
+            assert!(
+                out[&PathBuf::from(file)].contains(
+                    "from baml_bridge import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET"
+                ),
+                "{file}"
+            );
+        }
         // PEP 562 lazy re-export: root lists `baml` in `_LAZY_CHILDREN`
         // and exposes it through `__getattr__`. `to_source_code` always
         // synthesizes the `baml` leaf even when no stdlib symbols route
@@ -1003,11 +1013,11 @@ mod tests {
 
         // `baml/__init__.py` has no children in the empty-pool fixture,
         // so neither the lazy `__getattr__` block nor any cascade lines
-        // appear — just the bare `from __future__` header.
+        // appear — just the header and the error-wrapper re-exports.
         let baml_init = &out[&PathBuf::from("baml/__init__.py")];
         assert!(!baml_init.contains("_inlinedbaml"));
         assert!(!baml_init.contains("__getattr__"));
-        assert_eq!(baml_init, HEADER);
+        assert_eq!(*baml_init, format!("{HEADER}{}", leaf::BAML_ROOT_REEXPORTS));
 
         assert_eq!(out[&PathBuf::from("py.typed")], "");
     }
@@ -2967,8 +2977,12 @@ mod tests {
             if !path.to_string_lossy().ends_with(".pyi") {
                 continue;
             }
+            // The `baml` package's error-wrapper re-exports are the only
+            // allowed `baml_bridge` import.
             assert!(
-                !content.contains("baml_bridge"),
+                !content
+                    .replace(leaf::BAML_ROOT_REEXPORTS, "")
+                    .contains("baml_bridge"),
                 "{} must not import baml_bridge",
                 path.display()
             );

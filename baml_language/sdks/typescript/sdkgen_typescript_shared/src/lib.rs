@@ -188,6 +188,12 @@ pub fn to_source_code_with_metadata(
                 .filter(|name| route(name) == leaf_path)
                 .cloned(),
         ));
+        // A namespace whose declarations were all filtered out would
+        // otherwise be an empty script, which `tsc` refuses to import from
+        // ("is not a module").
+        if content.trim().is_empty() {
+            content.push_str("export {};\n");
+        }
         out.insert(init_ts_path(dir), content);
     }
 
@@ -415,6 +421,8 @@ mod tests {
         }
         // No declaration files are emitted.
         assert!(!out.keys().any(|p| p.to_string_lossy().ends_with(".d.ts")));
+        // A namespace with nothing to declare is still an importable module.
+        assert!(out[&PathBuf::from("baml/index.ts")].ends_with("export {};\n"));
         let root = &out[&PathBuf::from("index.ts")];
         assert!(root.contains(HEADER_LEN_MARKER));
         assert!(
