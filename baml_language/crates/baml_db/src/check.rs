@@ -663,6 +663,7 @@ fn parse_error_tainted_scopes(
             ParseError::UnexpectedToken { span, .. }
             | ParseError::UnexpectedEof { span, .. }
             | ParseError::InvalidSyntax { span, .. }
+            | ParseError::AmbiguousUnion { span }
             | ParseError::RemovedFeature { span, .. } => span,
         };
         let fsid = index.scope_at_offset(span.range.start(), None);
@@ -2166,6 +2167,43 @@ mod tests {
         let db = setup_test_db(source);
         let file = db.workspace_files()[0];
         (db, file)
+    }
+
+    #[test]
+    fn b_1681_if_let_function_return_and_throws_unions_compile_without_parse_errors() {
+        let source = "function Demo(x: unknown) -> int { if let callback: (int, image) -> string | int throws unknown = x { 1 } else { 0 } }";
+        let (db, file) = single_file(source);
+        let parse_errors = baml_compiler_parser::parse_errors(&db, file);
+        assert!(
+            parse_errors.is_empty(),
+            "unparenthesized bare return and throws unions must parse: {parse_errors:#?}"
+        );
+        let diagnostics = check_file(&db, file);
+        assert!(
+            diagnostics.is_empty(),
+            "the unparenthesized if-let function type should compile: {diagnostics:#?}"
+        );
+    }
+
+    #[test]
+    fn ambiguous_function_union_reaches_compiler_diagnostics_at_the_pipe() {
+        let source = "type Callback = (int) -> string | (image) -> bool";
+        let (db, file) = single_file(source);
+        let diagnostics = check_file(&db, file);
+        let ambiguous: Vec<_> = diagnostics
+            .iter()
+            .filter(|diag| diag.id == DiagnosticId::AmbiguousUnion)
+            .collect();
+        assert_eq!(ambiguous.len(), 1, "{diagnostics:#?}");
+        let span = ambiguous[0].primary_span().expect("pipe span");
+        let start: usize = span.range.start().into();
+        let end: usize = span.range.end().into();
+        assert_eq!(&source[start..end], "|");
+        assert_eq!(ambiguous[0].message, "ambiguous union");
+        let rendered = ambiguous[0].message_with_primary_label();
+        assert!(!rendered.contains('\n'), "{rendered}");
+        assert!(rendered.contains("`((A) -> B) | ((C) -> D)`"), "{rendered}");
+        assert!(rendered.contains("`(A) -> (B | (C) -> D)`"), "{rendered}");
     }
 
     #[test]
