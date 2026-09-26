@@ -49,9 +49,9 @@ impl ToDiagnostic for ParseError {
 
             ParseError::AmbiguousUnion { span } => Diagnostic::error(
                 DiagnosticId::AmbiguousUnion,
-                "ambiguous union; use parentheses to make the intended grouping explicit, for example:\n  ((A) -> B) | ((C) -> D)\n  (A) -> (B | (C) -> D)",
+                ParseError::AMBIGUOUS_UNION_MESSAGE,
             )
-            .with_primary(*span, "ambiguous union"),
+            .with_primary(*span, ParseError::AMBIGUOUS_UNION_LABEL),
 
             ParseError::RemovedFeature { message, span } => {
                 Diagnostic::error(DiagnosticId::RemovedFeature, "removed language feature")

@@ -1276,7 +1276,11 @@ fn session_parse_error_diagnostic(
         ParseError::AmbiguousUnion { span } => (
             DiagnosticId::AmbiguousUnion,
             *span,
-            "ambiguous union; use parentheses to make the intended grouping explicit, for example:\n  ((A) -> B) | ((C) -> D)\n  (A) -> (B | (C) -> D)".to_string(),
+            format!(
+                "{}: {}",
+                ParseError::AMBIGUOUS_UNION_MESSAGE,
+                ParseError::AMBIGUOUS_UNION_LABEL
+            ),
         ),
     };
     let range = span.range;

@@ -2179,8 +2179,11 @@ mod tests {
         let start: usize = span.range.start().into();
         let end: usize = span.range.end().into();
         assert_eq!(&source[start..end], "|");
-        assert!(ambiguous[0].message.contains("((A) -> B) | ((C) -> D)"));
-        assert!(ambiguous[0].message.contains("(A) -> (B | (C) -> D)"));
+        assert_eq!(ambiguous[0].message, "ambiguous union");
+        let rendered = ambiguous[0].message_with_primary_label();
+        assert!(!rendered.contains('\n'), "{rendered}");
+        assert!(rendered.contains("`((A) -> B) | ((C) -> D)`"), "{rendered}");
+        assert!(rendered.contains("`(A) -> (B | (C) -> D)`"), "{rendered}");
     }
 
     #[test]
