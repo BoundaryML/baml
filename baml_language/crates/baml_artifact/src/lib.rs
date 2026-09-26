@@ -5,7 +5,11 @@
 //! the release metadata check at bridge startup useful while adding an ABI
 //! check that runs even when generated metadata is unavailable.
 
-use std::fmt;
+use std::{
+    borrow::Cow,
+    fmt,
+    io::{Read as _, Write as _},
+};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use sha2::{Digest, Sha256};
@@ -171,6 +175,39 @@ pub enum Error {
     Encode { kind: ArtifactKind, message: String },
     #[error("failed to decode {kind}: {message}")]
     Decode { kind: ArtifactKind, message: String },
+    #[error("failed to decompress {kind}: {message}")]
+    Decompress { kind: ArtifactKind, message: String },
+}
+
+/// LZ4 frame magic number (`0x184D2204`, little-endian on the wire). It cannot
+/// collide with [`MAGIC`], so a compressed artifact is recognizable by prefix.
+const LZ4_FRAME_MAGIC: [u8; 4] = [0x04, 0x22, 0x4D, 0x18];
+
+/// Compress an encoded artifact into an LZ4 frame for embedding in generated
+/// SDK source. [`decompress_embedded`] reverses this.
+pub fn compress_for_embedding(artifact: &[u8]) -> Vec<u8> {
+    let mut encoder = lz4_flex::frame::FrameEncoder::new(Vec::new());
+    encoder
+        .write_all(artifact)
+        .expect("writing to a Vec cannot fail");
+    encoder.finish().expect("writing to a Vec cannot fail")
+}
+
+/// Undo [`compress_for_embedding`] if `bytes` is an LZ4 frame; otherwise
+/// borrow `bytes` unchanged, so generators that embed the raw artifact (the
+/// Rust SDK's `include_bytes!`) keep working.
+pub fn decompress_embedded(kind: ArtifactKind, bytes: &[u8]) -> Result<Cow<'_, [u8]>, Error> {
+    if !bytes.starts_with(&LZ4_FRAME_MAGIC) {
+        return Ok(Cow::Borrowed(bytes));
+    }
+    let mut artifact = Vec::new();
+    lz4_flex::frame::FrameDecoder::new(bytes)
+        .read_to_end(&mut artifact)
+        .map_err(|error| Error::Decompress {
+            kind,
+            message: error.to_string(),
+        })?;
+    Ok(Cow::Owned(artifact))
 }
 
 /// Serialize `value` and wrap it in a versioned artifact envelope.
@@ -365,6 +402,38 @@ pub fn decode_payload(kind: ArtifactKind, bytes: &[u8]) -> Result<&[u8], Error> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn embedded_compression_round_trips() {
+        let artifact = encode(ArtifactKind::Program, &vec![7_u32; 1024]).unwrap();
+        let compressed = compress_for_embedding(&artifact);
+        assert!(compressed.starts_with(&LZ4_FRAME_MAGIC));
+        assert!(compressed.len() < artifact.len());
+        let restored = decompress_embedded(ArtifactKind::Program, &compressed).unwrap();
+        assert_eq!(restored.as_ref(), artifact.as_slice());
+        let decoded: Vec<u32> = decode(ArtifactKind::Program, &restored).unwrap();
+        assert_eq!(decoded, vec![7_u32; 1024]);
+    }
+
+    #[test]
+    fn uncompressed_artifacts_pass_through_decompression() {
+        let artifact = encode(ArtifactKind::Program, &vec![1_u32, 2, 3]).unwrap();
+        assert!(matches!(
+            decompress_embedded(ArtifactKind::Program, &artifact).unwrap(),
+            Cow::Borrowed(bytes) if bytes == artifact.as_slice()
+        ));
+    }
+
+    #[test]
+    fn corrupt_lz4_frame_is_a_decompress_error() {
+        let mut compressed =
+            compress_for_embedding(&encode(ArtifactKind::Program, &vec![1_u32; 64]).unwrap());
+        compressed.truncate(compressed.len() / 2);
+        assert!(matches!(
+            decompress_embedded(ArtifactKind::Program, &compressed),
+            Err(Error::Decompress { .. })
+        ));
+    }
 
     #[test]
     fn round_trips_payload() {

@@ -189,18 +189,23 @@ pub fn new(
 
 /// Initialize a runtime from a versioned BAML program artifact rather than
 /// from source files. Mirrors [`new`] but skips compilation, validating and
-/// decoding the program before instantiating the engine directly.
+/// decoding the program before instantiating the engine directly. The
+/// artifact may be LZ4-compressed (see [`baml_artifact::compress_for_embedding`]).
 ///
 /// This is the blessed seam for running pre-packed bytecode: bridge crates call
 /// it instead of reaching into `bex_engine` / `bex_vm_types` themselves.
 #[allow(clippy::needless_pass_by_value)]
 pub fn new_from_bytecode(bytecode: &[u8], sys_ops: SysOps) -> Result<Arc<dyn Bex>, RuntimeError> {
+    let deserialize_error = |e: baml_artifact::Error| RuntimeError::Compilation {
+        message: format!("Failed to deserialize BAML bytecode: {e}"),
+    };
+    // Generated SDKs other than Rust embed the artifact LZ4-compressed.
+    let bytecode =
+        baml_artifact::decompress_embedded(baml_artifact::ArtifactKind::Program, bytecode)
+            .map_err(deserialize_error)?;
     let program: bex_vm_types::Program =
-        baml_artifact::decode(baml_artifact::ArtifactKind::Program, bytecode).map_err(|e| {
-            RuntimeError::Compilation {
-                message: format!("Failed to deserialize BAML bytecode: {e}"),
-            }
-        })?;
+        baml_artifact::decode(baml_artifact::ArtifactKind::Program, &bytecode)
+            .map_err(deserialize_error)?;
     let engine = bex_engine::BexEngine::new_with_runtime_compiler(
         program,
         Arc::new(sys_ops),
