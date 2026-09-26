@@ -2740,7 +2740,9 @@ impl<'db> InferenceContext<'db> {
                 self.diverges = Diverges::Always;
                 Ty::never()
             }
-            Expr::Binary { op, lhs, rhs } => self.infer_binary(body, expr, *op, *lhs, *rhs),
+            Expr::Binary { op, lhs, rhs } => {
+                self.infer_binary(body, expr, expected, *op, *lhs, *rhs)
+            }
             Expr::Unary { op, expr: operand } => self.infer_unary(body, *op, *operand),
             Expr::Call { callee, args, .. } => self.infer_call(body, expr, *callee, args),
             Expr::Object {
@@ -4419,6 +4421,7 @@ impl<'db> InferenceContext<'db> {
         &mut self,
         body: &ExprBody,
         expr: ExprId,
+        expected: &Expectation,
         op: baml_compiler2_ast::BinaryOp,
         lhs: ExprId,
         rhs: ExprId,
@@ -4560,8 +4563,18 @@ impl<'db> InferenceContext<'db> {
                 // does not CONSTRAIN it - `v ?? "fallback"` is a join, not
                 // a mismatch - which is exactly Expectation's inform/
                 // constrain split (same as if-branches).
+                //
+                // The ENCLOSING expectation informs it first: the fallback
+                // flows to the same place as the whole expression, so
+                // `null ?? [1]` returned as `(int | string)[]` builds the
+                // literal at that type (the if-branch rule). The unwrapped
+                // lhs is the context only when the enclosing one is absent.
                 let inner = self.remove_null(&lhs_ty);
-                let rhs_ty = self.infer_expr(body, rhs, &Expectation::has_type(inner.clone()));
+                let rhs_expectation = match expected.adjust_for_branches(&mut self.table) {
+                    Expectation::HasType(ty) => Expectation::HasType(ty),
+                    _ => Expectation::has_type(inner.clone()),
+                };
+                let rhs_ty = self.infer_expr(body, rhs, &rhs_expectation);
                 self.null_coalesce(inner, &rhs_ty)
             }
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
