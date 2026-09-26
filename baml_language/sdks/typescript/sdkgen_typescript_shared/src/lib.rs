@@ -30,7 +30,10 @@ use std::{
     path::PathBuf,
 };
 
-use baml_sdkgen_types::{Name, SymbolPool, public_interface_tokens, without_builtin_functions};
+use baml_sdkgen_types::{
+    Name, SymbolPool, public_interface_tokens, without_builtin_functions,
+    without_unreachable_builtin_types,
+};
 pub use baml_sdkgen_types::{NamingConvention, OutputType};
 
 use crate::{
@@ -115,7 +118,7 @@ pub fn to_source_code_with_metadata(
         "sdkgen_typescript only supports naming_convention = PreserveCase \
          (got {naming_convention})",
     );
-    let filtered_pool = without_builtin_functions(pool);
+    let filtered_pool = without_unreachable_builtin_types(&without_builtin_functions(pool));
     let pool = &filtered_pool;
     let mut out: HashMap<PathBuf, String> = HashMap::new();
     let interface_tokens = public_interface_tokens(pool);
@@ -330,8 +333,13 @@ mod tests {
     }
 
     #[test]
-    fn builtin_functions_are_omitted_but_types_and_user_functions_remain() {
+    fn builtin_functions_and_unreachable_types_are_omitted() {
         let mut pool = SymbolPool::new();
+        let holder_name = name("user", &["sample"], "Holder");
+        let mut holder = class_sym(&holder_name, 1);
+        let Symbol::Class(holder_class) = &mut holder else {
+            unreachable!();
+        };
         for package in ["baml", "ai", "reflect", "openai"] {
             let builtin_source = format!("<builtin>/{package}/sample.baml");
             let builtin_function = |bare: &str, span| {
@@ -354,12 +362,27 @@ mod tests {
             class
                 .instance_methods
                 .push(builtin_function("suppressed_method", 2));
+            holder_class
+                .properties
+                .push(baml_sdkgen_types::ClassProperty {
+                    name: BaseName::new(format!("{package}_kept")),
+                    docstring: None,
+                    ty: Ty::Class(class_name.clone(), Box::new([])),
+                });
             pool.insert(class_name, builtin_class);
+            let pruned_name = name(package, &["sample"], "PrunedType");
+            let mut pruned = class_sym(&pruned_name, 4);
+            let Symbol::Class(pruned_class) = &mut pruned else {
+                unreachable!();
+            };
+            pruned_class.origin.source_file_path = builtin_source.clone();
+            pool.insert(pruned_name, pruned);
             pool.insert(
                 name(package, &["sample"], "suppressed_function"),
                 Symbol::Function(builtin_function("suppressed_function", 3)),
             );
         }
+        pool.insert(holder_name, holder);
         pool.insert(name("user", &["sample"], "extract_resume"), func_sym(0));
 
         let out = emit_sdk(&pool);
@@ -371,6 +394,7 @@ mod tests {
         ] {
             let leaf = &out[&PathBuf::from(format!("{leaf_path}/index.ts"))];
             assert!(leaf.contains("export class KeptType"));
+            assert!(!leaf.contains("PrunedType"));
             assert!(!leaf.contains("suppressed_function"));
             assert!(!leaf.contains("suppressed_static"));
             assert!(!leaf.contains("suppressed_method"));

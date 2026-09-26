@@ -24,6 +24,7 @@ use std::{
 
 use baml_sdkgen_types::{
     Name, Symbol, SymbolPool, public_interface_tokens, without_builtin_functions,
+    without_unreachable_builtin_types,
 };
 pub use baml_sdkgen_types::{NamingConvention, OutputType};
 pub use names::{IdentifierRename, IdentifierRenameReason};
@@ -252,7 +253,7 @@ fn to_source_code_internal(
         "sdkgen_python_pydantic2 only supports naming_convention = PreserveCase \
          (got {naming_convention})",
     );
-    let filtered_pool = without_builtin_functions(pool);
+    let filtered_pool = without_unreachable_builtin_types(&without_builtin_functions(pool));
     let pool = &filtered_pool;
     let mut out: HashMap<PathBuf, String> = HashMap::new();
     let names = Rc::new(PythonNames::build(pool));
@@ -897,8 +898,13 @@ mod tests {
     }
 
     #[test]
-    fn builtin_functions_are_omitted_but_types_and_user_functions_remain() {
+    fn builtin_functions_and_unreachable_types_are_omitted() {
         let mut pool = SymbolPool::new();
+        let holder_name = cg_name("user", &["sample"], "Holder");
+        let mut holder = class_at(holder_name.clone(), "user.baml", 1);
+        let Symbol::Class(holder_class) = &mut holder else {
+            unreachable!();
+        };
         for package in ["baml", "ai", "reflect", "openai"] {
             let builtin_source = format!("<builtin>/{package}/sample.baml");
             let class_name = cg_name(package, &["sample"], "KeptType");
@@ -912,12 +918,25 @@ mod tests {
             class
                 .instance_methods
                 .push(bare_func("suppressed_method", &builtin_source, 2));
+            holder_class
+                .properties
+                .push(baml_sdkgen_types::ClassProperty {
+                    name: BaseName::new(format!("{package}_kept")),
+                    docstring: None,
+                    ty: Ty::Class(class_name.clone(), Box::new([])),
+                });
             pool.insert(class_name, builtin_class);
+            let pruned_name = cg_name(package, &["sample"], "PrunedType");
+            pool.insert(
+                pruned_name.clone(),
+                class_at(pruned_name, &builtin_source, 4),
+            );
             pool.insert(
                 cg_name(package, &["sample"], "suppressed_function"),
                 func_sym("suppressed_function", &builtin_source, 3),
             );
         }
+        pool.insert(holder_name, holder);
         pool.insert(
             cg_name("user", &["sample"], "kept_function"),
             func_sym("kept_function", "user.baml", 0),
@@ -933,6 +952,7 @@ mod tests {
             for extension in ["py", "pyi"] {
                 let leaf = &out[&PathBuf::from(format!("{leaf_path}/__init__.{extension}"))];
                 assert!(leaf.contains("class KeptType"));
+                assert!(!leaf.contains("PrunedType"));
                 assert!(!leaf.contains("suppressed_function"));
                 assert!(!leaf.contains("suppressed_static"));
                 assert!(!leaf.contains("suppressed_method"));
