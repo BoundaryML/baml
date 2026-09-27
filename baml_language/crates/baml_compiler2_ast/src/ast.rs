@@ -380,13 +380,24 @@ impl std::fmt::Display for TypeExprKind {
                     }
                 }
                 write!(f, ") -> ")?;
-                if matches!(ret.kind, TypeExprKind::Function { .. }) {
+                // Without a following `throws`, a bare return union is an
+                // ambiguous union (E0175); a bare throws union always is.
+                if matches!(ret.kind, TypeExprKind::Function { .. })
+                    || (throws.is_none() && matches!(ret.kind, TypeExprKind::Union { .. }))
+                {
                     write!(f, "({ret})")?;
                 } else {
                     write!(f, "{ret}")?;
                 }
                 if let Some(throws) = throws {
-                    write!(f, " throws {throws}")?;
+                    if matches!(
+                        throws.kind,
+                        TypeExprKind::Union { .. } | TypeExprKind::Function { .. }
+                    ) {
+                        write!(f, " throws ({throws})")?;
+                    } else {
+                        write!(f, " throws {throws}")?;
+                    }
                 }
                 Ok(())
             }

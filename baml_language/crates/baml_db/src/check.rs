@@ -2182,8 +2182,8 @@ mod tests {
         assert_eq!(ambiguous[0].message, "ambiguous union");
         let rendered = ambiguous[0].message_with_primary_label();
         assert!(!rendered.contains('\n'), "{rendered}");
-        assert!(rendered.contains("`((A) -> B) | ((C) -> D)`"), "{rendered}");
-        assert!(rendered.contains("`(A) -> (B | (C) -> D)`"), "{rendered}");
+        assert!(rendered.contains("`((A) -> B) | C`"), "{rendered}");
+        assert!(rendered.contains("`(A) -> (B | C)`"), "{rendered}");
     }
 
     #[test]

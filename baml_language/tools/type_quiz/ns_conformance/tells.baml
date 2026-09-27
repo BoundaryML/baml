@@ -405,7 +405,7 @@ test "tells: the surface leans in the two places recorded here and nowhere else"
     // Pass `carried: true` for the facts behind each.
     assert.equal(
         leaning_features(128, 100, 10, false),
-        `compiles=50% of 7424 leaning=["pair:same-spelling 90% of 440", "pair:source-within-target 75% of 835"]`,
+        `compiles=50% of 7424 leaning=["pair:same-spelling 90% of 440", "pair:source-within-target 75% of 818"]`,
     )
 }
 

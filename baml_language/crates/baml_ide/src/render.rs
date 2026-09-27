@@ -322,13 +322,19 @@ fn display_type_ref_as_postfix_base(store: &TypeRefStore, id: TypeRefId) -> Stri
     }
 }
 
-fn display_type_ref_as_function_result(store: &TypeRefStore, id: TypeRefId) -> String {
+/// Render a function's return or `throws` operand. A bare union there is an
+/// ambiguous union (E0175) unless it is a return followed by `throws`.
+fn display_type_ref_as_function_operand(
+    store: &TypeRefStore,
+    id: TypeRefId,
+    union_needs_parens: bool,
+) -> String {
     use baml_compiler2_hir::type_ref::TypeRefKind;
     let rendered = display_type_ref(store, id);
-    if matches!(store[id].kind, TypeRefKind::Function { .. }) {
-        format!("({rendered})")
-    } else {
-        rendered
+    match store[id].kind {
+        TypeRefKind::Function { .. } => format!("({rendered})"),
+        TypeRefKind::Union { .. } if union_needs_parens => format!("({rendered})"),
+        _ => rendered,
     }
 }
 
@@ -386,15 +392,15 @@ pub fn display_type_ref(store: &TypeRefStore, id: TypeRefId) -> String {
                         .unwrap_or_else(|| display_type_ref(store, p.ty))
                 })
                 .collect();
-            let throws = throws
-                .map(|t| display_type_ref(store, t))
+            let rendered_throws = throws
+                .map(|t| display_type_ref_as_function_operand(store, t, true))
                 .map(|throws| format!(" throws {throws}"))
                 .unwrap_or_default();
             format!(
                 "({}) -> {}{}",
                 ps.join(", "),
-                display_type_ref_as_function_result(store, *ret),
-                throws
+                display_type_ref_as_function_operand(store, *ret, throws.is_none()),
+                rendered_throws
             )
         }
         K::Unknown => "unknown".to_string(),
@@ -490,6 +496,21 @@ impl SigSlot<'_> {
             SigSlot::Syntax(store, id) => style.type_form.render(store, *id),
             SigSlot::Missing => MISSING_RETURN.to_string(),
             SigSlot::Inferred => PENDING_INFERENCE.to_string(),
+        }
+    }
+
+    /// Whether this slot must be parenthesized as a function type's `throws`
+    /// operand, where a bare union is an ambiguous union (E0175).
+    fn is_union_or_function(&self) -> bool {
+        use baml_compiler2_hir::type_ref::TypeRefKind;
+        match self {
+            SigSlot::Resolved(ty) => matches!(ty, Ty::Union(..) | Ty::Function { .. }),
+            SigSlot::ResolvedOwned(ty) => matches!(ty, Ty::Union(..) | Ty::Function { .. }),
+            SigSlot::Syntax(store, id) => matches!(
+                store[*id].kind,
+                TypeRefKind::Union { .. } | TypeRefKind::Function { .. }
+            ),
+            SigSlot::Missing | SigSlot::Inferred => false,
         }
     }
 }
@@ -639,7 +660,13 @@ impl<'db> FnSigParts<'db> {
             .collect::<Vec<_>>()
             .join(", ");
         let ret = format!(" -> {}", self.ret.render(db, file, style));
-        let throws = format!(" throws {}", self.throws.render(db, file, style));
+        let throws = self.throws.render(db, file, style);
+        // A declaration's body delimits its `throws`; a function type's does not.
+        let throws = if !style.keyword_and_name && self.throws.is_union_or_function() {
+            format!(" throws ({throws})")
+        } else {
+            format!(" throws {throws}")
+        };
         if style.keyword_and_name {
             let generics = if self.generics.is_empty() {
                 String::new()

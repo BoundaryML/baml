@@ -33,5 +33,5 @@ impl ParseError {
     /// Headline for [`ParseError::AmbiguousUnion`].
     pub const AMBIGUOUS_UNION_MESSAGE: &str = "ambiguous union";
     /// Pipe label for [`ParseError::AmbiguousUnion`]; one line so concise renderers stay readable.
-    pub const AMBIGUOUS_UNION_LABEL: &str = "use parentheses to make the intended grouping explicit, e.g. `((A) -> B) | ((C) -> D)` or `(A) -> (B | (C) -> D)`";
+    pub const AMBIGUOUS_UNION_LABEL: &str = "use parentheses to make the intended grouping explicit, e.g. `((A) -> B) | C` or `(A) -> (B | C)`";
 }

@@ -232,7 +232,7 @@ test "callback_effect_param_is_inferred_from_unannotated_lambda_body" {
     assert.equal(lambda_effect_main(), 1)
 }
 
-function lambda_contextual_call(cb: (x: int) -> int throws int | string) -> int throws int | string {
+function lambda_contextual_call(cb: (x: int) -> int throws (int | string)) -> int throws int | string {
     cb(1)
 }
 

@@ -320,7 +320,7 @@ test "three_level_forwarding" {
 
 // ─── Closure captures type-arg ────────────────────────────────────────────────
 
-function make_decoder<T>() -> (string) -> T throws baml.json.ParseError | baml.json.DecodeError {
+function make_decoder<T>() -> (string) -> T throws (baml.json.ParseError | baml.json.DecodeError) {
     return (s: string) -> T throws baml.json.ParseError | baml.json.DecodeError { baml.json.from_string<T>(s) }
 }
 

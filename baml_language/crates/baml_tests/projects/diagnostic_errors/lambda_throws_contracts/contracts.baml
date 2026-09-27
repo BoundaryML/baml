@@ -13,7 +13,7 @@ function Lambdas(value: unknown) -> int throws never {
     1
 }
 
-function Accept(callback: () -> int throws string | int) -> int { 1 }
+function Accept(callback: () -> int throws (string | int)) -> int { 1 }
 
 function Contextual() -> int {
     Accept(() -> int { throw 1 })

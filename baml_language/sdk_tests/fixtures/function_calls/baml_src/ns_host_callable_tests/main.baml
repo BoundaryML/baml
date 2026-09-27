@@ -66,7 +66,7 @@ function call_float_callback(callback: () -> float) -> float {
     callback()
 }
 
-function call_float_bigint_union_callback(callback: () -> float | bigint) -> float | bigint {
+function call_float_bigint_union_callback(callback: () -> (float | bigint)) -> float | bigint {
     callback()
 }
 
@@ -111,7 +111,7 @@ function call_map_roundtrip_callback(callback: (map<string, int>) -> map<string,
     callback(values)
 }
 
-function call_union_roundtrip_callback(callback: (string | int) -> string | int, value: string | int) -> string | int {
+function call_union_roundtrip_callback(callback: (string | int) -> (string | int), value: string | int) -> string | int {
     callback(value)
 }
 
@@ -120,7 +120,7 @@ function call_union_roundtrip_callback(callback: (string | int) -> string | int,
 // named callback arguments, nominal arms, literal arms, and overlapping empty
 // container shapes.
 function call_nullable_union_roundtrip_callback(
-    callback: (string | int | null) -> string | int | null,
+    callback: (string | int | null) -> (string | int | null),
     value: string | int | null,
 ) -> string | int | null {
     callback(value)
@@ -141,21 +141,21 @@ function call_union_map_roundtrip_callback(
 }
 
 function call_nominal_union_roundtrip_callback(
-    callback: (Person | CallbackMood | string) -> Person | CallbackMood | string,
+    callback: (Person | CallbackMood | string) -> (Person | CallbackMood | string),
     value: Person | CallbackMood | string,
 ) -> Person | CallbackMood | string {
     callback(value)
 }
 
 function call_literal_union_roundtrip_callback(
-    callback: ("first" | "second" | int) -> "first" | "second" | int,
+    callback: ("first" | "second" | int) -> ("first" | "second" | int),
     value: "first" | "second" | int,
 ) -> "first" | "second" | int {
     callback(value)
 }
 
 function call_overlapping_container_union_callback(
-    callback: (int[] | string[]) -> int[] | string[],
+    callback: (int[] | string[]) -> (int[] | string[]),
     value: int[] | string[],
 ) -> int[] | string[] {
     callback(value)
