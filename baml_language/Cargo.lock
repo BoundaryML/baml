@@ -583,6 +583,7 @@ version = "0.2.5"
 dependencies = [
  "anyhow",
  "baml_release",
+ "baml_tls",
  "console",
  "reqwest",
  "serde",
@@ -623,6 +624,7 @@ dependencies = [
  "libloading 0.8.9",
  "num-bigint",
  "prost",
+ "rustls",
  "serde_json",
  "sha2",
  "tokio",

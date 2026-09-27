@@ -21,15 +21,23 @@ license = { workspace = true }
 workspace = true
 
 [features]
-default = [ "self-update" ]
+default = [ "self-update", "aws-crypto" ]
+aws-crypto = [ "reqwest/rustls", "baml_release/aws-crypto", "baml_tls/aws-crypto" ]
+ring-crypto = [ "reqwest/rustls-no-provider", "baml_release/ring-crypto", "baml_tls/ring-crypto" ]
+external-crypto = [
+  "reqwest/rustls-no-provider",
+  "baml_release/external-crypto",
+  "baml_tls/external-crypto",
+]
 self-update = [ "baml_release/self-update" ]
 no-self-update = [ "baml_release/no-self-update" ]
 
 [dependencies]
-baml_release = { workspace = true, features = [ "aws-crypto" ] }
+baml_release = { workspace = true }
+baml_tls = { workspace = true }
 anyhow = { workspace = true }
 console = { workspace = true }
-reqwest = { workspace = true, features = [ "blocking", "rustls" ] }
+reqwest = { workspace = true, features = [ "blocking" ] }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
 toml = { workspace = true }

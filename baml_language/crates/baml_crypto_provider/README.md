@@ -24,9 +24,15 @@ or SymCrypt.
 cargo build -p bridge_python --no-default-features --features external-crypto
 # C library
 cargo build -p bridge_cffi --no-default-features --features bundle-http,external-crypto
-# CLI
-cargo build -p baml_cli --no-default-features --features external-crypto
+# CLI, and the host binary `baml pack` embeds
+cargo build -p baml_cli -p baml_pack_host --no-default-features --features external-crypto
+# `baml` wrapper
+cargo build -p baml --no-default-features --features self-update,external-crypto
 ```
+
+Every artifact takes the same three features, so one build can't mix
+libraries. The Rust SDK (`baml_bridge`) has them too; with `external-crypto`
+it only downloads the BAML library after the host has installed a provider.
 
 ## Supply the provider
 

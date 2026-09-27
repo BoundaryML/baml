@@ -10,8 +10,11 @@ cd "$(dirname "$0")/.."
 
 # package  features-that-turn-on-http
 targets=(
+  "baml -"
+  "baml_bridge -"
   "baml_cli -"
   "baml_lsp_server -"
+  "baml_pack_host -"
   "bridge_cffi bundle-http"
   "bridge_python bundle-http"
   "bridge_java bundle-http"

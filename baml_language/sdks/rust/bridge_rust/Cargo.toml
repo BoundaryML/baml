@@ -30,12 +30,21 @@ doctest = false
 # library resolved at runtime by `baml_bridge::loader` — one call path in
 # development and in production. Engine capabilities (HTTP stack, crypto)
 # are baked into the shared library when *it* is built.
+[features]
+default = [ "aws-crypto" ]
+aws-crypto = [ "rustls/aws_lc_rs" ]
+ring-crypto = [ "rustls/ring" ]
+# Links no crypto library: the host installs a rustls CryptoProvider before
+# the loader downloads the library.
+external-crypto = [  ]
+
 [dependencies]
 hex = { workspace = true }
 indexmap = { workspace = true }
 libloading = { workspace = true }
 num-bigint = { workspace = true }
 prost = { workspace = true }
+rustls = { workspace = true, features = [ "std" ] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }

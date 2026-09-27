@@ -232,7 +232,7 @@ jobs:
 
       - name: "external-crypto builds"
         run: |
-          cargo check --locked -p baml_cli --no-default-features --features external-crypto
+          cargo check --locked -p baml_cli -p baml_pack_host -p baml -p baml_bridge --no-default-features --features external-crypto
           cargo check --locked -p bridge_cffi --no-default-features --features bundle-http,external-crypto
         working-directory: baml_language
 

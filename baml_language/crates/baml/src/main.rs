@@ -1596,6 +1596,7 @@ fn http_client() -> Result<reqwest::blocking::Client> {
 }
 
 fn http_client_with_timeout(timeout: Duration) -> Result<reqwest::blocking::Client> {
+    baml_tls::ensure_crypto_provider()?;
     reqwest::blocking::Client::builder()
         .connect_timeout(timeout.min(Duration::from_secs(10)))
         .timeout(timeout)

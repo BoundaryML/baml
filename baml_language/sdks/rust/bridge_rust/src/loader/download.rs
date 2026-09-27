@@ -31,6 +31,7 @@ pub(super) fn download_library(
         dest_path.display()
     ));
 
+    ensure_crypto_provider()?;
     let agent = http_agent(&env.version);
 
     let expected_checksum = match fetch_checksum(&agent, &checksum_url, filename) {
@@ -163,6 +164,28 @@ pub(super) fn download_library(
         dest_path.display()
     ));
     Ok(())
+}
+
+/// ureq panics without a rustls crypto provider. Keep one the host installed;
+/// otherwise install the one this build bundles.
+fn ensure_crypto_provider() -> Result<(), LoaderError> {
+    use rustls::crypto::CryptoProvider;
+    if CryptoProvider::get_default().is_none() {
+        // An error means another thread installed one first; that one stands.
+        #[cfg(feature = "ring-crypto")]
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        #[cfg(all(feature = "aws-crypto", not(feature = "ring-crypto")))]
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+    }
+    match CryptoProvider::get_default() {
+        Some(_) => Ok(()),
+        None => Err(LoaderError::DownloadFailed(
+            "no TLS crypto provider: this build links no crypto library (`external-crypto`). \
+             Install a rustls CryptoProvider with `CryptoProvider::install_default` before \
+             loading BAML"
+                .to_string(),
+        )),
+    }
 }
 
 fn http_agent(version: &str) -> ureq::Agent {
