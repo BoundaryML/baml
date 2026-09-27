@@ -19,6 +19,7 @@ targets=(
   "bridge_python bundle-http"
   "bridge_java bundle-http"
   "bridge_swift bundle-http"
+  "bridge_typescript bundle-http"
 )
 
 has() { # has <package> <features> <crate>

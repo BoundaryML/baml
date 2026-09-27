@@ -24,6 +24,8 @@ or SymCrypt.
 cargo build -p bridge_python --no-default-features --features external-crypto
 # C library
 cargo build -p bridge_cffi --no-default-features --features bundle-http,external-crypto
+# Node addon
+cargo build -p bridge_typescript --no-default-features --features bundle-http,external-crypto
 # CLI, and the host binary `baml pack` embeds
 cargo build -p baml_cli -p baml_pack_host --no-default-features --features external-crypto
 # `baml` wrapper
