@@ -78,6 +78,8 @@ impl Product {
 pub enum FetchError {
     #[error("network error fetching {url}: {source}")]
     Network { url: String, source: reqwest::Error },
+    #[error(transparent)]
+    NoCryptoProvider(#[from] baml_tls::NoCryptoProvider),
     #[error("HTTP {status} fetching {url}")]
     HttpStatus {
         url: String,
@@ -401,6 +403,7 @@ pub fn parse_release_checksum(checksum_text: &str, archive_name: &str) -> Result
 }
 
 fn download_bytes(url: &str) -> Result<Vec<u8>, FetchError> {
+    baml_tls::ensure_crypto_provider()?;
     let client = reqwest::blocking::Client::builder()
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_mins(10))

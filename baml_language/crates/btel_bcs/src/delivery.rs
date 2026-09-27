@@ -546,10 +546,7 @@ impl BcsDelivery {
         on_failure: impl Fn(DeliveryError) + Send + Sync + 'static,
     ) -> Result<Self, DeliveryError> {
         config.validate()?;
-        #[cfg(feature = "ring-crypto")]
-        if rustls::crypto::CryptoProvider::get_default().is_none() {
-            let _ = rustls::crypto::ring::default_provider().install_default();
-        }
+        baml_tls::ensure_crypto_provider().map_err(|_| DeliveryError::Http)?;
         let (sender, receiver) = mpsc::channel(config.max_pending_plans);
         let shared = Arc::new(Shared {
             state: Mutex::new(State {

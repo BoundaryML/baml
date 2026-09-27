@@ -26,7 +26,7 @@ self-update = [ "baml_release/self-update" ]
 no-self-update = [ "baml_release/no-self-update" ]
 
 [dependencies]
-baml_release = { workspace = true }
+baml_release = { workspace = true, features = [ "aws-crypto" ] }
 anyhow = { workspace = true }
 console = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking", "rustls" ] }

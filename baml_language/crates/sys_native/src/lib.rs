@@ -26,35 +26,27 @@ pub use sys_ops::{SysOps, io};
 pub use sys_types::{CallId, CompletionHandle, OpError, SysOp, SysOpContext, VmInternalError};
 
 // HTTPS — both the client (`fetch`/`send`) and the server (`build_acceptor`) —
-// needs a rustls crypto provider. Require one at compile time so `bundle-http`
-// can't silently ship without one, which would panic when building a rustls
-// `ServerConfig`/`ClientConfig` at runtime.
+// needs a rustls crypto provider. Require a source for one at compile time so
+// `bundle-http` can't ship without any.
 #[cfg(all(
     feature = "bundle-http",
     not(feature = "aws-crypto"),
-    not(feature = "ring-crypto")
+    not(feature = "ring-crypto"),
+    not(feature = "external-crypto")
 ))]
 compile_error!(
-    "feature `bundle-http` requires a rustls crypto provider: enable `aws-crypto` (the default) or `ring-crypto`"
+    "feature `bundle-http` requires a rustls crypto provider: enable `aws-crypto` (the default), `ring-crypto` or `external-crypto`"
 );
 
-#[cfg(all(feature = "bundle-http", feature = "ring-crypto"))]
-pub(crate) fn ensure_rustls_crypto_provider() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
+/// Installs the process's rustls crypto provider if none is yet. Call before
+/// building any TLS client or server config: without a provider, reqwest and
+/// rustls panic. An `external-crypto` build with no provider gets an error.
+#[cfg(feature = "bundle-http")]
+pub(crate) fn ensure_rustls_crypto_provider() -> Result<(), sys_types::VmBamlError> {
+    baml_tls::ensure_crypto_provider().map_err(|e| sys_types::VmBamlError::Io {
+        message: e.to_string(),
+    })
 }
-
-#[cfg(all(
-    feature = "bundle-http",
-    not(feature = "ring-crypto"),
-    feature = "aws-crypto"
-))]
-pub(crate) fn ensure_rustls_crypto_provider() {
-    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-}
-
-#[cfg(not(feature = "bundle-http"))]
-#[expect(dead_code)]
-pub(crate) fn ensure_rustls_crypto_provider() {}
 
 /// Where a program's relative paths resolve.
 ///

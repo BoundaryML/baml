@@ -374,6 +374,7 @@ mod tests {
 
     #[tokio::test]
     async fn response_is_bounded_and_errors_are_sanitized() {
+        baml_tls::ensure_crypto_provider().unwrap();
         let server = MockServer::start().await;
         let client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
@@ -411,6 +412,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn failures_are_advisory_rate_limited_and_worker_is_cancellable() {
+        baml_tls::ensure_crypto_provider().unwrap();
         let heartbeat = Heartbeat::new();
         heartbeat.configure(Some(policy())).unwrap();
         let start = Instant::now();
@@ -439,6 +441,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn stopped_worker_does_not_wait_for_interval() {
+        baml_tls::ensure_crypto_provider().unwrap();
         let heartbeat = Heartbeat::new();
         heartbeat.configure(Some(policy())).unwrap();
         let start = Instant::now();

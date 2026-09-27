@@ -27,6 +27,7 @@ protoc-bin-vendored = { workspace = true }
 default = [ "aws-crypto" ]
 aws-crypto = [ "bex_project/aws-crypto" ]
 ring-crypto = [ "bex_project/ring-crypto" ]
+external-crypto = [ "bex_project/external-crypto" ]
 
 [lints]
 workspace = true

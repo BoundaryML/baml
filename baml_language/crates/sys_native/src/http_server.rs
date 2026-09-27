@@ -273,7 +273,7 @@ fn build_acceptor(
     allow_http1: bool,
     allow_http2: bool,
 ) -> Result<TlsAcceptor, VmRustFnError> {
-    crate::ensure_rustls_crypto_provider();
+    crate::ensure_rustls_crypto_provider()?;
 
     let certs = cfg
         ._certificate

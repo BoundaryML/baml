@@ -22,10 +22,7 @@ const OBSERVATIONS: &str = include_str!("fixtures/cloud-v1/heartbeat/reordered-o
 
 #[tokio::test]
 async fn actual_sender_matches_fixed_heartbeat_wire_examples() {
-    #[cfg(feature = "ring-crypto")]
-    if rustls::crypto::CryptoProvider::get_default().is_none() {
-        let _ = rustls::crypto::ring::default_provider().install_default();
-    }
+    baml_tls::ensure_crypto_provider().unwrap();
     let fixture: Value = serde_json::from_str(SENDER).unwrap();
     assert_eq!(fixture["fixture_version"], 1);
     let url: reqwest::Url = fixture["url"].as_str().unwrap().parse().unwrap();

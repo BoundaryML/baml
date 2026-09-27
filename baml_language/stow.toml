@@ -87,8 +87,9 @@ name = "baml"
 # `fmt` is the formatter, `baml_fmt`, and its browser build, `baml_fmt_wasm`.
 approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "type", "query", "fmt"]
 # The type provider crate: `hir_ty` is one name (rust-analyzer's crate of
-# the same shape), not a prefix + word.
-approved_suffixes = ["artifact", "compiler2_hir_ty"]
+# the same shape), not a prefix + word. `crypto_provider` is the crate an
+# `external-crypto` build swaps out to supply its TLS crypto.
+approved_suffixes = ["artifact", "compiler2_hir_ty", "crypto_provider"]
 test_crate_exceptions = ["baml_tests"]
 embed_crates = ["bex_project"]
 # The Rust SDK runtime crate keeps the `bridge_rust` folder (mirroring

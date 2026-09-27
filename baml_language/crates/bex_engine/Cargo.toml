@@ -74,6 +74,7 @@ gc_profiling = [ "bex_heap/gc_profiling" ]
 # on the `[dev-dependencies]` entry above.
 aws-crypto = [ "sys_ops/aws-crypto", "btel_bcs/aws-crypto" ]
 ring-crypto = [ "sys_ops/ring-crypto", "btel_bcs/ring-crypto" ]
+external-crypto = [ "sys_ops/external-crypto", "btel_bcs/external-crypto" ]
 heap_debug = [
   "bex_vm/heap_debug",
   "bex_heap/heap_debug",

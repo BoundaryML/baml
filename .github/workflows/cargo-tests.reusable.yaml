@@ -189,6 +189,60 @@ jobs:
           path: baml_language/target/cargo-timings/cargo-timing-test-linux.html
           if-no-files-found: ignore
 
+  # `aws-crypto`, `ring-crypto` and `external-crypto` must each link only their
+  # own crypto library (none, for external), and `external-crypto` must build
+  # and report a missing provider as an error. The workspace jobs above run
+  # with `--all-features`, which unifies all three and can't see either.
+  crypto-backends:
+    name: "crypto backends"
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    timeout-minutes: 25
+    steps:
+      - uses: useblacksmith/checkout@v1
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Install tools (mise)"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          shared-key: "linux-cargo"
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      - name: "Each backend links only its own crypto library"
+        run: ./scripts/check-crypto-backends.sh
+        working-directory: baml_language
+
+      - name: "external-crypto builds"
+        run: |
+          cargo check --locked -p baml_cli --no-default-features --features external-crypto
+          cargo check --locked -p bridge_cffi --no-default-features --features bundle-http,external-crypto
+        working-directory: baml_language
+
+      - name: "Provider selection, per backend"
+        run: |
+          cargo test --locked -p baml_tls
+          cargo test --locked -p baml_tls --no-default-features --features ring-crypto
+          cargo test --locked -p baml_tls --no-default-features --features external-crypto
+        working-directory: baml_language
+
   cargo-test-linux-musl:
     name: "cargo test (x86_64-unknown-linux-musl)"
     runs-on: blacksmith-16vcpu-ubuntu-2404

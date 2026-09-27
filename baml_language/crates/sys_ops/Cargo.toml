@@ -13,6 +13,7 @@ default = [ "aws-crypto" ]
 # `sys_llm`, but downstream crates (bex_engine) still name these features.
 aws-crypto = [  ]
 ring-crypto = [  ]
+external-crypto = [  ]
 
 [build-dependencies]
 baml_builtins2 = { workspace = true }

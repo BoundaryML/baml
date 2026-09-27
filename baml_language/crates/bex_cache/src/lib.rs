@@ -1170,6 +1170,13 @@ impl RemoteCache {
             }
             return None;
         }
+        if let Err(e) = baml_tls::ensure_crypto_provider() {
+            #[allow(clippy::print_stderr)]
+            {
+                eprintln!("warning: BAML_CACHE_REMOTE ignored — {e}");
+            }
+            return None;
+        }
         let client = reqwest::blocking::Client::builder()
             .connect_timeout(std::time::Duration::from_millis(500))
             .timeout(std::time::Duration::from_secs(2))

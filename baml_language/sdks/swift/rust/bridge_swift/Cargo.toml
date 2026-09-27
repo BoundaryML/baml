@@ -21,6 +21,7 @@ aws-crypto = [ "bundle-http", "bridge_cffi/aws-crypto" ]
 # Apple targets can also use ring; the iOS feasibility work validated
 # ring + rustls-platform-verifier on-device.
 ring-crypto = [ "bundle-http", "bridge_cffi/ring-crypto" ]
+external-crypto = [ "bundle-http", "bridge_cffi/external-crypto" ]
 
 [dependencies]
 bridge_cffi = { workspace = true }

@@ -41,14 +41,19 @@ const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(5);
 const DEVICE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:device_code";
 
 /// A blocking HTTP client with [`REQUEST_TIMEOUT`] applied.
-pub(crate) fn http_client() -> reqwest::blocking::Client {
-    reqwest::blocking::Client::builder()
+///
+/// Errors:
+/// - When no TLS crypto provider is available (an `external-crypto` build
+///   whose host installed none).
+pub(crate) fn http_client() -> Result<reqwest::blocking::Client> {
+    baml_tls::ensure_crypto_provider()?;
+    Ok(reqwest::blocking::Client::builder()
         .timeout(REQUEST_TIMEOUT)
         .build()
         // Falls back to default settings only if the builder ever fails,
         // which requires a broken TLS backend; a login attempt should still
         // proceed rather than abort here.
-        .unwrap_or_default()
+        .unwrap_or_default())
 }
 
 fn env_or(var: &str, default: &str) -> String {
@@ -362,7 +367,7 @@ fn poll_token_endpoint(
     form: &[(&str, &str)],
     server_interval: Option<u64>,
 ) -> Result<TokenResponse> {
-    let client = http_client();
+    let client = http_client()?;
     let deadline = std::time::Instant::now() + LOGIN_TIMEOUT;
     let mut interval = server_interval
         .map(Duration::from_secs)
@@ -431,7 +436,7 @@ struct TokenUser {
 /// - On network failure, a non-success status (the response body is
 ///   included in the error), or a body that fails to deserialize as `T`.
 fn post_form<T: serde::de::DeserializeOwned>(url: &str, form: &[(&str, &str)]) -> Result<T> {
-    let client = http_client();
+    let client = http_client()?;
     let resp = client
         .post(url)
         .header("content-type", "application/x-www-form-urlencoded")

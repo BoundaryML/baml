@@ -2857,7 +2857,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         SysOpOutput::async_op(async move {
-            crate::ensure_rustls_crypto_provider();
+            crate::ensure_rustls_crypto_provider()?;
             let client = reqwest::Client::new();
             let response = apply_http_timeout(client.get(&url), &timeout_nanos)
                 .send()
@@ -2899,7 +2899,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 }
             })?;
 
-            crate::ensure_rustls_crypto_provider();
+            crate::ensure_rustls_crypto_provider()?;
             let client = reqwest::Client::new();
             let mut builder = client.request(method, &request.url);
 
@@ -2960,7 +2960,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 }
             })?;
 
-            crate::ensure_rustls_crypto_provider();
+            crate::ensure_rustls_crypto_provider()?;
             let client = reqwest::Client::new();
             let mut builder = client.request(method, &request.url);
 
@@ -3521,7 +3521,7 @@ impl io::IoNamespaceWs for NativeSysOps {
 
         let timeout = timeout_from_nanos(&timeout_nanos);
         SysOpOutput::async_op(async move {
-            crate::ensure_rustls_crypto_provider();
+            crate::ensure_rustls_crypto_provider()?;
 
             let mut request =
                 url.as_str()
