@@ -169,6 +169,12 @@ impl BexWork {
         }
     }
 
+    /// Whether any root call, task or unsettled future still holds a guard.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn has_work(&self) -> bool {
+        self.lock().work != 0
+    }
+
     pub(crate) fn cleanup_version(&self) -> CleanupVersion {
         self.version(&self.lock())
     }

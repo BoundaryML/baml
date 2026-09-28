@@ -59,6 +59,32 @@ export interface UseTelemetryOptions {
 const RUNNING_POLL_MS = 2000;
 
 /**
+ * An execution with no recorded end that started longer ago than this is
+ * more likely one whose writer stopped than one still in flight. Nothing
+ * says which, so it is re-read rarely rather than never: a long run still
+ * shows its end, and a dead one does not cost a query every two seconds.
+ */
+const RECENT_INCOMPLETE_MS = 10 * 60_000;
+const STALE_POLL_MS = 30_000;
+
+/** How often to re-read the list, or null when nothing can change. */
+export function pollInterval(
+  rows: readonly Pick<ExecutionRow, 'status' | 'startedMs'>[],
+  now: number,
+): number | null {
+  let incomplete = false;
+  for (const row of rows) {
+    if (row.status === 'running') return RUNNING_POLL_MS;
+    if (row.status !== 'incomplete') continue;
+    if (row.startedMs != null && now - row.startedMs < RECENT_INCOMPLETE_MS) {
+      return RUNNING_POLL_MS;
+    }
+    incomplete = true;
+  }
+  return incomplete ? STALE_POLL_MS : null;
+}
+
+/**
  * The server bounds telemetry work per session, and says so with this code
  * when a request arrives while its share is already running. The usual
  * cause is this hook's own polling outrunning a slow query, so a refresh
@@ -90,6 +116,10 @@ export function useTelemetry({
   // must not overwrite what is on screen.
   const listRequest = useRef(0);
   const detailRequest = useRef(0);
+  // A poll that fires while a read is still running would replace it, and
+  // its answer would be discarded: slow reads could never land.
+  const listPending = useRef(false);
+  const detailPending = useRef(false);
   // Read inside the fetch effects to decide whether a spinner is warranted,
   // without making them re-run when the data changes.
   const executionsRef = useRef(executions);
@@ -104,6 +134,7 @@ export function useTelemetry({
   useEffect(() => {
     if (!active || !project) return;
     const request = ++listRequest.current;
+    listPending.current = true;
     // Loading means "nothing to show yet", not "a request is in flight".
     // Polling a running execution refetches every couple of seconds, and
     // flagging each of those would flash a spinner over a populated list.
@@ -122,7 +153,9 @@ export function useTelemetry({
         setError(cause instanceof Error ? cause.message : String(cause));
       })
       .finally(() => {
-        if (request === listRequest.current) setLoading(false);
+        if (request !== listRequest.current) return;
+        listPending.current = false;
+        setLoading(false);
       });
   }, [active, client, project, reloadToken, revision]);
 
@@ -133,6 +166,7 @@ export function useTelemetry({
       return;
     }
     const request = ++detailRequest.current;
+    detailPending.current = true;
     setLoading((current) => current || telemetryRef.current == null);
     setError(null);
     client
@@ -147,7 +181,9 @@ export function useTelemetry({
         setError(cause instanceof Error ? cause.message : String(cause));
       })
       .finally(() => {
-        if (request === detailRequest.current) setLoading(false);
+        if (request !== detailRequest.current) return;
+        detailPending.current = false;
+        setLoading(false);
       });
   }, [active, client, project, selectedId, reloadToken]);
 
@@ -159,16 +195,19 @@ export function useTelemetry({
   }, [project]);
 
   const rows = useMemo(() => executions.map(toExecutionRow), [executions]);
-  const anyRunning = rows.some((row) => row.status === 'running');
+  // An incomplete execution may still be recording, and only a re-read can
+  // show its end arriving. Every re-read recomputes this with a fresh clock.
+  const poll = useMemo(() => pollInterval(rows, Date.now()), [rows]);
 
   useEffect(() => {
-    if (!active || !project || !anyRunning) return;
-    const timer = setInterval(
-      () => setReloadToken((token) => token + 1),
-      RUNNING_POLL_MS,
-    );
+    if (!active || !project || poll == null) return;
+    const timer = setInterval(() => {
+      if (!listPending.current && !detailPending.current) {
+        setReloadToken((token) => token + 1);
+      }
+    }, poll);
     return () => clearInterval(timer);
-  }, [active, project, anyRunning]);
+  }, [active, project, poll]);
   const evidence = useMemo(
     () => (telemetry ? buildEvidence(telemetry, { llmFunctions }) : null),
     [llmFunctions, telemetry],

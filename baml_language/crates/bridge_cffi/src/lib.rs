@@ -175,22 +175,25 @@ impl PreparedRuntime {
 
 /// Initialize the global runtime from serialized BAML bytecode.
 ///
-/// The payload is a versioned artifact containing `bex_vm_types::Program`.
-/// Validation, decoding, and engine construction live behind
+/// The payload is a versioned artifact containing `bex_vm_types::Program`,
+/// either raw or in the embedded encoding generated SDKs carry
+/// (`baml_artifact::encode_embedded`), which is decoded here so host languages
+/// pass it through untouched. Validation, decoding, and engine construction
+/// live behind
 /// `bex_project::prepare_from_bytecode` so the bridge stays on the `bex_project`
 /// surface rather than reaching into bex internals. Artifact validation runs
 /// even when the optional generated `baml.toml` metadata is absent.
-pub fn initialize_runtime_from_bytecode_with_sys_ops(
+pub fn initialize_runtime_from_blob_with_sys_ops(
     bytecode: &[u8],
     embedded_baml_toml: Option<&str>,
     sys_ops: sys_ops::SysOps,
 ) -> Result<Arc<dyn Bex>, BridgeError> {
-    let runtime = prepare_runtime_from_bytecode(bytecode, embedded_baml_toml, sys_ops)?.build()?;
+    let runtime = prepare_runtime_from_blob(bytecode, embedded_baml_toml, sys_ops)?.build()?;
     platform::replace_runtime(runtime.clone())?;
     Ok(runtime)
 }
 
-fn prepare_runtime_from_bytecode(
+fn prepare_runtime_from_blob(
     bytecode: &[u8],
     embedded_baml_toml: Option<&str>,
     sys_ops: sys_ops::SysOps,
@@ -208,7 +211,14 @@ fn prepare_runtime_from_bytecode(
         "BAML startup failed: generated SDK bytecode could not be loaded.\n\n`baml_sdk`{generated} could not be loaded by {} {}: ",
         bridge.bridge_runtime_name, bridge.bridge_runtime_version,
     );
-    let runtime = bex_project::prepare_from_bytecode(bytecode, sys_ops)
+    let bytecode: std::borrow::Cow<'_, [u8]> = if bytecode.starts_with(baml_artifact::MAGIC) {
+        bytecode.into()
+    } else {
+        baml_artifact::decode_embedded(baml_artifact::ArtifactKind::Program, bytecode)
+            .map_err(|error| BridgeError::Startup(format!("{context}{error}")))?
+            .into()
+    };
+    let runtime = bex_project::prepare_from_bytecode(&bytecode, sys_ops)
         .map_err(|error| BridgeError::Startup(format!("{context}{error}")))?;
     Ok(PreparedRuntime {
         runtime,
@@ -414,13 +424,13 @@ pub async fn shutdown_runtime() -> Result<(), BridgeError> {
 
 /// Initialize the native process-global runtime from serialized BAML bytecode.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn initialize_runtime_from_bytecode(
+pub fn initialize_runtime_from_blob(
     bytecode: &[u8],
     embedded_baml_toml: Option<&str>,
 ) -> Result<Arc<dyn Bex>, BridgeError> {
     use sys_native::SysOpsExt as _;
 
-    initialize_runtime_from_bytecode_with_sys_ops(
+    initialize_runtime_from_blob_with_sys_ops(
         bytecode,
         embedded_baml_toml,
         sys_ops::SysOps::native(),

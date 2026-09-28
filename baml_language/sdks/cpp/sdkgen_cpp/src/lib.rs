@@ -2444,7 +2444,7 @@ fn render_inlinedbaml(
          for (const BamlBytecodeChunk& chunk : kBamlBytecodeChunks) {{\n      \
          bytecode.append(chunk.data, chunk.len);\n    \
          }}\n    \
-         ::baml::initialize_runtime_from_bytecode(\n        \
+         ::baml::initialize_runtime_from_blob(\n        \
          reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size(),\n        \
          \"{version}\");\n  \
          }});\n\
@@ -2453,12 +2453,12 @@ fn render_inlinedbaml(
     );
     if embedded_baml_toml.is_some() {
         let legacy_call = format!(
-            "::baml::initialize_runtime_from_bytecode(\n        reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size(),\n        \"{}\");",
+            "::baml::initialize_runtime_from_blob(\n        reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size(),\n        \"{}\");",
             baml_version::CANONICAL_VERSION
         );
         buf = buf.replace(
             &legacy_call,
-            "::baml::initialize_runtime_from_bytecode_with_metadata(\n        reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size(),\n        kEmbeddedBamlToml);",
+            "::baml::initialize_runtime_from_blob_with_metadata(\n        reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size(),\n        kEmbeddedBamlToml);",
         );
     }
     let _ = writeln!(buf, "}}  // namespace {detail}");
@@ -2485,7 +2485,7 @@ mod bytecode_escape_tests {
         );
 
         assert!(output.contains("const char kEmbeddedBamlToml[]"));
-        assert!(output.contains("initialize_runtime_from_bytecode_with_metadata("));
+        assert!(output.contains("initialize_runtime_from_blob_with_metadata("));
         assert!(output.contains("kEmbeddedBamlToml);"));
     }
 

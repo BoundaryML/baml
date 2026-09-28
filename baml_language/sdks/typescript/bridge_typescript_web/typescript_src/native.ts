@@ -385,7 +385,7 @@ export class HostSpanManager {
  * an initializer failure is reported by calls until another runtime is staged.
  */
 export class BamlRuntime {
-  static initializeRuntimeFromBytecode(bytecode: Uint8Array, embeddedBamlToml?: string): BamlRuntime {
+  static initializeRuntimeFromBlob(bytecode: string | Uint8Array, embeddedBamlToml?: string): BamlRuntime {
     ensureWebSysopsConfigured();
     try {
       stageRuntimeBytecode(bytecode, embeddedBamlToml);

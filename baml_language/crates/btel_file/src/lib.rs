@@ -5,9 +5,11 @@
 //! zero-padded `.btel` sequence names; `.btel.part` files are never complete records.
 //! Files are written, closed and renamed without forcing storage synchronization.
 //! Successful finish means every accepted file completed that procedure. Recent
-//! data can be lost or damaged after a machine crash or power loss. It does not imply
-//! `RecordingEnd`, settled clock validity, or complete metadata. Accepted CAS blobs
-//! are written before later recording files on the same queue.
+//! data can be lost or damaged after a machine crash or power loss. The writer
+//! does not inspect `RecordingEnd`: the publisher decides whether its last file
+//! ends the recording, and that file is written after every earlier one. Success
+//! does not imply the end was produced or metadata is complete. Accepted CAS
+//! blobs are written before later recording files on the same queue.
 //!
 //! A full queue blocks the delivery worker until capacity is available. The queue
 //! bounds retained files and snapshot owners; the publisher seals on size or elapsed time.
@@ -31,7 +33,10 @@ pub use cas::cas_path;
 mod publisher;
 pub use publisher::LocalPublisher;
 mod reader;
-pub use reader::{ReadIssue, RecordingRead, read_directory};
+pub use reader::{
+    ReadIssue, RecordingRead, parse_recording_id, parse_sequence_file_name, read_directory,
+    validate_file,
+};
 
 /// Terminal delivery errors retain the path and operating-system explanation.
 #[derive(Clone, Debug, Eq, PartialEq)]

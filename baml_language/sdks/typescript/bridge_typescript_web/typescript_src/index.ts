@@ -18,8 +18,8 @@ export { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInv
 export { BamlPrompt, decodeCallResult, encodeCallArgs } from "./shared/proto.js";
 export type { BamlPromptCallOptions, BamlPromptMessage } from "./shared/proto.js";
 
-export function initializeRuntimeFromBytecode(bytecode: Uint8Array, embeddedBamlToml?: string): void {
-  BamlRuntime.initializeRuntimeFromBytecode(bytecode, embeddedBamlToml);
+export function initializeRuntimeFromBlob(bytecode: string | Uint8Array, embeddedBamlToml?: string): void {
+  BamlRuntime.initializeRuntimeFromBlob(bytecode, embeddedBamlToml);
 }
 
 export function initializeRuntime(srcDir: string, files: Record<string, string>): void {

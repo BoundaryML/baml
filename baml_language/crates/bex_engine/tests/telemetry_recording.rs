@@ -158,7 +158,8 @@ async fn trace_capture_reaches_cas_with_exact_values() {
 }
 
 fn read_string_capture(root: &std::path::Path, id: proto::SnapshotId, args: bool) -> String {
-    use borsh::BorshDeserialize;
+    use btel_snapshot::{DecodeLimits, DecodedRoot, DecodedValue, decode_blob};
+
     let mut digest = [0; 16];
     digest[..8].copy_from_slice(&id.low.to_le_bytes());
     digest[8..].copy_from_slice(&id.high.to_le_bytes());
@@ -167,28 +168,43 @@ fn read_string_capture(root: &std::path::Path, id: proto::SnapshotId, args: bool
         btel_snapshot::SnapshotId::from_bytes(digest),
     );
     let bytes = std::fs::read(path).unwrap();
-    let mut reader = bytes.as_slice();
-    // Decode the scalar subset using the same Borsh wire primitives as snapshot encoding tests.
-    assert_eq!(
-        <[u8; 8]>::deserialize_reader(&mut reader).unwrap(),
-        btel_snapshot::BLOB_MAGIC
-    );
-    assert_eq!(
-        u32::deserialize_reader(&mut reader).unwrap(),
-        btel_snapshot::BLOB_VERSION
-    );
-    assert_eq!(<[u8; 16]>::deserialize_reader(&mut reader).unwrap(), digest);
-    assert!(!bool::deserialize_reader(&mut reader).unwrap());
-    assert_eq!(u32::deserialize_reader(&mut reader).unwrap(), 0);
-    assert_eq!(u8::deserialize_reader(&mut reader).unwrap(), u8::from(args));
-    if args {
-        assert_eq!(u64::deserialize_reader(&mut reader).unwrap(), 1);
-        assert_eq!(u32::deserialize_reader(&mut reader).unwrap(), 1);
-    }
-    assert_eq!(u8::deserialize_reader(&mut reader).unwrap(), 5);
-    let value = String::deserialize_reader(&mut reader).unwrap();
-    assert!(reader.is_empty());
-    value
+    let snapshot = decode_blob(&bytes, &DecodeLimits::default()).unwrap();
+    assert_eq!(snapshot.id.as_bytes(), &digest);
+    assert!(!snapshot.limited);
+    assert!(snapshot.objects.is_empty());
+    let value = match (snapshot.root, args) {
+        (DecodedRoot::Value(value), false) => value,
+        (
+            DecodedRoot::FunctionArgs {
+                parameter_count,
+                mut slots,
+            },
+            true,
+        ) => {
+            assert_eq!(parameter_count, 1);
+            assert_eq!(slots.len(), 1);
+            slots.remove(0)
+        }
+        _ => panic!("unexpected capture root"),
+    };
+    let DecodedValue::String(value) = value else {
+        panic!("expected captured string");
+    };
+    value.into()
+}
+
+/// Every entry of a recording directory with its bytes, sorted by name:
+/// completed files, and any unfinished `.part` file a writer left behind.
+fn recording_bytes(directory: &std::path::Path) -> Vec<(std::ffi::OsString, Vec<u8>)> {
+    let mut entries: Vec<_> = std::fs::read_dir(directory)
+        .unwrap()
+        .map(|entry| {
+            let entry = entry.unwrap();
+            (entry.file_name(), std::fs::read(entry.path()).unwrap())
+        })
+        .collect();
+    entries.sort();
+    entries
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -249,15 +265,49 @@ async fn execution_reaches_encoded_files_and_shutdown_drains_once() {
     .expect("shutdown must drain without a heap-permit deadlock");
     assert_eq!(engine.telemetry_result(), Some(Ok(())));
     let directory = engine.telemetry_recording_directory().unwrap();
-    let files = btel_file::read_directory(directory).unwrap().files;
-    let count = files.len();
+    let read = btel_file::read_directory(directory).unwrap();
+    // No gap, unfinished file, invalid file or file after the end.
+    assert!(read.issues.is_empty(), "{:?}", read.issues);
+    let written = recording_bytes(directory);
+    // A later shutdown writes, replays and rewrites nothing, end included.
     engine.shutdown().await;
+    assert_eq!(engine.telemetry_result(), Some(Ok(())));
     assert_eq!(
-        btel_file::read_directory(directory).unwrap().files.len(),
-        count,
-        "shutdown must not replay output"
+        recording_bytes(directory),
+        written,
+        "shutdown must not replay or rewrite output"
     );
+    let files = read.files;
+    let count = files.len();
     assert!(count > 0);
+    // Both threads finished before shutdown, so the run settled: the
+    // concurrent shutdowns end the recording once, in its last file, whose
+    // sequence declares how many files there are.
+    let ends: Vec<u64> = files
+        .iter()
+        .filter(|file| file.end.is_some())
+        .map(|file| file.sequence)
+        .collect();
+    assert_eq!(
+        ends,
+        [count as u64],
+        "exactly one end marker, on the final file"
+    );
+    assert!(read.has_recording_end);
+    // The end is only written once every recorded clock is final.
+    let defined: std::collections::BTreeSet<u64> = files
+        .iter()
+        .flat_map(|file| &file.definitions.as_ref().unwrap().clock_epochs)
+        .map(|epoch| epoch.epoch_id)
+        .collect();
+    let finals: std::collections::BTreeSet<u64> = files
+        .iter()
+        .flat_map(|file| &file.clock_states.as_ref().unwrap().states)
+        .filter(|state| state.r#final)
+        .map(|state| state.epoch_id)
+        .collect();
+    assert!(!defined.is_empty());
+    assert_eq!(defined, finals, "every recorded run's clock is final");
     let mut aggregates = HashMap::<u64, u64>::new();
     let mut completions = HashMap::<u64, u64>::new();
     let mut announcements = 0;
@@ -267,8 +317,6 @@ async fn execution_reaches_encoded_files_and_shutdown_drains_once() {
         let header = file.header.unwrap();
         assert_eq!(header.recording_id, id.as_bytes());
         assert_eq!(header.source_snapshot_id, source.map(|s| s.to_vec()));
-        // Draining is not a claim of settled epochs or durable sink delivery.
-        assert!(file.end.is_none());
         for row in file.aggregates.unwrap().entries {
             *aggregates.entry(row.node).or_default() += row.count;
         }

@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use btel_bcs::{
     delivery::{BcsDelivery, DeliveryConfig, DeliveryError},
+    proto::CloudUploadEnvelope,
     publisher::{CloudPublisher, CloudPublisherConfig},
 };
 use btel_processor::{AggregateDelta, Publisher};
@@ -130,6 +131,11 @@ async fn windows_cross_batches_deduplicate_and_finish_drains_the_final_partial_f
             .collect::<Vec<_>>(),
         [(1, 3), (2, 3), (3, 1)]
     );
+    // The final partial window is the terminal file; finishing twice adds nothing.
+    assert_eq!(
+        recording_ends(&requests),
+        [(1, false), (2, false), (3, true)]
+    );
     assert_eq!(
         prepares
             .iter()
@@ -161,13 +167,40 @@ async fn one_chunk_can_stage_multiple_windows_without_publishing_while_borrowed(
     assert_eq!(pool.stats().in_use, 0);
     let requests = server.received_requests().await.unwrap();
     let prepares = prepare_requests(&requests);
-    assert_eq!(prepares.len(), 3);
-    assert!(prepares.iter().all(|request| request.candidates.len() == 2));
+    // Every window was already sealed: the terminal file carries only the end.
+    assert_eq!(
+        prepares
+            .iter()
+            .map(|request| request.candidates.len())
+            .collect::<Vec<_>>(),
+        [2, 2, 2, 0]
+    );
+    assert_eq!(
+        recording_ends(&requests),
+        [(1, false), (2, false), (3, false), (4, true)]
+    );
+}
+
+/// `(sequence, carries RecordingEnd)` for each uploaded recording file.
+fn recording_ends(requests: &[Request]) -> Vec<(u64, bool)> {
+    let mut ends: Vec<_> = requests
+        .iter()
+        .filter(|request| request.method.as_str() == "PUT")
+        .filter_map(|request| {
+            let envelope = CloudUploadEnvelope::decode(request.body.as_slice()).unwrap();
+            let file =
+                btel_recorder::proto::RecordingFile::decode(envelope.recording_file?.as_slice())
+                    .unwrap();
+            Some((file.sequence, file.end.is_some()))
+        })
+        .collect();
+    ends.sort_unstable();
+    ends
 }
 
 #[tokio::test]
 async fn delivery_failure_clears_the_open_window_and_returns_pool_owners() {
-    let (_server, delivery, mut publisher, pool) = setup(CloudPublisherConfig::default()).await;
+    let (server, delivery, mut publisher, pool) = setup(CloudPublisherConfig::default()).await;
     capture(&mut publisher, &pool, 1);
     publisher.after_batch(1);
     assert_eq!(pool.stats().in_use, 1);
@@ -177,6 +210,8 @@ async fn delivery_failure_clears_the_open_window_and_returns_pool_owners() {
     assert!(publisher.deadline().is_none());
     publisher.finish();
     assert_eq!(finish(delivery).await, Err(DeliveryError::Capacity));
+    // A failed recording is never sealed.
+    assert!(recording_ends(&server.received_requests().await.unwrap()).is_empty());
 }
 
 #[tokio::test]

@@ -148,6 +148,9 @@ fn all_snapshot_tags_preserve_v2_bytes_and_content_ids() {
         snapshot.write_blob(&mut bytes).unwrap();
         assert_eq!(hex(&bytes), expected.trim());
         assert_eq!(&bytes[12..28], snapshot.id().as_bytes());
+        let decoded = btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default())
+            .expect("the reader must verify the frozen v2 fixture");
+        assert_eq!(decoded.id, snapshot.id());
         drop(snapshot);
         assert_eq!(pool.stats().in_use, 0);
     }

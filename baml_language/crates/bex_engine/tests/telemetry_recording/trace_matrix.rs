@@ -154,9 +154,9 @@ impl Recording {
         let id = capture_id(id);
         let path = btel_file::cas_path(&self.directory.path().join("cas"), id);
         let bytes = std::fs::read(path).unwrap();
-        assert_eq!(&bytes[..8], &btel_snapshot::BLOB_MAGIC);
-        assert_eq!(&bytes[8..12], &btel_snapshot::BLOB_VERSION.to_le_bytes());
-        assert_eq!(&bytes[12..28], id.as_bytes());
+        let decoded =
+            btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default()).unwrap();
+        assert_eq!(decoded.id, id);
         bytes
     }
 

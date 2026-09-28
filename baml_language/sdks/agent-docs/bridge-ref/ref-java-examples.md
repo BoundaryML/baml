@@ -111,8 +111,7 @@ public final class Baml {
             if (in == null) {
                 throw new IllegalStateException("baml_sdk/inlinedbaml.b64 not found on the classpath — …");
             }
-            byte[] b64 = in.readAllBytes();
-            byte[] bytecode = java.util.Base64.getMimeDecoder().decode(b64);
+            byte[] bytecode = in.readAllBytes();
             baml_bridge.BamlFfi.initFromBytecode(bytecode);
         } catch (java.io.IOException e) {
             throw new java.io.UncheckedIOException("failed to read embedded BAML bytecode", e);
@@ -900,9 +899,9 @@ conditionally-always via `__traceback__`). The generated `Person` /
 
 The generated Java SDK root includes:
 
-- **`inlinedbaml.b64`** — the compiler-produced bytecode as a base64 classpath
-  resource, decoded in `Baml.java`'s static initializer via
-  `Base64.getMimeDecoder()` (`lib.rs:11-13,320-326`; `Baml.java:450-460`);
+- **`inlinedbaml.b64`** — the compiler-produced bytecode as a base64-encoded LZ4
+  classpath resource, which `Baml.java`'s static initializer passes unchanged to
+  `BamlFfi.initFromBytecode` for native decoding;
 - **`Baml.java`** — the runtime anchor whose `static {}` block registers the type
   map (`registerClass` / `registerEnum` / `registerUnion`, carrying field
   declaration order + per-field decode descriptors) and calls

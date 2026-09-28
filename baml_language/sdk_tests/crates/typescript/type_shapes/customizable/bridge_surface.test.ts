@@ -41,7 +41,7 @@ const packageRootExports = [
   "getTypeMap",
   "getVersion",
   "initializeRuntime",
-  "initializeRuntimeFromBytecode",
+  "initializeRuntimeFromBlob",
   "lowerTypeToWireTy",
   "newFunctionCall",
   "reflectType",

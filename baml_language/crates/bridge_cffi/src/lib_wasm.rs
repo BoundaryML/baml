@@ -30,12 +30,12 @@ pub fn configure_workerd_runtime() {
     bex_project::configure_workerd_runtime();
 }
 
-pub fn stage_runtime_from_bytecode_with_sys_ops(
+pub fn stage_runtime_from_blob_with_sys_ops(
     bytecode: &[u8],
     embedded_baml_toml: Option<&str>,
     sys_ops: sys_ops::SysOps,
 ) -> Result<(), BridgeError> {
-    stage_runtime(crate::prepare_runtime_from_bytecode(
+    stage_runtime(crate::prepare_runtime_from_blob(
         bytecode,
         embedded_baml_toml,
         sys_ops,
