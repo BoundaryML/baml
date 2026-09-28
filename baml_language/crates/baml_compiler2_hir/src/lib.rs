@@ -155,22 +155,7 @@ pub struct FileAst {
 // query gets early-cutoff (dependents skip re-running when the AST is
 // unchanged) rather than the always-`true` behavior of a no-eq value.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for FileAst {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for FileAst {}
 
 /// CST → AST lowering for one file, computed once and shared.
 ///

@@ -1315,20 +1315,7 @@ impl Default for WorkingResult<'_> {
 // `infer_body` but reproduces the same result cuts off every downstream
 // consumer.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for InferenceResult<'_> {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        unsafe {
-            let changed = *old_pointer != new_value;
-            if changed {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            changed
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for InferenceResult<'_> {}
 
 fn infer_function_body_cycle_initial<'db>(
     _db: &'db dyn baml_compiler2_hir::Db,

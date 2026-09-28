@@ -80,23 +80,7 @@ pub struct EvaluatedCalls<'db>(pub Vec<EvaluatedCall<'db>>);
 // Safety: comparison-based replacement for salsa early cutoff, matching
 // `FileThrowFacts` in `throw_facts.rs`.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for EvaluatedCalls<'_> {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: pointer is salsa-owned and valid for replacement.
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for EvaluatedCalls<'_> {}
 
 /// The callees a body invokes on its evaluated path, in arena order.
 ///

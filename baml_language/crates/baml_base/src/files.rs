@@ -68,6 +68,7 @@ pub struct SourceRoot {
     #[returns(ref)]
     pub path: PathBuf,
 
+    #[returns(clone)]
     pub kind: SourceRootKind,
 
     /// The package's own name: `[package].name` from its manifest, or the
@@ -78,6 +79,7 @@ pub struct SourceRoot {
     /// by; never compared for identity — the root id is the identity, and the
     /// name a package is reached by lives on the depending package's edge
     /// ([`Dependency::name`]).
+    #[returns(clone)]
     pub self_name: Option<Name>,
 
     /// Files in this root, in insertion order.
@@ -160,6 +162,7 @@ pub struct SourceFile {
     pub text: String,
 
     /// File path (for diagnostics and error reporting)
+    #[returns(clone)]
     pub path: PathBuf,
 
     /// The FileId associated with this source file.
@@ -167,11 +170,13 @@ pub struct SourceFile {
     /// Used to create lightweight Span values that can be embedded in tokens.
     /// This allows spans to identify their source file without carrying
     /// the full SourceFile reference (which is a Salsa-tracked entity).
+    #[returns(clone)]
     pub file_id: FileId,
 
     /// Whether this is compiler-generated source for a `Session.eval`
     /// submission. Session lowering represents persistent bindings as root
     /// lets internally; ordinary BAML source files must reject them.
+    #[returns(clone)]
     pub is_session_submission: bool,
 
     /// The source root this file belongs to.
@@ -181,5 +186,6 @@ pub struct SourceFile {
     /// adding or removing an unrelated root never invalidates a file's
     /// package identity. A file revived from a remove/re-add cycle must have
     /// this field re-set — the owning root may have changed.
+    #[returns(clone)]
     pub source_root: SourceRoot,
 }

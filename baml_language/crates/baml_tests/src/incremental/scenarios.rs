@@ -592,7 +592,7 @@ fn editing_a_function_body_preserves_its_signature_data() {
 
 /// A downstream consumer that reads spans out of the memoized signature, the
 /// way a signature-lowering pass anchors its diagnostics.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 fn signature_param_type_spans<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     function: baml_compiler2_hir::loc::FunctionLoc<'db>,

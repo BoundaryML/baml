@@ -51,26 +51,10 @@ pub struct ImplData<'db> {
 /// # Safety
 ///
 /// `ImplData<'db>` holds Salsa interned locs with a db-tied lifetime, so it
-/// can't auto-derive `salsa::Update`; `maybe_update` uses `PartialEq` for
-/// proper early-cutoff.
+/// can't auto-derive `salsa::SalsaValue`; Salsa uses its `PartialEq` for
+/// early-cutoff.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for ImplData<'_> {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for ImplData<'_> {}
 
 /// Where in an `implements` block a diagnostic originated. Span-free
 /// (Salsa-stable); check.rs maps it to a source range via [`impl_data_source_map`].
@@ -136,7 +120,7 @@ pub fn interface_loc_qtn<'db>(
 }
 
 /// Why [`impl_data`] could not produce an [`ImplData`].
-#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::SalsaValue)]
 pub enum ImplDataError {
     /// The implements target does not name an interface. The diagnostics
     /// lowered before the failure ride along so check.rs still surfaces them.

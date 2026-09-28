@@ -278,7 +278,7 @@ impl ModifierSet {
 // ── SemanticToken ─────────────────────────────────────────────────────────────
 
 /// A classified token ready for LSP encoding.
-#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::SalsaValue)]
 pub struct SemanticToken {
     pub range: TextRange,
     pub token_type: SemanticTokenType,

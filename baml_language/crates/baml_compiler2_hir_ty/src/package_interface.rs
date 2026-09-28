@@ -468,58 +468,13 @@ pub struct PackageResolutionContext<'db> {
 // ── Salsa Update impls ─────────────────────────────────────────────────────
 
 #[allow(unsafe_code)]
-unsafe impl<N: Head> salsa::Update for PackageInterface<N> {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old_ref = unsafe { &*old_pointer };
-        if *old_ref == new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
+unsafe impl<N: Head> salsa::SalsaValue for PackageInterface<N> {}
 
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for FileInterfaceFragment {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old_ref = unsafe { &*old_pointer };
-        if *old_ref == new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for FileInterfaceFragment {}
 
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for PackageResolutionContext<'_> {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old_ref = unsafe { &*old_pointer };
-        if *old_ref == new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for PackageResolutionContext<'_> {}
 
 // ── PackageInterface lookup helpers ────────────────────────────────────────
 
@@ -1887,23 +1842,7 @@ fn try_map_throw_sets<N: Head, M: Head, E>(
 
 // Safety: comparison-based replacement for Salsa early cutoff.
 #[allow(unsafe_code)]
-unsafe impl<N: Head> salsa::Update for FunctionThrowSets<N> {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: pointer is Salsa-owned and valid for replacement.
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
+unsafe impl<N: Head> salsa::SalsaValue for FunctionThrowSets<N> {}
 
 impl<N: Head> FunctionThrowSets<N> {
     pub fn transitive_for(&self, key: &Name) -> Option<&BTreeSet<ThrowFact<N>>> {
