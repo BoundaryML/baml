@@ -47,6 +47,7 @@ pub mod csharp;
 pub mod go;
 pub mod java;
 pub mod python_pydantic2;
+pub mod ruby_sorbet;
 pub mod rust;
 pub mod swift;
 pub mod typescript;

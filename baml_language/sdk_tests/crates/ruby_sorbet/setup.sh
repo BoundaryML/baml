@@ -15,6 +15,7 @@ mkdir -p "$FIXTURE_DIR"
 (
   cd "$WORKSPACE_ROOT"
   cargo build -p bridge_cffi
+  cargo run --quiet -p sdk_test_codegen -- ruby_sorbet
   cargo run --quiet -p sdk_test_codegen -- \
     emit-bytecode --fixture function_calls \
     --out "$FIXTURE_DIR/function-calls.bytecode"

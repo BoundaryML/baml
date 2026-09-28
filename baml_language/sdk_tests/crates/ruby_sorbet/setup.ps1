@@ -16,6 +16,9 @@ try {
     cargo build -p bridge_cffi
     if ($LASTEXITCODE -ne 0) { throw "cargo build -p bridge_cffi failed" }
 
+    cargo run --quiet -p sdk_test_codegen -- ruby_sorbet
+    if ($LASTEXITCODE -ne 0) { throw "ruby_sorbet SDK generation failed" }
+
     cargo run --quiet -p sdk_test_codegen -- emit-bytecode --fixture function_calls --out (Join-Path $fixtureDir "function-calls.bytecode")
     if ($LASTEXITCODE -ne 0) { throw "function_calls bytecode generation failed" }
 } finally {

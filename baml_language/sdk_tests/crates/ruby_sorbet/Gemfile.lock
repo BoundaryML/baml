@@ -46,6 +46,7 @@ GEM
       rake (~> 13.3)
     minitest (5.27.0)
     rake (13.4.2)
+    sorbet-runtime (0.6.13506)
 
 PLATFORMS
   aarch64-linux-gnu
@@ -66,6 +67,7 @@ DEPENDENCIES
   ffi (>= 1.17.4, < 2)
   google-protobuf (~> 4.0)
   minitest (~> 5.0)
+  sorbet-runtime (~> 0.5)
 
 CHECKSUMS
   bigdecimal (4.1.2) sha256=53d217666027eab4280346fba98e7d5b66baaae1b9c3c1c0ffe89d48188a3fbd
@@ -93,6 +95,7 @@ CHECKSUMS
   google-protobuf (4.35.1-x86_64-linux-musl) sha256=91890eb0002934a339fdb7d77a147c46b7474b6799db27872b747b905837f744
   minitest (5.27.0) sha256=2d3b17f8a36fe7801c1adcffdbc38233b938eb0b4966e97a6739055a45fa77d5
   rake (13.4.2) sha256=cb825b2bd5f1f8e91ca37bddb4b9aaf345551b4731da62949be002fa89283701
+  sorbet-runtime (0.6.13506) sha256=94a7ff795cf2a67818a954883c0301de0b7222a9f732b24ab30ea5253e7568f6
 
 BUNDLED WITH
   4.0.4

@@ -5,6 +5,7 @@ members = [
   "sdks/cpp/sdkgen_cpp",
   "sdks/csharp/sdkgen_csharp",
   "sdks/go/sdkgen_go",
+  "sdks/ruby/sdkgen_ruby_sorbet",
   "sdks/java/bridge_java",
   "sdks/java/sdkgen_java",
   "sdks/typescript/bridge_typescript",
@@ -89,6 +90,7 @@ sdkgen_java = { path = "sdks/java/sdkgen_java" }
 bridge_java = { path = "sdks/java/bridge_java" }
 sdkgen_swift = { path = "sdks/swift/rust/sdkgen_swift" }
 sdkgen_go = { path = "sdks/go/sdkgen_go" }
+sdkgen_ruby_sorbet = { path = "sdks/ruby/sdkgen_ruby_sorbet" }
 sdkgen_rust = { path = "sdks/rust/sdkgen_rust" }
 baml_sdkgen_types = { path = "crates/baml_sdkgen_types" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
