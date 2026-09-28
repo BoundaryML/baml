@@ -612,6 +612,9 @@ pub struct AstSourceMap {
     /// entry. Absent for binds the compiler synthesizes, which have no name
     /// token to point at.
     pub bind_name_spans: HashMap<PatId, TextRange>,
+    /// The NAME token of each body `type T = …` binding, as distinct from its
+    /// statement's span. Absent when the statement has no name token.
+    pub type_binding_name_spans: HashMap<StmtId, TextRange>,
     pub match_arm_spans: Arena<TextRange>,
     pub type_annotation_spans: Arena<TextRange>,
     pub catch_arm_spans: Arena<TextRange>,
@@ -653,6 +656,7 @@ impl AstSourceMap {
             stmt_spans: Arena::new(),
             pattern_spans: Arena::new(),
             bind_name_spans: HashMap::new(),
+            type_binding_name_spans: HashMap::new(),
             match_arm_spans: Arena::new(),
             type_annotation_spans: Arena::new(),
             catch_arm_spans: Arena::new(),
@@ -759,6 +763,11 @@ impl AstSourceMap {
     /// The name token of a `Pattern::Bind`, when it was written in source.
     pub fn bind_name_span(&self, id: PatId) -> Option<TextRange> {
         self.bind_name_spans.get(&id).copied()
+    }
+
+    /// The name token of a body `type T = …` binding, when it was written.
+    pub fn type_binding_name_span(&self, id: StmtId) -> Option<TextRange> {
+        self.type_binding_name_spans.get(&id).copied()
     }
 
     pub fn pattern_span(&self, id: PatId) -> TextRange {

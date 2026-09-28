@@ -28,14 +28,14 @@ pub enum LangPackage {
 }
 
 /// The package roots the COMPILER itself spells in the paths its desugars
-/// emit, and which a local binding therefore may not shadow.
+/// emit, and which a binding in a body therefore may not shadow.
 ///
 /// A desugar lowers to source-level paths (`spawn { .. }` becomes
-/// `baml.spawn.Plan.new(..)`, `$env.X` becomes `baml.env.ref(..)`), and those
-/// paths resolve in the user's own scope: a local named `baml` wins over the
-/// package, and every `spawn` in the function fails against the local's type.
-/// Items do NOT shadow a package root this way, so a user class or function
-/// may still be named `baml` - only a value BINDING is reserved.
+/// `baml.spawn.Plan.new(..)`, `env.X` becomes `baml.env.ref(..)`), and those
+/// paths resolve in the user's own scope: a local named `baml`, or a body
+/// `type baml = ..` binding, wins over the package, and every `spawn` in its
+/// scope fails. Items do NOT shadow a package root this way, so a user class
+/// or function may still be named `baml` - only a binding is reserved.
 ///
 /// Deliberately not every language package: `#4543` ruled that a language
 /// root is an ordinary package a user name shadows like any other (a local

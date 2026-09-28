@@ -1,8 +1,8 @@
 // The compiler spells `baml` in the paths its desugars emit (`spawn { .. }`
-// lowers to `baml.spawn.Plan.new(..)`, `$env.X` to `baml.env.ref(..)`), and
-// those paths resolve in the user's own scope. A local binding named `baml`
-// wins over the package, so every desugared path in the function would fail
-// against the local's type. The binding is refused instead.
+// lowers to `baml.spawn.Plan.new(..)`, `env.X` to `baml.env.ref(..)`), and
+// those paths resolve in the user's own scope. A binding named `baml`, a value
+// or a body `type`, wins over the package, so every desugared path in its scope
+// would fail. The binding is refused instead.
 
 function local_binding() -> int {
     let baml = 5;
@@ -35,6 +35,16 @@ function for_in_binding(xs: int[]) -> int throws never {
 
 function catch_binding() -> string {
     { throw "x" } catch (baml) { _ => "caught" }
+}
+
+function static_type_binding() -> int throws never {
+    type baml = int;
+    1
+}
+
+function runtime_type_binding(t: reflect.Type) -> int throws never {
+    type baml = unreflect(t);
+    1
 }
 
 // An ITEM may still take the name: an item does not shadow a package root the

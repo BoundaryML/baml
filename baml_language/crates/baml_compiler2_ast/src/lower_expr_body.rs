@@ -5602,10 +5602,12 @@ impl LoweringContext {
     /// type, which takes the ordinary type road (where a nested `unreflect`
     /// is rejected like every other inline occurrence).
     fn lower_type_binding_stmt(&mut self, node: &SyntaxNode) -> StmtId {
-        let name = node
+        let name_token = node
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| token.kind() == SyntaxKind::WORD)
+            .find(|token| token.kind() == SyntaxKind::WORD);
+        let name = name_token
+            .as_ref()
             .map(|token| Name::new(token.text()))
             .unwrap_or_else(|| Name::new("<missing>"));
         let value = match node
@@ -5647,7 +5649,13 @@ impl LoweringContext {
             }
             None => TypeBindingValue::Static(TypeExprKind::Error.at(node.span_range())),
         };
-        self.alloc_stmt(Stmt::TypeBinding { name, value }, node.span_range())
+        let stmt = self.alloc_stmt(Stmt::TypeBinding { name, value }, node.span_range());
+        if let Some(token) = name_token {
+            self.source_map
+                .type_binding_name_spans
+                .insert(stmt, token.text_range());
+        }
+        stmt
     }
 
     /// The `UNREFLECT_TYPE` node when `type_expr` is exactly `unreflect(expr)`:

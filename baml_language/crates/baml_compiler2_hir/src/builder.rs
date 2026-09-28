@@ -328,10 +328,10 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.emit_duplicate_diagnostics(seen);
     }
 
-    /// Reject a value binding that takes one of [`DESUGAR_PATH_ROOTS`]: the
-    /// compiler emits paths rooted at those names, and a local shadows a
-    /// package root where an item does not, so the binding would break every
-    /// desugared path in scope.
+    /// Reject a value binding or body type binding that takes one of
+    /// [`DESUGAR_PATH_ROOTS`]: the compiler emits paths rooted at those names,
+    /// and a binding shadows a package root where an item does not, so it
+    /// would break every desugared path in scope.
     fn reject_reserved_binding_name(&mut self, name: &Name, span: TextRange) {
         if baml_base::lang::DESUGAR_PATH_ROOTS.contains(&name.as_str()) {
             self.diagnostics.push(Hir2Diagnostic::ReservedBindingName {
@@ -440,16 +440,22 @@ impl<'db> SemanticIndexBuilder<'db> {
     ) {
         match &body.stmts[stmt_id] {
             ast::Stmt::Expr(expr) => self.walk_expr(*expr, body, source_map, true),
-            // The runtime operand is an ordinary expression in the enclosing
-            // scope (`T` is not yet in scope while its own operand runs).
-            ast::Stmt::TypeBinding {
-                value: ast::TypeBindingValue::Runtime(operand),
-                ..
-            } => self.walk_expr(*operand, body, source_map, true),
-            ast::Stmt::TypeBinding {
-                value: ast::TypeBindingValue::Static(_),
-                ..
-            } => {}
+            ast::Stmt::TypeBinding { name, value } => {
+                // A body type binding shadows a package root in value paths
+                // just as a value binding does.
+                if let Some(span) = source_map.type_binding_name_span(stmt_id) {
+                    self.reject_reserved_binding_name(name, span);
+                }
+                match value {
+                    // The runtime operand is an ordinary expression in the
+                    // enclosing scope (`T` is not yet in scope while its own
+                    // operand runs).
+                    ast::TypeBindingValue::Runtime(operand) => {
+                        self.walk_expr(*operand, body, source_map, true);
+                    }
+                    ast::TypeBindingValue::Static(_) => {}
+                }
+            }
             ast::Stmt::Let {
                 pattern,
                 initializer,
