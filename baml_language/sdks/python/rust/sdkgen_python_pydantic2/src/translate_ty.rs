@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 
 use baml_base::{Literal, MediaKind, qualified_name::AI_STREAM_STREAM};
-use baml_codegen_types::{Name, Ty};
+use baml_sdkgen_types::{Name, Ty};
 use indexmap::IndexMap;
 
 use crate::{
@@ -162,7 +162,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
         Ty::Function { params, ret, .. } => {
             let has_optional = params
                 .iter()
-                .any(|param| param.mode == baml_codegen_types::CodegenFunctionParamMode::Optional);
+                .any(|param| param.mode == baml_sdkgen_types::CodegenFunctionParamMode::Optional);
             if has_optional {
                 // A callback with optional params is emitted as a named
                 // `typing.Protocol` (see `TranslateCtx::callback_protocols`):
@@ -398,7 +398,7 @@ mod tests {
         Ty::TypeAlias(name)
     }
     fn type_var(name: BaseName) -> Ty {
-        Ty::TypeVar(baml_codegen_types::ParamTy::new(0, name))
+        Ty::TypeVar(baml_sdkgen_types::ParamTy::new(0, name))
     }
     fn list(inner: Box<Ty>) -> Ty {
         Ty::List(inner)
@@ -410,12 +410,12 @@ mod tests {
         Ty::Media(kind)
     }
     fn literal(value: Literal) -> Ty {
-        Ty::Literal(value, baml_codegen_types::Freshness::Regular)
+        Ty::Literal(value, baml_sdkgen_types::Freshness::Regular)
     }
     fn baml_options() -> Ty {
         class_ty(name("baml", &[], "Options"), Vec::new())
     }
-    fn callable(params: Vec<baml_codegen_types::CallableParam>, ret: Box<Ty>) -> Ty {
+    fn callable(params: Vec<baml_sdkgen_types::CallableParam>, ret: Box<Ty>) -> Ty {
         Ty::Function {
             params: params.into(),
             ret,
@@ -423,19 +423,19 @@ mod tests {
         }
     }
 
-    fn callable_param(ty: Ty) -> baml_codegen_types::CallableParam {
-        baml_codegen_types::CallableParam {
+    fn callable_param(ty: Ty) -> baml_sdkgen_types::CallableParam {
+        baml_sdkgen_types::CallableParam {
             name: None,
             ty,
-            mode: baml_codegen_types::CodegenFunctionParamMode::Required,
+            mode: baml_sdkgen_types::CodegenFunctionParamMode::Required,
         }
     }
 
-    fn optional_callable_param(name: &str, ty: Ty) -> baml_codegen_types::CallableParam {
-        baml_codegen_types::CallableParam {
+    fn optional_callable_param(name: &str, ty: Ty) -> baml_sdkgen_types::CallableParam {
+        baml_sdkgen_types::CallableParam {
             name: Some(BaseName::new(name)),
             ty,
-            mode: baml_codegen_types::CodegenFunctionParamMode::Optional,
+            mode: baml_sdkgen_types::CodegenFunctionParamMode::Optional,
         }
     }
 

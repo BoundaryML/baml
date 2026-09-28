@@ -7,7 +7,7 @@ pub struct Padded<T>(pub T);
 pub const CACHE_ALIGNMENT: usize = align_of::<Padded<()>>();
 /// **Checked layout.** Change the frame representation first; editing this assertion target
 /// does not reduce runtime storage.
-pub const FRAME_TELEMETRY_BYTES: usize = 32;
+pub const FRAME_TELEMETRY_BYTES: usize = 40;
 /// **Checked layout.** Bound for compact timing storage; change record representation before
 /// adjusting.
 pub const TIMING_RECORD_MAX_BYTES: usize = 32;
@@ -15,10 +15,11 @@ pub const TIMING_RECORD_MAX_BYTES: usize = 32;
 /// compress the payload.
 pub const SPAN_RECORD_MAX_BYTES: usize = 56;
 /// **Checked layout.** Determines combining-cache slot footprint; review together with its
-/// representation and measurements.
-pub const AGGREGATE_DELTA_BYTES: usize = 32;
-/// **Checked layout.** Second-level totals footprint in the publisher map.
-pub const AGGREGATE_TOTALS_BYTES: usize = 24;
+/// representation and measurements. Includes the errored/cancelled outcome counters.
+pub const AGGREGATE_DELTA_BYTES: usize = 48;
+/// **Checked layout.** Second-level totals footprint in the publisher map, including the
+/// errored/cancelled outcome counters.
+pub const AGGREGATE_TOTALS_BYTES: usize = 40;
 /// **Checked layout.** Per-producer context footprint; review worker-capacity memory when
 /// changing.
 pub const DECODER_CONTEXT_BYTES: usize = 16;

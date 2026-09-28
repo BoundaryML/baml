@@ -1,5 +1,7 @@
 //! Host run lifecycle, payload, request, and wire-domain state.
 
+pub mod presentation;
+
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{

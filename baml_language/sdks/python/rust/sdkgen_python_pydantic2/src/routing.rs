@@ -1,4 +1,4 @@
-//! Routing: turns a `baml_codegen_types::Name` into the leaf `__init__.py`
+//! Routing: turns a `baml_sdkgen_types::Name` into the leaf `__init__.py`
 //! path (under `baml_sdk/`) where that symbol's Python representation
 //! lives. Single source of truth for per-symbol placement; G1 uses this
 //! to enumerate leaves and interior directories, and later phases reuse
@@ -13,12 +13,12 @@
 //! a `.baml` source-syntax keyword (substituted to the current package
 //! during HIR resolution) and never appears as `Name::pkg`.
 //!
-//! `"baml"` routes under `baml/`, anything else under `vendor/<pkg>/`.
+//! Core language packages route under their own names; other dependencies route under `vendor/<pkg>/`, as defined by `baml_sdkgen_types::namespace_segments`.
 
 #[cfg(test)]
 use std::path::PathBuf;
 
-use baml_codegen_types::Name;
+use baml_sdkgen_types::Name;
 
 #[cfg(test)]
 use crate::names::PYTHON_KEYWORDS;
@@ -86,25 +86,7 @@ pub(crate) fn route(name: &Name) -> LeafPath {
     }
 }
 
-pub(crate) fn raw_route_segments(name: &Name) -> Vec<String> {
-    let mut segs: Vec<String> = Vec::new();
-
-    match name.package().as_str() {
-        "user" => {}
-        "baml" => segs.push("baml".to_string()),
-        "ai" => segs.push("ai".to_string()),
-        "reflect" => segs.push("reflect".to_string()),
-        other => {
-            segs.push("vendor".to_string());
-            segs.push(other.to_string());
-        }
-    }
-
-    for seg in name.namespace() {
-        segs.push(seg.as_str().to_string());
-    }
-    segs
-}
+pub(crate) use baml_sdkgen_types::namespace_segments as raw_route_segments;
 
 #[cfg(test)]
 mod tests {

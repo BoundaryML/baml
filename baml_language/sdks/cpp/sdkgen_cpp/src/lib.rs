@@ -30,7 +30,7 @@ use std::{
     path::PathBuf,
 };
 
-use baml_codegen_types::{
+use baml_sdkgen_types::{
     CallableParam, Class, CodegenFunctionParamMode, Enum, Function, Name, Symbol, SymbolPool, Ty,
 };
 
@@ -668,7 +668,7 @@ fn request_callable_members(
 #[cfg(test)]
 mod injected_argument_tests {
     use baml_base::Name as BaseName;
-    use baml_codegen_types::{FunctionArgument, FunctionArgumentDefault, Origin};
+    use baml_sdkgen_types::{FunctionArgument, FunctionArgumentDefault, Origin};
 
     use super::*;
 
@@ -682,7 +682,7 @@ mod injected_argument_tests {
             arguments: vec![],
             return_type: Ty::Literal(
                 baml_base::Literal::Bigint(42.into()),
-                baml_codegen_types::Freshness::Regular,
+                baml_sdkgen_types::Freshness::Regular,
             ),
             throws: None,
             watchers: vec![],
@@ -1030,7 +1030,7 @@ fn emit_alias_wrapper(
     pool: &SymbolPool,
     names: &CppNames,
     name: &Name,
-    alias: &baml_codegen_types::TypeAlias,
+    alias: &baml_sdkgen_types::TypeAlias,
     emitted_types: &BTreeSet<Name>,
     boxed: &BTreeSet<Name>,
 ) -> Result<Option<EmittedClass>, String> {
@@ -1081,7 +1081,7 @@ fn emit_alias_using(
     pool: &SymbolPool,
     names: &CppNames,
     name: &Name,
-    alias: &baml_codegen_types::TypeAlias,
+    alias: &baml_sdkgen_types::TypeAlias,
     emitted_types: &BTreeSet<Name>,
     boxed: &BTreeSet<Name>,
 ) -> Result<Option<EmittedUsing>, String> {
@@ -2444,7 +2444,7 @@ fn render_inlinedbaml(
          for (const BamlBytecodeChunk& chunk : kBamlBytecodeChunks) {{\n      \
          bytecode.append(chunk.data, chunk.len);\n    \
          }}\n    \
-         ::baml::initialize_runtime_from_bytecode(\n        \
+         ::baml::initialize_runtime_from_blob(\n        \
          reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size(),\n        \
          \"{version}\");\n  \
          }});\n\
@@ -2453,12 +2453,12 @@ fn render_inlinedbaml(
     );
     if embedded_baml_toml.is_some() {
         let legacy_call = format!(
-            "::baml::initialize_runtime_from_bytecode(\n        reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size(),\n        \"{}\");",
+            "::baml::initialize_runtime_from_blob(\n        reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size(),\n        \"{}\");",
             baml_version::CANONICAL_VERSION
         );
         buf = buf.replace(
             &legacy_call,
-            "::baml::initialize_runtime_from_bytecode_with_metadata(\n        reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size(),\n        kEmbeddedBamlToml);",
+            "::baml::initialize_runtime_from_blob_with_metadata(\n        reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size(),\n        kEmbeddedBamlToml);",
         );
     }
     let _ = writeln!(buf, "}}  // namespace {detail}");
@@ -2485,7 +2485,7 @@ mod bytecode_escape_tests {
         );
 
         assert!(output.contains("const char kEmbeddedBamlToml[]"));
-        assert!(output.contains("initialize_runtime_from_bytecode_with_metadata("));
+        assert!(output.contains("initialize_runtime_from_blob_with_metadata("));
         assert!(output.contains("kEmbeddedBamlToml);"));
     }
 

@@ -568,8 +568,7 @@ function ec_same_literal_rethrow() -> string {
                 { throw "same" } catch (e2) { _ => {} }
                 throw e
             }
-        };
-        "not thrown"
+        }
     } catch (e, ctx) {
         _ => `same line: ${ec_last_line(ctx) == first}, cause: ${ec_cause_error(ctx)}`,
     }
@@ -635,8 +634,7 @@ function ec_unbound_context_chain() -> string {
             _ => {
                 throw "outer"
             }
-        };
-        "not thrown"
+        }
     } catch (e, ctx) {
         _ => ec_cause_error(ctx),
     }

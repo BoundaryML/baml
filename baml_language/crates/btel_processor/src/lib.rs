@@ -18,7 +18,9 @@ use std::{
 pub use bex_chunkedringbuffer::DrainStatus as Progress;
 use bex_chunkedringbuffer::{Consumer, ProducerId, SpanChunk, TransportFailed};
 use btel_records::{SpanRecord, TimingRecord};
-use btel_types::{AwaitDuration, CallPathId, CallPathNodeId, ClockInstant, TelemetryId};
+use btel_types::{
+    AwaitDuration, CallPathId, CallPathNodeId, ClockInstant, InvocationOutcome, TelemetryId,
+};
 use web_time::Instant;
 
 mod capture;
@@ -53,6 +55,7 @@ impl<P> Processing<P> {
         exited: ClockInstant,
         io: AwaitDuration,
         reentry: bool,
+        outcome: InvocationOutcome,
     ) where
         P: Publisher<I, V>,
     {
@@ -61,6 +64,8 @@ impl<P> Processing<P> {
             count: 1,
             total_duration: entered.elapsed_until(exited),
             total_io_duration: io,
+            errored: u64::from(outcome == InvocationOutcome::Errored),
+            cancelled: u64::from(outcome == InvocationOutcome::Cancelled),
         };
         self.cache.observe(delta, |delta| {
             publisher::publish_aggregate(&mut self.publisher, delta);
@@ -80,14 +85,16 @@ impl<P> Processing<P> {
                     entered_at,
                     exited_at,
                     await_time,
+                    outcome,
                     reentry,
-                    ..
                 } => {
                     assert!(
                         thread.is_some(),
                         "timing completion without thread selector"
                     );
-                    self.sample::<I, V>(call_path, entered_at, exited_at, await_time, reentry);
+                    self.sample::<I, V>(
+                        call_path, entered_at, exited_at, await_time, reentry, outcome,
+                    );
                 }
             }
         }
@@ -132,6 +139,8 @@ impl<P> Processing<P> {
                 *thread = Some(*thread_id);
                 return;
             }
+            // Every function completion form is one population invocation. Its
+            // variant fixes the outcome; thread completions are not invocations.
             SpanRecord::FunctionSpanCompletionOk {
                 call_path,
                 entered_at,
@@ -146,7 +155,24 @@ impl<P> Processing<P> {
                 await_time,
                 ..
             }
-            | SpanRecord::FunctionSpanCompletionErrored {
+            | SpanRecord::LateFunctionSpanCompletionOk {
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                ..
+            } => {
+                assert!(thread.is_some(), "span completion without thread selector");
+                self.sample::<I, V>(
+                    *call_path,
+                    *entered_at,
+                    *exited_at,
+                    *await_time,
+                    false,
+                    InvocationOutcome::Ok,
+                );
+            }
+            SpanRecord::FunctionSpanCompletionErrored {
                 call_path,
                 entered_at,
                 exited_at,
@@ -160,7 +186,24 @@ impl<P> Processing<P> {
                 await_time,
                 ..
             }
-            | SpanRecord::FunctionSpanCompletionCancelled {
+            | SpanRecord::LateFunctionSpanCompletionErrored {
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                ..
+            } => {
+                assert!(thread.is_some(), "span completion without thread selector");
+                self.sample::<I, V>(
+                    *call_path,
+                    *entered_at,
+                    *exited_at,
+                    *await_time,
+                    false,
+                    InvocationOutcome::Errored,
+                );
+            }
+            SpanRecord::FunctionSpanCompletionCancelled {
                 call_path,
                 entered_at,
                 exited_at,
@@ -168,20 +211,6 @@ impl<P> Processing<P> {
                 ..
             }
             | SpanRecord::FunctionSpanCompletionCancelledNeedsAnnouncement {
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                ..
-            }
-            | SpanRecord::LateFunctionSpanCompletionOk {
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                ..
-            }
-            | SpanRecord::LateFunctionSpanCompletionErrored {
                 call_path,
                 entered_at,
                 exited_at,
@@ -196,7 +225,14 @@ impl<P> Processing<P> {
                 ..
             } => {
                 assert!(thread.is_some(), "span completion without thread selector");
-                self.sample::<I, V>(*call_path, *entered_at, *exited_at, *await_time, false);
+                self.sample::<I, V>(
+                    *call_path,
+                    *entered_at,
+                    *exited_at,
+                    *await_time,
+                    false,
+                    InvocationOutcome::Cancelled,
+                );
             }
             SpanRecord::FunctionSpanCompletionOkReentry {
                 call_path,
@@ -212,7 +248,24 @@ impl<P> Processing<P> {
                 await_time,
                 ..
             }
-            | SpanRecord::FunctionSpanCompletionErroredReentry {
+            | SpanRecord::LateFunctionSpanCompletionOkReentry {
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                ..
+            } => {
+                assert!(thread.is_some(), "span completion without thread selector");
+                self.sample::<I, V>(
+                    *call_path,
+                    *entered_at,
+                    *exited_at,
+                    *await_time,
+                    true,
+                    InvocationOutcome::Ok,
+                );
+            }
+            SpanRecord::FunctionSpanCompletionErroredReentry {
                 call_path,
                 entered_at,
                 exited_at,
@@ -226,7 +279,24 @@ impl<P> Processing<P> {
                 await_time,
                 ..
             }
-            | SpanRecord::FunctionSpanCompletionCancelledReentry {
+            | SpanRecord::LateFunctionSpanCompletionErroredReentry {
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                ..
+            } => {
+                assert!(thread.is_some(), "span completion without thread selector");
+                self.sample::<I, V>(
+                    *call_path,
+                    *entered_at,
+                    *exited_at,
+                    *await_time,
+                    true,
+                    InvocationOutcome::Errored,
+                );
+            }
+            SpanRecord::FunctionSpanCompletionCancelledReentry {
                 call_path,
                 entered_at,
                 exited_at,
@@ -234,20 +304,6 @@ impl<P> Processing<P> {
                 ..
             }
             | SpanRecord::FunctionSpanCompletionCancelledReentryNeedsAnnouncement {
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                ..
-            }
-            | SpanRecord::LateFunctionSpanCompletionOkReentry {
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                ..
-            }
-            | SpanRecord::LateFunctionSpanCompletionErroredReentry {
                 call_path,
                 entered_at,
                 exited_at,
@@ -262,7 +318,14 @@ impl<P> Processing<P> {
                 ..
             } => {
                 assert!(thread.is_some(), "span completion without thread selector");
-                self.sample::<I, V>(*call_path, *entered_at, *exited_at, *await_time, true);
+                self.sample::<I, V>(
+                    *call_path,
+                    *entered_at,
+                    *exited_at,
+                    *await_time,
+                    true,
+                    InvocationOutcome::Cancelled,
+                );
             }
             _ => {}
         }
@@ -283,7 +346,9 @@ impl<P> Processing<P> {
 #[cfg(not(target_arch = "wasm32"))]
 mod runtime;
 #[cfg(not(target_arch = "wasm32"))]
-pub use runtime::{ExecutionScope, RecordingControl, RuntimeError, TelemetryRuntime};
+pub use runtime::{
+    ExecutionScope, FutureErrorLinks, RecordingControl, RuntimeError, TelemetryRuntime,
+};
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum ProcessorError {

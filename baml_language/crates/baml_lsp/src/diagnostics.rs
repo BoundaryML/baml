@@ -80,8 +80,9 @@ pub fn collect_root_candidate(
     let mut referenced: HashMap<FileId, ReferencedFile> = HashMap::new();
     for diagnostic in buckets.iter().flatten() {
         let spans = diagnostic
-            .primary_span()
-            .into_iter()
+            .annotations
+            .iter()
+            .map(|annotation| annotation.span)
             .chain(diagnostic.related_info.iter().map(|info| info.span));
         for span in spans {
             if index_by_id.contains_key(&span.file_id) || referenced.contains_key(&span.file_id) {
@@ -216,6 +217,25 @@ fn to_lsp_diagnostic(
             message: info.message.clone(),
         })
     }));
+    for annotation in diagnostic
+        .annotations
+        .iter()
+        .filter(|annotation| !annotation.is_primary)
+    {
+        let (Some(message), Some(location)) = (
+            &annotation.message,
+            location(annotation.span.file_id, annotation.span.range),
+        ) else {
+            continue;
+        };
+        let info = lsp_types::DiagnosticRelatedInformation {
+            location,
+            message: message.clone(),
+        };
+        if !related_information.contains(&info) {
+            related_information.push(info);
+        }
+    }
 
     lsp_types::Diagnostic {
         range,
@@ -373,5 +393,128 @@ fn send_publish(
             }
         }
         Err(error) => tracing::error!(%error, "publishDiagnostics params did not serialize"),
+    }
+}
+
+/// Flatten diagnostics into the playground's one-line messages, in input order.
+/// Hosts may sort the result before projecting into their wire types.
+pub fn playground_diagnostics(
+    documents: &[PublishableDocument],
+) -> impl Iterator<Item = (&'static str, String)> + '_ {
+    documents.iter().flat_map(|document| {
+        let filename = document
+            .path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        document.diagnostics.iter().map(move |diagnostic| {
+            let severity = match diagnostic.severity {
+                Some(lsp_types::DiagnosticSeverity::ERROR) => "error",
+                Some(lsp_types::DiagnosticSeverity::WARNING) => "warning",
+                _ => "info",
+            };
+            (
+                severity,
+                format!(
+                    "{filename}:{}: {}",
+                    diagnostic.range.start.line + 1,
+                    diagnostic.message
+                ),
+            )
+        })
+    })
+}
+
+#[cfg(test)]
+mod playground_tests {
+    use super::*;
+    #[test]
+    fn messages_preserve_document_order_and_one_based_lines() {
+        let documents = [
+            PublishableDocument {
+                path: PathBuf::from("z/file.baml"),
+                diagnostics: vec![lsp_types::Diagnostic {
+                    range: lsp_types::Range::new(
+                        lsp_types::Position::new(4, 2),
+                        lsp_types::Position::new(4, 3),
+                    ),
+                    severity: Some(lsp_types::DiagnosticSeverity::WARNING),
+                    message: "last".into(),
+                    ..Default::default()
+                }],
+            },
+            PublishableDocument {
+                path: PathBuf::from("a.baml"),
+                diagnostics: vec![lsp_types::Diagnostic {
+                    message: "first".into(),
+                    ..Default::default()
+                }],
+            },
+        ];
+        assert_eq!(
+            playground_diagnostics(&documents).collect::<Vec<_>>(),
+            vec![
+                ("warning", "file.baml:5: last".into()),
+                ("info", "a.baml:1: first".into())
+            ]
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_base::Span;
+    use baml_db::baml_compiler_diagnostics::DiagnosticId;
+    use text_size::{TextRange, TextSize};
+
+    use super::*;
+
+    #[test]
+    fn secondary_annotations_become_related_information_without_duplicates() {
+        let file = FileId::new(0);
+        let primary = Span::new(file, TextRange::new(TextSize::from(0), TextSize::from(4)));
+        let secondary = Span::new(file, TextRange::new(TextSize::from(5), TextSize::from(9)));
+        let diagnostic =
+            Diagnostic::warning(DiagnosticId::ConditionAlwaysConstant, "always truthy")
+                .with_primary_span(primary)
+                .with_secondary(secondary, "this branch is unreachable");
+        let workspace = tempfile::tempdir().unwrap();
+        let path = workspace.path().join("main.baml");
+        let codecs = HashMap::from([(
+            file,
+            (
+                path.as_path(),
+                PositionCodec::new("true\ndead", PositionEncoding::UTF16),
+            ),
+        )]);
+
+        for diagnostic in [
+            diagnostic.clone(),
+            diagnostic.with_related(secondary, "this branch is unreachable"),
+        ] {
+            let converted = to_lsp_diagnostic(&diagnostic, file, &codecs, &RootsView::default());
+            assert_eq!(
+                converted.severity,
+                Some(lsp_types::DiagnosticSeverity::WARNING)
+            );
+            assert_eq!(
+                converted.range,
+                lsp_types::Range::new(
+                    lsp_types::Position::new(0, 0),
+                    lsp_types::Position::new(0, 4)
+                )
+            );
+            let related = converted.related_information.unwrap();
+            assert_eq!(related.len(), 1);
+            assert_eq!(related[0].message, "this branch is unreachable");
+            assert_eq!(related[0].location.uri, Url::from_file_path(&path).unwrap());
+            assert_eq!(
+                related[0].location.range,
+                lsp_types::Range::new(
+                    lsp_types::Position::new(1, 0),
+                    lsp_types::Position::new(1, 4)
+                )
+            );
+        }
     }
 }

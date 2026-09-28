@@ -100,8 +100,12 @@ export declare class BamlRuntime {
    * the `initializeRuntime(...)` import the spec docs use.
    */
   static initializeRuntime(rootPath: string, files: Record<string, string>): BamlRuntime
-  /** Initialize the process-global runtime from precompiled BAML bytecode. */
-  static initializeRuntimeFromBytecode(bytecode: Buffer, embeddedBamlToml?: string | undefined | null): BamlRuntime
+  /**
+   * Initialize the process-global runtime from precompiled BAML bytecode:
+   * a raw artifact, or the encoded string generated SDKs embed (decoded
+   * natively, never in JavaScript).
+   */
+  static initializeRuntimeFromBlob(bytecode: string | Buffer, embeddedBamlToml?: string | undefined | null): BamlRuntime
   /** Call a BAML function synchronously (blocking). */
   callFunctionSync(argsProto: Buffer, ctx?: HostSpanManager | undefined | null): Buffer
   /** Call a BAML function asynchronously. */

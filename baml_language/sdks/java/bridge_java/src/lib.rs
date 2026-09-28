@@ -19,6 +19,7 @@
 use std::sync::{Arc, Once, OnceLock};
 
 use bex_project::{BexExternalAdt, MediaKind, MediaValue};
+use bridge_cffi::handle_cffi::media_kind_from_proto;
 use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE};
 use jni::{
     JNIEnv, JavaVM,
@@ -54,12 +55,12 @@ fn call_sync_to_bytes(args_proto: &[u8]) -> Vec<u8> {
 /// `baml_bridge.BamlFfi.nativeInitFromBytecode(byte[] bytecode, String metadata, String runtimeVersion, String toolchainVersion)`.
 ///
 /// Initialize the process-global runtime from serialized BAML bytecode
-/// (`bridge_cffi::initialize_runtime_from_bytecode`, the same path
+/// (`bridge_cffi::initialize_runtime_from_blob`, the same path
 /// `bridge_python` uses). Idempotent in the same sense as Python: the
 /// single-slot singleton is replaced, so a second call swaps the runtime.
 /// A setup failure is thrown as an unchecked `RuntimeException` (this is a
 /// handle-returning site with no envelope to ride, like Python's
-/// `initialize_runtime_from_bytecode` raising).
+/// `initialize_runtime_from_blob` raising).
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
     mut env: JNIEnv<'_>,
@@ -141,8 +142,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
         }
     };
 
-    if let Err(e) =
-        bridge_cffi::initialize_runtime_from_bytecode(&bytes, embedded_baml_toml.as_deref())
+    if let Err(e) = bridge_cffi::initialize_runtime_from_blob(&bytes, embedded_baml_toml.as_deref())
     {
         throw_runtime_exception_exact(&mut env, &e.to_string());
     }
@@ -612,20 +612,6 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCompleteHostCall<'local>(
 // underlying `MediaValue` / `HANDLE_TABLE` API in-process rather than the
 // C-string ABI, since the JNI layer already owns `String` conversion.
 // ===========================================================================
-
-/// Map a proto `MediaTypeEnum` discriminant (as passed from Java) to a
-/// `MediaKind`. Mirrors `bridge_cffi::ffi::handle::media_kind_from_proto`.
-fn media_kind_from_proto(kind: jint) -> Option<MediaKind> {
-    use bridge_ctypes::baml_bridge::cffi::MediaTypeEnum;
-    match kind {
-        x if x == MediaTypeEnum::Image as jint => Some(MediaKind::Image),
-        x if x == MediaTypeEnum::Audio as jint => Some(MediaKind::Audio),
-        x if x == MediaTypeEnum::Pdf as jint => Some(MediaKind::Pdf),
-        x if x == MediaTypeEnum::Video as jint => Some(MediaKind::Video),
-        x if x == MediaTypeEnum::Other as jint => Some(MediaKind::Generic),
-        _ => None,
-    }
-}
 
 /// Read a required `JString` argument into an owned `String`, throwing (and
 /// returning `None`) on a null pointer or invalid UTF-8.

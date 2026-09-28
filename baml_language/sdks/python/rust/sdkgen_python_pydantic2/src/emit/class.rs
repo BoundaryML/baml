@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use baml_codegen_types::{Name, Ty};
+use baml_sdkgen_types::{Name, Ty};
 
 use crate::emit::method::PyMethodBinding;
 

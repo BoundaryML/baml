@@ -249,11 +249,10 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
     } else if (typeof value === 'boolean') {
         iv.boolValue = value;
     } else if (typeof value === 'number') {
-        if (Number.isInteger(value)) {
-            iv.intValue = value;
-        } else {
-            iv.floatValue = value;
-        }
+        // JavaScript has one numeric type. Preserve that ambiguity on the
+        // inbound wire so contextual BAML typing can select `int` or `float`;
+        // a JavaScript `bigint` remains the unambiguous `bigint_value` below.
+        iv.jsNumberValue = value;
     } else if (typeof value === 'bigint') {
         // Hex / base sixteen on the wire. BigInt.prototype.toString(16)
         // yields e.g. "-2a"; signed values round-trip via num-bigint's

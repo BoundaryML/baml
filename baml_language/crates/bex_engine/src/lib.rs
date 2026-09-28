@@ -786,6 +786,9 @@ pub struct BexEngine {
     next_thread_id: AtomicU64,
     /// The unified heap (shared across all VM instances)
     heap: Arc<BexHeap>,
+    /// Recording identity scope shared by every VM created by this engine.
+    /// This exists even when telemetry delivery is disabled.
+    trace_scope: btel_types::RecordingId,
     /// Shared telemetry resources; absent for `BAML_TELEMETRY=off`.
     telemetry: Option<EngineTelemetry>,
     /// Frozen global variables shared across every post-`$init` VM.
@@ -1555,6 +1558,12 @@ impl BexEngine {
         let source_snapshot_id = bytecode_program
             .source_content_hash
             .map(bex_events::ids::SourceSnapshotId);
+        #[cfg(not(target_arch = "wasm32"))]
+        let trace_scope = recording
+            .as_ref()
+            .map_or_else(btel_types::RecordingId::generate, TelemetryRecording::id);
+        #[cfg(target_arch = "wasm32")]
+        let trace_scope = btel_types::RecordingId::generate();
 
         // Extract package_init_order before consuming bytecode_program.
         let package_init_order = bytecode_program.package_init_order.clone();
@@ -1706,7 +1715,11 @@ impl BexEngine {
                 let recording_id = recording.as_ref().map(TelemetryRecording::id);
                 #[cfg(not(target_arch = "wasm32"))]
                 let (runtime, delivery) = match recording {
-                    Some(recording) => recording.start(source_snapshot_id.map(|id| id.0))?,
+                    // Compile-time metadata is copied once, before any VM executes.
+                    Some(recording) => recording.start(
+                        source_snapshot_id.map(|id| id.0),
+                        Arc::new(heap.static_function_metadata()),
+                    )?,
                     None => (
                         btel_processor::TelemetryRuntime::new().map_err(|error| {
                             EngineError::Other(format!("telemetry processor startup: {error}"))
@@ -1746,6 +1759,7 @@ impl BexEngine {
                     Arc::clone(&error_class_ptrs),
                     Arc::clone(&panic_class_ptrs),
                     EngineTelemetry::new_root(telemetry.as_ref()),
+                    trace_scope,
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -1890,6 +1904,7 @@ impl BexEngine {
             next_thread_id: AtomicU64::new(1),
             heap,
             telemetry,
+            trace_scope,
             globals,
             _globals_permit: globals_permit,
             resolved_function_names,
@@ -1934,6 +1949,12 @@ impl BexEngine {
     #[must_use]
     pub fn engine_id(&self) -> EngineId {
         self.engine_id
+    }
+
+    /// Content identity of the source this engine's program was compiled
+    /// from, when the compiler stamped one. Recordings carry the same value.
+    pub fn source_snapshot_id(&self) -> Option<[u8; 32]> {
+        self.source_snapshot_id.map(|id| id.0)
     }
 
     /// Owned snapshot of registered telemetry functions. Unobserved dynamic
@@ -2499,6 +2520,8 @@ impl BexEngine {
         let mut last_wait_report = tokio::time::Instant::now();
         #[cfg(not(target_arch = "wasm32"))]
         let mut on_leaks = Some(on_leaks);
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut abandoned = false;
         loop {
             let handles = self
                 .futures
@@ -2537,6 +2560,7 @@ impl BexEngine {
                     if let Some(on_leaks) = on_leaks.take() {
                         on_leaks(&leaks);
                     }
+                    abandoned = true;
                     continue;
                 }
                 let step = match grace {
@@ -2561,6 +2585,16 @@ impl BexEngine {
         #[cfg(target_arch = "wasm32")]
         if let Some(on_leaks) = on_leaks {
             on_leaks(&[]);
+        }
+        // A cancelled future settles while its task can still be unwinding.
+        // Let those tasks end, and record their end, before telemetry closes.
+        // Tasks the deadline above abandoned may never end: do not wait again.
+        #[cfg(not(target_arch = "wasm32"))]
+        if !abandoned {
+            let deadline = tokio::time::Instant::now() + CANCEL_SETTLE_GRACE;
+            while self.bex_work.has_work() && tokio::time::Instant::now() < deadline {
+                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+            }
         }
 
         self.collect_garbage_with_reason(bex_heap::CollectionLevel::Major, "shutdown")
@@ -3368,6 +3402,7 @@ impl BexEngine {
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
             EngineTelemetry::new_root(self.telemetry.as_ref()),
+            self.trace_scope,
         );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
@@ -4455,6 +4490,9 @@ impl BexEngine {
         // Read before the error fires the task's own token below: whether the
         // task had been cancelled, by any route, when it failed.
         let cancelled = child_cancel.is_cancelled();
+        // Before any awaiter can observe the error: record which raise failed
+        // this future, so every await of it can name the error's origin.
+        thread.vm.link_escaped_error_to_future(future_id);
         let mut guard = self.futures.acquire(thread.proof()).await;
         if cancelled {
             guard.mark_cancelled(future_id)?;
@@ -5087,6 +5125,7 @@ impl BexEngine {
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
             EngineTelemetry::new_child(self.telemetry.as_ref(), telemetry.as_ref()),
+            self.trace_scope,
         );
         child_vm.thread_id = thread_id;
 
@@ -5612,7 +5651,7 @@ impl BexEngine {
                                     // / projection / whatever the surrounding
                                     // expression expected — no implicit await.
                                     let value = if operation == SysOp::BamlHostCallHostValue {
-                                        self.convert_external_to_vm_value_with_ty(
+                                        self.convert_host_return_to_vm_value_with_ty(
                                             thread,
                                             external,
                                             host_ret_ty.as_ref(),
@@ -6729,6 +6768,66 @@ impl sys_types::VmSpawner for BexEngine {
 // The former `call_host_value_tests` module asserted the same shape against
 // the now-deleted `op_error_to_catchable_throw` helper; removing it avoids
 // duplicating the same expectations across crates.
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod trace_scope_tests {
+    use super::*;
+
+    #[test]
+    fn recording_scope_is_retained_even_when_telemetry_is_off() {
+        use sys_native::SysOpsExt;
+
+        const CHILD: &str = "BAML_TEST_TRACE_SCOPE_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            for mode in ["off", "medium"] {
+                let output = std::process::Command::new(std::env::current_exe().unwrap())
+                    .args([
+                        "--exact",
+                        "trace_scope_tests::recording_scope_is_retained_even_when_telemetry_is_off",
+                        "--nocapture",
+                    ])
+                    .env(CHILD, "1")
+                    .env("BAML_TELEMETRY", mode)
+                    .output()
+                    .unwrap();
+                assert!(
+                    output.status.success(),
+                    "{mode}: {}\n{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+            return;
+        }
+        tokio::runtime::Runtime::new().unwrap().block_on(async {
+            let directory = tempfile::tempdir().unwrap();
+            let recording = TelemetryRecording::local_files_in(
+                directory.path(),
+                btel_recorder::RecordingConfig::default(),
+            );
+            let scope = recording.id();
+            let engine = BexEngine::new_with_telemetry_recording(
+                baml_db::testing::compile_source(""),
+                Arc::new(sys_native::SysOps::native()),
+                vec![],
+                None,
+                btel_clock::ClockMode::Monotonic,
+                recording,
+            )
+            .unwrap();
+            assert_eq!(engine.trace_scope, scope);
+            let other = BexEngine::new(
+                baml_db::testing::compile_source(""),
+                Arc::new(sys_native::SysOps::native()),
+                vec![],
+            )
+            .unwrap();
+            assert_ne!(other.trace_scope, engine.trace_scope);
+            Arc::new(engine).shutdown().await;
+            Arc::new(other).shutdown().await;
+        });
+    }
+}
 
 #[cfg(test)]
 mod concurrent_tests {

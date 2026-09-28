@@ -1258,17 +1258,17 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[loop_stmts.baml:403:21]
- 403 │                     break;
-     ·                     ──────
+     ╭─[loop_stmts.baml:404:21]
+ 404 │                     0
+     ·                     ─
      ╰────
 
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[loop_stmts.baml:407:21]
- 407 │                     continue;
-     ·                     ─────────
+     ╭─[loop_stmts.baml:408:21]
+ 408 │                     n
+     ·                     ─
      ╰────
 
   [type] E0003

@@ -4,6 +4,8 @@
 //! adapts it to completed-file callbacks. The `Publisher` interface is defined by
 //! `btel_processor`; no storage or networking is implemented here.
 
+use std::{collections::BTreeMap, sync::Arc};
+
 use btel_processor::AggregateDelta;
 use btel_records::SpanRecord;
 use btel_snapshot::Snapshot;
@@ -11,7 +13,9 @@ use btel_types::{CallPathNodeId, TelemetryId};
 
 mod clock;
 mod encoding;
+mod errors;
 mod flags;
+mod functions;
 mod merge;
 mod recording;
 pub use flags::CompletionFlags;
@@ -32,6 +36,10 @@ struct PendingMessages {
     definitions: proto::Definitions,
     aggregates: proto::AggregateBatch,
     clock_states: proto::ClockStateBatch,
+    /// `ErrorBatch` body, encoded as each message arrives: a throw-heavy
+    /// program sends one raise and one end per throw, and prost would
+    /// otherwise recompute every nested length several times per file.
+    errors: Vec<u8>,
 }
 
 /// Worker-local conversion state. The recording publisher drains this after
@@ -41,8 +49,15 @@ struct ConversionBuffer {
     pending: PendingMessages,
     spans: encoding::EncodedSpans,
     aggregates: merge::PendingAggregates,
+    functions: functions::FunctionDefinitions,
+    // Referenced epochs not yet observed settled, released once final. Bounded
+    // by live runs plus runs settled since the last sealed file.
+    unsettled_clocks: BTreeMap<u64, Arc<btel_clock::ClockEpoch>>,
     // Cached repeated-message bytes. Span bytes are already materialized.
     pending_encoded_bytes: usize,
+    // Unwinds in progress, at most one per telemetry thread. Empty unless an
+    // exception is being unwound, so ordinary completions pay one length check.
+    unwinds: errors::ActiveUnwinds,
 }
 // Count each newly constructed metadata message once; never rescan the file.
 fn push_message<M: prost::Message>(output: &mut Vec<M>, bytes: &mut usize, tag: u32, value: M) {
@@ -60,7 +75,7 @@ impl ConversionBuffer {
         parent: Option<TelemetryId>,
         path: btel_types::CallPathId,
         started: btel_types::ClockInstant,
-        clock: &btel_clock::ClockEpoch,
+        clock: &Arc<btel_clock::ClockEpoch>,
     ) {
         push_message(
             &mut self.pending.definitions.threads,
@@ -80,16 +95,55 @@ impl ConversionBuffer {
             4,
             clock::definition(clock.metadata()),
         );
+        let state = clock::state(clock);
+        if state.r#final {
+            self.unsettled_clocks.remove(&state.epoch_id);
+        } else {
+            self.unsettled_clocks
+                .entry(state.epoch_id)
+                .or_insert_with(|| Arc::clone(clock));
+        }
         push_message(
             &mut self.pending.clock_states.states,
             &mut self.pending_encoded_bytes,
             1,
-            clock::state(clock),
+            state,
         );
+    }
+
+    /// Report and release epochs that settled since their last observation.
+    /// `latest` also reports each still-unsettled epoch's current, non-final
+    /// status. True when every observed epoch has been reported final.
+    fn observe_unsettled_clocks(&mut self, latest: bool) -> bool {
+        let states = &mut self.pending.clock_states.states;
+        let bytes = &mut self.pending_encoded_bytes;
+        self.unsettled_clocks.retain(|_, epoch| {
+            let state = clock::state(epoch);
+            let settled = state.r#final;
+            if settled || latest {
+                push_message(states, bytes, 1, state);
+            }
+            !settled
+        });
+        self.unsettled_clocks.is_empty()
     }
 }
 
 impl ConversionBuffer {
+    fn define_function(&mut self, function: btel_types::FunctionId) {
+        if let Some(resolution) = self.functions.resolve(function) {
+            push_message(
+                &mut self.pending.definitions.functions,
+                &mut self.pending_encoded_bytes,
+                1,
+                proto::FunctionDefinition {
+                    function_id: function.get(),
+                    resolution: Some(resolution),
+                },
+            );
+        }
+    }
+
     fn aggregate(&mut self, delta: AggregateDelta) {
         // One recording window before serialization and delivery to its sink.
         // Span callbacks do not enter this map: the processor already counted them.
@@ -114,6 +168,9 @@ impl ConversionBuffer {
 
     fn span(&mut self, thread: TelemetryId, record: &SpanRecord<Snapshot, Snapshot>) {
         use proto::span_event::Event;
+        if !self.unwinds.is_empty() {
+            self.link_unwound(thread, record);
+        }
         match record {
             SpanRecord::ThreadSelected { .. } => panic!("processor must consume selectors"),
             SpanRecord::ThreadSpanAnnouncement {
@@ -148,7 +205,49 @@ impl ConversionBuffer {
                         outcome: flags::outcome(*outcome) as i32,
                     }),
                 );
+                // A raise that never ended cannot claim anything after its thread.
+                self.unwinds.clear_thread(thread);
             }
+            SpanRecord::ErrorRaiseOrigin { raise_id, origin } => {
+                self.error_raise_origin(thread, *raise_id, *origin);
+            }
+            SpanRecord::ErrorRaiseStack(stack) => self.error_raise_stack(thread, stack),
+            SpanRecord::ErrorRaised { .. } => self.error_raised(thread, record),
+            SpanRecord::ErrorRaisedAndEnded {
+                raise_id,
+                result,
+                handler_function,
+                handler_pc,
+                unwound_frames,
+                ..
+            } => {
+                self.error_raised(thread, record);
+                self.error_unwind_ended(
+                    thread,
+                    *raise_id,
+                    *result,
+                    *handler_function,
+                    (*handler_pc != btel_records::NO_PC).then_some(*handler_pc),
+                    *unwound_frames,
+                );
+            }
+            SpanRecord::ErrorRaiseFrameCompleted { raise_id } => {
+                self.error_raise_frame_completed(thread, *raise_id);
+            }
+            SpanRecord::ErrorUnwindEnded {
+                raise_id,
+                result,
+                handler_function,
+                handler_pc,
+                unwound_frames,
+            } => self.error_unwind_ended(
+                thread,
+                *raise_id,
+                *result,
+                *handler_function,
+                *handler_pc,
+                *unwound_frames,
+            ),
             SpanRecord::FunctionSpanAnnouncement {
                 id,
                 parent_id,
@@ -194,20 +293,11 @@ impl ConversionBuffer {
                         } as i32,
                     },
                 );
-                // No heap access here. A later metadata resolver may enrich these
-                // explicit placeholders; GC-collected functions may stay unnamed.
+                // No heap access here. Metadata comes from the owned table supplied
+                // at startup, once per recording; functions outside it (runtime
+                // definitions, GC-collected ones) keep the explicit placeholder.
                 for function in [Some(*callee), *visible_caller].into_iter().flatten() {
-                    push_message(
-                        &mut self.pending.definitions.functions,
-                        &mut self.pending_encoded_bytes,
-                        1,
-                        proto::FunctionDefinition {
-                            function_id: function.get(),
-                            resolution: Some(proto::function_definition::Resolution::Unavailable(
-                                proto::MetadataUnavailable {},
-                            )),
-                        },
-                    );
+                    self.define_function(function);
                 }
             }
             SpanRecord::FunctionSpanCompletionOk {

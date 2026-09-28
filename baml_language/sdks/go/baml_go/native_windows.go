@@ -59,13 +59,13 @@ static const char *baml_open_library(const wchar_t *path) {
 		FreeLibrary(handle);
 		return baml_loader_error;
 	}
-	const size_t required_size = offsetof(BamlApiV1, initialize_runtime_from_bytecode_with_metadata) + sizeof(api->initialize_runtime_from_bytecode_with_metadata);
+	const size_t required_size = offsetof(BamlApiV1, initialize_runtime_from_blob_with_metadata) + sizeof(api->initialize_runtime_from_blob_with_metadata);
 	if (api->struct_size < required_size) {
 		snprintf(baml_loader_error, sizeof(baml_loader_error), "truncated BAML ABI v1 table: got %zu bytes, need at least %zu", api->struct_size, required_size);
 		FreeLibrary(handle);
 		return baml_loader_error;
 	}
-	if (api->version == NULL || api->initialize_runtime_from_bytecode == NULL ||
+	if (api->version == NULL || api->initialize_runtime_from_blob == NULL ||
 		api->free_buffer == NULL || api->register_callback == NULL ||
 		api->call_function == NULL || api->new_function_call == NULL ||
 		api->cancel_function_call == NULL ||
@@ -79,7 +79,7 @@ static const char *baml_open_library(const wchar_t *path) {
 		api->register_bridge == NULL ||
 		api->register_unhandled_spawn_error_callback == NULL ||
 		api->shutdown_runtime == NULL ||
-		api->initialize_runtime_from_bytecode_with_metadata == NULL) {
+		api->initialize_runtime_from_blob_with_metadata == NULL) {
 		snprintf(baml_loader_error, sizeof(baml_loader_error), "BAML ABI v1 table contains a NULL required function");
 		FreeLibrary(handle);
 		return baml_loader_error;
@@ -109,8 +109,8 @@ static BamlBuffer baml_register_go_bridge(const uint8_t *runtime_name, size_t ru
 	};
 	return baml_api->register_bridge(&info);
 }
-static BamlBuffer baml_initialize(const uint8_t *bytecode, size_t length) { return baml_api->initialize_runtime_from_bytecode(bytecode, length); }
-static BamlBuffer baml_initialize_with_metadata(const uint8_t *bytecode, size_t length, const char *baml_toml) { return baml_api->initialize_runtime_from_bytecode_with_metadata(bytecode, length, baml_toml); }
+static BamlBuffer baml_initialize(const uint8_t *bytecode, size_t length) { return baml_api->initialize_runtime_from_blob(bytecode, length); }
+static BamlBuffer baml_initialize_with_metadata(const uint8_t *bytecode, size_t length, const char *baml_toml) { return baml_api->initialize_runtime_from_blob_with_metadata(bytecode, length, baml_toml); }
 static void baml_free_buffer(BamlBuffer buffer) { baml_api->free_buffer(buffer); }
 static void baml_register_go_callback(void) {
 	baml_api->register_callback(baml_go_result_callback);

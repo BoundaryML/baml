@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-use baml_codegen_types::{Name, Symbol, SymbolPool};
+use baml_sdkgen_types::{Name, Symbol, SymbolPool};
 
 use crate::routing::{LeafPath, raw_route_segments, sanitize_python_module_segment};
 
@@ -385,7 +385,7 @@ impl PythonNames {
         }
     }
 
-    fn allocate_class_members(&mut self, owner: &Name, class: &baml_codegen_types::Class) {
+    fn allocate_class_members(&mut self, owner: &Name, class: &baml_sdkgen_types::Class) {
         let mut primaries = Vec::new();
         for field in &class.properties {
             let raw = field.name.as_str().to_string();
@@ -460,7 +460,7 @@ impl PythonNames {
     fn allocate_callable_signature(
         &mut self,
         fqn: &str,
-        arguments: &[baml_codegen_types::FunctionArgument],
+        arguments: &[baml_sdkgen_types::FunctionArgument],
         instance: bool,
     ) {
         let entries = arguments
@@ -526,7 +526,7 @@ impl PythonNames {
     }
 }
 
-fn secondary_roles(function: &baml_codegen_types::Function) -> Vec<BindingRole> {
+fn secondary_roles(function: &baml_sdkgen_types::Function) -> Vec<BindingRole> {
     let _ = function;
     vec![BindingRole::DirectAsync]
 }

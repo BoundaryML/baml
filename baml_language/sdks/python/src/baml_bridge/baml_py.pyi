@@ -179,7 +179,7 @@ class BamlRuntime:
         * `files` - Map of filename to file content
         """
     @staticmethod
-    def initialize_runtime_from_bytecode(bytecode: typing.Sequence[builtins.int], embedded_baml_toml: typing.Optional[builtins.str] = None) -> BamlRuntime:
+    def initialize_runtime_from_blob(bytecode: typing.Sequence[builtins.int], embedded_baml_toml: typing.Optional[builtins.str] = None) -> BamlRuntime:
         r"""
         Initialize the process-global runtime from serialized BAML bytecode.
 

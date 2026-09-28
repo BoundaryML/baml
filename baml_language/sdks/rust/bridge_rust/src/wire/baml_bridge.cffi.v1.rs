@@ -974,7 +974,7 @@ impl MediaTypeEnum {
 pub struct InboundValue {
     #[prost(message, optional, tag = "1")]
     pub value_type: ::core::option::Option<BamlTy>,
-    #[prost(oneof = "inbound_value::Value", tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16")]
+    #[prost(oneof = "inbound_value::Value", tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17")]
     pub value: ::core::option::Option<inbound_value::Value>,
 }
 /// Nested message and enum types in `InboundValue`.
@@ -1020,6 +1020,12 @@ pub mod inbound_value {
         MediaValue(super::BamlValueMedia),
         #[prost(message, tag = "16")]
         PromptAstValue(super::BamlValuePromptAst),
+        /// A JavaScript `number`. Unlike `int_value` and `float_value`, this does
+        /// not choose a BAML numeric representation: an integral value may inhabit
+        /// either `int` or `float`, and the declared contextual type selects one.
+        /// Non-integral values can inhabit only `float`.
+        #[prost(double, tag = "17")]
+        JsNumberValue(f64),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]

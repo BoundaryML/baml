@@ -393,6 +393,7 @@ pub(crate) mod tests {
 
             context_transfers: Vec::new(),
             argv: Arc::from([]),
+            pending_call_trace: None,
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
             static_load_type_cache: HashMap::new(),
@@ -403,6 +404,7 @@ pub(crate) mod tests {
                 #[cfg(not(target_arch = "wasm32"))]
                 crate::telemetry::test_runtime(),
             )),
+            trace_scope: btel_types::RecordingId::generate(),
             pending_telemetry_wait: None,
             packages: Arc::new(crate::package_load::PackageIndex::default()),
             dynamic_dispatch: Arc::new(crate::package_load::DynDispatchTables::default()),
@@ -456,6 +458,57 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn public_span_identity_uses_the_emitted_local_id() {
+        use bex_vm_types::{ConstValue, bytecode::Instruction, trace::SpanId};
+
+        use crate::telemetry::{SpanRecord, TelemetryPolicy};
+
+        let Object::Function(mut function) = native_function_object() else {
+            unreachable!()
+        };
+        function.kind = FunctionKind::Bytecode;
+        function.bytecode = Bytecode {
+            instructions: vec![Instruction::LoadConst(0), Instruction::Return],
+            constants: vec![ConstValue::Int(42)],
+            ..Bytecode::default()
+        };
+        function.bytecode.compact = Some(function.bytecode.lower_to_compact());
+        let mut vm = test_vm(vec![Object::Function(function)]);
+        let entry = vm.idx_to_ptr(ObjectIndex::from_raw(0));
+        let Object::Function(function) = vm.get_object(entry) else {
+            unreachable!()
+        };
+        vm.telemetry
+            .as_ref()
+            .unwrap()
+            .set_policy(
+                function,
+                TelemetryPolicy {
+                    span_from_entry: true,
+                    ..TelemetryPolicy::NONE
+                },
+            )
+            .unwrap();
+        vm.set_entry_point(entry, &[]);
+        let public_id = vm.current_span_id().unwrap();
+        assert!(
+            matches!(vm.exec().unwrap(), VmExecState::Complete(value) if value == Value::int(42))
+        );
+        let local_id = vm
+            .telemetry
+            .as_ref()
+            .unwrap()
+            .span_records()
+            .iter()
+            .find_map(|record| match record {
+                SpanRecord::FunctionSpanCompletionOk { id, .. } => Some(*id),
+                _ => None,
+            })
+            .expect("completed span");
+        assert_eq!(public_id, SpanId::new(vm.trace_scope, local_id));
+    }
+
+    #[test]
     fn hidden_native_execution_has_only_thread_events() {
         use crate::telemetry::{InvocationOutcome, SpanRecord};
 
@@ -480,6 +533,28 @@ pub(crate) mod tests {
                 }
             ]
         ));
+    }
+
+    // Invalid instruction ordering cannot be exercised from BAML source.
+    #[cfg(all(debug_assertions, not(target_arch = "wasm32")))]
+    #[test]
+    #[should_panic(expected = "SetCallTrace must be followed by a call instruction")]
+    fn trace_prefix_rejects_a_non_call_instruction() {
+        use bex_vm_types::bytecode::Instruction;
+
+        let Object::Function(mut function) = native_function_object() else {
+            unreachable!()
+        };
+        function.kind = FunctionKind::Bytecode;
+        function.bytecode = Bytecode {
+            instructions: vec![Instruction::SetCallTrace, Instruction::Return],
+            ..Bytecode::default()
+        };
+        function.bytecode.compact = Some(function.bytecode.lower_to_compact());
+        let mut vm = test_vm(vec![Object::Function(function)]);
+        let entry = vm.idx_to_ptr(ObjectIndex::from_raw(0));
+        vm.set_entry_point(entry, &[]);
+        let _ = vm.exec();
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1212,6 +1287,68 @@ impl RootHaver for Frame {
     }
 }
 
+/// The `baml.errors.Context` of an error the unwinder is carrying, until a
+/// handler lands it.
+enum InFlightContext {
+    /// An error that already has its context: a caught error raised again, an
+    /// error awaited from another task, or a conversion of the error a handler
+    /// is handling.
+    Carried(Value),
+    /// A new failure's trace and cause. The `Context` object is built only if
+    /// a handler lands it.
+    Fresh {
+        trace: Arc<[StackFrame]>,
+        cause: Value,
+    },
+}
+
+/// A conversion (`UnknownError.from` / `with_message`) of the error a handler
+/// is handling: the next new throw of `target` from inside that handler takes
+/// over the handled error's trace and cause, as if it were that error.
+struct ContextTransfer {
+    /// The handler's `baml.errors.Context`, which identifies the handled error.
+    handling: Value,
+    /// The value the conversion produced.
+    target: Value,
+}
+
+mod error_evidence;
+use error_evidence::RaiseEntry;
+
+/// The parameter list a callable value executes with; see
+/// [`BexVm::callee_params`].
+enum CalleeParams<'a> {
+    Function(&'a Function),
+    Host(&'a bex_vm_types::HostClosure),
+}
+
+impl CalleeParams<'_> {
+    fn arity(&self) -> usize {
+        match self {
+            Self::Function(function) => function.arity,
+            Self::Host(host) => host.arity,
+        }
+    }
+
+    fn layout(&self) -> baml_type::CallLayout {
+        match self {
+            Self::Function(function) => function.argument_layout(),
+            Self::Host(host) => baml_type::CallLayout::from_modes(
+                host.params
+                    .iter()
+                    .map(|param| (param.name.clone(), param.mode)),
+            ),
+        }
+    }
+
+    fn layout_is(&self, layout: &baml_type::CallLayout) -> bool {
+        match self {
+            Self::Function(function) => function.argument_layout_is(layout),
+            Self::Host(_) => self.layout() == *layout,
+        }
+    }
+}
+
 /// The beast.
 ///
 /// This is a stack based virtual machine. Stack based machines work by pushing
@@ -1319,65 +1456,6 @@ impl RootHaver for Frame {
 /// Other than that, pretty much everything is better in a stack VM, especially
 /// simplicity (we don't even need to figure out which registers to use and when
 /// to use them).
-/// The `baml.errors.Context` of an error the unwinder is carrying, until a
-/// handler lands it.
-enum InFlightContext {
-    /// An error that already has its context: a caught error raised again, an
-    /// error awaited from another task, or a conversion of the error a handler
-    /// is handling.
-    Carried(Value),
-    /// A new failure's trace and cause. The `Context` object is built only if
-    /// a handler lands it.
-    Fresh {
-        trace: Arc<[StackFrame]>,
-        cause: Value,
-    },
-}
-
-/// A conversion (`UnknownError.from` / `with_message`) of the error a handler
-/// is handling: the next new throw of `target` from inside that handler takes
-/// over the handled error's trace and cause, as if it were that error.
-struct ContextTransfer {
-    /// The handler's `baml.errors.Context`, which identifies the handled error.
-    handling: Value,
-    /// The value the conversion produced.
-    target: Value,
-}
-
-/// The parameter list a callable value executes with; see
-/// [`BexVm::callee_params`].
-enum CalleeParams<'a> {
-    Function(&'a Function),
-    Host(&'a bex_vm_types::HostClosure),
-}
-
-impl CalleeParams<'_> {
-    fn arity(&self) -> usize {
-        match self {
-            Self::Function(function) => function.arity,
-            Self::Host(host) => host.arity,
-        }
-    }
-
-    fn layout(&self) -> baml_type::CallLayout {
-        match self {
-            Self::Function(function) => function.argument_layout(),
-            Self::Host(host) => baml_type::CallLayout::from_modes(
-                host.params
-                    .iter()
-                    .map(|param| (param.name.clone(), param.mode)),
-            ),
-        }
-    }
-
-    fn layout_is(&self, layout: &baml_type::CallLayout) -> bool {
-        match self {
-            Self::Function(function) => function.argument_layout_is(layout),
-            Self::Host(_) => self.layout() == *layout,
-        }
-    }
-}
-
 pub struct BexVm {
     /// Call stack.
     ///
@@ -1442,6 +1520,7 @@ pub struct BexVm {
 
     /// VM-owned producer state. It deliberately has no transport or buffer.
     telemetry: Option<TelemetryState>,
+    pub(crate) trace_scope: btel_types::RecordingId,
 
     /// Starts at VM Await suspension, or when the engine receives an async
     /// sys-op. Taken across the heap-permit release; lookup failures leave it
@@ -1470,6 +1549,7 @@ pub struct BexVm {
     /// Saved/restored across nested `Call` instructions; native handlers that
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
+    pending_call_trace: Option<crate::telemetry::TraceConfig>,
     pending_call_type_args: Vec<bex_vm_types::RealizedTy>,
     pending_call_type_values: Vec<Option<TypeValue>>,
 
@@ -1960,6 +2040,7 @@ impl BexVm {
         error_class_ptrs: Arc<[HeapPtr]>,
         panic_class_ptrs: Arc<[HeapPtr]>,
         telemetry: Option<TelemetryState>,
+        trace_scope: btel_types::RecordingId,
     ) -> Self {
         // Defer the first TLAB chunk reservation until the first `tlab.alloc`,
         // which the engine reaches only after the VM has been registered as a
@@ -1997,11 +2078,13 @@ impl BexVm {
 
             context_transfers: Vec::new(),
             argv,
+            pending_call_trace: None,
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
             telemetry,
+            trace_scope,
             pending_telemetry_wait: None,
             packages,
             dynamic_dispatch,
@@ -2031,6 +2114,66 @@ impl BexVm {
     /// any call dispatch context.
     pub fn current_call_type_args(&self) -> &[bex_vm_types::RealizedTy] {
         &self.pending_call_type_args
+    }
+
+    pub(crate) fn current_span_id(&self) -> Option<bex_vm_types::trace::SpanId> {
+        self.telemetry.as_ref()?;
+        let Frame::Bytecode(frame) = self.frames.last()? else {
+            return None;
+        };
+        frame
+            .telemetry?
+            .span_id()
+            .map(|local| bex_vm_types::trace::SpanId::new(self.trace_scope, local))
+    }
+
+    fn trace_attachment_error(&mut self, message: &str) -> VmError {
+        VmError::thrown_fresh(self.panic_to_exception_value(VmPanic::UserPanic {
+            message: message.to_owned(),
+        }))
+    }
+
+    fn trace_config(&mut self, value: Value) -> Result<crate::telemetry::TraceConfig, VmError> {
+        use bex_vm_types::trace::{ReservationError, ReservedSpanData, TraceOptionsData};
+
+        let handle = self
+            .as_instance(&value)
+            .ok()
+            .and_then(|instance| (!instance.fields.is_empty()).then(|| instance.load_field(0)));
+        let Some(handle) = handle else {
+            return Err(
+                self.trace_attachment_error("$trace expects trace.Options or trace.ReservedSpan")
+            );
+        };
+        let (options, reserved_id) =
+            if let Ok(options) = self.as_rust_data::<TraceOptionsData>(&handle) {
+                (*options, None)
+            } else if let Ok(reservation) = self.as_rust_data::<ReservedSpanData>(&handle) {
+                let local = match reservation.attach(self.trace_scope) {
+                    Ok(local) => local,
+                    Err(error) => {
+                        return Err(self.trace_attachment_error(match error {
+                            ReservationError::WrongScope => {
+                                "trace.ReservedSpan belongs to a different runtime"
+                            }
+                            ReservationError::AlreadyAttached => {
+                                "trace.ReservedSpan can only be attached once"
+                            }
+                        }));
+                    }
+                };
+                (reservation.options, Some(local))
+            } else {
+                return Err(self
+                    .trace_attachment_error("$trace expects trace.Options or trace.ReservedSpan"));
+            };
+        Ok(crate::telemetry::TraceConfig {
+            mode: options.mode,
+            inputs: options.inputs,
+            output: options.output,
+            error: options.error,
+            reserved_id,
+        })
     }
 
     /// The `type` value a type-operand position received. Every such
@@ -3654,6 +3797,7 @@ impl BexVm {
                     }
                 })?,
             )),
+            btel_types::RecordingId::generate(),
         ))
     }
 
@@ -3801,6 +3945,7 @@ impl BexVm {
         if self.frames.is_empty() {
             if let Some(telemetry) = &mut self.telemetry {
                 telemetry.start_thread();
+                telemetry.clear_error_book();
             }
             self.context_transfers.clear();
         }
@@ -5105,6 +5250,16 @@ impl BexVm {
         function: &mut &'static Function,
         thrown: VmThrown,
     ) -> Result<(), VmError> {
+        self.unwind_exception(frame_idx, function, thrown, RaiseEntry::Vm)
+    }
+
+    fn unwind_exception(
+        &mut self,
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+        thrown: VmThrown,
+        entry: RaiseEntry,
+    ) -> Result<(), VmError> {
         let exception_value = thrown.value;
         let telemetry_outcome = self.telemetry_outcome_for_exception(exception_value);
 
@@ -5120,23 +5275,41 @@ impl BexVm {
         // becomes its cause, unless it throws a conversion of that error
         // (`UnknownError.from`), which takes over the error's own trace and
         // cause.
-        let context = match thrown.context {
+        let (context, converted) = match thrown.context {
             Some(context) if self.context_error(context)? == exception_value => {
-                InFlightContext::Carried(context)
+                (InFlightContext::Carried(context), false)
             }
             Some(_) | None => {
                 let cause = self.find_cause_context();
                 match self.take_context_transfer(cause, exception_value) {
-                    Some(handled) => {
-                        InFlightContext::Carried(self.retargeted_context(handled, exception_value)?)
-                    }
-                    None => InFlightContext::Fresh {
-                        trace: Arc::from(self.capture_user_stack_trace()),
-                        cause,
-                    },
+                    Some(handled) => (
+                        InFlightContext::Carried(
+                            self.retargeted_context(handled, exception_value)?,
+                        ),
+                        true,
+                    ),
+                    None => (
+                        InFlightContext::Fresh {
+                            trace: Arc::from(self.capture_user_stack_trace()),
+                            cause,
+                        },
+                        false,
+                    ),
                 }
             }
         };
+        // Exception-path telemetry; `None` unless a recording wants raises.
+        let carried = match &context {
+            InFlightContext::Carried(context) => Some(*context),
+            InFlightContext::Fresh { .. } => None,
+        };
+        let mut evidence = self.begin_error_evidence(
+            &thrown,
+            entry,
+            Some((*frame_idx, *function)),
+            carried,
+            converted,
+        );
 
         // The innermost (first) bytecode frame's faulting PC is the live
         // `cur_pc`; outer frames use the call-site PC they recorded at call time.
@@ -5157,6 +5330,12 @@ impl BexVm {
             if matches!(frame, Frame::Native(_)) {
                 if self.frames.len() <= 1 {
                     // No bytecode handler remains for this native entry frame.
+                    if let Some(evidence) = evidence.take() {
+                        self.error_not_caught(
+                            evidence,
+                            btel_records::UnwindResult::EscapedToNative,
+                        );
+                    }
                     return Err(VmError::thrown_fresh(exception_value));
                 }
                 // SAFETY: the branch above established that at least two frames remain.
@@ -5181,7 +5360,15 @@ impl BexVm {
 
             // Load the function for this frame to access its exception table.
             // SAFETY: See `load_function` doc comment.
-            let frame_function = unsafe { self.load_function(depth)? };
+            let frame_function = match unsafe { self.load_function(depth) } {
+                Ok(frame_function) => frame_function,
+                Err(error) => {
+                    if let Some(evidence) = evidence.take() {
+                        self.error_not_caught(evidence, btel_records::UnwindResult::Aborted);
+                    }
+                    return Err(error.into());
+                }
+            };
 
             // Find the INNERMOST exception table entry covering this PC: the
             // NARROWEST range — the largest `start_pc`, then the smallest
@@ -5245,6 +5432,17 @@ impl BexVm {
                 let ctx_slot = Self::local_slot_stack_index(locals_offset, entry.context_slot);
                 self.stack[ctx_slot] = ctx_value;
 
+                if let Some(evidence) = evidence.take() {
+                    self.error_caught(
+                        evidence,
+                        depth,
+                        frame_function,
+                        entry.context_slot,
+                        ctx_slot.raw(),
+                        entry.handler_pc,
+                    );
+                }
+
                 // Jump to the handler.
                 let Frame::Bytecode(bf) = &mut self.frames[depth] else {
                     unreachable!("frame at depth is Bytecode");
@@ -5258,8 +5456,20 @@ impl BexVm {
             }
 
             // No handler in this frame -- pop it and try the caller.
+            self.complete_unwound_frame(
+                depth,
+                frame_function,
+                telemetry_outcome,
+                exception_value,
+                evidence.as_mut(),
+            );
+            if let Some(evidence) = &mut evidence {
+                self.error_frame_unwound(evidence, depth);
+            }
             if self.frames.len() <= 1 {
-                self.complete_bytecode_invocation(depth, telemetry_outcome, Some(exception_value));
+                if let Some(evidence) = evidence.take() {
+                    self.error_not_caught(evidence, btel_records::UnwindResult::Unhandled);
+                }
                 let trace = match &context {
                     InFlightContext::Carried(context) => self.context_trace(*context)?,
                     InFlightContext::Fresh { trace, .. } => trace.to_vec(),
@@ -5270,7 +5480,6 @@ impl BexVm {
                 });
             }
 
-            self.complete_bytecode_invocation(depth, telemetry_outcome, Some(exception_value));
             let popped = self.frames.pop().expect("frame stack is not empty");
             match popped {
                 Frame::Bytecode(bf) => {
@@ -5703,6 +5912,7 @@ impl BexVm {
         frame_idx: &mut usize,
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
+        let trace = self.pending_call_trace.take();
         // Record the caller's call-site PC before descending. Once a callee
         // frame is pushed, this (now-outer) frame is no longer the innermost, so
         // its live PC must be persisted into `faulting_pc` for correct unwinding
@@ -5730,6 +5940,11 @@ impl BexVm {
         // the engine completes the op, exactly as for a bytecode callback's
         // return value.
         if matches!(callee_object, Object::HostClosure(_)) {
+            if trace.is_some() {
+                return Err(
+                    self.trace_attachment_error("$trace is not supported on host functions")
+                );
+            }
             let user_args: Vec<Value> = self.stack.drain(locals_offset..).collect();
             let state = self.host_closure_call_sysop(callee_ptr, user_args);
             return Ok(Some(state));
@@ -5814,6 +6029,11 @@ impl BexVm {
         // skip it but it's an easy and fast check.
         let callee_arity = callee.arity;
         let callee_kind = callee.kind;
+        if trace.is_some() && !matches!(callee_kind, FunctionKind::Bytecode) {
+            return Err(self.trace_attachment_error(
+                "$trace is not supported on native functions or system operations",
+            ));
+        }
         if arg_count != callee_arity {
             return Err(VmInternalError::InvalidArgumentCount {
                 expected: callee_arity,
@@ -5983,13 +6203,14 @@ impl BexVm {
                         [locals_offset.raw()..locals_offset.raw().saturating_add(arg_count)];
                     // SAFETY: arguments and callable remain live under the heap permit.
                     self.telemetry.as_mut().and_then(|telemetry| unsafe {
-                        telemetry.enter_bytecode(
+                        telemetry.enter_bytecode_with_trace(
                             callee,
                             callee_fn_ptr,
                             actual_caller,
                             caller_pc,
                             caller_is_observed,
                             args,
+                            trace,
                             |caller, callee| {
                                 Self::register_call_path_functions(&self.heap, caller, callee)
                             },
@@ -6386,6 +6607,56 @@ impl BexVm {
         self.complete_bytecode_invocation_with_function(function, telemetry, outcome, value);
     }
 
+    /// Complete a bytecode frame the unwinder is about to pop, with the
+    /// function it already loaded. While a raise is recorded, the frame exits
+    /// at the raise's instant: no code runs between one unwind's pops, so one
+    /// clock read serves the raise and every frame it pops.
+    fn complete_unwound_frame(
+        &mut self,
+        frame_idx: usize,
+        function: &Function,
+        outcome: InvocationOutcome,
+        value: Value,
+        evidence: Option<&mut error_evidence::UnwindEvidence>,
+    ) {
+        let telemetry = match self.frames.get_mut(frame_idx) {
+            Some(Frame::Bytecode(frame)) => frame.telemetry.take(),
+            _ => None,
+        };
+        let Some(telemetry) = telemetry else {
+            return;
+        };
+        // A retained call's completion, including a late promotion, must
+        // follow its raise's record.
+        let exited_at = evidence.map(|evidence| {
+            if evidence.holds_raise()
+                && (telemetry.is_span()
+                    || function.telemetry_policy_id.load() != btel_types::TelemetryPolicyId::NONE)
+            {
+                self.release_held_raise(evidence);
+            }
+            evidence.raised_at()
+        });
+        let state = self
+            .telemetry
+            .as_mut()
+            .expect("observed invocation has telemetry");
+        // SAFETY: the unwinder holds the heap permit, and the frame and the
+        // error stay rooted until after producer completion.
+        unsafe {
+            match exited_at {
+                Some(exited_at) => state.complete_invocation_at(
+                    telemetry,
+                    function,
+                    outcome,
+                    Some(value),
+                    exited_at,
+                ),
+                None => state.complete_invocation(telemetry, function, outcome, Some(value)),
+            }
+        }
+    }
+
     #[allow(clippy::inline_always, reason = "measured producer return fast path")]
     #[inline(always)]
     fn complete_bytecode_invocation_with_function(
@@ -6518,8 +6789,21 @@ impl BexVm {
             return;
         }
         self.finish_pending_telemetry_wait();
+        // Engine-side cancellation can terminate a suspended VM without an
+        // exception value on its stack. Capture the same panic value that the
+        // engine returns, without dispatching it into user code.
+        let error = (outcome == InvocationOutcome::Cancelled
+            && self
+                .frames
+                .iter()
+                .any(|frame| matches!(frame, Frame::Bytecode(frame) if frame.telemetry.is_some()))
+            && self
+                .panic_class_ptrs
+                .get(PanicClass::Cancelled as usize)
+                .is_some_and(|class| !class.is_null()))
+        .then(|| self.panic_to_exception_value(VmPanic::Cancelled));
         for frame_idx in (0..self.frames.len()).rev() {
-            self.complete_bytecode_invocation(frame_idx, outcome, None);
+            self.complete_bytecode_invocation(frame_idx, outcome, error);
         }
         self.telemetry.as_mut().unwrap().complete_thread(outcome);
     }
@@ -6601,6 +6885,7 @@ impl BexVm {
         self.finish_pending_telemetry_wait();
         let exception_value = thrown.value;
         if self.frames.is_empty() {
+            self.record_unwound_without_frames(&thrown);
             let trace = self.capture_user_stack_trace();
             return Err(VmError::ThrownUnhandled {
                 value: exception_value,
@@ -6615,6 +6900,7 @@ impl BexVm {
         let mut seed_idx = self.frames.len() - 1;
         while !matches!(&self.frames[seed_idx], Frame::Bytecode(_)) {
             if seed_idx == 0 {
+                self.record_unwound_without_frames(&thrown);
                 let trace = self.capture_user_stack_trace();
                 return Err(VmError::ThrownUnhandled {
                     value: exception_value,
@@ -6628,7 +6914,17 @@ impl BexVm {
         // Bytecode frame whose `function` pointer is valid for `&'static
         // Function` while we hold `&mut self`.
         let mut function = unsafe { self.load_function(seed_idx)? };
-        self.try_unwind_exception(&mut frame_idx, &mut function, thrown)
+        self.unwind_exception(&mut frame_idx, &mut function, thrown, RaiseEntry::Host)
+    }
+
+    /// An injected failure with no bytecode frame to unwind still is a raise.
+    #[cold]
+    fn record_unwound_without_frames(&mut self, thrown: &VmThrown) {
+        if let Some(evidence) =
+            self.begin_error_evidence(thrown, RaiseEntry::Host, None, None, false)
+        {
+            self.error_not_caught(evidence, btel_records::UnwindResult::Unhandled);
+        }
     }
 
     #[allow(clippy::inline_always)] // Measured: 20-40% speedup from inlining the dispatch loop
@@ -6999,6 +7295,9 @@ impl BexVm {
                     &mut code,
                     &mut dispatch_frame_idx,
                 );
+                if step_result.is_err() {
+                    self.pending_call_trace = None;
+                }
 
                 match step_result {
                     Ok(None) if frame_idx == dispatch_frame_idx => {
@@ -7595,6 +7894,11 @@ impl BexVm {
 
                     // ── SysOp (BEP-034 phase D′) ──────────────────────────────────
                     OpCode::SysOp => {
+                        if self.pending_call_trace.take().is_some() {
+                            return Err(self.trace_attachment_error(
+                                "$trace is not supported on system operations",
+                            ));
+                        }
                         let raw = { read_u32_unchecked(code, pc) };
 
                         let callee = bex_vm_types::GlobalIndex::from_raw(raw as usize);
@@ -7645,6 +7949,24 @@ impl BexVm {
                     }
 
                     // ── Call ──────────────────────────────────────────────────────
+                    OpCode::SetCallTrace => {
+                        debug_assert!(
+                            matches!(
+                                code.get(*pc)
+                                    .copied()
+                                    .and_then(|byte| OpCode::try_from(byte).ok()),
+                                Some(
+                                    OpCode::Call
+                                        | OpCode::CallExactArgs
+                                        | OpCode::CallIndirect
+                                        | OpCode::VirtualCall
+                                )
+                            ),
+                            "SetCallTrace must be followed by a call instruction"
+                        );
+                        let value = self.stack.ensure_pop();
+                        self.pending_call_trace = Some(self.trace_config(value)?);
+                    }
                     OpCode::Call | OpCode::CallExactArgs => {
                         let raw = read_u32_unchecked(code, pc);
                         let ntypeargs = usize::from(read_u16_unchecked(code, pc));
@@ -7654,6 +7976,7 @@ impl BexVm {
                             self.load_global_in(function.runtime_package, callee_global);
 
                         if op == OpCode::CallExactArgs
+                            && self.pending_call_trace.is_none()
                             && self.pending_call_type_args.is_empty()
                             && self.pending_call_type_values.is_empty()
                         {
@@ -8010,6 +8333,11 @@ impl BexVm {
                         let obj = self.get_object(callee_ptr);
 
                         if let Object::HostClosure(host_closure) = obj {
+                            if self.pending_call_trace.is_some() {
+                                return Err(self.trace_attachment_error(
+                                    "$trace is not supported on host functions",
+                                ));
+                            }
                             // Host-callable dispatch via a single-yield sys-op. See
                             // `Instruction::CallIndirect` / `host_closure_call_sysop`
                             // for the args-layout rationale.

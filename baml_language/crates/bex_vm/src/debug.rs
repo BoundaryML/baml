@@ -241,6 +241,7 @@ pub(crate) fn display_instruction(
         | Instruction::Await
         | Instruction::AwaitAny
         | Instruction::CallIndirect
+        | Instruction::SetCallTrace
         | Instruction::Throw
         | Instruction::Rethrow
         | Instruction::Discriminant
@@ -419,9 +420,10 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::JumpIfFalse(_)
         | Instruction::JumpTable { .. }
         | Instruction::DenseTag(_) => Style::new().yellow(),
-        Instruction::Call { .. } | Instruction::CallIndirect | Instruction::VirtualCall { .. } => {
-            Style::new().magenta()
-        }
+        Instruction::Call { .. }
+        | Instruction::CallIndirect
+        | Instruction::SetCallTrace
+        | Instruction::VirtualCall { .. } => Style::new().magenta(),
         Instruction::Return
         | Instruction::Pop(_)
         | Instruction::Copy(_)
@@ -932,6 +934,7 @@ fn display_instruction_textual(
         Instruction::Call { .. } => format!("call {}", meta_str(&"")),
 
         Instruction::CallIndirect => "call_indirect".to_string(),
+        Instruction::SetCallTrace => "set_call_trace".to_string(),
 
         Instruction::VirtualCall { nargs, ntypeargs } => {
             format!("virtual_call nargs={nargs} ntypeargs={ntypeargs}")
@@ -1276,6 +1279,7 @@ pub fn display_compact_bytecode(
             | OpCode::StoreArrayElement
             | OpCode::StoreMapElement
             | OpCode::CallIndirect
+            | OpCode::SetCallTrace
             | OpCode::Discriminant
             | OpCode::TypeTag
             | OpCode::Truthy

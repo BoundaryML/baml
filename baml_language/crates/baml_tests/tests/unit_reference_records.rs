@@ -44,7 +44,19 @@ const ROOT: &str = "/unit-reference-records";
 /// broken fixture must fail HERE, not as a mysterious missing edge.
 fn unit_for(files: &[(&str, &str)], file: &str) -> CompilationUnit {
     let db = build_db(ROOT, files);
-    let diagnostics = baml_db::collect_compiler2_diagnostics(&db);
+    let fixture_files: Vec<_> = db
+        .workspace_files()
+        .iter()
+        .map(|file| file.file_id(&db))
+        .collect();
+    let diagnostics: Vec<_> = baml_db::collect_compiler2_diagnostics(&db)
+        .into_iter()
+        .filter(|diagnostic| {
+            diagnostic
+                .primary_span()
+                .is_some_and(|span| fixture_files.contains(&span.file_id))
+        })
+        .collect();
     assert!(
         diagnostics.is_empty(),
         "fixture must type-check cleanly; got {diagnostics:#?}"

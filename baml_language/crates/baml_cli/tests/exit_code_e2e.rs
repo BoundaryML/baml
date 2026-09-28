@@ -324,7 +324,7 @@ fn generate_go_writes_sdk_through_cli() {
     assert!(bootstrap.contains("func Ensure() error"));
     assert_eq!(
         std::fs::read_to_string(sdk.join(".gitignore")).unwrap(),
-        baml_codegen_types::GENERATED_GITIGNORE
+        baml_sdkgen_types::GENERATED_GITIGNORE
     );
     assert!(sdk.join("types.go").is_file());
     assert_eq!(

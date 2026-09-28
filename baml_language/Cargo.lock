@@ -163,6 +163,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ar_archive_writer"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73cd58deff2140a0a8eae87e417bd01db68a33e148aa93d1e8cd837e55e312b6"
+dependencies = [
+ "object 0.39.1",
+]
+
+[[package]]
 name = "arbitrary"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -597,8 +606,10 @@ name = "baml_artifact"
 version = "0.0.0-beta"
 dependencies = [
  "baml_version",
+ "base64",
  "borsh",
  "log",
+ "lz4_flex",
  "sha2",
  "thiserror 2.0.18",
 ]
@@ -664,14 +675,14 @@ dependencies = [
  "anyhow",
  "baml_artifact",
  "baml_builtins2",
- "baml_codegen_types",
  "baml_db",
  "baml_exec",
  "baml_fmt",
  "baml_ide",
  "baml_lsp_server",
- "baml_query",
+ "baml_query_btel",
  "baml_release",
+ "baml_sdkgen_types",
  "baml_tests",
  "baml_type",
  "baml_version",
@@ -688,14 +699,12 @@ dependencies = [
  "console",
  "ctrlc",
  "hex",
- "indexmap",
  "indicatif",
  "insta",
  "libsui",
  "mimalloc",
  "mime_guess",
  "rayon",
- "regex",
  "reqwest",
  "sdkgen_cpp",
  "sdkgen_csharp",
@@ -718,20 +727,6 @@ dependencies = [
  "uuid",
  "webbrowser",
  "yaml_serde",
-]
-
-[[package]]
-name = "baml_codegen_types"
-version = "0.0.0-beta"
-dependencies = [
- "baml_base",
- "baml_type",
- "fs2",
- "serde",
- "serde_json",
- "sha2",
- "strum",
- "tempfile",
 ]
 
 [[package]]
@@ -940,7 +935,6 @@ name = "baml_fmt"
 version = "0.0.0-beta"
 dependencies = [
  "baml_db",
- "baml_type",
  "ouroboros",
  "rowan 0.16.1",
  "salsa",
@@ -962,7 +956,6 @@ dependencies = [
  "baml_artifact",
  "baml_base",
  "baml_builtins2",
- "baml_codegen_types",
  "baml_compiler2_ast",
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
@@ -972,6 +965,7 @@ dependencies = [
  "baml_compiler_parser",
  "baml_compiler_syntax",
  "baml_db",
+ "baml_sdkgen_types",
  "baml_type",
  "bitflags 2.11.1",
  "insta",
@@ -991,7 +985,6 @@ dependencies = [
  "baml_db",
  "baml_fmt",
  "baml_ide",
- "baml_type",
  "baml_version",
  "crossbeam-channel",
  "ignore",
@@ -1019,7 +1012,7 @@ dependencies = [
  "baml_db",
  "baml_ide",
  "baml_lsp",
- "baml_type",
+ "baml_query_btel",
  "baml_version",
  "base64",
  "bex_engine",
@@ -1028,6 +1021,7 @@ dependencies = [
  "bex_project",
  "bex_vm_types",
  "bridge_ctypes",
+ "btel_settings",
  "crossbeam-channel",
  "futures",
  "indexmap",
@@ -1091,6 +1085,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_query_btel"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_db",
+ "baml_query_btel",
+ "base64",
+ "bex_engine",
+ "bex_heap",
+ "bex_vm_types",
+ "btel_clock",
+ "btel_reader",
+ "btel_recorder",
+ "btel_snapshot",
+ "fs2",
+ "prost",
+ "rusqlite",
+ "rustc-hash 2.1.2",
+ "serde",
+ "serde_json",
+ "sqlparser",
+ "sys_native",
+ "sys_types",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "baml_release"
 version = "0.0.0-beta"
 dependencies = [
@@ -1102,10 +1123,23 @@ dependencies = [
  "serde_json",
  "sha2",
  "tar",
- "tempfile",
  "thiserror 2.0.18",
- "toml 0.8.23",
  "zip",
+]
+
+[[package]]
+name = "baml_sdkgen_types"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_artifact",
+ "baml_base",
+ "baml_type",
+ "fs2",
+ "serde",
+ "serde_json",
+ "sha2",
+ "strum",
+ "tempfile",
 ]
 
 [[package]]
@@ -1268,6 +1302,7 @@ dependencies = [
  "btel_processor",
  "btel_recorder",
  "btel_settings",
+ "btel_snapshot",
  "btel_types",
  "clap",
  "futures",
@@ -1828,6 +1863,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "btel_reader"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_type",
+ "base64",
+ "btel_file",
+ "btel_recorder",
+ "btel_settings",
+ "btel_snapshot",
+ "num-bigint",
+ "prost",
+ "serde_json",
+ "tempfile",
+ "xxhash-rust",
+]
+
+[[package]]
 name = "btel_recorder"
 version = "0.0.0-beta"
 dependencies = [
@@ -1842,7 +1894,6 @@ dependencies = [
  "prost-build",
  "protoc-bin-vendored",
  "rustc-hash 2.1.2",
- "uuid",
  "web-time",
 ]
 
@@ -1887,6 +1938,7 @@ version = "0.0.0-beta"
 dependencies = [
  "btel_settings",
  "rustc-hash 2.1.2",
+ "uuid",
 ]
 
 [[package]]
@@ -3369,6 +3421,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fallible-iterator"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
+
+[[package]]
+name = "fallible-streaming-iterator"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
+
+[[package]]
 name = "fancy-regex"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4637,6 +4701,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "libsqlite3-sys"
+version = "0.35.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "133c182a6a2c87864fe97778797e46c7e999672690dc9fa3ee8e241aa4a9c13f"
+dependencies = [
+ "cc",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
 name = "libsui"
 version = "0.16.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5181,6 +5256,15 @@ name = "object"
 version = "0.37.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff76201f031d8863c38aa7f905eca4f53abbfa15f609db4277d44cd8938f33fe"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
+name = "object"
+version = "0.39.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e5a6c098c7a3b6547378093f5cc30bc54fd361ce711e05293a5cc589562739b"
 dependencies = [
  "memchr",
 ]
@@ -5768,6 +5852,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95067976aca6421a523e491fce939a3e65249bac4b977adee0ee9771568e8aa3"
 
 [[package]]
+name = "psm"
+version = "0.1.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4dcd034599e63b970727f70d79e02d62390a4a84f7c6b827c27c46d5ac3fa622"
+dependencies = [
+ "ar_archive_writer",
+ "cc",
+]
+
+[[package]]
 name = "pxfm"
 version = "0.1.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6072,6 +6166,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "recursive"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0786a43debb760f491b1bc0269fe5e84155353c67482b9e60d0cfb596054b43e"
+dependencies = [
+ "recursive-proc-macro-impl",
+ "stacker",
+]
+
+[[package]]
+name = "recursive-proc-macro-impl"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76009fbe0614077fc1a2ce255e3a1881a2e3a3527097d5dc6d8212c585e7e38b"
+dependencies = [
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6233,6 +6347,20 @@ dependencies = [
  "spki",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "rusqlite"
+version = "0.37.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "165ca6e57b20e1351573e3729b958bc62f0e48025386970b6e4d29e7a7e71f3f"
+dependencies = [
+ "bitflags 2.11.1",
+ "fallible-iterator",
+ "fallible-streaming-iterator",
+ "hashlink",
+ "libsqlite3-sys",
+ "smallvec",
 ]
 
 [[package]]
@@ -6510,10 +6638,9 @@ version = "0.1.0"
 dependencies = [
  "baml_artifact",
  "baml_base",
- "baml_codegen_types",
  "baml_db",
  "baml_ide",
- "baml_type",
+ "baml_sdkgen_types",
  "baml_version",
  "proc-macro2",
  "quote",
@@ -6544,6 +6671,7 @@ dependencies = [
  "bridge_ctypes",
  "indexmap",
  "prost",
+ "sdk_test_harness_runner",
 ]
 
 [[package]]
@@ -6621,7 +6749,7 @@ name = "sdkgen_cpp"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
- "baml_codegen_types",
+ "baml_sdkgen_types",
  "baml_version",
  "flate2",
  "protoc-bin-vendored",
@@ -6634,7 +6762,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_artifact",
  "baml_base",
- "baml_codegen_types",
+ "baml_sdkgen_types",
  "bex_vm_types",
  "serde",
  "serde_json",
@@ -6647,7 +6775,7 @@ name = "sdkgen_go"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
- "baml_codegen_types",
+ "baml_sdkgen_types",
  "baml_type",
 ]
 
@@ -6656,7 +6784,7 @@ name = "sdkgen_java"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
- "baml_codegen_types",
+ "baml_sdkgen_types",
 ]
 
 [[package]]
@@ -6665,7 +6793,7 @@ version = "0.0.0-beta"
 dependencies = [
  "askama",
  "baml_base",
- "baml_codegen_types",
+ "baml_sdkgen_types",
  "indexmap",
  "pretty_assertions",
 ]
@@ -6675,8 +6803,7 @@ name = "sdkgen_rust"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
- "baml_codegen_types",
- "indexmap",
+ "baml_sdkgen_types",
  "pretty_assertions",
  "prettyplease",
  "proc-macro2",
@@ -6688,21 +6815,19 @@ dependencies = [
 name = "sdkgen_swift"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_artifact",
  "baml_base",
- "baml_codegen_types",
+ "baml_sdkgen_types",
  "baml_version",
- "base64",
- "indexmap",
- "pretty_assertions",
 ]
 
 [[package]]
 name = "sdkgen_typescript_shared"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_artifact",
  "baml_base",
- "baml_codegen_types",
- "base64",
+ "baml_sdkgen_types",
 ]
 
 [[package]]
@@ -7012,6 +7137,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c6d1b651dc4edf07eead2a0c6c78016ce971bc2c10da5266861b13f25e7cec"
 dependencies = [
  "log",
+ "recursive",
  "sqlparser_derive",
 ]
 
@@ -7031,6 +7157,19 @@ name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
+
+[[package]]
+name = "stacker"
+version = "0.1.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "707f49d46706bacf8a2b00d51dace3f9de527c13eec3778f570c411f89e69967"
+dependencies = [
+ "cc",
+ "cfg-if",
+ "libc",
+ "psm",
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "static_assertions"

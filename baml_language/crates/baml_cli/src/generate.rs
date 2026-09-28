@@ -7,12 +7,12 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_codegen_types::{
-    GeneratedOutputFile, Generator, NamingConvention, OutputType, write_generated_output,
-};
 use baml_db::{
     FileId, Span,
     baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity, render},
+};
+use baml_sdkgen_types::{
+    GeneratedOutputFile, Generator, NamingConvention, OutputType, write_generated_output,
 };
 use clap::{
     Args, Subcommand,
@@ -1221,8 +1221,8 @@ mod tests {
         for &output_type in OutputType::all() {
             let required = output_type.required_naming_convention();
             let unsupported = match required {
-                baml_codegen_types::NamingConvention::PreserveCase => "language",
-                baml_codegen_types::NamingConvention::Language => "preserve-case",
+                baml_sdkgen_types::NamingConvention::PreserveCase => "language",
+                baml_sdkgen_types::NamingConvention::Language => "preserve-case",
             };
             let sdk_import_path = if output_type == OutputType::Go {
                 "sdk_import_path = \"example.com/test/baml_sdk\"\n"

@@ -1,6 +1,6 @@
 //! JavaScript boundary-error adapters.
 
-use bridge_cffi::handle::HandleError;
+use bridge_cffi::handle_cffi::HandleError;
 use wasm_bindgen::{JsError, JsValue};
 
 pub(crate) const INVALID_ARGUMENT: &str = "invalid_argument";

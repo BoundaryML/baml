@@ -1117,6 +1117,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.pending_sequence_point = sequence_point;
     }
 
+    /// Put back a span saved before pulling operands. A pull that emitted no
+    /// instruction has not used the pending sequence point, so it stays.
+    fn restore_debug_span(&mut self, span: Option<Span>) {
+        self.current_debug_span = span;
+    }
+
     /// Emit a line-table entry for an instruction if needed.
     fn emit_line_table_entry(&mut self, pc: usize) {
         let Some(span) = self.current_debug_span else {
@@ -2296,6 +2302,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
 
             Terminator::Call {
+                has_trace,
                 argument_layout,
                 callee,
                 args,
@@ -2319,6 +2326,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                 if let Some(global_callee) = global_callee {
                     unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
+                    if *has_trace {
+                        self.emit(Instruction::SetCallTrace);
+                    }
 
                     let instruction = Instruction::Call {
                         callee: global_callee,
@@ -2349,8 +2359,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         "indirect calls require an explicit caller layout"
                     );
                     unwrap_infallible(pull_semantics::walk_call_indirect_operands(
-                        self, callee, args,
+                        self, callee, args, *has_trace,
                     ));
+                    if *has_trace {
+                        self.emit(Instruction::SetCallTrace);
+                    }
                     let instruction = Instruction::CallIndirect;
                     self.set_debug_span(call_span, false);
                     let inst = self.emit(instruction);
@@ -2361,6 +2374,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
 
             Terminator::VirtualCall {
+                has_trace,
                 argument_layout,
                 iface,
                 method,
@@ -2376,15 +2390,20 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // `OpCode::VirtualCall` expects: it pops the method name, then the
                 // interface, then the `ntypeargs` method type args, then reads the
                 // receiver (first value arg) to resolve the impl at runtime.
-                unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
+                let value_args = &args[..args.len() - usize::from(*has_trace)];
+                unwrap_infallible(pull_semantics::walk_call_direct_args(self, value_args));
                 let iface_const = self.add_constant(ConstValue::Type(
                     bex_vm_types::anchor_template(&iface.to_template()),
                 ));
                 let inst = self.emit(Instruction::LoadType(iface_const));
                 self.set_operand(inst, OperandMeta::Const(iface.to_string()));
                 self.emit_constant(&Constant::String(method.clone()));
+                if *has_trace {
+                    self.emit_operand_pull(args.last().expect("trace attachment"));
+                    self.emit(Instruction::SetCallTrace);
+                }
 
-                let nargs = args.len() - ntypeargs;
+                let nargs = value_args.len() - ntypeargs;
                 let nargs = u16::try_from(nargs)
                     .unwrap_or_else(|_| unreachable!("a call's argument count fits in u16"));
                 let ntypeargs = u16::try_from(*ntypeargs)
@@ -2446,8 +2465,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 future,
                 resume,
             } => {
-                // `Spawn` pops the plan and pushes the task's future.
+                // `Spawn` pops the plan and pushes the task's future. As for
+                // calls: the operand may install nested spans; the spawn
+                // opcode belongs to the whole spawn expression.
+                let spawn_span = self.current_debug_span;
                 self.emit_operand_pull(plan);
+                self.restore_debug_span(spawn_span);
                 self.emit(Instruction::Spawn);
                 self.emit_store_place(future);
                 self.emit_jump_unless_fallthrough(*resume);
@@ -2459,7 +2482,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 target,
                 unwind: _,
             } => {
+                let await_span = self.current_debug_span;
                 unwrap_infallible(pull_semantics::walk_await_future(self, future));
+                self.restore_debug_span(await_span);
                 self.emit(Instruction::Await);
 
                 self.emit_store_place(destination);
@@ -2481,13 +2506,19 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit_jump_unless_fallthrough(*target);
             }
 
+            // The raising opcode belongs to the throw itself, not to the last
+            // nested span its operand installed.
             Terminator::Throw { value } => {
+                let throw_span = self.current_debug_span;
                 self.emit_operand_pull(value);
+                self.restore_debug_span(throw_span);
                 self.emit(Instruction::Throw);
             }
             Terminator::Rethrow { value, context } => {
+                let throw_span = self.current_debug_span;
                 self.emit_operand_pull(value);
                 self.emit_operand_pull(context);
+                self.restore_debug_span(throw_span);
                 self.emit(Instruction::Rethrow);
             }
 
@@ -2496,8 +2527,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 context,
                 otherwise,
             } => {
+                let throw_span = self.current_debug_span;
                 self.emit_operand_pull(value);
                 self.emit_operand_pull(context);
+                self.restore_debug_span(throw_span);
                 self.emit(Instruction::ThrowIfPanic);
                 self.emit_jump_unless_fallthrough(*otherwise);
             }
@@ -3252,7 +3285,11 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
 
         let action = match classification {
             LocalClassification::Virtual => {
-                // Attribute inlined virtual loads to their defining statement.
+                // Attribute inlined virtual loads to their defining statement,
+                // then give the consumer back its own span: the instruction that
+                // uses this operand (a division, a call) belongs to the consuming
+                // expression, not to its last inlined operand.
+                let consumer_span = self.current_debug_span;
                 self.set_debug_span(self.def_span_for_local(local), false);
                 // Inline the definition rvalue at use site.
                 let rvalue = self.analysis.def_use[&local]
@@ -3278,9 +3315,11 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
                         }
                 ) {
                     self.emit_rvalue_pull(&rvalue);
-                    return Ok(LocalPullAction::Done);
+                } else {
+                    pull_semantics::walk_rvalue_pull(self, &rvalue)?;
                 }
-                LocalPullAction::Inline(Box::new(rvalue))
+                self.restore_debug_span(consumer_span);
+                LocalPullAction::Done
             }
             LocalClassification::PhiLike
             | LocalClassification::ReturnPhi

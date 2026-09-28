@@ -52,8 +52,8 @@ internal sealed unsafe partial class NativeBytecodeInitializer : IDisposable
             $"truncated API table {api->StructSize}");
         Require(api->Version is not null, "version is null");
         Require(
-            api->InitializeRuntimeFromBytecode is not null,
-            "initialize_runtime_from_bytecode is null");
+            api->InitializeRuntimeFromBlob is not null,
+            "initialize_runtime_from_blob is null");
         Require(api->FreeBuffer is not null, "free_buffer is null");
         ProductVersion = Consume(api->Version());
     }
@@ -74,7 +74,7 @@ internal sealed unsafe partial class NativeBytecodeInitializer : IDisposable
         fixed (byte* pointer = bytes)
         {
             return Consume(
-                api->InitializeRuntimeFromBytecode(
+                api->InitializeRuntimeFromBlob(
                     pointer,
                     (nuint)bytes.Length));
         }
@@ -132,7 +132,7 @@ internal sealed unsafe partial class NativeBytecodeInitializer : IDisposable
         public readonly delegate* unmanaged[Cdecl]<
             byte*,
             nuint,
-            BamlBuffer> InitializeRuntimeFromBytecode;
+            BamlBuffer> InitializeRuntimeFromBlob;
         public readonly delegate* unmanaged[Cdecl]<BamlBuffer, void> FreeBuffer;
     }
 

@@ -12,5 +12,8 @@ indexmap = { workspace = true }
 prost = { workspace = true }
 
 
+[dev-dependencies]
+sdk_test_harness_runner = { path = "../../harness_runner" }
+
 [package.metadata.ci]
 wasm_support = false

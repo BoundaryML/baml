@@ -4,7 +4,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use baml_codegen_types::{Name, Symbol, SymbolPool, Ty};
+use baml_sdkgen_types::{Name, Symbol, SymbolPool, Ty};
 
 use crate::{SkipWarning, routing};
 
@@ -66,8 +66,8 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
     let mut warnings = Vec::new();
 
     // Deterministic iteration everywhere: sort by Name.
-    let mut classes: Vec<(&Name, &baml_codegen_types::Class)> = Vec::new();
-    let mut aliases: Vec<(&Name, &baml_codegen_types::TypeAlias)> = Vec::new();
+    let mut classes: Vec<(&Name, &baml_sdkgen_types::Class)> = Vec::new();
+    let mut aliases: Vec<(&Name, &baml_sdkgen_types::TypeAlias)> = Vec::new();
     let mut enums: HashSet<Name> = HashSet::new();
     for (name, symbol) in pool {
         match symbol {

@@ -33,7 +33,7 @@
 use std::collections::BTreeMap;
 
 use baml_base::qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_DONE, AI_STREAM_STREAM};
-use baml_codegen_types::{Name, Ty};
+use baml_sdkgen_types::{Name, Ty};
 
 use crate::routing::{PackagePath, java_identifier, route};
 
@@ -403,28 +403,19 @@ pub(crate) fn collect_type_vars(ty: &Ty, out: &mut Vec<String>) {
                 out.push(id);
             }
         }
-        Ty::Class(_, args) => {
-            for a in args {
-                collect_type_vars(a, out);
-            }
-        }
-        Ty::List(inner) => collect_type_vars(inner, out),
-        Ty::Map { key, value, .. } => {
-            collect_type_vars(key, out);
-            collect_type_vars(value, out);
-        }
-        Ty::Union(items) => {
-            for i in items {
-                collect_type_vars(i, out);
-            }
-        }
+        // Java callable descriptors do not represent the throws type.
         Ty::Function { params, ret, .. } => {
-            for p in params {
-                collect_type_vars(&p.ty, out);
+            for param in params {
+                collect_type_vars(&param.ty, out);
             }
             collect_type_vars(ret, out);
         }
-        _ => {}
+        _ => {
+            baml_sdkgen_types::any_type_child(ty, |child| {
+                collect_type_vars(child, out);
+                false
+            });
+        }
     }
 }
 
@@ -694,12 +685,12 @@ pub(crate) fn union_arm_token(ty: &Ty) -> String {
 /// minted (design point E), one per distinct signature within the package,
 /// and recorded in the [`UnionSink`] for the emitter to render.
 fn translate_callable(
-    params: &[baml_codegen_types::CallableParam],
+    params: &[baml_sdkgen_types::CallableParam],
     ret: &Ty,
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
 ) -> String {
-    use baml_codegen_types::CodegenFunctionParamMode;
+    use baml_sdkgen_types::CodegenFunctionParamMode;
     let has_optional = params
         .iter()
         .any(|p| matches!(p.mode, CodegenFunctionParamMode::Optional));
@@ -783,11 +774,11 @@ fn translate_callable(
 /// types, and return) share one interface. Uses the same token vocabulary as
 /// the union/decode signatures.
 fn callback_signature_key(
-    params: &[baml_codegen_types::CallableParam],
+    params: &[baml_sdkgen_types::CallableParam],
     ret: &Ty,
     aliases: &AliasTable,
 ) -> String {
-    use baml_codegen_types::CodegenFunctionParamMode;
+    use baml_sdkgen_types::CodegenFunctionParamMode;
     let mut s = String::from("cb(");
     for p in params {
         let opt = matches!(p.mode, CodegenFunctionParamMode::Optional);
@@ -806,8 +797,8 @@ fn callback_signature_key(
 /// tokens concatenated, an `Opt` marker when the callable has optionals, then
 /// `Callback` — e.g. `(x: int, y?: int, z?: int) -> int` → `IntOptCallback`.
 /// Deduped against colliding distinct signatures by [`dedup_callback_name`].
-fn callback_base_name(params: &[baml_codegen_types::CallableParam], has_optional: bool) -> String {
-    use baml_codegen_types::CodegenFunctionParamMode;
+fn callback_base_name(params: &[baml_sdkgen_types::CallableParam], has_optional: bool) -> String {
+    use baml_sdkgen_types::CodegenFunctionParamMode;
     let mut s = String::new();
     for p in params
         .iter()
@@ -842,7 +833,7 @@ fn dedup_callback_name(base: &str, entries: &[(String, CallbackInterface)]) -> S
 #[cfg(test)]
 mod tests {
     use baml_base::Name as BaseName;
-    use baml_codegen_types::{CallableParam, CodegenFunctionParamMode};
+    use baml_sdkgen_types::{CallableParam, CodegenFunctionParamMode};
 
     use super::*;
 
@@ -906,7 +897,7 @@ mod tests {
         Ty::Media(kind)
     }
     fn literal(lit: baml_base::Literal) -> Ty {
-        Ty::Literal(lit, baml_codegen_types::Freshness::Regular)
+        Ty::Literal(lit, baml_sdkgen_types::Freshness::Regular)
     }
     fn list(inner: Ty) -> Ty {
         Ty::List(Box::new(inner))
@@ -930,7 +921,7 @@ mod tests {
         Ty::TypeAlias(n)
     }
     fn typevar(n: BaseName) -> Ty {
-        Ty::TypeVar(baml_codegen_types::ParamTy::new(0, n))
+        Ty::TypeVar(baml_sdkgen_types::ParamTy::new(0, n))
     }
     fn callable(params: Vec<CallableParam>, ret: Ty) -> Ty {
         Ty::Function {
@@ -1475,5 +1466,23 @@ mod tests {
             tr(&c, TyPosition::TopLevel),
             "baml_sdk.generics.Wrapper<java.lang.@org.jspecify.annotations.Nullable Long>"
         );
+    }
+}
+
+#[cfg(test)]
+mod shared_traversal_tests {
+    use super::*;
+
+    #[test]
+    fn collects_nested_interface_and_future_variables_in_first_appearance_order() {
+        let var = || Ty::TypeVar(baml_sdkgen_types::ParamTy::new(0, "T".into()));
+        let ty = Ty::Interface(
+            Name::new("user".into(), vec![], "I".into()),
+            Box::new([Ty::Future(Box::new(var()), Box::new(Ty::Never))]),
+            Box::new([("Item".into(), var())]),
+        );
+        let mut names = Vec::new();
+        collect_type_vars(&ty, &mut names);
+        assert_eq!(names, ["T"]);
     }
 }

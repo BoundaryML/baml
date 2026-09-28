@@ -3305,6 +3305,7 @@ impl<'a> Parser<'a> {
         if is_named {
             // Named parameter: `name: type`
             self.with_node(SyntaxKind::FUNCTION_TYPE_PARAM, |p| {
+                p.reject_reserved_trace_parameter();
                 p.bump(); // name
                 p.eat(TokenKind::Question); // optional parameter marker: `name?: T`
                 p.expect(TokenKind::Colon);
@@ -4260,8 +4261,18 @@ impl<'a> Parser<'a> {
         });
     }
 
+    fn reject_reserved_trace_parameter(&mut self) {
+        if self.current().is_some_and(|token| token.text == "$trace") {
+            self.error_here(
+                "`$trace` is reserved for invocation tracing and cannot be declared as a parameter"
+                    .to_string(),
+            );
+        }
+    }
+
     fn parse_parameter(&mut self) {
         self.with_node(SyntaxKind::PARAMETER, |p| {
+            p.reject_reserved_trace_parameter();
             // Check if this is a 'self' parameter (no type annotation allowed)
             let is_self = p.current().map(|t| t.text == "self").unwrap_or(false);
 
@@ -4545,6 +4556,7 @@ impl<'a> Parser<'a> {
     /// Parse a single lambda parameter with an optional type annotation.
     fn parse_lambda_parameter(&mut self) {
         self.with_node(SyntaxKind::PARAMETER, |p| {
+            p.reject_reserved_trace_parameter();
             // Parameter name
             if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
                 p.bump();
@@ -11770,6 +11782,25 @@ function Demo() -> int {
     }
 
     #[test]
+    fn trace_is_reserved_for_call_arguments() {
+        for source in [
+            "function Bad($trace: int) -> int { 1 }",
+            "function Bad() -> int { let f = ($trace: int) -> int { 1 }; 1 }",
+            "function Bad(f: ($trace: int) -> int) -> int { 1 }",
+        ] {
+            let (_, errors) = parse_source(source);
+            assert!(
+                errors.iter().any(|error| format!("{error:?}")
+                    .contains("`$trace` is reserved for invocation tracing")),
+                "{source}: {errors:?}"
+            );
+        }
+        let (_, errors) =
+            parse_source("function Good() -> int { Target(1, $trace = trace.hidden()) }");
+        assert_no_errors(&errors);
+    }
+
+    #[test]
     fn function_parameter_defaults_parse() {
         let source = r#"
 function Search(query: string, max_results: int = 10, filter: string = "none") -> int {
@@ -12756,6 +12787,43 @@ function Demo() -> string {
             vec!["Hello, ", "!\nWelcome."],
             "got: {text_parts:?}"
         );
+    }
+
+    #[test]
+    fn backtick_segments_trim_layout_around_interpolations() {
+        use baml_compiler_syntax::{BacktickSegment, BacktickStringLiteral};
+        use rowan::ast::AstNode;
+
+        let source = "
+function Demo(name: string) -> string {
+    let s = `
+
+        ${role(\"system\")}
+        Hello, ${name}.
+
+    `
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = BacktickStringLiteral::cast(
+            root.descendants()
+                .find(|node| node.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+                .unwrap(),
+        )
+        .unwrap();
+        let segments = lit.segments();
+        let text_parts: Vec<&str> = segments
+            .iter()
+            .filter_map(|segment| match segment {
+                BacktickSegment::Text(text) => Some(text.as_str()),
+                BacktickSegment::Interp(_) | BacktickSegment::For(_) | BacktickSegment::If(_) => {
+                    None
+                }
+            })
+            .collect();
+        assert_eq!(text_parts, vec!["\nHello, ", "."]);
     }
 
     #[test]

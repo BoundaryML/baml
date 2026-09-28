@@ -30,101 +30,14 @@ use std::{
     path::PathBuf,
 };
 
-use baml_codegen_types::{Name, Symbol, SymbolPool, Ty};
-pub use baml_codegen_types::{NamingConvention, OutputType};
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
+use baml_sdkgen_types::{Name, SymbolPool, public_interface_tokens};
+pub use baml_sdkgen_types::{NamingConvention, OutputType};
 
 use crate::{
     emit::{build_emitted, typemap_file::render_typemap_module},
     leaf::{LeafBody, group_and_sort, render_index_ts},
     routing::{LeafPath, route},
 };
-
-fn collect_interface_tys(ty: &Ty, out: &mut BTreeSet<Name>) {
-    match ty {
-        Ty::Interface(name, generics, associated) => {
-            out.insert(name.clone());
-            for nested in generics.iter().chain(associated.iter().map(|(_, ty)| ty)) {
-                collect_interface_tys(nested, out);
-            }
-        }
-        Ty::Class(_, args) => args.iter().for_each(|ty| collect_interface_tys(ty, out)),
-        Ty::List(inner) => collect_interface_tys(inner, out),
-        Ty::Map { key, value, .. } => {
-            collect_interface_tys(key, out);
-            collect_interface_tys(value, out);
-        }
-        Ty::Union(items) => items.iter().for_each(|ty| collect_interface_tys(ty, out)),
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            for param in params {
-                collect_interface_tys(&param.ty, out);
-            }
-            collect_interface_tys(ret, out);
-            collect_interface_tys(throws, out);
-        }
-        Ty::Future(value, error) => {
-            collect_interface_tys(value, out);
-            collect_interface_tys(error, out);
-        }
-        Ty::Enum(..)
-        | Ty::EnumVariant(..)
-        | Ty::TypeAlias(..)
-        | Ty::Literal(..)
-        | Ty::Int
-        | Ty::Bigint
-        | Ty::Float
-        | Ty::String
-        | Ty::Bool
-        | Ty::Null
-        | Ty::Uint8Array
-        | Ty::Media(..)
-        | Ty::TypeVar(..)
-        | Ty::RustType
-        | Ty::Type
-        | Ty::Resource
-        | Ty::PromptAst
-        | Ty::Void
-        | Ty::Unknown
-        | Ty::Never => {}
-    }
-}
-
-fn public_interface_tokens(pool: &SymbolPool) -> BTreeSet<Name> {
-    fn function(value: &baml_codegen_types::Function, out: &mut BTreeSet<Name>) {
-        for arg in &value.arguments {
-            collect_interface_tys(&arg.ty, out);
-        }
-        collect_interface_tys(&value.return_type, out);
-        if let Some(throws) = &value.throws {
-            collect_interface_tys(throws, out);
-        }
-        for (_, watcher) in &value.watchers {
-            collect_interface_tys(watcher, out);
-        }
-    }
-    let mut out = BTreeSet::new();
-    for symbol in pool.values() {
-        match symbol {
-            Symbol::Function(value) => function(value, &mut out),
-            Symbol::Class(value) => {
-                for property in &value.properties {
-                    collect_interface_tys(&property.ty, &mut out);
-                }
-                for method in value.static_methods.iter().chain(&value.instance_methods) {
-                    function(method, &mut out);
-                }
-            }
-            Symbol::TypeAlias(value) => collect_interface_tys(&value.resolves_to, &mut out),
-            Symbol::Enum(_) => {}
-        }
-    }
-    out
-}
 
 fn render_interface_tokens(tokens: impl Iterator<Item = Name>) -> String {
     let mut out = String::new();
@@ -307,43 +220,21 @@ fn init_ts_path(dir: &[String]) -> PathBuf {
     path
 }
 
-/// Base64 characters per emitted source line. Long enough that the line count
-/// stays small, short enough that the file is still diffable.
-const BYTECODE_BASE64_LINE: usize = 4096;
-
 fn render_inlinedbaml(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> String {
-    // The bytecode ships as base64 rather than a decimal `new Uint8Array([...])`
-    // literal. That literal cost up to 5 source characters per byte (~3.8 on
-    // average, measured); base64 costs 1.33, which shrinks this module by ~65%.
+    // The bytecode ships as one line of encoded bytecode (see
+    // `baml_sdkgen_types::embedded_bytecode_base64`) rather than a decimal
+    // `new Uint8Array([...])` literal, which cost up to 5 source characters
+    // per byte (~3.8 on average, measured). BYTECODE is passed to
+    // `initializeRuntimeFromBlob` as a string, and the bridge decodes it
+    // natively.
     //
     // Size matters here beyond disk: bundlers and the Cloudflare Workers test
     // pool move this module around as a unit, and workerd caps a single
     // WebSocket message at 1 MiB — a large enough program made the pool drop
     // the connection with a 1009 "Message is too large".
-    //
-    // `atob` is the one decoder available everywhere this runs: browsers,
-    // Workers, and Node (global since 16). BYTECODE stays a Uint8Array, so
-    // `initializeRuntimeFromBytecode` is unaffected.
-    let encoded = BASE64_STANDARD.encode(bytecode);
-    let mut out = String::with_capacity(encoded.len() + encoded.len() / 256 + 512);
-    out.push_str("const BYTECODE_BASE64 = [\n");
-    for chunk in encoded.as_bytes().chunks(BYTECODE_BASE64_LINE) {
-        out.push_str("  \"");
-        // base64 output is ASCII, so the chunk is always valid UTF-8 and needs
-        // no escaping.
-        out.push_str(std::str::from_utf8(chunk).expect("base64 output is ASCII"));
-        out.push_str("\",\n");
-    }
-    out.push_str("].join(\"\");\n\n");
-    out.push_str("function decodeBytecode(encoded: string): Uint8Array {\n");
-    out.push_str("  const binary = atob(encoded);\n");
-    out.push_str("  const bytes = new Uint8Array(binary.length);\n");
-    out.push_str("  for (let i = 0; i < binary.length; i += 1) {\n");
-    out.push_str("    bytes[i] = binary.charCodeAt(i);\n");
-    out.push_str("  }\n");
-    out.push_str("  return bytes;\n");
-    out.push_str("}\n\n");
-    out.push_str("export const BYTECODE = decodeBytecode(BYTECODE_BASE64);\n");
+    let encoded = baml_sdkgen_types::embedded_bytecode_base64(bytecode);
+    let mut out = String::with_capacity(encoded.len() + 512);
+    let _ = writeln!(out, "export const BYTECODE = \"{encoded}\";");
     let manifest = embedded_baml_toml
         .map(ts_string)
         .unwrap_or_else(|| "undefined".to_string());
@@ -353,32 +244,14 @@ fn render_inlinedbaml(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> Stri
 
 /// Render `s` as a TypeScript double-quoted string literal. JS escaping
 /// rules are byte-compatible with Python's for the ASCII range.
-pub(crate) fn ts_string(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
-    for ch in s.chars() {
-        match ch {
-            '\\' => out.push_str("\\\\"),
-            '"' => out.push_str("\\\""),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => {
-                let _ = write!(out, "\\x{:02x}", c as u32);
-            }
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
-}
+pub(crate) use baml_sdkgen_types::quoted_string as ts_string;
 
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
 
     use baml_base::Name as BaseName;
-    use baml_codegen_types::{
+    use baml_sdkgen_types::{
         Class, Enum, EnumVariant, Function, FunctionArgument, Name, Origin, Symbol, SymbolPool, Ty,
     };
 
@@ -469,9 +342,11 @@ mod tests {
         assert!(!out.keys().any(|p| p.to_string_lossy().ends_with(".d.ts")));
         let root = &out[&PathBuf::from("index.ts")];
         assert!(root.contains(HEADER_LEN_MARKER));
-        assert!(root.contains(
-            "initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);"
-        ));
+        assert!(
+            root.contains(
+                "initializeRuntimeFromBlob(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);"
+            )
+        );
         assert!(root.contains("setTypeMap(_TYPE_MAP);"));
         assert!(root.contains("export * as baml from \"./baml/index.js\";"));
         assert!(!root.contains("export const b"));
@@ -573,25 +448,23 @@ mod tests {
             GeneratorConfig::new("@boundaryml/baml-bridge"),
         );
         let inlined = &out[&PathBuf::from("_inlinedbaml.ts")];
-        assert!(inlined.contains("export const BYTECODE = decodeBytecode(BYTECODE_BASE64);"));
-        // The exact base64 for those six bytes, so a change to the encoding
+        // The exact payload for those six bytes, so a change to the encoding
         // fails here rather than at runtime in a generated SDK.
         assert!(
             inlined.contains(&format!(
-                "  \"{}\",\n",
-                BASE64_STANDARD.encode([0, 1, 2, 253, 254, 255])
+                "export const BYTECODE = \"{}\";\n",
+                baml_sdkgen_types::embedded_bytecode_base64(&[0, 1, 2, 253, 254, 255])
             )),
             "{inlined}"
         );
-        // The decoder must be self-contained: no import, and byte-exact.
-        assert!(inlined.contains("const binary = atob(encoded);"));
+        // Decoding is the bridge's job, never the generated module's.
+        assert!(!inlined.contains("atob"));
     }
 
     #[test]
-    fn inlinedbaml_base64_round_trips_and_wraps_long_bytecode() {
-        // Enough bytes to span several emitted lines, with every byte value
-        // represented so a mangled alphabet or a bad chunk boundary shows up.
-        let bytecode: Vec<u8> = (0..(BYTECODE_BASE64_LINE * 3))
+    fn inlinedbaml_payload_is_one_line_that_round_trips() {
+        // Every byte value represented so a mangled alphabet shows up.
+        let bytecode: Vec<u8> = (0..(3 * 4096))
             .map(|i| u8::try_from(i % 256).expect("i % 256 fits in u8"))
             .collect();
         let out = to_source_code(
@@ -602,17 +475,23 @@ mod tests {
         );
         let inlined = &out[&PathBuf::from("_inlinedbaml.ts")];
 
-        let joined: String = inlined
+        let payloads: Vec<&str> = inlined
             .lines()
-            .filter(|l| l.starts_with("  \"") && l.ends_with("\","))
-            .map(|l| &l[3..l.len() - 2])
+            .filter_map(|l| l.strip_prefix("export const BYTECODE = \""))
+            .map(|l| {
+                l.strip_suffix("\";")
+                    .expect("payload line ends the literal")
+            })
             .collect();
+        assert_eq!(payloads.len(), 1, "{inlined}");
         assert_eq!(
-            BASE64_STANDARD
-                .decode(joined)
-                .expect("emitted base64 decodes"),
+            baml_artifact::decode_embedded(
+                baml_artifact::ArtifactKind::Program,
+                payloads[0].as_bytes()
+            )
+            .expect("emitted payload decodes"),
             bytecode,
-            "emitted base64 must round-trip to the original bytecode"
+            "emitted payload must round-trip to the original bytecode"
         );
     }
 

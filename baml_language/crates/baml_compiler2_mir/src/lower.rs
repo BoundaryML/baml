@@ -4204,6 +4204,7 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         value_count: usize,
     ) -> Lowered<Option<baml_type::CallLayout>> {
+        let value_count = value_count - usize::from(self.call_trace_arg(expr_id).is_some());
         let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)) else {
             return Ok(None);
         };
@@ -5225,6 +5226,7 @@ impl<'db> LoweringContext<'db> {
             kind: SyntheticKind::Lambda,
             ordinal: self.synthetic_ordinals.next(SyntheticKind::Lambda),
         };
+        let lambda_definition_span = self.span_for_expr(expr_id);
 
         // Find the lambda's FileScopeId from the HIR index.
         // The HIR builder registered a ScopeKind::Lambda at the lambda expression's span.
@@ -5320,6 +5322,11 @@ impl<'db> LoweringContext<'db> {
             FunctionOwner::Synthetic(Box::new(lambda_identity.clone())),
             arity,
         );
+        // The lambda's definition span is its expression, so its metadata
+        // names the file its body's line table points into.
+        if let Some(span) = lambda_definition_span {
+            self.builder.set_span(span);
+        }
 
         // Keep the checked parameter types for interface dispatch inside the
         // lambda, including inferred parameters and enclosing generic bounds.
@@ -8118,6 +8125,20 @@ impl<'db> LoweringContext<'db> {
 // ─── 3.5: Call lowering with builtin detection ────────────────────────────────
 
 impl<'db> LoweringContext<'db> {
+    fn call_trace_arg(&self, expr_id: AstExprId) -> Option<AstExprId> {
+        match &self.body.exprs[expr_id] {
+            AstExpr::Call { args, .. } | AstExpr::OptionalCall { args, .. } => args
+                .iter()
+                .find(|arg| {
+                    arg.label
+                        .as_ref()
+                        .is_some_and(|label| label.as_str() == "$trace")
+                })
+                .map(|arg| arg.expr),
+            _ => None,
+        }
+    }
+
     fn lower_call_arg_operands(
         &mut self,
         expr_id: AstExprId,
@@ -8157,14 +8178,16 @@ impl<'db> LoweringContext<'db> {
         // in the call expression). This preserves the original evaluation
         // order, which matters for side effects.
         let provided_args: Vec<_> = plan.provided_args().collect();
+        let trace_arg = self.call_trace_arg(expr_id);
         let mut lowered_args: FxHashMap<AstExprId, Operand<'db>> = FxHashMap::default();
         for &arg in args {
-            if provided_args.contains(&arg) {
+            if provided_args.contains(&arg) || trace_arg == Some(arg) {
                 lowered_args.insert(arg, self.lower_to_operand(arg)?);
             }
         }
 
-        plan.bindings
+        let mut operands = plan
+            .bindings
             .into_iter()
             .map(|binding| match binding {
                 crate::inference_provider::ParamBinding::Provided { arg, .. } => {
@@ -8184,7 +8207,15 @@ impl<'db> LoweringContext<'db> {
                     })
                 }
             })
-            .collect()
+            .collect::<Lowered<Vec<_>>>()?;
+        if let Some(trace_arg) = trace_arg {
+            operands.push(
+                lowered_args.remove(&trace_arg).ok_or_else(|| {
+                    self.internal_error("trace attachment was not lowered", expr_id)
+                })?,
+            );
+        }
+        Ok(operands)
     }
 
     /// Materialize a sys-op parameter's omitted default as a constant operand.
@@ -8881,9 +8912,12 @@ impl<'db> LoweringContext<'db> {
                 let mut all_args = frame_type_arg_ops;
                 all_args.push(Operand::Copy(self.value_place(self_local)));
                 all_args.extend(self.lower_call_arg_operands(expr_id, args)?);
+                let argument_layout =
+                    self.call_argument_layout(expr_id, all_args.len() - ntypeargs)?;
                 let target = self.builder.create_block();
                 self.builder
                     .call_with_type_args(callee_op, all_args, ntypeargs, dest, target);
+                self.builder.set_call_layout(argument_layout);
                 self.builder.set_current_block(target);
                 return Ok(());
             }

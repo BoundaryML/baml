@@ -47,7 +47,7 @@
 
 use std::collections::BTreeSet;
 
-use baml_codegen_types::{Class, CodegenFunctionParamMode, Enum, Function, Ty};
+use baml_sdkgen_types::{Class, CodegenFunctionParamMode, Enum, Function, Ty};
 
 use crate::{
     routing::{java_identifier, java_method_identifier},
@@ -1279,7 +1279,7 @@ fn render_method_pair(
 fn render_optional_configurator(
     ident: &str,
     async_ident: &str,
-    optionals: &[&baml_codegen_types::FunctionArgument],
+    optionals: &[&baml_sdkgen_types::FunctionArgument],
     doc: &str,
     static_kw: &str,
     generics_kw: &str,

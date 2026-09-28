@@ -25,7 +25,7 @@ use std::{
     fmt,
 };
 
-use baml_codegen_types::Name;
+use baml_sdkgen_types::Name;
 
 /// The source namespace path a symbol routes to, pkg-aware: `user` symbols
 /// live at the generated root, `baml` under `baml/`, any other package under

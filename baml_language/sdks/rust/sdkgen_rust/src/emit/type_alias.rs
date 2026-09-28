@@ -5,7 +5,7 @@
 //! are transparent — so no conversion impls are needed; the item exists
 //! to keep the user's named types on the SDK surface.
 
-use baml_codegen_types::{Name, TypeAlias};
+use baml_sdkgen_types::{Name, TypeAlias};
 use proc_macro2::TokenStream;
 use quote::quote;
 

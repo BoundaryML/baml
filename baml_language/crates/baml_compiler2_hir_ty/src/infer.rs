@@ -19,6 +19,7 @@
 pub(crate) mod flow;
 pub(crate) mod obligations;
 pub(crate) mod pat;
+mod reachability;
 pub(crate) mod truthy;
 pub mod unify;
 
@@ -43,7 +44,7 @@ use baml_compiler2_hir::{
 /// block-scoped binding; the bit itself is defined with `ParamTy`.
 pub(crate) use baml_type::SCOPED_PARAM_BIT;
 use baml_type::{
-    Freshness, Int63, Literal,
+    Freshness, Int63, Literal, Name,
     interned::{ClosedTy, InferInterface, InferTy, Ty},
     normalize::canonical_union_interned,
 };
@@ -983,6 +984,12 @@ enum PendingDiag<'db> {
         expr: ExprId,
         name: baml_type::Name,
     },
+    TraceUnsupportedCall {
+        expr: ExprId,
+    },
+    TraceOpaqueValue {
+        expr: ExprId,
+    },
     RefutableLet {
         pat: PatId,
         context: crate::diagnostics::IrrefutableContextKind,
@@ -1173,10 +1180,6 @@ enum PendingDiag<'db> {
     },
     VoidResultUsed {
         expr: ExprId,
-    },
-    DeadCode {
-        at: baml_compiler2_ast::StmtId,
-        unreachable_count: usize,
     },
 
     UnknownPatternField {
@@ -1635,7 +1638,7 @@ fn infer_body_impl<'db>(
     if let Some(arena) = body.expr_body() {
         ctx.report_call_site_builtin_values(arena);
     }
-    ctx.finish()
+    ctx.finish(body.expr_body())
 }
 
 /// Which bounded-var classes a finish-fixpoint round may commit: the
@@ -2287,51 +2290,20 @@ impl<'db> InferenceContext<'db> {
             Expr::Block { stmts, tail_expr } => {
                 let type_scope = self.scoped_type_bindings.len();
                 let entry_diverges = self.diverges;
-                let mut first_unreachable: Option<usize> = None;
-                for (index, stmt) in stmts.iter().enumerate() {
-                    // Dead code counts only after a syntactic TERMINATOR
-                    // statement (return/throw/break/continue) - a
-                    // never-typed call is divergence the checker knows,
-                    // not noise the user wrote past.
-                    if first_unreachable.is_none()
-                        && entry_diverges == Diverges::Maybe
-                        && self.diverges == Diverges::Always
-                        && index > 0
-                        && (matches!(
-                            body.stmts[stmts[index - 1]],
-                            Stmt::Return { .. } | Stmt::Throw { .. } | Stmt::Break | Stmt::Continue
-                        ) || matches!(
-                            &body.stmts[stmts[index - 1]],
-                            Stmt::Let {
-                                initializer: Some(init),
-                                ..
-                            } if matches!(body.exprs[*init], Expr::Throw { .. })
-                        ))
-                    {
-                        first_unreachable = Some(index);
+                let mut deferred_writes = rustc_hash::FxHashSet::default();
+                let mut deferred_diverges = false;
+                for stmt in stmts {
+                    if let Stmt::Defer { body: deferred } = body.stmts[*stmt] {
+                        deferred_writes.extend(self.assigned_bindings(body, deferred));
                     }
                     self.infer_stmt(body, *stmt);
-                }
-                // The block TAIL counts too: `throw "x"` followed by a
-                // tail `0` leaves the tail unreachable even with no
-                // trailing statements.
-                let tail_after_diverge = first_unreachable.is_none()
-                    && tail_expr.is_some()
-                    && !stmts.is_empty()
-                    && matches!(
-                        &body.stmts[*stmts.last().expect("nonempty")],
-                        Stmt::Return { .. } | Stmt::Throw { .. } | Stmt::Break | Stmt::Continue
-                    );
-                if let Some(index) = first_unreachable {
-                    self.pending_diags.push(PendingDiag::DeadCode {
-                        at: stmts[index],
-                        unreachable_count: stmts.len() - index + usize::from(tail_expr.is_some()),
-                    });
-                } else if tail_after_diverge {
-                    self.pending_diags.push(PendingDiag::DeadCode {
-                        at: *stmts.last().expect("nonempty"),
-                        unreachable_count: 1,
-                    });
+                    if let Stmt::Defer { body: deferred } = body.stmts[*stmt] {
+                        deferred_diverges |= self
+                            .result
+                            .type_of_expr
+                            .get(&deferred)
+                            .is_some_and(|ty| matches!(ty.kind(), InferTy::Never));
+                    }
                 }
                 let ty = match tail_expr {
                     Some(tail) => self.infer_expr(body, *tail, expected),
@@ -2343,6 +2315,17 @@ impl<'db> InferenceContext<'db> {
                         Ty::never()
                     }
                     None => Ty::void(),
+                };
+                // Defers run after the tail value is evaluated. Their writes
+                // may change outer locals before the enclosing code resumes.
+                for binding in deferred_writes {
+                    self.flow.remove(&binding);
+                }
+                let ty = if deferred_diverges {
+                    self.diverges = Diverges::Always;
+                    Ty::never()
+                } else {
+                    ty
                 };
                 self.finish_scoped_type_bindings(type_scope, expr, *tail_expr, ty, expected)
             }
@@ -2875,9 +2858,15 @@ impl<'db> InferenceContext<'db> {
                 // BEP-042: the defer body runs at scope exit; escaping
                 // control flow is rejected (loop-aware - a loop opened
                 // inside the defer may break/continue freely).
+                // Registration-time facts need not hold when the defer runs,
+                // and its writes and divergence do not happen at registration.
+                let saved_flow = std::mem::take(&mut self.flow);
+                let saved_diverges = std::mem::replace(&mut self.diverges, Diverges::Maybe);
                 self.defer_loop_floors.push(self.loop_depth);
                 self.infer_expr(body, *defer_body, &Expectation::Discarded);
                 self.defer_loop_floors.pop();
+                self.flow = saved_flow;
+                self.diverges = saved_diverges;
             }
             Stmt::Assign { target, value } => {
                 self.infer_assign(body, *target, *value, None);
@@ -2914,16 +2903,17 @@ impl<'db> InferenceContext<'db> {
                 // `break` binds to this loop: then there is no zero-iteration
                 // path and no exit edge, so the loop DIVERGES and everything
                 // after it is unreachable - no false facts to apply.
+                let has_break = Self::loop_body_breaks(body, *loop_body, *after);
                 let never_exits =
                     self.condition_is_statically_true(body, *condition, &condition_ty)
-                        && !Self::loop_body_breaks(body, *loop_body, *after);
+                        && !has_break;
                 self.diverges = saved.or(if never_exits {
                     Diverges::Always
                 } else {
                     Diverges::Maybe
                 });
                 self.flow = entry_flow;
-                if !never_exits {
+                if !never_exits && !has_break {
                     self.apply_facts(&facts.when_false);
                 }
             }
@@ -5549,6 +5539,70 @@ impl<'db> InferenceContext<'db> {
         bound_receiver: bool,
         args: &[baml_compiler2_ast::CallArg],
     ) -> Ty {
+        let mut seen_trace = false;
+        let mut ordinary_args = Vec::with_capacity(args.len());
+        for arg in args {
+            if arg
+                .label
+                .as_ref()
+                .is_some_and(|label| label.as_str() == "$trace")
+            {
+                if seen_trace {
+                    self.pending_diags.push(PendingDiag::DuplicateNamedArg {
+                        expr: arg.expr,
+                        name: Name::new("$trace"),
+                    });
+                }
+                seen_trace = true;
+                let expected =
+                    self.lang()
+                        .get(baml_base::LangPackage::Trace)
+                        .map_or_else(Ty::error, |root| {
+                            syntactic_union(&["Options", "ReservedSpan"].map(|name| {
+                                Ty::intern(InferTy::Class(
+                                    baml_type::DeclName::in_root(root, vec![], Name::new(name)),
+                                    Box::new([]),
+                                ))
+                            }))
+                        });
+                self.check_expr(body, arg.expr, &expected);
+            } else {
+                if seen_trace && arg.label.is_none() {
+                    self.pending_diags
+                        .push(PendingDiag::PositionalAfterNamed { expr: arg.expr });
+                }
+                ordinary_args.push(arg.clone());
+            }
+        }
+        if seen_trace {
+            let callable = self
+                .result
+                .member_resolutions
+                .get(&callee)
+                .or_else(|| {
+                    self.result
+                        .path_resolutions
+                        .get(&callee)
+                        .and_then(|path| path.segments.last())
+                        .and_then(|segment| segment.resolution.as_ref())
+                })
+                .and_then(|resolution| resolution.callable(self.db));
+            let unsupported = match callable {
+                Some(DeclRef::Source(function)) => matches!(
+                    baml_compiler2_hir::body::function_body(self.db, function).as_ref(),
+                    baml_compiler2_hir::body::FunctionBody::Builtin(_)
+                ),
+                Some(DeclRef::External(function)) => extern_function_row(self.db, function)
+                    .builtin_kind
+                    .is_some(),
+                None => false,
+            };
+            if unsupported {
+                self.pending_diags
+                    .push(PendingDiag::TraceUnsupportedCall { expr: call });
+            }
+        }
+        let args = ordinary_args.as_slice();
         // The call is a STRUCTURE demand on the callee (rustc's
         // `check_call` structurally resolves before matching
         // callability): `inc2` holding a still-unsolved `?T` bounded
@@ -8678,6 +8732,11 @@ impl<'db> InferenceContext<'db> {
     ) -> Ty {
         let db = self.db;
         let class_name = crate::lower::class_qualified_name(db, class);
+        if self.is_opaque_trace_type(&class_name) {
+            self.pending_diags
+                .push(PendingDiag::TraceOpaqueValue { expr: object });
+            return Ty::error();
+        }
         if baml_type::type_kind::is_type_kind_class_decl(self.lang(), &class_name) {
             for field in fields {
                 self.infer_expr(body, field.value, &Expectation::None);
@@ -8888,6 +8947,11 @@ impl<'db> InferenceContext<'db> {
         let db = self.db;
         let row = crate::extern_loc::extern_class_row(db, class);
         let class_name = class.head(db).clone();
+        if self.is_opaque_trace_type(&class_name) {
+            self.pending_diags
+                .push(PendingDiag::TraceOpaqueValue { expr: object });
+            return Ty::error();
+        }
         let exported_fields = row.fields;
         let generic_params = row.generic_params;
         let generic_param_bounds = row.generic_param_bounds;
@@ -9064,6 +9128,12 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
+    fn is_opaque_trace_type(&self, name: &baml_type::DeclName) -> bool {
+        self.lang().is(baml_base::LangPackage::Trace, name.root())
+            && name.namespace().is_empty()
+            && matches!(name.name().as_str(), "Options" | "ReservedSpan" | "SpanId")
+    }
+
     /// The resolution core behind [`InferenceContext::field_access`]:
     /// hands the resolution BACK instead of recording, so the union arm
     /// can drop its per-member recursion's resolutions (one expression,
@@ -9079,6 +9149,14 @@ impl<'db> InferenceContext<'db> {
         // answers as its union and an alias-of-class answers as the
         // class - every arm below sees the target.
         let resolved = self.structurally_resolve(base_ty);
+        if member.as_str() == "_handle"
+            && let InferTy::Class(name, _) = resolved.kind()
+            && self.is_opaque_trace_type(name)
+        {
+            self.pending_diags
+                .push(PendingDiag::TraceOpaqueValue { expr: at });
+            return (Ty::error(), None);
+        }
         // A union behaves as the intersection existential over the
         // interfaces every arm provides (TIR's rule): `member` resolves
         // through the SINGLE shared interface that declares it -
@@ -10066,6 +10144,18 @@ impl<'db> InferenceContext<'db> {
         clauses: &[baml_compiler2_ast::CatchClause],
         expected: &Expectation,
     ) -> Ty {
+        // An exception can leave the base at any point, and a handler may
+        // assign outer locals (including through a defer at its block exit).
+        let mut entry_flow = self.flow.clone();
+        let mut writes = self.assigned_bindings(body, base);
+        for clause in clauses {
+            for &arm in &clause.arms {
+                writes.extend(self.assigned_bindings(body, body.catch_arms[arm].body));
+            }
+        }
+        for binding in writes {
+            entry_flow.remove(&binding);
+        }
         let branch_expectation = expected.adjust_for_branches(&mut self.table);
         // Caught values need not satisfy the enclosing callable's contract.
         self.throws_channels.push(ThrowsChannel::default());
@@ -10078,6 +10168,7 @@ impl<'db> InferenceContext<'db> {
         // An arm's binding would carry the fact's type past the block that
         // scoped it.
         let channel = self.drop_escaping_effects(channel, None);
+        self.flow = entry_flow;
         // catch discharges a SET of throw FACTS, never a value of a
         // union type (match scrutinizes values; catch removes facts):
         // each contribution finalizes and top-level unions split into
@@ -10701,7 +10792,7 @@ impl<'db> InferenceContext<'db> {
         diagnostics
     }
 
-    fn finish(mut self) -> InferenceResult<'db> {
+    fn finish(mut self, body: Option<&ExprBody>) -> InferenceResult<'db> {
         // The fulfillment fixpoint: solve what FULL bounds determine,
         // attempt obligations, re-drive the deferred residue, repeat
         // while any side progresses (rustc re-runs stalled obligations
@@ -11416,6 +11507,12 @@ impl<'db> InferenceContext<'db> {
                     PendingDiag::UnknownNamedArg { expr, name } => {
                         (TirTypeError::UnknownNamedArgument { name }, expr)
                     }
+                    PendingDiag::TraceUnsupportedCall { expr } => {
+                        (TirTypeError::TraceUnsupportedCall, expr)
+                    }
+                    PendingDiag::TraceOpaqueValue { expr } => {
+                        (TirTypeError::TraceOpaqueValue, expr)
+                    }
                     PendingDiag::OperatorNotApplicable {
                         expr,
                         interface,
@@ -11474,9 +11571,18 @@ impl<'db> InferenceContext<'db> {
                         ty,
                         always_true,
                     } => {
+                        let ty = self.plain_finalized(&ty);
+                        if let (Some(body), baml_type::Ty::Function { params, .. }) = (body, &ty) {
+                            diags.push(Self::uncalled_function_diagnostic(
+                                body,
+                                expr,
+                                params.iter().all(baml_type::FunctionParamTy::is_optional),
+                            ));
+                            continue;
+                        }
                         diags.push(TirDiagnostic {
                             error: TirTypeError::ConditionAlwaysConstant {
-                                ty: self.plain_finalized(&ty),
+                                ty: Some(ty),
                                 always_true,
                             },
                             severity: DiagnosticSeverity::Warning,
@@ -11497,21 +11603,6 @@ impl<'db> InferenceContext<'db> {
                         expr,
                     ),
 
-                    PendingDiag::DeadCode {
-                        at,
-                        unreachable_count,
-                    } => {
-                        diags.push(TirDiagnostic {
-                            error: TirTypeError::DeadCode {
-                                after: at,
-                                unreachable_count,
-                            },
-                            severity: DiagnosticSeverity::Warning,
-                            primary: DiagnosticLocation::Stmt(at),
-                            related: Vec::new(),
-                        });
-                        continue;
-                    }
                     PendingDiag::UnknownPatternField {
                         pat,
                         class_name,
@@ -11975,6 +12066,9 @@ impl<'db> InferenceContext<'db> {
                     primary: DiagnosticLocation::Expr(expr),
                     related: Vec::new(),
                 });
+            }
+            if let Some(body) = body {
+                reachability::add_diagnostics(body, &result, &mut diags);
             }
             // The finish fixpoint may re-attempt a failing obligation
             // once per round - identical findings collapse to one.

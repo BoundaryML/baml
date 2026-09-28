@@ -1,0 +1,35 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[ns_core/core.baml:255:7]
+ 255 │       Done {}
+     ·       ───────
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[ns_core/core.baml:281:7]
+ 281 │       Done {}
+     ·       ───────
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[ns_core/core.baml:316:7]
+ 316 │       Done {}
+     ·       ───────
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[ns_core/core.baml:350:7]
+ 350 │       Done {}
+     ·       ───────
+     ╰────

@@ -103,7 +103,7 @@ internal static unsafe partial class Program
 
         string emptyBytecodeDiagnostic = ConsumeUtf8Buffer(
             api,
-            api->InitializeRuntimeFromBytecode(null, 0));
+            api->InitializeRuntimeFromBlob(null, 0));
         Require(
             emptyBytecodeDiagnostic.Length > 0,
             "empty bytecode unexpectedly initialized the runtime");
@@ -113,7 +113,7 @@ internal static unsafe partial class Program
         {
             string diagnostic = ConsumeUtf8Buffer(
                 api,
-                api->InitializeRuntimeFromBytecode(
+                api->InitializeRuntimeFromBlob(
                     invalid,
                     (nuint)invalidBytecode.Length));
             Require(
@@ -126,7 +126,7 @@ internal static unsafe partial class Program
         {
             string diagnostic = ConsumeUtf8Buffer(
                 api,
-                api->InitializeRuntimeFromBytecode(
+                api->InitializeRuntimeFromBlob(
                     bytes,
                     (nuint)bytecode.Length));
             Require(
@@ -854,8 +854,8 @@ internal static unsafe partial class Program
     {
         Require(api->Version is not null, "version is null");
         Require(
-            api->InitializeRuntimeFromBytecode is not null,
-            "initialize_runtime_from_bytecode is null");
+            api->InitializeRuntimeFromBlob is not null,
+            "initialize_runtime_from_blob is null");
         Require(api->FreeBuffer is not null, "free_buffer is null");
         Require(api->RegisterCallback is not null, "register_callback is null");
         Require(api->CallFunction is not null, "call_function is null");
@@ -1035,7 +1035,7 @@ internal static unsafe partial class Program
         public readonly delegate* unmanaged[Cdecl]<
             byte*,
             nuint,
-            BamlBuffer> InitializeRuntimeFromBytecode;
+            BamlBuffer> InitializeRuntimeFromBlob;
         public readonly delegate* unmanaged[Cdecl]<BamlBuffer, void> FreeBuffer;
         public readonly delegate* unmanaged[Cdecl]<
             delegate* unmanaged[Cdecl]<uint, byte*, nuint, void>,

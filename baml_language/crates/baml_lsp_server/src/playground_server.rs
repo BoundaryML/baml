@@ -33,8 +33,11 @@ use bex_events::{
         BoundaryId, CancellationState, DiagnosticSeverity, ExecutionRequest, HostCallId,
         InMemoryRunStore, ProjectGeneration, ProjectId, RequestId, RunCursor,
         RunCursorExpiredReason, RunDiagnostic, RunError, RunErrorClass, RunFilter, RunKind,
-        RunOutcome, RunPatch, RunResult, RunSubscription, RunTarget, RunVisibilityFilter,
-        StartedHostRun,
+        RunOutcome, RunSubscription, RunTarget, RunVisibilityFilter, StartedHostRun,
+        presentation::{
+            capture_loss_message, error_outcome, log_loss_diagnostic_patch,
+            root_value_success_outcome_with_value,
+        },
     },
     value::{
         ByteValueArtifactSink, CaptureLossKind, CaptureLossReason, CaptureLossRecord,
@@ -362,20 +365,12 @@ fn runtime_error_outcome_with_ref(
     err: &bex_project::RuntimeError,
     value_ref: Option<ValueRef>,
 ) -> RunOutcome {
-    if is_cancelled_runtime_error(err) {
-        let now = epoch_ms();
-        return RunOutcome::Cancelled(CancellationState {
-            requested_at_ms: now,
-            completed_at_ms: Some(now),
-            reason: Some(format!("{err}")),
-        });
-    }
-    RunOutcome::Failed(RunError {
-        class: runtime_error_class(err),
-        message: format!("{err}"),
-        details: None,
+    error_outcome(
+        format!("{err}"),
+        runtime_error_class(err),
         value_ref,
-    })
+        is_cancelled_runtime_error(err).then(epoch_ms),
+    )
 }
 
 /// Find an available TCP port starting from `base_port`.
@@ -457,22 +452,11 @@ struct WsState {
     /// Target of the most recent `OpenPlayground`; replayed to a page when it
     /// requests state so a freshly opened / reconnected window navigates there.
     current_open_target: crate::playground_sender::SharedOpenTarget,
+    /// Recording reads for the telemetry tab, one open index per project.
+    telemetry: Arc<crate::playground_btel::PlaygroundTelemetry>,
 }
 
 type LiveValueStore = Arc<Mutex<LiveValueCache>>;
-
-fn root_value_success_outcome_with_value(
-    value_ref: Option<ValueRef>,
-    value: Option<Vec<u8>>,
-    renderer_hint: &str,
-) -> RunOutcome {
-    RunOutcome::Succeeded(RunResult {
-        value_ref,
-        value,
-        renderer_hint: Some(renderer_hint.to_string()),
-        supporting_payload_ids: Vec::new(),
-    })
-}
 
 /// The completed run's value, inlined as artifact-safe outbound bytes so the
 /// client has something to render — without it a test report (the pass/fail
@@ -657,29 +641,6 @@ fn broadcast_log_loss_diagnostic(
     }
 }
 
-fn log_loss_diagnostic_patch(
-    run_store: &InMemoryRunStore,
-    boundary_id: BoundaryId,
-    capture_kind: &str,
-    skipped: u64,
-) -> Option<RunPatch> {
-    run_store.add_diagnostic(
-        boundary_id,
-        RunDiagnostic {
-            severity: DiagnosticSeverity::Warning,
-            code: Some("logCaptureLoss".to_string()),
-            message: capture_loss_message(capture_kind, skipped),
-            payload_id: None,
-        },
-    )
-}
-
-fn capture_loss_message(capture_kind: &str, skipped: u64) -> String {
-    format!(
-        "Skipped {skipped} captured {capture_kind} value(s) because the log capture queue was full"
-    )
-}
-
 #[derive(Clone, Copy, Debug)]
 struct PlaygroundAccessGuard;
 
@@ -820,6 +781,9 @@ fn build_router(
         DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES,
     )));
     let history_store = Arc::new(HistoryStore::new(workspace_roots.to_vec()));
+    let telemetry = Arc::new(crate::playground_btel::PlaygroundTelemetry::new(
+        Arc::clone(&workspace_roots),
+    ));
     let ws_state = WsState {
         seam,
         broadcast_tx,
@@ -833,6 +797,7 @@ fn build_router(
         doc_mirror,
         workspace_roots,
         current_open_target,
+        telemetry,
     };
 
     let api = Router::new()
@@ -1964,18 +1929,77 @@ async fn handle_ws_in_message(
             }
         }
 
-        WsInMessage::ReadTelemetryMedia { request_id, .. }
-        | WsInMessage::ListExecutions { request_id, .. }
-        | WsInMessage::OpenExecution { request_id, .. } => {
+        WsInMessage::ReadTelemetryMedia { request_id, .. } => {
             send_ws(
                 sink,
                 &WsOutMessage::CommandError {
-                    code: "profilingUnavailable".to_string(),
-                    message: "Profiling is currently unavailable.".to_string(),
+                    code: "mediaUnavailable".to_string(),
+                    message: "Captured media bytes are not served from local recordings yet"
+                        .to_string(),
                     request_id,
                 },
             )
             .await;
+        }
+        WsInMessage::ListExecutions {
+            request_id,
+            project,
+        } => {
+            // SQLite and CAS reads block: keep them off the async executor.
+            let telemetry = Arc::clone(&state.telemetry);
+            let listed =
+                tokio::task::spawn_blocking(move || telemetry.list_executions(&project)).await;
+            let message = match listed {
+                Ok(Ok((executions, store_missing))) => WsOutMessage::ExecutionList {
+                    request_id,
+                    executions,
+                    store_missing,
+                },
+                Ok(Err(error)) => WsOutMessage::CommandError {
+                    code: error.code.to_string(),
+                    message: error.message,
+                    request_id,
+                },
+                Err(error) => WsOutMessage::CommandError {
+                    code: "telemetryFailed".to_string(),
+                    message: error.to_string(),
+                    request_id,
+                },
+            };
+            send_ws(sink, &message).await;
+        }
+        WsInMessage::OpenExecution {
+            request_id,
+            project,
+            execution_id,
+        } => {
+            let telemetry = Arc::clone(&state.telemetry);
+            let id = execution_id.clone();
+            // Recorded locations are verified against what the playground
+            // currently has built for this project, never assumed current.
+            let current_source = state.seam.installed_source_snapshot(&project);
+            let opened = tokio::task::spawn_blocking(move || {
+                telemetry.open_execution(&project, &id, current_source)
+            })
+            .await;
+            let message = match opened {
+                Ok(Ok(telemetry)) => WsOutMessage::ExecutionTelemetry {
+                    request_id,
+                    execution_id,
+                    telemetry,
+                },
+                Ok(Err(error)) => WsOutMessage::CommandError {
+                    code: error.code.to_string(),
+                    message: error.message,
+                    request_id,
+                },
+                Err(error) => WsOutMessage::CommandError {
+                    code: "telemetryFailed".to_string(),
+                    message: error.to_string(),
+                    request_id,
+                },
+            };
+            send_ws(sink, &message).await;
         }
 
         WsInMessage::Snapshot {

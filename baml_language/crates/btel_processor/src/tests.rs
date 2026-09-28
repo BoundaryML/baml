@@ -433,6 +433,9 @@ fn all_completions_combine_once_and_borrowed_spans_release_captures() {
             count: 3,
             total_duration: ClockDuration::from_ticks(20),
             total_io_duration: AwaitDuration::ZERO.saturating_add(ClockDuration::from_ticks(9)),
+            // Errored timing, successful span, cancelled late span.
+            errored: 1,
+            cancelled: 1,
         }
     );
     assert_eq!(
@@ -442,6 +445,8 @@ fn all_completions_combine_once_and_borrowed_spans_release_captures() {
             count: 1,
             total_duration: ClockDuration::from_ticks(10),
             total_io_duration: AwaitDuration::ZERO.saturating_add(ClockDuration::from_ticks(3)),
+            errored: 1,
+            cancelled: 0,
         }
     );
     assert_eq!(receiver.deltas.iter().map(|d| d.count).sum::<u64>(), 4);
@@ -487,6 +492,211 @@ fn all_completions_combine_once_and_borrowed_spans_release_captures() {
         4,
         "publisher released both span chunks"
     );
+}
+
+/// Every function completion form, with the outcome and reentry it implies.
+#[expect(clippy::type_complexity, reason = "test table of record builders")]
+fn completion_forms<I, V>() -> [(fn(CallPathId) -> SpanRecord<I, V>, InvocationOutcome, bool); 18] {
+    macro_rules! forms {
+        ($($variant:ident: $outcome:ident, $reentry:literal;)*) => {
+            [$((
+                (|call_path| SpanRecord::$variant {
+                    id: allocate_telemetry_id(),
+                    parent_id: allocate_telemetry_id(),
+                    call_path,
+                    entered_at: ClockInstant::from_ticks(10),
+                    exited_at: ClockInstant::from_ticks(15),
+                    await_time: AwaitDuration::ZERO,
+                    captured_value: None,
+                }) as fn(CallPathId) -> SpanRecord<I, V>,
+                InvocationOutcome::$outcome,
+                $reentry,
+            )),*]
+        };
+    }
+    forms! {
+        FunctionSpanCompletionOk: Ok, false;
+        FunctionSpanCompletionOkNeedsAnnouncement: Ok, false;
+        FunctionSpanCompletionOkReentry: Ok, true;
+        FunctionSpanCompletionOkReentryNeedsAnnouncement: Ok, true;
+        FunctionSpanCompletionErrored: Errored, false;
+        FunctionSpanCompletionErroredNeedsAnnouncement: Errored, false;
+        FunctionSpanCompletionErroredReentry: Errored, true;
+        FunctionSpanCompletionErroredReentryNeedsAnnouncement: Errored, true;
+        FunctionSpanCompletionCancelled: Cancelled, false;
+        FunctionSpanCompletionCancelledNeedsAnnouncement: Cancelled, false;
+        FunctionSpanCompletionCancelledReentry: Cancelled, true;
+        FunctionSpanCompletionCancelledReentryNeedsAnnouncement: Cancelled, true;
+        LateFunctionSpanCompletionOk: Ok, false;
+        LateFunctionSpanCompletionOkReentry: Ok, true;
+        LateFunctionSpanCompletionErrored: Errored, false;
+        LateFunctionSpanCompletionErroredReentry: Errored, true;
+        LateFunctionSpanCompletionCancelled: Cancelled, false;
+        LateFunctionSpanCompletionCancelledReentry: Cancelled, true;
+    }
+}
+
+fn timed(call_path: CallPathId, outcome: InvocationOutcome, reentry: bool) -> TimingRecord {
+    TimingRecord::FunctionTimingCompletion {
+        call_path,
+        entered_at: ClockInstant::from_ticks(10),
+        exited_at: ClockInstant::from_ticks(15),
+        await_time: AwaitDuration::ZERO,
+        outcome,
+        reentry,
+    }
+}
+
+const OUTCOMES: [InvocationOutcome; 3] = [
+    InvocationOutcome::Ok,
+    InvocationOutcome::Errored,
+    InvocationOutcome::Cancelled,
+];
+
+/// (count, errored, cancelled) per node, summed over every published delta.
+fn outcome_totals(deltas: &[AggregateDelta]) -> FxHashMap<CallPathNodeId, [u64; 3]> {
+    let mut totals = FxHashMap::<_, [u64; 3]>::default();
+    for d in deltas {
+        assert!(d.errored + d.cancelled <= d.count, "{d:?}");
+        let total = totals.entry(d.node).or_default();
+        total[0] += d.count;
+        total[1] += d.errored;
+        total[2] += d.cancelled;
+    }
+    totals
+}
+
+fn expected_outcome(outcome: InvocationOutcome) -> [u64; 3] {
+    [
+        1,
+        u64::from(outcome == InvocationOutcome::Errored),
+        u64::from(outcome == InvocationOutcome::Cancelled),
+    ]
+}
+
+#[test]
+fn every_completion_form_and_timing_outcome_counts_once_by_outcome() {
+    let pool = ChunkPool::new(config(32, 1)).unwrap();
+    let mut processor = Processor::with_publisher(
+        pool.bind_consumer().unwrap(),
+        nz(8),
+        RecordingPublisher::default(),
+    );
+    let mut producer = pool.register_producer().unwrap();
+    let thread_id = allocate_telemetry_id();
+    let clock = btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run();
+    let mut expected = FxHashMap::default();
+    producer.write_span(SpanRecord::ThreadSelected { thread_id });
+    let forms = completion_forms();
+    for (index, (build, outcome, reentry)) in forms.iter().enumerate() {
+        let path = CallPathId::new_non_root(u32::try_from(index).unwrap() + 1).unwrap();
+        producer.write_span(build(path));
+        expected.insert(
+            CallPathNodeId::new(path, *reentry),
+            expected_outcome(*outcome),
+        );
+    }
+    // Thread outcomes and announcements are forwarded, not function invocations.
+    for outcome in [InvocationOutcome::Errored, InvocationOutcome::Cancelled] {
+        producer.write_span(SpanRecord::ThreadSpanCompletion {
+            id: thread_id,
+            parent_id: None,
+            spawn_call_path: CallPathId::ROOT,
+            started_at: ClockInstant::from_ticks(1),
+            completed_at: ClockInstant::from_ticks(2),
+            outcome,
+            clock: clock.clone(),
+        });
+    }
+    producer.write_span(SpanRecord::FunctionSpanAnnouncement {
+        id: allocate_telemetry_id(),
+        parent_id: thread_id,
+        call_path: CallPathId::new_non_root(99).unwrap(),
+        entered_at: ClockInstant::from_ticks(1),
+        captured_inputs: None,
+    });
+    producer.write_timing(TimingRecord::ThreadSelected { thread_id });
+    let mut raw = 100;
+    for reentry in [false, true] {
+        for outcome in OUTCOMES {
+            let path = CallPathId::new_non_root(raw).unwrap();
+            raw += 1;
+            producer.write_timing(timed(path, outcome, reentry));
+            expected.insert(
+                CallPathNodeId::new(path, reentry),
+                expected_outcome(outcome),
+            );
+        }
+    }
+    drop(producer);
+    pool.close_admission();
+    assert!(processor.process_available().complete);
+    let publisher = processor.publisher();
+    assert_eq!(outcome_totals(&publisher.deltas), expected);
+    assert_eq!(expected.len(), 24);
+    assert_eq!(publisher.threads.len(), 18 + 3, "each span forwarded once");
+}
+
+#[test]
+fn mixed_outcomes_accumulate_across_chunks_flushes_and_collisions() {
+    let pool = ChunkPool::new(config(8, 1)).unwrap();
+    let mut processor = Processor::with_publisher(
+        pool.bind_consumer().unwrap(),
+        nz(8),
+        RecordingPublisher::default(),
+    );
+    let mut producer = pool.register_producer().unwrap();
+    let thread_id = allocate_telemetry_id();
+    producer.write_timing(TimingRecord::ThreadSelected { thread_id });
+    producer.write_span(SpanRecord::ThreadSelected { thread_id });
+    let forms = completion_forms();
+    let mut expected = FxHashMap::<_, [u64; 3]>::default();
+    let mut spans = 0;
+    for i in 0..600_u32 {
+        // 37 paths and reentry nodes overflow the 16 combining slots.
+        let path = CallPathId::new_non_root(1 + i % 37).unwrap();
+        let reentry = i % 5 == 0;
+        let outcome = OUTCOMES[(i as usize * 7 / 3) % 3];
+        if i % 2 == 0 {
+            producer.write_timing(timed(path, outcome, reentry));
+        } else {
+            let (build, ..) = forms
+                .iter()
+                .filter(|(_, o, r)| *o == outcome && *r == reentry)
+                .nth(i as usize / 2 % 3)
+                .unwrap();
+            producer.write_span(build(path));
+            spans += 1;
+        }
+        let total = expected
+            .entry(CallPathNodeId::new(path, reentry))
+            .or_default();
+        for (total, value) in total.iter_mut().zip(expected_outcome(outcome)) {
+            *total += value;
+        }
+        if i % 7 == 6 {
+            producer.seal();
+            processor.process_available();
+        }
+        if i % 50 == 49 {
+            processor.flush();
+        }
+    }
+    drop(producer);
+    pool.close_admission();
+    assert!(processor.process_available().complete);
+    let publisher = processor.publisher();
+    assert!(publisher.flushes > 1);
+    assert_eq!(outcome_totals(&publisher.deltas), expected);
+    let totals = expected.values().fold([0; 3], |mut sum, value| {
+        for (sum, value) in sum.iter_mut().zip(value) {
+            *sum += value;
+        }
+        sum
+    });
+    assert_eq!(totals[0], 600);
+    assert!(totals[1] > 0 && totals[2] > 0 && totals[1] + totals[2] < 600);
+    assert_eq!(publisher.threads.len(), spans);
 }
 
 #[test]
@@ -585,31 +795,40 @@ fn decoder_slots_stay_fixed_and_live_selectors_survive_other_slot_reuse() {
 #[test]
 fn combiner_collisions_and_overflow_preserve_exact_totals() {
     let mut cache = CombiningCache::default();
-    let mut actual: FxHashMap<CallPathNodeId, (u128, u128, u128)> = FxHashMap::default();
+    let mut actual: FxHashMap<CallPathNodeId, [u128; 5]> = FxHashMap::default();
     let mut expected = actual.clone();
     let mut accept = |d: AggregateDelta| {
+        assert!(d.errored + d.cancelled <= d.count, "{d:?}");
         let total = actual.entry(d.node).or_default();
-        total.0 += u128::from(d.count);
-        total.1 += u128::from(d.total_duration.get());
-        total.2 += u128::from(d.total_io_duration.get().get());
+        total[0] += u128::from(d.count);
+        total[1] += u128::from(d.total_duration.get());
+        total[2] += u128::from(d.total_io_duration.get().get());
+        total[3] += u128::from(d.errored);
+        total[4] += u128::from(d.cancelled);
     };
     for i in 0..400_u32 {
         let path = CallPathId::new_non_root((1 + (i % 65) * 64) | ((i % 2) << 31)).unwrap();
         let amount = if i % 7 == 0 { u64::MAX } else { u64::from(i) };
+        let count = amount.max(1);
         let d = AggregateDelta {
             node: CallPathNodeId::new(path, i % 3 == 0),
-            count: amount.max(1),
+            count,
             total_duration: ClockDuration::from_ticks(amount),
             total_io_duration: AwaitDuration::ZERO
                 .saturating_add(ClockDuration::from_ticks(amount)),
+            errored: count / 2,
+            cancelled: count / 4 * u64::from(i % 5 != 0),
         };
         let total = expected.entry(d.node).or_default();
-        total.0 += u128::from(d.count);
-        total.1 += u128::from(amount);
-        total.2 += u128::from(amount);
+        total[0] += u128::from(d.count);
+        total[1] += u128::from(amount);
+        total[2] += u128::from(amount);
+        total[3] += u128::from(d.errored);
+        total[4] += u128::from(d.cancelled);
         cache.observe(d, &mut accept);
     }
     // Force same-key overflow without relying on a particular cache mapping.
+    // Outcome counters split with the count instead of saturating.
     for _ in 0..2 {
         let path = CallPathId::new_non_root(1).unwrap();
         let d = AggregateDelta {
@@ -617,10 +836,14 @@ fn combiner_collisions_and_overflow_preserve_exact_totals() {
             count: u64::MAX,
             total_duration: ClockDuration::from_ticks(u64::MAX),
             total_io_duration: AwaitDuration::ZERO,
+            errored: u64::MAX - 1,
+            cancelled: 1,
         };
         let total = expected.entry(d.node).or_default();
-        total.0 += u128::from(u64::MAX);
-        total.1 += u128::from(u64::MAX);
+        total[0] += u128::from(u64::MAX);
+        total[1] += u128::from(u64::MAX);
+        total[3] += u128::from(u64::MAX - 1);
+        total[4] += 1;
         cache.observe(d, &mut accept);
     }
     cache.flush(&mut accept);
@@ -639,6 +862,8 @@ fn no_sink_publisher_bounds_unique_paths_and_flushes_before_overflow() {
                 count: 1,
                 total_duration: ClockDuration::from_ticks(u64::MAX),
                 total_io_duration: AwaitDuration::ZERO,
+                errored: 0,
+                cancelled: 0,
             },
         );
         assert!(publisher.pending().len() <= 2);
@@ -647,6 +872,43 @@ fn no_sink_publisher_bounds_unique_paths_and_flushes_before_overflow() {
     assert_eq!(publisher.stats().flushed_nodes, 3);
     <NoSinkPublisher as Publisher<(), ()>>::flush(&mut publisher);
     assert!(publisher.pending().is_empty());
+}
+
+#[test]
+fn no_sink_publisher_merges_outcome_counters_within_a_window() {
+    let mut publisher = NoSinkPublisher::new(nz(2));
+    let node = CallPathNodeId::new(CallPathId::new_non_root(1).unwrap(), true);
+    for (count, errored, cancelled) in [(3, 1, 0), (2, 0, 2), (4, 0, 0)] {
+        <NoSinkPublisher as Publisher<(), ()>>::aggregate(
+            &mut publisher,
+            AggregateDelta {
+                node,
+                count,
+                errored,
+                cancelled,
+                ..AggregateDelta::default()
+            },
+        );
+    }
+    let merged = publisher.pending()[&node];
+    assert_eq!((merged.count, merged.errored, merged.cancelled), (9, 1, 2));
+    // A count overflow finishes the window; the new delta keeps its own outcomes.
+    <NoSinkPublisher as Publisher<(), ()>>::aggregate(
+        &mut publisher,
+        AggregateDelta {
+            node,
+            count: u64::MAX,
+            errored: 5,
+            cancelled: 6,
+            ..AggregateDelta::default()
+        },
+    );
+    let merged = publisher.pending()[&node];
+    assert_eq!(
+        (merged.count, merged.errored, merged.cancelled),
+        (u64::MAX, 5, 6)
+    );
+    assert_eq!(publisher.stats().flushed_nodes, 1);
 }
 
 #[test]

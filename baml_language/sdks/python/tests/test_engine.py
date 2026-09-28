@@ -185,7 +185,7 @@ version = "{generated_toolchain}"
 """
 
         with pytest.raises(RuntimeError) as exc_info:
-            BamlRuntime.initialize_runtime_from_bytecode(
+            BamlRuntime.initialize_runtime_from_blob(
                 b"\x00", embedded_baml_toml
             )
 

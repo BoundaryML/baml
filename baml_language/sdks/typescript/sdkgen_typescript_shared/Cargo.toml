@@ -12,11 +12,13 @@ license = { workspace = true }
 
 [dependencies]
 baml_base = { workspace = true }
-baml_codegen_types = { workspace = true }
-base64 = { workspace = true }
+baml_sdkgen_types = { workspace = true }
 
 [lib]
 doctest = false
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+baml_artifact = { workspace = true }

@@ -112,13 +112,37 @@ pattern.exclude = ["bex_vm_types"]
 # (shared executor + packed-binary runtime host) and sit at the same
 # application boundary as `baml_cli` — they need direct access to the
 # engine, events, and VM types.
+#
+# Each bex boundary is written as two rules so one crate can get a
+# non-production exception: a `regular_deps_only` guard over
+# [dependencies], plus a companion rule over every section whose
+# allowlist adds only `baml_query_btel`. Stow's `regular_deps_only`
+# skips both [dev-dependencies] and [build-dependencies], so the
+# exception covers both; stow does not enforce dev-only. Today
+# `baml_query_btel` uses it only in [dev-dependencies]: its integration
+# tests run real engine programs (bex_engine, bex_heap, bex_vm_types)
+# to record executions and exercise GC. Its [dependencies] stay
+# btel_*-only. Keep both allowlists in sync.
 allowed_crates = ["bridge_cffi", "baml_cli", "baml_exec", "baml_pack_host"]
+regular_deps_only = true
 reason = "baml_* crates should not depend on bex_* crates."
+
+[[namespaces.dependency_rules]]
+pattern.select = "bex_*"
+pattern.exclude = ["bex_vm_types"]
+allowed_crates = ["bridge_cffi", "baml_cli", "baml_exec", "baml_pack_host", "baml_query_btel"]
+reason = "baml_* crates should not depend on bex_* crates (baml_query_btel: non-production dev/build dependencies only)."
 
 [[namespaces.dependency_rules]]
 pattern.select = "bex_vm_types"
 allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_db", "baml_cli", "baml_exec", "baml_pack_host"]
+regular_deps_only = true
 reason = "Only compiler_emit and baml_db crates should depend on bex_vm_types (pure data layer)."
+
+[[namespaces.dependency_rules]]
+pattern.select = "bex_vm_types"
+allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_db", "baml_cli", "baml_exec", "baml_pack_host", "baml_query_btel"]
+reason = "Only compiler_emit and baml_db crates should depend on bex_vm_types (pure data layer; baml_query_btel: non-production dev/build dependencies only)."
 
 
 # tools namespace configuration

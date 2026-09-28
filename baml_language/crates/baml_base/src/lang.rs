@@ -25,6 +25,8 @@ pub enum LangPackage {
     /// The `log` package, whose `info`/`debug`/`warn`/`error` are the
     /// compiler intrinsics MIR lowers to log statements.
     Log,
+    /// Invocation tracing options accepted by the reserved `$trace` argument.
+    Trace,
 }
 
 /// The package roots the COMPILER itself spells in the paths its desugars
@@ -45,7 +47,7 @@ pub enum LangPackage {
 pub const DESUGAR_PATH_ROOTS: &[&str] = &[LangPackage::Baml.manifest_name()];
 
 impl LangPackage {
-    pub const ALL: [Self; 4] = [Self::Baml, Self::Reflect, Self::Ai, Self::Log];
+    pub const ALL: [Self; 5] = [Self::Baml, Self::Reflect, Self::Ai, Self::Log, Self::Trace];
 
     /// The package's `[package].name` in the stdlib manifests — the ONE
     /// spelling the installer matches to find the root.
@@ -55,6 +57,7 @@ impl LangPackage {
             Self::Reflect => "reflect",
             Self::Ai => "ai",
             Self::Log => "log",
+            Self::Trace => "trace",
         }
     }
 }
@@ -68,6 +71,7 @@ pub struct LangRoots {
     reflect: Option<SourceRoot>,
     ai: Option<SourceRoot>,
     log: Option<SourceRoot>,
+    trace: Option<SourceRoot>,
 }
 
 impl LangRoots {
@@ -79,6 +83,7 @@ impl LangRoots {
             LangPackage::Reflect => self.reflect,
             LangPackage::Ai => self.ai,
             LangPackage::Log => self.log,
+            LangPackage::Trace => self.trace,
         }
     }
 
@@ -96,6 +101,7 @@ impl LangRoots {
             LangPackage::Reflect => &mut self.reflect,
             LangPackage::Ai => &mut self.ai,
             LangPackage::Log => &mut self.log,
+            LangPackage::Trace => &mut self.trace,
         };
         *slot = Some(root);
         self

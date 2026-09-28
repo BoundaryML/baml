@@ -40,8 +40,10 @@ export function initializeRuntime(srcDir, files) {
  * Free-function runtime initializer used by generated `baml_sdk/index.ts` when
  * codegen embeds precompiled BAML bytecode.
  */
-export function initializeRuntimeFromBytecode(bytecode, embeddedBamlToml) {
-    BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytecode), embeddedBamlToml);
+export function initializeRuntimeFromBlob(bytecode, embeddedBamlToml) {
+    // Generated SDKs pass their embedded bytecode string through untouched;
+    // the native bridge decodes it.
+    BamlRuntime.initializeRuntimeFromBlob(typeof bytecode === "string" ? bytecode : Buffer.from(bytecode), embeddedBamlToml);
 }
 export { BamlAbortError, BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
 export function newFunctionCall() {

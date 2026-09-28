@@ -1,4 +1,4 @@
-//! Shared routing: turns a `baml_codegen_types::Name` into the leaf `index.ts`
+//! Shared routing: turns a `baml_sdkgen_types::Name` into the leaf `index.ts`
 //! directory path (under `baml_sdk/`) where that symbol's TypeScript
 //! representation lives. Single source of truth for per-symbol placement;
 //! `to_source_code` uses this to enumerate leaves and interior
@@ -20,7 +20,7 @@
 #[cfg(test)]
 use std::path::PathBuf;
 
-use baml_codegen_types::Name;
+use baml_sdkgen_types::Name;
 
 /// Leaf directory path under `baml_sdk/`. Empty segments means the root
 /// leaf (i.e. `baml_sdk/index.ts`).
@@ -64,24 +64,12 @@ fn sanitize_module_segment(seg: &str) -> String {
 /// Routing depends only on the symbol's package + namespace path, so a
 /// function companion (`extract@stream`) routes beside its parent.
 pub(crate) fn route(name: &Name) -> LeafPath {
-    let mut segs: Vec<String> = Vec::new();
-
-    match name.package().as_str() {
-        "user" => {}
-        "baml" => segs.push("baml".to_string()),
-        "ai" => segs.push("ai".to_string()),
-        "reflect" => segs.push("reflect".to_string()),
-        other => {
-            segs.push("vendor".to_string());
-            segs.push(sanitize_module_segment(other));
-        }
+    LeafPath {
+        segments: baml_sdkgen_types::namespace_segments(name)
+            .iter()
+            .map(|segment| sanitize_module_segment(segment))
+            .collect(),
     }
-
-    for seg in name.namespace() {
-        segs.push(sanitize_module_segment(seg.as_str()));
-    }
-
-    LeafPath { segments: segs }
 }
 
 #[cfg(test)]

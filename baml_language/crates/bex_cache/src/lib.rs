@@ -139,12 +139,11 @@ use sha2::{Digest, Sha256};
 /// later variants.
 ///
 /// Version 17: `Bytecode::shield_table` records the PC ranges of `defer`
-/// bodies, which run shielded from cancellation, and the `Spawn` opcode yields
-/// a `baml.spawn.Plan` instead of a pre-allocated `UnscheduledFuture`. The
-/// instruction encoding is unchanged — both pop that operand — so a cached
-/// unit from before this version decodes cleanly and then hands the engine the
-/// wrong object; this constant is what rejects it. `Object`/`ObjectType` also
-/// lost `UnscheduledFuture` from the middle of the enum, renumbering the Borsh
+/// bodies, which run shielded from cancellation. The `Spawn` opcode yields a
+/// `baml.spawn.Plan` instead of a pre-allocated `UnscheduledFuture`, and moved
+/// to the end of the `Instruction` and `OpCode` enums (after `SetCallTrace`),
+/// changing its serialized discriminant. `Object`/`ObjectType` lost
+/// `UnscheduledFuture` from the middle of the enum, renumbering the Borsh
 /// discriminants after it, and `Rethrow`/`ThrowIfPanic` pop the caught error's
 /// context under its value, with every exception-table entry naming a context
 /// slot. (It is 17, not 16: version 16 is BEP-075's and shipped in 0.20.0, so

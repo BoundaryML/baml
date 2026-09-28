@@ -1245,7 +1245,7 @@ internal static unsafe class Program
             (nameof(BamlApiV1.AbiVersion), 0),
             (nameof(BamlApiV1.StructSize), 8),
             (nameof(BamlApiV1.Version), 16),
-            (nameof(BamlApiV1.InitializeRuntimeFromBytecode), 24),
+            (nameof(BamlApiV1.InitializeRuntimeFromBlob), 24),
             (nameof(BamlApiV1.FreeBuffer), 32),
             (nameof(BamlApiV1.RegisterCallback), 40),
             (nameof(BamlApiV1.CallFunction), 48),
@@ -1266,7 +1266,7 @@ internal static unsafe class Program
             (nameof(BamlApiV1.RegisterBridge), 168),
             (nameof(BamlApiV1.RegisterUnhandledSpawnErrorCallback), 176),
             (nameof(BamlApiV1.ShutdownRuntime), 184),
-            (nameof(BamlApiV1.InitializeRuntimeFromBytecodeWithMetadata), 192),
+            (nameof(BamlApiV1.InitializeRuntimeFromBlobWithMetadata), 192),
         ];
         foreach ((string field, int offset) in layout)
         {
@@ -2719,7 +2719,7 @@ internal static unsafe class Program
         AbiVersion = 2,
         StructSize = (nuint)sizeof(BamlApiV1),
         Version = &Version,
-        InitializeRuntimeFromBytecode = &Initialize,
+        InitializeRuntimeFromBlob = &Initialize,
         FreeBuffer = &FreeBuffer,
         RegisterCallback = &RegisterResult,
         CallFunction = &Call,
@@ -2740,7 +2740,7 @@ internal static unsafe class Program
         RegisterBridge = &RegisterBridge,
         RegisterUnhandledSpawnErrorCallback = &RegisterUnhandledSpawnError,
         ShutdownRuntime = &Shutdown,
-        InitializeRuntimeFromBytecodeWithMetadata = &InitializeWithMetadata,
+        InitializeRuntimeFromBlobWithMetadata = &InitializeWithMetadata,
     };
 
     private static void ExpectInvalidTable(BamlApiV1 table, bool passNull = false)
@@ -2762,7 +2762,7 @@ internal static unsafe class Program
         switch (field)
         {
             case 0: table.Version = null; break;
-            case 1: table.InitializeRuntimeFromBytecode = null; break;
+            case 1: table.InitializeRuntimeFromBlob = null; break;
             case 2: table.FreeBuffer = null; break;
             case 3: table.RegisterCallback = null; break;
             case 4: table.CallFunction = null; break;
@@ -2783,7 +2783,7 @@ internal static unsafe class Program
             case 19: table.RegisterBridge = null; break;
             case 20: table.RegisterUnhandledSpawnErrorCallback = null; break;
             case 21: table.ShutdownRuntime = null; break;
-            case 22: table.InitializeRuntimeFromBytecodeWithMetadata = null; break;
+            case 22: table.InitializeRuntimeFromBlobWithMetadata = null; break;
             default: throw new ArgumentOutOfRangeException(nameof(field));
         }
     }

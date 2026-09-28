@@ -59,6 +59,25 @@ function call_int_callback(callback: (int) -> int, x: int) -> int {
     callback(x)
 }
 
+// JavaScript represents both integers and floats as `number`. The Node bridge
+// preserves that ambiguity so a float callback contract can resolve an
+// integral callback result as a float.
+function call_float_callback(callback: () -> float) -> float {
+    callback()
+}
+
+function call_float_bigint_union_callback(callback: () -> float | bigint) -> float | bigint {
+    callback()
+}
+
+class FloatSize {
+    width float
+}
+
+function call_float_class_callback(callback: () -> FloatSize) -> float {
+    callback().width
+}
+
 // A user-defined class flows through the callback as the argument type;
 // exercises class-encoding on the engine→host direction and class-
 // decoding on the host→engine return value.

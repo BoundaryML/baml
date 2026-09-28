@@ -253,8 +253,8 @@ impl io::IoNamespaceHost for NativeSysOps {
 ///
 /// Delegates to the shared, strict [`validate_host_return`] guard (shared
 /// with the WASM bridge) so the native and WASM bridges enforce an identical
-/// shape contract: scalar discrimination (`int` ≠ `float`), container
-/// recursion, enum identity, and class-name identity. Class *field types* are
+/// shape contract: scalar discrimination (including contextual JavaScript
+/// `number` resolution), container recursion, enum identity, and class-name identity. Class *field types* are
 /// validated engine-side at the result-push site, where the resolved class
 /// schema is available.
 /// Project a lane type into the name-headed form the contract check reads.
@@ -487,15 +487,20 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
-    // Return-type validation: an `int` value does NOT satisfy a `float`
-    // return (strict int≠float; the shared validator owns the recursive
-    // structural cases — see `bex_external_types::host_return`).
+    // Return-type validation keeps typed bridge values strict while resolving
+    // JavaScript's single Number type against the declared numeric context.
     // -------------------------------------------------------------------------
     #[test]
-    fn validate_return_value_int_does_not_satisfy_float() {
+    fn validate_return_value_resolves_javascript_numbers() {
         validate_return_value(&BexExternalValue::Int(3), &RuntimeTy::float())
-            .expect_err("an Int value must not satisfy a declared `float` return type");
+            .expect_err("a typed Int value must not satisfy a declared `float` return type");
+        validate_return_value(&BexExternalValue::JsNumber(3.0), &RuntimeTy::float())
+            .expect("an integral JavaScript Number should satisfy a declared `float` return type");
+        validate_return_value(&BexExternalValue::JsNumber(3.0), &RuntimeTy::int())
+            .expect("an integral JavaScript Number should satisfy a declared `int` return type");
         validate_return_value(&BexExternalValue::Float(3.0), &RuntimeTy::float())
             .expect("a Float value satisfies a declared `float` return type");
+        validate_return_value(&BexExternalValue::Float(3.0), &RuntimeTy::int())
+            .expect_err("a Float value must not satisfy a declared `int` return type");
     }
 }
