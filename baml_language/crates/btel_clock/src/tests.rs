@@ -179,6 +179,19 @@ fn a_settled_status_survives_restores_racing_the_last_thread() {
 }
 
 #[test]
+fn validating_a_settled_run_leaves_its_status() {
+    let runtime = ClockRuntime::new(ClockMode::Monotonic);
+    let epoch = runtime.start_run();
+    epoch.attach_thread();
+    epoch.finish_thread();
+    let settled = epoch.settled_status().expect("every thread finished");
+    // The same backward jump that invalidates an active run below.
+    epoch.last_checked_tick.store(u64::MAX, Ordering::Relaxed);
+    runtime.validate(&epoch, true);
+    assert_eq!(epoch.status(), settled);
+}
+
+#[test]
 fn fault_switches_future_runs_to_os_without_reinterpreting_active_records() {
     let runtime = ClockRuntime::new(ClockMode::Monotonic);
     let epoch = runtime.start_run();

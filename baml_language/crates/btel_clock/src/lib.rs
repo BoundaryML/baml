@@ -342,6 +342,10 @@ impl ClockEpoch {
         let Ok(_guard) = self.validation.try_lock() else {
             return self.status();
         };
+        // A settled run's status was final when `settled_status` read it.
+        if self.is_settled() {
+            return self.status();
+        }
         let sample = probe(&self.clock, &self.reference, self.resolution);
         let status = self.assess(sample, ClockInstant::from_ticks(previous));
         if status != TimingStatus::Valid {
