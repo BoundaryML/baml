@@ -116,6 +116,10 @@ export function useTelemetry({
   // must not overwrite what is on screen.
   const listRequest = useRef(0);
   const detailRequest = useRef(0);
+  // A poll that fires while a read is still running would replace it, and
+  // its answer would be discarded: slow reads could never land.
+  const listPending = useRef(false);
+  const detailPending = useRef(false);
   // Read inside the fetch effects to decide whether a spinner is warranted,
   // without making them re-run when the data changes.
   const executionsRef = useRef(executions);
@@ -130,6 +134,7 @@ export function useTelemetry({
   useEffect(() => {
     if (!active || !project) return;
     const request = ++listRequest.current;
+    listPending.current = true;
     // Loading means "nothing to show yet", not "a request is in flight".
     // Polling a running execution refetches every couple of seconds, and
     // flagging each of those would flash a spinner over a populated list.
@@ -148,7 +153,9 @@ export function useTelemetry({
         setError(cause instanceof Error ? cause.message : String(cause));
       })
       .finally(() => {
-        if (request === listRequest.current) setLoading(false);
+        if (request !== listRequest.current) return;
+        listPending.current = false;
+        setLoading(false);
       });
   }, [active, client, project, reloadToken, revision]);
 
@@ -159,6 +166,7 @@ export function useTelemetry({
       return;
     }
     const request = ++detailRequest.current;
+    detailPending.current = true;
     setLoading((current) => current || telemetryRef.current == null);
     setError(null);
     client
@@ -173,7 +181,9 @@ export function useTelemetry({
         setError(cause instanceof Error ? cause.message : String(cause));
       })
       .finally(() => {
-        if (request === detailRequest.current) setLoading(false);
+        if (request !== detailRequest.current) return;
+        detailPending.current = false;
+        setLoading(false);
       });
   }, [active, client, project, selectedId, reloadToken]);
 
@@ -191,7 +201,11 @@ export function useTelemetry({
 
   useEffect(() => {
     if (!active || !project || poll == null) return;
-    const timer = setInterval(() => setReloadToken((token) => token + 1), poll);
+    const timer = setInterval(() => {
+      if (!listPending.current && !detailPending.current) {
+        setReloadToken((token) => token + 1);
+      }
+    }, poll);
     return () => clearInterval(timer);
   }, [active, project, poll]);
   const evidence = useMemo(
