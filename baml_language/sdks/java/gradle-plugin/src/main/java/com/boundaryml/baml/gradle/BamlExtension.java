@@ -28,7 +28,7 @@ public abstract class BamlExtension {
 
     /**
      * Project directory containing {@code baml.toml} and {@code baml_src/}.
-     * Passed to the CLI as {@code --from}. Default: the project directory.
+     * Passed to the CLI as {@code --project}. Default: the project directory.
      */
     public abstract DirectoryProperty getSrcDir();
 

@@ -505,12 +505,13 @@ class BamlPluginFunctionalTest {
         Map<String, String> env = new HashMap<>(System.getenv());
         String existingPath = env.getOrDefault("PATH", "");
         env.put("PATH", binDir.toAbsolutePath() + File.pathSeparator + existingPath);
+        env.put("EXPECTED_BAML_PROJECT", projectDir.toFile().getCanonicalPath());
         return env;
     }
 
     /**
      * A minimal stand-in for the real CLI: answers {@code --version} and, for
-     * {@code generate ... -o <dir>}, writes a self-contained {@code baml_sdk}
+     * {@code bridge generate ... -o <dir>}, writes a self-contained {@code baml_sdk}
      * tree (one {@code Baml.java} in package {@code baml_sdk} + an
      * {@code inlinedbaml.b64}) — deliberately free of any {@code baml_bridge}
      * dependency so the compile test stays hermetic.
@@ -524,7 +525,15 @@ class BamlPluginFunctionalTest {
         + "  exit 0\n"
         + "fi\n"
         + "\n"
-        + "# Expected: generate --from <dir> -o <outdir> [...]\n"
+        + "# Expected: bridge generate --project <dir> -o <outdir> [...]\n"
+        + "if [ \"$#\" -ne 6 ] || [ \"${1:-}\" != \"bridge\" ]"
+        + " || [ \"${2:-}\" != \"generate\" ] || [ \"${3:-}\" != \"--project\" ]"
+        + " || [ \"${4:-}\" != \"${EXPECTED_BAML_PROJECT:-}\" ]"
+        + " || [ \"${5:-}\" != \"-o\" ]; then\n"
+        + "  echo \"fake baml: unexpected arguments: $*\" >&2\n"
+        + "  exit 1\n"
+        + "fi\n"
+        + "\n"
         + "OUT=\"\"\n"
         + "while [ \"$#\" -gt 0 ]; do\n"
         + "  case \"$1\" in\n"

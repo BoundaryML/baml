@@ -21,7 +21,7 @@ import org.gradle.api.tasks.TaskAction;
 import org.gradle.process.ExecOperations;
 
 /**
- * Runs {@code baml generate} to produce the typed BAML Java SDK.
+ * Runs {@code baml bridge generate} to produce the typed BAML Java SDK.
  *
  * <p>Cacheable and incremental: the declared inputs are {@code baml.toml}, every
  * file under {@code baml_src/}, and the resolved CLI version string; the output
@@ -29,7 +29,7 @@ import org.gradle.process.ExecOperations;
  * {@code UP-TO-DATE} when none of those changed.
  *
  * <p>The output directory is cleaned before each generation (BAML's own
- * {@code generate} does not remove stale files — a renamed/deleted BAML class
+ * {@code bridge generate} does not remove stale files — a renamed/deleted BAML class
  * would otherwise leave a stale {@code .java} that still compiles).
  */
 @CacheableTask
@@ -39,7 +39,7 @@ public abstract class GenerateBamlTask extends DefaultTask {
     @Internal
     public abstract Property<String> getBamlExecutable();
 
-    /** The project directory passed to the CLI as {@code --from}. */
+    /** The project directory passed to the CLI as {@code --project}. */
     @Internal
     public abstract DirectoryProperty getSrcDir();
 
@@ -113,13 +113,13 @@ public abstract class GenerateBamlTask extends DefaultTask {
         //noinspection ResultOfMethodCallIgnored
         sdkDir.mkdirs();
 
-        File from = getSrcDir().get().getAsFile();
+        File project = getSrcDir().get().getAsFile();
 
         getExecOperations().exec(spec -> {
             spec.setExecutable(executablePath);
             spec.args(
-                "generate",
-                "--from", from.getAbsolutePath(),
+                "bridge", "generate",
+                "--project", project.getAbsolutePath(),
                 "-o", sdkDir.getAbsolutePath());
         });
     }
