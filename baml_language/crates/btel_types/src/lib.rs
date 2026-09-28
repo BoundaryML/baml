@@ -9,6 +9,7 @@
     reason = "these wrappers and clock/ID primitives are measured producer hot-path operations"
 )]
 
+pub mod context;
 mod function_lookup;
 mod functions;
 mod recording;

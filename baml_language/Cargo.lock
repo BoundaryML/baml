@@ -1928,6 +1928,7 @@ dependencies = [
  "bex_str",
  "borsh",
  "btel_settings",
+ "btel_types",
  "num-bigint",
  "xxhash-rust",
 ]

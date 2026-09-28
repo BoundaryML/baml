@@ -14,6 +14,7 @@ use baml_type::{DeclarationName, typetag::TypeTag};
 use bex_str::BexStr;
 use num_bigint::BigInt;
 
+pub mod context;
 mod decode;
 pub use decode::{
     BlobError, DecodeLimits, DecodedName, DecodedObject, DecodedRoot, DecodedSnapshot,
