@@ -32,27 +32,67 @@ fn root_help_and_version_include_wrapper_and_local_cli() {
     let root = tempfile::tempdir().unwrap();
     let wrapper = fixture(root.path(), true);
 
-    let help = command(&wrapper, root.path())
-        .arg("--help")
+    for flag in ["--help", "-h"] {
+        let help = command(&wrapper, root.path()).arg(flag).output().unwrap();
+        assert!(help.status.success(), "{flag}");
+        let stdout = String::from_utf8_lossy(&help.stdout);
+        assert!(
+            stdout.contains("Manage installed BAML toolchains"),
+            "{flag}: {stdout}"
+        );
+        assert!(stdout.contains("CLI:--help"), "{flag}: {stdout}");
+        assert!(!String::from_utf8_lossy(&help.stderr).contains("127.0.0.1"));
+    }
+
+    for flag in ["--version", "-V"] {
+        let version = command(&wrapper, root.path()).arg(flag).output().unwrap();
+        assert!(version.status.success(), "{flag}");
+        let stdout = String::from_utf8_lossy(&version.stdout);
+        assert!(stdout.contains("baml wrapper"), "{flag}: {stdout}");
+        assert!(stdout.contains("CLI:--version"), "{flag}: {stdout}");
+    }
+}
+
+#[test]
+fn only_wrapper_owned_commands_are_parsed_by_the_wrapper() {
+    let root = tempfile::tempdir().unwrap();
+    let wrapper = fixture(root.path(), true);
+    let toolchain_help = command(&wrapper, root.path())
+        .args(["toolchain", "pin", "--help"])
         .output()
         .unwrap();
-    assert!(help.status.success());
-    let stdout = String::from_utf8_lossy(&help.stdout);
+    assert!(toolchain_help.status.success());
+    let stdout = String::from_utf8_lossy(&toolchain_help.stdout);
+    assert!(stdout.contains("Usage: baml toolchain pin"), "{stdout}");
+    assert!(!stdout.contains("CLI:"), "{stdout}");
+
+    let toolchain_list = command(&wrapper, root.path())
+        .args(["toolchain", "list"])
+        .output()
+        .unwrap();
+    assert!(toolchain_list.status.success());
+    let stdout = String::from_utf8_lossy(&toolchain_list.stdout);
+    assert!(stdout.contains("default selector: canary"), "{stdout}");
+    assert!(!stdout.contains("CLI:"), "{stdout}");
+
+    let cli_help = command(&wrapper, root.path())
+        .args(["help", "generate"])
+        .output()
+        .unwrap();
+    assert!(cli_help.status.success());
+    let stdout = String::from_utf8_lossy(&cli_help.stdout);
+    assert!(stdout.contains("CLI:help generate"), "{stdout}");
+
+    let cli_delimiter = command(&wrapper, root.path())
+        .args(["generate", "--", "--literal-flag"])
+        .output()
+        .unwrap();
+    assert!(cli_delimiter.status.success());
+    let stdout = String::from_utf8_lossy(&cli_delimiter.stdout);
     assert!(
-        stdout.contains("Manage installed BAML toolchains"),
+        stdout.contains("CLI:generate -- --literal-flag"),
         "{stdout}"
     );
-    assert!(stdout.contains("CLI:--help"), "{stdout}");
-    assert!(!String::from_utf8_lossy(&help.stderr).contains("127.0.0.1"));
-
-    let version = command(&wrapper, root.path())
-        .arg("--version")
-        .output()
-        .unwrap();
-    assert!(version.status.success());
-    let stdout = String::from_utf8_lossy(&version.stdout);
-    assert!(stdout.contains("baml wrapper"), "{stdout}");
-    assert!(stdout.contains("CLI:--version"), "{stdout}");
 }
 
 #[test]

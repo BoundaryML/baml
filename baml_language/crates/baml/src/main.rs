@@ -3,7 +3,7 @@
 use std::{
     collections::{BTreeMap, hash_map::DefaultHasher},
     env,
-    ffi::{OsStr, OsString},
+    ffi::OsString,
     fs,
     hash::{Hash, Hasher},
     io::Write,
@@ -119,17 +119,33 @@ enum FetchPolicy {
 #[command(
     name = "baml",
     about = "BAML wrapper and toolchain manager",
-    long_about = "The wrapper manages `baml toolchain` commands and forwards language commands to the selected baml-cli. `baml --help` also shows help from the selected CLI."
+    long_about = "The wrapper manages `baml toolchain` commands and forwards language commands to the selected baml-cli. `baml --help` also shows help from the selected CLI.",
+    disable_help_flag = true,
+    disable_version_flag = true,
+    disable_help_subcommand = true
 )]
 struct WrapperArgs {
+    /// Show wrapper help and help from the selected BAML CLI.
+    #[arg(short, long)]
+    help: bool,
+    /// Show the wrapper and selected BAML CLI versions.
+    #[arg(short = 'V', long)]
+    version: bool,
+    /// Internal Windows helper for replacing the running wrapper executable.
+    #[cfg(all(windows, feature = "self-update", not(feature = "no-self-update")))]
+    #[arg(long, num_args = 2, value_names = ["TMP", "CURRENT"], hide = true)]
+    replace: Option<Vec<PathBuf>>,
     #[command(subcommand)]
-    command: WrapperCommand,
+    command: Option<WrapperCommand>,
 }
 
 #[derive(Subcommand)]
 enum WrapperCommand {
     /// Manage installed BAML toolchains.
     Toolchain {
+        /// Show help for this toolchain command.
+        #[arg(short, long, action = clap::ArgAction::Help, global = true, required = false)]
+        help: Option<bool>,
         /// Override the manifest source for this invocation.
         #[arg(long, global = true)]
         manifest_base_url: Option<String>,
@@ -137,7 +153,14 @@ enum WrapperCommand {
         command: Option<ToolchainCommand>,
     },
     /// Update a curl-installed wrapper. Package-manager builds refuse this command.
-    SelfUpdate,
+    SelfUpdate {
+        /// Show help for self-update.
+        #[arg(short, long, action = clap::ArgAction::Help, required = false)]
+        help: Option<bool>,
+    },
+    /// Forward all other subcommands and their arguments to baml-cli.
+    #[command(external_subcommand)]
+    External(Vec<OsString>),
 }
 
 #[derive(Subcommand)]
@@ -175,35 +198,34 @@ fn main() {
 }
 
 fn run() -> Result<i32> {
-    let args: Vec<OsString> = env::args_os().skip(1).collect();
+    let parsed = match WrapperArgs::try_parse() {
+        Ok(parsed) => parsed,
+        Err(error) => {
+            let code = error.exit_code();
+            error.print()?;
+            return Ok(code);
+        }
+    };
     #[cfg(all(windows, feature = "self-update", not(feature = "no-self-update")))]
-    if args.first().is_some_and(|arg| arg == "--replace") {
-        return replace_running_exe(args.into_iter().skip(1).collect()).map(|()| 0);
+    if let Some(paths) = parsed.replace {
+        let [tmp, current] = paths.try_into().expect("clap requires two paths");
+        return replace_running_exe(tmp, current).map(|()| 0);
     }
-    if args.is_empty() || (args.len() == 1 && is_help_arg(&args[0])) {
+    if parsed.help || (parsed.command.is_none() && !parsed.version) {
         print!("{}", WrapperArgs::command().render_long_help());
         println!("\nSelected BAML CLI help:\n");
         std::io::stdout().flush()?;
         return Ok(forward_information(vec![OsString::from("--help")]));
     }
-    if args.len() == 1 && matches!(args[0].to_str(), Some("--version" | "-V")) {
+    if parsed.version {
         println!("baml wrapper {}", env!("CARGO_PKG_VERSION"));
         std::io::stdout().flush()?;
         return Ok(forward_information(vec![OsString::from("--version")]));
     }
-    if matches!(args[0].to_str(), Some("toolchain" | "self-update")) {
-        let parsed =
-            WrapperArgs::try_parse_from(std::iter::once(OsString::from("baml")).chain(args));
-        return match parsed {
-            Ok(WrapperArgs { command }) => dispatch_wrapper_command(command),
-            Err(error) => {
-                let code = error.exit_code();
-                error.print()?;
-                Ok(code)
-            }
-        };
+    match parsed.command.expect("clap command or root flag") {
+        WrapperCommand::External(args) => pass_through(args),
+        command => dispatch_wrapper_command(command),
     }
-    pass_through(args)
 }
 
 fn forward_information(args: Vec<OsString>) -> i32 {
@@ -314,6 +336,7 @@ fn write_toml_atomic<T: Serialize>(path: &Path, value: &T) -> Result<()> {
 fn dispatch_wrapper_command(command: WrapperCommand) -> Result<i32> {
     match command {
         WrapperCommand::Toolchain {
+            help: _,
             manifest_base_url,
             command,
         } => {
@@ -344,7 +367,8 @@ fn dispatch_wrapper_command(command: WrapperCommand) -> Result<i32> {
             }
             Ok(0)
         }
-        WrapperCommand::SelfUpdate => self_update().map(|()| 0),
+        WrapperCommand::SelfUpdate { help: _ } => self_update().map(|()| 0),
+        WrapperCommand::External(_) => unreachable!("external subcommands are forwarded"),
     }
 }
 
@@ -363,10 +387,6 @@ fn install_toolchain_command(
         ),
     };
     install_toolchain(&selector, activate_channel, manifest_base_url, force)
-}
-
-fn is_help_arg(arg: &OsStr) -> bool {
-    matches!(arg.to_str(), Some("--help" | "-h"))
 }
 
 struct SelectedCli {
@@ -1655,12 +1675,7 @@ fn http_client_with_timeout(timeout: Duration) -> Result<reqwest::blocking::Clie
 }
 
 #[cfg(all(windows, feature = "self-update", not(feature = "no-self-update")))]
-fn replace_running_exe(args: Vec<OsString>) -> Result<()> {
-    if args.len() != 2 {
-        anyhow::bail!("usage: baml --replace <tmp> <current>");
-    }
-    let tmp = PathBuf::from(&args[0]);
-    let current = PathBuf::from(&args[1]);
+fn replace_running_exe(tmp: PathBuf, current: PathBuf) -> Result<()> {
     let mut last_error = None;
     for _ in 0..60 {
         std::thread::sleep(Duration::from_millis(250));
