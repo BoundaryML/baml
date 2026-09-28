@@ -1,4 +1,4 @@
-//! Ruby/Sorbet declarations with synchronous primitive function dispatch.
+//! Ruby/Sorbet declarations with synchronous function dispatch.
 use baml_sdkgen_types::{Name, NamingConvention, Symbol, SymbolPool, Ty};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -55,6 +55,7 @@ pub fn to_source_code_with_bytecode_and_skipped(
         "# frozen_string_literal: true\nrequire \"baml/bridge\"\nrequire \"sorbet-runtime\"\nrequire_relative \"baml_sdk/bytecode\"\nmodule BamlSdk\n  def self.initialize!\n    Baml::Bridge.initialize!(BYTECODE)\n  end\nend\n",
     );
     let mut methods = Vec::new();
+    let mut registry = String::new();
     for (name, symbol) in &symbols {
         let module = module_name(name);
         namespaces.entry(module.clone()).or_default();
@@ -66,6 +67,25 @@ pub fn to_source_code_with_bytecode_and_skipped(
         let body = namespaces.get_mut(&module).unwrap();
         match symbol {
             Symbol::Class(c) if supported.contains(*name) => {
+                let fields = c
+                    .properties
+                    .iter()
+                    .map(|p| {
+                        format!(
+                            "{:?} => :{}",
+                            p.name.as_str(),
+                            identifier(p.name.as_str(), naming)
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                writeln!(
+                    registry,
+                    "::Baml::Bridge.register_type({:?}, ::{}, fields: {{{fields}}})",
+                    name.to_string(),
+                    qualified(name)
+                )
+                .unwrap();
                 writeln!(root, "class {} < T::Struct; end", qualified(name)).unwrap();
                 writeln!(body, "class {}", constant(name.name().as_str())).unwrap();
                 for p in &c.properties {
@@ -80,6 +100,13 @@ pub fn to_source_code_with_bytecode_and_skipped(
                 body.push_str("end\n");
             }
             Symbol::Enum(e) if supported.contains(*name) => {
+                writeln!(
+                    registry,
+                    "::Baml::Bridge.register_type({:?}, ::{})",
+                    name.to_string(),
+                    qualified(name)
+                )
+                .unwrap();
                 writeln!(root, "class {} < T::Enum; end", qualified(name)).unwrap();
                 writeln!(body, "class {}\n  enums do", constant(name.name().as_str())).unwrap();
                 for v in &e.variants {
@@ -110,7 +137,7 @@ pub fn to_source_code_with_bytecode_and_skipped(
                     let arg = identifier(a.name.as_str(), naming);
                     let ty = ruby_type(&a.ty, &supported).unwrap();
                     arguments.push(format!("{:?} => {arg}", a.name.as_str()));
-                    // Omission/default handling is deferred; supplied primitives can dispatch.
+                    // Omission/default handling is deferred.
                     if a.default.is_some() {
                         keywords.push(format!(
                             "{arg}: (raise ::Baml::Bridge::UnsupportedTypeError, {:?})",
@@ -180,6 +207,7 @@ pub fn to_source_code_with_bytecode_and_skipped(
         )
         .unwrap();
     }
+    root.push_str(&registry);
     for method in methods {
         root.push_str(&method);
     }

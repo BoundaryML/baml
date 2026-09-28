@@ -53,11 +53,14 @@ class GeneratedPackageTest < Minitest::Test
     assert_equal "invalid document", error.message
   end
 
-  def test_unsupported_class_argument
+  def test_person_round_trip
     person = BamlSdk::Person.new(person: "person", name: "Ryan", age: 30)
-    error = assert_raises(Baml::Bridge::UnsupportedTypeError) { BamlSdk.round_trip_person(person) }
-    assert_includes error.message, "BamlSdk::Person"
-    assert_includes error.message, "not yet supported"
+    result = BamlSdk.round_trip_person(person)
+    assert_instance_of BamlSdk::Person, result
+    refute_same person, result
+    assert_equal person.person, result.person
+    assert_equal person.name, result.name
+    assert_equal person.age, result.age
   end
 
   private

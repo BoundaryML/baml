@@ -54,12 +54,14 @@ def fixture_inspection
   @fixture_inspection ||= FixtureInspection.new(FIXTURE)
 end
 
-def wait_for_child(child, timeout: 2)
+# Generous because nextest runs the other Ruby suites concurrently; a hung
+# child is the only thing this should catch.
+def wait_for_child(child, timeout: 10)
   Timeout.timeout(timeout) { Process.wait2(child).last }
 rescue Timeout::Error
   Process.kill("KILL", child)
   Process.wait(child)
-  raise "forked child #{child} did not exit promptly"
+  raise "forked child #{child} did not exit within #{timeout}s"
 end
 
 def use_fixture

@@ -120,10 +120,10 @@ class BridgeCallTest < Minitest::Test
   end
 
   def test_unsupported_argument_and_result_kinds
-    error = assert_raises(Baml::Bridge::UnsupportedTypeError) { call("value" => []) }
-    assert_includes error.message, "Array"
+    error = assert_raises(Baml::Bridge::UnsupportedTypeError) { call("value" => Object.new) }
+    assert_includes error.message, "Object"
     assert_empty pending
-    { class_value: { name: "user.Person" }, enum_value: { name: "user.Color", value: "RED" } }.each do |kind, value|
+    { handle_value: { key: 1 }, uint8array_value: "bytes" }.each do |kind, value|
       @api.dispatch = ->(_args, id) { @api.deliver(id, ok: { kind => value }) }
       error = assert_raises(Baml::Bridge::UnsupportedTypeError) { call }
       assert_includes error.message, kind.to_s

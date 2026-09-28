@@ -11,6 +11,10 @@ module Baml
     @process_runtime = ProcessRuntime.new
 
     class << self
+      def register_type(name, type, fields: nil)
+        Protocol.register_type(name, type, fields: fields)
+      end
+
       def initialize!(compiled_program_bytes)
         @process_runtime.initialize!(compiled_program_bytes)
       end
