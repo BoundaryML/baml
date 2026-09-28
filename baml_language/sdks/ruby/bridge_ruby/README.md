@@ -4,7 +4,10 @@ This directory contains private runtime plumbing for generated Ruby/Sorbet SDKs.
 
 ```ruby
 Baml::Bridge.initialize!(compiled_program_bytes)
+Baml::Bridge.call(compiled_program_bytes, "user.hello_world", {})
 ```
+
+Generated functions initialize automatically on first use and wait synchronously for the native result. Calls currently support string, int, float, bool, and null values. Typed throws raise `Baml::Error`; ordinary panics raise `Baml::PanicError`. Both expose `type_name` and `message`; decoding full error payloads and traces is deferred. Other value kinds and process-exit panics raise an explicit not-yet-supported error.
 
 The bridge loads the absolute library path in `BAML_RUNTIME_PATH`, validates the complete V1 C table, requires an exact canonical BAML toolchain version, registers `Baml::Bridge` as bridge language `10` with its stamped bridge runtime version, and initializes one exact generated program per process.
 

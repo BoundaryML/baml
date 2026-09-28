@@ -18,6 +18,16 @@ mod bridge_tests {
     }
 
     #[test]
+    fn synchronous_call_runtime() {
+        sdk_test_harness_runner::run_workspace_cmd(
+            "sdk_tests/crates/ruby_sorbet",
+            "ruby -S bundle exec ruby test/bridge_call_test.rb",
+            "ruby-bundle",
+            "BUNDLE_PATH",
+        );
+    }
+
+    #[test]
     fn loader_and_lifecycle() {
         sdk_test_harness_runner::run_workspace_cmd(
             "sdk_tests/crates/ruby_sorbet",

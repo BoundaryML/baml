@@ -68,6 +68,8 @@ module Baml
         ],
         free_buffer: [:void, [Buffer.by_value]],
         register_callback: [:void, [:pointer]],
+        new_function_call: [:uint64, []],
+        call_function: [:void, %i[pointer size_t uint32], { blocking: true }],
         register_bridge: [Buffer.by_value, [:pointer]]
       }.freeze
 
@@ -104,6 +106,18 @@ module Baml
 
           raise ProgramInitializationError,
                 "Native BAML program initialization failed: #{diagnostic}"
+        end
+
+        def new_function_call
+          call_id = function(:new_function_call).call
+          raise Error, "BAML engine call IDs are exhausted" if call_id.zero?
+
+          call_id
+        end
+
+        def call_function(encoded_args, callback_id)
+          pointer = memory_for(encoded_args)
+          function(:call_function).call(pointer, encoded_args.bytesize, callback_id)
         end
 
         private
@@ -226,11 +240,13 @@ module Baml
       class BorrowedBytesCallback
         attr_reader :function
 
-        def initialize(&handler)
+        def initialize(on_error: nil, &handler)
           raise ArgumentError, "callback handler is required" unless handler
 
           @handler = handler
-          @errors = Queue.new
+          @on_error = on_error
+          @error_mutex = Mutex.new
+          @errors = {}
           @function = FFI::Function.new(:void, %i[uint32 pointer size_t]) do |call_id, pointer, length|
             begin
               bytes = if length.zero?
@@ -242,17 +258,20 @@ module Baml
                       end
               @handler.call(call_id, bytes.force_encoding(Encoding::BINARY).freeze)
             rescue Exception => error # rubocop:disable Lint/RescueException -- exceptions cannot cross FFI
-              @errors << error
+              @error_mutex.synchronize { @errors[call_id] = error }
+              begin
+                @on_error&.call(call_id)
+              rescue Exception => notification_error # rubocop:disable Lint/RescueException
+                @error_mutex.synchronize { @errors[call_id] = notification_error }
+              end
             end
           end
         end
 
-        # The generated call layer will drain this queue after callbacks and
-        # surface errors on the caller's Ruby thread.
-        def pop_error
-          @errors.pop(true)
-        rescue ThreadError
-          nil
+        def pop_error(call_id = nil)
+          @error_mutex.synchronize do
+            call_id ? @errors.delete(call_id) : @errors.shift&.last
+          end
         end
       end
     end

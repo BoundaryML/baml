@@ -4,7 +4,8 @@ require "ffi"
 require "thread"
 require "timeout"
 require "tmpdir"
-require_relative "../../../../sdks/ruby/bridge_ruby/lib/baml/bridge"
+$LOAD_PATH.unshift File.expand_path("../../../../sdks/ruby/bridge_ruby/lib", __dir__)
+require "baml/bridge"
 
 ENV["BAML_FAKE_RUNTIME_VERSION"] = Baml::Bridge::VERSION
 
@@ -425,14 +426,20 @@ when "registered_callback_retention"
   payload_bytes = "retained\x00\xff".b
   payload = FFI::MemoryPointer.new(:uint8, payload_bytes.bytesize)
   payload.put_bytes(0, payload_bytes)
+  callback_id, = runtime.send(:register_call)
+  # Record the delivering thread by standing in for the pending call's queue.
+  delivered = Queue.new
+  pending_queue = Object.new
+  pending_queue.define_singleton_method(:<<) { |outcome| delivered << [outcome, Thread.current.object_id] }
+  runtime.instance_variable_get(:@pending)[callback_id] = pending_queue
   caller_thread = Thread.current.object_id
-  assert_equal(0, invoke.call(73, payload, payload_bytes.bytesize))
-  call_id, copied, callback_thread = runtime.send(:pop_result_event)
-  assert_equal(73, call_id)
+  assert_equal(0, invoke.call(callback_id, payload, payload_bytes.bytesize))
+  copied, callback_thread = delivered.pop
+  assert(callback_thread != caller_thread, "registered callback did not use a foreign thread")
   assert_equal(payload_bytes, copied)
   assert(copied.frozen?, "registered callback bytes were not frozen")
   assert_equal(Encoding::BINARY, copied.encoding)
-  assert(callback_thread != caller_thread, "registered callback did not use a foreign thread")
+  assert(runtime.instance_variable_get(:@pending).empty?, "completed call was not removed")
   retained_callback = runtime.instance_variable_get(:@result_callback)
   assert(!retained_callback.nil?, "process runtime released its result callback")
   assert_equal(nil, retained_callback.pop_error)

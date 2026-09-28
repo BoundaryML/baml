@@ -19,8 +19,7 @@ class GeneratedPackageTest < Minitest::Test
     assert_equal 1, method.arity
     assert_equal [:req], method.parameters.map(&:first).reject { |kind| kind == :block }
     assert_raises(TypeError) { method.call(1) }
-    error = assert_raises(NotImplementedError) { method.call("text") }
-    assert_includes error.message, "lorem.stream_e2e_collect_doc"
+    # Calling this function needs the LLM replay server; keep this a load/signature test.
     assert BamlSdk::BYTECODE.frozen?
     assert_equal Encoding::BINARY, BamlSdk::BYTECODE.encoding
   end

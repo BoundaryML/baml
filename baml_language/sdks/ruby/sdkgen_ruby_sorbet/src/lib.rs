@@ -1,4 +1,4 @@
-//! Minimal Ruby/Sorbet declarations. Function dispatch is intentionally deferred.
+//! Ruby/Sorbet declarations with synchronous primitive function dispatch.
 use baml_sdkgen_types::{Name, NamingConvention, Symbol, SymbolPool, Ty};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -105,15 +105,16 @@ pub fn to_source_code_with_bytecode_and_skipped(
                 let mut params = Vec::new();
                 let mut required = Vec::new();
                 let mut keywords = Vec::new();
+                let mut arguments = Vec::new();
                 for a in &f.arguments {
                     let arg = identifier(a.name.as_str(), naming);
                     let ty = ruby_type(&a.ty, &supported).unwrap();
-                    // Default expressions are not executed in this dispatch-free scaffold.
-                    // Raising as the Ruby default keeps the evaluated sig's type honest.
+                    arguments.push(format!("{:?} => {arg}", a.name.as_str()));
+                    // Omission/default handling is deferred; supplied primitives can dispatch.
                     if a.default.is_some() {
                         keywords.push(format!(
-                            "{arg}: (raise NotImplementedError, {:?})",
-                            name.to_string()
+                            "{arg}: (raise ::Baml::Bridge::UnsupportedTypeError, {:?})",
+                            format!("BAML argument default for {name}.{arg} is not yet supported")
                         ));
                     } else if matches!(&a.ty, Ty::Union(items) if items.iter().any(|t| matches!(t, Ty::Null { .. })))
                     {
@@ -130,7 +131,7 @@ pub fn to_source_code_with_bytecode_and_skipped(
                 } else {
                     format!("params({}).", params.join(", "))
                 };
-                writeln!(body, "sig {{ {params}returns({}) }}\ndef self.{method}({})\n  raise NotImplementedError, {:?}\nend", ruby_type(&f.return_type, &supported).unwrap(), required.join(", "), name.to_string()).unwrap();
+                writeln!(body, "sig {{ {params}returns({}) }}\ndef self.{method}({})\n  ::Baml::Bridge.call(::BamlSdk::BYTECODE, {:?}, {{{}}})\nend", ruby_type(&f.return_type, &supported).unwrap(), required.join(", "), name.to_string(), arguments.join(", ")).unwrap();
                 methods.push(format!(
                     "T::Utils.signature_for_method({module}.method(:{method}))\n"
                 ));
@@ -202,7 +203,6 @@ fn constant(name: &str) -> String {
     let mut result = String::new();
     for c in name.chars() {
         if c == '_' {
-            result.push(c);
             capitalize = true;
         } else if capitalize {
             result.extend(c.to_uppercase());
@@ -211,7 +211,7 @@ fn constant(name: &str) -> String {
             result.push(c);
         }
     }
-    if result.starts_with('_') {
+    if name.starts_with('_') {
         format!("Baml{result}")
     } else {
         result
@@ -295,6 +295,7 @@ fn ruby_type(ty: &Ty, supported: &BTreeSet<Name>) -> Option<String> {
         Ty::Float { .. } => "Float".into(),
         Ty::Bool { .. } => "T::Boolean".into(),
         Ty::Null { .. } => "NilClass".into(),
+        Ty::Never => "T.noreturn".into(),
         Ty::List(t) => format!("T::Array[{}]", ruby_type(t, supported)?),
         Ty::Map { key, value, .. } => format!(
             "T::Hash[{}, {}]",
@@ -337,6 +338,13 @@ mod tests {
         assert_eq!(
             identifier("SomeCall", NamingConvention::PreserveCase),
             "SomeCall"
+        );
+        assert_eq!(constant("throws_test"), "ThrowsTest");
+        assert_eq!(constant("StreamE2ECollectResult"), "StreamE2ECollectResult");
+        assert_eq!(constant("_private"), "BamlPrivate");
+        assert_eq!(
+            ruby_type(&Ty::Never, &BTreeSet::new()).as_deref(),
+            Some("T.noreturn")
         );
         let string = Ty::String;
         let optional = Ty::Union(Box::new([string.clone(), Ty::Null]));
