@@ -13,7 +13,7 @@ use crate::{
 };
 
 /// The item a scope was opened for, as a `Loc`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub enum ScopeOwner<'db> {
     Function(FunctionLoc<'db>),
     Class(ClassLoc<'db>),
@@ -26,7 +26,7 @@ pub enum ScopeOwner<'db> {
 
 /// The item `scope` was opened for, or `None` for structural and expression
 /// scopes (Project/Package/Namespace/File, Block/Lambda/MatchArm/…).
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn scope_owner<'db>(db: &'db dyn crate::Db, scope: ScopeId<'db>) -> Option<ScopeOwner<'db>> {
     let file = scope.file(db);
     let index = crate::file_semantic_index(db, file);
@@ -47,7 +47,7 @@ pub fn scope_owner<'db>(db: &'db dyn crate::Db, scope: ScopeId<'db>) -> Option<S
 macro_rules! item_scope {
     ($(#[$meta:meta])* $name:ident, $loc:ident, $owner:ident) => {
         $(#[$meta])*
-        #[salsa::tracked]
+        #[salsa::tracked(returns(clone))]
         pub fn $name<'db>(db: &'db dyn crate::Db, item: $loc<'db>) -> Option<ScopeId<'db>> {
             let file = item.file(db);
             let index = crate::file_semantic_index(db, file);

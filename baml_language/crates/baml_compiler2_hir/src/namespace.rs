@@ -18,7 +18,9 @@ use crate::contributions::{Contribution, Definition};
 /// Interned namespace identity — the package (its root) + path within it.
 #[salsa::interned]
 pub struct NamespaceId<'db> {
+    #[returns(clone)]
     pub package: SourceRoot,
+    #[returns(clone)]
     pub path: Vec<Name>,
 }
 
@@ -124,7 +126,7 @@ impl<'db> NamespaceItems<'db> {
     }
 }
 
-// ── salsa::Update impl ────────────────────────────────────────────────────────
+// ── salsa::SalsaValue impl ────────────────────────────────────────────────────────
 
 /// # Safety
 ///
@@ -135,23 +137,7 @@ impl<'db> NamespaceItems<'db> {
 /// `maybe_update` uses `PartialEq` to determine whether the value changed,
 /// providing proper Salsa early-cutoff for downstream queries.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for NamespaceItems<'_> {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for NamespaceItems<'_> {}
 
 /// Merges `file_symbol_contributions` for all files within a namespace.
 ///

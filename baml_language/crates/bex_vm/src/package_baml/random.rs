@@ -9,13 +9,13 @@
 //! value is shared as an immutable `Object::RustData`, so advancing its state
 //! requires interior mutability, and concurrent draws from the same generator
 //! across `spawn` fibers must be serialized rather than racing on the backing
-//! `RngCore` state.
+//! `Rng` state.
 
 use std::sync::{Arc, Mutex, PoisonError};
 
 use bex_vm_types::types::Value;
 use rand_chacha::ChaCha20Rng;
-use rand_core::{RngCore, SeedableRng};
+use rand_core::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256PlusPlus as XoshiroRng;
 
 use super::{
@@ -62,7 +62,7 @@ fn byte_count(bytes: i64) -> Result<usize, VmRustFnError> {
 /// Allocates fallibly (`try_reserve`) so an unsatisfiable request surfaces as a
 /// catchable [`VmPanic::AllocFailure`] rather than aborting the host process via
 /// the global allocator's OOM handler.
-fn fill<R: RngCore>(mutex: &Mutex<R>, n: usize) -> Result<Vec<u8>, VmRustFnError> {
+fn fill<R: Rng>(mutex: &Mutex<R>, n: usize) -> Result<Vec<u8>, VmRustFnError> {
     let mut buf = Vec::new();
     buf.try_reserve(n).map_err(|_| VmPanic::AllocFailure {
         message: format!("Rng.random: allocation of {n} bytes failed"),
@@ -81,7 +81,7 @@ fn fill<R: RngCore>(mutex: &Mutex<R>, n: usize) -> Result<Vec<u8>, VmRustFnError
 /// arithmetic-shifting right by one maps it uniformly onto `[INT_MIN, INT_MAX]`
 /// (every i63 value has exactly two u64 preimages), which always fits in
 /// `Value::int`.
-fn next_i63<R: RngCore>(mutex: &Mutex<R>) -> i64 {
+fn next_i63<R: Rng>(mutex: &Mutex<R>) -> i64 {
     let r = mutex
         .lock()
         .unwrap_or_else(PoisonError::into_inner)

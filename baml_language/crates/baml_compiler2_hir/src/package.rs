@@ -490,7 +490,7 @@ impl<'db> PackageItems<'db> {
     }
 }
 
-// ── salsa::Update impl ────────────────────────────────────────────────────────
+// ── salsa::SalsaValue impl ────────────────────────────────────────────────────────
 
 /// # Safety
 ///
@@ -499,25 +499,9 @@ impl<'db> PackageItems<'db> {
 /// `PackageItems<'db>` to be stored and returned by
 /// `#[salsa::tracked(returns(ref))]` queries.
 ///
-/// `maybe_update` uses `PartialEq` for proper Salsa early-cutoff.
+/// Salsa compares old and new values with `PartialEq` for early-cutoff.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for PackageItems<'_> {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for PackageItems<'_> {}
 
 impl<'db> PackageItems<'db> {
     /// Look up a type by explicit namespace and item name.

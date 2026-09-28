@@ -7,7 +7,7 @@
 use baml_base::{Name, SourceFile, SourceRoot};
 
 /// Package/namespace info for a file.
-#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::SalsaValue)]
 pub struct PackageInfo {
     /// The package the file belongs to. Lets consumers ask `root.kind(db)`
     /// instead of sniffing path prefixes.
@@ -42,7 +42,7 @@ fn extract_ns_name(component: &str) -> Option<Name> {
 /// Reads only the file's `source_root` field and the root's `path` field:
 /// adding or removing an unrelated root never invalidates a file's package
 /// identity.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn file_package(db: &dyn crate::Db, file: SourceFile) -> PackageInfo {
     let root = file.source_root(db);
     let root_path = root.path(db);

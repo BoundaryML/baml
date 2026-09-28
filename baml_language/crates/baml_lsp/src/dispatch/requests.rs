@@ -556,7 +556,11 @@ pub(super) fn rename(
     let spans = baml_ide::rename(db, file, offset, &params.new_name)
         .map_err(|error| LspError::RequestFailed(error.to_string()))?;
 
-    let mut changes: std::collections::HashMap<lsp_types::Url, Vec<lsp_types::TextEdit>> =
+    #[allow(
+        clippy::mutable_key_type,
+        reason = "lsp-types' `WorkspaceEdit::changes` is keyed by `Uri`"
+    )]
+    let mut changes: std::collections::HashMap<lsp_types::Uri, Vec<lsp_types::TextEdit>> =
         std::collections::HashMap::new();
     for span in spans {
         let location = super::proto::location(snap, span).ok_or_else(|| {
@@ -674,7 +678,7 @@ fn encode_semantic_tokens(
 /// by the full and (fallback path of the) delta handler.
 fn full_tokens_with_commit(
     snap: &crate::snapshot::Snapshot,
-    uri: &lsp_types::Url,
+    uri: &lsp_types::Uri,
 ) -> Result<(lsp_types::SemanticTokens, crate::state::BaselineCommit), LspError> {
     let path = crate::paths::canonical_document_path(snap.roots(), uri)?;
     let db = snap.db();
@@ -1027,7 +1031,7 @@ pub(super) enum StdlibSourceRequest {}
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub(super) struct StdlibSourceParams {
-    uri: lsp_types::Url,
+    uri: lsp_types::Uri,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -1049,7 +1053,11 @@ pub(super) fn stdlib_source(
     snap: &crate::snapshot::Snapshot,
     params: StdlibSourceParams,
 ) -> Result<StdlibSourceResult, LspError> {
-    if params.uri.scheme() != crate::paths::STDLIB_SCHEME {
+    if params
+        .uri
+        .scheme()
+        .is_none_or(|s| s.as_str() != crate::paths::STDLIB_SCHEME)
+    {
         return Err(LspError::InvalidParams("expected a stdlib URI".to_owned()));
     }
     let path = crate::paths::canonical_document_path(snap.roots(), &params.uri)?;

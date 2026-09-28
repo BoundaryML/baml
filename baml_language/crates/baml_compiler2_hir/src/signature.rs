@@ -370,7 +370,7 @@ fn elaborated_function_signature_with_source_map<'db>(
 /// Cached independently of the source map. Its written types keep their spans
 /// (see [`SignatureTypeExpr`]), so it does not cut off when they move;
 /// span-free consumers use [`crate::item_data::function_data`].
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn function_signature<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
@@ -382,7 +382,7 @@ pub fn function_signature<'db>(
 /// Salsa query: function signature source map (spans only).
 ///
 /// Re-runs on any file change (including whitespace).
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn function_signature_source_map<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
@@ -395,7 +395,7 @@ pub fn function_signature_source_map<'db>(
 ///
 /// Kept separate from `FunctionSignature` so changing a default expression does
 /// not invalidate consumers that only need callable shape or optionality.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn function_parameter_defaults<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
@@ -415,7 +415,7 @@ pub fn function_parameter_defaults<'db>(
 }
 
 /// Salsa query: elaborated callable signature used by TIR consumers.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn elaborated_function_signature<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
@@ -428,7 +428,7 @@ pub fn elaborated_function_signature<'db>(
 ///
 /// The elaboration rewrites types but does not change source spans, so this is
 /// intentionally parallel to `function_signature_source_map`.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn elaborated_function_signature_source_map<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,

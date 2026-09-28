@@ -677,7 +677,7 @@ impl<'db> InterfaceDeclScope<'db> {
 /// surfaces them exactly once; every referencing site reuses the type and drops the
 /// diagnostics. `None` when the associated type has no default.
 #[allow(clippy::needless_pass_by_value)]
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn interface_associated_type_default<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
@@ -707,22 +707,7 @@ pub struct ResolvedInterfaceFields {
 // Safety: contains `Ty` (which has `Name`, a Salsa interned type). Manual
 // `Update` impl uses `PartialEq` for early-cutoff.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for ResolvedInterfaceFields {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old_ref = unsafe { &*old_pointer };
-        if *old_ref == new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for ResolvedInterfaceFields {}
 
 /// Resolve an interface's declared field types in its own scope.
 #[salsa::tracked(returns(ref))]
@@ -781,22 +766,7 @@ pub struct ResolvedInterfaceMethod {
 // Safety: contains `Ty` (which has `Name`, a Salsa interned type). Manual
 // `Update` impl uses `PartialEq` for early-cutoff.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for ResolvedInterfaceMethod {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old_ref = unsafe { &*old_pointer };
-        if *old_ref == new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for ResolvedInterfaceMethod {}
 
 /// Resolve every *required* method signature of an interface at its
 /// declaration site, in declaration order (parallel to

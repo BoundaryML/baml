@@ -44,7 +44,7 @@ pub(crate) fn single_file_db(name: &str, source: &str) -> (ProjectDatabase, baml
     (db, file)
 }
 
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 #[allow(clippy::drop_non_drop)] // salsa macro expands to drop() of the args tuple
 pub fn format_salsa(
     db: &dyn salsa::Database,

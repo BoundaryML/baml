@@ -127,19 +127,7 @@ macro_rules! partial_eq_salsa_update {
         // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned;
         // `PartialEq` decides whether consumers see a change.
         #[allow(unsafe_code)]
-        unsafe impl salsa::Update for $ty<'_> {
-            unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-                #[allow(unsafe_code)]
-                unsafe {
-                    let changed = *old_pointer != new_value;
-                    if changed {
-                        std::ptr::drop_in_place(old_pointer);
-                        std::ptr::write(old_pointer, new_value);
-                    }
-                    changed
-                }
-            }
-        }
+        unsafe impl salsa::SalsaValue for $ty<'_> {}
     };
 }
 
@@ -655,20 +643,7 @@ pub struct MountedImplFacts {
 // collections. PartialEq therefore completely determines whether Salsa may
 // retain the old allocation.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for MountedImplFacts {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        unsafe {
-            let changed = *old_pointer != new_value;
-            if changed {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            changed
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for MountedImplFacts {}
 
 /// A resolved impl's identity WITH its facts, split once by where it is
 /// declared: the two lanes carry different fact payloads, so the block and
@@ -752,20 +727,7 @@ struct CachedResolvedImpl<'db> {
 // Copy/interned handles. PartialEq therefore completely determines whether the
 // old allocation can be retained, matching Salsa's update contract.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for CachedResolvedImpl<'_> {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        unsafe {
-            let changed = *old_pointer != new_value;
-            if changed {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            changed
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for CachedResolvedImpl<'_> {}
 
 impl ResolvedImpl<'_> {
     /// The interface this impl provides, realized through the match's
@@ -1193,6 +1155,7 @@ fn derived_impl_allows(
 #[salsa::interned]
 struct ImplTypeKey<'db> {
     /// The asking package: candidates come from what it can see.
+    #[returns(clone)]
     viewer: baml_base::SourceRoot,
     #[returns(ref)]
     concrete: baml_type::Ty,

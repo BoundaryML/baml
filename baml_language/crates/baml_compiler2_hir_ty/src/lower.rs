@@ -2227,20 +2227,7 @@ pub fn interface_qualified_name<'db>(
 
 // SAFETY: PartialEq-driven overwrite, the CallableThrows precedent.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for FunctionSignature {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        unsafe {
-            let changed = *old_pointer != new_value;
-            if changed {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            changed
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for FunctionSignature {}
 
 /// Whether `function`'s signature is an interface's dispatch contract - the
 /// positions where inference holes are forbidden and the `throws` contract
@@ -3163,20 +3150,7 @@ pub struct AssocTypeLowering(pub Option<baml_type::Ty>);
 
 // SAFETY: PartialEq-driven overwrite, the CallableThrows precedent.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for AssocTypeLowering {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        unsafe {
-            let changed = *old_pointer != new_value;
-            if changed {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            changed
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for AssocTypeLowering {}
 
 /// The DEFAULT of associated type `member` on `interface` (`type member =
 /// ...`), lowered ONCE in the interface frame with `Self` symbolic (frame

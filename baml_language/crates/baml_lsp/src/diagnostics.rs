@@ -18,7 +18,7 @@ use std::{
 
 use baml_base::{FileId, SourceRoot};
 use baml_db::baml_compiler_diagnostics::{Diagnostic, Severity};
-use lsp_types::Url;
+use lsp_types::Uri;
 
 use crate::{
     error::LspError,
@@ -365,7 +365,7 @@ pub fn publish_cleared(state: &GlobalState, paths: &[PathBuf]) {
 /// The URI a publication for `path` must carry: the client's own spelling
 /// while the document is open (editors match publications to buffers by
 /// exact URI), the canonical presentation otherwise.
-fn publication_uri(state: &GlobalState, path: &Path) -> Option<Url> {
+fn publication_uri(state: &GlobalState, path: &Path) -> Option<Uri> {
     match state.open_document(path) {
         Some(doc) => Some(doc.uri.clone()),
         None => paths::uri_for_db_path(state.roots(), path),
@@ -375,7 +375,7 @@ fn publication_uri(state: &GlobalState, path: &Path) -> Option<Url> {
 fn send_publish(
     state: &GlobalState,
     session: SessionKey,
-    uri: Url,
+    uri: Uri,
     diagnostics: Vec<lsp_types::Diagnostic>,
     version: Option<i32>,
 ) {
@@ -507,7 +507,10 @@ mod tests {
             let related = converted.related_information.unwrap();
             assert_eq!(related.len(), 1);
             assert_eq!(related[0].message, "this branch is unreachable");
-            assert_eq!(related[0].location.uri, Url::from_file_path(&path).unwrap());
+            assert_eq!(
+                related[0].location.uri,
+                paths::uri_from_file_path(&path).unwrap()
+            );
             assert_eq!(
                 related[0].location.range,
                 lsp_types::Range::new(

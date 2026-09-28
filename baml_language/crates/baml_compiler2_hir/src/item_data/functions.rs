@@ -57,7 +57,7 @@ pub struct FunctionSourceMap {
 /// out-of-body `implements` block. A method on a generic class reports the
 /// class's, which callers thread as type-arg operands alongside the function's
 /// own — see the IO-builtin arity in `baml_compiler2_mir`.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn enclosing_type_generic_param_count<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
@@ -243,7 +243,7 @@ fn lower_elaborated<'db>(
 /// Mirrors `item_tree::MethodOwner` (see its docs for the ownership rules —
 /// notably, an in-body `implements I { … }` method is owned by its impl
 /// block, not its class — the in-class spelling is pure syntax).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub enum MethodOwner<'db> {
     Class(crate::loc::ClassLoc<'db>),
     Interface(crate::loc::InterfaceLoc<'db>),
@@ -256,7 +256,7 @@ pub enum MethodOwner<'db> {
 /// Replaces the `classes.values().find(|c| c.methods.contains(&id))` scan
 /// family — O(items) per lookup, with class-only and class-plus-interface
 /// copies drifting apart across crates.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn method_owner<'db>(
     db: &'db dyn crate::Db,
     method: FunctionLoc<'db>,
@@ -285,7 +285,7 @@ pub fn method_owner<'db>(
 /// default and a required interface method (r-a's shape); resolution
 /// and signatures never consult it, body lowering and the `default.`
 /// delegation gate do.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn function_has_body<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> bool {
     let item_tree = crate::file_item_tree(db, function.file(db));
     item_tree[function.id(db)].body.is_some()
@@ -295,7 +295,7 @@ pub fn function_has_body<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>
 /// interface. Signature/resolution consumers treat it like any other
 /// method (the r-a shape); BODY-LOWERING consumers (MIR, emit) skip it -
 /// there is nothing to compile, exactly as before it was an item.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn is_required_interface_method<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,

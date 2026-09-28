@@ -26,8 +26,8 @@ derive_more = { workspace = true }
 indexmap = { workspace = true }
 log = { workspace = true }
 num-bigint = { workspace = true }
-ouroboros = { workspace = true }
 regex = { workspace = true }
+self_cell = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

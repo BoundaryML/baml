@@ -124,7 +124,7 @@ fn installed_toolchain_version(path: &Path) -> std::io::Result<Option<String>> {
     for line in lines {
         let line = line?;
         if line == "---" {
-            return Ok(serde_yaml::from_str::<SkillFrontmatter>(&frontmatter)
+            return Ok(serde_yaml2::from_str::<SkillFrontmatter>(&frontmatter)
                 .ok()
                 .map(|parsed| parsed.metadata.toolchain_version));
         }

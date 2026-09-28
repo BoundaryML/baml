@@ -345,7 +345,7 @@ pub(super) fn did_change_watched_files(
         let path = match paths::canonical_document_path(state.roots(), &change.uri) {
             Ok(path) => path,
             Err(error) => {
-                tracing::debug!(uri = %change.uri, %error, "ignoring watched-file event");
+                tracing::debug!(uri = change.uri.as_str(), %error, "ignoring watched-file event");
                 continue;
             }
         };

@@ -231,7 +231,7 @@ fn fill_secure_random(buf: &mut [u8]) -> Result<(), String> {
     feature = "external-crypto"
 )))]
 fn fill_secure_random(buf: &mut [u8]) -> Result<(), String> {
-    getrandom::getrandom(buf).map_err(|e| e.to_string())
+    getrandom::fill(buf).map_err(|e| e.to_string())
 }
 
 impl io::IoClassRandomSystemRandom for NativeSysOps {

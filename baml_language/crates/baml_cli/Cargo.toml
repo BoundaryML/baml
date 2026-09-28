@@ -60,7 +60,7 @@ rayon = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking", "json" ] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_yaml = { workspace = true }
+serde_yaml2 = { workspace = true }
 sha2 = { workspace = true }
 strsim = { workspace = true }
 text-size = { workspace = true }

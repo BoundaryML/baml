@@ -85,7 +85,7 @@ pub enum AnnotationKind {
 }
 
 /// A single inline annotation (inlay hint) to display in the editor.
-#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::SalsaValue)]
 pub struct InlineAnnotation {
     /// Byte offset in the file where the hint is inserted.
     pub offset: TextSize,

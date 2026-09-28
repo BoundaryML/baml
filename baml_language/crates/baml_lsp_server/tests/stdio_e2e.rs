@@ -18,7 +18,7 @@ use baml_lsp_server::{
     lsp_runtime::{LspRuntime, Sink, SinkDelivery, SubmitResult},
 };
 use lsp_server::{Message, Notification, Request, RequestId};
-use lsp_types::Url;
+use lsp_types::Uri;
 use parking_lot::Mutex;
 
 /// Generous on purpose: every wait below is for *behavior*, and the first
@@ -103,7 +103,7 @@ impl Wire {
     fn diagnostics(
         &self,
         what: &str,
-        uri: &Url,
+        uri: &Uri,
         accept: impl Fn(&[lsp_types::Diagnostic]) -> bool,
     ) -> lsp_types::PublishDiagnosticsParams {
         self.wait_for(what, |messages| {
@@ -133,8 +133,8 @@ fn notification(method: &str, params: serde_json::Value) -> Message {
     Message::Notification(Notification::new(method.to_string(), params))
 }
 
-fn file_uri(path: &Path) -> Url {
-    Url::from_file_path(path).expect("absolute path")
+fn file_uri(path: &Path) -> Uri {
+    baml_lsp::paths::uri_from_file_path(path).expect("absolute path")
 }
 
 const VALID: &str = "class Point {\n    x int\n    y int\n}\n";

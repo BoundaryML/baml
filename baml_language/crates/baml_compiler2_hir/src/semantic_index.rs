@@ -285,7 +285,7 @@ pub struct FileSemanticIndex<'db> {
     pub env_var_refs: Vec<baml_compiler2_ast::EnvVarRef>,
 }
 
-// ── salsa::Update impl ────────────────────────────────────────────────────────
+// ── salsa::SalsaValue impl ────────────────────────────────────────────────────────
 
 /// # Safety
 ///
@@ -299,19 +299,7 @@ pub struct FileSemanticIndex<'db> {
 /// semantics. The `*old_pointer = new_value` write is safe because `old_pointer`
 /// points to valid allocated memory that Salsa owns.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for FileSemanticIndex<'_> {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: `old_pointer` is valid, aligned, and points to memory Salsa
-        // has previously initialized. We drop the old value and write the new one.
-        #[allow(unsafe_code)]
-        unsafe {
-            std::ptr::drop_in_place(old_pointer);
-            std::ptr::write(old_pointer, new_value);
-        }
-        true
-    }
-}
+unsafe impl salsa::SalsaValue for FileSemanticIndex<'_> {}
 
 impl FileSemanticIndex<'_> {
     /// Find the `Lambda` scope whose range exactly matches `span`.

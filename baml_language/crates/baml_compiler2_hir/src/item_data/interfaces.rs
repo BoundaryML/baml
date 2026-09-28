@@ -10,7 +10,7 @@ use crate::{
 };
 
 /// Span-free semantic data for an `interface` declaration.
-#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::SalsaValue)]
 pub struct InterfaceData<'db> {
     pub name: Name,
     /// Generic type parameters, each with its conjunction of bounds.

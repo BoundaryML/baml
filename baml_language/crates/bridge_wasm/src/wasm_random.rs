@@ -35,7 +35,7 @@ impl io::IoClassRandomSystemRandom for WasmRandom {
             });
         }
         buf.resize(n, 0u8);
-        match getrandom_03::fill(&mut buf) {
+        match getrandom::fill(&mut buf) {
             Ok(()) => SysOpOutput::ok(buf),
             Err(e) => SysOpOutput::err(VmPanic::HostUnavailable {
                 resource: "randomness".to_string(),
@@ -51,7 +51,7 @@ impl io::IoClassRandomSystemRandom for WasmRandom {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
         let mut buf = [0u8; 8];
-        match getrandom_03::fill(&mut buf) {
+        match getrandom::fill(&mut buf) {
             // Arithmetic shift right by one maps the uniform 64-bit draw onto
             // the BAML i63 range `[INT_MIN, INT_MAX]`.
             Ok(()) => SysOpOutput::ok(i64::from_le_bytes(buf) >> 1),

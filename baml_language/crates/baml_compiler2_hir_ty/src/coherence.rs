@@ -797,20 +797,7 @@ pub struct CoherenceReport<'db>(pub Vec<CoherenceViolation<'db>>);
 
 // SAFETY: PartialEq-driven overwrite, the ImplFacts precedent.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for CoherenceReport<'_> {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        unsafe {
-            let changed = *old_pointer != new_value;
-            if changed {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            changed
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for CoherenceReport<'_> {}
 
 /// Per-package coherence: overlapping implementations across the package
 /// and its dependency closure - rustc's per-crate coherence plus
@@ -1138,20 +1125,7 @@ pub struct OrphanReport<'db>(pub Vec<OrphanViolation<'db>>);
 
 // SAFETY: PartialEq-driven overwrite, the ImplFacts precedent.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for OrphanReport<'_> {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        unsafe {
-            let changed = *old_pointer != new_value;
-            if changed {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            changed
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for OrphanReport<'_> {}
 
 /// Per-package orphan check: every impl must implement a local interface
 /// or cover a local type (RFC-2451: the first local class/enum in the
