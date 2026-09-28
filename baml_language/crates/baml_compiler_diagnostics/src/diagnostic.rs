@@ -423,6 +423,10 @@ pub enum DiagnosticId {
     ServedInterfaceExportsFunctionsOnly,
     /// A constant pattern passed to `baml.regex.new` does not compile (E0174).
     InvalidRegexPattern,
+    /// A builtin the compiler lowers where it is called (`log.info`,
+    /// `baml.spawn.__spawn`, ...) was referenced as a value: it has no
+    /// function value, so it may only be called directly.
+    CallSiteBuiltinValue,
 }
 
 impl DiagnosticId {
@@ -637,6 +641,7 @@ impl DiagnosticId {
             DiagnosticId::CannotConstructOpaqueClass => "E0173",
             DiagnosticId::ReservedBindingName => "E0176",
             DiagnosticId::ServedInterfaceExportsFunctionsOnly => "E0175",
+            DiagnosticId::CallSiteBuiltinValue => "E0177",
         }
     }
 }

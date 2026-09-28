@@ -47,12 +47,12 @@ use baml_type::{
     interned::{ClosedTy, InferInterface, InferTy, Ty},
     normalize::canonical_union_interned,
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     callable::{
-        callable_display_name, callable_generic_frame, callable_owner_type, callable_signature,
-        callable_takes_self, callable_throws_of, callable_user_generic_params,
+        callable_builtin_kind, callable_display_name, callable_generic_frame, callable_owner_type,
+        callable_signature, callable_takes_self, callable_throws_of, callable_user_generic_params,
         instantiate_callable_signature,
     },
     diagnostics::ScopedTypeEscapeKind,
@@ -964,6 +964,12 @@ enum PendingDiag<'db> {
         class_name: baml_type::DeclName,
         field: baml_type::Name,
     },
+    /// A builtin lowered at its call site, referenced other than as a
+    /// direct call's callee.
+    CallSiteBuiltinValue {
+        expr: ExprId,
+        reference: String,
+    },
     NotCallable {
         expr: ExprId,
         ty: Ty,
@@ -1625,6 +1631,9 @@ fn infer_body_impl<'db>(
         }
     } else if let Some(expr_body) = body.expr_body() {
         ctx.infer_expr_body(expr_body);
+    }
+    if let Some(arena) = body.expr_body() {
+        ctx.report_call_site_builtin_values(arena);
     }
     ctx.finish()
 }
@@ -5246,6 +5255,58 @@ impl<'db> InferenceContext<'db> {
         });
     }
 
+    /// A builtin lowered where it is called (`log.info`, `baml.spawn.__spawn`,
+    /// ...) has no function value, so every reference to one that is not a
+    /// direct call's callee is refused. Judged over the resolution tables MIR
+    /// lowers from, so no value road can miss it.
+    fn report_call_site_builtin_values(&mut self, body: &ExprBody) {
+        let callees: FxHashSet<ExprId> = body
+            .exprs
+            .iter()
+            .filter_map(|(_, expr)| match expr {
+                // A specialization called through parentheses (`(f<T>)(x)`)
+                // is a value that is then called; the direct spelling puts
+                // the type arguments on the call (`f<T>(x)`).
+                Expr::Call { callee, .. }
+                    if !matches!(body.exprs[*callee], Expr::GenericApply { .. }) =>
+                {
+                    Some(*callee)
+                }
+                // A tagged template calls its tag; which functions may be
+                // tags is the template's own check.
+                Expr::Template {
+                    tag: baml_compiler2_ast::TemplateTag::Custom { tag, .. },
+                    ..
+                } => Some(*tag),
+                _ => None,
+            })
+            .collect();
+        let resolutions = self.result.member_resolutions.iter().chain(
+            self.result
+                .path_resolutions
+                .iter()
+                .filter_map(|(expr, path)| Some((expr, path.final_member_resolution()?))),
+        );
+        let mut values: Vec<ExprId> = resolutions
+            .filter(|(expr, _)| !callees.contains(expr))
+            .filter(|(_, resolution)| {
+                resolution
+                    .callable(self.db)
+                    .and_then(|callable| callable_builtin_kind(self.db, callable))
+                    .is_some_and(baml_compiler2_ast::BuiltinKind::lowers_at_call_site)
+            })
+            .map(|(&expr, _)| expr)
+            .collect();
+        values.sort_unstable();
+        values.dedup();
+        for expr in values {
+            self.pending_diags.push(PendingDiag::CallSiteBuiltinValue {
+                expr,
+                reference: body.display_expr(expr),
+            });
+        }
+    }
+
     fn report_mounted_reserved_call(&mut self, call: ExprId, callee: ExprId) {
         let Some(DeclRef::External(function)) = self
             .result
@@ -5258,17 +5319,13 @@ impl<'db> InferenceContext<'db> {
         let row = extern_function_row(self.db, function);
         // Trust is decided by the package the row's ADDRESS lives in, never
         // by the heads the row's own `target` spells.
-        let trusted_callsite_lowering = matches!(
-            row.builtin_kind,
-            Some(
-                baml_compiler2_ast::BuiltinKind::Intrinsic
-                    | baml_compiler2_ast::BuiltinKind::AwaitAny
-                    | baml_compiler2_ast::BuiltinKind::Spawn
-            )
-        ) && baml_compiler2_hir::package::is_precompiled_stdlib(
-            self.db,
-            function.package(self.db),
-        );
+        let trusted_callsite_lowering = row
+            .builtin_kind
+            .is_some_and(baml_compiler2_ast::BuiltinKind::lowers_at_call_site)
+            && baml_compiler2_hir::package::is_precompiled_stdlib(
+                self.db,
+                function.package(self.db),
+            );
         if row.linkability == crate::callable::ExternalLinkability::ReservedBuiltin
             && !trusted_callsite_lowering
         {
@@ -11331,6 +11388,9 @@ impl<'db> InferenceContext<'db> {
                         TirTypeError::CannotConstructOpaqueClass { class_name, field },
                         expr,
                     ),
+                    PendingDiag::CallSiteBuiltinValue { expr, reference } => {
+                        (TirTypeError::CallSiteBuiltinValue { reference }, expr)
+                    }
                     PendingDiag::CannotConstructBuiltinCompanion {
                         expr,
                         class_name,

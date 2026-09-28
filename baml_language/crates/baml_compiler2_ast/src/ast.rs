@@ -1721,6 +1721,18 @@ pub enum BuiltinKind {
     Spawn,
 }
 
+impl BuiltinKind {
+    /// Whether the builtin is lowered where it is called instead of compiled
+    /// into a callable: it has no function value, so it may only be the callee
+    /// of a direct call.
+    pub const fn lowers_at_call_site(self) -> bool {
+        match self {
+            BuiltinKind::Vm | BuiltinKind::Io => false,
+            BuiltinKind::Intrinsic | BuiltinKind::AwaitAny | BuiltinKind::Spawn => true,
+        }
+    }
+}
+
 /// Source geometry of an LLM function's prompt literal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LlmPromptSpans {

@@ -221,6 +221,9 @@ pub enum TirTypeError {
     /// A constructor head that is an alias of a type no object literal can
     /// construct (anything but a class).
     CannotConstructAlias { name: Name, denotes: baml_type::Ty },
+    /// A builtin that is lowered where it is called (`log.info`,
+    /// `baml.spawn.__spawn`, ...) was referenced as a value.
+    CallSiteBuiltinValue { reference: String },
     /// Unreachable code after a diverging statement (return/break/continue).
     DeadCode {
         after: StmtId,
@@ -1143,6 +1146,11 @@ impl TirTypeError {
                     "class `{}` cannot be built with a class literal: its field `{field}` holds \
                  state that only the class's own functions create",
                     class_name.spell(vp)
+                ),
+                TirTypeError::CallSiteBuiltinValue { reference } => write!(
+                    f,
+                    "`{reference}` can only be called directly, not used as a value; to pass \
+                 it along, wrap the call in a lambda"
                 ),
                 TirTypeError::CannotConstructAlias { name, denotes } => write!(
                     f,

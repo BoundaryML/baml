@@ -1937,6 +1937,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::WrongTypeArgArity { .. } => DiagnosticId::ArgumentCountMismatch,
         TirTypeError::ScopedTypeEscapesBlock { .. } => DiagnosticId::ScopedTypeEscapesBlock,
         TirTypeError::CannotConstructOpaqueClass { .. } => DiagnosticId::CannotConstructOpaqueClass,
+        TirTypeError::CallSiteBuiltinValue { .. } => DiagnosticId::CallSiteBuiltinValue,
         // Optional chaining diagnostics
         TirTypeError::UnnecessaryOptionalChaining { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::UnnecessaryNullCoalesce { .. } => DiagnosticId::InvalidOperator,
