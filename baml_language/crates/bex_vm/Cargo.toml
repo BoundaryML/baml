@@ -55,6 +55,8 @@ toml = { workspace = true }
 
 # Native-only: tokio runtime so CancelToken.any can `tokio::spawn` its watcher.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# `baml.crypto` runs on the TLS crypto provider in native builds that have one.
+baml_tls = { workspace = true, optional = true }
 tokio = { workspace = true, features = [ "rt", "macros" ] }
 
 # WASM-only: wasm-bindgen-futures for spawning the watcher.
@@ -76,6 +78,12 @@ indexmap = { workspace = true }
 
 [features]
 default = [  ]
+# Which TLS crypto provider the build has (see `baml_tls`). With any of them,
+# `baml.crypto.Sha256` hashes on it; with `external-crypto` alone, the ciphers,
+# which no provider offers, are unavailable.
+aws-crypto = [ "dep:baml_tls" ]
+ring-crypto = [ "dep:baml_tls" ]
+external-crypto = [ "dep:baml_tls" ]
 heap_debug = [ "bex_heap/heap_debug", "bex_vm_types/heap_debug" ]
 # Enables the per-op VM counter for the `kperf` profiler's instructions/op
 # breakdown. Off by default — pure measurement scaffolding on the hot path.

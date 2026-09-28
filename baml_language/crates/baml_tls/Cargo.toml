@@ -1,0 +1,28 @@
+# Picks the rustls crypto provider behind every TLS connection BAML makes
+# (LLM calls, WebSockets, the HTTPS server, telemetry, the remote cache).
+[package]
+name = "baml_tls"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+default = [ "aws-crypto" ]
+aws-crypto = [ "rustls/aws_lc_rs" ]
+ring-crypto = [ "rustls/ring" ]
+# Link no crypto library; the provider comes from the host or from a
+# replacement `baml_crypto_provider` crate.
+external-crypto = [ "dep:baml_crypto_provider" ]
+
+[dependencies]
+baml_crypto_provider = { workspace = true, optional = true }
+rustls = { workspace = true, features = [ "std" ] }
+
+[lints]
+workspace = true
+
+[package.metadata.ci]
+wasm_support = false

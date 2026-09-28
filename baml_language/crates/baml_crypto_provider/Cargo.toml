@@ -1,0 +1,23 @@
+# The crypto provider a BAML `external-crypto` build uses.
+#
+# This default links no crypto and supplies no provider. To bring your own
+# (a FIPS-validated OpenSSL, AWS-LC in FIPS mode, BoringSSL, SymCrypt, ...),
+# point the workspace's `baml_crypto_provider` dependency at a crate that
+# exposes the same `provider()` function; see README.md.
+[package]
+name = "baml_crypto_provider"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+rustls = { workspace = true }
+
+[lints]
+workspace = true
+
+[package.metadata.ci]
+wasm_support = false

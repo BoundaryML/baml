@@ -19,12 +19,8 @@
 
 use std::{collections::BTreeMap, fmt};
 
-use hmac::{Hmac, Mac};
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
-use sha2::{Digest, Sha256};
 use web_time::{SystemTime, UNIX_EPOCH};
-
-type HmacSha256 = Hmac<Sha256>;
 
 const ALGORITHM: &str = "AWS4-HMAC-SHA256";
 
@@ -125,12 +121,21 @@ impl fmt::Debug for Credentials {
 pub enum SigningError {
     /// The request URL could not be parsed into scheme/authority/path.
     InvalidUri(String),
+    /// The crypto provider could not hash or sign.
+    Crypto(baml_tls::CryptoError),
+}
+
+impl From<baml_tls::CryptoError> for SigningError {
+    fn from(e: baml_tls::CryptoError) -> Self {
+        SigningError::Crypto(e)
+    }
 }
 
 impl fmt::Display for SigningError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SigningError::InvalidUri(u) => write!(f, "invalid request URI for signing: {u}"),
+            SigningError::Crypto(e) => write!(f, "SigV4 signing failed: {e}"),
         }
     }
 }
@@ -161,7 +166,7 @@ pub fn sign_request(
 
     let date_stamp = format_date(time);
     let date_time = format_date_time(time);
-    let payload_hash = sha256_hex(body);
+    let payload_hash = sha256_hex(body)?;
 
     // --- Canonical headers (only signed headers appear in the block) --------
     // Group lowercased header names to their trimmed, comma-joined values.
@@ -213,13 +218,13 @@ pub fn sign_request(
     let scope = format!("{date_stamp}/{region}/{service}/aws4_request");
     let string_to_sign = format!(
         "{ALGORITHM}\n{date_time}\n{scope}\n{}",
-        sha256_hex(canonical_request.as_bytes())
+        sha256_hex(canonical_request.as_bytes())?
     );
 
     // --- Signature ----------------------------------------------------------
     let signing_key =
-        generate_signing_key(&credentials.secret_access_key, &date_stamp, region, service);
-    let signature = hex::encode(hmac(&signing_key, string_to_sign.as_bytes()));
+        generate_signing_key(&credentials.secret_access_key, &date_stamp, region, service)?;
+    let signature = hex::encode(hmac(&signing_key, string_to_sign.as_bytes())?);
 
     let authorization = format!(
         "{ALGORITHM} Credential={}/{scope}, SignedHeaders={signed_headers}, Signature={signature}",
@@ -240,24 +245,28 @@ pub fn sign_request(
 // HMAC / SHA helpers
 // ---------------------------------------------------------------------------
 
-fn hmac(key: &[u8], data: &[u8]) -> Vec<u8> {
-    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC accepts any key length");
-    mac.update(data);
-    mac.finalize().into_bytes().to_vec()
+// Both run on the process's rustls crypto provider (see `baml_tls`), so a
+// build that brings its own provider signs with it.
+
+fn hmac(key: &[u8], data: &[u8]) -> Result<[u8; 32], baml_tls::CryptoError> {
+    baml_tls::hmac_sha256(key, data)
 }
 
-fn sha256_hex(bytes: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    hex::encode(hasher.finalize())
+fn sha256_hex(bytes: &[u8]) -> Result<String, baml_tls::CryptoError> {
+    Ok(hex::encode(baml_tls::sha256(bytes)?))
 }
 
 /// Derive the SigV4 signing key:
 /// `HMAC(HMAC(HMAC(HMAC("AWS4"+secret, date), region), service), "aws4_request")`.
-fn generate_signing_key(secret: &str, date_stamp: &str, region: &str, service: &str) -> Vec<u8> {
-    let k_date = hmac(format!("AWS4{secret}").as_bytes(), date_stamp.as_bytes());
-    let k_region = hmac(&k_date, region.as_bytes());
-    let k_service = hmac(&k_region, service.as_bytes());
+fn generate_signing_key(
+    secret: &str,
+    date_stamp: &str,
+    region: &str,
+    service: &str,
+) -> Result<[u8; 32], baml_tls::CryptoError> {
+    let k_date = hmac(format!("AWS4{secret}").as_bytes(), date_stamp.as_bytes())?;
+    let k_region = hmac(&k_date, region.as_bytes())?;
+    let k_service = hmac(&k_region, service.as_bytes())?;
     hmac(&k_service, b"aws4_request")
 }
 
@@ -508,7 +517,7 @@ mod tests {
     #[test]
     fn sha256_empty() {
         assert_eq!(
-            sha256_hex(b""),
+            sha256_hex(b"").unwrap(),
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
         );
     }
@@ -521,10 +530,11 @@ mod tests {
             "20150830",
             "us-east-1",
             "iam",
-        );
+        )
+        .unwrap();
         let creq = "AWS4-HMAC-SHA256\n20150830T123600Z\n20150830/us-east-1/iam/aws4_request\nf536975d06c0309214f805bb90ccff089219ecd68b2577efef23edd43b7e1a59";
         assert_eq!(
-            hex::encode(hmac(&key, creq.as_bytes())),
+            hex::encode(hmac(&key, creq.as_bytes()).unwrap()),
             "5d672d79c15b13162d9279b0855cfba6789a8edb4c82c400e06b5924a6f2b5d7"
         );
     }

@@ -21,8 +21,12 @@ num-bigint = { workspace = true }
 web-time = { workspace = true }
 
 [dev-dependencies]
+baml_tls = { workspace = true, features = [ "aws-crypto" ] }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "macros" ] }
 
 [lints]
 workspace = true
+
+[package.metadata.ci]
+wasm_support = false

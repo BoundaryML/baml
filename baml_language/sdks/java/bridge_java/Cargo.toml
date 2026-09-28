@@ -19,6 +19,7 @@ default = [ "bundle-http", "aws-crypto" ]
 bundle-http = [ "bridge_cffi/bundle-http" ]
 aws-crypto = [ "bundle-http", "bex_project/aws-crypto", "bridge_cffi/aws-crypto" ]
 ring-crypto = [ "bundle-http", "bex_project/ring-crypto", "bridge_cffi/ring-crypto" ]
+external-crypto = [ "bundle-http", "bex_project/external-crypto", "bridge_cffi/external-crypto" ]
 
 [dependencies]
 bex_project = { workspace = true }

@@ -17,16 +17,23 @@ workspace = true
 [dependencies]
 baml_artifact = { workspace = true }
 baml_exec = { workspace = true }
-bex_engine = { workspace = true, default-features = false, features = [ "ring-crypto" ] }
+bex_engine = { workspace = true }
 bex_events = { workspace = true }
-bex_project = { workspace = true, default-features = false, features = [ "ring-crypto" ] }
+bex_project = { workspace = true }
 btel_settings = { workspace = true }
-sys_native = { workspace = true, default-features = false, features = [ "bundle-http", "ring-crypto" ] }
+sys_native = { workspace = true, features = [ "bundle-http" ] }
 libsui = { workspace = true }
 tokio = { workspace = true, features = [ "rt" ] }
 
 [features]
-default = [  ]
+default = [ "aws-crypto" ]
+aws-crypto = [ "bex_engine/aws-crypto", "bex_project/aws-crypto", "sys_native/aws-crypto" ]
+ring-crypto = [ "bex_engine/ring-crypto", "bex_project/ring-crypto", "sys_native/ring-crypto" ]
+external-crypto = [
+  "bex_engine/external-crypto",
+  "bex_project/external-crypto",
+  "sys_native/external-crypto",
+]
 native-tls = [ "sys_native/native-tls" ]
 
 [[bin]]

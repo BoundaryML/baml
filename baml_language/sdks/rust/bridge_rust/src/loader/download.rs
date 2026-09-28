@@ -13,8 +13,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use sha2::{Digest, Sha256};
-
 use super::{LoaderEnv, LoaderError, log};
 
 pub(super) fn download_library(
@@ -31,6 +29,7 @@ pub(super) fn download_library(
         dest_path.display()
     ));
 
+    ensure_crypto_provider()?;
     let agent = http_agent(&env.version);
 
     let expected_checksum = match fetch_checksum(&agent, &checksum_url, filename) {
@@ -76,7 +75,7 @@ pub(super) fn download_library(
     // the removal quietly finds nothing.
     let _cleanup = RemoveOnDrop(tmp_path.clone());
 
-    let mut hasher = Sha256::new();
+    let mut hasher = provider_sha256()?;
     let mut progress = Progress::new(content_length, filename);
     let mut reader = response.body_mut().as_reader();
     let mut buf = [0u8; 64 * 1024];
@@ -101,7 +100,7 @@ pub(super) fn download_library(
     }
     progress.finish();
 
-    let actual_checksum = hex::encode(hasher.finalize());
+    let actual_checksum = hex::encode(hasher.finish());
     if let Some(expected) = &expected_checksum {
         log::debug("Verifying checksum");
         if !actual_checksum.eq_ignore_ascii_case(expected) {
@@ -163,6 +162,61 @@ pub(super) fn download_library(
         dest_path.display()
     ));
     Ok(())
+}
+
+/// A SHA-256 hasher on the process's rustls crypto provider, so a build that
+/// brings its own provider verifies the download with it. rustls exposes the
+/// provider's SHA-256 through its TLS 1.3 SHA-256 cipher suite.
+fn provider_sha256() -> Result<Box<dyn rustls::crypto::hash::Context>, LoaderError> {
+    use rustls::{SupportedCipherSuite, crypto::hash::HashAlgorithm};
+    ensure_crypto_provider()?;
+    let provider = rustls::crypto::CryptoProvider::get_default()
+        .ok_or_else(|| LoaderError::DownloadFailed("no TLS crypto provider".to_string()))?;
+    provider
+        .cipher_suites
+        .iter()
+        .find_map(|suite| {
+            #[allow(
+                clippy::match_wildcard_for_single_variants,
+                reason = "the `Tls12` variant exists only when rustls's `tls12` feature is on"
+            )]
+            match suite {
+                SupportedCipherSuite::Tls13(suite)
+                    if suite.common.hash_provider.algorithm() == HashAlgorithm::SHA256 =>
+                {
+                    Some(suite.common.hash_provider.start())
+                }
+                _ => None,
+            }
+        })
+        .ok_or_else(|| {
+            LoaderError::DownloadFailed(
+                "the TLS crypto provider has no TLS 1.3 SHA-256 cipher suite to hash with"
+                    .to_string(),
+            )
+        })
+}
+
+/// ureq panics without a rustls crypto provider. Keep one the host installed;
+/// otherwise install the one this build bundles.
+fn ensure_crypto_provider() -> Result<(), LoaderError> {
+    use rustls::crypto::CryptoProvider;
+    if CryptoProvider::get_default().is_none() {
+        // An error means another thread installed one first; that one stands.
+        #[cfg(feature = "ring-crypto")]
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        #[cfg(all(feature = "aws-crypto", not(feature = "ring-crypto")))]
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+    }
+    match CryptoProvider::get_default() {
+        Some(_) => Ok(()),
+        None => Err(LoaderError::DownloadFailed(
+            "no TLS crypto provider: this build links no crypto library (`external-crypto`). \
+             Install a rustls CryptoProvider with `CryptoProvider::install_default` before \
+             loading BAML"
+                .to_string(),
+        )),
+    }
 }
 
 fn http_agent(version: &str) -> ureq::Agent {

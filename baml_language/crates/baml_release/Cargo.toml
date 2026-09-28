@@ -17,18 +17,21 @@ doctest = false
 workspace = true
 
 [features]
-default = [  ]
+default = [ "aws-crypto" ]
+aws-crypto = [ "reqwest/rustls", "baml_tls/aws-crypto" ]
+ring-crypto = [ "reqwest/rustls-no-provider", "baml_tls/ring-crypto" ]
+external-crypto = [ "reqwest/rustls-no-provider", "baml_tls/external-crypto" ]
 self-update = [  ]
 no-self-update = [  ]
 
 [dependencies]
+baml_tls = { workspace = true }
 anyhow = { workspace = true }
 dirs = { workspace = true }
 flate2 = { workspace = true }
-reqwest = { workspace = true, features = [ "blocking", "rustls" ] }
+reqwest = { workspace = true, features = [ "blocking" ] }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
-sha2 = { workspace = true }
 tar = { workspace = true }
 thiserror = { workspace = true }
 zip = { workspace = true }

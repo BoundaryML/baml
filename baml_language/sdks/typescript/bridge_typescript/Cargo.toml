@@ -20,6 +20,8 @@ default = [ "bundle-http", "aws-crypto" ]
 bundle-http = [ "bridge_cffi/bundle-http" ]
 aws-crypto = [ "bex_project/aws-crypto", "bridge_cffi/aws-crypto" ]
 ring-crypto = [ "bex_project/ring-crypto", "bridge_cffi/ring-crypto" ]
+# Link no crypto library; see crates/baml_crypto_provider.
+external-crypto = [ "bex_project/external-crypto", "bridge_cffi/external-crypto" ]
 
 [dependencies]
 baml_version = { workspace = true }

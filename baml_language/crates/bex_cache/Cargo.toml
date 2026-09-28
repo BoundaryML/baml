@@ -15,21 +15,17 @@ license = { workspace = true }
 # iOS — Apple bridge builds select `ring-crypto` instead.
 [features]
 default = [ "aws-crypto" ]
-aws-crypto = [ "reqwest/rustls" ]
-ring-crypto = [
-  "reqwest/rustls-no-provider",
-  "dep:rustls",
-  "rustls/ring",
-  "rustls/std",
-]
+aws-crypto = [ "reqwest/rustls", "baml_tls/aws-crypto" ]
+ring-crypto = [ "reqwest/rustls-no-provider", "baml_tls/ring-crypto" ]
+external-crypto = [ "reqwest/rustls-no-provider", "baml_tls/external-crypto" ]
 
 [dependencies]
+baml_tls = { workspace = true }
 baml_type = { workspace = true }
 baml_version = { workspace = true }
 bex_vm_types = { workspace = true }
 borsh = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking" ] }
-rustls = { workspace = true, optional = true }
 
 # The warm bytecode-cache path hashes every cached unit payload per run
 # (~230MB at a 295k LOC project), so enable sha2's hardware backend (`asm`:

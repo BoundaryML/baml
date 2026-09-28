@@ -33,6 +33,9 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
 /// it back for retry. Only ever runs in the detached child, so blocking
 /// on the network here is fine.
 pub(super) fn send_body(body: &Value) -> bool {
+    if baml_tls::ensure_crypto_provider().is_err() {
+        return false;
+    }
     let Ok(client) = reqwest::blocking::Client::builder()
         .timeout(REQUEST_TIMEOUT)
         .build()

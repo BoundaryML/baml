@@ -910,7 +910,7 @@ fn post_event(body: &Value) -> Result<()> {
     if api_key.trim().is_empty() {
         anyhow::bail!("This build has no PostHog key configured.");
     }
-    let resp = auth::http_client()
+    let resp = auth::http_client()?
         .post(format!("{}/capture/", posthog_host().trim_end_matches('/')))
         .json(body)
         .send()
