@@ -44,13 +44,13 @@ rand_xoshiro = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_yaml = { workspace = true }
 sha2 = { workspace = true }
 smallvec = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true, features = [ "macros" ] }
 tokio-util = { workspace = true }
 toml = { workspace = true }
+yaml-rust2 = { workspace = true }
 
 # Native-only: tokio runtime so CancelToken.any can `tokio::spawn` its watcher.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

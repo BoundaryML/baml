@@ -22,13 +22,13 @@ pub struct TypescriptCrosswalkTopic {
 }
 
 static LANGUAGE_TOPICS: LazyLock<HashMap<String, LanguageTopic>> = LazyLock::new(|| {
-    serde_yaml::from_str(crate::BAML_KEYWORDS_YAML)
+    serde_yaml2::from_str(crate::BAML_KEYWORDS_YAML)
         .expect("failed to parse embedded BAML language topics")
 });
 
 static TYPESCRIPT_CROSSWALK_TOPICS: LazyLock<HashMap<String, TypescriptCrosswalkTopic>> =
     LazyLock::new(|| {
-        serde_yaml::from_str(crate::TS_KEYWORDS_YAML)
+        serde_yaml2::from_str(crate::TS_KEYWORDS_YAML)
             .expect("failed to parse embedded TypeScript crosswalk topics")
     });
 

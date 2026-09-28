@@ -1,24 +1,18 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Range};
 
 use baml_db::baml_compiler_syntax::{SyntaxKind, SyntaxNode};
-use ouroboros::self_referencing;
 use rowan::{TextRange, TextSize};
 
 use crate::printer::Printable;
 
 /// Represents all the trivia attached to tokens or EOF.
 pub struct TriviaInfo {
-    inner: TriviaInfoInner,
-}
-
-#[self_referencing]
-struct TriviaInfoInner {
+    /// Sorted by the range each trivia is attached to, EOF last.
     trivia: Vec<EmittableTrivia>,
-    #[borrows(trivia)]
-    #[covariant]
-    token_trivia: HashMap<TextRange, &'this [EmittableTrivia]>,
-    #[borrows(trivia)]
-    eof_trivia: &'this [EmittableTrivia],
+    /// The span of `trivia` attached to each token range.
+    token_trivia: HashMap<TextRange, Range<usize>>,
+    /// Where the trailing EOF-attached run of `trivia` starts.
+    eof_start: usize,
 }
 
 impl TriviaInfo {
@@ -132,66 +126,52 @@ impl TriviaInfo {
 
         debug_assert!(found_trivia.is_sorted_by_key(|trivia| trivia.attached_to().start()));
 
-        let found_trivia = TriviaInfoInner::new(
-            found_trivia,
-            |found_trivia| {
-                let mut token_trivia = HashMap::new();
-
-                let mut it = found_trivia.iter().enumerate().peekable();
-                'outer_loop: while let Some((start_idx, trivia)) = it.next() {
-                    let range = trivia.attached_to();
-                    if range.start() == TextSize::new(u32::MAX) {
-                        // EOF trivia, there are no more token-attached trivia
-                        break;
-                    }
-                    while let Some(&(idx, trivia)) = it.peek() {
-                        if trivia.attached_to() == range {
-                            it.next();
-                        } else {
-                            // found something not attached to the same range, so we can stop
-                            token_trivia.insert(range, &found_trivia[start_idx..idx]);
-                            continue 'outer_loop;
-                        }
-                    }
-                    // we reached the end of trivia without finding a token not attached to the same range
-                    // so we can add the entire rest of the trivia to the token trivia
-                    token_trivia.insert(range, &found_trivia[start_idx..]);
-                }
-
-                token_trivia
-            },
-            |found_trivia| {
-                if let Some((idx, _)) = found_trivia
-                    .iter()
-                    .enumerate()
-                    .rfind(|(_, trivia)| !trivia.is_at_eof())
-                {
-                    &found_trivia[(idx + 1)..]
+        let mut token_trivia = HashMap::new();
+        let mut it = found_trivia.iter().enumerate().peekable();
+        'outer_loop: while let Some((start_idx, trivia)) = it.next() {
+            let range = trivia.attached_to();
+            if range.start() == TextSize::new(u32::MAX) {
+                // EOF trivia, there are no more token-attached trivia
+                break;
+            }
+            while let Some(&(idx, trivia)) = it.peek() {
+                if trivia.attached_to() == range {
+                    it.next();
                 } else {
-                    // all trivia is attached to EOF (or there is not trivia)
-                    found_trivia
+                    // found something not attached to the same range, so we can stop
+                    token_trivia.insert(range, start_idx..idx);
+                    continue 'outer_loop;
                 }
-            },
-        );
+            }
+            // we reached the end of trivia without finding a token not attached to the same range
+            // so we can add the entire rest of the trivia to the token trivia
+            token_trivia.insert(range, start_idx..found_trivia.len());
+        }
+
+        // All trivia is attached to EOF (or there is none) when nothing isn't.
+        let eof_start = found_trivia
+            .iter()
+            .rposition(|trivia| !trivia.is_at_eof())
+            .map_or(0, |idx| idx + 1);
 
         TriviaInfo {
-            inner: found_trivia,
+            trivia: found_trivia,
+            token_trivia,
+            eof_start,
         }
     }
 
     #[must_use]
     pub fn all_trivia(&self) -> &[EmittableTrivia] {
-        self.inner.borrow_trivia()
+        &self.trivia
     }
 
     /// Returns all trivia attached to the token at the given range.
     #[must_use]
     pub fn get_for_range(&self, range: TextRange) -> &[EmittableTrivia] {
-        self.inner
-            .borrow_token_trivia()
+        self.token_trivia
             .get(&range)
-            .copied()
-            .unwrap_or(&[])
+            .map_or(&[], |span| &self.trivia[span.clone()])
     }
 
     /// Returns all trivia attached to the token at the given range, split into leading and trailing trivia.
@@ -259,7 +239,7 @@ impl TriviaInfo {
     /// Returns all trivia attached to EOF.
     #[must_use]
     pub fn get_for_eof(&self) -> &[EmittableTrivia] {
-        self.inner.borrow_eof_trivia()
+        &self.trivia[self.eof_start..]
     }
 }
 

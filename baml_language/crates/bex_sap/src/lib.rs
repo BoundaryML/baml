@@ -1,4 +1,3 @@
-use ouroboros::self_referencing;
 use sys_types::DefKey;
 
 pub use crate::jsonish::parse;
@@ -35,12 +34,16 @@ impl CompiledSapModel {
         // types were simplified. Normalize the runtime target at the SAP
         // boundary so the converter always receives its required flat form.
         let target = type_ctx.normalize_parse_target(target);
-        let inner = CompiledSapModelInner::try_new(
+        let owner = SapModelOwner {
             type_ctx,
-            target,
-            sap_model::TypeCtx::build_db,
-            sap_model::TypeCtx::convert_ty,
-        )?;
+            parse_ty: target,
+        };
+        let inner = CompiledSapModelInner::try_new(owner, |owner| {
+            Ok::<_, sap_model::ConvertError>(SapModelViews {
+                db: owner.type_ctx.build_db()?,
+                ty: owner.type_ctx.convert_ty(&owner.parse_ty)?,
+            })
+        })?;
         Ok(Self { inner })
     }
     pub fn from_sys_op_context(
@@ -52,23 +55,31 @@ impl CompiledSapModel {
     }
 
     pub fn db(&self) -> &TypeRefDb<'_, DefKey> {
-        self.inner.borrow_db()
+        &self.inner.borrow_dependent().db
     }
 
     pub fn ty(&self) -> &Ty<'_, DefKey> {
-        self.inner.borrow_ty()
+        &self.inner.borrow_dependent().ty
     }
 }
 
-#[self_referencing]
-struct CompiledSapModelInner {
-    pub type_ctx: sap_model::TypeCtx,
+/// What [`CompiledSapModel`] owns.
+struct SapModelOwner {
+    type_ctx: sap_model::TypeCtx,
     /// The target type
-    pub parse_ty: sys_types::SapTy,
-    #[borrows(type_ctx)]
-    #[covariant]
-    pub db: TypeRefDb<'this, DefKey>,
-    #[borrows(type_ctx, parse_ty)]
-    #[covariant]
-    pub ty: Ty<'this, DefKey>,
+    parse_ty: sys_types::SapTy,
 }
+
+/// What [`CompiledSapModel`] borrows from its [`SapModelOwner`].
+struct SapModelViews<'a> {
+    db: TypeRefDb<'a, DefKey>,
+    ty: Ty<'a, DefKey>,
+}
+
+self_cell::self_cell!(
+    struct CompiledSapModelInner {
+        owner: SapModelOwner,
+        #[covariant]
+        dependent: SapModelViews,
+    }
+);
