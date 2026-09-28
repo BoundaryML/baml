@@ -81,6 +81,118 @@ allowed_crates = [
 regular_deps_only = true
 reason = "Use thiserror for proper error types in library crates."
 
+# ---------------------------------------------------------------------------
+# Crypto: everything that protects something runs on the one rustls
+# CryptoProvider `baml_tls` picks, so an `external-crypto` build (e.g. FIPS)
+# runs it all in the host's module. These rules keep new code from reaching
+# around it. Which provider a build links is feature-level and checked by
+# `scripts/check-crypto-backends.sh`, not here.
+# ---------------------------------------------------------------------------
+
+[[dependency_rules]]
+pattern = "rustls"
+# `sys_native` builds the HTTPS server's `ServerConfig`; `baml_bridge` is
+# published to crates.io and can't depend on the unpublished `baml_tls`.
+allowed_crates = ["baml_tls", "baml_crypto_provider", "sys_native", "baml_bridge"]
+regular_deps_only = true
+reason = "Get crypto from baml_tls (ensure_crypto_provider, sha256, hmac_sha256, sign_rs256, fill_random), not rustls directly."
+
+[[dependency_rules]]
+pattern = "tokio-rustls"
+allowed_crates = ["sys_native"]
+regular_deps_only = true
+reason = "TLS server/client configs are built in sys_native after baml_tls::ensure_crypto_provider."
+
+# Every TLS client panics without a provider in an `external-crypto` build,
+# so each user must call `baml_tls::ensure_crypto_provider()` before building
+# one. Adding a crate here means adding that call.
+[[dependency_rules]]
+pattern = "reqwest"
+allowed_crates = ["baml", "baml_cli", "baml_lsp_server", "baml_release", "bex_cache", "bridge_wasm", "btel_bcs", "sys_native"]
+regular_deps_only = true
+reason = "HTTP clients need baml_tls::ensure_crypto_provider() first; route new HTTP through sys_native or add the call and list the crate here."
+
+[[dependency_rules]]
+pattern = "tokio-tungstenite"
+allowed_crates = ["baml_lsp_server", "sys_native"]
+regular_deps_only = true
+reason = "WebSocket clients need baml_tls::ensure_crypto_provider() first."
+
+[[dependency_rules]]
+pattern = "ureq"
+allowed_crates = ["baml_bridge"]
+regular_deps_only = true
+reason = "HTTP clients need a crypto provider first; use reqwest after baml_tls::ensure_crypto_provider()."
+
+# Crypto implementations that would bypass the provider.
+[[dependency_rules]]
+pattern = "ring"
+allowed_crates = []
+reason = "Use baml_tls: ring is selected only through the ring-crypto feature."
+
+[[dependency_rules]]
+pattern = "aws-lc-*"
+allowed_crates = []
+reason = "Use baml_tls: AWS-LC is selected only through the aws-crypto feature."
+
+[[dependency_rules]]
+pattern = "hmac"
+allowed_crates = []
+reason = "Use baml_tls::hmac_sha256 so HMAC runs on the crypto provider."
+
+[[dependency_rules]]
+pattern = "rsa"
+allowed_crates = []
+reason = "Use baml_tls::sign_rs256 so signing runs on the crypto provider."
+
+[[dependency_rules]]
+pattern = "openssl*"
+allowed_crates = []
+reason = "Crypto comes from the rustls provider (baml_tls); bring OpenSSL in through a baml_crypto_provider crate."
+
+[[dependency_rules]]
+pattern = "native-tls"
+allowed_crates = []
+reason = "TLS goes through rustls and the baml_tls provider."
+
+[[dependency_rules]]
+pattern = "getrandom"
+# `bex_vm` seeds non-cryptographic PRNGs; `sys_native` falls back to OS
+# entropy only in builds with no provider; `bridge_wasm` has no provider.
+allowed_crates = ["bex_vm", "sys_native", "bridge_wasm"]
+regular_deps_only = true
+reason = "Secure randomness comes from baml_tls::fill_random (the provider's secure random source)."
+
+# Fingerprint hashing: SHA-256 that protects nothing (cache keys, program
+# identity, file signatures) stays on `sha2` because these crates also build
+# for wasm. A security use (checksums, signing, anything an attacker could
+# exploit) must use baml_tls::sha256 instead.
+[[dependency_rules]]
+pattern = "sha2"
+allowed_crates = ["baml_artifact", "baml_cli", "baml_codegen_types", "bex_cache", "bex_events", "bex_project", "bex_vm", "bex_vm_types", "sdkgen_csharp"]
+regular_deps_only = true
+reason = "Security-relevant hashing must use baml_tls::sha256 (the crypto provider); sha2 is only for non-security fingerprints."
+
+[[dependency_rules]]
+pattern = "sha1"
+# Names the AWS SSO token-cache file the AWS CLI writes; not a security use.
+allowed_crates = ["forked_aws_config"]
+regular_deps_only = true
+reason = "SHA-1 is only for matching external file-naming conventions."
+
+# `baml.crypto`'s ciphers; an `external-crypto` build refuses to create them.
+[[dependency_rules]]
+pattern.select = "*poly1305"
+allowed_crates = ["bex_vm"]
+regular_deps_only = true
+reason = "Only baml.crypto's ciphers (bex_vm) may use these; they're unavailable in external-crypto builds."
+
+[[dependency_rules]]
+pattern = "aes-gcm-siv"
+allowed_crates = ["bex_vm"]
+regular_deps_only = true
+reason = "Only baml.crypto's ciphers (bex_vm) may use these; they're unavailable in external-crypto builds."
+
 # baml namespace configuration
 [[namespaces]]
 name = "baml"
