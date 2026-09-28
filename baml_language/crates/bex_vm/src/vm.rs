@@ -836,7 +836,7 @@ pub(crate) mod tests {
             has_cleanup: false,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
-            owner: HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let bound = TypeValue::new(bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, tag),
@@ -901,7 +901,7 @@ pub(crate) mod tests {
             has_cleanup: false,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
-            owner: HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let Some(Frame::Bytecode(frame)) = vm.frames.last_mut() else {
             panic!("expected trampoline bytecode frame");
@@ -958,7 +958,7 @@ pub(crate) mod tests {
             has_cleanup: false,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
-            owner: HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         vm.pending_call_type_args = vec![bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, tag),
@@ -3506,20 +3506,27 @@ impl BexVm {
         ))
     }
 
+    /// `owner` if it is a runtime package: a compile-time package (a static
+    /// declaration's owner) and null (a declaration still being minted) are
+    /// not.
+    pub(crate) fn runtime_owner(&self, owner: HeapPtr) -> Option<HeapPtr> {
+        (!owner.is_null() && !self.heap.is_compile_time_ptr(owner)).then_some(owner)
+    }
+
     /// Runtime package that owns a value's nominal/callable definition.
-    /// Static values and standalone runtime-constructed types return null.
+    /// Static values return null.
     pub(crate) fn value_runtime_package(&self, value: Value) -> HeapPtr {
         let Some(ptr) = value.as_object_ptr() else {
             return HeapPtr::null();
         };
-        match self.get_object(ptr) {
+        let owner = match self.get_object(ptr) {
             Object::Instance(instance) => match self.get_object(instance.class) {
-                Object::Class(class) => class.owner,
-                _ => HeapPtr::null(),
+                Object::Class(class) => class.owner.package(),
+                _ => None,
             },
             Object::Variant(variant) => match self.get_object(variant.enm) {
-                Object::Enum(enm) => enm.owner,
-                _ => HeapPtr::null(),
+                Object::Enum(enm) => enm.owner.package(),
+                _ => None,
             },
             // A type value has no owner of its own: it owns nothing, it *names*
             // things. The package is whichever one declared the type's head.
@@ -3531,28 +3538,31 @@ impl BexVm {
                     if head.is_resolved() =>
                 {
                     match self.get_object(head.ptr()) {
-                        Object::Class(class) => class.owner,
-                        Object::Enum(enm) => enm.owner,
-                        Object::Interface(interface) => interface.owner,
-                        Object::TypeAlias(alias) => alias.owner,
-                        _ => HeapPtr::null(),
+                        Object::Class(class) => class.owner.package(),
+                        Object::Enum(enm) => enm.owner.package(),
+                        Object::Interface(interface) => Some(interface.owner),
+                        Object::TypeAlias(alias) => Some(alias.owner),
+                        _ => None,
                     }
                 }
-                _ => HeapPtr::null(),
+                _ => None,
             },
-            Object::Function(function) => function.runtime_package,
-            Object::GenericFunction(function) => function.runtime_package,
+            Object::Function(function) => Some(function.runtime_package),
+            Object::GenericFunction(function) => Some(function.runtime_package),
             Object::Closure(closure) => match unsafe { closure.function.get() } {
-                Object::Function(function) => function.runtime_package,
-                _ => HeapPtr::null(),
+                Object::Function(function) => Some(function.runtime_package),
+                _ => None,
             },
             Object::BoundMethod(method) => match unsafe { method.function.get() } {
-                Object::Function(function) => function.runtime_package,
-                _ => HeapPtr::null(),
+                Object::Function(function) => Some(function.runtime_package),
+                _ => None,
             },
-            Object::Cell(cell) => self.value_runtime_package(cell.load()),
-            _ => HeapPtr::null(),
-        }
+            Object::Cell(cell) => return self.value_runtime_package(cell.load()),
+            _ => None,
+        };
+        owner
+            .and_then(|owner| self.runtime_owner(owner))
+            .unwrap_or_else(HeapPtr::null)
     }
 
     /// Get array from a Value. Acquires the container's mutex; the

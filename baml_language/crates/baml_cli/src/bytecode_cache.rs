@@ -1855,6 +1855,7 @@ mod tests {
             },
             namespaces: Default::default(),
             impls: Default::default(),
+            reexports: Default::default(),
         };
         let mut seed = BTreeMap::new();
         seed.insert(

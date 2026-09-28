@@ -15,8 +15,8 @@ use baml_compiler2_hir_ty::{
     impls::{ResolvedImplFacts, impl_facts, package_impl_locs},
     package_interface::{
         ExportedFunction, ExportedImpl, ExportedImplOrigin, ExportedType, PackageInterface,
-        ResolvedValue, export_interface, exported_takes_self, import_interface, package_interface,
-        package_resolution_context, reduce_ground_projections,
+        ReExport, ResolvedValue, export_interface, exported_takes_self, import_interface,
+        package_interface, package_resolution_context, reduce_ground_projections,
     },
 };
 use baml_db::{
@@ -1792,4 +1792,146 @@ fn callable_takes_self_agrees_across_lanes_and_with_the_export_predicate() {
         }
     }
     assert!(seen_instance && seen_static);
+}
+
+// ── Re-exports ───────────────────────────────────────────────────────────────
+
+/// The library served as `app`, reached only through `view` (the consumer
+/// has no edge to `app`), which re-exports `app`'s declarations as
+/// `reexports` says.
+fn view_world(reexports: &[(&str, ReExport<TypeName>)]) -> Result<ProjectDatabase, String> {
+    let mut db = ProjectDatabase::new();
+    let workspace = db.workspace(std::path::Path::new("/hir-ty-package-interface-view"));
+    let lib = db
+        .add_source_root(
+            baml_db::SourceRootSpec::new("<builtin>/app", baml_base::SourceRootKind::Dynamic)
+                .named(Name::new("app"))
+                .served_from(library_blob()),
+        )
+        .expect("the library mounts");
+    let mut interface = PackageInterface::<TypeName> {
+        types: Default::default(),
+        functions: Default::default(),
+        throw_sets: Default::default(),
+        namespaces: [Vec::new()].into_iter().collect(),
+        impls: Vec::new(),
+        reexports: Default::default(),
+    };
+    interface.reexports.insert(
+        Vec::new(),
+        reexports
+            .iter()
+            .map(|(name, reexport)| (Name::new(*name), reexport.clone()))
+            .collect(),
+    );
+    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
+        .expect("the view's interface encodes");
+    let view = db
+        .add_source_root(
+            baml_db::SourceRootSpec::new("<builtin>/view", baml_base::SourceRootKind::Dynamic)
+                .named(Name::new("view"))
+                .depending_on(vec![baml_base::Dependency {
+                    name: Name::new("app"),
+                    root: lib,
+                }])
+                .served_from(blob),
+        )
+        .map_err(|error| match error {
+            SourceRootError::InvalidInterface { message } => message,
+            other => panic!("a view is refused only for its interface, got {other:?}"),
+        })?;
+    db.add_dependency(
+        workspace,
+        baml_base::Dependency {
+            name: Name::new("view"),
+            root: view,
+        },
+    )
+    .expect("the workspace reaches the view");
+    Ok(db)
+}
+
+#[test]
+fn a_re_export_resolves_to_the_defining_declaration() {
+    use baml_compiler2_hir_ty::{
+        package_interface::{
+            exported_function_head, exported_type_row, resolve_wire_head, wire_from,
+        },
+        render::Viewpoint,
+    };
+    let mut db = view_world(&[
+        ("Entry", ReExport::Type(wire_name("app", &[], "Entry"))),
+        ("Twin", ReExport::Type(wire_name("app", &[], "Entry"))),
+        (
+            "choose",
+            ReExport::Function(wire_name("app", &[], "choose")),
+        ),
+    ])
+    .expect("a faithful view mounts");
+    let spelling = baml_compiler2_hir::package::spelling(&db);
+    let lib = spelling.root(&Name::new("app")).expect("app is installed");
+    let view = spelling
+        .root(&Name::new("view"))
+        .expect("view is installed");
+    let workspace = db.workspace_root().unwrap();
+    let entry = DeclName::in_root(lib, Vec::new(), Name::new("Entry"));
+
+    // Both names read the library's row, whose head is the identity.
+    for name in ["Entry", "Twin"] {
+        let row = exported_type_row(&db, view, &[], &Name::new(name))
+            .unwrap_or_else(|| panic!("`view.{name}` resolves"));
+        assert!(matches!(row, ExportedType::Class { qtn, .. } if *qtn == entry));
+    }
+    assert_eq!(
+        exported_function_head(&db, view, &[], &Name::new("choose")),
+        Some(DeclName::in_root(lib, Vec::new(), Name::new("choose")))
+    );
+    // A wire head spelled through the view resolves to the defining pair.
+    assert_eq!(
+        resolve_wire_head(&db, workspace, &wire_name("view", &[], "Twin")),
+        Some(entry.clone())
+    );
+    // The consumer has no edge to `lib`: it spells and renders the
+    // declaration by the re-export that reaches it.
+    assert_eq!(
+        wire_from(&db, workspace, &entry),
+        wire_name("view", &[], "Entry")
+    );
+    let viewpoint = Viewpoint::user_facing(&db, workspace);
+    assert_eq!(viewpoint.path(&entry), "view.Entry");
+    assert_eq!(viewpoint.source_path(&entry).as_deref(), Ok("view.Entry"));
+
+    // Source sees one type under both spellings.
+    db.file(
+        "main.baml",
+        "function f(value: view.Twin) -> view.Entry throws never { value }\n\
+         function g(value: view.Entry) -> view.Twin throws never { value }",
+    );
+    assert_no_diagnostic_errors(&db);
+}
+
+#[test]
+fn a_self_re_export_is_refused() {
+    let refused = view_world(&[("Entry", ReExport::Type(wire_name("view", &[], "Entry")))])
+        .expect_err("a re-export of the package itself is refused");
+    assert_eq!(
+        refused,
+        "the re-export `view.Entry` names a declaration of the package itself"
+    );
+}
+
+#[test]
+fn a_dangling_re_export_is_refused() {
+    let refused = view_world(&[("Missing", ReExport::Type(wire_name("app", &[], "Missing")))])
+        .expect_err("a re-export of nothing is refused");
+    assert_eq!(
+        refused,
+        "the re-export `view.Missing` names `app.Missing`, which its package does not export as that kind"
+    );
+    let wrong_kind = view_world(&[("choose", ReExport::Type(wire_name("app", &[], "choose")))])
+        .expect_err("a re-export of a function as a type is refused");
+    assert_eq!(
+        wrong_kind,
+        "the re-export `view.choose` names `app.choose`, which its package does not export as that kind"
+    );
 }

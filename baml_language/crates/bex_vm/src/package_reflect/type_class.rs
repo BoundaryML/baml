@@ -1138,7 +1138,7 @@ fn render_witness_sources(
     let Object::Class(class) = vm.get_object(class_ptr) else {
         return;
     };
-    for rule_ptr in vm.dynamic_dispatch.rules_for_class(class_ptr) {
+    for &rule_ptr in class.owner.witnesses() {
         let Object::ImplRule(rule) = vm.get_object(rule_ptr) else {
             continue;
         };
@@ -1205,11 +1205,10 @@ fn expanded_type_value_nominals(
         .chain(&enum_ptrs)
         .filter(|ptr| !vm.heap.is_compile_time_ptr(**ptr))
         .filter_map(|ptr| match vm.get_object(*ptr) {
-            Object::Class(class) => Some(class.owner),
-            Object::Enum(enm) => Some(enm.owner),
+            Object::Class(class) => class.owner.package(),
+            Object::Enum(enm) => enm.owner.package(),
             _ => None,
         })
-        .filter(|owner| !owner.is_null())
         .collect::<indexmap::IndexSet<_>>();
     for owner in owners {
         let Object::Package(package) = vm.get_object(owner) else {
@@ -1434,7 +1433,6 @@ mod renderability_tests {
         bex_vm_types::types::Package {
             name: baml_type::Name::default(),
             edges: indexmap::IndexMap::new(),
-            exported_names: Vec::new(),
             classes: indexmap::IndexMap::new(),
             enums: indexmap::IndexMap::new(),
             interfaces: indexmap::IndexMap::new(),
@@ -1446,10 +1444,9 @@ mod renderability_tests {
                 initialized: true,
             },
             objects: bex_vm_types::types::Objects::Own(Box::new([])),
-            interface_blob: Vec::new(),
+            surface: bex_vm_types::types::ExportSurface::Projected,
             init: None,
             test_init: None,
-            mounted_types: indexmap::IndexMap::new(),
             diagnostics: Vec::new(),
             session: None,
         }
@@ -1474,7 +1471,7 @@ mod renderability_tests {
             has_cleanup: false,
             methods: IndexMap::new(),
             generic_param_count: 0,
-            owner,
+            owner: bex_vm_types::types::Owner::Package(owner),
         })));
         (ptr, type_tag)
     }

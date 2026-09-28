@@ -199,10 +199,10 @@ impl<'vm> ImplResolver<'vm> {
             }
             packages.extend(package.declared());
         }
-        // A rule can be reachable both through the static index and through
-        // a package that owns it (a witnessed runtime class's private owner
-        // is also the world its instances resolve in). Each rule is one
-        // candidate, so a coherence count over the candidates is exact.
+        // A rule can be reached more than once — through the static index
+        // and the package that owns it, or through two packages of one
+        // chain. Each rule is one candidate, so a coherence count over the
+        // candidates is exact.
         let mut seen_rules = std::collections::HashSet::new();
         let mut rules = pointers
             .into_iter()

@@ -1377,8 +1377,9 @@ impl<'db> LowerCtx<'db> {
                 // A served dependency answers from its interface ONLY: its
                 // files, when present, are link-only stubs (`definition_of`).
                 if is_served_from_interface(self.db, package) {
-                    let interface = crate::package_interface::mounted_interface(self.db, package)?;
-                    if let Some(exported) = interface.lookup_type(prefix_ns, item) {
+                    if let Some(exported) = crate::package_interface::exported_type_row(
+                        self.db, package, prefix_ns, item,
+                    ) {
                         return Some(ResolvedTypeDefinition::Exported(Box::new(exported.clone())));
                     }
                 } else if let Some(def) =
@@ -1400,8 +1401,7 @@ impl<'db> LowerCtx<'db> {
             // answers from its interface, exactly as the package-prefixed
             // spelling above and the value shorthand do.
             if is_served_from_interface(self.db, baml) {
-                return crate::package_interface::mounted_interface(self.db, baml)?
-                    .lookup_type(namespace, item)
+                return crate::package_interface::exported_type_row(self.db, baml, namespace, item)
                     .map(|exported| ResolvedTypeDefinition::Exported(Box::new(exported.clone())));
             }
             let baml_items = baml_compiler2_hir::package::package_items(self.db, baml);

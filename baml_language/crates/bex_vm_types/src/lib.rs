@@ -36,10 +36,11 @@ pub use runtime_compile::{
     RuntimeCompileDiagnostic, RuntimeCompileMode, RuntimeCompileRequest,
     RuntimeDiagnosticAnnotation, RuntimeDiagnosticDetails, RuntimeDiagnosticHighlight,
     RuntimeDiagnosticHighlightKind, RuntimeDiagnosticPhase, RuntimeDiagnosticRelatedInfo,
-    RuntimeDiagnosticSeverity, RuntimeMountedClass, RuntimeMountedEnum, RuntimeMountedFieldAttrs,
+    RuntimeDiagnosticSeverity, RuntimeMountEdge, RuntimeMountSurface, RuntimeMountedAlias,
+    RuntimeMountedClass, RuntimeMountedEnum, RuntimeMountedFieldAttrs, RuntimeMountedImpl,
     RuntimeMountedVariantAttrs, RuntimePackageIdentity, RuntimePackageMount,
-    RuntimeSessionCompileRequest, RuntimeSourceSpan, RuntimeTypeMount, SessionContract,
-    SessionEvalLease, SessionVisibleKind, SessionVisibleSymbol,
+    RuntimeProjectedSurface, RuntimeReExport, RuntimeReExportKind, RuntimeSessionCompileRequest,
+    RuntimeSourceSpan, SessionContract, SessionEvalLease, SessionVisibleKind, SessionVisibleSymbol,
 };
 pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};
 pub use type_head::TypeHead;

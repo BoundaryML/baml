@@ -187,7 +187,7 @@ pub(crate) fn build_class_object<'db>(
         has_cleanup: has_cleanup(db, class),
         methods: indexmap::IndexMap::new(),
         generic_param_count: class.generic_params.len(),
-        owner: bex_vm_types::HeapPtr::null(),
+        owner: bex_vm_types::types::Owner::anonymous(),
     }
 }
 
@@ -224,7 +224,7 @@ pub(crate) fn build_enum_object<'db>(
         alias: enm.attrs.schema.alias.clone(),
         docstring: enm.docstring.clone(),
         other: indexmap::IndexMap::new(),
-        owner: bex_vm_types::HeapPtr::null(),
+        owner: bex_vm_types::types::Owner::anonymous(),
     }
 }
 
@@ -537,7 +537,7 @@ pub(crate) fn build_interface_def(
                 default_fn: bex_vm_types::HeapPtr::null(),
             })
             .collect(),
-        // Static declarations have no owning runtime package.
+        // The loader assigns a static declaration's package.
         owner: bex_vm_types::HeapPtr::null(),
     }
 }

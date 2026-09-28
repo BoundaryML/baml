@@ -27,40 +27,6 @@ use bex_vm_types::{
 };
 use indexmap::IndexMap;
 
-impl crate::BexVm {
-    /// A private package that owns a runtime-created class and its impl
-    /// rules. The dynamic dispatch table only *finds* a witness; ownership is
-    /// what keeps the rule objects alive exactly as long as the class, through
-    /// the same `Class::owner` edge a compiled class has to its package. The
-    /// package is never installed under a name or rooted on its own: it lives
-    /// while something still reaches the class.
-    pub(crate) fn alloc_private_type_owner(&mut self) -> HeapPtr {
-        use bex_heap::TlabHolder;
-        self.tlab_mut().alloc(Object::Package(Box::new(Package {
-            name: Name::default(),
-            edges: IndexMap::new(),
-            exported_names: Vec::new(),
-            classes: IndexMap::new(),
-            enums: IndexMap::new(),
-            interfaces: IndexMap::new(),
-            impl_rules: IndexMap::new(),
-            type_aliases: IndexMap::new(),
-            globals: IndexMap::new(),
-            slots: bex_vm_types::types::Slots::Own {
-                cells: Box::new([]),
-                initialized: true,
-            },
-            objects: bex_vm_types::types::Objects::Own(Box::new([])),
-            interface_blob: Vec::new(),
-            init: None,
-            test_init: None,
-            mounted_types: IndexMap::new(),
-            diagnostics: Vec::new(),
-            session: None,
-        })))
-    }
-}
-
 /// One anonymous-class witness in the dynamic dispatch table.
 ///
 /// Both pointers are **weak**: the table never keeps a minted definition or its
@@ -68,8 +34,8 @@ impl crate::BexVm {
 /// `rule` is the heap `Object::ImplRule` the resolver borrows — the one
 /// authoritative copy, so the collector's fixup of that object is what keeps
 /// the rule's own `interface_head`/`methods[].fqn` pointers current. The
-/// class keeps its rules alive through its private owner package
-/// (`BexVm::alloc_private_type_owner`).
+/// class keeps its rules alive itself, as the witnesses of its
+/// [`Owner::Anonymous`](bex_vm_types::types::Owner::Anonymous).
 #[derive(Clone, Copy, Debug)]
 pub struct DynRuleEntry {
     pub class: HeapPtr,
@@ -78,11 +44,12 @@ pub struct DynRuleEntry {
 
 /// Engine-local side tables for runtime-created nominal definitions.
 ///
-/// Anonymous typebuilder classes have no owning package to hold their impl
-/// rules, so this is where their witnesses live — keyed by the interface's
-/// `Object::Interface` pointer, the same key every package's `impl_rules` map
-/// uses. It is a *findability* index only: nothing here is a GC root, and every
-/// entry is dropped the moment its class is collected.
+/// Anonymous typebuilder classes belong to no package whose `impl_rules` the
+/// resolver could walk, so this is where their witnesses are FOUND — keyed by
+/// the interface's `Object::Interface` pointer, the same key every package's
+/// `impl_rules` map uses. It is a *findability* index only: the class holds
+/// its rules, nothing here is a GC root, and every entry is dropped the moment
+/// its class is collected.
 #[derive(Default, Debug)]
 pub struct DynDispatchTables {
     impl_rules: RwLock<IndexMap<HeapPtr, Vec<DynRuleEntry>>>,
@@ -364,6 +331,15 @@ impl PackageIndex {
         root.accessible(self.root, name)
     }
 
+    /// Whether `package` is one of the language packages the root reaches
+    /// under a fixed name — the prelude every package reaches without
+    /// declaring an edge to it.
+    pub fn is_prelude(&self, package: HeapPtr) -> bool {
+        baml_builtins2::stdlib_package_names()
+            .iter()
+            .any(|name| self.accessible(&Name::new(name)) == Some(package))
+    }
+
     /// Every loaded package's `Object::Package` pointer, by ordinal.
     pub fn package_ptrs(&self) -> impl Iterator<Item = HeapPtr> + '_ {
         self.packages.iter().copied()
@@ -482,7 +458,6 @@ fn fill_package_slots(
                     )
                 })
                 .collect(),
-            exported_names: pkg.exported_names.clone(),
             classes: resolve_members(heap, &pkg.classes),
             enums: resolve_members(heap, &pkg.enums),
             interfaces: resolve_members(heap, &pkg.interfaces),
@@ -493,18 +468,39 @@ fn fill_package_slots(
                 base: pkg.slot_base,
             },
             objects: bex_vm_types::types::Objects::Program,
-            interface_blob: pkg.interface_blob.clone(),
+            surface: bex_vm_types::types::ExportSurface::Compiled(pkg.interface_blob.clone()),
             init: pkg
                 .init
                 .map(|index| heap.compile_time_ptr(index.into_raw())),
             test_init: pkg
                 .test_init
                 .map(|index| heap.compile_time_ptr(index.into_raw())),
-            mounted_types: IndexMap::new(),
             diagnostics: Vec::new(),
             session: None,
         };
         heap.set_compile_time_object(slots.package_slot, Object::Package(Box::new(package)));
+        // Every declaration knows its package: the edge a runtime declaration
+        // carries to the package that declared it, and what the compile seam
+        // reads to say where a re-exported declaration is defined.
+        let owner = heap.compile_time_ptr(slots.package_slot);
+        for index in pkg
+            .classes
+            .values()
+            .chain(pkg.enums.values())
+            .chain(pkg.interfaces.values())
+            .chain(pkg.type_aliases.values())
+        {
+            match heap.compile_time_object_mut(index.into_raw()) {
+                Object::Class(class) => class.owner = bex_vm_types::types::Owner::Package(owner),
+                Object::Enum(enm) => enm.owner = bex_vm_types::types::Owner::Package(owner),
+                Object::Interface(interface) => interface.owner = owner,
+                Object::TypeAlias(alias) => alias.owner = owner,
+                other => unreachable!(
+                    "a package's declaration table names a {:?} object",
+                    bex_vm_types::ObjectType::of(other)
+                ),
+            }
+        }
     }
     index
 }

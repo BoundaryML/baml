@@ -460,14 +460,13 @@ async fn escaped_session_type_retains_provenance_only_while_handle_is_live() {
         .iter()
         .filter(|ptr| matches!(unsafe { ptr.get() }, Object::Class(_)))
         .count();
-    let owner_ptr = declarations.iter().find_map(|ptr| {
-        let owner = match unsafe { ptr.get() } {
-            Object::Class(class) => class.owner,
-            Object::Enum(enm) => enm.owner,
-            _ => return None,
-        };
-        (!owner.is_null()).then_some(owner)
-    });
+    let owner_ptr = declarations
+        .iter()
+        .find_map(|ptr| match unsafe { ptr.get() } {
+            Object::Class(class) => class.owner.package(),
+            Object::Enum(enm) => enm.owner.package(),
+            _ => None,
+        });
     let mut owner_is_session = false;
     let mut session_history = 0;
     let mut retained_globals = 0;

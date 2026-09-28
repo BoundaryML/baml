@@ -676,7 +676,6 @@ impl BexHeap {
                 worklist.extend(package.enums.values().copied());
                 worklist.extend(package.interfaces.values().copied());
                 worklist.extend(package.type_aliases.values().copied());
-                worklist.extend(package.mounted_types.values().copied());
                 worklist.extend(package.edges.values().map(|edge| edge.target));
                 worklist.extend(package.init);
                 worklist.extend(package.test_init);
@@ -715,9 +714,7 @@ impl BexHeap {
             // A class's inherent method bodies are direct pointers, like an
             // interface's default bodies.
             Object::Class(class) => {
-                if !class.owner.as_ptr().is_null() {
-                    worklist.push(class.owner);
-                }
+                trace_owner(&class.owner, worklist);
                 worklist.extend(
                     class
                         .methods
@@ -726,11 +723,7 @@ impl BexHeap {
                         .filter(|ptr| !ptr.as_ptr().is_null()),
                 );
             }
-            Object::Enum(enm) => {
-                if !enm.owner.as_ptr().is_null() {
-                    worklist.push(enm.owner);
-                }
-            }
+            Object::Enum(enm) => trace_owner(&enm.owner, worklist),
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -921,7 +914,6 @@ impl BexHeap {
                     .chain(package.enums.values_mut())
                     .chain(package.interfaces.values_mut())
                     .chain(package.type_aliases.values_mut())
-                    .chain(package.mounted_types.values_mut())
                     .chain(package.edges.values_mut().map(|edge| &mut edge.target))
                 {
                     if let Some(&new_ptr) = forwarding.get(ptr) {
@@ -978,20 +970,14 @@ impl BexHeap {
             // Owner back-edges; heads are repointed for every object kind
             // below, by the same walk that traced them.
             Object::Class(class) => {
-                if let Some(&new_ptr) = forwarding.get(&class.owner) {
-                    class.owner = new_ptr;
-                }
+                forward_owner(&mut class.owner, forwarding);
                 for method in class.methods.values_mut() {
                     if let Some(&new_ptr) = forwarding.get(&method.function_ptr) {
                         method.function_ptr = new_ptr;
                     }
                 }
             }
-            Object::Enum(enm) => {
-                if let Some(&new_ptr) = forwarding.get(&enm.owner) {
-                    enm.owner = new_ptr;
-                }
-            }
+            Object::Enum(enm) => forward_owner(&mut enm.owner, forwarding),
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -1298,7 +1284,6 @@ impl BexHeap {
                     .chain(package.enums.values())
                     .chain(package.interfaces.values())
                     .chain(package.type_aliases.values())
-                    .chain(package.mounted_types.values())
                     .chain(package.edges.values().map(|edge| &edge.target))
                     .copied();
                 worklist.extend(refs.filter(|ptr| self.generation_of(*ptr).is_young()));
@@ -1361,9 +1346,9 @@ impl BexHeap {
             }
             // Owner back-edges; heads are scanned for every object kind below.
             Object::Class(class) => {
-                if !class.owner.as_ptr().is_null() && self.generation_of(class.owner).is_young() {
-                    worklist.push(class.owner);
-                }
+                worklist.extend(
+                    owner_edges(&class.owner).filter(|ptr| self.generation_of(*ptr).is_young()),
+                );
                 worklist.extend(
                     class
                         .methods
@@ -1375,9 +1360,9 @@ impl BexHeap {
                 );
             }
             Object::Enum(enm) => {
-                if !enm.owner.as_ptr().is_null() && self.generation_of(enm.owner).is_young() {
-                    worklist.push(enm.owner);
-                }
+                worklist.extend(
+                    owner_edges(&enm.owner).filter(|ptr| self.generation_of(*ptr).is_young()),
+                );
             }
             // Primitives/leaf variants have no heap references.
             #[cfg(feature = "heap_debug")]
@@ -1647,6 +1632,32 @@ impl BexHeap {
     }
 }
 
+/// The heap edges a declaration's [`Owner`](bex_vm_types::types::Owner)
+/// carries: its package, or the witness rules an anonymous declaration holds.
+fn owner_edges(owner: &bex_vm_types::types::Owner) -> impl Iterator<Item = HeapPtr> + '_ {
+    match owner {
+        bex_vm_types::types::Owner::Package(package) => std::slice::from_ref(package).iter(),
+        bex_vm_types::types::Owner::Anonymous { witnesses } => witnesses.iter(),
+    }
+    .copied()
+}
+
+fn trace_owner(owner: &bex_vm_types::types::Owner, worklist: &mut Vec<HeapPtr>) {
+    worklist.extend(owner_edges(owner));
+}
+
+fn forward_owner(owner: &mut bex_vm_types::types::Owner, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    let edges: &mut dyn Iterator<Item = &mut HeapPtr> = match owner {
+        bex_vm_types::types::Owner::Package(package) => &mut std::iter::once(package),
+        bex_vm_types::types::Owner::Anonymous { witnesses } => &mut witnesses.iter_mut(),
+    };
+    for ptr in edges {
+        if let Some(&new_ptr) = forwarding.get(ptr) {
+            *ptr = new_ptr;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -1796,7 +1807,7 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         }))];
         let debug = HeapDebuggerConfig {
             enabled: true,
@@ -1850,7 +1861,7 @@ mod tests {
             has_cleanup: false,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         }))];
         let debug = HeapDebuggerConfig {
             enabled: true,
@@ -2470,7 +2481,7 @@ mod tests {
             has_cleanup: false,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let field_str = tlab.alloc_string("field_value".to_string());
         let inst_ptr =
@@ -2513,7 +2524,7 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let var_ptr = tlab.alloc_variant(enum_ptr, 1);
 
@@ -2745,7 +2756,7 @@ mod tests {
             has_cleanup: false,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
@@ -2771,7 +2782,7 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
@@ -2822,7 +2833,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             type_tag,
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let type_ptr = tlab.alloc_type(TypeValue::new(RealizedTy::Enum(TypeHead::new(
             enum_ptr, type_tag,
@@ -2888,7 +2899,7 @@ mod tests {
             has_cleanup: false,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let type_ptr = tlab.alloc_type(TypeValue::new(RealizedTy::Class(
             TypeHead::new(class_ptr, type_tag),
@@ -3329,7 +3340,7 @@ mod tests {
             has_cleanup: false,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let instance_container = tlab.alloc(Object::Instance(Instance::new(
             class_ptr,
@@ -3346,7 +3357,7 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let variant_container = tlab.alloc(Object::Variant(Variant {
             enm: enum_ptr,

@@ -178,15 +178,11 @@ impl Assembler<'_, '_> {
         }
     }
 
-    /// Copy the package record in, resolving its exported callables.
+    /// Copy the package record in.
     fn fill_record(&self, id: LinkPackageId, package: &mut ProgramPackage) {
-        let link_package = self.set.package(id);
-        package
-            .exported_names
-            .clone_from(&link_package.record.exported_names);
         package
             .interface_blob
-            .clone_from(&link_package.record.interface_blob);
+            .clone_from(&self.set.package(id).record.interface_blob);
     }
 
     /// Resolve a unit's impl rules: the interface head through its operand

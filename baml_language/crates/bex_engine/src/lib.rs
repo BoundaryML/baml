@@ -2935,11 +2935,10 @@ impl BexEngine {
                 classes.into_iter().chain(enums)
             })
             .filter_map(|declaration| match vm.get_object(declaration) {
-                Object::Class(class) => Some(class.owner),
-                Object::Enum(enm) => Some(enm.owner),
+                Object::Class(class) => class.owner.package(),
+                Object::Enum(enm) => enm.owner.package(),
                 _ => None,
             })
-            .filter(|owner| !owner.is_null())
             .collect::<Vec<_>>();
         let mut seen = std::collections::HashSet::<usize>::new();
         let mut classes = IndexMap::new();
@@ -7084,82 +7083,293 @@ impl BexEngine {
         }
     }
 
-    fn runtime_type_mount(
+    /// Every mount a compile against `aliased` can reach, by identity: the
+    /// aliased packages and, transitively, everything their edges reach (the
+    /// prelude excepted — every package reaches it under its fixed names) —
+    /// packages, and the anonymous declarations views export, each a mount
+    /// of its own. A consumer names a re-exported declaration by where it is
+    /// defined, so that must be in the compile's world even when no alias
+    /// reaches it.
+    fn mounts_reached(
         vm: &BexVm,
-        export_name: &str,
-        ptr: bex_vm_types::HeapPtr,
-    ) -> Result<bex_vm_types::RuntimeTypeMount, EngineError> {
-        let Object::Type(value) = vm.get_object(ptr) else {
-            return Err(EngineError::TypeMismatch {
-                message: format!("with_types entry `{export_name}` is not a type"),
-            });
-        };
-        // On the mount's wire a declaration local to the mounted package is
-        // `Local` — the consumer compile world resolves `Local` to the root
-        // it mounts this package as, under whichever aliases reach it — and a
-        // compiled declaration from another dependency keeps its qualified
-        // name; a runtime-created declaration has no name of its own beyond
-        // its item name, so it is local to the mount surface that carries it.
-        let wire_head =
-            |head: &bex_vm_types::TypeHead| -> Result<baml_type::TypeName, EngineError> {
-                if !head.is_resolved() {
+        aliased: &IndexMap<String, bex_vm_types::HeapPtr>,
+    ) -> Result<
+        IndexMap<bex_vm_types::RuntimePackageIdentity, bex_vm_types::RuntimePackageMount>,
+        EngineError,
+    > {
+        let mut packages = IndexMap::new();
+        let mut pending: Vec<bex_vm_types::HeapPtr> = aliased.values().rev().copied().collect();
+        while let Some(ptr) = pending.pop() {
+            let identity = bex_vm_types::RuntimePackageIdentity::of(ptr);
+            if packages.contains_key(&identity) {
+                continue;
+            }
+            let (edges, surface) = match vm.get_object(ptr) {
+                Object::Package(package) => {
+                    let edges: IndexMap<_, _> = package
+                        .edges
+                        .iter()
+                        .filter(|(_, edge)| edge.kind != bex_vm_types::types::EdgeKind::Prelude)
+                        .map(|(name, edge)| (name.clone(), *edge))
+                        .collect();
+                    let surface = match &package.surface {
+                        bex_vm_types::types::ExportSurface::Compiled(blob) => {
+                            bex_vm_types::RuntimeMountSurface::Compiled(blob.clone())
+                        }
+                        bex_vm_types::types::ExportSurface::Projected => {
+                            bex_vm_types::RuntimeMountSurface::Projected(Self::projected_surface(
+                                vm,
+                                ptr,
+                                &edges,
+                                package
+                                    .classes
+                                    .iter()
+                                    .chain(&package.enums)
+                                    .chain(&package.interfaces)
+                                    .chain(&package.type_aliases)
+                                    .map(|(name, &declaration)| (name.clone(), declaration)),
+                                &[],
+                            )?)
+                        }
+                    };
+                    (edges, surface)
+                }
+                Object::Class(_) | Object::Enum(_) => Self::declaration_mount(vm, ptr)?,
+                _ => {
                     return Err(EngineError::TypeMismatch {
-                        message: format!("mounted type `{export_name}` carries an unresolved head"),
+                        message: "a package edge reaches neither a package nor a declaration"
+                            .to_string(),
                     });
                 }
-                // BUG: a head is not spelled by its package's identity. A
-                // compiled head's declared name is spelled from ITS
-                // artifact's viewpoint, and a runtime declaration (below) is
-                // spelled `Local` outright, so a declaration of the HOST
-                // program or of ANOTHER runtime package reaches the mount's
-                // wire as `Local` — which the importer reads as the MOUNT's
-                // own package. `enrich_runtime_mount` drops a witness whose
-                // local interface the mount does not declare, so a runtime
-                // class's witness of another runtime package's interface is
-                // never served (E0001 where the consumer relies on it), and a
-                // path collision with the mount's own interface would
-                // attribute it to the wrong declaration.
-                if vm.heap.is_compile_time_ptr(head.ptr()) {
-                    let name = head
-                        .declared_name()
-                        .ok_or_else(|| EngineError::TypeMismatch {
-                            message: format!(
-                                "mounted type `{export_name}` names an unnameable compiled head"
-                            ),
-                        })?;
-                    return Ok(name);
+            };
+            pending.extend(edges.values().map(|edge| edge.target));
+            packages.insert(
+                identity,
+                bex_vm_types::RuntimePackageMount {
+                    edges: edges
+                        .into_iter()
+                        .map(|(name, edge)| {
+                            (
+                                name,
+                                bex_vm_types::RuntimeMountEdge {
+                                    target: bex_vm_types::RuntimePackageIdentity::of(edge.target),
+                                    kind: edge.kind,
+                                },
+                            )
+                        })
+                        .collect(),
+                    surface,
+                },
+            );
+        }
+        Ok(packages)
+    }
+
+    /// An anonymous declaration as a mount of its own: a root of one row,
+    /// its witness rules, and edges — synthesized here, since a declaration
+    /// keeps none — to wherever the declarations it names are defined.
+    fn declaration_mount(
+        vm: &BexVm,
+        declaration: bex_vm_types::HeapPtr,
+    ) -> Result<
+        (
+            IndexMap<baml_type::Name, bex_vm_types::types::Edge>,
+            bex_vm_types::RuntimeMountSurface,
+        ),
+        EngineError,
+    > {
+        use bex_vm::reachable::Reached;
+        let object = vm.get_object(declaration);
+        let (item, witnesses): (baml_type::Name, Vec<bex_vm_types::HeapPtr>) = match object {
+            Object::Class(class) => (
+                class.name.item_name().clone(),
+                class.owner.witnesses().to_vec(),
+            ),
+            Object::Enum(enm) => (enm.name.item_name().clone(), enm.owner.witnesses().to_vec()),
+            _ => unreachable!("a declaration mount is a class or an enum"),
+        };
+        let mut heads = Vec::new();
+        for ptr in std::iter::once(declaration).chain(witnesses.iter().copied()) {
+            bex_vm_types::head_walk::visit_object_heads(vm.get_object(ptr), &mut |head| {
+                if head.is_resolved() && head.ptr() != declaration {
+                    heads.push(head.ptr());
                 }
-                let item = match vm.get_object(head.ptr()) {
-                    Object::Class(class) => class.name.item_name().clone(),
-                    Object::Enum(enm) => enm.name.item_name().clone(),
-                    Object::Interface(iface) => iface.name.name().clone(),
-                    Object::TypeAlias(alias_def) => alias_def.name.name().clone(),
-                    _ => {
-                        return Err(EngineError::TypeMismatch {
-                            message: format!(
-                                "mounted type `{export_name}` reaches a non-declaration head"
-                            ),
-                        });
+            });
+        }
+        for &rule in &witnesses {
+            if let Object::ImplRule(rule) = vm.get_object(rule) {
+                heads.push(rule.interface_head);
+            }
+        }
+        let mut edges = IndexMap::new();
+        for reached in bex_vm::reachable::defined_in(vm, heads) {
+            let (target, kind) = match reached {
+                Reached::Package(package) => {
+                    if vm.packages.is_prelude(package) {
+                        continue;
+                    }
+                    (package, bex_vm_types::types::EdgeKind::Declared)
+                }
+                Reached::Anonymous(other) => (other, bex_vm_types::types::EdgeKind::Anonymous),
+            };
+            edges.insert(
+                baml_type::Name::new(format!("${}", edges.len())),
+                bex_vm_types::types::Edge { target, kind },
+            );
+        }
+        let surface = Self::projected_surface(
+            vm,
+            declaration,
+            &edges,
+            std::iter::once((
+                bex_vm_types::types::LocalName {
+                    namespace: Vec::new(),
+                    name: item,
+                },
+                declaration,
+            )),
+            &witnesses,
+        )?;
+        Ok((edges, bex_vm_types::RuntimeMountSurface::Projected(surface)))
+    }
+
+    /// The exports of a mount that had no compile, projected from what it
+    /// holds (see [`bex_vm_types::RuntimeProjectedSurface`]): `exports` are
+    /// its named declarations — own rows for what is defined here (`own` is
+    /// the view, or the anonymous declaration itself), re-exports by the
+    /// defining declaration for the rest — and `rules` its impl rules; every
+    /// head is spelled from the mount's own viewpoint through `edges`.
+    fn projected_surface(
+        vm: &BexVm,
+        own: bex_vm_types::HeapPtr,
+        edges: &IndexMap<baml_type::Name, bex_vm_types::types::Edge>,
+        exports: impl Iterator<Item = (bex_vm_types::types::LocalName, bex_vm_types::HeapPtr)>,
+        rules: &[bex_vm_types::HeapPtr],
+    ) -> Result<bex_vm_types::RuntimeProjectedSurface, EngineError> {
+        use bex_vm::reachable::{Reached, declared_in};
+        use bex_vm_types::types::LocalName;
+
+        let internal = |message: String| EngineError::TypeMismatch { message };
+        // A declaration's own path where it is defined: the coordinates the
+        // compile world reads its row at.
+        let path_of = |declaration: bex_vm_types::HeapPtr| -> Result<LocalName, EngineError> {
+            let name = match vm.get_object(declaration) {
+                Object::Class(class) => class.name.overlay_name(),
+                Object::Enum(enm) => enm.name.overlay_name(),
+                Object::Interface(interface) => interface.name.clone(),
+                Object::TypeAlias(alias) => alias.name.clone(),
+                _ => {
+                    return Err(internal(
+                        "a type head points at a non-declaration".to_string(),
+                    ));
+                }
+            };
+            Ok(LocalName {
+                namespace: name.namespace().clone(),
+                name: name.name().clone(),
+            })
+        };
+        // Whether `declaration` is defined by this mount itself: a view's
+        // own alias, or the anonymous declaration a mount stands for.
+        let is_own = |declaration: bex_vm_types::HeapPtr| -> Result<bool, EngineError> {
+            match declared_in(vm.get_object(declaration), declaration) {
+                Some(Reached::Package(package)) => Ok(package == own),
+                Some(Reached::Anonymous(anonymous)) => Ok(anonymous == own),
+                None => Err(internal("a table names a non-declaration".to_string())),
+            }
+        };
+        // The declaration at `declaration`, spelled from this mount's
+        // viewpoint: its own `Local`, the prelude by the fixed name its
+        // declared name carries, anything else through the edge that
+        // reaches where it is defined — which exists, since the edges were
+        // computed from exactly these heads.
+        let spell =
+            |declaration: bex_vm_types::HeapPtr| -> Result<baml_type::TypeName, EngineError> {
+                let path = path_of(declaration)?;
+                if is_own(declaration)? {
+                    return Ok(baml_type::TypeName::qualified(
+                        baml_type::Package::Local,
+                        path.namespace,
+                        path.name,
+                    ));
+                }
+                let target = match declared_in(vm.get_object(declaration), declaration) {
+                    Some(Reached::Package(package)) => {
+                        if vm.packages.is_prelude(package) {
+                            return bex_vm_types::TypeHead::new(
+                                declaration,
+                                bex_heap::BexHeap::declaration_tag(vm.get_object(declaration))
+                                    .ok_or_else(|| {
+                                        internal("a prelude head is a declaration".to_string())
+                                    })?,
+                            )
+                            .to_name()
+                            .map_err(|_| {
+                                internal("a prelude declaration has a declared name".to_string())
+                            });
+                        }
+                        package
+                    }
+                    Some(Reached::Anonymous(anonymous)) => anonymous,
+                    None => {
+                        return Err(internal(
+                            "a type head points at a non-declaration".to_string(),
+                        ));
                     }
                 };
-                Ok(baml_type::QualifiedTypeName::local(item))
+                let (edge, _) = edges
+                    .iter()
+                    .find(|(_, edge)| edge.target == target)
+                    .ok_or_else(|| {
+                        internal(format!(
+                            "the mount reaches `{}` through no edge of its own",
+                            path.name
+                        ))
+                    })?;
+                Ok(baml_type::TypeName::new(
+                    edge.clone(),
+                    path.namespace,
+                    path.name,
+                ))
             };
         let wire_ty = |ty: &bex_vm_types::RuntimeTy| -> Result<baml_type::Ty<baml_type::TypeName>, EngineError> {
-            let mapped: baml_type::RuntimeTy = ty.try_map_heads(&mut |head| wire_head(head))?;
+            let mapped: baml_type::RuntimeTy = ty.try_map_heads(&mut |head: &bex_vm_types::TypeHead| {
+                if !head.is_resolved() {
+                    return Err(internal("a projected type carries an unresolved head".to_string()));
+                }
+                spell(head.ptr())
+            })?;
             Ok(baml_type::Ty::from(&mapped))
         };
-        // The mount describes the runtime declarations the type reaches;
-        // the walk over its heads is what finds them.
-        let (class_ptrs, enum_ptrs) = bex_vm::reachable::runtime_nominals(vm, &value.ty);
-        let classes = class_ptrs
-            .iter()
-            .map(|ptr| {
-                let Object::Class(class) = vm.get_object(*ptr) else {
-                    unreachable!("runtime_nominals returned a non-class in the class list")
+        let wire_template = |template: &bex_vm_types::TyTemplate,
+                             what: &str|
+         -> Result<baml_type::Ty<baml_type::TypeName>, EngineError> {
+            let ty = bex_vm_types::RealizedTy::try_from(template).map_err(|error| {
+                internal(format!("an impl rule's {what} is not realized: {error}"))
+            })?;
+            wire_ty(&bex_vm_types::RuntimeTy::from(ty))
+        };
+
+        let mut surface = bex_vm_types::RuntimeProjectedSurface::default();
+        for (name, declaration) in exports {
+            if !is_own(declaration)? {
+                let kind = match vm.get_object(declaration) {
+                    Object::Class(_) => bex_vm_types::RuntimeReExportKind::Class,
+                    Object::Enum(_) => bex_vm_types::RuntimeReExportKind::Enum,
+                    Object::Interface(_) => bex_vm_types::RuntimeReExportKind::Interface,
+                    Object::TypeAlias(_) => bex_vm_types::RuntimeReExportKind::TypeAlias,
+                    _ => return Err(internal("a table names a non-declaration".to_string())),
                 };
-                Ok(bex_vm_types::RuntimeMountedClass {
-                    name: class.name.item_name().clone(),
-                    tag: class.type_tag,
+                surface.reexports.push(bex_vm_types::RuntimeReExport {
+                    name,
+                    of: spell(declaration)?,
+                    kind,
+                });
+                continue;
+            }
+            match vm.get_object(declaration) {
+                Object::Class(class) => surface.classes.push(bex_vm_types::RuntimeMountedClass {
+                    name: name.name.clone(),
                     docstring: class.docstring.clone(),
                     fields: class
                         .fields
@@ -7176,18 +7386,9 @@ impl BexEngine {
                             ))
                         })
                         .collect::<Result<Vec<_>, EngineError>>()?,
-                })
-            })
-            .collect::<Result<Vec<_>, EngineError>>()?;
-        let enums = enum_ptrs
-            .iter()
-            .map(|ptr| {
-                let Object::Enum(enm) = vm.get_object(*ptr) else {
-                    unreachable!("runtime_nominals returned a non-enum in the enum list")
-                };
-                Ok(bex_vm_types::RuntimeMountedEnum {
-                    name: enm.name.item_name().clone(),
-                    tag: enm.type_tag,
+                }),
+                Object::Enum(enm) => surface.enums.push(bex_vm_types::RuntimeMountedEnum {
+                    name: name.name.clone(),
                     docstring: enm.docstring.clone(),
                     variants: enm
                         .variants
@@ -7201,125 +7402,82 @@ impl BexEngine {
                             )
                         })
                         .collect(),
-                })
-            })
-            .collect::<Result<Vec<_>, EngineError>>()?;
-        // Dynamic witness rules are heap objects rather than TypeValue sidecars,
-        // but the consumer compiler cannot see this VM's dispatch table. Project
-        // the root class's rules into the mount artifact so type checking in the
-        // consumer world sees the same conformances as runtime dispatch.
-        let witnesses = match &value.ty {
-            bex_vm_types::RealizedTy::Class(head, _) if head.is_resolved() => {
-                let Object::Class(class) = vm.get_object(head.ptr()) else {
-                    return Err(EngineError::TypeMismatch {
-                        message: format!(
-                            "mounted type `{export_name}` has a non-class declaration head"
-                        ),
+                }),
+                Object::TypeAlias(alias) => {
+                    surface.aliases.push(bex_vm_types::RuntimeMountedAlias {
+                        name,
+                        ty: wire_ty(&bex_vm_types::RuntimeTy::from(alias.definition.clone()))?,
                     });
-                };
-                vm.dynamic_dispatch
-                    .rules_for_class(head.ptr())
-                    .into_iter()
-                    .map(|rule_ptr| {
-                        let Object::ImplRule(rule) = vm.get_object(rule_ptr) else {
-                            return Err(EngineError::TypeMismatch {
-                                message: format!(
-                                    "mounted type `{export_name}` has an invalid witness rule"
-                                ),
-                            });
-                        };
-                        let Object::Interface(interface) = vm.get_object(rule.interface_head)
-                        else {
-                            return Err(EngineError::TypeMismatch {
-                                message: format!(
-                                    "mounted type `{export_name}` has an invalid witness interface"
-                                ),
-                            });
-                        };
-                        if interface.fields.len() != rule.field_links.len() {
-                            return Err(EngineError::TypeMismatch {
-                                message: format!(
-                                    "mounted type `{export_name}` has an incomplete witness field map"
-                                ),
-                            });
-                        }
-                        let interface_head = bex_vm_types::TypeHead::new(
-                            rule.interface_head,
-                            interface.type_tag,
-                        );
-                        let interface_name = wire_head(&interface_head)?;
-                        let interface_args = rule
-                            .interface_args
-                            .iter()
-                            .map(|ty| {
-                                let ty = bex_vm_types::RealizedTy::try_from(ty).map_err(|error| {
-                                    EngineError::TypeMismatch {
-                                        message: format!(
-                                            "mounted type `{export_name}` has an unrealized witness argument: {error}"
-                                        ),
-                                    }
-                                })?;
-                                let ty = bex_vm_types::RuntimeTy::from(ty);
-                                wire_ty(&ty)
-                            })
-                            .collect::<Result<Vec<_>, EngineError>>()?;
-                        let associated_types = rule
-                            .interface_assoc
-                            .iter()
-                            .map(|(name, ty)| {
-                                let ty = bex_vm_types::RealizedTy::try_from(ty).map_err(|error| {
-                                    EngineError::TypeMismatch {
-                                        message: format!(
-                                            "mounted type `{export_name}` has an unrealized witness associated type: {error}"
-                                        ),
-                                    }
-                                })?;
-                                let ty = bex_vm_types::RuntimeTy::from(ty);
-                                Ok((name.clone(), wire_ty(&ty)?))
-                            })
-                            .collect::<Result<Vec<_>, EngineError>>()?;
-                        let field_links = interface
-                            .fields
-                            .iter()
-                            .zip(rule.field_links.iter())
-                            .map(|(field, slot)| {
-                                let class_field = class.fields.get(*slot as usize).ok_or_else(|| {
-                                    EngineError::TypeMismatch {
-                                        message: format!(
-                                            "mounted type `{export_name}` has an out-of-range witness field link"
-                                        ),
-                                    }
-                                })?;
-                                Ok((
-                                    field.name.clone(),
-                                    baml_type::Name::new(&class_field.name),
-                                ))
-                            })
-                            .collect::<Result<Vec<_>, EngineError>>()?;
-                        Ok((
-                            baml_type::Interface::new(
-                                interface_name,
-                                interface_args.into(),
-                                associated_types.into(),
-                            ),
-                            field_links,
-                        ))
-                    })
-                    .collect::<Result<Vec<_>, EngineError>>()?
+                }
+                Object::Interface(_) => {
+                    return Err(internal(
+                        "a mount without a compile declares no interface".to_string(),
+                    ));
+                }
+                _ => return Err(internal("a table names a non-declaration".to_string())),
             }
-            _ => Vec::new(),
-        };
-        let ty = value
-            .ty
-            .try_map_heads(&mut |head| wire_head(head))
-            .map_err(|e: EngineError| e)?;
-        Ok(bex_vm_types::RuntimeTypeMount {
-            export_name: baml_type::Name::new(export_name),
-            ty,
-            classes,
-            enums,
-            witnesses,
-        })
+        }
+        for &rule_ptr in rules {
+            let Object::ImplRule(rule) = vm.get_object(rule_ptr) else {
+                return Err(internal("a witness list names a non-rule".to_string()));
+            };
+            let Object::Interface(interface) = vm.get_object(rule.interface_head) else {
+                return Err(internal(
+                    "an impl rule implements a non-interface".to_string(),
+                ));
+            };
+            let for_ty = wire_template(&rule.for_ty_pattern, "implementing type")?;
+            let interface_args = rule
+                .interface_args
+                .iter()
+                .map(|arg| wire_template(arg, "interface argument"))
+                .collect::<Result<Vec<_>, EngineError>>()?;
+            let associated_types = rule
+                .interface_assoc
+                .iter()
+                .map(|(name, ty)| Ok((name.clone(), wire_template(ty, "associated type")?)))
+                .collect::<Result<Vec<_>, EngineError>>()?;
+            // The links are read through the implementing class's fields.
+            let implementor = match bex_vm_types::RealizedTy::try_from(&rule.for_ty_pattern) {
+                Ok(bex_vm_types::RealizedTy::Class(head, _)) if head.is_resolved() => head.ptr(),
+                _ => {
+                    return Err(internal(
+                        "a witness rule implements an interface for a non-class".to_string(),
+                    ));
+                }
+            };
+            let Object::Class(class) = vm.get_object(implementor) else {
+                return Err(internal(
+                    "a witness rule's implementor is not a class".to_string(),
+                ));
+            };
+            if interface.fields.len() != rule.field_links.len() {
+                return Err(internal(
+                    "a witness rule has an incomplete field map".to_string(),
+                ));
+            }
+            let field_links = interface
+                .fields
+                .iter()
+                .zip(rule.field_links.iter())
+                .map(|(field, slot)| {
+                    let class_field = class.fields.get(*slot as usize).ok_or_else(|| {
+                        internal("a witness rule has an out-of-range field link".to_string())
+                    })?;
+                    Ok((field.name.clone(), baml_type::Name::new(&class_field.name)))
+                })
+                .collect::<Result<Vec<_>, EngineError>>()?;
+            surface.impls.push(bex_vm_types::RuntimeMountedImpl {
+                interface: baml_type::Interface::new(
+                    spell(rule.interface_head)?,
+                    interface_args.into(),
+                    associated_types.into(),
+                ),
+                for_ty,
+                field_links,
+            });
+        }
+        Ok(surface)
     }
 
     fn runtime_compile_request(
@@ -7370,7 +7528,7 @@ impl BexEngine {
             files.insert(path.to_string(), source.to_string());
         }
 
-        let mut packages = IndexMap::new();
+        let mut aliased = IndexMap::new();
         let mut pins = IndexMap::new();
         for (alias, value) in map_entries(vm, packages_value)? {
             let Some(wrapper_ptr) = value.as_object_ptr() else {
@@ -7395,33 +7553,31 @@ impl BexEngine {
                     });
                 }
             };
-            let Object::Package(package) = vm.get_object(package_ptr) else {
+            if !matches!(vm.get_object(package_ptr), Object::Package(_)) {
                 return Err(EngineError::TypeMismatch {
                     message: format!("Package.compile dependency `{alias}` is not initialized"),
                 });
-            };
-            let types = package
-                .mounted_types
-                .iter()
-                .map(|(name, ptr)| Self::runtime_type_mount(vm, name, *ptr))
-                .collect::<Result<Vec<_>, _>>()?;
-            packages.insert(
-                alias.to_string(),
-                bex_vm_types::RuntimePackageMount {
-                    identity: bex_vm_types::RuntimePackageIdentity::of(package_ptr),
-                    interface_blob: package.interface_blob.clone(),
-                    types,
-                },
-            );
+            }
+            aliased.insert(alias.to_string(), package_ptr);
             // Pinned while this thread holds the permit: the compile task runs
             // across the sys-op await, and `_finish` binds against exactly
             // this object.
             pins.insert(alias.to_string(), vm.heap.create_handle(package_ptr));
         }
+        let packages = Self::mounts_reached(vm, &aliased)?;
         Ok(PendingRuntimeCompile {
             request: bex_vm_types::RuntimeCompileRequest {
                 files,
                 packages,
+                aliases: aliased
+                    .iter()
+                    .map(|(alias, ptr)| {
+                        (
+                            alias.clone(),
+                            bex_vm_types::RuntimePackageIdentity::of(*ptr),
+                        )
+                    })
+                    .collect(),
                 mode: bex_vm_types::RuntimeCompileMode::Package,
             },
             pins,
@@ -7520,7 +7676,7 @@ impl BexEngine {
             let mounts = package
                 .edges
                 .iter()
-                .filter(|(_, edge)| edge.kind == bex_vm_types::types::EdgeKind::Declared)
+                .filter(|(_, edge)| edge.kind != bex_vm_types::types::EdgeKind::Prelude)
                 .map(|(alias, edge)| (alias.to_string(), edge.target))
                 .collect::<IndexMap<String, HeapPtr>>();
             (
@@ -7530,28 +7686,17 @@ impl BexEngine {
                 sequence,
             )
         };
-        let mut packages = IndexMap::new();
-        for (alias, ptr) in mounts {
-            let Object::Package(package) = vm.get_object(ptr) else {
-                return Err(invalid(format!(
-                    "Session dependency `{alias}` has an invalid runtime payload"
-                )));
-            };
-            let types = package
-                .mounted_types
-                .iter()
-                .map(|(name, ptr)| Self::runtime_type_mount(vm, name, *ptr))
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|error| invalid(error.to_string()))?;
-            packages.insert(
-                alias,
-                bex_vm_types::RuntimePackageMount {
-                    identity: bex_vm_types::RuntimePackageIdentity::of(ptr),
-                    interface_blob: package.interface_blob.clone(),
-                    types,
-                },
-            );
-        }
+        let packages =
+            Self::mounts_reached(vm, &mounts).map_err(|error| invalid(error.to_string()))?;
+        let aliases = mounts
+            .iter()
+            .map(|(alias, ptr)| {
+                (
+                    alias.clone(),
+                    bex_vm_types::RuntimePackageIdentity::of(*ptr),
+                )
+            })
+            .collect();
         let submission_name = format!("$submission_{sequence}.baml");
         let session = bex_vm_types::RuntimeSessionCompileRequest {
             submission_name,
@@ -7567,6 +7712,7 @@ impl BexEngine {
             request: bex_vm_types::RuntimeCompileRequest {
                 files: IndexMap::new(),
                 packages,
+                aliases,
                 mode: bex_vm_types::RuntimeCompileMode::Session(Box::new(session)),
             },
             pins: IndexMap::new(),

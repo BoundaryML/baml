@@ -86,12 +86,11 @@ pub struct Class {
     /// (bound by the receiver, never by name). Set at emit time.
     pub generic_param_count: usize,
 
-    /// The runtime package that owns this declaration, or null for a
-    /// compile-time one. A GC edge: reaching the class keeps its package — and
-    /// so its globals and dependencies — alive. Mirrors `InterfaceDef::owner`
-    /// and `TypeAliasDef::owner`.
+    /// What this declaration belongs to: its package (a static package's is
+    /// assigned at load), or nothing — a class minted through `reflect`,
+    /// which then holds its own witness rules. See [`Owner`](super::Owner).
     #[borsh(skip)]
-    pub owner: HeapPtr,
+    pub owner: super::Owner,
 
     /// The class's inherent methods (static and instance, natives included),
     /// by name, in declaration order. Impl-provided methods are not here:

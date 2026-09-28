@@ -401,6 +401,17 @@ impl BexHeap {
         self.compile_time[index] = object;
     }
 
+    /// A compile-time object, mutably, before the heap is [sealed](Self::seal):
+    /// what the loader fills in once every pointer is known (a declaration's
+    /// owner edge to its package).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out of bounds.
+    pub fn compile_time_object_mut(&mut self, index: usize) -> &mut Object {
+        &mut self.compile_time[index]
+    }
+
     /// Resolve every pooled `ObjectIndex` operand into a `HeapPtr` before the
     /// heap is sealed: bytecode constants of every `Function`, and each
     /// interface's default-method bodies.

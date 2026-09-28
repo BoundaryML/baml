@@ -1830,17 +1830,20 @@ fn try_yield_interface_from_json(
         baml_type::Name::new("FromJson"),
     );
     let from_json_head = vm.declaration_head(&from_json_qtn)?;
-    let resolver = match vm.get_object(head.ptr()) {
-        Object::Class(class) if !class.owner.is_null() => {
-            super::resolve::ImplResolver::for_package(vm, class.owner)
-        }
+    let owner = match vm.get_object(head.ptr()) {
+        Object::Class(class) => class
+            .owner
+            .package()
+            .and_then(|owner| vm.runtime_owner(owner)),
         // An interface head carries the same owner edge; rooting it the
         // same way keeps runtime-declared interfaces symmetric with
         // runtime classes instead of falling to the lexical world.
-        Object::Interface(iface) if !iface.owner.is_null() => {
-            super::resolve::ImplResolver::for_package(vm, iface.owner)
-        }
-        _ => super::resolve::ImplResolver::new(vm),
+        Object::Interface(iface) => vm.runtime_owner(iface.owner),
+        _ => None,
+    };
+    let resolver = match owner {
+        Some(owner) => super::resolve::ImplResolver::for_package(vm, owner),
+        None => super::resolve::ImplResolver::new(vm),
     };
     let (rule, bound_args) = resolver.resolve_implements_rule(ty, from_json_head, &[])?;
     let resolved = match resolver.rule_method_impl(&rule, "from_json") {

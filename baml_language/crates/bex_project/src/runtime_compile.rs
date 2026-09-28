@@ -64,387 +64,320 @@ fn runtime_relative_virtual_path(path: &Path) -> String {
         .to_string()
 }
 
-/// What a mount's export can spell: its own declarations (`Local`), the
-/// stdlib, and the packages this compile request mounts. A nominal reference
-/// to any other package came from a different compile world — a mount alias
-/// of the dependency's own compile, say — and means nothing here, so a
-/// witness that names one is not served.
-struct ExportViewpoint<'a> {
-    aliases: &'a [Name],
-}
-
-impl ExportViewpoint<'_> {
-    fn spellable_package(&self, name: &baml_type::QualifiedTypeName) -> bool {
-        name.is_local()
-            || baml_builtins2::stdlib_package_names().contains(&name.package().as_str())
-            || self.aliases.contains(name.package())
-    }
-
-    fn hides_interface(&self, interface: &baml_type::Interface<TypeName>) -> bool {
-        !self.spellable_package(&interface.name)
-            || interface.generics.iter().any(|ty| self.hides_type(ty))
-            || interface
-                .associated_types
-                .iter()
-                .any(|(_, ty)| self.hides_type(ty))
-    }
-
-    /// Whether rendering `ty` as source would spell a package this compile
-    /// world cannot resolve. Unspellable references can occur below otherwise
-    /// source-spellable containers, function types, or interface constraints,
-    /// so this inspects the complete type rather than only its outer nominal
-    /// reference.
-    fn hides_type(&self, ty: &baml_type::Ty<TypeName>) -> bool {
-        use baml_type::Ty;
-
-        match ty {
-            Ty::Class(name, generics) => {
-                !self.spellable_package(name) || generics.iter().any(|ty| self.hides_type(ty))
-            }
-            Ty::Interface(name, generics, associated_types) => {
-                !self.spellable_package(name)
-                    || generics.iter().any(|ty| self.hides_type(ty))
-                    || associated_types.iter().any(|(_, ty)| self.hides_type(ty))
-            }
-            Ty::Enum(name) | Ty::EnumVariant(name, ..) | Ty::TypeAlias(name) => {
-                !self.spellable_package(name)
-            }
-            Ty::List(inner) => self.hides_type(inner),
-            Ty::Map { key, value, .. } => self.hides_type(key) || self.hides_type(value),
-            Ty::Union(members) => members.iter().any(|ty| self.hides_type(ty)),
-            Ty::Function {
-                params,
-                ret,
-                throws,
-                ..
-            } => {
-                params.iter().any(|param| self.hides_type(&param.ty))
-                    || self.hides_type(ret)
-                    || self.hides_type(throws)
-            }
-            Ty::Future(value, throws) => self.hides_type(value) || self.hides_type(throws),
-            Ty::AssociatedTypeProjection {
-                base, interface, ..
-            } => self.hides_type(base) || self.hides_interface(interface),
-            Ty::Int
-            | Ty::Bigint
-            | Ty::Float
-            | Ty::String
-            | Ty::Bool
-            | Ty::Null
-            | Ty::Uint8Array
-            | Ty::Media(..)
-            | Ty::Literal(..)
-            | Ty::RustType
-            | Ty::Type
-            | Ty::Resource
-            | Ty::PromptAst
-            | Ty::Void
-            | Ty::TypeVar(..)
-            | Ty::Unknown
-            | Ty::Never
-            | Ty::Error => false,
-        }
+/// A mount-boundary failure as a diagnostic.
+fn mount_diagnostic(code: &str, message: String) -> RuntimeCompileDiagnostic {
+    RuntimeCompileDiagnostic {
+        code: code.to_string(),
+        message,
+        severity: RuntimeDiagnosticSeverity::Error,
+        span: None,
+        details: None,
     }
 }
 
-/// The packages a mount's interface names besides itself and the stdlib —
-/// the sibling mounts it must reach, under the aliases it spells them by.
-fn mount_references(own_aliases: &[Name], blob: &[u8]) -> Result<Vec<Name>, String> {
-    let interface = baml_artifact::decode::<PackageInterface<TypeName>>(
-        baml_artifact::ArtifactKind::PackageInterface,
-        blob,
-    )
-    .map_err(|error| format!("invalid package interface: {error}"))?;
-    let mut names: Vec<Name> = Vec::new();
-    interface
-        .try_map_heads::<_, std::convert::Infallible>(&mut |name| {
-            if !name.is_local()
-                && !own_aliases.contains(name.package())
-                && !baml_builtins2::stdlib_package_names().contains(&name.package().as_str())
-                && !names.contains(name.package())
-            {
-                names.push(name.package().clone());
-            }
-            Ok(name.clone())
+/// Mount creation order: every package after the packages its edges reach
+/// (Kahn's algorithm over the request's identity edges, request order among
+/// the ready). `Err` names a package inside an edge cycle, or one an edge
+/// reaches that the request omits.
+fn mount_order(
+    packages: &IndexMap<bex_vm_types::RuntimePackageIdentity, RuntimePackageMount>,
+) -> Result<Vec<bex_vm_types::RuntimePackageIdentity>, String> {
+    let references: Vec<Vec<usize>> = packages
+        .values()
+        .map(|mount| {
+            mount
+                .edges
+                .values()
+                .map(|edge| {
+                    packages
+                        .get_index_of(&edge.target)
+                        .ok_or_else(|| "a package reaches one the request omits".to_string())
+                })
+                .collect::<Result<Vec<_>, _>>()
         })
-        .unwrap_or_else(|never| match never {});
-    Ok(names)
-}
-
-/// A mount ready to become a root: every alias it is reached under (the
-/// first names the root) and its interface blob as exported.
-type EnrichedMount = (Vec<Name>, Vec<u8>);
-
-/// Mount creation order: every mount after the mounts its interface names
-/// (Kahn's algorithm over the alias references, alias order among the
-/// ready). `Err(alias)` names a mount inside a reference cycle.
-fn mount_order(mounts: &[EnrichedMount]) -> Result<Vec<usize>, Name> {
-    let index_of = |name: &Name| {
-        mounts
-            .iter()
-            .position(|(aliases, _)| aliases.contains(name))
-    };
-    let references: Vec<Vec<usize>> = mounts
-        .iter()
-        .map(|(aliases, blob)| {
-            mount_references(aliases, blob)
-                .unwrap_or_default()
-                .iter()
-                .filter_map(index_of)
-                .collect()
-        })
-        .collect();
-    let mut placed = vec![false; mounts.len()];
-    let mut order = Vec::with_capacity(mounts.len());
-    while order.len() < mounts.len() {
-        let next =
-            (0..mounts.len()).find(|&i| !placed[i] && references[i].iter().all(|&dep| placed[dep]));
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut placed = vec![false; packages.len()];
+    let mut order = Vec::with_capacity(packages.len());
+    while order.len() < packages.len() {
+        let next = (0..packages.len())
+            .find(|&i| !placed[i] && references[i].iter().all(|&dep| placed[dep]));
         match next {
             Some(i) => {
                 placed[i] = true;
-                order.push(i);
+                order.push(
+                    *packages
+                        .get_index(i)
+                        .map(|(id, _)| id)
+                        .unwrap_or_else(|| unreachable!("the index came from the map")),
+                );
             }
-            None => {
-                let stuck = (0..mounts.len()).find(|&i| !placed[i]).unwrap_or(0);
-                return Err(mounts[stuck].0[0].clone());
-            }
+            None => return Err("packages reach each other in a cycle".to_string()),
         }
     }
     Ok(order)
 }
 
-/// Prepare one package object for mounting under `own_aliases` (every alias
-/// the request gives it), among a request whose mounts are spelled by
-/// `all_aliases`: the interface blob as the producer exported it — its own
-/// declarations `Local`, resolved to the mount root by the importer — plus
-/// the rows its mounted types add: one item row per runtime declaration
-/// reached, an alias row per export name, and the witnesses each declaration
-/// carries. A served root has no source: the consumer's emit reaches every
-/// row by identity through the interface.
-fn enrich_runtime_mount(
-    own_aliases: &[Name],
-    all_aliases: &[Name],
-    mut package: RuntimePackageMount,
-) -> Result<Vec<u8>, RuntimeCompileDiagnostic> {
+/// The wire interface of a package that had no compile, from its projected
+/// surface (`bex_vm_types::RuntimeProjectedSurface`): its own class, enum
+/// and alias rows, its impl rows, the declarations it re-exports by name,
+/// and — for every re-exported edge — every export of the target, by the
+/// target's path (`built` holds the targets' wire interfaces; the order the
+/// roots are created in guarantees it). A name exported twice is E0011.
+fn projected_interface(
+    surface: &bex_vm_types::RuntimeProjectedSurface,
+    edges: &IndexMap<Name, bex_vm_types::RuntimeMountEdge>,
+    built: &IndexMap<bex_vm_types::RuntimePackageIdentity, PackageInterface<TypeName>>,
+) -> Result<PackageInterface<TypeName>, RuntimeCompileDiagnostic> {
     use baml_compiler2_hir_ty::package_interface::{
-        ExportedFieldAttrs, ExportedImpl, ExportedImplOrigin, ExportedType, PackageInterface,
+        ExportedFieldAttrs, ExportedImpl, ExportedImplOrigin, ExportedType, ReExport,
     };
 
-    let mut interface = baml_artifact::decode::<PackageInterface<TypeName>>(
-        baml_artifact::ArtifactKind::PackageInterface,
-        &package.interface_blob,
-    )
-    .map_err(|error| RuntimeCompileDiagnostic {
-        code: "E_RUNTIME_INTERFACE".to_string(),
-        message: error.to_string(),
-        severity: RuntimeDiagnosticSeverity::Error,
-        span: None,
-        details: None,
-    })?;
-    let alias = own_aliases
-        .first()
-        .cloned()
-        .unwrap_or_else(|| unreachable!("a mounted package is reached under at least one alias"));
-    let viewpoint = ExportViewpoint {
-        aliases: all_aliases,
+    let mut interface = PackageInterface::<TypeName> {
+        types: IndexMap::new(),
+        functions: IndexMap::new(),
+        throw_sets: baml_compiler2_hir_ty::package_interface::FunctionThrowSets::default(),
+        namespaces: std::collections::BTreeSet::default(),
+        impls: Vec::new(),
+        reexports: IndexMap::new(),
     };
-    // A runtime-created declaration reached through a mount is an item of the
-    // mounted package: `Local` on this mount's wire, resolved by the importer
-    // to the mount root, so every alias of the mount names one declaration.
-    // Each reached declaration gets one row under its item name; two mounts
-    // reaching the same declaration agree on the row, and two distinct
-    // declarations sharing an item name are a fail-closed error (the live
-    // tag, carried for exactly this check, tells them apart).
-    let mut minted_tags: IndexMap<Name, baml_type::typetag::TypeTag> = IndexMap::new();
-    let mut minted_rows: IndexMap<Name, ExportedType<TypeName>> = IndexMap::new();
-    let duplicate_minted = |name: &Name| RuntimeCompileDiagnostic {
-        code: "E0011".to_string(),
-        message: format!(
-            "two distinct mounted declarations under `{alias}` share the name `{name}`"
-        ),
-        severity: RuntimeDiagnosticSeverity::Error,
-        span: None,
-        details: None,
+    let duplicate = |name: &LocalName| {
+        mount_diagnostic("E0011", format!("duplicate exported type name `{name}`"))
     };
-    for mount in &package.types {
-        for class in &mount.classes {
-            if let Some(&seen) = minted_tags.get(&class.name) {
-                if seen != class.tag {
-                    return Err(duplicate_minted(&class.name));
-                }
-                continue;
-            }
-            minted_tags.insert(class.name.clone(), class.tag);
-            minted_rows.insert(
-                class.name.clone(),
-                ExportedType::Class {
-                    qtn: baml_type::QualifiedTypeName::local(class.name.clone()),
-                    fields: class
-                        .fields
-                        .iter()
-                        .map(|(name, ty, attrs)| {
-                            (
-                                name.clone(),
-                                ty.clone(),
-                                ExportedFieldAttrs {
-                                    alias: attrs.alias.clone(),
-                                    description: attrs.description.clone(),
-                                    docstring: attrs.docstring.clone(),
-                                },
-                            )
-                        })
-                        .collect(),
-                    methods: Vec::new(),
-                    generic_params: Vec::new(),
-                    generic_param_bounds: Vec::new(),
-                },
-            );
+    let exported = |interface: &PackageInterface<TypeName>, name: &LocalName| {
+        interface.lookup_type(&name.namespace, &name.name).is_some()
+            || interface
+                .lookup_function(&name.namespace, &name.name)
+                .is_some()
+            || interface
+                .lookup_reexport(&name.namespace, &name.name)
+                .is_some()
+    };
+    let add_row = |interface: &mut PackageInterface<TypeName>,
+                   name: &LocalName,
+                   row: ExportedType<TypeName>|
+     -> Result<(), RuntimeCompileDiagnostic> {
+        if exported(interface, name) {
+            return Err(duplicate(name));
         }
-        for enm in &mount.enums {
-            if let Some(&seen) = minted_tags.get(&enm.name) {
-                if seen != enm.tag {
-                    return Err(duplicate_minted(&enm.name));
-                }
-                continue;
-            }
-            minted_tags.insert(enm.name.clone(), enm.tag);
-            minted_rows.insert(
-                enm.name.clone(),
-                ExportedType::Enum {
-                    qtn: baml_type::QualifiedTypeName::local(enm.name.clone()),
-                    variants: enm.variants.iter().map(|(name, _)| name.clone()).collect(),
-                },
-            );
-        }
-    }
-    // Item rows join the package's root export namespace, so a mounted name
-    // colliding with a declared export is exactly as fatal as two mounts
-    // colliding with each other.
-    if !minted_rows.is_empty() {
-        interface.namespaces.insert(Vec::new());
-        let root_types = interface.types.entry(Vec::new()).or_default();
-        for (name, row) in &minted_rows {
-            if root_types.contains_key(name) {
-                return Err(duplicate_minted(name));
-            }
-            root_types.insert(name.clone(), row.clone());
-        }
-    }
-    // The witness rows each nominal root has contributed, by its item name:
-    // a declaration reached under two export names is witnessed ONCE.
-    let mut witnessed: IndexMap<Name, Vec<ExportedImpl<TypeName>>> = IndexMap::new();
-    for mount in package.types.drain(..) {
-        let root_ty = baml_type::Ty::from(&mount.ty);
-        // The export name is one more spelling of the mounted type, never a
-        // second identity. A nominal root's identity is its item row (the row
-        // the consumer's stub declares), so an export name of its own is a
-        // transparent alias of that row — the same alias row a structural
-        // root gets — and an export name equal to the item name is the item
-        // row itself.
-        let root_item = match &mount.ty {
-            baml_type::RealizedTy::Class(qtn, _) | baml_type::RealizedTy::Enum(qtn) => {
-                if !minted_rows.contains_key(qtn.name()) {
-                    return Err(RuntimeCompileDiagnostic {
-                        code: "E_RUNTIME_INTERFACE".to_string(),
-                        message: format!(
-                            "runtime type `{}` has no structural definition",
-                            mount.export_name
-                        ),
-                        severity: RuntimeDiagnosticSeverity::Error,
-                        span: None,
-                        details: None,
-                    });
-                }
-                Some(qtn.name().clone())
-            }
-            _ => None,
+        interface.namespaces.insert(name.namespace.clone());
+        interface
+            .types
+            .entry(name.namespace.clone())
+            .or_default()
+            .insert(name.name.clone(), row);
+        Ok(())
+    };
+    for class in &surface.classes {
+        let name = LocalName {
+            namespace: Vec::new(),
+            name: class.name.clone(),
         };
-        if root_item.as_ref() != Some(&mount.export_name) {
-            let root_types = interface.types.entry(Vec::new()).or_default();
-            if root_types.contains_key(&mount.export_name) {
-                return Err(RuntimeCompileDiagnostic {
-                    code: "E0011".to_string(),
-                    message: format!("duplicate exported type name `{}`", mount.export_name),
-                    severity: RuntimeDiagnosticSeverity::Error,
-                    span: None,
-                    details: None,
-                });
-            }
-            interface.namespaces.insert(Vec::new());
-            root_types.insert(
-                mount.export_name.clone(),
-                ExportedType::TypeAlias {
-                    qtn: baml_type::QualifiedTypeName::local(mount.export_name.clone()),
-                    resolved: root_ty.clone(),
-                },
-            );
-        }
-
-        // A witness is exported only against an interface this mount can
-        // serve: one its own interface declares, or one of a package the
-        // consumer's world can spell. A runtime class may also witness an
-        // interface of the HOST program that created it; that declaration
-        // does not exist in the consumer's world, so the fact has no row to
-        // be exported against — the same law that degrades a field type the
-        // world cannot spell.
-        let serves = |witness: &baml_type::Interface<TypeName>| {
-            !viewpoint.hides_interface(witness)
-                && (!witness.name.is_local()
-                    || matches!(
-                        interface.lookup_type(witness.name.namespace(), witness.name.name()),
-                        Some(ExportedType::Interface { .. })
-                    ))
-        };
-        let rows: Vec<ExportedImpl<TypeName>> = mount
-            .witnesses
-            .into_iter()
-            .filter(|(witness, _)| serves(witness))
-            .map(|(witness, field_links)| ExportedImpl {
-                // The bindings are the row's `associated_types`; the header
-                // names the interface and its arguments only, exactly as a
-                // source impl's does.
-                associated_types: witness.associated_types.to_vec(),
-                interface: baml_type::Interface::new(witness.name, witness.generics, Box::new([])),
-                for_ty_pattern: root_ty.clone(),
-                generic_params: Vec::new(),
-                param_bounds: Vec::new(),
-                field_links,
-                origin: ExportedImplOrigin::OutOfBody,
+        add_row(
+            &mut interface,
+            &name,
+            ExportedType::Class {
+                qtn: baml_type::QualifiedTypeName::local(class.name.clone()),
+                fields: class
+                    .fields
+                    .iter()
+                    .map(|(name, ty, attrs)| {
+                        (
+                            name.clone(),
+                            ty.clone(),
+                            ExportedFieldAttrs {
+                                alias: attrs.alias.clone(),
+                                description: attrs.description.clone(),
+                                docstring: attrs.docstring.clone(),
+                            },
+                        )
+                    })
+                    .collect(),
                 methods: Vec::new(),
-            })
-            .collect();
-        // A witness is a fact about the DECLARATION, and the export name is
-        // not part of a row, so a declaration reached under two names (`{
-        // "Alias": t, "Twin": t }`) contributes its rows once; a second copy
-        // would be the same identity twice, which the import refuses as a
-        // duplicate impl. Every mount of one declaration reads the same
-        // witnesses off the class's own impl rules, which the assertion pins.
-        match root_item {
-            Some(root) => match witnessed.entry(root) {
-                indexmap::map::Entry::Occupied(seen) => debug_assert_eq!(
-                    seen.get(),
-                    &rows,
-                    "two mounts of one declaration carry one witness list"
-                ),
-                indexmap::map::Entry::Vacant(slot) => {
-                    interface.impls.extend(rows.iter().cloned());
-                    slot.insert(rows);
-                }
+                generic_params: Vec::new(),
+                generic_param_bounds: Vec::new(),
             },
-            // Witnesses are read off a class; a structural root has none.
-            None => debug_assert!(rows.is_empty(), "a structural root carries no witnesses"),
+        )?;
+    }
+    for enm in &surface.enums {
+        let name = LocalName {
+            namespace: Vec::new(),
+            name: enm.name.clone(),
+        };
+        add_row(
+            &mut interface,
+            &name,
+            ExportedType::Enum {
+                qtn: baml_type::QualifiedTypeName::local(enm.name.clone()),
+                variants: enm.variants.iter().map(|(name, _)| name.clone()).collect(),
+            },
+        )?;
+    }
+    for alias in &surface.aliases {
+        add_row(
+            &mut interface,
+            &alias.name,
+            ExportedType::TypeAlias {
+                qtn: baml_type::QualifiedTypeName::qualified(
+                    baml_type::Package::Local,
+                    alias.name.namespace.clone(),
+                    alias.name.name.clone(),
+                ),
+                resolved: alias.ty.clone(),
+            },
+        )?;
+    }
+    let add_reexport = |interface: &mut PackageInterface<TypeName>,
+                        name: &LocalName,
+                        reexport: ReExport<TypeName>|
+     -> Result<(), RuntimeCompileDiagnostic> {
+        if exported(interface, name) {
+            return Err(duplicate(name));
+        }
+        interface.namespaces.insert(name.namespace.clone());
+        interface
+            .reexports
+            .entry(name.namespace.clone())
+            .or_default()
+            .insert(name.name.clone(), reexport);
+        Ok(())
+    };
+    for reexport in &surface.reexports {
+        let of = reexport.of.clone();
+        let entry = match reexport.kind {
+            bex_vm_types::RuntimeReExportKind::Class
+            | bex_vm_types::RuntimeReExportKind::Enum
+            | bex_vm_types::RuntimeReExportKind::Interface
+            | bex_vm_types::RuntimeReExportKind::TypeAlias => ReExport::Type(of),
+        };
+        add_reexport(&mut interface, &reexport.name, entry)?;
+    }
+    // Every export of a re-exported edge's target, by the target's own path
+    // — its rows and its re-exports alike; a re-export of a re-export is
+    // followed at resolution.
+    for (edge, mount_edge) in edges {
+        if mount_edge.kind != bex_vm_types::types::EdgeKind::ReExported {
+            continue;
+        }
+        let target = built.get(&mount_edge.target).ok_or_else(|| {
+            mount_diagnostic(
+                "E_RUNTIME_MOUNT",
+                "a re-exported package is mounted after the package re-exporting it".to_string(),
+            )
+        })?;
+        let spell = |namespace: &[Name], name: &Name| {
+            TypeName::new(edge.clone(), namespace.to_vec(), name.clone())
+        };
+        for (namespace, items) in &target.types {
+            for name in items.keys() {
+                add_reexport(
+                    &mut interface,
+                    &LocalName {
+                        namespace: namespace.clone(),
+                        name: name.clone(),
+                    },
+                    ReExport::Type(spell(namespace, name)),
+                )?;
+            }
+        }
+        for (namespace, items) in &target.functions {
+            for name in items.keys() {
+                add_reexport(
+                    &mut interface,
+                    &LocalName {
+                        namespace: namespace.clone(),
+                        name: name.clone(),
+                    },
+                    ReExport::Function(spell(namespace, name)),
+                )?;
+            }
+        }
+        for (namespace, items) in &target.reexports {
+            for (name, reexport) in items {
+                let entry = match reexport {
+                    ReExport::Type(_) => ReExport::Type(spell(namespace, name)),
+                    ReExport::Function(_) => ReExport::Function(spell(namespace, name)),
+                };
+                add_reexport(
+                    &mut interface,
+                    &LocalName {
+                        namespace: namespace.clone(),
+                        name: name.clone(),
+                    },
+                    entry,
+                )?;
+            }
         }
     }
-    baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface).map_err(
-        |error| RuntimeCompileDiagnostic {
-            code: "E_RUNTIME_INTERFACE".to_string(),
-            message: error.to_string(),
-            severity: RuntimeDiagnosticSeverity::Error,
-            span: None,
-            details: None,
-        },
-    )
+    for rule in &surface.impls {
+        interface.impls.push(ExportedImpl {
+            // The bindings are the row's `associated_types`; the header
+            // names the interface and its arguments only, exactly as a
+            // source impl's does.
+            associated_types: rule.interface.associated_types.to_vec(),
+            interface: baml_type::Interface::new(
+                rule.interface.name.clone(),
+                rule.interface.generics.clone(),
+                Box::new([]),
+            ),
+            for_ty_pattern: rule.for_ty.clone(),
+            generic_params: Vec::new(),
+            param_bounds: Vec::new(),
+            field_links: rule.field_links.clone(),
+            origin: ExportedImplOrigin::OutOfBody,
+            methods: Vec::new(),
+        });
+    }
+    Ok(interface)
+}
+
+/// The names the roots of a request take, made distinct: an aliased package
+/// is named by its first alias; a package no alias reaches — one a mount's
+/// edges reach — by the first edge name reaching it; either suffixed with
+/// `$k` when the name is taken or is one of the package's OWN edge names (a
+/// root's name resolves to the root itself, so it must not shadow an edge
+/// its blob spells). A root's name is what the program spells its
+/// declarations by where no edge reaches it; every declaration a consumer
+/// can write is spelled through an edge or a re-export instead.
+fn root_names(
+    packages: &IndexMap<bex_vm_types::RuntimePackageIdentity, RuntimePackageMount>,
+    aliases: &IndexMap<String, bex_vm_types::RuntimePackageIdentity>,
+) -> IndexMap<bex_vm_types::RuntimePackageIdentity, Name> {
+    let mut taken: HashSet<Name> = baml_builtins2::reserved_edge_names()
+        .iter()
+        .map(Name::new)
+        .collect();
+    let mut names: IndexMap<bex_vm_types::RuntimePackageIdentity, Name> = IndexMap::new();
+    let mut claim = |taken: &mut HashSet<Name>,
+                     identity: bex_vm_types::RuntimePackageIdentity,
+                     preferred: &Name| {
+        if names.contains_key(&identity) {
+            return;
+        }
+        let own_edges = packages
+            .get(&identity)
+            .map(|mount| &mount.edges)
+            .into_iter()
+            .flat_map(|edges| edges.keys())
+            .cloned()
+            .collect::<HashSet<Name>>();
+        let mut candidate = preferred.clone();
+        let mut suffix = 1;
+        while taken.contains(&candidate) || own_edges.contains(&candidate) {
+            candidate = Name::new(format!("{preferred}${suffix}"));
+            suffix += 1;
+        }
+        taken.insert(candidate.clone());
+        names.insert(identity, candidate);
+    };
+    for (alias, identity) in aliases {
+        claim(&mut taken, *identity, &Name::new(alias.as_str()));
+    }
+    for mount in packages.values() {
+        for (edge, mount_edge) in &mount.edges {
+            claim(&mut taken, mount_edge.target, edge);
+        }
+    }
+    names
 }
 
 /// Stateless compiler provider. A fresh database is allocated inside every
@@ -1539,6 +1472,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
         let RuntimeCompileRequest {
             files,
             packages,
+            aliases,
             mode,
         } = request;
         let mut session_request = None;
@@ -1582,119 +1516,82 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                 baml_base::SourceRootKind::Workspace,
             ))
             .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
-        let aliases: Vec<Name> = packages
-            .keys()
-            .map(|name| Name::new(name.as_str()))
-            .collect();
-        // One mount per package OBJECT: two aliases naming the same object are
-        // two edges to one root, and the first alias names it.
-        let mut grouped: IndexMap<
-            bex_vm_types::RuntimePackageIdentity,
-            (Vec<Name>, RuntimePackageMount),
-        > = IndexMap::new();
-        for (alias, package) in packages {
-            grouped
-                .entry(package.identity)
-                .or_insert_with(|| (Vec::new(), package))
-                .0
-                .push(Name::new(alias.as_str()));
-        }
-        let enriched = grouped
-            .into_values()
-            .map(|(own_aliases, package)| {
-                enrich_runtime_mount(&own_aliases, &aliases, package)
-                    .map(|blob| (own_aliases, blob))
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|diagnostic| vec![diagnostic])?;
-        // One root per mount, served from its interface (the semantic
-        // authority) and holding no files, reached from the consumer under
-        // the alias it chose. The root is `Dynamic` (runtime-loaded), so it
-        // sorts after every statically compiled root.
-        let mount_error = |alias: &Name, error: &dyn std::fmt::Display| {
-            vec![RuntimeCompileDiagnostic {
-                code: "E_RUNTIME_MOUNT".to_string(),
-                message: format!("cannot mount package `{alias}`: {error}"),
-                severity: RuntimeDiagnosticSeverity::Error,
-                span: None,
-                details: None,
-            }]
+        // One root per package OBJECT, served from its interface (the
+        // semantic authority) and holding no files, created after the
+        // packages its edges reach so a re-export resolves to a root that
+        // exists. A root is `Dynamic` (runtime-loaded), so it sorts after
+        // every statically compiled root. The consumer reaches the packages
+        // it mounted under its aliases; a package only an edge reaches has a
+        // root all the same, since a consumer names a re-exported
+        // declaration by the package it is defined in.
+        let mount_error = |name: &Name, error: &dyn std::fmt::Display| {
+            vec![mount_diagnostic(
+                "E_RUNTIME_MOUNT",
+                format!("cannot mount package `{name}`: {error}"),
+            )]
         };
-        // A mount reaches the sibling mounts its interface names (the edges its
-        // producer compiled against, recovered from the artifact the way
-        // rustc metadata lists its crate dependencies), so mounts are created
-        // in dependency order and a mount that names an unmounted package is
-        // refused when its interface is read.
-        let mut mount_roots: IndexMap<&str, baml_base::SourceRoot> = IndexMap::new();
-        // A package a mount's interface names that this world has not mounted
-        // (a runtime-minted type's package, spelled under the alias its
-        // producer used) is foreign: it becomes an empty named root, so its
-        // declarations are opaque here — no definition, identity by type tag
-        // at run time — rather than the mount being refused.
-        let mut foreign_roots: IndexMap<Name, baml_base::SourceRoot> = IndexMap::new();
-        for mount_index in mount_order(&enriched)
-            .map_err(|alias| mount_error(&alias, &"mounts reference each other in a cycle"))?
+        let names = root_names(&packages, &aliases);
+        let mut mount_roots: IndexMap<bex_vm_types::RuntimePackageIdentity, baml_base::SourceRoot> =
+            IndexMap::new();
+        let mut built: IndexMap<bex_vm_types::RuntimePackageIdentity, PackageInterface<TypeName>> =
+            IndexMap::new();
+        for identity in mount_order(&packages)
+            .map_err(|error| vec![mount_diagnostic("E_RUNTIME_MOUNT", error)])?
         {
-            let (own_aliases, blob) = &enriched[mount_index];
-            let alias = &own_aliases[0];
-            let mut edges: Vec<Dependency> = Vec::new();
-            for name in
-                mount_references(own_aliases, blob).map_err(|error| mount_error(alias, &error))?
-            {
-                // BUG: a sibling mount is matched by the NAME the producer
-                // spelled its dependency by, not by identity. A producer that
-                // reached package `c` as `geometry`, mounted beside `c` under
-                // the name `c`, gets an empty foreign `geometry` root instead
-                // of `c`'s mount — one package, two roots — so its impl rows
-                // of `geometry.Shape` never meet a consumer's `c.Shape` (E0001
-                // at the use site). Names live on edges; the blob must record
-                // its dependencies' identities for this match to be by
-                // identity.
-                let root = match mount_roots.get(name.as_str()) {
-                    Some(&root) => root,
-                    None => match foreign_roots.get(&name) {
-                        Some(&root) => root,
-                        None => {
-                            let root = db
-                                .add_source_root(
-                                    SourceRootSpec::new(
-                                        format!("{BUILTIN_VIRTUAL_ROOT}/foreign/{name}"),
-                                        baml_base::SourceRootKind::Dynamic,
-                                    )
-                                    .named(name.clone()),
-                                )
-                                .map_err(|error| mount_error(alias, &error))?;
-                            foreign_roots.insert(name.clone(), root);
-                            root
-                        }
-                    },
-                };
-                edges.push(Dependency { name, root });
-            }
-            let mount_root = db
+            let mount = &packages[&identity];
+            let name = names[&identity].clone();
+            let (interface, blob) = match &mount.surface {
+                bex_vm_types::RuntimeMountSurface::Compiled(blob) => {
+                    let interface = baml_artifact::decode::<PackageInterface<TypeName>>(
+                        baml_artifact::ArtifactKind::PackageInterface,
+                        blob,
+                    )
+                    .map_err(|error| mount_error(&name, &error))?;
+                    (interface, blob.clone())
+                }
+                bex_vm_types::RuntimeMountSurface::Projected(surface) => {
+                    let interface = projected_interface(surface, &mount.edges, &built)
+                        .map_err(|diagnostic| vec![diagnostic])?;
+                    let blob = baml_artifact::encode(
+                        baml_artifact::ArtifactKind::PackageInterface,
+                        &interface,
+                    )
+                    .map_err(|error| mount_error(&name, &error))?;
+                    (interface, blob)
+                }
+            };
+            let edges = mount
+                .edges
+                .iter()
+                .map(|(edge, mount_edge)| Dependency {
+                    name: edge.clone(),
+                    root: mount_roots[&mount_edge.target],
+                })
+                .collect();
+            let root = db
                 .add_source_root(
                     SourceRootSpec::new(
-                        format!("{BUILTIN_VIRTUAL_ROOT}/{alias}"),
+                        format!("{BUILTIN_VIRTUAL_ROOT}/mounts/{}", mount_roots.len()),
                         baml_base::SourceRootKind::Dynamic,
                     )
-                    .named(alias.clone())
+                    .named(name.clone())
                     .depending_on(edges)
-                    .served_from(blob.clone()),
+                    .served_from(blob),
                 )
-                .map_err(|error| mount_error(alias, &error))?;
-            for own in own_aliases {
-                mount_roots.insert(own.as_str(), mount_root);
-            }
-            for own in own_aliases {
-                db.add_dependency(
-                    workspace,
-                    Dependency {
-                        name: own.clone(),
-                        root: mount_root,
-                    },
-                )
-                .map_err(|error| mount_error(own, &error))?;
-            }
+                .map_err(|error| mount_error(&name, &error))?;
+            mount_roots.insert(identity, root);
+            built.insert(identity, interface);
+        }
+        for (alias, identity) in &aliases {
+            let alias = Name::new(alias.as_str());
+            db.add_dependency(
+                workspace,
+                Dependency {
+                    name: alias.clone(),
+                    root: mount_roots[identity],
+                },
+            )
+            .map_err(|error| mount_error(&alias, &error))?;
         }
         let mut submission_file = None;
         for (path, source) in files {
@@ -1979,30 +1876,6 @@ mod tests {
         assert_eq!(details.related_info[0].message, "declaration of `value`");
         assert_eq!(details.related_info[0].message_highlights.len(), 1);
         assert_eq!(details.related_info[0].span.file, "related.baml");
-    }
-
-    #[test]
-    fn unspellable_package_detection_is_recursive() {
-        let aliases = vec![Name::new("app")];
-        let viewpoint = ExportViewpoint { aliases: &aliases };
-        let class_list = |qtn: baml_type::QualifiedTypeName| {
-            baml_type::Ty::List(Box::new(baml_type::Ty::Class(qtn, Box::new([]))))
-        };
-        // Local, stdlib, and mount-alias packages are spellable — even nested.
-        assert!(
-            !viewpoint.hides_type(&class_list(baml_type::QualifiedTypeName::local(Name::new(
-                "SourceClass"
-            ))))
-        );
-        assert!(!viewpoint.hides_type(&class_list(
-            baml_type::QualifiedTypeName::from_dotted_path("app.Mounted")
-        )));
-        // A package from some other compile world is not, wherever it nests.
-        assert!(
-            viewpoint.hides_type(&class_list(baml_type::QualifiedTypeName::from_dotted_path(
-                "elsewhere.Foreign"
-            )))
-        );
     }
 
     #[test]

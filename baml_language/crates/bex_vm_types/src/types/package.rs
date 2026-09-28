@@ -53,11 +53,10 @@ pub struct Package {
     /// the compiler's edge table, and the only way a name becomes a package
     /// at run time: a host names a package as the world's root reaches it,
     /// and a runtime package's wire names resolve through its own edges.
-    /// Names live on edges, so two packages may share a spelling.
+    /// Names live on edges, so two packages may share a spelling. An edge
+    /// of kind [`EdgeKind::ReExported`] makes every export of its target an
+    /// export of this package too (a `with_types` view of its base).
     pub edges: IndexMap<Name, Edge>,
-    /// Every source-visible exported declaration name, including aliases that
-    /// have no heap object of their own.
-    pub exported_names: Vec<LocalName>,
     /// Classes defined in the package.
     pub classes: IndexMap<LocalName, HeapPtr>,
     /// Enums defined in the package.
@@ -86,16 +85,12 @@ pub struct Package {
     pub slots: Slots,
     /// Where the package's code finds its objects.
     pub objects: Objects,
-    /// Versioned artifact containing the enriched, source-less compiler
-    /// interface for mounting this package under an alias in a later
-    /// `Package.compile` call.
-    pub interface_blob: Vec<u8>,
+    /// How a dependent's compiler learns what this package exports.
+    pub surface: ExportSurface,
     /// The package's `$init`, when it has `let`s to run.
     pub init: Option<HeapPtr>,
     /// Compiler-synthesized test registrar for this package, when it has tests.
     pub test_init: Option<HeapPtr>,
-    /// Exact runtime type values attached by `Package.with_types`.
-    pub mounted_types: IndexMap<String, HeapPtr>,
     /// Compiler warnings retained on the package. A static package's were
     /// reported at compile time; it retains none.
     pub diagnostics: Vec<RuntimeCompileDiagnostic>,
@@ -103,16 +98,40 @@ pub struct Package {
     pub session: Option<Box<SessionState>>,
 }
 
-/// How a package reaches another: by declaring it (a manifest edge or a
-/// `Package.compile` mount), or as the language's prelude, which every
+/// How a package reaches what an edge points at: a package it declared (a
+/// manifest edge or a `Package.compile` mount); a package it re-exports
+/// wholesale (a `with_types` view reaches its base this way: every export of
+/// the target is an export of the package — Rust's `pub use base::*`); a
+/// declaration belonging to no package that it exports (a `with_types` view
+/// reaches a minted class this way — the edge's target is the declaration
+/// itself, which the compile seam treats as a root of one row and the loader
+/// binds a dependency slot to); or the language's prelude, which every
 /// package reaches under fixed names without declaring.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum EdgeKind {
     Declared,
+    ReExported,
+    Anonymous,
     Prelude,
 }
 
-/// An entry of a package's edge table on the heap.
+/// How a dependent's compiler learns what a package exports.
+#[derive(Debug, Clone)]
+pub enum ExportSurface {
+    /// The versioned `PackageInterface` artifact the package's compile
+    /// exported: what a dependent compiles against when the package is
+    /// mounted.
+    Compiled(Vec<u8>),
+    /// The package had no compile — it is a `with_types` view, or the owner
+    /// of runtime-minted declarations — and its exports are projected from
+    /// its tables when a dependent compiles against it: its own classes,
+    /// enums and aliases, the declarations it re-exports, its impl rules, and
+    /// every export of a [`EdgeKind::ReExported`] edge's target.
+    Projected,
+}
+
+/// An entry of a package's edge table on the heap: a package, or — for
+/// [`EdgeKind::Anonymous`] — a class or enum declaration.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Edge {
     pub target: HeapPtr,
@@ -191,11 +210,29 @@ impl Package {
     }
 
     /// The packages this one declared as dependencies, in declaration order
-    /// — its edges minus the prelude.
+    /// — its package edges minus the prelude, a re-exported base included.
     pub fn declared(&self) -> impl Iterator<Item = HeapPtr> + '_ {
         self.edges
             .values()
-            .filter(|edge| edge.kind == EdgeKind::Declared)
+            .filter(|edge| matches!(edge.kind, EdgeKind::Declared | EdgeKind::ReExported))
+            .map(|edge| edge.target)
+    }
+
+    /// The declarations belonging to no package this one exports, in edge
+    /// order: the targets of its [`EdgeKind::Anonymous`] edges.
+    pub fn anonymous(&self) -> impl Iterator<Item = HeapPtr> + '_ {
+        self.edges
+            .values()
+            .filter(|edge| edge.kind == EdgeKind::Anonymous)
+            .map(|edge| edge.target)
+    }
+
+    /// The packages every export of which is also an export of this one, in
+    /// edge order: the targets of its [`EdgeKind::ReExported`] edges.
+    pub fn reexported(&self) -> impl Iterator<Item = HeapPtr> + '_ {
+        self.edges
+            .values()
+            .filter(|edge| edge.kind == EdgeKind::ReExported)
             .map(|edge| edge.target)
     }
 
@@ -242,7 +279,6 @@ pub struct ProgramPackage {
     /// A name resolves only from some package's viewpoint; a host's names
     /// resolve from the root's ([`Program::root`](crate::Program::root)).
     pub edges: Vec<ProgramEdge>,
-    pub exported_names: Vec<LocalName>,
     pub classes: IndexMap<LocalName, ObjectIndex>,
     pub enums: IndexMap<LocalName, ObjectIndex>,
     pub interfaces: IndexMap<LocalName, ObjectIndex>,

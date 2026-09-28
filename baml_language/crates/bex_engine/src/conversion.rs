@@ -329,11 +329,10 @@ fn portable_type_def(
         .iter()
         .chain(&enum_ptrs)
         .filter_map(|ptr| match unsafe { ptr.get() } {
-            Object::Class(class) => Some(class.owner),
-            Object::Enum(enm) => Some(enm.owner),
+            Object::Class(class) => class.owner.package(),
+            Object::Enum(enm) => enm.owner.package(),
             _ => None,
         })
-        .filter(|owner| !owner.is_null())
         .collect::<Vec<_>>();
     owners.dedup();
     for owner in owners {
@@ -5265,7 +5264,7 @@ mod union_container_selection_tests {
             alias: None,
             docstring: None,
             other: indexmap::IndexMap::new(),
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"));
         let broad = RuntimeTy::Enum(mood);
@@ -5303,7 +5302,7 @@ mod union_container_selection_tests {
                 has_cleanup: false,
                 methods: indexmap::IndexMap::new(),
                 generic_param_count: 0,
-                owner: bex_vm_types::HeapPtr::null(),
+                owner: bex_vm_types::types::Owner::anonymous(),
             })))
         }
 

@@ -274,15 +274,12 @@ pub struct CompilationUnit {
     pub impl_rules: Vec<ProgramImplRuleFrag>,
 }
 
-/// The whole-package products of a compile, produced beside the unit
-/// (rustc's crate metadata beside its codegen units): what the package exports
-/// by name, and the interface a dependent compiles against.
+/// The whole-package product of a compile, produced beside the unit
+/// (rustc's crate metadata beside its codegen units): the interface a
+/// dependent compiles against.
 #[derive(Clone, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct PackageRecord {
-    /// All source-visible declaration names (types, aliases, and values),
-    /// including aliases that have no pool object of their own.
-    pub exported_names: Vec<LocalName>,
-    /// Versioned artifact containing the whole-package enriched interface.
+    /// Versioned artifact containing the whole-package interface.
     pub interface_blob: Vec<u8>,
 }
 

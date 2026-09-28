@@ -83,7 +83,7 @@ fn class(name: &str) -> Object {
         has_cleanup: false,
         methods: indexmap::IndexMap::new(),
         generic_param_count: 0,
-        owner: bex_vm_types::HeapPtr::null(),
+        owner: bex_vm_types::types::Owner::anonymous(),
     }))
 }
 
@@ -526,11 +526,9 @@ fn transitive_dependencies_bind_through_the_parent_edge_table() {
 #[test]
 fn layout_is_package_major_in_set_order() {
     let stdlib_record = PackageRecord {
-        exported_names: vec![item("x")],
         interface_blob: Vec::new(),
     };
     let user_record = PackageRecord {
-        exported_names: vec![item("f")],
         interface_blob: vec![1, 2, 3],
     };
     let mut std_unit = unit_with_fn("baml.x", vec![Instruction::Return]);
@@ -572,7 +570,6 @@ fn layout_is_package_major_in_set_order() {
     assert_eq!(callables["baml.x"].object, ObjectIndex::from_raw(3));
     assert_eq!(callables["baml.x"].slot, GlobalIndex::from_raw(2));
     let user = package_named(&program, "user");
-    assert_eq!(user.exported_names, vec![item("f")]);
     assert_eq!(callables["user.f"].object, ObjectIndex::from_raw(1));
     assert_eq!(user.interface_blob, vec![1, 2, 3]);
     assert_eq!(

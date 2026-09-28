@@ -21,7 +21,10 @@ use baml_type::{normalize, normalize::TypeContext};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     DeclPath, FnPath, HeapPtr, Interface, Object, RealizedTy, SessionEvalLease, Ty, TyTemplate,
-    types::{Edge, EdgeKind, LocalName, Objects, Package, SessionState, Slots, TypeValue, Value},
+    types::{
+        Edge, EdgeKind, ExportSurface, LocalName, Objects, Package, SessionState, Slots,
+        TypeAliasDef, TypeValue, Value,
+    },
 };
 use indexmap::IndexMap;
 
@@ -109,6 +112,61 @@ fn runtime_edges(
             )
         })
         .collect();
+    add_prelude(vm, &mut edges);
+    edges
+}
+
+/// A `with_types` view's edge table: `base` under `$base`, re-exported
+/// (every export of the base is the view's); everywhere else the view's
+/// additions are defined under a name of its own, `$0`, `$1`, … in
+/// first-reach order — a package under a declared edge, an anonymous
+/// declaration under an anonymous edge to the declaration itself; a name no
+/// source can write, so a consumer spells such a declaration only through
+/// the re-export that reaches it; then the prelude by its fixed names. A
+/// prelude package is never an edge of its own, since every package reaches
+/// it under its fixed name.
+fn view_edges(
+    vm: &BexVm,
+    base: HeapPtr,
+    reached: &[crate::reachable::Reached],
+) -> IndexMap<baml_type::Name, Edge> {
+    use crate::reachable::Reached;
+    let mut edges = IndexMap::new();
+    edges.insert(
+        baml_type::Name::new(REEXPORTED_BASE_EDGE),
+        Edge {
+            target: base,
+            kind: EdgeKind::ReExported,
+        },
+    );
+    let mut next = 0;
+    for &reached in reached {
+        let (target, kind) = match reached {
+            Reached::Package(package) => (package, EdgeKind::Declared),
+            Reached::Anonymous(declaration) => (declaration, EdgeKind::Anonymous),
+        };
+        if target == base
+            || (kind == EdgeKind::Declared && vm.packages.is_prelude(target))
+            || edges.values().any(|edge| edge.target == target)
+        {
+            continue;
+        }
+        edges.insert(
+            baml_type::Name::new(format!("${next}")),
+            Edge { target, kind },
+        );
+        next += 1;
+    }
+    add_prelude(vm, &mut edges);
+    edges
+}
+
+/// The edge name a view reaches its base under.
+const REEXPORTED_BASE_EDGE: &str = "$base";
+
+/// The language packages under their fixed names, as the host image's root
+/// reaches them, added to `edges` where the name is free.
+fn add_prelude(vm: &BexVm, edges: &mut IndexMap<baml_type::Name, Edge>) {
     for name in baml_builtins2::stdlib_package_names() {
         let name = baml_type::Name::new(name);
         if !edges.contains_key(&name)
@@ -123,7 +181,6 @@ fn runtime_edges(
             );
         }
     }
-    edges
 }
 
 fn package_ptr(vm: &BexVm, value: Value) -> Result<HeapPtr, VmRustFnError> {
@@ -208,14 +265,184 @@ fn display_local_name(name: &LocalName) -> String {
         .join(".")
 }
 
-/// The exact type value `Package.with_types` attached under `name`, if any.
-/// A declaration's own type value is not stored: a `type` naming it is built
-/// off its head on demand, and compares by that head's identity.
-fn stored_package_type(package: &Package, name: &LocalName) -> Option<HeapPtr> {
-    name.namespace
-        .is_empty()
-        .then(|| package.mounted_types.get(name.name.as_str()).copied())
-        .flatten()
+/// The packages whose exports are `package`'s: itself, then — for a
+/// `with_types` view — its re-exported base, transitively, in first-visit
+/// order.
+fn export_chain(vm: &BexVm, package_ptr: HeapPtr) -> Vec<HeapPtr> {
+    let mut chain = vec![package_ptr];
+    let mut index = 0;
+    while index < chain.len() {
+        let current = chain[index];
+        index += 1;
+        if let Object::Package(package) = vm.get_object(current) {
+            for target in package.reexported() {
+                if !chain.contains(&target) {
+                    chain.push(target);
+                }
+            }
+        }
+    }
+    chain
+}
+
+/// The first answer `f` gives along `package`'s export chain: what a
+/// package exports under a name is its own entry, else the entry of the
+/// base it re-exports.
+fn find_export<T>(
+    vm: &BexVm,
+    package_ptr: HeapPtr,
+    mut f: impl FnMut(&BexVm, HeapPtr, &Package) -> Option<T>,
+) -> Option<T> {
+    export_chain(vm, package_ptr)
+        .into_iter()
+        .find_map(|ptr| match vm.get_object(ptr) {
+            Object::Package(package) => f(vm, ptr, package),
+            _ => None,
+        })
+}
+
+/// What a package exports under `name`, if anything: a declaration by its
+/// pointer, or a cell (a function or a `let`).
+fn exported_under(package: &Package, name: &LocalName) -> Option<Export> {
+    package
+        .classes
+        .get(name)
+        .or_else(|| package.enums.get(name))
+        .or_else(|| package.interfaces.get(name))
+        .or_else(|| package.type_aliases.get(name))
+        .map(|&ptr| Export::Declaration(ptr))
+        .or_else(|| {
+            (package
+                .globals
+                .contains_key(&DeclPath::Function(FnPath::Free(name.clone())))
+                || package.globals.contains_key(&DeclPath::Let(name.clone())))
+            .then_some(Export::Cell)
+        })
+}
+
+/// One export of a package, by what it is.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Export {
+    Declaration(HeapPtr),
+    Cell,
+}
+
+/// The declarations of one kind a package exports, along its export chain:
+/// each name under the first package that exports it.
+fn exported_declarations(
+    vm: &BexVm,
+    package_ptr: HeapPtr,
+    table: impl Fn(&Package) -> &IndexMap<LocalName, HeapPtr>,
+) -> IndexMap<LocalName, HeapPtr> {
+    let mut entries: IndexMap<LocalName, HeapPtr> = IndexMap::new();
+    for ptr in export_chain(vm, package_ptr) {
+        if let Object::Package(package) = vm.get_object(ptr) {
+            for (name, &declaration) in table(package) {
+                entries.entry(name.clone()).or_insert(declaration);
+            }
+        }
+    }
+    entries
+}
+
+/// The declaration a `with_types` value re-exports, if it is a bare nominal:
+/// a class, enum, or interface at no arguments, or an alias declaration.
+/// Any other type is declared as an alias of the view.
+fn reexported_declaration(ty: &RealizedTy) -> Option<HeapPtr> {
+    match ty {
+        RealizedTy::Class(head, args) if args.is_empty() => Some(head.ptr()),
+        RealizedTy::Interface(head, args, assoc) if args.is_empty() && assoc.is_empty() => {
+            Some(head.ptr())
+        }
+        RealizedTy::Enum(head) | RealizedTy::TypeAlias(head) => Some(head.ptr()),
+        _ => None,
+    }
+}
+
+/// What a `with_types` view adds to its base's exports.
+#[derive(Default)]
+struct Additions {
+    classes: IndexMap<LocalName, HeapPtr>,
+    enums: IndexMap<LocalName, HeapPtr>,
+    interfaces: IndexMap<LocalName, HeapPtr>,
+    type_aliases: IndexMap<LocalName, HeapPtr>,
+    /// The aliases the view declares, allocated once the view exists to own
+    /// them.
+    aliases: Vec<(LocalName, RealizedTy)>,
+}
+
+enum Addition {
+    /// A declaration re-exported under the name.
+    Declaration(HeapPtr),
+    /// An alias of the type, declared by the view.
+    Alias(RealizedTy),
+}
+
+impl Additions {
+    fn exported(&self, name: &LocalName) -> Option<Export> {
+        self.classes
+            .get(name)
+            .or_else(|| self.enums.get(name))
+            .or_else(|| self.interfaces.get(name))
+            .or_else(|| self.type_aliases.get(name))
+            .map(|&ptr| Export::Declaration(ptr))
+            .or_else(|| {
+                self.aliases
+                    .iter()
+                    .any(|(alias, _)| alias == name)
+                    .then_some(Export::Cell)
+            })
+    }
+
+    /// Add `addition` under `name`. A name already exported — along the
+    /// base's chain (`chain`) or among the additions — is a collision, except
+    /// that a declaration REACHED through a mounted type (`explicit` false)
+    /// may already be exported as exactly that declaration: the base's own
+    /// class named by a field, or one declaration reached through two types.
+    fn add(
+        &mut self,
+        vm: &mut BexVm,
+        chain: &[HeapPtr],
+        name: LocalName,
+        addition: Addition,
+        explicit: bool,
+    ) -> Result<(), VmRustFnError> {
+        let existing = self.exported(&name).or_else(|| {
+            chain.iter().find_map(|&ptr| match vm.get_object(ptr) {
+                Object::Package(package) => exported_under(package, &name),
+                _ => None,
+            })
+        });
+        match (&addition, existing) {
+            (Addition::Declaration(declaration), Some(Export::Declaration(exported)))
+                if !explicit && *declaration == exported =>
+            {
+                return Ok(());
+            }
+            (_, Some(_)) => {
+                return Err(compilation_error(
+                    vm,
+                    DiagnosticId::DuplicateName,
+                    format!("duplicate exported type name `{name}`"),
+                ));
+            }
+            (_, None) => {}
+        }
+        match addition {
+            Addition::Declaration(declaration) => {
+                let table = match vm.get_object(declaration) {
+                    Object::Class(_) => &mut self.classes,
+                    Object::Enum(_) => &mut self.enums,
+                    Object::Interface(_) => &mut self.interfaces,
+                    Object::TypeAlias(_) => &mut self.type_aliases,
+                    _ => unreachable!("a resolved head points at a declaration"),
+                };
+                table.insert(name, declaration);
+            }
+            Addition::Alias(ty) => self.aliases.push((name, ty)),
+        }
+        Ok(())
+    }
 }
 
 /// Runtime type facts rooted at the Package being inspected, not at the code
@@ -301,15 +528,7 @@ impl TypeContext<bex_vm_types::TypeHead> for PackageSubtypeContext<'_> {
     }
 }
 
-fn package_class_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, class_ptr: HeapPtr) -> Value {
-    if let Some(runtime_type) = runtime_type {
-        let ty_value = Value::object(runtime_type);
-        return super::type_kinds::alloc_kind_view(
-            vm,
-            baml_type::type_kind::TypeKind::Class,
-            ty_value,
-        );
-    }
+fn package_class_type(vm: &mut BexVm, class_ptr: HeapPtr) -> Value {
     let Object::Class(class) = vm.get_object(class_ptr) else {
         unreachable!("Package.classes only contains class pointers")
     };
@@ -321,15 +540,7 @@ fn package_class_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, class_ptr: 
     super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Class, ty_value)
 }
 
-fn package_enum_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, enum_ptr: HeapPtr) -> Value {
-    if let Some(runtime_type) = runtime_type {
-        let ty_value = Value::object(runtime_type);
-        return super::type_kinds::alloc_kind_view(
-            vm,
-            baml_type::type_kind::TypeKind::Enum,
-            ty_value,
-        );
-    }
+fn package_enum_type(vm: &mut BexVm, enum_ptr: HeapPtr) -> Value {
     let Object::Enum(enm) = vm.get_object(enum_ptr) else {
         unreachable!("Package.enums only contains enum pointers")
     };
@@ -338,19 +549,7 @@ fn package_enum_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, enum_ptr: He
     super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Enum, ty_value)
 }
 
-fn package_interface_type(
-    vm: &mut BexVm,
-    runtime_type: Option<HeapPtr>,
-    interface_ptr: HeapPtr,
-) -> Value {
-    if let Some(runtime_type) = runtime_type {
-        let ty_value = Value::object(runtime_type);
-        return super::type_kinds::alloc_kind_view(
-            vm,
-            baml_type::type_kind::TypeKind::Interface,
-            ty_value,
-        );
-    }
+fn package_interface_type(vm: &mut BexVm, interface_ptr: HeapPtr) -> Value {
     let Object::Interface(interface) = vm.get_object(interface_ptr) else {
         unreachable!("Package.interfaces only contains interface pointers")
     };
@@ -796,7 +995,6 @@ impl BamlClassPackage for PackageReflectImpl {
         let package = Package {
             name: baml_type::Name::new(baml_type::RESERVED_USER_PACKAGE),
             edges: runtime_edges(vm, &dependencies),
-            exported_names: Vec::new(),
             classes: IndexMap::new(),
             enums: IndexMap::new(),
             interfaces: IndexMap::new(),
@@ -808,10 +1006,9 @@ impl BamlClassPackage for PackageReflectImpl {
                 initialized: false,
             },
             objects: Objects::Own(Box::new([])),
-            interface_blob: artifact.interface_blob,
+            surface: ExportSurface::Compiled(artifact.interface_blob),
             init: None,
             test_init: None,
-            mounted_types: IndexMap::new(),
             diagnostics: artifact.diagnostics,
             session: None,
         };
@@ -858,35 +1055,27 @@ impl BamlClassPackage for PackageReflectImpl {
 
     fn get_class(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
         let ptr = package_ptr(vm, *package).ok()?;
-        let Object::Package(package) = vm.get_object(ptr) else {
-            return None;
-        };
         let local = local_name(name.as_str())?;
-        let class_ptr = package.classes.get(&local).copied()?;
-        let runtime_type = stored_package_type(package, &local);
-        Some(package_class_type(vm, runtime_type, class_ptr))
+        let class_ptr = find_export(vm, ptr, |_, _, package| {
+            package.classes.get(&local).copied()
+        })?;
+        Some(package_class_type(vm, class_ptr))
     }
 
     fn get_enum(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
         let ptr = package_ptr(vm, *package).ok()?;
-        let Object::Package(package) = vm.get_object(ptr) else {
-            return None;
-        };
         let local = local_name(name.as_str())?;
-        let enum_ptr = package.enums.get(&local).copied()?;
-        let runtime_type = stored_package_type(package, &local);
-        Some(package_enum_type(vm, runtime_type, enum_ptr))
+        let enum_ptr = find_export(vm, ptr, |_, _, package| package.enums.get(&local).copied())?;
+        Some(package_enum_type(vm, enum_ptr))
     }
 
     fn get_interface(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
         let ptr = package_ptr(vm, *package).ok()?;
-        let Object::Package(package) = vm.get_object(ptr) else {
-            return None;
-        };
         let local = local_name(name.as_str())?;
-        let interface_ptr = package.interfaces.get(&local).copied()?;
-        let runtime_type = stored_package_type(package, &local);
-        Some(package_interface_type(vm, runtime_type, interface_ptr))
+        let interface_ptr = find_export(vm, ptr, |_, _, package| {
+            package.interfaces.get(&local).copied()
+        })?;
+        Some(package_interface_type(vm, interface_ptr))
     }
 
     fn with_types(
@@ -894,12 +1083,17 @@ impl BamlClassPackage for PackageReflectImpl {
         package: &Value,
         types: &IndexMap<bex_str::BexStr, Value>,
     ) -> Result<Value, VmRustFnError> {
-        let source_ptr = package_ptr(vm, *package)?;
-        let Object::Package(source) = vm.get_object(source_ptr) else {
-            unreachable!("package_ptr validates Object::Package")
-        };
-        let mut derived = (**source).clone();
-
+        let base_ptr = package_ptr(vm, *package)?;
+        // A view is a new package that re-exports its base wholesale and
+        // adds the given names: a bare nominal is re-exported, possibly
+        // renamed, under its export name; any other type is an alias the
+        // view declares; and every runtime declaration a mounted type
+        // reaches is re-exported under its item name, as the type reaches
+        // it. Nothing of the base is copied — a name the view does not add
+        // is read from the base at the time it is asked for.
+        let chain = export_chain(vm, base_ptr);
+        let mut additions = Additions::default();
+        let mut reached: Vec<crate::reachable::Reached> = Vec::new();
         for (export, value) in types {
             let export = export.to_string();
             if !super::type_kinds::is_baml_identifier(&export) {
@@ -914,18 +1108,6 @@ impl BamlClassPackage for PackageReflectImpl {
                 namespace: Vec::new(),
                 name: baml_type::Name::new(&export),
             };
-            if derived.classes.contains_key(&local)
-                || derived.enums.contains_key(&local)
-                || derived.interfaces.contains_key(&local)
-                || derived.exported_names.contains(&local)
-                || derived.mounted_types.contains_key(&export)
-            {
-                return Err(compilation_error(
-                    vm,
-                    DiagnosticId::DuplicateName,
-                    format!("duplicate exported type name `{export}`"),
-                ));
-            }
             let Some(mut type_ptr) = value.as_object_ptr() else {
                 return Err(compilation_error(
                     vm,
@@ -951,28 +1133,78 @@ impl BamlClassPackage for PackageReflectImpl {
                     format!("with_types value for `{export}` must be a type"),
                 ));
             };
-            // The head is the declaration being mounted — no lookup, no
-            // owner-package scan, and no name that could resolve to a
-            // same-named declaration from somewhere else.
-            match &type_value.ty {
-                RealizedTy::Class(head, _) => {
-                    derived.classes.insert(local.clone(), head.ptr());
-                }
-                RealizedTy::Enum(head) => {
-                    derived.enums.insert(local.clone(), head.ptr());
-                }
-                RealizedTy::Interface(head, _, _) => {
-                    derived.interfaces.insert(local.clone(), head.ptr());
-                }
-                _ => {}
+            let ty = type_value.ty.clone();
+            let addition = match reexported_declaration(&ty) {
+                Some(declaration) => Addition::Declaration(declaration),
+                None => Addition::Alias(ty.clone()),
+            };
+            additions.add(vm, &chain, local, addition, true)?;
+            for declaration in crate::reachable::runtime_definitions(vm, &ty) {
+                let item = match vm.get_object(declaration) {
+                    Object::Class(class) => class.name.item_name().clone(),
+                    Object::Enum(enm) => enm.name.item_name().clone(),
+                    Object::Interface(interface) => interface.name.name().clone(),
+                    Object::TypeAlias(alias) => alias.name.name().clone(),
+                    _ => continue,
+                };
+                additions.add(
+                    vm,
+                    &chain,
+                    LocalName {
+                        namespace: Vec::new(),
+                        name: item,
+                    },
+                    Addition::Declaration(declaration),
+                    false,
+                )?;
             }
-            derived.mounted_types.insert(export, type_ptr);
-            derived.exported_names.push(local);
+            for where_ in crate::reachable::reached(vm, &ty) {
+                if !reached.contains(&where_) {
+                    reached.push(where_);
+                }
+            }
         }
-
-        let derived_ptr = vm.alloc(Object::Package(Box::new(derived)));
+        let Object::Package(base) = vm.get_object(base_ptr) else {
+            unreachable!("package_ptr validates Object::Package")
+        };
+        let view = Package {
+            name: base.name.clone(),
+            edges: view_edges(vm, base_ptr, &reached),
+            classes: additions.classes,
+            enums: additions.enums,
+            interfaces: additions.interfaces,
+            type_aliases: additions.type_aliases,
+            impl_rules: IndexMap::new(),
+            globals: IndexMap::new(),
+            // A view runs nothing: its base's functions and `let`s run in
+            // the base.
+            slots: Slots::Own {
+                cells: Box::new([]),
+                initialized: true,
+            },
+            objects: Objects::Own(Box::new([])),
+            surface: ExportSurface::Projected,
+            init: None,
+            test_init: None,
+            diagnostics: Vec::new(),
+            session: None,
+        };
+        let view_ptr = vm.alloc(Object::Package(Box::new(view)));
+        for (local, definition) in additions.aliases {
+            let alias = vm.alloc(Object::TypeAlias(Box::new(TypeAliasDef {
+                name: baml_type::TypeName::local(local.name.clone()),
+                type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
+                definition,
+                owner: view_ptr,
+            })));
+            vm.tlab.heap().write_barrier(view_ptr, Value::object(alias));
+            let Object::Package(view) = vm.get_object_mut(view_ptr) else {
+                unreachable!("the view was just allocated")
+            };
+            view.type_aliases.insert(local, alias);
+        }
         Ok(copy::Package {
-            _inner: Value::object(derived_ptr),
+            _inner: Value::object(view_ptr),
         }
         .to_value(vm))
     }
@@ -986,15 +1218,13 @@ impl BamlClassPackage for PackageReflectImpl {
         let Some(local) = local_name(name.as_str()) else {
             return Ok(None);
         };
-        let function = match vm.get_object(package_ptr) {
-            Object::Package(package) => package
-                .globals
-                .get(&DeclPath::Function(FnPath::Free(local.clone())))
-                .and_then(|&cell| super::graft::cell_value(vm, package, cell))
-                .and_then(|value| value.as_object_ptr()),
-            _ => None,
-        };
-        let Some(function) = function else {
+        // The package the function lives in: a view answers with its base's.
+        let path = DeclPath::Function(FnPath::Free(local.clone()));
+        let Some((package_ptr, function)) = find_export(vm, package_ptr, |vm, ptr, package| {
+            let cell = *package.globals.get(&path)?;
+            let function = super::graft::cell_value(vm, package, cell)?.as_object_ptr()?;
+            Some((ptr, function))
+        }) else {
             return Ok(None);
         };
         if matches!(
@@ -1039,20 +1269,12 @@ impl BamlClassPackage for PackageReflectImpl {
         let Ok(ptr) = package_ptr(vm, *package) else {
             return IndexMap::new();
         };
-        let Object::Package(package) = vm.get_object(ptr) else {
-            return IndexMap::new();
-        };
-        let entries = package
-            .classes
-            .iter()
-            .map(|(name, &class)| (name.clone(), class, stored_package_type(package, name)))
-            .collect::<Vec<_>>();
-        entries
+        exported_declarations(vm, ptr, |package| &package.classes)
             .into_iter()
-            .map(|(name, class, runtime_type)| {
+            .map(|(name, class)| {
                 (
                     display_local_name(&name).into(),
-                    package_class_type(vm, runtime_type, class),
+                    package_class_type(vm, class),
                 )
             })
             .collect()
@@ -1062,22 +1284,9 @@ impl BamlClassPackage for PackageReflectImpl {
         let Ok(ptr) = package_ptr(vm, *package) else {
             return IndexMap::new();
         };
-        let Object::Package(package) = vm.get_object(ptr) else {
-            return IndexMap::new();
-        };
-        let entries = package
-            .enums
-            .iter()
-            .map(|(name, &enm)| (name.clone(), enm, stored_package_type(package, name)))
-            .collect::<Vec<_>>();
-        entries
+        exported_declarations(vm, ptr, |package| &package.enums)
             .into_iter()
-            .map(|(name, enm, runtime_type)| {
-                (
-                    display_local_name(&name).into(),
-                    package_enum_type(vm, runtime_type, enm),
-                )
-            })
+            .map(|(name, enm)| (display_local_name(&name).into(), package_enum_type(vm, enm)))
             .collect()
     }
 
@@ -1085,20 +1294,12 @@ impl BamlClassPackage for PackageReflectImpl {
         let Ok(ptr) = package_ptr(vm, *package) else {
             return IndexMap::new();
         };
-        let Object::Package(package) = vm.get_object(ptr) else {
-            return IndexMap::new();
-        };
-        let entries = package
-            .interfaces
-            .iter()
-            .map(|(name, &interface)| (name.clone(), interface, stored_package_type(package, name)))
-            .collect::<Vec<_>>();
-        entries
+        exported_declarations(vm, ptr, |package| &package.interfaces)
             .into_iter()
-            .map(|(name, interface, runtime_type)| {
+            .map(|(name, interface)| {
                 (
                     display_local_name(&name).into(),
-                    package_interface_type(vm, runtime_type, interface),
+                    package_interface_type(vm, interface),
                 )
             })
             .collect()
@@ -1108,35 +1309,39 @@ impl BamlClassPackage for PackageReflectImpl {
         let Ok(ptr) = package_ptr(vm, *package) else {
             return IndexMap::new();
         };
-        let Object::Package(package) = vm.get_object(ptr) else {
-            return IndexMap::new();
-        };
-        let functions = package
-            .globals
-            .iter()
-            .filter_map(|(path, &cell)| match path {
-                DeclPath::Function(FnPath::Free(name)) => {
-                    let function = super::graft::cell_value(vm, package, cell)?.as_object_ptr()?;
-                    Some((name.clone(), function))
+        // Every free function along the export chain, each under the first
+        // package that exports its name, with the package it lives in.
+        let mut functions: IndexMap<LocalName, HeapPtr> = IndexMap::new();
+        for package_ptr in export_chain(vm, ptr) {
+            let Object::Package(package) = vm.get_object(package_ptr) else {
+                continue;
+            };
+            for (path, &cell) in &package.globals {
+                let DeclPath::Function(FnPath::Free(name)) = path else {
+                    continue;
+                };
+                if functions.contains_key(name) {
+                    continue;
                 }
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        let functions = functions
-            .into_iter()
-            .filter(|(_, function)| {
-                !matches!(
-                    vm.get_object(*function),
+                let Some(function) = super::graft::cell_value(vm, package, cell)
+                    .and_then(|value| value.as_object_ptr())
+                else {
+                    continue;
+                };
+                if matches!(
+                    vm.get_object(function),
                     Object::Function(function)
                         if function.origin == bex_vm_types::FunctionOrigin::Internal
-                )
-            })
-            .map(|(name, _)| name)
-            .collect::<Vec<_>>();
+                ) {
+                    continue;
+                }
+                functions.insert(name.clone(), package_ptr);
+            }
+        }
         functions
             .into_iter()
-            .filter_map(|name| {
-                function_type(vm, ptr, &name).map(|ty| (display_local_name(&name).into(), ty))
+            .filter_map(|(name, owner)| {
+                function_type(vm, owner, &name).map(|ty| (display_local_name(&name).into(), ty))
             })
             .collect()
     }
@@ -1146,10 +1351,8 @@ impl BamlClassPackage for PackageReflectImpl {
             Ok(package) => package,
             Err(error) => return error.into(),
         };
-        let test_init = match vm.get_object(package_ptr) {
-            Object::Package(package) => package.test_init,
-            _ => None,
-        };
+        // A view's tests are its base's.
+        let test_init = find_export(vm, package_ptr, |_, _, package| package.test_init);
         let Some(test_init) = test_init else {
             return NativeCallResult::Done(empty_tests(vm));
         };
@@ -1371,7 +1574,7 @@ fn graft_session_submission(
             step,
         });
     }
-    package.interface_blob.clone_from(&artifact.interface_blob);
+    package.surface = ExportSurface::Compiled(artifact.interface_blob.clone());
     let Some(state) = package.session.as_deref_mut() else {
         unreachable!("Session graft target is a Session package")
     };
@@ -1413,7 +1616,6 @@ impl BamlClassSession for PackageReflectImpl {
         let package = Package {
             name: baml_type::Name::new(baml_type::RESERVED_USER_PACKAGE),
             edges: runtime_edges(vm, &dependencies),
-            exported_names: Vec::new(),
             classes: IndexMap::new(),
             enums: IndexMap::new(),
             interfaces: IndexMap::new(),
@@ -1426,10 +1628,11 @@ impl BamlClassSession for PackageReflectImpl {
                 initialized: false,
             },
             objects: Objects::Own(Box::new([])),
-            interface_blob: Vec::new(),
+            // Every submission's compile exports the whole session; the first
+            // replaces this before any code of the session can observe it.
+            surface: ExportSurface::Compiled(Vec::new()),
             init: None,
             test_init: None,
-            mounted_types: IndexMap::new(),
             diagnostics: Vec::new(),
             session: Some(Box::new(SessionState {
                 history: IndexMap::new(),

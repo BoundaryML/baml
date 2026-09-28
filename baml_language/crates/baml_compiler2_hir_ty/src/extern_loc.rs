@@ -897,19 +897,16 @@ pub fn mounted_interface_method<'db>(
     served(db, interface.root()).then(|| extern_interface_method(db, interface, name))?
 }
 
-/// The free function `namespace.name` of `root`, if exported.
+/// The free function `namespace.name` of `root`, if exported — by the
+/// identity of its defining row, which a re-export names in another package.
 pub fn extern_function_named<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     root: SourceRoot,
     namespace: &[Name],
     name: &Name,
 ) -> Option<ExternFunctionLoc<'db>> {
-    mint_declared(
-        db,
-        ExternalCallTarget::Free {
-            function: DeclName::in_root(root, namespace.to_vec(), name.clone()),
-        },
-    )
+    let function = crate::package_interface::exported_function_head(db, root, namespace, name)?;
+    mint_declared(db, ExternalCallTarget::Free { function })
 }
 
 /// The inherent method `name` of the exported class `class`, if any.

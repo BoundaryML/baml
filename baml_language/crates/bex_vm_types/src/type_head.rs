@@ -602,7 +602,7 @@ mod tests {
             has_cleanup: false,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
-            owner: crate::HeapPtr::null(),
+            owner: crate::types::Owner::anonymous(),
         }));
 
         let mut head = TypeHead::unresolved(TypeTag::of_static_index(0));
@@ -641,7 +641,7 @@ mod tests {
             has_cleanup: false,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
-            owner: crate::HeapPtr::null(),
+            owner: crate::types::Owner::anonymous(),
         }));
         let head = TypeHead::new(ptr_to(&mut declaration), type_tag);
 

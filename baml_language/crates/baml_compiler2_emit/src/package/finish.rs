@@ -12,10 +12,7 @@ use baml_compiler2_hir::{
     },
     loc::{DeclRef, FunctionLoc, LetLoc},
 };
-use baml_compiler2_hir_ty::{
-    lower::qualify_def,
-    package_interface::{export_interface, package_interface},
-};
+use baml_compiler2_hir_ty::{lower::qualify_def, package_interface::export_interface};
 use baml_compiler2_mir::{RuntimeLowering, definition_link_name};
 use baml_linker_types::{
     CompilationUnit, EmittedPackage, ExportTable, InitTail, LocalRef, PackageRecord,
@@ -23,7 +20,6 @@ use baml_linker_types::{
 };
 use bex_vm_types::{
     ClassMethodDef, DeclPath, Function, GlobalIndex, Object, ObjectIndex, ObjectPool,
-    types::LocalName,
 };
 
 use super::{
@@ -259,10 +255,9 @@ fn seal_tail((mut tail, tail_refs): (InitTail, RefTables)) -> InitTail {
     tail
 }
 
-/// The whole-package products beside the unit: what the package exports by
-/// name, and the interface a dependent compiles against.
+/// The whole-package product beside the unit: the interface a dependent
+/// compiles against.
 fn package_record(db: &dyn crate::Db, root: SourceRoot) -> PackageRecord {
-    let interface = package_interface(db, root);
     // Runtime compilers already own the exact stdlib sources, so only
     // mountable packages need to carry a serialized compiler surface.
     let interface_blob = if root.kind(db) == SourceRootKind::Stdlib {
@@ -274,28 +269,7 @@ fn package_record(db: &dyn crate::Db, root: SourceRoot) -> PackageRecord {
         )
         .expect("PackageInterface artifact serialization into Vec is infallible")
     };
-    let mut exported_names: indexmap::IndexSet<LocalName> = interface
-        .types
-        .iter()
-        .flat_map(|(namespace, types)| {
-            types.keys().map(|name| LocalName {
-                namespace: namespace.clone(),
-                name: name.clone(),
-            })
-        })
-        .collect();
-    for (namespace, rows) in &interface.functions {
-        for name in rows.keys() {
-            exported_names.insert(LocalName {
-                namespace: namespace.clone(),
-                name: name.clone(),
-            });
-        }
-    }
-    PackageRecord {
-        exported_names: exported_names.into_iter().collect(),
-        interface_blob,
-    }
+    PackageRecord { interface_blob }
 }
 
 /// A tail before its tables are sealed, with what a submission's tail

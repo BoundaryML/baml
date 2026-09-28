@@ -51,7 +51,9 @@ use bex_vm_types::{
     bytecode::SwitchKey,
     head_walk::visit_object_heads_mut,
     relink::{IndexOperand, visit_object_operands},
-    types::{LocalName, MethodImpl, Objects, Package, RuntimeImplRule, Slots, Value},
+    types::{
+        EdgeKind, LocalName, MethodImpl, Objects, Owner, Package, RuntimeImplRule, Slots, Value,
+    },
 };
 use indexmap::IndexMap;
 
@@ -166,9 +168,6 @@ pub(super) fn load_package(
         let Object::Package(package) = vm.get_object_mut(package_ptr) else {
             unreachable!("a graft target is a package")
         };
-        package
-            .exported_names
-            .clone_from(&emitted.record.exported_names);
         package.classes.extend(declared.classes);
         package.enums.extend(declared.enums);
         package.interfaces.extend(declared.interfaces);
@@ -398,7 +397,7 @@ fn place_objects<'a>(
     vm: &mut BexVm,
     image: &mut Image,
     package_ptr: HeapPtr,
-    slots: &[HeapPtr],
+    slots: &[Bound],
     owned: impl IntoIterator<Item = &'a Object>,
     imports: &[ImportEntry],
 ) -> Result<(Vec<usize>, Vec<usize>), VmRustFnError> {
@@ -424,7 +423,7 @@ fn place_globals(
     vm: &BexVm,
     image: &mut Image,
     package_ptr: HeapPtr,
-    slots: &[HeapPtr],
+    slots: &[Bound],
     imports: &[ImportEntry],
 ) -> Result<Vec<usize>, VmRustFnError> {
     imports
@@ -566,76 +565,117 @@ impl Declared {
     }
 }
 
-/// Bind a dependency table's slots (slot `k + 1` is `entries[k]`): a direct
-/// edge through the package's own dependency table, a prelude name through
-/// the host image. A transitive entry has no binding a runtime package can
-/// make yet, and is refused rather than left dangling.
+/// What a dependency slot binds to: a package, or — through an anonymous
+/// edge — a class or enum declaration belonging to no package, which exports
+/// exactly itself.
+#[derive(Clone, Copy)]
+enum Bound {
+    Package(HeapPtr),
+    Declaration(HeapPtr),
+}
+
+/// Bind a dependency table's slots (slot `k + 1` is `entries[k]`): each
+/// entry's edge name is read in the edge table of the package bound to its
+/// `via` slot — the package being loaded for a direct edge (its edges are
+/// the compile's mounts and the host image's prelude, exactly what the unit
+/// could name), an earlier slot's package for a transitive root (one the
+/// consumer reaches through a dependency's re-exports or API). The static
+/// linker's rule, read off package objects instead of a link set. A slot
+/// bound to a declaration has no edges to read.
 fn bind_slots(
     vm: &BexVm,
     package_ptr: HeapPtr,
     entries: &[DependencyEntry],
-) -> Result<Vec<HeapPtr>, VmRustFnError> {
-    let Object::Package(package) = vm.get_object(package_ptr) else {
-        unreachable!("a graft target is a package")
-    };
-    entries
-        .iter()
-        .map(|entry| {
-            if !entry.via.is_self() {
-                return Err(link_error(format!(
-                    "dependency `{}` is reached through another package, which a runtime \
-                     package cannot bind",
-                    entry.edge
-                )));
+) -> Result<Vec<Bound>, VmRustFnError> {
+    let mut bound: Vec<Bound> = Vec::with_capacity(entries.len());
+    for (index, entry) in entries.iter().enumerate() {
+        let parent = match entry.via.dependency_index() {
+            None => package_ptr,
+            Some(via) => match bound.get(via) {
+                Some(Bound::Package(parent)) => *parent,
+                Some(Bound::Declaration(_)) => {
+                    return Err(link_error(format!(
+                        "dependency slot {} is reached via slot {}, a declaration with no edges",
+                        index + 1,
+                        entry.via.0
+                    )));
+                }
+                None => {
+                    return Err(link_error(format!(
+                        "dependency slot {} is reached via slot {}, which is not earlier",
+                        index + 1,
+                        entry.via.0
+                    )));
+                }
+            },
+        };
+        let Object::Package(package) = vm.get_object(parent) else {
+            unreachable!("a bound dependency slot is a package")
+        };
+        let edge = package.edges.get(&entry.edge).ok_or_else(|| {
+            link_error(format!(
+                "dependency `{}` names no package the compile was given",
+                entry.edge
+            ))
+        })?;
+        bound.push(match edge.kind {
+            EdgeKind::Anonymous => Bound::Declaration(edge.target),
+            EdgeKind::Declared | EdgeKind::ReExported | EdgeKind::Prelude => {
+                Bound::Package(edge.target)
             }
-            // The package's edges are the compile's mounts and the host
-            // image's prelude — exactly what the unit could name.
-            package
-                .edges
-                .get(&entry.edge)
-                .map(|edge| edge.target)
-                .ok_or_else(|| {
-                    link_error(format!(
-                        "dependency `{}` names no package the compile was given",
-                        entry.edge
-                    ))
-                })
-        })
-        .collect()
+        });
+    }
+    Ok(bound)
 }
 
-fn slot_package(package_ptr: HeapPtr, slots: &[HeapPtr], dep: DepSlot) -> HeapPtr {
+fn slot_binding(package_ptr: HeapPtr, slots: &[Bound], dep: DepSlot) -> Bound {
     match dep.dependency_index() {
-        None => package_ptr,
+        None => Bound::Package(package_ptr),
         Some(index) => slots[index],
     }
+}
+
+/// The object an anonymous declaration exports under `path`: itself, under
+/// its own kind and item name, and nothing else — it has no members a
+/// consumer imports (a minted class has no inherent methods).
+fn anonymous_export(vm: &BexVm, declaration: HeapPtr, path: &DeclPath) -> Option<HeapPtr> {
+    let exported = match (vm.get_object(declaration), path) {
+        (Object::Class(class), DeclPath::Class(item)) => {
+            item.namespace.is_empty() && item.name == *class.name.item_name()
+        }
+        (Object::Enum(enm), DeclPath::Enum(item)) => {
+            item.namespace.is_empty() && item.name == *enm.name.item_name()
+        }
+        _ => false,
+    };
+    exported.then_some(declaration)
 }
 
 /// The object `key` names, through the bound package's tables.
 fn resolve_object(
     vm: &BexVm,
     package_ptr: HeapPtr,
-    slots: &[HeapPtr],
+    slots: &[Bound],
     key: &DeclKey,
 ) -> Result<HeapPtr, VmRustFnError> {
-    let owner = slot_package(package_ptr, slots, key.dep);
+    let owner = match slot_binding(package_ptr, slots, key.dep) {
+        Bound::Package(owner) => owner,
+        Bound::Declaration(declaration) => {
+            return anonymous_export(vm, declaration, &key.path).ok_or_else(|| {
+                link_error(format!(
+                    "`{}` is not the declaration bound at dependency slot {}",
+                    key.path, key.dep.0
+                ))
+            });
+        }
+    };
     let Object::Package(package) = vm.get_object(owner) else {
         unreachable!("a bound dependency slot is a package")
     };
     let found =
         match &key.path {
-            DeclPath::Class(item) => match package.classes.get(item) {
-                Some(&ptr) => Some(ptr),
-                None => mounted_item(vm, package, item, |object| {
-                    matches!(object, Object::Class(_))
-                })?,
-            },
-            DeclPath::Enum(item) => match package.enums.get(item) {
-                Some(&ptr) => Some(ptr),
-                None => mounted_item(vm, package, item, |object| {
-                    matches!(object, Object::Enum(_))
-                })?,
-            },
+            DeclPath::Class(item) => package.classes.get(item).copied(),
+            DeclPath::Enum(item) => package.enums.get(item).copied(),
             DeclPath::Interface(item) => package.interfaces.get(item).copied(),
             DeclPath::TypeAlias(item) => package.type_aliases.get(item).copied(),
             DeclPath::Function(FnPath::Free(_)) => package
@@ -675,48 +715,6 @@ fn resolve_object(
             key.path, key.dep.0
         ))
     })
-}
-
-/// The runtime declaration `item` names on a `with_types` mount. The
-/// consumer's compile spelled every runtime class and enum a mounted type
-/// reaches by its item name under the mount's alias — one row each, unique by
-/// E0011 — so that name identifies it here too. A declaration spelled by no
-/// row is unreachable from source; a name two declarations carry is refused
-/// rather than guessed.
-fn mounted_item(
-    vm: &BexVm,
-    package: &Package,
-    item: &LocalName,
-    kind: impl Fn(&Object) -> bool,
-) -> Result<Option<HeapPtr>, VmRustFnError> {
-    if !item.namespace.is_empty() {
-        return Ok(None);
-    }
-    let mut found: Option<HeapPtr> = None;
-    for &type_ptr in package.mounted_types.values() {
-        let Object::Type(value) = vm.get_object(type_ptr) else {
-            unreachable!("a mounted type is a type value")
-        };
-        for ptr in crate::reachable::runtime_definitions(vm, &value.ty) {
-            let object = vm.get_object(ptr);
-            let name = match object {
-                Object::Class(class) => class.name.item_name(),
-                Object::Enum(enm) => enm.name.item_name(),
-                // Only classes and enums are spelled by rows.
-                _ => continue,
-            };
-            if name.as_str() != item.name.as_str() || !kind(object) {
-                continue;
-            }
-            if found.is_some_and(|seen| seen != ptr) {
-                return Err(link_error(format!(
-                    "`{item}` names two runtime declarations of the mount"
-                )));
-            }
-            found = Some(ptr);
-        }
-    }
-    Ok(found)
 }
 
 /// A body, as the package that binds it holds it.
@@ -785,10 +783,18 @@ enum GlobalBinding {
 fn resolve_global(
     vm: &BexVm,
     package_ptr: HeapPtr,
-    slots: &[HeapPtr],
+    slots: &[Bound],
     key: &DeclKey,
 ) -> Result<GlobalBinding, VmRustFnError> {
-    let owner = slot_package(package_ptr, slots, key.dep);
+    let owner = match slot_binding(package_ptr, slots, key.dep) {
+        Bound::Package(owner) => owner,
+        Bound::Declaration(_) => {
+            return Err(link_error(format!(
+                "`{}` names a cell of a declaration, which owns none",
+                key.path
+            )));
+        }
+    };
     let Object::Package(package) = vm.get_object(owner) else {
         unreachable!("a bound dependency slot is a package")
     };
@@ -827,11 +833,11 @@ fn adopt(object: &mut Object, package_ptr: HeapPtr) {
     match object {
         Object::Class(class) => {
             class.type_tag = TypeTag::fresh_dynamic();
-            class.owner = package_ptr;
+            class.owner = Owner::Package(package_ptr);
         }
         Object::Enum(enm) => {
             enm.type_tag = TypeTag::fresh_dynamic();
-            enm.owner = package_ptr;
+            enm.owner = Owner::Package(package_ptr);
         }
         Object::Interface(interface) => {
             interface.type_tag = TypeTag::fresh_dynamic();

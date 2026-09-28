@@ -9,20 +9,16 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use baml_type::{Interface, Name, RealizedTy, Ty, TypeName};
+use baml_type::{Interface, Name, Ty, TypeName};
 use indexmap::IndexMap;
 
-/// Compiler-neutral structural projection of one runtime class definition.
-///
-/// `name` is the declaration's bare item name; the compile world spells it
-/// `alias.<name>` under whatever alias the package is mounted as. `tag` is the
-/// declaration's live identity, carried only so the compile seam can tell two
-/// same-named declarations apart (a fail-closed duplicate check) — it is never
-/// a compile-time identity.
+/// Compiler-neutral structural projection of one runtime class declaration
+/// of a package that had no compile: its row, keyed by the bare item name it
+/// is exported under. Field types are spelled from the package's viewpoint
+/// (see [`RuntimeProjectedSurface`]).
 #[derive(Clone, Debug)]
 pub struct RuntimeMountedClass {
     pub name: Name,
-    pub tag: baml_type::typetag::TypeTag,
     pub docstring: Option<String>,
     pub fields: Vec<(Name, Ty<TypeName>, RuntimeMountedFieldAttrs)>,
 }
@@ -30,7 +26,6 @@ pub struct RuntimeMountedClass {
 #[derive(Clone, Debug)]
 pub struct RuntimeMountedEnum {
     pub name: Name,
-    pub tag: baml_type::typetag::TypeTag,
     pub docstring: Option<String>,
     pub variants: Vec<(Name, RuntimeMountedVariantAttrs)>,
 }
@@ -47,34 +42,86 @@ pub struct RuntimeMountedVariantAttrs {
     pub docstring: Option<String>,
 }
 
-/// One exact type value mounted under a source-visible export name.
-///
-/// `ty` and every field type in `classes` are already spelled from the
-/// consumer compile world's viewpoint: a runtime declaration appears as
-/// `alias.<item name>`, a compiled one as its own qualified name.
+/// A type alias a package that had no compile declares: a `with_types` name
+/// given a type that is not a bare nominal.
 #[derive(Clone, Debug)]
-pub struct RuntimeTypeMount {
-    pub export_name: Name,
-    pub ty: RealizedTy,
-    pub classes: Vec<RuntimeMountedClass>,
-    pub enums: Vec<RuntimeMountedEnum>,
-    pub witnesses: Vec<MountedWitness>,
+pub struct RuntimeMountedAlias {
+    pub name: crate::types::LocalName,
+    pub ty: Ty<TypeName>,
 }
 
-/// One interface a mounted type witnesses, with the `(field, method)` links
-/// its implementation is read through.
-pub type MountedWitness = (Interface<TypeName>, Vec<(Name, Name)>);
+/// A declaration of another package that a package exports under a name of
+/// its own — Rust's `pub use other::Decl as Name`. `of` spells the defining
+/// declaration through the package's edges.
+#[derive(Clone, Debug)]
+pub struct RuntimeReExport {
+    pub name: crate::types::LocalName,
+    pub of: TypeName,
+    pub kind: RuntimeReExportKind,
+}
 
-/// The identity of a runtime package object across the compile seam: an
-/// opaque token minted from the object's address, valid for the request
-/// that carries it (the request pins its packages). Two aliases naming one
-/// package object carry one identity, so the compile world mounts one
-/// package reached under two names, never two look-alike packages.
+/// What kind of declaration a re-export names.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RuntimeReExportKind {
+    Class,
+    Enum,
+    Interface,
+    TypeAlias,
+}
+
+/// One impl rule of a package that had no compile (a witness a minted class
+/// carries), spelled from the package's viewpoint: the interface with its
+/// arguments and associated bindings, the implementing type, and the
+/// `(field, class field)` links the implementation is read through.
+#[derive(Clone, Debug)]
+pub struct RuntimeMountedImpl {
+    pub interface: Interface<TypeName>,
+    pub for_ty: Ty<TypeName>,
+    pub field_links: Vec<(Name, Name)>,
+}
+
+/// The exports of a mount that had no compile — a `with_types` view, or an
+/// anonymous declaration a view exports, a root of one row — projected from
+/// what it holds.
+/// Every type is spelled from the package's own viewpoint: its own
+/// declarations `Local`, the prelude under its fixed names, and any other
+/// package's declaration through the edge of [`RuntimePackageMount::edges`]
+/// that reaches its owner. Every export of a
+/// [`ReExported`](crate::types::EdgeKind::ReExported) edge's target is an
+/// export of the package too; the compiler adds those from the target's
+/// interface.
+#[derive(Clone, Debug, Default)]
+pub struct RuntimeProjectedSurface {
+    pub classes: Vec<RuntimeMountedClass>,
+    pub enums: Vec<RuntimeMountedEnum>,
+    pub aliases: Vec<RuntimeMountedAlias>,
+    pub reexports: Vec<RuntimeReExport>,
+    pub impls: Vec<RuntimeMountedImpl>,
+}
+
+/// How a mounted package's exports reach the compiler.
+#[derive(Clone, Debug)]
+pub enum RuntimeMountSurface {
+    /// The versioned `PackageInterface` artifact the package's compile
+    /// exported.
+    Compiled(Vec<u8>),
+    /// The package had no compile; its exports are projected from its
+    /// tables.
+    Projected(RuntimeProjectedSurface),
+}
+
+/// The identity of a mounted object across the compile seam — a package, or
+/// a declaration belonging to no package that a view exports: an opaque
+/// token minted from the object's address, valid for the request that
+/// carries it (the request pins its packages). Two aliases naming one
+/// package object carry one identity, and two views exporting one anonymous
+/// declaration name one identity, so the compile world mounts one root for
+/// each, never two look-alikes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct RuntimePackageIdentity(usize);
 
 impl RuntimePackageIdentity {
-    /// The identity of the package object at `ptr`.
+    /// The identity of the package or declaration object at `ptr`.
     pub fn of(ptr: crate::HeapPtr) -> Self {
         Self(ptr.as_ptr() as usize)
     }
@@ -85,13 +132,22 @@ impl RuntimePackageIdentity {
     }
 }
 
+/// One edge of a mount, by the identity of the package or anonymous
+/// declaration it reaches. The prelude never crosses the seam: every package
+/// reaches it under its fixed names.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RuntimeMountEdge {
+    pub target: RuntimePackageIdentity,
+    pub kind: crate::types::EdgeKind,
+}
+
+/// One mount of a compile request, by identity — a package, or an anonymous
+/// declaration a view exports (a root of one row): its edges to the other
+/// mounts of the request, and how its exports reach the compiler.
 #[derive(Clone, Debug)]
 pub struct RuntimePackageMount {
-    /// Which package object this is: two aliases of one object share it.
-    pub identity: RuntimePackageIdentity,
-    /// Versioned `PackageInterface` artifact checked before the mount is used.
-    pub interface_blob: Vec<u8>,
-    pub types: Vec<RuntimeTypeMount>,
+    pub edges: IndexMap<Name, RuntimeMountEdge>,
+    pub surface: RuntimeMountSurface,
 }
 
 /// The kind of a name retained in a Session's compile-time scope.
@@ -207,8 +263,13 @@ pub enum RuntimeCompileMode {
 pub struct RuntimeCompileRequest {
     /// Project-root-relative submitted paths and their source text.
     pub files: IndexMap<String, String>,
-    /// Source-less dependency package name to enriched `PackageInterface` blob.
-    pub packages: IndexMap<String, RuntimePackageMount>,
+    /// Every package the compile can reach, by identity: the packages
+    /// mounted under an alias and, transitively, every package their edges
+    /// reach — a consumer names a re-exported declaration by the package it
+    /// is defined in.
+    pub packages: IndexMap<RuntimePackageIdentity, RuntimePackageMount>,
+    /// The compile's own edges: each alias to the package it mounts.
+    pub aliases: IndexMap<String, RuntimePackageIdentity>,
     pub mode: RuntimeCompileMode,
 }
 

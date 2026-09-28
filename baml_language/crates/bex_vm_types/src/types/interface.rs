@@ -30,10 +30,10 @@ pub struct InterfaceDef {
     pub fields: Vec<InterfaceFieldDef>,
     pub methods: Vec<InterfaceMethodDef>,
 
-    /// Runtime package that declared this interface; null for a static
-    /// declaration. A member back-edge: reaching the interface keeps its
-    /// package alive, the same ownership shape ``Class::owner``
-    /// gives classes and enums. This is a GC edge, never serialized.
+    /// The package that owns this declaration (a static package's is
+    /// assigned at load; nothing mints an interface anonymously). A member
+    /// back-edge: reaching the interface keeps its package alive. This is a
+    /// GC edge, never serialized.
     #[borsh(skip)]
     pub owner: HeapPtr,
 }

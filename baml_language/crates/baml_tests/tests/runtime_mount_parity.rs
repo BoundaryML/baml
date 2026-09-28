@@ -30,8 +30,10 @@ use baml_db::{ProjectDatabase, testing::assert_no_diagnostic_errors};
 use baml_linker_types::CompilationUnit;
 use baml_tests::engine::TestDbExt;
 use bex_vm_types::{
-    RuntimeCompileRequest, RuntimeMountedClass, RuntimeMountedEnum, RuntimeMountedFieldAttrs,
-    RuntimeMountedVariantAttrs, RuntimePackageIdentity, RuntimePackageMount, RuntimeTypeMount,
+    RuntimeCompileRequest, RuntimeMountEdge, RuntimeMountSurface, RuntimeMountedClass,
+    RuntimeMountedEnum, RuntimeMountedFieldAttrs, RuntimeMountedImpl, RuntimeMountedVariantAttrs,
+    RuntimePackageIdentity, RuntimePackageMount, RuntimeProjectedSurface, RuntimeReExport,
+    RuntimeReExportKind, types::EdgeKind,
 };
 
 /// The runtime compile's opt level (`bex_project::precompiled_stdlib_config`):
@@ -105,18 +107,22 @@ function summary(name: string) -> string throws never {
 }
 "#;
 
+/// A request over `packages` by identity, the consumer reaching each of
+/// `aliases` under its name.
 fn request(
     files: &[(&str, &str)],
-    packages: Vec<(&str, RuntimePackageMount)>,
+    packages: Vec<(RuntimePackageIdentity, RuntimePackageMount)>,
+    aliases: Vec<(&str, RuntimePackageIdentity)>,
 ) -> RuntimeCompileRequest {
     RuntimeCompileRequest {
         files: files
             .iter()
             .map(|(path, text)| ((*path).to_string(), (*text).to_string()))
             .collect(),
-        packages: packages
+        packages: packages.into_iter().collect(),
+        aliases: aliases
             .into_iter()
-            .map(|(alias, mount)| (alias.to_string(), mount))
+            .map(|(alias, identity)| (alias.to_string(), identity))
             .collect(),
         ..RuntimeCompileRequest::default()
     }
@@ -128,11 +134,11 @@ fn runtime_compile(request: RuntimeCompileRequest) -> bex_vm::RuntimeCompileArti
         .unwrap_or_else(|diagnostics| panic!("runtime compile failed: {diagnostics:#?}"))
 }
 
-fn mount(interface_blob: Vec<u8>, types: Vec<RuntimeTypeMount>) -> RuntimePackageMount {
+/// A compiled package with no edges of its own.
+fn compiled(interface_blob: Vec<u8>) -> RuntimePackageMount {
     RuntimePackageMount {
-        identity: RuntimePackageIdentity::synthetic(1),
-        interface_blob,
-        types,
+        edges: indexmap::IndexMap::new(),
+        surface: RuntimeMountSurface::Compiled(interface_blob),
     }
 }
 
@@ -217,10 +223,12 @@ fn wire_contract(unit: &CompilationUnit) -> String {
 fn runtime_mount_consumer_unit_is_byte_identical_to_the_source_dependency_compile() {
     // The mount lane: the dependency compiled to its interface blob, then the
     // consumer compiled against it as a mounted package.
-    let library = runtime_compile(request(&[("lib.baml", LIB)], Vec::new()));
+    let library = runtime_compile(request(&[("lib.baml", LIB)], Vec::new(), Vec::new()));
+    let app = RuntimePackageIdentity::synthetic(1);
     let mounted = runtime_compile(request(
         &[("main.baml", CONSUMER)],
-        vec![("app", mount(library.interface_blob, Vec::new()))],
+        vec![(app, compiled(library.interface_blob))],
+        vec![("app", app)],
     ));
     let mounted_unit = &mounted.emitted.unit;
 
@@ -265,8 +273,15 @@ fn runtime_mount_consumer_unit_is_byte_identical_to_the_source_dependency_compil
 /// The `with_types` shapes: a runtime class mounted under an export name
 /// that is NOT its item name, a runtime enum under its own, and a witness
 /// of a stdlib interface on the class. The consumer constructs the class
-/// through the alias, reads a field, matches the enum, and dispatches the
-/// witnessed method.
+/// through the export name, reads a field, matches the enum, and dispatches
+/// the witnessed method.
+///
+/// The world a `with_types` view presents: the view re-exports its base
+/// (an empty compiled package) wholesale and adds the mounted declarations
+/// by name; each minted declaration belongs to no package and is a mount of
+/// its own — a root of one row — reached from the view under an anonymous
+/// edge. The consumer imports each declaration from where it is DEFINED,
+/// through the view's edge, never from the view.
 #[test]
 fn with_types_consumer_wire_contract_is_pinned() {
     use baml_compiler2_hir_ty::package_interface::PackageInterface;
@@ -276,27 +291,30 @@ fn with_types_consumer_wire_contract_is_pinned() {
         throw_sets: Default::default(),
         namespaces: Default::default(),
         impls: Vec::new(),
+        reexports: indexmap::IndexMap::new(),
     };
     let interface_blob =
         baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &empty)
             .expect("an empty package interface encodes");
 
-    let class_qtn =
-        baml_type::QualifiedTypeName::new(Name::new("app"), Vec::new(), Name::new("Minted"));
-    let enum_qtn =
-        baml_type::QualifiedTypeName::new(Name::new("app"), Vec::new(), Name::new("Level"));
+    let base = RuntimePackageIdentity::synthetic(1);
+    let minted = RuntimePackageIdentity::synthetic(2);
+    let level = RuntimePackageIdentity::synthetic(3);
+    let view = RuntimePackageIdentity::synthetic(4);
+    let local = |name: &str| baml_type::QualifiedTypeName::local(Name::new(name));
+    let through = |edge: &str, name: &str| {
+        baml_type::QualifiedTypeName::new(Name::new(edge), Vec::new(), Name::new(name))
+    };
     let to_string = baml_type::Interface::<baml_type::TypeName>::new(
         baml_type::QualifiedTypeName::from_dotted_path("baml.ToString"),
         Box::new([]),
         Box::new([]),
     );
-    let types = vec![
-        RuntimeTypeMount {
-            export_name: Name::new("Exported"),
-            ty: baml_type::RealizedTy::Class(class_qtn, Box::new([])),
+    let minted_mount = RuntimePackageMount {
+        edges: indexmap::IndexMap::new(),
+        surface: RuntimeMountSurface::Projected(RuntimeProjectedSurface {
             classes: vec![RuntimeMountedClass {
                 name: Name::new("Minted"),
-                tag: baml_type::typetag::TypeTag::fresh_dynamic(),
                 docstring: Some("A minted class".to_string()),
                 fields: vec![(
                     Name::new("value"),
@@ -305,24 +323,78 @@ fn with_types_consumer_wire_contract_is_pinned() {
                 )],
             }],
             enums: Vec::new(),
-            witnesses: vec![(to_string, Vec::new())],
-        },
-        RuntimeTypeMount {
-            export_name: Name::new("Level"),
-            ty: baml_type::RealizedTy::Enum(enum_qtn),
+            aliases: Vec::new(),
+            reexports: Vec::new(),
+            impls: vec![RuntimeMountedImpl {
+                interface: to_string,
+                for_ty: baml_type::Ty::Class(local("Minted"), Box::new([])),
+                field_links: Vec::new(),
+            }],
+        }),
+    };
+    let level_mount = RuntimePackageMount {
+        edges: indexmap::IndexMap::new(),
+        surface: RuntimeMountSurface::Projected(RuntimeProjectedSurface {
             classes: Vec::new(),
             enums: vec![RuntimeMountedEnum {
                 name: Name::new("Level"),
-                tag: baml_type::typetag::TypeTag::fresh_dynamic(),
                 docstring: None,
                 variants: vec![
                     (Name::new("Low"), RuntimeMountedVariantAttrs::default()),
                     (Name::new("High"), RuntimeMountedVariantAttrs::default()),
                 ],
             }],
-            witnesses: Vec::new(),
+            aliases: Vec::new(),
+            reexports: Vec::new(),
+            impls: Vec::new(),
+        }),
+    };
+    let reexport = |name: &str, edge: &str, of: &str, kind: RuntimeReExportKind| RuntimeReExport {
+        name: bex_vm_types::types::LocalName {
+            namespace: Vec::new(),
+            name: Name::new(name),
         },
-    ];
+        of: through(edge, of),
+        kind,
+    };
+    let view_mount = RuntimePackageMount {
+        edges: [
+            (
+                Name::new("$base"),
+                RuntimeMountEdge {
+                    target: base,
+                    kind: EdgeKind::ReExported,
+                },
+            ),
+            (
+                Name::new("$0"),
+                RuntimeMountEdge {
+                    target: minted,
+                    kind: EdgeKind::Anonymous,
+                },
+            ),
+            (
+                Name::new("$1"),
+                RuntimeMountEdge {
+                    target: level,
+                    kind: EdgeKind::Anonymous,
+                },
+            ),
+        ]
+        .into_iter()
+        .collect(),
+        surface: RuntimeMountSurface::Projected(RuntimeProjectedSurface {
+            classes: Vec::new(),
+            enums: Vec::new(),
+            aliases: Vec::new(),
+            reexports: vec![
+                reexport("Exported", "$0", "Minted", RuntimeReExportKind::Class),
+                reexport("Minted", "$0", "Minted", RuntimeReExportKind::Class),
+                reexport("Level", "$1", "Level", RuntimeReExportKind::Enum),
+            ],
+            impls: Vec::new(),
+        }),
+    };
     let consumer = r#"
 function level_name(level: app.Level) -> string throws never {
     match (level) {
@@ -338,7 +410,13 @@ function render(level: app.Level) -> string throws never {
 "#;
     let artifact = runtime_compile(request(
         &[("main.baml", consumer)],
-        vec![("app", mount(interface_blob, types))],
+        vec![
+            (base, compiled(interface_blob)),
+            (minted, minted_mount),
+            (level, level_mount),
+            (view, view_mount),
+        ],
+        vec![("app", view)],
     ));
     insta::assert_snapshot!(
         "with_types_consumer_wire_contract",

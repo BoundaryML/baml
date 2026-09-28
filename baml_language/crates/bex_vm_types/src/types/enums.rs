@@ -47,10 +47,9 @@ pub struct Enum {
     pub docstring: Option<String>,
     pub other: IndexMap<String, String>,
 
-    /// The runtime package that owns this declaration, or null for a
-    /// compile-time one. A GC edge; see `Class::owner`.
+    /// What this declaration belongs to; see `Class::owner`.
     #[borsh(skip)]
-    pub owner: HeapPtr,
+    pub owner: super::Owner,
 }
 
 impl std::fmt::Display for Enum {

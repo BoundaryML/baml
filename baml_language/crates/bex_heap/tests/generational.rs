@@ -13,8 +13,8 @@ use bex_heap::{BexHeap, CollectionLevel, Generation, Tlab};
 use bex_vm_types::{
     Class, ClassField, GenericFunction, GlobalIndex, Object, RealizedTy,
     types::{
-        Edge, EdgeKind, InterfaceDef, LocalName, MethodImpl, Objects, Package, RuntimeImplRule,
-        Slots, TypeAliasDef, TypeValue,
+        Edge, EdgeKind, ExportSurface, InterfaceDef, LocalName, MethodImpl, Objects, Package,
+        RuntimeImplRule, Slots, TypeAliasDef, TypeValue,
     },
 };
 use indexmap::IndexMap;
@@ -111,7 +111,6 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
         let package = Package {
             name: Name::default(),
             edges: IndexMap::new(),
-            exported_names: Vec::new(),
             classes: IndexMap::new(),
             enums: IndexMap::new(),
             interfaces: IndexMap::new(),
@@ -123,10 +122,9 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
                 initialized: true,
             },
             objects: Objects::Own(Box::new([])),
-            interface_blob: Vec::new(),
+            surface: ExportSurface::Projected,
             init: None,
             test_init: None,
-            mounted_types: IndexMap::new(),
             diagnostics: Vec::new(),
             session: None,
         };
@@ -145,7 +143,7 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
             has_cleanup: false,
             methods: IndexMap::new(),
             generic_param_count: 0,
-            owner: package_ptr,
+            owner: bex_vm_types::types::Owner::Package(package_ptr),
         })));
         let ty = RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, type_tag),
@@ -204,7 +202,7 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
     let Object::Class(class) = (unsafe { moved_class.get() }) else {
         panic!("package class ceased to be a class")
     };
-    assert_eq!(class.owner, moved_package);
+    assert_eq!(class.owner.package(), Some(moved_package));
     assert_eq!(forwarding.get(&package_ptr), Some(&moved_package));
 
     let dropped_heap = BexHeap::new(vec![]);
@@ -1036,7 +1034,6 @@ fn empty_package() -> Package {
     Package {
         name: Name::default(),
         edges: IndexMap::new(),
-        exported_names: Vec::new(),
         classes: IndexMap::new(),
         enums: IndexMap::new(),
         interfaces: IndexMap::new(),
@@ -1048,10 +1045,9 @@ fn empty_package() -> Package {
             initialized: true,
         },
         objects: Objects::Own(Box::new([])),
-        interface_blob: Vec::new(),
+        surface: ExportSurface::Projected,
         init: None,
         test_init: None,
-        mounted_types: IndexMap::new(),
         diagnostics: Vec::new(),
         session: None,
     }
@@ -1228,7 +1224,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         docstring: None,
         other: IndexMap::new(),
         type_tag: enum_tag,
-        owner: package_ptr,
+        owner: bex_vm_types::types::Owner::Package(package_ptr),
     })));
     let field_ty = RealizedTy::Enum(bex_vm_types::TypeHead::new(enum_ptr, enum_tag));
     let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
@@ -1257,7 +1253,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         has_cleanup: false,
         methods: IndexMap::new(),
         generic_param_count: 0,
-        owner: bex_vm_types::HeapPtr::null(),
+        owner: bex_vm_types::types::Owner::anonymous(),
     })));
 
     // Root only the outer class: the enum survives through the field type's
@@ -1293,12 +1289,16 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
     let Object::Enum(enm) = (unsafe { head.ptr().get() }) else {
         panic!("the field type's head does not point at an enum")
     };
+    let owner = enm
+        .owner
+        .package()
+        .expect("the enum belongs to its package");
     assert_ne!(
-        enm.owner, package_ptr,
+        owner, package_ptr,
         "the package moved, so owner must be repointed"
     );
     assert!(
-        matches!(unsafe { enm.owner.get() }, Object::Package(_)),
+        matches!(unsafe { owner.get() }, Object::Package(_)),
         "the declaration's owner does not point at the package"
     );
 }
@@ -1460,7 +1460,7 @@ fn class_method_bodies_are_traced_and_forwarded() {
         has_cleanup: false,
         methods,
         generic_param_count: 0,
-        owner: package_ptr,
+        owner: bex_vm_types::types::Owner::Package(package_ptr),
     })));
 
     let mut roots = vec![class_ptr];
@@ -1485,7 +1485,7 @@ fn class_method_bodies_are_traced_and_forwarded() {
     let Object::Class(class) = (unsafe { roots[0].get() }) else {
         panic!("root was not the class")
     };
-    assert_eq!(class.owner, expected_owner);
+    assert_eq!(class.owner.package(), Some(expected_owner));
     assert_eq!(
         class.methods[&Name::new("greet")].function_ptr,
         expected_body
@@ -1556,7 +1556,7 @@ fn future_output_type_heads_are_traced_and_forwarded() {
         has_cleanup: false,
         methods: IndexMap::new(),
         generic_param_count: 0,
-        owner: bex_vm_types::HeapPtr::null(),
+        owner: bex_vm_types::types::Owner::anonymous(),
     })));
     let returns = RealizedTy::Class(
         bex_vm_types::TypeHead::new(class_ptr, type_tag),

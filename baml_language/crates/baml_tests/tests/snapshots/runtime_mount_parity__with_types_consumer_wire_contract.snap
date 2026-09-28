@@ -3,10 +3,12 @@ source: crates/baml_tests/tests/runtime_mount_parity.rs
 expression: wire_contract(&artifact.emitted.unit)
 ---
 dep @1 app via @0
-dep @2 baml via @0
-import object @1 enum Level
-import object @1 class Minted
-import object @2 interface ToString
+dep @2 $1 via @1
+dep @3 $0 via @1
+dep @4 baml via @0
+import object @2 enum Level
+import object @3 class Minted
+import object @4 interface ToString
 export object function level_name = Code(2)
 export object function render = Code(7)
 export global function level_name = 0

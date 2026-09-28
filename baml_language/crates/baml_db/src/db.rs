@@ -1653,6 +1653,7 @@ mod tests {
                 throw_sets: baml_compiler2_hir_ty::package_interface::FunctionThrowSets::default(),
                 namespaces: std::collections::BTreeSet::default(),
                 impls: Vec::default(),
+                reexports: indexmap::IndexMap::default(),
             },
         )
         .unwrap();
