@@ -4568,10 +4568,16 @@ impl<'db> InferenceContext<'db> {
                 // flows to the same place as the whole expression, so
                 // `null ?? [1]` returned as `(int | string)[]` builds the
                 // literal at that type (the if-branch rule). The unwrapped
-                // lhs is the context only when the enclosing one is absent.
+                // lhs is the context when the enclosing one is absent or
+                // gives the fallback no shape: `cb ?? (x) -> { x }`
+                // returned as `unknown` still types `x` from `cb`.
                 let inner = self.remove_null(&lhs_ty);
                 let rhs_expectation = match expected.adjust_for_branches(&mut self.table) {
-                    Expectation::HasType(ty) => Expectation::HasType(ty),
+                    enclosing @ Expectation::HasType(_)
+                        if self.expectation_shapes(body, rhs, &enclosing) =>
+                    {
+                        enclosing
+                    }
                     _ => Expectation::has_type(inner.clone()),
                 };
                 let rhs_ty = self.infer_expr(body, rhs, &rhs_expectation);
@@ -9751,6 +9757,28 @@ impl<'db> InferenceContext<'db> {
             InferTy::Map { key, value, .. } => Some((key.clone(), value.clone())),
             _ => None,
         })
+    }
+
+    /// Whether `expected` gives `expr` a shape to build at: an aggregate
+    /// literal needs a unique list/map arm, a lambda a callback arm. Any
+    /// other expression takes the expectation as-is.
+    fn expectation_shapes(
+        &mut self,
+        body: &ExprBody,
+        expr: ExprId,
+        expected: &Expectation,
+    ) -> bool {
+        match &body.exprs[expr] {
+            Expr::Array { .. } => self.expected_list_element(expected).is_some(),
+            Expr::Map { .. } => self.expected_map_entry(expected).is_some(),
+            Expr::Lambda(_) => expected
+                .only_has_type()
+                .cloned()
+                .map(|ty| self.structurally_resolve(&ty))
+                .and_then(|ty| self.callback_root_fn(&ty))
+                .is_some(),
+            _ => true,
+        }
     }
 
     /// The single arm of `ty` that `pick` accepts, looking through nested

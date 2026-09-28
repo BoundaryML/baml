@@ -24,3 +24,16 @@ function coalesce_local(values: int[]?) -> void throws never {
     let fallback = values ?? [];
                           // ^^ int[]
 }
+
+// An enclosing expectation that gives the fallback no shape does not
+// displace the lhs context: `unknown` has no callback arm, so the lambda
+// still types `x` from `cb`, and `[]` still adopts `int[]`.
+function coalesce_lambda_unknown(cb: ((int) -> int)?) -> unknown throws never {
+    cb ?? (x) -> { x }
+//                 ^ int
+}
+
+function coalesce_list_unknown(values: int[]?) -> unknown throws never {
+    values ?? []
+           // ^^ int[]
+}
