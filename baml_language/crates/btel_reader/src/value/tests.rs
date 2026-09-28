@@ -292,6 +292,60 @@ fn rendering_preserves_sharing_cycles_truncation_and_names() {
 }
 
 #[test]
+fn shared_labels_follow_output_order_and_skip_truncated_visits() {
+    use DecodedObject as O;
+    use DecodedValue as V;
+    let map = |value: i64| O::Map {
+        key_type: ty(),
+        value_type: ty(),
+        entries: vec![("v".into(), V::Int(value))],
+        original_len: 1,
+    };
+    let list = |items: Vec<DecodedValue>| O::List {
+        element_type: ty(),
+        original_len: items.len() as u64,
+        items,
+    };
+    // Argument `deep` reaches map 0 two lists down; `a` and `b` reach it and
+    // map 1 directly.
+    let snap = DecodedSnapshot {
+        id: SnapshotId::from_bytes([0; 16]),
+        limited: false,
+        root: DecodedRoot::FunctionArgs {
+            parameter_count: 3,
+            slots: vec![V::Object(2), V::Object(1), V::Object(0)],
+        },
+        objects: vec![
+            map(0),
+            map(1),
+            list(vec![V::Object(3), V::Object(1)]),
+            list(vec![V::Object(0)]),
+        ],
+    };
+    let names = ArgumentNames {
+        slots: ["deep", "a", "b"]
+            .into_iter()
+            .map(|name| SlotName {
+                name: Some(name.into()),
+                receiver: false,
+            })
+            .collect(),
+    };
+    let limits = RenderLimits {
+        max_depth: 3,
+        ..RenderLimits::default()
+    };
+    let args = render_arguments(&snap, Some(&names), &limits);
+    // Map 0 is first reached at the depth limit: no label is spent there, so
+    // its later full rendering carries the `$id`.
+    assert_eq!(args["deep"][0][0], json!({"$truncated": "render_depth"}));
+    // Map 1 is printed first, so it takes label 0.
+    assert_eq!(args["deep"][1], json!({"$id": 0, "$map": {"v": 1}}));
+    assert_eq!(args["a"], json!({"$ref": 0}));
+    assert_eq!(args["b"], json!({"$id": 1, "$map": {"v": 0}}));
+}
+
+#[test]
 fn scalar_projection_keeps_leaf_kinds() {
     let snap = snapshot();
     let n = names();

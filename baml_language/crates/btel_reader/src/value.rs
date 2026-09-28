@@ -9,7 +9,10 @@
 //!   `Missing`, a SQL-NULL-like non-match that keeps an answer complete;
 //! - truncated evidence or unknown argument names are `Unavailable`: the
 //!   recording cannot answer, and callers report that separately.
-use std::{cmp::Ordering, collections::HashMap};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+};
 
 use btel_snapshot::{DecodedObject, DecodedSnapshot, DecodedValue, Description, Limit};
 use num_bigint::BigInt;
@@ -663,7 +666,8 @@ struct Renderer<'a> {
     snapshot: &'a DecodedSnapshot,
     limits: &'a RenderLimits,
     /// Objects reachable more than once from the rendered roots.
-    shared: HashMap<u32, u32>,
+    shared: HashSet<u32>,
+    /// Label of each shared object already printed with its `$id`.
     rendered: HashMap<u32, u32>,
     nodes: usize,
 }
@@ -708,13 +712,10 @@ impl<'a> Renderer<'a> {
                 _ => {}
             }
         }
-        let mut shared = HashMap::new();
-        for (id, count) in counts {
-            if count > 1 {
-                let next = u32::try_from(shared.len()).unwrap_or(u32::MAX);
-                shared.insert(id, next);
-            }
-        }
+        let shared = counts
+            .into_iter()
+            .filter_map(|(id, count)| (count > 1).then_some(id))
+            .collect();
         Self {
             snapshot,
             limits,
@@ -771,16 +772,21 @@ impl<'a> Renderer<'a> {
     }
 
     fn object(&mut self, id: u32, depth: usize) -> Json {
-        let shared = self.shared.get(&id).copied();
-        if let Some(label) = shared {
-            if self.rendered.contains_key(&id) {
-                return envelope("$ref", Json::from(label));
-            }
-            self.rendered.insert(id, label);
+        let is_shared = self.shared.contains(&id);
+        if is_shared && let Some(label) = self.rendered.get(&id) {
+            return envelope("$ref", Json::from(*label));
         }
+        // A truncated visit prints no `$id`, so it must not take the label.
         if depth >= self.limits.max_depth {
             return envelope("$truncated", Json::from("render_depth"));
         }
+        // Labels count up in output order, so a capture renders the same way
+        // in every process.
+        let shared = is_shared.then(|| {
+            let label = u32::try_from(self.rendered.len()).unwrap_or(u32::MAX);
+            self.rendered.insert(id, label);
+            label
+        });
         let mut map = Map::new();
         if let Some(label) = shared {
             map.insert("$id".into(), Json::from(label));
