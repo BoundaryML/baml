@@ -1003,13 +1003,13 @@ fn guarded<R>(what: &str, step: impl FnOnce() -> R) -> Option<R> {
 /// sessions spelling one file differently (`/tmp` vs `/private/tmp`, a
 /// symlinked directory) share one overlay slot. The client's exact URI is
 /// kept in the `TextDocumentItem` for replay.
-fn canonical_document_identity(uri: &lsp_types::Url) -> Option<PathBuf> {
-    let path = uri.to_file_path().ok()?;
+fn canonical_document_identity(uri: &lsp_types::Uri) -> Option<PathBuf> {
+    let path = baml_lsp::paths::file_path_from_uri(uri)?;
     Some(baml_lsp::paths::canonical_physical_path(&path))
 }
 
 fn canonical_document_identity_str(uri: &str) -> Option<PathBuf> {
-    canonical_document_identity(&lsp_types::Url::parse(uri).ok()?)
+    canonical_document_identity(&uri.parse().ok()?)
 }
 
 #[cfg(test)]
@@ -1164,7 +1164,7 @@ mod tests {
         runtime.document_overlays.lock().insert(
             (stdio.session_id, shared_identity.clone()),
             lsp_types::TextDocumentItem {
-                uri: lsp_types::Url::parse(&shared_uri).unwrap(),
+                uri: shared_uri.parse().unwrap(),
                 language_id: "baml".to_string(),
                 version: 3,
                 text: "function stdio() -> int { 3 }".to_string(),
@@ -1173,7 +1173,7 @@ mod tests {
         runtime.document_overlays.lock().insert(
             (old_browser.session_id, shared_identity.clone()),
             lsp_types::TextDocumentItem {
-                uri: lsp_types::Url::parse(&shared_uri).unwrap(),
+                uri: shared_uri.parse().unwrap(),
                 language_id: "baml".to_string(),
                 version: 7,
                 text: "function browser() -> int { 7 }".to_string(),
@@ -1237,8 +1237,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&real).unwrap();
         std::os::unix::fs::symlink(&real, &alias).unwrap();
-        let real_uri = lsp_types::Url::from_file_path(real.join("main.baml")).unwrap();
-        let alias_uri = lsp_types::Url::from_file_path(alias.join("main.baml")).unwrap();
+        let real_uri = baml_lsp::paths::uri_from_file_path(&real.join("main.baml")).unwrap();
+        let alias_uri = baml_lsp::paths::uri_from_file_path(&alias.join("main.baml")).unwrap();
 
         assert_ne!(real_uri, alias_uri);
         assert_eq!(

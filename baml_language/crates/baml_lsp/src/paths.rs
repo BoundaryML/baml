@@ -22,7 +22,8 @@
 use std::path::Component;
 use std::path::{Path, PathBuf};
 
-use lsp_types::Url;
+use lsp_types::Uri;
+use url::Url;
 
 use crate::{
     error::LspError,
@@ -73,7 +74,11 @@ fn lexically_normalize(path: &Path) -> PathBuf {
 
 /// The database path for a document URI: physical identity, then the stdlib
 /// mapping. Stdlib document URIs retain their virtual database identity.
-pub fn canonical_document_path(roots: &RootsView, uri: &Url) -> Result<PathBuf, LspError> {
+pub fn canonical_document_path(roots: &RootsView, uri: &Uri) -> Result<PathBuf, LspError> {
+    let uri = &Url::parse(uri.as_str()).map_err(|e| LspError::InvalidPath {
+        path: PathBuf::from(uri.as_str()),
+        message: format!("invalid URI: {e}"),
+    })?;
     if uri.scheme() == STDLIB_SCHEME {
         let invalid = || LspError::InvalidPath {
             path: PathBuf::from(uri.as_str()),
@@ -103,7 +108,7 @@ pub fn canonical_document_path(roots: &RootsView, uri: &Url) -> Result<PathBuf, 
 
 /// The URI a client can open for a database path.
 /// Stdlib sources always use read-only virtual documents.
-pub fn uri_for_db_path(_roots: &RootsView, db_path: &Path) -> Option<Url> {
+pub fn uri_for_db_path(_roots: &RootsView, db_path: &Path) -> Option<Uri> {
     if let Ok(rest) = db_path.strip_prefix(BUILTIN_PREFIX) {
         let mut uri = Url::parse("baml-stdlib:/").ok()?;
         {
@@ -113,9 +118,24 @@ pub fn uri_for_db_path(_roots: &RootsView, db_path: &Path) -> Option<Url> {
                 segments.push(component.as_os_str().to_str()?);
             }
         }
-        return Some(uri);
+        return to_lsp_uri(&uri);
     }
-    file_path_to_url(db_path)
+    uri_from_file_path(db_path)
+}
+
+/// The `file:` URI for an absolute path.
+pub fn uri_from_file_path(path: &Path) -> Option<Uri> {
+    to_lsp_uri(&file_path_to_url(path)?)
+}
+
+/// The path a `file:` URI names.
+pub fn file_path_from_uri(uri: &Uri) -> Option<PathBuf> {
+    url_to_file_path(&Url::parse(uri.as_str()).ok()?)
+}
+
+/// lsp-types' `Uri` only parses and prints; `url::Url` does the path work.
+fn to_lsp_uri(url: &Url) -> Option<Uri> {
+    url.as_str().parse().ok()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -220,7 +240,7 @@ mod tests {
 
     #[test]
     fn document_path_rejects_non_file_uris() {
-        let uri = Url::parse("untitled:Untitled-1").unwrap();
+        let uri: Uri = "untitled:Untitled-1".parse().unwrap();
         assert!(matches!(
             canonical_document_path(&roots(None), &uri),
             Err(LspError::InvalidPath { .. })

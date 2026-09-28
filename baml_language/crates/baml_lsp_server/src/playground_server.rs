@@ -1124,7 +1124,7 @@ fn track_and_persist_lsp_notification(
 }
 
 fn write_lsp_document_to_disk(uri: &str, text: &str, workspace_roots: &[PathBuf]) {
-    let Some(path) = lsp_types::Url::parse(uri)
+    let Some(path) = url::Url::parse(uri)
         .ok()
         .and_then(|u| u.to_file_path().ok())
     else {
@@ -1182,14 +1182,14 @@ fn canonicalize_existing_or_parent(path: &Path) -> Option<PathBuf> {
 /// Resolve a `file://` URI to a canonical path (the key form used by the disk
 /// watcher), so the browser's content and the watcher's reads compare equal.
 fn uri_to_canonical_path(uri: &str) -> Option<PathBuf> {
-    let path = lsp_types::Url::parse(uri).ok()?.to_file_path().ok()?;
+    let path = url::Url::parse(uri).ok()?.to_file_path().ok()?;
     Some(std::fs::canonicalize(&path).unwrap_or(path))
 }
 
 /// Resolve a `file://` URI to a plain filesystem path (the database key
 /// form; it canonicalizes paths itself).
 fn uri_to_path(uri: &str) -> Option<PathBuf> {
-    lsp_types::Url::parse(uri).ok()?.to_file_path().ok()
+    url::Url::parse(uri).ok()?.to_file_path().ok()
 }
 
 /// Record the content the browser now has for `uri` (used for echo avoidance).
@@ -1255,7 +1255,7 @@ pub fn spawn_disk_watcher(
                 mirror.insert(canonical.clone(), content.clone());
             }
             apply_disk_text(&owner, canonical.clone(), content.clone());
-            let Ok(url) = lsp_types::Url::from_file_path(&canonical) else {
+            let Ok(url) = url::Url::from_file_path(&canonical) else {
                 continue;
             };
             let notif = lsp_server::Notification {

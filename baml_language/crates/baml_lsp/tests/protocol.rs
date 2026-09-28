@@ -16,7 +16,7 @@ use baml_lsp::{
     snapshot::TaskFailure,
     state::DIAGNOSTICS_DEBOUNCE,
 };
-use lsp_types::{PublishDiagnosticsParams, Url};
+use lsp_types::{PublishDiagnosticsParams, Uri};
 use serde_json::{Value, json};
 
 // ── Fakes ────────────────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ impl RecordingSender {
             .collect()
     }
 
-    fn publications_for(&self, uri: &Url) -> Vec<PublishDiagnosticsParams> {
+    fn publications_for(&self, uri: &Uri) -> Vec<PublishDiagnosticsParams> {
         self.publications()
             .into_iter()
             .filter(|p| &p.uri == uri)
@@ -202,8 +202,8 @@ impl Harness {
         }
     }
 
-    fn uri(&self, rel: &str) -> Url {
-        Url::from_file_path(self.ws.join(rel)).unwrap()
+    fn uri(&self, rel: &str) -> Uri {
+        baml_lsp::paths::uri_from_file_path(&self.ws.join(rel)).unwrap()
     }
 
     fn sender(&self, session: SessionKey) -> &RecordingSender {
@@ -230,7 +230,7 @@ impl Harness {
             "processId": null,
             "capabilities": { "general": { "positionEncodings": encodings } },
             "workspaceFolders": folders.iter().map(|f| json!({
-                "uri": Url::from_file_path(f).unwrap(),
+                "uri": baml_lsp::paths::uri_from_file_path(f).unwrap(),
                 "name": "ws",
             })).collect::<Vec<_>>(),
         });
@@ -271,7 +271,7 @@ impl Harness {
         self.state.dispatch_notification(session, notif)
     }
 
-    fn open(&mut self, session: SessionKey, uri: &Url, version: i32, text: &str) {
+    fn open(&mut self, session: SessionKey, uri: &Uri, version: i32, text: &str) {
         self.notify(
             session,
             "textDocument/didOpen",
@@ -280,7 +280,7 @@ impl Harness {
         .unwrap();
     }
 
-    fn change(&mut self, session: SessionKey, uri: &Url, version: i32, text: &str) {
+    fn change(&mut self, session: SessionKey, uri: &Uri, version: i32, text: &str) {
         self.notify(
             session,
             "textDocument/didChange",
@@ -289,7 +289,7 @@ impl Harness {
         .unwrap();
     }
 
-    fn close(&mut self, session: SessionKey, uri: &Url) {
+    fn close(&mut self, session: SessionKey, uri: &Uri) {
         self.notify(
             session,
             "textDocument/didClose",
@@ -503,11 +503,11 @@ fn two_workspace_folders_are_two_roots() {
 
     // Each project checks clean against its own `Point`: were the two
     // roots one world, `Point` would be declared twice.
-    let a_uri = Url::from_file_path(a.join("baml_src/point.baml")).unwrap();
-    let b_uri = Url::from_file_path(b.join("baml_src/point.baml")).unwrap();
+    let a_uri = baml_lsp::paths::uri_from_file_path(&a.join("baml_src/point.baml")).unwrap();
+    let b_uri = baml_lsp::paths::uri_from_file_path(&b.join("baml_src/point.baml")).unwrap();
     for uri in [&a_uri, &b_uri] {
         let last = h.sender(s).publications_for(uri).last().cloned().unwrap();
-        assert!(last.diagnostics.is_empty(), "{uri}: {last:?}");
+        assert!(last.diagnostics.is_empty(), "{}: {last:?}", uri.as_str());
     }
 
     // Hover in `b` resolves `b`'s `Point`, never `a`'s.
@@ -526,7 +526,7 @@ fn two_workspace_folders_are_two_roots() {
     assert!(!markdown.contains("x: int"), "not a's Point: {markdown}");
 
     // An error in `a` is published for `a` alone; `b` is untouched.
-    let bad_uri = Url::from_file_path(a.join("baml_src/bad.baml")).unwrap();
+    let bad_uri = baml_lsp::paths::uri_from_file_path(&a.join("baml_src/bad.baml")).unwrap();
     h.open(s, &bad_uri, 1, BAD_SOURCE);
     h.settle();
     assert!(has_error(
@@ -564,7 +564,7 @@ fn a_folder_added_later_is_discovered_not_refused() {
         s,
         "workspace/didChangeWorkspaceFolders",
         json!({ "event": {
-            "added": [{ "uri": Url::from_file_path(&b).unwrap(), "name": "b" }],
+            "added": [{ "uri": baml_lsp::paths::uri_from_file_path(&b).unwrap(), "name": "b" }],
             "removed": [],
         } }),
     )
@@ -583,7 +583,7 @@ fn a_folder_added_later_is_discovered_not_refused() {
         vec![a, b.clone()],
         "the second folder is a second root"
     );
-    let b_uri = Url::from_file_path(b.join("baml_src/b.baml")).unwrap();
+    let b_uri = baml_lsp::paths::uri_from_file_path(&b.join("baml_src/b.baml")).unwrap();
     assert!(
         has_error(h.sender(s).publications_for(&b_uri).last().unwrap()),
         "the second project's diagnostics are published"
@@ -608,8 +608,8 @@ fn a_folder_removed_later_drops_its_roots() {
         &[a.clone(), b.clone()],
     );
     h.settle();
-    let a_uri = Url::from_file_path(a.join("baml_src/a.baml")).unwrap();
-    let b_uri = Url::from_file_path(b.join("baml_src/b.baml")).unwrap();
+    let a_uri = baml_lsp::paths::uri_from_file_path(&a.join("baml_src/a.baml")).unwrap();
+    let b_uri = baml_lsp::paths::uri_from_file_path(&b.join("baml_src/b.baml")).unwrap();
     assert!(has_error(
         h.sender(s).publications_for(&b_uri).last().unwrap()
     ));
@@ -619,7 +619,7 @@ fn a_folder_removed_later_drops_its_roots() {
         "workspace/didChangeWorkspaceFolders",
         json!({ "event": {
             "added": [],
-            "removed": [{ "uri": Url::from_file_path(&b).unwrap(), "name": "b" }],
+            "removed": [{ "uri": baml_lsp::paths::uri_from_file_path(&b).unwrap(), "name": "b" }],
         } }),
     )
     .unwrap();
@@ -667,7 +667,7 @@ fn an_open_document_keeps_a_withdrawn_folders_project_until_it_closes() {
         &[a.clone(), b.clone()],
     );
     h.settle();
-    let b_uri = Url::from_file_path(b.join("baml_src/b.baml")).unwrap();
+    let b_uri = baml_lsp::paths::uri_from_file_path(&b.join("baml_src/b.baml")).unwrap();
     h.open(s, &b_uri, 1, BAD_SOURCE);
     h.settle();
 
@@ -676,7 +676,7 @@ fn an_open_document_keeps_a_withdrawn_folders_project_until_it_closes() {
         "workspace/didChangeWorkspaceFolders",
         json!({ "event": {
             "added": [],
-            "removed": [{ "uri": Url::from_file_path(&b).unwrap(), "name": "b" }],
+            "removed": [{ "uri": baml_lsp::paths::uri_from_file_path(&b).unwrap(), "name": "b" }],
         } }),
     )
     .unwrap();
@@ -745,7 +745,7 @@ fn a_host_folder_is_discovered_without_a_session_and_outlives_a_withdrawal() {
     let s = SessionKey(1);
     h.init_session_with_folders(s, &[], std::slice::from_ref(&a));
     h.settle();
-    let a_uri = Url::from_file_path(a.join("baml_src/a.baml")).unwrap();
+    let a_uri = baml_lsp::paths::uri_from_file_path(&a.join("baml_src/a.baml")).unwrap();
     assert!(
         has_error(h.sender(s).publications_for(&a_uri).last().unwrap()),
         "the late session receives the standing error"
@@ -756,7 +756,7 @@ fn a_host_folder_is_discovered_without_a_session_and_outlives_a_withdrawal() {
         "workspace/didChangeWorkspaceFolders",
         json!({ "event": {
             "added": [],
-            "removed": [{ "uri": Url::from_file_path(&a).unwrap(), "name": "a" }],
+            "removed": [{ "uri": baml_lsp::paths::uri_from_file_path(&a).unwrap(), "name": "a" }],
         } }),
     )
     .unwrap();
@@ -987,7 +987,7 @@ fn stdlib_paths_round_trip_through_the_materialized_directory() {
         .map(|entry| entry.path.join("prelude.baml"))
         .expect("a stdlib root");
     let uri = baml_lsp::paths::uri_for_db_path(h.state.roots(), &db_path).unwrap();
-    assert_eq!(uri.scheme(), "baml-stdlib");
+    assert!(uri.as_str().starts_with("baml-stdlib:"), "{}", uri.as_str());
     assert_eq!(
         baml_lsp::paths::canonical_document_path(h.state.roots(), &uri).unwrap(),
         db_path
@@ -1335,7 +1335,7 @@ fn a_host_without_a_playground_advertises_no_lenses() {
                 "processId": null,
                 "capabilities": {},
                 "workspaceFolders": [{
-                    "uri": Url::from_file_path(&harness.ws).unwrap(),
+                    "uri": baml_lsp::paths::uri_from_file_path(&harness.ws).unwrap(),
                     "name": "ws",
                 }],
             }),
@@ -1361,7 +1361,7 @@ fn a_host_without_a_playground_advertises_no_lenses() {
     );
 }
 
-fn position_params(uri: &Url, position: lsp_types::Position) -> Value {
+fn position_params(uri: &Uri, position: lsp_types::Position) -> Value {
     serde_json::json!({
         "textDocument": { "uri": uri },
         "position": position,
@@ -1606,7 +1606,7 @@ fn rename_refuses_inside_a_read_only_stdlib_document() {
         .unwrap_or_else(|| unreachable!("the stdlib is loaded before any session"));
     let uri = baml_lsp::paths::uri_for_db_path(harness.state.roots(), &db_path)
         .unwrap_or_else(|| unreachable!("a `<builtin>/` path maps to a stdlib URI"));
-    assert_eq!(uri.scheme(), "baml-stdlib");
+    assert!(uri.as_str().starts_with("baml-stdlib:"), "{}", uri.as_str());
 
     // A stdlib document may be opened; the overlay is refused elsewhere.
     harness.open(SessionKey(1), &uri, 1, &text);
@@ -1820,7 +1820,7 @@ fn stdlib_source_and_nested_navigation_without_disk_sources() {
             }),
         )
         .unwrap();
-    let uri = Url::parse(target["uri"].as_str().unwrap()).unwrap();
+    let uri: Uri = target["uri"].as_str().unwrap().parse().unwrap();
     assert_eq!(uri.as_str(), "baml-stdlib:/baml/ns_env/env.baml");
     let response = h
         .request(session, "baml/stdlibSource", json!({ "uri": uri }))
@@ -2281,7 +2281,7 @@ fn a_detached_document_and_a_discovered_project_are_served_together() {
 
     let scratch_dir = tempfile::tempdir().unwrap();
     let scratch = scratch_dir.path().canonicalize().unwrap();
-    let scratch_uri = Url::from_file_path(scratch.join("scratch.baml")).unwrap();
+    let scratch_uri = baml_lsp::paths::uri_from_file_path(&scratch.join("scratch.baml")).unwrap();
     h.open(s, &scratch_uri, 1, "class S { y int }\n");
     h.settle();
     let roots: Vec<PathBuf> = h
@@ -2299,7 +2299,7 @@ fn a_detached_document_and_a_discovered_project_are_served_together() {
         "workspace/didChangeWorkspaceFolders",
         json!({
             "event": {
-                "added": [{ "uri": Url::from_file_path(&h.ws).unwrap(), "name": "ws" }],
+                "added": [{ "uri": baml_lsp::paths::uri_from_file_path(&h.ws).unwrap(), "name": "ws" }],
                 "removed": [],
             }
         }),

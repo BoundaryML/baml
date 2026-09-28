@@ -17,7 +17,7 @@ use std::{
 
 use baml_base::{SourceRoot, SourceRootKind};
 use baml_db::{ProjectDatabase, SourceRootSpec};
-use lsp_types::Url;
+use lsp_types::Uri;
 // `std::time::Instant::now()` panics on `wasm32-unknown-unknown`; `web_time`
 // is `std::time` everywhere else and `performance.now()` in a browser, so the
 // debounce deadlines below work in both hosts on one code path.
@@ -62,7 +62,7 @@ pub const DIAGNOSTICS_DEBOUNCE: Duration = Duration::from_millis(150);
 #[derive(Debug, Clone)]
 pub struct OpenDocument {
     /// The URI as the client spelled it (what publications must echo).
-    pub uri: Url,
+    pub uri: Uri,
     /// `None` for non-editor writers (playground edits).
     pub version: Option<i32>,
     pub session: SessionKey,
