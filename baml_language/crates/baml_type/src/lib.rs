@@ -1035,8 +1035,7 @@ impl<N: Clone> LoweringTy<N> {
                     "({}) -> {} throws {}",
                     ps.join(", "),
                     ret.render_as_function_result(s),
-                    // A bare `throws A | B` is an ambiguous union (E0175).
-                    throws.render_as_postfix_base(s),
+                    throws.render_with(s),
                 )
             }
             LoweringTy::TypeVar(param) => s.type_var(param.name()),
@@ -1254,15 +1253,14 @@ impl<N: Clone + HeadDisplay> fmt::Display for LoweringTy<N> {
             } => {
                 let param_strs: Vec<std::string::String> =
                     params.iter().map(|p| p.ty.to_string()).collect();
+                let throws_display = if matches!(throws.as_ref(), LoweringTy::Void) {
+                    "never".to_string()
+                } else {
+                    throws.to_string()
+                };
                 write!(f, "({}) -> ", param_strs.join(", "))?;
                 ret.fmt_as_function_result(f)?;
-                write!(f, " throws ")?;
-                if matches!(throws.as_ref(), LoweringTy::Void) {
-                    write!(f, "never")
-                } else {
-                    // A bare `throws A | B` is an ambiguous union (E0175).
-                    throws.fmt_as_postfix_base(f)
-                }
+                write!(f, " throws {}", throws_display)
             }
             LoweringTy::Void => write!(f, "void"),
             LoweringTy::Unknown => write!(f, "unknown"),
@@ -1541,21 +1539,6 @@ mod tests {
         assert_eq!(
             ty.to_string(),
             "() -> ((int) -> string throws never) throws never"
-        );
-    }
-
-    #[test]
-    fn test_function_display_parenthesizes_union_throws() {
-        let ty = Ty::Function {
-            params: Box::new([]),
-            ret: Box::new(Ty::union([ty_int(), ty_string()])),
-            throws: Box::new(Ty::union([ty_int(), ty_string()])),
-        };
-
-        assert_eq!(ty.to_string(), "() -> int | string throws (int | string)");
-        assert_eq!(
-            ty.render_canonical(),
-            "() -> int | string throws (int | string)"
         );
     }
 

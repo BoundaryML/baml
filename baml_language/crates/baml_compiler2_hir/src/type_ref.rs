@@ -289,18 +289,13 @@ impl std::fmt::Display for TypeRefDisplay<'_> {
                     }
                 }
                 write!(f, ") -> ")?;
-                // Without a following `throws`, a bare return union is an
-                // ambiguous union (E0175); a bare throws union always is.
-                if matches!(store[*ret].kind, TypeRefKind::Function { .. })
-                    || (throws.is_none() && matches!(store[*ret].kind, TypeRefKind::Union { .. }))
-                {
+                if matches!(store[*ret].kind, TypeRefKind::Function { .. }) {
                     write!(f, "({})", store.display(*ret))?;
                 } else {
                     write!(f, "{}", store.display(*ret))?;
                 }
                 if let Some(throws) = throws {
-                    write!(f, " throws ")?;
-                    write_postfix_base(store, *throws, f)?;
+                    write!(f, " throws {}", store.display(*throws))?;
                 }
                 Ok(())
             }

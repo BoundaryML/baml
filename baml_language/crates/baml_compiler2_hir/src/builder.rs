@@ -2012,22 +2012,9 @@ impl<'db> SemanticIndexBuilder<'db> {
                 throws,
                 ..
             } => {
-                // A bare return union without `throws`, or any bare throws
-                // union, would be an ambiguous union (E0175).
-                let operand = |ty: &ast::TypeExpr, union_needs_parens: bool| {
-                    let rendered = Self::render_type_expr(ty);
-                    match ty.kind {
-                        ast::TypeExprKind::Function { .. } => format!("({rendered})"),
-                        ast::TypeExprKind::Union { .. } if union_needs_parens => {
-                            format!("({rendered})")
-                        }
-                        _ => rendered,
-                    }
-                };
-                let ret = operand(ret, throws.is_none());
                 let throws = throws
                     .as_deref()
-                    .map(|throws| operand(throws, true))
+                    .map(Self::render_type_expr)
                     .map(|throws| format!(" throws {throws}"))
                     .unwrap_or_default();
                 format!(
@@ -2042,7 +2029,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                         })
                         .collect::<Vec<_>>()
                         .join(", "),
-                    ret,
+                    Self::render_type_expr(ret),
                     throws
                 )
             }

@@ -84,9 +84,10 @@ function render_args(args: Ty[]) -> string throws never {
     }
 }
 
-/// The return and `throws` types are spelled as atoms: a bare union in
-/// either operand is an ambiguous union (E0175), since its `|` could also
-/// end the function type.
+/// The return type is spelled as an atom: in a `let` annotation the grammar
+/// binds `|` looser than `->`, so a bare union return does not parse there.
+/// The `throws` type is delimited by the end of the type and parses bare in
+/// every position.
 function render_fn(f: Fn) -> string throws never {
     let params = f.positional
         .map((t) -> {
@@ -97,7 +98,7 @@ function render_fn(f: Fn) -> string throws never {
                 render_named(n)
             }),
         );
-    `(${params.join(", ")}) -> ${render_atom(f.ret)} throws ${render_atom(f.error)}`
+    `(${params.join(", ")}) -> ${render_atom(f.ret)} throws ${render(f.error)}`
 }
 
 function render_named(n: Named) -> string throws never {

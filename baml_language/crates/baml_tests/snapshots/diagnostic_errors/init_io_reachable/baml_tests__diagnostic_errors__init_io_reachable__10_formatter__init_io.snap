@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 12080
 ---
 // E0158 — io reachable from `$init`.
 //
@@ -83,7 +82,7 @@ client LateBoundRef = openai.ResponsesClient.new(
 // exists to enable, and flagging it would make the analysis useless.
 function pick_eager(
     eager: string,
-    lazy: () -> string throws (baml.errors.Io | baml.errors.ParseError),
+    lazy: () -> string throws baml.errors.Io | baml.errors.ParseError,
 ) -> string {
     eager
 }

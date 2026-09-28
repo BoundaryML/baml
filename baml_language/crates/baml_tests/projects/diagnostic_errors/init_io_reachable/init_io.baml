@@ -79,7 +79,7 @@ client LateBoundRef = openai.ResponsesClient.new(
 // exists to enable, and flagging it would make the analysis useless.
 function pick_eager(
     eager: string,
-    lazy: () -> string throws (baml.errors.Io | baml.errors.ParseError),
+    lazy: () -> string throws baml.errors.Io | baml.errors.ParseError,
 ) -> string {
     eager
 }

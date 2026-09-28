@@ -453,7 +453,7 @@ async fn host_callable_resolves_integral_js_number_class_field_to_float() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn host_callable_integral_number_uses_float_in_float_bigint_union() {
     let source = r#"
-        function measure(f: () -> (float | bigint)) -> float | bigint {
+        function measure(f: () -> float | bigint) -> float | bigint {
             return f();
         }
     "#;
@@ -583,7 +583,7 @@ async fn returned_closure_required_arguments_bind_by_position_not_source_name() 
 async fn host_callable_arguments_preserve_closed_union_selected_arm_on_wire() {
     let source = r#"
         function round_trip(
-            f: (int | string) -> (int | string),
+            f: (int | string) -> int | string,
             value: int | string,
         ) -> int | string {
             f(value)
@@ -698,7 +698,7 @@ async fn host_callable_argument_selects_implemented_interface_arm_on_wire() {
 async fn host_callable_union_envelope_preserves_empty_container_arm_identity() {
     let source = r#"
         function round_trip(
-            f: (int[] | string[]) -> (int[] | string[]),
+            f: (int[] | string[]) -> int[] | string[],
             value: int[] | string[],
         ) -> int[] | string[] {
             f(value)

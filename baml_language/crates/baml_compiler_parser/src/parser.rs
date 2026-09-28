@@ -210,14 +210,6 @@ enum Event {
 }
 
 /// Recursive descent parser with error recovery.
-/// The undelimited function operand whose union is being parsed.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum FunctionUnionOperand {
-    None,
-    Return,
-    Throws,
-}
-
 pub(crate) struct Parser<'a> {
     tokens: &'a [Token],
     current: usize,
@@ -257,13 +249,9 @@ pub(crate) struct Parser<'a> {
     /// `ARRAY_PATTERN` so nested patterns regain normal destructure
     /// parsing. Counter so nested conditions nest correctly.
     suppress_destructure_pattern_depth: u32,
-    /// Which undelimited function operand, if any, is being parsed.
+    /// True while parsing an undelimited function return or throws operand.
     /// Parenthesized operands clear it; nested functions establish their own scope.
-    function_union_operand: FunctionUnionOperand,
-    /// Pipes in the current function's return operand whose right member is
-    /// not a function head. They are ambiguous unless that function's
-    /// `throws` follows, which rules out ending the function at the pipe.
-    pending_return_pipes: Vec<Span>,
+    function_union_operand: bool,
 }
 
 impl<'a> Parser<'a> {
@@ -280,8 +268,7 @@ impl<'a> Parser<'a> {
             suppress_object_literal_depth: 0,
             allow_object_literal_before_for_body_depth: 0,
             suppress_destructure_pattern_depth: 0,
-            function_union_operand: FunctionUnionOperand::None,
-            pending_return_pipes: Vec::new(),
+            function_union_operand: false,
         }
     }
 
@@ -3032,36 +3019,28 @@ impl<'a> Parser<'a> {
                     p.bump();
                 } else if consume_union && p.at(TokenKind::Pipe) {
                     // Union type: string | int | "user" | "assistant"
-                    let pipe_span = p.current().unwrap().span;
-                    let starts_function = p.function_union_operand != FunctionUnionOperand::None
-                        && p.pipe_starts_function_type();
+                    let ambiguous_pipe = (p.function_union_operand
+                        && p.pipe_starts_function_type())
+                    .then(|| p.current().unwrap().span);
                     p.bump();
                     let errors_before_member = p.events.len();
                     p.parse_type_primary();
-                    // The pipe can stay in the function's return/throws
-                    // union, or end the function and join a sibling. A
-                    // malformed member is diagnosed by the parser instead of
-                    // gaining a second ambiguity diagnostic.
-                    let member_parsed = !p.events[errors_before_member..].iter().any(|event| {
-                        matches!(
-                            event,
-                            Event::UnexpectedToken { .. }
-                                | Event::SyntaxHint { .. }
-                                | Event::RemovedFeature { .. }
-                        )
-                    });
-                    match p.function_union_operand {
-                        _ if !member_parsed => {}
-                        FunctionUnionOperand::None => {}
-                        // Deferred until we know whether this function has a
-                        // `throws`. An unparenthesized function member stays
-                        // ambiguous either way: `throws` can attach to it.
-                        FunctionUnionOperand::Return if !starts_function => {
-                            p.pending_return_pipes.push(pipe_span);
-                        }
-                        FunctionUnionOperand::Return | FunctionUnionOperand::Throws => {
-                            p.events.push(Event::AmbiguousUnion { span: pipe_span });
-                        }
+                    // Both ownership branches are syntax-complete here: the
+                    // previous operand can finish the first function, and the
+                    // member can also be a function inside its return/throws
+                    // union. A malformed member is diagnosed by the parser
+                    // instead of gaining a second ambiguity diagnostic.
+                    if let Some(span) = ambiguous_pipe
+                        && !p.events[errors_before_member..].iter().any(|event| {
+                            matches!(
+                                event,
+                                Event::UnexpectedToken { .. }
+                                    | Event::SyntaxHint { .. }
+                                    | Event::RemovedFeature { .. }
+                            )
+                        })
+                    {
+                        p.events.push(Event::AmbiguousUnion { span });
                     }
                 } else {
                     break;
@@ -3280,8 +3259,7 @@ impl<'a> Parser<'a> {
 
         // Pipes within a parameter list or parenthesized operand do not
         // compete with the enclosing function's return/throws boundary.
-        let enclosing_function_operand =
-            std::mem::replace(&mut self.function_union_operand, FunctionUnionOperand::None);
+        let enclosing_function_operand = std::mem::replace(&mut self.function_union_operand, false);
         self.bump(); // (
 
         // Track whether any parameter had a name (which would make it invalid as parenthesized type)
@@ -3317,36 +3295,17 @@ impl<'a> Parser<'a> {
             // Note: The tokens are already emitted, we just need to parse the return type
             self.bump(); // ->
             // Bare return unions are owned by the function even in pattern
-            // position, but a pipe that could instead end the function is
-            // reported as ambiguous rather than silently grouped.
-            let enclosing_function_operand = std::mem::replace(
-                &mut self.function_union_operand,
-                FunctionUnionOperand::Return,
-            );
-            let enclosing_pending = std::mem::take(&mut self.pending_return_pipes);
+            // position. A pipe followed by another function head is reported
+            // as ambiguous instead of silently choosing this grouping.
+            let enclosing_function_operand =
+                std::mem::replace(&mut self.function_union_operand, true);
             self.parse_type(); // return type
             self.function_union_operand = enclosing_function_operand;
-            let return_pipes = std::mem::replace(&mut self.pending_return_pipes, enclosing_pending);
-            // A following `throws` rules out ending this function at a bare
-            // return pipe, unless this function sits in an enclosing return
-            // operand: the pipe can then exit to that union and `throws` can
-            // attach to the enclosing function.
-            if !self.at(TokenKind::Throws)
-                || enclosing_function_operand == FunctionUnionOperand::Return
-            {
-                self.events.extend(
-                    return_pipes
-                        .into_iter()
-                        .map(|span| Event::AmbiguousUnion { span }),
-                );
-            }
             if self.at(TokenKind::Throws) {
                 self.with_node(SyntaxKind::THROWS_CLAUSE, |p| {
                     p.bump(); // throws
-                    let enclosing_function_operand = std::mem::replace(
-                        &mut p.function_union_operand,
-                        FunctionUnionOperand::Throws,
-                    );
+                    let enclosing_function_operand =
+                        std::mem::replace(&mut p.function_union_operand, true);
                     p.parse_type();
                     p.function_union_operand = enclosing_function_operand;
                 });
@@ -5332,16 +5291,35 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// True if the member after this pipe is an unparenthesized function
-    /// type. Such a member can absorb a later `throws` itself, so unlike a
-    /// bare or parenthesized member, its pipe stays ambiguous even when the
-    /// enclosing function's `throws` follows.
+    /// At a return/throws union pipe, test the two structural ownership
+    /// options without resolving names: the pipe can stay in the operand, or
+    /// end the current function before a syntactic function-type member.
+    /// Repeated whole-type parentheses on the right do not settle ownership
+    /// of the pipe on the left.
     fn pipe_starts_function_type(&self) -> bool {
         debug_assert!(self.at(TokenKind::Pipe));
-        self.peek(1).map(|token| token.kind) == Some(TokenKind::LParen)
-            && self.matching_paren_after_pipe(1).is_some_and(|end| {
-                self.peek(end + 1).map(|token| token.kind) == Some(TokenKind::Arrow)
-            })
+        let mut start = 1;
+        loop {
+            if self.peek(start).map(|token| token.kind) != Some(TokenKind::LParen) {
+                return false;
+            }
+            let Some(end) = self.matching_paren_after_pipe(start) else {
+                return false;
+            };
+            if self.peek(end + 1).map(|token| token.kind) == Some(TokenKind::Arrow) {
+                return true;
+            }
+            // `((C) -> D)` is a grouped function, whereas `(C | D)` is
+            // merely a grouped union. Peel one exact wrapper at a time.
+            let inner_start = start + 1;
+            if self.peek(inner_start).map(|token| token.kind) != Some(TokenKind::LParen) {
+                return false;
+            }
+            // An inner function may have a return and throws clause, so the
+            // closing paren alone cannot prove it fills the whole wrapper.
+            // The parser will validate the member after this shape probe.
+            start = inner_start;
+        }
     }
 
     fn matching_paren_after_pipe(&self, start: usize) -> Option<usize> {
@@ -7280,8 +7258,7 @@ impl<'a> Parser<'a> {
         self.type_args_depth += 1;
         // A pipe inside `<...>` cannot end the surrounding function. Nested
         // function types parsed as arguments establish their own context.
-        let enclosing_function_operand =
-            std::mem::replace(&mut self.function_union_operand, FunctionUnionOperand::None);
+        let enclosing_function_operand = std::mem::replace(&mut self.function_union_operand, false);
         self.with_node(SyntaxKind::TYPE_ARGS, |p| {
             p.expect(TokenKind::Less);
 
@@ -10757,67 +10734,42 @@ type Callback = (value: int) -> string throws Foo
 
     #[test]
     fn function_union_boundaries_are_ambiguous_in_types_and_patterns() {
-        // The thirteen syntax-shape candidates in if-let-2.md, plus bare
-        // members after an undelimited function. `^` marks each pipe that can
-        // either stay in the function's return/throws union or end the
-        // function. A pipe followed later by the same function's `throws` is
-        // not ambiguous: ending the function there leaves `throws` dangling.
+        // The thirteen syntax-shape candidates in if-let-2.md. The rightmost
+        // `| (` is the competing function/union boundary in each form.
         let ambiguous = [
-            ("(A) -> B | (C) -> D", "         ^"),
-            ("(A) -> B? | (C) -> D", "          ^"),
-            ("(A) -> B[] | (C) -> D", "           ^"),
-            ("(A) -> Box<B> | (C) -> D", "              ^"),
-            ("(A | B) -> C | (D) -> E", "             ^"),
-            ("(A) -> (B | C) | (D) -> E", "               ^"),
-            ("(A) -> B | (C | D) -> E", "         ^"),
-            ("(A) -> B | ((C) -> D)", "         ^"),
-            ("(A) -> B | ((C) -> D) | E", "         ^            ^"),
-            ("(A) -> B | (C) -> D throws E", "         ^"),
-            ("(A) -> B throws E | (C) -> D", "                  ^"),
-            (
-                "(A) -> B throws E | (C) -> D throws F",
-                "                  ^",
-            ),
-            (
-                "(A) -> B | C throws E | (D) -> F",
-                "                      ^",
-            ),
-            (
-                "(A) -> B throws E | F | (C) -> D throws G",
-                "                  ^   ^",
-            ),
-            ("(A) -> B | C", "         ^"),
-            ("(A) -> B? | C[]", "          ^"),
-            ("(A) -> B | C | D", "         ^   ^"),
-            ("(A) -> B | Callback", "         ^"),
-            ("(A) -> B throws E | F", "                  ^"),
-            ("(A) -> B | C throws E | F", "                      ^"),
-            ("(A) -> (C) -> D | E throws F", "                ^"),
-            ("(A) -> B | (C) -> D | E throws F", "         ^          ^"),
+            "(A) -> B | (C) -> D",
+            "(A) -> B? | (C) -> D",
+            "(A) -> B[] | (C) -> D",
+            "(A) -> Box<B> | (C) -> D",
+            "(A | B) -> C | (D) -> E",
+            "(A) -> (B | C) | (D) -> E",
+            "(A) -> B | (C | D) -> E",
+            "(A) -> B | ((C) -> D)",
+            "(A) -> B | (C) -> D throws E",
+            "(A) -> B throws E | (C) -> D",
+            "(A) -> B throws E | (C) -> D throws F",
+            "(A) -> B | C throws E | (D) -> F",
+            "(A) -> B throws E | F | (C) -> D throws G",
         ];
-        for (form, markers) in ambiguous {
-            let expected: Vec<usize> = markers.match_indices('^').map(|(i, _)| i).collect();
+        for form in ambiguous {
             for source in [
                 format!("type T = {form}\n"),
                 format!("function Demo(x: any) -> int {{ match (x) {{ {form} => 1, _ => 0 }} }}"),
             ] {
                 let (root, errors) = parse_source(&source);
                 assert_eq!(root.text().to_string(), source, "{form}");
-                let offset = source.find(form).unwrap();
-                let mut pipes: Vec<usize> = errors
-                    .iter()
-                    .map(|error| {
-                        let ParseError::AmbiguousUnion { span } = error else {
-                            panic!("{form}: expected ambiguous union, got {errors:#?}");
-                        };
-                        let start: usize = span.range.start().into();
-                        let end: usize = span.range.end().into();
-                        assert_eq!(&source[start..end], "|", "{form}");
-                        start - offset
-                    })
-                    .collect();
-                pipes.sort_unstable();
-                assert_eq!(pipes, expected, "{form}");
+                assert_eq!(errors.len(), 1, "{form}: {errors:#?}");
+                let ParseError::AmbiguousUnion { span } = &errors[0] else {
+                    panic!("{form}: expected ambiguous union, got {errors:#?}");
+                };
+                let start: usize = span.range.start().into();
+                let end: usize = span.range.end().into();
+                assert_eq!(&source[start..end], "|", "{form}");
+                assert_eq!(
+                    start,
+                    source.find(form).unwrap() + form.rfind("| (").unwrap(),
+                    "{form}"
+                );
             }
         }
     }
@@ -10825,14 +10777,14 @@ type Callback = (value: int) -> string throws Foo
     #[test]
     fn function_union_controls_keep_their_explicit_groupings() {
         let return_and_throws = [
-            "(A) -> (B | C)",
-            "(A) -> B | C throws E",
-            "(A) -> B | ((C) -> D throws F) throws E",
-            "(A) -> (B | C) throws (E | F)",
+            "(A) -> B | C",
+            "(A) -> B | C throws E | F",
+            "(A) -> B throws C | D",
+            "(A) -> B | C | D",
             "(A) -> (B | (C) -> D)",
             "(A) -> B throws (E | (C) -> D)",
             "(A | B) -> C",
-            "(A) -> (B | Callback)",
+            "(A) -> B | Callback",
         ];
         for form in return_and_throws {
             let (_, errors) = parse_source(&format!("type T = {form}\n"));
@@ -10860,8 +10812,6 @@ type Callback = (value: int) -> string throws Foo
             "((A) -> B) | ((C) -> D)",
             "((A) -> B throws E) | ((C) -> D throws F)",
             "((A) -> B) | (C) -> D",
-            "((A) -> B) | C",
-            "A | (B) -> C",
         ] {
             let (_, errors) = parse_source(&format!("type T = {form}\n"));
             assert_no_errors(&errors);

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 13939
 ---
 class UnusedError {
 }
@@ -33,7 +32,7 @@ function Lambdas(value: unknown) -> int throws never {
     1
 }
 
-function Accept(callback: () -> int throws (string | int)) -> int {
+function Accept(callback: () -> int throws string | int) -> int {
     1
 }
 

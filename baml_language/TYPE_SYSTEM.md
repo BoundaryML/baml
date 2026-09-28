@@ -427,19 +427,6 @@ function bar/*<E>*/(arg: (() -> void /* throws E */)? = null) -> void /* throws 
    callback's own parameter — is a stored/structural position with no single
    call site to instantiate an effect against, and must declare its `throws`.
 
-A function *type* (as opposed to a declaration, whose `{` body delimits it) has no closing delimiter, so a `|` inside its return or `throws` operand could either extend that union or end the function type and join an outer union. The compiler reports such a pipe as an ambiguous union (E0175) instead of choosing a grouping; parenthesize either the operand or the whole function type:
-
-```baml
-type A = (int) -> string | null           // E0175: ambiguous union
-type B = (int) -> (string | null)         // ok: returns string | null
-type C = ((int) -> string) | null         // ok: optional function
-type D = (int) -> string throws E | F     // E0175
-type G = (int) -> string throws (E | F)   // ok
-type H = (int) -> string | null throws E  // ok: `throws` can only follow the return type, so the pipe cannot end the function
-```
-
-The check is purely syntactic and applies in type and pattern positions alike.
-
 As previously noted, BAML function declarations may include generics. However, all function calls and function-values must have their type parameters specified — or unambiguously inferable from context — to enable monomorphization at call-time:
 
 ```baml
