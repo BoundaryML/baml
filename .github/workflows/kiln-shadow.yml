@@ -13,16 +13,902 @@ concurrency:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
-  cargo-test-linux:
-    name: "KILN: cargo test (x86_64-unknown-linux-gnu)"
+
+  determine_changes:
+    name: "KILN: Determine changes"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    continue-on-error: true
+    outputs:
+      # Flag that is raised when any code in baml_language is changed
+      code: ${{ steps.check_code.outputs.changed }}
+      # Flag for lexer changes
+      lexer: ${{ steps.check_lexer.outputs.changed }}
+      # Flag for parser changes
+      parser: ${{ steps.check_parser.outputs.changed }}
+      # Flag for HIR changes
+      hir: ${{ steps.check_hir.outputs.changed }}
+      # Flag for THIR changes
+      thir: ${{ steps.check_thir.outputs.changed }}
+      # Flag for codegen changes
+      codegen: ${{ steps.check_codegen.outputs.changed }}
+      # Docs example changes need the CLI, but not the full platform/SDK matrix.
+      documentation_snippets: ${{ steps.check_documentation_snippets.outputs.changed }}
+      # Flag for docs/frontend changes
+      docs: ${{ steps.check_docs.outputs.changed }}
+      # Flag for typescript2/webview changes
+      webview: ${{ steps.check_webview.outputs.changed }}
+      # Flag for typescript2 grammar changes
+      grammar: ${{ steps.check_grammar.outputs.changed }}
+      # Flag for unsafe code changes (bex_heap) - triggers Miri tests
+      unsafe: ${{ steps.check_unsafe.outputs.changed }}
+      # Flag for proto codegen changes - triggers generated file sync check
+      proto: ${{ steps.check_proto.outputs.changed }}
+      # Flag for inputs that can change the shipping bridge_cffi binaries
+      bridge_cffi_release: ${{ steps.check_bridge_cffi_release.outputs.changed }}
+      # Flag for SDK test changes - triggers the SDK parity analysis pipeline
+      sdk_tests: ${{ steps.check_sdk_tests.outputs.changed }}
+      # Flag that is raised when perf benchmarks (CodSpeed) should run: always
+      # after merge (push to main/canary) and on manual dispatch; on PRs only
+      # when the PR title/body or a commit message opts in.
+      run_perf: ${{ steps.check_perf.outputs.run }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: false
+          fetch-depth: 0
+          persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+
+      - name: Determine merge base
+        id: merge_base
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || 'canary' }}
+          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+        run: |
+          set -euo pipefail
+          sha=${MERGE_GROUP_BASE_SHA:-$(git merge-base HEAD "origin/${BASE_REF}")}
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Check if code changed
+        id: check_code
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':baml_language/**' \
+            ':typescript2/app-promptfiddle/src/playground/default.baml' \
+            ':scripts/baml-language-version' \
+            ':scripts/baml-wrapper-version' \
+            ':scripts/baml-release-manifests' \
+            ':scripts/baml-package-manager-artifacts' \
+            ':scripts/baml-release-platforms' \
+            ':scripts/baml_release_platforms.py' \
+            ':tools/baml_nightly_select.py' \
+            ':scripts/baml-bridge-cffi-hygiene' \
+            ':scripts/tests/**' \
+            ':release/platforms.json' \
+            ':scripts/install.sh' \
+            ':scripts/install.ps1' \
+            ':packaging/aur/**' \
+            ':tools/pkg_boundaryml_com/**' \
+            ':.github/workflows/ci.yaml' \
+            ':.github/workflows/release-baml-language.yml' \
+            ':.github/workflows/nightly-release.yml' \
+            ':.github/workflows/build2-bridge-cffi.reusable.yaml' \
+            ':.github/workflows/build2-python-sdk.reusable.yaml' \
+            ':.github/workflows/build2-nodejs-sdk.reusable.yaml' \
+            ':.github/workflows/build2-web-sdk.reusable.yaml' \
+            ':.github/workflows/publish2-nodejs-sdk.yaml' \
+            ':.github/workflows/publish2-web-sdk.yaml' \
+            ':.github/workflows/cargo-tests.reusable.yaml' \
+            ':.github/workflows/compiler-tests.reusable.yaml' \
+            ':.github/workflows/size-gate.reusable.yaml' \
+            ':.github/workflows/wasm-pack-tests.reusable.yaml' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if lexer code changed
+        id: check_lexer
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':baml_language/crates/baml_compiler_lexer/**' \
+            ':baml_language/crates/baml_base/**' \
+            ':baml_language/Cargo.toml' \
+            ':baml_language/Cargo.lock' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if parser code changed
+        id: check_parser
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':baml_language/crates/baml_compiler_parser/**' \
+            ':baml_language/crates/baml_compiler_syntax/**' \
+            ':baml_language/crates/baml_compiler_lexer/**' \
+            ':baml_language/crates/baml_base/**' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if HIR code changed
+        id: check_hir
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':baml_language/crates/baml_compiler_hir/**' \
+            ':baml_language/crates/baml_compiler_parser/**' \
+            ':baml_language/crates/baml_base/**' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if THIR code changed
+        id: check_thir
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':baml_language/crates/baml_thir/**' \
+            ':baml_language/crates/baml_compiler_hir/**' \
+            ':baml_language/crates/baml_base/**' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if codegen code changed
+        id: check_codegen
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':baml_language/crates/baml_compiler_emit/**' \
+            ':baml_language/crates/baml_thir/**' \
+            ':baml_language/crates/baml_base/**' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if documentation examples changed
+        id: check_documentation_snippets
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          # Content includes expected inferred signatures in MDX, as well as
+          # canonical code. CSS/components do not require a Rust build.
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]] || ! git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':typescript2/app-developer-docs/content/**' \
+            ':typescript2/app-developer-docs/lib/snippets/**' \
+            ':typescript2/app-developer-docs/scripts/validate-snippets.ts' \
+            ':typescript2/app-developer-docs/scripts/validate-book-behavior.ts' \
+            ':typescript2/app-developer-docs/scripts/operator-arguments.ts' \
+            ':typescript2/app-developer-docs/package.json' \
+            ':typescript2/package.json' \
+            ':typescript2/pnpm-lock.yaml' \
+            ':typescript2/pnpm-workspace.yaml' \
+            ':.envrc' \
+            ':mise.toml' \
+            ':tools/baml-sccache' \
+            ':.github/actions/setup-mise/**' \
+            ':.github/actions/setup-node2/**' \
+          ; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if docs changed
+        id: check_docs
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':fern/**' \
+            ':.github/workflows/docs.reusable.yaml' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if webview changed
+        id: check_webview
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':typescript2/app-vscode-webview/**' \
+            ':typescript2/pkg-playground/**' \
+            ':typescript2/pkg-proto/**' \
+            ':baml_language/crates/bridge_ctypes/types/**' \
+            ':baml_language/crates/bridge_wasm/**' \
+            ':.github/workflows/webview-tests.reusable.yaml' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if grammar changed
+        id: check_grammar
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':typescript2/pkg-grammar/**' \
+            ':typescript2/pkg-grammar-hljs/**' \
+            ':typescript2/pkg-grammar-treesitter/**' \
+            ':typescript2/pnpm-workspace.yaml' \
+            ':typescript2/app-vscode-ext/syntaxes/**' \
+            ':typescript2/app-vscode-ext/language-configuration.json' \
+            ':typescript2/app-vscode-ext/package.json' \
+            ':typescript2/pnpm-lock.yaml' \
+            ':.github/actions/setup-node2/**' \
+            ':.github/workflows/ci.yaml' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if unsafe code changed
+        id: check_unsafe
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':baml_language/crates/bex_heap/**' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if proto sources changed
+        id: check_proto
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':baml_language/crates/bridge_ctypes/**/*.proto' \
+            ':baml_language/crates/bridge_cffi/include/**' \
+            ':baml_language/sdks/swift/Sources/BamlBridge/Proto/**' \
+            ':baml_language/sdks/swift/Sources/CBamlBridge/include/**' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if bridge_cffi release inputs changed
+        id: check_bridge_cffi_release
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':.github/workflows/ci.yaml' \
+            ':.github/workflows/build2-bridge-cffi.reusable.yaml' \
+            ':.github/actions/setup-rust/**' \
+            ':scripts/baml-bridge-cffi-hygiene' \
+            ':scripts/tests/**' \
+            ':release/platforms.json' \
+            ':baml_language/Cargo.toml' \
+            ':baml_language/Cargo.lock' \
+            ':baml_language/Cross.toml' \
+            ':baml_language/rust-toolchain.toml' \
+            ':baml_language/crates/**' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if SDK tests changed
+        id: check_sdk_tests
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          paths=(
+            'baml_language/sdk_tests/**'
+            'baml_language/sdks/README.md'
+            'tools/sdk-parity-lint/**'
+            'mise.toml'
+            '.github/workflows/ci.yaml'
+          )
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$EVENT_NAME" = "push" ]; then
+            if [ -z "$PUSH_BEFORE" ] || [ "$PUSH_BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+            elif git diff --quiet "$PUSH_BEFORE" "$PUSH_AFTER" -- "${paths[@]}"; then
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- "${paths[@]}"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Decide whether perf benchmarks (CodSpeed) should run for this event.
+      # Policy: benchmarks run AFTER MERGE (push to main/canary) only when the
+      # merge actually touched baml_language/, and on manual dispatch. On PRs
+      # they are OPT-IN — they no longer run on every code change. A PR opts in
+      # by mentioning one of the perf markers in its title, body, OR any of its
+      # commit messages. merge_group is always skipped (the PR already had its
+      # chance to run).
+      - name: Check perf benchmark opt-in
+        id: check_perf
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          # Any of these, case-insensitive, in the PR title/body or a commit
+          # message opts a PR into a perf run. Keep in sync with the instructions
+          # posted by the "Perf benchmarks (PR notice)" job below.
+          PATTERN='RUN_CODSPEED=1|run-perf|/perf'
+
+          # After merge (push to canary/main): only run when the merge actually
+          # touched baml_language/. NOTE: we diff the pushed range (before..after)
+          # directly rather than reuse determine_changes' `code` flag — on a push
+          # the merge-base of HEAD and origin/<branch> collapses to HEAD, so that
+          # diff is always empty here. The push payload's before/after are the
+          # real merged range.
+          if [ "$EVENT_NAME" = "push" ]; then
+            if [ -z "$PUSH_BEFORE" ] || [ "$PUSH_BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              # Branch creation / unknown previous tip — nothing to diff against,
+              # so run to be safe rather than silently skip.
+              echo "run=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if git diff --quiet "$PUSH_BEFORE" "$PUSH_AFTER" -- ':baml_language/**'; then
+              echo "run=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "run=true" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          # Manual dispatch always runs.
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Never run in the merge queue — it already ran (or was opted out) on
+          # the PR.
+          if [ "$EVENT_NAME" = "merge_group" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # On PRs: opt in via the PR title/body or any commit message in the PR.
+          if printf '%s\n%s' "$PR_TITLE" "$PR_BODY" | grep -qiE "$PATTERN"; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -n "$MERGE_BASE" ] && git log --format='%B' "${MERGE_BASE}..HEAD" | grep -qiE "$PATTERN"; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "run=false" >> "$GITHUB_OUTPUT"
+
+  prek:
+    name: "KILN: Pre-commit Checks"
     runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: 40
+    continue-on-error: true
+    steps:
+      - name: "Checkout Branch"
+        uses: actions/checkout@v7
+        with:
+          clean: false
+          persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
+      - name: "Install Rust toolchain"
+        run: |
+          rustup toolchain install
+          rustup toolchain install 1.97.1 --profile minimal --component rustc-dev
+        working-directory: baml_language
+
+      # prek hooks invoke cargo (from rustup), mise tasks that shell out
+      # to cargo, and python scripts that begin with `#!/usr/bin/env -S
+      # uv run --script` (e.g. validate-markdown). We don't
+      # need go/ruby/etc here, just the prek binary, a python/uv pair
+      # for hook scripts, node for the grammar check, and clang-format.
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
+        with:
+          # Temporarily omit Hawk while its CI check is disabled.
+          # install_args: "cargo:prek cargo:https://github.com/astral-sh/hawk python uv node clang-format"
+          install_args: "sccache cargo:prek python uv node clang-format"
+
+      - name: "Cache prek"
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
+      - name: "Run prek"
+        run: |
+          echo '```console' > "$GITHUB_STEP_SUMMARY"
+          # Enable color output for prek and remove it for the summary
+          # Use --hook-stage=manual to enable slower hooks that are skipped by default
+          SKIP=no-commit-to-branch prek run --all-files --show-diff-on-failure --color always --hook-stage manual | \
+            tee >(sed -E 's/\x1B\[([0-9]{1,2}(;[0-9]{1,2})*)?[mGK]//g' >> "$GITHUB_STEP_SUMMARY") >&1
+          exit_code="${PIPESTATUS[0]}"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          exit "$exit_code"
+
+  release-metadata:
+    name: "KILN: Release Metadata"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v7
+        with:
+          clean: false
+          fetch-depth: 0
+          persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+
+      - name: "Validate baml_language release metadata"
+        run: scripts/baml-language-version check
+
+      - name: "Test release contracts and workflow graph"
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
+
+      - name: "Validate canary/nightly version computation"
+        env:
+          BAML_LANGUAGE_VERSION_DATE: "20260522"
+        run: |
+          set -euo pipefail
+          canary="$(scripts/baml-language-version show)"
+          test "$(scripts/baml-language-version compute --channel canary)" = "$canary"
+          test "$(scripts/baml-language-version compute --channel canary --pypi)" = "$canary"
+
+          nightly="$(scripts/baml-language-version compute --channel nightly)"
+          pypi="$(scripts/baml-language-version compute --channel nightly --pypi)"
+          python3 - "$canary" "$nightly" "$pypi" <<'PY'
+          import re
+          import sys
+
+          canary, nightly, pypi = sys.argv[1:]
+          major, minor, patch = [int(part) for part in canary.split(".")]
+          base = f"{major}.{minor}.{patch + 1}"
+          match = re.fullmatch(rf"{re.escape(base)}-nightly\.20260522\.([a-z])", nightly)
+          if not match:
+              raise SystemExit(f"unexpected nightly version: {nightly}")
+
+          index = ord(match.group(1)) - ord("a")
+          expected_pypi = f"{base}.dev20260522{index:02d}"
+          if pypi != expected_pypi:
+              raise SystemExit(f"unexpected nightly PyPI version: {pypi} != {expected_pypi}")
+          PY
+
+          scripts/baml-language-version plan --channel nightly --out nightly-release-plan.json
+          scripts/baml-language-version stamp --plan nightly-release-plan.json
+          nuget="$(jq -r .registry_versions.nuget nightly-release-plan.json)"
+          maven="$(jq -r .registry_versions.maven nightly-release-plan.json)"
+          gradle_plugin="$(jq -r \
+            .registry_versions.gradle_plugin nightly-release-plan.json)"
+          swiftpm="$(jq -r .registry_versions.swiftpm nightly-release-plan.json)"
+          node_npm="$(jq -r .version baml_language/sdks/typescript/bridge_typescript/package.json)"
+          web_npm="$(jq -r .version baml_language/sdks/typescript/bridge_typescript_web/package.json)"
+          csharp_nuget="$(sed -n \
+            's#^    <Version>\([^<]*\)</Version>$#\1#p' \
+            baml_language/sdks/csharp/bridge_csharp/src/Baml.Bridge.csproj)"
+          rust_crate="$(sed -n 's/^version = "\(.*\)"$/\1/p' \
+            baml_language/sdks/rust/bridge_rust/Cargo.toml)"
+          go_toolchain="$(sed -n \
+            's/^const ToolchainVersion = "\(.*\)"$/\1/p' \
+            baml_language/sdks/go/baml_go/version.go)"
+          go_runtime="$(sed -n \
+            's/^const BridgeRuntimeVersion = "\(.*\)"$/\1/p' \
+            baml_language/sdks/go/baml_go/version.go)"
+          vsix="$(jq -r .version typescript2/app-vscode-ext/package.json)"
+          test "$node_npm" = "$nightly"
+          test "$web_npm" = "$node_npm"
+          test "$nuget" = "$nightly"
+          test "$csharp_nuget" = "$nuget"
+          test "$maven" = "$nightly"
+          test "$gradle_plugin" = "$nightly"
+          test "$swiftpm" = "$nightly"
+          test "$rust_crate" = "$nightly"
+          test "$go_toolchain" = "$nightly"
+          test "$go_runtime" = "v$nightly"
+          test "$vsix" = "$nightly"
+          for shipping_version in \
+            "$node_npm" "$web_npm" "$csharp_nuget" "$maven" \
+            "$gradle_plugin" "$swiftpm" "$rust_crate" "$go_toolchain" "$vsix"; do
+            test "$shipping_version" != "$canary"
+          done
+          test "$go_runtime" != "v$canary"
+
+  grammar-tests:
+    name: "KILN: Grammar Tests"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    needs: determine_changes
+    if: needs.determine_changes.outputs.grammar == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    continue-on-error: true
+    steps:
+      - name: "Checkout Branch"
+        uses: actions/checkout@v7
+        with:
+          clean: false
+          persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+
+      - name: "Setup Node.js for typescript2"
+        uses: ./.github/actions/setup-node2
+
+      - name: "Build grammar artifacts"
+        run: pnpm --filter @b/pkg-grammar build
+        working-directory: typescript2
+
+      - name: "Committed artifacts must match src/"
+        # build regenerates baml.tmLanguage.json (+ the app-vscode-ext copies
+        # via sync.mjs); any diff means someone edited src/ without committing
+        # the regenerated artifacts, or edited an artifact by hand.
+        run: git diff --exit-code -- typescript2/pkg-grammar typescript2/app-vscode-ext
+
+      - name: "Run grammar tests"
+        id: grammar-tests
+        run: pnpm --filter @b/pkg-grammar test
+        working-directory: typescript2
+
+      - name: "Run highlight.js grammar tests"
+        # The hljs port validates against pkg-grammar's fixtures, so a grammar
+        # change that the port doesn't handle fails here (conformance gate).
+        id: hljs-tests
+        run: pnpm --filter @b/pkg-grammar-hljs test
+        working-directory: typescript2
+
+      - name: "Run tree-sitter grammar tests"
+        # Generates the parser and runs the corpus + fixture parse gate.
+        run: pnpm --filter @b/pkg-grammar-treesitter test
+        working-directory: typescript2
+
+  proto-sync:
+    name: "KILN: proto generated files sync"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    needs: determine_changes
+    if: needs.determine_changes.outputs.proto == 'true'
+    timeout-minutes: 40
+    continue-on-error: true
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v7
+        with:
+          clean: false
+          persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version.
+      - name: "Install Rust toolchain"
+        run: rustup toolchain install
+        working-directory: baml_language
+
+      # bridge_ctypes/build.rs needs `protoc`; bridge_go/build.sh needs
+      # `protoc` + `protoc-gen-go`; bridge_typescript needs node + pnpm.
+      # The `cargo build -p bridge_ctypes` step uses cargo from rustup
+      # (not mise), so we don't need `go` itself here either.
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "node npm:pnpm protoc protoc-gen-go"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
+      # Rust (prost) + Python (protoc) — both driven by bridge_ctypes/build.rs.
+      # Writes Python pb2/pyi into baml_language/sdks/python/src/baml_bridge/cffi/v1/.
+      - name: "Generate Rust + Python proto bindings (bridge_ctypes)"
+        run: cargo build -p bridge_ctypes
+        working-directory: baml_language
+
+      # Go (protoc-gen-go) — writes into sdks/go/bridge_go/cffi/proto/baml_bridge/cffi/v1/.
+      - name: "Generate Go proto bindings (sdks/go/bridge_go)"
+        run: ./build.sh
+        working-directory: baml_language/sdks/go/bridge_go
+
+      # --ignore-workspace: install from bridge_typescript's own pnpm-lock.yaml
+      # rather than the root workspace lockfile. The two resolve different
+      # protobufjs-cli versions, and pbjs codegen output (committed under
+      # typescript_src/proto/) must come from the version this package pins.
+      # --ignore-scripts: skip dependency build scripts (esbuild's binary
+      # fetch, protobufjs postinstall) — none are needed for pbjs/tsc/napi
+      # codegen, and pnpm errors on unapproved build scripts otherwise.
+      # Same flags as sdk_tests/crates/typescript/setup.sh.
+      - name: "Install Node SDK dependencies"
+        run: pnpm install --frozen-lockfile --ignore-workspace --ignore-scripts
+        working-directory: baml_language/sdks/typescript/bridge_typescript
+
+      # Node / TypeScript (protobufjs) — writes into sdks/typescript/bridge_typescript/typescript_src/proto/.
+      # build:debug also regenerates typescript2/pkg-proto/src/generated/ (ts-proto / buf).
+      - name: "Generate Node/TypeScript proto bindings (sdks/typescript/bridge_typescript)"
+        run: pnpm build:debug
+        working-directory: baml_language/sdks/typescript/bridge_typescript
+
+      # Swift (protoc-gen-swift) — the plugin needs a Swift toolchain,
+      # which this Linux job doesn't have. The generated .pb.swift files
+      # are instead checked via the input-hash manifest that
+      # sdks/swift/scripts/generate-protos.sh writes alongside them:
+      # recompute the source protos' hashes here; if they differ from
+      # the committed manifest, the Swift bindings were not regenerated.
+      # The bundled ABI header is a verbatim copy of the canonical one
+      # (itself byte-enforced by bridge_cffi's header_generation test),
+      # so re-copy it and let the dirty-tree check below catch drift.
+      - name: "Sync-check Swift proto bindings + ABI header (sdks/swift)"
+        run: |
+          (cd baml_language/crates/bridge_ctypes/types \
+            && sha256sum baml_bridge/cffi/v1/*.proto) \
+            > baml_language/sdks/swift/Sources/BamlBridge/Proto/.generated-from
+          cp baml_language/crates/bridge_cffi/include/baml_cffi.h \
+             baml_language/sdks/swift/Sources/CBamlBridge/include/baml_cffi.h
+
+      - name: "Check generated proto files are in sync"
+        run: |
+          # Check for both modified tracked files and untracked files across every
+          # codegen output documented in baml_language/crates/bridge_ctypes/README.md.
+          PATHS=(
+            baml_language/sdks/typescript/bridge_typescript
+            baml_language/crates/bridge_ctypes
+            baml_language/sdks/go/bridge_go
+            baml_language/sdks/python/src/baml_bridge/cffi
+            baml_language/sdks/rust/bridge_rust/src/wire
+            baml_language/sdks/swift/Sources/BamlBridge/Proto
+            baml_language/sdks/swift/Sources/CBamlBridge/include
+            typescript2/pkg-proto
+          )
+          README="baml_language/crates/bridge_ctypes/README.md"
+          STATUS=$(git status --porcelain -- "${PATHS[@]}")
+          if [ -n "$STATUS" ]; then
+            echo "::error::proto generated files are out of sync — consult ${README} for the regeneration commands and commit the resulting changes."
+            echo ""
+            echo "The following files are out of sync:"
+            echo "$STATUS"
+            echo ""
+            echo "===== ${README} ====="
+            cat "${README}"
+            echo "===== end of ${README} ====="
+            echo ""
+            git diff -- "${PATHS[@]}"
+            exit 1
+          fi
+          echo "All generated proto files are in sync."
+
+  sdk_parity_check:
+    name: "KILN: SDK parity lint"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    needs: determine_changes
+    if: needs.determine_changes.outputs.sdk_tests == 'true'
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - name: "Checkout Branch"
+        uses: actions/checkout@v7
+        with:
+          clean: false
+          fetch-depth: 0
+          persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "ast-grep"
+
+      - name: "Install Rust toolchain"
+        working-directory: baml_language
+        run: rustup show
+
+      - name: "Build local BAML CLI"
+        run: cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
+
+      - name: "Run SDK parity analysis"
+        run: tools/sdk-parity-lint/run --repo-root . --baseline baml_language/sdk_tests/crates/parity_analysis.md --output baml_language/sdk_tests/crates/parity_analysis.new.md
+
+      - name: "Upload parity results"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdk-parity-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: baml_language/sdk_tests/crates/parity_analysis.new.md
+          if-no-files-found: ignore
+          retention-days: 14
+
+  documentation-snippets:
+    name: "KILN: Documentation examples / Compiler and documentation tests"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge
+    needs: determine_changes
+    if: >-
+      needs.determine_changes.outputs.documentation_snippets == 'true' &&
+      needs.determine_changes.outputs.code != 'true' &&
+      github.ref != 'refs/heads/main' && github.ref != 'refs/heads/canary'
     timeout-minutes: 60
     continue-on-error: true
     env:
       CARGO_INCREMENTAL: 0
       CARGO_NET_RETRY: 10
       CARGO_TERM_COLOR: always
+      # Match Cargo CI: these binaries repeatedly execute the compiler, so opt-level
+      # 1 matters for runtime as well as sharing compiled dependencies in sccache.
       CARGO_PROFILE_DEV_OPT_LEVEL: "1"
       CARGO_PROFILE_TEST_OPT_LEVEL: "1"
       RUSTUP_MAX_RETRIES: 10
@@ -31,7 +917,6 @@ jobs:
         with:
           clean: false
           persist-credentials: false
-
       - name: "Backdate the git refs baml_artifact tracks"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
@@ -61,6 +946,131 @@ jobs:
       - name: "Install tools (mise)"
         uses: ./.github/actions/setup-mise
         with:
+          install_args: "sccache direnv"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      - name: "Build the CLI for documentation-only changes"
+        run: cargo build -p baml_cli --bin baml-cli --all-features --timings
+        working-directory: baml_language
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node2
+      - name: Compile canonical documentation snippets
+        env:
+          # Require full diagnostics for both valid and intentionally invalid
+          # examples. Do not seed disposable projects during the check pass.
+          BAML_NO_BYTECODE_CACHE: "1"
+          BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
+        run: pnpm --filter app-developer-docs docs:snippets:validate
+        working-directory: typescript2
+      - name: Execute documentation behavior and inferred-signature assertions
+        env:
+          BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
+          # Content-addressed keys include the compiler fingerprint and project
+          # inputs. Reuse the stdlib across examples without writing into source.
+          BAML_CACHE_DIR: ${{ runner.temp }}/baml-documentation-cache
+        run: pnpm --filter app-developer-docs docs:book:validate
+        working-directory: typescript2
+      # The full baml_cli::baml_corpus test above already executes
+      # root.compiler.mounted_interface_diagnostics. Do not compile the corpus
+      # again just to select those three package-boundary assertions.
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-snapshot.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-snapshot
+          path: sccache-stats-snapshot.json
+          if-no-files-found: ignore
+
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-snapshot.html
+        working-directory: baml_language
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-snapshot
+          path: baml_language/target/cargo-timings/cargo-timing-snapshot.html
+          if-no-files-found: ignore
+
+  cargo-test-linux:
+    name: "KILN: cargo test (x86_64-unknown-linux-gnu)"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: 50
+    continue-on-error: true
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_NET_RETRY: 10
+      CARGO_TERM_COLOR: always
+      # CI executes the compiler thousands of times per job — in-process in
+      # `baml_tests`, and as a spawned debug `baml-cli` in the CLI e2e suites — so
+      # test runtime dwarfs compile time here (opt-level 0 test execution was
+      # ~55min of CPU per run across the linux jobs alone). opt-level 1 keeps
+      # debug-assertions on and costs one sccache-cold rebuild after this change
+      # lands; per-package overrides in Cargo.toml (e.g. salsa) still apply on
+      # top. Pinned on both `dev` (dependencies) and `test` (the `--test`
+      # binaries) so the setting is unambiguous, mirroring the DEBUG pins in the
+      # windows job.
+      CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+      CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+      RUSTUP_MAX_RETRIES: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: false
+          persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      # mise installs sccache/direnv AND cargo-nextest (cargo: backend ->
+      # cargo-binstall prebuilt), replacing taiki-e/install-action.
+      - name: "Install tools (mise)"
+        uses: ./.github/actions/setup-mise
+        with:
           install_args: "sccache direnv cargo:cargo-nextest"
 
       - name: "Verify sccache"
@@ -69,19 +1079,39 @@ jobs:
       - name: "Load .envrc with direnv"
         run: |
           set -euo pipefail
+
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
 
+      # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
         run: cargo fetch
         working-directory: baml_language
 
+      # `baml_tests`, `baml_cli`, and `baml_pack_host` already run on linux
+      # with `--all-features` in the dedicated `snapshot-tests` job, so this
+      # job neither builds nor runs them — their test binaries are also the
+      # heaviest links in the workspace. (A nextest `-E` filter would only
+      # skip *running* them; the cargo-level `--exclude` skips building them
+      # too.) The `sdk_test_*` crates each need their own language toolchain,
+      # and their suites only pass behind the setup script that generates the
+      # SDK under test — both of which the dedicated `sdk-tests` matrix below
+      # provides.
       - name: "Build tests with --timings"
         run: cargo nextest run --no-run --all-features --timings --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
       - name: "Run tests with nextest"
+        id: cargo-test
         run: cargo nextest run --profile ci --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
+        working-directory: baml_language
+
+      # Release leg: structured-log value copying carries `debug_assert`-adjacent
+      # logic whose behavior must not change when debug assertions are
+      # compiled out (PR #4548 review A.1). Narrow on purpose — this module,
+      # not the workspace.
+      - name: "Run structured-log value-copy tests in release mode"
+        run: cargo test --release -p bex_engine --lib trace_heap
         working-directory: baml_language
 
       - name: "Upload test results on failure"
@@ -95,7 +1125,7 @@ jobs:
 
       - name: "Show sccache stats"
         if: always()
-        run: sccache --show-stats || true
+        run: sccache --show-stats
 
       - name: "Dump sccache stats (json)"
         if: always()
@@ -113,7 +1143,6 @@ jobs:
         if: always()
         run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-linux.html
         working-directory: baml_language
-
       - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v7
@@ -125,129 +1154,27 @@ jobs:
   cargo-test-linux-musl:
     name: "KILN: cargo test (x86_64-unknown-linux-musl)"
     runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge..memory=high
-    timeout-minutes: 60
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: 70
     continue-on-error: true
-    env:
-      CARGO_BUILD_TARGET: x86_64-unknown-linux-musl
-      CARGO_INCREMENTAL: 0
-      CARGO_PROFILE_DEV_OPT_LEVEL: "1"
-      CARGO_PROFILE_TEST_OPT_LEVEL: "1"
-    steps:
-      - uses: actions/checkout@v7
-        with: { clean: false, persist-credentials: false }
-      - name: "Backdate the git refs baml_artifact tracks"
-        run: |
-          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
-          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
-          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
-          p=("$(git rev-parse --git-path HEAD)")
-          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
-          if ! git show-ref --verify --quiet refs/heads/canary; then
-            b="${basis:-$(git rev-parse HEAD)}"
-            git update-ref refs/heads/canary "${b}"
-            echo "recreated refs/heads/canary at ${b}"
-          fi
-          p+=("$(git rev-parse --git-path refs/heads/canary)")
-          touch -t 197001010000 "${p[@]}"
-          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
-      - name: "Install Rust toolchain"
-        working-directory: baml_language
-        run: |
-          rustup show
-          rustup target add x86_64-unknown-linux-musl
-      - name: "Work around the stale HashiCorp apt key"
-        run: sudo rm -f /etc/apt/sources.list.d/hashicorp.list
-      - name: "Setup musl cross toolchain"
-        uses: ./.github/actions/setup-musl-cross
-        with:
-          target: x86_64-unknown-linux-musl
-      - name: "Install tools (mise)"
-        uses: ./.github/actions/setup-mise
-        with:
-          install_args: "sccache direnv cargo:cargo-nextest"
-      - name: "Verify sccache"
-        run: sccache --version
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
-      - name: "Fetch cargo dependencies"
-        run: cargo fetch
-        working-directory: baml_language
-      - name: "Build tests with --timings"
-        run: cargo build --tests --bin baml-cli --bin baml-pack-host --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
-        working-directory: baml_language
-      - name: "Run tests with nextest"
-        run: cargo nextest run --profile ci --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=baml_corpus)'
-        working-directory: baml_language
-        env:
-          BAML_PACK_HOST_PREBUILT: "1"
-      - name: "Upload test results on failure"
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-failures-linux-musl
-          path: |
-            baml_language/**/*.snap.new
-            baml_language/**/target/nextest/
-      - name: "Show sccache stats"
-        if: always()
-        run: sccache --show-stats || true
-      - name: "Dump sccache stats (json)"
-        if: always()
-        run: sccache --show-stats --stats-format json > sccache-stats-test-linux-musl.json
-      - name: "Upload sccache stats"
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: sccache-stats-test-linux-musl
-          path: sccache-stats-test-linux-musl.json
-          if-no-files-found: ignore
-      - name: "Rename cargo timings"
-        if: always()
-        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-linux-musl.html
-        working-directory: baml_language
-      - name: "Upload cargo timings"
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: cargo-timings-test-linux-musl
-          path: baml_language/target/cargo-timings/cargo-timing-test-linux-musl.html
-          if-no-files-found: ignore
-
-  sdk-tests:
-    name: "KILN: sdk tests (${{ matrix.sdk-label }}, ${{ matrix.os-label }})"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge..memory=${{ matrix.memory }}
-    timeout-minutes: ${{ matrix.timeout }}
-    continue-on-error: true
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { sdk-label: "typescript", sdk-dir: "typescript", package-name: "sdk_test_typescript", sdk-path: "typescript", install-args: "sccache direnv node npm:pnpm cargo:cargo-nextest", os-label: "linux", timeout: 30, memory: "standard" }
-          - { sdk-label: "csharp", sdk-dir: "csharp", package-name: "sdk_test_csharp", sdk-path: "csharp", install-args: "sccache direnv cargo:cargo-nextest", os-label: "linux", timeout: 30, memory: "high" }
     env:
       CARGO_INCREMENTAL: 0
       CARGO_NET_RETRY: 10
       CARGO_TERM_COLOR: always
+      # CI executes the compiler thousands of times per job — in-process in
+      # `baml_tests`, and as a spawned debug `baml-cli` in the CLI e2e suites — so
+      # test runtime dwarfs compile time here (opt-level 0 test execution was
+      # ~55min of CPU per run across the linux jobs alone). opt-level 1 keeps
+      # debug-assertions on and costs one sccache-cold rebuild after this change
+      # lands; per-package overrides in Cargo.toml (e.g. salsa) still apply on
+      # top. Pinned on both `dev` (dependencies) and `test` (the `--test`
+      # binaries) so the setting is unambiguous, mirroring the DEBUG pins in the
+      # windows job.
       CARGO_PROFILE_DEV_OPT_LEVEL: "1"
       CARGO_PROFILE_TEST_OPT_LEVEL: "1"
       RUSTUP_MAX_RETRIES: 10
-      # MSBuild reads environment variables as global properties. The .NET
-      # SDK embeds the git commit into every build by default (SourceLink
-      # json + SourceRevisionId in InformationalVersion), which changes a
-      # CoreCompile input on every push and would defeat the C# MSBuild
-      # cache below for any new commit. Test builds need neither; only
-      # dotnet reads these, so the other SDK matrix legs are unaffected.
-      EnableSourceLink: "false"
-      IncludeSourceRevisionInInformationalVersion: "false"
+      CARGO_BUILD_TARGET: x86_64-unknown-linux-musl
     steps:
       - uses: actions/checkout@v7
         with:
@@ -274,18 +1201,535 @@ jobs:
           else
             echo "no warm template; build.rs reads HEAD, which matches a cold tree"
           fi
+
+      - name: "Install Rust toolchain"
+        run: |
+          set -euo pipefail
+          rustup show
+          rustup target add x86_64-unknown-linux-musl
+        working-directory: baml_language
+      - name: "Work around the stale HashiCorp apt key"
+        run: sudo rm -f /etc/apt/sources.list.d/hashicorp.list
+
+      - name: "Setup musl cross toolchain"
+        uses: ./.github/actions/setup-musl-cross
+        with:
+          target: x86_64-unknown-linux-musl
+
+      - name: "Install tools (mise)"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv cargo:cargo-nextest"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
+      # Enabling every feature turns on the optional native-tls backend, which
+      # needs a separate target-specific OpenSSL build. Default features match
+      # the rustls-based musl artifacts we ship.
+      - name: "Build tests with --timings"
+        run: cargo build --tests --bin baml-cli --bin baml-pack-host --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+        working-directory: baml_language
+
+      - name: "Run tests with nextest"
+        # The runtime corpus moved from the excluded baml_tests package into
+        # baml_cli; keep its existing ownership in the snapshot job.
+        id: cargo-test
+        run: cargo nextest run --profile ci --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=baml_corpus)'
+        working-directory: baml_language
+        env:
+          BAML_PACK_HOST_PREBUILT: "1"
+
+      - name: "Upload test results on failure"
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-failures-linux-musl
+          path: |
+            baml_language/**/*.snap.new
+            baml_language/**/target/nextest/
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-test-linux-musl.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-test-linux-musl
+          path: sccache-stats-test-linux-musl.json
+          if-no-files-found: ignore
+
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-linux-musl.html
+        working-directory: baml_language
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-test-linux-musl
+          path: baml_language/target/cargo-timings/cargo-timing-test-linux-musl.html
+          if-no-files-found: ignore
+
+  cargo-test-wasm:
+    name: "KILN: cargo test (wasm32-unknown-unknown)"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: 90
+    continue-on-error: true
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_NET_RETRY: 10
+      CARGO_TERM_COLOR: always
+      # CI executes the compiler thousands of times per job — in-process in
+      # `baml_tests`, and as a spawned debug `baml-cli` in the CLI e2e suites — so
+      # test runtime dwarfs compile time here (opt-level 0 test execution was
+      # ~55min of CPU per run across the linux jobs alone). opt-level 1 keeps
+      # debug-assertions on and costs one sccache-cold rebuild after this change
+      # lands; per-package overrides in Cargo.toml (e.g. salsa) still apply on
+      # top. Pinned on both `dev` (dependencies) and `test` (the `--test`
+      # binaries) so the setting is unambiguous, mirroring the DEBUG pins in the
+      # windows job.
+      CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+      CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+      RUSTUP_MAX_RETRIES: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: false
+          persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+
+      - name: "Install Rust toolchain"
+        run: |
+          set -euo pipefail
+          rustup show
+          # `rustup target add wasm32` fetches a small (~20MB) std component that
+          # normally installs in seconds. A multi-minute duration means a stalled
+          # download (rustup has no idle timeout), which otherwise burns the whole
+          # job timeout and dequeues the PR from the merge queue. Cap each attempt
+          # well above the normal time and retry on a fresh connection; surface a
+          # genuine outage after 3 tries instead of hanging.
+          for attempt in 1 2 3; do
+            if timeout 300 rustup target add wasm32-unknown-unknown; then
+              break
+            fi
+            echo "::warning::rustup target add wasm32 attempt $attempt stalled/failed; retrying" >&2
+            [ "$attempt" = 3 ] && { echo "::error::rustup target add wasm32 failed after 3 attempts"; exit 1; }
+            sleep 5
+          done
+        working-directory: baml_language
+
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - name: "Build for WASM"
+        run: |
+          set -euo pipefail
+          readarray -t wasm_packages < <(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.source==null) | select(if .metadata.ci.wasm_support == null then true else .metadata.ci.wasm_support end) | .name')
+          if [[ ${#wasm_packages[@]} -eq 0 ]]; then
+            echo "Error: no WASM packages discovered; cargo metadata or jq may have failed" >&2
+            exit 1
+          fi
+          package_args=()
+          for package in "${wasm_packages[@]}"; do
+            package_args+=(-p "$package")
+          done
+          cargo build "${package_args[@]}" --target wasm32-unknown-unknown --no-default-features --release --timings
+        working-directory: baml_language
+
+      - name: "List WASM artifacts"
+        run: ls -lh target/wasm32-unknown-unknown/release/*.wasm || true
+        working-directory: baml_language
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-test-wasm.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-test-wasm
+          path: sccache-stats-test-wasm.json
+          if-no-files-found: ignore
+
+      - name: "Rename cargo timings"
+        if: always()
+        run: |
+          if [[ -f target/cargo-timings/cargo-timing.html ]]; then
+            mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-wasm.html
+          fi
+        working-directory: baml_language
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-test-wasm
+          path: baml_language/target/cargo-timings/cargo-timing-test-wasm.html
+          if-no-files-found: ignore
+
+  cargo-build-msrv:
+    name: "KILN: cargo build (msrv)"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: 50
+    continue-on-error: true
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_NET_RETRY: 10
+      CARGO_TERM_COLOR: always
+      # CI executes the compiler thousands of times per job — in-process in
+      # `baml_tests`, and as a spawned debug `baml-cli` in the CLI e2e suites — so
+      # test runtime dwarfs compile time here (opt-level 0 test execution was
+      # ~55min of CPU per run across the linux jobs alone). opt-level 1 keeps
+      # debug-assertions on and costs one sccache-cold rebuild after this change
+      # lands; per-package overrides in Cargo.toml (e.g. salsa) still apply on
+      # top. Pinned on both `dev` (dependencies) and `test` (the `--test`
+      # binaries) so the setting is unambiguous, mirroring the DEBUG pins in the
+      # windows job.
+      CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+      CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+      RUSTUP_MAX_RETRIES: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: false
+          persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+
+      - uses: SebRollen/toml-action@v1.2.0
+        id: msrv
+        with:
+          file: "baml_language/Cargo.toml"
+          field: "workspace.package.rust-version"
+
+      - name: "Install Rust toolchain (MSRV)"
+        env:
+          MSRV: ${{ steps.msrv.outputs.value }}
+        run: |
+          rustup toolchain install "${MSRV}"
+          rustup default "${MSRV}"
+        working-directory: baml_language
+
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        env:
+          MSRV: ${{ steps.msrv.outputs.value }}
+        run: cargo "+${MSRV}" fetch
+        working-directory: baml_language
+
+      - name: "Build with MSRV"
+        env:
+          MSRV: ${{ steps.msrv.outputs.value }}
+        run: cargo "+${MSRV}" test --no-run --all-features --timings
+        working-directory: baml_language
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-msrv.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-msrv
+          path: sccache-stats-msrv.json
+          if-no-files-found: ignore
+
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-msrv.html
+        working-directory: baml_language
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-msrv
+          path: baml_language/target/cargo-timings/cargo-timing-msrv.html
+          if-no-files-found: ignore
+
+  cargo-doc:
+    name: "KILN: cargo doc"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: 50
+    continue-on-error: true
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_NET_RETRY: 10
+      CARGO_TERM_COLOR: always
+      # CI executes the compiler thousands of times per job — in-process in
+      # `baml_tests`, and as a spawned debug `baml-cli` in the CLI e2e suites — so
+      # test runtime dwarfs compile time here (opt-level 0 test execution was
+      # ~55min of CPU per run across the linux jobs alone). opt-level 1 keeps
+      # debug-assertions on and costs one sccache-cold rebuild after this change
+      # lands; per-package overrides in Cargo.toml (e.g. salsa) still apply on
+      # top. Pinned on both `dev` (dependencies) and `test` (the `--test`
+      # binaries) so the setting is unambiguous, mirroring the DEBUG pins in the
+      # windows job.
+      CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+      CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+      RUSTUP_MAX_RETRIES: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: false
+          persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+
       - name: "Install Rust toolchain"
         run: rustup show
         working-directory: baml_language
+
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
+      - name: "Generate documentation"
+        run: cargo doc --all --no-deps --timings
+        working-directory: baml_language
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-doc.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-doc
+          path: sccache-stats-doc.json
+          if-no-files-found: ignore
+
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-doc.html
+        working-directory: baml_language
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-doc
+          path: baml_language/target/cargo-timings/cargo-timing-doc.html
+          if-no-files-found: ignore
+
+  sdk-tests:
+    name: "KILN: sdk tests (${{ matrix.sdk-label }}, ${{ matrix.os-label }})"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge..memory=${{ matrix.memory }}
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: ${{ matrix.timeout }}
+    continue-on-error: true
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_NET_RETRY: 10
+      CARGO_TERM_COLOR: always
+      # CI executes the compiler thousands of times per job — in-process in
+      # `baml_tests`, and as a spawned debug `baml-cli` in the CLI e2e suites — so
+      # test runtime dwarfs compile time here (opt-level 0 test execution was
+      # ~55min of CPU per run across the linux jobs alone). opt-level 1 keeps
+      # debug-assertions on and costs one sccache-cold rebuild after this change
+      # lands; per-package overrides in Cargo.toml (e.g. salsa) still apply on
+      # top. Pinned on both `dev` (dependencies) and `test` (the `--test`
+      # binaries) so the setting is unambiguous, mirroring the DEBUG pins in the
+      # windows job.
+      CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+      CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+      RUSTUP_MAX_RETRIES: 10
+      # MSBuild reads environment variables as global properties. The .NET
+      # SDK embeds the git commit into every build by default (SourceLink
+      # json + SourceRevisionId in InformationalVersion), which changes a
+      # CoreCompile input on every push and would defeat the C# MSBuild
+      # cache below for any new commit. Test builds need neither; only
+      # dotnet reads these, so the other SDK matrix legs are unaffected.
+      EnableSourceLink: "false"
+      IncludeSourceRevisionInInformationalVersion: "false"
+    strategy:
+      fail-fast: false
+      # In the merge queue (`merge_group`) only the linux leg runs — the
+      # macos/windows legs already ran on the PR. Keep these entries in sync
+      # with the standalone platform cargo-test jobs above.
+      matrix:
+        include:
+          - {"sdk-label": "go", "sdk-dir": "go", "package-name": "sdk_test_go", "sdk-path": "go", "install-args": "sccache direnv go cargo:cargo-nextest", "os-label": "linux", "timeout": 60, "memory": "standard"}
+          - {"sdk-label": "python-pydantic2", "sdk-dir": "python", "package-name": "sdk_test_python_pydantic2", "sdk-path": "python_pydantic2", "install-args": "sccache direnv python uv cargo:cargo-nextest", "os-label": "linux", "timeout": 60, "memory": "standard"}
+          - {"sdk-label": "ruby-sorbet", "sdk-dir": "ruby", "package-name": "sdk_test_ruby_sorbet", "sdk-path": "ruby_sorbet", "install-args": "sccache direnv cargo:cargo-nextest", "os-label": "linux", "timeout": 60, "memory": "standard"}
+          - {"sdk-label": "typescript", "sdk-dir": "typescript", "package-name": "sdk_test_typescript", "sdk-path": "typescript", "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest", "os-label": "linux", "timeout": 60, "memory": "standard"}
+          - {"sdk-label": "typescript-web", "sdk-dir": "typescript", "package-name": "sdk_test_typescript_web", "sdk-path": "typescript_web", "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest github:rustwasm/wasm-pack", "os-label": "linux", "timeout": 60, "memory": "standard"}
+          - {"sdk-label": "cpp", "sdk-dir": "cpp", "package-name": "sdk_test_cpp", "sdk-path": "cpp", "install-args": "sccache direnv cargo:cargo-nextest", "os-label": "linux", "timeout": 60, "memory": "standard"}
+          - {"sdk-label": "csharp", "sdk-dir": "csharp", "package-name": "sdk_test_csharp", "sdk-path": "csharp", "install-args": "sccache direnv cargo:cargo-nextest", "os-label": "linux", "timeout": 60, "memory": "high"}
+          - {"sdk-label": "rust", "sdk-dir": "rust", "package-name": "sdk_test_rust", "sdk-path": "rust", "install-args": "sccache direnv cargo:cargo-nextest", "os-label": "linux", "timeout": 60, "memory": "standard"}
+          - {"sdk-label": "java", "sdk-dir": "java", "package-name": "sdk_test_java", "sdk-path": "java", "install-args": "sccache direnv java gradle cargo:cargo-nextest", "os-label": "linux", "timeout": 60, "memory": "standard"}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
       - name: "Install sdk test tools"
         uses: ./.github/actions/setup-mise
         with:
           install_args: ${{ matrix.install-args }}
+
+      - name: "Install Ruby"
+        if: matrix.sdk-label == 'ruby-sorbet'
+        uses: ./.github/actions/setup-ruby
+        with:
+          ruby-version: "3.2.2"
+
       - name: "Install .NET SDK"
         if: matrix.sdk-label == 'csharp'
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.301
+
       # The SDK install is freshly stamped every run, and its targets files
       # and reference packs are MSBuild inputs (e.g. Microsoft.Common.targets
       # regenerates AssemblyAttributes.cs, a CoreCompile input), which alone
@@ -306,6 +1750,7 @@ jobs:
             echo "WARNING: some SDK files kept fresh mtimes (cache will under-hit):"
             echo "$fresh"
           fi
+
       # The C# fixtures all build the shared bridge project and, without a
       # cache, every CI run pays the full set of Roslyn compiles from
       # scratch (setup.sh builds them as one solution; the tests run with
@@ -341,17 +1786,20 @@ jobs:
           # rather than lean on secondary invalidation signals.
           key: csharp-msbuild-v2-${{ matrix.os-label }}-sdk10.0.301-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: csharp-msbuild-v2-${{ matrix.os-label }}-sdk10.0.301-
+
       - name: "Backdate unchanged C# sources"
         if: matrix.sdk-label == 'csharp'
         shell: bash
         run: |
           "$(command -v python3 || command -v python)" .github/scripts/csharp-mtime-cache.py restore
+
       - name: "Test C# NuGet payload comparison"
         if: matrix.sdk-label == 'csharp'
         run: |
           dotnet run --project \
             baml_language/sdks/csharp/bridge_csharp/tools/Baml.NuGetNormalizer/Baml.NuGetNormalizer.csproj \
             -- --self-test
+
       - name: "Test nightly C# package version"
         if: matrix.sdk-label == 'csharp' && matrix.os-label == 'linux'
         env:
@@ -407,21 +1855,47 @@ jobs:
           test -f "$package"
           test "$(unzip -p "$package" baml-bridge.nuspec \
             | sed -n 's#.*<version>\([^<]*\)</version>.*#\1#p')" = "$nuget"
+
       - name: "Verify sccache"
         run: sccache --version
+
       - name: "Load .envrc with direnv"
         run: |
           set -euo pipefail
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
         run: cargo fetch
         working-directory: baml_language
+
+      # Windows-only: swap the .cmd RUSTC_WRAPPER for the native tools_sccache
+      # .exe. See the matching step in `cargo-test-windows` for why.
+      - name: "Build native sccache wrapper"
+        if: matrix.os-label == 'windows'
+        run: |
+          set -euo pipefail
+          cargo build -p tools_sccache
+          echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
+          # CARGO_BUILD_JOBS oversubscription only matters for the Windows build.
+          echo "CARGO_BUILD_JOBS=16" >> "$GITHUB_ENV"
+        working-directory: baml_language
+
+      # Windows Python only: setup.ps1 builds one baml_bridge wheel and strips
+      # the editable source block from each fixture so `uv sync` installs that
+      # prebuilt wheel instead of rebuilding baml_bridge per fixture. The later
+      # test-time `uv run` processes also need this wheelhouse.
+      - name: "Configure Python wheelhouse"
+        if: matrix.os-label == 'windows' && matrix.sdk-label == 'python-pydantic2'
+        run: echo "UV_FIND_LINKS=$(pwd -W)/target/wheels" >> "$GITHUB_ENV"
+        working-directory: baml_language
+
       - name: "Build tests with --timings"
         run: cargo test --no-run -p ${{ matrix.package-name }} --all-features --timings
         working-directory: baml_language
+
       # Generating the fixture clients used to be a side effect of the build
       # above, back when this crate had a build script. It is explicit now, and
       # must stay ahead of the backdate below so there is something to backdate:
@@ -432,6 +1906,7 @@ jobs:
         if: matrix.sdk-label == 'csharp'
         run: cargo run --quiet -p sdk_test_codegen -- csharp
         working-directory: baml_language
+
       # Second pass: the step above writes every fixture's client tree with
       # fresh mtimes. Re-run the backdate so unchanged generated sources also
       # count as older than the cached outputs.
@@ -440,23 +1915,30 @@ jobs:
         shell: bash
         run: |
           "$(command -v python3 || command -v python)" .github/scripts/csharp-mtime-cache.py restore
+
       - name: "Show sccache stats"
         if: always()
         run: sccache --show-stats
+
       - name: "Run sdk test setup"
         # The C# crate uses nextest's setup-script hook directly and has no
         # generated setup_guard test. Its setup still runs before the full suite.
         if: matrix.sdk-label != 'csharp'
         run: cargo nextest run -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }}) and test(setup_guard::ran)'
         working-directory: baml_language
+
       - name: "Run sdk tests"
+        id: sdk-test
         if: matrix.sdk-label != 'csharp'
         run: cargo nextest run --profile ci -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }})'
         working-directory: baml_language
+
       - name: "Run C# sdk tests"
+        id: csharp-sdk-test
         if: matrix.sdk-label == 'csharp'
         run: cargo nextest run --profile ci -p ${{ matrix.package-name }} --all-features --no-fail-fast -E 'package(=${{ matrix.package-name }})'
         working-directory: baml_language
+
       # Record the content hashes the next run's backdate steps compare
       # against. Runs even on test failure: the bin/obj state saved by the
       # cache post-step must always be described by a matching manifest.
@@ -465,6 +1947,7 @@ jobs:
         shell: bash
         run: |
           "$(command -v python3 || command -v python)" .github/scripts/csharp-mtime-cache.py record
+
       # Counterpart of "Restore C# build cache" above; keep path and key in
       # sync with it. The key is unique per run+attempt, so this save never
       # collides with an existing entry.
@@ -480,6 +1963,20 @@ jobs:
             baml_language/sdk_tests/crates/csharp/*/obj
             baml_language/sdk_tests/crates/csharp/*/bin
           key: csharp-msbuild-v2-${{ matrix.os-label }}-sdk10.0.301-${{ github.run_id }}-${{ github.run_attempt }}
+
+      # The Rust bridge runtime crate (baml_bridge). Its tests load the engine
+      # cdylib at run time, and its lib test binary mixes pure (loader/encode)
+      # with engine-dependent (completion, live-engine) tests, so the whole
+      # package runs here — where sdk_test_rust's setup already built the engine
+      # into the main target dir — instead of in the general cargo-test lane
+      # (where the non-cacheable cdylib build ran as a silent nextest setup
+      # script and stalled the Windows job).
+      - name: "Run rust bridge tests"
+        id: bridge-test
+        if: matrix.sdk-label == 'rust'
+        run: cargo nextest run --profile ci-bridge -p baml_bridge --all-features
+        working-directory: baml_language
+
       - name: "Upload test results on failure"
         if: failure()
         uses: actions/upload-artifact@v7
@@ -489,12 +1986,15 @@ jobs:
             baml_language/sdk_tests/crates/${{ matrix.sdk-path }}/*/generated/
             baml_language/target/nextest/
           if-no-files-found: ignore
+
       - name: "Show sccache stats"
         if: always()
         run: sccache --show-stats
+
       - name: "Dump sccache stats (json)"
         if: always()
         run: sccache --show-stats --stats-format json > sccache-stats-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}.json
+
       - name: "Upload sccache stats"
         if: always()
         uses: actions/upload-artifact@v7
@@ -502,6 +2002,7 @@ jobs:
           name: sccache-stats-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}
           path: sccache-stats-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}.json
           if-no-files-found: ignore
+
       - name: "Rename cargo timings"
         if: always()
         run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}.html
@@ -517,12 +2018,16 @@ jobs:
   snapshot-tests:
     name: "KILN: Compiler and documentation tests"
     runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge
-    timeout-minutes: 30
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: 60
     continue-on-error: true
     env:
       CARGO_INCREMENTAL: 0
       CARGO_NET_RETRY: 10
       CARGO_TERM_COLOR: always
+      # Match Cargo CI: these binaries repeatedly execute the compiler, so opt-level
+      # 1 matters for runtime as well as sharing compiled dependencies in sccache.
       CARGO_PROFILE_DEV_OPT_LEVEL: "1"
       CARGO_PROFILE_TEST_OPT_LEVEL: "1"
       RUSTUP_MAX_RETRIES: 10
@@ -552,42 +2057,54 @@ jobs:
           else
             echo "no warm template; build.rs reads HEAD, which matches a cold tree"
           fi
+
       - name: "Install Rust toolchain"
         run: rustup show
         working-directory: baml_language
+
       - name: "Install tools (mise)"
         uses: ./.github/actions/setup-mise
         with:
           install_args: "sccache direnv python uv cargo:cargo-insta cargo:cargo-nextest"
+
       - name: "Verify sccache"
         run: sccache --version
+
       - name: "Load .envrc with direnv"
         run: |
           set -euo pipefail
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
         run: cargo fetch
         working-directory: baml_language
-      # --bins includes the normal baml-pack-host executable, not just its
-      # unit-test harness. --tests unifies the test/dev-dependency features
-      # in the same build as both executables. Keep these packages/features
-      # identical to the nextest invocation below.
+
       - name: "Build tests and CLI binaries with --timings"
+        # --bins includes the normal baml-pack-host executable, not just its
+        # unit-test harness. --tests unifies the test/dev-dependency features
+        # in the same build as both executables. Keep these packages/features
+        # identical to the nextest invocation below.
         run: cargo build --tests --bins -p baml_tests -p baml_cli -p baml_pack_host --all-features --timings
         working-directory: baml_language
+
       # This job owns glibc coverage of baml_tests, baml_cli and baml_pack_host.
       # Keep the GNU job's --exclude list in sync. The musl job also runs
       # pack_e2e, so both Linux libc variants exercise the ELF pack path.
       # `cargo insta` takes no profile flag, hence NEXTEST_PROFILE.
       - name: "Run compiler, CLI, and snapshot tests"
+        id: snapshot-test
+        # The shared upload action gates this outcome (including a tokenless
+        # fallback on forks). Do not add a second raw-outcome gate: that would
+        # override Trunk's intentional quarantine handling.
         run: cargo insta test --test-runner nextest --dnd -p baml_tests -p baml_cli -p baml_pack_host --all-features --unreferenced=reject
         working-directory: baml_language
         env:
           BAML_PACK_HOST_PREBUILT: "1"
           NEXTEST_PROFILE: ci
+
       - name: "Check for snapshot changes"
         run: |
           pathspecs=(
@@ -599,6 +2116,7 @@ jobs:
             git diff -- "${pathspecs[@]}"
             exit 1
           fi
+
       - name: "Upload snapshot failures"
         if: failure()
         uses: actions/upload-artifact@v7
@@ -607,6 +2125,7 @@ jobs:
           path: |
             baml_language/**/*.snap
             baml_language/**/*.snap.new
+
       - name: Setup Node.js and pnpm
         uses: ./.github/actions/setup-node2
       - name: Compile canonical documentation snippets
@@ -625,12 +2144,18 @@ jobs:
           BAML_CACHE_DIR: ${{ runner.temp }}/baml-documentation-cache
         run: pnpm --filter app-developer-docs docs:book:validate
         working-directory: typescript2
+      # The full baml_cli::baml_corpus test above already executes
+      # root.compiler.mounted_interface_diagnostics. Do not compile the corpus
+      # again just to select those three package-boundary assertions.
+
       - name: "Show sccache stats"
         if: always()
         run: sccache --show-stats
+
       - name: "Dump sccache stats (json)"
         if: always()
         run: sccache --show-stats --stats-format json > sccache-stats-snapshot.json
+
       - name: "Upload sccache stats"
         if: always()
         uses: actions/upload-artifact@v7
@@ -638,6 +2163,7 @@ jobs:
           name: sccache-stats-snapshot
           path: sccache-stats-snapshot.json
           if-no-files-found: ignore
+
       - name: "Rename cargo timings"
         if: always()
         run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-snapshot.html
@@ -650,10 +2176,12 @@ jobs:
           path: baml_language/target/cargo-timings/cargo-timing-snapshot.html
           if-no-files-found: ignore
 
-  sdk_parity_check:
-    name: "KILN: SDK parity lint"
+  size-gate-linux:
+    name: "KILN: measure-baml-size (linux)"
     runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
-    timeout-minutes: 15
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: 60
     continue-on-error: true
     env:
       CARGO_INCREMENTAL: 0
@@ -665,7 +2193,6 @@ jobs:
         with:
           clean: false
           persist-credentials: false
-          fetch-depth: 0
       - name: "Backdate the git refs baml_artifact tracks"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
@@ -687,22 +2214,467 @@ jobs:
           else
             echo "no warm template; build.rs reads HEAD, which matches a cold tree"
           fi
-      - name: "Install mise"
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Install sccache and direnv"
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "ast-grep"
-      - name: "Install Rust toolchain"
+          install_args: "sccache direnv"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
         working-directory: baml_language
-        run: rustup show
-      - name: "Build local BAML CLI"
-        run: cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
-      - name: "Run SDK parity analysis"
-        run: tools/sdk-parity-lint/run --repo-root . --baseline baml_language/sdk_tests/crates/parity_analysis.md --output baml_language/sdk_tests/crates/parity_analysis.new.md
-      - name: "Upload parity results"
+
+      - name: "Run size-gate check"
+        id: check
+        working-directory: baml_language
+        run: |
+          cargo run --timings -p cargo-size-gate -- size-gate check \
+            --only baml-cli,packed-program \
+            --format json > size-gate-linux.json 2> size-gate-stderr.txt || exit_code=$?
+          cat size-gate-stderr.txt >&2
+          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
+
+      - name: "Upload size-gate report"
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: sdk-parity-results-${{ github.run_id }}-${{ github.run_attempt }}
-          path: baml_language/sdk_tests/crates/parity_analysis.new.md
+          name: size-gate-linux
+          path: baml_language/size-gate-linux.json
           if-no-files-found: ignore
-          retention-days: 14
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-size-gate-linux.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-size-gate-linux
+          path: sccache-stats-size-gate-linux.json
+          if-no-files-found: ignore
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-size-gate-linux
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
+
+  size-gate-wasm:
+    name: "KILN: measure-baml-size (wasm)"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: 50
+    continue-on-error: true
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_NET_RETRY: 10
+      CARGO_TERM_COLOR: always
+      RUSTUP_MAX_RETRIES: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: false
+          persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+
+      - name: "Install Rust toolchain"
+        run: |
+          rustup show
+          rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - name: "Run size-gate check"
+        id: check
+        working-directory: baml_language
+        run: |
+          cargo run --timings -p cargo-size-gate -- size-gate check \
+            --only bridge_wasm \
+            --format json > size-gate-wasm.json 2> size-gate-stderr.txt || exit_code=$?
+          cat size-gate-stderr.txt >&2
+          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
+
+      - name: "Upload size-gate report"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: size-gate-wasm
+          path: baml_language/size-gate-wasm.json
+          if-no-files-found: ignore
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-size-gate-wasm.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-size-gate-wasm
+          path: sccache-stats-size-gate-wasm.json
+          if-no-files-found: ignore
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-size-gate-wasm
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
+
+  wasm-pack-test:
+    name: "KILN: wasm-pack test"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..memory=high
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: 40
+    continue-on-error: true
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_NET_RETRY: 10
+      CARGO_TERM_COLOR: always
+      RUSTUP_MAX_RETRIES: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: false
+          persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
+      - name: "Install Rust toolchain"
+        run: |
+          set -euo pipefail
+          rustup show
+          # `rustup target add wasm32` fetches a small (~20MB) std component that
+          # normally installs in seconds. A multi-minute duration means a stalled
+          # download (rustup has no idle timeout), which otherwise burns the whole
+          # 20-min job timeout and dequeues the PR from the merge queue. Cap each
+          # attempt well above the normal time and retry on a fresh connection;
+          # surface a genuine outage after 3 tries instead of hanging.
+          for attempt in 1 2 3; do
+            if timeout 300 rustup target add wasm32-unknown-unknown; then
+              break
+            fi
+            echo "::warning::rustup target add wasm32 attempt $attempt stalled/failed; retrying" >&2
+            [ "$attempt" = 3 ] && { echo "::error::rustup target add wasm32 failed after 3 attempts"; exit 1; }
+            sleep 5
+          done
+        working-directory: baml_language
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
+
+      # Compiling for wasm is necessary but far from sufficient: the target
+      # accepts code that traps on first call (`std::time::Instant::now` is
+      # "not implemented on this platform" there). The check catches wasm-only
+      # dependency breakage (e.g. a missing `getrandom/js` feature); the test
+      # run is the only place the browser language server actually executes.
+      - name: "Check wasm build (bridge_wasm)"
+        run: cargo check -p bridge_wasm --target wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - name: "Setup Node.js and wasm-pack"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "node github:rustwasm/wasm-pack"
+
+      - name: "Run wasm tests (bridge_wasm)"
+        run: wasm-pack test --node
+        working-directory: baml_language/crates/bridge_wasm
+
+  typecheck:
+    name: "KILN: Typecheck"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    needs: determine_changes
+    if: needs.determine_changes.outputs.webview == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: false
+          persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+
+      - name: "Setup Node.js for typescript2"
+        uses: ./.github/actions/setup-node2
+
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
+      - name: "Install Rust toolchain"
+        run: |
+          rustup show
+          rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
+
+      # node + pnpm come from setup-node2 above; we only need mise for
+      # wasm-pack here.
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "github:rustwasm/wasm-pack"
+
+      # Path-mapped imports from app-vscode-webview resolve into pkg-playground/wasm
+      # and pkg-proto/src/generated, so both must be present before tsc runs.
+      - name: "Build WASM"
+        run: pnpm --filter pkg-playground build:wasm
+        working-directory: typescript2
+
+      - name: "Generate proto types"
+        run: pnpm --filter @b/pkg-proto generate
+        working-directory: typescript2
+
+      - name: "Typecheck pkg-proto"
+        run: pnpm --filter @b/pkg-proto typecheck
+        working-directory: typescript2
+
+      - name: "Typecheck app-vscode-webview"
+        run: pnpm --filter app-vscode-webview typecheck
+        working-directory: typescript2
+
+  unit-tests:
+    name: "KILN: Unit Tests (jsdom)"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    needs: determine_changes
+    if: needs.determine_changes.outputs.webview == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: false
+          persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+
+      - name: "Setup Node.js for typescript2"
+        uses: ./.github/actions/setup-node2
+
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
+      - name: "Install Rust toolchain"
+        run: |
+          rustup show
+          rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
+
+      # node + pnpm come from setup-node2 above; we only need mise for
+      # wasm-pack here.
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "github:rustwasm/wasm-pack"
+
+      - name: "Build WASM"
+        run: pnpm --filter pkg-playground build:wasm
+        working-directory: typescript2
+
+      - name: "Run unit tests"
+        id: unit-tests
+        run: pnpm --filter app-vscode-webview test:unit:run
+        working-directory: typescript2
+
+  browser-tests:
+    name: "KILN: Browser Tests (Playwright)"
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    needs: determine_changes
+    if: needs.determine_changes.outputs.webview == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: 40
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: false
+          persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+
+      - name: "Setup Node.js for typescript2"
+        uses: ./.github/actions/setup-node2
+
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
+      - name: "Install Rust toolchain"
+        run: |
+          rustup show
+          rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
+
+      # node + pnpm come from setup-node2 above; we only need mise for
+      # wasm-pack here.
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "github:rustwasm/wasm-pack"
+
+      - name: "Build WASM"
+        run: pnpm --filter pkg-playground build:wasm
+        working-directory: typescript2
+
+      - name: "Install Playwright browsers"
+        run: npx playwright install chromium
+        working-directory: typescript2/app-vscode-webview
+
+      - name: "Run browser tests"
+        id: browser-tests
+        run: pnpm --filter app-vscode-webview test:browser:run
+        working-directory: typescript2

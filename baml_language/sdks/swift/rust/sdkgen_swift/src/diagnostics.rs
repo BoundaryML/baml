@@ -15,7 +15,7 @@
 
 use std::fmt::Write as _;
 
-use baml_codegen_types::{Class, Function, Ty, TypeAlias};
+use baml_sdkgen_types::{Class, Function, Ty, TypeAlias};
 
 use crate::{
     emit::ty_contains_type_var,

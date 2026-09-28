@@ -33,8 +33,8 @@ use std::{
 };
 
 use baml_base::qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_DONE, AI_STREAM_STREAM};
-use baml_codegen_types::{Function, Symbol, SymbolPool, Ty};
-pub use baml_codegen_types::{NamingConvention, OutputType};
+use baml_sdkgen_types::{Function, Symbol, SymbolPool, Ty};
+pub use baml_sdkgen_types::{NamingConvention, OutputType};
 
 use crate::{
     emit::{render_class, render_enum, render_fns_holder, render_union},
@@ -534,7 +534,7 @@ pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
 /// The canonical dotted BAML FQN of a named type (`pkg.namespace….Name`),
 /// shared by [`signature_token`] and the typed decode-descriptor builders in
 /// [`crate::translate_ty`].
-pub(crate) fn baml_fqn(name: &baml_codegen_types::Name) -> String {
+pub(crate) fn baml_fqn(name: &baml_sdkgen_types::Name) -> String {
     let mut s = String::from(name.package().as_str());
     for seg in name.namespace() {
         s.push('.');
@@ -635,7 +635,7 @@ fn base64_encode(data: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use baml_base::Name as BaseName;
-    use baml_codegen_types::{
+    use baml_sdkgen_types::{
         Class, ClassProperty, Enum, EnumVariant, Function, FunctionArgument, Name, Origin, Symbol,
         SymbolPool, Ty, TypeAlias,
     };
@@ -683,7 +683,7 @@ mod tests {
         Ty::Uint8Array
     }
     fn t_typevar(n: &str) -> Ty {
-        Ty::TypeVar(baml_codegen_types::ParamTy::new(0, BaseName::new(n)))
+        Ty::TypeVar(baml_sdkgen_types::ParamTy::new(0, BaseName::new(n)))
     }
     fn t_union(items: Vec<Ty>) -> Ty {
         Ty::Union(items.into())
@@ -1172,7 +1172,7 @@ mod tests {
 
     #[test]
     fn optional_args_emit_configurator_overload_and_opts_class() {
-        use baml_codegen_types::{DefaultLiteral, FunctionArgumentDefault};
+        use baml_sdkgen_types::{DefaultLiteral, FunctionArgumentDefault};
         // (required int x, optional int opt1 default, optional string opt2 default)
         let mut pool = SymbolPool::new();
         let f = Function {
@@ -1267,9 +1267,7 @@ mod tests {
 
     #[test]
     fn stream_options_include_client_and_preserve_event_callback_types() {
-        use baml_codegen_types::{
-            CallableParam, CodegenFunctionParamMode, FunctionArgumentDefault,
-        };
+        use baml_sdkgen_types::{CallableParam, CodegenFunctionParamMode, FunctionArgumentDefault};
 
         let mut pool = SymbolPool::new();
         let event = name("vendor", &["ai", "events"], "Event");
@@ -1314,7 +1312,7 @@ mod tests {
 
     #[test]
     fn optional_args_instance_method_puts_configurator_last() {
-        use baml_codegen_types::{DefaultLiteral, FunctionArgumentDefault};
+        use baml_sdkgen_types::{DefaultLiteral, FunctionArgumentDefault};
         let mut pool = SymbolPool::new();
         let n = name("user", &[], "OptBox");
         let probe = Function {
@@ -1367,7 +1365,7 @@ mod tests {
 
     #[test]
     fn optional_args_callable_mints_functional_interface_and_types_param() {
-        use baml_codegen_types::{CallableParam, CodegenFunctionParamMode};
+        use baml_sdkgen_types::{CallableParam, CodegenFunctionParamMode};
         // A free function taking a callable whose own type carries optionals
         // (`(x: int, y?: int, z?: int) -> int`): the param types as the minted
         // interface, and the interface file is emitted beside `Fns`.
@@ -1471,7 +1469,7 @@ mod tests {
         expected = "Java generation does not yet support optional parameters on returned callable"
     )]
     fn optional_returned_callable_fails_generation_instead_of_emitting_an_unsafe_cast() {
-        use baml_codegen_types::{CallableParam, CodegenFunctionParamMode};
+        use baml_sdkgen_types::{CallableParam, CodegenFunctionParamMode};
 
         let returned = Ty::Function {
             params: Box::new([CallableParam {
@@ -1501,7 +1499,7 @@ mod tests {
 
     #[test]
     fn unnamed_returned_callable_uses_its_canonical_positional_wire_name() {
-        use baml_codegen_types::{CallableParam, CodegenFunctionParamMode};
+        use baml_sdkgen_types::{CallableParam, CodegenFunctionParamMode};
 
         let returned = Ty::Function {
             params: Box::new([CallableParam {
@@ -1776,7 +1774,7 @@ mod tests {
 
     #[test]
     fn generic_optional_function_emits_full_overload_matrix() {
-        use baml_codegen_types::{DefaultLiteral, FunctionArgumentDefault};
+        use baml_sdkgen_types::{DefaultLiteral, FunctionArgumentDefault};
         // A generic (`<T>`) function with one optional arg → the worst-case
         // matrix: {opts?}×{types?}×{ctx?} = 8 pairs = 16 entry-point methods.
         let mut pool = SymbolPool::new();
@@ -2239,7 +2237,7 @@ mod tests {
 
     #[test]
     fn nullable_optional_setter_param_is_annotated() {
-        use baml_codegen_types::{DefaultLiteral, FunctionArgumentDefault};
+        use baml_sdkgen_types::{DefaultLiteral, FunctionArgumentDefault};
         // A nullable optional arg (`hint?: string?`) → its `$Opts` setter param
         // is `@Nullable`; a non-null optional's setter is not.
         let mut pool = SymbolPool::new();

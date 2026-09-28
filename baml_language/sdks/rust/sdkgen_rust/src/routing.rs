@@ -1,4 +1,4 @@
-//! Routing: turns a `baml_codegen_types::Name` into the module path
+//! Routing: turns a `baml_sdkgen_types::Name` into the module path
 //! (under `src/`) where that symbol's Rust representation lives.
 //!
 //! The package of the codegen-facing `Name` is `Local` for project files
@@ -7,7 +7,7 @@
 //! core language packages under their own names, other dependencies under `vendor/<pkg>/` — the same
 //! placement rules as the python and typescript emitters.
 
-use baml_codegen_types::Name;
+use baml_sdkgen_types::Name;
 
 use crate::idents;
 
@@ -29,7 +29,7 @@ impl LeafPath {
 /// Route a pool entry to the module its Rust items are emitted in.
 pub(crate) fn route(name: &Name) -> LeafPath {
     LeafPath {
-        segments: baml_codegen_types::namespace_segments(name)
+        segments: baml_sdkgen_types::namespace_segments(name)
             .iter()
             .map(|segment| idents::dir_segment(segment))
             .collect(),

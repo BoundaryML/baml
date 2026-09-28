@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[operators.baml:200:20]
+ 200 │     assert.is_true(true || false)
+     ·                    ────    ──┬──
+     ·                      │       ╰── this expression is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[operators.baml:213:20]
+ 213 │     assert.is_true(true || ops_ret_bool())
+     ·                    ────    ───────┬──────
+     ·                      │            ╰── this expression is unreachable
+     ╰────

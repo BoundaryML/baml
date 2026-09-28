@@ -1,7 +1,7 @@
 //! Emitter-internal representation of Python-side symbols.
 //!
 //! These types describe what the emitter will render to Python, as
-//! opposed to `baml_codegen_types` which describes BAML-side input
+//! opposed to `baml_sdkgen_types` which describes BAML-side input
 //! symbols. The split is deliberate — G3/G4/G5 will grow detail
 //! fields on these types without touching the input IR.
 
@@ -14,7 +14,7 @@ pub(crate) mod typemap_file;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use baml_codegen_types::{FunctionArgumentDefault, Name, Symbol, SymbolPool, Ty};
+use baml_sdkgen_types::{FunctionArgumentDefault, Name, Symbol, SymbolPool, Ty};
 
 use crate::{
     emit::{
@@ -223,7 +223,7 @@ fn is_nullable(ty: &Ty, aliases: &BTreeMap<Name, Ty>, visiting: &mut BTreeSet<Na
 fn expand_function(
     leaf: &LeafPath,
     key: &Name,
-    f: &baml_codegen_types::Function,
+    f: &baml_sdkgen_types::Function,
     sort_key: &SortKey,
     names: &PythonNames,
     out: &mut Vec<(LeafPath, EmittedSymbol, SortKey)>,
@@ -302,10 +302,10 @@ fn expand_function(
 /// contribute their unqualified leaf name; a union contributes each member's;
 /// an optional unwraps; anything else (primitives) contributes nothing.
 fn collect_raises_names(
-    throws: Option<&baml_codegen_types::Ty>,
+    throws: Option<&baml_sdkgen_types::Ty>,
     names: &PythonNames,
 ) -> Vec<String> {
-    use baml_codegen_types::Ty;
+    use baml_sdkgen_types::Ty;
 
     fn walk(ty: &Ty, names: &PythonNames, out: &mut Vec<String>) {
         match ty {
@@ -329,12 +329,12 @@ fn collect_raises_names(
 
 /// Emit sync and async bindings for source-declared methods.
 fn expand_methods(
-    methods: &[baml_codegen_types::Function],
+    methods: &[baml_sdkgen_types::Function],
     class_fqn_root: &str,
     kind: MethodKind,
     names: &PythonNames,
 ) -> Vec<PyMethodBinding> {
-    let mut sorted: Vec<&baml_codegen_types::Function> = methods.iter().collect();
+    let mut sorted: Vec<&baml_sdkgen_types::Function> = methods.iter().collect();
     sorted.sort_by_key(|m| (origin_key(&m.origin), m.name.as_str()));
 
     let mut out: Vec<PyMethodBinding> = Vec::new();
@@ -391,7 +391,7 @@ fn expand_methods(
 }
 
 fn split_arguments(
-    arguments: &[&baml_codegen_types::FunctionArgument],
+    arguments: &[&baml_sdkgen_types::FunctionArgument],
     fqn: &str,
     names: &PythonNames,
 ) -> (Vec<RequiredArg>, Vec<OptionalArg>) {
@@ -428,6 +428,6 @@ fn split_arguments(
     )
 }
 
-fn origin_key(origin: &baml_codegen_types::Origin) -> SortKey {
+fn origin_key(origin: &baml_sdkgen_types::Origin) -> SortKey {
     (origin.source_file_path.clone(), origin.span_start)
 }

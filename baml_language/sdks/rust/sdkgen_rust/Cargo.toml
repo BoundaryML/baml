@@ -12,7 +12,7 @@ license = { workspace = true }
 
 [dependencies]
 baml_base = { workspace = true }
-baml_codegen_types = { workspace = true }
+baml_sdkgen_types = { workspace = true }
 prettyplease = { workspace = true }
 proc-macro2 = { workspace = true }
 quote = { workspace = true }

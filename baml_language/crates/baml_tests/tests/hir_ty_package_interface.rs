@@ -985,6 +985,11 @@ class ConcreteBatch {
 
     let diagnostic_codes = collect_diagnostics(&db)
         .into_iter()
+        .filter(|diagnostic| {
+            diagnostic
+                .primary_span()
+                .is_some_and(|span| span.file_id == file.file_id(&db))
+        })
         .map(|diagnostic| diagnostic.code())
         .collect::<Vec<_>>();
     assert_eq!(

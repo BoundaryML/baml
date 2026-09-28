@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+   ╭─[well_formed_blocks.baml:3:57]
+ 3 │     prompt: `${for (let x in [1, 2])}${x}${endfor}${if (true)}a${else if (false)}b${else}c${endif}`
+   ·             ───────────────────────────────────────────┬────────────────────────────────────────────
+   ·                                                        ╰── this branch is unreachable
+   ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always falsy: a value of type `false` can never be truthy
+   ╭─[well_formed_blocks.baml:3:75]
+ 3 │     prompt: `${for (let x in [1, 2])}${x}${endfor}${if (true)}a${else if (false)}b${else}c${endif}`
+   ·             ───────────────────────────────────────────┬────────────────────────────────────────────
+   ·                                                        ╰── this branch is unreachable
+   ╰────

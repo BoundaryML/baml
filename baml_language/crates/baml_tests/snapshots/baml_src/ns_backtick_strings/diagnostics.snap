@@ -2,6 +2,15 @@
 source: crates/baml_tests/src/corpus.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [type] E0167
+
+  ⚠ this condition is always falsy: a value of type `false` can never be truthy
+     ╭─[backtick_strings.baml:176:14]
+ 176 │     `a${ if (false) { "x" } }b`
+     ·              ─────  ───┬───
+     ·                │       ╰── this branch is unreachable
+     ╰────
+
   [hir] E0010
 
   ⚠ empty interpolation ${} has no expression
@@ -14,7 +23,7 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[backtick_strings.baml:455:12]
+     ╭─[backtick_strings.baml:455:27]
  455 │     `x: ${ throw "boom" }`
-     ·            ────────────
+     ·                           ▲
      ╰────

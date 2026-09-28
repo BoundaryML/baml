@@ -1,4 +1,4 @@
-//! Routing: turns a `baml_codegen_types::Name` into the Java package
+//! Routing: turns a `baml_sdkgen_types::Name` into the Java package
 //! path (under `baml_sdk/`) where that symbol's generated source lives.
 //! Single source of truth for per-symbol placement; `to_source_code`
 //! uses this to place per-symbol files, and later phases reuse it when
@@ -14,7 +14,7 @@
 //! name from HIR — `"user"` for project files, `"baml"` for stdlib,
 //! `"<vendor>"` for declared external packages.
 //!
-//! Core language packages route under their own names; other dependencies route under `vendor/<pkg>/`, as defined by `baml_codegen_types::namespace_segments`.
+//! Core language packages route under their own names; other dependencies route under `vendor/<pkg>/`, as defined by `baml_sdkgen_types::namespace_segments`.
 //! Routing is independent of the symbol kind.
 //!
 //! Unlike TS (where `sanitize_module_segment` is a no-op), Java package
@@ -24,7 +24,7 @@
 //! symbol-level collisions (see
 //! `sdks/agent-docs/bridge-ref/ref-java-codegen-conventions.md`).
 
-use baml_codegen_types::Name;
+use baml_sdkgen_types::Name;
 
 /// Package path under `baml_sdk/`. Empty segments means the root
 /// package (`baml_sdk` itself).
@@ -161,7 +161,7 @@ pub(crate) fn java_identifier(seg: &str) -> String {
 /// Routing depends only on the symbol's package + namespace path.
 pub(crate) fn route(name: &Name) -> PackagePath {
     PackagePath {
-        segments: baml_codegen_types::namespace_segments(name)
+        segments: baml_sdkgen_types::namespace_segments(name)
             .iter()
             .map(|segment| java_identifier(segment))
             .collect(),

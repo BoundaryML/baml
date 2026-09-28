@@ -15,7 +15,7 @@ use baml_base::{
     Literal, MediaKind, Name as BaseName,
     qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_STREAM, BAML_JSON_JSON},
 };
-use baml_codegen_types::{CodegenFunctionParamMode, Name, Symbol, SymbolPool, Ty};
+use baml_sdkgen_types::{CodegenFunctionParamMode, Name, Symbol, SymbolPool, Ty};
 
 /// A canonical, attribute-free Go type identity.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -202,7 +202,7 @@ impl<'a> GoTypeProjection<'a> {
     }
 
     fn collect(&mut self) {
-        fn function_tys(function: &baml_codegen_types::Function) -> Vec<&Ty> {
+        fn function_tys(function: &baml_sdkgen_types::Function) -> Vec<&Ty> {
             function
                 .arguments
                 .iter()
@@ -713,7 +713,7 @@ pub(crate) fn literal_surface(literal: &GoLiteral) -> GoTy {
 
 #[cfg(test)]
 mod tests {
-    use baml_codegen_types::{CallableParam, Origin, TypeAlias};
+    use baml_sdkgen_types::{CallableParam, Origin, TypeAlias};
     use baml_type::Freshness;
 
     use super::*;
@@ -1060,7 +1060,7 @@ mod tests {
             callable(
                 vec![callable_param(
                     CodegenFunctionParamMode::Required,
-                    Ty::TypeVar(baml_codegen_types::ParamTy::new(0, BaseName::new("T"))),
+                    Ty::TypeVar(baml_sdkgen_types::ParamTy::new(0, BaseName::new("T"))),
                 )],
                 Ty::String,
                 never(),
@@ -1117,7 +1117,7 @@ mod tests {
                 vec![],
                 Ty::String,
                 Ty::TypeVar(
-                    baml_codegen_types::ParamTy::new(0, BaseName::new("__effect_param_0")))
+                    baml_sdkgen_types::ParamTy::new(0, BaseName::new("__effect_param_0")))
             )),
             GoTy::Function(key) if !key.throws()
         ));

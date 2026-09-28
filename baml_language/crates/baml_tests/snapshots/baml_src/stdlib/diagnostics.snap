@@ -1,0 +1,94 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+    ╭─[ns_internal/wire.baml:31:5]
+ 31 │     out
+    ·     ───
+    ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[ns_mcp/mcp.baml:134:13]
+ 134 │ ╭─▶             throw root.errors.NetworkFailure { status_code: null,
+ 135 │ │                   provider: `mcp/${self.server_name}`,
+ 136 │ │                   detail: `no response for ${method}`,
+ 137 │ │                   raw_body: null,
+ 138 │ ╰─▶             }
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[baml/ns_csv/csv.baml:402:13]
+ 402 │             root.sys.panic("unreachable: Reader.next loop ended")
+     ·             ─────────────────────────────────────────────────────
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[baml/ns_csv/csv.baml:435:9]
+ 435 │         root.sys.panic("unreachable: Reader.headers loop ended")
+     ·         ────────────────────────────────────────────────────────
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[stream.baml:436:9]
+ 436 │         baml.sys.panic("unreachable")
+     ·         ─────────────────────────────
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[stream.baml:520:9]
+ 520 │         baml.sys.panic("unreachable")
+     ·         ─────────────────────────────
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[baml/ns_csv/csv.baml:632:13]
+ 632 │             root.sys.panic("unreachable: Rows.next loop ended")
+     ·             ───────────────────────────────────────────────────
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[baml/ns_iter/iter.baml:786:13]
+ 786 │             Done {  }
+     ·             ─────────
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[baml/ns_iter/iter.baml:831:13]
+ 831 │             Done {  }
+     ·             ─────────
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[baml/ns_iter/iter.baml:891:13]
+ 891 │             Done {  }
+     ·             ─────────
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[baml/ns_iter/iter.baml:947:13]
+ 947 │             Done {  }
+     ·             ─────────
+     ╰────

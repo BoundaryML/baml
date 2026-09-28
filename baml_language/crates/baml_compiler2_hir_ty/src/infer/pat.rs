@@ -88,6 +88,17 @@ impl<'db> InferenceContext<'db> {
         let scrut_binding = self.narrowable_binding(body, scrutinee);
         let branch_expectation = expected.adjust_for_branches(&mut self.table);
 
+        // Arm execution can change outer locals. Do not restore an entry
+        // fact after an arm (or its deferred cleanup) invalidates it.
+        for &arm in arms {
+            let arm = &body.match_arms[arm];
+            for root in arm.guard.into_iter().chain(std::iter::once(arm.body)) {
+                for binding in self.assigned_bindings(body, root) {
+                    self.flow.remove(&binding);
+                }
+            }
+        }
+
         let entry_diverges = self.diverges;
         let mut arm_tys = Vec::new();
         let mut matrix_arms: Vec<DPat> = Vec::new();
