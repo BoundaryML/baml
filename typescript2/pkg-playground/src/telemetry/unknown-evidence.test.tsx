@@ -568,6 +568,15 @@ describe('recorded raises', () => {
             raiseKind: 'rethrow',
             source: 'bytecode',
           }),
+          // Proven to pass along an error thrown outside this execution: a
+          // distinct error, not an unproven one.
+          raise({
+            errorId: 'rec:13',
+            kind: 'rethrow',
+            originState: 'proven',
+            raiseKind: 'await',
+            source: 'future_resume',
+          }),
         ],
         execution: btelExecution({ sourceState: 'stale' }),
       }),
@@ -580,7 +589,7 @@ describe('recorded raises', () => {
         openSpan={noop}
       />,
     );
-    expect(overview).toContain('1 error');
+    expect(overview).toContain('2 errors');
     expect(overview).toContain('plus 1 raise with an unproven origin');
     expect(overview).toContain('failed in the native call at');
     expect(overview).toContain('(changed since run)');

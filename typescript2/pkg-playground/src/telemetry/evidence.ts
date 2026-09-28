@@ -276,9 +276,11 @@ export interface ErrorCapture {
   /** `fresh` for a new throw, `rethrow` for one passed along. */
   kind: string | null;
   /**
-   * `fresh` is a distinct error. `ambiguous` and `unresolved` raises passed
-   * an error along without a proven origin: shown, never counted as errors.
-   * Null from backends that do not say.
+   * `fresh` is a distinct error, and so is `proven` here: a proven raise is
+   * only listed on its own when its origin is outside this execution.
+   * `ambiguous` and `unresolved` raises passed an error along without a
+   * proven origin: shown, never counted as errors. Null from backends that
+   * do not say.
    */
   originState: 'fresh' | 'proven' | 'ambiguous' | 'unresolved' | null;
   /** How many different origins matched an ambiguous raise. */

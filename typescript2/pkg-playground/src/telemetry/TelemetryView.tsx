@@ -639,7 +639,7 @@ const ExecutionRowView: FC<{
               {erroredCalls} errored {erroredCalls === 1 ? 'call' : 'calls'}
             </span>
           )}
-          {!row.indexComplete && (
+          {row.recordsLost && (
             <span
               className="rounded border border-vsc-yellow/25 bg-vsc-yellow/10 px-1.5 py-0.5 text-[11px] font-medium text-vsc-yellow"
               title="Records were lost for this execution, so its counts are a floor rather than a total"
@@ -942,10 +942,13 @@ export const OverviewTab: FC<{
   const throwCaptures = evidence.errors.filter(
     (error) => error.grain === 'throw',
   );
-  // Raises that passed an error along without a proven origin are shown but
-  // are not distinct errors: they may belong to one already listed.
+  // Each entry is one error: a fresh throw, or a raise proven to pass along
+  // one thrown outside this execution. Raises whose origin is ambiguous or
+  // unresolved are shown but are not distinct errors: they may belong to one
+  // already listed.
   const distinctErrors = throwCaptures.filter(
-    (error) => error.originState == null || error.originState === 'fresh',
+    (error) =>
+      error.originState !== 'ambiguous' && error.originState !== 'unresolved',
   );
   const erroredCallErrors = evidence.errors.filter(
     (error) => error.grain === 'erroredCall',
