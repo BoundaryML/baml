@@ -38,11 +38,7 @@ pub struct Relation {
 impl Relation {
     /// The `CREATE TEMP VIEW` statement for this relation.
     pub fn create_sql(&self) -> String {
-        if self.name == CAPABILITIES.name {
-            capabilities_view()
-        } else {
-            self.view.to_owned()
-        }
+        self.view.to_owned()
     }
 }
 
@@ -1888,188 +1884,6 @@ SELECT lower(hex(r.recording_id)), j.sequence, 'rejected', j.size, NULL, j.reaso
 FROM main.rejected j JOIN main.recording r ON r.rec = j.rec",
 };
 
-/// What the old tracer answered and how much of it current recordings
-/// support. Also served as the `capabilities` relation.
-pub const CAPABILITY_ROWS: &[(&str, &str, &str, &str)] = &[
-    (
-        "executions",
-        "supported",
-        "executions",
-        "Host invocations with root outcome, timing, entry function and summary counts.",
-    ),
-    (
-        "threads and spawn tree",
-        "supported",
-        "threads",
-        "Root and spawned threads, parent thread or call, spawn context and lifetime.",
-    ),
-    (
-        "calling contexts",
-        "supported",
-        "call_paths",
-        "Callee, visible caller, bytecode pc and its call-site line, parent context and depth.",
-    ),
-    (
-        "completed call counts",
-        "supported",
-        "call_path_stats, function_stats",
-        "Completed invocations over every recorded call. Not invocation starts: an unfinished call is not counted.",
-    ),
-    (
-        "recursion-aware time",
-        "supported",
-        "call_path_stats",
-        "inclusive_ns without recursive double counting, direct_child_ns, await_ns and self_ns with a state.",
-    ),
-    (
-        "retained calls and captured values",
-        "supported",
-        "calls",
-        "Retained calls with args, output and error values; filter and render with brackets.",
-    ),
-    (
-        "structured value equality",
-        "partial",
-        "calls",
-        "= and != compare captured lists/maps/classes by content; baml_value_json supplies a plain JSON literal. Missing/truncated evidence, cycles, opaque values and comparison limits remain explicit. Structured ordering and value-based DISTINCT/grouping are unsupported.",
-    ),
-    (
-        "errored calls",
-        "supported",
-        "calls (status = 'errored')",
-        "Retained calls that ended in an error, with their error values and ancestry through parent_call_id.",
-    ),
-    (
-        "function metadata and parameters",
-        "supported",
-        "function_definitions",
-        "Recorded names, kinds, origins, definition spans and parameter slots.",
-    ),
-    (
-        "clock interpretation",
-        "supported",
-        "clocks",
-        "Clock sources, conversions, calibration, UTC anchors and observed validity.",
-    ),
-    (
-        "evidence problems",
-        "supported",
-        "issues, recordings, recording_files",
-        "Gaps, invalid files, conflicts, unresolved references and invalidated clocks.",
-    ),
-    (
-        "entry function",
-        "partial",
-        "executions",
-        "Known only when the root thread recorded exactly one top-level call.",
-    ),
-    (
-        "source locations",
-        "partial",
-        "call_paths, threads, calls, error_raises, error_frames",
-        "Call, spawn and raise sites resolve through the recording's own source maps (format minor 2). A direct recursive re-entry has no site of its own. Older recordings have definition spans only. Locations are the recorded program's; today's file may differ.",
-    ),
-    (
-        "failure ancestry",
-        "supported",
-        "error_raises, error_frames, error_call_links, calls",
-        "The stack when each raise started, and which retained calls it failed. Timing-only calls have no ids; recursion in the stack is not collapsed.",
-    ),
-    (
-        "live recordings",
-        "partial",
-        "recordings",
-        "Unsealed recordings answer from their indexed prefix. No liveness is recorded: an incomplete execution is not proof it is still running.",
-    ),
-    (
-        "throw occurrences (old errors relation)",
-        "partial",
-        "error_occurrences, error_raises",
-        "Every raise has its own id, including throws caught where they were thrown. A rethrow or await names its origin only when a catch landing or future link proves it; otherwise it is ambiguous or unresolved. An UnknownError conversion never establishes a proven link: when it carries an earlier throw's context it is unresolved (source_not_recorded) and keeps that trace as weaker evidence; otherwise it is a fresh raise. Native and host failures are located at the BAML call that entered them. Recordings before format minor 2 have none.",
-    ),
-    (
-        "population outcome counts",
-        "supported",
-        "call_path_stats, function_stats",
-        "Completed success/error/cancellation counts from aggregate outcomes, including timing-only calls. Older or mixed deltas have NULL counts and an explicit outcome_state. Unfinished/hidden calls are not counted.",
-    ),
-    (
-        "invocation starts and active calls",
-        "unsupported",
-        "",
-        "Aggregates are written at completion; unfinished invocations are not counted.",
-    ),
-    (
-        "latency distributions",
-        "unsupported",
-        "",
-        "Only sums and counts are recorded for aggregated calls: no percentiles, minimum or maximum. Retained calls have individual durations.",
-    ),
-    (
-        "await counts",
-        "unsupported",
-        "",
-        "Await time is recorded, the number of awaits is not.",
-    ),
-    ("thread names", "unsupported", "", "Not recorded."),
-    (
-        "producer process and version (old processes relation)",
-        "unsupported",
-        "",
-        "Recordings carry no process, pid, engine or version identity.",
-    ),
-    (
-        "capture loss reasons (old health relation)",
-        "unsupported",
-        "",
-        "The recording does not say why a value was not captured or how many events the producer dropped.",
-    ),
-    (
-        "sealed recordings and final clocks",
-        "supported",
-        "recordings, clocks",
-        "A normal shutdown ends the recording once every recorded run's clock settled, and marks those clocks final. Older recordings, and recordings that stop before their end is written (a crash, a failure, or runs still attached at shutdown), stay unsealed. Sealed is not proof every capture or cloud upload arrived.",
-    ),
-    (
-        "old store internals (store_files, value_index)",
-        "unsupported",
-        "recording_files",
-        "Replaced by recording_files; captured blobs are not enumerated.",
-    ),
-];
-
-pub const CAPABILITIES: Relation = Relation {
-    name: "capabilities",
-    doc: "What current recordings can answer, compared with the old tracer: supported, partial or unsupported, and where to look.",
-    columns: &[
-        col("capability", "text", ""),
-        col("support", "text", "supported, partial, unsupported"),
-        col("relation", "text", "where to query it"),
-        col("detail", "text", ""),
-    ],
-    view: "",
-};
-
-fn capabilities_view() -> String {
-    let quote = |text: &str| format!("'{}'", text.replace('\'', "''"));
-    let rows: Vec<String> = CAPABILITY_ROWS
-        .iter()
-        .map(|(capability, support, relation, detail)| {
-            format!(
-                "({}, {}, {}, {})",
-                quote(capability),
-                quote(support),
-                quote(relation),
-                quote(detail)
-            )
-        })
-        .collect();
-    format!(
-        "CREATE TEMP VIEW capabilities (capability, support, relation, detail) AS VALUES {}",
-        rows.join(",\n  ")
-    )
-}
-
 pub const RELATIONS: &[Relation] = &[
     RECORDINGS,
     EXECUTIONS,
@@ -2086,7 +1900,6 @@ pub const RELATIONS: &[Relation] = &[
     CLOCKS,
     ISSUES,
     RECORDING_FILES,
-    CAPABILITIES,
 ];
 
 /// Id columns a filter can use indexes for: `(relation, column, prefix)`.

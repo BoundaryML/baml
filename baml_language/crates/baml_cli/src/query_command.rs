@@ -89,7 +89,7 @@ fn parse_duration(value: &str) -> Result<Duration, String> {
         .map_err(|e| e.to_string())
 }
 
-/// Value functions, capabilities and retired names, after the relations.
+/// Value functions and retired names, after the relations.
 fn print_guide() {
     println!("BAML value functions:");
     println!(
@@ -98,16 +98,6 @@ fn print_guide() {
     println!(
         "  baml_kind(v)         null, bool, int, float, string, bigint, enum, json (structured), missing, unavailable"
     );
-    println!();
-    println!("What recordings can answer (SELECT * FROM capabilities):");
-    for (capability, support, relation, _) in catalog::CAPABILITY_ROWS {
-        let relation = if relation.is_empty() {
-            String::new()
-        } else {
-            format!("  [{relation}]")
-        };
-        println!("  {support:<12} {capability}{relation}");
-    }
     println!();
     println!("Old tracer relations that are not available:");
     for (name, advice) in catalog::RETIRED {
