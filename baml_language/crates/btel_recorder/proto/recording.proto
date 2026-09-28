@@ -18,11 +18,15 @@ message RecordingFile {
   SpanBatch spans = 5;
   ClockStateBatch clock_states = 6;
   RecordingEnd end = 7;       // If present, this sequence is the final sequence.
+  // Minor 2. Exception evidence. One unwind's raise, links and end can be
+  // in different files; readers join them by raise ID.
+  ErrorBatch errors = 8;
 }
 
 message RecordingHeader {
   uint32 format_major = 1;       // Exactly 1.
-  uint32 format_minor = 2;       // Initially 0; additive optional fields only.
+  uint32 format_minor = 2;       // Additive optional fields only. 1 adds argument layouts;
+                                 // 2 adds source maps and error evidence.
   bytes recording_id = 3;       // Exactly 16 random bytes, not all zero.
   optional bytes source_snapshot_id = 4; // Exactly 32 bytes when supplied; not identity.
 }
@@ -60,6 +64,45 @@ message FunctionMetadata {
   optional string definition_key = 11;
   optional string package_name = 12;
   repeated string namespace = 13;
+  // Minor 1. Absent means the slot names are unknown (older producers, or
+  // declarations that do not name every slot). Present with no slots is a
+  // known zero-argument function.
+  ArgumentLayout argument_layout = 14;
+  // Minor 2. Absent: no map was recorded (older producers, functions without
+  // compact bytecode). Never inferred from today's source.
+  SourceMap source_map = 15;
+}
+
+// Line table of the code the VM executed, sorted by strictly increasing PC.
+// Parallel arrays: entry i applies from pc[i] up to pc[i + 1], the last one
+// up to code_bytes. A PC before pc[0] or at/after code_bytes has no source.
+message SourceMap {
+  PcCoordinate coordinate = 1;
+  uint32 code_bytes = 2;        // Executed code length in the coordinate's unit.
+  repeated uint32 pc = 3;
+  // Compiler-local file of each entry. Empty means every entry is in the
+  // function's own source_span file.
+  repeated uint32 file_id = 4;
+  repeated uint32 start = 5;    // Half-open source byte range.
+  repeated uint32 end = 6;
+  repeated uint32 line = 7;     // One-based line of start.
+}
+
+enum PcCoordinate {
+  PC_COORDINATE_UNSPECIFIED = 0;
+  // Byte offset of an instruction's opcode in the function's compact code.
+  // Call-path caller_pc and error PCs use this coordinate.
+  PC_COORDINATE_COMPACT_BYTE_OFFSET = 1;
+}
+
+// Names for FunctionArgs capture slots, which record positions only.
+message ArgumentLayout {
+  repeated ArgumentSlot slots = 1; // Callee parameter-slot order.
+}
+
+message ArgumentSlot {
+  optional string name = 1;     // Absent for an unnamed slot.
+  bool receiver = 2;            // Method receiver slot.
 }
 
 message SourceSpan {
@@ -199,6 +242,17 @@ message AggregateDelta {
   uint64 count = 2;            // Positive; includes recursive invocations.
   fixed64 total_duration_ticks = 3;
   fixed64 total_self_await_ticks = 4;
+  // Outcomes of the same `count` completions, including timing-only calls.
+  // Absent means outcomes are unknown (older producers); never assume success.
+  // Present, even with both counters zero, when every completion was counted.
+  // Detected by presence, not by format_minor.
+  AggregateOutcomes outcomes = 5;
+}
+
+// Succeeded = count - errored - cancelled; errored + cancelled <= count.
+message AggregateOutcomes {
+  uint64 errored = 1;
+  uint64 cancelled = 2;
 }
 
 message SpanBatch {
@@ -265,6 +319,133 @@ enum InvocationOutcome {
 message SnapshotId {
   fixed64 low = 1;
   fixed64 high = 2;
+}
+
+// Minor 2. Exception evidence, outside span sections so a stack never passes
+// through the scalar span-event encoder.
+message ErrorBatch {
+  repeated ErrorRaise raises = 1;
+  repeated ErrorCallLink call_links = 2;
+  repeated ErrorUnwindEnd unwind_ends = 3;
+}
+
+// One observed start of unwinding. Every raise has its own ID, including two
+// throws of equal values. An occurrence is identified by its first raise.
+message ErrorRaise {
+  uint64 raise_id = 1;          // Nonzero, from the telemetry node ID space.
+  uint64 thread_id = 2;         // Telemetry thread that unwound.
+  fixed64 raised_at_ticks = 3;  // That thread's clock epoch.
+  RaiseKind kind = 4;
+  // Innermost bytecode frame when unwinding started, and its live PC. For a
+  // boundary kind this is the BAML call site, not a location in native code.
+  optional uint64 function_id = 5;
+  optional uint32 pc = 6;       // PC_COORDINATE_COMPACT_BYTE_OFFSET.
+  OriginState origin_state = 7;
+  // PROVEN only: the occurrence's first raise.
+  optional uint64 origin_raise_id = 8;
+  // PROVEN only, when exactly one earlier raise delivered the value here.
+  optional uint64 previous_raise_id = 9;
+  OriginVia origin_via = 10;    // How a non-fresh origin was looked up.
+  uint32 origin_candidates = 11; // AMBIGUOUS: distinct origins that matched.
+  UnresolvedReason unresolved_reason = 12; // UNRESOLVED only.
+  reserved 13;
+  // Live stack, innermost first, bounded. Only without call_path_id: some
+  // bytecode frame was not observed, or no bytecode frame raised.
+  repeated ErrorFrame frames = 14;
+  uint32 frame_count = 15;      // Frames on the stack, native ones included.
+  // Diagnostic trace the VM carried from an earlier throw, recorded only
+  // when the origin is not proven. Weaker evidence: names and lines, no IDs.
+  repeated InheritedFrame inherited_frames = 16;
+  uint32 inherited_frame_count = 17;
+  // The raising frame's call path, when every bytecode frame on the thread
+  // was observed. The stack is function_id at pc, then each path's caller at
+  // its caller_pc, up to the thread's first frame. Native frames are not on
+  // call paths, and direct recursion shares one path: frame_count can exceed
+  // the frames it names.
+  optional uint32 call_path_id = 18;
+}
+
+message ErrorFrame {
+  optional uint64 function_id = 1; // Absent when the function has no telemetry ID.
+  optional uint32 pc = 2;       // Innermost: live PC; outer: call-site PC. Absent for native frames.
+  bool native = 3;
+}
+
+message InheritedFrame {
+  string function_name = 1;
+  string file = 2;
+  uint32 line = 3;              // Zero when unknown.
+}
+
+enum RaiseKind {
+  RAISE_KIND_UNSPECIFIED = 0;
+  RAISE_KIND_THROW = 1;         // `throw` of a value.
+  RAISE_KIND_RETHROW = 2;       // Rethrow of a caught value (bare rethrow, no-match, defer).
+  RAISE_KIND_PANIC_RETHROW = 3; // A wildcard catch passing a panic on.
+  RAISE_KIND_AWAIT = 4;         // Awaited future failed.
+  RAISE_KIND_AWAIT_CANCELLED = 5; // Awaited future was cancelled.
+  RAISE_KIND_NATIVE_BOUNDARY = 6; // A native function or call setup failed at this call site.
+  RAISE_KIND_HOST_BOUNDARY = 7; // The engine injected a sys-op or host failure.
+  RAISE_KIND_RUNTIME = 8;       // The VM raised a panic at this instruction.
+}
+
+enum OriginState {
+  ORIGIN_STATE_UNSPECIFIED = 0;
+  ORIGIN_STATE_FRESH = 1;       // This raise starts a new occurrence.
+  ORIGIN_STATE_PROVEN = 2;
+  ORIGIN_STATE_AMBIGUOUS = 3;   // Several different origins matched.
+  ORIGIN_STATE_UNRESOLVED = 4;
+}
+
+enum OriginVia {
+  ORIGIN_VIA_UNSPECIFIED = 0;
+  ORIGIN_VIA_RETHROW = 1;       // A catch landing in the same frame.
+  ORIGIN_VIA_AWAIT = 2;         // The failed future's recorded raise.
+  ORIGIN_VIA_NORMALIZATION = 3; // Context carried by UnknownError conversion.
+}
+
+enum UnresolvedReason {
+  UNRESOLVED_REASON_UNSPECIFIED = 0;
+  UNRESOLVED_REASON_NO_LANDING = 1;       // No recorded catch holds this value.
+  UNRESOLVED_REASON_LANDINGS_EVICTED = 2; // As above, after bounded notes were dropped.
+  UNRESOLVED_REASON_FUTURE_LINK_MISSING = 3;
+  UNRESOLVED_REASON_FUTURE_LINK_EVICTED = 4;
+  UNRESOLVED_REASON_NO_FUTURE = 5;        // The awaited operand was not found.
+  // UnknownError conversion: where the converted value came from is not
+  // recorded, and an equal value in a catch slot does not prove it.
+  UNRESOLVED_REASON_SOURCE_NOT_RECORDED = 6;
+}
+
+// A retained call associated with a raise, emitted by the recorder from the
+// order of records on one telemetry thread.
+message ErrorCallLink {
+  uint64 raise_id = 1;
+  uint64 call_id = 2;
+  ErrorLinkRole role = 3;
+}
+
+enum ErrorLinkRole {
+  ERROR_LINK_ROLE_UNSPECIFIED = 0;
+  // The call whose frame raised it. It may still be running when caught in place.
+  ERROR_LINK_ROLE_RAISE_FRAME = 1;
+  // A call that completed while this raise unwound it.
+  ERROR_LINK_ROLE_UNWOUND = 2;
+}
+
+message ErrorUnwindEnd {
+  uint64 raise_id = 1;
+  UnwindResult result = 2;
+  optional uint64 handler_function_id = 3; // CAUGHT: the catching frame.
+  optional uint32 handler_pc = 4;          // CAUGHT: handler entry PC.
+  uint32 unwound_frames = 5;    // Bytecode frames popped, observed or not.
+}
+
+enum UnwindResult {
+  UNWIND_RESULT_UNSPECIFIED = 0;
+  UNWIND_RESULT_CAUGHT = 1;
+  UNWIND_RESULT_UNHANDLED = 2;  // Escaped the thread's outermost frame.
+  UNWIND_RESULT_ESCAPED_TO_NATIVE = 3; // Returned to a native caller without a bytecode handler.
+  UNWIND_RESULT_ABORTED = 4;    // The unwinder stopped with an internal error.
 }
 
 // Present only in the last file; its containing sequence declares the file count.

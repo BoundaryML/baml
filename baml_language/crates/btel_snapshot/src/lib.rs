@@ -14,6 +14,11 @@ use baml_type::{DeclarationName, typetag::TypeTag};
 use bex_str::BexStr;
 use num_bigint::BigInt;
 
+mod decode;
+pub use decode::{
+    BlobError, DecodeLimits, DecodedName, DecodedObject, DecodedRoot, DecodedSnapshot,
+    DecodedValue, Entries, SHALLOW_TYPE_BYTES, SharedSnapshot, TypeDescription, decode_blob,
+};
 mod encoding;
 pub use encoding::{BLOB_MAGIC, BLOB_VERSION};
 mod hash;

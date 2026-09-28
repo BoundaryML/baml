@@ -257,6 +257,193 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         callee: FunctionId,
         edge: CallPathEdge,
     },
+    /// Exception path only: how the raise that the next `ErrorRaised` on this
+    /// thread starts relates to earlier ones. Absent for a fresh raise.
+    ErrorRaiseOrigin {
+        raise_id: TelemetryId,
+        origin: RaiseOrigin,
+    },
+    /// Exception path only, rare: evidence of the next `ErrorRaised` on this
+    /// thread that does not fit its slot. Boxed so it never widens the slot.
+    ErrorRaiseStack(Box<RaiseStack>),
+    /// Exception path only: unwinding started. Completions until the matching
+    /// end belong to it. Fixed size: every raise has one, so it allocates
+    /// nothing. Its stack is `call_path` and that path's callers.
+    ErrorRaised {
+        raise_id: TelemetryId,
+        raised_at: ClockInstant,
+        kind: RaiseKind,
+        /// Innermost bytecode frame and its live PC (compact byte offset).
+        function: Option<FunctionId>,
+        pc: Option<u32>,
+        /// That frame's retained call, when it was a span at raise time.
+        raise_call: Option<TelemetryId>,
+        /// That frame was timing-only and its function has a policy, so its
+        /// completion may promote it: an `ErrorRaiseFrameCompleted` marker
+        /// then follows the completion.
+        raise_frame_may_promote: bool,
+        /// The raise frame's call path when every bytecode frame on the
+        /// thread was observed: the path and its callers are the stack.
+        /// `ROOT` otherwise; a preceding `ErrorRaiseStack` then lists it.
+        call_path: CallPathId,
+        /// Frames on the stack, native ones included.
+        frame_count: u32,
+    },
+    /// Exception path only: a raise whose unwind completed no retained call,
+    /// so nothing had to sit between its start and its end. Stands for
+    /// `ErrorRaised` then `ErrorUnwindEnded` in one slot; the raise frame
+    /// was not a span and could not be promoted. PCs are `NO_PC` when absent.
+    ErrorRaisedAndEnded {
+        raise_id: TelemetryId,
+        raised_at: ClockInstant,
+        kind: RaiseKind,
+        function: Option<FunctionId>,
+        pc: u32,
+        call_path: CallPathId,
+        frame_count: u32,
+        result: UnwindResult,
+        handler_function: Option<FunctionId>,
+        handler_pc: u32,
+        unwound_frames: u32,
+    },
+    /// Exception path only: the raise frame, which was timing-only and could
+    /// be promoted, has completed. A late completion just before this marker
+    /// is that frame's call.
+    ErrorRaiseFrameCompleted { raise_id: TelemetryId },
+    /// Exception path only: unwinding stopped.
+    ErrorUnwindEnded {
+        raise_id: TelemetryId,
+        result: UnwindResult,
+        handler_function: Option<FunctionId>,
+        handler_pc: Option<u32>,
+        unwound_frames: u32,
+    },
+}
+
+/// An absent PC in `SpanRecord::ErrorRaisedAndEnded`. Compact code never
+/// reaches it; larger PCs already saturate to it.
+pub const NO_PC: u32 = u32::MAX;
+
+/// A raise's evidence that does not fit its fixed-size record. Owned and
+/// bounded; contains no VM pointers.
+#[derive(Debug)]
+pub struct RaiseStack {
+    pub raise_id: TelemetryId,
+    /// Live stack, innermost first, at most `MAX_ERROR_FRAMES`, when the
+    /// raise has no call path: some bytecode frame was not observed, or no
+    /// bytecode frame raised. Empty when the call path describes it.
+    pub frames: Vec<ErrorFrame>,
+    /// Diagnostic trace carried from an earlier throw, only when the origin
+    /// is not proven. At most `MAX_INHERITED_FRAMES`, strings clipped.
+    pub inherited: Vec<InheritedFrame>,
+    pub inherited_count: u32,
+}
+
+/// Bounds for one raise's owned evidence.
+pub const MAX_ERROR_FRAMES: usize = 64;
+pub const MAX_INHERITED_FRAMES: usize = 16;
+pub const MAX_INHERITED_TEXT_BYTES: usize = 256;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RaiseKind {
+    Throw,
+    Rethrow,
+    PanicRethrow,
+    Await,
+    AwaitCancelled,
+    NativeBoundary,
+    HostBoundary,
+    Runtime,
+}
+
+/// How a raise relates to earlier ones. Never derived from value equality
+/// alone; see the VM's landing notes and future links.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RaiseOrigin {
+    Fresh,
+    Proven {
+        origin: TelemetryId,
+        previous: Option<TelemetryId>,
+        via: OriginVia,
+    },
+    Ambiguous {
+        candidates: u32,
+        via: OriginVia,
+    },
+    Unresolved {
+        reason: UnresolvedOrigin,
+        via: OriginVia,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OriginVia {
+    Rethrow,
+    Await,
+    Normalization,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UnresolvedOrigin {
+    NoLanding,
+    LandingsEvicted,
+    FutureLinkMissing,
+    FutureLinkEvicted,
+    NoFuture,
+    /// `UnknownError` conversion: the VM does not record where the converted
+    /// value came from, so an equal value in a catch slot proves nothing.
+    SourceNotRecorded,
+}
+
+/// An occurrence's identity as carried between raises: its first raise, or
+/// why it is not known. Plain IDs, so it can cross threads and GC.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OriginEvidence {
+    Known(TelemetryId),
+    Ambiguous(u32),
+    Unresolved(UnresolvedOrigin),
+}
+
+/// A failed future's escaping raise, stored before its awaiters wake.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FutureErrorLink {
+    pub raise: TelemetryId,
+    pub origin: OriginEvidence,
+}
+
+/// Looking up the raise that failed a future.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FutureErrorLookup {
+    Found(FutureErrorLink),
+    Missing,
+    /// No entry, and an entry with this key or an older one was evicted.
+    PossiblyEvicted,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ErrorFrame {
+    pub function: Option<FunctionId>,
+    /// Innermost: live PC; outer: call-site PC. None for native frames.
+    pub pc: Option<u32>,
+    pub native: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InheritedFrame {
+    pub function_name: String,
+    pub file: String,
+    pub line: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UnwindResult {
+    Caught,
+    /// Escaped the thread's outermost frame.
+    Unhandled,
+    /// Returned to a native caller without a bytecode handler.
+    EscapedToNative,
+    /// The unwinder stopped with an internal error.
+    Aborted,
 }
 
 const _: () =
@@ -265,6 +452,25 @@ const _: () = assert!(
     std::mem::size_of::<SpanRecord<btel_snapshot::Snapshot, btel_snapshot::Snapshot>>()
         <= btel_settings::layout::SPAN_RECORD_MAX_BYTES
 );
+
+#[cfg(test)]
+mod layout_tests {
+    use std::mem::{align_of, size_of};
+
+    use super::*;
+
+    /// A raise fits the span slot inline and rare evidence is boxed: the
+    /// slot keeps the exact size and alignment it had before error records
+    /// existed.
+    #[test]
+    fn error_variants_keep_the_span_slot() {
+        type Span = SpanRecord<btel_snapshot::Snapshot, btel_snapshot::Snapshot>;
+        assert_eq!(size_of::<Span>(), 56);
+        assert_eq!(align_of::<Span>(), 8);
+        assert_eq!(size_of::<TimingRecord>(), 32);
+        assert_eq!(size_of::<Box<RaiseStack>>(), 8);
+    }
+}
 
 // Independently owned captures and retained clock epochs support cross-thread
 // consumption. This does not make a VM-backed payload safe to transfer.
@@ -710,7 +916,13 @@ impl<C> SpanRecord<C, C> {
             Self::ThreadSelected { .. }
             | Self::ThreadSpanAnnouncement { .. }
             | Self::ThreadSpanCompletion { .. }
-            | Self::CallPathDefined { .. } => None,
+            | Self::CallPathDefined { .. }
+            | Self::ErrorRaiseOrigin { .. }
+            | Self::ErrorRaiseStack(_)
+            | Self::ErrorRaised { .. }
+            | Self::ErrorRaisedAndEnded { .. }
+            | Self::ErrorRaiseFrameCompleted { .. }
+            | Self::ErrorUnwindEnded { .. } => None,
         }
     }
 }

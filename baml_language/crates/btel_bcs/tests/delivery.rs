@@ -60,7 +60,7 @@ fn files(count: usize) -> Vec<SealedFile> {
                 count: 1,
                 ..AggregateDelta::default()
             });
-            publisher.finish_recording().unwrap();
+            publisher.flush_recording().unwrap();
         }
     }
     assert_eq!(files.len(), count);

@@ -16,5 +16,6 @@ pub const LENGTH_BYTES: usize = 5;
 /// knob.
 pub const FORMAT_MAJOR: u32 = 2;
 /// **Wire compatibility.** Coordinate with readers/schema evolution; never a performance
-/// knob.
-pub const FORMAT_MINOR: u32 = 0;
+/// knob. 1 adds `FunctionMetadata.argument_layout`; 2 adds
+/// `FunctionMetadata.source_map` and `RecordingFile.errors`. Readers accept any minor.
+pub const FORMAT_MINOR: u32 = 2;

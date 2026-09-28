@@ -146,6 +146,7 @@ impl TelemetryRecording {
     pub(crate) fn start(
         self,
         source_snapshot: Option<[u8; 32]>,
+        functions: Arc<btel_types::FunctionMetadataTable>,
     ) -> Result<
         (
             Arc<btel_processor::TelemetryRuntime>,
@@ -168,6 +169,7 @@ impl TelemetryRecording {
                     publisher,
                     *delivery,
                     source_snapshot,
+                    functions,
                     transport,
                 );
             }
@@ -199,7 +201,8 @@ impl TelemetryRecording {
                 });
                 let builder = RecordingBuilder::new(self.id, self.config)
                     .map_err(std::io::Error::other)?
-                    .with_source_snapshot(source_snapshot);
+                    .with_source_snapshot(source_snapshot)
+                    .with_function_metadata(functions);
                 let publisher = match writer {
                     Ok(writer) => {
                         let publisher = btel_file::LocalPublisher::new(builder, writer);
@@ -228,6 +231,7 @@ impl TelemetryRecording {
         publisher_config: btel_bcs::CloudPublisherConfig,
         delivery_config: btel_bcs::delivery::DeliveryConfig,
         source_snapshot: Option<[u8; 32]>,
+        functions: Arc<btel_types::FunctionMetadataTable>,
         transport: btel_settings::transport::ChunkConfig,
     ) -> Result<
         (
@@ -258,7 +262,11 @@ impl TelemetryRecording {
                     }
                 };
                 btel_bcs::CloudPublisher::new(id, config, publisher_config, handle)
-                    .map(|publisher| publisher.with_source_snapshot(source_snapshot))
+                    .map(|publisher| {
+                        publisher
+                            .with_source_snapshot(source_snapshot)
+                            .with_function_metadata(functions)
+                    })
                     .map_err(std::io::Error::other)
             })
             .map_err(|error| EngineError::Other(format!("telemetry processor startup: {error}")))?;

@@ -90,7 +90,7 @@ fn sources(pool: &SnapshotPool, count: usize) -> (SealedFile, Vec<Snapshot>) {
         );
     }
     let snapshots = builder.take_snapshots().collect();
-    let file = builder.finish_recording().unwrap().unwrap();
+    let file = builder.flush_recording().unwrap().unwrap();
     (file, snapshots)
 }
 

@@ -1,0 +1,47 @@
+[package]
+name = "baml_query_btel"
+version = { workspace = true }
+publish = false
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+description = "Local SQL over Btel recordings: incremental SQLite index, BAML-value SQL translation, lazy CAS value functions"
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[features]
+# Deterministic crash points for recovery tests only.
+fault-injection = [  ]
+
+[dependencies]
+btel_reader = { workspace = true }
+btel_recorder = { workspace = true }
+btel_snapshot = { workspace = true }
+base64 = { workspace = true }
+fs2 = { workspace = true }
+prost = { workspace = true }
+rusqlite = { workspace = true, features = [ "bundled", "functions", "hooks", "limits" ] }
+rustc-hash = { workspace = true }
+serde = { workspace = true, features = [ "derive" ] }
+serde_json = { workspace = true }
+sqlparser = { workspace = true }
+
+[dev-dependencies]
+baml_db = { workspace = true }
+baml_query_btel = { workspace = true, features = [ "fault-injection" ] }
+bex_engine = { workspace = true }
+bex_heap = { workspace = true }
+bex_vm_types = { workspace = true }
+btel_clock = { workspace = true }
+btel_reader = { workspace = true }
+sys_native = { workspace = true, features = [ "bundle-http", "aws-crypto" ] }
+sys_types = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = [ "macros", "rt-multi-thread", "time" ] }
+
+[package.metadata.ci]
+wasm_support = false
