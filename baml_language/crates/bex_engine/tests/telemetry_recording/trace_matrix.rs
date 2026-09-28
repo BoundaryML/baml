@@ -596,6 +596,30 @@ async fn arguments_and_graphs(program: &Program) {
 }
 
 async fn call_structure(program: &Program) {
+    let (result, recording) = Recording::run(program, "matrix_parent_no_capture", vec![]).await;
+    assert_eq!(result.unwrap(), text("child"));
+    assert_eq!(recording.spans.len(), 2);
+    let parent = recording
+        .spans
+        .iter()
+        .find(|(thread, entry, _)| entry.parent_id == *thread)
+        .unwrap();
+    recording.assert_capture(parent.1.inputs_cas_id.as_ref(), None);
+    recording.assert_capture(parent.2.value_cas_id.as_ref(), None);
+    let child = recording
+        .spans
+        .iter()
+        .find(|(_, entry, _)| entry.parent_id == parent.1.id)
+        .unwrap();
+    recording.assert_capture(
+        child.1.inputs_cas_id.as_ref(),
+        Some(&snapshot(true, &[text("child")])),
+    );
+    recording.assert_capture(
+        child.2.value_cas_id.as_ref(),
+        Some(&snapshot(false, &[text("child")])),
+    );
+
     for hidden in [false, true] {
         let (result, recording) =
             Recording::run(program, "matrix_nested", vec![External::Bool(hidden)]).await;
@@ -891,35 +915,99 @@ async fn unions_and_opaque_values(program: &Program) {
 }
 
 async fn llm_policy(program: &Program) {
-    for capture in [None, Some(false), Some(true)] {
-        let server = wiremock::MockServer::start().await;
-        wiremock::Mock::given(wiremock::matchers::method("POST"))
-            .respond_with(wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({
+    for inputs in [None, Some(false), Some(true)] {
+        for output in [None, Some(false), Some(true)] {
+            for error in [None, Some(false), Some(true)] {
+                for reserved in [false, true] {
+                    for fail in [false, true] {
+                        llm_capture_case(program, inputs, output, error, reserved, fail).await;
+                    }
+                }
+            }
+        }
+    }
+}
+
+async fn llm_capture_case(
+    program: &Program,
+    inputs: Option<bool>,
+    output: Option<bool>,
+    error: Option<bool>,
+    reserved: bool,
+    fail: bool,
+) {
+    let server = wiremock::MockServer::start().await;
+    let response = if fail {
+        wiremock::ResponseTemplate::new(400).set_body_json(serde_json::json!({
+            "error": {"message": "capture matrix rejection", "type": "invalid_request_error"}
+        }))
+    } else {
+        wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "id": "matrix", "object": "chat.completion", "created": 1, "model": "test",
                 "choices": [{"index": 0, "message": {"role": "assistant", "content": "captured llm", "refusal": null}, "finish_reason": "stop"}],
                 "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
-            })))
-            .expect(1)
-            .mount(&server).await;
-        let (result, recording) = Recording::run(
-            program,
-            "matrix_llm_policy",
-            vec![text(&server.uri()), flag(capture)],
-        )
+            }))
+    };
+    wiremock::Mock::given(wiremock::matchers::method("POST"))
+        .respond_with(response)
+        .expect(1)
+        .mount(&server)
         .await;
+    let (result, recording) = Recording::run(
+        program,
+        "matrix_llm_policy",
+        vec![
+            text(&server.uri()),
+            flag(inputs),
+            flag(output),
+            flag(error),
+            External::Bool(reserved),
+        ],
+    )
+    .await;
+    if fail {
+        assert!(
+            matches!(result, Err(EngineError::UnhandledThrow { .. })),
+            "{result:?}"
+        );
+    } else {
         assert_eq!(result.unwrap(), text("captured llm"));
+    }
+    let root_spans: Vec<_> = recording
+        .spans
+        .iter()
+        .filter(|(thread, entry, _)| {
+            recording.threads[thread].parent_id.is_none() && entry.parent_id == *thread
+        })
+        .collect();
+    assert_eq!(root_spans.len(), 1, "the LLM invocation remains a span");
+    let (_, entry, done) = root_spans[0];
+    assert_eq!(
+        entry.inputs_cas_id.is_some(),
+        inputs.unwrap_or(true),
+        "inputs={inputs:?}"
+    );
+    assert_eq!(
+        done.value_cas_id.is_some(),
+        (if fail { error } else { output }).unwrap_or(true),
+        "output={output:?}/error={error:?}/fail={fail}",
+    );
+    assert_eq!(
+        CompletionFlags::from_wire(done.completion_flags, false)
+            .unwrap()
+            .outcome(),
+        if fail {
+            btel_types::InvocationOutcome::Errored
+        } else {
+            btel_types::InvocationOutcome::Ok
+        },
+    );
+    if !fail {
         let expected = snapshot(false, &[text("captured llm")]);
-        let (_, entry, done) = recording
-            .spans
-            .iter()
-            .find(|(_, _, done)| {
-                done.value_cas_id
-                    .as_ref()
-                    .is_some_and(|id| capture_id(id) == expected.id())
-            })
-            .expect("LLM policy captures its output even with false options");
-        assert!(entry.inputs_cas_id.is_some());
-        recording.assert_capture(done.value_cas_id.as_ref(), Some(&expected));
+        recording.assert_capture(
+            done.value_cas_id.as_ref(),
+            output.unwrap_or(true).then_some(&expected),
+        );
     }
 }
 

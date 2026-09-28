@@ -58,8 +58,8 @@ const _: () = assert!(CALL_PATH_CACHE_SLOTS == 1);
 const _: () = assert!(matches!(NATIVE_DEFAULT_MODE, InvocationMode::Hidden));
 
 const SPAN: u8 = 1 << 0;
-const CAPTURE_OUTPUT: u8 = 1 << 1;
-const CAPTURE_ERROR: u8 = 1 << 2;
+const INHERITED_CAPTURE_OUTPUT: u8 = 1 << 1;
+const INHERITED_CAPTURE_ERROR: u8 = 1 << 2;
 const REENTRY: u8 = 1 << 3;
 const REQUIRES_ANNOUNCEMENT: u8 = 1 << 4;
 
@@ -94,6 +94,9 @@ pub struct FrameTelemetry {
     pub await_duration: AwaitDuration,
     pub saved_call_path: CallPathId,
     flags: u8,
+    // Keep call-site overrides distinct from inherited requests latched at entry.
+    output_override: Option<bool>,
+    error_override: Option<bool>,
 }
 
 const _: () = assert!(size_of::<FrameTelemetry>() == btel_settings::layout::FRAME_TELEMETRY_BYTES);
@@ -355,6 +358,7 @@ impl TelemetryState {
                     visible_caller,
                     caller_pc,
                     caller_is_observed,
+                    trace,
                     register,
                 ));
             }
@@ -400,20 +404,14 @@ impl TelemetryState {
         if mode == InvocationMode::Span {
             flags |= SPAN;
         }
-        let capture_inputs = policy.capture_inputs
-            || (is_ai && btel_settings::policy::AI_CAPTURE_INPUTS)
-            || trace.is_some_and(|config| config.inputs == Some(true));
-        let capture_output = policy.capture_output
-            || (is_ai && btel_settings::policy::AI_CAPTURE_OUTPUT)
-            || trace.is_some_and(|config| config.output == Some(true));
-        let capture_error = policy.capture_error
-            || (is_ai && btel_settings::policy::AI_CAPTURE_ERROR)
-            || trace.is_some_and(|config| config.error == Some(true));
-        if capture_output {
-            flags |= CAPTURE_OUTPUT;
+        let capture_inputs = trace.and_then(|config| config.inputs).unwrap_or(
+            policy.capture_inputs || (is_ai && btel_settings::policy::AI_CAPTURE_INPUTS),
+        );
+        if policy.capture_output || (is_ai && btel_settings::policy::AI_CAPTURE_OUTPUT) {
+            flags |= INHERITED_CAPTURE_OUTPUT;
         }
-        if capture_error {
-            flags |= CAPTURE_ERROR;
+        if policy.capture_error || (is_ai && btel_settings::policy::AI_CAPTURE_ERROR) {
+            flags |= INHERITED_CAPTURE_ERROR;
         }
 
         let captured_inputs = (mode == InvocationMode::Span && capture_inputs)
@@ -448,6 +446,8 @@ impl TelemetryState {
             await_duration: AwaitDuration::ZERO,
             saved_call_path,
             flags,
+            output_override: trace.and_then(|config| config.output),
+            error_override: trace.and_then(|config| config.error),
         })
     }
 
@@ -458,6 +458,7 @@ impl TelemetryState {
         visible_caller: Option<HeapPtr>,
         caller_pc: u32,
         caller_is_observed: bool,
+        trace: Option<TraceConfig>,
         register: impl FnOnce(Option<HeapPtr>, HeapPtr) -> (Option<FunctionId>, FunctionId),
     ) -> FrameTelemetry {
         let saved_call_path = self.thread.active_call_path;
@@ -491,6 +492,8 @@ impl TelemetryState {
             await_duration: AwaitDuration::ZERO,
             saved_call_path,
             flags,
+            output_override: trace.and_then(|config| config.output),
+            error_override: trace.and_then(|config| config.error),
         }
     }
 
@@ -525,12 +528,16 @@ impl TelemetryState {
         let policy = self.policy_by_id(policy_id);
         let capture_value = match outcome {
             InvocationOutcome::Ok
-                if telemetry.flags & CAPTURE_OUTPUT != 0 || policy.capture_output =>
+                if telemetry.output_override.unwrap_or(
+                    telemetry.flags & INHERITED_CAPTURE_OUTPUT != 0 || policy.capture_output,
+                ) =>
             {
                 value
             }
             InvocationOutcome::Errored | InvocationOutcome::Cancelled
-                if telemetry.flags & CAPTURE_ERROR != 0 || policy.capture_error =>
+                if telemetry.error_override.unwrap_or(
+                    telemetry.flags & INHERITED_CAPTURE_ERROR != 0 || policy.capture_error,
+                ) =>
             {
                 value
             }
@@ -1132,7 +1139,7 @@ mod tests {
     }
 
     #[test]
-    fn invocation_capture_is_additive_and_records_real_snapshots() {
+    fn invocation_capture_overrides_policy_and_records_real_snapshots() {
         for [capture_inputs, capture_output, capture_error] in [
             [false, false, false],
             [true, false, false],
@@ -1182,11 +1189,11 @@ mod tests {
                     unsafe {
                         state.complete_invocation(frame, &function, outcome, Some(Value::int(9)));
                     }
-                    let expected_inputs = capture_inputs || inputs == Some(true);
+                    let expected_inputs = inputs.unwrap_or(capture_inputs);
                     let expected_value = match outcome {
-                        InvocationOutcome::Ok => capture_output || output == Some(true),
+                        InvocationOutcome::Ok => output.unwrap_or(capture_output),
                         InvocationOutcome::Errored | InvocationOutcome::Cancelled => {
-                            capture_error || error == Some(true)
+                            error.unwrap_or(capture_error)
                         }
                     };
                     let inputs = state
@@ -1267,8 +1274,8 @@ mod tests {
                         }),
                     )
                     .unwrap();
-                    assert_eq!(next.flags & CAPTURE_OUTPUT != 0, capture_output);
-                    assert_eq!(next.flags & CAPTURE_ERROR != 0, capture_error);
+                    assert_eq!(next.flags & INHERITED_CAPTURE_OUTPUT != 0, capture_output);
+                    assert_eq!(next.flags & INHERITED_CAPTURE_ERROR != 0, capture_error);
                     unsafe {
                         state.complete_invocation(next, &function, InvocationOutcome::Ok, None);
                     }
@@ -2117,6 +2124,85 @@ mod tests {
             function.telemetry_policy_id.load(),
             btel_types::TelemetryPolicyId::NONE
         );
+    }
+
+    #[test]
+    fn capture_overrides_survive_policy_changes_and_late_promotion() {
+        for mode in [
+            None,
+            Some(InvocationMode::Timing),
+            Some(InvocationMode::Span),
+        ] {
+            for initial in [false, true] {
+                for current in [false, true] {
+                    for override_ in [None, Some(false), Some(true)] {
+                        for outcome in [
+                            InvocationOutcome::Ok,
+                            InvocationOutcome::Errored,
+                            InvocationOutcome::Cancelled,
+                        ] {
+                            let function = function(FunctionKind::Bytecode, None);
+                            let mut state =
+                                test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+                            state.start_thread();
+                            state
+                                .set_policy(
+                                    &function,
+                                    TelemetryPolicy {
+                                        capture_output: initial,
+                                        capture_error: initial,
+                                        ..TelemetryPolicy::NONE
+                                    },
+                                )
+                                .unwrap();
+                            let frame = trace_entry(
+                                &mut state,
+                                &function,
+                                Some(TraceConfig {
+                                    mode,
+                                    output: override_,
+                                    error: override_,
+                                    ..TraceConfig::default()
+                                }),
+                            )
+                            .unwrap();
+                            let initially_span = frame.is_span();
+                            state
+                                .set_policy(
+                                    &function,
+                                    TelemetryPolicy {
+                                        span_from_entry: true,
+                                        capture_output: current,
+                                        capture_error: current,
+                                        ..TelemetryPolicy::NONE
+                                    },
+                                )
+                                .unwrap();
+                            unsafe {
+                                state.complete_invocation(
+                                    frame,
+                                    &function,
+                                    outcome,
+                                    Some(Value::int(7)),
+                                );
+                            }
+                            let recorded =
+                                state.span_records().last().unwrap().completion().unwrap();
+                            assert_eq!(recorded.outcome, outcome);
+                            assert_eq!(recorded.late, !initially_span);
+                            assert_eq!(
+                                recorded.captured_value.map(|snapshot| matches!(
+                                    snapshot.roots()[0],
+                                    btel_snapshot::SnapshotValue::Int(7)
+                                )),
+                                override_.unwrap_or(initial || current).then_some(true),
+                                "{mode:?}/{initial}/{current}/{override_:?}/{outcome:?}",
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 
     #[test]

@@ -92,6 +92,10 @@ function matrix_nested(hidden: bool) -> unknown {
     matrix_parent("parent", $trace = options)
 }
 
+function matrix_parent_no_capture() -> unknown {
+    matrix_parent("parent", $trace = trace.span(inputs = false, output = false, error = false))
+}
+
 function matrix_spawned() -> unknown {
     let reserved = trace.span(inputs = true, output = true).reserve();
     let child = spawn { matrix_echo("spawned", $trace = reserved) };
@@ -245,12 +249,20 @@ function matrix_llm(value: string) -> string {
     prompt: `${value}`
 }
 
-function matrix_llm_policy(base_url: string, capture: bool?) -> string {
+function matrix_llm_policy(
+    base_url: string,
+    inputs: bool?,
+    output: bool?,
+    error: bool?,
+    reserved: bool,
+) -> string {
     let cl = openai.ChatClient.new(api_key = "test", base_url = base_url);
+    let options = trace.span(inputs = inputs, output = output, error = error);
+    let attachment = if (reserved) { options.reserve() } else { options };
     matrix_llm(
         "llm input",
         client = cl,
-        $trace = trace.span(inputs = capture, output = capture, error = capture),
+        $trace = attachment,
     )
 }
 
