@@ -2750,7 +2750,7 @@ impl<'db> InferenceContext<'db> {
                 fields,
                 spreads,
                 ..
-            } => self.infer_object(body, expr, type_name, fields, spreads),
+            } => self.infer_object(body, expr, expected, type_name, fields, spreads),
             Expr::MemberAccess { base, member } => {
                 let base_ty = self.infer_expr(body, *base, &Expectation::None);
                 self.field_access(expr, &base_ty, member)
@@ -8545,6 +8545,7 @@ impl<'db> InferenceContext<'db> {
         &mut self,
         body: &ExprBody,
         object: ExprId,
+        expected: &Expectation,
         type_name: &baml_base::TypePath,
         fields: &[ObjectExprField],
         spreads: &[baml_compiler2_ast::SpreadField],
@@ -8584,11 +8585,11 @@ impl<'db> InferenceContext<'db> {
             }
         };
         match class {
-            DeclRef::Source(class) => {
-                self.infer_source_object(body, object, type_name, class, pinned, fields, spreads)
-            }
+            DeclRef::Source(class) => self.infer_source_object(
+                body, object, expected, type_name, class, pinned, fields, spreads,
+            ),
             DeclRef::External(class) => {
-                self.infer_exported_object(body, object, class, pinned, fields, spreads)
+                self.infer_exported_object(body, object, expected, class, pinned, fields, spreads)
             }
         }
     }
@@ -8706,6 +8707,7 @@ impl<'db> InferenceContext<'db> {
         &mut self,
         body: &ExprBody,
         object: ExprId,
+        expected: &Expectation,
         type_name: &baml_base::TypePath,
         class: baml_compiler2_hir::loc::ClassLoc<'db>,
         pinned: Option<Vec<Ty>>,
@@ -8779,14 +8781,32 @@ impl<'db> InferenceContext<'db> {
                 });
             }
         }
+        // The object's head: the written spelling (a `$stream` companion
+        // re-qualifies under its own name), or through an alias the class
+        // the alias denotes.
+        let object_head = if through_alias {
+            class_name.clone()
+        } else {
+            let short = type_name.0.last().expect("type paths are never empty");
+            self.lower.qualify_definition(
+                baml_compiler2_hir::contributions::Definition::Class(class),
+                short,
+            )
+        };
+        let hints = self.constructor_arg_hints(expected, &object_head, &instantiation);
         for field in fields {
             let name = &field.name;
             let value = field.value;
             match field_types.iter().find(|(field, _)| field == name) {
                 Some((_, field_ty)) => {
-                    let field_ty =
-                        substitute_params(&crate::impls::interned_ty(field_ty), &instantiation);
-                    self.check_expr(body, value, &field_ty);
+                    let field_ty = crate::impls::interned_ty(field_ty);
+                    self.check_object_field(
+                        body,
+                        value,
+                        &field_ty,
+                        &instantiation,
+                        hints.as_deref(),
+                    );
                 }
                 None => {
                     // An INTERFACE field of an implemented interface is not
@@ -8804,11 +8824,14 @@ impl<'db> InferenceContext<'db> {
                             });
                         match field_types.iter().find(|(field, _)| *field == class_field) {
                             Some((_, field_ty)) => {
-                                let field_ty = substitute_params(
-                                    &crate::impls::interned_ty(field_ty),
+                                let field_ty = crate::impls::interned_ty(field_ty);
+                                self.check_object_field(
+                                    body,
+                                    value,
+                                    &field_ty,
                                     &instantiation,
+                                    hints.as_deref(),
                                 );
-                                self.check_expr(body, value, &field_ty);
                             }
                             None => {
                                 self.infer_expr(body, value, &Expectation::None);
@@ -8842,18 +8865,6 @@ impl<'db> InferenceContext<'db> {
             fields,
             !spreads.is_empty(),
         );
-        // The object's head: the written spelling (a `$stream` companion
-        // re-qualifies under its own name), or through an alias the class
-        // the alias denotes.
-        let object_head = if through_alias {
-            class_name.clone()
-        } else {
-            let short = type_name.0.last().expect("type paths are never empty");
-            self.lower.qualify_definition(
-                baml_compiler2_hir::contributions::Definition::Class(class),
-                short,
-            )
-        };
         let object_ty = Ty::intern(InferTy::Class(object_head, instantiation.into()));
         // A spread source must BE the constructed class at the same
         // arguments (fields are invariant slots): checking against the
@@ -8868,10 +8879,12 @@ impl<'db> InferenceContext<'db> {
     /// A served class under construction: at `pinned` arguments when the
     /// head was an alias, else at the object's own written or inferred
     /// ones.
+    #[expect(clippy::too_many_arguments)]
     fn infer_exported_object(
         &mut self,
         body: &ExprBody,
         object: ExprId,
+        expected: &Expectation,
         class: crate::extern_loc::ExternClassLoc<'db>,
         pinned: Option<Vec<Ty>>,
         fields: &[ObjectExprField],
@@ -8970,11 +8983,12 @@ impl<'db> InferenceContext<'db> {
                 });
             }
         }
+        let hints = self.constructor_arg_hints(expected, &class_name, &instantiation);
         for field in fields {
             let name = &field.name;
             let value = field.value;
             if let Some((_, field_ty)) = field_types.iter().find(|(field, _)| field == name) {
-                self.check_expr(body, value, &substitute_params(field_ty, &instantiation));
+                self.check_object_field(body, value, field_ty, &instantiation, hints.as_deref());
             } else {
                 self.infer_expr(body, value, &Expectation::None);
                 let shorthand = field.syntax == PropertySyntax::Shorthand;
@@ -9778,6 +9792,79 @@ impl<'db> InferenceContext<'db> {
                 .and_then(|ty| self.callback_root_fn(&ty))
                 .is_some(),
             _ => true,
+        }
+    }
+
+    /// The arguments a generic constructor's EXPECTED type gives its class:
+    /// the unique arm naming the same class, found like the aggregate
+    /// literals' arms. Class arguments are invariant, so that arm is the
+    /// only instantiation the object can take there.
+    fn expected_class_args(
+        &mut self,
+        expected: &Expectation,
+        head: &baml_type::DeclName,
+    ) -> Option<Vec<Ty>> {
+        let shape = self.expectation_shape(expected)?;
+        self.unique_expected_arm(&shape, |arm| match arm.kind() {
+            InferTy::Class(name, args) if name == head => Some(args.to_vec()),
+            _ => None,
+        })
+    }
+
+    /// The instantiation that INFORMS a generic constructor's field values:
+    /// each still-open slot takes the argument the expected type gives the
+    /// same class. `Box {value: [1]}` returned as `Box<(int | string)[]>`
+    /// then builds `[1]` at `(int | string)[]`, instead of committing it
+    /// to `int[]` before the return relates `?T`. `None` when every slot
+    /// is already determined or the expectation names no unique arm.
+    fn constructor_arg_hints(
+        &mut self,
+        expected: &Expectation,
+        head: &baml_type::DeclName,
+        instantiation: &[Ty],
+    ) -> Option<Vec<Ty>> {
+        let open: Vec<bool> = instantiation
+            .iter()
+            .map(|arg| self.table.resolve_completely(arg).has_infer())
+            .collect();
+        if !open.contains(&true) {
+            return None;
+        }
+        let expected_args = self.expected_class_args(expected, head)?;
+        (expected_args.len() == instantiation.len()).then(|| {
+            instantiation
+                .iter()
+                .zip(expected_args)
+                .zip(open)
+                .map(|((arg, hint), open)| if open { hint } else { arg.clone() })
+                .collect()
+        })
+    }
+
+    /// Checks a constructor field value against its declared type at the
+    /// object's `instantiation`. With `hints`, the value is first inferred
+    /// against the declared type at the hinted arguments; this only
+    /// INFORMS the value (its literals take their shape from it), while
+    /// the check that constrains the open slots remains against the
+    /// object's own instantiation.
+    fn check_object_field(
+        &mut self,
+        body: &ExprBody,
+        value: ExprId,
+        field_ty: &Ty,
+        instantiation: &[Ty],
+        hints: Option<&[Ty]>,
+    ) {
+        let declared = substitute_params(field_ty, instantiation);
+        match hints {
+            Some(hints) => {
+                let hint = substitute_params(field_ty, hints);
+                let ty = self.infer_expr_with_hint(body, value, Some(&hint));
+                self.check_inferred(value, ty, &declared);
+            }
+            None => {
+                self.check_expr(body, value, &declared);
+            }
         }
     }
 
