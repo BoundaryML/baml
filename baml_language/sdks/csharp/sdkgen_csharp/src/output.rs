@@ -1,7 +1,7 @@
 //! C#-specific output validation.
 //!
 //! Filesystem installation belongs exclusively to
-//! `baml_codegen_types::write_generated_output`.
+//! `baml_sdkgen_types::write_generated_output`.
 
 use std::{
     collections::BTreeSet,
@@ -9,7 +9,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use baml_codegen_types::GeneratedOutputFile;
+use baml_sdkgen_types::GeneratedOutputFile;
 use serde::{Deserialize, Serialize};
 
 use crate::{hash::sha256, routing::is_safe_portable_segment};

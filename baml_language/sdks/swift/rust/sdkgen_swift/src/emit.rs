@@ -5,7 +5,7 @@
 
 use std::fmt::Write as _;
 
-use baml_codegen_types::{Class, Enum, Function, Name, Symbol, Ty, TypeAlias};
+use baml_sdkgen_types::{Class, Enum, Function, Name, Symbol, Ty, TypeAlias};
 
 use crate::{
     escape_ident,
@@ -506,7 +506,7 @@ pub(crate) fn ty_contains_type_var(ty: &Ty, name: &str) -> bool {
         Ty::TypeVar(v) => v.as_str() == name,
         // These values are opaque or unsupported, so do not infer from their types.
         Ty::Function { .. } | Ty::Interface(..) | Ty::Future(..) => false,
-        _ => baml_codegen_types::any_type_child(ty, |child| ty_contains_type_var(child, name)),
+        _ => baml_sdkgen_types::any_type_child(ty, |child| ty_contains_type_var(child, name)),
     }
 }
 
@@ -666,7 +666,7 @@ fn thrown_leaf_names(ty: &Ty) -> Vec<String> {
 /// onto the closure's positional/optional parameters.
 fn render_callable_param(
     name: &str,
-    cparams: &[baml_codegen_types::CallableParam],
+    cparams: &[baml_sdkgen_types::CallableParam],
     ret: &Ty,
     ctx: &TranslateCtx,
 ) -> Option<(String, String)> {
@@ -676,12 +676,12 @@ fn render_callable_param(
     let mut positional = 0usize;
     for cp in cparams {
         match cp.mode {
-            baml_codegen_types::CodegenFunctionParamMode::Required => {
+            baml_sdkgen_types::CodegenFunctionParamMode::Required => {
                 sig_parts.push(translate_ty(&cp.ty, ctx)?);
                 invoke_args.push(format!("try _args.required({positional})"));
                 positional += 1;
             }
-            baml_codegen_types::CodegenFunctionParamMode::Optional => {
+            baml_sdkgen_types::CodegenFunctionParamMode::Optional => {
                 let inner = translate_optional_arg_inner(&cp.ty, ctx)?;
                 sig_parts.push(format!("BamlOptional<{inner}>"));
                 let arg_name = cp.name.as_ref()?.as_str();
@@ -710,7 +710,7 @@ fn render_callable_param(
 }
 
 fn render_returned_callable(
-    params: &[baml_codegen_types::CallableParam],
+    params: &[baml_sdkgen_types::CallableParam],
     ret: &Ty,
     ctx: &TranslateCtx,
 ) -> Option<(String, String)> {
@@ -721,12 +721,12 @@ fn render_returned_callable(
         let local = format!("_arg{index}");
         let name = param.name.as_ref()?.as_str();
         match param.mode {
-            baml_codegen_types::CodegenFunctionParamMode::Required => {
+            baml_sdkgen_types::CodegenFunctionParamMode::Required => {
                 let ty = translate_ty(&param.ty, ctx)?;
                 signature.push(format!("{local}: {ty}"));
                 required_args.push(format!("(\"{name}\", {local})"));
             }
-            baml_codegen_types::CodegenFunctionParamMode::Optional => {
+            baml_sdkgen_types::CodegenFunctionParamMode::Optional => {
                 let ty = translate_optional_arg_inner(&param.ty, ctx)?;
                 signature.push(format!("{local}: BamlOptional<{ty}>"));
                 optional_args.push((local, name.to_string()));
@@ -786,7 +786,7 @@ mod shared_traversal_tests {
 
     #[test]
     fn value_inference_traverses_containers_but_not_opaque_signatures() {
-        let variable = || Ty::TypeVar(baml_codegen_types::ParamTy::new(0, "T".into()));
+        let variable = || Ty::TypeVar(baml_sdkgen_types::ParamTy::new(0, "T".into()));
         assert!(ty_contains_type_var(&Ty::List(Box::new(variable())), "T"));
         let callable = Ty::Function {
             params: Box::new([]),

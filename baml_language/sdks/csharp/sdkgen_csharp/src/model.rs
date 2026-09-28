@@ -3,7 +3,7 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use baml_base::Name as BaseName;
-use baml_codegen_types::{Class, Name, Symbol, SymbolPool};
+use baml_sdkgen_types::{Class, Name, Symbol, SymbolPool};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) enum CallableVariant {
@@ -216,7 +216,7 @@ fn callable_parts(name: &BaseName) -> (BaseName, CallableVariant) {
 
 #[cfg(test)]
 mod tests {
-    use baml_codegen_types::{Function, Origin, Ty};
+    use baml_sdkgen_types::{Function, Origin, Ty};
 
     use super::*;
 

@@ -1,6 +1,6 @@
 //! C#-owned normalization for generator-facing semantic types.
 
-use baml_codegen_types::{
+use baml_sdkgen_types::{
     Class, ClassProperty, CodegenFunctionParamMode, Enum, EnumVariant, Function, FunctionArgument,
     Symbol, Ty, TypeAlias,
 };
@@ -158,7 +158,7 @@ fn normalize_canonical(ty: Ty) -> Ty {
         } => Ty::Function {
             params: params
                 .into_iter()
-                .map(|param| baml_codegen_types::CallableParam {
+                .map(|param| baml_sdkgen_types::CallableParam {
                     name: param.name,
                     ty: normalize_ty(&param.ty),
                     mode: match param.mode {
@@ -181,7 +181,7 @@ fn normalize_canonical(ty: Ty) -> Ty {
 #[cfg(test)]
 mod tests {
     use baml_base::Name;
-    use baml_codegen_types::{Name as TypeName, Ty};
+    use baml_sdkgen_types::{Name as TypeName, Ty};
 
     use super::normalize_ty;
 

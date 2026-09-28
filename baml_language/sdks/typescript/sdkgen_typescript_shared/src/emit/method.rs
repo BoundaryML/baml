@@ -3,7 +3,7 @@
 //! static methods as `static x = defineFunction(...)`, instance methods as
 //! `x = defineInstanceFunction(...).bind(this)`.
 
-use baml_codegen_types::{FunctionArgumentDefault, Ty};
+use baml_sdkgen_types::{FunctionArgumentDefault, Ty};
 
 use crate::emit::function::SyncAsync;
 

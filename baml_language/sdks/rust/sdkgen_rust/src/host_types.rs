@@ -1,4 +1,4 @@
-use baml_codegen_types::{CallableParam, Class, Function, Symbol, SymbolPool, Ty};
+use baml_sdkgen_types::{CallableParam, Class, Function, Symbol, SymbolPool, Ty};
 
 pub(crate) fn lower_unrepresentable_literals(pool: &SymbolPool) -> SymbolPool {
     pool.iter()

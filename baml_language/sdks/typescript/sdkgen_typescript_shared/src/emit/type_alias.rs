@@ -3,7 +3,7 @@
 //! Emits `export type Foo = <RHS>`. `recursive` is consumed by
 //! `group_and_sort` (recursive aliases hoist to the front of the leaf).
 
-use baml_codegen_types::{Name, Ty};
+use baml_sdkgen_types::{Name, Ty};
 
 pub(crate) struct TypeScriptTypeAlias {
     pub(crate) name: String,

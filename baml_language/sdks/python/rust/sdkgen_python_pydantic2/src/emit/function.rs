@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use baml_codegen_types::{FunctionArgumentDefault, Ty};
+use baml_sdkgen_types::{FunctionArgumentDefault, Ty};
 
 /// Async/sync marker carried by factory bindings. Each host projection fans
 /// out into one sync and one async binding.
