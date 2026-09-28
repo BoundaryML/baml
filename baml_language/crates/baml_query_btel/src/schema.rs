@@ -15,7 +15,7 @@
 //!   visible; they never make a thread a root or a path a top-level path.
 
 /// Physical layout of these tables. Change on any DDL change.
-pub const SCHEMA_VERSION: i64 = 8;
+pub const SCHEMA_VERSION: i64 = 9;
 /// Interpretation of evidence into rows. Change when reconciliation changes
 /// meaning without a DDL change; either mismatch rebuilds the index.
 pub const NORMALIZATION_VERSION: i64 = 1;
@@ -175,9 +175,16 @@ CREATE TABLE thread (
   -- The execution (root thread) this thread belongs to, once resolvable.
   root_id BLOB,
   conflict INTEGER NOT NULL DEFAULT 0,
+  -- A root's start in Unix milliseconds, as `executions.started_at_ms`
+  -- reports it; stored so the newest executions are an index read.
+  started_ms INTEGER,
+  -- Set when the start or its clock may have changed since `started_ms`.
+  start_pending INTEGER NOT NULL DEFAULT 1,
   PRIMARY KEY (rec, thread_id)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX thread_by_root ON thread (rec, root_id);
+CREATE INDEX execution_by_start ON thread (started_ms) WHERE defined = 1 AND parent_id IS NULL;
+CREATE INDEX thread_start_pending ON thread (rec) WHERE start_pending = 1;
 -- Threads still waiting for their execution: root resolution after each
 -- transaction touches only these, not the recording's history.
 CREATE INDEX thread_unresolved ON thread (rec) WHERE root_id IS NULL;

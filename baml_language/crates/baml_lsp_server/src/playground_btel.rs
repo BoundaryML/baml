@@ -55,7 +55,9 @@ SELECT s.call_path_id, s.parent_call_path_id, s.depth, s.fqn, s.kind, s.origin, 
   s.self_time_state, s.ok_calls, s.errored_calls, s.cancelled_calls, s.outcome_state,
   p.call_site_file, p.call_site_line, p.call_site_start, p.call_site_end, p.call_site_state
 FROM call_path_stats s
-LEFT JOIN call_paths p ON p.call_path_id = s.call_path_id
+-- Both views read the same stored path, so every row matches; an inner join
+-- looks each path up by key where a left join would build both views whole.
+JOIN call_paths p ON p.call_path_id = s.call_path_id
 WHERE s.execution_id = ?1
 ORDER BY s.depth, s.call_path_id";
 
@@ -63,11 +65,12 @@ ORDER BY s.depth, s.call_path_id";
 const CALLS_SQL: &str = "
 SELECT c.call_id, c.parent_call_id, c.thread_id, c.fqn, c.status, c.start_offset_ns,
   c.duration_ns, c.args_state, c.output_state, c.error_state, c.args_cid, c.output_cid,
-  c.error_cid, c.args, c.output, c.error, c.call_path_id, c.kind, p.edge_kind,
+  c.error_cid, c.args, c.output, c.error, c.call_path_id, c.kind,
+  -- A lookup by key; NULL while the call's path is not defined yet.
+  (SELECT p.edge_kind FROM call_paths p WHERE p.call_path_id = c.call_path_id) AS edge_kind,
   c.call_site_file, c.call_site_line, c.call_site_state, c.error_occurrence_id,
   c.error_link_state
 FROM calls c
-LEFT JOIN call_paths p ON p.call_path_id = c.call_path_id
 WHERE c.execution_id = ?1
 ORDER BY c.start_offset_ns";
 
@@ -80,13 +83,20 @@ SELECT raise_id, thread_id, kind, occurrence_id, origin_state, origin_via, origi
 FROM error_raises WHERE execution_id = ?1
 ORDER BY raised_ticks, raise_id";
 
-/// Stacks of the raises that start or cannot join an occurrence.
-const FRAMES_SQL: &str = "
-SELECT f.raise_id, f.position, f.fqn, f.native, f.site_file, f.site_line
-FROM error_frames f
-WHERE f.raise_id IN (SELECT raise_id FROM error_raises
-  WHERE execution_id = ?1 AND origin_state != 'proven')
-ORDER BY f.raise_id, f.position";
+/// Raise ids per stack query: each is a parameter, and the id filter
+/// repeats it.
+const FRAMES_PER_QUERY: usize = 256;
+
+/// Stacks of `count` raises given as parameters `?1..`.
+fn frames_sql(count: usize) -> String {
+    let ids: Vec<String> = (1..=count).map(|i| format!("?{i}")).collect();
+    format!(
+        "SELECT f.raise_id, f.position, f.fqn, f.native, f.site_file, f.site_line
+         FROM error_frames f WHERE f.raise_id IN ({})
+         ORDER BY f.raise_id, f.position",
+        ids.join(", ")
+    )
+}
 
 /// Refused rather than queued: the UI's polling retries it.
 pub const BUSY: &str = "telemetryBusy";
@@ -104,6 +114,16 @@ impl TelemetryError {
             message: message.into(),
         }
     }
+}
+
+fn run(index: &mut Index, sql: &str, params: Vec<SqlParam>) -> Result<QueryResult, TelemetryError> {
+    index
+        .query(&QueryRequest {
+            sql: sql.to_owned(),
+            params,
+            ..QueryRequest::default()
+        })
+        .map_err(|e| TelemetryError::failed(e.to_string()))
 }
 
 pub struct PlaygroundTelemetry {
@@ -162,6 +182,20 @@ impl PlaygroundTelemetry {
         project: &str,
         queries: &[(&str, Vec<SqlParam>)],
     ) -> Result<Option<Vec<QueryResult>>, TelemetryError> {
+        self.with_index(project, |index| {
+            queries
+                .iter()
+                .map(|(sql, params)| run(index, sql, params.clone()))
+                .collect()
+        })
+    }
+
+    /// Reconcile new files, then hand the project's index to `read`.
+    fn with_index<T>(
+        &self,
+        project: &str,
+        read: impl FnOnce(&mut Index) -> Result<T, TelemetryError>,
+    ) -> Result<Option<T>, TelemetryError> {
         let project = self.project(project)?;
         let Some(index) = self.index(&project)? else {
             return Ok(None);
@@ -179,19 +213,7 @@ impl PlaygroundTelemetry {
         index
             .refresh()
             .map_err(|e| TelemetryError::failed(e.to_string()))?;
-        queries
-            .iter()
-            .map(|(sql, params)| {
-                index
-                    .query(&QueryRequest {
-                        sql: (*sql).to_owned(),
-                        params: params.clone(),
-                        ..QueryRequest::default()
-                    })
-                    .map_err(|e| TelemetryError::failed(e.to_string()))
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .map(Some)
+        read(&mut index).map(Some)
     }
 
     /// Execution list and whether the project has no recordings yet.
@@ -215,17 +237,32 @@ impl PlaygroundTelemetry {
         current_source: Option<[u8; 32]>,
     ) -> Result<Value, TelemetryError> {
         let id = SqlParam::Text(execution_id.to_owned());
-        let Some(results) = self.read(
-            project,
-            &[
-                (EXECUTION_SQL, vec![id.clone()]),
-                (THREADS_SQL, vec![id.clone()]),
-                (CALL_PATHS_SQL, vec![id.clone()]),
-                (CALLS_SQL, vec![id.clone()]),
-                (RAISES_SQL, vec![id.clone()]),
-                (FRAMES_SQL, vec![id]),
-            ],
-        )?
+        let Some((results, frames)) = self.with_index(project, |index| {
+            let results = [
+                EXECUTION_SQL,
+                THREADS_SQL,
+                CALL_PATHS_SQL,
+                CALLS_SQL,
+                RAISES_SQL,
+            ]
+            .into_iter()
+            .map(|sql| run(index, sql, vec![id.clone()]))
+            .collect::<Result<Vec<_>, _>>()?;
+            // Stacks of the raises not proven to pass another along, looked
+            // up by raise id: a constant id list is an index lookup.
+            let unproven: Vec<SqlParam> = results[4]
+                .rows
+                .iter()
+                .filter(|raise| raise[4] != "proven")
+                .filter_map(|raise| raise[0].as_str())
+                .map(|raise| SqlParam::Text(raise.to_owned()))
+                .collect();
+            let mut frames = Vec::new();
+            for chunk in unproven.chunks(FRAMES_PER_QUERY) {
+                frames.extend(run(index, &frames_sql(chunk.len()), chunk.to_vec())?.rows);
+            }
+            Ok((results, frames))
+        })?
         else {
             return Err(TelemetryError::failed("no recordings in this project"));
         };
@@ -247,7 +284,7 @@ impl PlaygroundTelemetry {
         let call_paths: Vec<Value> = results[2].rows.iter().map(|row| call_path(row)).collect();
         let calls: Vec<Value> = results[3].rows.iter().map(|row| call(row)).collect();
         let mut errors = if has_error_evidence {
-            errors::occurrences(&results[4].rows, &results[5].rows, &calls)
+            errors::occurrences(&results[4].rows, &frames, &calls)
         } else {
             Vec::new()
         };

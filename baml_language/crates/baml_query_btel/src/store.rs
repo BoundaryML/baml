@@ -166,7 +166,62 @@ pub fn ensure_schema(conn: &mut Connection) -> Result<bool, Error> {
         "INSERT INTO meta (key, value) VALUES ('normalization_version', ?1)",
         [NORMALIZATION_VERSION],
     )?;
+    write_statistics(&tx)?;
     tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     tx.commit()?;
     Ok(true)
+}
+
+/// Rows the planner assumes per table: fixed, so plans do not depend on
+/// what is indexed so far.
+const PLANNED_ROWS: u64 = 1_000_000;
+
+/// Planner statistics for the index's shape rather than its contents: a
+/// recording (`rec`) matches many rows, a whole key one, and a non-unique
+/// id (a thread's calls, an execution's threads) about ten. Without statistics
+/// SQLite assumes `rec` alone is selective and reads a recording's rows by
+/// it instead of using an index on the id that was asked for.
+pub(crate) fn write_statistics(tx: &rusqlite::Transaction<'_>) -> Result<(), Error> {
+    tx.execute_batch("ANALYZE sqlite_schema; DELETE FROM sqlite_stat1")?;
+    let tables: Vec<String> = tx
+        .prepare(
+            "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+        )?
+        .query_map([], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    for table in tables {
+        let indexes: Vec<(String, bool, bool)> = tx
+            .prepare("SELECT name, \"unique\", partial FROM pragma_index_list(?1)")?
+            .query_map([&table], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+            .collect::<Result<_, _>>()?;
+        for (index, unique, partial) in indexes {
+            let columns: Vec<Option<String>> = tx
+                .prepare("SELECT name FROM pragma_index_xinfo(?1) WHERE key = 1 ORDER BY seqno")?
+                .query_map([&index], |r| r.get(0))?
+                .collect::<Result<_, _>>()?;
+            let rows = if partial {
+                PLANNED_ROWS / 1_000
+            } else {
+                PLANNED_ROWS
+            };
+            let mut stat = vec![rows];
+            for (i, column) in columns.iter().enumerate() {
+                let previous = *stat.last().expect("row count");
+                stat.push(if unique && i + 1 == columns.len() {
+                    1
+                } else if i == 0 && column.as_deref() == Some("rec") {
+                    rows / 10
+                } else {
+                    (previous / 10).clamp(1, 10)
+                });
+            }
+            let stat: Vec<String> = stat.iter().map(u64::to_string).collect();
+            tx.execute(
+                "INSERT INTO sqlite_stat1 (tbl, idx, stat) VALUES (?1, ?2, ?3)",
+                rusqlite::params![table, index, stat.join(" ")],
+            )?;
+        }
+    }
+    tx.execute_batch("ANALYZE sqlite_schema")?;
+    Ok(())
 }

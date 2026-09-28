@@ -1428,7 +1428,7 @@ impl<'t> Applier<'t> {
             .tx
             .prepare_cached(
                 "UPDATE thread SET defined = 1, parent_id = ?3, spawn_call_path_id = ?4,
-                   started_ticks = ?5, epoch_id = ?6
+                   started_ticks = ?5, epoch_id = ?6, start_pending = 1
                  WHERE rec = ?1 AND thread_id = ?2 AND defined = 0",
             )?
             .execute(values)?;
@@ -1499,6 +1499,9 @@ impl<'t> Applier<'t> {
         } else {
             0
         };
+        if inserted > 0 || upgraded > 0 {
+            restart_epoch(self.tx, self.rec, epoch.epoch_id)?;
+        }
         if inserted == 0 && upgraded == 0 {
             let previous: Vec<u8> = self
                 .tx
@@ -1510,6 +1513,7 @@ impl<'t> Applier<'t> {
                         "UPDATE epoch SET conflict = 1 WHERE rec = ?1 AND epoch_id = ?2",
                     )?
                     .execute(params![self.rec, id(epoch.epoch_id)])?;
+                restart_epoch(self.tx, self.rec, epoch.epoch_id)?;
                 self.issue(
                     sequence,
                     "clock_epoch_conflict",
@@ -1634,6 +1638,7 @@ impl<'t> Applier<'t> {
         if self.touched_threads || !self.references.threads.is_empty() {
             resolve_roots(self.tx, self.rec)?;
         }
+        resolve_starts(self.tx, self.rec)?;
         if self.touched_paths {
             resolve_depths(self.tx, self.rec)?;
         }
@@ -1733,6 +1738,34 @@ fn resolve_depths(tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
 /// a spawned thread's parent is a thread or a retained call on a thread.
 /// Repairs threads whose parents arrived in later files. `INDEXED BY` keeps
 /// each pass to unresolved threads; preparing fails if the index cannot serve.
+/// Store the start of each root written or re-clocked since the last pass,
+/// computed as `executions.started_at_ms` computes it from the clock.
+pub(super) fn resolve_starts(tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
+    tx.prepare_cached(
+        "UPDATE thread INDEXED BY thread_start_pending SET start_pending = 0,
+           started_ms = IIF(defined = 1 AND parent_id IS NULL,
+             (SELECT __btel_unix_ms(thread.started_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL),
+                e.utc_unix_ns, e.multiplier, e.shift)
+              FROM epoch e
+              WHERE e.rec = thread.rec AND e.epoch_id = thread.epoch_id AND e.defined = 1),
+             NULL)
+         WHERE rec = ?1 AND start_pending = 1",
+    )?
+    .execute([rec])?;
+    Ok(())
+}
+
+/// A clock was defined or found conflicting: its roots' starts change.
+fn restart_epoch(tx: &Transaction<'_>, rec: i64, epoch: u64) -> Result<(), Error> {
+    tx.prepare_cached(
+        "UPDATE thread SET start_pending = 1
+         WHERE rec = ?1 AND epoch_id = ?2 AND defined = 1 AND parent_id IS NULL
+           AND start_pending = 0",
+    )?
+    .execute(params![rec, id(epoch)])?;
+    Ok(())
+}
+
 fn resolve_roots(tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
     // Only a defined thread without a parent is a root: a placeholder's
     // missing parent is unknown, not absent.

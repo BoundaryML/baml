@@ -1300,3 +1300,54 @@ fn conflicting_thread_completions_are_conflicted_not_chosen() {
         vec![vec![json!("thread_completion_conflict"), json!("thread")]]
     );
 }
+
+#[test]
+fn stored_execution_starts_follow_their_clock() {
+    let project = tempfile::tempdir().unwrap();
+    let recording = Recording::new(project.path(), 1);
+    let definitions = |definitions: proto::Definitions| proto::RecordingFile {
+        definitions: Some(definitions),
+        ..Default::default()
+    };
+    // The root and a spawned thread arrive before their clock.
+    recording.write(
+        1,
+        definitions(proto::Definitions {
+            threads: vec![
+                thread(ROOT, None, 0, 2_000_000),
+                thread(2, Some(ROOT), 0, 3_000_000),
+            ],
+            ..Default::default()
+        }),
+    );
+    let starts = "SELECT started_at_ms, started_unix_ns / 1000000 FROM executions";
+    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
+    assert_eq!(rows(&mut index, starts), vec![vec![Json::Null, Json::Null]]);
+    // The clock arrives: the stored start is what its conversion gives.
+    recording.write(
+        2,
+        definitions(proto::Definitions {
+            clock_epochs: vec![epoch()],
+            ..Default::default()
+        }),
+    );
+    let start = json!(1_790_000_000_002_i64);
+    assert_eq!(rows(&mut index, starts), vec![vec![start.clone(), start]]);
+    // A second, different conversion: the clock's times are unavailable.
+    recording.write(
+        3,
+        definitions(proto::Definitions {
+            clock_epochs: vec![proto::ClockEpochDefinition {
+                multiplier: 2,
+                ..epoch()
+            }],
+            ..Default::default()
+        }),
+    );
+    assert_eq!(rows(&mut index, starts), vec![vec![Json::Null, Json::Null]]);
+    // A first index of the same files stores the same.
+    drop(index);
+    std::fs::remove_file(project.path().join(".baml/btel/query.sqlite")).unwrap();
+    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
+    assert_eq!(rows(&mut index, starts), vec![vec![Json::Null, Json::Null]]);
+}

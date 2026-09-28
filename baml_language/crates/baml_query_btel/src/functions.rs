@@ -456,6 +456,46 @@ fn ticks_u64(value: i64) -> u64 {
     u64::try_from(value).unwrap_or(0)
 }
 
+/// Unix milliseconds at `ticks`, from a clock's UTC anchor and conversion
+/// as the index stores them (`__btel_unix_ms`).
+pub(crate) fn unix_ms(
+    ticks: i64,
+    anchor_ticks: i64,
+    anchor_ns: i64,
+    multiplier: i64,
+    shift: i64,
+) -> Option<i64> {
+    let anchor = UtcAnchor {
+        ticks: ticks_u64(anchor_ticks),
+        unix_ns: i128::from(anchor_ns),
+    };
+    let conversion = Conversion {
+        multiplier: ticks_u64(multiplier),
+        shift: u32::try_from(shift).unwrap_or(u32::MAX),
+    };
+    anchor
+        .unix_ns_at(conversion, ticks_u64(ticks))
+        .and_then(|ns| i64::try_from(ns.div_euclid(1_000_000)).ok())
+}
+
+/// `<recording hex>:<prefix><n>`, as `__btel_pubid` and `__btel_sid` write
+/// it: `(recording id, n)`.
+fn public_id(value: ValueRef<'_>, prefix: &str) -> Option<(Vec<u8>, u64)> {
+    let ValueRef::Text(text) = value else {
+        return None;
+    };
+    let (recording, rest) = std::str::from_utf8(text).ok()?.split_once(':')?;
+    let id = rest.strip_prefix(prefix)?.parse().ok()?;
+    if recording.len() % 2 != 0 {
+        return None;
+    }
+    let recording = (0..recording.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(recording.get(i..i + 2)?, 16).ok())
+        .collect::<Option<Vec<u8>>>()?;
+    Some((recording, id))
+}
+
 fn u64_from_blob(bytes: &[u8]) -> Option<u64> {
     Some(u64::from_be_bytes(bytes.try_into().ok()?))
 }
@@ -595,17 +635,7 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
         ) else {
             return Ok(None);
         };
-        let anchor = UtcAnchor {
-            ticks: ticks_u64(anchor_ticks),
-            unix_ns: i128::from(anchor_ns),
-        };
-        let conversion = Conversion {
-            multiplier: ticks_u64(multiplier),
-            shift: u32::try_from(shift).unwrap_or(u32::MAX),
-        };
-        Ok(anchor
-            .unix_ns_at(conversion, ticks_u64(ticks))
-            .and_then(|ns| i64::try_from(ns.div_euclid(1_000_000)).ok()))
+        Ok(unix_ms(ticks, anchor_ticks, anchor_ns, multiplier, shift))
     })?;
     conn.create_aggregate_function("__btel_sum", 1, pure, CheckedSum)?;
 
@@ -957,6 +987,26 @@ fn clock_at(ctx: &Context<'_>, at: usize) -> rusqlite::Result<Result<Clock, Timi
 fn register_identity_and_time(conn: &Connection) -> rusqlite::Result<()> {
     let pure = FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC;
     conn.create_scalar_function("__btel_sid", 3, pure, scoped_id)?;
+    // A public id's stored parts, so a filter on an id column can use the
+    // indexes: the recording's id, and the key as its table stores it.
+    // NULL when the text is not an id of that kind.
+    conn.create_scalar_function("__btel_key_recording", 1, pure, |ctx| {
+        Ok(public_id(ctx.get_raw(0), "").map(|(recording, _)| recording))
+    })?;
+    conn.create_scalar_function("__btel_key", 2, pure, |ctx| {
+        let ValueRef::Text(prefix) = ctx.get_raw(1) else {
+            return Err(user_error("id prefix must be text"));
+        };
+        let prefix = std::str::from_utf8(prefix).map_err(|_| user_error("id prefix"))?;
+        Ok(public_id(ctx.get_raw(0), prefix).and_then(|(_, id)| {
+            // Call paths are stored as integers; every other key as 8 bytes.
+            if prefix == "p" {
+                i64::try_from(id).ok().map(SqlValue::Integer)
+            } else {
+                Some(SqlValue::Blob(id.to_be_bytes().to_vec()))
+            }
+        }))
+    })?;
     // Checked i64 addition: NULL on NULL input or overflow, never a float.
     conn.create_scalar_function("__btel_add", 2, pure, |ctx| {
         Ok(opt_i64(ctx, 0)?

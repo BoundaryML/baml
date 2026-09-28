@@ -1441,8 +1441,8 @@ impl Bulk {
             tx,
             "thread (rec, thread_id, defined, parent_id, spawn_call_path_id, started_ticks,
                epoch_id, announced, completed_ticks, outcome, completion_conflict, root_id,
-               conflict)",
-            13,
+               conflict, started_ms, start_pending)",
+            15,
             &ids,
             |b, thread| {
                 let row = &self.threads[&thread];
@@ -1460,7 +1460,20 @@ impl Bulk {
                 b.bind(completion.map(|(_, outcome)| outcome))?;
                 b.bind(row.has(THREAD_COMPLETION_CONFLICT))?;
                 b.bind(row.root().value().map(id))?;
-                b.bind(row.has(THREAD_CONFLICT))
+                b.bind(row.has(THREAD_CONFLICT))?;
+                // A root's start, as `ingest::resolve_starts` stores it.
+                b.bind(def.filter(|d| d.parent.is_none()).and_then(|d| {
+                    let epoch = self.epochs.get(&d.epoch)?;
+                    let clock = epoch.def.as_ref()?;
+                    crate::functions::unix_ms(
+                        d.started?,
+                        clock.utc_ticks.filter(|_| !epoch.conflict)?,
+                        clock.utc_unix_ns?,
+                        clock.multiplier?,
+                        clock.shift,
+                    )
+                }))?;
+                b.bind(false)
             },
         )
     }
@@ -1878,7 +1891,8 @@ fn with_indexes_deferred(
     for (_, sql) in &indexes {
         tx.execute_batch(sql)?;
     }
-    Ok(())
+    // Dropping an index drops its planner statistics.
+    crate::store::write_statistics(tx)
 }
 
 fn saturating_sequence(sequence: u64) -> i64 {

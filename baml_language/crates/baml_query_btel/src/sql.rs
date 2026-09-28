@@ -62,6 +62,16 @@ pub struct Translation {
 struct Col {
     name: String,
     value: bool,
+    /// Set on a catalog relation's indexable id column.
+    key: Option<Key>,
+}
+
+/// An id column whose view also selects its stored parts as the hidden
+/// columns `<hidden>_rec` and `<hidden>_key` (see `catalog::KEYS`).
+#[derive(Clone, Debug)]
+struct Key {
+    hidden: String,
+    prefix: &'static str,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -381,6 +391,10 @@ impl Translator {
                 .map(|c| Col {
                     name: c.name.to_owned(),
                     value: c.value,
+                    key: catalog::key(relation.name, c.name).map(|prefix| Key {
+                        hidden: format!("__{}", c.name),
+                        prefix,
+                    }),
                 })
                 .collect(),
         })
@@ -692,9 +706,7 @@ impl Translator {
                 };
                 let Some(shape) = self.lookup_relation(table) else {
                     if let Some(advice) = catalog::retired(table) {
-                        return err(format!(
-                            "`{table}` is not available: {advice}"
-                        ));
+                        return err(format!("`{table}` is not available: {advice}"));
                     }
                     let names: Vec<_> = catalog::RELATIONS.iter().map(|r| r.name).collect();
                     return err(format!(
@@ -833,6 +845,7 @@ impl Translator {
                 shape.cols.push(Col {
                     name,
                     value: kind == Kind::Value && mode == Mode::Keep,
+                    key: None,
                 });
             }
         }
@@ -977,8 +990,11 @@ impl Translator {
                         any
                     };
                 } else {
-                    for item in list {
+                    for item in list.iter_mut() {
                         self.scalar(item)?;
+                    }
+                    if !*negated && let Some(rewritten) = self.key_membership(inner, list)? {
+                        *expr = rewritten;
                     }
                 }
                 Ok(Kind::Sql)
@@ -1249,6 +1265,7 @@ impl Translator {
         let left_kind = self.raw(left)?;
         let right_kind = self.raw(right)?;
         Ok(match (left_kind, right_kind) {
+            (Kind::Sql, Kind::Sql) if comparison == "=" => self.key_equality(left, right)?,
             (Kind::Sql, Kind::Sql) => None,
             (Kind::Value, Kind::Value) => Some(call(
                 "__btel_cmp_values",
@@ -1263,6 +1280,90 @@ impl Translator {
                 Some(compare_call(take(right), flip(comparison), lhs))
             }
         })
+    }
+
+    /// The relation and key of an id column reference, found as
+    /// `Self::column` resolves the name: innermost scope first.
+    fn key_of(&self, expr: &Expr) -> Option<(Option<String>, Key)> {
+        let (qualifier, name) = match expr {
+            Expr::Identifier(ident) => (None, ident.value.as_str()),
+            Expr::CompoundIdentifier(parts) => match parts.as_slice() {
+                [relation, column] => (Some(relation.value.as_str()), column.value.as_str()),
+                _ => return None,
+            },
+            Expr::Nested(inner) => return self.key_of(inner),
+            _ => return None,
+        };
+        for frame in self.frames.iter().rev() {
+            for (alias, shape) in &frame.relations {
+                if qualifier.is_some_and(|q| !alias.eq_ignore_ascii_case(q)) {
+                    continue;
+                }
+                if let Some(col) = shape.find(name) {
+                    return col
+                        .key
+                        .clone()
+                        .map(|key| (qualifier.map(str::to_owned), key));
+                }
+            }
+            if qualifier.is_some_and(|q| {
+                frame
+                    .relations
+                    .iter()
+                    .any(|(alias, _)| alias.eq_ignore_ascii_case(q))
+            }) {
+                return None;
+            }
+        }
+        None
+    }
+
+    /// `id = constant` or `id = id`, kept, plus the same test on the ids'
+    /// stored parts, which the indexes can answer. A constant that is not an
+    /// id of that kind decodes to NULL, and the kept test decides the row.
+    fn key_equality(&self, left: &Expr, right: &Expr) -> Result<Option<Expr>, SqlError> {
+        let stored = match (self.key_of(left), self.key_of(right)) {
+            (Some(l), Some(r)) if l.1.prefix == r.1.prefix => format!(
+                "{} = {} AND {} = {}",
+                hidden(&l, "rec"),
+                hidden(&r, "rec"),
+                hidden(&l, "key"),
+                hidden(&r, "key")
+            ),
+            (Some(key), None) if id_constant(right) => stored_id(&key, right),
+            (None, Some(key)) if id_constant(left) => stored_id(&key, left),
+            _ => return Ok(None),
+        };
+        parse_expr(&format!("({left} = {right} AND {stored})")).map(Some)
+    }
+
+    /// `id IN (constants...)`, kept, plus membership of the stored parts.
+    fn key_membership(&self, id: &Expr, list: &[Expr]) -> Result<Option<Expr>, SqlError> {
+        let Some(key) = self.key_of(id) else {
+            return Ok(None);
+        };
+        if list.is_empty() || !list.iter().all(id_constant) {
+            return Ok(None);
+        }
+        let items: Vec<String> = list.iter().map(ToString::to_string).collect();
+        let recordings: Vec<String> = items
+            .iter()
+            .map(|item| format!("__btel_key_recording({item})"))
+            .collect();
+        let keys: Vec<String> = items
+            .iter()
+            .map(|item| format!("__btel_key({item}, '{}')", key.1.prefix))
+            .collect();
+        parse_expr(&format!(
+            "({id} IN ({}) AND {} IN (SELECT rec FROM main.recording WHERE recording_id IN ({})) \
+             AND {} IN ({}))",
+            items.join(", "),
+            hidden(&key, "rec"),
+            recordings.join(", "),
+            hidden(&key, "key"),
+            keys.join(", ")
+        ))
+        .map(Some)
     }
 
     /// `handle op item` for an already-translated handle.
@@ -1388,6 +1489,50 @@ impl Translator {
 }
 
 /// Move an expression out, leaving a NULL literal behind.
+/// A literal or a numbered parameter. A bare `?` is not: repeating it in a
+/// rewrite would renumber every later parameter.
+fn id_constant(expr: &Expr) -> bool {
+    match expr {
+        Expr::Value(value) => match &value.value {
+            Value::SingleQuotedString(_) => true,
+            Value::Placeholder(name) => name != "?",
+            _ => false,
+        },
+        Expr::Nested(inner) => id_constant(inner),
+        _ => false,
+    }
+}
+
+/// `alias.__column_part`, or unqualified when the reference was.
+fn hidden((qualifier, key): &(Option<String>, Key), part: &str) -> String {
+    let column = format!("\"{}_{part}\"", key.hidden);
+    match qualifier {
+        Some(alias) => format!("\"{}\".{column}", alias.replace('"', "\"\"")),
+        None => column,
+    }
+}
+
+fn recording_of(id: &str) -> String {
+    format!("(SELECT rec FROM main.recording WHERE recording_id = __btel_key_recording({id}))")
+}
+
+fn stored_id(key: &(Option<String>, Key), id: &Expr) -> String {
+    format!(
+        "{} = {} AND {} = __btel_key({id}, '{}')",
+        hidden(key, "rec"),
+        recording_of(&id.to_string()),
+        hidden(key, "key"),
+        key.1.prefix
+    )
+}
+
+fn parse_expr(text: &str) -> Result<Expr, SqlError> {
+    Parser::new(&GenericDialect {})
+        .try_with_sql(text)
+        .and_then(|mut parser| parser.parse_expr())
+        .map_err(|error| SqlError(format!("id filter rewrite: {error}")))
+}
+
 fn take(expr: &mut Expr) -> Expr {
     std::mem::replace(expr, Expr::Value(Value::Null.into()))
 }

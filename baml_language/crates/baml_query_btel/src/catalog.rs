@@ -336,7 +336,9 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS thread_id,
     IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS timing_state,
   CASE t.outcome WHEN 1 THEN 'ok' WHEN 2 THEN 'errored' WHEN 3 THEN 'cancelled' END AS end_status,
   CASE WHEN t.completion_conflict = 1 THEN 'conflicted' WHEN t.outcome IS NOT NULL THEN 'present'
-    ELSE 'missing' END AS completion_state
+    ELSE 'missing' END AS completion_state,
+  t.rec AS __thread_id_rec, t.thread_id AS __thread_id_key,
+  t.rec AS __execution_id_rec, t.root_id AS __execution_id_key
 FROM main.thread t
 JOIN main.recording r ON r.rec = t.rec
 LEFT JOIN main.thread pt ON pt.rec = t.rec AND pt.thread_id = t.parent_id
@@ -480,8 +482,9 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS execution_id,
   __btel_sid(r.recording_id, 'c', t.epoch_id) AS clock_epoch_id,
   __btel_utc(t.started_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
     e.multiplier, e.shift) AS started_at,
-  __btel_unix_ms(t.started_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
-    e.multiplier, e.shift) AS started_at_ms,
+  -- Stored at indexing (ingest::resolve_starts), so the newest executions
+  -- are read from an index.
+  t.started_ms AS started_at_ms,
   __btel_unix_ns(t.started_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
     e.multiplier, e.shift) AS started_unix_ns,
   __btel_utc(t.completed_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
@@ -529,7 +532,9 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS execution_id,
      CROSS JOIN main.aggregate a ON a.rec = p.rec
        AND a.node BETWEEN p.call_path_id * 2 AND p.call_path_id * 2 + 1
      WHERE d.rec = t.rec AND d.root_id = t.thread_id) IS NULL THEN 'overflow'
-    ELSE 'observed_prefix' END AS aggregate_state
+    ELSE 'observed_prefix' END AS aggregate_state,
+  t.rec AS __execution_id_rec, t.thread_id AS __execution_id_key,
+  t.rec AS __thread_id_rec, t.thread_id AS __thread_id_key
 FROM main.thread t
 JOIN main.recording r ON r.rec = t.rec
 LEFT JOIN main.epoch e ON e.rec = t.rec AND e.epoch_id = t.epoch_id AND e.defined = 1
@@ -798,7 +803,11 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS call_id,
   __btel_ref(1, c.inputs_cas, f.argument_names,
     c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS args,
   CASE WHEN c.outcome = 1 AND c.conflict = 0 THEN __btel_ref(2, c.value_cas, NULL, 0) END AS output,
-  CASE WHEN c.outcome = 2 AND c.conflict = 0 THEN __btel_ref(3, c.value_cas, NULL, 0) END AS error
+  CASE WHEN c.outcome = 2 AND c.conflict = 0 THEN __btel_ref(3, c.value_cas, NULL, 0) END AS error,
+  c.rec AS __call_id_rec, c.call_id AS __call_id_key,
+  t.rec AS __execution_id_rec, t.root_id AS __execution_id_key,
+  c.rec AS __thread_id_rec, c.thread_id AS __thread_id_key,
+  c.rec AS __call_path_id_rec, c.call_path_id AS __call_path_id_key
 FROM main.call c
 JOIN main.recording r ON r.rec = c.rec
 LEFT JOIN main.thread t ON t.rec = c.rec AND t.thread_id = c.thread_id
@@ -989,7 +998,10 @@ SELECT __btel_pubid(r.recording_id, e.raise_id) AS raise_id,
     ELSE 'complete' END AS inherited_trace_state,
   CASE WHEN e.defined = 0 THEN 'raise_missing'
     WHEN e.conflict = 1 OR e.end_conflict = 1 THEN 'conflicted'
-    WHEN e.end_result IS NULL THEN 'end_not_indexed' ELSE 'complete' END AS evidence_state
+    WHEN e.end_result IS NULL THEN 'end_not_indexed' ELSE 'complete' END AS evidence_state,
+  e.rec AS __raise_id_rec, e.raise_id AS __raise_id_key,
+  t.rec AS __execution_id_rec, t.root_id AS __execution_id_key,
+  e.rec AS __thread_id_rec, e.thread_id AS __thread_id_key
 FROM main.error_raise e
 JOIN main.recording r ON r.rec = e.rec
 LEFT JOIN main.thread t ON t.rec = e.rec AND t.thread_id = e.thread_id
@@ -1080,7 +1092,10 @@ SELECT __btel_pubid(r.recording_id, e.raise_id) AS occurrence_id,
       AND x.end_result = 2) AS unhandled_raises,
   IIF(vc.value_cas IS NULL, 'not_captured', 'captured') AS error_state,
   lower(hex(vc.value_cas)) AS error_cid,
-  __btel_ref(3, vc.value_cas, NULL, 0) AS error
+  __btel_ref(3, vc.value_cas, NULL, 0) AS error,
+  e.rec AS __occurrence_id_rec, e.raise_id AS __occurrence_id_key,
+  t.rec AS __execution_id_rec, t.root_id AS __execution_id_key,
+  e.rec AS __thread_id_rec, e.thread_id AS __thread_id_key
 FROM main.error_raise e
 JOIN main.recording r ON r.rec = e.rec
 LEFT JOIN main.thread t ON t.rec = e.rec AND t.thread_id = e.thread_id
@@ -1127,7 +1142,8 @@ SELECT __btel_pubid(r.recording_id, x.raise_id) AS raise_id,
   x.position,
   __btel_sid(r.recording_id, 'f', x.function_id) AS function_id,
   f.fqn, x.pc, x.native,
-  x.site_state, x.site_file, x.site_line, x.site_start, x.site_end
+  x.site_state, x.site_file, x.site_line, x.site_start, x.site_end,
+  x.rec AS __raise_id_rec, x.raise_id AS __raise_id_key
 FROM (
   SELECT rec, raise_id, position, function_id, pc, native,
     site_state, site_file, site_line, site_start, site_end
@@ -1185,7 +1201,9 @@ SELECT __btel_pubid(r.recording_id, l.raise_id) AS raise_id,
   f.fqn,
   CASE WHEN c.conflict > 0 THEN 'conflicted'
     ELSE CASE c.outcome WHEN 1 THEN 'ok' WHEN 2 THEN 'errored' WHEN 3 THEN 'cancelled'
-      ELSE 'incomplete' END END AS call_status
+      ELSE 'incomplete' END END AS call_status,
+  l.rec AS __raise_id_rec, l.raise_id AS __raise_id_key,
+  l.rec AS __call_id_rec, l.call_id AS __call_id_key
 FROM main.error_link l
 JOIN main.recording r ON r.rec = l.rec
 LEFT JOIN main.error_raise e ON e.rec = l.rec AND e.raise_id = l.raise_id
@@ -1283,7 +1301,8 @@ SELECT __btel_sid(r.recording_id, 'f', f.function_id) AS function_id,
   CASE WHEN f.parameter_count IS NOT NULL THEN
     (SELECT json_group_array(a.name ORDER BY a.position) FROM main.function_param a
      WHERE a.rec = f.rec AND a.function_id = f.function_id)
-  END AS parameters
+  END AS parameters,
+  f.rec AS __function_id_rec, f.function_id AS __function_id_key
 FROM main.function_def f
 JOIN main.recording r ON r.rec = f.rec",
 };
@@ -1393,7 +1412,10 @@ SELECT __btel_sid(r.recording_id, 'p', p.call_path_id) AS call_path_id,
   CASE WHEN p.edge = 2 THEN 'spawn'
     WHEN p.edge = 1 AND p.parent_call_path_id = 0 AND t.defined = 1 AND t.parent_id IS NULL
       THEN 'root'
-    WHEN p.edge = 1 THEN 'call' END AS edge_kind
+    WHEN p.edge = 1 THEN 'call' END AS edge_kind,
+  p.rec AS __call_path_id_rec, p.call_path_id AS __call_path_id_key,
+  t.rec AS __execution_id_rec, t.root_id AS __execution_id_key,
+  p.rec AS __thread_id_rec, p.thread_id AS __thread_id_key
 FROM main.call_path p
 JOIN main.recording r ON r.rec = p.rec
 LEFT JOIN main.thread t ON t.rec = p.rec AND t.thread_id = p.thread_id
@@ -1546,7 +1568,9 @@ SELECT lower(hex(r.recording_id)) AS recording_id,
   __btel_outcome_state(COALESCE(n.outcome_evidence, 0) | COALESCE(x.outcome_evidence, 0),
     __btel_add(IIF(n.rec IS NULL, 0, n.call_count), IIF(x.rec IS NULL, 0, x.call_count)),
     __btel_add(IIF(n.rec IS NULL, 0, n.errored_calls), IIF(x.rec IS NULL, 0, x.errored_calls)),
-    __btel_add(IIF(n.rec IS NULL, 0, n.cancelled_calls), IIF(x.rec IS NULL, 0, x.cancelled_calls))) AS outcome_state
+    __btel_add(IIF(n.rec IS NULL, 0, n.cancelled_calls), IIF(x.rec IS NULL, 0, x.cancelled_calls))) AS outcome_state,
+  p.rec AS __call_path_id_rec, p.call_path_id AS __call_path_id_key,
+  t.rec AS __execution_id_rec, t.root_id AS __execution_id_key
 FROM main.call_path p
 JOIN main.recording r ON r.rec = p.rec
 LEFT JOIN main.thread t ON t.rec = p.rec AND t.thread_id = p.thread_id
@@ -1727,7 +1751,8 @@ SELECT lower(hex(r.recording_id)) AS recording_id,
     WHEN e.conflict = 1 THEN 'conflicted'
     WHEN s.status = 1 THEN 'valid'
     ELSE 'invalidated_' || CASE s.status WHEN 2 THEN 'restored' WHEN 3 THEN 'discontinuity'
-      WHEN 4 THEN 'uncertain' ELSE 'mode_changed' END END AS timing_state
+      WHEN 4 THEN 'uncertain' ELSE 'mode_changed' END END AS timing_state,
+  e.rec AS __clock_epoch_id_rec, e.epoch_id AS __clock_epoch_id_key
 FROM main.epoch e
 JOIN main.recording r ON r.rec = e.rec
 LEFT JOIN main.epoch_state s ON s.rec = e.rec AND s.epoch_id = e.epoch_id",
@@ -2064,6 +2089,45 @@ pub const RELATIONS: &[Relation] = &[
     CAPABILITIES,
 ];
 
+/// Id columns a filter can use indexes for: `(relation, column, prefix)`.
+/// The relation's view also selects the id's stored parts as hidden columns
+/// `__<column>_rec` and `__<column>_key`, which the SQL translator adds to
+/// `=` and `IN` on the id. The prefix is the id's kind (`p` call path, `f`
+/// function, `c` clock epoch, empty for the rest), as `__btel_key` takes it.
+pub const KEYS: &[(&str, &str, &str)] = &[
+    ("threads", "thread_id", ""),
+    ("threads", "execution_id", ""),
+    ("executions", "execution_id", ""),
+    ("executions", "thread_id", ""),
+    ("calls", "call_id", ""),
+    ("calls", "execution_id", ""),
+    ("calls", "thread_id", ""),
+    ("calls", "call_path_id", "p"),
+    ("error_raises", "raise_id", ""),
+    ("error_raises", "execution_id", ""),
+    ("error_raises", "thread_id", ""),
+    ("error_occurrences", "occurrence_id", ""),
+    ("error_occurrences", "execution_id", ""),
+    ("error_occurrences", "thread_id", ""),
+    ("error_frames", "raise_id", ""),
+    ("error_call_links", "raise_id", ""),
+    ("error_call_links", "call_id", ""),
+    ("function_definitions", "function_id", "f"),
+    ("call_paths", "call_path_id", "p"),
+    ("call_paths", "execution_id", ""),
+    ("call_paths", "thread_id", ""),
+    ("call_path_stats", "call_path_id", "p"),
+    ("call_path_stats", "execution_id", ""),
+    ("clocks", "clock_epoch_id", "c"),
+];
+
+/// The kind of `relation.column` when it is an indexable id.
+pub fn key(relation: &str, column: &str) -> Option<&'static str> {
+    KEYS.iter()
+        .find(|(r, c, _)| r.eq_ignore_ascii_case(relation) && c.eq_ignore_ascii_case(column))
+        .map(|(_, _, prefix)| *prefix)
+}
+
 /// Old relation names with no current equivalent, and what to use instead.
 pub const RETIRED: &[(&str, &str)] = &[
     (
@@ -2175,9 +2239,21 @@ mod tests {
             let statement = conn
                 .prepare(&format!("SELECT * FROM {}", relation.name))
                 .unwrap();
-            let actual: Vec<&str> = statement.column_names();
+            let names = statement.column_names();
+            let (hidden, actual): (Vec<&str>, Vec<&str>) =
+                names.iter().partition(|name| name.starts_with("__"));
             let documented: Vec<&str> = relation.columns.iter().map(|c| c.name).collect();
             assert_eq!(actual, documented, "{}", relation.name);
+            // Hidden columns are exactly the stored parts of its keyed ids.
+            let keyed: Vec<String> = super::KEYS
+                .iter()
+                .filter(|(r, _, _)| *r == relation.name)
+                .flat_map(|(_, c, _)| [format!("__{c}_rec"), format!("__{c}_key")])
+                .collect();
+            assert_eq!(hidden, keyed, "{}", relation.name);
+            for (_, column, _) in super::KEYS.iter().filter(|(r, _, _)| *r == relation.name) {
+                assert!(documented.contains(column), "{}.{column}", relation.name);
+            }
         }
     }
 }

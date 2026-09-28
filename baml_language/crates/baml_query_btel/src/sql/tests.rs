@@ -368,3 +368,138 @@ fn old_relations_explain_what_replaced_them() {
     );
     assert_eq!(t.columns.len(), 2);
 }
+
+/// SQLite's plan for the translation, on an empty index with every view.
+fn plan(sql: &str) -> String {
+    let mut conn = rusqlite::Connection::open_in_memory().unwrap();
+    crate::store::ensure_schema(&mut conn).unwrap();
+    crate::functions::register(&conn, &crate::functions::ContextSlot::default()).unwrap();
+    for relation in crate::catalog::RELATIONS {
+        conn.execute_batch(&relation.create_sql()).unwrap();
+    }
+    let t = ok(sql);
+    let mut statement = conn
+        .prepare(&format!("EXPLAIN QUERY PLAN {}", t.sql))
+        .unwrap();
+    let params = vec![rusqlite::types::Value::Text("00:1".into()); statement.parameter_count()];
+    statement
+        .query_map(rusqlite::params_from_iter(params), |r| {
+            r.get::<_, String>(3)
+        })
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap()
+        .join("\n")
+}
+
+#[test]
+fn id_filters_keep_the_test_and_add_the_stored_parts() {
+    let t = ok("SELECT thread_id FROM threads WHERE execution_id = ?1");
+    assert!(
+        t.sql.contains(
+            "execution_id = ?1 AND \"__execution_id_rec\" = (SELECT rec FROM main.recording"
+        ) && t
+            .sql
+            .contains("\"__execution_id_key\" = __btel_key(?1, '')"),
+        "{}",
+        t.sql
+    );
+    let t = ok("SELECT 1 FROM calls c JOIN call_paths p ON p.call_path_id = c.call_path_id");
+    assert!(
+        t.sql
+            .contains("\"p\".\"__call_path_id_key\" = \"c\".\"__call_path_id_key\""),
+        "{}",
+        t.sql
+    );
+    let t = ok("SELECT 1 FROM error_frames WHERE raise_id IN ('a:1', ?2)");
+    assert!(
+        t.sql
+            .contains("\"__raise_id_key\" IN (__btel_key('a:1', ''), __btel_key(?2, ''))"),
+        "{}",
+        t.sql
+    );
+    // Left alone: a bare `?` (repeating it renumbers parameters), negation,
+    // other operators, ids of different kinds, and columns of a CTE.
+    for sql in [
+        "SELECT 1 FROM threads WHERE execution_id = ?",
+        "SELECT 1 FROM threads WHERE execution_id NOT IN ('a:1')",
+        "SELECT 1 FROM threads WHERE execution_id > 'a:1'",
+        "SELECT 1 FROM calls c JOIN call_paths p ON p.call_path_id = c.call_id",
+        "WITH x AS (SELECT execution_id FROM threads) SELECT 1 FROM x WHERE execution_id = 'a:1'",
+    ] {
+        assert!(!ok(sql).sql.contains("__btel_key"), "{sql}");
+    }
+}
+
+#[test]
+fn id_filters_are_index_lookups() {
+    for (sql, lookups) in [
+        (
+            "SELECT status FROM executions WHERE execution_id = ?1",
+            &["SEARCH t USING PRIMARY KEY (rec=? AND thread_id=?)"][..],
+        ),
+        (
+            "SELECT thread_id FROM threads WHERE execution_id = ?1",
+            &["SEARCH t USING INDEX thread_by_root (rec=? AND root_id=?)"],
+        ),
+        (
+            "SELECT call_id FROM calls WHERE execution_id = ?1",
+            &[
+                "thread_by_root (rec=? AND root_id=?)",
+                "call_by_thread (rec=? AND thread_id=?)",
+            ],
+        ),
+        (
+            "SELECT raise_id FROM error_raises WHERE execution_id = ?1",
+            &[
+                "thread_by_root (rec=? AND root_id=?)",
+                "error_raise_by_thread (rec=? AND thread_id=?)",
+            ],
+        ),
+        (
+            "SELECT s.depth, p.call_site_line FROM call_path_stats s
+             JOIN call_paths p ON p.call_path_id = s.call_path_id WHERE s.execution_id = ?1",
+            &[
+                "call_path_by_thread (rec=? AND thread_id=?)",
+                "SEARCH p USING PRIMARY KEY (rec=? AND call_path_id=?)",
+            ],
+        ),
+        (
+            "SELECT position FROM error_frames WHERE raise_id IN (?1, ?2)",
+            &["main.error_frame USING PRIMARY KEY (rec=? AND raise_id=?)"],
+        ),
+    ] {
+        let plan = plan(sql);
+        for lookup in lookups {
+            assert!(plan.contains(lookup), "{sql}: no {lookup}\n{plan}");
+        }
+        // Scans only read a subquery's already-filtered rows.
+        let subqueries: Vec<&str> = plan
+            .lines()
+            .filter_map(|line| line.strip_prefix("CO-ROUTINE "))
+            .collect();
+        for line in plan.lines() {
+            if let Some(target) = line.strip_prefix("SCAN ") {
+                let name = target.split_whitespace().next().unwrap_or_default();
+                assert!(subqueries.contains(&name), "{sql}: {line}\n{plan}");
+            }
+        }
+    }
+}
+
+#[test]
+fn the_newest_executions_are_an_index_read() {
+    for sql in [
+        "SELECT execution_id FROM executions ORDER BY started_at_ms DESC LIMIT 200",
+        "SELECT e.execution_id, r.prefix_state FROM executions e
+         JOIN recordings r ON r.recording_id = e.recording_id
+         ORDER BY e.started_at_ms DESC LIMIT 200",
+    ] {
+        let plan = plan(sql);
+        assert!(
+            plan.contains("USING INDEX execution_by_start"),
+            "{sql}\n{plan}"
+        );
+        assert!(!plan.contains("TEMP B-TREE FOR ORDER BY"), "{sql}\n{plan}");
+    }
+}
