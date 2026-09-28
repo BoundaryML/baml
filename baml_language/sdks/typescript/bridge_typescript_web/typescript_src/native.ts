@@ -383,6 +383,7 @@ export class HostSpanManager {
  *
  * Failed validation preserves the previous runtime. After successful staging,
  * an initializer failure is reported by calls until another runtime is staged.
+ * This recovery does not cover internal Rust panics or WebAssembly traps.
  */
 export class BamlRuntime {
   static initializeRuntimeFromBlob(bytecode: string | Uint8Array, embeddedBamlToml?: string): BamlRuntime {

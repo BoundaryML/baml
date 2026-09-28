@@ -116,6 +116,9 @@ pub(crate) fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
 
         // Release the slot borrow before executing initializers. Reentrant calls
         // get an explicit error rather than a second engine or a RefCell panic.
+        // Our panic-abort WASM builds do not run unwind guards on Rust panics
+        // or traps; recovery of that instance is unsupported. BAML initializer
+        // failures return Err and take the recoverable Failed path below.
         match pending.build() {
             Ok(runtime) => {
                 *slot.borrow_mut() = RuntimeState::Ready(Arc::clone(&runtime));

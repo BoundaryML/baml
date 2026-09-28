@@ -537,6 +537,28 @@ pub(crate) mod tests {
         ));
     }
 
+    // Invalid instruction ordering cannot be exercised from BAML source.
+    #[cfg(all(debug_assertions, not(target_arch = "wasm32")))]
+    #[test]
+    #[should_panic(expected = "SetCallTrace must be followed by a call instruction")]
+    fn trace_prefix_rejects_a_non_call_instruction() {
+        use bex_vm_types::bytecode::Instruction;
+
+        let Object::Function(mut function) = native_function_object() else {
+            unreachable!()
+        };
+        function.kind = FunctionKind::Bytecode;
+        function.bytecode = Bytecode {
+            instructions: vec![Instruction::SetCallTrace, Instruction::Return],
+            ..Bytecode::default()
+        };
+        function.bytecode.compact = Some(function.bytecode.lower_to_compact());
+        let mut vm = test_vm(vec![Object::Function(function)]);
+        let entry = vm.idx_to_ptr(ObjectIndex::from_raw(0));
+        vm.set_entry_point(entry, &[]);
+        let _ = vm.exec();
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn hidden_native_callbacks_preserve_visible_paths_and_reentry() {
@@ -7929,6 +7951,20 @@ impl BexVm {
 
                     // ── Call ──────────────────────────────────────────────────────
                     OpCode::SetCallTrace => {
+                        debug_assert!(
+                            matches!(
+                                code.get(*pc)
+                                    .copied()
+                                    .and_then(|byte| OpCode::try_from(byte).ok()),
+                                Some(
+                                    OpCode::Call
+                                        | OpCode::CallExactArgs
+                                        | OpCode::CallIndirect
+                                        | OpCode::VirtualCall
+                                )
+                            ),
+                            "SetCallTrace must be followed by a call instruction"
+                        );
                         let value = self.stack.ensure_pop();
                         self.pending_call_trace = Some(self.trace_config(value)?);
                     }
