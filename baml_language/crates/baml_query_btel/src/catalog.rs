@@ -2151,19 +2151,6 @@ pub const RETIRED: &[(&str, &str)] = &[
         "cct_population",
         "query call_path_stats (counts are completed calls, not starts)",
     ),
-    ("error_calls", "query calls WHERE status = 'errored'"),
-    (
-        "hot_call_paths",
-        "query call_path_stats ORDER BY self_ns DESC",
-    ),
-    (
-        "call_path_nodes",
-        "query call_path_stats: its normal_ and reentry_ columns split the totals",
-    ),
-    (
-        "function_parameters",
-        "query function_definitions.parameters, the declared names as a JSON array",
-    ),
 ];
 
 pub fn relation(name: &str) -> Option<&'static Relation> {
