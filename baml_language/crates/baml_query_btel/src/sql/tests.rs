@@ -348,10 +348,20 @@ fn value_inspection_functions_take_values() {
 #[test]
 fn old_relations_explain_what_replaced_them() {
     let message = fails("SELECT * FROM errors");
-    assert!(message.contains("error_calls"), "{message}");
+    assert!(message.contains("status = 'errored'"), "{message}");
     assert!(fails("SELECT * FROM store_files").contains("recording_files"));
+    // Relations folded into others say where their rows went.
+    for (name, replacement) in [
+        ("error_calls", "calls WHERE status = 'errored'"),
+        ("hot_call_paths", "call_path_stats"),
+        ("call_path_nodes", "call_path_stats"),
+        ("function_parameters", "function_definitions.parameters"),
+    ] {
+        let message = fails(&format!("SELECT * FROM {name}"));
+        assert!(message.contains(replacement), "{message}");
+    }
     // New relations are catalog relations with value columns where due.
-    let t = ok("SELECT error['code'] FROM error_calls");
+    let t = ok("SELECT error['code'] FROM calls WHERE status = 'errored'");
     assert!(t.columns[0].value);
     let t = ok(
         "SELECT fqn, self_ns FROM call_path_stats WHERE execution_id IN (SELECT execution_id FROM executions)",

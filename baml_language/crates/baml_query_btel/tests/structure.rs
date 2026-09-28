@@ -784,36 +784,26 @@ fn recursion_aware_path_statistics_have_exact_values() {
             ],
         ]
     );
-    // The raw nodes, exactly as recorded.
+    // The outermost and recursive invocations, as recorded, stay split.
     assert_eq!(
         rows(
             &mut index,
-            "SELECT fqn, reentry, completed_calls, completed_calls_exact, duration_sum_ns,
-               duration_ticks_exact
-             FROM call_path_nodes WHERE fqn = 'user.A' ORDER BY reentry"
+            "SELECT fqn, normal_completed_calls, reentry_completed_calls, inclusive_ns,
+               reentry_duration_ns
+             FROM call_path_stats WHERE fqn = 'user.A'"
         ),
-        vec![
-            vec![
-                json!("user.A"),
-                json!(0),
-                json!(1),
-                json!("1"),
-                json!(100),
-                json!("100")
-            ],
-            vec![
-                json!("user.A"),
-                json!(1),
-                json!(2),
-                json!("2"),
-                json!(60),
-                json!("60")
-            ],
-        ]
+        vec![vec![
+            json!("user.A"),
+            json!(1),
+            json!(2),
+            json!(100),
+            json!(60)
+        ]]
     );
     let hot = rows(
         &mut index,
-        "SELECT fqn, self_ns FROM hot_call_paths ORDER BY self_ns DESC",
+        "SELECT fqn, self_ns FROM call_path_stats WHERE self_ns IS NOT NULL
+         ORDER BY self_ns DESC",
     );
     assert_eq!(
         hot,
@@ -861,13 +851,9 @@ fn recursion_aware_path_statistics_have_exact_values() {
     assert_eq!(
         rows(
             &mut index,
-            "SELECT position, name, is_receiver FROM function_parameters WHERE fqn = 'user.C'
-             ORDER BY position"
+            "SELECT parameters FROM function_definitions WHERE fqn = 'user.C'"
         ),
-        vec![
-            vec![json!(0), json!("x"), json!(0)],
-            vec![json!(1), json!("y"), json!(0)],
-        ]
+        vec![vec![json!("[\"x\",\"y\"]")]]
     );
 }
 
@@ -1268,17 +1254,6 @@ fn totals_beyond_i64_stay_exact_and_are_never_wrapped() {
         },
     );
     let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
-    assert_eq!(
-        rows(
-            &mut index,
-            "SELECT completed_calls, completed_calls_exact, aggregate_state FROM call_path_nodes"
-        ),
-        vec![vec![
-            Json::Null,
-            json!((2 * u128::from(big)).to_string()),
-            json!("overflow")
-        ]]
-    );
     assert_eq!(
         rows(
             &mut index,

@@ -349,16 +349,16 @@ async fn raises_are_distinct_and_only_proven_origins_are_linked() {
         ]
     );
 
-    // error_calls keeps its meaning: retained failed calls, now linked.
+    // Retained failed calls are all linked.
     let unlinked = sql(
         &mut index,
-        "SELECT COUNT(*) FROM error_calls WHERE error_link_state != 'linked'",
+        "SELECT COUNT(*) FROM calls WHERE status = 'errored' AND error_link_state != 'linked'",
     );
     assert_eq!(unlinked.rows[0][0], 0);
     let distinct = sql(
         &mut index,
-        "SELECT COUNT(*), COUNT(DISTINCT error_occurrence_id) FROM error_calls
-         WHERE execution_id IN (SELECT execution_id FROM executions WHERE entry_fqn = 'user.propagated')",
+        "SELECT COUNT(*), COUNT(DISTINCT error_occurrence_id) FROM calls
+         WHERE status = 'errored' AND execution_id IN (SELECT execution_id FROM executions WHERE entry_fqn = 'user.propagated')",
     );
     assert_eq!(distinct.rows[0], [Json::from(3), Json::from(1)]);
     assert!(sql(&mut index, "SELECT * FROM issues").rows.is_empty());
@@ -461,7 +461,10 @@ async fn interleaved_deep_unwinds_link_each_call_to_its_own_raise() {
          WHERE kind = 'await' AND origin_state = 'proven'",
     );
     assert_eq!(awaits.rows[0], [Json::from(8), Json::from(8)]);
-    let failed = sql(&mut index, "SELECT COUNT(*) FROM error_calls");
+    let failed = sql(
+        &mut index,
+        "SELECT COUNT(*) FROM calls WHERE status = 'errored'",
+    );
     let linked = sql(
         &mut index,
         "SELECT COUNT(*) FROM error_call_links WHERE role = 'unwound'",

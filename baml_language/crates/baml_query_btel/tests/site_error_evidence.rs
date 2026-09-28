@@ -171,7 +171,8 @@ fn older_recordings_keep_failed_calls_and_say_what_they_lack() {
     assert_eq!(
         rows(
             &mut index,
-            "SELECT status, call_site_state, error_raise_id, error_link_state FROM error_calls"
+            "SELECT status, call_site_state, error_raise_id, error_link_state FROM calls
+             WHERE status = 'errored'"
         ),
         [vec![
             json!("errored"),
@@ -465,7 +466,8 @@ fn error_evidence_arrives_in_pieces_and_bad_records_are_explicit() {
     assert_eq!(
         rows(
             &mut index,
-            "SELECT error_raise_id, error_occurrence_id, error_link_state FROM error_calls"
+            "SELECT error_raise_id, error_occurrence_id, error_link_state FROM calls
+             WHERE status = 'errored'"
         ),
         [vec![
             json!(prefix(200)),

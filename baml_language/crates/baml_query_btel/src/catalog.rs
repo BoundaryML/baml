@@ -814,15 +814,6 @@ LEFT JOIN main.epoch e ON e.rec = c.rec AND e.epoch_id = t.epoch_id AND e.define
 LEFT JOIN main.epoch_state s ON s.rec = c.rec AND s.epoch_id = t.epoch_id",
 };
 
-pub const ERROR_CALLS: Relation = Relation {
-    name: "error_calls",
-    doc: "Retained calls that ended in an error, one row per call (the calls columns). Not throw occurrences: several rows can come from one propagating error, and equal error values do not mean the same throw. error_raise_id and error_occurrence_id link a row to the raise that failed it; error_occurrences counts distinct errors.",
-    columns: CALL_COLUMNS,
-    view: "
-CREATE TEMP VIEW error_calls AS
-SELECT * FROM temp.calls WHERE status = 'errored'",
-};
-
 const RAISE_KIND_DOC: &str = "throw, rethrow (a caught value raised again: bare rethrow, no-match fall-through or defer), panic_rethrow, await (an awaited future failed), await_cancelled, native_boundary (a native function or call setup failed at this BAML call), host_boundary (the engine injected a sys-op or host failure), runtime (the VM raised a panic at this instruction)";
 
 const RAISE_SITE_DOC: &str = "resolved, raise_missing, no_pc (no bytecode frame), no_function, or why the function's map cannot place it (see call_paths.call_site_state). For boundary kinds this is the BAML call that entered native or host code, not a location inside it";
@@ -1262,12 +1253,17 @@ pub const FUNCTION_DEFINITIONS: Relation = Relation {
         col(
             "argument_layout_state",
             "text",
-            "known (see function_parameters), unknown, conflicted",
+            "known (see parameters), unknown, conflicted",
         ),
         col(
             "parameter_count",
             "integer",
             "slots in the recorded layout; 0 is a known zero-parameter function, NULL unknown",
+        ),
+        col(
+            "parameters",
+            "text",
+            "declared names in slot order as a JSON array, a method's `self` receiver first; NULL when the layout is unknown",
         ),
     ],
     view: "
@@ -1283,35 +1279,18 @@ SELECT __btel_sid(r.recording_id, 'f', f.function_id) AS function_id,
   f.owner_type_key, f.parent_function_key, f.lambda_path,
   CASE WHEN f.conflict = 1 THEN 'conflicted' WHEN f.parameter_count IS NOT NULL THEN 'known'
     ELSE 'unknown' END AS argument_layout_state,
-  f.parameter_count
+  f.parameter_count,
+  CASE WHEN f.parameter_count IS NOT NULL THEN
+    (SELECT json_group_array(a.name ORDER BY a.position) FROM main.function_param a
+     WHERE a.rec = f.rec AND a.function_id = f.function_id)
+  END AS parameters
 FROM main.function_def f
 JOIN main.recording r ON r.rec = f.rec",
 };
 
-pub const FUNCTION_PARAMETERS: Relation = Relation {
-    name: "function_parameters",
-    doc: "Recorded parameter slots, for functions whose layout was recorded. These are the names args['name'] resolves.",
-    columns: &[
-        col("recording_id", "text", ""),
-        col("function_id", "text", ""),
-        col("fqn", "text", ""),
-        col("position", "integer", "zero-based slot: args[position]"),
-        col("name", "text", "NULL for an unnamed slot"),
-        col("is_receiver", "integer", "1 for a method's self slot"),
-    ],
-    view: "
-CREATE TEMP VIEW function_parameters AS
-SELECT lower(hex(r.recording_id)) AS recording_id,
-  __btel_sid(r.recording_id, 'f', a.function_id) AS function_id,
-  f.fqn, a.position, a.name, a.receiver AS is_receiver
-FROM main.function_param a
-JOIN main.recording r ON r.rec = a.rec
-JOIN main.function_def f ON f.rec = a.rec AND f.function_id = a.function_id",
-};
-
 pub const CALL_PATHS: Relation = Relation {
     name: "call_paths",
-    doc: "Calling contexts: a function called at one bytecode site below one parent context. A direct recursive call reuses its caller's path (see call_path_nodes), so this is not a tree of every VM frame.",
+    doc: "Calling contexts: a function called at one bytecode site below one parent context. A direct recursive call reuses its caller's path (see the reentry_ columns of call_path_stats), so this is not a tree of every VM frame.",
     columns: &[
         col("call_path_id", "text", "<recording_id>:p<n>"),
         col("recording_id", "text", ""),
@@ -1420,82 +1399,6 @@ JOIN main.recording r ON r.rec = p.rec
 LEFT JOIN main.thread t ON t.rec = p.rec AND t.thread_id = p.thread_id
 LEFT JOIN main.function_def f ON f.rec = p.rec AND f.function_id = p.callee_function_id
 LEFT JOIN main.function_def cf ON cf.rec = p.rec AND cf.function_id = p.caller_function_id",
-};
-
-pub const CALL_PATH_NODES: Relation = Relation {
-    name: "call_path_nodes",
-    doc: "Reduced aggregate totals exactly as recorded: one row per calling context and reentry bit. Reentry rows are direct recursive re-entries; their durations overlap the outer invocation's.",
-    columns: &[
-        col("recording_id", "text", ""),
-        col("call_path_id", "text", ""),
-        col("execution_id", "text", ""),
-        col("fqn", "text", ""),
-        col(
-            "reentry",
-            "integer",
-            "0 outermost invocations, 1 direct recursive re-entries",
-        ),
-        col(
-            "completed_calls",
-            "integer",
-            "completions aggregated; NULL if it no longer fits",
-        ),
-        col("completed_calls_exact", "text", "exact decimal count"),
-        col(
-            "duration_sum_ns",
-            "integer",
-            "sum of these invocations' durations",
-        ),
-        col("duration_ticks_exact", "text", "exact decimal tick sum"),
-        col("self_await_ns", "integer", "sum of their own await time"),
-        col("self_await_ticks_exact", "text", "exact decimal tick sum"),
-        col("clock_epoch_id", "text", ""),
-        col(
-            "timing_state",
-            "text",
-            "valid, unknown_clock, conflicted, invalidated_*, overflow",
-        ),
-        col(
-            "aggregate_state",
-            "text",
-            "observed_prefix, overflow, unresolved (the path is not defined yet)",
-        ),
-        OK_CALLS,
-        ERRORED_CALLS,
-        CANCELLED_CALLS,
-        OUTCOME_STATE,
-    ],
-    view: "
-CREATE TEMP VIEW call_path_nodes AS
-SELECT lower(hex(r.recording_id)) AS recording_id,
-  __btel_sid(r.recording_id, 'p', a.node >> 1) AS call_path_id,
-  __btel_pubid(r.recording_id, t.root_id) AS execution_id,
-  f.fqn,
-  a.node & 1 AS reentry,
-  a.call_count AS completed_calls,
-  a.count_exact AS completed_calls_exact,
-  __btel_total_ns(a.duration_ticks, e.multiplier, e.shift, s.status,
-    IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS duration_sum_ns,
-  a.duration_exact AS duration_ticks_exact,
-  __btel_total_ns(a.self_await_ticks, e.multiplier, e.shift, s.status,
-    IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS self_await_ns,
-  a.self_await_exact AS self_await_ticks_exact,
-  __btel_sid(r.recording_id, 'c', t.epoch_id) AS clock_epoch_id,
-  __btel_total_timing(a.duration_ticks, e.multiplier, e.shift, s.status,
-    IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS timing_state,
-  CASE WHEN p.defined IS NOT 1 THEN 'unresolved'
-    WHEN a.call_count IS NULL OR a.duration_ticks IS NULL OR a.self_await_ticks IS NULL
-      THEN 'overflow'
-    ELSE 'observed_prefix' END AS aggregate_state,
-  a.ok_calls, a.errored_calls, a.cancelled_calls,
-  __btel_outcome_state(a.outcome_evidence, a.call_count, a.errored_calls, a.cancelled_calls) AS outcome_state
-FROM main.aggregate a
-JOIN main.recording r ON r.rec = a.rec
-LEFT JOIN main.call_path p ON p.rec = a.rec AND p.call_path_id = (a.node >> 1)
-LEFT JOIN main.thread t ON t.rec = p.rec AND t.thread_id = p.thread_id
-LEFT JOIN main.function_def f ON f.rec = p.rec AND f.function_id = p.callee_function_id
-LEFT JOIN main.epoch e ON e.rec = t.rec AND e.epoch_id = t.epoch_id AND e.defined = 1
-LEFT JOIN main.epoch_state s ON s.rec = t.rec AND s.epoch_id = t.epoch_id",
 };
 
 pub const CALL_PATH_STATS: Relation = Relation {
@@ -1652,29 +1555,6 @@ LEFT JOIN main.aggregate n ON n.rec = p.rec AND n.node = p.call_path_id * 2
 LEFT JOIN main.aggregate x ON x.rec = p.rec AND x.node = p.call_path_id * 2 + 1
 LEFT JOIN main.epoch e ON e.rec = t.rec AND e.epoch_id = t.epoch_id AND e.defined = 1
 LEFT JOIN main.epoch_state s ON s.rec = t.rec AND s.epoch_id = t.epoch_id",
-};
-
-pub const HOT_CALL_PATHS: Relation = Relation {
-    name: "hot_call_paths",
-    doc: "call_path_stats rows with a supported self time. Order it yourself, e.g. ORDER BY self_ns DESC.",
-    columns: &[
-        col("recording_id", "text", ""),
-        col("execution_id", "text", ""),
-        col("call_path_id", "text", ""),
-        col("function_id", "text", ""),
-        col("fqn", "text", ""),
-        col("depth", "integer", ""),
-        col("self_ns", "integer", ""),
-        col("inclusive_ns", "integer", ""),
-        col("completed_calls", "integer", ""),
-        col("timing_state", "text", ""),
-        col("self_time_state", "text", "valid or provisional"),
-    ],
-    view: "
-CREATE TEMP VIEW hot_call_paths AS
-SELECT recording_id, execution_id, call_path_id, function_id, fqn, depth, self_ns, inclusive_ns,
-  completed_calls, timing_state, self_time_state
-FROM temp.call_path_stats WHERE self_ns IS NOT NULL",
 };
 
 pub const FUNCTION_STATS: Relation = Relation {
@@ -2031,13 +1911,13 @@ pub const CAPABILITY_ROWS: &[(&str, &str, &str, &str)] = &[
     (
         "errored calls",
         "supported",
-        "error_calls",
+        "calls (status = 'errored')",
         "Retained calls that ended in an error, with their error values and ancestry through parent_call_id.",
     ),
     (
         "function metadata and parameters",
         "supported",
-        "function_definitions, function_parameters",
+        "function_definitions",
         "Recorded names, kinds, origins, definition spans and parameter slots.",
     ),
     (
@@ -2067,7 +1947,7 @@ pub const CAPABILITY_ROWS: &[(&str, &str, &str, &str)] = &[
     (
         "failure ancestry",
         "supported",
-        "error_raises, error_frames, error_call_links, error_calls",
+        "error_raises, error_frames, error_call_links, calls",
         "The stack when each raise started, and which retained calls it failed. Timing-only calls have no ids; recursion in the stack is not collapsed.",
     ),
     (
@@ -2085,7 +1965,7 @@ pub const CAPABILITY_ROWS: &[(&str, &str, &str, &str)] = &[
     (
         "population outcome counts",
         "supported",
-        "call_path_nodes, call_path_stats, function_stats",
+        "call_path_stats, function_stats",
         "Completed success/error/cancellation counts from aggregate outcomes, including timing-only calls. Older or mixed deltas have NULL counts and an explicit outcome_state. Unfinished/hidden calls are not counted.",
     ),
     (
@@ -2170,18 +2050,14 @@ pub const RELATIONS: &[Relation] = &[
     EXECUTIONS,
     THREADS,
     CALLS,
-    ERROR_CALLS,
     ERROR_OCCURRENCES,
     ERROR_RAISES,
     ERROR_FRAMES,
     ERROR_CALL_LINKS,
     CALL_PATHS,
-    CALL_PATH_NODES,
     CALL_PATH_STATS,
-    HOT_CALL_PATHS,
     FUNCTION_STATS,
     FUNCTION_DEFINITIONS,
-    FUNCTION_PARAMETERS,
     CLOCKS,
     ISSUES,
     RECORDING_FILES,
@@ -2192,7 +2068,7 @@ pub const RELATIONS: &[Relation] = &[
 pub const RETIRED: &[(&str, &str)] = &[
     (
         "errors",
-        "query error_occurrences for distinct errors, error_raises for every throw/rethrow with its origin, error_frames for stacks, and error_call_links or error_calls for the retained calls that failed",
+        "query error_occurrences for distinct errors, error_raises for every throw/rethrow with its origin, error_frames for stacks, and error_call_links or calls WHERE status = 'errored' for the retained calls that failed",
     ),
     (
         "health",
@@ -2210,6 +2086,19 @@ pub const RETIRED: &[(&str, &str)] = &[
     (
         "cct_population",
         "query call_path_stats (counts are completed calls, not starts)",
+    ),
+    ("error_calls", "query calls WHERE status = 'errored'"),
+    (
+        "hot_call_paths",
+        "query call_path_stats ORDER BY self_ns DESC",
+    ),
+    (
+        "call_path_nodes",
+        "query call_path_stats: its normal_ and reentry_ columns split the totals",
+    ),
+    (
+        "function_parameters",
+        "query function_definitions.parameters, the declared names as a JSON array",
     ),
 ];
 

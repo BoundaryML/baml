@@ -158,7 +158,7 @@ async fn spawn_tree_call_ancestry_and_recursion_from_a_real_recording() {
         &format!(
             "SELECT (SELECT completed_calls FROM executions WHERE execution_id = '{execution_id}'),
                (SELECT SUM(completed_calls) FROM function_stats WHERE execution_id = '{execution_id}'),
-               (SELECT SUM(completed_calls) FROM call_path_nodes WHERE execution_id = '{execution_id}'),
+               (SELECT SUM(completed_calls) FROM call_path_stats WHERE execution_id = '{execution_id}'),
                (SELECT completed_calls FROM function_stats WHERE fqn = 'user.Inner')"
         ),
     );
@@ -249,8 +249,9 @@ async fn value_sql_through_unions_states_and_unsupported_comparisons() {
     // Errored calls, including one caught inside main.
     let errors = sql(
         &mut index,
-        "SELECT e.fqn, e.error['code'], x.status FROM error_calls e
-         JOIN executions x ON x.execution_id = e.execution_id ORDER BY x.status",
+        "SELECT e.fqn, e.error['code'], x.status FROM calls e
+         JOIN executions x ON x.execution_id = e.execution_id
+         WHERE e.status = 'errored' ORDER BY x.status",
     );
     assert_eq!(
         errors.rows,

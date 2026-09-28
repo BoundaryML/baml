@@ -26,7 +26,7 @@ QUERIES = {
     "function_stats": "SELECT fqn, sum(call_count) AS calls, sum(total_duration_ns) AS ns "
                       "FROM function_stats GROUP BY fqn ORDER BY calls DESC, fqn",
     "call_path_stats": "SELECT * FROM call_path_stats ORDER BY self_ns DESC, call_path_id LIMIT 20",
-    "hot_call_paths": "SELECT * FROM hot_call_paths ORDER BY self_ns DESC, call_path_id LIMIT 20",
+    "hot_call_paths": "SELECT * FROM call_path_stats WHERE self_ns IS NOT NULL ORDER BY self_ns DESC, call_path_id LIMIT 20",
     "cas_filter": "SELECT count(*) FROM calls WHERE args['n'] = 7",
 }
 

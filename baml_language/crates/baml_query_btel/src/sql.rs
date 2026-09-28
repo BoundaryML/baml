@@ -693,7 +693,7 @@ impl Translator {
                 let Some(shape) = self.lookup_relation(table) else {
                     if let Some(advice) = catalog::retired(table) {
                         return err(format!(
-                            "`{table}` from the old tracer is not available: {advice}"
+                            "`{table}` is not available: {advice}"
                         ));
                     }
                     let names: Vec<_> = catalog::RELATIONS.iter().map(|r| r.name).collect();
