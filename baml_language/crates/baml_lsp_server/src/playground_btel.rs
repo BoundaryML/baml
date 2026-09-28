@@ -136,10 +136,11 @@ impl PlaygroundTelemetry {
     }
 
     fn index(&self, project: &Path) -> Result<Option<Arc<Mutex<Index>>>, TelemetryError> {
-        let mut indexes = self.indexes.lock().expect("index table");
-        if let Some(index) = indexes.get(project) {
+        if let Some(index) = self.indexes.lock().expect("index table").get(project) {
             return Ok(Some(Arc::clone(index)));
         }
+        // Opening can wait on another process's index lock, so other projects
+        // must not wait on the table meanwhile.
         let index = Index::for_project(project, IndexOptions::default())
             .map_err(|e| TelemetryError::failed(e.to_string()))?;
         // Nothing recorded yet: do not cache an empty in-memory index, so the
@@ -147,9 +148,12 @@ impl PlaygroundTelemetry {
         if index.source_missing() {
             return Ok(None);
         }
-        let index = Arc::new(Mutex::new(index));
-        indexes.insert(project.to_owned(), Arc::clone(&index));
-        Ok(Some(index))
+        // A request that opened the same project meanwhile keeps its index.
+        let mut indexes = self.indexes.lock().expect("index table");
+        let index = indexes
+            .entry(project.to_owned())
+            .or_insert_with(|| Arc::new(Mutex::new(index)));
+        Ok(Some(Arc::clone(index)))
     }
 
     /// Reconcile new files, then run each query in its own read snapshot.
