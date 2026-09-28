@@ -511,6 +511,19 @@ impl Translator {
                 if right.cols.len() != shape.cols.len() {
                     return err("set operation branches return different column counts");
                 }
+                // Branches that keep handles must agree on which columns are
+                // BAML values: the kind follows the left branch.
+                if let Some((col, _)) = shape
+                    .cols
+                    .iter()
+                    .zip(&right.cols)
+                    .find(|(l, r)| l.value != r.value)
+                {
+                    return err(format!(
+                        "set operation column `{}` is a BAML value in one branch but not the other",
+                        col.name
+                    ));
+                }
                 if mode == Mode::Final {
                     self.output = shape
                         .cols

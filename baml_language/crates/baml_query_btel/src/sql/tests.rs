@@ -307,6 +307,22 @@ fn set_operations_keep_handles_until_the_output_boundary() {
 }
 
 #[test]
+fn set_operation_branches_agree_on_value_columns() {
+    for sql in [
+        "SELECT fqn FROM calls UNION ALL SELECT output FROM calls",
+        "SELECT output FROM calls UNION SELECT fqn FROM calls",
+        "WITH v AS (SELECT fqn FROM calls UNION ALL SELECT error FROM calls) SELECT * FROM v",
+    ] {
+        assert!(
+            fails(sql).contains("is a BAML value in one branch but not the other"),
+            "{sql}"
+        );
+    }
+    // Expression subqueries render values in each branch, so kinds may differ.
+    ok("SELECT fqn FROM calls WHERE fqn IN (SELECT fqn FROM calls UNION SELECT output FROM calls)");
+}
+
+#[test]
 fn positions_skip_hidden_kind_columns() {
     let t = ok("SELECT output, fqn, COUNT(*) FROM calls GROUP BY 1, 2 ORDER BY 2, 3 DESC");
     // Physical columns: output, output kind, fqn, count.
