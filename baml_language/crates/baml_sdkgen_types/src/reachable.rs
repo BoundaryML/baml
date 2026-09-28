@@ -2,22 +2,19 @@
 
 use std::collections::HashSet;
 
+use baml_base::MediaKind;
+
 use crate::{Function, Name, Symbol, SymbolPool, Ty};
 
 /// Keep every function and user declaration, plus only the built-in types
 /// reachable from them or from the always-kept `baml.media`, `baml.errors`,
 /// `baml.panics`, `ai.errors`, and `ai.stream` namespaces. Reachability
 /// follows class properties and methods, function signatures (arguments,
-/// return, throws, watchers), and alias targets; a type token (`Ty::Type`)
-/// reaches `reflect.Type`.
+/// return, throws, watchers), and alias targets, through every generic
+/// argument and structural child; type tokens (`Ty::Type`) and media reach
+/// the `reflect.Type` and `baml.media` classes that SDKs render for them.
 pub fn without_unreachable_builtin_types(pool: &SymbolPool) -> SymbolPool {
-    // `Ty::Type` is a type token, which SDKs render as the bridge-owned
-    // `reflect.Type` class.
-    let reflect_type = Name::new(
-        baml_base::Name::new("reflect"),
-        Vec::new(),
-        baml_base::Name::new("Type"),
-    );
+    let implicit = ImplicitNames::new();
     let mut reachable: HashSet<&Name> = HashSet::new();
     let mut pending: Vec<&Name> = pool
         .iter()
@@ -31,18 +28,18 @@ pub fn without_unreachable_builtin_types(pool: &SymbolPool) -> SymbolPool {
         let Some(symbol) = pool.get(name) else {
             continue;
         };
+        // `visit_type` walks every child, so generic arguments (reified type
+        // variables such as `Box<baml.http.Response>`), list/map elements,
+        // union members, and callable/future parts are all followed.
         for_each_type(symbol, &mut |ty| {
             crate::visit_type(ty, &mut |ty| {
-                let referenced = match ty {
-                    Ty::Type => Some(&reflect_type),
-                    _ => named_reference(ty),
-                };
-                if let Some(referenced) = referenced
-                    && let Some((referenced, _)) = pool.get_key_value(referenced)
-                    && !reachable.contains(referenced)
-                {
-                    pending.push(referenced);
-                }
+                for_each_named(ty, &implicit, &mut |referenced| {
+                    if let Some((referenced, _)) = pool.get_key_value(referenced)
+                        && !reachable.contains(referenced)
+                    {
+                        pending.push(referenced);
+                    }
+                });
             });
         });
     }
@@ -50,6 +47,82 @@ pub fn without_unreachable_builtin_types(pool: &SymbolPool) -> SymbolPool {
         .filter(|(name, _)| reachable.contains(name))
         .map(|(name, symbol)| (name.clone(), symbol.clone()))
         .collect()
+}
+
+/// Pool symbols that SDKs render for types which do not carry a name.
+struct ImplicitNames {
+    reflect_type: Name,
+    media: [Name; 4],
+}
+
+impl ImplicitNames {
+    fn new() -> Self {
+        let name = |package: &str, namespace: &[&str], item: &str| {
+            Name::new(
+                baml_base::Name::new(package),
+                namespace
+                    .iter()
+                    .map(|segment| baml_base::Name::new(*segment))
+                    .collect(),
+                baml_base::Name::new(item),
+            )
+        };
+        Self {
+            reflect_type: name("reflect", &[], "Type"),
+            media: [
+                name("baml", &["media"], "Image"),
+                name("baml", &["media"], "Audio"),
+                name("baml", &["media"], "Video"),
+                name("baml", &["media"], "Pdf"),
+            ],
+        }
+    }
+
+    fn media(&self, kind: MediaKind) -> &[Name] {
+        match kind {
+            MediaKind::Image => &self.media[0..1],
+            MediaKind::Audio => &self.media[1..2],
+            MediaKind::Video => &self.media[2..3],
+            MediaKind::Pdf => &self.media[3..4],
+            MediaKind::Generic => &self.media,
+        }
+    }
+}
+
+/// Call `reach` for each pool symbol that one type node names itself; its
+/// children are visited separately. The match is exhaustive so a new type
+/// variant needs an explicit reachability decision.
+fn for_each_named<'a>(ty: &'a Ty, implicit: &'a ImplicitNames, reach: &mut impl FnMut(&'a Name)) {
+    match ty {
+        Ty::Class(name, _) | Ty::Enum(name) | Ty::EnumVariant(name, _) | Ty::TypeAlias(name) => {
+            reach(name);
+        }
+        // SDKs render a type token as the bridge-owned `reflect.Type` class.
+        Ty::Type => reach(&implicit.reflect_type),
+        // SDKs render media as the bridge-owned `baml.media` classes.
+        Ty::Media(kind) => implicit.media(*kind).iter().for_each(reach),
+        // Interfaces are emitted as tokens, not pool symbols; their type
+        // arguments and associated types are children.
+        Ty::Interface(..) => {}
+        // Structural types name nothing themselves; their parts are children.
+        Ty::List(_) | Ty::Map { .. } | Ty::Union(_) | Ty::Function { .. } | Ty::Future(..) => {}
+        // Leaves that name no declaration.
+        Ty::Int
+        | Ty::Bigint
+        | Ty::Float
+        | Ty::String
+        | Ty::Bool
+        | Ty::Null
+        | Ty::Uint8Array
+        | Ty::Literal(..)
+        | Ty::TypeVar(..)
+        | Ty::RustType
+        | Ty::Resource
+        | Ty::PromptAst
+        | Ty::Void
+        | Ty::Unknown
+        | Ty::Never => {}
+    }
 }
 
 /// Built-in namespaces whose types are always generated, as
@@ -83,16 +156,6 @@ fn is_always_kept(name: &Name) -> bool {
                 .map(baml_base::Name::as_str)
                 .eq([*namespace])
     })
-}
-
-/// The pool symbol a type node names directly, if any.
-fn named_reference(ty: &Ty) -> Option<&Name> {
-    match ty {
-        Ty::Class(name, _) | Ty::Enum(name) | Ty::EnumVariant(name, _) | Ty::TypeAlias(name) => {
-            Some(name)
-        }
-        _ => None,
-    }
 }
 
 /// Call `f` on every type a symbol's generated declaration mentions.
@@ -341,6 +404,134 @@ mod tests {
                 "baml.trace.Frame",
                 "user.Resume",
                 "user.extract",
+            ]
+        );
+    }
+
+    #[test]
+    fn function_signatures_reach_through_generic_arguments_and_structure() {
+        let n = |item: &str| name("baml", &["probe"], item);
+        let [
+            in_user_generic,
+            builtin_generic,
+            in_builtin_generic,
+            from_builtin_generic_field,
+            map_value,
+            callable_param,
+            callable_return,
+            future_value,
+            future_error,
+            interface_arg,
+            thrown,
+            unreferenced,
+        ] = [
+            "InUserGeneric",
+            "BuiltinGeneric",
+            "InBuiltinGeneric",
+            "FromBuiltinGenericField",
+            "MapValue",
+            "CallableParam",
+            "CallableReturn",
+            "FutureValue",
+            "FutureError",
+            "InterfaceArg",
+            "Thrown",
+            "Unreferenced",
+        ]
+        .map(n);
+        let holder = name("user", &[], "Holder");
+        let generic_function = name("user", &[], "g");
+
+        // Argument: a user generic reified with a stdlib type, inside a list.
+        let argument = Ty::List(Box::new(Ty::Class(
+            holder.clone(),
+            Box::new([class_ty(&in_user_generic)]),
+        )));
+        // Return: a stdlib generic reified with a stdlib type, inside a map
+        // value, alongside a callable, a future, and an interface argument.
+        let return_type = Ty::Union(Box::new([
+            Ty::Map {
+                key: Box::new(Ty::String),
+                value: Box::new(Ty::Class(
+                    builtin_generic.clone(),
+                    Box::new([class_ty(&in_builtin_generic)]),
+                )),
+            },
+            class_ty(&map_value),
+            Ty::Function {
+                params: Box::new([crate::CallableParam::required(
+                    None,
+                    class_ty(&callable_param),
+                )]),
+                ret: Box::new(class_ty(&callable_return)),
+                throws: Box::new(Ty::Never),
+            },
+            Ty::Future(
+                Box::new(class_ty(&future_value)),
+                Box::new(class_ty(&future_error)),
+            ),
+            Ty::Interface(
+                name("baml", &["probe"], "Iterable"),
+                Box::new([class_ty(&interface_arg)]),
+                Box::new([]),
+            ),
+        ]));
+        let Symbol::Function(mut signature) = function(USER, argument, return_type) else {
+            unreachable!();
+        };
+        signature.throws = Some(class_ty(&thrown));
+
+        let mut pool = SymbolPool::from([
+            (generic_function, Symbol::Function(signature)),
+            (
+                holder.clone(),
+                class(
+                    &holder,
+                    USER,
+                    vec![Ty::TypeVar(crate::ParamTy::new(0, "T".into()))],
+                ),
+            ),
+            (
+                builtin_generic.clone(),
+                class(
+                    &builtin_generic,
+                    BUILTIN,
+                    vec![class_ty(&from_builtin_generic_field)],
+                ),
+            ),
+        ]);
+        for symbol in [
+            &in_user_generic,
+            &in_builtin_generic,
+            &from_builtin_generic_field,
+            &map_value,
+            &callable_param,
+            &callable_return,
+            &future_value,
+            &future_error,
+            &interface_arg,
+            &thrown,
+            &unreferenced,
+        ] {
+            pool.insert(symbol.clone(), class(symbol, BUILTIN, Vec::new()));
+        }
+
+        assert_eq!(
+            kept(&pool),
+            [
+                "baml.probe.BuiltinGeneric",
+                "baml.probe.CallableParam",
+                "baml.probe.CallableReturn",
+                "baml.probe.FromBuiltinGenericField",
+                "baml.probe.FutureError",
+                "baml.probe.FutureValue",
+                "baml.probe.InBuiltinGeneric",
+                "baml.probe.InUserGeneric",
+                "baml.probe.InterfaceArg",
+                "baml.probe.MapValue",
+                "baml.probe.Thrown",
+                "user.Holder",
+                "user.g",
             ]
         );
     }
