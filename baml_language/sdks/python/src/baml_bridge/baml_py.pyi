@@ -15,8 +15,8 @@ __all__ = [
     "HostSpanManager",
     "cancel_function_call",
     "flush_events",
-    "get_runtime",
     "get_bridge_runtime_version",
+    "get_runtime",
     "get_toolchain_version",
     "get_version",
     "lookup_host_value",
@@ -57,7 +57,7 @@ class BamlAudio:
 class BamlCallContext:
     r"""
     A call context for cancelling BAML function calls.
-
+    
     Usage from Python:
     ```python
     ctx = BamlCallContext()
@@ -76,7 +76,7 @@ class BamlCallContext:
     def abort(self) -> None:
         r"""
         Cancel the associated function call.
-
+        
         If the function is still running, it will be interrupted at the next
         cancellation check point (before HTTP calls, between retries, etc.).
         Calling `abort()` multiple times is harmless.
@@ -169,11 +169,11 @@ class BamlRuntime:
     def initialize_runtime(root_path: builtins.str, files: typing.Mapping[builtins.str, builtins.str]) -> BamlRuntime:
         r"""
         Initialize the process-global runtime from in-memory BAML source files.
-
+        
         Mirrors `bridge_cffi::initialize_runtime`: the same
         single-slot singleton is used, so a second call replaces the prior
         runtime.
-
+        
         # Arguments
         * `root_path` - Root path for BAML files
         * `files` - Map of filename to file content
@@ -182,10 +182,10 @@ class BamlRuntime:
     def initialize_runtime_from_bytecode(bytecode: typing.Sequence[builtins.int], embedded_baml_toml: typing.Optional[builtins.str] = None) -> BamlRuntime:
         r"""
         Initialize the process-global runtime from serialized BAML bytecode.
-
+        
         Generated SDKs use this path so importing `baml_sdk` can skip parsing
         and compiling the inlined BAML source files.
-
+        
         # Arguments
         * `bytecode` - borsh-encoded BAML bytecode program
         """
@@ -197,6 +197,7 @@ class BamlRuntime:
         r"""
         Call a BAML function synchronously (blocking).
         """
+
 @typing.final
 class BamlVideo:
     @staticmethod
@@ -223,12 +224,11 @@ class BamlVideo:
     @classmethod
     def __get_pydantic_core_schema__(cls, _source_type: typing.Any, _handler: typing.Any) -> typing.Any: ...
 
-
 @typing.final
 class FunctionResult:
     r"""
     Result of a BAML function call.
-
+    
     Contains the parsed Python object returned by the function.
     """
     def __new__(cls, value: typing.Any) -> FunctionResult:
@@ -246,7 +246,7 @@ class FunctionResult:
 class HostSpanManager:
     r"""
     Manages host-side span tracking for `@trace` in Python.
-
+    
     This is a thin PyO3 wrapper around `bridge_cffi::host_spans::HostSpanManager`.
     All core logic (span stack, event emission) lives in bridge_cffi.
     """
@@ -276,6 +276,24 @@ class HostSpanManager:
         Number of active spans (call depth).
         """
 
+def _handle_refcount(key: builtins.int) -> typing.Optional[builtins.int]:
+    r"""
+    Test-only: the outstanding ownership count of a live key — the releases it
+    still owes — or `None` for a dead/unknown key. Lets an audit see an
+    exactly-once imbalance on a shared engine-heap key, which row counts hide.
+    """
+
+def _live_handle_count() -> builtins.int:
+    r"""
+    Test-only: return the number of live ordinary HANDLE_TABLE rows (a
+    refcounted engine-heap row counts once however many owners it has).
+    """
+
+def _release_wire_handle(key: builtins.int) -> None:
+    r"""
+    Release a handle cloned for wire ownership when encoding aborts before the
+    engine can consume it.
+    """
 
 def _seed_function_ref_handle(global_index: builtins.int) -> tuple[builtins.int, builtins.int]:
     r"""
@@ -296,25 +314,6 @@ def _seed_heap_handle(slab_key: builtins.int) -> tuple[builtins.int, builtins.in
     `slab_key` share a key.
     """
 
-def _release_wire_handle(key: builtins.int) -> None:
-    r"""
-    Release a handle cloned for wire ownership when encoding aborts before the
-    engine can consume it.
-    """
-
-def _live_handle_count() -> builtins.int:
-    r"""
-    Test-only: return the number of live ordinary HANDLE_TABLE rows (a
-    refcounted engine-heap row counts once however many owners it has).
-    """
-
-def _handle_refcount(key: builtins.int) -> typing.Optional[builtins.int]:
-    r"""
-    Test-only: the outstanding ownership count of a live key — the releases it
-    still owes — or `None` for a dead/unknown key. Lets an audit see an
-    exactly-once imbalance on a shared engine-heap key, which row counts hide.
-    """
-
 def cancel_function_call(call_id: builtins.int) -> builtins.bool: ...
 
 def flush_events() -> None:
@@ -323,19 +322,21 @@ def flush_events() -> None:
     (SDK `atexit` + `__all__` reference it).
     """
 
+def get_bridge_runtime_version() -> builtins.str: ...
+
 def get_runtime() -> BamlRuntime:
     r"""
     Return the process-global `BamlRuntime`, or raise `BamlError` if
     `BamlRuntime.initialize_runtime(...)` has not been called yet.
-
+    
     Used by the pure-Python factories in `baml_bridge` so generated
     leaves don't have to thread a runtime reference through every call
     site.
     """
 
-def get_version() -> builtins.str: ...
 def get_toolchain_version() -> builtins.str: ...
-def get_bridge_runtime_version() -> builtins.str: ...
+
+def get_version() -> builtins.str: ...
 
 def lookup_host_value(handle: BamlPyHandle) -> typing.Optional[typing.Any]:
     r"""
@@ -346,7 +347,7 @@ def lookup_host_value(handle: BamlPyHandle) -> typing.Optional[typing.Any]:
     `baml_bridge.proto` to rehydrate a `baml.errors.HostCallable` thrown
     by BAML back to the original Python exception object on same-host
     round-trip.
-
+    
     Returns `None` if the handle is the wrong kind, the entry has been
     released (last `HostValueArc` clone already dropped), or the key
     never existed in this runtime's registry (cross-runtime handle):
@@ -358,7 +359,7 @@ def new_function_call() -> builtins.int: ...
 def register_host_callable(callable: typing.Any) -> builtins.int:
     r"""
     Insert a Python callable into the registry and return its key.
-
+    
     Exposed to Python as `baml_py.register_host_callable(callable) -> int`.
     Called from the inbound encoder in `baml_bridge.proto` whenever a Python
     callable appears as a kwarg.
@@ -370,7 +371,7 @@ def release_host_callable(host_value_key: builtins.int) -> None:
     r"""
     Release a host callable the inbound encoder registered but never handed to
     the engine — the encode-error rollback path.
-
+    
     Exposed to Python as `baml_py.release_host_callable(key)`. When
     `encode_call_args` registers a callable for an early kwarg and then a
     later kwarg fails to encode, the `CallFunctionArgs` is never sent, so the
@@ -381,3 +382,4 @@ def release_host_callable(host_value_key: builtins.int) -> None:
     """
 
 def shutdown_runtime() -> None: ...
+
