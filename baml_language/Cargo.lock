@@ -1456,12 +1456,11 @@ dependencies = [
  "btel_types",
  "chacha20poly1305",
  "console",
- "getrandom 0.2.17",
  "indexmap",
  "log",
  "num-bigint",
- "rand_chacha 0.3.1",
- "rand_core 0.6.4",
+ "rand_chacha 0.10.0",
+ "rand_core 0.10.1",
  "rand_xoshiro",
  "rustc-hash 2.1.2",
  "serde",
@@ -1734,7 +1733,7 @@ dependencies = [
  "bytes",
  "console_error_panic_hook",
  "futures",
- "getrandom 0.3.4",
+ "getrandom 0.4.2",
  "indexmap",
  "js-sys",
  "log",
@@ -3697,10 +3696,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0de51e6874e94e7bf76d726fc5d13ba782deca734ff60d5bb2fb2607c7406555"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "r-efi 6.0.0",
  "wasip2",
  "wasip3",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -5036,7 +5037,6 @@ checksum = "a5e44f723f1133c9deac646763579fdb3ac745e418f2a7af9cd0c431da1f20b9"
 dependencies = [
  "num-integer",
  "num-traits",
- "rand 0.8.6",
  "serde",
 ]
 
@@ -5931,6 +5931,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand_chacha"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e6af7f3e25ded52c41df4e0b1af2d047e45896c2f3281792ed68a1c243daedb"
+dependencies = [
+ "ppv-lite86",
+ "rand_core 0.10.1",
+]
+
+[[package]]
 name = "rand_core"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5949,12 +5959,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "rand_xoshiro"
-version = "0.6.0"
+name = "rand_core"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f97cdb2a36ed4183de61b2f824cc45c9f1037f28afe0a322e9fff4c108b5aaa"
+checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
+
+[[package]]
+name = "rand_xoshiro"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "662effc7698e08ea324d3acccf8d9d7f7bf79b9785e270a174ea36e56900c91d"
 dependencies = [
- "rand_core 0.6.4",
+ "rand_core 0.10.1",
 ]
 
 [[package]]
@@ -7059,7 +7075,7 @@ dependencies = [
  "bridge_ctypes",
  "bytes",
  "futures",
- "getrandom 0.2.17",
+ "getrandom 0.4.2",
  "http-body-util",
  "hyper",
  "hyper-util",
