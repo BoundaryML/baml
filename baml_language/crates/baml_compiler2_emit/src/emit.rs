@@ -1100,6 +1100,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.pending_sequence_point = sequence_point;
     }
 
+    /// Put back a span saved before pulling operands. A pull that emitted no
+    /// instruction has not used the pending sequence point, so it stays.
+    fn restore_debug_span(&mut self, span: Option<Span>) {
+        self.current_debug_span = span;
+    }
+
     /// Emit a line-table entry for an instruction if needed.
     fn emit_line_table_entry(&mut self, pc: usize) {
         let Some(span) = self.current_debug_span else {
@@ -2443,7 +2449,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 unwrap_infallible(self.load_type(&future_ty.throws));
                 // As for calls: operands may install nested spans; the spawn
                 // opcode belongs to the whole spawn expression.
-                self.set_debug_span(spawn_span, false);
+                self.restore_debug_span(spawn_span);
                 self.emit(Instruction::Spawn);
                 self.emit_store_place(future);
                 self.emit_jump_unless_fallthrough(*resume);
@@ -2457,7 +2463,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             } => {
                 let await_span = self.current_debug_span;
                 unwrap_infallible(pull_semantics::walk_await_future(self, future));
-                self.set_debug_span(await_span, false);
+                self.restore_debug_span(await_span);
                 self.emit(Instruction::Await);
 
                 self.emit_store_place(destination);
@@ -2484,20 +2490,20 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Terminator::Throw { value } => {
                 let throw_span = self.current_debug_span;
                 self.emit_operand_pull(value);
-                self.set_debug_span(throw_span, false);
+                self.restore_debug_span(throw_span);
                 self.emit(Instruction::Throw);
             }
             Terminator::Rethrow { value } => {
                 let throw_span = self.current_debug_span;
                 self.emit_operand_pull(value);
-                self.set_debug_span(throw_span, false);
+                self.restore_debug_span(throw_span);
                 self.emit(Instruction::Rethrow);
             }
 
             Terminator::ThrowIfPanic { value, otherwise } => {
                 let throw_span = self.current_debug_span;
                 self.emit_operand_pull(value);
-                self.set_debug_span(throw_span, false);
+                self.restore_debug_span(throw_span);
                 self.emit(Instruction::ThrowIfPanic);
                 self.emit_jump_unless_fallthrough(*otherwise);
             }
@@ -3274,7 +3280,7 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
                 } else {
                     pull_semantics::walk_rvalue_pull(self, &rvalue)?;
                 }
-                self.set_debug_span(consumer_span, false);
+                self.restore_debug_span(consumer_span);
                 LocalPullAction::Done
             }
             LocalClassification::PhiLike
