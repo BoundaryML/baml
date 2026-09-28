@@ -2,6 +2,16 @@
 //
 // Helper functions live at top level to avoid the test-block local-boxing VM bug.
 
+// Set by a task once it is running. A task cancelled before it starts never
+// runs at all, so a test about a running task waits for this first.
+class Flag { set: bool }
+
+function wait_until_set(flag: Flag) -> void {
+    while (!flag.set) {
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(1n));
+    }
+}
+
 // `waiter` awaits `slow` (a 60s sibling, not a child of waiter). Cancelling
 // `waiter` fires waiter's own cancel token; without the await-race fix,
 // waiter's `await slow` would block on the SetOnce until `slow` settles 60s
@@ -13,7 +23,9 @@
 function cancel_unblocks_await_on_non_descendant_fn() -> bool {
     let started = baml.time.Instant.now();
     let slow = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n)); 42 };
-    let waiter = spawn { await slow };
+    let running = Flag { set: false };
+    let waiter = spawn { running.set = true; await slow };
+    wait_until_set(running);
     let _ = waiter.cancel();
     // waiter's BexThread is parked in the engine's await on `slow`. cancel()
     // fires waiter's cancel token; awaiting waiter must observe Cancelled now,
@@ -88,7 +100,9 @@ test "cancel_after_gc_relocation_still_settles" {
 // alive at shutdown. Tear it down explicitly after capturing `waiter`'s state.
 function cancelled_child_future_state_is_cancelled() -> baml.future.State {
     let slow = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n)); 42 };
-    let waiter = spawn { await slow };
+    let running = Flag { set: false };
+    let waiter = spawn { running.set = true; await slow };
+    wait_until_set(running);
     let _ = waiter.cancel();
     let _ = (await waiter) catch (e) { baml.panics.Cancelled => 0 };
     let observed = waiter.state();

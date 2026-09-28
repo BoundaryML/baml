@@ -8,7 +8,7 @@
 /// `baml.panics.Cancelled`, and so does that of every task it spawns other
 /// than a `Root` one, even after the task itself has finished. Once cancelled,
 /// a token stays cancelled forever, and a task spawned with it after that
-/// starts cancelled.
+/// never starts: its future settles `Cancelled`.
 ///
 /// # Examples
 ///

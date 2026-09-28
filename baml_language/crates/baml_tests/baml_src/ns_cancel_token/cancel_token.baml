@@ -176,3 +176,69 @@ function linked_token_skips_a_rooted_descendant() -> int {
 test "linked_token_skips_a_rooted_descendant" {
     assert.equal(linked_token_skips_a_rooted_descendant(), 7)
 }
+
+// A task whose token has already fired never starts, whatever gates it: its
+// body never runs, not even up to a first checkpoint, so a body with none
+// cannot complete, and its `defer` never runs either. Its future settles
+// `Cancelled`.
+class StartLog {
+    steps: string[]
+}
+
+function never_starts_open() -> string {
+    let log = StartLog { steps: [] };
+    let token = baml.spawn.CancelToken.new();
+    let _ = token.cancel();
+    let f = spawn with token {
+        defer {
+            log.steps.push("defer");
+        }
+        log.steps.push("body");
+        1
+    };
+    let outcome = (await f) catch (e) { baml.panics.Cancelled => 0 };
+    `${outcome}:${log.steps.join(",")}`
+}
+
+test "an_already_cancelled_task_never_starts" {
+    assert.equal(never_starts_open(), "0:")
+}
+
+// A free slot admits the task at once, and it still never starts; the slot
+// goes to the next task.
+function never_starts_admitted() -> string {
+    let log = StartLog { steps: [] };
+    let limit = baml.spawn.Limit.new(1) catch (e) {
+        baml.errors.InvalidArgument => baml.sys.panic("positive")
+    };
+    let token = baml.spawn.CancelToken.new();
+    let _ = token.cancel();
+    let f = spawn with limit, token {
+        log.steps.push("body");
+        1
+    };
+    let outcome = (await f) catch (e) { baml.panics.Cancelled => 0 };
+    let next = spawn with limit { 2 };
+    `${outcome}:${log.steps.join(",")}:${await next}`
+}
+
+test "an_already_cancelled_task_never_starts_through_a_free_slot" {
+    assert.equal(never_starts_admitted(), "0::2")
+}
+
+// A `Root` task drops its spawner's cancellation, not the tokens it is given.
+function never_starts_rooted() -> string {
+    let log = StartLog { steps: [] };
+    let token = baml.spawn.CancelToken.new();
+    let _ = token.cancel();
+    let f = spawn with baml.spawn.Root.new(), token {
+        log.steps.push("body");
+        1
+    };
+    let outcome = (await f) catch (e) { baml.panics.Cancelled => 0 };
+    `${outcome}:${log.steps.join(",")}`
+}
+
+test "an_already_cancelled_rooted_task_never_starts" {
+    assert.equal(never_starts_rooted(), "0:")
+}

@@ -196,7 +196,10 @@ async fn error_then_cancel_reports_nonfatal_cancellation_flag() {
         function bad() -> int throws string { throw "boom" }
         function main() -> int {
             let failing = spawn { bad() };
-            baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+            // Error first: a task cancelled before it starts never runs.
+            while (!failing.is_settled()) {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(1n));
+            }
             let _ = failing.cancel();
             1
         }

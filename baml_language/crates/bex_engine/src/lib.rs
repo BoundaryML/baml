@@ -5096,12 +5096,16 @@ impl BexEngine {
         let return_type = RuntimeTy::Null;
         let task = async move {
             // If this spawn is gated, park here — WITHOUT the heap permit, so a
-            // queued task doesn't block GC — until it is admitted. A task
-            // cancelled while queued settles its future `Cancelled` and never
-            // runs its body. The permit is held for the body's lifetime and
-            // releases its slots (admitting the next waiter) on drop.
-            let Some(_entry_permit) = entry_ticket.acquire(&cancelled_by).await else {
-                let mut permit = inactive.acquire().await;
+            // queued task doesn't block GC — until it is admitted. The permit is
+            // held for the body's lifetime and releases its slots (admitting the
+            // next waiter) on drop.
+            let admitted = entry_ticket.acquire(&cancelled_by).await;
+            let mut permit = inactive.acquire().await;
+            // A task cancelled before its first instruction never starts,
+            // whatever its gate: one cancelled while queued is refused by
+            // `acquire`, and one admitted at once is caught here. Its future
+            // settles `Cancelled` and its body never runs.
+            let Some(_entry_permit) = admitted.filter(|_| !child_cancel.is_cancelled()) else {
                 let settled = engine.settle_child_cancelled(&mut permit, future_id).await;
                 engine.finish_thread_telemetry(
                     &mut permit,
@@ -5115,12 +5119,11 @@ impl BexEngine {
                     tracing::error!(
                         ?err,
                         ?future_id,
-                        "failed to settle queued-then-cancelled spawn"
+                        "failed to settle a spawn cancelled before it started"
                     );
                 }
                 return;
             };
-            let permit = inactive.acquire().await;
 
             match engine
                 .run_thread_event_loop(return_type, None, permit, call_id, log_capture, true)

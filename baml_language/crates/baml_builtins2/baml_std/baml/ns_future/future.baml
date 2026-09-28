@@ -24,12 +24,13 @@ enum State {
 }
 
 class Future<T, E> {
-    /// Request cancellation of the future: fires its cancel token, so the
-    /// spawned task throws `baml.panics.Cancelled` at its next checkpoint (an
-    /// `await` or an IO call) and at every one after that, outside a
-    /// `defer`. The task settles the future: `Cancelled` once it unwinds,
-    /// `Ready` with its value if it had no checkpoint left, or handled the
-    /// panic and completed. Until then the future stays `Pending`.
+    /// Request cancellation of the future: fires its cancel token. A task that
+    /// has not started yet never starts; a running one throws
+    /// `baml.panics.Cancelled` at its next checkpoint (an `await` or an IO
+    /// call) and at every one after that, outside a `defer`. The task settles
+    /// the future: `Cancelled` once it unwinds or if it never started, `Ready`
+    /// with its value if it had no checkpoint left, or handled the panic and
+    /// completed. Until then the future stays `Pending`.
     ///
     /// Returns `true` if this call fired the token, `false` if the future was
     /// already settled or cancellation was already requested.

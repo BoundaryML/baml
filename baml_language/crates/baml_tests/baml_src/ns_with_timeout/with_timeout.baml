@@ -36,11 +36,12 @@ test "with_timeout preserves body error" {
 
 // A caller cancelled as its deadline fires reports its own cancellation, not a
 // timeout: the body's cleanup cancels the caller while the deadline cancels
-// the body, so the caller wakes to both at once.
+// the body, so the caller wakes to both at once. The deadline leaves the body
+// time to start: a body cancelled before it starts never runs its cleanup.
 function with_timeout_caller_cancelled_at_deadline() -> string {
     let callers: baml.future.Future<string, baml.errors.Io>[] = [];
     callers.push(spawn {
-        baml.future.with_timeout(baml.time.Duration.from_milliseconds(20), () -> string {
+        baml.future.with_timeout(baml.time.Duration.from_milliseconds(250), () -> string {
             defer {
                 callers[0].cancel();
             }

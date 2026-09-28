@@ -597,23 +597,36 @@ test "a token's queued task is cancelled, not admitted" {
 }
 
 // Cancelling the spawner cancels its ordinary child; a `Root` child runs on.
+// The spawner is cancelled only once it has spawned both, and both are awaited.
+class Spawned { set: bool }
+
 function root_survives_its_spawner() -> string {
     let log = Log { entries: [] };
+    let children: baml.future.Future<int, baml.errors.Io>[] = [];
+    let spawned = Spawned { set: false };
     let outer = spawn {
-        let rooted = spawn with baml.spawn.Root.new() { sleep_ms(80n); log.entries.push("rooted done"); 1 };
-        let child = spawn { sleep_ms(80n); log.entries.push("child done"); 1 };
+        children.push(spawn with baml.spawn.Root.new() { sleep_ms(80n); log.entries.push("rooted done"); 1 });
+        children.push(spawn { sleep_ms(80n); log.entries.push("child done"); 1 });
+        spawned.set = true;
         sleep_ms(5000n);
         0
     };
-    sleep_ms(30n);
+    while (!spawned.set) {
+        sleep_ms(1n);
+    }
     let _ = outer.cancel();
     let _ = (await outer) catch (e) {
         baml.panics.Cancelled => -1,
     };
-    sleep_ms(150n);
-    log.entries.join(",")
+    let rooted = (await children[0]) catch (e) {
+        baml.panics.Cancelled => -1,
+    };
+    let child = (await children[1]) catch (e) {
+        baml.panics.Cancelled => -1,
+    };
+    `${log.entries.join(",")}:${rooted}:${child}`
 }
 
 test "a root task is not cancelled with its spawner" {
-    assert.equal(root_survives_its_spawner(), "rooted done")
+    assert.equal(root_survives_its_spawner(), "rooted done:1:-1")
 }
