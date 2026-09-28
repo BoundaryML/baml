@@ -1701,17 +1701,6 @@ enum Expectation {
     Erroneous,
 }
 
-#[derive(Clone, Copy)]
-enum ExpectedAggregateKind {
-    List,
-    Map,
-}
-
-enum ExpectedAggregate {
-    List(Ty),
-    Map(Ty, Ty),
-}
-
 impl Expectation {
     /// The `Error` sentinel is never propagated as context. Top-level only
     /// (rust-analyzer's `Expectation::has_type` discipline): a nested
@@ -9736,71 +9725,72 @@ impl<'db> InferenceContext<'db> {
     /// multi-list union adopts nothing and the literal synthesizes.
     fn expected_list_element(&mut self, expected: &Expectation) -> Option<Ty> {
         let shape = self.expectation_shape(expected)?;
-        match self
-            .unique_expected_aggregate(&shape, ExpectedAggregateKind::List, 8)
-            .ok()
-            .flatten()?
-        {
-            ExpectedAggregate::List(element) => Some(element),
-            ExpectedAggregate::Map(..) => None,
-        }
+        self.unique_expected_arm(&shape, |arm| match arm.kind() {
+            InferTy::List(element) => Some(element.clone()),
+            _ => None,
+        })
     }
 
     /// The MAP literal's counterpart of `expected_list_element`.
     fn expected_map_entry(&mut self, expected: &Expectation) -> Option<(Ty, Ty)> {
         let shape = self.expectation_shape(expected)?;
-        match self
-            .unique_expected_aggregate(&shape, ExpectedAggregateKind::Map, 8)
-            .ok()
-            .flatten()?
-        {
-            ExpectedAggregate::Map(key, value) => Some((key, value)),
-            ExpectedAggregate::List(..) => None,
-        }
+        self.unique_expected_arm(&shape, |arm| match arm.kind() {
+            InferTy::Map { key, value, .. } => Some((key.clone(), value.clone())),
+            _ => None,
+        })
     }
 
-    /// Find a unique aggregate arm through nested unions and aliases. An
-    /// optional `json` expectation is `baml.json.json | null`, so resolving
-    /// only the outer union leaves the recursive JSON alias hiding its list
-    /// and map arms. Exhaustion is ambiguity: a partial search must not select
-    /// a shallow arm while another candidate may remain behind an alias.
-    fn unique_expected_aggregate(
-        &mut self,
-        ty: &Ty,
-        kind: ExpectedAggregateKind,
-        fuel: u8,
-    ) -> Result<Option<ExpectedAggregate>, ()> {
-        if fuel == 0 {
-            return Err(());
-        }
-        match (kind, ty.kind()) {
-            (ExpectedAggregateKind::List, InferTy::List(element)) => {
-                Ok(Some(ExpectedAggregate::List(element.clone())))
-            }
-            (ExpectedAggregateKind::Map, InferTy::Map { key, value, .. }) => {
-                Ok(Some(ExpectedAggregate::Map(key.clone(), value.clone())))
-            }
-            (_, InferTy::TypeAlias(..)) => {
-                let expanded = self.expand_alias_ty(ty);
-                self.unique_expected_aggregate(&expanded, kind, fuel - 1)
-            }
-            (_, InferTy::Union(members)) => {
-                let members = members.to_vec();
-                let mut found = None;
-                for member in &members {
-                    if let Some(candidate) =
-                        self.unique_expected_aggregate(member, kind, fuel - 1)?
-                    {
-                        if found.is_some() {
-                            return Err(());
+    /// The single arm of `ty` that `pick` accepts, looking through nested
+    /// unions and type aliases. An optional `json` expectation is
+    /// `baml.json.json | null`, so resolving only the outer union would
+    /// leave the recursive JSON alias hiding its list and map arms. Two
+    /// accepted arms are ambiguous and give no context.
+    ///
+    /// Each alias expands at most once per search, so recursive aliases
+    /// terminate without a depth limit; a depth limit would make the answer
+    /// depend on how many aliases spell the same type.
+    fn unique_expected_arm<T>(&mut self, ty: &Ty, pick: impl Fn(&Ty) -> Option<T>) -> Option<T> {
+        fn search<T>(
+            this: &mut InferenceContext<'_>,
+            ty: &Ty,
+            pick: &impl Fn(&Ty) -> Option<T>,
+            expanded: &mut Vec<baml_type::DeclName>,
+            found: &mut Option<T>,
+        ) -> bool {
+            match ty.kind() {
+                InferTy::TypeAlias(name) => {
+                    if expanded.contains(name) {
+                        return true;
+                    }
+                    expanded.push(name.clone());
+                    match baml_type::normalize::TypeContext::alias_def(&this.facts, name) {
+                        Some(expansion) => {
+                            search(this, &Ty::from_plain(&expansion), pick, expanded, found)
                         }
-                        found = Some(candidate);
+                        None => true,
                     }
                 }
-                Ok(found)
+                InferTy::Union(members) => {
+                    let members = members.to_vec();
+                    members
+                        .iter()
+                        .all(|member| search(this, member, pick, expanded, found))
+                }
+                _ => match pick(ty) {
+                    Some(_) if found.is_some() => false,
+                    Some(arm) => {
+                        *found = Some(arm);
+                        true
+                    }
+                    None => true,
+                },
             }
-            _ => Ok(None),
         }
+
+        let mut found = None;
+        search(self, ty, &pick, &mut Vec::new(), &mut found)
+            .then_some(found)
+            .flatten()
     }
 
     /// The type of a tagged-template body param in scope, innermost frame
