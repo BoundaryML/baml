@@ -53,6 +53,8 @@ pub struct UnhandledSpawnError {
     pub future_id: FutureId,
     pub value: Value,
     pub trace: Vec<StackFrame>,
+    /// Cancellation reached the task, by any route: see
+    /// [`bex_vm_types::Future::was_cancelled`].
     pub cancelled: bool,
 }
 impl Generation {

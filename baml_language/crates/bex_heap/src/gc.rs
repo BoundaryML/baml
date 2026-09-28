@@ -312,7 +312,7 @@ impl BexHeap {
                             future_id: future.id(),
                             value,
                             trace: future.error_trace(),
-                            cancelled: future.cancel_requested(),
+                            cancelled: future.was_cancelled(),
                         });
                     }
                 }

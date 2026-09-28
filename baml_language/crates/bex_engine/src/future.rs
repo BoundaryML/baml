@@ -238,6 +238,19 @@ impl FutureManagerGuard<'_> {
         Ok(())
     }
 
+    /// Record that the producer of pending `id` had been cancelled when it
+    /// failed; see [`bex_vm_types::Future::was_cancelled`]. Call before
+    /// settling its error.
+    pub fn mark_cancelled(&mut self, id: FutureId) -> Result<(), EngineError> {
+        let Some(entry) = self.holder().active_futures.get(&id) else {
+            return Ok(());
+        };
+        // SAFETY: caller holds the heap permit via `self.proof`.
+        let future = unsafe { entry.future_ref() }?;
+        future.mark_cancelled();
+        Ok(())
+    }
+
     /// Register a Session lease held by the producer of `id`. If user-side
     /// cancellation already won the future race, registration releases the
     /// lease immediately; otherwise `Future::settle_cancelled` releases it

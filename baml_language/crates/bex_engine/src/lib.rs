@@ -234,6 +234,9 @@ pub struct UnhandledSpawnError {
     pub report_id: usize,
     pub value: BexExternalValue,
     pub trace: Vec<bex_vm::StackFrame>,
+    /// The task had been cancelled, whatever cancelled it (`f.cancel()`, a
+    /// linked token, its parent, shutdown), so its error is not a failure of
+    /// the program.
     pub cancelled: bool,
 }
 
@@ -4449,7 +4452,13 @@ impl BexEngine {
         trace: Vec<bex_vm::StackFrame>,
     ) -> Result<(), EngineError> {
         let child_cancel = thread.vm_thread_cancel().clone();
+        // Read before the error fires the task's own token below: whether the
+        // task had been cancelled, by any route, when it failed.
+        let cancelled = child_cancel.is_cancelled();
         let mut guard = self.futures.acquire(thread.proof()).await;
+        if cancelled {
+            guard.mark_cancelled(future_id)?;
+        }
         guard.err_future(future_id, value, trace)?;
         drop(guard);
         child_cancel.cancel();

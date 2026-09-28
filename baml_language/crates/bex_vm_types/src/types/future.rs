@@ -73,7 +73,8 @@ pub struct Future {
     /// `Pending → terminal` via `compare_exchange` is the unique writer.
     state: AtomicU8,
     /// Metadata orthogonal to the terminal state. `observed` is set when an
-    /// await delivers an error. `cancel_requested` is set by `f.cancel()` even
+    /// await delivers an error. `cancelled` records that cancellation reached
+    /// the producer (see [`Future::was_cancelled`]); `f.cancel()` sets it even
     /// when the future already settled and cancellation cannot change it.
     /// `reported` is set when GC transfers an unreachable error to the
     /// engine-owned reporting queue.
@@ -154,7 +155,8 @@ enum FutureTag {
 }
 
 const FUTURE_FLAG_OBSERVED: u8 = 1 << 0;
-const FUTURE_FLAG_CANCEL_REQUESTED: u8 = 1 << 1;
+/// Cancellation reached the producer: see [`Future::was_cancelled`].
+const FUTURE_FLAG_CANCELLED: u8 = 1 << 1;
 const FUTURE_FLAG_REPORTED: u8 = 1 << 2;
 
 /// Snapshot view of a [`Future`] used for pattern matching at read sites.
@@ -327,8 +329,20 @@ impl Future {
         self.flags.load(Ordering::Acquire) & FUTURE_FLAG_OBSERVED != 0
     }
 
-    pub fn cancel_requested(&self) -> bool {
-        self.flags.load(Ordering::Acquire) & FUTURE_FLAG_CANCEL_REQUESTED != 0
+    /// Whether cancellation reached this future's producer: `f.cancel()` was
+    /// called on it (at any time, even after it settled), or the task's
+    /// cancellation fired by another route (a linked token, its parent's
+    /// cancellation, shutdown) before it settled with an error. An unobserved
+    /// error from such a future is not a failure of the program.
+    pub fn was_cancelled(&self) -> bool {
+        self.flags.load(Ordering::Acquire) & FUTURE_FLAG_CANCELLED != 0
+    }
+
+    /// Record that the producer's cancellation had fired before it failed.
+    /// Called before the error settles, so whoever reads the `Error` state
+    /// also reads this.
+    pub fn mark_cancelled(&self) {
+        self.flags.fetch_or(FUTURE_FLAG_CANCELLED, Ordering::AcqRel);
     }
 
     /// Mark this future's error as transferred to the engine reporting queue.
@@ -515,12 +529,8 @@ impl Future {
     /// race (an unobserved error whose future was then cancelled reports as
     /// a non-fatal cancellation).
     pub fn request_cancel(&self) -> bool {
-        let previous = self
-            .flags
-            .fetch_or(FUTURE_FLAG_CANCEL_REQUESTED, Ordering::AcqRel);
-        if previous & FUTURE_FLAG_CANCEL_REQUESTED != 0
-            || !matches!(self.read(), FutureRead::Pending(_))
-        {
+        let previous = self.flags.fetch_or(FUTURE_FLAG_CANCELLED, Ordering::AcqRel);
+        if previous & FUTURE_FLAG_CANCELLED != 0 || !matches!(self.read(), FutureRead::Pending(_)) {
             return false;
         }
         self.cancel.cancel();

@@ -216,6 +216,113 @@ async fn error_then_cancel_reports_nonfatal_cancellation_flag() {
     assert!(errors[0].cancelled);
 }
 
+/// An unobserved error from a task that was cancelled is non-fatal whatever
+/// cancelled it, not only `Future.cancel()`: here a linked token. The task's
+/// `defer` throws while it unwinds, so it settles with that error.
+#[tokio::test]
+async fn linked_token_cancellation_reports_nonfatal_cancellation_flag() {
+    let source = r#"
+        class Flag { set: bool }
+        function main() -> int {
+            let started = Flag { set: false };
+            let token = baml.spawn.CancelToken.new();
+            let _ = spawn with token {
+                defer { throw "cleanup failed" }
+                started.set = true;
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+                0
+            };
+            while (!started.set) {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(1n));
+            }
+            let _ = token.cancel();
+            1
+        }
+    "#;
+    let engine = make_engine(source);
+    assert_eq!(
+        call_main(&engine, true).await.unwrap(),
+        BexExternalValue::Int(1)
+    );
+    engine.shutdown().await;
+    let errors = engine.take_unhandled_spawn_errors();
+    assert_eq!(errors.len(), 1);
+    assert_eq!(
+        errors[0].value,
+        BexExternalValue::String("cleanup failed".into())
+    );
+    assert!(errors[0].cancelled);
+}
+
+/// ...and here its parent's cancellation, which reaches it through the
+/// cascade.
+#[tokio::test]
+async fn parent_cancellation_reports_nonfatal_cancellation_flag() {
+    let source = r#"
+        class Flag { set: bool }
+        function main() -> int {
+            let started = Flag { set: false };
+            let parent = spawn {
+                let _ = spawn {
+                    defer { throw "cleanup failed" }
+                    started.set = true;
+                    baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+                    0
+                };
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+                0
+            };
+            while (!started.set) {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(1n));
+            }
+            let _ = parent.cancel();
+            1
+        }
+    "#;
+    let engine = make_engine(source);
+    assert_eq!(
+        call_main(&engine, true).await.unwrap(),
+        BexExternalValue::Int(1)
+    );
+    engine.shutdown().await;
+    let errors = engine.take_unhandled_spawn_errors();
+    assert_eq!(errors.len(), 1);
+    assert_eq!(
+        errors[0].value,
+        BexExternalValue::String("cleanup failed".into())
+    );
+    assert!(errors[0].cancelled);
+}
+
+/// A task that failed on its own stays fatal even if a token linked into it
+/// fires afterwards: only cancellation that reached the task while it ran, or
+/// an explicit `Future.cancel()`, makes its error non-fatal.
+#[tokio::test]
+async fn failure_before_its_linked_token_fires_stays_fatal() {
+    let source = r#"
+        function bad() -> int throws string { throw "boom" }
+        function main() -> int {
+            let token = baml.spawn.CancelToken.new();
+            let failing = spawn with token { bad() };
+            while (!failing.is_settled()) {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(1n));
+            }
+            let _ = token.cancel();
+            1
+        }
+    "#;
+    let engine = make_engine(source);
+    assert_eq!(
+        call_main(&engine, true).await.unwrap(),
+        BexExternalValue::Int(1)
+    );
+    engine.shutdown().await;
+    let errors = engine.take_unhandled_spawn_errors();
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].value, BexExternalValue::String("boom".into()));
+    assert!(!errors[0].cancelled);
+}
+
 #[tokio::test]
 async fn handler_receives_unhandled_spawn_error() {
     let source = r#"
