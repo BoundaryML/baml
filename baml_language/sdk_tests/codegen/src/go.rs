@@ -10,7 +10,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use baml_base::{Literal, Name as BaseName};
-use baml_codegen_types::{
+use baml_sdkgen_types::{
     CallableParam, Class, ClassProperty, CodegenFunctionParamMode, DefaultLiteral, Enum,
     EnumVariant, Function, FunctionArgument, FunctionArgumentDefault, Name, NamingConvention,
     Origin, Symbol, SymbolPool, Ty, TypeAlias,
@@ -487,7 +487,7 @@ fn synthetic_method(name: &str, arguments: Vec<(&str, Ty, bool)>, return_type: T
                 docstring: None,
                 ty,
                 default: defaulted.then_some(
-                    baml_codegen_types::FunctionArgumentDefault::Expression { source: None },
+                    baml_sdkgen_types::FunctionArgumentDefault::Expression { source: None },
                 ),
             })
             .collect(),

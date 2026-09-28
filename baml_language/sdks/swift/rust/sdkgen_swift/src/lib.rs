@@ -1,7 +1,7 @@
 //! Swift SDK generator for BAML.
 //!
 //! Mirrors `sdkgen_python_pydantic2`'s public entry point: consumes a
-//! [`baml_codegen_types::SymbolPool`] plus borsh-serialized bytecode and
+//! [`baml_sdkgen_types::SymbolPool`] plus borsh-serialized bytecode and
 //! returns generated Swift sources as `(relative_path, content)` pairs.
 //! The paths are relative to the generated package's `Sources/Baml/`
 //! output root (the harness / CLI decides where that root lives).
@@ -35,8 +35,8 @@ use std::{
 };
 
 use baml_base::qualified_name::AI_STREAM_STREAM;
-use baml_codegen_types::{Class, Name, Symbol, SymbolPool, Ty, TypeAlias};
-pub use baml_codegen_types::{NamingConvention, OutputType};
+use baml_sdkgen_types::{Class, Name, Symbol, SymbolPool, Ty, TypeAlias};
+pub use baml_sdkgen_types::{NamingConvention, OutputType};
 use base64::Engine as _;
 use emit::{
     FnKind, RenderedField, indent_lines, render_callable, render_class, render_enum,
@@ -795,7 +795,7 @@ mod tests {
         Ty::Union(members.into())
     }
     fn literal(value: baml_base::Literal) -> Ty {
-        Ty::Literal(value, baml_codegen_types::Freshness::Regular)
+        Ty::Literal(value, baml_sdkgen_types::Freshness::Regular)
     }
 
     #[test]

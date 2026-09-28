@@ -21,7 +21,7 @@ use std::{
 };
 
 use baml_base::qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_STREAM};
-use baml_codegen_types::FunctionArgumentDefault;
+use baml_sdkgen_types::FunctionArgumentDefault;
 
 use crate::{
     emit::{
@@ -1026,7 +1026,7 @@ fn split_param_names(
 #[cfg(test)]
 mod tests {
     use baml_base::{Literal, Name as BaseName};
-    use baml_codegen_types::{DefaultLiteral, FunctionArgumentDefault, Name, Ty};
+    use baml_sdkgen_types::{DefaultLiteral, FunctionArgumentDefault, Name, Ty};
 
     use super::*;
 

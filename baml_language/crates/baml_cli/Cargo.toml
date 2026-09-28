@@ -19,7 +19,6 @@ workspace = true
 [dependencies]
 baml_artifact = { workspace = true }
 baml_builtins2 = { workspace = true }
-baml_codegen_types = { workspace = true }
 baml_db = { workspace = true }
 baml_exec = { workspace = true }
 baml_fmt = { workspace = true }
@@ -27,6 +26,7 @@ baml_ide = { workspace = true }
 baml_lsp_server = { workspace = true }
 baml_query = { workspace = true }
 baml_release = { workspace = true }
+baml_sdkgen_types = { workspace = true }
 baml_type = { workspace = true }
 baml_version = { workspace = true }
 bex_cache = { workspace = true }

@@ -12,7 +12,7 @@ license = { workspace = true }
 
 [dependencies]
 baml_base = { workspace = true }
-baml_codegen_types = { workspace = true }
+baml_sdkgen_types = { workspace = true }
 askama = { workspace = true }
 indexmap = { workspace = true }
 
@@ -23,5 +23,5 @@ doctest = false
 workspace = true
 
 [dev-dependencies]
-baml_codegen_types = { workspace = true }
+baml_sdkgen_types = { workspace = true }
 pretty_assertions = { workspace = true }

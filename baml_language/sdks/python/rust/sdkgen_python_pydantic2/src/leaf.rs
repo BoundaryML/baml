@@ -12,7 +12,7 @@ use baml_base::{
     Literal,
     qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_STREAM},
 };
-use baml_codegen_types::{DefaultLiteral, FunctionArgumentDefault, Ty};
+use baml_sdkgen_types::{DefaultLiteral, FunctionArgumentDefault, Ty};
 use indexmap::IndexMap;
 
 use crate::{
@@ -578,7 +578,7 @@ fn collect_optional_callables(
             collect_optional_callables(ret, base, seen, out);
             let has_optional = params
                 .iter()
-                .any(|p| p.mode == baml_codegen_types::CodegenFunctionParamMode::Optional);
+                .any(|p| p.mode == baml_sdkgen_types::CodegenFunctionParamMode::Optional);
             if has_optional && seen.insert(ty.clone()) {
                 out.push((ty.clone(), base.to_string()));
             }
@@ -673,7 +673,7 @@ fn collect_root_imports(
 }
 
 fn record_name_routing(
-    name: &baml_codegen_types::Name,
+    name: &baml_sdkgen_types::Name,
     current: &LeafPath,
     out: &mut RootImportSets,
     names: Option<&PythonNames>,
@@ -811,7 +811,7 @@ fn split_hoistable_aliases(
     leaf: &LeafPath,
     aliases: Vec<SortedSymbol>,
 ) -> (Vec<SortedSymbol>, Vec<SortedSymbol>) {
-    let alias_indices: BTreeMap<baml_codegen_types::Name, usize> = aliases
+    let alias_indices: BTreeMap<baml_sdkgen_types::Name, usize> = aliases
         .iter()
         .enumerate()
         .map(|(index, (symbol, _))| match symbol {
@@ -867,7 +867,7 @@ fn split_hoistable_aliases(
 
 /// Whether `name` lands in a leaf under a different top-level package than
 /// `leaf`. The SDK root counts as nobody's outside.
-pub(crate) fn routes_outside_package(leaf: &LeafPath, name: &baml_codegen_types::Name) -> bool {
+pub(crate) fn routes_outside_package(leaf: &LeafPath, name: &baml_sdkgen_types::Name) -> bool {
     match (leaf.segments.first(), route(name).segments.first()) {
         (Some(current), Some(other)) => current != other,
         _ => false,
@@ -875,12 +875,12 @@ pub(crate) fn routes_outside_package(leaf: &LeafPath, name: &baml_codegen_types:
 }
 
 /// Every named symbol (class, interface, enum, alias) `ty` mentions.
-fn collect_ty_names(ty: &Ty, out: &mut Vec<baml_codegen_types::Name>) {
+fn collect_ty_names(ty: &Ty, out: &mut Vec<baml_sdkgen_types::Name>) {
     ty.visit_heads(&mut |name| out.push(name.clone()));
 }
 
 fn sort_aliases(aliases: Vec<(EmittedSymbol, SortKey)>) -> Vec<(EmittedSymbol, SortKey)> {
-    let alias_indices: BTreeMap<baml_codegen_types::Name, usize> = aliases
+    let alias_indices: BTreeMap<baml_sdkgen_types::Name, usize> = aliases
         .iter()
         .enumerate()
         .map(|(index, (symbol, _))| match symbol {
@@ -944,7 +944,7 @@ fn sort_aliases(aliases: Vec<(EmittedSymbol, SortKey)>) -> Vec<(EmittedSymbol, S
 
 fn collect_alias_dependencies(
     ty: &Ty,
-    alias_indices: &BTreeMap<baml_codegen_types::Name, usize>,
+    alias_indices: &BTreeMap<baml_sdkgen_types::Name, usize>,
     out: &mut BTreeSet<usize>,
 ) {
     match ty {
@@ -2401,7 +2401,7 @@ fn render_typed_params(
 /// callback's own language-level default fills any omitted trailing arg.
 fn render_callback_protocol(
     name: &str,
-    params: &[baml_codegen_types::CallableParam],
+    params: &[baml_sdkgen_types::CallableParam],
     ret: &Ty,
     ctx: &TranslateCtx,
 ) -> String {
@@ -2413,7 +2413,7 @@ fn render_callback_protocol(
             .map(|n| n.as_str().to_string())
             .unwrap_or_else(|| format!("arg{idx}"));
         let pty = translate_ty(&p.ty, ctx);
-        if p.mode == baml_codegen_types::CodegenFunctionParamMode::Optional {
+        if p.mode == baml_sdkgen_types::CodegenFunctionParamMode::Optional {
             write!(sig, ", {pname}: {pty} = ...").unwrap();
         } else {
             write!(sig, ", {pname}: {pty}").unwrap();

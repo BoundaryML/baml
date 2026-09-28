@@ -10,7 +10,7 @@
 use std::collections::BTreeSet;
 
 use baml_base::qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_STREAM};
-use baml_codegen_types::{Name, Ty};
+use baml_sdkgen_types::{Name, Ty};
 
 /// Which named types the emitter decided it can emit this run (the
 /// fixpoint result from `lib.rs`), plus how to spell their Swift path.

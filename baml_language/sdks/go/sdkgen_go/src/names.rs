@@ -10,7 +10,7 @@ use std::{
 };
 
 use baml_base::MediaKind;
-use baml_codegen_types::{Name, Symbol, SymbolPool};
+use baml_sdkgen_types::{Name, Symbol, SymbolPool};
 
 use crate::{
     packages::GoPackages,
@@ -1439,7 +1439,7 @@ pub(crate) fn is_go_keyword(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use baml_base::Name as BaseName;
-    use baml_codegen_types::Name;
+    use baml_sdkgen_types::Name;
 
     use super::*;
     use crate::rendering::GeneratorIdent;

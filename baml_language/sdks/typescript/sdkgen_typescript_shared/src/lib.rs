@@ -30,8 +30,8 @@ use std::{
     path::PathBuf,
 };
 
-use baml_codegen_types::{Name, SymbolPool, public_interface_tokens};
-pub use baml_codegen_types::{NamingConvention, OutputType};
+use baml_sdkgen_types::{Name, SymbolPool, public_interface_tokens};
+pub use baml_sdkgen_types::{NamingConvention, OutputType};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 
 use crate::{
@@ -267,14 +267,14 @@ fn render_inlinedbaml(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> Stri
 
 /// Render `s` as a TypeScript double-quoted string literal. JS escaping
 /// rules are byte-compatible with Python's for the ASCII range.
-pub(crate) use baml_codegen_types::quoted_string as ts_string;
+pub(crate) use baml_sdkgen_types::quoted_string as ts_string;
 
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
 
     use baml_base::Name as BaseName;
-    use baml_codegen_types::{
+    use baml_sdkgen_types::{
         Class, Enum, EnumVariant, Function, FunctionArgument, Name, Origin, Symbol, SymbolPool, Ty,
     };
 

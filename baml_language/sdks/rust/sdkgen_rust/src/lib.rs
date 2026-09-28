@@ -1,6 +1,6 @@
 //! Rust SDK code generator for BAML.
 //!
-//! Consumes the language-agnostic [`baml_codegen_types::SymbolPool`] and
+//! Consumes the language-agnostic [`baml_sdkgen_types::SymbolPool`] and
 //! emits a standalone Cargo crate — the generated `baml_sdk` — whose code
 //! links against the `baml_bridge` runtime crate.
 //!
@@ -29,8 +29,8 @@ use std::{
     path::PathBuf,
 };
 
-pub use baml_codegen_types::NamingConvention;
-use baml_codegen_types::{Symbol, SymbolPool};
+pub use baml_sdkgen_types::NamingConvention;
+use baml_sdkgen_types::{Symbol, SymbolPool};
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -529,7 +529,7 @@ baml_bridge = {runtime_dep}
 
 #[cfg(test)]
 mod tests {
-    use baml_codegen_types::{Function, Name, Origin, Ty};
+    use baml_sdkgen_types::{Function, Name, Origin, Ty};
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -580,7 +580,7 @@ mod tests {
         let mut function = nullary_string_fn(n);
         function
             .arguments
-            .push(baml_codegen_types::FunctionArgument {
+            .push(baml_sdkgen_types::FunctionArgument {
                 injected: false,
                 name: baml_base::Name::new("u"),
                 docstring: None,
@@ -593,11 +593,11 @@ mod tests {
 
     fn class_symbol(
         n: &Name,
-        properties: Vec<baml_codegen_types::ClassProperty>,
+        properties: Vec<baml_sdkgen_types::ClassProperty>,
         static_methods: Vec<Function>,
         instance_methods: Vec<Function>,
     ) -> Symbol {
-        Symbol::Class(baml_codegen_types::Class {
+        Symbol::Class(baml_sdkgen_types::Class {
             name: n.clone(),
             generic_params: Vec::new(),
             docstring: None,
@@ -614,13 +614,13 @@ mod tests {
     /// A generic class with the given `<...>` params and properties (no
     /// methods).
     fn generic_class(n: &Name, params: &[&str], properties: Vec<(&str, Ty)>) -> Symbol {
-        Symbol::Class(baml_codegen_types::Class {
+        Symbol::Class(baml_sdkgen_types::Class {
             name: n.clone(),
             generic_params: params.iter().map(|p| baml_base::Name::new(*p)).collect(),
             docstring: None,
             properties: properties
                 .into_iter()
-                .map(|(field, ty)| baml_codegen_types::ClassProperty {
+                .map(|(field, ty)| baml_sdkgen_types::ClassProperty {
                     name: baml_base::Name::new(field),
                     docstring: None,
                     ty,
@@ -687,7 +687,7 @@ mod tests {
             Ty::String,
             Ty::Literal(
                 baml_base::Literal::String("draft".to_string()),
-                baml_codegen_types::Freshness::Regular,
+                baml_sdkgen_types::Freshness::Regular,
             ),
         ]));
         let pool =
@@ -707,11 +707,11 @@ mod tests {
         let union_field = Ty::Union(Box::new([Ty::Class(a.clone(), Box::new([])), Ty::Int]));
         let pool = SymbolPool::from([(
             a.clone(),
-            Symbol::Class(baml_codegen_types::Class {
+            Symbol::Class(baml_sdkgen_types::Class {
                 name: a,
                 generic_params: Vec::new(),
                 docstring: None,
-                properties: vec![baml_codegen_types::ClassProperty {
+                properties: vec![baml_sdkgen_types::ClassProperty {
                     name: baml_base::Name::new("x"),
                     docstring: None,
                     ty: union_field,
@@ -776,7 +776,7 @@ mod tests {
         let n = name("user", &[], "wide_function");
         let mut function = nullary_string_fn(&n);
         function.arguments = (0..8)
-            .map(|index| baml_codegen_types::FunctionArgument {
+            .map(|index| baml_sdkgen_types::FunctionArgument {
                 injected: false,
                 name: baml_base::Name::new(format!("arg_{index}")),
                 docstring: None,
@@ -801,7 +801,7 @@ mod tests {
         let n = name("user", &[], "wide_function@stream");
         let mut function = nullary_string_fn(&n);
         function.arguments = (0..7)
-            .map(|index| baml_codegen_types::FunctionArgument {
+            .map(|index| baml_sdkgen_types::FunctionArgument {
                 injected: false,
                 name: baml_base::Name::new(format!("arg_{index}")),
                 docstring: None,
@@ -826,7 +826,7 @@ mod tests {
         let with_args = name("user", &[], "takes_one");
         let mut function = nullary_string_fn(&with_args);
         function.docstring = Some("Frobnicates the input.".to_string());
-        function.arguments = vec![baml_codegen_types::FunctionArgument {
+        function.arguments = vec![baml_sdkgen_types::FunctionArgument {
             injected: false,
             name: baml_base::Name::new("x"),
             docstring: None,
@@ -858,7 +858,7 @@ mod tests {
     }
 
     fn typevar(index: u32, name: &str) -> Ty {
-        Ty::TypeVar(baml_codegen_types::ParamTy::new(
+        Ty::TypeVar(baml_sdkgen_types::ParamTy::new(
             index,
             baml_base::Name::new(name),
         ))
@@ -890,8 +890,8 @@ mod tests {
         );
     }
 
-    fn arg(name: &str, ty: Ty) -> baml_codegen_types::FunctionArgument {
-        baml_codegen_types::FunctionArgument {
+    fn arg(name: &str, ty: Ty) -> baml_sdkgen_types::FunctionArgument {
+        baml_sdkgen_types::FunctionArgument {
             injected: false,
             name: baml_base::Name::new(name),
             docstring: None,
@@ -1322,7 +1322,7 @@ mod tests {
     fn methods_emit_static_and_instance_bindings() {
         let g = name("user", &[], "Greeter");
         let mut create = nullary_string_fn(&name("user", &[], "create"));
-        create.arguments.push(baml_codegen_types::FunctionArgument {
+        create.arguments.push(baml_sdkgen_types::FunctionArgument {
             injected: false,
             name: baml_base::Name::new("name"),
             docstring: None,
@@ -1332,7 +1332,7 @@ mod tests {
         create.return_type = Ty::Class(g.clone(), Box::new([]));
         let who = nullary_string_fn(&name("user", &[], "who"));
         let mut greet = nullary_string_fn(&name("user", &[], "greet"));
-        greet.arguments.push(baml_codegen_types::FunctionArgument {
+        greet.arguments.push(baml_sdkgen_types::FunctionArgument {
             injected: false,
             name: baml_base::Name::new("greeting"),
             docstring: None,
@@ -1343,7 +1343,7 @@ mod tests {
             g.clone(),
             class_symbol(
                 &g,
-                vec![baml_codegen_types::ClassProperty {
+                vec![baml_sdkgen_types::ClassProperty {
                     name: baml_base::Name::new("name"),
                     docstring: None,
                     ty: Ty::String,
@@ -1439,7 +1439,7 @@ mod tests {
             node.clone(),
             class_symbol(
                 &node,
-                vec![baml_codegen_types::ClassProperty {
+                vec![baml_sdkgen_types::ClassProperty {
                     name: baml_base::Name::new("next"),
                     docstring: None,
                     ty: next_field,
@@ -1468,7 +1468,7 @@ mod tests {
         let h = name("user", &[], "Holder");
         let union = Ty::Union(Box::new([Ty::Int, Ty::String]));
         let mut pick = nullary_string_fn(&name("user", &[], "pick"));
-        pick.arguments.push(baml_codegen_types::FunctionArgument {
+        pick.arguments.push(baml_sdkgen_types::FunctionArgument {
             injected: false,
             name: baml_base::Name::new("u"),
             docstring: None,

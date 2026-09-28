@@ -7,7 +7,6 @@
 
 use std::collections::HashMap;
 
-use baml_codegen_types::{self as cg, Origin, SymbolPool};
 use baml_compiler2_ast::{self as ast, FunctionOrigin};
 use baml_compiler2_hir::{
     compiler2_all_files, file_package,
@@ -15,6 +14,7 @@ use baml_compiler2_hir::{
     package::{Spelling, spelling},
 };
 use baml_db::{Name, ProjectDatabase};
+use baml_sdkgen_types::{self as cg, Origin, SymbolPool};
 use baml_type::{DeclName, Freshness, ParamTy, Ty as TirTy};
 
 // ---------------------------------------------------------------------------

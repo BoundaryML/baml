@@ -18,7 +18,7 @@
 
 use std::collections::{BTreeMap, HashSet};
 
-use baml_codegen_types::{Symbol, SymbolPool, Ty};
+use baml_sdkgen_types::{Symbol, SymbolPool, Ty};
 
 use crate::{analyze::Analysis, routing};
 
