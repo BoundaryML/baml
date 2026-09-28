@@ -9819,35 +9819,72 @@ impl<'db> InferenceContext<'db> {
     /// multi-list union adopts nothing and the literal synthesizes.
     fn expected_list_element(&mut self, expected: &Expectation) -> Option<Ty> {
         let shape = self.expectation_shape(expected)?;
-        match shape.kind() {
+        self.unique_expected_arm(&shape, |arm| match arm.kind() {
             InferTy::List(element) => Some(element.clone()),
-            InferTy::Union(members) => {
-                let mut lists = members.iter().filter_map(|member| match member.kind() {
-                    InferTy::List(element) => Some(element.clone()),
-                    _ => None,
-                });
-                let first = lists.next()?;
-                lists.next().is_none().then_some(first)
-            }
             _ => None,
-        }
+        })
     }
 
     /// The MAP literal's counterpart of `expected_list_element`.
     fn expected_map_entry(&mut self, expected: &Expectation) -> Option<(Ty, Ty)> {
         let shape = self.expectation_shape(expected)?;
-        match shape.kind() {
+        self.unique_expected_arm(&shape, |arm| match arm.kind() {
             InferTy::Map { key, value, .. } => Some((key.clone(), value.clone())),
-            InferTy::Union(members) => {
-                let mut maps = members.iter().filter_map(|member| match member.kind() {
-                    InferTy::Map { key, value, .. } => Some((key.clone(), value.clone())),
-                    _ => None,
-                });
-                let first = maps.next()?;
-                maps.next().is_none().then_some(first)
-            }
             _ => None,
+        })
+    }
+
+    /// The single arm of `ty` that `pick` accepts, looking through nested
+    /// unions and type aliases. An optional `json` expectation is
+    /// `baml.json.json | null`, so resolving only the outer union would
+    /// leave the recursive JSON alias hiding its list and map arms. Two
+    /// accepted arms are ambiguous and give no context.
+    ///
+    /// Each alias expands at most once per search, so recursive aliases
+    /// terminate without a depth limit; a depth limit would make the answer
+    /// depend on how many aliases spell the same type.
+    fn unique_expected_arm<T>(&mut self, ty: &Ty, pick: impl Fn(&Ty) -> Option<T>) -> Option<T> {
+        fn search<T>(
+            this: &mut InferenceContext<'_>,
+            ty: &Ty,
+            pick: &impl Fn(&Ty) -> Option<T>,
+            expanded: &mut Vec<baml_type::DeclName>,
+            found: &mut Option<T>,
+        ) -> bool {
+            match ty.kind() {
+                InferTy::TypeAlias(name) => {
+                    if expanded.contains(name) {
+                        return true;
+                    }
+                    expanded.push(name.clone());
+                    match baml_type::normalize::TypeContext::alias_def(&this.facts, name) {
+                        Some(expansion) => {
+                            search(this, &Ty::from_plain(&expansion), pick, expanded, found)
+                        }
+                        None => true,
+                    }
+                }
+                InferTy::Union(members) => {
+                    let members = members.to_vec();
+                    members
+                        .iter()
+                        .all(|member| search(this, member, pick, expanded, found))
+                }
+                _ => match pick(ty) {
+                    Some(_) if found.is_some() => false,
+                    Some(arm) => {
+                        *found = Some(arm);
+                        true
+                    }
+                    None => true,
+                },
+            }
         }
+
+        let mut found = None;
+        search(self, ty, &pick, &mut Vec::new(), &mut found)
+            .then_some(found)
+            .flatten()
     }
 
     /// The type of a tagged-template body param in scope, innermost frame
