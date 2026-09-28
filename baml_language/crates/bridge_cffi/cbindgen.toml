@@ -73,7 +73,7 @@ include = [
   "BamlHostReleaseCallback",
   "BamlUnhandledSpawnErrorCallback",
   "BamlVersionFn",
-  "BamlInitializeRuntimeFromBytecodeFn",
+  "BamlInitializeRuntimeFromBlobFn",
   "BamlFreeBufferFn",
   "BamlRegisterCallbackFn",
   "BamlCallFunctionFn",
@@ -118,7 +118,7 @@ exclude = [
   "flush_events",
   "version",
   "create_baml_runtime",
-  "initialize_runtime_from_bytecode",
+  "initialize_runtime_from_blob",
   "destroy_baml_runtime",
   "invoke_runtime_cli",
 ]

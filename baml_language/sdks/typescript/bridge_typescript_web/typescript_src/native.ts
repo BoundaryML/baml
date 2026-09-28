@@ -377,7 +377,7 @@ export class HostSpanManager {
 }
 
 export class BamlRuntime {
-  static initializeRuntimeFromBytecode(bytecode: Uint8Array, embeddedBamlToml?: string): BamlRuntime {
+  static initializeRuntimeFromBlob(bytecode: string | Uint8Array, embeddedBamlToml?: string): BamlRuntime {
     ensureWebSysopsConfigured();
     try {
       stageRuntimeBytecode(bytecode, embeddedBamlToml);

@@ -5032,24 +5032,23 @@ fn render_bootstrap(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> String
     out.push_str("import (\n\t\"sync\"\n\n");
     let _ = writeln!(out, "\t\"{BAML_GO_MODULE}\"\n)\n");
     out.push_str("var (\n\tonce          sync.Once\n\tinitializeErr error\n)\n\n");
-    out.push_str("var bytecode = []byte{\n");
-    for chunk in bytecode.chunks(20) {
-        let line = chunk
-            .iter()
-            .map(u8::to_string)
-            .collect::<Vec<_>>()
-            .join(", ");
-        let _ = writeln!(out, "\t{line},");
-    }
-    out.push_str("}\n\n");
+    // One line of encoded bytecode, passed to the runtime as bytes; the
+    // bridge decodes it natively.
+    let _ = writeln!(
+        out,
+        "const bytecode = \"{}\"\n",
+        baml_sdkgen_types::embedded_bytecode_base64(bytecode)
+    );
     if let Some(embedded_baml_toml) = embedded_baml_toml {
         let _ = writeln!(out, "const embeddedBamlToml = {embedded_baml_toml:?}\n");
     }
     out.push_str("func Ensure() error {\n");
     if embedded_baml_toml.is_some() {
-        out.push_str("\tonce.Do(func() { initializeErr = baml_go.InitializeWithMetadata(bytecode, embeddedBamlToml) })\n");
+        out.push_str("\tonce.Do(func() { initializeErr = baml_go.InitializeWithMetadata([]byte(bytecode), embeddedBamlToml) })\n");
     } else {
-        out.push_str("\tonce.Do(func() { initializeErr = baml_go.Initialize(bytecode) })\n");
+        out.push_str(
+            "\tonce.Do(func() { initializeErr = baml_go.Initialize([]byte(bytecode)) })\n",
+        );
     }
     out.push_str("\treturn initializeErr\n}\n");
     out
@@ -5323,8 +5322,10 @@ mod tests {
         assert!(functions.contains("\"user.echo_text\""));
         assert!(functions.contains("baml_go.String(value)"));
         assert!(
-            files[&PathBuf::from("internal/bootstrap/bootstrap.go")]
-                .contains("var bytecode = []byte{\n\t1, 2, 3,")
+            files[&PathBuf::from("internal/bootstrap/bootstrap.go")].contains(&format!(
+                "const bytecode = \"{}\"\n",
+                baml_sdkgen_types::embedded_bytecode_base64(&[1, 2, 3])
+            ))
         );
     }
 
