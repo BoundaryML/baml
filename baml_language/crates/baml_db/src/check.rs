@@ -663,7 +663,7 @@ fn parse_error_tainted_scopes(
             ParseError::UnexpectedToken { span, .. }
             | ParseError::UnexpectedEof { span, .. }
             | ParseError::InvalidSyntax { span, .. }
-            | ParseError::AmbiguousUnion { span }
+            | ParseError::AmbiguousUnion { span, .. }
             | ParseError::RemovedFeature { span, .. } => span,
         };
         let fsid = index.scope_at_offset(span.range.start(), None);
@@ -2182,8 +2182,11 @@ mod tests {
         assert_eq!(ambiguous[0].message, "ambiguous union");
         let rendered = ambiguous[0].message_with_primary_label();
         assert!(!rendered.contains('\n'), "{rendered}");
-        assert!(rendered.contains("`((A) -> B) | ((C) -> D)`"), "{rendered}");
-        assert!(rendered.contains("`(A) -> (B | (C) -> D)`"), "{rendered}");
+        assert_eq!(
+            rendered,
+            "ambiguous union: use parentheses to make the intended grouping explicit: \
+             `(int) -> (string | (image) -> bool)` or `((int) -> string) | ((image) -> bool)`"
+        );
     }
 
     #[test]

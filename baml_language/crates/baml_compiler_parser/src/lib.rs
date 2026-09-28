@@ -8,6 +8,7 @@ use baml_compiler_lexer::lex_file;
 use baml_compiler_syntax::SyntaxNode;
 use rowan::GreenNode;
 
+mod function_union;
 mod parser;
 pub use parser::parse_file;
 

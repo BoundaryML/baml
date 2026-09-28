@@ -1273,13 +1273,13 @@ fn session_parse_error_diagnostic(
         | ParseError::RemovedFeature { message, span } => {
             (DiagnosticId::InvalidSyntax, *span, message.clone())
         }
-        ParseError::AmbiguousUnion { span } => (
+        ParseError::AmbiguousUnion { span, groupings } => (
             DiagnosticId::AmbiguousUnion,
             *span,
             format!(
                 "{}: {}",
                 ParseError::AMBIGUOUS_UNION_MESSAGE,
-                ParseError::AMBIGUOUS_UNION_LABEL
+                ParseError::ambiguous_union_label(groupings)
             ),
         ),
     };
@@ -2736,13 +2736,25 @@ mod tests {
             rowan::TextRange::new(20.into(), 21.into()),
         );
         let diagnostic = session_parse_error_diagnostic(
-            &ParseError::AmbiguousUnion { span },
+            &ParseError::AmbiguousUnion {
+                span,
+                groupings: vec![
+                    "((A) -> B) | ((C) -> D)".into(),
+                    "(A) -> (B | (C) -> D)".into(),
+                ],
+            },
             "submission.baml",
             10,
         );
         assert_eq!(diagnostic.code, DiagnosticId::AmbiguousUnion.code());
         assert_eq!(diagnostic.span.unwrap().start, 10);
-        assert!(diagnostic.message.contains("use parentheses"));
+        assert!(
+            diagnostic
+                .message
+                .ends_with("`((A) -> B) | ((C) -> D)` or `(A) -> (B | (C) -> D)`"),
+            "{}",
+            diagnostic.message
+        );
     }
 
     #[test]

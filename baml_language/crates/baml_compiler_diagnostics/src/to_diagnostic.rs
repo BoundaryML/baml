@@ -47,11 +47,11 @@ impl ToDiagnostic for ParseError {
                     .with_primary(*span, message.clone())
             }
 
-            ParseError::AmbiguousUnion { span } => Diagnostic::error(
+            ParseError::AmbiguousUnion { span, groupings } => Diagnostic::error(
                 DiagnosticId::AmbiguousUnion,
                 ParseError::AMBIGUOUS_UNION_MESSAGE,
             )
-            .with_primary(*span, ParseError::AMBIGUOUS_UNION_LABEL),
+            .with_primary(*span, ParseError::ambiguous_union_label(groupings)),
 
             ParseError::RemovedFeature { message, span } => {
                 Diagnostic::error(DiagnosticId::RemovedFeature, "removed language feature")
