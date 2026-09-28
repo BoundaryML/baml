@@ -154,6 +154,25 @@ pub fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
     platform::get_runtime()
 }
 
+struct PreparedRuntime {
+    runtime: bex_project::PreparedRuntime,
+    error_context: Option<String>,
+}
+
+impl PreparedRuntime {
+    fn build(self) -> Result<Arc<dyn Bex>, BridgeError> {
+        let runtime: Arc<dyn Bex> =
+            self.runtime
+                .build()
+                .map_err(|error| match self.error_context {
+                    Some(context) => BridgeError::Startup(format!("{context}{error}")),
+                    None => error.into(),
+                })?;
+        install_unhandled_spawn_error_handler(&runtime);
+        Ok(runtime)
+    }
+}
+
 /// Initialize the global runtime from serialized BAML bytecode.
 ///
 /// The payload is a versioned artifact containing `bex_vm_types::Program`,
@@ -161,7 +180,7 @@ pub fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
 /// (`baml_artifact::encode_embedded`), which is decoded here so host languages
 /// pass it through untouched. Validation, decoding, and engine construction
 /// live behind
-/// `bex_project::new_from_bytecode` so the bridge stays on the `bex_project`
+/// `bex_project::prepare_from_bytecode` so the bridge stays on the `bex_project`
 /// surface rather than reaching into bex internals. Artifact validation runs
 /// even when the optional generated `baml.toml` metadata is absent.
 pub fn initialize_runtime_from_blob_with_sys_ops(
@@ -169,33 +188,42 @@ pub fn initialize_runtime_from_blob_with_sys_ops(
     embedded_baml_toml: Option<&str>,
     sys_ops: sys_ops::SysOps,
 ) -> Result<Arc<dyn Bex>, BridgeError> {
+    let runtime = prepare_runtime_from_blob(bytecode, embedded_baml_toml, sys_ops)?.build()?;
+    platform::replace_runtime(runtime.clone())?;
+    Ok(runtime)
+}
+
+fn prepare_runtime_from_blob(
+    bytecode: &[u8],
+    embedded_baml_toml: Option<&str>,
+    sys_ops: sys_ops::SysOps,
+) -> Result<PreparedRuntime, BridgeError> {
     let bridge = validate_bytecode_startup_preconditions(bytecode.is_empty())?;
 
     let generated_toolchain_version = embedded_baml_toml
         .map(|manifest| validate_generated_metadata(manifest, bridge))
         .transpose()?;
-    let load_error = |error: &dyn std::fmt::Display| {
-        let generated = generated_toolchain_version
-            .as_deref()
-            .map(|version| format!(" generated using BAML toolchain {version},"))
-            .unwrap_or_default();
-        BridgeError::Startup(format!(
-            "BAML startup failed: generated SDK bytecode could not be loaded.\n\n`baml_sdk`{generated} could not be loaded by {} {}: {error}",
-            bridge.bridge_runtime_name, bridge.bridge_runtime_version,
-        ))
-    };
+    let generated = generated_toolchain_version
+        .as_deref()
+        .map(|version| format!(" generated using BAML toolchain {version},"))
+        .unwrap_or_default();
+    let context = format!(
+        "BAML startup failed: generated SDK bytecode could not be loaded.\n\n`baml_sdk`{generated} could not be loaded by {} {}: ",
+        bridge.bridge_runtime_name, bridge.bridge_runtime_version,
+    );
     let bytecode: std::borrow::Cow<'_, [u8]> = if bytecode.starts_with(baml_artifact::MAGIC) {
         bytecode.into()
     } else {
         baml_artifact::decode_embedded(baml_artifact::ArtifactKind::Program, bytecode)
-            .map_err(|error| load_error(&error))?
+            .map_err(|error| BridgeError::Startup(format!("{context}{error}")))?
             .into()
     };
-    let runtime: Arc<dyn Bex> =
-        bex_project::new_from_bytecode(&bytecode, sys_ops).map_err(|error| load_error(&error))?;
-    install_unhandled_spawn_error_handler(&runtime);
-    platform::replace_runtime(runtime.clone())?;
-    Ok(runtime)
+    let runtime = bex_project::prepare_from_bytecode(&bytecode, sys_ops)
+        .map_err(|error| BridgeError::Startup(format!("{context}{error}")))?;
+    Ok(PreparedRuntime {
+        runtime,
+        error_context: Some(context),
+    })
 }
 
 pub(crate) fn validate_bytecode_startup_preconditions(
@@ -315,6 +343,16 @@ pub fn initialize_runtime_from_files_with_sys_ops(
     src_files: HashMap<String, String>,
     sys_ops: sys_ops::SysOps,
 ) -> Result<Arc<dyn Bex>, BridgeError> {
+    let runtime = prepare_runtime_from_files(root_path, src_files, sys_ops)?.build()?;
+    platform::replace_runtime(runtime.clone())?;
+    Ok(runtime)
+}
+
+fn prepare_runtime_from_files(
+    root_path: &str,
+    src_files: HashMap<String, String>,
+    sys_ops: sys_ops::SysOps,
+) -> Result<PreparedRuntime, BridgeError> {
     // `vfs::MemoryFS` timestamps its root with `SystemTime::now()`, which is
     // unavailable on wasm32-unknown-unknown. WASM therefore uses an equivalent
     // timestamp-free root marker; source contents are supplied separately.
@@ -357,10 +395,10 @@ pub fn initialize_runtime_from_files_with_sys_ops(
         files.insert(bex_project::FsPath::from_str(name), contents);
     }
 
-    let runtime: Arc<dyn Bex> = bex_project::new(project_root, sys_ops, files)?;
-    install_unhandled_spawn_error_handler(&runtime);
-    platform::replace_runtime(runtime.clone())?;
-    Ok(runtime)
+    Ok(PreparedRuntime {
+        runtime: bex_project::prepare(project_root, sys_ops, files)?,
+        error_context: None,
+    })
 }
 
 #[cfg(not(target_arch = "wasm32"))]

@@ -880,6 +880,9 @@ pub enum Instruction {
     JumpIfTrueOrPop(isize),
     /// Keep a non-null value on the taken edge; pop on fallthrough.
     JumpIfNotNullOrPop(isize),
+
+    /// Pop tracing configuration for the immediately following call.
+    SetCallTrace,
 }
 
 /// Compact bytecode opcodes.
@@ -1084,6 +1087,7 @@ pub enum OpCode {
     /// the same u32 global + u16 zero operands as `Call`, preserving every PC.
     /// This opcode is never emitted into serialized `Instruction` streams.
     CallExactArgs,
+    SetCallTrace,
 }
 
 impl OpCode {
@@ -1100,6 +1104,7 @@ impl OpCode {
             | Self::StoreArrayElement
             | Self::StoreMapElement
             | Self::CallIndirect
+            | Self::SetCallTrace
             | Self::Discriminant
             | Self::TypeTag
             | Self::ThrowIfPanic
@@ -1371,6 +1376,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::NarrowBind as u8 => Ok(Self::NarrowBind),
             x if x == Self::Truthy as u8 => Ok(Self::Truthy),
             x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
+            x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
             _ => Err(byte),
         }
     }
@@ -1395,6 +1401,7 @@ impl std::fmt::Display for OpCode {
             Self::StoreArrayElement => "STORE_ARRAY_ELEMENT",
             Self::StoreMapElement => "STORE_MAP_ELEMENT",
             Self::CallIndirect => "CALL_INDIRECT",
+            Self::SetCallTrace => "SET_CALL_TRACE",
 
             Self::Discriminant => "DISCRIMINANT",
             Self::TypeTag => "TYPE_TAG",
@@ -1702,6 +1709,7 @@ impl std::fmt::Display for Instruction {
                 write!(f, "MAKE_GENERIC_FUNCTION_FROM_VALUE ntypeargs={ntypeargs}")
             }
             Instruction::CallIndirect => f.write_str("CALL_INDIRECT"),
+            Instruction::SetCallTrace => f.write_str("SET_CALL_TRACE"),
 
             Instruction::VirtualCall { nargs, ntypeargs } => {
                 write!(f, "VIRTUAL_CALL nargs={nargs} ntypeargs={ntypeargs}")
@@ -2181,6 +2189,7 @@ impl Bytecode {
                 | Instruction::StoreArrayElement
                 | Instruction::StoreMapElement
                 | Instruction::CallIndirect
+                | Instruction::SetCallTrace
                 | Instruction::Discriminant
                 | Instruction::TypeTag
                 | Instruction::ThrowIfPanic
@@ -2552,6 +2561,7 @@ impl Bytecode {
             Instruction::StoreArrayElement => OpCode::StoreArrayElement,
             Instruction::StoreMapElement => OpCode::StoreMapElement,
             Instruction::CallIndirect => OpCode::CallIndirect,
+            Instruction::SetCallTrace => OpCode::SetCallTrace,
 
             Instruction::Discriminant => OpCode::Discriminant,
             Instruction::TypeTag => OpCode::TypeTag,
@@ -2735,6 +2745,33 @@ mod compact_tests {
             handler_context_table: Vec::new(),
             compact: None,
         }
+    }
+
+    #[test]
+    fn trace_call_prefix_survives_serialization() {
+        let bytecode = make_bytecode(
+            vec![
+                Instruction::SetCallTrace,
+                Instruction::CallIndirect,
+                Instruction::Return,
+            ],
+            vec![],
+        );
+        let serialized = borsh::to_vec(&bytecode).unwrap();
+        let restored: Bytecode = borsh::from_slice(&serialized).unwrap();
+        let compact = restored.lower_to_compact();
+        assert_eq!(
+            compact.code,
+            vec![
+                OpCode::SetCallTrace as u8,
+                OpCode::CallIndirect as u8,
+                OpCode::Return as u8,
+            ]
+        );
+        assert_eq!(
+            OpCode::try_from(OpCode::SetCallTrace as u8).unwrap(),
+            OpCode::SetCallTrace
+        );
     }
 
     #[test]

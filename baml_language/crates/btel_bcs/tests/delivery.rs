@@ -883,14 +883,18 @@ async fn snapshot_owner_saturation_waits_until_planning_releases_owners() {
     let base = server.uri();
     let prepared = Arc::new(tokio::sync::Notify::new());
     let observed = prepared.clone();
+    let release = Arc::new(AtomicBool::new(false));
+    let released = release.clone();
     Mock::given(method("POST"))
         .respond_with(move |r: &Request| {
             observed.notify_one();
-            ResponseTemplate::new(200)
-                .set_body_json(response(r, &base, &[0]))
-                .set_delay(Duration::from_millis(100))
+            if released.load(Ordering::Acquire) {
+                ResponseTemplate::new(200).set_body_json(response(r, &base, &[0]))
+            } else {
+                ResponseTemplate::new(503)
+            }
         })
-        .expect(2)
+        .expect(2..)
         .mount(&server)
         .await;
     Mock::given(method("PUT"))
@@ -902,6 +906,9 @@ async fn snapshot_owner_saturation_waits_until_planning_releases_owners() {
     settings.max_pending_snapshots = 1;
     settings.max_candidates = 1;
     settings.max_targets = 2;
+    settings.max_attempts = 100;
+    settings.retry_delay = Duration::from_millis(10);
+    settings.request_timeout = Duration::from_secs(2);
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
     let handle = delivery.handle();
     let pool = SnapshotPool::new(2, Limits::default());
@@ -931,6 +938,7 @@ async fn snapshot_owner_saturation_waits_until_planning_releases_owners() {
             .is_err()
     );
     assert_eq!(pool.stats().in_use, 2);
+    release.store(true, Ordering::Release);
     assert_eq!(
         tokio::time::timeout(Duration::from_secs(2), waiting)
             .await

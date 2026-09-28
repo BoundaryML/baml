@@ -5,6 +5,7 @@ use btel_processor::{AggregateDelta, Publisher};
 use btel_records::SpanRecord;
 use btel_settings::{encoding, publisher as settings};
 use btel_snapshot::Snapshot;
+pub use btel_types::RecordingId;
 use btel_types::TelemetryId;
 use prost::Message;
 pub use settings::RecordingConfig;
@@ -14,19 +15,6 @@ use crate::{ConversionBuffer, proto};
 
 /// `RecordingFile.errors`, written from pre-encoded bytes after the rest.
 const ERRORS_FIELD: u32 = 8;
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct RecordingId([u8; 16]);
-impl RecordingId {
-    pub fn generate() -> Self {
-        Self(*uuid::Uuid::new_v4().as_bytes())
-    }
-    pub fn from_bytes(bytes: [u8; 16]) -> Option<Self> {
-        (bytes != [0; 16]).then_some(Self(bytes))
-    }
-    pub fn as_bytes(&self) -> &[u8; 16] {
-        &self.0
-    }
-}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RecordingError {
@@ -215,7 +203,7 @@ impl RecordingBuilder {
             header: Some(proto::RecordingHeader {
                 format_major: encoding::FORMAT_MAJOR,
                 format_minor: encoding::FORMAT_MINOR,
-                recording_id: self.id.0.to_vec(),
+                recording_id: self.id.as_bytes().to_vec(),
                 source_snapshot_id: self.source_snapshot_id.map(|id| id.to_vec()),
             }),
             sequence: sequence.get(),

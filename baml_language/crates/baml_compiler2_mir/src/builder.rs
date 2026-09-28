@@ -376,6 +376,7 @@ impl<'db> MirBuilder<'db> {
             "Call destination must be a local place"
         );
         self.set_terminator(Terminator::Call {
+            has_trace: false,
             argument_layout: None,
             callee,
             args,
@@ -387,16 +388,31 @@ impl<'db> MirBuilder<'db> {
     }
 
     /// Attach the checked argument layout to the call terminator just emitted.
+    /// The layout describes only callee parameters; one extra trailing operand
+    /// is the invocation's trace attachment.
     pub(crate) fn set_call_layout(&mut self, layout: Option<baml_type::CallLayout>) {
         match &mut self.current_block_mut().terminator {
             Some(
                 Terminator::Call {
-                    argument_layout, ..
+                    argument_layout,
+                    args,
+                    ntypeargs,
+                    has_trace,
+                    ..
                 }
                 | Terminator::VirtualCall {
-                    argument_layout, ..
+                    argument_layout,
+                    args,
+                    ntypeargs,
+                    has_trace,
+                    ..
                 },
-            ) => *argument_layout = layout,
+            ) => {
+                *has_trace = layout
+                    .as_ref()
+                    .is_some_and(|layout| args.len() == *ntypeargs + layout.len() + 1);
+                *argument_layout = layout;
+            }
             _ => unreachable!("call layout requires a call terminator"),
         }
     }
@@ -422,6 +438,7 @@ impl<'db> MirBuilder<'db> {
             "VirtualCall must carry at least the receiver value argument"
         );
         self.set_terminator(Terminator::VirtualCall {
+            has_trace: false,
             argument_layout: None,
             iface,
             method,

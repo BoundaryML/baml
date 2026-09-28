@@ -2235,6 +2235,7 @@ mod tests {
                         callee: Operand::Constant(Constant::Null),
                         args: vec![],
                         ntypeargs: 0,
+                        has_trace: false,
                         destination: Place::Local(target),
                         target: BlockId(1),
                         unwind: None,
@@ -2299,6 +2300,7 @@ mod tests {
                         callee: Operand::Constant(Constant::Null),
                         args: vec![],
                         ntypeargs: 0,
+                        has_trace: false,
                         destination: Place::Local(result),
                         target: BlockId(1),
                         unwind: None,
@@ -2697,6 +2699,7 @@ mod tests {
 
     fn call_into_dest(destination: Local, target: usize) -> Terminator<'static> {
         Terminator::Call {
+            has_trace: false,
             argument_layout: None,
             callee: Operand::Constant(Constant::Null),
             args: vec![],
@@ -3184,6 +3187,7 @@ mod tests {
 
     fn call_into(target: BlockId, unwind: Option<BlockId>) -> Terminator<'static> {
         Terminator::Call {
+            has_trace: false,
             argument_layout: None,
             callee: Operand::Constant(Constant::Null),
             args: vec![],
@@ -3196,6 +3200,7 @@ mod tests {
 
     fn virtual_call_into(target: BlockId) -> Terminator<'static> {
         Terminator::VirtualCall {
+            has_trace: false,
             argument_layout: None,
             iface: baml_type::TyTemplateInterface::new(
                 baml_type::TypeName::from_dotted_path("baml.ops.Equals"),
@@ -3453,6 +3458,7 @@ mod tests {
                         callee: Operand::Constant(Constant::Null),
                         args: vec![Operand::copy_local(array)],
                         ntypeargs: 0,
+                        has_trace: false,
                         destination: Place::Local(call_result),
                         target: BlockId(2),
                         unwind: None,
