@@ -23,10 +23,7 @@ use baml_type::{MediaKind, Name};
 use bex_heap::{BexHeap, Generation};
 use bex_vm_types::{
     HeapPtr, Object, ObjectIndex, TypeHead,
-    types::{
-        LocalName, MethodImpl, Package, PackageKind, ProgramImplRule, ProgramPackage,
-        RuntimeImplRule,
-    },
+    types::{LocalName, MethodImpl, Package, ProgramImplRule, ProgramPackage, RuntimeImplRule},
 };
 use indexmap::IndexMap;
 
@@ -40,11 +37,26 @@ impl crate::BexVm {
     pub(crate) fn alloc_private_type_owner(&mut self) -> HeapPtr {
         use bex_heap::TlabHolder;
         self.tlab_mut().alloc(Object::Package(Box::new(Package {
-            kind: PackageKind::Runtime(Box::new(bex_vm_types::types::RuntimePackage {
+            name: Name::default(),
+            edges: IndexMap::new(),
+            exported_names: Vec::new(),
+            classes: IndexMap::new(),
+            enums: IndexMap::new(),
+            interfaces: IndexMap::new(),
+            impl_rules: IndexMap::new(),
+            type_aliases: IndexMap::new(),
+            globals: IndexMap::new(),
+            slots: bex_vm_types::types::Slots::Own {
+                cells: Box::new([]),
                 initialized: true,
-                ..Default::default()
-            })),
-            ..Default::default()
+            },
+            objects: bex_vm_types::types::Objects::Own(Box::new([])),
+            interface_blob: Vec::new(),
+            init: None,
+            test_init: None,
+            mounted_types: IndexMap::new(),
+            diagnostics: Vec::new(),
+            session: None,
         })))
     }
 }
@@ -460,26 +472,37 @@ fn fill_package_slots(
             edges: pkg
                 .edges
                 .iter()
-                .map(|(edge, ordinal)| (edge.clone(), package_ptrs[*ordinal as usize]))
+                .map(|edge| {
+                    (
+                        edge.name.clone(),
+                        bex_vm_types::types::Edge {
+                            target: package_ptrs[edge.target as usize],
+                            kind: edge.kind,
+                        },
+                    )
+                })
                 .collect(),
             exported_names: pkg.exported_names.clone(),
             classes: resolve_members(heap, &pkg.classes),
             enums: resolve_members(heap, &pkg.enums),
             interfaces: resolve_members(heap, &pkg.interfaces),
             impl_rules,
-            functions: resolve_members(heap, &pkg.functions),
             type_aliases: resolve_members(heap, &pkg.type_aliases),
-            globals: pkg
-                .globals
-                .iter()
-                .map(|(path, slot)| (path.clone(), slot.raw()))
-                .collect(),
+            globals: pkg.globals.clone(),
+            slots: bex_vm_types::types::Slots::Program {
+                base: pkg.slot_base,
+            },
+            objects: bex_vm_types::types::Objects::Program,
             interface_blob: pkg.interface_blob.clone(),
+            init: pkg
+                .init
+                .map(|index| heap.compile_time_ptr(index.into_raw())),
             test_init: pkg
                 .test_init
                 .map(|index| heap.compile_time_ptr(index.into_raw())),
             mounted_types: IndexMap::new(),
-            kind: PackageKind::Static,
+            diagnostics: Vec::new(),
+            session: None,
         };
         heap.set_compile_time_object(slots.package_slot, Object::Package(Box::new(package)));
     }

@@ -188,7 +188,19 @@ fn link_set<'a>(
                 edges: package
                     .edges
                     .iter()
-                    .filter_map(|(edge, root)| Some((edge.clone(), position(*root)?)))
+                    .filter_map(|(edge, target)| {
+                        Some(baml_linker::LinkEdge {
+                            name: edge.clone(),
+                            target: position(*target)?,
+                            // The language packages are the prelude: reached
+                            // under fixed names, never declared.
+                            kind: if target.kind(db) == baml_base::SourceRootKind::Stdlib {
+                                bex_vm_types::types::EdgeKind::Prelude
+                            } else {
+                                bex_vm_types::types::EdgeKind::Declared
+                            },
+                        })
+                    })
                     .collect(),
                 unit: &package.emitted.unit,
                 record: &package.emitted.record,

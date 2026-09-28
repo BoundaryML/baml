@@ -174,7 +174,6 @@ impl Object {
 enum ObjectWire {
     Function(Box<Function>),
     Interface(Box<InterfaceDef>),
-    Package(Box<Package>),
     ImplRule(Box<RuntimeImplRule>),
     Class(Box<Class>),
     Instance(Instance),
@@ -226,7 +225,12 @@ impl BorshSerialize for Object {
         let proxy = match self {
             Self::Function(v) => ObjectWire::Function(v.clone()),
             Self::Interface(v) => ObjectWire::Interface(v.clone()),
-            Self::Package(v) => ObjectWire::Package(v.clone()),
+            Self::Package(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "a package object has no wire form; `ProgramPackage` is its wire twin",
+                ));
+            }
             Self::ImplRule(v) => ObjectWire::ImplRule(v.clone()),
             Self::Class(v) => ObjectWire::Class(v.clone()),
             Self::Instance(v) => ObjectWire::Instance(v.clone()),
@@ -283,7 +287,6 @@ impl BorshDeserialize for Object {
         Ok(match proxy {
             ObjectWire::Function(v) => Self::Function(v),
             ObjectWire::Interface(v) => Self::Interface(v),
-            ObjectWire::Package(v) => Self::Package(v),
             ObjectWire::ImplRule(v) => Self::ImplRule(v),
             ObjectWire::Class(v) => Self::Class(v),
             ObjectWire::Instance(v) => Self::Instance(v),

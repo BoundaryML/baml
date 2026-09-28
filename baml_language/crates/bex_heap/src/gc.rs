@@ -29,7 +29,7 @@ use std::{cell::UnsafeCell, collections::HashMap};
 
 use bex_vm_types::{
     FutureRead, HeapPtr, Object, Value,
-    types::{Future, PackageKind},
+    types::{Future, Objects, Slots},
 };
 
 use crate::{
@@ -675,29 +675,20 @@ impl BexHeap {
                 worklist.extend(package.classes.values().copied());
                 worklist.extend(package.enums.values().copied());
                 worklist.extend(package.interfaces.values().copied());
-                worklist.extend(package.functions.values().copied());
                 worklist.extend(package.type_aliases.values().copied());
                 worklist.extend(package.mounted_types.values().copied());
-                worklist.extend(package.edges.values().copied());
+                worklist.extend(package.edges.values().map(|edge| edge.target));
+                worklist.extend(package.init);
                 worklist.extend(package.test_init);
                 for (interface, rules) in &package.impl_rules {
                     worklist.push(*interface);
                     worklist.extend(rules.iter().copied());
                 }
-                match &package.kind {
-                    PackageKind::Static => {}
-                    PackageKind::Runtime(runtime) | PackageKind::Session { runtime, .. } => {
-                        worklist.extend(runtime.objects.iter().copied());
-                        worklist.extend(runtime.type_values.values().copied());
-                        worklist.extend(runtime.dependencies.iter().copied());
-                        worklist.extend(runtime.init);
-                        worklist.extend(
-                            runtime
-                                .globals
-                                .iter()
-                                .filter_map(|slot| slot.load().as_object_ptr()),
-                        );
-                    }
+                if let Slots::Own { cells, .. } = &package.slots {
+                    worklist.extend(cells.iter().filter_map(|slot| slot.load().as_object_ptr()));
+                }
+                if let Objects::Own(objects) = &package.objects {
+                    worklist.extend(objects.iter().copied());
                 }
             }
             Object::Function(function) => {
@@ -929,19 +920,32 @@ impl BexHeap {
                     .values_mut()
                     .chain(package.enums.values_mut())
                     .chain(package.interfaces.values_mut())
-                    .chain(package.functions.values_mut())
                     .chain(package.type_aliases.values_mut())
                     .chain(package.mounted_types.values_mut())
-                    .chain(package.edges.values_mut())
+                    .chain(package.edges.values_mut().map(|edge| &mut edge.target))
                 {
                     if let Some(&new_ptr) = forwarding.get(ptr) {
                         *ptr = new_ptr;
                     }
                 }
-                if let Some(ptr) = &mut package.test_init
-                    && let Some(&new_ptr) = forwarding.get(ptr)
-                {
-                    *ptr = new_ptr;
+                for ptr in package.init.iter_mut().chain(package.test_init.iter_mut()) {
+                    if let Some(&new_ptr) = forwarding.get(ptr) {
+                        *ptr = new_ptr;
+                    }
+                }
+                if let Slots::Own { cells, .. } = &package.slots {
+                    for slot in cells.iter() {
+                        let mut value = slot.load();
+                        self.fixup_value(&mut value, forwarding);
+                        slot.store(value);
+                    }
+                }
+                if let Objects::Own(objects) = &mut package.objects {
+                    for ptr in objects.iter_mut() {
+                        if let Some(&new_ptr) = forwarding.get(ptr) {
+                            *ptr = new_ptr;
+                        }
+                    }
                 }
                 let old_rules = std::mem::take(&mut package.impl_rules);
                 package.impl_rules = old_rules
@@ -955,44 +959,6 @@ impl BexHeap {
                         (interface, rules)
                     })
                     .collect();
-                match &mut package.kind {
-                    PackageKind::Static => {}
-                    PackageKind::Runtime(runtime) | PackageKind::Session { runtime, .. } => {
-                        for ptr in runtime.objects.iter_mut() {
-                            if let Some(&new_ptr) = forwarding.get(ptr) {
-                                *ptr = new_ptr;
-                            }
-                        }
-                        // Keyed by the declaration each value names, so the keys
-                        // move too — rebuilt through the forwarding map rather than
-                        // mutated in place, as `impl_rules` above is.
-                        let old_type_values = std::mem::take(&mut runtime.type_values);
-                        runtime.type_values = old_type_values
-                            .into_iter()
-                            .map(|(declaration, value)| {
-                                (
-                                    forwarding.get(&declaration).copied().unwrap_or(declaration),
-                                    forwarding.get(&value).copied().unwrap_or(value),
-                                )
-                            })
-                            .collect();
-                        for ptr in runtime.dependencies.iter_mut() {
-                            if let Some(&new_ptr) = forwarding.get(ptr) {
-                                *ptr = new_ptr;
-                            }
-                        }
-                        if let Some(ptr) = &mut runtime.init
-                            && let Some(&new_ptr) = forwarding.get(ptr)
-                        {
-                            *ptr = new_ptr;
-                        }
-                        for slot in &runtime.globals {
-                            let mut value = slot.load();
-                            self.fixup_value(&mut value, forwarding);
-                            slot.store(value);
-                        }
-                    }
-                }
             }
             Object::Function(function) => {
                 if let Some(&new_ptr) = forwarding.get(&function.runtime_package) {
@@ -1331,10 +1297,9 @@ impl BexHeap {
                     .values()
                     .chain(package.enums.values())
                     .chain(package.interfaces.values())
-                    .chain(package.functions.values())
                     .chain(package.type_aliases.values())
                     .chain(package.mounted_types.values())
-                    .chain(package.edges.values())
+                    .chain(package.edges.values().map(|edge| &edge.target))
                     .copied();
                 worklist.extend(refs.filter(|ptr| self.generation_of(*ptr).is_young()));
                 worklist.extend(
@@ -1346,36 +1311,28 @@ impl BexHeap {
                         })
                         .filter(|ptr| self.generation_of(*ptr).is_young()),
                 );
-                if let Some(ptr) = package.test_init
-                    && self.generation_of(ptr).is_young()
-                {
-                    worklist.push(ptr);
+                worklist.extend(
+                    package
+                        .init
+                        .into_iter()
+                        .chain(package.test_init)
+                        .filter(|ptr| self.generation_of(*ptr).is_young()),
+                );
+                if let Slots::Own { cells, .. } = &package.slots {
+                    worklist.extend(
+                        cells
+                            .iter()
+                            .filter_map(|slot| slot.load().as_object_ptr())
+                            .filter(|ptr| self.generation_of(*ptr).is_young()),
+                    );
                 }
-                match &package.kind {
-                    PackageKind::Static => {}
-                    PackageKind::Runtime(runtime) | PackageKind::Session { runtime, .. } => {
-                        worklist.extend(
-                            runtime
-                                .objects
-                                .iter()
-                                .chain(runtime.type_values.values())
-                                .chain(runtime.dependencies.iter())
-                                .copied()
-                                .filter(|ptr| self.generation_of(*ptr).is_young()),
-                        );
-                        if let Some(ptr) = runtime.init
-                            && self.generation_of(ptr).is_young()
-                        {
-                            worklist.push(ptr);
-                        }
-                        worklist.extend(
-                            runtime
-                                .globals
-                                .iter()
-                                .filter_map(|slot| slot.load().as_object_ptr())
-                                .filter(|ptr| self.generation_of(*ptr).is_young()),
-                        );
-                    }
+                if let Objects::Own(objects) = &package.objects {
+                    worklist.extend(
+                        objects
+                            .iter()
+                            .copied()
+                            .filter(|ptr| self.generation_of(*ptr).is_young()),
+                    );
                 }
             }
             Object::Function(function) => {

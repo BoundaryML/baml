@@ -89,9 +89,7 @@ fn assert_identity_tables(label: &str, program: &Program) {
         }
         let rendered_slots = callables
             .iter()
-            .filter(|(name, callable)| {
-                name.starts_with(&format!("{}.", package.name)) && callable.slot.is_some()
-            })
+            .filter(|(name, _)| name.starts_with(&format!("{}.", package.name)))
             .count();
         assert!(
             package.globals.len() >= rendered_slots,

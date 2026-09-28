@@ -45,7 +45,11 @@ impl Assembler<'_, '_> {
                 edges: package
                     .edges
                     .iter()
-                    .map(|(edge, id)| (edge.clone(), id.0))
+                    .map(|edge| bex_vm_types::types::ProgramEdge {
+                        name: edge.name.clone(),
+                        target: edge.target.0,
+                        kind: edge.kind,
+                    })
                     .collect(),
                 ..ProgramPackage::default()
             })
@@ -53,7 +57,7 @@ impl Assembler<'_, '_> {
         for (id, package) in self.set.ids().zip(&mut packages) {
             self.fill_slots(id, &mut program, package)?;
             self.fill_tables(id, package);
-            self.fill_record(id, package)?;
+            self.fill_record(id, package);
             self.fill_impl_rules(id, &program, package)?;
         }
         self.fill_tails(&mut program, &mut packages)?;
@@ -122,7 +126,8 @@ impl Assembler<'_, '_> {
         Ok(())
     }
 
-    /// Fill a unit's global slots and its package's own slot table.
+    /// Fill a unit's global slots and its package's slot map: each cell as an
+    /// ordinal from the package's base in the program pool.
     fn fill_slots(
         &self,
         id: LinkPackageId,
@@ -130,6 +135,7 @@ impl Assembler<'_, '_> {
         package: &mut ProgramPackage,
     ) -> Result<(), LinkError> {
         let name = self.set.name(id);
+        package.slot_base = GlobalIndex::from_raw(self.slots.units[id].func_base);
         for (path, flat) in &self.set.package(id).unit.exports.globals {
             let slot = self.slots.units[id]
                 .local(*flat as usize)
@@ -147,11 +153,12 @@ impl Assembler<'_, '_> {
                 DeclPath::Let(_) => {}
                 _ => unreachable!("the partition was validated"),
             }
-            if !matches!(path, DeclPath::InterfaceBody(_)) {
-                package
-                    .globals
-                    .insert(path.clone(), GlobalIndex::from_raw(slot));
-            }
+            debug_assert_eq!(
+                slot,
+                package.slot_base.raw() + *flat as usize,
+                "a unit's slots are contiguous from its base"
+            );
+            package.globals.insert(path.clone(), *flat);
         }
         Ok(())
     }
@@ -172,11 +179,7 @@ impl Assembler<'_, '_> {
     }
 
     /// Copy the package record in, resolving its exported callables.
-    fn fill_record(
-        &self,
-        id: LinkPackageId,
-        package: &mut ProgramPackage,
-    ) -> Result<(), LinkError> {
+    fn fill_record(&self, id: LinkPackageId, package: &mut ProgramPackage) {
         let link_package = self.set.package(id);
         package
             .exported_names
@@ -184,19 +187,6 @@ impl Assembler<'_, '_> {
         package
             .interface_blob
             .clone_from(&link_package.record.interface_blob);
-        for (local, function) in &link_package.record.functions {
-            let path = DeclPath::Function(function.clone());
-            let Some(&abs) = self.exports.get(&(id, path.clone())) else {
-                return Err(LinkError::UnresolvedImport {
-                    package: link_package.name.clone(),
-                    path,
-                });
-            };
-            package
-                .functions
-                .insert(local.clone(), ObjectIndex::from_raw(abs));
-        }
-        Ok(())
     }
 
     /// Resolve a unit's impl rules: the interface head through its operand

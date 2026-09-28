@@ -197,9 +197,7 @@ impl<'vm> ImplResolver<'vm> {
             if let Some(rules) = package.impl_rules.get(&iface_ptr) {
                 pointers.extend(rules);
             }
-            if let Some(runtime) = package.runtime() {
-                packages.extend(runtime.dependencies.iter().copied());
-            }
+            packages.extend(package.declared());
         }
         // A rule can be reachable both through the static index and through
         // a package that owns it (a witnessed runtime class's private owner

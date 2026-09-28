@@ -21,7 +21,7 @@ use baml_type::{normalize, normalize::TypeContext};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     DeclPath, FnPath, HeapPtr, Interface, Object, RealizedTy, SessionEvalLease, Ty, TyTemplate,
-    types::{LocalName, Package, PackageKind, RuntimePackage, SessionState, TypeValue, Value},
+    types::{Edge, EdgeKind, LocalName, Objects, Package, SessionState, Slots, TypeValue, Value},
 };
 use indexmap::IndexMap;
 
@@ -96,17 +96,31 @@ impl BamlPackageReflect for PackageReflectImpl {
 fn runtime_edges(
     vm: &BexVm,
     declared: &IndexMap<String, HeapPtr>,
-) -> IndexMap<baml_type::Name, HeapPtr> {
-    let mut edges: IndexMap<baml_type::Name, HeapPtr> = declared
+) -> IndexMap<baml_type::Name, Edge> {
+    let mut edges: IndexMap<baml_type::Name, Edge> = declared
         .iter()
-        .map(|(alias, ptr)| (baml_type::Name::new(alias), *ptr))
+        .map(|(alias, ptr)| {
+            (
+                baml_type::Name::new(alias),
+                Edge {
+                    target: *ptr,
+                    kind: EdgeKind::Declared,
+                },
+            )
+        })
         .collect();
     for name in baml_builtins2::stdlib_package_names() {
         let name = baml_type::Name::new(name);
         if !edges.contains_key(&name)
-            && let Some(ptr) = vm.packages.accessible(&name)
+            && let Some(target) = vm.packages.accessible(&name)
         {
-            edges.insert(name, ptr);
+            edges.insert(
+                name,
+                Edge {
+                    target,
+                    kind: EdgeKind::Prelude,
+                },
+            );
         }
     }
     edges
@@ -194,23 +208,14 @@ fn display_local_name(name: &LocalName) -> String {
         .join(".")
 }
 
+/// The exact type value `Package.with_types` attached under `name`, if any.
+/// A declaration's own type value is not stored: a `type` naming it is built
+/// off its head on demand, and compares by that head's identity.
 fn stored_package_type(package: &Package, name: &LocalName) -> Option<HeapPtr> {
     name.namespace
         .is_empty()
         .then(|| package.mounted_types.get(name.name.as_str()).copied())
         .flatten()
-        .or_else(|| {
-            // Two hops, each keyed by what it is actually indexed on: the
-            // package's export namespace resolves the source-visible name to a
-            // declaration, and the created-once table is keyed by that
-            // declaration.
-            let declaration = package
-                .classes
-                .get(name)
-                .or_else(|| package.enums.get(name))
-                .or_else(|| package.interfaces.get(name))?;
-            package.runtime()?.type_values.get(declaration).copied()
-        })
 }
 
 /// Runtime type facts rooted at the Package being inspected, not at the code
@@ -358,62 +363,6 @@ fn package_interface_type(
     super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Interface, ty_value)
 }
 
-pub(super) fn allocate_runtime_declaration_types(
-    vm: &mut BexVm,
-    classes: &IndexMap<LocalName, HeapPtr>,
-    enums: &IndexMap<LocalName, HeapPtr>,
-    interfaces: &IndexMap<LocalName, HeapPtr>,
-) -> IndexMap<HeapPtr, HeapPtr> {
-    let class_rows = classes
-        .values()
-        .filter_map(|&class_ptr| match vm.get_object(class_ptr) {
-            Object::Class(class) => Some((
-                class_ptr,
-                RealizedTy::Class(
-                    bex_vm_types::TypeHead::new(class_ptr, class.type_tag),
-                    Box::new([]),
-                ),
-            )),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    let enum_rows = enums
-        .values()
-        .filter_map(|&enum_ptr| match vm.get_object(enum_ptr) {
-            Object::Enum(enm) => Some((
-                enum_ptr,
-                RealizedTy::Enum(bex_vm_types::TypeHead::new(enum_ptr, enm.type_tag)),
-            )),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    let interface_rows = interfaces
-        .values()
-        .filter_map(|&interface_ptr| match vm.get_object(interface_ptr) {
-            Object::Interface(interface) => Some((
-                interface_ptr,
-                RealizedTy::Interface(
-                    bex_vm_types::TypeHead::new(interface_ptr, interface.type_tag),
-                    Box::new([]),
-                    Box::new([]),
-                ),
-            )),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-
-    // Each type value's head points at the declaration it names, so the value
-    // reaches its definition without a side table; the declaration's own
-    // `owner`, set when the loader adopted it, is what keeps the package (and
-    // so its globals and dependencies) alive.
-    class_rows
-        .into_iter()
-        .chain(enum_rows)
-        .chain(interface_rows)
-        .map(|(declaration, ty)| (declaration, vm.alloc_type(TypeValue::new(ty))))
-        .collect()
-}
-
 /// `testing.TestCollector.new`, through the prelude package's tables: the
 /// stdlib package by its fixed name, the class by its item path, the
 /// constructor through the class's method table.
@@ -437,19 +386,20 @@ fn test_collector_constructor(vm: &BexVm) -> Option<HeapPtr> {
 }
 
 fn package_function_value(vm: &mut BexVm, package_ptr: HeapPtr, name: &LocalName) -> Option<Value> {
-    // The slot table is the one road for both kinds of package: a runtime
-    // package's own slots, a static package's mirror of the program's.
+    // The slot map is the one road for both kinds of package; `slots` says
+    // which table its ordinal addresses.
     let (slot, runtime_package) = match vm.get_object(package_ptr) {
         Object::Package(package) => {
             let slot = *package
                 .globals
                 .get(&DeclPath::Function(FnPath::Free(name.clone())))?;
-            let owner = if package.runtime().is_some() {
-                package_ptr
-            } else {
-                HeapPtr::null()
+            // The index addresses whichever table the package's cells live
+            // in: the program pool (no owner) or the package's own (owner).
+            let (index, owner) = match &package.slots {
+                Slots::Program { base } => (base.raw() + slot as usize, HeapPtr::null()),
+                Slots::Own { .. } => (slot as usize, package_ptr),
             };
-            (bex_vm_types::GlobalIndex::from_raw(slot), owner)
+            (bex_vm_types::GlobalIndex::from_raw(index), owner)
         }
         _ => return None,
     };
@@ -699,10 +649,10 @@ impl Continuation for FinishPackage {
         let Object::Package(package) = vm.get_object_mut(self.package) else {
             unreachable!("finish continuation retained a Package")
         };
-        package
-            .runtime_mut()
-            .expect("runtime package has an image")
-            .initialized = true;
+        let Slots::Own { initialized, .. } = &mut package.slots else {
+            unreachable!("a runtime package owns its cells")
+        };
+        *initialized = true;
         NativeCallResult::Done(Value::object(self.wrapper))
     }
 
@@ -851,22 +801,19 @@ impl BamlClassPackage for PackageReflectImpl {
             enums: IndexMap::new(),
             interfaces: IndexMap::new(),
             impl_rules: IndexMap::new(),
-            functions: IndexMap::new(),
             type_aliases: IndexMap::new(),
             globals: IndexMap::new(),
+            slots: Slots::Own {
+                cells: Box::new([]),
+                initialized: false,
+            },
+            objects: Objects::Own(Box::new([])),
             interface_blob: artifact.interface_blob,
+            init: None,
             test_init: None,
             mounted_types: IndexMap::new(),
-            kind: PackageKind::Runtime(Box::new(RuntimePackage {
-                objects: Box::new([]),
-                globals: Box::new([]),
-                bodies: IndexMap::new(),
-                type_values: IndexMap::new(),
-                diagnostics: artifact.diagnostics,
-                dependencies: dependencies.values().copied().collect(),
-                init: None,
-                initialized: false,
-            })),
+            diagnostics: artifact.diagnostics,
+            session: None,
         };
         let package_ptr = vm.alloc(Object::Package(Box::new(package)));
         let loaded =
@@ -878,7 +825,7 @@ impl BamlClassPackage for PackageReflectImpl {
             unreachable!("package was just allocated")
         };
         package.test_init = loaded.test_init;
-        package.runtime_mut().expect("runtime package image").init = loaded.init;
+        package.init = loaded.init;
 
         let wrapper = copy::Package {
             _inner: Value::object(package_ptr),
@@ -901,7 +848,10 @@ impl BamlClassPackage for PackageReflectImpl {
             let Object::Package(package) = vm.get_object_mut(package_ptr) else {
                 unreachable!()
             };
-            package.runtime_mut().expect("runtime image").initialized = true;
+            let Slots::Own { initialized, .. } = &mut package.slots else {
+                unreachable!("a runtime package owns its cells")
+            };
+            *initialized = true;
             NativeCallResult::Done(wrapper)
         }
     }
@@ -1037,7 +987,11 @@ impl BamlClassPackage for PackageReflectImpl {
             return Ok(None);
         };
         let function = match vm.get_object(package_ptr) {
-            Object::Package(package) => package.functions.get(&local).copied(),
+            Object::Package(package) => package
+                .globals
+                .get(&DeclPath::Function(FnPath::Free(local.clone())))
+                .and_then(|&cell| super::graft::cell_value(vm, package, cell))
+                .and_then(|value| value.as_object_ptr()),
             _ => None,
         };
         let Some(function) = function else {
@@ -1158,9 +1112,15 @@ impl BamlClassPackage for PackageReflectImpl {
             return IndexMap::new();
         };
         let functions = package
-            .functions
+            .globals
             .iter()
-            .map(|(name, &function)| (name.clone(), function))
+            .filter_map(|(path, &cell)| match path {
+                DeclPath::Function(FnPath::Free(name)) => {
+                    let function = super::graft::cell_value(vm, package, cell)?.as_object_ptr()?;
+                    Some((name.clone(), function))
+                }
+                _ => None,
+            })
             .collect::<Vec<_>>();
         let functions = functions
             .into_iter()
@@ -1210,10 +1170,7 @@ impl BamlClassPackage for PackageReflectImpl {
             return Vec::new();
         };
         let diagnostics = match vm.get_object(ptr) {
-            Object::Package(package) => package
-                .runtime()
-                .map(|runtime| runtime.diagnostics.clone())
-                .unwrap_or_default(),
+            Object::Package(package) => package.diagnostics.clone(),
             _ => Vec::new(),
         };
         diagnostics
@@ -1312,10 +1269,13 @@ impl Continuation for SessionExecution {
             let Object::Package(package) = vm.get_object_mut(self.package) else {
                 unreachable!("Session continuation retained its package")
             };
-            let PackageKind::Session { runtime, state } = &mut package.kind else {
+            let bex_vm_types::types::Slots::Own { cells, .. } = &package.slots else {
+                unreachable!("a Session owns its cells")
+            };
+            cells[action.target].store(value);
+            let Some(state) = package.session.as_deref_mut() else {
                 unreachable!("Session continuation retained a Session package")
             };
-            runtime.globals[action.target].store(value);
 
             if let Some(step_index) = action.step {
                 let step = &self.metadata.steps[step_index];
@@ -1404,7 +1364,7 @@ fn graft_session_submission(
         let target = step
             .and_then(|index| metadata.steps[index].commit_global.as_ref())
             .and_then(|commit| package.globals.get(&DeclPath::Let(commit.clone())).copied())
-            .unwrap_or(*slot);
+            .map_or(*slot, |ordinal| ordinal as usize);
         actions.push(SessionAction {
             helper: *helper,
             target,
@@ -1412,8 +1372,8 @@ fn graft_session_submission(
         });
     }
     package.interface_blob.clone_from(&artifact.interface_blob);
-    let PackageKind::Session { runtime, state } = &mut package.kind else {
-        unreachable!("Session graft target changed package kind")
+    let Some(state) = package.session.as_deref_mut() else {
+        unreachable!("Session graft target is a Session package")
     };
     if !metadata.declaration_source.trim().is_empty() {
         state.history.insert(
@@ -1422,7 +1382,7 @@ fn graft_session_submission(
         );
     }
     state.visible.extend(metadata.declarations.clone());
-    runtime.diagnostics.clone_from(&artifact.diagnostics);
+    package.diagnostics.clone_from(&artifact.diagnostics);
     // The tables above now hold fresh young pointers inside a package object
     // that may itself have been promoted long ago. Without dirtying its card,
     // a minor collection would never rescan it and the new declarations
@@ -1458,31 +1418,25 @@ impl BamlClassSession for PackageReflectImpl {
             enums: IndexMap::new(),
             interfaces: IndexMap::new(),
             impl_rules: IndexMap::new(),
-            functions: IndexMap::new(),
             type_aliases: IndexMap::new(),
             globals: IndexMap::new(),
+            slots: Slots::Own {
+                cells: Box::new([]),
+                // Session cells intentionally stay mutable between evals.
+                initialized: false,
+            },
+            objects: Objects::Own(Box::new([])),
             interface_blob: Vec::new(),
+            init: None,
             test_init: None,
             mounted_types: IndexMap::new(),
-            kind: PackageKind::Session {
-                runtime: Box::new(RuntimePackage {
-                    objects: Box::new([]),
-                    globals: Box::new([]),
-                    bodies: IndexMap::new(),
-                    type_values: IndexMap::new(),
-                    diagnostics: Vec::new(),
-                    dependencies: dependencies.values().copied().collect(),
-                    init: None,
-                    // Session cells intentionally stay mutable between evals.
-                    initialized: false,
-                }),
-                state: Box::new(SessionState {
-                    history: IndexMap::new(),
-                    visible: IndexMap::new(),
-                    busy: Arc::new(AtomicBool::new(false)),
-                    submission_counter: 0,
-                }),
-            },
+            diagnostics: Vec::new(),
+            session: Some(Box::new(SessionState {
+                history: IndexMap::new(),
+                visible: IndexMap::new(),
+                busy: Arc::new(AtomicBool::new(false)),
+                submission_counter: 0,
+            })),
         };
         let package = vm.alloc(Object::Package(Box::new(package)));
         Ok(copy::Session {
@@ -1546,10 +1500,7 @@ impl BamlClassSession for PackageReflectImpl {
             return Vec::new();
         };
         let diagnostics = match vm.get_object(package) {
-            Object::Package(package) => package
-                .runtime()
-                .map(|runtime| runtime.diagnostics.clone())
-                .unwrap_or_default(),
+            Object::Package(package) => package.diagnostics.clone(),
             _ => Vec::new(),
         };
         diagnostics

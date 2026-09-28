@@ -212,7 +212,7 @@ impl Program {
         std::iter::once((&root.name, root)).chain(
             root.edges
                 .iter()
-                .map(|(edge, ordinal)| (edge, &self.packages[*ordinal as usize])),
+                .map(|edge| (&edge.name, &self.packages[edge.target as usize])),
         )
     }
 
@@ -228,33 +228,25 @@ impl Program {
     pub fn rendered_callables(&self) -> HashMap<String, RenderedCallable> {
         let mut out = HashMap::new();
         for (spelling, package) in self.root_viewpoint() {
-            for (local, &object) in &package.functions {
-                let path = DeclPath::Function(FnPath::Free(local.clone()));
-                out.insert(
-                    format!("{spelling}.{local}"),
-                    RenderedCallable {
-                        object,
-                        slot: package.globals.get(&path).copied(),
-                    },
-                );
-            }
-            for (class_local, &class_index) in &package.classes {
-                let Some(Object::Class(class)) = self.objects.get(class_index.raw()) else {
-                    unreachable!("a package's class table indexes class objects")
+            for path in package.globals.keys() {
+                let name = match path {
+                    DeclPath::Function(FnPath::Free(local)) => format!("{spelling}.{local}"),
+                    DeclPath::Function(FnPath::Method { class, name }) => {
+                        format!("{spelling}.{class}.{name}")
+                    }
+                    DeclPath::Let(_) | DeclPath::InterfaceBody(_) => continue,
+                    DeclPath::Class(_)
+                    | DeclPath::Enum(_)
+                    | DeclPath::Interface(_)
+                    | DeclPath::TypeAlias(_) => unreachable!("a type owns no cell"),
                 };
-                for (method, def) in &class.methods {
-                    let path = DeclPath::Function(FnPath::Method {
-                        class: class_local.clone(),
-                        name: method.clone(),
-                    });
-                    out.insert(
-                        format!("{spelling}.{class_local}.{method}"),
-                        RenderedCallable {
-                            object: def.function,
-                            slot: package.globals.get(&path).copied(),
-                        },
-                    );
-                }
+                let slot = package
+                    .global_slot(path)
+                    .unwrap_or_else(|| unreachable!("the path was read from the slot map"));
+                let ConstValue::Object(object) = self.globals[slot.raw()] else {
+                    unreachable!("a callable's cell holds its object")
+                };
+                out.insert(name, RenderedCallable { object, slot });
             }
         }
         out
@@ -265,8 +257,11 @@ impl Program {
     pub fn rendered_lets(&self) -> HashMap<String, GlobalIndex> {
         let mut out = HashMap::new();
         for (spelling, package) in self.root_viewpoint() {
-            for (path, &slot) in &package.globals {
+            for path in package.globals.keys() {
                 if let DeclPath::Let(local) = path {
+                    let slot = package
+                        .global_slot(path)
+                        .unwrap_or_else(|| unreachable!("the path was read from the slot map"));
                     out.insert(format!("{spelling}.{local}"), slot);
                 }
             }
@@ -276,12 +271,11 @@ impl Program {
 }
 
 /// A callable of the executable as a host names it: its function object and
-/// the global slot it links as — `None` for a callable nothing slots (an
-/// intrinsic).
+/// the cell it links as, which holds that object.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RenderedCallable {
     pub object: ObjectIndex,
-    pub slot: Option<GlobalIndex>,
+    pub slot: GlobalIndex,
 }
 
 // ============================================================================

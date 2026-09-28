@@ -7,8 +7,8 @@ use bex_vm_types::{
     Object, ObjectIndex, RealizedTy, TypeHead,
     bytecode::{Bytecode, MatchHashTable, SwitchKey},
     types::{
-        Class, Function, FunctionCaptureProps, FunctionKind, FunctionOrigin, GenericFunction,
-        LocalName, ProgramPackage,
+        Class, EdgeKind, Function, FunctionCaptureProps, FunctionKind, FunctionOrigin,
+        GenericFunction, LocalName, ProgramEdge, ProgramPackage,
     },
 };
 
@@ -108,6 +108,15 @@ fn import(dep: u32, path: DeclPath) -> ImportEntry {
     }
 }
 
+/// A declared edge of the executable's record.
+fn declared(name: &str, target: u32) -> ProgramEdge {
+    ProgramEdge {
+        name: Name::new(name),
+        target,
+        kind: EdgeKind::Declared,
+    }
+}
+
 fn direct(edge: &str, fingerprint: Option<Digest>) -> DependencyEntry {
     DependencyEntry {
         edge: Name::new(edge),
@@ -180,7 +189,11 @@ fn package<'a>(
         name: Name::new(name),
         edges: edges
             .into_iter()
-            .map(|(edge, id)| (Name::new(edge), LinkPackageId(id)))
+            .map(|(edge, id)| LinkEdge {
+                name: Name::new(edge),
+                target: LinkPackageId(id),
+                kind: EdgeKind::Declared,
+            })
             .collect(),
         unit,
         record,
@@ -260,7 +273,7 @@ fn the_root_and_every_edge_table_are_recorded_by_ordinal() {
     .unwrap();
     assert_eq!(program.root, 1);
     assert_eq!(program.packages[0].edges, vec![]);
-    assert_eq!(program.packages[1].edges, vec![(Name::new("gadgets"), 0)]);
+    assert_eq!(program.packages[1].edges, vec![declared("gadgets", 0)]);
     assert!(matches!(
         link(&LinkSet {
             packages: packages(),
@@ -268,6 +281,43 @@ fn the_root_and_every_edge_table_are_recorded_by_ordinal() {
         }),
         Err(LinkError::InvalidUnit(message)) if message.contains("root package 2")
     ));
+}
+
+#[test]
+fn a_packages_slot_map_is_relative_to_its_own_base() {
+    // Two packages, each with one function and one `let`: every package's
+    // cells are ordinals from its own base, and the bases follow set order.
+    let record = PackageRecord::default();
+    let mut first = unit_with_fn("a.f", vec![Instruction::Return]);
+    first.exports.globals.push((DeclPath::Let(item("x")), 1));
+    let mut second = unit_with_fn("user.g", vec![Instruction::Return]);
+    second.exports.globals.push((DeclPath::Let(item("y")), 1));
+    let program = link(&LinkSet {
+        packages: vec![
+            package("a", vec![], &first, &record),
+            package("user", vec![("a", 0)], &second, &record),
+        ],
+        root: LinkPackageId(1),
+    })
+    .unwrap();
+    let [a, user] = program.packages.as_slice() else {
+        panic!("two packages")
+    };
+    assert_eq!(a.globals[&free_fn("f")], 0);
+    assert_eq!(a.globals[&DeclPath::Let(item("x"))], 1);
+    assert_eq!(user.globals[&free_fn("g")], 0);
+    assert_eq!(user.globals[&DeclPath::Let(item("y"))], 1);
+    assert_eq!(a.slot_base, GlobalIndex::from_raw(0));
+    assert_eq!(user.slot_base, GlobalIndex::from_raw(2));
+    assert_eq!(
+        user.global_slot(&free_fn("g")),
+        Some(GlobalIndex::from_raw(2))
+    );
+    assert_eq!(
+        user.global_slot(&DeclPath::Let(item("y"))),
+        Some(GlobalIndex::from_raw(3))
+    );
+    assert_eq!(program.rendered_lets()["user.y"], GlobalIndex::from_raw(3));
 }
 
 #[test]
@@ -288,7 +338,7 @@ fn two_packages_may_share_a_spelling() {
     assert_eq!(program.packages.len(), 3);
     assert_eq!(
         program.packages[2].edges,
-        vec![(Name::new("first"), 0), (Name::new("second"), 1)]
+        vec![declared("first", 0), declared("second", 1)]
     );
 }
 
@@ -390,7 +440,10 @@ fn generic_values_are_interned_by_base_slot_across_packages_and_tails() {
     assert_eq!(program.init_order, vec![1]);
     let user = package_named(&program, "user");
     assert_eq!(user.init, Some(ObjectIndex::from_raw(4)));
-    assert_eq!(user.globals[&free_fn("g")], GlobalIndex::from_raw(1));
+    assert_eq!(
+        user.global_slot(&free_fn("g")),
+        Some(GlobalIndex::from_raw(1))
+    );
 }
 
 #[test]
@@ -474,12 +527,10 @@ fn transitive_dependencies_bind_through_the_parent_edge_table() {
 fn layout_is_package_major_in_set_order() {
     let stdlib_record = PackageRecord {
         exported_names: vec![item("x")],
-        functions: vec![(item("x"), FnPath::Free(item("x")))],
         interface_blob: Vec::new(),
     };
     let user_record = PackageRecord {
         exported_names: vec![item("f")],
-        functions: vec![(item("f"), FnPath::Free(item("f")))],
         interface_blob: vec![1, 2, 3],
     };
     let mut std_unit = unit_with_fn("baml.x", vec![Instruction::Return]);
@@ -515,18 +566,18 @@ fn layout_is_package_major_in_set_order() {
     );
     let callables = program.rendered_callables();
     assert_eq!(callables["user.f"].object, ObjectIndex::from_raw(1));
-    assert_eq!(callables["user.f"].slot, Some(GlobalIndex::from_raw(0)));
+    assert_eq!(callables["user.f"].slot, GlobalIndex::from_raw(0));
     assert_eq!(program.rendered_lets()["user.x"], GlobalIndex::from_raw(1));
     assert_eq!(program.globals[1], ConstValue::Null);
     assert_eq!(callables["baml.x"].object, ObjectIndex::from_raw(3));
-    assert_eq!(callables["baml.x"].slot, Some(GlobalIndex::from_raw(2)));
+    assert_eq!(callables["baml.x"].slot, GlobalIndex::from_raw(2));
     let user = package_named(&program, "user");
     assert_eq!(user.exported_names, vec![item("f")]);
-    assert_eq!(user.functions[&item("f")], ObjectIndex::from_raw(1));
+    assert_eq!(callables["user.f"].object, ObjectIndex::from_raw(1));
     assert_eq!(user.interface_blob, vec![1, 2, 3]);
     assert_eq!(
-        user.globals[&DeclPath::Let(item("x"))],
-        GlobalIndex::from_raw(1)
+        user.global_slot(&DeclPath::Let(item("x"))),
+        Some(GlobalIndex::from_raw(1))
     );
     assert_eq!(
         program

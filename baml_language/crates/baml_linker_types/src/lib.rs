@@ -54,9 +54,7 @@
 //! uses the same convention over its own tables.
 
 use baml_base::Name;
-use bex_vm_types::{
-    DeclPath, FnPath, InterfaceBound, Object, ObjectIndex, TyTemplate, types::LocalName,
-};
+use bex_vm_types::{DeclPath, InterfaceBound, Object, ObjectIndex, TyTemplate, types::LocalName};
 use borsh::{BorshDeserialize, BorshSerialize};
 
 /// The first import ordinal in every per-unit index space (see the module
@@ -284,9 +282,6 @@ pub struct PackageRecord {
     /// All source-visible declaration names (types, aliases, and values),
     /// including aliases that have no pool object of their own.
     pub exported_names: Vec<LocalName>,
-    /// Exported callables by their package-local name, to the function each
-    /// resolves to, in interface order.
-    pub functions: Vec<(LocalName, FnPath)>,
     /// Versioned artifact containing the whole-package enriched interface.
     pub interface_blob: Vec<u8>,
 }

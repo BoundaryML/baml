@@ -45,12 +45,13 @@ impl Linker<'_, '_> {
                     entry.via.0
                 )));
             };
-            let Some(&(_, id)) = self
+            let Some(id) = self
                 .set
                 .package(parent)
                 .edges
                 .iter()
-                .find(|(name, _)| *name == entry.edge)
+                .find(|edge| edge.name == entry.edge)
+                .map(|edge| edge.target)
             else {
                 return Err(LinkError::UnknownDependency {
                     package: owner_name.clone(),

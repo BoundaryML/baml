@@ -111,7 +111,8 @@ fn init_order(
     let mut in_degree: HashMap<LinkPackageId, usize> = members.iter().map(|&id| (id, 0)).collect();
     let mut dependents: HashMap<LinkPackageId, Vec<LinkPackageId>> = HashMap::new();
     for &id in members {
-        for &(_, dependency) in &set.package(id).edges {
+        for edge in &set.package(id).edges {
+            let dependency = edge.target;
             if dependency != id && member_set.contains(&dependency) {
                 *in_degree.entry(id).or_insert(0) += 1;
                 dependents.entry(dependency).or_default().push(id);

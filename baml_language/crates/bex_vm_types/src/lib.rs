@@ -127,8 +127,8 @@ pub fn name_headed_realized(ty: &RealizedTy) -> Result<baml_type::RealizedTy, Un
     ty.try_map_heads(&mut |head| head.declared_name().ok_or(UnnameableHead(head.tag())))
 }
 pub use types::{
-    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BodyIndices, BodyKey,
-    BoundMethod, CaptureCategory, CaptureOption, Class, ClassField, ClassMethodDef, CleanupLatch,
+    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BodyKey, BoundMethod,
+    CaptureCategory, CaptureOption, Class, ClassField, ClassMethodDef, CleanupLatch,
     ClientBuildMeta, ClientBuildType, ConstValue, DeclPath, DeclarationName, Enum, EnumVariant,
     FnPath, Function, FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, Future,
     FutureRead, GenericFunction, HostClosure, ImplBodyCoherence, ImplBodyKey, ImplCoherenceKey,

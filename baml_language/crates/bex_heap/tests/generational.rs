@@ -13,8 +13,8 @@ use bex_heap::{BexHeap, CollectionLevel, Generation, Tlab};
 use bex_vm_types::{
     Class, ClassField, GenericFunction, GlobalIndex, Object, RealizedTy,
     types::{
-        InterfaceDef, LocalName, MethodImpl, Package, PackageKind, RuntimeImplRule, RuntimePackage,
-        TypeAliasDef, TypeValue,
+        Edge, EdgeKind, InterfaceDef, LocalName, MethodImpl, Objects, Package, RuntimeImplRule,
+        Slots, TypeAliasDef, TypeValue,
     },
 };
 use indexmap::IndexMap;
@@ -100,11 +100,12 @@ fn test_major_gc_flattens_all_to_gen2() {
     }
 }
 
-/// A runtime package owns its created-once type mints, while every minted type
-/// carries a back-edge to the package. The moving collector must preserve and
-/// fix up that cycle when rooted, and reclaim the whole cycle when dropped.
+/// A runtime package owns its objects — here a type value naming its class,
+/// a generic value, and the class, which carries a back-edge to the package.
+/// The moving collector must preserve and fix up that cycle when rooted, and
+/// reclaim the whole cycle when dropped.
 #[test]
-fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
+fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped() {
     fn alloc_cycle(heap: &Arc<BexHeap>) -> (Tlab, bex_vm_types::HeapPtr, bex_vm_types::HeapPtr) {
         let mut tlab = Tlab::new(Arc::clone(heap));
         let package = Package {
@@ -115,22 +116,19 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             enums: IndexMap::new(),
             interfaces: IndexMap::new(),
             impl_rules: IndexMap::new(),
-            functions: IndexMap::new(),
             type_aliases: IndexMap::new(),
             globals: indexmap::IndexMap::new(),
+            slots: Slots::Own {
+                cells: Box::new([]),
+                initialized: true,
+            },
+            objects: Objects::Own(Box::new([])),
             interface_blob: Vec::new(),
+            init: None,
             test_init: None,
             mounted_types: IndexMap::new(),
-            kind: PackageKind::Runtime(Box::new(RuntimePackage {
-                objects: Box::new([]),
-                globals: Box::new([]),
-                bodies: indexmap::IndexMap::new(),
-                type_values: IndexMap::new(),
-                diagnostics: Vec::new(),
-                dependencies: Box::new([]),
-                init: None,
-                initialized: true,
-            })),
+            diagnostics: Vec::new(),
+            session: None,
         };
         let package_ptr = tlab.alloc(Object::Package(Box::new(package)));
         let class_name = QualifiedTypeName::local(Name::new("RuntimeClass"));
@@ -171,9 +169,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             },
             class_ptr,
         );
-        let runtime = package.runtime_mut().expect("runtime image");
-        runtime.objects = vec![type_ptr, function_ptr, class_ptr].into_boxed_slice();
-        runtime.type_values.insert(class_ptr, type_ptr);
+        package.objects = Objects::Own(vec![type_ptr, function_ptr, class_ptr].into_boxed_slice());
         (tlab, package_ptr, function_ptr)
     }
 
@@ -193,7 +189,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
         panic!("root ceased to be a package")
     };
     let moved_class = package.classes.values().next().copied().unwrap();
-    let moved_type = package.runtime().unwrap().type_values[&moved_class];
+    let moved_type = package.objects.own().unwrap()[0];
     let Object::Type(type_value) = (unsafe { moved_type.get() }) else {
         panic!("package type value ceased to be a type")
     };
@@ -1045,13 +1041,19 @@ fn empty_package() -> Package {
         enums: IndexMap::new(),
         interfaces: IndexMap::new(),
         impl_rules: IndexMap::new(),
-        functions: IndexMap::new(),
         type_aliases: IndexMap::new(),
         globals: indexmap::IndexMap::new(),
+        slots: Slots::Own {
+            cells: Box::new([]),
+            initialized: true,
+        },
+        objects: Objects::Own(Box::new([])),
         interface_blob: Vec::new(),
+        init: None,
         test_init: None,
         mounted_types: IndexMap::new(),
-        kind: PackageKind::Static,
+        diagnostics: Vec::new(),
+        session: None,
     }
 }
 
@@ -1118,7 +1120,13 @@ fn package_edges_are_traced_and_forwarded() {
     dependency.name = Name::new("lib");
     let dependency_ptr = tlab.alloc(Object::Package(Box::new(dependency)));
     let mut package = empty_package();
-    package.edges.insert(Name::new("gadgets"), dependency_ptr);
+    package.edges.insert(
+        Name::new("gadgets"),
+        Edge {
+            target: dependency_ptr,
+            kind: EdgeKind::Declared,
+        },
+    );
     let package_ptr = tlab.alloc(Object::Package(Box::new(package)));
 
     let (_, roots, _) =
@@ -1135,10 +1143,11 @@ fn package_edges_are_traced_and_forwarded() {
     let Object::Package(package) = (unsafe { roots[0].get() }) else {
         panic!("root was not the package")
     };
-    let forwarded = *package
+    let forwarded = package
         .edges
         .get(&Name::new("gadgets"))
-        .expect("edge entry was lost");
+        .expect("edge entry was lost")
+        .target;
     assert_ne!(
         forwarded, dependency_ptr,
         "the dependency moved, so the edge must be repointed"
@@ -1147,6 +1156,58 @@ fn package_edges_are_traced_and_forwarded() {
         panic!("edge does not point at a package")
     };
     assert_eq!(dependency.name, Name::new("lib"));
+}
+
+/// A package's own cells hold values, and its `$init` is an object of its
+/// image; both live on the package now, so the collector must keep them
+/// alive through the package alone and repoint each when it moves.
+#[test]
+fn package_cells_and_init_are_traced_and_forwarded() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+    let held = tlab.alloc(Object::String("held by a cell".into()));
+    let init = tlab.alloc(Object::String("stands in for $init".into()));
+    let mut package = empty_package();
+    package.slots = Slots::Own {
+        cells: Box::new([bex_vm_types::AtomicValueSlot::new(
+            bex_vm_types::Value::object(held),
+        )]),
+        initialized: true,
+    };
+    package.init = Some(init);
+    let package_ptr = tlab.alloc(Object::Package(Box::new(package)));
+
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&[package_ptr], CollectionLevel::Minor) };
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
+    let (stats, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
+
+    assert_eq!(
+        stats.live_count, 3,
+        "package, cell value, and init should survive"
+    );
+    let Object::Package(package) = (unsafe { roots[0].get() }) else {
+        panic!("root was not the package")
+    };
+    let cell = package.slots.own().expect("own cells")[0]
+        .load()
+        .as_object_ptr()
+        .expect("the cell still holds an object");
+    assert_ne!(
+        cell, held,
+        "the cell's value moved, so the cell must be repointed"
+    );
+    let forwarded_init = package.init.expect("init entry was lost");
+    assert_ne!(
+        forwarded_init, init,
+        "init moved, so the entry must be repointed"
+    );
+    assert!(matches!(unsafe { cell.get() }, Object::String(s) if s.as_str() == "held by a cell"));
+    assert!(
+        matches!(unsafe { forwarded_init.get() }, Object::String(s) if s.as_str() == "stands in for $init")
+    );
 }
 
 /// A field's exact-operand `TypeValue` reaches its declaration through a head,

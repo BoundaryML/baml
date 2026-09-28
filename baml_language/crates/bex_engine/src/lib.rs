@@ -2953,10 +2953,12 @@ impl BexEngine {
             let Object::Package(package) = vm.get_object(owner) else {
                 continue;
             };
-            let Some(runtime) = package.runtime() else {
+            // Only runtime declarations need an overlay; a static owner's
+            // definitions are in the program image already.
+            if self.heap.is_compile_time_ptr(owner) {
                 continue;
-            };
-            pending.extend(runtime.dependencies.iter().copied());
+            }
+            pending.extend(package.declared());
             let handle = self.heap.create_handle(owner);
             for ptr in package.classes.values().copied() {
                 let Object::Class(class) = vm.get_object(ptr) else {
@@ -7506,8 +7508,7 @@ impl BexEngine {
                     "Session has an invalid runtime payload".to_string(),
                 ));
             };
-            let bex_vm_types::types::PackageKind::Session { runtime, state } = &mut package.kind
-            else {
+            let Some(state) = package.session.as_deref_mut() else {
                 return Err(invalid(
                     "Session has an invalid runtime payload".to_string(),
                 ));
@@ -7519,8 +7520,8 @@ impl BexEngine {
             let mounts = package
                 .edges
                 .iter()
-                .filter(|(_, ptr)| runtime.dependencies.contains(*ptr))
-                .map(|(alias, ptr)| (alias.to_string(), *ptr))
+                .filter(|(_, edge)| edge.kind == bex_vm_types::types::EdgeKind::Declared)
+                .map(|(alias, edge)| (alias.to_string(), edge.target))
                 .collect::<IndexMap<String, HeapPtr>>();
             (
                 state.history.clone(),

@@ -104,13 +104,21 @@ pub struct LinkPackage<'a> {
     /// by the name this package reaches it under. Each name reaches one
     /// package ([`LinkError::DuplicateEdge`]); the table is carried into the
     /// executable as the package's viewpoint.
-    pub edges: Vec<(Name, LinkPackageId)>,
+    pub edges: Vec<LinkEdge>,
     pub unit: &'a CompilationUnit,
     pub record: &'a PackageRecord,
     pub tail: Option<&'a InitTail>,
 }
 
 /// Everything one link consumes: the packages of the world, in world order.
+/// One entry of a [`LinkPackage`]'s edge table.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LinkEdge {
+    pub name: Name,
+    pub target: LinkPackageId,
+    pub kind: bex_vm_types::types::EdgeKind,
+}
+
 #[derive(Clone, Debug)]
 pub struct LinkSet<'a> {
     pub packages: Vec<LinkPackage<'a>>,
@@ -216,18 +224,19 @@ impl Linker<'_, '_> {
         }
         for package in &self.set.packages {
             let mut edges = HashSet::new();
-            for (edge, id) in &package.edges {
-                if !edges.insert(edge) {
+            for edge in &package.edges {
+                if !edges.insert(&edge.name) {
                     return Err(LinkError::DuplicateEdge {
                         package: package.name.clone(),
-                        edge: edge.clone(),
+                        edge: edge.name.clone(),
                     });
                 }
-                if id.0 as usize >= self.set.packages.len() {
+                if edge.target.0 as usize >= self.set.packages.len() {
                     return Err(LinkError::invalid(format!(
-                        "package `{}` edge `{edge}` names package {} of {}",
+                        "package `{}` edge `{}` names package {} of {}",
                         package.name,
-                        id.0,
+                        edge.name,
+                        edge.target.0,
                         self.set.packages.len()
                     )));
                 }

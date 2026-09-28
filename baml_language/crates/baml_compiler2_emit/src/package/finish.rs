@@ -1,7 +1,7 @@
 //! Everything after a package's code pass: the backfills that needed the
 //! bodies pooled, the rules, the record, and the tail.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use baml_base::{SourceFile, SourceRoot, SourceRootKind};
 use baml_compiler2_hir::{
@@ -13,7 +13,6 @@ use baml_compiler2_hir::{
     loc::{DeclRef, FunctionLoc, LetLoc},
 };
 use baml_compiler2_hir_ty::{
-    callable::ExternalCallTarget,
     lower::qualify_def,
     package_interface::{export_interface, package_interface},
 };
@@ -23,7 +22,7 @@ use baml_linker_types::{
     ProgramImplRuleFrag, ProgramMethodImplFrag, SessionInitializer,
 };
 use bex_vm_types::{
-    ClassMethodDef, DeclPath, FnPath, Function, GlobalIndex, Object, ObjectIndex, ObjectPool,
+    ClassMethodDef, DeclPath, Function, GlobalIndex, Object, ObjectIndex, ObjectPool,
     types::LocalName,
 };
 
@@ -78,7 +77,7 @@ pub(super) fn finish<'db>(
     fill_class_methods(db, &files, &tables, &mut classes, &placed);
     let mut refs = refs.attach(db, root, scope.own(&tables));
     let impl_rules = bake_rules(db, root, &files, &offsets, &mut refs);
-    let record = package_record(db, root, &exports);
+    let record = package_record(db, root);
     let (tail, initializers) = match emit_tail(db, class_fields, root, &files, &lets, opt, scope)? {
         Some(parts) => (
             Some(seal_tail((parts.tail, parts.refs))),
@@ -262,7 +261,7 @@ fn seal_tail((mut tail, tail_refs): (InitTail, RefTables)) -> InitTail {
 
 /// The whole-package products beside the unit: what the package exports by
 /// name, and the interface a dependent compiles against.
-fn package_record(db: &dyn crate::Db, root: SourceRoot, exports: &ExportTable) -> PackageRecord {
+fn package_record(db: &dyn crate::Db, root: SourceRoot) -> PackageRecord {
     let interface = package_interface(db, root);
     // Runtime compilers already own the exact stdlib sources, so only
     // mountable packages need to carry a serialized compiler surface.
@@ -275,7 +274,6 @@ fn package_record(db: &dyn crate::Db, root: SourceRoot, exports: &ExportTable) -
         )
         .expect("PackageInterface artifact serialization into Vec is infallible")
     };
-    let slotted: HashSet<&DeclPath> = exports.globals.iter().map(|(path, _)| path).collect();
     let mut exported_names: indexmap::IndexSet<LocalName> = interface
         .types
         .iter()
@@ -286,33 +284,16 @@ fn package_record(db: &dyn crate::Db, root: SourceRoot, exports: &ExportTable) -
             })
         })
         .collect();
-    let mut functions = Vec::new();
     for (namespace, rows) in &interface.functions {
-        for (name, row) in rows {
-            let local = LocalName {
+        for name in rows.keys() {
+            exported_names.insert(LocalName {
                 namespace: namespace.clone(),
                 name: name.clone(),
-            };
-            exported_names.insert(local.clone());
-            // An interface method dispatches through its interface, and a
-            // callable that owns no object (an intrinsic) resolves to
-            // nothing: neither is a function of the package's table.
-            let path = match &row.target {
-                ExternalCallTarget::Free { function } => FnPath::Free(item_path(function)),
-                ExternalCallTarget::Method { class, name } => FnPath::Method {
-                    class: item_path(class),
-                    name: name.clone(),
-                },
-                ExternalCallTarget::Interface { .. } => continue,
-            };
-            if slotted.contains(&DeclPath::Function(path.clone())) {
-                functions.push((local, path));
-            }
+            });
         }
     }
     PackageRecord {
         exported_names: exported_names.into_iter().collect(),
-        functions,
         interface_blob,
     }
 }

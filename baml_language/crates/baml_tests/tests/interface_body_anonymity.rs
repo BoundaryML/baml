@@ -94,7 +94,10 @@ fn interface_bodies_are_pooled_and_slotted_but_in_no_name_map() {
 
     // Real logical items stay where they were.
     let main = program.rendered_callables()["user.main"];
-    assert!(main.slot.is_some(), "`user.main` owns a slot");
+    assert!(
+        matches!(program.globals[main.slot.raw()], bex_vm_types::ConstValue::Object(object) if object == main.object),
+        "`user.main`'s cell holds it"
+    );
 }
 
 #[tokio::test]

@@ -924,7 +924,6 @@ mod tests {
             unit: baml_linker_types::CompilationUnit::default(),
             record: baml_linker_types::PackageRecord {
                 exported_names: Vec::new(),
-                functions: Vec::new(),
                 interface_blob: vec![1, 2, 3, 4],
             },
             tail: None,
@@ -1466,7 +1465,6 @@ mod remote_tests {
             unit: baml_linker_types::CompilationUnit::default(),
             record: baml_linker_types::PackageRecord {
                 exported_names: Vec::new(),
-                functions: Vec::new(),
                 interface_blob: vec![4, 3, 2, 1],
             },
             tail: None,

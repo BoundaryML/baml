@@ -1439,13 +1439,19 @@ mod renderability_tests {
             enums: indexmap::IndexMap::new(),
             interfaces: indexmap::IndexMap::new(),
             impl_rules: indexmap::IndexMap::new(),
-            functions: indexmap::IndexMap::new(),
             type_aliases: indexmap::IndexMap::new(),
             globals: indexmap::IndexMap::new(),
+            slots: bex_vm_types::types::Slots::Own {
+                cells: Box::new([]),
+                initialized: true,
+            },
+            objects: bex_vm_types::types::Objects::Own(Box::new([])),
             interface_blob: Vec::new(),
+            init: None,
             test_init: None,
             mounted_types: indexmap::IndexMap::new(),
-            kind: bex_vm_types::types::PackageKind::default(),
+            diagnostics: Vec::new(),
+            session: None,
         }
     }
 

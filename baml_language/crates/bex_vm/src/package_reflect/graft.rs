@@ -15,7 +15,7 @@
 //! own tables, kind-directed. Nothing is looked up by a rendered spelling.
 //!
 //! An interface body has no name in any table. Within its own package it is
-//! addressed through the package-private body table — a session's later
+//! addressed through the package-private slot entry — a session's later
 //! submission, or the tail, reaching a body the package pooled. From a
 //! dependency, a default body is the function its interface binds, and a
 //! provided body is not addressable at all: it is dispatched through its
@@ -46,16 +46,15 @@ use baml_linker_types::{
 use baml_type::typetag::TypeTag;
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    AtomicValueSlot, BodyIndices, BodyKey, ConstValue, DeclPath, FnPath, GlobalIndex, HeapPtr,
-    Object, ObjectIndex, TyTemplate, TypeHead,
+    AtomicValueSlot, BodyKey, ConstValue, DeclPath, FnPath, GlobalIndex, HeapPtr, Object,
+    ObjectIndex, TyTemplate, TypeHead,
     bytecode::SwitchKey,
     head_walk::visit_object_heads_mut,
     relink::{IndexOperand, visit_object_operands},
-    types::{LocalName, MethodImpl, Package, RuntimeImplRule, Value},
+    types::{LocalName, MethodImpl, Objects, Package, RuntimeImplRule, Slots, Value},
 };
 use indexmap::IndexMap;
 
-use super::reflect::allocate_runtime_declaration_types;
 use crate::{
     BexVm,
     errors::{VmBamlError, VmRustFnError},
@@ -133,7 +132,7 @@ pub(super) fn load_package(
     image
         .globals
         .extend((0..local_count).map(|_| AtomicValueSlot::new(Value::NULL)));
-    let bodies = slot_unit_functions(&mut image, unit, &locals, base_slot)?;
+    slot_unit_functions(&mut image, unit, &locals, base_slot)?;
     let import_slots = place_globals(vm, &mut image, package_ptr, &slots, &unit.global_imports)?;
     let space = Space {
         locals,
@@ -153,19 +152,13 @@ pub(super) fn load_package(
         impl_rules.entry(interface_ptr).or_default().push(rule_ptr);
     }
 
-    let declared = Declared::of(unit, &space, &image, &bodies)?;
-    let mut slot_table: IndexMap<DeclPath, usize> = IndexMap::new();
+    let mut slot_table: IndexMap<DeclPath, u32> = IndexMap::new();
     for (path, slot) in &unit.exports.globals {
-        if !matches!(path, DeclPath::InterfaceBody(_)) {
-            slot_table.insert(path.clone(), base_slot + *slot as usize);
-        }
+        let ordinal = u32::try_from(base_slot + *slot as usize)
+            .map_err(|_| link_error("the package's slot table outgrew u32".to_string()))?;
+        slot_table.insert(path.clone(), ordinal);
     }
-    let type_values = allocate_runtime_declaration_types(
-        vm,
-        &declared.classes,
-        &declared.enums,
-        &declared.interfaces,
-    );
+    let declared = Declared::of(unit, &space, &image, &slot_table)?;
 
     // Publish the unit before the tail: the tail names the unit's
     // declarations as `SELF` imports, resolved through these tables.
@@ -180,7 +173,6 @@ pub(super) fn load_package(
         package.enums.extend(declared.enums);
         package.interfaces.extend(declared.interfaces);
         package.type_aliases.extend(declared.type_aliases);
-        package.functions.extend(declared.functions);
         package.globals.extend(slot_table);
         for (interface, rules) in impl_rules {
             package
@@ -189,13 +181,18 @@ pub(super) fn load_package(
                 .or_default()
                 .extend(rules);
         }
-        let runtime = package
-            .runtime_mut()
-            .unwrap_or_else(|| unreachable!("a graft target is a runtime package"));
-        runtime.objects = image.objects.clone().into_boxed_slice();
-        runtime.globals = image.globals.clone().into_boxed_slice();
-        runtime.bodies.extend(bodies);
-        runtime.type_values.extend(type_values);
+        let initialized = matches!(
+            package.slots,
+            Slots::Own {
+                initialized: true,
+                ..
+            }
+        );
+        package.slots = Slots::Own {
+            cells: image.globals.clone().into_boxed_slice(),
+            initialized,
+        };
+        package.objects = Objects::Own(image.objects.clone().into_boxed_slice());
     }
 
     let Some(tail) = &emitted.tail else {
@@ -283,17 +280,24 @@ fn load_tail(
                         initializer.target
                     ))
                 })?;
-            recorded.push((tail_object(helper)?, target_slot));
+            recorded.push((tail_object(helper)?, target_slot as usize));
         }
     }
     let Object::Package(package) = vm.get_object_mut(package_ptr) else {
         unreachable!("a graft target is a package")
     };
-    let runtime = package
-        .runtime_mut()
-        .unwrap_or_else(|| unreachable!("a graft target is a runtime package"));
-    runtime.objects = image.objects.into_boxed_slice();
-    runtime.globals = image.globals.into_boxed_slice();
+    let initialized = matches!(
+        package.slots,
+        Slots::Own {
+            initialized: true,
+            ..
+        }
+    );
+    package.slots = Slots::Own {
+        cells: image.globals.into_boxed_slice(),
+        initialized,
+    };
+    package.objects = Objects::Own(image.objects.into_boxed_slice());
     Ok(Loaded {
         init,
         test_init,
@@ -328,16 +332,21 @@ impl Image {
         let Object::Package(package) = vm.get_object(package_ptr) else {
             unreachable!("a graft target is a package")
         };
-        let runtime = package
-            .runtime()
-            .unwrap_or_else(|| unreachable!("a graft target is a runtime package"));
+        let objects = package
+            .objects
+            .own()
+            .unwrap_or_else(|| unreachable!("a graft target owns its objects"));
+        let cells = package
+            .slots
+            .own()
+            .unwrap_or_else(|| unreachable!("a graft target owns its cells"));
         let mut image = Self {
-            objects: Vec::with_capacity(runtime.objects.len()),
-            tags: Vec::with_capacity(runtime.objects.len()),
-            entry_of: HashMap::with_capacity(runtime.objects.len()),
-            globals: runtime.globals.to_vec(),
+            objects: Vec::with_capacity(objects.len()),
+            tags: Vec::with_capacity(objects.len()),
+            entry_of: HashMap::with_capacity(objects.len()),
+            globals: cells.to_vec(),
         };
-        for &ptr in &runtime.objects {
+        for &ptr in objects {
             image.add(vm, ptr);
         }
         image
@@ -429,14 +438,14 @@ fn place_globals(
         .collect()
 }
 
-/// Fill the unit's own function slots and record where its interface
-/// bodies sit. A `let`'s slot stays `null` for its initializer.
+/// Fill the unit's own function and body slots with their objects. A `let`'s
+/// slot stays `null` for its initializer.
 fn slot_unit_functions(
     image: &mut Image,
     unit: &CompilationUnit,
     locals: &[usize],
     base_slot: usize,
-) -> Result<IndexMap<BodyKey, BodyIndices>, VmRustFnError> {
+) -> Result<(), VmRustFnError> {
     let code_of: HashMap<&DeclPath, u32> = unit
         .exports
         .objects
@@ -450,7 +459,6 @@ fn slot_unit_functions(
         })
         .collect();
     let type_count = unit.type_object_count();
-    let mut bodies = IndexMap::new();
     for (path, slot) in &unit.exports.globals {
         let offset = match path {
             DeclPath::Let(_) => continue,
@@ -482,11 +490,8 @@ fn slot_unit_functions(
                 "`{path}` owns slot {slot}, outside the unit's slot table"
             ))
         })? = AtomicValueSlot::new(Value::object(function));
-        if let DeclPath::InterfaceBody(key) = path {
-            bodies.insert(key.clone(), BodyIndices { object, global });
-        }
     }
-    Ok(bodies)
+    Ok(())
 }
 
 /// Relocate every local of `space`, keeping the float constants it boxes in
@@ -507,7 +512,6 @@ struct Declared {
     enums: IndexMap<LocalName, HeapPtr>,
     interfaces: IndexMap<LocalName, HeapPtr>,
     type_aliases: IndexMap<LocalName, HeapPtr>,
-    functions: IndexMap<LocalName, HeapPtr>,
 }
 
 impl Declared {
@@ -515,14 +519,13 @@ impl Declared {
         unit: &CompilationUnit,
         space: &Space,
         image: &Image,
-        bodies: &IndexMap<BodyKey, BodyIndices>,
+        slots: &IndexMap<DeclPath, u32>,
     ) -> Result<Self, VmRustFnError> {
         let mut declared = Self {
             classes: IndexMap::new(),
             enums: IndexMap::new(),
             interfaces: IndexMap::new(),
             type_aliases: IndexMap::new(),
-            functions: IndexMap::new(),
         };
         for (path, local_ref) in &unit.exports.objects {
             let local = space
@@ -544,13 +547,11 @@ impl Declared {
                 DeclPath::TypeAlias(item) => {
                     declared.type_aliases.insert(item.clone(), ptr);
                 }
-                DeclPath::Function(FnPath::Free(item)) => {
-                    declared.functions.insert(item.clone(), ptr);
-                }
-                // A method is reached through its class's method table.
-                DeclPath::Function(FnPath::Method { .. }) => {}
-                DeclPath::InterfaceBody(key) => {
-                    if !bodies.contains_key(key) {
+                // A callable is reached through its cell (a method also
+                // through its class's method table).
+                DeclPath::Function(_) => {}
+                DeclPath::InterfaceBody(_) => {
+                    if !slots.contains_key(path) {
                         return Err(link_error(format!("`{path}` is pooled but owns no slot")));
                     }
                 }
@@ -589,12 +590,16 @@ fn bind_slots(
             }
             // The package's edges are the compile's mounts and the host
             // image's prelude — exactly what the unit could name.
-            package.edges.get(&entry.edge).copied().ok_or_else(|| {
-                link_error(format!(
-                    "dependency `{}` names no package the compile was given",
-                    entry.edge
-                ))
-            })
+            package
+                .edges
+                .get(&entry.edge)
+                .map(|edge| edge.target)
+                .ok_or_else(|| {
+                    link_error(format!(
+                        "dependency `{}` names no package the compile was given",
+                        entry.edge
+                    ))
+                })
         })
         .collect()
 }
@@ -633,7 +638,11 @@ fn resolve_object(
             },
             DeclPath::Interface(item) => package.interfaces.get(item).copied(),
             DeclPath::TypeAlias(item) => package.type_aliases.get(item).copied(),
-            DeclPath::Function(FnPath::Free(item)) => package.functions.get(item).copied(),
+            DeclPath::Function(FnPath::Free(_)) => package
+                .globals
+                .get(&key.path)
+                .and_then(|&cell| cell_value(vm, package, cell))
+                .and_then(|value| value.as_object_ptr()),
             DeclPath::Function(FnPath::Method { class, name }) => package
                 .classes
                 .get(class)
@@ -646,9 +655,9 @@ fn resolve_object(
                 }),
             DeclPath::InterfaceBody(body) => {
                 match resolve_body(vm, package, owner == package_ptr, &key.path, body)? {
-                    Some(BoundBody::Own(indices)) => package
-                        .runtime()
-                        .and_then(|runtime| runtime.objects.get(indices.object).copied()),
+                    Some(BoundBody::Own(cell)) => {
+                        cell_value(vm, package, cell).and_then(|value| value.as_object_ptr())
+                    }
                     Some(BoundBody::Function(function)) => Some(function),
                     None => None,
                 }
@@ -712,14 +721,25 @@ fn mounted_item(
 
 /// A body, as the package that binds it holds it.
 enum BoundBody {
-    /// The package's own: where it sits in the object and slot tables.
-    Own(BodyIndices),
+    /// The package's own: the cell holding it, as an ordinal into its slots.
+    Own(u32),
     /// A dependency's default body: the function its interface binds.
     Function(HeapPtr),
 }
 
+/// The value in the cell at `ordinal` of `package`'s slots.
+pub(super) fn cell_value(vm: &BexVm, package: &Package, ordinal: u32) -> Option<Value> {
+    match &package.slots {
+        Slots::Program { base } => Some(vm.globals.get(
+            vm.proof(),
+            GlobalIndex::from_raw(base.raw() + ordinal as usize),
+        )),
+        Slots::Own { cells, .. } => cells.get(ordinal as usize).map(AtomicValueSlot::load),
+    }
+}
+
 /// The body `key` names in `package`. Within its own package (`own`) a body
-/// is addressed through the package-private body table; from a dependency a
+/// is addressed through its package-private slot entry; from a dependency a
 /// default body is the function its interface object binds, and a provided
 /// body is refused — it is dispatched through its rule, never addressed.
 fn resolve_body(
@@ -730,10 +750,7 @@ fn resolve_body(
     key: &BodyKey,
 ) -> Result<Option<BoundBody>, VmRustFnError> {
     if own {
-        return Ok(package
-            .runtime()
-            .and_then(|runtime| runtime.bodies.get(key).copied())
-            .map(BoundBody::Own));
+        return Ok(package.globals.get(path).copied().map(BoundBody::Own));
     }
     match key {
         BodyKey::Default { interface, method } => Ok(package
@@ -778,7 +795,7 @@ fn resolve_global(
     let own = owner == package_ptr;
     if let DeclPath::InterfaceBody(body) = &key.path {
         return match resolve_body(vm, package, own, &key.path, body)? {
-            Some(BoundBody::Own(indices)) => Ok(GlobalBinding::Slot(indices.global)),
+            Some(BoundBody::Own(cell)) => Ok(GlobalBinding::Slot(cell as usize)),
             Some(BoundBody::Function(function)) => {
                 Ok(GlobalBinding::Value(Value::object(function)))
             }
@@ -795,17 +812,11 @@ fn resolve_global(
         ))
     })?;
     if own {
-        return Ok(GlobalBinding::Slot(slot));
+        return Ok(GlobalBinding::Slot(slot as usize));
     }
-    match package.runtime() {
-        None => Ok(GlobalBinding::Value(
-            vm.globals.get(vm.proof(), GlobalIndex::from_raw(slot)),
-        )),
-        Some(runtime) => runtime
-            .load_global(slot)
-            .map(GlobalBinding::Value)
-            .ok_or_else(|| link_error(format!("`{}` names a slot outside its package", key.path))),
-    }
+    cell_value(vm, package, slot)
+        .map(GlobalBinding::Value)
+        .ok_or_else(|| link_error(format!("`{}` names a slot outside its package", key.path)))
 }
 
 /// Give a freshly cloned unit object its runtime identity and owner edges

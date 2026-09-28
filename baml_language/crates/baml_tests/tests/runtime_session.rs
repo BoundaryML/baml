@@ -480,17 +480,13 @@ async fn escaped_session_type_retains_provenance_only_while_handle_is_live() {
         };
         owner_is_session = owner.session().is_some();
         session_history = owner.session().map_or(0, |state| state.history.len());
-        let runtime = owner.runtime().expect("runtime owner image");
-        retained_globals = runtime.globals.len();
-        retained_objects = runtime.objects.len();
-        retained_dependencies = runtime.dependencies.len();
-        retained_dependency_objects = runtime
-            .dependencies
-            .iter()
+        retained_globals = owner.slots.own().map_or(0, <[_]>::len);
+        retained_objects = owner.objects.own().map_or(0, <[_]>::len);
+        retained_dependencies = owner.declared().count();
+        retained_dependency_objects = owner
+            .declared()
             .map(|dependency| match unsafe { dependency.get() } {
-                Object::Package(package) => {
-                    package.runtime().map_or(0, |runtime| runtime.objects.len())
-                }
+                Object::Package(package) => package.objects.own().map_or(0, <[_]>::len),
                 _ => 0,
             })
             .sum::<usize>();

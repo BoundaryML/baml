@@ -2666,42 +2666,6 @@ impl BexVm {
             .unwrap_or_else(HeapPtr::null)
     }
 
-    /// Return the created-once type value for a declaration owned by the
-    /// currently executing runtime package.
-    ///
-    /// A runtime-compiled declaration is not in the program image, so a
-    /// concrete `LoadType` in that package must reuse the value allocated at
-    /// package load — that value carries the definition overlay and owner edge
-    /// the type needs to stay meaningful. Imported and composite types
-    /// deliberately miss this lookup and retain the static path.
-    fn current_runtime_declaration_type(&self, ty: &bex_vm_types::RealizedTy) -> Option<HeapPtr> {
-        let (bex_vm_types::RealizedTy::Class(head, ..)
-        | bex_vm_types::RealizedTy::Enum(head, ..)
-        | bex_vm_types::RealizedTy::Interface(head, ..)) = ty
-        else {
-            return None;
-        };
-        if !head.is_resolved() {
-            return None;
-        }
-
-        let package_ptr = self.current_runtime_package();
-        if package_ptr.is_null() {
-            return None;
-        }
-        let Object::Package(package) = self.get_object(package_ptr) else {
-            unreachable!("runtime function owner does not point to Object::Package")
-        };
-        // The head *is* the key: a declaration this package created has an
-        // entry, and one it merely imported or composed does not — which is
-        // exactly the set that must reuse the created-once value.
-        let ptr = package.runtime()?.type_values.get(&head.ptr()).copied()?;
-        match self.get_object(ptr) {
-            Object::Type(value) if &value.ty == ty => Some(ptr),
-            _ => None,
-        }
-    }
-
     fn load_global_in(&self, package: HeapPtr, index: GlobalIndex) -> Value {
         if package.as_ptr().is_null() {
             return self.globals.get(self.proof(), index);
@@ -2709,9 +2673,12 @@ impl BexVm {
         let Object::Package(package) = self.get_object(package) else {
             unreachable!("runtime owner does not point to Object::Package")
         };
-        package
-            .runtime()
-            .and_then(|runtime| runtime.load_global(index.raw()))
+        let bex_vm_types::types::Slots::Own { cells, .. } = &package.slots else {
+            unreachable!("a runtime function's owner owns its cells")
+        };
+        cells
+            .get(index.raw())
+            .map(bex_vm_types::AtomicValueSlot::load)
             .expect("runtime global index was validated by dynamic link")
     }
 
@@ -2729,14 +2696,13 @@ impl BexVm {
         let Object::Package(package) = self.get_object(package_ptr) else {
             unreachable!("runtime owner does not point to Object::Package")
         };
-        let runtime = package
-            .runtime()
-            .expect("runtime function owner has a runtime image");
-        if runtime.initialized {
+        let bex_vm_types::types::Slots::Own { cells, initialized } = &package.slots else {
+            unreachable!("a runtime function's owner owns its cells")
+        };
+        if *initialized {
             return Err(VmInternalError::StoreGlobalAfterInit);
         }
-        let slot = runtime
-            .globals
+        let slot = cells
             .get(index.raw())
             .ok_or(VmInternalError::StoreGlobalAfterInit)?;
         slot.store(value);
@@ -2757,8 +2723,9 @@ impl BexVm {
             unreachable!("runtime owner does not point to Object::Package")
         };
         package
-            .runtime()
-            .and_then(|runtime| runtime.objects.get(idx.raw()))
+            .objects
+            .own()
+            .and_then(|objects| objects.get(idx.raw()))
             .copied()
             .expect("runtime object index was validated by dynamic link")
     }
@@ -3271,8 +3238,9 @@ impl BexVm {
         // carries its declaration heads inside the `RealizedTy` itself, so the
         // callee resolves the same declarations without a separate metadata
         // channel. `VirtualCall` still threads the exact values via
-        // `append_virtual_method_type_args` so `LoadType<T>` reuses the
-        // created-once value rather than allocating an equal twin.
+        // `append_virtual_method_type_args` so `LoadType<T>` yields the
+        // exact value the caller passed rather than an equal twin built
+        // from the type.
         frame.extend(method_type_args.tys);
         Ok((method.fqn, frame))
     }
@@ -9367,11 +9335,7 @@ impl BexVm {
                                     })?
                                 }
                             };
-                            if let Some(type_ptr) = self.current_runtime_declaration_type(&ty) {
-                                Value::object(type_ptr)
-                            } else {
-                                Value::object(self.tlab.alloc_type(TypeValue::new(ty)))
-                            }
+                            Value::object(self.tlab.alloc_type(TypeValue::new(ty)))
                         };
                         if let Some(cache_key) = static_cache_key
                             && let Some(ptr) = value.as_object_ptr()
@@ -10416,8 +10380,8 @@ impl ::bex_vm_types::RootHaver for BexVm {
         // multiplied every GC by the live thread count (a corpus-scale run
         // spent most of its wall clock inside that collect, world parked).
         // A tagged identity absent from the map keeps today's behavior: the
-        // memo entry is dropped and re-derived from the authoritative
-        // created-once table on the owning package.
+        // memo entry is dropped, and the site allocates afresh on its next
+        // `LoadType`.
         let forward_identity = |identity: usize| -> Option<usize> {
             if identity & 1 == 0 {
                 return Some(identity);
