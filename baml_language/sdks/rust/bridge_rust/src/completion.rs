@@ -15,14 +15,16 @@ use std::{
     task::{Poll, Waker},
 };
 
-use crate::capi;
+use crate::{SdkError, capi};
+
+type CompletionResult = Result<Vec<u8>, SdkError>;
 
 /// One in-flight call's state.
 enum State {
     Pending,
     /// An async receiver parked its waker while pending.
     PendingWithWaker(Waker),
-    Ready(Vec<u8>),
+    Ready(CompletionResult),
     /// The receiver was dropped before the result arrived; the callback
     /// discards the payload.
     Abandoned,
@@ -38,6 +40,8 @@ struct Slot {
 /// reclaimed by the callback or eagerly on drop).
 pub(crate) struct Receiver {
     dispatch_id: u32,
+    engine_call_id: u64,
+    cancel_function_call: capi::CancelFunctionCallFn,
     slot: Arc<Slot>,
 }
 
@@ -51,7 +55,15 @@ fn registry() -> &'static Mutex<HashMap<u32, Arc<Slot>>> {
 /// Allocate a dispatch id and register a completion for it, ensuring the
 /// process-global callback is registered with the engine first (so a
 /// result can never arrive unroutable).
-pub(crate) fn register(api: &'static capi::Api) -> Receiver {
+pub(crate) fn register(api: &'static capi::Api, engine_call_id: u64) -> Receiver {
+    register_with_cancel(api, engine_call_id, api.cancel_function_call)
+}
+
+fn register_with_cancel(
+    api: &'static capi::Api,
+    engine_call_id: u64,
+    cancel_function_call: capi::CancelFunctionCallFn,
+) -> Receiver {
     static CALLBACK_REGISTERED: OnceLock<()> = OnceLock::new();
     // Dispatch ids only correlate callback deliveries with waiting
     // receivers; wrap-around is harmless as long as ~4 billion calls are
@@ -77,7 +89,12 @@ pub(crate) fn register(api: &'static capi::Api) -> Receiver {
         .lock()
         .expect("completion registry poisoned")
         .insert(dispatch_id, Arc::clone(&slot));
-    Receiver { dispatch_id, slot }
+    Receiver {
+        dispatch_id,
+        engine_call_id,
+        cancel_function_call,
+        slot,
+    }
 }
 
 impl Receiver {
@@ -86,14 +103,14 @@ impl Receiver {
     }
 
     /// Block until the result envelope arrives.
-    pub(crate) fn wait_blocking(self) -> Vec<u8> {
+    pub(crate) fn wait_blocking(self) -> CompletionResult {
         let mut state = self.slot.state.lock().expect("completion slot poisoned");
         loop {
             match std::mem::replace(&mut *state, State::Pending) {
-                State::Ready(bytes) => {
+                State::Ready(result) => {
                     *state = State::Abandoned;
                     drop(state);
-                    return bytes;
+                    return result;
                 }
                 other => {
                     *state = other;
@@ -108,20 +125,20 @@ impl Receiver {
     }
 
     /// Await the result envelope. The future is executor-agnostic.
-    pub(crate) async fn wait(self) -> Vec<u8> {
+    pub(crate) async fn wait(self) -> CompletionResult {
         struct WaitFuture(Receiver);
         impl Future for WaitFuture {
-            type Output = Vec<u8>;
+            type Output = CompletionResult;
 
             fn poll(
                 self: std::pin::Pin<&mut Self>,
                 cx: &mut std::task::Context<'_>,
-            ) -> Poll<Vec<u8>> {
+            ) -> Poll<CompletionResult> {
                 let mut state = self.0.slot.state.lock().expect("completion slot poisoned");
                 match std::mem::replace(&mut *state, State::Pending) {
-                    State::Ready(bytes) => {
+                    State::Ready(result) => {
                         *state = State::Abandoned;
-                        Poll::Ready(bytes)
+                        Poll::Ready(result)
                     }
                     State::Pending | State::PendingWithWaker(_) => {
                         *state = State::PendingWithWaker(cx.waker().clone());
@@ -141,12 +158,30 @@ impl Drop for Receiver {
         // an entry left in the registry means the result never arrived (or
         // the receiver is being dropped unconsumed) — reclaim it so the
         // table cannot grow without bound.
-        registry()
+        let was_registered = registry()
             .lock()
             .expect("completion registry poisoned")
-            .remove(&self.dispatch_id);
+            .remove(&self.dispatch_id)
+            .is_some();
         let mut state = self.slot.state.lock().expect("completion slot poisoned");
+        let was_pending = matches!(*state, State::Pending | State::PendingWithWaker(_));
         *state = State::Abandoned;
+        drop(state);
+
+        // A registered, pending receiver represents a caller that stopped
+        // observing the call (for example, `tokio::time::timeout` dropped its
+        // future). Propagate that cancellation to the engine before the
+        // caller's own concurrency permit can be reused. If the callback won
+        // the race and removed the registry entry, the engine call is already
+        // complete and must not be cancelled.
+        if was_registered && was_pending {
+            // SAFETY: the function pointer came from the validated process-
+            // lifetime C API table and accepts this engine-issued call id.
+            #[expect(unsafe_code)]
+            unsafe {
+                (self.cancel_function_call)(self.engine_call_id);
+            }
+        }
     }
 }
 
@@ -155,13 +190,25 @@ impl Drop for Receiver {
 /// dispatch ids are discarded. Must never unwind into the engine.
 extern "C" fn trampoline(call_id: u32, content: *const c_char, length: usize) {
     let caught = std::panic::catch_unwind(|| {
-        // SAFETY: the engine guarantees `content` is valid for `length`
-        // bytes for the synchronous duration of this call.
-        let bytes = if content.is_null() {
-            Vec::new()
+        let result = if length > crate::runtime::MAX_RESULT_BYTES {
+            Err(SdkError::new(format!(
+                "BAML result exceeded the {} MiB bridge limit (received {length} bytes)",
+                crate::runtime::MAX_RESULT_BYTES / (1024 * 1024),
+            )))
+        } else if content.is_null() && length != 0 {
+            Err(SdkError::new(
+                "engine returned a null BAML result pointer with a nonzero length",
+            ))
         } else {
-            #[expect(unsafe_code)]
-            unsafe { std::slice::from_raw_parts(content.cast::<u8>(), length) }.to_vec()
+            // SAFETY: the engine guarantees `content` is valid for `length`
+            // bytes for the synchronous duration of this call.
+            let bytes = if length == 0 {
+                Vec::new()
+            } else {
+                #[expect(unsafe_code)]
+                unsafe { std::slice::from_raw_parts(content.cast::<u8>(), length) }.to_vec()
+            };
+            Ok(bytes)
         };
         let slot = registry()
             .lock()
@@ -169,7 +216,7 @@ extern "C" fn trampoline(call_id: u32, content: *const c_char, length: usize) {
             .remove(&call_id);
         if let Some(slot) = slot {
             let mut state = slot.state.lock().expect("completion slot poisoned");
-            let previous = std::mem::replace(&mut *state, State::Ready(bytes));
+            let previous = std::mem::replace(&mut *state, State::Ready(result));
             drop(state);
             match previous {
                 State::PendingWithWaker(waker) => waker.wake(),
@@ -195,11 +242,16 @@ extern "C" fn trampoline(call_id: u32, content: *const c_char, length: usize) {
 mod tests {
     use super::*;
 
-    /// Register against the real loaded engine's table; these tests
-    /// fulfill through the trampoline directly and never call it.
+    /// Register against the real loaded engine's table, but stub cancellation;
+    /// these tests fulfill through the trampoline directly and never start an
+    /// engine call.
     fn register() -> Receiver {
         crate::test_support::locate_dev_engine();
-        super::register(capi::api().expect("engine library loads"))
+        register_with_cancel(
+            capi::api().expect("engine library loads"),
+            1,
+            record_cancellation,
+        )
     }
 
     // Fulfill directly through the trampoline, as the engine would.
@@ -216,14 +268,14 @@ mod tests {
         // on the ordering either way.
         std::thread::yield_now();
         fulfill(id, b"hello");
-        assert_eq!(handle.join().unwrap(), b"hello");
+        assert_eq!(handle.join().unwrap().unwrap(), b"hello");
     }
 
     #[test]
     fn fulfill_before_wait_is_immediate() {
         let receiver = register();
         fulfill(receiver.dispatch_id(), b"early");
-        assert_eq!(receiver.wait_blocking(), b"early");
+        assert_eq!(receiver.wait_blocking().unwrap(), b"early");
     }
 
     #[test]
@@ -243,7 +295,58 @@ mod tests {
         let handle = std::thread::spawn(move || minimal_block_on(receiver.wait()));
         std::thread::yield_now();
         fulfill(id, b"async");
-        assert_eq!(handle.join().unwrap(), b"async");
+        assert_eq!(handle.join().unwrap().unwrap(), b"async");
+    }
+
+    fn fake_cancellations() -> &'static Mutex<Vec<u64>> {
+        static CALLS: OnceLock<Mutex<Vec<u64>>> = OnceLock::new();
+        CALLS.get_or_init(|| Mutex::new(Vec::new()))
+    }
+
+    #[expect(unsafe_code, reason = "matches the engine cancellation ABI")]
+    unsafe extern "C" fn record_cancellation(call_id: u64) -> i32 {
+        fake_cancellations().lock().unwrap().push(call_id);
+        0
+    }
+
+    fn fake_cancel_receiver(engine_call_id: u64) -> Receiver {
+        crate::test_support::locate_dev_engine();
+        register_with_cancel(
+            capi::api().expect("engine library loads"),
+            engine_call_id,
+            record_cancellation,
+        )
+    }
+
+    #[test]
+    fn dropping_pending_receiver_cancels_its_engine_call() {
+        const ENGINE_CALL_ID: u64 = 0xCA11_CE11;
+        let receiver = fake_cancel_receiver(ENGINE_CALL_ID);
+        drop(receiver);
+        let calls = fake_cancellations().lock().unwrap();
+        assert_eq!(calls.iter().filter(|&&id| id == ENGINE_CALL_ID).count(), 1);
+    }
+
+    #[test]
+    fn dropping_fulfilled_receiver_does_not_cancel() {
+        const ENGINE_CALL_ID: u64 = 0xC0DE_0001;
+        let receiver = fake_cancel_receiver(ENGINE_CALL_ID);
+        fulfill(receiver.dispatch_id(), b"done");
+        drop(receiver);
+        let calls = fake_cancellations().lock().unwrap();
+        assert!(!calls.contains(&ENGINE_CALL_ID));
+    }
+
+    #[test]
+    fn oversized_result_is_rejected_without_reading_its_payload() {
+        let receiver = register();
+        trampoline(
+            receiver.dispatch_id(),
+            std::ptr::dangling(),
+            crate::runtime::MAX_RESULT_BYTES + 1,
+        );
+        let error = receiver.wait_blocking().unwrap_err();
+        assert!(error.to_string().contains("32 MiB bridge limit"));
     }
 
     /// Minimal single-future `block_on` so the test needs no async runtime.
