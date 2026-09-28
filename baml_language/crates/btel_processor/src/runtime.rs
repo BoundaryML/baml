@@ -6,7 +6,7 @@ use std::{
     rc::Rc,
     sync::{
         Arc, Mutex, OnceLock, Weak,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 
@@ -107,6 +107,9 @@ pub struct TelemetryRuntime {
     /// Failed futures' escaping raises, shared by every VM of this engine.
     /// Exception path only; see `FutureErrorLinks`.
     future_errors: Mutex<FutureErrorLinks>,
+    /// Set when `finish` starts. A task that shutdown stopped waiting for can
+    /// still run afterwards; it then sees recording as disabled.
+    finished: AtomicBool,
 }
 
 /// Bounded, engine-scoped map from a failed future to the raise that failed
@@ -291,6 +294,7 @@ impl TelemetryRuntime {
             future_errors: Mutex::new(FutureErrorLinks::new(
                 btel_settings::processor::FUTURE_ERROR_LINKS,
             )),
+            finished: AtomicBool::new(false),
         }))
     }
 
@@ -298,7 +302,7 @@ impl TelemetryRuntime {
     /// records it and recording has not been disabled.
     #[inline]
     pub fn wants_error_evidence(&self) -> bool {
-        self.error_evidence && !self.pool.is_disabled()
+        self.error_evidence && !self.is_disabled()
     }
 
     /// Store a failed future's escaping raise. Exception path only.
@@ -348,7 +352,7 @@ impl TelemetryRuntime {
                 match self.pool.reserve_worker() {
                     Ok(worker) => break worker,
                     Err(SetupError::ProducerLimit) => std::hint::spin_loop(),
-                    Err(SetupError::Disabled) => return false,
+                    Err(SetupError::Disabled | SetupError::Closed) => return false,
                     Err(_) => {
                         self.pool.fail();
                         std::panic::panic_any(TransportFailed);
@@ -377,10 +381,12 @@ impl TelemetryRuntime {
         }
     }
 
+    /// `None` once admission has closed, like `Self::is_disabled`: a late task
+    /// that raced `finish` records nothing rather than failing the recording.
     fn bind_worker(&self, worker: &WorkerSlot) -> Option<Producer<TimingRecord, Span>> {
         match self.pool.bind_worker(worker) {
             Ok(producer) => Some(producer),
-            Err(SetupError::Disabled) => None,
+            Err(SetupError::Disabled | SetupError::Closed) => None,
             Err(_) => {
                 self.pool.fail();
                 std::panic::panic_any(TransportFailed);
@@ -391,7 +397,7 @@ impl TelemetryRuntime {
     /// Capture-only admission. Publish private records before waiting: they may
     /// own every available snapshot. Never hold a TLS borrow while spinning.
     pub fn acquire_snapshot(&self) -> Option<btel_snapshot::Builder> {
-        if self.pool.is_disabled() {
+        if self.is_disabled() {
             return None;
         }
         if let Some(builder) = self.snapshots.try_acquire() {
@@ -410,7 +416,7 @@ impl TelemetryRuntime {
             }
         });
         let result = loop {
-            if self.pool.is_disabled() {
+            if self.is_disabled() {
                 break None;
             }
             if self.pool.is_failed() {
@@ -434,8 +440,9 @@ impl TelemetryRuntime {
         self.snapshot_wait_nanos.load(Ordering::Relaxed)
     }
 
+    /// Recording was abandoned, or `finish` has started and a task is late.
     pub fn is_disabled(&self) -> bool {
-        self.pool.is_disabled()
+        self.pool.is_disabled() || self.finished.load(Ordering::Acquire)
     }
 
     #[inline]
@@ -493,6 +500,7 @@ impl TelemetryRuntime {
     /// permit on this thread. Blocking; async hosts should use `spawn_blocking`.
     /// Repeated/concurrent calls return the same terminal result.
     pub fn finish(&self) -> Result<(), RuntimeError> {
+        self.finished.store(true, Ordering::Release);
         self.pool.close_admission();
         let mut worker = self
             .worker
@@ -594,6 +602,7 @@ mod tests {
             result: Arc::new(RuntimeStatus::default()),
             error_evidence: true,
             future_errors: Mutex::new(FutureErrorLinks::new(4)),
+            finished: AtomicBool::new(false),
         });
         (runtime, pool)
     }
@@ -710,6 +719,37 @@ mod tests {
             runtime.result.result(),
             Some(Err(RuntimeError("disk full".into())))
         );
+    }
+
+    #[test]
+    fn tasks_that_run_after_admission_closes_record_nothing() {
+        let (runtime, pool) = manual_runtime();
+        let id = allocate_telemetry_id();
+        std::thread::scope(|scope| {
+            // A thread that bound before shutdown and one that never did.
+            let (bound_tx, bound_rx) = std::sync::mpsc::channel();
+            let (closed_tx, closed_rx) = std::sync::mpsc::channel::<()>();
+            let runtime = &runtime;
+            let bound = scope.spawn(move || {
+                drop(runtime.enter());
+                bound_tx.send(()).unwrap();
+                closed_rx.recv().unwrap();
+                let late = runtime.enter();
+                assert!(!late.active);
+                runtime.write_span(id, SpanRecord::ThreadSelected { thread_id: id });
+            });
+            bound_rx.recv().unwrap();
+            // No worker here, so `finish` reports that; only admission matters.
+            let _ = runtime.finish();
+            closed_tx.send(()).unwrap();
+            bound.join().unwrap();
+            scope
+                .spawn(|| assert!(!runtime.enter().active))
+                .join()
+                .unwrap();
+        });
+        assert!(!pool.is_failed(), "a late task must not fail the recording");
+        assert_eq!(pool.stats().active_producers, 0);
     }
 
     #[test]

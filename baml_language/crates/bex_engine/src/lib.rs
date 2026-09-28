@@ -2429,6 +2429,8 @@ impl BexEngine {
         let mut last_wait_report = tokio::time::Instant::now();
         #[cfg(not(target_arch = "wasm32"))]
         let mut on_leaks = Some(on_leaks);
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut abandoned = false;
         loop {
             let handles = self
                 .futures
@@ -2467,6 +2469,7 @@ impl BexEngine {
                     if let Some(on_leaks) = on_leaks.take() {
                         on_leaks(&leaks);
                     }
+                    abandoned = true;
                     continue;
                 }
                 let step = match grace {
@@ -2491,6 +2494,16 @@ impl BexEngine {
         #[cfg(target_arch = "wasm32")]
         if let Some(on_leaks) = on_leaks {
             on_leaks(&[]);
+        }
+        // A cancelled future settles while its task can still be unwinding.
+        // Let those tasks end, and record their end, before telemetry closes.
+        // Tasks the deadline above abandoned may never end: do not wait again.
+        #[cfg(not(target_arch = "wasm32"))]
+        if !abandoned {
+            let deadline = tokio::time::Instant::now() + CANCEL_SETTLE_GRACE;
+            while self.bex_work.has_work() && tokio::time::Instant::now() < deadline {
+                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+            }
         }
 
         self.collect_garbage_with_reason(bex_heap::CollectionLevel::Major, "shutdown")
