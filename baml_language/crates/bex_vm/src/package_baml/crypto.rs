@@ -1,7 +1,14 @@
 //! `baml.crypto` ciphers and hashes (`$rust_function`).
 //!
-//! The AES-GCM-SIV ciphers are backed by the `aes-gcm-siv` crate and `Sha256` by
-//! the `sha2` crate. Every class here keeps its runtime state in an opaque
+//! The AES-GCM-SIV ciphers are backed by the `aes-gcm-siv` crate and the
+//! `ChaCha20` ones by `chacha20poly1305`. `Sha256` runs on the TLS crypto
+//! provider in native builds that have one (see `baml_tls`), so a build that
+//! brings its own provider hashes with it, and on the `sha2` crate otherwise
+//! (wasm).
+//!
+//! A build that takes all its crypto from the host's provider
+//! (`external-crypto` with no bundled one) has no ciphers: no provider offers
+//! these algorithms, and none of them is FIPS-approved. Every class here keeps its runtime state in an opaque
 //! `$rust_type` field, which puts that state out of BAML's reach: no BAML
 //! expression produces a `$rust_type`, so the class constructor is the only way
 //! to build one.
@@ -45,7 +52,6 @@ use aes_gcm_siv::aead::{
 };
 use bex_heap::TlabHolder;
 use bex_vm_types::types::Value;
-use sha2::Digest;
 
 use super::{
     BamlClassCryptoAead_for_Aes128GcmSiv, BamlClassCryptoAead_for_Aes256GcmSiv,
@@ -114,6 +120,35 @@ const XCHACHA20_POLY1305: Algorithm = Algorithm {
 
 fn invalid_argument(message: String) -> VmRustFnError {
     VmRustFnError::BamlError(VmBamlError::InvalidArgument { message })
+}
+
+/// Rejects building a cipher in a build that takes all its crypto from the
+/// host's TLS crypto provider: no provider offers these ciphers.
+#[cfg(all(
+    feature = "external-crypto",
+    not(any(feature = "aws-crypto", feature = "ring-crypto"))
+))]
+fn cipher_available(algorithm: &Algorithm) -> Result<(), VmRustFnError> {
+    Err(VmRustFnError::BamlError(VmBamlError::Unsupported {
+        message: format!(
+            "{} is unavailable: this BAML build takes all its crypto from the host's TLS \
+             crypto provider (`external-crypto`), which does not offer it",
+            algorithm.name
+        ),
+    }))
+}
+
+#[cfg(not(all(
+    feature = "external-crypto",
+    not(any(feature = "aws-crypto", feature = "ring-crypto"))
+)))]
+#[allow(
+    clippy::unnecessary_wraps,
+    clippy::trivially_copy_pass_by_ref,
+    reason = "matches the variant for builds without bundled ciphers"
+)]
+fn cipher_available(_algorithm: &Algorithm) -> Result<(), VmRustFnError> {
+    Ok(())
 }
 
 /// Expand `key` into a cipher, rejecting a key that is not the algorithm's key
@@ -277,6 +312,7 @@ macro_rules! impl_aead_class {
     ($class_trait:ident, $aead_trait:ident, $class:ident, $cipher:ty, $algorithm:expr) => {
         impl $class_trait for PackageBamlImpl {
             fn new(vm: &mut BexVm, key: &[u8]) -> Result<Value, VmRustFnError> {
+                cipher_available(&$algorithm)?;
                 let cipher: $cipher = build_cipher(&$algorithm, key)?;
                 let state: Arc<dyn Any + Send + Sync> = Arc::new(cipher);
                 Ok(copy::crypto::$class { _cipher: state }.to_value(vm))
@@ -366,45 +402,109 @@ impl_aead_class!(
 // Sha256
 // =========================================================================
 
+/// The hasher behind `baml.crypto.Sha256`: the TLS crypto provider's in native
+/// builds that have one, `sha2`'s otherwise.
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(
+        feature = "aws-crypto",
+        feature = "ring-crypto",
+        feature = "external-crypto"
+    )
+))]
+mod sha256_impl {
+    use crate::errors::{VmBamlError, VmRustFnError};
+
+    pub(super) type State = baml_tls::Sha256;
+
+    pub(super) fn new() -> Result<State, VmRustFnError> {
+        baml_tls::Sha256::new().map_err(|e| {
+            VmRustFnError::BamlError(VmBamlError::Unsupported {
+                message: format!("Sha256: {e}"),
+            })
+        })
+    }
+
+    pub(super) fn update(state: &mut State, data: &[u8]) {
+        state.update(data);
+    }
+
+    pub(super) fn finish(state: &mut State) -> Vec<u8> {
+        state.finish().to_vec()
+    }
+}
+
+#[cfg(not(all(
+    not(target_arch = "wasm32"),
+    any(
+        feature = "aws-crypto",
+        feature = "ring-crypto",
+        feature = "external-crypto"
+    )
+)))]
+mod sha256_impl {
+    use sha2::Digest;
+
+    use crate::errors::VmRustFnError;
+
+    pub(super) type State = sha2::Sha256;
+
+    #[allow(
+        clippy::unnecessary_wraps,
+        reason = "matches the provider-backed hasher, which can fail"
+    )]
+    pub(super) fn new() -> Result<State, VmRustFnError> {
+        Ok(sha2::Sha256::new())
+    }
+
+    pub(super) fn update(state: &mut State, data: &[u8]) {
+        state.update(data);
+    }
+
+    // `finalize_reset` rather than `finalize` because the BAML contract says
+    // `finish` leaves the hasher ready for a new message. `finalize` would
+    // need to consume the hasher, which the shared `Object::RustData` behind
+    // `_state` cannot give up.
+    pub(super) fn finish(state: &mut State) -> Vec<u8> {
+        state.finalize_reset().to_vec()
+    }
+}
+
 /// Lock a hasher's state, recovering from a poisoned mutex.
 ///
-/// A panic can only reach the mutex through `sha2`'s own compression, which does
-/// not panic, so poisoning means the process is already unwinding. Recovering
+/// A panic can only reach the mutex through the hash's own compression, which
+/// does not panic, so poisoning means the process is already unwinding. Recovering
 /// keeps a panicking fiber from turning every other holder of the same hasher
 /// into a second panic; the state is a partial digest either way, and a partial
 /// digest is exactly what an interrupted `update` sequence should leave behind.
 fn lock_hasher<'v>(
     hasher: &view::crypto::Sha256<'_>,
     vm: &'v BexVm,
-) -> std::sync::MutexGuard<'v, sha2::Sha256> {
+) -> std::sync::MutexGuard<'v, sha256_impl::State> {
     #[expect(
         clippy::used_underscore_items,
         reason = "the `_state` view accessor is generated from the private BAML field"
     )]
     hasher
-        ._state::<Mutex<sha2::Sha256>>(vm)
+        ._state::<Mutex<sha256_impl::State>>(vm)
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
 }
 
 impl BamlClassCryptoSha256 for PackageBamlImpl {
-    fn new(vm: &mut BexVm) -> Value {
-        let state: Arc<dyn Any + Send + Sync> = Arc::new(Mutex::new(sha2::Sha256::new()));
-        copy::crypto::Sha256 { _state: state }.to_value(vm)
+    fn new(vm: &mut BexVm) -> Result<Value, VmRustFnError> {
+        let state: Arc<dyn Any + Send + Sync> = Arc::new(Mutex::new(sha256_impl::new()?));
+        Ok(copy::crypto::Sha256 { _state: state }.to_value(vm))
     }
 }
 
 impl BamlClassCryptoHasher_for_Sha256 for PackageBamlImpl {
     fn update(vm: &BexVm, hasher: &view::crypto::Sha256<'_>, data: &[u8]) {
-        lock_hasher(hasher, vm).update(data);
+        sha256_impl::update(&mut lock_hasher(hasher, vm), data);
     }
 
     fn finish(vm: &BexVm, hasher: &view::crypto::Sha256<'_>) -> Vec<u8> {
-        // `finalize_reset` rather than `finalize` because the BAML contract says
-        // `finish` leaves the hasher ready for a new message. `finalize` would
-        // need to consume the hasher, which the shared `Object::RustData` behind
-        // `_state` cannot give up.
-        lock_hasher(hasher, vm).finalize_reset().to_vec()
+        sha256_impl::finish(&mut lock_hasher(hasher, vm))
     }
 }
 

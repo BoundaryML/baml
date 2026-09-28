@@ -111,8 +111,9 @@ sys_ops = { path = "crates/sys_ops", default-features = false }
 sys_types = { path = "crates/sys_types" }
 sys_native = { path = "crates/sys_native", default-features = false }
 baml_tls = { path = "crates/baml_tls", default-features = false }
-# An `external-crypto` build gets its TLS crypto provider from this crate.
-# Point the path at your own crate to supply one (see its README).
+# An `external-crypto` build gets its crypto provider from this crate. To
+# supply your own, point this at your crate with `package = "<its name>"`
+# (see crates/baml_crypto_provider/README.md).
 baml_crypto_provider = { path = "crates/baml_crypto_provider" }
 baml_path = { path = "crates/baml_path" }
 baml_db = { path = "crates/baml_db" }
@@ -195,7 +196,6 @@ fs2 = "0.4"
 futures = { version = "0.3.30", features = [ "executor" ] }
 graphviz-rust = { version = "0.9" }
 hex = "0.4"
-hmac = "0.12"
 http-body-util = "0.1"
 hyper = { version = "1", features = [ "server", "http1", "http2" ] }
 hyper-util = { version = "0.1", features = [ "server", "server-auto", "tokio" ] }
@@ -329,7 +329,6 @@ rand_chacha = "0.3"
 rand_xoshiro = "0.6"
 num-bigint = { version = "0.4", features = [ "rand", "serde" ] }
 num-traits = { version = "0.2" }
-rsa = { version = "0.9", default-features = false, features = [ "std", "pem" ] }
 # The hardware SHA-2 backend (`asm`: SHA-NI / ARMv8 crypto extensions,
 # runtime-detected) is enabled per-target in `bex_cache` — the `asm` feature
 # does not build under MSVC (sha2-asm ships GAS `.S` sources), so it must not

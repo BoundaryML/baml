@@ -32,7 +32,6 @@ use std::{
 
 use console::style;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 use super::{TELEMETRY_URL, events::TelemetryEvent, post, queue};
 
@@ -199,13 +198,18 @@ impl Telemetry {
     /// the digest is stable per-machine but not reversible off it. Used
     /// for anything remotely identifying (e.g. project root path) — see
     /// [`super::project_id`].
+    ///
+    /// Hashed on the process's rustls crypto provider (see `baml_tls`). A build
+    /// with no provider gets `"unavailable"`; it can't send telemetry anyway.
     pub(crate) fn one_way_hash(&self, payload: &[u8]) -> String {
-        let mut hasher = Sha256::new();
+        let Ok(mut hasher) = baml_tls::Sha256::new() else {
+            return "unavailable".to_string();
+        };
         if let Ok(cfg) = self.inner.config.lock() {
             hasher.update(cfg.salt.as_bytes());
         }
         hasher.update(payload);
-        hex::encode(hasher.finalize())
+        hex::encode(hasher.finish())
     }
 
     /// Print the one-time "Attention: BAML collects anonymous telemetry"

@@ -1,21 +1,22 @@
 # baml_crypto_provider
 
-Supplies the TLS crypto for BAML builds that use `external-crypto`.
+Supplies the crypto for BAML builds that use `external-crypto`.
 
-BAML makes every TLS connection (LLM calls, WebSockets, the HTTPS server,
-telemetry, the remote cache) through rustls. rustls needs a crypto provider
-under it, and a build picks where it comes from:
+BAML runs all of its security-relevant crypto on one rustls crypto provider:
+TLS (LLM calls, WebSockets, the HTTPS server, telemetry, the remote cache),
+Vertex and Bedrock request signing, download checksums, `baml.crypto.Sha256`
+and `baml.random.SystemRandom`. A build picks where that provider comes from:
 
 | Feature | Provider |
 |---|---|
-| `aws-crypto` (default, all published packages) | AWS-LC, bundled |
+| `aws-crypto` (default, all published packages except iOS) | AWS-LC, bundled |
 | `ring-crypto` | `ring`, bundled |
 | `external-crypto` | none bundled: yours |
 
 With `external-crypto`, neither AWS-LC nor `ring` is linked (CI checks this,
-see `scripts/check-crypto-backends.sh`). Use it to put TLS on a crypto module
-you choose, such as a FIPS-validated OpenSSL, AWS-LC in FIPS mode, BoringSSL
-or SymCrypt.
+see `scripts/check-crypto-backends.sh`). Use it to run BAML's crypto on a
+module you choose, such as AWS-LC in FIPS mode, a FIPS-validated OpenSSL,
+BoringSSL or SymCrypt.
 
 ## Build
 
@@ -38,7 +39,7 @@ it only downloads the BAML library after the host has installed a provider.
 
 ## Supply the provider
 
-BAML uses the first of these that exists, on its first TLS connection:
+BAML uses the first of these that exists, the first time it needs crypto:
 
 1. A process-wide provider the host already installed. A Rust program that
    embeds BAML can install one before its first BAML call:
@@ -47,18 +48,19 @@ BAML uses the first of these that exists, on its first TLS connection:
    my_provider().install_default().expect("no provider installed yet");
    ```
 
-2. The provider this crate returns. This default returns none. To supply
-   one, write a crate with the same name and function and point the
-   workspace at it in `baml_language/Cargo.toml`:
+2. The provider the `baml_crypto_provider` dependency returns. This crate
+   returns none. To supply one, write a crate with a `provider()` function and
+   point the dependency at it in `baml_language/Cargo.toml`, keeping the
+   dependency name (`package` is your crate's name):
 
    ```toml
-   baml_crypto_provider = { path = "../my_crypto_provider" }
+   baml_crypto_provider = { path = "../my_crypto_provider", package = "my_crypto_provider" }
    ```
 
    ```toml
    # my_crypto_provider/Cargo.toml
    [package]
-   name = "baml_crypto_provider"
+   name = "my_crypto_provider"
    version = "0.1.0"
    edition = "2021"
 
@@ -77,21 +79,44 @@ BAML uses the first of these that exists, on its first TLS connection:
    `rustls-openssl`, `rustls-symcrypt`, a BoringSSL provider). With Bazel or
    Buck, swap the target that provides `baml_crypto_provider`.
 
+   The provider must have a TLS 1.3 SHA-256 cipher suite (every mainstream
+   and FIPS provider does): BAML takes SHA-256 and HMAC-SHA256 from it.
+
 If neither exists, BAML does not panic and does not fall back to another
-library: each HTTPS call fails with a `baml.errors.Io` that says no TLS crypto
-provider is installed. Plain HTTP keeps working.
+library: each operation that needs crypto fails with an error saying no crypto
+provider is installed. Code that needs no crypto keeps working.
 
-## What this covers
+### AWS-LC FIPS notes
 
-Every TLS connection BAML makes. Some crypto BAML runs itself in pure Rust
-does not go through the provider yet:
+The example above is tested end to end (HTTPS, SHA-256, HMAC-SHA256, RS256,
+secure random, AWS's SigV4 test vectors). Two things to know:
 
-| Where | Algorithm |
+- Building `aws-lc-fips-sys` needs CMake and Go.
+- rustls's `fips` feature also compiles the regular `aws-lc-sys` into the
+  build; `aws-lc-rs` uses the FIPS module at runtime. On macOS the FIPS
+  module is a shared library (`libaws_lc_fips_*_crypto.dylib`) that must be
+  shipped alongside the binary; on Linux it links statically.
+
+## What runs on the provider
+
+| Where | What |
 |---|---|
-| Google Vertex auth | RSA signing of the service-account JWT |
-| AWS Bedrock auth | HMAC-SHA256 / SHA-256 request signing (SigV4) |
-| `baml.crypto` in BAML code | AES-GCM-SIV, ChaCha20-Poly1305 |
-| Internal cache keys and fingerprints | SHA-256, not used for security |
+| Every TLS connection | TLS |
+| Google Vertex auth | RS256 signing of the service-account JWT, SHA-256 token-cache keys |
+| AWS Bedrock auth | SigV4: HMAC-SHA256 and SHA-256 |
+| Self-update, wrapper and Rust SDK downloads | SHA-256 checksum checks |
+| Telemetry | Upload content hashes, the salted project-id hash |
+| `baml.crypto.Sha256` | SHA-256 |
+| `baml.random.SystemRandom` | Secure random bytes |
 
-If you use neither Bedrock nor Vertex and your BAML code doesn't use
-`baml.crypto`, TLS is all the security-relevant crypto BAML does.
+`baml.crypto`'s ciphers (AES-GCM-SIV, ChaCha20-Poly1305, XChaCha20-Poly1305)
+are not FIPS-approved and no provider offers them, so an `external-crypto`
+build refuses to create them (`Unsupported`).
+
+## What doesn't, and why that's fine
+
+SHA-256 used as a fingerprint, not to protect anything, stays on the `sha2`
+crate: compile-cache keys, program identity, file signatures, codegen output
+tracking, profiler stores. Those crates also build for wasm, where there is
+no provider. FIPS covers crypto used for a security function; confirm with
+your auditor that these are out of scope.

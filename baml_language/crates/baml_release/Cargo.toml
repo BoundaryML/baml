@@ -32,7 +32,6 @@ flate2 = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking" ] }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
-sha2 = { workspace = true }
 tar = { workspace = true }
 thiserror = { workspace = true }
 zip = { workspace = true }

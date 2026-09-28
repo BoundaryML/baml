@@ -1,4 +1,5 @@
-//! The rustls crypto provider behind every TLS connection BAML makes.
+//! The rustls crypto provider behind every TLS connection BAML makes, and the
+//! rest of its security-relevant crypto (see `primitives`).
 //!
 //! rustls does no cryptography itself; it calls a process-wide
 //! [`CryptoProvider`]. A build picks where that provider comes from with one
@@ -13,8 +14,13 @@
 //! Whichever features are on, a provider the host installed first is always
 //! the one used. With none of them on, only a host-installed provider works.
 
+mod primitives;
+
 use std::fmt;
 
+pub use primitives::{
+    CryptoError, SHA256_LEN, Sha256, fill_random, hmac_sha256, provider, sha256, sign_rs256,
+};
 use rustls::crypto::CryptoProvider;
 
 /// Makes sure the process has a default rustls crypto provider. Call it
@@ -80,9 +86,9 @@ pub struct NoCryptoProvider;
 impl fmt::Display for NoCryptoProvider {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(
-            "no TLS crypto provider: this BAML build links no crypto library (`external-crypto`). \
-             Install a rustls CryptoProvider with `CryptoProvider::install_default` before the \
-             first HTTPS call, or build with a `baml_crypto_provider` crate that supplies one",
+            "no crypto provider: this BAML build links no crypto library (`external-crypto`). \
+             Install a rustls CryptoProvider with `CryptoProvider::install_default` before BAML \
+             first needs crypto, or build with a `baml_crypto_provider` crate that supplies one",
         )
     }
 }
@@ -95,8 +101,9 @@ mod tests {
 
     #[test]
     fn installs_the_bundled_provider_or_reports_none() {
+        let supplied = supplied_provider().is_some();
         let result = ensure_crypto_provider();
-        if cfg!(any(feature = "aws-crypto", feature = "ring-crypto")) {
+        if supplied || cfg!(any(feature = "aws-crypto", feature = "ring-crypto")) {
             assert_eq!(result, Ok(()));
             assert!(CryptoProvider::get_default().is_some());
         } else {

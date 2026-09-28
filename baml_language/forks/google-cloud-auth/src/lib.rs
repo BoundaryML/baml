@@ -2,8 +2,9 @@
 //!
 //! Replaces `google-cloud-auth` for BAML's use case: minting Google Cloud
 //! access tokens for Vertex AI. All IO (env, file, HTTP) is routed through the
-//! [`TokenIo`] trait so the host can sandbox it; JWT signing is pure Rust
-//! (`rsa` + `sha2`), so a single code path works on both native and wasm.
+//! [`TokenIo`] trait so the host can sandbox it. JWT signing and hashing run on
+//! the process's rustls crypto provider (`baml_tls`), so a build that brings
+//! its own provider signs with it.
 //!
 //! Mirrors `google-auth` (Python/Node) Application Default Credentials as
 //! closely as the `TokenIo` surface allows:
@@ -45,11 +46,6 @@ use async_trait::async_trait;
 use base64::{
     Engine as _,
     engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
-};
-use rsa::{
-    RsaPrivateKey,
-    pkcs8::DecodePrivateKey,
-    signature::{SignatureEncoding, Signer},
 };
 
 /// The default OAuth2 cloud-platform scope used for Vertex AI.
@@ -152,13 +148,13 @@ fn now_unix() -> u64 {
 
 /// Cache keys are SHA-256 over the credential material + scope so the map
 /// never holds raw credentials and distinct identities can never collide.
-fn cache_key(credential_material: &str, scope: &str) -> [u8; 32] {
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
+/// Hashed on the process's rustls crypto provider (see `baml_tls`).
+fn cache_key(credential_material: &str, scope: &str) -> Result<[u8; 32], AuthError> {
+    let mut hasher = baml_tls::Sha256::new().map_err(|e| AuthError::Signing(e.to_string()))?;
     hasher.update(credential_material.as_bytes());
-    hasher.update([0]);
+    hasher.update(&[0]);
     hasher.update(scope.as_bytes());
-    hasher.finalize().into()
+    Ok(hasher.finish())
 }
 
 fn cached_token(key: &[u8; 32]) -> Option<String> {
@@ -197,7 +193,7 @@ pub async fn token_from_service_account_json(
     json_str: &str,
     scope: &str,
 ) -> Result<String, AuthError> {
-    let key = cache_key(json_str, scope);
+    let key = cache_key(json_str, scope)?;
     if let Some(token) = cached_token(&key) {
         return Ok(token);
     }
@@ -214,7 +210,7 @@ pub async fn token_from_credentials_json(
     json_str: &str,
     scope: &str,
 ) -> Result<String, AuthError> {
-    let key = cache_key(json_str, scope);
+    let key = cache_key(json_str, scope)?;
     if let Some(token) = cached_token(&key) {
         return Ok(token);
     }
@@ -264,7 +260,7 @@ pub async fn token_from_adc(io: &dyn TokenIo, scope: &str) -> Result<String, Aut
     }
 
     // 3. GCE metadata server.
-    let key = cache_key("\u{0}gce-metadata", scope);
+    let key = cache_key("\u{0}gce-metadata", scope)?;
     if let Some(token) = cached_token(&key) {
         return Ok(token);
     }
@@ -416,7 +412,8 @@ async fn mint_service_account(
     post_token_form(io, token_uri, Vec::new(), &body).await
 }
 
-/// Sign a service-account JWT using RSASSA-PKCS1-v1_5 with SHA-256.
+/// Sign a service-account JWT using RSASSA-PKCS1-v1_5 with SHA-256, on the
+/// process's rustls crypto provider (see `baml_tls`).
 fn sign_service_account_jwt(sa: &ServiceAccount, scope: &str) -> Result<String, AuthError> {
     #[allow(clippy::cast_possible_wrap)]
     let now = now_unix() as i64;
@@ -435,12 +432,9 @@ fn sign_service_account_jwt(sa: &ServiceAccount, scope: &str) -> Result<String, 
     let claims_b64 = URL_SAFE_NO_PAD.encode(claims.to_string());
     let signing_input = format!("{header_b64}.{claims_b64}");
 
-    let private_key = RsaPrivateKey::from_pkcs8_pem(&sa.private_key)
-        .map_err(|e| AuthError::Signing(format!("failed to parse PKCS8 private key: {e}")))?;
-    let signing_key = rsa::pkcs1v15::SigningKey::<sha2::Sha256>::new(private_key);
-
-    let signature = signing_key.sign(signing_input.as_bytes());
-    let sig_b64 = URL_SAFE_NO_PAD.encode(signature.to_bytes());
+    let signature = baml_tls::sign_rs256(&sa.private_key, signing_input.as_bytes())
+        .map_err(|e| AuthError::Signing(e.to_string()))?;
+    let sig_b64 = URL_SAFE_NO_PAD.encode(signature);
 
     Ok(format!("{signing_input}.{sig_b64}"))
 }
@@ -1016,7 +1010,7 @@ project = right-project
 
     #[test]
     fn cache_respects_refresh_threshold() {
-        let key = cache_key("cache-threshold-test", CLOUD_PLATFORM_SCOPE);
+        let key = cache_key("cache-threshold-test", CLOUD_PLATFORM_SCOPE).unwrap();
         // Expiring within the 225s threshold -> treated as stale.
         store_token(
             key,

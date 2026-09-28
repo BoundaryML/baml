@@ -31,7 +31,6 @@ prost = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha2 = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "sync", "time", "net", "macros" ] }
 uuid = { workspace = true }
 
@@ -40,6 +39,7 @@ prost-build = { workspace = true }
 protoc-bin-vendored = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+sha2 = { workspace = true }
 btel_clock = { workspace = true }
 tokio = { workspace = true, features = [ "rt-multi-thread", "test-util" ] }
 wiremock = { workspace = true }

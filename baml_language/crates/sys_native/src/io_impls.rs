@@ -209,8 +209,30 @@ impl io::IoNamespaceTime for NativeSysOps {
 }
 
 // ============================================================================
-// Random (operating-system entropy)
+// Random (cryptographically secure)
 // ============================================================================
+
+/// Fills `buf` from the TLS crypto provider's secure random source, so a build
+/// that brings its own provider (a FIPS module) draws randomness from it.
+#[cfg(any(
+    feature = "aws-crypto",
+    feature = "ring-crypto",
+    feature = "external-crypto"
+))]
+fn fill_secure_random(buf: &mut [u8]) -> Result<(), String> {
+    baml_tls::fill_random(buf).map_err(|e| e.to_string())
+}
+
+/// Fills `buf` from operating-system entropy: this build has no TLS crypto
+/// provider to draw from.
+#[cfg(not(any(
+    feature = "aws-crypto",
+    feature = "ring-crypto",
+    feature = "external-crypto"
+)))]
+fn fill_secure_random(buf: &mut [u8]) -> Result<(), String> {
+    getrandom::getrandom(buf).map_err(|e| e.to_string())
+}
 
 impl io::IoClassRandomSystemRandom for NativeSysOps {
     fn random(
@@ -234,11 +256,11 @@ impl io::IoClassRandomSystemRandom for NativeSysOps {
             });
         }
         buf.resize(n, 0u8);
-        match getrandom::getrandom(&mut buf) {
+        match fill_secure_random(&mut buf) {
             Ok(()) => SysOpOutput::ok(buf),
             Err(e) => SysOpOutput::err(VmPanic::HostUnavailable {
                 resource: "randomness".to_string(),
-                message: format!("SystemRandom.random: system entropy unavailable: {e}"),
+                message: format!("SystemRandom.random: secure randomness unavailable: {e}"),
             }),
         }
     }
@@ -250,13 +272,13 @@ impl io::IoClassRandomSystemRandom for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
         let mut buf = [0u8; 8];
-        match getrandom::getrandom(&mut buf) {
+        match fill_secure_random(&mut buf) {
             // Arithmetic shift right by one maps the uniform 64-bit draw onto
             // the BAML i63 range `[INT_MIN, INT_MAX]`.
             Ok(()) => SysOpOutput::ok(i64::from_le_bytes(buf) >> 1),
             Err(e) => SysOpOutput::err(VmPanic::HostUnavailable {
                 resource: "randomness".to_string(),
-                message: format!("SystemRandom.random_int: system entropy unavailable: {e}"),
+                message: format!("SystemRandom.random_int: secure randomness unavailable: {e}"),
             }),
         }
     }

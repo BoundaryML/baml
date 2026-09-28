@@ -14,7 +14,6 @@ use std::{
 
 use anyhow::{Context, Result};
 pub use manifest::{Artifact, Channel, ToolchainManifest, WrapperManifest};
-use sha2::{Digest, Sha256};
 
 /// Resolve the BAML home directory (`~/.baml`), the root under which the
 /// toolchain stores installed releases, config, and other per-user state.
@@ -79,7 +78,7 @@ pub enum FetchError {
     #[error("network error fetching {url}: {source}")]
     Network { url: String, source: reqwest::Error },
     #[error(transparent)]
-    NoCryptoProvider(#[from] baml_tls::NoCryptoProvider),
+    Crypto(#[from] baml_tls::CryptoError),
     #[error("HTTP {status} fetching {url}")]
     HttpStatus {
         url: String,
@@ -357,7 +356,7 @@ pub fn verify_release_archive_checksum_text(
             name: archive_name.to_string(),
         }
     })?;
-    let got = format!("{:x}", Sha256::digest(archive_bytes));
+    let got = sha256_hex(archive_bytes)?;
     compare_sha256(archive_url, &expected, &got)
 }
 
@@ -371,8 +370,21 @@ pub fn verify_sha256(
         expected: expected.to_string(),
         got: "invalid sha256".to_string(),
     })?;
-    let got = format!("{:x}", Sha256::digest(archive_bytes));
+    let got = sha256_hex(archive_bytes)?;
     compare_sha256(archive_url, &expected, &got)
+}
+
+/// Lowercase hex SHA-256, hashed on the process's rustls crypto provider (see
+/// `baml_tls`) so a build that brings its own provider verifies downloads with
+/// it.
+fn sha256_hex(bytes: &[u8]) -> Result<String, FetchError> {
+    use std::fmt::Write as _;
+    Ok(baml_tls::sha256(bytes)?
+        .iter()
+        .fold(String::new(), |mut out, b| {
+            let _ = write!(out, "{b:02x}");
+            out
+        }))
 }
 
 fn compare_sha256(archive_url: &str, expected: &str, got: &str) -> Result<(), FetchError> {
@@ -403,7 +415,7 @@ pub fn parse_release_checksum(checksum_text: &str, archive_name: &str) -> Result
 }
 
 fn download_bytes(url: &str) -> Result<Vec<u8>, FetchError> {
-    baml_tls::ensure_crypto_provider()?;
+    baml_tls::ensure_crypto_provider().map_err(baml_tls::CryptoError::from)?;
     let client = reqwest::blocking::Client::builder()
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_mins(10))
@@ -794,7 +806,7 @@ mod tests {
         let archive_name = "baml-language-1.2.3-nightly.20260602.a-x86_64-unknown-linux-gnu.tar.gz";
         let archive_url = format!("https://example.com/releases/{archive_name}");
         let archive_bytes = b"fake archive bytes";
-        let digest = format!("{:x}", Sha256::digest(archive_bytes));
+        let digest = sha256_hex(archive_bytes).unwrap();
         let checksum_text = format!("{digest}  {archive_name}\n");
 
         verify_release_archive_checksum_text(archive_bytes, &archive_url, &checksum_text).unwrap();

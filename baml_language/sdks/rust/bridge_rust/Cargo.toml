@@ -46,11 +46,11 @@ num-bigint = { workspace = true }
 prost = { workspace = true }
 rustls = { workspace = true, features = [ "std" ] }
 serde_json = { workspace = true }
-sha2 = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 ureq = { workspace = true }
 
 [dev-dependencies]
+sha2 = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread", "macros" ] }
 
 [lints]

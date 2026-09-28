@@ -13,7 +13,6 @@ use bytes::Bytes;
 use futures::FutureExt;
 use prost::Message;
 use reqwest::{Client, StatusCode, Url};
-use sha2::{Digest, Sha256};
 use tokio::sync::{Semaphore, mpsc, watch};
 
 use crate::{
@@ -399,7 +398,9 @@ impl BcsDeliveryHandle {
                 recording_file_sequence: file.sequence().get(),
                 encoded_length: u64::try_from(file.bytes().len())
                     .map_err(|_| DeliveryError::Capacity)?,
-                sha256: hex::encode(Sha256::digest(file.bytes())),
+                sha256: hex::encode(
+                    baml_tls::sha256(file.bytes()).map_err(|_| DeliveryError::Http)?,
+                ),
             },
             candidates: metadata,
             proposed_uploads,
@@ -903,7 +904,9 @@ async fn assemble(
                 let object = CasObject {
                     snapshot_id: snapshot.id().as_bytes().to_vec(),
                     snapshot_format_version: btel_settings::snapshot::BLOB_VERSION,
-                    blob_sha256: Sha256::digest(&writer.bytes).to_vec(),
+                    blob_sha256: baml_tls::sha256(&writer.bytes)
+                        .map_err(|_| DeliveryError::Http)?
+                        .to_vec(),
                     blob: writer.bytes.into_boxed_slice().into_vec(),
                 };
                 drop(snapshot);

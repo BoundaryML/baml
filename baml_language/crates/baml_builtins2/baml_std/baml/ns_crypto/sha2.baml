@@ -26,6 +26,7 @@ class Sha256 {
     /// Creates a hasher with no data fed into it yet. Calling `finish` on it
     /// immediately returns the digest of the empty message.
     //baml:mut_vm
+    //baml:fallible
     function new() -> Sha256 throws never {
         $rust_function
     }
