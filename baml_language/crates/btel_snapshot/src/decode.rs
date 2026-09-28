@@ -18,7 +18,12 @@
 //! at least one byte, so a byte budget bounds depth. Descriptions of at most `SHALLOW_TYPE_BYTES` decode in
 //! place and stay available; larger ones (up to `max_type_bytes`) are only
 //! measured, on a helper thread with a large stack, and kept as verified bytes.
-use std::{io, sync::Arc};
+//! A blob starts that thread at its first large description and reuses it.
+use std::{
+    io,
+    sync::{Arc, mpsc},
+    thread::{Scope, ScopedJoinHandle},
+};
 
 use baml_type::{DeclarationName, TaggedTypeName, typetag::TypeTag};
 use borsh::BorshDeserialize;
@@ -197,13 +202,25 @@ impl DecodedSnapshot {
 
 /// Decode and verify one blob. `bytes` is the complete file contents.
 pub fn decode_blob(bytes: &[u8], limits: &DecodeLimits) -> Result<DecodedSnapshot, BlobError> {
-    let mut r = Reader {
-        input: bytes,
-        limits,
-        values: 0,
-        decoded: 0,
-        objects: 0,
-    };
+    std::thread::scope(|scope| {
+        let mut r = Reader {
+            input: bytes,
+            limits,
+            values: 0,
+            decoded: 0,
+            objects: 0,
+            deep: DeepTypes {
+                scope,
+                helper: None,
+            },
+        };
+        let decoded = decode(&mut r);
+        r.deep.finish();
+        decoded
+    })
+}
+
+fn decode(r: &mut Reader<'_, '_>) -> Result<DecodedSnapshot, BlobError> {
     if r.take(8).map_err(|_| BlobError::Magic)? != crate::BLOB_MAGIC {
         return Err(BlobError::Magic);
     }
@@ -218,7 +235,7 @@ pub fn decode_blob(bytes: &[u8], limits: &DecodeLimits) -> Result<DecodedSnapsho
     if object_count as usize > r.input.len() {
         return Err(BlobError::Truncated);
     }
-    if object_count as usize > limits.max_objects {
+    if object_count as usize > r.limits.max_objects {
         return Err(BlobError::Limit("objects"));
     }
     r.objects = object_count;
@@ -284,15 +301,87 @@ fn range(h: &mut Hasher, len: usize, digest: Digest) {
     h.digest(digest);
 }
 
-struct Reader<'a> {
+struct Reader<'a, 'scope> {
     input: &'a [u8],
     limits: &'a DecodeLimits,
     values: usize,
     decoded: usize,
     objects: u32,
+    deep: DeepTypes<'scope, 'a>,
 }
 
-impl<'a> Reader<'a> {
+/// Measures descriptions larger than `SHALLOW_TYPE_BYTES` on one thread
+/// whose stack covers `max_type_bytes` nesting levels, started on first use.
+struct DeepTypes<'scope, 'a> {
+    scope: &'scope Scope<'scope, 'a>,
+    helper: Option<TypeHelper<'scope, 'a>>,
+}
+
+struct TypeHelper<'scope, 'a> {
+    jobs: mpsc::Sender<(&'a [u8], bool)>,
+    results: mpsc::Receiver<Result<usize, BlobError>>,
+    thread: ScopedJoinHandle<'scope, ()>,
+}
+
+impl<'a> DeepTypes<'_, 'a> {
+    fn measure(&mut self, bytes: &'a [u8], limited: bool) -> Result<usize, BlobError> {
+        let helper = match &mut self.helper {
+            Some(helper) => helper,
+            None => {
+                let (jobs, job_queue) = mpsc::channel::<(&'a [u8], bool)>();
+                let (answers, results) = mpsc::channel();
+                let thread = std::thread::Builder::new()
+                    .name("btel-type-decode".into())
+                    .stack_size(TYPE_HELPER_STACK)
+                    .spawn_scoped(self.scope, move || {
+                        for (bytes, limited) in job_queue {
+                            if answers.send(measure_type(bytes, limited)).is_err() {
+                                break;
+                            }
+                        }
+                    })
+                    .map_err(|_| BlobError::Limit("type decoder thread"))?;
+                #[cfg(test)]
+                TYPE_HELPERS_STARTED.set(TYPE_HELPERS_STARTED.get() + 1);
+                self.helper.insert(TypeHelper {
+                    jobs,
+                    results,
+                    thread,
+                })
+            }
+        };
+        let panicked = || invalid("type description decoder panicked".into());
+        helper.jobs.send((bytes, limited)).map_err(|_| panicked())?;
+        helper.results.recv().map_err(|_| panicked())?
+    }
+
+    /// Stop the helper. A panic was already reported by `Self::measure`.
+    fn finish(self) {
+        if let Some(TypeHelper { jobs, thread, .. }) = self.helper {
+            drop(jobs);
+            let _ = thread.join();
+        }
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Helper threads started by decodes on this thread.
+    static TYPE_HELPERS_STARTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Encoded length of one description, found by decoding it. Runs on the
+/// helper's large stack; the deep value is dropped there too.
+fn measure_type(bytes: &[u8], limited: bool) -> Result<usize, BlobError> {
+    let mut window = Window::new(bytes);
+    match OwnedType::deserialize_reader(&mut window) {
+        Ok(_) => Ok(window.used()),
+        Err(_) if window.exhausted && limited => Err(BlobError::Limit("type description bytes")),
+        Err(error) => Err(type_error(&error, window.exhausted)),
+    }
+}
+
+impl<'a> Reader<'a, '_> {
     fn take(&mut self, n: usize) -> Result<&'a [u8], BlobError> {
         if n > self.input.len() {
             return Err(BlobError::Truncated);
@@ -374,30 +463,11 @@ impl<'a> Reader<'a> {
             h.finish(),
         ))
     }
-    /// Encoded length of a description larger than the shallow bound, found
-    /// on a helper thread whose stack covers `max_type_bytes` nesting levels.
-    fn measure_type(&self) -> Result<usize, BlobError> {
+    /// Encoded length of a description larger than the shallow bound.
+    fn measure_type(&mut self) -> Result<usize, BlobError> {
         let bytes = &self.input[..self.input.len().min(self.limits.max_type_bytes)];
         let limited = bytes.len() == self.limits.max_type_bytes;
-        std::thread::scope(|scope| {
-            std::thread::Builder::new()
-                .name("btel-type-decode".into())
-                .stack_size(TYPE_HELPER_STACK)
-                .spawn_scoped(scope, || {
-                    let mut window = Window::new(bytes);
-                    // The deep value is dropped here, on the large stack.
-                    match OwnedType::deserialize_reader(&mut window) {
-                        Ok(_) => Ok(window.used()),
-                        Err(_) if window.exhausted && limited => {
-                            Err(BlobError::Limit("type description bytes"))
-                        }
-                        Err(error) => Err(type_error(&error, window.exhausted)),
-                    }
-                })
-                .map_err(|_| BlobError::Limit("type decoder thread"))?
-                .join()
-                .map_err(|_| invalid("type description decoder panicked".into()))?
-        })
+        self.deep.measure(bytes, limited)
     }
     fn limit(&mut self) -> Result<Limit, BlobError> {
         Ok(match self.u8()? {

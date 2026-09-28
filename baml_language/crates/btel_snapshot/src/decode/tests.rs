@@ -435,6 +435,40 @@ fn type_descriptions_are_bounded_and_large_ones_never_recurse_on_the_caller() {
 }
 
 #[test]
+fn one_helper_thread_measures_every_large_description_in_a_blob() {
+    let blob = on_large_stack(|| {
+        let pool = SnapshotPool::new(1, Limits::default());
+        let mut b = pool.try_acquire().unwrap();
+        let types: Vec<_> = (0..3)
+            .map(|extra| b.push_type(nested_list(SHALLOW_TYPE_BYTES + extra)))
+            .collect();
+        let start = b.value_start();
+        for ty in types {
+            b.push_value(V::Type(ty));
+        }
+        let slots = b.value_range(start);
+        encode(&b.finish_args(3, slots))
+    });
+    let (decoded, helpers) = std::thread::Builder::new()
+        .stack_size(2 << 20)
+        .spawn(move || (decode(&blob), TYPE_HELPERS_STARTED.get()))
+        .unwrap()
+        .join()
+        .unwrap();
+    let DecodedRoot::FunctionArgs { slots, .. } = decoded.unwrap().root else {
+        panic!("argument root");
+    };
+    for slot in &slots {
+        let DecodedValue::Type(ty) = slot else {
+            panic!("type slot: {slot:?}");
+        };
+        assert!(ty.encoded.len() > SHALLOW_TYPE_BYTES && ty.decoded.is_none());
+    }
+    assert_eq!(slots.len(), 3);
+    assert_eq!(helpers, 1);
+}
+
+#[test]
 fn map_entry_keys_hash_like_the_producer() {
     // Keys and values from separate entry ranges must verify independently.
     let pool = SnapshotPool::new(1, Limits::default());
