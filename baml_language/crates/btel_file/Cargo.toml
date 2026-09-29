@@ -8,6 +8,8 @@ license = { workspace = true }
 description = "Bounded local delivery and recovery of Btel recording files"
 
 [features]
+default = [ "baml-defaults" ]
+baml-defaults = [ "btel_recorder/baml-defaults" ]
 # Deterministic storage fault injection for dependent-crate tests only.
 test-support = [  ]
 

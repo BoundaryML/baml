@@ -230,7 +230,7 @@ reason = "AEAD implementations belong in baml_crypto_provider, not the VM."
 [[namespaces]]
 name = "baml"
 # `fmt` is the formatter, `baml_fmt`, and its browser build, `baml_fmt_wasm`.
-approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "type", "query", "fmt", "http", "crypto"]
+approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "type", "query", "fmt", "http", "crypto", "proto"]
 # The type provider crate: `hir_ty` is one name (rust-analyzer's crate of
 # the same shape), not a prefix + word. The crypto provider and interface
 # crates form the replaceable TLS and AEAD integration.

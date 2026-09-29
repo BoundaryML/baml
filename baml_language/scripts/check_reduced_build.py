@@ -40,7 +40,7 @@ def check_graph(workspace=WORKSPACE, replacement=False):
         for line in output.splitlines():
             identity, features = line.split("|", 1)
             name = identity.split()[0]
-            if name in forbidden or name.startswith(("datafusion", "arrow", "sqlparser")):
+            if name in forbidden or name.startswith(("datafusion", "arrow", "sqlparser", "protoc-bin-vendored")):
                 failures.append(identity)
             enabled = set(features.removesuffix(" (*)").split(","))
             unwanted = enabled & FORBIDDEN_FEATURES.get(name, set())

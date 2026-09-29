@@ -26,8 +26,11 @@ web-time = { workspace = true }
 uuid = { workspace = true, features = [ "js" ] }
 
 [build-dependencies]
-prost-build = { workspace = true }
-protoc-bin-vendored = { workspace = true }
+baml_proto_codegen = { workspace = true }
 
 [dev-dependencies]
 bex_chunkedringbuffer = { workspace = true }
+
+[features]
+default = [ "baml-defaults" ]
+baml-defaults = [ "baml_proto_codegen/baml-defaults" ]

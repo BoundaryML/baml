@@ -30,11 +30,14 @@ tokio = { workspace = true, features = [ "rt", "sync", "time", "net", "macros" ]
 uuid = { workspace = true }
 
 [build-dependencies]
-prost-build = { workspace = true }
-protoc-bin-vendored = { workspace = true }
+baml_proto_codegen = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 sha2 = { workspace = true }
 btel_clock = { workspace = true }
 tokio = { workspace = true, features = [ "rt-multi-thread", "test-util" ] }
 wiremock = { workspace = true }
+
+[features]
+default = [ "baml-defaults" ]
+baml-defaults = [ "baml_proto_codegen/baml-defaults", "btel_recorder/baml-defaults" ]

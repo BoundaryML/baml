@@ -20,12 +20,11 @@ thiserror = { workspace = true }
 web-time = { workspace = true }
 
 [build-dependencies]
-prost-build = { workspace = true }
-protoc-bin-vendored = { workspace = true }
+baml_proto_codegen = { workspace = true }
 
 [lints]
 workspace = true
 
 [features]
 default = [ "baml-defaults" ]
-baml-defaults = [ "bex_project/baml-defaults" ]
+baml-defaults = [ "bex_project/baml-defaults", "baml_proto_codegen/baml-defaults" ]

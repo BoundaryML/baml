@@ -21,11 +21,11 @@ These controls do not provide a process-wide network sandbox or establish FIPS v
 
 Pin the upstream commit and retain the source tree, `Cargo.lock`, `rust-toolchain.toml`, and Cargo configuration with the downstream import. Keep local patches and provider implementations identifiable alongside that revision. Some build inputs live outside `baml_language`, including release metadata and the CLI's embedded agent skill; preserve the repository layout when importing the source. See [development setup](../README-DEV.md) for build prerequisites.
 
-The [build-script integration audit](BUILD_SCRIPTS.md) inventories BAML-owned generation steps, tools, inputs, outputs, and linker settings for build systems that replace Cargo scripts. It also identifies current integration gaps: protobuf scripts force the bundled compiler, and the bridge schema build writes generated SDK files into the source tree. Reduced runtime features do not yet remove those build-time requirements.
+The [build-script integration audit](BUILD_SCRIPTS.md) inventories BAML-owned generation steps, tools, inputs, outputs, and linker settings for build systems that replace Cargo scripts. The protobuf scripts accept a supplied `PROTOC`; reduced builds omit the bundled compiler packages and require that variable. Ordinary bridge builds generate Rust files only under `OUT_DIR`. Committed SDK bindings are regenerated through a separate maintenance command.
 
 The [`baml-generate-builtins` and `baml-generate-stdlib` commands](BUILD_SCRIPTS.md#standalone-generation-commands) expose the existing Rust generators for external build actions. They write to explicit output directories and share their implementations with Cargo's build scripts. Ordinary runtime builds continue to call those implementations directly.
 
-When importing without Git metadata, set `BAML_GIT_SHA` to the full lowercase commit ID identifying the imported source. BAML uses this value in its artifact fingerprint; development builds require it when a commit cannot be read from Git. Retain downstream patches separately so that the commit ID and patch set together identify the build inputs.
+When importing without Git metadata, set `BAML_GIT_SHA` to the full lowercase commit ID identifying the imported source. The build script skips Git entirely when this variable is set. BAML uses this value in its artifact fingerprint; development builds require it when a commit cannot be read from Git. Retain downstream patches separately so that the commit ID and patch set together identify the build inputs.
 
 Run the following commands from `baml_language/`. After replacing the provider dependencies described below, build the Python native bridge with outbound restrictions enabled:
 
@@ -57,12 +57,13 @@ Build and inspect the intended artifact with the same package selection, target,
 | CLI allocator | The CLI uses Rust's default allocator instead of mimalloc. |
 | Playground server | `baml-cli playground` and the language server's playground panels are omitted, including Axum's WebSocket and tower-http's filesystem serving dependencies. The stdio language server remains available. |
 | Deadlock detection | The language server omits its deadlock watchdog and `parking_lot/deadlock_detection`. |
+| Bundled protobuf compiler | `protoc-bin-vendored` and its platform packages are omitted. Set `PROTOC` to a supplied compiler executable; see the [build integration guide](BUILD_SCRIPTS.md#supplied-protobuf-compiler). |
 | Bundled timezone database | Jiff uses the system timezone database. Named timezone operations require that database to be provisioned; systems without one, including typical Windows installations, lose the bundled fallback. |
 
 For example, after replacing the providers, build the CLI and Python bridge with optional capabilities disabled and service requests restricted:
 
 ```sh
-cargo build --locked --release -p baml_cli -p bridge_python --no-default-features --features no-phone-home,bridge_python/bundle-http
+PROTOC=/path/to/protoc cargo build --locked --release -p baml_cli -p bridge_python --no-default-features --features no-phone-home,bridge_python/bundle-http
 python3 scripts/check_reduced_build.py
 python3 scripts/check_no_rustls.py -p baml_cli -p bridge_python --no-default-features --features no-phone-home,bridge_python/bundle-http
 ```
@@ -73,7 +74,7 @@ The workspace does not request `clap/cargo`, `tar/xattr`, or `smol_str/borsh`. B
 
 ### Query support
 
-`baml-cli query` is a stub at this revision. This guide does not identify a release with a working query command. The CLI does not depend on `baml_query`, DataFusion, Arrow, or sqlparser, and neither does the Python native bridge. The separate `baml_query` workspace crate uses DataFusion and remains available for development. Its manifest pins DataFusion to `54.1.0`; the workspace lockfile resolves Arrow to `58.4.0` and sqlparser to `0.62.0`. Their presence in the shared lockfile does not imply inclusion in the CLI or bridge.
+`baml-cli query` is a stub at this revision. There is no committed release timeline for a working command. An alternative implementation that removes DataFusion is under consideration; future query functionality is intended to remain optional and absent from reduced builds. The CLI does not depend on `baml_query`, DataFusion, Arrow, or sqlparser, and neither does the Python native bridge. The separate `baml_query` workspace crate uses DataFusion and remains available for development. Its manifest pins DataFusion to `54.1.0`; the workspace lockfile resolves Arrow to `58.4.0` and sqlparser to `0.62.0`. Their presence in the shared lockfile does not imply inclusion in the CLI or bridge.
 
 ### Offline builds
 
@@ -283,7 +284,7 @@ cargo test --locked -p baml_crypto --lib
 
 The tests include SHA-1, SHA-256, HMAC-SHA256, RSA signing, and secure randomness checks. They fail if a tested capability is unsupported. Test the replacement's supported AEAD algorithms against published vectors and exercise rejection of unsupported algorithms through BAML.
 
-The repository's default provider has its own AEAD vector and error tests. The substitution check imports the source into a temporary directory and replaces both provider dependencies. It checks all-target native dependency graphs, builds default and reduced configurations of the CLI and Python bridge while inspecting Cargo's build-artifact records, tests a ring-based crypto implementation without rustls, and exercises AWS SSO cache lookup, transport substitution, and unsupported operations through BAML. It also imports the Python extension and checks the reduced CLI's available commands and stdio language-server handshake. A second replacement rejects all cryptographic operations to verify that no fallback backend is introduced. The script requires Python 3.10 or newer for the Python bridge build; set `PYO3_PYTHON` if a different interpreter is selected by default:
+The repository's default provider has its own AEAD vector and error tests. The substitution check imports the source into a temporary directory and replaces both provider dependencies. It checks all-target native dependency graphs, builds default and reduced configurations of the CLI and Python bridge while inspecting Cargo's build-artifact records, tests a ring-based crypto implementation without rustls, and exercises AWS SSO cache lookup, transport substitution, and unsupported operations through BAML. It also imports the Python extension and checks the reduced CLI's available commands and stdio language-server handshake. A second replacement rejects all cryptographic operations to verify that no fallback backend is introduced. The script requires a supplied protobuf compiler (`PROTOC`, or `protoc` on the test runner's `PATH`) and Python 3.10 or newer for the Python bridge build; set `PYO3_PYTHON` if a different interpreter is selected by default:
 
 ```sh
 cargo test --locked -p baml_crypto_provider -p baml_crypto_types -p baml_crypto -p baml_http_provider

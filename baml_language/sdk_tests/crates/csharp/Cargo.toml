@@ -17,3 +17,7 @@ sdk_test_harness_runner = { path = "../../harness_runner" }
 
 [package.metadata.ci]
 wasm_support = false
+
+[features]
+default = [ "baml-defaults" ]
+baml-defaults = [ "bridge_ctypes/baml-defaults" ]

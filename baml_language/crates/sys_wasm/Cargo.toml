@@ -7,6 +7,10 @@ authors.workspace = true
 license.workspace = true
 description = "Browser implementations of BAML system operations"
 
+[features]
+default = [ "baml-defaults" ]
+baml-defaults = [ "bex_project/baml-defaults", "bridge_ctypes/baml-defaults" ]
+
 [dependencies]
 baml_type = { workspace = true }
 bex_project = { workspace = true }

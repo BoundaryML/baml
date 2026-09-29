@@ -122,6 +122,8 @@ def build_without_tls(workspace, env, reduced=False):
             if packages[message["package_id"]] == "bridge_python":
                 bridge = next((p for p in message["filenames"] if Path(p).suffix in {".so", ".dylib", ".dll"}), bridge)
     assert_no_tls(compiled)
+    if reduced:
+        assert not any(name.startswith("protoc-bin-vendored") for name in compiled), compiled
     if not {"baml_cli", "bridge_python"} <= compiled or cli is None or bridge is None:
         raise RuntimeError("Expected CLI and Python bridge build artifacts")
     print(f"ok: {len(compiled)} build-artifact packages contain no rustls dependencies", flush=True)
@@ -139,6 +141,9 @@ print("ok: rustls-free Python bridge imports")
 
 
 def main():
+    protoc = os.environ.get("PROTOC", shutil.which("protoc"))
+    if not protoc:
+        raise RuntimeError("Set PROTOC or install protoc to test reduced builds")
     python = os.environ.get("PYO3_PYTHON", sys.executable)
     subprocess.run([python, "-c", "import sys; assert sys.version_info >= (3, 10), 'Set PYO3_PYTHON to Python 3.10 or newer'"], check=True)
     check_reduced_graph()
@@ -184,7 +189,7 @@ futures.workspace = true
         # Test real hashing/signing/randomness against the replacement backend.
         # Reuse build output within this import without touching source checkout.
         revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
-        env = dict(os.environ, CARGO_TARGET_DIR=str(WORKSPACE / "target/provider-check"), BAML_GIT_SHA=revision, PYO3_PYTHON=python)
+        env = dict(os.environ, CARGO_TARGET_DIR=str(WORKSPACE / "target/provider-check"), BAML_GIT_SHA=revision, PYO3_PYTHON=python, PROTOC=protoc)
         cargo(workspace, "test", "--locked", "-p", "baml_crypto", env=env)
         cargo(workspace, "test", "--locked", "-p", "forked_aws_config", "--test", "sso_provider", env=env)
         cargo(workspace, "check", "--locked", "-p", "bridge_cffi", "-p", "bridge_typescript", "-p", "baml_pack_host", "-p", "baml", env=env)

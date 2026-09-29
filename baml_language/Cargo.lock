@@ -1143,6 +1143,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_proto_codegen"
+version = "0.0.0-beta"
+dependencies = [
+ "prost-build",
+ "protoc-bin-vendored",
+]
+
+[[package]]
 name = "baml_query"
 version = "0.0.0-beta"
 dependencies = [
@@ -1359,13 +1367,12 @@ dependencies = [
 name = "bex_events"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_proto_codegen",
  "base64",
  "bex_vm_types",
  "btel_types",
  "loom",
  "prost",
- "prost-build",
- "protoc-bin-vendored",
  "serde_json",
  "sha2 0.11.0",
  "sys_types",
@@ -1684,14 +1691,13 @@ dependencies = [
 name = "bridge_ctypes"
 version = "0.1.0"
 dependencies = [
+ "baml_proto_codegen",
  "baml_type",
  "base64",
  "bex_project",
  "indexmap",
  "num-bigint",
  "prost",
- "prost-build",
- "protoc-bin-vendored",
  "serde_json",
  "thiserror 2.0.18",
  "web-time",
@@ -1831,6 +1837,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_crypto",
  "baml_http",
+ "baml_proto_codegen",
  "btel_clock",
  "btel_processor",
  "btel_recorder",
@@ -1842,8 +1849,6 @@ dependencies = [
  "futures",
  "hex",
  "prost",
- "prost-build",
- "protoc-bin-vendored",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -1895,6 +1900,7 @@ dependencies = [
 name = "btel_recorder"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_proto_codegen",
  "bex_chunkedringbuffer",
  "btel_clock",
  "btel_processor",
@@ -1903,8 +1909,6 @@ dependencies = [
  "btel_snapshot",
  "btel_types",
  "prost",
- "prost-build",
- "protoc-bin-vendored",
  "rustc-hash 2.1.2",
  "uuid",
  "web-time",

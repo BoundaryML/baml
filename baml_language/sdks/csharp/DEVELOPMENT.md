@@ -13,11 +13,10 @@ the public C# generation facade twice and verifies deterministic manifests
 before running the .NET consumers. Generated fixture clients are disposable
 test output and must remain untracked.
 
-For a canonical-schema change, build `bridge_ctypes` to refresh its Rust and
-Python consumers, then regenerate and verify the checked-in C++ client:
+For a canonical-schema change, regenerate the committed Rust and Python consumers with the SDK maintenance command, then regenerate and verify the checked-in C++ client:
 
 ```sh
-RUSTC_WRAPPER= cargo build -p bridge_ctypes
+RUSTC_WRAPPER= cargo run --locked -p baml_proto_codegen --bin baml-generate-sdk-protos
 RUSTC_WRAPPER= cargo test -p sdkgen_cpp --test pb_generation regenerate -- --ignored --exact
 RUSTC_WRAPPER= cargo test -p sdkgen_cpp --test pb_generation
 ```

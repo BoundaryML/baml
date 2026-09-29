@@ -1,0 +1,31 @@
+[package]
+name = "baml_proto_codegen"
+version = { workspace = true }
+publish = false
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+description = "Protobuf build helpers and explicit SDK source generation"
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "baml-generate-sdk-protos"
+path = "src/main.rs"
+test = false
+bench = false
+
+[lints]
+workspace = true
+
+[dependencies]
+prost-build = { workspace = true }
+protoc-bin-vendored = { workspace = true, optional = true }
+
+[features]
+default = [ "baml-defaults" ]
+baml-defaults = [ "dep:protoc-bin-vendored" ]
+
+[package.metadata.ci]
+wasm_support = false

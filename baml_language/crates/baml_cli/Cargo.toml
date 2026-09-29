@@ -72,6 +72,7 @@ yaml-rust2 = { workspace = true }
 
 [features]
 baml-defaults = [
+  "baml_exec/baml-defaults",
   "baml_lsp_server/baml-defaults",
   "bex_project/baml-defaults",
   "sys_native/baml-defaults",

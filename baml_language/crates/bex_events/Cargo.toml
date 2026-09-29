@@ -34,9 +34,12 @@ web-time = { workspace = true }
 # Protobuf generation remains only for mixed host lifecycle/log history.
 
 [build-dependencies]
-prost-build = { workspace = true }
-protoc-bin-vendored = { workspace = true }
+baml_proto_codegen = { workspace = true }
 
 # Reserved for future concurrency model checking; inactive in normal builds.
 [target.'cfg(baml_loom)'.dependencies]
 loom = { workspace = true }
+
+[features]
+default = [ "baml-defaults" ]
+baml-defaults = [ "baml_proto_codegen/baml-defaults" ]

@@ -85,6 +85,7 @@ baml_type_runtime = { path = "crates/baml_type_runtime" }
 baml_type_macros = { path = "crates/baml_type_macros" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
+baml_proto_codegen = { path = "crates/baml_proto_codegen", default-features = false }
 sdkgen_cpp = { path = "sdks/cpp/sdkgen_cpp" }
 sdkgen_csharp = { path = "sdks/csharp/sdkgen_csharp" }
 sdkgen_typescript_shared = { path = "sdks/typescript/sdkgen_typescript_shared" }
@@ -140,8 +141,8 @@ btel_types = { path = "crates/btel_types" }
 btel_clock = { path = "crates/btel_clock" }
 btel_records = { path = "crates/btel_records" }
 btel_processor = { path = "crates/btel_processor" }
-btel_recorder = { path = "crates/btel_recorder" }
-btel_file = { path = "crates/btel_file" }
+btel_recorder = { path = "crates/btel_recorder", default-features = false }
+btel_file = { path = "crates/btel_file", default-features = false }
 btel_ringbuffer = { path = "crates/btel_ringbuffer" }
 bex_chunkedringbuffer = { path = "crates/bex_chunkedringbuffer" }
 quanta = { path = "vendor/quanta", version = "=0.12.6", default-features = false }
@@ -150,11 +151,11 @@ bex_heap = { path = "crates/bex_heap" }
 bex_sap = { path = "crates/bex_sap", default-features = false }
 bridge_ctypes = { path = "crates/bridge_ctypes", default-features = false }
 bridge_cffi = { path = "crates/bridge_cffi", default-features = false }
-sys_wasm = { path = "crates/sys_wasm" }
+sys_wasm = { path = "crates/sys_wasm", default-features = false }
 baml_cli = { path = "crates/baml_cli", default-features = false }
 baml_home = { path = "crates/baml_home" }
-baml_exec = { path = "crates/baml_exec" }
-bex_events = { path = "crates/bex_events" }
+baml_exec = { path = "crates/baml_exec", default-features = false }
+bex_events = { path = "crates/bex_events", default-features = false }
 baml_query = { path = "crates/baml_query" }
 bex_resource_types = { path = "crates/bex_resource_types" }
 darwin-kperf = "0.1.0"

@@ -299,6 +299,13 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/crates/bridge_ctypes/**/*.proto' \
+            ':baml_language/crates/baml_proto_codegen/**' \
+            ':baml_language/crates/bridge_ctypes/build.rs' \
+            ':baml_language/crates/bridge_ctypes/Cargo.toml' \
+            ':baml_language/Cargo.toml' \
+            ':baml_language/Cargo.lock' \
+            ':baml_language/sdks/rust/bridge_rust/src/wire/**' \
+            ':baml_language/sdks/python/src/baml_bridge/cffi/v1/*_pb2.*' \
             ':baml_language/crates/bridge_cffi/include/**' \
             ':baml_language/sdks/swift/Sources/BamlBridge/Proto/**' \
             ':baml_language/sdks/swift/Sources/CBamlBridge/include/**' \
@@ -837,10 +844,8 @@ jobs:
           save-if: false
           shared-key: "linux-cargo"
 
-      # bridge_ctypes/build.rs needs `protoc`; bridge_go/build.sh needs
-      # `protoc` + `protoc-gen-go`; bridge_typescript needs node + pnpm.
-      # The `cargo build -p bridge_ctypes` step uses cargo from rustup
-      # (not mise), so we don't need `go` itself here either.
+      # Go generation uses protoc + protoc-gen-go; TypeScript uses node + pnpm.
+      # Rust/Python SDK maintenance uses the pinned bundled compiler by default.
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
@@ -851,10 +856,10 @@ jobs:
         run: cargo fetch
         working-directory: baml_language
 
-      # Rust (prost) + Python (protoc) — both driven by bridge_ctypes/build.rs.
+      # Explicitly regenerate committed SDK files; ordinary builds leave them untouched.
       # Writes Python pb2/pyi into baml_language/sdks/python/src/baml_bridge/cffi/v1/.
       - name: "Generate Rust + Python proto bindings (bridge_ctypes)"
-        run: cargo build -p bridge_ctypes
+        run: cargo run --locked -p baml_proto_codegen --bin baml-generate-sdk-protos
         working-directory: baml_language
 
       # Go (protoc-gen-go) — writes into sdks/go/bridge_go/cffi/proto/baml_bridge/cffi/v1/.

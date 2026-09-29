@@ -208,7 +208,7 @@ jobs:
       - name: "Install tools (mise)"
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "sccache direnv"
+          install_args: "sccache direnv protoc"
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -231,6 +231,10 @@ jobs:
 
       - name: "Default provider vectors and selection"
         run: cargo test --locked -p baml_crypto_provider -p baml_crypto_types -p baml_crypto -p baml_http_provider
+        working-directory: baml_language
+
+      - name: "Supplied build tools and SDK generation"
+        run: python3 scripts/check_build_integration.py
         working-directory: baml_language
 
       - name: "Standalone build generator parity"

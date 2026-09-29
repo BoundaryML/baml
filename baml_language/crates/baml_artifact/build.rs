@@ -43,12 +43,12 @@ fn is_commit_id(value: &str) -> bool {
 
 fn main() {
     println!("cargo:rerun-if-env-changed=BAML_GIT_SHA");
-    track_git_head();
+    println!("cargo:rerun-if-changed=build.rs");
 
     // An explicit `BAML_GIT_SHA` (release CI, source archives) wins over the
-    // checkout's HEAD. An empty value counts as unset.
+    // checkout's HEAD. Do not probe Git when the source identity is supplied.
     let commit = match env::var("BAML_GIT_SHA") {
-        Ok(value) if !value.trim().is_empty() => {
+        Ok(value) => {
             let value = value.trim();
             assert!(
                 is_commit_id(value),
@@ -56,7 +56,8 @@ fn main() {
             );
             Some(value.to_owned())
         }
-        Ok(_) | Err(env::VarError::NotPresent) => {
+        Err(env::VarError::NotPresent) => {
+            track_git_head();
             git_output(&["rev-parse", "HEAD"]).filter(|head| is_commit_id(head))
         }
         Err(env::VarError::NotUnicode(value)) => {

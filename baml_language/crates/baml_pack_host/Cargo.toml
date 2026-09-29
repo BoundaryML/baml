@@ -26,7 +26,11 @@ libsui = { workspace = true }
 tokio = { workspace = true, features = [ "rt" ] }
 
 [features]
-baml-defaults = [ "bex_project/baml-defaults", "sys_native/baml-defaults" ]
+baml-defaults = [
+  "baml_exec/baml-defaults",
+  "bex_project/baml-defaults",
+  "sys_native/baml-defaults",
+]
 default = [ "baml-defaults" ]
 # BAML never contacts anything on its own (see VENDOR.md).
 no-phone-home = [ "sys_native/no-phone-home" ]

@@ -1,11 +1,10 @@
 # Regenerating proto clients for baml_inbound.proto / baml_outbound.proto
 
 ```sh
-# Rust (prost) + Python (protoc) — both driven by bridge_ctypes/build.rs.
+# Rust (prost) + Python (protoc) — explicit SDK maintenance command.
 # The vendored copy under sdks/rust is COMMITTED: the published baml_bridge
 # crate ships it so consumers need neither protoc nor bridge_ctypes.
-cargo build -p bridge_ctypes
-#   -> target/.../build/bridge_ctypes-*/out/baml_bridge.cffi.v1.rs
+cargo run --locked -p baml_proto_codegen --bin baml-generate-sdk-protos
 #   -> sdks/rust/bridge_rust/src/wire/baml_bridge.cffi.v1.rs (committed)
 #   -> sdks/python/src/baml_bridge/cffi/v1/*_pb2.py(i)
 
@@ -42,6 +41,8 @@ sdks/swift/scripts/generate-protos.sh
 #   -> sdks/swift/Sources/BamlBridge/Proto/.generated-from (input-hash
 #      manifest; CI checks it on Linux instead of running the plugin)
 ```
+
+Ordinary `bridge_ctypes` builds generate only the Rust bindings under `OUT_DIR`; they never regenerate committed SDK files. The maintenance command defaults to the bundled compiler, honors `PROTOC`, and accepts `--proto-dir`, `--rust-out`, and `--python-out` for staged generation. Without `baml-defaults`, `PROTOC` is required.
 
 Other consumers (`bridge_cffi`, `bridge_wasm`, `sdks/python/rust/bridge_python`) use the Rust prost types via `bridge_ctypes` — nothing extra to regenerate. `sdks/rust/bridge_rust` is the exception: it vendors the generated file (see above) because it publishes to crates.io and must not depend on this engine-coupled crate.
 
