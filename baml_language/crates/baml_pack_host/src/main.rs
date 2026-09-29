@@ -99,7 +99,8 @@ fn run_single(envelope: PackEnvelope) -> ExitCode {
         btel_settings::clock::DEFAULT_MODE,
         bex_engine::TelemetryRecording::user_files(
             btel_settings::publisher::RecordingConfig::default(),
-        ),
+        )
+        .with_host("pack"),
     ) {
         Ok(e) => Arc::new(e),
         Err(e) => {
@@ -177,7 +178,8 @@ fn run_subcommand(envelope: PackEnvelope) -> ExitCode {
         btel_settings::clock::DEFAULT_MODE,
         bex_engine::TelemetryRecording::user_files(
             btel_settings::publisher::RecordingConfig::default(),
-        ),
+        )
+        .with_host("pack"),
     ) {
         Ok(e) => e,
         Err(e) => {
@@ -272,6 +274,11 @@ fn finalize_dispatch(
         json_args,
         output_format,
     ));
+    engine.record_process_exit(match &result {
+        Ok(DispatchResult::Ok | DispatchResult::Exit(0)) => bex_engine::ProcessStatus::Success,
+        _ if engine.root_panicked() => bex_engine::ProcessStatus::Panicked,
+        _ => bex_engine::ProcessStatus::Error,
+    });
     rt.block_on(engine.shutdown());
     if let Some(Err(error)) = engine.telemetry_result() {
         eprintln!("Warning: telemetry recording failed: {error}");

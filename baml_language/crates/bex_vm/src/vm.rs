@@ -633,7 +633,7 @@ pub(crate) mod tests {
                 TimingRecord::FunctionTimingCompletion {
                     call_path, reentry, ..
                 } => Some((*call_path, *reentry)),
-                TimingRecord::ThreadSelected { .. } => None,
+                TimingRecord::ThreadSelected { .. } | TimingRecord::SysOpTime { .. } => None,
             })
             .collect();
         assert_eq!(
@@ -5275,7 +5275,7 @@ impl BexVm {
         // becomes its cause, unless it throws a conversion of that error
         // (`UnknownError.from`), which takes over the error's own trace and
         // cause.
-        let (context, converted) = match thrown.context {
+        let (mut context, converted) = match thrown.context {
             Some(context) if self.context_error(context)? == exception_value => {
                 (InFlightContext::Carried(context), false)
             }
@@ -5456,11 +5456,16 @@ impl BexVm {
             }
 
             // No handler in this frame -- pop it and try the caller.
+            let recorded = if self.frame_wants_error_capture(depth, frame_function) {
+                self.recorded_context(&mut context, exception_value)
+            } else {
+                exception_value
+            };
             self.complete_unwound_frame(
                 depth,
                 frame_function,
                 telemetry_outcome,
-                exception_value,
+                recorded,
                 evidence.as_mut(),
             );
             if let Some(evidence) = &mut evidence {
@@ -6675,19 +6680,137 @@ impl BexVm {
         }
     }
 
-    fn telemetry_outcome_for_exception(&self, value: Value) -> InvocationOutcome {
+    fn frame_wants_error_capture(&self, frame_idx: usize, function: &Function) -> bool {
+        let (Some(Frame::Bytecode(frame)), Some(state)) =
+            (self.frames.get(frame_idx), self.telemetry.as_ref())
+        else {
+            return false;
+        };
+        frame
+            .telemetry
+            .as_ref()
+            .is_some_and(|telemetry| state.wants_error_capture(telemetry, function))
+    }
+
+    /// Whether `baml.errors.Context` can be built: bare test VMs do not load
+    /// the error classes.
+    fn error_context_classes_loaded(&self) -> bool {
+        [
+            ErrorClass::Context,
+            ErrorClass::StackTrace,
+            ErrorClass::StackFrame,
+        ]
+        .iter()
+        .all(|class| {
+            self.error_class_ptrs
+                .get(*class as usize)
+                .is_some_and(|ptr| !ptr.is_null())
+        })
+    }
+
+    /// `baml.errors.Context { error, stack_trace, cause }` for a recorded
+    /// error. The bare value when the error classes are not loaded (bare
+    /// test VMs).
+    fn error_context_value(&mut self, error: Value, trace: &[StackFrame], cause: Value) -> Value {
+        if self.error_context_classes_loaded() {
+            self.alloc_error_context(error, trace, cause)
+        } else {
+            error
+        }
+    }
+
+    /// What a span that records the error in flight captures: the context a
+    /// `catch (e, ctx)` would bind. A new failure's context is built the
+    /// first time a span records it and carried from then on, so the handler
+    /// that lands the error binds the same object: one context per
+    /// occurrence. Allocation never collects, so it stays live. The bare error
+    /// when the error classes are not loaded (bare test VMs).
+    fn recorded_context(&mut self, context: &mut InFlightContext, error: Value) -> Value {
+        match context {
+            InFlightContext::Carried(carried) => *carried,
+            InFlightContext::Fresh { .. } if !self.error_context_classes_loaded() => error,
+            InFlightContext::Fresh { trace, cause } => {
+                let built = self.alloc_error_context(error, trace, *cause);
+                *context = InFlightContext::Carried(built);
+                built
+            }
+        }
+    }
+
+    /// Charge a finished sysop's time to the innermost observed call path.
+    pub fn record_sysop_time(&mut self, elapsed: ClockDuration) {
+        if elapsed == ClockDuration::ZERO {
+            return;
+        }
+        if let Some(telemetry) = self.telemetry.as_mut() {
+            telemetry.record_sysop_time(elapsed);
+        }
+    }
+
+    /// The node model usage recorded now belongs to: the innermost span, or
+    /// the thread outside any. `None` when telemetry is off.
+    pub(crate) fn usage_target(&self) -> Option<btel_types::TelemetryId> {
+        self.telemetry.as_ref().map(TelemetryState::active_id)
+    }
+
+    /// Record one model turn's tokens against `target`, a telemetry ID from
+    /// [`Self::usage_target`]. False when telemetry is off or `target` is 0.
+    #[allow(clippy::too_many_arguments, reason = "mirrors ai.events.Usage")]
+    pub(crate) fn record_model_usage(
+        &mut self,
+        target: u64,
+        model: Option<Box<str>>,
+        input_tokens: u64,
+        output_tokens: u64,
+        cache_read_tokens: Option<u64>,
+        cache_write_tokens: Option<u64>,
+        reasoning_tokens: Option<u64>,
+    ) -> bool {
+        let (Some(telemetry), Some(node)) = (
+            self.telemetry.as_mut(),
+            btel_types::TelemetryId::from_raw(target),
+        ) else {
+            return false;
+        };
+        telemetry.record_model_usage(btel_records::ModelUsage {
+            node,
+            model,
+            input_tokens,
+            output_tokens,
+            cache_read_tokens,
+            cache_write_tokens,
+            reasoning_tokens,
+        });
+        true
+    }
+
+    /// Name this thread's future for telemetry; call before its entry point.
+    pub fn set_telemetry_thread_name(&mut self, name: &str) {
+        if let Some(telemetry) = self.telemetry.as_mut() {
+            telemetry.set_thread_name(name);
+        }
+    }
+
+    /// How an escaping error ends an observed invocation: cancelled for a
+    /// cancellation or `exit`, panicked for another panic, else errored.
+    pub fn telemetry_outcome_for_exception(&self, value: Value) -> InvocationOutcome {
         let Some(ptr) = value.as_object_ptr() else {
             return InvocationOutcome::Errored;
         };
         let Object::Instance(instance) = self.get_object(ptr) else {
             return InvocationOutcome::Errored;
         };
-        if self
-            .panic_class_ptrs
-            .get(PanicClass::Cancelled as usize)
-            .is_some_and(|class| *class == instance.class)
-        {
+        let is = |panic: PanicClass| {
+            self.panic_class_ptrs
+                .get(panic as usize)
+                .is_some_and(|class| *class == instance.class)
+        };
+        // Exit ends the process on purpose: the frames it unwinds were
+        // stopped, not failed.
+        if is(PanicClass::Cancelled) || is(PanicClass::Exit) {
             InvocationOutcome::Cancelled
+        } else if self.panic_class_ptrs.contains(&instance.class) {
+            InvocationOutcome::Panicked
         } else {
             InvocationOutcome::Errored
         }
@@ -6801,7 +6924,8 @@ impl BexVm {
                 .panic_class_ptrs
                 .get(PanicClass::Cancelled as usize)
                 .is_some_and(|class| !class.is_null()))
-        .then(|| self.panic_to_exception_value(VmPanic::Cancelled));
+        .then(|| self.panic_to_exception_value(VmPanic::Cancelled))
+        .map(|error| self.error_context_value(error, &[], Value::NULL));
         for frame_idx in (0..self.frames.len()).rev() {
             self.complete_bytecode_invocation(frame_idx, outcome, error);
         }

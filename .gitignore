@@ -186,8 +186,9 @@ target/
 
 baml-graph/_site/
 
-# claude
-.claude/
+# claude (shared project settings are checked in; everything else is per-user)
+.claude/*
+!.claude/settings.json
 rpi/
 
 # Riptide artifacts (cloud-synced)

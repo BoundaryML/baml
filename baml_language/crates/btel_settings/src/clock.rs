@@ -14,8 +14,15 @@ pub const DEFAULT_MODE: ClockMode = ClockMode::Auto;
 /// fault detection and accumulate more scale uncertainty. Not a per-function read setting.
 pub const VALIDATION_INTERVAL_DURATION: Duration = Duration::from_millis(100);
 /// **Contract.** Normal-operation duration accuracy target, not a guarantee across host
-/// migration. Change only with an explicit contract decision.
+/// migration, plus `MAX_DRIFT_PPB` of the epoch's length. Change only with an explicit
+/// contract decision.
 pub const ACCURACY_TARGET_NS: u64 = 1_000_000; // ns
+/// **Contract.** How far a long epoch may drift from the OS monotonic clock beyond the
+/// accuracy target, as a share of its length. NTP slews that clock by a few ppm, so a rate
+/// fixed at calibration drifts from it; with a flat 1 ms, every duration of a run longer
+/// than a few minutes was dropped. 100 ppm is 0.01% of a duration (6 ms over ten
+/// minutes); a larger jump still ends the epoch.
+pub const MAX_DRIFT_PPB: u64 = 100_000;
 /// **Sensitive tolerance.** Residual margin after accounting for sampling and rate
 /// uncertainty. Revalidate fault detection and fallback before changing.
 pub const DISCONTINUITY_MARGIN_NS: u64 = 250_000; // ns

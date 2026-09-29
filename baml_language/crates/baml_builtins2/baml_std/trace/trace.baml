@@ -124,3 +124,27 @@ function _span(inputs: bool?, output: bool?, error: bool?) -> Options throws nev
 function current_span_id() -> SpanId? throws never {
     $rust_function
 }
+
+/// (internal) The span or thread that model usage recorded later belongs
+/// to: this invocation's innermost span, else its thread. 0 when tracing is
+/// off. Model clients capture it when a call starts.
+//baml:mut_vm
+function _usage_target() -> int throws never {
+    $rust_function
+}
+
+/// (internal) Record the tokens one model turn used against a target from
+/// `_usage_target`. `input_tokens` excludes cache reads and writes. Returns
+/// whether anything was recorded.
+//baml:mut_vm
+function _record_usage(
+    target: int,
+    model: string?,
+    input_tokens: int,
+    output_tokens: int,
+    cache_read_tokens: int?,
+    cache_write_tokens: int?,
+    reasoning_tokens: int?,
+) -> bool throws never {
+    $rust_function
+}

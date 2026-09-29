@@ -52,7 +52,9 @@ fn leaf_calls(json: &Value) -> i64 {
         .map_or(0, |row| row[1].as_i64().unwrap())
 }
 
-const STATS: &str = "SELECT fqn, SUM(call_count) FROM function_stats GROUP BY fqn";
+/// Every completed invocation per function, over each ended `baml run`.
+const STATS: &str =
+    "SELECT function_name, SUM(invocation_count) FROM profiler GROUP BY function_name";
 
 #[test]
 fn fresh_query_processes_index_once_and_then_only_new_files() {
@@ -61,7 +63,7 @@ fn fresh_query_processes_index_once_and_then_only_new_files() {
     std::fs::write(project.path().join("baml_src/main.baml"), PROGRAM).unwrap();
 
     // Before anything ran: an empty answer, and nothing is created.
-    let (code, empty) = query(project.path(), "SELECT COUNT(*) FROM executions");
+    let (code, empty) = query(project.path(), "SELECT COUNT(*) FROM spans");
     assert_eq!(code, 0);
     assert_eq!(empty["rows"], serde_json::json!([[0]]));
     assert_eq!(empty["outcome"]["source_missing"], true);
@@ -91,20 +93,16 @@ fn fresh_query_processes_index_once_and_then_only_new_files() {
     assert_eq!(leaf_calls(&first), 2 * 25);
     assert_eq!(first["outcome"]["unsealed"], false);
 
-    // Each `baml run` shut down normally: its recording ended after every run
-    // settled, so every recorded clock is final.
+    // Each `baml run` is its own process, which said how it ended and which
+    // sources it ran.
     let (code, ended) = query(
         project.path(),
-        "SELECT COUNT(*), SUM(state = 'sealed'), SUM(terminal_sequence = indexed_sequence)
-         FROM recordings",
+        "SELECT COUNT(*), SUM(status = 'success'), SUM(host = 'baml'),
+           SUM(baml_source_code_content_id IS NOT NULL), SUM(command LIKE '% run main')
+         FROM processes",
     );
     assert_eq!(code, 0, "{ended}");
-    assert_eq!(ended["rows"], serde_json::json!([[2, 2, 2]]));
-    let (_, clocks) = query(
-        project.path(),
-        "SELECT COUNT(*) > 0, COUNT(*) = SUM(is_final) FROM clocks",
-    );
-    assert_eq!(clocks["rows"], serde_json::json!([[1, 1]]));
+    assert_eq!(ended["rows"], serde_json::json!([[2, 2, 2, 2, 2]]));
 
     for _ in 0..2 {
         let (_, again) = query(project.path(), STATS);
@@ -126,25 +124,22 @@ fn fresh_query_processes_index_once_and_then_only_new_files() {
         "new evidence counted exactly once"
     );
 
-    // Population outcomes count timing-only and retained calls once each.
+    // The profiler counts timing-only and retained calls once each.
     let (code, outcomes) = query(
         project.path(),
-        "SELECT SUM(completed_calls), SUM(ok_calls), SUM(errored_calls),
-           SUM(cancelled_calls), MIN(outcome_state), MAX(outcome_state)
-         FROM function_stats WHERE fqn = 'user.Leaf'",
+        "SELECT SUM(invocation_count), SUM(return_count), SUM(error_count),
+           SUM(panic_error_count), SUM(cancel_error_count), SUM(missing_count)
+         FROM profiler WHERE function_name = 'user.Leaf'",
     );
     assert_eq!(code, 0);
-    assert_eq!(
-        outcomes["rows"],
-        serde_json::json!([[75, 75, 0, 0, "recorded", "recorded"]])
-    );
+    assert_eq!(outcomes["rows"], serde_json::json!([[75, 75, 0, 0, 0, 0]]));
     assert_eq!(outcomes["outcome"]["query"]["cas_loads"], 0);
 
     // Retained calls exist only for the high-mode run; values render as NULL
     // because nothing captured them, and that is not unavailability.
     let (code, calls) = query(
         project.path(),
-        "SELECT fqn, output['x'] FROM calls WHERE fqn = 'user.Work' AND execution_id IS NOT NULL",
+        "SELECT span_name, output_value['x'] FROM spans WHERE span_name = 'user.Work'",
     );
     assert_eq!(code, 0);
     assert_eq!(calls["rows"].as_array().unwrap().len(), 2);
@@ -156,17 +151,17 @@ fn schema_invalid_sql_and_stdin() {
     let project = tempfile::tempdir().unwrap();
     let schema = cli(
         project.path(),
-        &["query", "--schema", "--table", "calls"],
+        &["query", "--schema", "--table", "spans"],
         &[],
     );
     assert!(schema.status.success());
     let text = String::from_utf8_lossy(&schema.stdout);
     assert!(
-        text.contains("args") && text.contains("baml_value"),
+        text.contains("input_args") && text.contains("baml_value"),
         "{text}"
     );
 
-    let invalid = cli(project.path(), &["query", "DELETE FROM calls"], &[]);
+    let invalid = cli(project.path(), &["query", "DELETE FROM spans"], &[]);
     assert_eq!(invalid.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&invalid.stderr).contains("read-only"));
 
@@ -182,7 +177,7 @@ fn schema_invalid_sql_and_stdin() {
         .stdin
         .take()
         .unwrap()
-        .write_all(b"SELECT COUNT(*) AS n FROM calls")
+        .write_all(b"SELECT COUNT(*) AS n FROM spans")
         .unwrap();
     let output = child.wait_with_output().unwrap();
     let lines: Vec<&str> = std::str::from_utf8(&output.stdout)

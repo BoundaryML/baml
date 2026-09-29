@@ -21,13 +21,14 @@ LANGUAGE = Path(__file__).resolve().parents[1]
 FIXTURES = {"tiny": 10000, "dense": 128, "spawn": 256,
             "capture-repeat": 10000, "capture-unique": 512}
 QUERIES = {
-    "count": "SELECT count(*) FROM calls",
-    "executions": "SELECT * FROM executions ORDER BY started_at_ms DESC, execution_id LIMIT 20",
-    "function_stats": "SELECT fqn, sum(call_count) AS calls, sum(total_duration_ns) AS ns "
-                      "FROM function_stats GROUP BY fqn ORDER BY calls DESC, fqn",
-    "call_path_stats": "SELECT * FROM call_path_stats ORDER BY self_ns DESC, call_path_id LIMIT 20",
-    "hot_call_paths": "SELECT * FROM call_path_stats WHERE self_ns IS NOT NULL ORDER BY self_ns DESC, call_path_id LIMIT 20",
-    "cas_filter": "SELECT count(*) FROM calls WHERE args['n'] = 7",
+    "count": "SELECT count(*) FROM spans",
+    "roots": "SELECT * FROM spans WHERE span_type = 'future' AND parent_span_id IS NULL "
+             "ORDER BY start_time DESC, span_id LIMIT 20",
+    "function_stats": "SELECT function_name, sum(invocation_count) AS calls, sum(total_time) AS ns "
+                      "FROM profiler GROUP BY function_name ORDER BY calls DESC, function_name",
+    "profiler": "SELECT * FROM profiler ORDER BY self_time DESC, profiler_node_id LIMIT 20",
+    "processes": "SELECT * FROM processes",
+    "cas_filter": "SELECT count(*) FROM spans WHERE input_args['n'] = 7",
 }
 
 

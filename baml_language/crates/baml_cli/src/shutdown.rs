@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
-use bex_engine::BexEngine;
+use bex_engine::{BexEngine, ProcessStatus};
 
 use crate::reporter::Reporter;
 
@@ -24,11 +24,18 @@ pub(crate) fn shutdown_engine(
     rt: &tokio::runtime::Runtime,
     engine: &Arc<BexEngine>,
     reporter: &Reporter,
+    status: ProcessStatus,
 ) {
-    rt.block_on(shutdown_engine_future(engine, reporter));
+    rt.block_on(shutdown_engine_future(engine, reporter, status));
 }
 
-pub(crate) async fn shutdown_engine_future(engine: &Arc<BexEngine>, reporter: &Reporter) {
+/// The CLI exits after this: the recording ends with the process's status.
+pub(crate) async fn shutdown_engine_future(
+    engine: &Arc<BexEngine>,
+    reporter: &Reporter,
+    status: ProcessStatus,
+) {
+    engine.record_process_exit(status);
     engine
         .shutdown_with_deadline(
             shutdown_grace(),

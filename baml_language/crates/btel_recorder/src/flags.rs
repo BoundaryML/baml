@@ -45,7 +45,9 @@ impl CompletionFlags {
 pub(crate) const fn outcome(value: InvocationOutcome) -> proto::InvocationOutcome {
     match value {
         InvocationOutcome::Ok => proto::InvocationOutcome::Ok,
-        InvocationOutcome::Errored => proto::InvocationOutcome::Errored,
+        InvocationOutcome::Errored | InvocationOutcome::Panicked => {
+            proto::InvocationOutcome::Errored
+        }
         InvocationOutcome::Cancelled => proto::InvocationOutcome::Cancelled,
     }
 }

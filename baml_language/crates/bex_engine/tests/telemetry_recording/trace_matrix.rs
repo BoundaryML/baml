@@ -160,12 +160,54 @@ impl Recording {
         bytes
     }
 
+    /// A failure captures the `baml.errors.Context` a handler would bind: its
+    /// `error` is the thrown value `expected` holds.
+    #[track_caller]
+    fn assert_error_capture(
+        &self,
+        actual: Option<&proto::SnapshotId>,
+        expected: Option<&Snapshot>,
+    ) {
+        use btel_snapshot::{DecodeLimits, DecodedObject, DecodedRoot, DecodedValue, decode_blob};
+        let (actual, expected) = match (actual, expected) {
+            (None, None) => return,
+            (Some(actual), Some(expected)) => (actual, expected),
+            _ => panic!(
+                "capture presence differs: actual={}, expected={}",
+                actual.is_some(),
+                expected.is_some()
+            ),
+        };
+        let context = decode_blob(&self.blob(actual), &DecodeLimits::default()).unwrap();
+        let DecodedRoot::Value(DecodedValue::Object(root)) = context.root else {
+            panic!("expected a captured context object");
+        };
+        let DecodedObject::Instance { fields, .. } = context.object(root) else {
+            panic!("expected a baml.errors.Context instance");
+        };
+        let mut bytes = Vec::new();
+        expected.write_blob(&mut bytes).unwrap();
+        let expected = decode_blob(&bytes, &DecodeLimits::default()).unwrap();
+        let DecodedRoot::Value(value) = &expected.root else {
+            panic!("expected a captured value");
+        };
+        assert_eq!(fields[0].0.as_ref(), "error");
+        assert!(
+            same_value(&context, &fields[0].1, &expected, value),
+            "error {:?} differs from {value:?}",
+            fields[0].1
+        );
+    }
+
     #[track_caller]
     fn assert_capture(&self, actual: Option<&proto::SnapshotId>, expected: Option<&Snapshot>) {
         match (actual, expected) {
             (None, None) => {}
             (Some(actual), Some(expected)) => {
-                assert_eq!(capture_id(actual), expected.id());
+                if capture_id(actual) != expected.id() {
+                    // Not the value itself: a failure's context around it.
+                    return self.assert_error_capture(Some(actual), Some(expected));
+                }
                 let mut expected_bytes = Vec::new();
                 expected.write_blob(&mut expected_bytes).unwrap();
                 assert_eq!(self.blob(actual), expected_bytes);
@@ -176,6 +218,37 @@ impl Recording {
                 expected.is_some()
             ),
         }
+    }
+}
+
+/// Structural equality across two snapshots: object IDs are local to each.
+fn same_value(
+    a: &btel_snapshot::DecodedSnapshot,
+    x: &btel_snapshot::DecodedValue,
+    b: &btel_snapshot::DecodedSnapshot,
+    y: &btel_snapshot::DecodedValue,
+) -> bool {
+    use btel_snapshot::{DecodedObject, DecodedValue};
+    match (x, y) {
+        // NaN is its own bits, not equal to itself.
+        (DecodedValue::Float(x), DecodedValue::Float(y)) => x.to_bits() == y.to_bits(),
+        (DecodedValue::Object(x), DecodedValue::Object(y)) => match (a.object(*x), b.object(*y)) {
+            (DecodedObject::List { items: x, .. }, DecodedObject::List { items: y, .. }) => {
+                x.len() == y.len() && x.iter().zip(y).all(|(x, y)| same_value(a, x, b, y))
+            }
+            (
+                DecodedObject::Map { entries: x, .. } | DecodedObject::Instance { fields: x, .. },
+                DecodedObject::Map { entries: y, .. } | DecodedObject::Instance { fields: y, .. },
+            ) => {
+                x.len() == y.len()
+                    && x.iter()
+                        .zip(y)
+                        .all(|((kx, x), (ky, y))| kx == ky && same_value(a, x, b, y))
+            }
+            (DecodedObject::Cell(x), DecodedObject::Cell(y)) => same_value(a, x, b, y),
+            (x, y) => x == y,
+        },
+        (x, y) => x == y,
     }
 }
 
@@ -271,10 +344,17 @@ async fn capture_flags(program: &Program) {
                             entry.inputs_cas_id.as_ref(),
                             (inputs == Some(true)).then_some(&args),
                         );
-                        recording.assert_capture(
-                            done.value_cas_id.as_ref(),
-                            (if fail { error } else { output } == Some(true)).then_some(&returned),
-                        );
+                        if fail {
+                            recording.assert_error_capture(
+                                done.value_cas_id.as_ref(),
+                                (error == Some(true)).then_some(&returned),
+                            );
+                        } else {
+                            recording.assert_capture(
+                                done.value_cas_id.as_ref(),
+                                (output == Some(true)).then_some(&returned),
+                            );
+                        }
                         assert_eq!(
                             CompletionFlags::from_wire(done.completion_flags, false)
                                 .unwrap()

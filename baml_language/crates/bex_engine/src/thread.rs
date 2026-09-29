@@ -96,6 +96,8 @@ pub struct BexThread {
     /// an op in flight, so the abandoned op stops and later ops start clean.
     pub sysop_cancel: CancellationToken,
     pub settles_future: Option<FutureId>,
+    /// How the error that escaped this root thread ends it, for telemetry.
+    pub escaped_outcome: Option<bex_vm::telemetry::InvocationOutcome>,
 }
 
 impl BexThread {
@@ -107,6 +109,7 @@ impl BexThread {
             cancel,
             sysop_cancel: CancellationToken::new(),
             settles_future: None,
+            escaped_outcome: None,
         }
     }
 
@@ -123,6 +126,7 @@ impl BexThread {
             cancel,
             sysop_cancel: CancellationToken::new(),
             settles_future: Some(settles_future),
+            escaped_outcome: None,
         }
     }
 

@@ -18,6 +18,25 @@ fn blob_path(project: &std::path::Path, hex: &str) -> std::path::PathBuf {
     )
 }
 
+/// Captured inputs and value CAS ids of a function's calls, oldest first.
+/// The public tables expose values, not their storage.
+fn cas_ids(index: &mut baml_query_btel::Index, fqn: &str) -> Vec<(Option<String>, Option<String>)> {
+    index.refresh().unwrap();
+    index
+        .connection()
+        .prepare(
+            "SELECT lower(hex(c.inputs_cas)), lower(hex(c.value_cas)) FROM call c
+             JOIN call_path p ON p.rec = c.rec AND p.call_path_id = c.call_path_id
+             JOIN function_def f ON f.rec = p.rec AND f.function_id = p.callee_function_id
+             WHERE f.fqn = ?1 ORDER BY c.entered_ticks",
+        )
+        .unwrap()
+        .query_map([fqn], |r| Ok((r.get(0)?, r.get(1)?)))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap()
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn structured_comparisons_use_captured_content_across_blobs_and_queries() {
     let project = tempfile::tempdir().unwrap();
@@ -25,20 +44,20 @@ async fn structured_comparisons_use_captured_content_across_blobs_and_queries() 
     let mut index = index(project.path());
     let equal = sql(
         &mut index,
-        "SELECT COUNT(*) FROM calls WHERE fqn = 'user.Extract' AND args['customer'] = output['customer']",
+        "SELECT COUNT(*) FROM spans WHERE span_name = 'user.Extract' AND input_args['customer'] = output_value['customer']",
     );
     assert_eq!(equal.rows, vec![vec![json!(3)]]);
     assert_eq!(equal.outcome.status, Status::Complete);
     assert!(equal.outcome.query.values.cas_loads > 0);
     let array = sql(
         &mut index,
-        r#"SELECT COUNT(*) FROM calls WHERE fqn = 'user.Extract' AND args['customer']['tags'] = baml_value_json('["vip","bob"]')"#,
+        r#"SELECT COUNT(*) FROM spans WHERE span_name = 'user.Extract' AND input_args['customer']['tags'] = baml_value_json('["vip","bob"]')"#,
     );
     assert_eq!(array.rows, vec![vec![json!(1)]]);
     assert_eq!(array.outcome.status, Status::Complete);
     let join = sql(
         &mut index,
-        "WITH x AS MATERIALIZED (SELECT call_id, output FROM calls WHERE fqn = 'user.Extract') SELECT COUNT(*) FROM x a JOIN x b ON a.output = b.output WHERE a.call_id < b.call_id",
+        "WITH x AS MATERIALIZED (SELECT span_id, output_value FROM spans WHERE span_name = 'user.Extract') SELECT COUNT(*) FROM x a JOIN x b ON a.output_value = b.output_value WHERE a.span_id < b.span_id",
     );
     assert_eq!(join.rows, vec![vec![json!(1)]]);
     assert_eq!(
@@ -49,27 +68,23 @@ async fn structured_comparisons_use_captured_content_across_blobs_and_queries() 
     );
     assert_eq!(
         join.outcome.query.values.cas_loads, 2,
-        "two distinct output blobs are hydrated once each"
+        "two distinct output_value blobs are hydrated once each"
     );
     let cycles = sql(
         &mut index,
-        "SELECT COUNT(*) FROM calls WHERE fqn = 'user.Link' AND output = output",
+        "SELECT COUNT(*) FROM spans WHERE span_name = 'user.Link' AND output_value = output_value",
     );
     assert_eq!(cycles.rows, vec![vec![json!(0)]]);
     assert_eq!(cycles.outcome.status, Status::Incomplete);
     assert_eq!(cycles.outcome.diagnostics[0].code, "comparison_cycle");
 
-    let ids = sql(
-        &mut index,
-        "SELECT value_cas_id FROM calls WHERE fqn = 'user.Extract' LIMIT 1",
-    );
-    let id = ids.rows[0][0].as_str().unwrap();
-    let path = blob_path(project.path(), id);
+    let ids = cas_ids(&mut index, "user.Extract");
+    let path = blob_path(project.path(), ids[0].1.as_deref().unwrap());
     let bytes = std::fs::read(&path).unwrap();
     std::fs::remove_file(&path).unwrap();
     let missing = sql(
         &mut index,
-        "WITH x AS MATERIALIZED (SELECT output FROM calls WHERE fqn = 'user.Extract') SELECT COUNT(*) FROM x WHERE output = output",
+        "WITH x AS MATERIALIZED (SELECT output_value FROM spans WHERE span_name = 'user.Extract') SELECT COUNT(*) FROM x WHERE output_value = output_value",
     );
     assert_eq!(
         missing.outcome.status,
@@ -80,11 +95,11 @@ async fn structured_comparisons_use_captured_content_across_blobs_and_queries() 
     std::fs::write(path, bytes).unwrap();
     let recovered = sql(
         &mut index,
-        "WITH x AS MATERIALIZED (SELECT output FROM calls WHERE fqn = 'user.Extract') SELECT COUNT(*) FROM x WHERE output = output",
+        "WITH x AS MATERIALIZED (SELECT output_value FROM spans WHERE span_name = 'user.Extract') SELECT COUNT(*) FROM x WHERE output_value = output_value",
     );
     assert_eq!(recovered.rows, vec![vec![json!(3)]]);
     assert_eq!(recovered.outcome.status, Status::Complete);
-    let metadata = sql(&mut index, "SELECT COUNT(*) FROM calls");
+    let metadata = sql(&mut index, "SELECT COUNT(*) FROM spans");
     assert_eq!(metadata.outcome.query.values.cas_loads, 0);
 
     let mut options = baml_query_btel::IndexOptions::default();
@@ -93,7 +108,7 @@ async fn structured_comparisons_use_captured_content_across_blobs_and_queries() 
     let mut unrendered = baml_query_btel::Index::open(layout.clone(), options.clone()).unwrap();
     let independent = sql(
         &mut unrendered,
-        "SELECT COUNT(*) FROM calls WHERE fqn = 'user.Extract' AND args['customer'] = output['customer']",
+        "SELECT COUNT(*) FROM spans WHERE span_name = 'user.Extract' AND input_args['customer'] = output_value['customer']",
     );
     assert_eq!(independent.rows, vec![vec![json!(3)]]);
     assert_eq!(independent.outcome.status, Status::Complete);
@@ -101,7 +116,7 @@ async fn structured_comparisons_use_captured_content_across_blobs_and_queries() 
     let mut bounded = baml_query_btel::Index::open(layout, options).unwrap();
     let limited = sql(
         &mut bounded,
-        "WITH x AS MATERIALIZED (SELECT output FROM calls WHERE fqn = 'user.Extract') SELECT COUNT(*) FROM x WHERE output = output",
+        "WITH x AS MATERIALIZED (SELECT output_value FROM spans WHERE span_name = 'user.Extract') SELECT COUNT(*) FROM x WHERE output_value = output_value",
     );
     assert_eq!(limited.outcome.status, Status::Incomplete);
     assert_eq!(limited.outcome.diagnostics[0].code, "comparison_limit");
@@ -114,8 +129,8 @@ async fn omitted_arguments_and_cycles_have_defined_results() {
     let mut index = index(project.path());
     let classify = sql(
         &mut index,
-        "SELECT args['threshold'] AS threshold, args['threshold'] IS NULL AS absent, args
-         FROM calls WHERE fqn = 'user.Classify'",
+        "SELECT input_args['threshold'] AS threshold, input_args['threshold'] IS NULL AS absent, input_args
+         FROM spans WHERE span_name = 'user.Classify'",
     );
     assert_eq!(
         classify.rows[0][0],
@@ -128,16 +143,16 @@ async fn omitted_arguments_and_cycles_have_defined_results() {
 
     let link = sql(
         &mut index,
-        "SELECT output, output['next']['next']['next']['name'] AS far, args['node']['name'] AS name
-         FROM calls WHERE fqn = 'user.Link'",
+        "SELECT output_value, output_value['next']['next']['next']['name'] AS far, input_args['node']['name'] AS name
+         FROM spans WHERE span_name = 'user.Link'",
     );
-    let output = &link.rows[0][0];
-    assert_eq!(output["$class"], json!("Node"));
+    let output_value = &link.rows[0][0];
+    assert_eq!(output_value["$class"], json!("Node"));
     assert!(
-        output["$id"].is_u64(),
-        "a cyclic object is labelled: {output}"
+        output_value["$id"].is_u64(),
+        "a cyclic object is labelled: {output_value}"
     );
-    assert_eq!(output["next"], json!({"$ref": output["$id"]}));
+    assert_eq!(output_value["next"], json!({"$ref": output_value["$id"]}));
     assert_eq!(
         link.rows[0][1],
         json!("bob"),
@@ -151,14 +166,8 @@ async fn missing_and_corrupt_blobs_are_reported_not_answered() {
     let project = tempfile::tempdir().unwrap();
     record(project.path(), &[(1, "ann"), (7, "bob")]).await;
     let mut index = index(project.path());
-    let ids = sql(
-        &mut index,
-        "SELECT args_cas_id, value_cas_id FROM calls WHERE fqn = 'user.Extract' ORDER BY started_at",
-    );
-    let (ann_args, bob_output) = (
-        ids.rows[0][0].as_str().unwrap().to_owned(),
-        ids.rows[1][1].as_str().unwrap().to_owned(),
-    );
+    let ids = cas_ids(&mut index, "user.Extract");
+    let (ann_args, bob_output) = (ids[0].0.clone().unwrap(), ids[1].1.clone().unwrap());
     std::fs::remove_file(blob_path(project.path(), &ann_args)).unwrap();
     let corrupt = blob_path(project.path(), &bob_output);
     let mut bytes = std::fs::read(&corrupt).unwrap();
@@ -168,8 +177,8 @@ async fn missing_and_corrupt_blobs_are_reported_not_answered() {
 
     let result = sql(
         &mut index,
-        "SELECT args['customer']['name'] AS who, output['customer']['name'] AS owner
-         FROM calls WHERE fqn = 'user.Extract' ORDER BY started_at",
+        "SELECT input_args['customer']['name'] AS who, output_value['customer']['name'] AS owner
+         FROM spans WHERE span_name = 'user.Extract' ORDER BY start_time",
     );
     assert_eq!(
         result.rows[0][0],
@@ -196,12 +205,12 @@ async fn missing_and_corrupt_blobs_are_reported_not_answered() {
     // the outcome says the answer is incomplete.
     let filtered = sql(
         &mut index,
-        "SELECT COUNT(*) FROM calls WHERE args['customer']['name'] = 'ann' AND fqn = 'user.Extract'",
+        "SELECT COUNT(*) FROM spans WHERE input_args['customer']['name'] = 'ann' AND span_name = 'user.Extract'",
     );
     assert_eq!(filtered.rows[0][0], json!(0));
     assert_eq!(filtered.outcome.status, Status::Incomplete);
     // Metadata queries are unaffected and read no blob.
-    let metadata = sql(&mut index, "SELECT COUNT(*) FROM calls");
+    let metadata = sql(&mut index, "SELECT COUNT(*) FROM spans");
     assert_eq!(metadata.outcome.status, Status::Complete);
     assert_eq!(metadata.outcome.query.values.cas_loads, 0);
 }

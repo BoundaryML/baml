@@ -204,6 +204,8 @@ async fn main() {
     let execution_s = start.elapsed().as_secs_f64();
     let (cpu_end, _) = usage();
     let drain = Instant::now();
+    // As the CLI does, so the recording has a profiler to query.
+    engine.record_process_exit(bex_engine::ProcessStatus::Success);
     engine.shutdown().await;
     let drain_ms = drain.elapsed().as_secs_f64() * 1000.0;
     let (cpu_after_drain, peak_rss_bytes) = usage();

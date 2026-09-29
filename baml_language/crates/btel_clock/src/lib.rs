@@ -22,7 +22,7 @@ use web_time::{SystemTime, UNIX_EPOCH};
 mod calibration;
 pub use btel_settings::clock::ClockMode;
 use btel_settings::clock::{
-    ACCURACY_TARGET_NS, DISCONTINUITY_MARGIN_NS, MAX_SAMPLE_UNCERTAINTY_NS,
+    ACCURACY_TARGET_NS, DISCONTINUITY_MARGIN_NS, MAX_DRIFT_PPB, MAX_SAMPLE_UNCERTAINTY_NS,
     VALIDATION_INTERVAL_DURATION,
 };
 use calibration::{Calibrated, Probe, probe};
@@ -387,12 +387,22 @@ impl ClockEpoch {
         );
         let scale_error =
             narrow(u128::from(elapsed) * u128::from(self.metadata.rate_error.0) / 1_000_000_000);
+        // NTP slews the reference, so an epoch's calibrated rate drifts from
+        // it by a few ppm: both tests allow MAX_DRIFT_PPB of the elapsed time.
+        let drift = narrow(u128::from(elapsed) * u128::from(MAX_DRIFT_PPB) / 1_000_000_000);
         let tolerance = DISCONTINUITY_MARGIN_NS
             .saturating_add(sampling)
-            .saturating_add(scale_error);
-        // A growing scale-error allowance must not silently accept a known
-        // >1 ms origin error. Both tests subtract the measurement uncertainty.
-        if discrepancy > tolerance || discrepancy > ACCURACY_TARGET_NS.saturating_add(sampling) {
+            .saturating_add(scale_error)
+            .saturating_add(drift);
+        // A growing scale-error allowance must not silently accept an origin
+        // error beyond the accuracy target and that drift. Both tests subtract
+        // the measurement uncertainty.
+        if discrepancy > tolerance
+            || discrepancy
+                > ACCURACY_TARGET_NS
+                    .saturating_add(sampling)
+                    .saturating_add(drift)
+        {
             TimingStatus::Discontinuity
         } else {
             TimingStatus::Valid

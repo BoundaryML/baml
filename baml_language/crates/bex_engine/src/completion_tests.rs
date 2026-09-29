@@ -97,7 +97,8 @@ async fn conversion_errors_and_terminal_outcomes_finalize() {
             RuntimeTy::int(),
             None,
             false,
-            InvocationOutcome::Errored,
+            // Exit stops the call; it did not fail.
+            InvocationOutcome::Cancelled,
         ),
     ] {
         let engine = engine(source);
@@ -126,6 +127,7 @@ async fn conversion_errors_and_terminal_outcomes_finalize() {
                 InvocationOutcome::Cancelled => {
                     assert!(is_cancelled_engine_error(result.as_ref().err().unwrap()));
                 }
+                InvocationOutcome::Panicked => unreachable!("no case panics"),
             }
         }
         assert_completed(&engine, &[(id, outcome)]);
@@ -277,10 +279,11 @@ async fn child_success_and_error_settle_and_finalize_once() {
         ),
         // A child settles its escaping Exit as an error value; the root
         // recognizes that value as explicit process exit when it is awaited.
+        // Both were stopped by the exit, not failed.
         (
             "baml.sys.exit(7); 1",
-            InvocationOutcome::Errored,
-            InvocationOutcome::Errored,
+            InvocationOutcome::Cancelled,
+            InvocationOutcome::Cancelled,
         ),
     ] {
         let engine = engine(&format!(

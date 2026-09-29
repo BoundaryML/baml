@@ -888,6 +888,9 @@ function parse(resp: Response) -> ai.ModelTurn {
                 cached_input_tokens: u.cache_read_input_tokens,
                 // Extended thinking: the reasoning share of output_tokens.
                 reasoning_tokens: u.output_tokens_details?.thinking_tokens,
+                cache_write_input_tokens: u.cache_creation_input_tokens,
+                // Anthropic's input_tokens already excludes both cache counts.
+                uncached_input_tokens: u.input_tokens,
             }
         },
         null => null,
@@ -907,7 +910,7 @@ function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
         request_timeout_ms = c.request_timeout_ms,
     );
     let turn = parse(sent.value);
-    ai.ModelTurn { ...turn, calls: [sent.call] }
+    ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
 }
 
 // ---------------------------------------------------------------------------
@@ -1299,6 +1302,7 @@ function invoke_stream(c: root.Client, input: ai.ModelTurnInput) -> ai.stream.Tu
             }
         },
         require_terminal = "anthropic",
+        model = c.model,
     );
     let call = ai.events.LLMCall {
         client_name: c.id(),
