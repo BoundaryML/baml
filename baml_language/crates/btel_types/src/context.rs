@@ -48,6 +48,15 @@ impl ContextPatch {
 }
 
 impl Context {
+    /// Identity of an immutable version, not value equality (notably for NaN).
+    pub fn same_version(&self, other: &Self) -> bool {
+        match (&self.0, &other.0) {
+            (Some(left), Some(right)) => Arc::ptr_eq(left, right),
+            (None, None) => true,
+            _ => false,
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.0.is_none()
     }

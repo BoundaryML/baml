@@ -37,6 +37,11 @@ impl EncodedSpans {
         context: Option<crate::proto::thread_section::Context>,
     ) {
         self.selected_context = Some((thread, context));
+        // The selector may own a CAS snapshot. Materialize its section now so
+        // capture pressure can seal and deliver it before the next observation.
+        if self.thread != Some(thread) || self.context != context {
+            self.select(thread, context);
+        }
     }
 
     pub(crate) fn begin_chunk(&mut self) {

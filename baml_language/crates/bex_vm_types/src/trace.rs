@@ -1,6 +1,11 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
-use btel_types::{InvocationMode, RecordingId, TelemetryId, allocate_telemetry_id};
+use btel_types::{
+    InvocationMode, RecordingId, TelemetryId, allocate_telemetry_id, context::ContextPatch,
+};
 
 /// The recording key of a span, exposed to BAML only as an opaque handle.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -21,12 +26,13 @@ pub enum ReservationError {
     AlreadyAttached,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct TraceOptionsData {
     pub mode: Option<InvocationMode>,
     pub inputs: Option<bool>,
     pub output: Option<bool>,
     pub error: Option<bool>,
+    pub context: Option<Arc<ContextPatch>>,
 }
 
 #[derive(Debug)]
@@ -70,9 +76,10 @@ mod tests {
             inputs: Some(false),
             output: Some(true),
             error: None,
+            context: None,
         };
         let scope = RecordingId::generate();
-        let reserved = ReservedSpanData::new(scope, options);
+        let reserved = ReservedSpanData::new(scope, options.clone());
         assert_eq!(options.mode, Some(InvocationMode::Hidden));
         assert_eq!(reserved.options.mode, Some(InvocationMode::Span));
         assert_eq!(reserved.options.inputs, Some(false));

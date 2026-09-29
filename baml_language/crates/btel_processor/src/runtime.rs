@@ -74,6 +74,7 @@ struct Binding {
     // Silent invocations and chunk publication leave these unchanged.
     timing_thread: Option<TelemetryId>,
     span_thread: Option<TelemetryId>,
+    span_context: Option<btel_records::ContextReference>,
 }
 
 impl Drop for Binding {
@@ -223,10 +224,15 @@ impl TelemetryRuntime {
         let id = NEXT_RUNTIME
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
             .expect("telemetry runtime identity space exhausted");
-        let snapshots = btel_snapshot::SnapshotPool::new(
-            config.max_producers.get() + btel_settings::snapshot::MIN_SNAPSHOT_SLOTS,
-            btel_snapshot::Limits::default(),
-        );
+        // A producer can own a value capture while acquiring its context capture.
+        let snapshot_slots = config
+            .max_producers
+            .get()
+            .checked_mul(2)
+            .and_then(|slots| slots.checked_add(btel_settings::snapshot::MIN_SNAPSHOT_SLOTS))
+            .ok_or_else(|| std::io::Error::other("snapshot slot count overflow"))?;
+        let snapshots =
+            btel_snapshot::SnapshotPool::new(snapshot_slots, btel_snapshot::Limits::default());
         let pool = Pool::new(config).map_err(|e| std::io::Error::other(format!("{e:?}")))?;
         let publisher = make(RecordingControl {
             pool: pool.clone(),
@@ -371,6 +377,7 @@ impl TelemetryRuntime {
                 owner: Arc::downgrade(self),
                 timing_thread: None,
                 span_thread: None,
+                span_context: None,
             });
             true
         });
@@ -472,27 +479,123 @@ impl TelemetryRuntime {
 
     #[inline]
     pub fn write_span(&self, thread: TelemetryId, record: Span) {
+        self.write_span_with_context(
+            thread,
+            btel_records::ContextReference::Unavailable,
+            None,
+            record,
+        );
+    }
+
+    /// Tiny chunks unable to hold the selector group still record observations,
+    /// but report unavailable context. True means the context was handed off.
+    pub fn write_span_with_context(
+        &self,
+        thread: TelemetryId,
+        context: btel_records::ContextReference,
+        mut snapshot: Option<btel_snapshot::Snapshot>,
+        record: Span,
+    ) -> bool {
         BINDINGS.with_borrow_mut(|bindings| {
             let Some(binding) = bindings.iter_mut().rev().find(|b| b.runtime == self.id) else {
                 assert!(
                     self.is_disabled(),
                     "telemetry emission outside execution scope"
                 );
-                return;
+                return false;
             };
             let Some(producer) = binding.producer.as_mut() else {
                 assert!(
                     self.is_disabled(),
                     "telemetry emission outside execution scope"
                 );
-                return;
+                return false;
             };
+            if producer.span_is_empty() || binding.span_thread != Some(thread) {
+                binding.span_context = None;
+            }
+            if !record.is_context_observation() && snapshot.is_none() {
+                use btel_records::ContextReference;
+
+                if binding.span_thread != Some(thread) {
+                    producer.write_span(SpanRecord::ThreadSelected { thread_id: thread });
+                    binding.span_thread = Some(thread);
+                }
+                match &record {
+                    SpanRecord::ContextSelected { captured_context } => {
+                        binding.span_context = Some(
+                            captured_context
+                                .as_ref()
+                                .map_or(ContextReference::Unavailable, |snapshot| {
+                                    ContextReference::Snapshot(snapshot.id())
+                                }),
+                        );
+                    }
+                    SpanRecord::ContextReferenced { id } => {
+                        binding.span_context = Some(ContextReference::Snapshot(*id));
+                    }
+                    SpanRecord::ContextCleared => {
+                        binding.span_context = Some(ContextReference::Empty);
+                    }
+                    _ => {}
+                }
+                producer.write_span(record);
+                return true;
+            }
+            let select_thread = binding.span_thread != Some(thread);
+            let select_context = snapshot.is_some()
+                || binding
+                    .span_context
+                    .is_some_and(|selected| selected != context)
+                || (binding.span_context.is_none()
+                    && context != btel_records::ContextReference::Unavailable);
+            let required = 1 + usize::from(select_thread) + usize::from(select_context);
+            if !producer.prepare_span_group(required) {
+                if select_thread {
+                    producer.write_span(SpanRecord::ThreadSelected { thread_id: thread });
+                    binding.span_thread = Some(thread);
+                }
+                producer.write_span(record);
+                binding.span_context = None;
+                return false;
+            }
+            let select_context = select_context
+                || (producer.span_is_empty()
+                    && context != btel_records::ContextReference::Unavailable);
+            assert!(
+                producer.prepare_span_group(
+                    1 + usize::from(select_thread) + usize::from(select_context)
+                ),
+                "a newly sealed chunk must fit the admitted selector group"
+            );
             if binding.span_thread != Some(thread) {
                 producer.write_span(SpanRecord::ThreadSelected { thread_id: thread });
                 binding.span_thread = Some(thread);
             }
+            if select_context {
+                use btel_records::ContextReference;
+                let marker = match context {
+                    ContextReference::Empty => SpanRecord::ContextCleared,
+                    ContextReference::Unavailable => SpanRecord::ContextSelected {
+                        captured_context: None,
+                    },
+                    ContextReference::Snapshot(id) => {
+                        if let Some(snapshot) = snapshot.take() {
+                            debug_assert_eq!(id, snapshot.id());
+                            SpanRecord::ContextSelected {
+                                captured_context: Some(snapshot),
+                            }
+                        } else {
+                            SpanRecord::ContextReferenced { id }
+                        }
+                    }
+                };
+                producer.write_span(marker);
+            }
+            binding.span_context = Some(context);
             producer.write_span(record);
-        });
+            true
+        })
     }
 
     /// Stop admission, drain published chunks, seal the publisher, and join.

@@ -9,7 +9,10 @@ use crate::{Builder, Snapshot, SnapshotObject, SnapshotPool, SnapshotValue};
 /// look like a complete context with missing keys. Pool admission never affects
 /// the live execution context.
 pub fn capture(context: &Context, pool: &SnapshotPool) -> Option<Snapshot> {
-    let mut builder = pool.try_acquire()?;
+    capture_with_builder(context, pool.try_acquire()?)
+}
+
+pub fn capture_with_builder(context: &Context, mut builder: Builder) -> Option<Snapshot> {
     if builder.limits().max_depth.is_some_and(|depth| depth < 2) {
         return None;
     }

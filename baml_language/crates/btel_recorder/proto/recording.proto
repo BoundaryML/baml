@@ -24,7 +24,7 @@ message RecordingFile {
 }
 
 message RecordingHeader {
-  uint32 format_major = 1;       // Exactly 1.
+  uint32 format_major = 1;       // Exactly 2.
   uint32 format_minor = 2;       // Additive optional fields only. 1 adds argument layouts;
                                  // 2 adds source maps and error evidence; 3 adds context runs.
   bytes recording_id = 3;       // Exactly 16 random bytes, not all zero.

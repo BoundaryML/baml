@@ -1300,6 +1300,7 @@ dependencies = [
  "btel_clock",
  "btel_file",
  "btel_processor",
+ "btel_reader",
  "btel_recorder",
  "btel_settings",
  "btel_snapshot",

@@ -1276,16 +1276,28 @@ fn constructor_media_namespace(b: &NativeBuiltin) -> &str {
 
 fn emit_single_extraction_indented(
     out: &mut String,
-    name: &str,
+    param: &crate::types::Param,
     idx: usize,
-    ty: &BamlType,
     indent: &str,
     needs_owned: bool,
     arraymap_needs_owned: bool,
 ) {
+    let name = rust_field_ident(&param.name).to_string();
+    if param.empty_map_default {
+        assert!(
+            matches!(param.ty, BamlType::Map(_, _)),
+            "empty map default needs a map parameter"
+        );
+        writeln!(
+            out,
+            "{indent}let {name} = if args[{idx}].is_omitted() {{ indexmap::IndexMap::new() }} else {{ vm.as_map(&args[{idx}])?.to_index_map() }};"
+        )
+        .unwrap();
+        return;
+    }
     let rhs = extraction_expr(
         &format!("&args[{idx}]"),
-        ty,
+        &param.ty,
         false,
         needs_owned,
         arraymap_needs_owned,
@@ -1438,78 +1450,39 @@ fn emit_arg_extractions_indented(
     needs_owned: bool,
     arraymap_needs_owned: bool,
 ) {
-    if let Some(recv) = &b.receiver {
-        if recv.receiver_type.is_static() {
-            // Static methods: no receiver
-            for (i, p) in b.params.iter().enumerate() {
-                let arg_idx = i;
-                emit_single_extraction_indented(
-                    out,
-                    &rust_field_ident(&p.name).to_string(),
-                    arg_idx,
-                    &p.ty,
-                    indent,
-                    needs_owned,
-                    arraymap_needs_owned,
-                );
-            }
-        } else if recv.receiver_type.is_mut() {
-            for (i, p) in b.params.iter().enumerate() {
-                let arg_idx = i + 1;
-                emit_single_extraction_indented(
-                    out,
-                    &rust_field_ident(&p.name).to_string(),
-                    arg_idx,
-                    &p.ty,
-                    indent,
-                    needs_owned,
-                    arraymap_needs_owned,
-                );
-            }
-            let recv_name = receiver_param_name(recv);
-            emit_mut_receiver_extraction_indented(
-                out,
-                &recv_name,
-                recv,
-                indent,
-                matches!(b.vm_usage, VmUsage::MutRef) && b.may_yield,
-            );
-        } else {
-            let recv_name = receiver_param_name(recv);
-            emit_immut_receiver_extraction_indented(
-                out,
-                &recv_name,
-                0,
-                recv,
-                indent,
-                needs_owned,
-                arraymap_needs_owned,
-            );
-            for (i, p) in b.params.iter().enumerate() {
-                let arg_idx = i + 1;
-                emit_single_extraction_indented(
-                    out,
-                    &rust_field_ident(&p.name).to_string(),
-                    arg_idx,
-                    &p.ty,
-                    indent,
-                    needs_owned,
-                    arraymap_needs_owned,
-                );
-            }
-        }
-    } else {
-        for (i, p) in b.params.iter().enumerate() {
-            emit_single_extraction_indented(
-                out,
-                &rust_field_ident(&p.name).to_string(),
-                i,
-                &p.ty,
-                indent,
-                needs_owned,
-                arraymap_needs_owned,
-            );
-        }
+    let receiver = b
+        .receiver
+        .as_ref()
+        .filter(|recv| !recv.receiver_type.is_static());
+    if let Some(recv) = receiver.filter(|recv| !recv.receiver_type.is_mut()) {
+        emit_immut_receiver_extraction_indented(
+            out,
+            &receiver_param_name(recv),
+            0,
+            recv,
+            indent,
+            needs_owned,
+            arraymap_needs_owned,
+        );
+    }
+    for (i, param) in b.params.iter().enumerate() {
+        emit_single_extraction_indented(
+            out,
+            param,
+            i + usize::from(receiver.is_some()),
+            indent,
+            needs_owned,
+            arraymap_needs_owned,
+        );
+    }
+    if let Some(recv) = receiver.filter(|recv| recv.receiver_type.is_mut()) {
+        emit_mut_receiver_extraction_indented(
+            out,
+            &receiver_param_name(recv),
+            recv,
+            indent,
+            matches!(b.vm_usage, VmUsage::MutRef) && b.may_yield,
+        );
     }
 }
 

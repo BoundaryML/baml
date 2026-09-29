@@ -45,9 +45,15 @@ fn usage() -> (f64, u64) {
     );
     // SAFETY: initialized by the successful call above.
     let usage = unsafe { usage.assume_init() };
-    let cpu = usage.ru_utime.tv_sec as f64
-        + usage.ru_stime.tv_sec as f64
-        + (usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) as f64 / 1e6;
+    let duration = |time: libc::timeval| {
+        std::time::Duration::from_secs(time.tv_sec.try_into().expect("nonnegative CPU seconds"))
+            + std::time::Duration::from_micros(
+                time.tv_usec
+                    .try_into()
+                    .expect("nonnegative CPU microseconds"),
+            )
+    };
+    let cpu = (duration(usage.ru_utime) + duration(usage.ru_stime)).as_secs_f64();
     (cpu, usage.ru_maxrss as u64 * 1024)
 }
 

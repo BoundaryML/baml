@@ -16,6 +16,24 @@ use btel_types::{
     TelemetryId,
 };
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ContextReference {
+    Unavailable,
+    Empty,
+    Snapshot(btel_snapshot::SnapshotId),
+}
+
+impl<I, V> SpanRecord<I, V> {
+    pub fn is_context_observation(&self) -> bool {
+        matches!(
+            self,
+            Self::ThreadSpanAnnouncement { .. }
+                | Self::ThreadSpanCompletion { .. }
+                | Self::FunctionSpanAnnouncement { .. }
+        ) || self.completion().is_some()
+    }
+}
+
 /// Frequent anonymous measurements with a 32-byte slot budget.
 /// Records transfer ownership rather than implicitly duplicating publication.
 ///

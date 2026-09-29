@@ -4782,7 +4782,7 @@ impl BexEngine {
         future_id: FutureId,
         thread_id: u64,
         telemetry: Option<bex_vm::telemetry::ThreadSpawnContext>,
-
+        context: btel_types::context::Context,
         log_capture: Option<LogCaptureContext>,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<(), EngineError>> + Send + 'static>,
@@ -4797,6 +4797,7 @@ impl BexEngine {
             future_id,
             thread_id,
             telemetry,
+            context,
             log_capture,
         ))
     }
@@ -4822,7 +4823,7 @@ impl BexEngine {
         future_id: FutureId,
         thread_id: u64,
         telemetry: Option<bex_vm::telemetry::ThreadSpawnContext>,
-
+        context: btel_types::context::Context,
         log_capture: Option<LogCaptureContext>,
     ) -> Result<(), EngineError> {
         // Count the producer until its task exits, even if its future was
@@ -4874,6 +4875,7 @@ impl BexEngine {
         );
         child_vm.thread_id = thread_id;
 
+        child_vm.set_root_context(context);
         child_vm.set_entry_point(closure, &[]);
 
         // Register a new (inactive) permit for the child. `new_permit` only
@@ -5497,6 +5499,7 @@ impl BexEngine {
                     VmExecState::Spawn {
                         future: unscheduled,
                         telemetry,
+                        context,
                     } => {
                         // BEP-034: pull the closure + name off the
                         // `UnscheduledFuture` heap object and hand them to
@@ -5574,6 +5577,7 @@ impl BexEngine {
                                     future_id,
                                     child_thread_id,
                                     telemetry,
+                                    context,
                                     log_capture.clone(),
                                 )
                                 .await?;

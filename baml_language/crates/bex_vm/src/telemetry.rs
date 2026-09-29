@@ -157,6 +157,11 @@ pub struct ThreadTelemetry {
 }
 
 pub struct TelemetryState {
+    context: btel_types::context::Context,
+    #[cfg(all(not(test), not(target_arch = "wasm32")))]
+    context_snapshot: Option<(btel_types::context::Context, btel_snapshot::SnapshotId)>,
+    #[cfg(all(not(test), not(target_arch = "wasm32")))]
+    pending_context_snapshot: Option<btel_snapshot::Snapshot>,
     capture_scratch: snapshot::Scratch,
     #[cfg(target_arch = "wasm32")]
     snapshots: btel_snapshot::SnapshotPool,
@@ -178,6 +183,31 @@ pub struct TelemetryState {
 }
 
 impl TelemetryState {
+    pub fn set_context(&mut self, context: btel_types::context::Context) {
+        #[cfg(all(not(test), not(target_arch = "wasm32")))]
+        if !context.same_version(&self.context) {
+            self.pending_context_snapshot = None;
+        }
+        self.context = context;
+    }
+
+    #[cfg(all(not(test), not(target_arch = "wasm32")))]
+    fn prepare_context(&mut self) {
+        if self.context.is_empty()
+            || self.pending_context_snapshot.is_some()
+            || self
+                .context_snapshot
+                .as_ref()
+                .is_some_and(|(context, _)| context.same_version(&self.context))
+        {
+            return;
+        }
+        if let Some(builder) = self.runtime.acquire_snapshot() {
+            self.pending_context_snapshot =
+                btel_snapshot::context::capture_with_builder(&self.context, builder);
+        }
+    }
+
     pub fn new_root(
         policies: Arc<TelemetryPolicies>,
         clock: Arc<ClockEpoch>,
@@ -187,6 +217,11 @@ impl TelemetryState {
         let id = allocate_telemetry_id();
         let started_at = clock.read();
         Self {
+            context: btel_types::context::Context::default(),
+            #[cfg(all(not(test), not(target_arch = "wasm32")))]
+            context_snapshot: None,
+            #[cfg(all(not(test), not(target_arch = "wasm32")))]
+            pending_context_snapshot: None,
             capture_scratch: snapshot::Scratch::default(),
             #[cfg(target_arch = "wasm32")]
             snapshots: btel_snapshot::SnapshotPool::new(
@@ -429,6 +464,10 @@ impl TelemetryState {
             .flatten();
         if captured_inputs.is_some() {
             flags |= REQUIRES_ANNOUNCEMENT;
+        }
+        #[cfg(all(not(test), not(target_arch = "wasm32")))]
+        if mode == InvocationMode::Span {
+            self.prepare_context();
         }
         let entered_at = self.clock.read();
         let span_id = if mode == InvocationMode::Span {
@@ -997,7 +1036,38 @@ impl TelemetryState {
         #[cfg(test)]
         self.span_records.push(record);
         #[cfg(all(not(test), not(target_arch = "wasm32")))]
-        self.runtime.write_span(self.thread.id, record);
+        {
+            use btel_records::ContextReference;
+
+            if !record.is_context_observation() {
+                self.runtime.write_span(self.thread.id, record);
+                return;
+            }
+            let mut snapshot = None;
+            let reference = if self.context.is_empty() {
+                ContextReference::Empty
+            } else if let Some((context, id)) = &self.context_snapshot
+                && context.same_version(&self.context)
+            {
+                ContextReference::Snapshot(*id)
+            } else {
+                self.prepare_context();
+                if let Some(captured) = self.pending_context_snapshot.take() {
+                    let id = captured.id();
+                    snapshot = Some(captured);
+                    ContextReference::Snapshot(id)
+                } else {
+                    ContextReference::Unavailable
+                }
+            };
+            if self
+                .runtime
+                .write_span_with_context(self.thread.id, reference, snapshot, record)
+                && let ContextReference::Snapshot(id) = reference
+            {
+                self.context_snapshot = Some((self.context.clone(), id));
+            }
+        }
         #[cfg(all(not(test), target_arch = "wasm32"))]
         {
             let _ = self;
@@ -1669,9 +1739,9 @@ mod tests {
         // Heap-debug adds an epoch to HeapPtr; the rest of each frame stays fixed.
         let pointer_bytes = size_of::<HeapPtr>();
         assert!(matches!(pointer_bytes, 8 | 16));
-        assert_eq!(size_of::<crate::vm::BytecodeFrame>(), 96 + pointer_bytes);
+        assert_eq!(size_of::<crate::vm::BytecodeFrame>(), 104 + pointer_bytes);
         assert_eq!(size_of::<crate::vm::NativeFrame>(), 24 + pointer_bytes);
-        assert_eq!(size_of::<crate::vm::Frame>(), 96 + pointer_bytes);
+        assert_eq!(size_of::<crate::vm::Frame>(), 104 + pointer_bytes);
     }
 
     #[test]
