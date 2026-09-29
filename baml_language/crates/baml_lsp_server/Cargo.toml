@@ -25,7 +25,7 @@ sys_native = { workspace = true, features = [ "bundle-http" ] }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
 anyhow = { workspace = true }
-axum = { workspace = true }
+axum = { workspace = true, optional = true }
 base64 = { workspace = true }
 crossbeam-channel = { workspace = true }
 futures = { workspace = true }
@@ -34,12 +34,12 @@ lsp-server = { workspace = true }
 lsp-types = { workspace = true }
 notify = { workspace = true }
 num-bigint = { workspace = true }
-parking_lot = { workspace = true, features = [ "deadlock_detection" ] }
+parking_lot = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "rt-multi-thread", "net", "time", "macros" ] }
-tower-http = { workspace = true }
+tower-http = { workspace = true, optional = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 url = { workspace = true }
@@ -51,3 +51,13 @@ tokio = { workspace = true, features = [ "macros", "rt-multi-thread" ] }
 
 [package.metadata.ci]
 wasm_support = false
+
+[features]
+default = [ "baml-defaults" ]
+baml-defaults = [
+  "bex_project/baml-defaults",
+  "sys_native/baml-defaults",
+  "dep:axum",
+  "dep:tower-http",
+  "parking_lot/deadlock_detection",
+]

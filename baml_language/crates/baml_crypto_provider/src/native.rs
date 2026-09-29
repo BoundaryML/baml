@@ -7,12 +7,18 @@ use backend::{
     rand::{SecureRandom, SystemRandom},
     signature,
 };
-use baml_crypto_types::{CryptoError, SHA256_LEN, Sha256Context};
+use baml_crypto_types::{CryptoError, SHA1_LEN, SHA256_LEN, Sha256Context};
 #[cfg(target_os = "ios")]
 use ring as backend;
 use zeroize::Zeroizing;
 
 struct Sha256(digest::Context);
+
+pub(super) fn sha1(data: &[u8]) -> [u8; SHA1_LEN] {
+    let mut output = [0; SHA1_LEN];
+    output.copy_from_slice(digest::digest(&digest::SHA1_FOR_LEGACY_USE_ONLY, data).as_ref());
+    output
+}
 
 pub(super) fn sha256() -> Box<dyn Sha256Context> {
     Box::new(Sha256(digest::Context::new(&digest::SHA256)))

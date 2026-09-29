@@ -18,11 +18,11 @@ license.workspace = true
 name = "aws_config"
 
 [dependencies]
+baml_crypto = { workspace = true }
 async-trait = { workspace = true }
 aws-sigv4 = { workspace = true }
 hex = { workspace = true }
 serde_json = { workspace = true }
-sha1 = { workspace = true }
 
 [dev-dependencies]
 async-trait = { workspace = true }

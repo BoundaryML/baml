@@ -55,6 +55,7 @@ use pyo3::{
     prelude::*,
     types::{PyAnyMethods, PyDict, PyList, PyModule, PyTuple},
 };
+#[cfg(feature = "baml-defaults")]
 use pyo3_stub_gen::derive::gen_stub_pyfunction;
 
 /// Process-wide table of Python callables that have been handed to BAML.
@@ -70,7 +71,7 @@ static REGISTRY: LazyLock<bridge_ctypes::HostValueRegistry<Py<PyAny>>> =
 /// Exposed to Python as `baml_py.register_host_callable(callable) -> int`.
 /// Called from the inbound encoder in `baml_bridge.proto` whenever a Python
 /// callable appears as a kwarg.
-#[gen_stub_pyfunction]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyfunction)]
 #[pyfunction]
 pub fn register_host_callable(callable: Py<PyAny>) -> u64 {
     REGISTRY.insert(callable)
@@ -138,7 +139,7 @@ pub extern "C" fn host_release_callback(host_value_key: u64) {
 /// released (last `HostValueArc` clone already dropped), or the key
 /// never existed in this runtime's registry (cross-runtime handle):
 /// callers should fall back to a metadata-built exception in that case.
-#[gen_stub_pyfunction]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyfunction)]
 #[pyfunction]
 pub fn lookup_host_value(
     py: Python<'_>,
@@ -179,7 +180,7 @@ pub fn lookup_host_value(
 /// registry entry (holding a strong ref to the user callable) would leak for
 /// the life of the process. The encoder calls this for every key it
 /// registered during a failed encode.
-#[gen_stub_pyfunction]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyfunction)]
 #[pyfunction]
 pub fn release_host_callable(host_value_key: u64) {
     drop_registry_entry(host_value_key);

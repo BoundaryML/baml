@@ -12,6 +12,7 @@ use std::io::Write as _;
 /// `baml build` wall time. This affects allocation only, not any rendered
 /// bytes, so it is safe with respect to `BAML_CACHE_VERIFY`.
 #[global_allocator]
+#[cfg(feature = "baml-defaults")]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 fn main() {

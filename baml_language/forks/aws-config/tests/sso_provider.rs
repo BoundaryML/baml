@@ -13,9 +13,8 @@
 //!     with header `x-amz-sso_bearer_token: <accessToken>`,
 //!   * map the response `roleCredentials` -> `Credentials`.
 //!
-//! These tests use `MockIo` only; `file_contains("/sso/cache/", ...)` returns
-//! the token JSON for whatever sha1 path the resolver computes, so we never
-//! compute the hash ourselves.
+//! The success cases pin the AWS CLI-compatible cache filename. Other cases
+//! use `file_contains` to isolate their error handling.
 
 mod common;
 
@@ -65,7 +64,10 @@ sso_start_url = https://d-abc123.awsapps.com/start
     let io = MockIo::new()
         .env("HOME", "/home")
         .file("/home/.aws/config", config)
-        .file_contains("/sso/cache/", token_json)
+        .file(
+            "/home/.aws/sso/cache/34c6fceca75e456f25e7e99531e2425c6c1de443.json",
+            token_json,
+        )
         .http(move |method, url, headers| {
             assert_eq!(method, "GET");
             *seen_h.lock().unwrap() = Some((url.to_string(), headers.to_vec()));
@@ -117,7 +119,10 @@ sso_role_name = readOnly
     let io = MockIo::new()
         .env("HOME", "/home")
         .file("/home/.aws/config", config)
-        .file_contains("/sso/cache/", token_json)
+        .file(
+            "/home/.aws/sso/cache/b343494cf15ba6b81449840ea93161cf3b27e5e3.json",
+            token_json,
+        )
         .http(move |_method, url, headers| {
             *seen_h.lock().unwrap() = Some((url.to_string(), headers.to_vec()));
             Ok(HttpResponse {

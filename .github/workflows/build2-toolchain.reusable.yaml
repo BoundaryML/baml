@@ -122,6 +122,10 @@ jobs:
           if [[ "$TARGET" == *windows-msvc ]]; then suffix=".exe"; fi
           cp "baml_language/target/$TARGET/release/baml-cli$suffix" "staging/bin/baml-cli$suffix"
           cp "baml_language/target/$TARGET/release/baml-pack-host$suffix" "staging/bin/baml-pack-host$suffix"
+          # Ship the lockfile after version stamping and dependency resolution,
+          # so each release archive records the dependencies used by this build.
+          cp baml_language/Cargo.lock staging/Cargo.lock
+          test -s staging/Cargo.lock
           vsix="$(find vsix -maxdepth 1 -name '*.vsix' -print -quit)"
           test -n "$vsix"
           cp "$vsix" staging/assets/baml-vscode.vsix

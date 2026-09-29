@@ -20,6 +20,7 @@ use pyo3::{
     prelude::{PyModule, pyclass, pymethods},
     types::PyAnyMethods,
 };
+#[cfg(feature = "baml-defaults")]
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use crate::py_handle::{BamlPyHandle, handle_clone, status_to_pyerr};
@@ -86,13 +87,13 @@ macro_rules! define_media_pyclass {
         // the honest module makes `type(value).__module__` match that
         // seed, so `py_type_to_baml_type` resolves media values on the
         // encode path instead of returning `""` (35b "Bug B").
-        #[gen_stub_pyclass]
+        #[cfg_attr(feature = "baml-defaults", gen_stub_pyclass)]
         #[pyclass(module = "baml_bridge.baml_py")]
         pub struct $name {
             pub(crate) handle: Py<BamlPyHandle>,
         }
 
-        #[gen_stub_pymethods]
+        #[cfg_attr(feature = "baml-defaults", gen_stub_pymethods)]
         #[pymethods]
         impl $name {
             #[staticmethod]

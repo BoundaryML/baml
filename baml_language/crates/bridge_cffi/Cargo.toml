@@ -13,7 +13,8 @@ name = "bridge_cffi"
 crate-type = [ "cdylib", "lib" ]
 
 [features]
-default = [ "bundle-http" ]
+baml-defaults = [ "bex_project/baml-defaults", "sys_native/baml-defaults" ]
+default = [ "bundle-http", "baml-defaults" ]
 bundle-http = [ "sys_native/bundle-http" ]
 # BAML never contacts anything on its own (see VENDOR.md).
 no-phone-home = [ "sys_native/no-phone-home" ]

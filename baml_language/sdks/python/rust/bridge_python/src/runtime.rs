@@ -6,6 +6,7 @@ use pyo3::{
     pyclass,
     types::PyAny,
 };
+#[cfg(feature = "baml-defaults")]
 use pyo3_stub_gen::{
     derive::{gen_methods_from_python, gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods},
     inventory::submit,
@@ -17,11 +18,11 @@ use crate::errors::{bridge_error_to_sdk_panic, py_sdk_panic};
 /// the `Arc<dyn Bex>` singleton is `bridge_cffi`, fetched via
 /// `bridge_cffi::get_runtime()` at each call site (31e-phase4), so this
 /// no longer caches its own clone.
-#[gen_stub_pyclass]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyclass)]
 #[pyclass]
 pub struct BamlRuntime;
 
-#[gen_stub_pymethods]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pymethods)]
 #[pymethods]
 impl BamlRuntime {
     /// Initialize the process-global runtime from in-memory BAML source files.
@@ -73,6 +74,7 @@ impl BamlRuntime {
 
 // Manual stub declarations for methods with complex parameter types
 // that pyo3-stub-gen cannot process (reference params, PyRef, etc.).
+#[cfg(feature = "baml-defaults")]
 submit! {
     gen_methods_from_python! {
         r#"
@@ -174,7 +176,7 @@ impl BamlRuntime {
 /// Used by the pure-Python factories in `baml_bridge` so generated
 /// leaves don't have to thread a runtime reference through every call
 /// site.
-#[gen_stub_pyfunction]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyfunction)]
 #[pyfunction]
 pub fn get_runtime() -> PyResult<BamlRuntime> {
     // Validate the singleton is initialized so callers get a helpful error

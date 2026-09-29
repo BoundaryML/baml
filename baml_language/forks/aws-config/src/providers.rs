@@ -1,7 +1,5 @@
 //! Individual credential providers used by the default chain.
 
-use sha1::{Digest, Sha1};
-
 use crate::{
     ConfigError, CredentialIo, Credentials, credential_process_credentials_from_value,
     credentials_from_json, credentials_from_value, profile,
@@ -169,7 +167,10 @@ async fn from_sso(
     let home = home_dir(io)
         .await
         .ok_or_else(|| ConfigError::Io("cannot determine home directory for SSO cache".into()))?;
-    let hash = hex::encode(Sha1::digest(cache_key.as_bytes()));
+    let hash =
+        hex::encode(baml_crypto::sha1(cache_key.as_bytes()).map_err(|error| {
+            ConfigError::Io(format!("cannot locate AWS SSO token cache: {error}"))
+        })?);
     let cache_path = format!("{home}/.aws/sso/cache/{hash}.json");
     let token_json = io.read_file(&cache_path).await.ok_or_else(|| {
         ConfigError::Io(format!(

@@ -188,6 +188,7 @@ pub(crate) enum Commands {
     Run(crate::run_command::RunArgs),
 
     #[command(about = "Package a BAML target as a standalone executable")]
+    #[cfg(feature = "baml-defaults")]
     Pack(crate::pack_command::PackArgs),
 
     #[command(
@@ -206,6 +207,7 @@ pub(crate) enum Commands {
         about = "Open the BAML playground in a browser",
         after_long_help = "Examples:\n  Open the nearest project:\n    baml playground\n\n  Serve a project without opening a browser:\n    baml playground --project ./my-project --no-open"
     )]
+    #[cfg(feature = "baml-defaults")]
     Playground(crate::playground_command::PlaygroundArgs),
 
     #[command(about = "Start a language server", name = "lsp")]
@@ -374,11 +376,13 @@ impl RuntimeCli {
             Commands::Describe(args) => args.run(),
             Commands::Query(args) => args.run(),
             Commands::Run(args) => args.run(),
+            #[cfg(feature = "baml-defaults")]
             Commands::Pack(args) => args.run(),
             Commands::Ide(args) => args.run(),
             Commands::Agent(args) => args.run(),
             Commands::Generate(args) => args.run(),
             Commands::Test(args) => args.run(),
+            #[cfg(feature = "baml-defaults")]
             Commands::Playground(args) => args.run(),
             Commands::LanguageServer(args) => match args.run() {
                 Ok(()) => Ok(crate::ExitCode::Success),
@@ -412,13 +416,19 @@ impl Commands {
             },
             Self::Test(args) => args.from.as_deref(),
             Self::Run(args) => args.from.as_deref(),
+            #[cfg(feature = "baml-defaults")]
             Self::Pack(args) => args.from.as_deref(),
+            #[cfg(feature = "baml-defaults")]
             Self::Playground(args) => args.from.as_deref(),
             _ => None,
         }
     }
 
     fn requires_agent_skill(&self) -> bool {
+        #[cfg(feature = "baml-defaults")]
+        if matches!(self, Self::Pack(_) | Self::Playground(_)) {
+            return true;
+        }
         matches!(
             self,
             Self::Check(_)
@@ -430,8 +440,6 @@ impl Commands {
                 | Self::Init(_)
                 | Self::New(_)
                 | Self::Run(_)
-                | Self::Pack(_)
-                | Self::Playground(_)
         )
     }
 
@@ -445,7 +453,9 @@ impl Commands {
             Self::Generate(args) => args.has_legacy_project(),
             Self::Test(args) => args.from.is_some(),
             Self::Run(args) => args.from.is_some(),
+            #[cfg(feature = "baml-defaults")]
             Self::Pack(args) => args.from.is_some(),
+            #[cfg(feature = "baml-defaults")]
             Self::Playground(args) => args.from.is_some(),
             Self::Agent(crate::agent_command::AgentArgs {
                 command: crate::agent_command::AgentCommand::Install(args),
@@ -468,7 +478,9 @@ impl Commands {
             Self::Generate(args) => args.apply_project(&project),
             Self::Test(args) => args.from = Some(project.clone()),
             Self::Run(args) => args.from = Some(project.clone()),
+            #[cfg(feature = "baml-defaults")]
             Self::Pack(args) => args.from = Some(project.clone()),
+            #[cfg(feature = "baml-defaults")]
             Self::Playground(args) => args.from = Some(project.clone()),
             Self::Agent(crate::agent_command::AgentArgs {
                 command: crate::agent_command::AgentCommand::Install(args),
@@ -528,11 +540,13 @@ mod tests {
         &["init"],
         &["new"],
         &["run"],
+        #[cfg(feature = "baml-defaults")]
         &["pack"],
         &["ide"],
         &["ide", "install"],
         &["agent"],
         &["agent", "install"],
+        #[cfg(feature = "baml-defaults")]
         &["playground"],
         &["lsp"],
         &["help"],
@@ -593,6 +607,7 @@ mod tests {
         assert!(!help.contains("Usage: baml-cli"), "{help}");
     }
 
+    #[cfg(feature = "baml-defaults")]
     #[test]
     fn pack_help_presents_public_baml_command() {
         let help = help_for(&["baml-cli", "pack", "--help"]);
@@ -748,6 +763,7 @@ mod tests {
                     "--log <LEVEL>\n          Set the BAML log level; overrides BAML_LOG [default: info] [possible values: off, error,\n          warn, info, debug, trace]",
                 ],
             ),
+            #[cfg(feature = "baml-defaults")]
             (
                 &["pack"],
                 &[
@@ -858,8 +874,11 @@ mod tests {
             &["baml", "run", "-e", "1 + 2"],
             &["baml", "run", "--file", "script.baml"],
             &["baml", "run", "--list"],
+            #[cfg(feature = "baml-defaults")]
             &["baml", "pack", "main"],
+            #[cfg(feature = "baml-defaults")]
             &["baml", "pack", "main", "--output", "./my-tool"],
+            #[cfg(feature = "baml-defaults")]
             &[
                 "baml",
                 "pack",
@@ -870,6 +889,7 @@ mod tests {
                 "--output",
                 "./baml-tools",
             ],
+            #[cfg(feature = "baml-defaults")]
             &["baml", "pack", "--file", "script.baml", "main"],
             &[
                 "baml",
@@ -913,7 +933,9 @@ mod tests {
             &["baml", "ide", "install", "--output-dir", "./extensions"],
             &["baml", "agent", "install"],
             &["baml", "agent", "install", "--project", "./my-project"],
+            #[cfg(feature = "baml-defaults")]
             &["baml", "playground"],
+            #[cfg(feature = "baml-defaults")]
             &[
                 "baml",
                 "playground",
@@ -921,6 +943,7 @@ mod tests {
                 "./my-project",
                 "--no-open",
             ],
+            #[cfg(feature = "baml-defaults")]
             &[
                 "baml",
                 "playground",

@@ -7,13 +7,19 @@ use std::{
 };
 
 pub use baml_crypto_types::{
-    AeadAlgorithm, AeadCipher, AeadError, CryptoError, CryptoProvider, SHA256_LEN, Sha256Context,
+    AeadAlgorithm, AeadCipher, AeadError, CryptoError, CryptoProvider, SHA1_LEN, SHA256_LEN,
+    Sha256Context,
 };
 
 /// The provider selected by the downstream build, initialized once on first use.
 pub fn provider() -> &'static Arc<dyn CryptoProvider> {
     static PROVIDER: OnceLock<Arc<dyn CryptoProvider>> = OnceLock::new();
     PROVIDER.get_or_init(baml_crypto_provider::provider)
+}
+
+/// Compatibility hash for AWS SSO cache filenames.
+pub fn sha1(data: &[u8]) -> Result<[u8; SHA1_LEN], CryptoError> {
+    provider().sha1(data)
 }
 
 pub fn sha256(data: &[u8]) -> Result<[u8; SHA256_LEN], CryptoError> {

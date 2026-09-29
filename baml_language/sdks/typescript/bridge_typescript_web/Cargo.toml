@@ -30,3 +30,7 @@ wasm_support = true
 
 [lints]
 workspace = true
+
+[features]
+default = [ "baml-defaults" ]
+baml-defaults = [ "bridge_cffi/baml-defaults" ]

@@ -31,7 +31,8 @@ doctest = false
 # development and in production. Engine capabilities (HTTP stack, crypto)
 # are baked into the shared library when *it* is built.
 [features]
-default = [ "aws-crypto" ]
+baml-defaults = [ "serde_json/arbitrary_precision" ]
+default = [ "aws-crypto", "baml-defaults" ]
 # With default features disabled, the loader uses only local library paths.
 download = [ "dep:hex", "dep:rustls", "dep:ureq" ]
 aws-crypto = [ "download", "rustls/aws_lc_rs" ]

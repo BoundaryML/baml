@@ -20,6 +20,8 @@
 // discovered (TL;DR: we shell out to `cargo build` until artifact deps
 // stabilize).
 
+#![cfg(feature = "baml-defaults")]
+
 mod common;
 
 use std::{

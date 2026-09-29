@@ -172,7 +172,7 @@ fn git_toplevel(dir: &Path) -> Option<PathBuf> {
 }
 
 /// The user's canonicalized home directory (`HOME`, or `USERPROFILE` on
-/// Windows). Not [`baml_release::baml_home`], which is `~/.baml` state
+/// Windows). Not [`baml_home::baml_home`], which is `~/.baml` state
 /// storage and overridable via `BAML_HOME`.
 fn user_home_dir() -> Option<PathBuf> {
     std::env::var_os("HOME")

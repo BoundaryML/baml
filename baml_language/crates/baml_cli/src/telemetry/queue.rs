@@ -61,7 +61,7 @@ const STALE_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// The queue directory, alongside (not inside) the config file.
 pub(super) fn queue_dir() -> PathBuf {
-    baml_release::baml_home().join("telemetry")
+    baml_home::baml_home().join("telemetry")
 }
 
 /// Mint a live-file path for this process: `live_<pid>_<rand8>.jsonl`.

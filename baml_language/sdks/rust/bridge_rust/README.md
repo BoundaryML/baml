@@ -16,3 +16,5 @@ Set `default-features = false` on the `baml_bridge` dependency and provision the
 Apply this dependency setting in the generated SDK's manifest too, retaining it as part of the downstream generation or patch process. Disabling defaults on an application's additional direct dependency does not override features enabled by the generated SDK.
 
 The default `aws-crypto` feature enables downloading. `ring-crypto` and `external-crypto` also enable the `download` feature. `BAML_LIBRARY_DISABLE_DOWNLOAD=true` disables downloads at runtime but does not remove compiled dependencies.
+
+The default `baml-defaults` feature enables arbitrary-precision JSON numbers. If using a local engine, keep `default-features = false` and add `features = ["baml-defaults"]` to retain that JSON behavior without enabling the downloader. Without `baml-defaults`, JSON conversion of large bigint values may fail or lose precision.

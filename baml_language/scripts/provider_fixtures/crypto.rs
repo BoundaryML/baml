@@ -1,7 +1,7 @@
 //! Integration-test provider: ring primitives, with no TLS or AEAD dependencies.
 use std::sync::Arc;
 
-use baml_crypto_types::{CryptoError, CryptoProvider, SHA256_LEN, Sha256Context};
+use baml_crypto_types::{CryptoError, CryptoProvider, SHA1_LEN, SHA256_LEN, Sha256Context};
 use ring::{digest, hmac, rand::{SecureRandom, SystemRandom}, signature};
 use zeroize::Zeroizing;
 
@@ -18,6 +18,9 @@ impl Sha256Context for Hasher {
 }
 
 impl CryptoProvider for RingProvider {
+    fn sha1(&self, data: &[u8]) -> Result<[u8; SHA1_LEN], CryptoError> {
+        Ok(digest::digest(&digest::SHA1_FOR_LEGACY_USE_ONLY, data).as_ref().try_into().unwrap())
+    }
     fn sha256(&self) -> Result<Box<dyn Sha256Context>, CryptoError> {
         Ok(Box::new(Hasher(digest::Context::new(&digest::SHA256))))
     }

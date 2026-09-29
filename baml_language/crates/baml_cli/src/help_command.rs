@@ -200,7 +200,12 @@ mod tests {
     #[test]
     fn concise_and_detailed_help_are_snapshot_tested() {
         let concise = normalize_snapshot(&render_for_test(&[]));
-        insta::assert_snapshot!("root_concise_help", concise);
+        let snapshot = if cfg!(feature = "baml-defaults") {
+            "root_concise_help"
+        } else {
+            "root_concise_help_reduced"
+        };
+        insta::assert_snapshot!(snapshot, concise);
         insta::assert_snapshot!(
             "run_detailed_help",
             normalize_snapshot(&render_for_test(&["run"]))

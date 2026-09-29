@@ -78,3 +78,7 @@ walkdir = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = { workspace = true }
+
+[features]
+default = [ "baml-defaults" ]
+baml-defaults = [ "bex_engine/baml-defaults" ]

@@ -6,12 +6,13 @@ use pyo3::{
     pyclass,
     types::{PyAny, PyAnyMethods},
 };
+#[cfg(feature = "baml-defaults")]
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 /// Result of a BAML function call.
 ///
 /// Contains the parsed Python object returned by the function.
-#[gen_stub_pyclass]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyclass)]
 #[pyclass]
 pub struct FunctionResult {
     value: Py<PyAny>,
@@ -23,7 +24,7 @@ impl FunctionResult {
     }
 }
 
-#[gen_stub_pymethods]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pymethods)]
 #[pymethods]
 impl FunctionResult {
     /// Construct a FunctionResult from a Python value.

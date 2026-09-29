@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use baml_crypto_types::{AeadAlgorithm, AeadCipher, AeadError, CryptoProvider};
 #[cfg(not(target_arch = "wasm32"))]
-use baml_crypto_types::{CryptoError, SHA256_LEN, Sha256Context};
+use baml_crypto_types::{CryptoError, SHA1_LEN, SHA256_LEN, Sha256Context};
 
 pub fn provider() -> Arc<dyn CryptoProvider> {
     Arc::new(DefaultProvider)
@@ -19,6 +19,11 @@ pub fn provider() -> Arc<dyn CryptoProvider> {
 struct DefaultProvider;
 
 impl CryptoProvider for DefaultProvider {
+    #[cfg(not(target_arch = "wasm32"))]
+    fn sha1(&self, data: &[u8]) -> Result<[u8; SHA1_LEN], CryptoError> {
+        Ok(native::sha1(data))
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     fn sha256(&self) -> Result<Box<dyn Sha256Context>, CryptoError> {
         Ok(native::sha256())

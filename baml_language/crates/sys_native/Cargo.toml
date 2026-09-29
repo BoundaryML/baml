@@ -7,6 +7,8 @@ authors.workspace = true
 license.workspace = true
 
 [features]
+baml-defaults = [ "bridge_ctypes/baml-defaults", "jiff/tzdb-bundle-platform" ]
+default = [ "baml-defaults" ]
 # `baml.http` / `baml.ws` on the process's network transport (`baml_http`).
 bundle-http = [ "dep:baml_http" ]
 # BAML never contacts anything on its own (see VENDOR.md).

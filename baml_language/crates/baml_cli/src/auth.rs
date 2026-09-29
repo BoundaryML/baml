@@ -523,7 +523,7 @@ pub(crate) fn write_owner_only(path: &std::path::Path, content: &str) -> Result<
 }
 
 fn creds_path() -> Result<PathBuf> {
-    Ok(baml_release::baml_home().join("creds.json"))
+    Ok(baml_home::baml_home().join("creds.json"))
 }
 
 pub(crate) fn now_unix() -> u64 {

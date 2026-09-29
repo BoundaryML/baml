@@ -22,9 +22,9 @@ no-self-update = [  ]
 
 [dependencies]
 baml_crypto = { workspace = true }
+baml_home = { workspace = true }
 baml_http = { workspace = true }
 anyhow = { workspace = true }
-dirs = { workspace = true }
 flate2 = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }

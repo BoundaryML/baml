@@ -33,8 +33,10 @@ pub(crate) mod init_command;
 pub(crate) mod log_output;
 pub(crate) mod lsp;
 pub(crate) mod output;
+#[cfg(feature = "baml-defaults")]
 pub(crate) mod pack_command;
 pub(crate) mod paint;
+#[cfg(feature = "baml-defaults")]
 pub(crate) mod playground_command;
 pub(crate) mod project_load;
 pub(crate) mod project_session;

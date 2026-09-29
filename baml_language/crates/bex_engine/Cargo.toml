@@ -67,6 +67,8 @@ wiremock = { workspace = true }
 workspace = true
 
 [features]
+baml-defaults = [ "bex_vm/baml-defaults" ]
+default = [ "baml-defaults" ]
 gc_profiling = [ "bex_heap/gc_profiling" ]
 heap_debug = [
   "bex_vm/heap_debug",

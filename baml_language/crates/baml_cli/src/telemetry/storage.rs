@@ -406,11 +406,11 @@ fn print_first_run_notice() {
 // ── Config file I/O ──────────────────────────────────────────────────────────
 
 fn config_path() -> PathBuf {
-    baml_release::baml_home().join(CONFIG_FILE_NAME)
+    baml_home::baml_home().join(CONFIG_FILE_NAME)
 }
 
 fn legacy_id_path() -> PathBuf {
-    baml_release::baml_home().join(LEGACY_ID_FILE_NAME)
+    baml_home::baml_home().join(LEGACY_ID_FILE_NAME)
 }
 
 /// Load `telemetry.toml`, migrating from the legacy `telemetry_id` file if

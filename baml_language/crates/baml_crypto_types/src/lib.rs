@@ -5,6 +5,7 @@
 
 use std::{fmt, sync::Arc};
 
+pub const SHA1_LEN: usize = 20;
 pub const SHA256_LEN: usize = 32;
 
 /// An initialized, incremental SHA-256 computation. After successful creation,
@@ -39,6 +40,12 @@ impl std::error::Error for CryptoError {}
 /// Operations used outside the HTTP transport's TLS stack. Unsupported
 /// capabilities return errors; BAML never substitutes a different backend.
 pub trait CryptoProvider: Send + Sync + 'static {
+    /// SHA-1 for compatibility with the AWS CLI's SSO cache filenames.
+    /// This is not used for signatures or integrity verification.
+    fn sha1(&self, _data: &[u8]) -> Result<[u8; SHA1_LEN], CryptoError> {
+        Err(CryptoError::Unsupported("SHA-1 for AWS SSO cache lookup"))
+    }
+
     fn sha256(&self) -> Result<Box<dyn Sha256Context>, CryptoError> {
         Err(CryptoError::Unsupported("SHA-256"))
     }

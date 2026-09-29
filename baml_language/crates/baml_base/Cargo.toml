@@ -20,5 +20,5 @@ workspace = true
 borsh = { workspace = true }
 num-bigint = { workspace = true }
 salsa = { workspace = true }
-smol_str = { workspace = true }
+smol_str = { workspace = true, features = [ "borsh" ] }
 text-size = { workspace = true }

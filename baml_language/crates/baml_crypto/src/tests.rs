@@ -9,6 +9,18 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 #[test]
+fn sha1_matches_legacy_cache_hash_vectors() {
+    assert_eq!(
+        hex(&sha1(b"abc").unwrap()),
+        "a9993e364706816aba3e25717850c26c9cd0d89d"
+    );
+    assert_eq!(
+        hex(&sha1(b"").unwrap()),
+        "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+    );
+}
+
+#[test]
 fn sha256_matches_fips_180_vectors() {
     assert_eq!(
         hex(&sha256(b"abc").unwrap()),

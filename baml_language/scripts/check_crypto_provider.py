@@ -11,6 +11,7 @@ import sys
 import tempfile
 
 from check_no_rustls import assert_no_rustls as assert_no_tls
+from check_reduced_build import check_graph as check_reduced_graph, check_cli as check_reduced_cli
 
 WORKSPACE = Path(__file__).resolve().parent.parent
 REPO = WORKSPACE.parent
@@ -101,12 +102,14 @@ def replace_dependency(workspace, name, package):
     return provider
 
 
-def build_without_tls(workspace, env):
+def build_without_tls(workspace, env, reduced=False):
     metadata = json.loads(cargo(workspace, "metadata", "--locked", "--format-version", "1", capture=True))
     packages = {p["id"]: p["name"] for p in metadata["packages"]}
     # Inspect Cargo's artifact stream as well as its dependency graph. This
     # includes build scripts and proc macros, including cached artifacts.
-    output = cargo(workspace, "build", "--locked", "--message-format=json", "-p", "baml_cli", "-p", "bridge_python", "--features", "no-phone-home", capture=True, env=env)
+    features = "no-phone-home,bridge_python/bundle-http" if reduced else "no-phone-home"
+    flags = ["--no-default-features"] if reduced else []
+    output = cargo(workspace, "build", "--locked", "--message-format=json", "-p", "baml_cli", "-p", "bridge_python", *flags, "--features", features, capture=True, env=env)
     compiled = set()
     cli = None
     bridge = None
@@ -138,6 +141,7 @@ print("ok: rustls-free Python bridge imports")
 def main():
     python = os.environ.get("PYO3_PYTHON", sys.executable)
     subprocess.run([python, "-c", "import sys; assert sys.version_info >= (3, 10), 'Set PYO3_PYTHON to Python 3.10 or newer'"], check=True)
+    check_reduced_graph()
     default = {"aws-lc-rs", "aws-lc-sys", "aes-gcm-siv", "chacha20poly1305"}
     for package in PACKAGES:
         check_graph(WORKSPACE, package, default)
@@ -182,6 +186,7 @@ futures.workspace = true
         revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
         env = dict(os.environ, CARGO_TARGET_DIR=str(WORKSPACE / "target/provider-check"), BAML_GIT_SHA=revision, PYO3_PYTHON=python)
         cargo(workspace, "test", "--locked", "-p", "baml_crypto", env=env)
+        cargo(workspace, "test", "--locked", "-p", "forked_aws_config", "--test", "sso_provider", env=env)
         cargo(workspace, "check", "--locked", "-p", "bridge_cffi", "-p", "bridge_typescript", "-p", "baml_pack_host", "-p", "baml", env=env)
 
         cli = build_without_tls(workspace, env)
@@ -204,6 +209,11 @@ futures.workspace = true
         (fixture / "provider.baml").write_text("\n".join(tests))
         subprocess.run([cli, "test", "--from", str(fixture)], cwd=workspace, env=env, check=True)
 
+        check_reduced_graph(workspace, replacement=True)
+        reduced_cli = build_without_tls(workspace, env, reduced=True)
+        check_reduced_cli(reduced_cli, workspace, env)
+        subprocess.run([reduced_cli, "test", "--from", str(fixture)], cwd=workspace, env=env, check=True)
+
         # A second replacement rejects every crypto operation. The runtime
         # must propagate those errors without pulling in another backend.
         (provider / "Cargo.toml").write_text(replacement_manifest(False))
@@ -216,6 +226,7 @@ futures.workspace = true
         (tests_dir / "unsupported_provider.rs").write_text('''#[test]
 fn unsupported_provider_has_no_fallback() {
     use baml_crypto::{CryptoError, AeadAlgorithm, AeadError};
+    assert!(matches!(baml_crypto::sha1(b"test"), Err(CryptoError::Unsupported(_))));
     assert!(matches!(baml_crypto::sha256(b"test"), Err(CryptoError::Unsupported(_))));
     assert!(matches!(baml_crypto::hmac_sha256(b"key", b"test"), Err(CryptoError::Unsupported(_))));
     assert!(matches!(baml_crypto::sign_rs256("not a key", b"test"), Err(CryptoError::Unsupported(_))));

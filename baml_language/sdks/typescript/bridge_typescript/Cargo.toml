@@ -16,7 +16,8 @@ test = false
 doctest = false
 
 [features]
-default = [ "bundle-http" ]
+baml-defaults = [ "bridge_cffi/baml-defaults" ]
+default = [ "bundle-http", "baml-defaults" ]
 bundle-http = [ "bridge_cffi/bundle-http" ]
 # BAML never contacts anything on its own (see VENDOR.md).
 no-phone-home = [ "bridge_cffi/no-phone-home", "sys_native/no-phone-home" ]

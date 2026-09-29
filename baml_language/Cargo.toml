@@ -131,9 +131,9 @@ baml_ide = { path = "crates/baml_ide" }
 baml_lsp = { path = "crates/baml_lsp" }
 baml_lsp_server = { path = "crates/baml_lsp_server", default-features = false }
 baml_release = { path = "crates/baml_release", default-features = false }
-baml_tests = { path = "crates/baml_tests" }
+baml_tests = { path = "crates/baml_tests", default-features = false }
 baml_version = { path = "crates/baml_version" }
-bex_vm = { path = "crates/bex_vm" }
+bex_vm = { path = "crates/bex_vm", default-features = false }
 bex_vm_types = { path = "crates/bex_vm_types" }
 btel_settings = { path = "crates/btel_settings" }
 btel_types = { path = "crates/btel_types" }
@@ -147,11 +147,12 @@ bex_chunkedringbuffer = { path = "crates/bex_chunkedringbuffer" }
 quanta = { path = "vendor/quanta", version = "=0.12.6", default-features = false }
 bex_external_types = { path = "crates/bex_external_types" }
 bex_heap = { path = "crates/bex_heap" }
-bex_sap = { path = "crates/bex_sap" }
+bex_sap = { path = "crates/bex_sap", default-features = false }
 bridge_ctypes = { path = "crates/bridge_ctypes", default-features = false }
 bridge_cffi = { path = "crates/bridge_cffi", default-features = false }
 sys_wasm = { path = "crates/sys_wasm" }
-baml_cli = { path = "crates/baml_cli" }
+baml_cli = { path = "crates/baml_cli", default-features = false }
+baml_home = { path = "crates/baml_home" }
 baml_exec = { path = "crates/baml_exec" }
 bex_events = { path = "crates/bex_events" }
 baml_query = { path = "crates/baml_query" }
@@ -187,7 +188,7 @@ bytesize = "2.4.2"
 cargo_metadata = { version = "0.23.1" }
 cbindgen = "=0.29.0"
 cc = "1.2"
-clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
+clap = { version = "4.4.6", features = [ "derive" ] }
 console = "0.16"
 console_error_panic_hook = "0.1"
 miette = { version = "7.6", default-features = false, features = [ "fancy-no-syscall" ] }
@@ -212,7 +213,7 @@ indexmap = { version = "2.13", features = [ "serde" ] }
 indicatif = "0.18"
 insta = { version = "1.34", features = [ "yaml", "redactions" ] }
 similar = "2"
-jiff = { version = "0.2" }
+jiff = { version = "0.2", default-features = false, features = [ "std", "tz-system", "tz-fat", "tzdb-zoneinfo", "tzdb-concatenated", "perf-inline" ] }
 la-arena = { version = "0.3" }
 libc = "0.2.169"
 libloading = "0.8"
@@ -263,18 +264,17 @@ salsa = { version = "0.28.5", default-features = false, features = [
 ] }
 serde = { version = "1.0.197", features = [ "derive" ] }
 serde-wasm-bindgen = "0.6"
-serde_json = { version = "1.0.113", features = [ "arbitrary_precision", "preserve_order" ] }
+serde_json = { version = "1.0.113", features = [ "preserve_order" ] }
 self_cell = "1"
 semver = { version = "1" }
 serde_yaml2 = "0.1"
 # The YAML parser serde_yaml2 is built on; keep the versions in step.
 yaml-rust2 = "0.8"
-sha1 = "0.11"
 smallvec = { version = "1.15", features = [ "const_generics" ] }
-smol_str = { version = "0.3", features = [ "serde", "borsh" ] }
+smol_str = { version = "0.3", features = [ "serde" ] }
 strsim = { version = "0.11.1" }
 syn = { version = "2", features = [ "full" ] }
-tar = "0.4"
+tar = { version = "0.4", default-features = false }
 zip = { version = "8", default-features = false, features = [ "deflate" ] }
 taplo = { version = "0.13" }
 tempfile = { version = "3" }

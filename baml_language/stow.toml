@@ -207,10 +207,10 @@ reason = "Security-relevant hashing uses baml_crypto::sha256; sha2 is only for n
 
 [[dependency_rules]]
 pattern = "sha1"
-# Names the AWS SSO token-cache file the AWS CLI writes; not a security use.
-allowed_crates = ["forked_aws_config"]
+# Legacy cache naming still goes through the selected crypto provider.
+allowed_crates = ["baml_crypto_provider"]
 regular_deps_only = true
-reason = "SHA-1 is only for matching external file-naming conventions."
+reason = "Use baml_crypto::sha1 for AWS SSO cache filename compatibility."
 
 [[dependency_rules]]
 pattern = "aes-gcm-siv"

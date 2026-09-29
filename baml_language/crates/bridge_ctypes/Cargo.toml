@@ -25,3 +25,7 @@ protoc-bin-vendored = { workspace = true }
 
 [lints]
 workspace = true
+
+[features]
+default = [ "baml-defaults" ]
+baml-defaults = [ "bex_project/baml-defaults" ]

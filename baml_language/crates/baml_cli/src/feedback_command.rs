@@ -665,7 +665,7 @@ impl FeedbackRecord {
 
 impl FeedbackStore {
     fn path() -> std::path::PathBuf {
-        baml_release::baml_home().join("feedback.json")
+        baml_home::baml_home().join("feedback.json")
     }
 
     fn load() -> Result<Self> {

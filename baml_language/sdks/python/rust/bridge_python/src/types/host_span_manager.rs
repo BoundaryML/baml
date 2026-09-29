@@ -7,13 +7,14 @@ use pyo3::{
     prelude::*,
     types::{PyAny, PyDict, PyList},
 };
+#[cfg(feature = "baml-defaults")]
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 /// Manages host-side span tracking for `@trace` in Python.
 ///
 /// This is a thin PyO3 wrapper around `bridge_cffi::host_spans::HostSpanManager`.
 /// All core logic (span stack, event emission) lives in bridge_cffi.
-#[gen_stub_pyclass]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyclass)]
 #[pyclass]
 pub struct HostSpanManager {
     inner: bridge_cffi::host_spans::HostSpanManager,
@@ -33,7 +34,7 @@ impl HostSpanManager {
     }
 }
 
-#[gen_stub_pymethods]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pymethods)]
 #[pymethods]
 impl HostSpanManager {
     #[new]

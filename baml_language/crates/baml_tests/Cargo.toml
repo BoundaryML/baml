@@ -86,7 +86,12 @@ name = "package_compile_benchmark"
 harness = false
 
 [features]
-default = [  ]
+baml-defaults = [
+  "bex_project/baml-defaults",
+  "sys_native/baml-defaults",
+  "baml_cli/baml-defaults",
+]
+default = [ "baml-defaults" ]
 heap_debug = [
   "bex_engine/heap_debug",
   "bex_vm/heap_debug",

@@ -4,11 +4,12 @@ use pyo3::{
     Py, PyAny, Python,
     prelude::{PyResult, pyfunction},
 };
+#[cfg(feature = "baml-defaults")]
 use pyo3_stub_gen::derive::gen_stub_pyfunction;
 
 static CALLBACK: OnceLock<Py<PyAny>> = OnceLock::new();
 
-#[gen_stub_pyfunction]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyfunction)]
 #[pyfunction]
 pub fn register_unhandled_spawn_error_callback(callback: Py<PyAny>) {
     if CALLBACK.set(callback).is_ok() {
@@ -16,7 +17,7 @@ pub fn register_unhandled_spawn_error_callback(callback: Py<PyAny>) {
     }
 }
 
-#[gen_stub_pyfunction]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyfunction)]
 #[pyfunction]
 pub fn shutdown_runtime(py: Python<'_>) -> PyResult<()> {
     py.detach(|| bridge_cffi::get_tokio_runtime()?.block_on(bridge_cffi::shutdown_runtime()))

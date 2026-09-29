@@ -6,13 +6,14 @@ This guide describes those controls, their scope, and how to verify a downstream
 
 ## Integration scope
 
-The three controls are independent:
+The following controls are independent:
 
 | Requirement | Control | Scope |
 |---|---|---|
 | Supply cryptographic implementations | Replace the `baml_crypto_provider` workspace dependency | Non-TLS hashing, signing, secure randomness, and AEAD. The HTTP provider owns TLS. No backend-selection feature flags are required. |
 | Supply an HTTP transport | Replace the `baml_http_provider` workspace dependency | Runtime HTTP clients and servers, WebSockets, and requests routed through BAML's outbound registry. Raw sockets and auxiliary tooling have separate paths. |
 | Disable telemetry and release services | `no-phone-home` | Rejects the outbound destinations listed below except `RemoteCache`. Application traffic remains enabled. |
+| Omit optional tooling and dependency features | Disable `baml-defaults` with `--no-default-features` | Removes the capabilities listed under reduced builds. It does not replace providers or restrict network destinations. |
 
 These controls do not provide a process-wide network sandbox or establish FIPS validation. For a deployment that restricts all network access, combine them with the host's network policy and review the additional network paths below.
 
@@ -40,6 +41,36 @@ The native bridges enable `bundle-http` by default. It includes the integration 
 
 Build and inspect the intended artifact with the same package selection, target, and features. A workspace-wide build can include tools and other implementations that are absent from the individual artifact being distributed.
 
+### Reduced builds
+
+`baml-defaults` is a single, default-on feature for the following capabilities. Disabling default features on the selected CLI or bridge removes the corresponding dependencies and dependency features from that artifact:
+
+| Capability | Behavior without `baml-defaults` |
+|---|---|
+| Arbitrary-precision JSON numbers | `serde_json/arbitrary_precision` is disabled. JSON conversion of large `bigint` values may fail or lose precision. This configuration does not guarantee bigint JSON round trips. |
+| Python stub generation | `pyo3-stub-gen` and the `stub_gen` binary are omitted. The native Python runtime remains available; provision type stubs separately when packaging. |
+| `baml-cli pack` | The command, `libsui`, and `baml_release` are omitted. Telemetry, authentication, and feedback obtain their configuration directory through the small `baml_home` crate. |
+| CLI allocator | The CLI uses Rust's default allocator instead of mimalloc. |
+| Playground server | `baml-cli playground` and the language server's playground panels are omitted, including Axum's WebSocket and tower-http's filesystem serving dependencies. The stdio language server remains available. |
+| Deadlock detection | The language server omits its deadlock watchdog and `parking_lot/deadlock_detection`. |
+| Bundled timezone database | Jiff uses the system timezone database. Named timezone operations require that database to be provisioned; systems without one, including typical Windows installations, lose the bundled fallback. |
+
+For example, after replacing the providers, build the CLI and Python bridge with optional capabilities disabled and service requests restricted:
+
+```sh
+cargo build --locked --release -p baml_cli -p bridge_python --no-default-features --features no-phone-home,bridge_python/bundle-http
+python3 scripts/check_reduced_build.py
+python3 scripts/check_no_rustls.py -p baml_cli -p bridge_python --no-default-features --features no-phone-home,bridge_python/bundle-http
+```
+
+Retain `bundle-http` to use the replacement HTTP provider in the Python bridge. Cargo features are additive: another dependency or selected workspace member that enables `baml-defaults` can restore these capabilities. Apply `default-features = false` to the relevant dependency edges and verify the final application's graph. `no-phone-home` is a separate choice; disabling `baml-defaults` alone does not disable service requests.
+
+The workspace does not request `clap/cargo` or `tar/xattr`. `smol_str/borsh` remains necessary for the compiler's serialized names and bytecode types and is declared by `baml_base`; disabling it requires a serialization change, rather than a build configuration change.
+
+### Query support
+
+`baml-cli query` is a stub at this revision. This guide does not identify a release with a working query command. The CLI does not depend on `baml_query`, DataFusion, Arrow, or sqlparser, and neither does the Python native bridge. The separate `baml_query` workspace crate uses DataFusion and remains available for development. Its manifest pins DataFusion to `54.1.0`; the workspace lockfile resolves Arrow to `58.4.0` and sqlparser to `0.62.0`. Their presence in the shared lockfile does not imply inclusion in the CLI or bridge.
+
 ### Offline builds
 
 Source vendoring and runtime network restrictions are separate concerns. To prepare registry and Git dependencies for an offline Cargo build, use [`cargo vendor`](https://doc.rust-lang.org/cargo/commands/cargo-vendor.html) in the dependency acquisition environment:
@@ -60,6 +91,7 @@ Provision the pinned Rust toolchain, native build tools, and any SDK packaging t
 |---|---|
 | Google Vertex service-account authentication | RSA PKCS#1 v1.5 with SHA-256 (RS256) |
 | AWS Bedrock request signing | SHA-256 and HMAC-SHA256 for SigV4 |
+| AWS CLI SSO token-cache lookup | SHA-1 for the AWS CLI's cache filename convention |
 | Release download checksum verification | SHA-256 |
 | `baml.crypto.Sha256` | Incremental SHA-256 |
 | `baml.random.SystemRandom` | Secure random bytes |
@@ -85,6 +117,7 @@ pub fn provider() -> std::sync::Arc<dyn baml_crypto_types::CryptoProvider> {
 
 | Method | Contract |
 |---|---|
+| `sha1` | Return exactly 20 bytes. Used only to locate an AWS CLI SSO token-cache file, not for signing or integrity verification. A provider may reject this capability if SSO cache lookup is not needed. |
 | `sha256` | Return an incremental `Sha256Context`. `update` accepts another chunk; `finish` returns exactly 32 bytes and resets the context to an empty message. After successful creation, updates and finalization are infallible. |
 | `hmac_sha256` | Compute HMAC-SHA256 for the supplied key and message, including keys longer than the SHA-256 block size. Return exactly 32 bytes. |
 | `sign_rs256` | Accept an unencrypted PKCS#8 or PKCS#1 PEM RSA private key and return a PKCS#1 v1.5 SHA-256 signature. |
@@ -181,7 +214,7 @@ Review these separately when the requirement applies to the entire application:
 |---|---|
 | Raw TCP and UDP | `baml.net` operations use Tokio sockets in `sys_native` directly. They are outside `HttpProvider` and remain available with `no-phone-home`. |
 | Subprocesses and host callbacks | Programs and credential helpers can perform their own I/O. BAML's HTTP provider cannot enforce policy inside those processes or callbacks. |
-| CLI playground/language server | The local playground server uses Axum/Tokio directly and retains its WebSocket dependencies when the HTTP provider is replaced. |
+| CLI playground/language server | With `baml-defaults`, the local playground server uses Axum/Tokio directly and retains its WebSocket dependencies when the HTTP provider is replaced. Disable `baml-defaults` to omit the playground server while retaining the stdio language server. |
 | Rust SDK loader | `baml_bridge` can download a missing engine library from GitHub using its own `ureq` client. Build `baml_bridge` with `default-features = false` and set `BAML_LIBRARY_PATH` to the built library to omit its downloader and TLS dependencies. With downloading compiled in, `BAML_LIBRARY_DISABLE_DOWNLOAD=true` disables acquisition at runtime but leaves those dependencies present. Its `aws-crypto`, `ring-crypto`, and `external-crypto` features enable downloading and configure only that loader, independently of the loaded engine provider. |
 | Browser/WebAssembly | Uses browser networking and entropy, and `sha2` for `baml.crypto.Sha256`; native TLS and HTTP substitutions do not apply. AEAD does use the replaceable crypto provider. |
 | Build and installation tools | Cargo, SDK package managers, and packaging scripts have their own acquisition behavior. Provision their inputs and enforce build-network policy separately. |
@@ -205,7 +238,7 @@ cargo build --locked --release -p baml_cli -p bridge_python --features no-phone-
 python3 scripts/check_no_rustls.py -p baml_cli -p bridge_python --features no-phone-home
 ```
 
-The check fails for any package whose name starts with `rustls` or ends with `-rustls`, including `rustls-pki-types`, `rustls-webpki`, `hyper-rustls`, and `tokio-rustls`. It includes build dependencies and proc macros. Pass the same `--target` and feature arguments used for the artifact; `--target all` additionally checks dependency paths across targets. The remaining playground WebSocket dependencies do not require rustls, so disabling the playground is not necessary for this configuration.
+The check fails for any package whose name starts with `rustls` or ends with `-rustls`, including `rustls-pki-types`, `rustls-webpki`, `hyper-rustls`, and `tokio-rustls`. It includes build dependencies and proc macros. Pass the same `--target` and feature arguments used for the artifact; `--target all` additionally checks dependency paths across targets. The remaining playground WebSocket dependencies do not require rustls. To omit them as well, disable `baml-defaults` as described under reduced builds.
 
 For Rust SDK consumers, also disable the loader's default features and provision the engine library:
 
@@ -244,9 +277,9 @@ Run the crypto tests against the replacement provider:
 cargo test --locked -p baml_crypto --lib
 ```
 
-The tests include SHA-256, HMAC-SHA256, RSA signing, and secure randomness checks. They fail if a required capability is unsupported. Test the replacement's supported AEAD algorithms against published vectors and exercise rejection of unsupported algorithms through BAML.
+The tests include SHA-1, SHA-256, HMAC-SHA256, RSA signing, and secure randomness checks. They fail if a tested capability is unsupported. Test the replacement's supported AEAD algorithms against published vectors and exercise rejection of unsupported algorithms through BAML.
 
-The repository's default provider has its own AEAD vector and error tests. The substitution check imports the source into a temporary directory and replaces both provider dependencies. It checks all-target native dependency graphs, builds the CLI and Python bridge while inspecting Cargo's build-artifact records, tests a ring-based crypto implementation without rustls, and exercises transport substitution and unsupported operations through BAML. A second replacement rejects all cryptographic operations to verify that no fallback backend is introduced. The script requires Python 3.10 or newer for the Python bridge build; set `PYO3_PYTHON` if a different interpreter is selected by default:
+The repository's default provider has its own AEAD vector and error tests. The substitution check imports the source into a temporary directory and replaces both provider dependencies. It checks all-target native dependency graphs, builds default and reduced configurations of the CLI and Python bridge while inspecting Cargo's build-artifact records, tests a ring-based crypto implementation without rustls, and exercises AWS SSO cache lookup, transport substitution, and unsupported operations through BAML. It also imports the Python extension and checks the reduced CLI's available commands and stdio language-server handshake. A second replacement rejects all cryptographic operations to verify that no fallback backend is introduced. The script requires Python 3.10 or newer for the Python bridge build; set `PYO3_PYTHON` if a different interpreter is selected by default:
 
 ```sh
 cargo test --locked -p baml_crypto_provider -p baml_crypto_types -p baml_crypto -p baml_http_provider
@@ -258,6 +291,8 @@ Finally, exercise the packaged artifact with the intended SDK, provider, and net
 ## Maintain the vendored copy
 
 Treat the provider interfaces as source integration points tied to the vendored revision. On an upstream update, review changes to the provider traits, feature propagation, outbound registry, SDK loaders, and dependency lockfile; rebuild the affected artifacts and repeat the integration checks. Keep the SDK, generated bindings, and runtime versions aligned for the release being deployed.
+
+Toolchain releases are tagged at their source revision. The release packaging workflow includes the resolved `Cargo.lock` alongside the binaries in each toolchain archive. Use the tag's lockfile when rebuilding the source as checked in, and retain the archive's copy when auditing the published binaries: release version stamping can change local package versions before the build.
 
 Retain the upstream revision, downstream patches, toolchain and target, effective features, provider versions, dependency inventory, and validation results with each internal release. Include the repository's [license](../LICENSE) and applicable third-party license and notice files in the import and distribution review.
 

@@ -19,23 +19,24 @@ use pyo3::{
     types::PyModuleMethods,
     wrap_pyfunction,
 };
+#[cfg(feature = "baml-defaults")]
 use pyo3_stub_gen::{define_stub_info_gatherer, derive::gen_stub_pyfunction};
 
 const BRIDGE_RUNTIME_NAME: &str = "baml-bridge";
 
-#[gen_stub_pyfunction]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyfunction)]
 #[pyfunction]
 fn get_version() -> &'static str {
     get_toolchain_version()
 }
 
-#[gen_stub_pyfunction]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyfunction)]
 #[pyfunction]
 fn get_toolchain_version() -> &'static str {
     baml_version::CANONICAL_VERSION
 }
 
-#[gen_stub_pyfunction]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyfunction)]
 #[pyfunction]
 fn get_bridge_runtime_version() -> &'static str {
     baml_version::PYPI_VERSION
@@ -43,17 +44,17 @@ fn get_bridge_runtime_version() -> &'static str {
 
 /// No-op: tracing has been removed. Kept as a live symbol for ABI stability
 /// (SDK `atexit` + `__all__` reference it).
-#[gen_stub_pyfunction]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyfunction)]
 #[pyfunction]
 fn flush_events() {}
 
-#[gen_stub_pyfunction]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyfunction)]
 #[pyfunction]
 fn new_function_call() -> u64 {
     bridge_cffi::new_function_call_id()
 }
 
-#[gen_stub_pyfunction]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyfunction)]
 #[pyfunction]
 fn cancel_function_call(call_id: u64) -> bool {
     bridge_cffi::cancel_function_call_by_id(call_id)
@@ -105,4 +106,5 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
+#[cfg(feature = "baml-defaults")]
 define_stub_info_gatherer!(stub_info);

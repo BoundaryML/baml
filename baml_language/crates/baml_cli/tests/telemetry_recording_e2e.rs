@@ -129,6 +129,7 @@ testset "smoke" { test "ok" { assert.is_true(true) } }
 }
 
 #[test]
+#[cfg(feature = "baml-defaults")]
 fn packed_modes_write_to_user_home_even_when_launched_in_another_project() {
     let _built = common::ensure_built();
     let temp = tempfile::tempdir().unwrap();

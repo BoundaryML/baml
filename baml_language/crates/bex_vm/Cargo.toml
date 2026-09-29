@@ -68,7 +68,8 @@ baml_db = { workspace = true }
 indexmap = { workspace = true }
 
 [features]
-default = [  ]
+baml-defaults = [ "serde_json/arbitrary_precision" ]
+default = [ "baml-defaults" ]
 heap_debug = [ "bex_heap/heap_debug", "bex_vm_types/heap_debug" ]
 # Enables the per-op VM counter for the `kperf` profiler's instructions/op
 # breakdown. Off by default — pure measurement scaffolding on the hot path.

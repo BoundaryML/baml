@@ -3,6 +3,7 @@
 use std::sync::Mutex;
 
 use pyo3::{prelude::pymethods, pyclass};
+#[cfg(feature = "baml-defaults")]
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 /// A call context for cancelling BAML function calls.
@@ -15,14 +16,14 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 /// # Cancel from another task:
 /// ctx.abort()
 /// ```
-#[gen_stub_pyclass]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyclass)]
 #[pyclass]
 pub struct BamlCallContext {
     aborted: Mutex<bool>,
     active_call_ids: Mutex<Vec<u64>>,
 }
 
-#[gen_stub_pymethods]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pymethods)]
 #[pymethods]
 impl BamlCallContext {
     #[new]

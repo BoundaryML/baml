@@ -27,6 +27,7 @@
 
 use bridge_cffi::{BamlCffiStatus, handle_cffi};
 use pyo3::prelude::*;
+#[cfg(feature = "baml-defaults")]
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
 
 pub(crate) fn status_to_pyerr(context: &str, status: BamlCffiStatus) -> PyErr {
@@ -42,7 +43,7 @@ pub(crate) fn release_wire_handle(key: u64, context: &str) -> PyResult<()> {
     handle_cffi::release_handle(key).map_err(|error| status_to_pyerr(context, error.into()))
 }
 
-#[gen_stub_pyclass]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyclass)]
 #[pyclass]
 pub struct BamlPyHandle {
     pub(crate) handle_key: u64,
@@ -54,7 +55,7 @@ pub struct BamlPyHandle {
     pub(crate) handle_type: u64,
 }
 
-#[gen_stub_pymethods]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pymethods)]
 #[pymethods]
 impl BamlPyHandle {
     #[new]
@@ -128,7 +129,7 @@ impl Drop for BamlPyHandle {
 /// Test-only: seed a `FunctionRef` entry through the shared CFFI API,
 /// returning `(key, handle_type)` so test code can construct a
 /// `BamlPyHandle` or stage a wire `BamlHandle`.
-#[gen_stub_pyfunction]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyfunction)]
 #[pyfunction]
 pub fn _seed_function_ref_handle(global_index: u64) -> PyResult<(u64, u64)> {
     let parts = handle_cffi::seed_function_ref_handle(global_index);
@@ -136,7 +137,7 @@ pub fn _seed_function_ref_handle(global_index: u64) -> PyResult<(u64, u64)> {
 }
 
 /// Test-only: seed an `Adt(Media(generic))` entry through the shared CFFI API.
-#[gen_stub_pyfunction]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyfunction)]
 #[pyfunction]
 pub fn _seed_generic_media_handle() -> PyResult<(u64, u64)> {
     let parts = handle_cffi::seed_generic_media_handle();
@@ -146,7 +147,7 @@ pub fn _seed_generic_media_handle() -> PyResult<(u64, u64)> {
 /// Test-only: seed an engine-heap (`BexHeapHandle`) entry through the shared
 /// CFFI API — the identity-bearing, deduplicating arm. Two seeds of one
 /// `slab_key` share a key.
-#[gen_stub_pyfunction]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyfunction)]
 #[pyfunction]
 pub fn _seed_heap_handle(slab_key: u64) -> PyResult<(u64, u64)> {
     let parts = handle_cffi::seed_heap_handle(slab_key);
@@ -155,7 +156,7 @@ pub fn _seed_heap_handle(slab_key: u64) -> PyResult<(u64, u64)> {
 
 /// Release a handle cloned for wire ownership when encoding aborts before the
 /// engine can consume it.
-#[gen_stub_pyfunction]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyfunction)]
 #[pyfunction]
 pub fn _release_wire_handle(key: u64) -> PyResult<()> {
     release_wire_handle(key, "BamlPyHandle wire-encode rollback")
@@ -163,7 +164,7 @@ pub fn _release_wire_handle(key: u64) -> PyResult<()> {
 
 /// Test-only: return the number of live ordinary HANDLE_TABLE rows (a
 /// refcounted engine-heap row counts once however many owners it has).
-#[gen_stub_pyfunction]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyfunction)]
 #[pyfunction]
 pub fn _live_handle_count() -> usize {
     bridge_cffi::handle_cffi::live_handle_count()
@@ -172,7 +173,7 @@ pub fn _live_handle_count() -> usize {
 /// Test-only: the outstanding ownership count of a live key — the releases it
 /// still owes — or `None` for a dead/unknown key. Lets an audit see an
 /// exactly-once imbalance on a shared engine-heap key, which row counts hide.
-#[gen_stub_pyfunction]
+#[cfg_attr(feature = "baml-defaults", gen_stub_pyfunction)]
 #[pyfunction]
 pub fn _handle_refcount(key: u64) -> Option<u64> {
     bridge_cffi::handle_cffi::handle_refcount(key)
