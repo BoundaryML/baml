@@ -52,6 +52,7 @@ console = { workspace = true }
 ctrlc = { workspace = true }
 hex = { workspace = true }
 indicatif = { workspace = true }
+libmimalloc-sys = { workspace = true }
 libsui = { workspace = true }
 mimalloc = { workspace = true }
 mime_guess = { workspace = true }

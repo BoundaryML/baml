@@ -562,3 +562,33 @@ function main() -> int { 0 }
     // resolve to slot 1 rather than defaulting to 0.
     assert_eq!(rule.field_links.as_ref(), [1]);
 }
+
+/// `xs = []` is the only thing that releases the old array: the VM roots every
+/// frame slot, so dropping the dead store keeps it alive across the collection.
+#[test]
+fn dead_reassignment_of_heap_local_is_emitted() {
+    let mut db = make_db();
+    db.file(
+        "test.baml",
+        r#"
+function hold_and_drop(n: int) -> int {
+    let xs: string[] = [];
+    let i = 0;
+    while (i < n) {
+        xs.push("item " + i.to_string());
+        i += 1;
+    }
+    xs = [];
+    baml.sys.collect_garbage();
+    0
+}
+"#,
+    );
+    let program = compile(&db);
+    let bytecode = crate::engine::display_user_functions_with_options(&program, false);
+    assert_eq!(
+        bytecode.matches("store_var xs\n").count(),
+        2,
+        "both the definition and the releasing reassignment of `xs` are stored:\n{bytecode}"
+    );
+}
