@@ -1,0 +1,65 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0010
+
+  × invalid assignment target; only a variable, a field, or an index can be assigned to (BAML has no destructuring assignment: bind the value with `let`, then assign from its fields or elements)
+    ╭─[main.baml:19:5]
+ 19 │     P { a: a, b: b } = mk();
+    ·     ────────┬───────
+    ·             ╰── cannot assign to this expression
+    ╰────
+
+  [hir] E0010
+
+  × invalid assignment target; only a variable, a field, or an index can be assigned to (BAML has no destructuring assignment: bind the value with `let`, then assign from its fields or elements)
+    ╭─[main.baml:26:5]
+ 26 │     [x, y] = [1, 2];
+    ·     ───┬──
+    ·        ╰── cannot assign to this expression
+    ╰────
+
+  [hir] E0010
+
+  × invalid assignment target; only a variable, a field, or an index can be assigned to (BAML has no destructuring assignment: bind the value with `let`, then assign from its fields or elements)
+    ╭─[main.baml:32:5]
+ 32 │     [x] += [1];
+    ·     ─┬─
+    ·      ╰── cannot assign to this expression
+    ╰────
+
+  [type] E0004
+
+  × operator `+` cannot be applied to `int[]` and `int[]`
+    ╭─[main.baml:32:12]
+ 32 │     [x] += [1];
+    ·            ───
+    ╰────
+
+  [hir] E0010
+
+  × invalid assignment target; only a variable, a field, or an index can be assigned to (BAML has no destructuring assignment: bind the value with `let`, then assign from its fields or elements)
+    ╭─[main.baml:37:5]
+ 37 │     mk() = mk();
+    ·     ──┬─
+    ·       ╰── cannot assign to this expression
+    ╰────
+
+  [hir] E0010
+
+  × invalid assignment target; only a variable, a field, or an index can be assigned to (BAML has no destructuring assignment: bind the value with `let`, then assign from its fields or elements)
+    ╭─[main.baml:42:5]
+ 42 │     1 = 2;
+    ·     ┬
+    ·     ╰── cannot assign to this expression
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:42:9]
+ 42 │     1 = 2;
+    ·         ┬
+    ·         ╰── expected `1`, found `2`
+    ╰────
