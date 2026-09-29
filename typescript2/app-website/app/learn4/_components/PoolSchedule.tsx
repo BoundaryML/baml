@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/useFilenamingConvention: Keep the existing module path.
 'use client';
 
 import { useState } from 'react';
@@ -23,9 +24,9 @@ export function PoolSchedule() {
           Limit.new(2) · six spawns
         </span>
         <button
-          type="button"
           className="l2-btn"
           onClick={() => setRunId((n) => n + 1)}
+          type="button"
         >
           Run again ↻
         </button>
@@ -36,7 +37,7 @@ export function PoolSchedule() {
           const start = 0.3 + wait;
           return (
             // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length, order-stable
-            <div key={i} className="l4-pool-row">
+            <div className="l4-pool-row" key={i}>
               <span className="l4-pool-name font-mono">shard-{i}</span>
               <span className="l4-pool-track">
                 <span

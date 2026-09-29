@@ -6833,10 +6833,9 @@ impl<'a> Parser<'a> {
 
     /// Parse `spawn name_expr? (with expr (, expr)*)? { body }`. The name
     /// expression is optional and is parsed until we see `with` or `{`. The
-    /// optional `with` clause (BEP-034 spawn options) is a comma-separated
-    /// list of expressions; in v1 the only accepted form is a single
-    /// modifier value, enforced later in TIR. The body is
-    /// always a brace-delimited block.
+    /// optional `with` clause is a comma-separated list of
+    /// `baml.spawn.Modifier` values (BEP-040), applied left to right. The body
+    /// is always a brace-delimited block.
     fn parse_spawn_expr(&mut self) {
         self.with_node(SyntaxKind::SPAWN_EXPR, |p| {
             p.bump(); // `spawn`

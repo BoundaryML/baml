@@ -600,6 +600,30 @@ test "a rethrow does not become its own cause when its site throws again" {
     assert.equal(ec_same_site_rethrow(), "cause: none")
 }
 
+// A closure capturing the caught error keeps it in a cell; throwing it is
+// still a rethrow.
+function ec_captured_rethrow() -> string {
+    let first = -1;
+    {
+        {
+            throw "captured"
+        } catch (e, ctx) {
+            _ => {
+                first = ec_last_line(ctx);
+                let peek = () -> string { e };
+                let _ = peek();
+                throw e
+            }
+        }
+    } catch (e, ctx) {
+        _ => `same line: ${ec_last_line(ctx) == first}, cause: ${ec_cause_error(ctx)}`,
+    }
+}
+
+test "a rethrow keeps its trace when a closure captures the caught error" {
+    assert.equal(ec_captured_rethrow(), "same line: true, cause: none")
+}
+
 function ec_throw_one() -> void throws int {
     throw 1
 }

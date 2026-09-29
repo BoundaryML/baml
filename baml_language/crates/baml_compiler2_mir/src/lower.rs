@@ -10612,11 +10612,18 @@ impl<'db> LoweringContext<'db> {
         Ok(Operand::Copy(Place::Local(temp)))
     }
 
+    /// The operand a `throw` reads. A binding is read in place, a captured one
+    /// through its cell, never through a temp: a thrown catch binding must
+    /// still read the caught error's local, or it would not be a rethrow (see
+    /// `caught_error_context`).
     fn lower_throw_operand(&mut self, expr_id: AstExprId) -> Lowered<Operand<'db>> {
-        match self.try_resolve_to_local(expr_id) {
-            Some(local) => Ok(Operand::copy_local(local)),
-            None => self.lower_to_operand(expr_id),
+        if let AstExpr::Path(segments) = &self.body.exprs[expr_id]
+            && let [name] = segments.as_slice()
+            && let Some(local) = self.local_for_path(expr_id, name)
+        {
+            return Ok(Operand::Copy(self.value_place(local)));
         }
+        self.lower_to_operand(expr_id)
     }
 
     /// An internal inconsistency: lowering cannot produce code here, for a

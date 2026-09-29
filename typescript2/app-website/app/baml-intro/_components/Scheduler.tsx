@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/useFilenamingConvention: Keep the existing module path.
 'use client';
 
 import { useAnimateInView } from '../../learn3/_lib/use-animate-in-view';

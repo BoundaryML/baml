@@ -121,9 +121,19 @@ module.exports = grammar({
     [$.function_type_parameter, $.parenthesized_type, $.type_pattern],
     // `f <` — explicit type arguments (a call, or a specialized function
     // value) vs. less-than comparison.
-    [$.call_expression, $.specialized_expression, $.binary_expression, $.unary_expression],
+    [
+      $.call_expression,
+      $.specialized_expression,
+      $.binary_expression,
+      $.unary_expression,
+    ],
     [$.call_expression, $.specialized_expression, $.binary_expression],
-    [$.call_expression, $.specialized_expression, $.binary_expression, $.await_expression],
+    [
+      $.call_expression,
+      $.specialized_expression,
+      $.binary_expression,
+      $.await_expression,
+    ],
     // `f<int>(` — a call with type arguments vs. a call of a specialized
     // value; the call wins by dynamic precedence.
     [$.call_expression, $.specialized_expression],
@@ -201,8 +211,7 @@ module.exports = grammar({
         field('body', $.class_body),
       ),
 
-    class_body: ($) =>
-      seq('{', repeat($._class_member), '}'),
+    class_body: ($) => seq('{', repeat($._class_member), '}'),
 
     _class_member: ($) =>
       choice(
@@ -410,10 +419,18 @@ module.exports = grammar({
     client_type: ($) => seq('<', field('kind', $.identifier), '>'),
 
     generator_declaration: ($) =>
-      seq('generator', field('name', $.identifier), field('body', $.config_block)),
+      seq(
+        'generator',
+        field('name', $.identifier),
+        field('body', $.config_block),
+      ),
 
     retry_policy_declaration: ($) =>
-      seq('retry_policy', field('name', $.identifier), field('body', $.config_block)),
+      seq(
+        'retry_policy',
+        field('name', $.identifier),
+        field('body', $.config_block),
+      ),
 
     config_block: ($) =>
       seq('{', repeat(choice($.config_entry, $.empty_statement)), '}'),
@@ -427,7 +444,14 @@ module.exports = grammar({
         2,
         prec.right(
           seq(
-            field('key', choice($.identifier, $.string, alias('retry_policy', $.identifier))),
+            field(
+              'key',
+              choice(
+                $.identifier,
+                $.string,
+                alias('retry_policy', $.identifier),
+              ),
+            ),
             optional(':'),
             field('value', $._config_value),
             optional(choice(',', ';')),
@@ -509,13 +533,7 @@ module.exports = grammar({
     test_body: ($) =>
       seq(
         '{',
-        repeat(
-          choice(
-            $.type_builder_block,
-            $.config_entry,
-            $._statement,
-          ),
-        ),
+        repeat(choice($.type_builder_block, $.config_entry, $._statement)),
         '}',
       ),
 
@@ -570,7 +588,12 @@ module.exports = grammar({
     generic_parameter: ($) =>
       seq(
         field('name', $.identifier),
-        optional(seq('extends', field('bound', seq($._type, repeat(seq('&', $._type)))))),
+        optional(
+          seq(
+            'extends',
+            field('bound', seq($._type, repeat(seq('&', $._type)))),
+          ),
+        ),
       ),
 
     // ==========================================================================
@@ -696,9 +719,9 @@ module.exports = grammar({
         prec.dynamic(
           1,
           seq(
-          optional('watch'),
-          choice('let', 'const'),
-          field('pattern', $._pattern),
+            optional('watch'),
+            choice('let', 'const'),
+            field('pattern', $._pattern),
             optional(seq('=', field('value', $._expression))),
             optional(field('else', $.else_clause)),
             optional(';'),
@@ -730,10 +753,7 @@ module.exports = grammar({
       prec.right(
         seq(
           'for',
-          choice(
-            seq('(', $._for_header, ')'),
-            $._for_in_header,
-          ),
+          choice(seq('(', $._for_header, ')'), $._for_in_header),
           field('body', $.block),
           optional(';'),
         ),
@@ -880,7 +900,8 @@ module.exports = grammar({
         ),
       ),
 
-    arguments: ($) => seq('(', commaSep(choice($._expression, $.named_argument)), ')'),
+    arguments: ($) =>
+      seq('(', commaSep(choice($._expression, $.named_argument)), ')'),
 
     // `f(limit = 2)`
     named_argument: ($) =>
@@ -916,8 +937,7 @@ module.exports = grammar({
       seq('[', commaSep(choice($._expression, $.spread_element)), ']'),
 
     // `{ "a": 1, "b": [2] }` — JSON-ish map literal (keys are strings).
-    map_expression: ($) =>
-      seq('{', commaSep1($.map_entry), '}'),
+    map_expression: ($) => seq('{', commaSep1($.map_entry), '}'),
 
     map_entry: ($) =>
       seq(field('key', $.string), ':', field('value', $._expression)),
@@ -952,16 +972,14 @@ module.exports = grammar({
             ),
           ),
           field('consequence', $.block),
-          optional(seq('else', field('alternative', choice($.block, $.if_expression)))),
+          optional(
+            seq('else', field('alternative', choice($.block, $.if_expression))),
+          ),
         ),
       ),
 
     match_expression: ($) =>
-      seq(
-        'match',
-        field('value', $._expression),
-        field('body', $.match_body),
-      ),
+      seq('match', field('value', $._expression), field('body', $.match_body)),
 
     match_body: ($) => seq('{', repeat($.match_arm), '}'),
 
@@ -1005,7 +1023,11 @@ module.exports = grammar({
     is_expression: ($) =>
       prec.left(
         PREC.COMPARE,
-        seq(field('value', $._expression), 'is', field('pattern', $._is_pattern)),
+        seq(
+          field('value', $._expression),
+          'is',
+          field('pattern', $._is_pattern),
+        ),
       ),
 
     _is_pattern: ($) =>
@@ -1074,7 +1096,10 @@ module.exports = grammar({
     unary_expression: ($) =>
       prec(
         PREC.UNARY,
-        seq(field('operator', choice('!', '-', '~', '+')), field('operand', $._expression)),
+        seq(
+          field('operator', choice('!', '-', '~', '+')),
+          field('operand', $._expression),
+        ),
       ),
 
     assignment_expression: ($) =>
@@ -1084,7 +1109,19 @@ module.exports = grammar({
           field('left', $._expression),
           field(
             'operator',
-            choice('=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>='),
+            choice(
+              '=',
+              '+=',
+              '-=',
+              '*=',
+              '/=',
+              '%=',
+              '&=',
+              '|=',
+              '^=',
+              '<<=',
+              '>>=',
+            ),
           ),
           field('right', $._expression),
         ),
@@ -1109,7 +1146,8 @@ module.exports = grammar({
         field('body', $.block),
       ),
 
-    throw_expression: ($) => prec.right(seq('throw', field('value', $._expression))),
+    throw_expression: ($) =>
+      prec.right(seq('throw', field('value', $._expression))),
 
     return_expression: ($) =>
       prec.right(seq('return', optional(field('value', $._expression)))),
@@ -1146,7 +1184,8 @@ module.exports = grammar({
       ),
 
     // `let x` (also the leading name of `let x: int = ...` via chain).
-    binding_pattern: ($) => seq('let', field('name', choice($.identifier, '_'))),
+    binding_pattern: ($) =>
+      seq('let', field('name', choice($.identifier, '_'))),
 
     wildcard_pattern: (_) => '_',
 
@@ -1219,8 +1258,7 @@ module.exports = grammar({
         ),
       ),
 
-    raw_string_content: ($) =>
-      repeat1(choice(RAW_CHUNK, alias('"', $.quote))),
+    raw_string_content: ($) => repeat1(choice(RAW_CHUNK, alias('"', $.quote))),
 
     // Backtick strings (BEP-049), 1–3 tick ladders with `${}` interpolation.
     backtick_string: ($) =>
@@ -1256,7 +1294,8 @@ module.exports = grammar({
         ')',
       ),
 
-    template_if_open: ($) => seq('if', field('condition', $.parenthesized_expression)),
+    template_if_open: ($) =>
+      seq('if', field('condition', $.parenthesized_expression)),
 
     template_else_if: ($) =>
       seq('else', 'if', field('condition', $.parenthesized_expression)),
