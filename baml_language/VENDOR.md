@@ -65,7 +65,7 @@ python3 scripts/check_no_rustls.py -p baml_cli -p bridge_python --no-default-fea
 
 Retain `bundle-http` to use the replacement HTTP provider in the Python bridge. Cargo features are additive: another dependency or selected workspace member that enables `baml-defaults` can restore these capabilities. Apply `default-features = false` to the relevant dependency edges and verify the final application's graph. `no-phone-home` is a separate choice; disabling `baml-defaults` alone does not disable service requests.
 
-The workspace does not request `clap/cargo` or `tar/xattr`. `smol_str/borsh` remains necessary for the compiler's serialized names and bytecode types and is declared by `baml_base`; disabling it requires a serialization change, rather than a build configuration change.
+The workspace does not request `clap/cargo`, `tar/xattr`, or `smol_str/borsh`. BAML's `Name` type owns the Borsh encoding of compiler names while retaining `SmolStr` storage. Its encoding remains compatible with existing compiler artifacts and does not require Borsh support in the shared `smol_str` dependency.
 
 ### Query support
 

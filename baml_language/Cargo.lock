@@ -612,6 +612,8 @@ dependencies = [
  "borsh",
  "num-bigint",
  "salsa",
+ "serde",
+ "serde_json",
  "smol_str",
  "text-size",
 ]
@@ -750,7 +752,6 @@ dependencies = [
  "la-arena",
  "num-bigint",
  "rowan 0.16.1",
- "smol_str",
  "text-size",
 ]
 
@@ -810,7 +811,6 @@ dependencies = [
  "num-bigint",
  "rustc-hash 2.1.2",
  "salsa",
- "smol_str",
  "strsim",
  "sys_regex",
  "text-size",

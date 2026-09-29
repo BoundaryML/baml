@@ -15,7 +15,6 @@ borsh = { workspace = true }
 la-arena = { workspace = true }
 num-bigint = { workspace = true }
 rowan = { workspace = true }
-smol_str = { workspace = true }
 text-size = { workspace = true }
 
 # `build.rs` reads the client-option field lists out of `llm_types.baml` with the

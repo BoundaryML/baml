@@ -139,7 +139,7 @@ pub fn lower_bigint_literal(
 // implementation introduced by BEP-049 M1.
 #[cfg(test)]
 mod tests {
-    use baml_base::FileId;
+    use baml_base::{FileId, Name};
     use baml_compiler_lexer::lex_lossless;
     use baml_compiler_parser::parse_file;
     use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
@@ -584,12 +584,9 @@ function Search(query: string, max_results: int = 10) -> int {
             panic!("expected call tail expression");
         };
 
+        assert_eq!(args[0].label.as_ref().map(Name::as_str), Some("query"));
         assert_eq!(
-            args[0].label.as_ref().map(smol_str::SmolStr::as_str),
-            Some("query")
-        );
-        assert_eq!(
-            args[1].label.as_ref().map(smol_str::SmolStr::as_str),
+            args[1].label.as_ref().map(Name::as_str),
             Some("max_results")
         );
     }

@@ -1041,7 +1041,7 @@ impl<'db> LowerCtx<'db> {
                 } else {
                     let ns_str = ns_path
                         .iter()
-                        .map(smol_str::SmolStr::as_str)
+                        .map(Name::as_str)
                         .collect::<Vec<_>>()
                         .join(".");
                     suggestions.push(format!("root.{ns_str}.{item}"));

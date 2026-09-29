@@ -223,19 +223,18 @@ impl QualifiedName {
             Namespace::Local => self.name.to_string(),
             Namespace::Builtin { path } => {
                 let mut parts: Vec<&str> = vec!["baml"];
-                parts.extend(path.iter().map(smol_str::SmolStr::as_str));
+                parts.extend(path.iter().map(Name::as_str));
                 parts.push(self.name.as_str());
                 parts.join(".")
             }
             Namespace::BamlStd { path } => {
                 let mut parts: Vec<&str> = vec!["baml"];
-                parts.extend(path.iter().map(smol_str::SmolStr::as_str));
+                parts.extend(path.iter().map(Name::as_str));
                 parts.push(self.name.as_str());
                 parts.join(".")
             }
             Namespace::UserModule { module_path } => {
-                let mut parts: Vec<&str> =
-                    module_path.iter().map(smol_str::SmolStr::as_str).collect();
+                let mut parts: Vec<&str> = module_path.iter().map(Name::as_str).collect();
                 parts.push(self.name.as_str());
                 parts.join(".")
             }
@@ -244,7 +243,7 @@ impl QualifiedName {
                 module_path,
             } => {
                 let mut parts: Vec<&str> = vec![package_name.as_str()];
-                parts.extend(module_path.iter().map(smol_str::SmolStr::as_str));
+                parts.extend(module_path.iter().map(Name::as_str));
                 parts.push(self.name.as_str());
                 parts.join(".")
             }
@@ -336,10 +335,7 @@ impl std::fmt::Display for Namespace {
                     write!(
                         f,
                         ".{}",
-                        path.iter()
-                            .map(smol_str::SmolStr::as_str)
-                            .collect::<Vec<_>>()
-                            .join(".")
+                        path.iter().map(Name::as_str).collect::<Vec<_>>().join(".")
                     )?;
                 }
                 Ok(())
@@ -350,10 +346,7 @@ impl std::fmt::Display for Namespace {
                     write!(
                         f,
                         ".{}",
-                        path.iter()
-                            .map(smol_str::SmolStr::as_str)
-                            .collect::<Vec<_>>()
-                            .join(".")
+                        path.iter().map(Name::as_str).collect::<Vec<_>>().join(".")
                     )?;
                 }
                 Ok(())
@@ -364,7 +357,7 @@ impl std::fmt::Display for Namespace {
                     "mod.{}",
                     module_path
                         .iter()
-                        .map(smol_str::SmolStr::as_str)
+                        .map(Name::as_str)
                         .collect::<Vec<_>>()
                         .join(".")
                 )
@@ -380,7 +373,7 @@ impl std::fmt::Display for Namespace {
                         ".{}",
                         module_path
                             .iter()
-                            .map(smol_str::SmolStr::as_str)
+                            .map(Name::as_str)
                             .collect::<Vec<_>>()
                             .join(".")
                     )?;

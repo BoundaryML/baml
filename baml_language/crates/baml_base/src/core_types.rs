@@ -3,8 +3,9 @@
 use std::fmt;
 
 use borsh::{BorshDeserialize, BorshSerialize};
-use smol_str::SmolStr;
 use text_size::{TextRange, TextSize};
+
+pub use crate::name::Name;
 
 /// Borsh adapters for `num_bigint::BigInt`, which has no native borsh impl.
 /// Encoded as a length-prefixed little-endian two's-complement byte string —
@@ -150,9 +151,6 @@ impl Span {
         }
     }
 }
-
-/// An interned string - used for identifiers, keywords, etc.
-pub type Name = SmolStr;
 
 /// A possibly-qualified type-path identifier as written in source
 /// (e.g., `MyClass`, `baml.errors.Io`, `root.http.Response`).

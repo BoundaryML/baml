@@ -44,7 +44,7 @@ use baml_compiler2_hir::{
 /// block-scoped binding; the bit itself is defined with `ParamTy`.
 pub(crate) use baml_type::SCOPED_PARAM_BIT;
 use baml_type::{
-    Freshness, Int63, Literal,
+    Freshness, Int63, Literal, Name,
     interned::{ClosedTy, InferInterface, InferTy, Ty},
     normalize::canonical_union_interned,
 };
@@ -6909,7 +6909,7 @@ impl<'db> InferenceContext<'db> {
                 baml_type::Name::new(
                     segments
                         .iter()
-                        .map(smol_str::SmolStr::as_str)
+                        .map(Name::as_str)
                         .collect::<Vec<_>>()
                         .join("."),
                 )
@@ -8535,7 +8535,7 @@ impl<'db> InferenceContext<'db> {
                         name: baml_type::Name::new(
                             segments
                                 .iter()
-                                .map(smol_str::SmolStr::as_str)
+                                .map(Name::as_str)
                                 .collect::<Vec<_>>()
                                 .join("."),
                         ),

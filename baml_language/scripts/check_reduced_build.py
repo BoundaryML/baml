@@ -15,6 +15,7 @@ FORBIDDEN = {
 }
 FORBIDDEN_FEATURES = {
     "serde_json": {"arbitrary_precision"},
+    "smol_str": {"borsh"},
     "parking_lot": {"deadlock_detection"},
     "jiff": {"tzdb-bundle-platform", "tzdb-bundle-always"},
     "tar": {"xattr"},

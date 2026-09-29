@@ -290,7 +290,7 @@ impl std::fmt::Display for TypeExprKind {
             } => {
                 let path = segments
                     .iter()
-                    .map(smol_str::SmolStr::as_str)
+                    .map(Name::as_str)
                     .collect::<Vec<_>>()
                     .join(".");
                 write!(f, "{path}")?;
@@ -490,7 +490,7 @@ impl ExprBody {
         match &self.exprs[id] {
             Expr::Path(segments) => segments
                 .iter()
-                .map(smol_str::SmolStr::as_str)
+                .map(Name::as_str)
                 .collect::<Vec<_>>()
                 .join("."),
             Expr::GenericApply { base, type_args } => {
