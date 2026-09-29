@@ -504,3 +504,29 @@ fn content_hash_can_be_published_concurrently() {
         }
     });
 }
+
+#[test]
+fn char_count_of_deep_rope_does_not_recurse() {
+    // `s = s + "é"` in a loop (and `Array.join`, which is such a loop) builds
+    // a left-leaning rope as deep as the append count. Counting it must not
+    // walk that depth on the call stack: run on a small stack, like a spawned
+    // task, where a recursive walk overflowed at ~30k appends.
+    std::thread::Builder::new()
+        .stack_size(64 * 1024)
+        .spawn(|| {
+            let n = 200_000;
+            let mut s = BexStr::from("x".repeat(60));
+            for _ in 0..n {
+                s = BexStr::concat(s, BexStr::from("é"));
+            }
+            assert!(matches!(s, BexStr::Concat(_)));
+            assert_eq!(s.char_count(), 60 + n);
+            assert_eq!(s.len(), 60 + 2 * n);
+            // Flattening keeps the cached count.
+            assert_eq!(s.as_str().chars().count(), 60 + n);
+            assert_eq!(s.char_count(), 60 + n);
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
