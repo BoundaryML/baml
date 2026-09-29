@@ -640,7 +640,7 @@ fn model_usage_is_priced_on_the_span_that_made_the_call() {
     let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
     let result = run(
         &mut index,
-        "SELECT span_type, temporary_projections['model_name'],
+        "SELECT span_type, temporary_projections['model_name'], temporary_projections['model_calls'],
            temporary_projections['input_tokens'], temporary_projections['output_tokens'],
            temporary_projections['cache_read_tokens'], temporary_projections['cache_write_tokens'],
            round(temporary_projections['cost'], 6)
@@ -654,6 +654,7 @@ fn model_usage_is_priced_on_the_span_that_made_the_call() {
             vec![
                 json!("function"),
                 json!("claude-opus-5-5-20260915, jev-1.13.0"),
+                json!(2),
                 json!(2_000_000),
                 json!(2_000),
                 json!(1_000_000),
@@ -663,6 +664,7 @@ fn model_usage_is_priced_on_the_span_that_made_the_call() {
             vec![
                 json!("future"),
                 json!("some-new-model"),
+                json!(1),
                 json!(10),
                 json!(1_000),
                 Json::Null,

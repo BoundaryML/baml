@@ -252,7 +252,7 @@ pub const SPANS: Relation = Relation {
         value("context_metadata", "not recorded yet: always an empty map"),
         value(
             "temporary_projections",
-            "model usage of calls made directly in this span: model_name, input_tokens (full-rate), output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens, cost (dollars; NULL for an unpriced model). NULL without model calls",
+            "model usage of calls made directly in this span: model_name, model_calls (model turns), input_tokens (full-rate), output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens, cost (dollars; NULL for an unpriced model). NULL without model calls",
         ),
         col(
             "span_reason",

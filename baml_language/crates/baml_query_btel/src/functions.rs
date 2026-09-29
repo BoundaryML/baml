@@ -951,6 +951,8 @@ fn build_inline(b: &mut btel_snapshot::Builder, value: &Inline) -> btel_snapshot
 /// cache_write, reasoning)` rows in, one `temporary_projections` map out.
 #[derive(Default)]
 struct Usage {
+    /// Model turns recorded against the span.
+    calls: i64,
     models: Vec<String>,
     unnamed: bool,
     input: i64,
@@ -996,6 +998,7 @@ impl Aggregate<Option<Usage>, Option<Vec<u8>>> for UsageSum {
             Some(_) => {}
             None => usage.unnamed = true,
         }
+        usage.calls += 1;
         usage.input = usage.input.saturating_add(input);
         usage.output = usage.output.saturating_add(output);
         usage.cache_read = add(usage.cache_read, cache_read);
@@ -1019,6 +1022,7 @@ impl Aggregate<Option<Usage>, Option<Vec<u8>>> for UsageSum {
         };
         Ok(Some(inline_handle(&Inline::Map(vec![
             ("model_name".into(), model),
+            ("model_calls".into(), Inline::Int(usage.calls)),
             ("input_tokens".into(), Inline::Int(usage.input)),
             ("output_tokens".into(), Inline::Int(usage.output)),
             ("cache_read_tokens".into(), int(usage.cache_read)),
