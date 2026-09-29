@@ -57,6 +57,9 @@ fn expected_stats(mains: i64, crashes: i64) -> BTreeMap<String, i64> {
         ("user.Validate".to_owned(), mains + crashes),
         ("user.Link".to_owned(), mains),
         (".<lambda(main, 0)>".to_owned(), mains),
+        // `spawn` builds its plan through this call, which is recorded like
+        // any other BAML call.
+        ("baml.spawn.Plan.new".to_owned(), mains),
     ]);
     if crashes > 0 {
         expected.insert("user.crash".to_owned(), crashes);

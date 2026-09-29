@@ -69,7 +69,7 @@ fn replace_state(state: RuntimeState) -> Result<(), BridgeError> {
         Ok(std::mem::replace(&mut *slot, state))
     })?;
     if let RuntimeState::Ready(previous) = previous {
-        wasm_bindgen_futures::spawn_local(previous.shutdown());
+        wasm_bindgen_futures::spawn_local(previous.shutdown(None));
     }
     Ok(())
 }

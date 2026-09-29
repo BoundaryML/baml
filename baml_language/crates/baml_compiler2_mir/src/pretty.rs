@@ -48,6 +48,7 @@ pub fn write_function(
                 BuiltinKind::Vm => "vm",
                 BuiltinKind::Intrinsic => "intrinsic",
                 BuiltinKind::AwaitAny => "await_any",
+                BuiltinKind::Spawn => "spawn",
             };
             writeln!(
                 f,
@@ -154,7 +155,24 @@ fn write_local_decl_inline(f: &mut impl Write, id: Local, decl: &LocalDecl) -> f
 }
 
 fn write_block(f: &mut impl Write, db: &dyn crate::Db, block: &BasicBlock<'_>) -> fmt::Result {
-    writeln!(f, "    {}: {{", block.id)?;
+    write!(f, "    {}", block.id)?;
+    if let Some(landing) = block.landing {
+        write!(
+            f,
+            " [landing {}, {}]",
+            landing.error_local, landing.context_local
+        )?;
+    }
+    if let Some(unwind) = block.unwind {
+        write!(f, " [unwind {unwind}]")?;
+    }
+    if let Some(handling) = block.handling {
+        write!(f, " [handling {handling}]")?;
+    }
+    if block.shielded {
+        write!(f, " [shielded]")?;
+    }
+    writeln!(f, ": {{")?;
 
     for stmt in &block.statements {
         write!(f, "        ")?;
@@ -396,25 +414,12 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
             write!(f, ";")
         }
         Terminator::Spawn {
-            closure,
-            name,
-            config,
-            future_ty,
+            plan,
             future,
             resume,
         } => {
-            write!(
-                f,
-                "{future} = spawn<{}, {}> ",
-                future_ty.returns, future_ty.throws
-            )?;
-            write_operand(f, db, closure)?;
-            write!(f, " name=")?;
-            write_operand(f, db, name)?;
-            if let Some(config) = config {
-                write!(f, " config=")?;
-                write_operand(f, db, config)?;
-            }
+            write!(f, "{future} = spawn ")?;
+            write_operand(f, db, plan)?;
             write!(f, " -> {resume};")
         }
         Terminator::Await {
@@ -448,14 +453,22 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
             write_operand(f, db, value)?;
             write!(f, ";")
         }
-        Terminator::Rethrow { value } => {
+        Terminator::Rethrow { value, context } => {
             write!(f, "rethrow ")?;
             write_operand(f, db, value)?;
+            write!(f, " with ")?;
+            write_operand(f, db, context)?;
             write!(f, ";")
         }
-        Terminator::ThrowIfPanic { value, otherwise } => {
+        Terminator::ThrowIfPanic {
+            value,
+            context,
+            otherwise,
+        } => {
             write!(f, "throw_if_panic ")?;
             write_operand(f, db, value)?;
+            write!(f, " with ")?;
+            write_operand(f, db, context)?;
             write!(f, " -> {otherwise};")
         }
         Terminator::ShortCircuit {

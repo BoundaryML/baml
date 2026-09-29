@@ -595,7 +595,7 @@ class StreamRelay {
             return event;
         }
         if (self.finished) {
-            return root.stream.Done {  };
+            return root.stream.Done {};
         }
         if (self.current == null) {
             let opened: root.stream.TurnStream | StreamRelayError = self.open() catch_all (e) {
@@ -640,7 +640,7 @@ class StreamRelay {
                                     input_tokens: turn.usage?.input_tokens,
                                     output_tokens: turn.usage?.output_tokens,
                                 },
-                                root.stream.TurnDone {  },
+                                root.stream.TurnDone {},
                             ];
                         return self.next_event();
                     }

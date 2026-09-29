@@ -1563,7 +1563,7 @@ test "own_generic_bound_after_associated_type_still_rejects_at_call" {
     ) {
         if (
             diagnostic.code == "E0001"
-                && diagnostic.message.includes("expected `Tagged`, found `Blank`")
+                && diagnostic.message.includes("type `Blank` does not implement interface `Tagged`")
         ) {
             found = true;
         }

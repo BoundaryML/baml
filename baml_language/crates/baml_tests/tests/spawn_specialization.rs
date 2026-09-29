@@ -64,15 +64,15 @@ async fn captured_int_arithmetic_uses_generic_binop() {
         store_var value
         load_const 1
         store_deref ?1
-        load_var value
-        make_closure .<lambda(main, 0)>, 1
-        load_const null
-        load_const null
         load_type int
         load_type never
+        load_var value
+        make_closure .<lambda(main, 0)>, 1
+        load_const <omitted>
+        call baml.spawn.Plan.new
         spawn
-        store_var _4
-        load_var _4
+        store_var f
+        load_var f
         await
         pop 1
         load_deref ?1
@@ -111,15 +111,15 @@ async fn spawned_closure_capture_marks_transitive_cells() {
         load_var counter
         make_closure .<lambda(main, 0)>, 1
         store_deref ?2
-        load_var bump
-        make_closure .<lambda(main, 1)>, 1
-        load_const null
-        load_const null
         load_type int
         load_type never
+        load_var bump
+        make_closure .<lambda(main, 1)>, 1
+        load_const <omitted>
+        call baml.spawn.Plan.new
         spawn
-        store_var _5
-        load_var _5
+        store_var f
+        load_var f
         await
         pop 1
         load_deref ?1
@@ -153,15 +153,15 @@ async fn captured_float_array_element_arithmetic_uses_generic_binop() {
         load_type float
         alloc_array 1
         store_deref ?1
-        load_var values
-        make_closure .<lambda(main, 0)>, 1
-        load_const null
-        load_const null
         load_type int
         load_type never
+        load_var values
+        make_closure .<lambda(main, 0)>, 1
+        load_const <omitted>
+        call baml.spawn.Plan.new
         spawn
-        store_var _4
-        load_var _4
+        store_var f
+        load_var f
         await
         pop 1
         load_deref ?1
@@ -247,5 +247,51 @@ async fn spawn_shared_bigint_mixed_with_int_uses_generic_binop() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::Bigint(BigInt::from(24)))
+    );
+}
+
+/// The generic `bin_op` the spawn-capture guard falls back to must be total
+/// over bigint (BAMLGH-79): it used to reach the string-concatenation arm and
+/// fail with `expected string, got bigint`. Pins both the opcode and the result.
+#[tokio::test]
+async fn captured_bigint_arithmetic_uses_generic_binop() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint {
+            let value = 10n;
+            let f = spawn { value };
+            let _ = await f;
+            value + 1n
+        }
+        "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> bigint {
+        load_const null
+        make_cell
+        store_var value
+        load_const 10n
+        store_deref ?1
+        load_type bigint
+        load_type never
+        load_var value
+        make_closure .<lambda(main, 0)>, 1
+        load_const <omitted>
+        call baml.spawn.Plan.new
+        spawn
+        store_var f
+        load_var f
+        await
+        pop 1
+        load_deref ?1
+        load_const 1n
+        bin_op +
+        return
+    }
+    ");
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Bigint(BigInt::from(11)))
     );
 }

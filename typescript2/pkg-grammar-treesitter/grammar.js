@@ -119,10 +119,24 @@ module.exports = grammar({
     // `(int` in type position — function-type params vs parenthesized type.
     [$.function_type_parameter, $.parenthesized_type],
     [$.function_type_parameter, $.parenthesized_type, $.type_pattern],
-    // `f <` — explicit call type arguments vs. less-than comparison.
-    [$.call_expression, $.binary_expression, $.unary_expression],
-    [$.call_expression, $.binary_expression],
-    [$.call_expression, $.binary_expression, $.await_expression],
+    // `f <` — explicit type arguments (a call, or a specialized function
+    // value) vs. less-than comparison.
+    [
+      $.call_expression,
+      $.specialized_expression,
+      $.binary_expression,
+      $.unary_expression,
+    ],
+    [$.call_expression, $.specialized_expression, $.binary_expression],
+    [
+      $.call_expression,
+      $.specialized_expression,
+      $.binary_expression,
+      $.await_expression,
+    ],
+    // `f<int>(` — a call with type arguments vs. a call of a specialized
+    // value; the call wins by dynamic precedence.
+    [$.call_expression, $.specialized_expression],
     // Pattern space: `Foo` may open a destructure, a type path, or a plain
     // binding-ish name; `(` may open a paren pattern or a parenthesized type.
     [$.binding_pattern, $.destructure_pattern],
@@ -152,6 +166,12 @@ module.exports = grammar({
     [$.while_statement, $.const_identifier],
     [$.if_expression, $.const_identifier],
     [$._for_in_header, $.template_for_open],
+    // `spawn { .. }`: a block is an expression, so it could read as the
+    // task's name with the body still to come. The body is required, so
+    // the name-first parse only completes when a second block follows;
+    // the negative dynamic precedence on the name settles that tie the
+    // way the real parser's condition position does.
+    [$._expression, $.spawn_expression],
   ],
 
   rules: {
@@ -191,8 +211,7 @@ module.exports = grammar({
         field('body', $.class_body),
       ),
 
-    class_body: ($) =>
-      seq('{', repeat($._class_member), '}'),
+    class_body: ($) => seq('{', repeat($._class_member), '}'),
 
     _class_member: ($) =>
       choice(
@@ -400,10 +419,18 @@ module.exports = grammar({
     client_type: ($) => seq('<', field('kind', $.identifier), '>'),
 
     generator_declaration: ($) =>
-      seq('generator', field('name', $.identifier), field('body', $.config_block)),
+      seq(
+        'generator',
+        field('name', $.identifier),
+        field('body', $.config_block),
+      ),
 
     retry_policy_declaration: ($) =>
-      seq('retry_policy', field('name', $.identifier), field('body', $.config_block)),
+      seq(
+        'retry_policy',
+        field('name', $.identifier),
+        field('body', $.config_block),
+      ),
 
     config_block: ($) =>
       seq('{', repeat(choice($.config_entry, $.empty_statement)), '}'),
@@ -417,7 +444,14 @@ module.exports = grammar({
         2,
         prec.right(
           seq(
-            field('key', choice($.identifier, $.string, alias('retry_policy', $.identifier))),
+            field(
+              'key',
+              choice(
+                $.identifier,
+                $.string,
+                alias('retry_policy', $.identifier),
+              ),
+            ),
             optional(':'),
             field('value', $._config_value),
             optional(choice(',', ';')),
@@ -499,13 +533,7 @@ module.exports = grammar({
     test_body: ($) =>
       seq(
         '{',
-        repeat(
-          choice(
-            $.type_builder_block,
-            $.config_entry,
-            $._statement,
-          ),
-        ),
+        repeat(choice($.type_builder_block, $.config_entry, $._statement)),
         '}',
       ),
 
@@ -560,7 +588,12 @@ module.exports = grammar({
     generic_parameter: ($) =>
       seq(
         field('name', $.identifier),
-        optional(seq('extends', field('bound', seq($._type, repeat(seq('&', $._type)))))),
+        optional(
+          seq(
+            'extends',
+            field('bound', seq($._type, repeat(seq('&', $._type)))),
+          ),
+        ),
       ),
 
     // ==========================================================================
@@ -686,9 +719,9 @@ module.exports = grammar({
         prec.dynamic(
           1,
           seq(
-          optional('watch'),
-          choice('let', 'const'),
-          field('pattern', $._pattern),
+            optional('watch'),
+            choice('let', 'const'),
+            field('pattern', $._pattern),
             optional(seq('=', field('value', $._expression))),
             optional(field('else', $.else_clause)),
             optional(';'),
@@ -720,10 +753,7 @@ module.exports = grammar({
       prec.right(
         seq(
           'for',
-          choice(
-            seq('(', $._for_header, ')'),
-            $._for_in_header,
-          ),
+          choice(seq('(', $._for_header, ')'), $._for_in_header),
           field('body', $.block),
           optional(';'),
         ),
@@ -770,6 +800,7 @@ module.exports = grammar({
         $.index_expression,
         $.call_expression,
         $.optional_call_expression,
+        $.specialized_expression,
         $.constructor_expression,
         $.parenthesized_expression,
         $.array_expression,
@@ -842,6 +873,22 @@ module.exports = grammar({
         ),
       ),
 
+    // `same<int>`: a generic function specialized as a value, with no call
+    // (`let g = same<int>;`). A `(` after the type arguments makes it a call
+    // instead, and a comparison (`a < b`) reads as one, as the real parser
+    // decides both.
+    specialized_expression: ($) =>
+      prec.dynamic(
+        -1,
+        prec(
+          PREC.CALL,
+          seq(
+            field('function', $._expression),
+            field('type_arguments', $.type_arguments),
+          ),
+        ),
+      ),
+
     // `callback?.(42)`
     optional_call_expression: ($) =>
       prec(
@@ -853,9 +900,10 @@ module.exports = grammar({
         ),
       ),
 
-    arguments: ($) => seq('(', commaSep(choice($._expression, $.named_argument)), ')'),
+    arguments: ($) =>
+      seq('(', commaSep(choice($._expression, $.named_argument)), ')'),
 
-    // `baml.spawn.options(cancel = tok)`
+    // `f(limit = 2)`
     named_argument: ($) =>
       seq(field('name', $.identifier), '=', field('value', $._expression)),
 
@@ -889,8 +937,7 @@ module.exports = grammar({
       seq('[', commaSep(choice($._expression, $.spread_element)), ']'),
 
     // `{ "a": 1, "b": [2] }` — JSON-ish map literal (keys are strings).
-    map_expression: ($) =>
-      seq('{', commaSep1($.map_entry), '}'),
+    map_expression: ($) => seq('{', commaSep1($.map_entry), '}'),
 
     map_entry: ($) =>
       seq(field('key', $.string), ':', field('value', $._expression)),
@@ -925,16 +972,14 @@ module.exports = grammar({
             ),
           ),
           field('consequence', $.block),
-          optional(seq('else', field('alternative', choice($.block, $.if_expression)))),
+          optional(
+            seq('else', field('alternative', choice($.block, $.if_expression))),
+          ),
         ),
       ),
 
     match_expression: ($) =>
-      seq(
-        'match',
-        field('value', $._expression),
-        field('body', $.match_body),
-      ),
+      seq('match', field('value', $._expression), field('body', $.match_body)),
 
     match_body: ($) => seq('{', repeat($.match_arm), '}'),
 
@@ -978,7 +1023,11 @@ module.exports = grammar({
     is_expression: ($) =>
       prec.left(
         PREC.COMPARE,
-        seq(field('value', $._expression), 'is', field('pattern', $._is_pattern)),
+        seq(
+          field('value', $._expression),
+          'is',
+          field('pattern', $._is_pattern),
+        ),
       ),
 
     _is_pattern: ($) =>
@@ -1047,7 +1096,10 @@ module.exports = grammar({
     unary_expression: ($) =>
       prec(
         PREC.UNARY,
-        seq(field('operator', choice('!', '-', '~', '+')), field('operand', $._expression)),
+        seq(
+          field('operator', choice('!', '-', '~', '+')),
+          field('operand', $._expression),
+        ),
       ),
 
     assignment_expression: ($) =>
@@ -1057,7 +1109,19 @@ module.exports = grammar({
           field('left', $._expression),
           field(
             'operator',
-            choice('=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>='),
+            choice(
+              '=',
+              '+=',
+              '-=',
+              '*=',
+              '/=',
+              '%=',
+              '&=',
+              '|=',
+              '^=',
+              '<<=',
+              '>>=',
+            ),
           ),
           field('right', $._expression),
         ),
@@ -1066,15 +1130,24 @@ module.exports = grammar({
     await_expression: ($) =>
       prec(PREC.UNARY, seq('await', field('value', $._expression))),
 
-    // `spawn { ... }` | `spawn with baml.spawn.options(...) { ... }`
+    // `spawn { ... }` | `spawn NAME { ... }` |
+    // `spawn NAME? with MODIFIER, MODIFIER { ... }`
+    //
+    // The name labels the task and the modifiers transform its plan; both are
+    // ordinary expressions, so the `{` that opens the body is what ends the
+    // list. As in a condition position, a name that could also read as a
+    // constructor (`spawn Foo { .. }`) parses as the name plus the body: the
+    // other split leaves the body missing, so GLR discards it.
     spawn_expression: ($) =>
       seq(
         'spawn',
-        optional(seq('with', field('options', $._expression))),
+        optional(field('name', prec.dynamic(-1, $._expression))),
+        optional(seq('with', commaSep1(field('modifier', $._expression)))),
         field('body', $.block),
       ),
 
-    throw_expression: ($) => prec.right(seq('throw', field('value', $._expression))),
+    throw_expression: ($) =>
+      prec.right(seq('throw', field('value', $._expression))),
 
     return_expression: ($) =>
       prec.right(seq('return', optional(field('value', $._expression)))),
@@ -1111,7 +1184,8 @@ module.exports = grammar({
       ),
 
     // `let x` (also the leading name of `let x: int = ...` via chain).
-    binding_pattern: ($) => seq('let', field('name', choice($.identifier, '_'))),
+    binding_pattern: ($) =>
+      seq('let', field('name', choice($.identifier, '_'))),
 
     wildcard_pattern: (_) => '_',
 
@@ -1184,8 +1258,7 @@ module.exports = grammar({
         ),
       ),
 
-    raw_string_content: ($) =>
-      repeat1(choice(RAW_CHUNK, alias('"', $.quote))),
+    raw_string_content: ($) => repeat1(choice(RAW_CHUNK, alias('"', $.quote))),
 
     // Backtick strings (BEP-049), 1–3 tick ladders with `${}` interpolation.
     backtick_string: ($) =>
@@ -1221,7 +1294,8 @@ module.exports = grammar({
         ')',
       ),
 
-    template_if_open: ($) => seq('if', field('condition', $.parenthesized_expression)),
+    template_if_open: ($) =>
+      seq('if', field('condition', $.parenthesized_expression)),
 
     template_else_if: ($) =>
       seq('else', 'if', field('condition', $.parenthesized_expression)),

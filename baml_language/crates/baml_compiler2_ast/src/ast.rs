@@ -612,6 +612,9 @@ pub struct AstSourceMap {
     /// entry. Absent for binds the compiler synthesizes, which have no name
     /// token to point at.
     pub bind_name_spans: HashMap<PatId, TextRange>,
+    /// The NAME token of each body `type T = …` binding, as distinct from its
+    /// statement's span. Absent when the statement has no name token.
+    pub type_binding_name_spans: HashMap<StmtId, TextRange>,
     pub match_arm_spans: Arena<TextRange>,
     pub type_annotation_spans: Arena<TextRange>,
     pub catch_arm_spans: Arena<TextRange>,
@@ -653,6 +656,7 @@ impl AstSourceMap {
             stmt_spans: Arena::new(),
             pattern_spans: Arena::new(),
             bind_name_spans: HashMap::new(),
+            type_binding_name_spans: HashMap::new(),
             match_arm_spans: Arena::new(),
             type_annotation_spans: Arena::new(),
             catch_arm_spans: Arena::new(),
@@ -759,6 +763,11 @@ impl AstSourceMap {
     /// The name token of a `Pattern::Bind`, when it was written in source.
     pub fn bind_name_span(&self, id: PatId) -> Option<TextRange> {
         self.bind_name_spans.get(&id).copied()
+    }
+
+    /// The name token of a body `type T = …` binding, when it was written.
+    pub fn type_binding_name_span(&self, id: StmtId) -> Option<TextRange> {
+        self.type_binding_name_spans.get(&id).copied()
     }
 
     pub fn pattern_span(&self, id: PatId) -> TextRange {
@@ -913,21 +922,6 @@ pub enum Expr {
     /// not the surrounding `catch`.
     Return {
         value: Option<ExprId>,
-    },
-    /// BEP-034 `spawn name_expr? (with expr (, expr)*)? { body }`. The body is
-    /// always a block expression that runs on a freshly-spawned green thread;
-    /// the optional `name` is any expression that evaluates to a string and
-    /// surfaces in debug / stack traces.
-    Spawn {
-        /// Optional human-readable label for the spawn.
-        name: Option<ExprId>,
-        /// BEP-034 spawn options: the `with expr (, expr)*` clause. Each entry
-        /// is an arbitrary expression; in v1 TIR requires exactly one, a call
-        /// to `baml.spawn.options(...)`. Empty when there is no `with` clause.
-        with_exprs: Vec<ExprId>,
-        /// Body of the spawn (`{...}`) — always an `Expr::Block` after
-        /// CST lowering.
-        body: ExprId,
     },
     /// BEP-034 `await expr` — prefix form. Suspends the current thread
     /// until `expr`'s future settles, then unwraps the value or re-throws
@@ -1730,6 +1724,22 @@ pub enum BuiltinKind {
     /// the array of futures; the result is the `int` index of the first to
     /// settle.
     AwaitAny,
+    /// `baml.spawn.__spawn` — lowered to a `Terminator::Spawn` suspend point,
+    /// not a normal call. The single argument is the `baml.spawn.Plan<T, E>`
+    /// to run; the result is the new task's `Future<T, E>`.
+    Spawn,
+}
+
+impl BuiltinKind {
+    /// Whether the builtin is lowered where it is called instead of compiled
+    /// into a callable: it has no function value, so it may only be the callee
+    /// of a direct call.
+    pub const fn lowers_at_call_site(self) -> bool {
+        match self {
+            BuiltinKind::Vm | BuiltinKind::Io => false,
+            BuiltinKind::Intrinsic | BuiltinKind::AwaitAny | BuiltinKind::Spawn => true,
+        }
+    }
 }
 
 /// Source geometry of an LLM function's prompt literal.

@@ -107,7 +107,7 @@ function verify(case: Case) -> Outcome throws never {
         let threw: InitThrew => threw,
         let package: reflect.Package => match (case.key) {
             let expected: Compiles => run_tests(package, expected.tests),
-            Rejected => UnexpectedCompile {  },
+            Rejected => UnexpectedCompile {},
         },
     }
 }
@@ -144,7 +144,7 @@ function check_rejection(
         within(d, expected.at)
     });
     if (inside) {
-        Agrees {  }
+        Agrees {}
     } else {
         Mislocated {
             at: expected.at,
@@ -198,7 +198,7 @@ function run_tests(package: reflect.Package, names: string[]) -> Outcome throws 
             if (failures.length() > 0) {
                 FailedTests { failures }
             } else {
-                Agrees {  }
+                Agrees {}
             }
         },
     }
@@ -257,7 +257,7 @@ function verify_at(item: Item, seed: Seed) -> Outcome? throws never {
     }
     match (foil_of(item, seed)) {
         let foil: Foil => verify(foil.case),
-        null => Agrees {  },
+        null => Agrees {},
     }
 }
 

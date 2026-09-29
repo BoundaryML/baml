@@ -312,7 +312,7 @@ impl BexHeap {
                             future_id: future.id(),
                             value,
                             trace: future.error_trace(),
-                            cancelled: future.cancel_requested(),
+                            cancelled: future.was_cancelled(),
                         });
                     }
                 }
@@ -666,15 +666,6 @@ impl BexHeap {
                     worklist.push(ptr);
                 }
             }
-            Object::UnscheduledFuture(future) => {
-                if let Some(name_ptr) = future.name {
-                    worklist.push(name_ptr);
-                }
-                if let Some(config_ptr) = future.config {
-                    worklist.push(config_ptr);
-                }
-                worklist.push(future.closure);
-            }
             Object::Package(package) => {
                 worklist.extend(package.classes.values().copied());
                 worklist.extend(package.enums.values().copied());
@@ -902,21 +893,6 @@ impl BexHeap {
                 // SAFETY: GC holds exclusive access via the parked HeapGuard.
                 if let Some(value) = unsafe { fut.value_mut_for_fixup() } {
                     self.fixup_value(value, forwarding);
-                }
-            }
-            Object::UnscheduledFuture(future) => {
-                if let Some(name_ptr) = &mut future.name
-                    && let Some(&new_ptr) = forwarding.get(name_ptr)
-                {
-                    *name_ptr = new_ptr;
-                }
-                if let Some(config_ptr) = &mut future.config
-                    && let Some(&new_ptr) = forwarding.get(config_ptr)
-                {
-                    *config_ptr = new_ptr;
-                }
-                if let Some(&new_ptr) = forwarding.get(&future.closure) {
-                    future.closure = new_ptr;
                 }
             }
             Object::Package(package) => {
@@ -1308,21 +1284,6 @@ impl BexHeap {
                     && self.generation_of(ptr).is_young()
                 {
                     worklist.push(ptr);
-                }
-            }
-            Object::UnscheduledFuture(future) => {
-                if let Some(name_ptr) = future.name
-                    && self.generation_of(name_ptr).is_young()
-                {
-                    worklist.push(name_ptr);
-                }
-                if let Some(config_ptr) = future.config
-                    && self.generation_of(config_ptr).is_young()
-                {
-                    worklist.push(config_ptr);
-                }
-                if self.generation_of(future.closure).is_young() {
-                    worklist.push(future.closure);
                 }
             }
             Object::Package(package) => {
@@ -2643,32 +2604,6 @@ mod tests {
     }
 
     #[test]
-    fn test_gc_traces_unscheduled_spawn_closure() {
-        use bex_vm_types::UnscheduledFuture;
-
-        let heap = BexHeap::new(vec![]);
-        let mut tlab = Tlab::new(Arc::clone(&heap));
-
-        // The closure pointer is just a dummy String for tracing
-        // purposes — the GC only needs a valid HeapPtr to walk.
-        let closure = tlab.alloc_string("closure-stand-in".to_string());
-        let name = tlab.alloc_string("spawn-name".to_string());
-        let future_ptr = tlab.alloc(Object::UnscheduledFuture(Box::new(UnscheduledFuture {
-            closure,
-            name: Some(name),
-            config: None,
-            returns: RealizedTy::int(),
-            throws: RealizedTy::never(),
-        })));
-
-        let roots = vec![future_ptr];
-        let (stats, _new_roots, _) = unsafe { heap.collect_garbage(&roots) };
-
-        // future + closure + name
-        assert_eq!(stats.live_count, 3);
-    }
-
-    #[test]
     fn test_gc_traces_future_ready_object() {
         use bex_vm_types::{Future, FutureRead, types::FutureId};
 
@@ -3296,7 +3231,7 @@ mod tests {
     fn test_tracing_and_fixup_consistency_all_variants() {
         use baml_type::{Name, TypeName};
         use bex_vm_types::{
-            Class, Enum, UnscheduledFuture,
+            Class, Enum,
             types::{Cell, Closure, Instance, Variant},
         };
 
@@ -3309,7 +3244,6 @@ mod tests {
         let leaf_for_map = tlab.alloc_string("in_map".to_string());
         let leaf_for_closure_cap = tlab.alloc_string("closure_cap".to_string());
         let leaf_for_cell = tlab.alloc_string("cell_value".to_string());
-        let leaf_for_future = tlab.alloc_string("future_arg".to_string());
 
         // A function stand-in (Class acts as a leaf here, needed by Closure).
         let leaf_func = tlab.alloc_string("func_placeholder".to_string());
@@ -3338,17 +3272,6 @@ mod tests {
 
         // --- Container: Object::Cell ---
         let cell_container = tlab.alloc(Object::Cell(Cell::new(Value::object(leaf_for_cell))));
-
-        // --- Container: Object::UnscheduledFuture ---
-        // After BEP-034 phase D′ the spawn case is all that's left;
-        // the closure pointer stands in as the traced HeapPtr.
-        let future_container = tlab.alloc(Object::UnscheduledFuture(Box::new(UnscheduledFuture {
-            closure: leaf_for_future,
-            name: None,
-            config: None,
-            returns: RealizedTy::int(),
-            throws: RealizedTy::never(),
-        })));
 
         // --- Container: Object::Instance ---
         // Instance requires a class pointer.
@@ -3394,7 +3317,6 @@ mod tests {
             map_container,
             closure_container,
             cell_container,
-            future_container,
             instance_container,
             variant_container,
         ];
@@ -3402,11 +3324,11 @@ mod tests {
         let (stats, new_roots, _fwd) = unsafe { heap.collect_garbage(&roots) };
 
         // All transitively reachable objects must survive.
-        // Containers: Array, Map, Closure, Cell, Future, Instance, Variant = 7
+        // Containers: Array, Map, Closure, Cell, Instance, Variant = 6
         // Leaves referenced by containers (some shared):
         //   leaf_for_array, leaf_for_map, leaf_for_closure_cap, leaf_func,
-        //   leaf_for_cell, leaf_for_future, leaf_string, class_ptr, enum_ptr = 9
-        // Total = 7 + 9 = 16, but >= 11 is the conservative bound.
+        //   leaf_for_cell, leaf_string, class_ptr, enum_ptr = 8
+        // Total = 6 + 8 = 14, but >= 11 is the conservative bound.
         assert!(
             stats.live_count >= 11,
             "expected at least 11 live objects; got {}",
@@ -3463,19 +3385,9 @@ mod tests {
         };
         assert_eq!(s, "cell_value");
 
-        // Future: closure HeapPtr should be the (forwarded) leaf string
-        // we used as a stand-in for the spawn-body closure.
-        let Object::UnscheduledFuture(pending) = (unsafe { new_roots[4].get() }) else {
-            panic!("new_roots[4] not UnscheduledFuture")
-        };
-        let Object::String(s) = (unsafe { pending.closure.get() }) else {
-            panic!("future closure leaf not String")
-        };
-        assert_eq!(s, "future_arg");
-
         // Instance: fields[0] should be the (forwarded) leaf string.
-        let Object::Instance(inst) = (unsafe { new_roots[5].get() }) else {
-            panic!("new_roots[5] not Instance")
+        let Object::Instance(inst) = (unsafe { new_roots[4].get() }) else {
+            panic!("new_roots[4] not Instance")
         };
         let Some(inst_leaf) = inst.fields.first().and_then(|v| v.load().as_object_ptr()) else {
             panic!("instance.fields[0] not Object")
@@ -3486,8 +3398,8 @@ mod tests {
         assert_eq!(s, "leaf_string");
 
         // Variant: enm should be a valid Enum.
-        let Object::Variant(var) = (unsafe { new_roots[6].get() }) else {
-            panic!("new_roots[6] not Variant")
+        let Object::Variant(var) = (unsafe { new_roots[5].get() }) else {
+            panic!("new_roots[5] not Variant")
         };
         let Object::Enum(e) = (unsafe { var.enm.get() }) else {
             panic!("variant.enm not Enum")

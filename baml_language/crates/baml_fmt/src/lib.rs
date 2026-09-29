@@ -1177,14 +1177,13 @@ mod linear_formatter_regression_tests {
 
     #[test]
     fn keyword_path_segments_format() {
-        let source = "function repro() -> int {\n    let g = baml.spawn.TaskGroup.new(2, name = \"fmt-repro\");\n    let f = spawn with baml.spawn.options(group = g) {\n        42\n    };\n    await f\n}\n";
+        let source = "function repro() -> int {\n    let g = baml.spawn.Limit.new(2);\n    let f = spawn with g {\n        42\n    };\n    await f\n}\n";
         let options = FormatOptions::default();
         let formatted = format(source, &options)
             .expect("formatter should accept keyword path segments after `.`");
 
         assert!(
-            formatted.contains("baml.spawn.TaskGroup.new")
-                && formatted.contains("baml.spawn.options"),
+            formatted.contains("baml.spawn.Limit.new") && formatted.contains("spawn with g"),
             "keyword path segments should round-trip, got:\n{formatted}"
         );
         let second = format(&formatted, &options).expect("formatter should be idempotent");
@@ -1323,7 +1322,7 @@ mod spawn_and_hug_format_tests {
     /// A simple spawn body (`{ tail }`) stays on one line when it fits.
     #[test]
     fn test_simple_spawn_stays_single_line() {
-        let source = "function f() -> int {\n    let nm = \"n\";\n    let a = spawn nm { 7 };\n    let b = spawn with baml.spawn.options(name = nm) { 8 };\n    (await a) + (await b)\n}\n";
+        let source = "function f() -> int {\n    let nm = \"n\";\n    let a = spawn nm { 7 };\n    let b = spawn nm with baml.spawn.Root.new() { 8 };\n    (await a) + (await b)\n}\n";
         assert_formats_to(source, source);
     }
 
@@ -1924,6 +1923,19 @@ mod map_literal_format_tests {
     fn test_empty_map_has_no_interior_padding() {
         // Regression for B-234: an empty map literal must format as `{}`, not `{  }`.
         let source = "function f() -> int {\n    {};\n    0\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_empty_class_literal_has_no_interior_padding() {
+        // The same rule for a class literal: `Root {}`, not `Root {  }`.
+        let source = "class Root {\n}\n\nfunction f() -> Root {\n    Root {}\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_empty_class_literal_keeps_an_interior_comment_padded() {
+        let source = "class Root {\n}\n\nfunction f() -> Root {\n    Root { /* none */ }\n}\n";
         assert_formats_to(source, source);
     }
 

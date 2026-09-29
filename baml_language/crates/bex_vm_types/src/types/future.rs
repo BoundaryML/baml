@@ -73,7 +73,8 @@ pub struct Future {
     /// `Pending → terminal` via `compare_exchange` is the unique writer.
     state: AtomicU8,
     /// Metadata orthogonal to the terminal state. `observed` is set when an
-    /// await delivers an error. `cancel_requested` is set by `f.cancel()` even
+    /// await delivers an error. `cancelled` records that cancellation reached
+    /// the producer (see [`Future::was_cancelled`]); `f.cancel()` sets it even
     /// when the future already settled and cancellation cannot change it.
     /// `reported` is set when GC transfers an unreachable error to the
     /// engine-owned reporting queue.
@@ -134,29 +135,6 @@ impl BorshDeserialize for Future {
     }
 }
 
-// `UnscheduledFuture` is a runtime spawn-request slot — same lifecycle
-// shape as `Future`, never appears in a compiled `Program`. The pack
-// envelope (`baml_exec::PackEnvelope`) serializes the bytecode + the
-// constant heap; if an `UnscheduledFuture` ever reaches the serializer
-// that's a malformed program and we want to fail fast.
-impl BorshSerialize for UnscheduledFuture {
-    fn serialize<W: std::io::Write>(&self, _writer: &mut W) -> std::io::Result<()> {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "UnscheduledFuture cannot be serialized",
-        ))
-    }
-}
-
-impl BorshDeserialize for UnscheduledFuture {
-    fn deserialize_reader<R: std::io::Read>(_reader: &mut R) -> std::io::Result<Self> {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "UnscheduledFuture cannot be deserialized",
-        ))
-    }
-}
-
 // `Future::read` calls `MaybeUninit::<Value>::assume_init_read`, which is
 // sound only because `Value: Copy`. If `Value` ever gains a non-trivial
 // `Drop` (e.g. by holding an `Arc<…>` or `Box<…>`), `assume_init_read`
@@ -177,7 +155,8 @@ enum FutureTag {
 }
 
 const FUTURE_FLAG_OBSERVED: u8 = 1 << 0;
-const FUTURE_FLAG_CANCEL_REQUESTED: u8 = 1 << 1;
+/// Cancellation reached the producer: see [`Future::was_cancelled`].
+const FUTURE_FLAG_CANCELLED: u8 = 1 << 1;
 const FUTURE_FLAG_REPORTED: u8 = 1 << 2;
 
 /// Snapshot view of a [`Future`] used for pattern matching at read sites.
@@ -350,8 +329,20 @@ impl Future {
         self.flags.load(Ordering::Acquire) & FUTURE_FLAG_OBSERVED != 0
     }
 
-    pub fn cancel_requested(&self) -> bool {
-        self.flags.load(Ordering::Acquire) & FUTURE_FLAG_CANCEL_REQUESTED != 0
+    /// Whether cancellation reached this future's producer: `f.cancel()` was
+    /// called on it (at any time, even after it settled), or the task's
+    /// cancellation fired by another route (a linked token, its parent's
+    /// cancellation, shutdown) before it settled with an error. An unobserved
+    /// error from such a future is not a failure of the program.
+    pub fn was_cancelled(&self) -> bool {
+        self.flags.load(Ordering::Acquire) & FUTURE_FLAG_CANCELLED != 0
+    }
+
+    /// Record that the producer's cancellation had fired before it failed.
+    /// Called before the error settles, so whoever reads the `Error` state
+    /// also reads this.
+    pub fn mark_cancelled(&self) {
+        self.flags.fetch_or(FUTURE_FLAG_CANCELLED, Ordering::AcqRel);
     }
 
     /// Mark this future's error as transferred to the engine reporting queue.
@@ -528,13 +519,22 @@ impl Future {
         }
     }
 
-    /// Record an explicit `f.cancel()` request, then attempt to cancel the
-    /// future if it is still pending. The flag remains set when an existing
-    /// terminal error wins the race.
+    /// Record an explicit `f.cancel()` request and fire the cancel token, so
+    /// the producer observes it at its next checkpoint. The state stays the
+    /// producer's to settle: `Pending` until its body unwinds with
+    /// `Cancelled`, throws, or — with no checkpoint left — completes with its
+    /// value. Returns `true` when this call fired the token: no earlier call
+    /// had requested cancellation and the future was still pending. The
+    /// request is recorded even when a terminal state has already won the
+    /// race (an unobserved error whose future was then cancelled reports as
+    /// a non-fatal cancellation).
     pub fn request_cancel(&self) -> bool {
-        self.flags
-            .fetch_or(FUTURE_FLAG_CANCEL_REQUESTED, Ordering::AcqRel);
-        self.settle_cancelled()
+        let previous = self.flags.fetch_or(FUTURE_FLAG_CANCELLED, Ordering::AcqRel);
+        if previous & FUTURE_FLAG_CANCELLED != 0 || !matches!(self.read(), FutureRead::Pending(_)) {
+            return false;
+        }
+        self.cancel.cancel();
+        true
     }
 
     /// Attempt to transition `Pending → InternalError`, carrying `err`
@@ -620,61 +620,6 @@ impl std::fmt::Debug for Future {
             FutureRead::InternalError(id) => f.debug_tuple("InternalError").field(&id).finish(),
         }
     }
-}
-
-/// Runtime payload behind a `baml.spawn.SpawnConfig` instance's `_handle`
-/// (`Object::RustData`). Produced by `baml.spawn.options(...)` and read by the
-/// engine when dispatching a `spawn ... with` clause to derive the spawned
-/// task's effective cancel token. BEP-034 "spawn options".
-///
-/// PR1 carries only the optional cancel token; `group` (rate limiting) and
-/// `detach` are added as those features are wired, so the engine's downcast
-/// target stays stable across PRs.
-#[derive(Debug, Clone, Default)]
-pub struct SpawnConfigData {
-    /// User-provided cancel token from `options(cancel = ...)`, if any. Linked
-    /// into the spawn's effective token by the engine.
-    pub cancel: Option<CancellationToken>,
-    /// `detach = true`: the spawn opts out of the parent→child cancel cascade
-    /// (its effective token is independent of the parent's) and its unhandled
-    /// errors route to the root task rather than the spawner.
-    pub detach: bool,
-    /// `TaskGroup` from `options(group = ...)`, if any. The engine acquires a
-    /// concurrency slot from it before running the spawned body (BEP-034 rate
-    /// limiting).
-    pub group: Option<std::sync::Arc<crate::task_group::TaskGroupInner>>,
-}
-
-/// A pending user `spawn { body }` request that the engine still has to
-/// dispatch on a fresh `BexThread`.
-///
-/// BEP-034 phase D′: this struct used to also carry sys-op invocations
-/// (`kind: SysOp { ... }`), but sys-ops now go through the single-yield
-/// `VmExecState::SysOp` path without allocating a heap object. Only the
-/// spawn case survives.
-#[derive(Clone, Debug)]
-pub struct UnscheduledFuture {
-    /// Pointer to an `Object::Closure` carrying the spawn body.
-    pub closure: HeapPtr,
-    /// Optional human-readable name attached at the spawn site. Surfaces in
-    /// debug, stack traces, and the playground. Held here as a `HeapPtr` so
-    /// the GC keeps the underlying string alive while the unscheduled
-    /// future is on the heap.
-    pub name: Option<HeapPtr>,
-    /// Optional `baml.spawn.SpawnConfig` instance from a `spawn ... with
-    /// baml.spawn.options(...)` clause (BEP-034 "spawn options"). Held as a
-    /// `HeapPtr` — like `name` — so the GC keeps the config (and the
-    /// `CancelToken`/`TaskGroup` it references) alive while this slot is on the
-    /// heap. `None` when the spawn had no `with` clause. The engine reads the
-    /// config's `_handle` (`SpawnConfigData`) when dispatching the spawn.
-    pub config: Option<HeapPtr>,
-    /// The `T` of the `Future<T, E>` this spawn yields, already resolved
-    /// against the spawning frame's type args by `OpCode::Spawn`. Handed to
-    /// [`Future::pending`] so the scheduled future can answer reflection and
-    /// `is`/`match` on its generic parameters.
-    pub returns: RealizedTy,
-    /// The `E` of the `Future<T, E>` this spawn yields. See [`Self::returns`].
-    pub throws: RealizedTy,
 }
 
 /// A unique identifier for a future.

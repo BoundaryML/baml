@@ -1099,9 +1099,7 @@ fn build_packages<'db>(
                     debug_assert!(
                         matches!(
                             function_body(db, m).as_ref(),
-                            baml_compiler2_hir::body::FunctionBody::Builtin(
-                                BuiltinKind::Intrinsic | BuiltinKind::AwaitAny
-                            )
+                            baml_compiler2_hir::body::FunctionBody::Builtin(kind) if kind.lowers_at_call_site()
                         ),
                         "impl method `{method_name}` has no pooled function object",
                     );
@@ -3569,9 +3567,8 @@ fn generate_impl<'db>(
                     }
                     if matches!(
                         function_body(db, func_loc).as_ref(),
-                        baml_compiler2_hir::body::FunctionBody::Builtin(
-                            BuiltinKind::Intrinsic | BuiltinKind::AwaitAny
-                        )
+                        baml_compiler2_hir::body::FunctionBody::Builtin(kind)
+                            if kind.lowers_at_call_site()
                     ) {
                         continue;
                     }
@@ -3823,10 +3820,10 @@ fn seed_served_rows<'db>(
             }
         }
         for (loc, row) in rows {
-            if matches!(
-                row.builtin_kind,
-                Some(BuiltinKind::Intrinsic | BuiltinKind::AwaitAny)
-            ) {
+            if row
+                .builtin_kind
+                .is_some_and(BuiltinKind::lowers_at_call_site)
+            {
                 continue;
             }
             let name = baml_compiler2_mir::function_link_name(db, DeclRef::External(loc));
@@ -3979,9 +3976,7 @@ fn spliced_throws_match(
         // Mirror Pass 4's skip set: these never become callable objects.
         if matches!(
             function_body(db, func_loc).as_ref(),
-            baml_compiler2_hir::body::FunctionBody::Builtin(
-                BuiltinKind::Intrinsic | BuiltinKind::AwaitAny
-            )
+            baml_compiler2_hir::body::FunctionBody::Builtin(kind) if kind.lowers_at_call_site()
         ) {
             continue;
         }
@@ -4081,9 +4076,8 @@ fn emit_file_group<'db>(
             // every function again).
             if matches!(
                 function_body(db, func_loc).as_ref(),
-                baml_compiler2_hir::body::FunctionBody::Builtin(
-                    BuiltinKind::Intrinsic | BuiltinKind::AwaitAny
-                )
+                baml_compiler2_hir::body::FunctionBody::Builtin(kind)
+                    if kind.lowers_at_call_site()
             ) {
                 continue;
             }
@@ -6235,7 +6229,7 @@ fn builtin_emit_function(
     arity: usize,
 ) -> Option<Function> {
     let kind = match kind {
-        BuiltinKind::Intrinsic | BuiltinKind::AwaitAny => return None,
+        BuiltinKind::Intrinsic | BuiltinKind::AwaitAny | BuiltinKind::Spawn => return None,
         BuiltinKind::Io => {
             let sys_op = bex_vm_types::sys_op_for_path(native_path)
                 .unwrap_or_else(|| panic!("unknown sys_op path: {native_path}"));

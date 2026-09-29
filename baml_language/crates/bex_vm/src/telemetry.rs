@@ -30,7 +30,7 @@ use btel_types::{FunctionId, allocate_telemetry_id};
 use rustc_hash::FxHashMap;
 
 mod errors;
-pub(crate) use errors::{ActiveHandler, ErrorBook, FrameScope, LandingMatch};
+pub(crate) use errors::{ErrorBook, LandingMatch};
 mod policy;
 pub use policy::{TelemetryPolicies, TelemetryPolicy};
 
@@ -232,6 +232,17 @@ impl TelemetryState {
         // SAFETY: invocation entry/completion run with the VM heap permit held.
         // Scratch traversal never releases it or triggers VM allocation/GC.
         builder.map(|builder| unsafe { self.capture_scratch.capture(builder, input) })
+    }
+
+    /// The spawn context for a task whose body runs no BAML function (a host
+    /// closure): with no callee to add an edge for, the child continues the
+    /// spawner's active call path.
+    pub fn hidden_spawn_context(&self) -> ThreadSpawnContext {
+        ThreadSpawnContext {
+            parent_id: self.thread.active_id,
+            spawn_call_path: self.thread.active_call_path,
+            clock: Arc::clone(&self.clock),
+        }
     }
 
     pub fn configure_spawn(&mut self, context: &ThreadSpawnContext) {

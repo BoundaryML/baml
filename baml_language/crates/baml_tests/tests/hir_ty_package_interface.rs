@@ -1361,7 +1361,7 @@ function missing_member_on_exported_type() -> int throws never {
     assert_eq!(unresolved("app.not_exported"), 1, "{errors:#?}");
     assert_eq!(unresolved("app.nested.not_exported"), 1, "{errors:#?}");
     assert!(
-        errors.iter().all(|message| !message.starts_with("[E0173]")),
+        errors.iter().all(|message| !message.starts_with("[E0178]")),
         "the served lane never invents a code of its own: {errors:#?}"
     );
     assert!(

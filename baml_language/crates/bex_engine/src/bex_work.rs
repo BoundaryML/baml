@@ -393,7 +393,7 @@ mod tests {
                     class Node { value int }
                     function Tiny() -> Node { Node { value: 7 } }
                     function Detached() -> int {
-                        spawn with baml.spawn.options(detach = true) {
+                        spawn with baml.spawn.Root.new() {
                             baml.sys.sleep(baml.time.Duration.from_milliseconds(1000n));
                             Tiny()
                         };

@@ -603,3 +603,39 @@ function ufw_rename(value: UfwA | UfwB) -> string {
 test "union_field_write_uses_shared_interface" {
     assert.equal(ufw_rename(UfwA { name: "original" }), "renamed")
 }
+
+// A rigid var proves a goal from the bounds it carries. Two bounds whose
+// `requires` closures meet reach the same head twice, and a head is not
+// ambiguous with itself: a diamond bound, and a bound restated beside one
+// that already requires it, both prove a generic goal `DbC<X>`.
+interface DbC<X> {
+    function c(self) -> int throws never
+}
+interface DbA<X> requires DbC<X> {
+    function a(self) -> int throws never
+}
+interface DbB<X> requires DbC<X> {
+    function b(self) -> int throws never
+}
+class DbImpl {
+    implements DbC<int> { function c(self) -> int throws never { 7 } }
+    implements DbA<int> { function a(self) -> int throws never { 1 } }
+    implements DbB<int> { function b(self) -> int throws never { 2 } }
+}
+function db_goal<X, U extends DbC<X>>(u: U) -> int throws never {
+    u.c()
+}
+function db_diamond<X, T extends DbA<X> & DbB<X>>(t: T) -> int throws never {
+    db_goal(t)
+}
+function db_restated<X, T extends DbC<X> & DbA<X>>(t: T) -> int throws never {
+    db_goal(t)
+}
+
+test "diamond_bound_proves_a_generic_goal_once" {
+    assert.equal(db_diamond<int, DbImpl>(DbImpl {}), 7)
+}
+
+test "restated_bound_proves_a_generic_goal_once" {
+    assert.equal(db_restated<int, DbImpl>(DbImpl {}), 7)
+}

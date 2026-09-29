@@ -111,7 +111,21 @@
           }
         }
       },
-      "includes": ["pkg-editor/package.json", "pkg-grammar/src/baml.ts"]
+      "includes": [
+        "pkg-editor/package.json",
+        "pkg-grammar/src/baml.ts",
+        "pkg-grammar-treesitter/grammar.js"
+      ]
+    },
+    {
+      "includes": ["pkg-grammar-treesitter/grammar.js"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noCommonJs": "off"
+          }
+        }
+      }
     }
   ],
   "vcs": {

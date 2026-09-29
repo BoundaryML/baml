@@ -102,7 +102,7 @@ use bex_vm_types::{
     bytecode::{self, Instruction},
     types::{
         BoundMethod, Closure, ConstValue, Function, FunctionOrigin, FunctionType, Instance, Type,
-        TypeValue, UnscheduledFuture,
+        TypeValue,
     },
 };
 use indexmap::IndexMap;
@@ -391,9 +391,7 @@ pub(crate) mod tests {
 
             thread_id: 0,
 
-            thrown_value_causes: Vec::new(),
-            thrown_value_contexts: Vec::new(),
-            preserved_throw_contexts: Vec::new(),
+            context_transfers: Vec::new(),
             argv: Arc::from([]),
             pending_call_trace: None,
             pending_call_type_args: Vec::new(),
@@ -1289,6 +1287,68 @@ impl RootHaver for Frame {
     }
 }
 
+/// The `baml.errors.Context` of an error the unwinder is carrying, until a
+/// handler lands it.
+enum InFlightContext {
+    /// An error that already has its context: a caught error raised again, an
+    /// error awaited from another task, or a conversion of the error a handler
+    /// is handling.
+    Carried(Value),
+    /// A new failure's trace and cause. The `Context` object is built only if
+    /// a handler lands it.
+    Fresh {
+        trace: Arc<[StackFrame]>,
+        cause: Value,
+    },
+}
+
+/// A conversion (`UnknownError.from` / `with_message`) of the error a handler
+/// is handling: the next new throw of `target` from inside that handler takes
+/// over the handled error's trace and cause, as if it were that error.
+struct ContextTransfer {
+    /// The handler's `baml.errors.Context`, which identifies the handled error.
+    handling: Value,
+    /// The value the conversion produced.
+    target: Value,
+}
+
+mod error_evidence;
+use error_evidence::RaiseEntry;
+
+/// The parameter list a callable value executes with; see
+/// [`BexVm::callee_params`].
+enum CalleeParams<'a> {
+    Function(&'a Function),
+    Host(&'a bex_vm_types::HostClosure),
+}
+
+impl CalleeParams<'_> {
+    fn arity(&self) -> usize {
+        match self {
+            Self::Function(function) => function.arity,
+            Self::Host(host) => host.arity,
+        }
+    }
+
+    fn layout(&self) -> baml_type::CallLayout {
+        match self {
+            Self::Function(function) => function.argument_layout(),
+            Self::Host(host) => baml_type::CallLayout::from_modes(
+                host.params
+                    .iter()
+                    .map(|param| (param.name.clone(), param.mode)),
+            ),
+        }
+    }
+
+    fn layout_is(&self, layout: &baml_type::CallLayout) -> bool {
+        match self {
+            Self::Function(function) => function.argument_layout_is(layout),
+            Self::Host(_) => self.layout() == *layout,
+        }
+    }
+}
+
 /// The beast.
 ///
 /// This is a stack based virtual machine. Stack based machines work by pushing
@@ -1396,49 +1456,6 @@ impl RootHaver for Frame {
 /// Other than that, pretty much everything is better in a stack VM, especially
 /// simplicity (we don't even need to figure out which registers to use and when
 /// to use them).
-#[derive(Clone)]
-struct ThrowContext {
-    trace: Arc<[StackFrame]>,
-    cause: Value,
-}
-
-mod error_evidence;
-use error_evidence::RaiseEntry;
-
-/// The parameter list a callable value executes with; see
-/// [`BexVm::callee_params`].
-enum CalleeParams<'a> {
-    Function(&'a Function),
-    Host(&'a bex_vm_types::HostClosure),
-}
-
-impl CalleeParams<'_> {
-    fn arity(&self) -> usize {
-        match self {
-            Self::Function(function) => function.arity,
-            Self::Host(host) => host.arity,
-        }
-    }
-
-    fn layout(&self) -> baml_type::CallLayout {
-        match self {
-            Self::Function(function) => function.argument_layout(),
-            Self::Host(host) => baml_type::CallLayout::from_modes(
-                host.params
-                    .iter()
-                    .map(|param| (param.name.clone(), param.mode)),
-            ),
-        }
-    }
-
-    fn layout_is(&self, layout: &baml_type::CallLayout) -> bool {
-        match self {
-            Self::Function(function) => function.argument_layout_is(layout),
-            Self::Host(_) => self.layout() == *layout,
-        }
-    }
-}
-
 pub struct BexVm {
     /// Call stack.
     ///
@@ -1510,28 +1527,11 @@ pub struct BexVm {
     /// here for the explicit completion boundary to finish.
     pending_telemetry_wait: Option<(usize, ClockInstant)>,
 
-    /// BEP-042 cause chain across a transparent re-raise: the `cause` context
-    /// computed at each error value's original (fresh) throw site, keyed by the
-    /// thrown value. A later *rethrow* of the same value (a non-throwing
-    /// `defer` pad re-raising the in-flight error, the no-match fall-through,
-    /// or `throw <binding>`) reuses this instead of re-running the cause walk —
-    /// which from inside a handler body would self-link — so the chain survives
-    /// the re-raise. Stored as values (not raw bits) so GC forwarding preserves
-    /// both key and cause identity; deduplicated by value and cleared, like
-    /// the other throw-state stores, when a fresh entry point is set on an
-    /// empty frame stack.
-    thrown_value_causes: Vec<(Value, Value)>,
-
-    /// Most recently observed context for each thrown value. `UnknownError`
-    /// conversion uses this to transfer the original trace and cause to the
-    /// normalized value.
-    thrown_value_contexts: Vec<(Value, ThrowContext)>,
-
-    /// One-shot context transfers registered by `UnknownError.from` and
-    /// `UnknownError.with_message`. The next fresh throw of the target consumes
-    /// the entry, preserving the source throw site instead of the conversion
-    /// boundary.
-    preserved_throw_contexts: Vec<(Value, ThrowContext)>,
+    /// Context transfers registered by the conversions that ran inside a
+    /// handler still active on this thread (see [`ContextTransfer`]). Stale
+    /// entries, whose handler has finished without throwing the converted
+    /// value, are dropped at the next registration.
+    context_transfers: Vec<ContextTransfer>,
 
     /// Process arguments exposed by `baml.sys.argv()`. Shared across VMs.
     pub argv: Arc<[String]>,
@@ -1611,24 +1611,17 @@ pub enum VmExecState {
     ///   `Await` (settle our future as cancelled, or surface `Cancelled`).
     AwaitAny(Vec<FutureId>),
 
-    /// BEP-034: VM yields a `spawn { body }` to the engine.
+    /// VM yields a `spawn` to the engine.
     ///
-    /// - Input: a `HeapPtr` to the `UnscheduledFuture` object the VM
-    ///   allocated. The struct carries the body closure, the optional
-    ///   spawn name, and the `Future<T, E>` type arguments this spawn
-    ///   site was typed at.
-    /// - Output: the engine builds a fresh `Future::Pending(id)` heap
-    ///   object at those types, dispatches the body on a new `BexThread`, and pushes
-    ///   the future pointer onto the VM stack. Terminal transitions
-    ///   (`Ready`/`Error`/`Cancelled`/`InternalError`) happen later
-    ///   via the `FutureManager`; the VM only ever sees `Pending`
-    ///   directly after this yield.
-    ///
-    /// BEP-034 phase D′: this used to be `ScheduleFuture` and covered
-    /// both sys-ops and spawns; sys-ops have moved to the dedicated
-    /// single-yield `SysOp` variant below.
+    /// - Input: `plan` points at the `baml.spawn.Plan<T, E>` instance to
+    ///   start; [`crate::package_baml::spawn_launch`] reads what it describes.
+    /// - Output: the engine allocates the pending future at the plan's types,
+    ///   starts the task on a new `BexThread`, and pushes the future pointer
+    ///   onto the VM stack. Terminal transitions (`Ready`/`Error`/`Cancelled`/
+    ///   `InternalError`) happen later via the `FutureManager`; the VM only
+    ///   ever sees `Pending` directly after this yield.
     Spawn {
-        future: HeapPtr,
+        plan: HeapPtr,
         telemetry: Option<crate::telemetry::ThreadSpawnContext>,
     },
 
@@ -1956,7 +1949,6 @@ fn value_type_tag(value: Value) -> i64 {
                 Object::HostClosure(_) => type_tags::FUNCTION,
                 Object::Cell(_) => type_tags::UNKNOWN,
                 Object::Future(_) => type_tags::FUTURE,
-                Object::UnscheduledFuture(_) => type_tags::FUTURE,
                 Object::Enum(_) => type_tags::ENUM,
                 Object::RustData(_) => type_tags::UNKNOWN,
                 Object::Type(_) => type_tags::TYPE,
@@ -2084,9 +2076,7 @@ impl BexVm {
 
             thread_id: 0,
 
-            thrown_value_causes: Vec::new(),
-            thrown_value_contexts: Vec::new(),
-            preserved_throw_contexts: Vec::new(),
+            context_transfers: Vec::new(),
             argv,
             pending_call_trace: None,
             pending_call_type_args: Vec::new(),
@@ -2313,85 +2303,119 @@ impl BexVm {
         self.take_type_args_below_values(count, 0)
     }
 
-    /// Remember the `cause` context computed at `value`'s original (fresh)
-    /// throw site so a later rethrow of the same value can recover it. The
-    /// stored cause is the error `value` superseded (the enclosing handler's
-    /// context), NEVER `value`'s own materialized context, so it can never form
-    /// a self-link. Keyed by value identity.
-    fn record_throw_cause(&mut self, value: Value, cause: Value) {
-        if cause == Value::NULL {
-            self.thrown_value_causes.retain(|(v, _)| *v != value);
-            return;
-        }
-        if let Some((_, existing)) = self
-            .thrown_value_causes
-            .iter_mut()
-            .find(|(v, _)| *v == value)
-        {
-            *existing = cause;
-        } else {
-            self.thrown_value_causes.push((value, cause));
-        }
+    /// The error a `baml.errors.Context` describes.
+    fn context_error(&self, context: Value) -> Result<Value, VmInternalError> {
+        let instance = self.as_instance(&context)?;
+        Ok(crate::package_baml::view::errors::Context { instance }.error())
     }
 
-    /// The `cause` context recorded for `value` at its fresh throw site, or
-    /// `Value::NULL` if it never superseded an error (a genuine rethrow).
-    fn recorded_throw_cause(&self, value: Value) -> Value {
-        self.thrown_value_causes
+    /// The trace a `baml.errors.Context` records, as the unwinder reports it
+    /// when the error escapes every handler.
+    fn context_trace(&self, context: Value) -> Result<Vec<StackFrame>, VmInternalError> {
+        use crate::package_baml::view::errors;
+
+        let instance = self.as_instance(&context)?;
+        let stack_trace = errors::Context { instance }.stack_trace();
+        let instance = self.as_instance(&stack_trace)?;
+        errors::StackTrace { instance }
+            .frames(self)
             .iter()
-            .find(|(v, _)| *v == value)
-            .map_or(Value::NULL, |(_, cause)| *cause)
+            .map(|frame| {
+                let frame = errors::StackFrame {
+                    instance: self.as_instance(frame)?,
+                };
+                Ok(StackFrame {
+                    function_name: frame.function_name(self).to_string(),
+                    file_path: frame.file(self).to_string(),
+                    error_line: usize::try_from(frame.line()).unwrap_or_default(),
+                })
+            })
+            .collect()
     }
 
-    fn record_throw_context(&mut self, value: Value, trace: Arc<[StackFrame]>, cause: Value) {
-        let context = ThrowContext { trace, cause };
-        if let Some((_, existing)) = self
-            .thrown_value_contexts
-            .iter_mut()
-            .find(|(candidate, _)| *candidate == value)
-        {
-            *existing = context;
-        } else {
-            self.thrown_value_contexts.push((value, context));
-        }
-    }
-
-    fn recorded_throw_context(&self, value: Value) -> Option<ThrowContext> {
-        self.thrown_value_contexts
-            .iter()
-            .find(|(candidate, _)| *candidate == value)
-            .map(|(_, context)| context.clone())
-    }
-
-    /// Transfer the source value's most recently observed throw context to the
-    /// next fresh throw of `target`.
-    pub(crate) fn preserve_throw_context(&mut self, source: Value, target: Value) {
-        let Some(context) = self
-            .thrown_value_contexts
-            .iter()
-            .find(|(candidate, _)| *candidate == source)
-            .map(|(_, context)| context.clone())
-        else {
-            return;
+    /// A `baml.errors.Context` for `error` with `source`'s trace and cause:
+    /// what a conversion of the handled error throws with.
+    fn retargeted_context(
+        &mut self,
+        source: Value,
+        error: Value,
+    ) -> Result<Value, VmInternalError> {
+        let (stack_trace, cause) = {
+            let instance = self.as_instance(&source)?;
+            let source = crate::package_baml::view::errors::Context { instance };
+            (
+                source.stack_trace(),
+                source.cause(self).unwrap_or(Value::NULL),
+            )
         };
-
-        if let Some((_, existing)) = self
-            .preserved_throw_contexts
-            .iter_mut()
-            .find(|(candidate, _)| *candidate == target)
-        {
-            *existing = context;
-        } else {
-            self.preserved_throw_contexts.push((target, context));
-        }
+        Ok(self.alloc_error_value(ErrorClass::Context, vec![error, stack_trace, cause]))
     }
 
-    fn take_preserved_throw_context(&mut self, value: Value) -> Option<ThrowContext> {
+    /// Record that `target` is a conversion of `source`, the error the
+    /// innermost active handler is handling (`UnknownError.from` and
+    /// `with_message`): the next new throw of `target` from inside that
+    /// handler throws with `source`'s trace and cause. A conversion of any
+    /// other value records nothing.
+    pub(crate) fn transfer_context(&mut self, source: Value, target: Value) {
+        let handling = self.find_cause_context();
+        if handling == Value::NULL || self.context_error(handling) != Ok(source) {
+            return;
+        }
+        let active = self.active_handler_contexts();
+        self.context_transfers.retain(|transfer| {
+            transfer.handling != handling && active.contains(&transfer.handling)
+        });
+        self.context_transfers
+            .push(ContextTransfer { handling, target });
+    }
+
+    /// The context a new throw of `value` during handling of the error with
+    /// context `handling` takes over from a conversion, if one was recorded.
+    fn take_context_transfer(&mut self, handling: Value, value: Value) -> Option<Value> {
         let index = self
-            .preserved_throw_contexts
+            .context_transfers
             .iter()
-            .position(|(candidate, _)| *candidate == value)?;
-        Some(self.preserved_throw_contexts.swap_remove(index).1)
+            .position(|transfer| transfer.handling == handling && transfer.target == value)?;
+        Some(self.context_transfers.swap_remove(index).handling)
+    }
+
+    /// The contexts of every handler whose body is running on this thread, in
+    /// every frame and at every nesting depth.
+    fn active_handler_contexts(&self) -> Vec<Value> {
+        let mut contexts = Vec::new();
+        let mut innermost_bc = true;
+        for depth in (0..self.frames.len()).rev() {
+            let Frame::Bytecode(bf) = &self.frames[depth] else {
+                continue;
+            };
+            let pc = if innermost_bc {
+                self.cur_pc
+            } else {
+                bf.faulting_pc
+            };
+            innermost_bc = false;
+            // SAFETY: same `load_function` contract as the unwind walk.
+            let Ok(func) = (unsafe { self.load_function(depth) }) else {
+                continue;
+            };
+            let slots: Vec<usize> = match &func.bytecode.compact {
+                Some(compact) => compact
+                    .handler_contexts_for_pc(pc)
+                    .map(|entry| entry.context_slot)
+                    .collect(),
+                None => func
+                    .bytecode
+                    .handler_contexts_for_pc(pc)
+                    .map(|entry| entry.context_slot)
+                    .collect(),
+            };
+            contexts.extend(
+                slots
+                    .into_iter()
+                    .map(|slot| self.stack[Self::local_slot_stack_index(bf.locals_offset, slot)]),
+            );
+        }
+        contexts
     }
 
     /// The declared element type of `value` when it is an `Object::Array`, else
@@ -3466,11 +3490,6 @@ impl BexVm {
                 Box::new(fut.returns().clone()),
                 Box::new(fut.throws().clone()),
             ),
-            // An `UnscheduledFuture` is the engine's spawn-request slot, consumed
-            // before control returns to the VM. It is never a value user code can
-            // hold, so it has no type of its own.
-            Object::UnscheduledFuture(_) => return None,
-
             // Opaque native handles are not BAML data types at all.
             Object::RustData(_) => return None,
 
@@ -3785,18 +3804,32 @@ impl BexVm {
     /// Bootstraps the VM preparing the given callable to run.
     ///
     /// `function` may point to an [`Object::Function`], [`Object::Closure`],
-    /// [`Object::GenericFunction`], or [`Object::HostClosure`]. Closure entry
-    /// points are used by BEP-034
-    /// `spawn { ... }`: the compiler lowers the body to a lambda, wraps it
-    /// in a closure that carries the captured environment, then hands the
-    /// closure pointer to a fresh `BexThread` which calls `set_entry_point`.
+    /// [`Object::GenericFunction`], [`Object::HostClosure`], or
+    /// [`Object::BoundMethod`] - every callable a `() -> T` value can be.
+    /// Closure entry points are the common case for a `spawn { ... }`: the
+    /// compiler lowers the body to a lambda, wraps it in a closure that
+    /// carries the captured environment, then hands the closure pointer to a
+    /// fresh `BexThread` which calls `set_entry_point`. A hand-built plan's
+    /// body, or the wrapper a modifier installs, can be any of the others
+    /// (`plan.wrap(self.around)` is a bound method).
     pub fn set_entry_point(&mut self, function: HeapPtr, args: &[Value]) {
-        // BEP-034 spawn entry points can pass a `Closure` (carrying
-        // captured type args from the surrounding scope); host calls
-        // typically pass a bare `Function` and want no type args.
-        // Either way, fan out to `set_entry_point_with_type_args` so
-        // the type-arg-aware host call path
-        // (`BexEngine::call_function_bound_args`) shares one
+        // A bound method enters as its function, with the receiver as the
+        // leading argument and the type arguments it curried at bind time -
+        // the frame `CallIndirect` builds for the same value.
+        if let Object::BoundMethod(bound) = self.get_object(function) {
+            let inner = bound.function;
+            let type_args = bound.type_args.to_vec();
+            let args: Vec<Value> = std::iter::once(bound.receiver)
+                .chain(args.iter().copied())
+                .collect();
+            self.set_entry_point_positional(inner, &args, type_args);
+            return;
+        }
+        // Spawn entry points can pass a `Closure` (carrying captured type
+        // args from the surrounding scope); host calls typically pass a bare
+        // `Function` and want no type args. Either way, fan out to
+        // `set_entry_point_with_type_args` so the type-arg-aware host call
+        // path (`BexEngine::call_function_bound_args`) shares one
         // implementation with the spawn path.
         let positional = match self.get_object(function) {
             Object::Function(_) => vec![],
@@ -3805,6 +3838,17 @@ impl BexVm {
             Object::HostClosure(_) => vec![],
             other => panic!("expect callable as entry point, got {other:?}"),
         };
+        self.set_entry_point_positional(function, args, positional);
+    }
+
+    /// [`Self::set_entry_point`] with the callee's type arguments already in
+    /// positional (De Bruijn) order.
+    fn set_entry_point_positional(
+        &mut self,
+        function: HeapPtr,
+        args: &[Value],
+        positional: Vec<bex_vm_types::RealizedTy>,
+    ) {
         // The captured/specialized type args are positional (De Bruijn order);
         // pair each with the callee's generic-param name so they round-trip
         // through the named `set_entry_point_with_type_args` channel. A lambda
@@ -3878,6 +3922,19 @@ impl BexVm {
             self.get_object(function)
         );
 
+        // The callee may declare trailing optionals `args` does not supply: a
+        // function value of type `() -> T` can be a function with defaulted
+        // parameters, and every LLM function has some. They are laid over the
+        // callee's slots as for a call through a function value, so an omitted
+        // optional reads the omission sentinel and the callee computes its
+        // default.
+        let args = self
+            .lay_over_callee_slots(function, args.to_vec())
+            .unwrap_or_else(|error| {
+                unreachable!("an entry point is started with arguments that fit it: {error}")
+            });
+        let args = args.as_slice();
+
         // A fresh top-level run starts with no in-flight throw, so drop the
         // per-run throw bookkeeping from the previous run. These vectors are
         // GC roots; on a reused VM (engine package init, playground evals)
@@ -3890,9 +3947,7 @@ impl BexVm {
                 telemetry.start_thread();
                 telemetry.clear_error_book();
             }
-            self.thrown_value_causes.clear();
-            self.thrown_value_contexts.clear();
-            self.preserved_throw_contexts.clear();
+            self.context_transfers.clear();
         }
 
         // Lower the named bindings onto the positional De Bruijn slot against the
@@ -4237,23 +4292,6 @@ impl BexVm {
             faulting_pc: 0,
             telemetry: None,
         }));
-    }
-
-    /// Returns a reference to the unscheduled future at `future_ptr`.
-    ///
-    /// Returns [`VmInternalError::TypeError`] if the heap object is not an
-    /// `Object::UnscheduledFuture`.
-    pub fn unscheduled_future(
-        &self,
-        future_ptr: HeapPtr,
-    ) -> Result<&UnscheduledFuture, VmInternalError> {
-        match self.get_object(future_ptr) {
-            Object::UnscheduledFuture(future) => Ok(future),
-            other => Err(VmInternalError::TypeError {
-                expected: Type::Object(ObjectType::UnscheduledFuture),
-                got: ObjectType::of(other).into(),
-            }),
-        }
     }
 
     /// Allocate a bigint on the heap. Takes an `Arc<BigInt>` to allow sharing.
@@ -4848,8 +4886,7 @@ impl BexVm {
     /// Construct a `baml.errors.StackTrace` instance from captured error locations.
     ///
     /// Allocates one `baml.errors.StackFrame` per frame, an array to hold them,
-    /// and the outer `StackTrace` wrapper. Only called when a catch handler binds
-    /// a `stack_trace` parameter.
+    /// and the outer `StackTrace` wrapper.
     pub(crate) fn alloc_stack_trace(&mut self, trace: &[StackFrame]) -> Value {
         // Build StackFrame instances (fields: file, line, function_name)
         let frames: Vec<Value> = trace
@@ -4877,8 +4914,8 @@ impl BexVm {
     /// superseded while unwinding (or `Value::NULL` for a fresh error).
     ///
     /// Field order — error, `stack_trace`, cause — matches the class declared in
-    /// `ns_errors/error_context.baml` (the constructor ABI). Only called when a
-    /// catch handler binds the second `catch (e, ctx)` parameter.
+    /// `ns_errors/error_context.baml` (the constructor ABI). Built when a
+    /// handler first lands a new error, whether or not it binds `ctx`.
     pub(crate) fn alloc_error_context(
         &mut self,
         error: Value,
@@ -5179,14 +5216,12 @@ impl BexVm {
                         Some(StackFrame {
                             function_name: func.name.clone(),
                             file_path: func.source_file.clone(),
-                            function_span: func.span,
                             error_line,
                         })
                     }
                     Frame::Native(_) => Some(StackFrame {
                         function_name: func.name.clone(),
                         file_path: func.source_file.clone(),
-                        function_span: func.span,
                         error_line: 0,
                     }),
                 }
@@ -5227,68 +5262,58 @@ impl BexVm {
     ) -> Result<(), VmError> {
         let exception_value = thrown.value;
         let telemetry_outcome = self.telemetry_outcome_for_exception(exception_value);
-        let is_rethrow = thrown.language_is_rethrow;
 
-        // BEP-042 cause chain: identify the error currently being handled at
-        // the throw site (read-only, before unwinding mutates frames/slots).
-        // If this throw happened inside a handler body, that handler's caught
-        // error becomes the new error's `cause`.
-        //
-        // A *rethrow* re-raises an already-thrown value: a bare re-raise inside
-        // a handler, the no-match fall-through that re-enters this funnel, a
-        // non-throwing `defer` pad's transparent re-raise of the in-flight
-        // error, or `ThrowIfPanic` (all pass `is_rethrow`). None is a *new*
-        // failure "during handling of" the caught error, so none may graft
-        // another link onto the chain by re-running the cause walk here — in
-        // particular the no-match fall-through and the defer pad both re-raise
-        // from inside a handler body, which the walk would mis-read as a
-        // self-link.
-        //
-        // Instead we reuse the cause the value's *original* (fresh) throw site
-        // computed, keyed by the value in `thrown_value_causes`. This preserves
-        // a pre-existing chain across a transparent re-raise (the defer-pad
-        // case: `mid` throws B while handling A, so B's recorded cause is
-        // ErrorContext(A); the pad's re-raise of B recovers A instead of
-        // nulling it) while keeping the deliberate null cause for a genuine
-        // rethrow that never superseded an error (no recorded entry -> NULL).
-        // The recorded value is the superseded error, never the re-raised
-        // value's own context, so this can never form a self-link.
-        let preserved = if is_rethrow {
-            self.recorded_throw_context(exception_value)
-        } else {
-            self.take_preserved_throw_context(exception_value)
+        // BEP-042: the context this error lands with. A caught error raised
+        // again — `throw` of its binding, a catch's no-match fall-through or
+        // `throw_if_panic`, a `defer` pad re-raising the in-flight error — and
+        // one awaited from another task carry the context of their original
+        // throw, trace and cause intact. The context travels with the error,
+        // so two errors that happen to be equal values never share one. It is
+        // the error's only while it describes this value: a binding reassigned
+        // before its `throw` makes that a new throw. A new throw inside a
+        // handler body is "during handling of" that handler's error, which
+        // becomes its cause, unless it throws a conversion of that error
+        // (`UnknownError.from`), which takes over the error's own trace and
+        // cause.
+        let (mut context, converted) = match thrown.context {
+            Some(context) if self.context_error(context)? == exception_value => {
+                (InFlightContext::Carried(context), false)
+            }
+            Some(_) | None => {
+                let cause = self.find_cause_context();
+                match self.take_context_transfer(cause, exception_value) {
+                    Some(handled) => (
+                        InFlightContext::Carried(
+                            self.retargeted_context(handled, exception_value)?,
+                        ),
+                        true,
+                    ),
+                    None => (
+                        InFlightContext::Fresh {
+                            trace: Arc::from(self.capture_user_stack_trace()),
+                            cause,
+                        },
+                        false,
+                    ),
+                }
+            }
         };
         // Exception-path telemetry; `None` unless a recording wants raises.
+        let carried = match &context {
+            InFlightContext::Carried(context) => Some(*context),
+            InFlightContext::Fresh { .. } => None,
+        };
         let mut evidence = self.begin_error_evidence(
             &thrown,
             entry,
             Some((*frame_idx, *function)),
-            preserved.as_ref(),
-            !is_rethrow && preserved.is_some(),
+            carried,
+            converted,
         );
-        let (trace, cause_context) = if let Some(context) = preserved {
-            (context.trace, context.cause)
-        } else {
-            let trace = Arc::from(self.capture_user_stack_trace());
-            let cause = if is_rethrow {
-                self.recorded_throw_cause(exception_value)
-            } else {
-                self.find_cause_context()
-            };
-            (trace, cause)
-        };
-        if !is_rethrow {
-            self.record_throw_cause(exception_value, cause_context);
-            self.record_throw_context(exception_value, Arc::clone(&trace), cause_context);
-        }
 
         // The innermost (first) bytecode frame's faulting PC is the live
         // `cur_pc`; outer frames use the call-site PC they recorded at call time.
         let mut innermost_bc = true;
-        // What a span that records this error captures: the context a
-        // `catch (e, ctx)` would bind. Built once, for the first frame that
-        // records it; allocation never collects, so it stays live.
-        let mut recorded_error: Option<Value> = None;
 
         // Walk the call stack from the current frame outward looking for an
         // exception table entry that covers the faulting PC.
@@ -5395,25 +5420,25 @@ impl BexVm {
                     Self::local_slot_stack_index(locals_offset, entry.error_slot);
                 self.stack[error_stack_slot] = exception_value;
 
-                // Store stack trace in stack_trace_slot if the catch clause binds it.
-                if entry.has_stack_trace_slot() {
-                    // BEP-042 Part 3: the second `catch (e, ctx)` binding is an
-                    // `ErrorContext` — the thrown value, its trace, and the
-                    // error it superseded (`cause_context`, computed at the
-                    // funnel top before unwinding).
-                    let ctx_value =
-                        self.alloc_error_context(exception_value, &trace, cause_context);
-                    let ctx_slot =
-                        Self::local_slot_stack_index(locals_offset, entry.stack_trace_slot);
-                    self.stack[ctx_slot] = ctx_value;
-                }
+                // Store the error's `baml.errors.Context` in the context
+                // slot: a rethrow from this handler carries it, and a throw
+                // during its body takes it as its cause.
+                let ctx_value = match &context {
+                    InFlightContext::Carried(context) => *context,
+                    InFlightContext::Fresh { trace, cause } => {
+                        self.alloc_error_context(exception_value, trace, *cause)
+                    }
+                };
+                let ctx_slot = Self::local_slot_stack_index(locals_offset, entry.context_slot);
+                self.stack[ctx_slot] = ctx_value;
 
                 if let Some(evidence) = evidence.take() {
                     self.error_caught(
                         evidence,
                         depth,
                         frame_function,
-                        error_stack_slot.raw(),
+                        entry.context_slot,
+                        ctx_slot.raw(),
                         entry.handler_pc,
                     );
                 }
@@ -5432,9 +5457,7 @@ impl BexVm {
 
             // No handler in this frame -- pop it and try the caller.
             let recorded = if self.frame_wants_error_capture(depth, frame_function) {
-                *recorded_error.get_or_insert_with(|| {
-                    self.error_context_value(exception_value, &trace, cause_context)
-                })
+                self.recorded_context(&mut context, exception_value)
             } else {
                 exception_value
             };
@@ -5452,9 +5475,13 @@ impl BexVm {
                 if let Some(evidence) = evidence.take() {
                     self.error_not_caught(evidence, btel_records::UnwindResult::Unhandled);
                 }
+                let trace = match &context {
+                    InFlightContext::Carried(context) => self.context_trace(*context)?,
+                    InFlightContext::Fresh { trace, .. } => trace.to_vec(),
+                };
                 return Err(VmError::ThrownUnhandled {
                     value: exception_value,
-                    trace: trace.to_vec(),
+                    trace,
                 });
             }
 
@@ -5504,18 +5531,11 @@ impl BexVm {
                 func.bytecode.handler_context_for_pc(pc)
             };
             if let Some(entry) = entry {
-                // The cause is the enclosing handler's `ErrorContext`, which
-                // lives in its context slot — itself a link in the chain (with
-                // its own `cause`). It exists only if that handler bound `ctx`;
-                // a handler that didn't materialize one has no context object
-                // to chain, so we stop with null rather than mis-linking to a
-                // further-out error.
-                if entry.has_stack_trace_slot() {
-                    let slot =
-                        Self::local_slot_stack_index(bf.locals_offset, entry.stack_trace_slot);
-                    return self.stack[slot];
-                }
-                return Value::NULL;
+                // The cause is the enclosing handler's `baml.errors.Context`,
+                // which lives in its context slot — itself a link in the chain
+                // (with its own `cause`).
+                let slot = Self::local_slot_stack_index(bf.locals_offset, entry.context_slot);
+                return self.stack[slot];
             }
         }
         Value::NULL
@@ -5670,17 +5690,30 @@ impl BexVm {
             // Prepend receiver so the inner function sees [self, arg1, ..., argN].
             args.insert(0, bm.receiver);
         }
-        let params = self.callee_params(callee)?;
-        if args.len() != params.arity() {
-            let mapping = baml_type::CallLayout::positional(args.len())
-                .map_to(&params.layout())
-                .map_err(VmInternalError::CallLayout)?;
-            *args = mapping
-                .into_iter()
-                .map(|slot| slot.map_or(Value::OMITTED_ARG, |index| args[index]))
-                .collect();
-        }
+        *args = self.lay_over_callee_slots(callee, std::mem::take(args))?;
         Ok(callee)
+    }
+
+    /// `args` laid over `callee`'s parameter slots. A list as long as the
+    /// callee's parameter list is its complete frame and stays as it is; a
+    /// shorter one supplies the required parameters in order, and every
+    /// optional it omits receives the omission sentinel.
+    fn lay_over_callee_slots(
+        &self,
+        callee: HeapPtr,
+        args: Vec<Value>,
+    ) -> Result<Vec<Value>, VmInternalError> {
+        let params = self.callee_params(callee)?;
+        if args.len() == params.arity() {
+            return Ok(args);
+        }
+        let mapping = baml_type::CallLayout::positional(args.len())
+            .map_to(&params.layout())
+            .map_err(VmInternalError::CallLayout)?;
+        Ok(mapping
+            .into_iter()
+            .map(|slot| slot.map_or(Value::OMITTED_ARG, |index| args[index]))
+            .collect())
     }
 
     /// The class-level type arguments to curry into a bound method whose
@@ -6279,7 +6312,7 @@ impl BexVm {
             VmRustFnError::Thrown { value, throw_kind } => VmError::Thrown(VmThrown {
                 value,
                 throw_kind,
-                language_is_rethrow: false,
+                context: None,
             }),
         }
     }
@@ -6539,8 +6572,15 @@ impl BexVm {
     /// Resolve a frame's callable wrapper to the underlying function object
     /// used as stable call-path identity.
     fn frame_function_identity(&self, frame_idx: usize) -> Option<HeapPtr> {
-        let ptr = self.frames.get(frame_idx)?.function();
-        // SAFETY: the frame roots `ptr` and execution holds the heap permit.
+        self.callable_function_identity(self.frames.get(frame_idx)?.function())
+    }
+
+    /// The function object a callable value runs, used as stable call-path
+    /// identity; `None` for a host closure, which runs no BAML function.
+    fn callable_function_identity(&self, ptr: HeapPtr) -> Option<HeapPtr> {
+        // SAFETY: callers hold the heap permit with `ptr` rooted (a frame's
+        // function, or a plan the running instruction holds), and nothing
+        // here allocates.
         match unsafe { ptr.get() } {
             Object::Function(function) => function.telemetry_function_id.map(|_| ptr),
             Object::Closure(closure) => Some(closure.function),
@@ -6652,11 +6692,10 @@ impl BexVm {
             .is_some_and(|telemetry| state.wants_error_capture(telemetry, function))
     }
 
-    /// `baml.errors.Context { error, stack_trace, cause }` for a recorded
-    /// error. The bare value when the error classes are not loaded (bare
-    /// test VMs).
-    fn error_context_value(&mut self, error: Value, trace: &[StackFrame], cause: Value) -> Value {
-        let loaded = [
+    /// Whether `baml.errors.Context` can be built: bare test VMs do not load
+    /// the error classes.
+    fn error_context_classes_loaded(&self) -> bool {
+        [
             ErrorClass::Context,
             ErrorClass::StackTrace,
             ErrorClass::StackFrame,
@@ -6666,11 +6705,35 @@ impl BexVm {
             self.error_class_ptrs
                 .get(*class as usize)
                 .is_some_and(|ptr| !ptr.is_null())
-        });
-        if loaded {
+        })
+    }
+
+    /// `baml.errors.Context { error, stack_trace, cause }` for a recorded
+    /// error. The bare value when the error classes are not loaded (bare
+    /// test VMs).
+    fn error_context_value(&mut self, error: Value, trace: &[StackFrame], cause: Value) -> Value {
+        if self.error_context_classes_loaded() {
             self.alloc_error_context(error, trace, cause)
         } else {
             error
+        }
+    }
+
+    /// What a span that records the error in flight captures: the context a
+    /// `catch (e, ctx)` would bind. A new failure's context is built the
+    /// first time a span records it and carried from then on, so the handler
+    /// that lands the error binds the same object: one context per
+    /// occurrence. Allocation never collects, so it stays live. The bare error
+    /// when the error classes are not loaded (bare test VMs).
+    fn recorded_context(&mut self, context: &mut InFlightContext, error: Value) -> Value {
+        match context {
+            InFlightContext::Carried(carried) => *carried,
+            InFlightContext::Fresh { .. } if !self.error_context_classes_loaded() => error,
+            InFlightContext::Fresh { trace, cause } => {
+                let built = self.alloc_error_context(error, trace, *cause);
+                *context = InFlightContext::Carried(built);
+                built
+            }
         }
     }
 
@@ -7144,8 +7207,13 @@ impl BexVm {
     }
 
     /// Execute a binary arithmetic operation. Pops two values, pushes the result.
-    /// Shared between the legacy `step()` `BinOp` arm and the compact `Add` opcode
-    /// (which needs string concatenation in addition to numeric dispatch).
+    ///
+    /// The generic `BinOp` opcode: emit falls back to it whenever it declines a
+    /// specialized `*Int`/`*Float`/`*Bigint` opcode (an operand read from a
+    /// spawn-shared cell, an operand whose static type it cannot resolve). It
+    /// must therefore be total over every operand pair the specialized opcodes
+    /// accept — including bigint and the `bigint`/`int` mix — plus string
+    /// concatenation for `+`.
     fn exec_binop(&mut self, op: BinOp) -> Result<(), VmError> {
         let right = self.stack.ensure_pop();
         let left = self.stack.ensure_pop();
@@ -7972,71 +8040,21 @@ impl BexVm {
 
                     // ── Spawn (BEP-034) ────────────────────────────────────────────
                     OpCode::Spawn => {
-                        // Stack layout (pushed by emit in this order): closure, name,
-                        // config, the future's `T`, the future's `E`. So pop in
-                        // reverse: `E` (top), `T`, config, name, closure. The two
-                        // types were pushed by `LoadType`, already resolved against
-                        // this frame's type args, and travel with the request so the
-                        // engine can type the heap `Future` it allocates.
-                        let throws = self.ensure_pop_type()?;
-                        let returns = self.ensure_pop_type()?;
-                        // `config` is the optional `baml.spawn.SpawnConfig` from a
-                        // `with baml.spawn.options(...)` clause, or null.
-                        let config_value = self.stack.ensure_pop();
-                        let name_value = self.stack.ensure_pop();
-                        let closure_value = self.stack.ensure_pop();
-                        let closure_ptr = self.as_object_ptr(
-                            closure_value,
-                            ObjectType::Function(FunctionType::Any),
-                        )?;
-                        let name_ptr = if name_value.is_null() {
-                            None
-                        } else if let Some(ptr) = name_value.as_object_ptr() {
-                            Some(ptr)
-                        } else {
-                            return Err(VmInternalError::TypeError {
-                                expected: Type::Object(ObjectType::String),
-                                got: self.type_of(&name_value),
-                            }
-                            .into());
-                        };
-                        let config_ptr = if config_value.is_null() {
-                            None
-                        } else if let Some(ptr) = config_value.as_object_ptr()
-                            && matches!(unsafe { ptr.get() }, Object::Instance(_))
-                        {
-                            // Must be an instance (`baml.spawn.Params`) — an
-                            // arbitrary heap object here would turn a local type
-                            // error into a VM→engine contract break downstream.
-                            Some(ptr)
-                        } else {
-                            return Err(VmInternalError::TypeError {
-                                expected: Type::Object(ObjectType::Instance),
-                                got: self.type_of(&config_value),
-                            }
-                            .into());
-                        };
-                        let pending_future = bex_vm_types::types::UnscheduledFuture {
-                            closure: closure_ptr,
-                            name: name_ptr,
-                            config: config_ptr,
-                            returns,
-                            throws,
-                        };
-                        let object_index = self
-                            .tlab
-                            .alloc(Object::UnscheduledFuture(Box::new(pending_future)));
-
+                        // The operand is a `baml.spawn.Plan` instance. Anything
+                        // else here would turn a local type error into a
+                        // VM→engine contract break downstream.
+                        let plan_value = self.stack.ensure_pop();
+                        self.as_instance(&plan_value)?;
+                        let plan = plan_value
+                            .as_object_ptr()
+                            .unwrap_or_else(|| unreachable!("an instance is an object"));
                         let telemetry = if self.telemetry.is_some() {
                             let actual_caller = self.frame_function_identity(*frame_idx);
                             let caller_pc = u32::try_from(self.cur_pc).unwrap_or(u32::MAX);
-                            let callee = match self.get_object(closure_ptr) {
-                                Object::Closure(closure) => closure.function,
-                                Object::Function(_) => closure_ptr,
-                                _ => closure_ptr,
-                            };
-                            self.telemetry.as_mut().map(|telemetry| {
-                                telemetry.spawn_context(
+                            let body = crate::package_baml::plan_body(self, plan_value)?;
+                            let callee = self.callable_function_identity(body);
+                            self.telemetry.as_mut().map(|telemetry| match callee {
+                                Some(callee) => telemetry.spawn_context(
                                     actual_caller,
                                     caller_pc,
                                     callee,
@@ -8045,15 +8063,13 @@ impl BexVm {
                                             &self.heap, caller, callee,
                                         )
                                     },
-                                )
+                                ),
+                                None => telemetry.hidden_spawn_context(),
                             })
                         } else {
                             None
                         };
-                        return Ok(Some(VmExecState::Spawn {
-                            future: object_index,
-                            telemetry,
-                        }));
+                        return Ok(Some(VmExecState::Spawn { plan, telemetry }));
                     }
 
                     // ── Call ──────────────────────────────────────────────────────
@@ -8652,15 +8668,18 @@ impl BexVm {
                                     // in a stdlib collector may have no user frames of its
                                     // own, so capturing only the awaiter's stack loses it.
                                     let trace = awaiting.error_trace();
-                                    if !trace.is_empty() {
-                                        self.record_throw_context(
+                                    let thrown = if trace.is_empty() {
+                                        VmThrown {
                                             value,
-                                            Arc::from(trace),
-                                            Value::NULL,
-                                        );
-                                        self.preserve_throw_context(value, value);
-                                    }
-                                    return Err(VmError::Thrown(VmThrown::rethrow(value, false)));
+                                            throw_kind: bex_vm_types::errors::ThrowKind::Rethrow,
+                                            context: None,
+                                        }
+                                    } else {
+                                        let context =
+                                            self.alloc_error_context(value, &trace, Value::NULL);
+                                        VmThrown::rethrow(value, context)
+                                    };
+                                    return Err(VmError::Thrown(thrown));
                                 }
                                 FutureRead::Cancelled => {
                                     let value = self.panic_to_exception_value(VmPanic::Cancelled);
@@ -8745,17 +8764,16 @@ impl BexVm {
 
                     // ── Throw ─────────────────────────────────────────────────────
                     OpCode::Throw | OpCode::Rethrow => {
-                        let is_rethrow = op == OpCode::Rethrow;
-                        let value = self.stack.ensure_pop();
+                        let thrown = if op == OpCode::Rethrow {
+                            let context = self.stack.ensure_pop();
+                            VmThrown::rethrow(self.stack.ensure_pop(), context)
+                        } else {
+                            VmThrown::fresh(self.stack.ensure_pop())
+                        };
                         // Save pc before unwinding (handler lookup needs it).
                         if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
                             bf.instruction_ptr = *pc;
                         }
-                        let thrown = if is_rethrow {
-                            VmThrown::rethrow(value, true)
-                        } else {
-                            VmThrown::fresh(value)
-                        };
                         self.try_unwind_exception(frame_idx, function, thrown)?;
                         // A handler was found; sync the local `pc` to its entry.
                         // When the handler is in the SAME frame, the dispatch loop
@@ -8945,6 +8963,7 @@ impl BexVm {
 
                     // ── ThrowIfPanic ──────────────────────────────────────────────
                     OpCode::ThrowIfPanic => {
+                        let context = self.stack.ensure_pop();
                         let value = self.stack.ensure_pop();
                         let is_panic = match value.as_object_ptr() {
                             Some(ptr) => match self.get_object(ptr) {
@@ -8963,7 +8982,7 @@ impl BexVm {
                             self.try_unwind_exception(
                                 frame_idx,
                                 function,
-                                VmThrown::rethrow(value, true),
+                                VmThrown::rethrow(value, context),
                             )?;
                             // Sync the local `pc` to the handler entry (see
                             // OpCode::Throw): a same-frame rethrow — an inner
@@ -10077,18 +10096,9 @@ impl ::bex_vm_types::RootHaver for BexVm {
             });
         }
         roots.extend(self.static_load_type_cache.values().copied());
-        // Both key (thrown value) and cause context are heap pointers.
-        for (value, cause) in &self.thrown_value_causes {
-            roots.extend(value.as_object_ptr());
-            roots.extend(cause.as_object_ptr());
-        }
-        for (value, context) in self
-            .thrown_value_contexts
-            .iter()
-            .chain(&self.preserved_throw_contexts)
-        {
-            roots.extend(value.as_object_ptr());
-            roots.extend(context.cause.as_object_ptr());
+        for transfer in &self.context_transfers {
+            roots.extend(transfer.handling.as_object_ptr());
+            roots.extend(transfer.target.as_object_ptr());
         }
 
         // Frame function pointers (needed once closures are heap-allocated)
@@ -10168,32 +10178,13 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 self.static_virtual_call_cache.insert(key, target);
             }
         }
-        for (value, cause) in &mut self.thrown_value_causes {
-            if let Some(ptr) = value.as_object_ptr()
-                && let Some(&new_ptr) = roots.get(&ptr)
-            {
-                *value = Value::object(new_ptr);
-            }
-            if let Some(ptr) = cause.as_object_ptr()
-                && let Some(&new_ptr) = roots.get(&ptr)
-            {
-                *cause = Value::object(new_ptr);
-            }
-        }
-        for (value, context) in self
-            .thrown_value_contexts
-            .iter_mut()
-            .chain(&mut self.preserved_throw_contexts)
-        {
-            if let Some(ptr) = value.as_object_ptr()
-                && let Some(&new_ptr) = roots.get(&ptr)
-            {
-                *value = Value::object(new_ptr);
-            }
-            if let Some(ptr) = context.cause.as_object_ptr()
-                && let Some(&new_ptr) = roots.get(&ptr)
-            {
-                context.cause = Value::object(new_ptr);
+        for transfer in &mut self.context_transfers {
+            for value in [&mut transfer.handling, &mut transfer.target] {
+                if let Some(ptr) = value.as_object_ptr()
+                    && let Some(&new_ptr) = roots.get(&ptr)
+                {
+                    *value = Value::object(new_ptr);
+                }
             }
         }
 

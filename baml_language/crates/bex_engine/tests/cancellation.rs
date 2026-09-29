@@ -710,18 +710,18 @@ async fn cancelled_panic_shape_equivalence() {
 }
 
 // ============================================================================
-// BEP-034 spawn options — `spawn with baml.spawn.options(cancel = tok)`
+// `spawn with tok`
 // ============================================================================
 
 /// Firing a BAML-surface `CancelToken` passed via
-/// `baml.spawn.options(cancel = ...)` cancels the spawned child; awaiting it
+/// A `CancelToken` modifier cancels the spawned child; awaiting it
 /// re-throws `Cancelled`, and it returns well before the 10s sleep would.
 #[tokio::test]
 async fn spawn_with_options_cancel_token_propagates() {
     let source = r#"
         function main() -> int {
             let tok = baml.spawn.CancelToken.new();
-            let f = spawn with baml.spawn.options(cancel = tok) {
+            let f = spawn with tok {
                 baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
                 42
             };
@@ -765,7 +765,7 @@ async fn spawn_with_options_cancel_token_is_catchable() {
     let source = r#"
         function main() -> int {
             let tok = baml.spawn.CancelToken.new();
-            let f = spawn with baml.spawn.options(cancel = tok) {
+            let f = spawn with tok {
                 baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
                 42
             };
@@ -804,7 +804,7 @@ async fn spawn_with_options_uncancelled_completes_normally() {
     let source = r#"
         function main() -> int {
             let tok = baml.spawn.CancelToken.new();
-            let f = spawn with baml.spawn.options(cancel = tok) { 42 };
+            let f = spawn with tok { 42 };
             await f
         }
     "#;
@@ -837,13 +837,13 @@ async fn spawn_with_options_uncancelled_completes_normally() {
 /// returns the fallback; if composition were broken the 10s sleep would run to
 /// completion and yield 42 instead.
 #[tokio::test]
-async fn spawn_with_options_cancel_token_any_composes() {
+async fn spawn_with_composite_cancel_token() {
     let source = r#"
         function main() -> int {
             let a = baml.spawn.CancelToken.new();
             let b = baml.spawn.CancelToken.new();
             let combined = baml.spawn.CancelToken.any([a, b]);
-            let f = spawn with baml.spawn.options(cancel = combined) {
+            let f = spawn with combined {
                 baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
                 42
             };
@@ -882,15 +882,15 @@ async fn spawn_with_options_cancel_token_any_composes() {
 }
 
 // ============================================================================
-// BEP-034 spawn options — `detach = true`
+// `baml.spawn.Root`
 // ============================================================================
 
-/// `detach = true` does not perturb normal completion.
+/// `Root` does not perturb normal completion.
 #[tokio::test]
-async fn spawn_with_options_detach_completes_normally() {
+async fn spawn_with_root_completes_normally() {
     let source = r#"
         function main() -> int {
-            let f = spawn with baml.spawn.options(detach = true) { 42 };
+            let f = spawn with baml.spawn.Root.new() { 42 };
             await f
         }
     "#;
@@ -918,15 +918,15 @@ async fn spawn_with_options_detach_completes_normally() {
     assert_eq!(result, BexExternalValue::Int(42));
 }
 
-/// A `detach = true` spawn still honors an explicit `cancel` token: detach only
-/// drops the *parent* token from the effective token, so a user token linked
-/// via `options(cancel = ...)` still cancels it.
+/// A `Root` spawn still honors an explicit token: `Root` only drops the
+/// *parent* token from the task's own, so a linked `CancelToken` still cancels
+/// it.
 #[tokio::test]
-async fn spawn_with_options_detach_still_honors_cancel_token() {
+async fn spawn_with_root_still_honors_cancel_token() {
     let source = r#"
         function main() -> int {
             let tok = baml.spawn.CancelToken.new();
-            let f = spawn with baml.spawn.options(cancel = tok, detach = true) {
+            let f = spawn with tok, baml.spawn.Root.new() {
                 baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
                 42
             };
@@ -964,11 +964,11 @@ async fn spawn_with_options_detach_still_honors_cancel_token() {
     );
 }
 
-/// `spawn ... with` accepts only a `baml.spawn.options(...)` config: any other
-/// expression is a compile error (BEP-034 spawn options, v1). `compile_for_engine`
-/// panics on diagnostics, so a rejected program unwinds here.
+/// `spawn ... with` accepts only a `baml.spawn.Modifier` value: anything else
+/// is a compile error. `compile_for_engine` panics on diagnostics, so a
+/// rejected program unwinds here.
 #[test]
-fn spawn_with_non_options_is_rejected() {
+fn spawn_with_non_modifier_is_rejected() {
     let bad = r#"
         function helper() -> int { 1 }
         function main() -> int {
@@ -982,6 +982,87 @@ fn spawn_with_non_options_is_rejected() {
     std::panic::set_hook(prev);
     assert!(
         compiled.is_err(),
-        "`spawn with helper()` should fail to compile (with accepts only baml.spawn.options(...))"
+        "`spawn with helper()` should fail to compile (`with` takes a modifier value)"
+    );
+}
+
+// ============================================================================
+// Linked cancel tokens do not outlive the work they are linked to
+// ============================================================================
+
+/// A task that completes normally never fires the token it was linked to, so
+/// whatever forwards that token's cancellation has to end with the task — not
+/// with the token, which may live for the whole program. Each iteration is
+/// three successful linkings: a plain `spawn with token`, one through a
+/// `CancelToken.any` composite, and the stdlib's own `with_timeout`, which is
+/// a `spawn with` a fresh token. A forwarder that outlives its task grows the
+/// runtime's live task count on every call.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn linked_tokens_do_not_outlive_their_spawns() {
+    let source = r#"
+        function main(n: int) -> int {
+            let shared = baml.spawn.CancelToken.new();
+            let total = 0;
+            for (let i = 0; i < n; i += 1) {
+                let direct = spawn with shared { 1 };
+                total += await direct;
+                let composite = baml.spawn.CancelToken.any([shared]);
+                let through_any = spawn with composite { 1 };
+                total += await through_any;
+                total += baml.future.with_timeout(
+                    baml.time.Duration.from_seconds(60n),
+                    () -> int { 1 },
+                );
+            }
+            total
+        }
+    "#;
+    let engine = Arc::new(
+        BexEngine::new(
+            compile_for_engine(source),
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+    let call = |n: i64| {
+        let engine = Arc::clone(&engine);
+        async move {
+            engine
+                .call_function(
+                    "main",
+                    vec![BexExternalValue::Int(n)],
+                    FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                    true,
+                )
+                .await
+                .expect("main completes")
+        }
+    };
+    // Whatever the engine keeps running across calls is not a leak: measure
+    // from after a first call.
+    call(1).await;
+    let metrics = tokio::runtime::Handle::current().metrics();
+    let baseline = metrics.num_alive_tasks();
+
+    let iterations = 200;
+    assert_eq!(
+        call(iterations).await,
+        BexExternalValue::Int(3 * iterations)
+    );
+
+    // A task woken by its stop signal still has to be polled to exit: give
+    // the runtime a bounded window to reap whatever is ending.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let mut alive = metrics.num_alive_tasks();
+    while alive > baseline && std::time::Instant::now() < deadline {
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        alive = metrics.num_alive_tasks();
+    }
+    assert!(
+        alive <= baseline,
+        "{} tasks outlived {} completed linkings",
+        alive - baseline,
+        3 * iterations,
     );
 }

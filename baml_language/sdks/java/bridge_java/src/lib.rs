@@ -154,7 +154,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeShutdownRuntime(
     _class: JClass<'_>,
 ) {
     let result = bridge_cffi::get_tokio_runtime()
-        .and_then(|runtime| runtime.block_on(bridge_cffi::shutdown_runtime()));
+        .and_then(|runtime| runtime.block_on(bridge_cffi::shutdown_runtime(None)));
     if let Err(error) = result {
         throw_runtime_exception(&mut env, &format!("runtime shutdown failed: {error}"));
     }

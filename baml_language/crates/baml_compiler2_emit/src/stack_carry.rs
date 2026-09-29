@@ -270,7 +270,7 @@ fn is_stack_carry_use_safe(
 
     let single_entry = |from, to| {
         to != body.entry
-            && !body.catch_regions.iter().any(|region| region.handler == to)
+            && !body.is_handler(to)
             && predecessors
                 .get(&to)
                 .is_some_and(|preds| preds.as_slice() == [from])
@@ -775,36 +775,18 @@ fn simulate_terminator_stack<'db>(
             sim.push();
             simulate_store_place_stack(destination, sim, classifications)
         }
-        Terminator::Spawn {
-            closure,
-            name,
-            config,
-            future,
-            ..
-        } => {
+        Terminator::Spawn { plan, future, .. } => {
             let mut sink = StackCarryPullSink {
                 sim,
                 carried_local,
                 classifications,
                 def_use,
             };
-            if pull_semantics::walk_operand_pull(&mut sink, closure).is_err() {
+            if pull_semantics::walk_operand_pull(&mut sink, plan).is_err() {
                 return false;
             }
-            if pull_semantics::walk_operand_pull(&mut sink, name).is_err() {
-                return false;
-            }
-            // Config operand is pushed last (null when there is no `with`
-            // clause). Mirror `emit`: always push three, pop three. The
-            // future's `T`/`E` types are pushed after it by `load_type` and
-            // popped again by `Spawn`, so like `alloc_array`'s element type
-            // they leave the net stack effect unchanged.
-            let null_config = Operand::Constant(Constant::Null);
-            let config_op = config.as_deref().unwrap_or(&null_config);
-            if pull_semantics::walk_operand_pull(&mut sink, config_op).is_err() {
-                return false;
-            }
-            if !sim.pop_n(3) {
+            // `Spawn` pops the plan and pushes the future.
+            if !sim.pop_n(1) {
                 return false;
             }
             sim.push();
@@ -852,7 +834,7 @@ fn simulate_terminator_stack<'db>(
             sim.push();
             simulate_store_place_stack(destination, sim, classifications)
         }
-        Terminator::Throw { value } | Terminator::Rethrow { value } => {
+        Terminator::Throw { value } => {
             let mut sink = StackCarryPullSink {
                 sim,
                 carried_local,
@@ -865,19 +847,22 @@ fn simulate_terminator_stack<'db>(
             // THROW consumes the thrown value from the stack when unwinding.
             sim.pop_n(1)
         }
-        Terminator::ThrowIfPanic { value, .. } => {
+        Terminator::Rethrow { value, context }
+        | Terminator::ThrowIfPanic { value, context, .. } => {
             let mut sink = StackCarryPullSink {
                 sim,
                 carried_local,
                 classifications,
                 def_use,
             };
-            if pull_semantics::walk_operand_pull(&mut sink, value).is_err() {
+            if pull_semantics::walk_operand_pull(&mut sink, value).is_err()
+                || pull_semantics::walk_operand_pull(&mut sink, context).is_err()
+            {
                 return false;
             }
-            // ThrowIfPanic loads the value, checks it, and either throws (consuming it)
-            // or continues (consuming it). Either way the stack is clean after.
-            sim.pop_n(1)
+            // RETHROW consumes the value and its context when unwinding;
+            // THROW_IF_PANIC consumes both whether it throws or continues.
+            sim.pop_n(2)
         }
         Terminator::ShortCircuit { operand, .. } => {
             // ShortCircuit peeks the operand (stays on TOS), then conditionally
@@ -1711,10 +1696,13 @@ mod tests {
                 terminator: Some(Terminator::Return),
                 span: None,
                 terminator_span: None,
+                unwind: None,
+                handling: None,
+                landing: None,
+                shielded: false,
             }],
             entry: baml_compiler2_mir::BlockId(0),
             locals: local_tys.into_iter().map(local_decl).collect(),
-            catch_regions: vec![],
         }
     }
 

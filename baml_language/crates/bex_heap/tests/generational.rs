@@ -1259,6 +1259,13 @@ fn impl_rule_edges_are_traced_and_forwarded() {
     assert!(matches!(unsafe { fqn.get() }, Object::String(_)));
 }
 
+// BUG: the `assert_ne!(ptr_after_gc, ptr_before)` checks in this file are
+// flaky. "The object moved" is not something a collection guarantees: a lone
+// survivor copied into a fresh region can land at the address it came from, so
+// these fail intermittently (roughly one run in three) with no code change.
+// The invariant worth asserting is that the edge still resolves to the right
+// object, which the surrounding assertions already cover; the address
+// comparison should go.
 /// A runtime-declared interface back-references its owning package and points
 /// at its default-method bodies; the collector must keep both alive through
 /// the interface alone and repoint them as they move.

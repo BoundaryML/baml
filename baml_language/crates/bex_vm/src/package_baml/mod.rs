@@ -45,6 +45,7 @@ pub(crate) mod resolve;
 pub(crate) use resolve::ImplResolver;
 pub(crate) mod root;
 mod spawn;
+pub use spawn::{SpawnLaunch, plan_body, spawn_launch};
 mod stack_trace;
 mod string;
 mod sys;

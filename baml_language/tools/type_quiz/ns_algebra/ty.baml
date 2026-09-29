@@ -484,7 +484,7 @@ class AliasDecl {
     /// can refer back to it:
     /// `AliasDecl.recursive("Rec", (self) -> { Union.new([Prim.int(), Array.new(self)]) })`.
     function recursive(name: string, body: (Ty) -> Ty throws never) -> AliasDecl throws never {
-        let decl = AliasDecl { name, body: Never {  } };
+        let decl = AliasDecl { name, body: Never {} };
         decl.body = body(Alias { decl });
         decl
     }

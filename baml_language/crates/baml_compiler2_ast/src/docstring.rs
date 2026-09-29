@@ -5,6 +5,10 @@
 
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
 
+/// How a `//baml:<marker>` directive line begins. A directive belongs to the
+/// declaration it precedes, like an attribute: it is not a comment.
+const DIRECTIVE_PREFIX: &str = "//baml:";
+
 /// Extract `///` doc comments attached to `node`.
 ///
 /// The BAML parser captures leading line comments as the *first children*
@@ -15,7 +19,10 @@ use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
 /// line interleaved among the leading comments resets the accumulator —
 /// e.g. file-header `// …` blocks separated by a blank line from a `///`
 /// block don't pollute the docstring, and a stray `// …` after the `///`
-/// block detaches the docstring entirely. The walk stops at the first
+/// block detaches the docstring entirely. A `//baml:` directive is not such
+/// a line: it is part of the declaration, so a doc written above one stays
+/// attached (every documented stdlib native reads `/// …`, then
+/// `//baml:mut_self`, then `function …`). The walk stops at the first
 /// non-trivia token or child node.
 ///
 /// Returns `None` when no `///` lines are immediately attached; otherwise
@@ -32,10 +39,11 @@ pub fn extract_docstring(node: &SyntaxNode) -> Option<String> {
                     if let Some(doc) = text.strip_prefix("///") {
                         let doc = doc.strip_prefix(' ').unwrap_or(doc);
                         doc_lines.push(doc.to_string());
-                    } else {
+                    } else if !text.starts_with(DIRECTIVE_PREFIX) {
                         // Regular `// …` line interleaved with leading
                         // trivia detaches any earlier `///` accumulation
-                        // from the declaration.
+                        // from the declaration. A directive is part of the
+                        // declaration, so it leaves the doc attached.
                         doc_lines.clear();
                     }
                 }
@@ -60,7 +68,7 @@ pub fn extract_docstring(node: &SyntaxNode) -> Option<String> {
 /// Used by BEP-049 §10 to detect `//baml:tagged_string` on a function
 /// definition; can be reused for any future single-keyword directive.
 pub fn has_baml_marker(node: &SyntaxNode, marker: &str) -> bool {
-    let needle = format!("//baml:{marker}");
+    let needle = format!("{DIRECTIVE_PREFIX}{marker}");
     for child in node.children_with_tokens() {
         match child {
             rowan::NodeOrToken::Token(tok) => match tok.kind() {

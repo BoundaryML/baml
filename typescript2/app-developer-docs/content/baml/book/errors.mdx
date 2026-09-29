@@ -534,7 +534,7 @@ The second catch binding has type `ErrorContext`:
 
 - `error`: The caught error value.
 - `stack_trace`: The stack trace captured for the error.
-- `cause`: An optional preceding `ErrorContext` in a cause chain.
+- `cause`: The context of the error a handler was handling where this error was thrown, if any. A caught error thrown again with `throw e` keeps its own trace and cause.
 - `root_cause()`: Returns the deepest context in the cause chain.
 
 The binding name doesn't change the type. `catch (error, context)` and `catch (e, tb)` use the same two-binding form.

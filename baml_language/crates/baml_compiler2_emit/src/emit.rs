@@ -317,6 +317,10 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// fragment pool based at the shared watermark, so every index this
     /// codegen embeds is program-absolute either way.
     objects_base: usize,
+    /// String objects this function has minted, by content: a string
+    /// constant is minted once per function however many sites load it
+    /// (`string_object`). Strings compare by value, so sharing is unobservable.
+    string_objects: HashMap<String, usize>,
 
     /// Analysis results (classifications, def-use, etc.).
     analysis: AnalysisResult<'ctx>,
@@ -451,6 +455,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             class_fields: ctx.class_fields,
             objects: ctx.objects,
             objects_base: ctx.objects_base,
+            string_objects: HashMap::new(),
             analysis,
             local_slots: HashMap::with_capacity(body.locals.len()),
             real_local_count: 0,
@@ -491,6 +496,17 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     fn mint_object(&mut self, object: Object) -> usize {
         let idx = self.objects_base + self.objects.len();
         self.objects.push(object);
+        idx
+    }
+
+    /// The program-absolute index of the string object holding `value`,
+    /// minted on first use in this function and shared by every later load.
+    fn string_object(&mut self, value: &str) -> usize {
+        if let Some(&idx) = self.string_objects.get(value) {
+            return idx;
+        }
+        let idx = self.mint_object(Object::String(value.into()));
+        self.string_objects.insert(value.to_owned(), idx);
         idx
     }
 
@@ -950,8 +966,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.patch_jumps();
         self.patch_jump_tables();
 
-        // 4. Build exception table from MIR catch regions
+        // 4. Build exception table from the blocks' handler edges
         self.build_exception_table(mir);
+        self.build_shield_table(mir);
 
         let debug_locals = Self::build_debug_locals(mir, &self.local_slots);
 
@@ -1442,13 +1459,15 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         let call_site_span = self.current_debug_span;
 
                         // 1. Push event name "$baml_log"
-                        let log_str_idx = self.mint_object(Object::String("$baml_log".into()));
+                        let log_str_idx = self.string_object(bex_vm_types::bytecode::LOG_EVENT);
                         let log_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(log_str_idx)));
                         let inst = self.emit(Instruction::LoadConst(log_const_idx));
                         self.set_operand(
                             inst,
-                            OperandMeta::Const(Self::display_string_operand("$baml_log")),
+                            OperandMeta::Const(Self::display_string_operand(
+                                bex_vm_types::bytecode::LOG_EVENT,
+                            )),
                         );
 
                         // 2. Push level value string
@@ -1458,7 +1477,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                             LogLevel::Warn => "warn",
                             LogLevel::Error => "error",
                         };
-                        let level_val_idx = self.mint_object(Object::String(level_str.into()));
+                        let level_val_idx = self.string_object(level_str);
                         let level_val_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(level_val_idx)));
                         let inst = self.emit(Instruction::LoadConst(level_val_const_idx));
@@ -1471,7 +1490,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
 
                         // 4. Push key "level"
-                        let level_key_idx = self.mint_object(Object::String("level".into()));
+                        let level_key_idx = self.string_object("level");
                         let level_key_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(level_key_idx)));
                         let inst = self.emit(Instruction::LoadConst(level_key_const_idx));
@@ -1481,7 +1500,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         );
 
                         // 5. Push key "data"
-                        let data_key_idx = self.mint_object(Object::String("data".into()));
+                        let data_key_idx = self.string_object("data");
                         let data_key_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(data_key_idx)));
                         let inst = self.emit(Instruction::LoadConst(data_key_const_idx));
@@ -2028,7 +2047,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             Constant::String(s) => {
                 let display = Self::display_string_operand(s);
-                let obj_idx = self.mint_object(Object::String(s.as_str().into()));
+                let obj_idx = self.string_object(s);
                 let idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)));
                 let inst = self.emit(Instruction::LoadConst(idx));
                 self.set_operand(inst, OperandMeta::Const(display));
@@ -2442,26 +2461,15 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
 
             Terminator::Spawn {
-                closure,
-                name,
-                config,
-                future_ty,
+                plan,
                 future,
                 resume,
             } => {
-                // Push closure, name, config, then the future's `T`/`E`. The
-                // runtime `OpCode::Spawn` pops them in reverse. Config is null
-                // when there is no `with` clause, so a fixed five values are
-                // always pushed (BEP-034 spawn options).
-                let spawn_span = self.current_debug_span;
-                self.emit_operand_pull(closure);
-                self.emit_operand_pull(name);
-                let null_config = Operand::Constant(Constant::Null);
-                self.emit_operand_pull(config.as_deref().unwrap_or(&null_config));
-                unwrap_infallible(self.load_type(&future_ty.returns));
-                unwrap_infallible(self.load_type(&future_ty.throws));
-                // As for calls: operands may install nested spans; the spawn
+                // `Spawn` pops the plan and pushes the task's future. As for
+                // calls: the operand may install nested spans; the spawn
                 // opcode belongs to the whole spawn expression.
+                let spawn_span = self.current_debug_span;
+                self.emit_operand_pull(plan);
                 self.restore_debug_span(spawn_span);
                 self.emit(Instruction::Spawn);
                 self.emit_store_place(future);
@@ -2506,16 +2514,22 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.restore_debug_span(throw_span);
                 self.emit(Instruction::Throw);
             }
-            Terminator::Rethrow { value } => {
+            Terminator::Rethrow { value, context } => {
                 let throw_span = self.current_debug_span;
                 self.emit_operand_pull(value);
+                self.emit_operand_pull(context);
                 self.restore_debug_span(throw_span);
                 self.emit(Instruction::Rethrow);
             }
 
-            Terminator::ThrowIfPanic { value, otherwise } => {
+            Terminator::ThrowIfPanic {
+                value,
+                context,
+                otherwise,
+            } => {
                 let throw_span = self.current_debug_span;
                 self.emit_operand_pull(value);
+                self.emit_operand_pull(context);
                 self.restore_debug_span(throw_span);
                 self.emit(Instruction::ThrowIfPanic);
                 self.emit_jump_unless_fallthrough(*otherwise);
@@ -2699,120 +2713,131 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
-    /// Build the bytecode exception table from MIR catch regions.
+    /// Build the bytecode exception table from the blocks' handler edges.
     ///
-    /// Each `CatchRegion` contributes the exact PC ranges of its protected
-    /// `body_blocks` (coalesced where the layout made them contiguous), NOT a
-    /// single `[body_entry_pc, handler_pc)` span. A span-based table is only
-    /// correct if the layout places every protected block before the handler
-    /// and every unprotected block outside the span — reverse-postorder
-    /// guarantees neither (a direct-throw block is a CFG leaf that sinks past
-    /// the handler; a panic-capable call-free block has no unwind edge to
-    /// anchor it), and both escaped their `catch` before this was made exact.
+    /// Every block names the handler a throw or panic inside it unwinds to
+    /// (`BasicBlock::unwind`), so each block contributes one entry over its
+    /// exact PC range (adjacent ranges to the same handler are coalesced).
+    /// Coverage therefore does not depend on layout: a direct-throw block
+    /// that sinks past its handler, or a call-free panic-capable block with
+    /// no unwind edge to anchor it, is covered by its own range. Entries
+    /// never overlap — a block has one handler — so the VM's innermost-entry
+    /// selection has exactly one candidate at any PC.
     ///
-    /// Nested regions overlap: the protected PC set of an inner region is a
-    /// subset of every enclosing region's (inner windows nest inside outer
-    /// windows at lowering). The VM picks the innermost covering entry —
-    /// largest `start_pc`, then smallest `end_pc`, then latest table order —
-    /// which subset-nesting makes unambiguous: the inner region's coalesced
-    /// range around any PC is contained in the outer's, and for byte-identical
-    /// ranges the stable sort below preserves `catch_regions` creation order
-    /// (always outer before inner), so the last matching entry is the inner
-    /// handler.
+    /// `BasicBlock::handling` gives one `HandlerContextEntry` per block the
+    /// same way, for the BEP-042 cause chain: a throw there is "during
+    /// handling of" the error whose context lives in that handler's landing.
     fn build_exception_table(&mut self, mir: &MirFunctionBody<'ctx>) {
         use bex_vm_types::bytecode::{ExceptionTableEntry, HandlerContextEntry};
 
-        for region in &mir.catch_regions {
-            let handler = self.analysis.resolve_jump_target(region.handler);
-
-            let &handler_pc = self.block_addresses.get(&handler).unwrap_or_else(|| {
-                unreachable!(
-                    "exception table: handler block {handler:?} has no PC address — \
-                     catch region was emitted but its handler block was dropped"
-                )
-            });
-            // If the error local was optimized away (e.g. an inline
-            // `throw X catch ...` that the MIR lowers as a direct jump),
-            // the catch region doesn't need a VM-level exception table entry.
-            let Some(&error_slot) = self.local_slots.get(&region.error_local) else {
-                log::debug!(
-                    "exception table: error local {:?} has no slot (optimized away)",
-                    region.error_local,
-                );
-                continue;
+        // (start, end, handler) per emitted, non-empty block.
+        let mut protected: Vec<(usize, usize, BlockId)> = Vec::new();
+        let mut handling: Vec<(usize, usize, BlockId)> = Vec::new();
+        for block in &mir.blocks {
+            let (Some(&start), Some(&end)) = (
+                self.block_addresses.get(&block.id),
+                self.block_end_addresses.get(&block.id),
+            ) else {
+                continue; // block dropped by layout / DCE
             };
-
-            let stack_trace_slot = region
-                .stack_trace_local
-                .and_then(|local| self.local_slots.get(&local).copied())
-                .unwrap_or(ExceptionTableEntry::NO_STACK_TRACE);
-
-            // BEP-042 cause chain: a throw inside the handler body is "during
-            // handling of" this catch's error. The handler body is the union of
-            // the arm blocks (or defer-pad body blocks) captured at lowering;
-            // the layout can fragment them across non-contiguous PCs. Emit one
-            // `HandlerContextEntry` per block so the coverage is exact — a
-            // single `[handler_pc, max_end)` span would over-cover the gaps
-            // between fragments and mis-chain a throw laid out there. An empty
-            // or fully-dropped body contributes no entries and never chains.
-            for &block in &region.handler_body {
-                let (Some(&block_start), Some(&block_end)) = (
-                    self.block_addresses.get(&block),
-                    self.block_end_addresses.get(&block),
-                ) else {
-                    continue; // block dropped by layout / DCE
-                };
-                if block_start >= block_end {
-                    continue; // empty block — nothing to cover
-                }
-                self.bytecode
-                    .handler_context_table
-                    .push(HandlerContextEntry {
-                        start_pc: block_start,
-                        end_pc: block_end,
-                        handler_pc,
-                        stack_trace_slot,
-                    });
+            if start >= end {
+                continue; // empty block — nothing to cover
             }
-
-            // Exact protected coverage: one PC range per protected block,
-            // merged where the layout put member blocks back-to-back. Blocks
-            // dropped by layout/DCE have no addresses and nothing to protect;
-            // gaps between member fragments (e.g. an interleaved handler or
-            // post-join block) stay uncovered by construction.
-            let mut ranges: Vec<(usize, usize)> = region
-                .body_blocks
-                .iter()
-                .filter_map(|&block| {
-                    let &block_start = self.block_addresses.get(&block)?;
-                    let &block_end = self.block_end_addresses.get(&block)?;
-                    (block_start < block_end).then_some((block_start, block_end))
-                })
-                .collect();
-            ranges.sort_unstable();
-            let mut coalesced: Vec<(usize, usize)> = Vec::new();
-            for (start, end) in ranges {
-                match coalesced.last_mut() {
-                    Some(last) if start <= last.1 => last.1 = last.1.max(end),
-                    _ => coalesced.push((start, end)),
-                }
+            if let Some(handler) = block.unwind {
+                protected.push((start, end, handler));
             }
-            for (start_pc, end_pc) in coalesced {
-                self.bytecode.exception_table.push(ExceptionTableEntry {
+            if let Some(handler) = block.handling {
+                handling.push((start, end, handler));
+            }
+        }
+        protected.sort_unstable_by_key(|&(start, end, _)| (start, end));
+        let mut coalesced: Vec<(usize, usize, BlockId)> = Vec::new();
+        for (start, end, handler) in protected {
+            match coalesced.last_mut() {
+                Some(last) if last.2 == handler && start <= last.1 => last.1 = last.1.max(end),
+                _ => coalesced.push((start, end, handler)),
+            }
+        }
+        for (start_pc, end_pc, handler) in coalesced {
+            let (handler_pc, error_slot, context_slot) = self.landing_slots(mir, handler);
+            self.bytecode.exception_table.push(ExceptionTableEntry {
+                start_pc,
+                end_pc,
+                handler_pc,
+                error_slot,
+                context_slot,
+            });
+        }
+        for (start_pc, end_pc, handler) in handling {
+            let (handler_pc, _, context_slot) = self.landing_slots(mir, handler);
+            self.bytecode
+                .handler_context_table
+                .push(HandlerContextEntry {
                     start_pc,
                     end_pc,
                     handler_pc,
-                    error_slot,
-                    stack_trace_slot,
+                    context_slot,
                 });
+        }
+        self.bytecode.exception_table.sort_by_key(|e| e.start_pc);
+    }
+
+    /// Build the bytecode's shield table from the blocks stamped `shielded`
+    /// (the bodies of `defer`s): one exact PC range per emitted block,
+    /// coalesced where the layout put them back-to-back, sorted by start.
+    fn build_shield_table(&mut self, mir: &MirFunctionBody<'ctx>) {
+        use bex_vm_types::bytecode::ShieldRange;
+
+        let mut ranges: Vec<(usize, usize)> = mir
+            .blocks
+            .iter()
+            .filter(|block| block.shielded)
+            .filter_map(|block| {
+                let &start = self.block_addresses.get(&block.id)?;
+                let &end = self.block_end_addresses.get(&block.id)?;
+                (start < end).then_some((start, end))
+            })
+            .collect();
+        ranges.sort_unstable();
+        for (start_pc, end_pc) in ranges {
+            match self.bytecode.shield_table.last_mut() {
+                Some(last) if start_pc <= last.end_pc => last.end_pc = last.end_pc.max(end_pc),
+                _ => self
+                    .bytecode
+                    .shield_table
+                    .push(ShieldRange { start_pc, end_pc }),
             }
         }
+    }
 
-        // Stable sort by start_pc: the VM selects the innermost covering entry
-        // by (largest start_pc, smallest end_pc, latest table order); stability
-        // keeps outer-before-inner creation order for byte-identical ranges so
-        // "latest" resolves to the inner handler (see the function doc).
-        self.bytecode.exception_table.sort_by_key(|e| e.start_pc);
+    /// Where the VM lands for `handler`: its PC and the slots of its error
+    /// and context locals (landing locals are always `Real`).
+    fn landing_slots(
+        &self,
+        mir: &MirFunctionBody<'ctx>,
+        handler: BlockId,
+    ) -> (usize, usize, usize) {
+        let landing = mir
+            .block(handler)
+            .landing
+            .unwrap_or_else(|| unreachable!("{handler:?} is not a handler block"));
+        let resolved = self.analysis.resolve_jump_target(handler);
+        let &handler_pc = self.block_addresses.get(&resolved).unwrap_or_else(|| {
+            unreachable!(
+                "exception table: handler block {handler:?} has no PC address — \
+                 a block unwinds to it but it was dropped"
+            )
+        });
+        let slot_of = |local: Local| {
+            *self.local_slots.get(&local).unwrap_or_else(|| {
+                unreachable!("landing local {local:?} of handler {handler:?} has no slot")
+            })
+        };
+        (
+            handler_pc,
+            slot_of(landing.error_local),
+            slot_of(landing.context_local),
+        )
     }
 
     // ========================================================================
@@ -3717,7 +3742,7 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
     }
 
     fn load_current_package(&mut self, package: &str) -> Result<(), Self::Error> {
-        let object = self.mint_object(Object::String(package.into()));
+        let object = self.string_object(package);
         let constant = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(object)));
         let inst = self.emit(Instruction::LoadCurrentPackage(constant));
         self.set_operand(inst, OperandMeta::Const(package.to_string()));
@@ -3944,7 +3969,6 @@ mod tests {
             blocks: vec![entry, then_block, unreachable_else, return_block],
             entry: BlockId(0),
             locals: vec![local(RuntimeTy::int()), local(RuntimeTy::bool())],
-            catch_regions: Vec::new(),
         };
 
         let slots = crate::GlobalSlots::default();

@@ -60,6 +60,10 @@ bitflags::bitflags! {
         const HAS_PROJECTION = 1 << 3;
         /// Contains a fresh (unwidened) literal.
         const HAS_FRESH_LITERAL = 1 << 4;
+        /// Contains a union node. Its members may be a spelling inference has
+        /// not canonicalized yet, so consumers that relate or dispatch on
+        /// structure re-canonicalize a ground tree before deciding.
+        const HAS_UNION = 1 << 5;
     }
 }
 
@@ -143,6 +147,11 @@ impl Ty {
     /// Whether this type contains an associated-type projection.
     pub fn has_projection(&self) -> bool {
         self.0.flags.contains(TypeFlags::HAS_PROJECTION)
+    }
+
+    /// Whether this type contains a union node.
+    pub fn has_union(&self) -> bool {
+        self.0.flags.contains(TypeFlags::HAS_UNION)
     }
 }
 
@@ -457,6 +466,7 @@ fn compute_flags(kind: &InferTy) -> TypeFlags {
         InferTy::AssociatedTypeProjection { .. } => TypeFlags::HAS_PROJECTION,
         InferTy::Error => TypeFlags::HAS_ERROR,
         InferTy::InferVar { .. } => TypeFlags::HAS_INFER,
+        InferTy::Union(..) => TypeFlags::HAS_UNION,
         _ => TypeFlags::empty(),
     };
     let mut flags = own;

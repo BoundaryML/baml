@@ -178,7 +178,7 @@ async fn net_read_is_cancellable() {
             function main() -> string {{
                 let sock = baml.net.TcpStream.connect("{addr}");
                 let tok = baml.spawn.CancelToken.new();
-                let read = spawn with baml.spawn.options(cancel = tok) {{
+                let read = spawn with tok {{
                     sock.read(1024)
                 }};
                 let deadline = spawn {{
@@ -249,7 +249,7 @@ async fn net_read_completes_before_cancellation() {
             function main() -> uint8array? {{
                 let sock = baml.net.TcpStream.connect("{addr}");
                 let tok = baml.spawn.CancelToken.new();
-                let read = spawn with baml.spawn.options(cancel = tok) {{
+                let read = spawn with tok {{
                     sock.read(1024)
                 }};
                 let deadline = spawn {{

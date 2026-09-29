@@ -3157,7 +3157,7 @@ impl<'a> Parser<'a> {
 
             // Consume dot-separated path segments (e.g., baml.http.Request).
             // `spawn`/`await` are reserved keywords but valid as namespace
-            // segments after a `.` (e.g. `baml.spawn.Params` in a type
+            // segments after a `.` (e.g. `baml.spawn.Plan` in a type
             // annotation), mirroring `parse_path_or_ident`'s segment set.
             while self.at(TokenKind::Dot) {
                 self.bump(); // dot
@@ -5579,7 +5579,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::Arrow
                 | TokenKind::FatArrow
                 // `spawn`/`await` are valid namespace segments inside type
-                // args (`foo<baml.spawn.Params<T, E>>(x)`), mirroring
+                // args (`foo<baml.spawn.Plan<T, E>>(x)`), mirroring
                 // the type-path parser's segment set.
                 | TokenKind::Spawn
                 | TokenKind::Await
@@ -6833,10 +6833,9 @@ impl<'a> Parser<'a> {
 
     /// Parse `spawn name_expr? (with expr (, expr)*)? { body }`. The name
     /// expression is optional and is parsed until we see `with` or `{`. The
-    /// optional `with` clause (BEP-034 spawn options) is a comma-separated
-    /// list of expressions; in v1 the only accepted form is a single
-    /// `baml.spawn.options(...)` call, enforced later in TIR. The body is
-    /// always a brace-delimited block.
+    /// optional `with` clause is a comma-separated list of
+    /// `baml.spawn.Modifier` values (BEP-040), applied left to right. The body
+    /// is always a brace-delimited block.
     fn parse_spawn_expr(&mut self) {
         self.with_node(SyntaxKind::SPAWN_EXPR, |p| {
             p.bump(); // `spawn`
@@ -7183,7 +7182,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::Arrow
                 | TokenKind::FatArrow
                 // `spawn`/`await` are valid namespace segments inside type
-                // args (`foo<baml.spawn.Params<T, E>>(x)`), mirroring
+                // args (`foo<baml.spawn.Plan<T, E>>(x)`), mirroring
                 // the type-path parser's segment set.
                 | TokenKind::Spawn
                 | TokenKind::Await

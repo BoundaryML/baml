@@ -56,7 +56,11 @@ pub trait Bex: Send + Sync {
 
     fn set_unhandled_spawn_error_handler(&self, handler: Option<UnhandledSpawnErrorHandler>);
 
-    async fn shutdown(self: Arc<Self>);
+    /// Wait for in-flight calls and spawned work, report unreachable
+    /// unobserved errors, and close the runtime. `grace` bounds the whole
+    /// wait (`None` waits for as long as the work takes); see
+    /// `BexEngine::shutdown_with_deadline` for what happens at the deadline.
+    async fn shutdown(self: Arc<Self>, grace: Option<std::time::Duration>);
 
     /// Run-vocabulary alias for host-call cancellation. The parameter is still
     /// the adapter-owned `HostCallId` backing value, not a `RunId`.
@@ -174,7 +178,8 @@ impl Bex for BexEngine {
         BexEngine::set_unhandled_spawn_error_handler(self, handler);
     }
 
-    async fn shutdown(self: Arc<Self>) {
-        BexEngine::shutdown(&self).await;
+    async fn shutdown(self: Arc<Self>, grace: Option<std::time::Duration>) {
+        BexEngine::shutdown_with_deadline(&self, grace, BexEngine::report_shutdown_wait, |_| {})
+            .await;
     }
 }
