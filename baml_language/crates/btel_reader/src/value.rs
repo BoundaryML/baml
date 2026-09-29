@@ -14,7 +14,7 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
-use btel_snapshot::{DecodedObject, DecodedSnapshot, DecodedValue, Description, Limit};
+use btel_snapshot::{DecodedObject, DecodedSnapshot, DecodedValue, Description, Limit, NodeId};
 use num_bigint::BigInt;
 use serde_json::{Map, Value as Json};
 
@@ -82,7 +82,7 @@ fn through_cells<'a>(
         match value {
             DecodedValue::Object(id) => match snapshot.object(*id) {
                 DecodedObject::Cell(inner) => value = inner,
-                DecodedObject::Bytes { .. }
+                DecodedObject::Uint8Array { .. }
                 | DecodedObject::List { .. }
                 | DecodedObject::Map { .. }
                 | DecodedObject::Instance { .. }
@@ -166,7 +166,7 @@ pub fn navigate<'a>(
         None => Nav::Unavailable(Unavailable::CellCycle),
         Some(DecodedValue::Object(id)) => match snapshot.object(*id) {
             DecodedObject::Truncated(limit) => Nav::Unavailable(Unavailable::Truncated(*limit)),
-            DecodedObject::Bytes { .. }
+            DecodedObject::Uint8Array { .. }
             | DecodedObject::List { .. }
             | DecodedObject::Map { .. }
             | DecodedObject::Instance { .. }
@@ -263,7 +263,7 @@ fn step<'a>(
         (DecodedObject::List { .. }, Segment::Key(_))
         | (DecodedObject::Map { .. } | DecodedObject::Instance { .. }, Segment::Index(_))
         | (
-            DecodedObject::Bytes { .. }
+            DecodedObject::Uint8Array { .. }
             | DecodedObject::Declaration { .. }
             | DecodedObject::Cell(_)
             | DecodedObject::NonSnapshotable
@@ -724,9 +724,9 @@ struct Renderer<'a> {
     snapshot: &'a DecodedSnapshot,
     limits: &'a RenderLimits,
     /// Objects reachable more than once from the rendered roots.
-    shared: HashSet<u32>,
+    shared: HashSet<NodeId>,
     /// Label of each shared object already printed with its `$id`.
-    rendered: HashMap<u32, u32>,
+    rendered: HashMap<NodeId, u32>,
     nodes: usize,
 }
 
@@ -737,17 +737,18 @@ impl<'a> Renderer<'a> {
         limits: &'a RenderLimits,
     ) -> Self {
         // Count incoming references reachable from the roots (iteratively).
-        let mut counts: HashMap<u32, u32> = HashMap::new();
-        let mut stack: Vec<u32> = Vec::new();
-        let visit = |value: &DecodedValue, counts: &mut HashMap<u32, u32>, stack: &mut Vec<u32>| {
-            if let DecodedValue::Object(id) = value {
-                let count = counts.entry(*id).or_insert(0);
-                *count += 1;
-                if *count == 1 {
-                    stack.push(*id);
+        let mut counts: HashMap<NodeId, u32> = HashMap::new();
+        let mut stack: Vec<NodeId> = Vec::new();
+        let visit =
+            |value: &DecodedValue, counts: &mut HashMap<NodeId, u32>, stack: &mut Vec<NodeId>| {
+                if let DecodedValue::Object(id) = value {
+                    let count = counts.entry(*id).or_insert(0);
+                    *count += 1;
+                    if *count == 1 {
+                        stack.push(*id);
+                    }
                 }
-            }
-        };
+            };
         for root in roots {
             visit(root, &mut counts, &mut stack);
         }
@@ -769,7 +770,7 @@ impl<'a> Renderer<'a> {
                 DecodedObject::Cell(value) => visit(value, &mut counts, &mut stack),
                 // Declarations render by name, so references to them never
                 // make an object shared.
-                DecodedObject::Bytes { .. }
+                DecodedObject::Uint8Array { .. }
                 | DecodedObject::Declaration { .. }
                 | DecodedObject::NonSnapshotable
                 | DecodedObject::Descriptive { .. }
@@ -789,12 +790,12 @@ impl<'a> Renderer<'a> {
         }
     }
 
-    fn declaration_name(&self, id: u32) -> Json {
+    fn declaration_name(&self, id: NodeId) -> Json {
         match self.snapshot.object(id) {
             DecodedObject::Declaration { name, .. } => {
                 Json::from(name.0.display_name().to_string())
             }
-            DecodedObject::Bytes { .. }
+            DecodedObject::Uint8Array { .. }
             | DecodedObject::List { .. }
             | DecodedObject::Map { .. }
             | DecodedObject::Instance { .. }
@@ -842,7 +843,7 @@ impl<'a> Renderer<'a> {
         }
     }
 
-    fn object(&mut self, id: u32, depth: usize) -> Json {
+    fn object(&mut self, id: NodeId, depth: usize) -> Json {
         let is_shared = self.shared.contains(&id);
         if is_shared && let Some(label) = self.rendered.get(&id) {
             return envelope("$ref", Json::from(*label));
@@ -918,7 +919,7 @@ impl<'a> Renderer<'a> {
                     map.insert("$original_len".into(), Json::from(*original_len));
                 }
             }
-            DecodedObject::Bytes { data, original_len } => {
+            DecodedObject::Uint8Array { data, original_len } => {
                 use base64::Engine as _;
                 if data.len() <= self.limits.max_bytes_inline {
                     map.insert(

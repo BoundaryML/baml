@@ -4,7 +4,10 @@ use baml_type::{DeclarationName, RealizedTy, TypeName, typetag::TypeTag};
 use num_bigint::BigInt;
 
 use super::*;
-use crate::{Limits, MapEntry, Snapshot, SnapshotObject as O, SnapshotPool, SnapshotValue as V};
+use crate::{
+    BlobScratch, Limits, MapEntry, Shaper, Snapshot, SnapshotObject as O, SnapshotPool,
+    SnapshotValue as V,
+};
 
 fn int_type() -> OwnedType {
     RealizedTy::Int
@@ -13,8 +16,25 @@ fn customer() -> DeclarationName {
     DeclarationName::Declared(TypeName::from_dotted_path("user.Customer"))
 }
 fn encode(snapshot: &Snapshot) -> Vec<u8> {
+    assert_eq!(snapshot.blobs().len(), 1);
     let mut bytes = Vec::new();
-    snapshot.write_blob(&mut bytes).unwrap();
+    snapshot
+        .root_blob()
+        .write(&mut BlobScratch::default(), &mut bytes)
+        .unwrap();
+    bytes
+}
+/// A hand-built header: zero ID, the given child IDs, and an object count.
+fn header(children: &[[u8; 16]], objects: u32) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(&crate::BLOB_MAGIC);
+    bytes.extend_from_slice(&crate::BLOB_VERSION.to_le_bytes());
+    bytes.extend_from_slice(&[0; 16]);
+    bytes.extend_from_slice(&u32::try_from(children.len()).unwrap().to_le_bytes());
+    for child in children {
+        bytes.extend_from_slice(child);
+    }
+    bytes.extend_from_slice(&objects.to_le_bytes());
     bytes
 }
 fn decode(bytes: &[u8]) -> Result<DecodedSnapshot, BlobError> {
@@ -84,7 +104,7 @@ fn rich_snapshot(pool: &SnapshotPool) -> Snapshot {
     let data = b.copy_bytes(&[1, 2, 3]);
     b.set_object(
         bytes,
-        O::Bytes {
+        O::Uint8Array {
             data,
             original_len: 3,
         },
@@ -141,7 +161,7 @@ fn rich_snapshot(pool: &SnapshotPool) -> Snapshot {
     b.push_value(V::OmittedArg);
     b.push_value(V::Object(list));
     let slots = b.value_range(start);
-    b.finish_args(3, slots)
+    b.finish_args(3, slots, &mut Shaper::default())
 }
 
 #[test]
@@ -149,8 +169,8 @@ fn every_value_kind_round_trips_with_verified_identity_and_preserved_graph() {
     let pool = SnapshotPool::new(1, Limits::default());
     let snapshot = rich_snapshot(&pool);
     let decoded = decode(&encode(&snapshot)).unwrap();
-    assert_eq!(decoded.id, snapshot.id());
-    assert!(!decoded.limited);
+    assert_eq!(decoded.id, snapshot.root_id());
+    assert!(decoded.children.is_empty());
     let DecodedRoot::FunctionArgs {
         parameter_count,
         slots,
@@ -227,17 +247,19 @@ fn value_roots_and_limited_captures_verify() {
     let value = b
         .string(&"too long".into())
         .map_or(V::Truncated(crate::Limit::Bytes), V::String);
-    let snapshot = b.finish_value(value);
+    let snapshot = b.finish_value(value, &mut Shaper::default());
     assert!(snapshot.stats().limited);
     let decoded = decode(&encode(&snapshot)).unwrap();
-    assert!(decoded.limited);
     assert_eq!(
         decoded.root,
         DecodedRoot::Value(DecodedValue::Truncated(crate::Limit::Bytes))
     );
     drop(snapshot);
-    let empty = pool.try_acquire().unwrap().finish_value(V::Null);
-    assert_eq!(decode(&encode(&empty)).unwrap().id, empty.id());
+    let empty = pool
+        .try_acquire()
+        .unwrap()
+        .finish_value(V::Null, &mut Shaper::default());
+    assert_eq!(decode(&encode(&empty)).unwrap().id, empty.root_id());
 }
 
 #[test]
@@ -252,7 +274,7 @@ fn content_changes_are_rejected_even_when_the_header_is_intact() {
     changed[at] = b'j';
     assert!(matches!(
         decode(&changed),
-        Err(BlobError::IdMismatch { declared, .. }) if declared == snapshot.id()
+        Err(BlobError::IdMismatch { declared, .. }) if declared == snapshot.root_id()
     ));
     // A different declared ID with unchanged content is also rejected.
     let mut header = bytes;
@@ -273,9 +295,9 @@ fn malformed_blobs_fail_without_panicking() {
     let mut magic = bytes.clone();
     magic[0] = b'X';
     assert_eq!(decode(&magic), Err(BlobError::Magic));
-    // The previous format (attribute-carrying types, v1 hash domain) and any
-    // later one are rejected by version, before their content is read.
-    for other in [1, crate::BLOB_VERSION + 1] {
+    // Earlier formats (attribute-carrying types; discovery-order numbering)
+    // and any later one are rejected by version, before their content is read.
+    for other in [1, 2, crate::BLOB_VERSION + 1] {
         let mut version = bytes.clone();
         version[8..12].copy_from_slice(&other.to_le_bytes());
         assert_eq!(decode(&version), Err(BlobError::Version(other)));
@@ -292,12 +314,7 @@ fn malformed_blobs_fail_without_panicking() {
 #[test]
 fn out_of_range_references_are_structural_errors() {
     // Header for an empty graph whose value root references object 0.
-    let mut bytes = Vec::new();
-    bytes.extend_from_slice(&crate::BLOB_MAGIC);
-    bytes.extend_from_slice(&crate::BLOB_VERSION.to_le_bytes());
-    bytes.extend_from_slice(&[0; 16]);
-    bytes.push(0); // not limited
-    bytes.extend_from_slice(&0_u32.to_le_bytes());
+    let mut bytes = header(&[], 0);
     bytes.push(0); // value root
     bytes.push(7); // object reference
     bytes.extend_from_slice(&0_u32.to_le_bytes());
@@ -333,12 +350,7 @@ fn limits_are_enforced_before_allocation() {
         Err(BlobError::Limit("decoded bytes"))
     );
     // A declared length far beyond the input is rejected before allocating.
-    let mut huge = Vec::new();
-    huge.extend_from_slice(&crate::BLOB_MAGIC);
-    huge.extend_from_slice(&crate::BLOB_VERSION.to_le_bytes());
-    huge.extend_from_slice(&[0; 16]);
-    huge.push(0);
-    huge.extend_from_slice(&0_u32.to_le_bytes());
+    let mut huge = header(&[], 0);
     huge.push(1); // argument root
     huge.extend_from_slice(&3_u64.to_le_bytes());
     huge.extend_from_slice(&u32::MAX.to_le_bytes());
@@ -366,7 +378,7 @@ fn type_blob(ty: OwnedType) -> Vec<u8> {
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
     let id = b.push_type(ty);
-    encode(&b.finish_value(V::Type(id)))
+    encode(&b.finish_value(V::Type(id), &mut Shaper::default()))
 }
 
 #[test]
@@ -447,7 +459,7 @@ fn one_helper_thread_measures_every_large_description_in_a_blob() {
             b.push_value(V::Type(ty));
         }
         let slots = b.value_range(start);
-        encode(&b.finish_args(3, slots))
+        encode(&b.finish_args(3, slots, &mut Shaper::default()))
     });
     let (decoded, helpers) = std::thread::Builder::new()
         .stack_size(2 << 20)
@@ -490,9 +502,9 @@ fn map_entry_keys_hash_like_the_producer() {
             original_len: 2,
         },
     );
-    let snapshot = b.finish_value(V::Object(map));
+    let snapshot = b.finish_value(V::Object(map), &mut Shaper::default());
     let decoded = decode(&encode(&snapshot)).unwrap();
-    let DecodedObject::Map { entries, .. } = decoded.object(0) else {
+    let DecodedObject::Map { entries, .. } = decoded.object(NodeId(0)) else {
         panic!("map")
     };
     assert_eq!(
@@ -547,4 +559,44 @@ fn measure_type_decode_stack_per_level() {
             }
         }
     }
+}
+
+fn invalid_because(bytes: &[u8], reason: &str) -> bool {
+    matches!(decode(bytes), Err(BlobError::Invalid(actual)) if actual.contains(reason))
+}
+
+#[test]
+fn objects_must_be_numbered_in_first_reference_order() {
+    // The root's first reference names object 1 before object 0.
+    let mut skipped = header(&[], 2);
+    skipped.extend_from_slice(&[0, 7]); // value root: object reference
+    skipped.extend_from_slice(&1_u32.to_le_bytes());
+    assert!(invalid_because(&skipped, "precedes a first reference to 0"));
+
+    // Object 1 is defined but never referenced.
+    let mut unreferenced = header(&[], 2);
+    unreferenced.extend_from_slice(&[0, 7]);
+    unreferenced.extend_from_slice(&0_u32.to_le_bytes());
+    unreferenced.extend_from_slice(&[5, 0, 5, 0]); // two null cells
+    assert!(invalid_because(
+        &unreferenced,
+        "object 1 is not referenced before its definition"
+    ));
+}
+
+#[test]
+fn child_blobs_must_be_distinct_and_referenced() {
+    let mut unused = header(&[[1; 16]], 0);
+    unused.extend_from_slice(&[0, 0]); // null value root
+    assert!(invalid_because(&unused, "unreferenced child blob"));
+
+    let mut duplicate = header(&[[1; 16], [1; 16]], 0);
+    duplicate.extend_from_slice(&[0, 0]);
+    assert!(invalid_because(&duplicate, "duplicate child blob"));
+
+    // A declared child table longer than the input is rejected before reading it.
+    let mut truncated = header(&[], 0);
+    truncated.truncate(truncated.len() - 8);
+    truncated.extend_from_slice(&u32::MAX.to_le_bytes());
+    assert_eq!(decode(&truncated), Err(BlobError::Truncated));
 }

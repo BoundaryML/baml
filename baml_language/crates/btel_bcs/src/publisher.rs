@@ -6,7 +6,7 @@ use std::{
 use btel_processor::{AggregateDelta, Publisher};
 use btel_recorder::{RecordingBuilder, RecordingConfig, RecordingError, RecordingId, SealedFile};
 use btel_records::SpanRecord;
-use btel_snapshot::{Snapshot, SnapshotId};
+use btel_snapshot::{CasId, Snapshot};
 use btel_types::TelemetryId;
 
 use crate::{
@@ -65,15 +65,15 @@ pub struct CloudPublisher {
     recording: RecordingBuilder,
     recording_target: usize,
     config: CloudPublisherConfig,
-    offered: HashSet<SnapshotId>,
-    offered_order: VecDeque<SnapshotId>,
+    offered: HashSet<CasId>,
+    offered_order: VecDeque<CasId>,
     metadata: MetadataJournal,
     pending: PendingSnapshots,
     staged: Vec<PendingFile>,
     retained_snapshots: usize,
     retained_bytes: usize,
     staged_recording_bytes: usize,
-    preflight_size: Option<(SnapshotId, Option<usize>)>,
+    preflight_size: Option<(CasId, Option<usize>)>,
     failure: Option<DeliveryError>,
     delivery: BcsDeliveryHandle,
 }
@@ -178,16 +178,22 @@ impl CloudPublisher {
         self.recording.discard_pending();
     }
 
-    fn already_offered(&self, id: SnapshotId) -> bool {
+    fn already_offered(&self, id: CasId) -> bool {
         self.offered.contains(&id)
-            || self.pending.owners.iter().any(|owner| owner.id() == id)
             || self
-                .staged
+                .pending
+                .owners
                 .iter()
-                .any(|file| file.snapshots.owners.iter().any(|owner| owner.id() == id))
+                .any(|owner| owner.root_id() == id)
+            || self.staged.iter().any(|file| {
+                file.snapshots
+                    .owners
+                    .iter()
+                    .any(|owner| owner.root_id() == id)
+            })
     }
 
-    fn remember(&mut self, id: SnapshotId) {
+    fn remember(&mut self, id: CasId) {
         if self.offered.contains(&id) {
             return;
         }
@@ -213,7 +219,7 @@ impl CloudPublisher {
                 .owners
                 .iter()
                 .chain(self.staged.iter().flat_map(|file| &file.snapshots.owners))
-                .map(Snapshot::id)
+                .map(Snapshot::root_id)
                 .collect();
             for id in ids {
                 self.remember(id);
@@ -223,11 +229,11 @@ impl CloudPublisher {
 
     fn retain(&mut self, snapshot: Snapshot) {
         let preflight = self.preflight_size.take();
-        if self.already_offered(snapshot.id()) {
+        if self.already_offered(snapshot.root_id()) {
             return;
         }
         let size = match preflight {
-            Some((id, size)) if id == snapshot.id() => size,
+            Some((id, size)) if id == snapshot.root_id() => size,
             _ => snapshot.retained_bytes(),
         };
         let Some(size) = size else {
@@ -247,7 +253,7 @@ impl CloudPublisher {
                 .record_payload_loss(DeliveryError::Capacity, false);
             return;
         }
-        self.remember(snapshot.id());
+        self.remember(snapshot.root_id());
         self.retained_snapshots += 1;
         self.retained_bytes = total;
         self.pending.bytes += size;
@@ -375,9 +381,9 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
                 .and_then(|completion| completion.captured_value),
         };
         if let Some(snapshot) = snapshot {
-            if !self.already_offered(snapshot.id()) {
+            if !self.already_offered(snapshot.root_id()) {
                 let size = snapshot.retained_bytes();
-                self.preflight_size = Some((snapshot.id(), size));
+                self.preflight_size = Some((snapshot.root_id(), size));
                 if self.retained_snapshots >= self.config.max_pending_snapshots
                     || size.is_some_and(|bytes| {
                         self.retained_bytes.saturating_add(bytes) > self.config.max_retained_bytes
@@ -546,10 +552,10 @@ mod tests {
     }
 
     fn capture(publisher: &mut CloudPublisher, pool: &SnapshotPool, value: i64) {
-        let snapshot = pool
-            .try_acquire()
-            .unwrap()
-            .finish_value(SnapshotValue::Int(value));
+        let snapshot = pool.try_acquire().unwrap().finish_value(
+            SnapshotValue::Int(value),
+            &mut btel_snapshot::Shaper::default(),
+        );
         let thread = allocate_telemetry_id();
         publisher.span(
             thread,
@@ -570,9 +576,9 @@ mod tests {
         let snapshot = pool
             .try_acquire()
             .unwrap()
-            .finish_value(SnapshotValue::Int(1));
+            .finish_value(SnapshotValue::Int(1), &mut btel_snapshot::Shaper::default());
         let expected = snapshot.retained_bytes().unwrap();
-        let id = snapshot.id();
+        let id = snapshot.root_id();
         let thread = allocate_telemetry_id();
         let mut record = SpanRecord::FunctionSpanAnnouncement {
             id: allocate_telemetry_id(),
@@ -590,7 +596,7 @@ mod tests {
         let next = pool
             .try_acquire()
             .unwrap()
-            .finish_value(SnapshotValue::Int(2));
+            .finish_value(SnapshotValue::Int(2), &mut btel_snapshot::Shaper::default());
         let SpanRecord::FunctionSpanAnnouncement {
             captured_inputs, ..
         } = &mut record

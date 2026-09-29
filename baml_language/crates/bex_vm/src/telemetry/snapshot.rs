@@ -2,7 +2,7 @@
 //! snapshot-local indexes. Locks sample containers independently, not atomically.
 use bex_vm_types::{HeapPtr, Object, Value, ValueKind};
 use btel_snapshot::{
-    Builder, Description, Limit, ObjectId, Snapshot, SnapshotObject, SnapshotValue,
+    Builder, Description, Limit, ObjectId, Shaper, Snapshot, SnapshotObject, SnapshotValue,
 };
 use rustc_hash::FxHashMap;
 
@@ -17,8 +17,15 @@ pub(super) struct Scratch {
     seen: FxHashMap<HeapPtr, SnapshotValue>,
     rust_seen: FxHashMap<usize, ObjectId>,
     work: Vec<(ObjectId, HeapPtr, usize)>,
+    shaper: Shaper,
 }
 impl Scratch {
+    /// The capturing thread's shaping scratch, for captures built outside
+    /// [`Self::capture`].
+    #[cfg(all(not(test), not(target_arch = "wasm32")))]
+    pub(super) fn shaper(&mut self) -> &mut Shaper {
+        &mut self.shaper
+    }
     fn add(&mut self, b: &mut Builder, value: Value, depth: usize) -> SnapshotValue {
         if let Some(ptr) = value.as_object_ptr() {
             if let Some(value) = self.seen.get(&ptr) {
@@ -122,7 +129,7 @@ impl Scratch {
             let object = match unsafe { ptr.get() } {
                 Object::Uint8Array(data) => {
                     let data = data.lock();
-                    SnapshotObject::Bytes {
+                    SnapshotObject::Uint8Array {
                         data: b.copy_bytes(&data),
                         original_len: data.len(),
                     }
@@ -244,8 +251,8 @@ impl Scratch {
         self.rust_seen.clear();
         self.work.clear();
         match input {
-            Input::Value(_) => b.finish_value(value_root),
-            Input::FunctionArgs(args) => b.finish_args(args.len(), args_range),
+            Input::Value(_) => b.finish_value(value_root, &mut self.shaper),
+            Input::FunctionArgs(args) => b.finish_args(args.len(), args_range, &mut self.shaper),
         }
     }
 }
@@ -345,7 +352,7 @@ mod tests {
         let children = snapshot.values(*items);
         assert_eq!(children[0], children[1]);
         assert_eq!(children[2], root);
-        let Obj::Bytes { data, .. } = captured_object(&snapshot, children[0]) else {
+        let Obj::Uint8Array { data, .. } = captured_object(&snapshot, children[0]) else {
             panic!()
         };
         assert_eq!(snapshot.bytes(*data), [1, 2, 3]);
@@ -664,7 +671,7 @@ mod tests {
         // Both walks must preserve the same graph topology and values despite
         // distinct VM heap addresses; no source addresses appear in either graph.
         assert_eq!(format!("{snapshot:?}"), format!("{copied_snapshot:?}"));
-        assert_eq!(snapshot.id(), copied_snapshot.id());
+        assert_eq!(snapshot.root_id(), copied_snapshot.root_id());
     }
 
     #[test]
@@ -684,7 +691,7 @@ mod tests {
             };
             node = snapshot.values(*items)[0];
         }
-        let Obj::Bytes { data, original_len } = captured_object(&snapshot, node) else {
+        let Obj::Uint8Array { data, original_len } = captured_object(&snapshot, node) else {
             panic!()
         };
         assert_eq!(*original_len, 9 * 1024 * 1024);

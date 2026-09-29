@@ -1,5 +1,5 @@
 use baml_type::{DeclarationName, TypeName, typetag::TypeTag};
-use btel_snapshot::{DecodedName, DecodedRoot, SnapshotId, TypeDescription};
+use btel_snapshot::{CasId, DecodedName, DecodedRoot, TypeDescription};
 use serde_json::json;
 
 use super::*;
@@ -32,14 +32,14 @@ fn snapshot() -> DecodedSnapshot {
         // 1: customer instance
         O::Instance {
             type_arguments: vec![],
-            declaration: 0,
+            declaration: NodeId(0),
             fields: vec![
                 ("name".into(), s("Ann")),
                 ("age".into(), V::Int(30)),
-                ("items".into(), V::Object(2)),
-                ("meta".into(), V::Object(4)),
+                ("items".into(), V::Object(NodeId(2))),
+                ("meta".into(), V::Object(NodeId(4))),
                 ("nothing".into(), V::Null),
-                ("cell".into(), V::Object(5)),
+                ("cell".into(), V::Object(NodeId(5))),
                 ("cut".into(), V::Truncated(Limit::Bytes)),
             ],
             original_len: 7,
@@ -47,7 +47,7 @@ fn snapshot() -> DecodedSnapshot {
         // 2: items list, second element shared with meta.first
         O::List {
             element_type: ty(),
-            items: vec![V::Object(3), V::Object(3)],
+            items: vec![V::Object(NodeId(3)), V::Object(NodeId(3))],
             original_len: 3,
         },
         // 3: item map
@@ -65,7 +65,7 @@ fn snapshot() -> DecodedSnapshot {
             key_type: ty(),
             value_type: ty(),
             entries: vec![
-                ("self".into(), V::Object(4)),
+                ("self".into(), V::Object(NodeId(4))),
                 ("big".into(), V::Bigint(Box::new(BigInt::from(1) << 80))),
             ],
             original_len: 2,
@@ -74,11 +74,11 @@ fn snapshot() -> DecodedSnapshot {
         O::Cell(V::Int(99)),
     ];
     DecodedSnapshot {
-        id: SnapshotId::from_bytes([0; 16]),
-        limited: true,
+        id: CasId::from_bytes([0; 16]),
+        children: Vec::new(),
         root: DecodedRoot::FunctionArgs {
             parameter_count: 2,
-            slots: vec![V::Object(1), V::OmittedArg],
+            slots: vec![V::Object(NodeId(1)), V::OmittedArg],
         },
         objects,
     }
@@ -309,17 +309,21 @@ fn shared_labels_follow_output_order_and_skip_truncated_visits() {
     // Argument `deep` reaches map 0 two lists down; `a` and `b` reach it and
     // map 1 directly.
     let snap = DecodedSnapshot {
-        id: SnapshotId::from_bytes([0; 16]),
-        limited: false,
+        id: CasId::from_bytes([0; 16]),
+        children: Vec::new(),
         root: DecodedRoot::FunctionArgs {
             parameter_count: 3,
-            slots: vec![V::Object(2), V::Object(1), V::Object(0)],
+            slots: vec![
+                V::Object(NodeId(2)),
+                V::Object(NodeId(1)),
+                V::Object(NodeId(0)),
+            ],
         },
         objects: vec![
             map(0),
             map(1),
-            list(vec![V::Object(3), V::Object(1)]),
-            list(vec![V::Object(0)]),
+            list(vec![V::Object(NodeId(3)), V::Object(NodeId(1))]),
+            list(vec![V::Object(NodeId(0))]),
         ],
     };
     let names = ArgumentNames {

@@ -147,7 +147,7 @@ fn announce(inputs: Option<[u8; 16]>) -> Event {
         parent_id: THREAD,
         call_path_id: PATH,
         entered_at_ticks: 1000,
-        inputs_cas_id: inputs.map(|b| proto::SnapshotId {
+        inputs_cas_id: inputs.map(|b| proto::CasId {
             low: u64::from_le_bytes(b[..8].try_into().unwrap()),
             high: u64::from_le_bytes(b[8..].try_into().unwrap()),
         }),

@@ -72,10 +72,10 @@ fn sources(pool: &SnapshotPool, count: usize) -> (SealedFile, Vec<Snapshot>) {
         ..AggregateDelta::default()
     });
     for index in 0..count {
-        let snapshot = pool
-            .try_acquire()
-            .unwrap()
-            .finish_value(SnapshotValue::Int(10 + i64::try_from(index).unwrap()));
+        let snapshot = pool.try_acquire().unwrap().finish_value(
+            SnapshotValue::Int(10 + i64::try_from(index).unwrap()),
+            &mut btel_snapshot::Shaper::default(),
+        );
         builder.span(
             ids[0],
             &mut SpanRecord::FunctionSpanCompletionOk {
@@ -109,10 +109,13 @@ fn source_manifest() -> Value {
         if count == 5 {
             for (index, snapshot) in snapshots.iter().enumerate() {
                 let mut blob = Vec::new();
-                snapshot.write_blob(&mut blob).unwrap();
+                snapshot
+                    .root_blob()
+                    .write(&mut btel_snapshot::BlobScratch::default(), &mut blob)
+                    .unwrap();
                 blobs.push(json!({
                     "value": 10 + index,
-                    "snapshot_id": hex::encode(snapshot.id().as_bytes()),
+                    "snapshot_id": hex::encode(snapshot.root_id().as_bytes()),
                     "snapshot_format_version": btel_settings::snapshot::BLOB_VERSION,
                     "hex": hex::encode(&blob),
                     "length": blob.len(),

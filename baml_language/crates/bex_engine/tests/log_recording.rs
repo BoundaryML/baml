@@ -16,7 +16,7 @@ use btel_reader::{
     context::{ContextReference, reference},
 };
 use btel_recorder::{RecordingConfig, proto};
-use btel_snapshot::{DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, SnapshotId};
+use btel_snapshot::{CasId, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue};
 use prost::Message as _;
 use sys_native::SysOpsExt;
 use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers::method};
@@ -103,7 +103,7 @@ fn fields(entries: &btel_snapshot::Entries) -> BTreeMap<&str, &DecodedValue> {
 fn assert_logs(
     files: &[proto::RecordingFile],
     name: &str,
-    mut load: impl FnMut(SnapshotId) -> DecodedSnapshot,
+    mut load: impl FnMut(CasId) -> DecodedSnapshot,
 ) {
     use proto::span_event::Event;
     let functions: BTreeMap<_, _> = files

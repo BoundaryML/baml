@@ -3,16 +3,22 @@
 use baml_type::RealizedTy;
 use btel_types::context::{Context, ContextValue};
 
-use crate::{Builder, Snapshot, SnapshotObject, SnapshotPool, SnapshotValue};
+use crate::{Builder, Shaper, Snapshot, SnapshotObject, SnapshotPool, SnapshotValue};
 
 /// Capture an entire context or decline it. A truncated metadata map must not
 /// look like a complete context with missing keys. Pool admission never affects
 /// the live execution context.
 pub fn capture(context: &Context, pool: &SnapshotPool) -> Option<Snapshot> {
-    capture_with_builder(context, pool.try_acquire()?)
+    capture_with_builder(context, pool.try_acquire()?, &mut Shaper::default())
 }
 
-pub fn capture_with_builder(context: &Context, mut builder: Builder) -> Option<Snapshot> {
+/// As [`capture`], into `builder`, shaped with the capturing thread's
+/// `shaper`.
+pub fn capture_with_builder(
+    context: &Context,
+    mut builder: Builder,
+    shaper: &mut Shaper,
+) -> Option<Snapshot> {
     if builder.limits().max_depth.is_some_and(|depth| depth < 2) {
         return None;
     }
@@ -60,7 +66,7 @@ pub fn capture_with_builder(context: &Context, mut builder: Builder) -> Option<S
             original_len: 2,
         },
     );
-    Some(builder.finish_value(SnapshotValue::Object(root)))
+    Some(builder.finish_value(SnapshotValue::Object(root), shaper))
 }
 
 fn entry(builder: &mut Builder, key: &str, value: SnapshotValue) -> Option<()> {
@@ -76,7 +82,7 @@ mod tests {
     use btel_types::context::ContextPatch;
 
     use super::*;
-    use crate::{DecodeLimits, Limits, SnapshotRoot, decode_blob};
+    use crate::{BlobScratch, DecodeLimits, Limits, SnapshotRoot, decode_blob};
 
     fn context() -> Context {
         Context::default().with_patch(&ContextPatch {
@@ -99,10 +105,13 @@ mod tests {
         let pool = SnapshotPool::new(2, Limits::default());
         let snapshot = capture(&context(), &pool).unwrap();
         let mut bytes = Vec::new();
-        snapshot.write_blob(&mut bytes).unwrap();
+        snapshot
+            .root_blob()
+            .write(&mut BlobScratch::default(), &mut bytes)
+            .unwrap();
         let decoded = decode_blob(&bytes, &DecodeLimits::default()).unwrap();
-        assert_eq!(decoded.id, snapshot.id());
-        assert!(!decoded.limited);
+        assert_eq!(decoded.id, snapshot.root_id());
+        assert!(!snapshot.stats().limited);
         let SnapshotRoot::Value(SnapshotValue::Object(root)) = snapshot.root() else {
             panic!("context root must be a map");
         };
@@ -147,7 +156,7 @@ mod tests {
         }
         let first = capture(&context, &pool).unwrap();
         let second = capture(&rebuilt, &pool).unwrap();
-        assert_eq!(first.id(), second.id());
+        assert_eq!(first.root_id(), second.root_id());
     }
 
     #[test]

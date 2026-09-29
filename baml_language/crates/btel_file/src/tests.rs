@@ -392,10 +392,20 @@ fn later_definitions_resolve_a_live_prefix_and_wrong_identity_is_rejected() {
     ));
 }
 
+fn root_blob(snapshot: &btel_snapshot::Snapshot) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    snapshot
+        .root_blob()
+        .write(&mut btel_snapshot::BlobScratch::default(), &mut bytes)
+        .unwrap();
+    bytes
+}
+
 fn snapshot(pool: &btel_snapshot::SnapshotPool, n: i64) -> btel_snapshot::Snapshot {
-    pool.try_acquire()
-        .unwrap()
-        .finish_value(btel_snapshot::SnapshotValue::Int(n))
+    pool.try_acquire().unwrap().finish_value(
+        btel_snapshot::SnapshotValue::Int(n),
+        &mut btel_snapshot::Shaper::default(),
+    )
 }
 
 #[test]
@@ -404,9 +414,8 @@ fn cas_is_shared_across_recordings_and_atomic_under_concurrent_writers() {
     let cas = root.path().join("cas");
     let pool = btel_snapshot::SnapshotPool::new(3, btel_snapshot::Limits::default());
     let value = snapshot(&pool, 42);
-    let id = value.id();
-    let mut expected = Vec::new();
-    value.write_blob(&mut expected).unwrap();
+    let id = value.root_id();
+    let expected = root_blob(&value);
     drop(value);
     let mut a = LocalDelivery::create_with_cas(
         root.path(),
@@ -435,7 +444,7 @@ fn cas_is_shared_across_recordings_and_atomic_under_concurrent_writers() {
     assert_eq!(filename.len(), 32);
     assert_eq!(
         path,
-        cas.join("v2")
+        cas.join("v3")
             .join(&filename[..2])
             .join(&filename[2..4])
             .join(&filename[4..6])
@@ -469,18 +478,16 @@ fn new_cas_version_does_not_reuse_or_overwrite_old_namespace() {
     let root = tempfile::tempdir().unwrap();
     let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
     let value = snapshot(&pool, 42);
-    let path = cas_path(root.path(), value.id());
+    let path = cas_path(root.path(), value.root_id());
     let legacy = root
         .path()
-        .join("v1")
-        .join(path.strip_prefix(root.path().join("v2")).unwrap());
+        .join("v2")
+        .join(path.strip_prefix(root.path().join("v3")).unwrap());
     fs::create_dir_all(legacy.parent().unwrap()).unwrap();
-    fs::write(&legacy, b"existing v1 entry").unwrap();
+    fs::write(&legacy, b"existing v2 entry").unwrap();
     crate::cas::write_snapshot(root.path(), &value).unwrap();
-    let mut expected = Vec::new();
-    value.write_blob(&mut expected).unwrap();
-    assert_eq!(fs::read(&path).unwrap(), expected);
-    assert_eq!(fs::read(&legacy).unwrap(), b"existing v1 entry");
+    assert_eq!(fs::read(&path).unwrap(), root_blob(&value));
+    assert_eq!(fs::read(&legacy).unwrap(), b"existing v2 entry");
 }
 
 #[test]

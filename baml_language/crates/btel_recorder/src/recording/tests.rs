@@ -894,7 +894,10 @@ fn thread_heavy_files_seal_near_the_encoded_target() {
 fn snapshot() -> btel_snapshot::Snapshot {
     let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
     let b = pool.try_acquire().unwrap();
-    b.finish_value(btel_snapshot::SnapshotValue::Int(42))
+    b.finish_value(
+        btel_snapshot::SnapshotValue::Int(42),
+        &mut btel_snapshot::Shaper::default(),
+    )
 }
 
 #[test]
@@ -902,14 +905,14 @@ fn captures_move_after_chunk_recycle_and_duplicates_release_before_file_flush() 
     use btel_snapshot::{Limits, SnapshotPool, SnapshotValue};
     let snapshots = SnapshotPool::new(2, Limits::default());
     let make = || {
-        snapshots
-            .try_acquire()
-            .unwrap()
-            .finish_value(SnapshotValue::Int(42))
+        snapshots.try_acquire().unwrap().finish_value(
+            SnapshotValue::Int(42),
+            &mut btel_snapshot::Shaper::default(),
+        )
     };
     let first = make();
     let second = make();
-    let expected = crate::snapshot_id(&first);
+    let expected = crate::cas_id(&first);
     let chunks =
         ChunkPool::<btel_records::TimingRecord, SpanRecord<Snapshot, Snapshot>>::new(Config {
             chunk_capacity: nz(4),
@@ -985,7 +988,7 @@ fn snapshot_receiver_panic_releases_pending_owners() {
         let snapshot = pool
             .try_acquire()
             .unwrap()
-            .finish_value(SnapshotValue::Int(n));
+            .finish_value(SnapshotValue::Int(n), &mut btel_snapshot::Shaper::default());
         p.span(
             thread,
             &mut SpanRecord::FunctionSpanAnnouncement {

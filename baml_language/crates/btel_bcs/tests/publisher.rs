@@ -38,10 +38,10 @@ fn capture_at(
     thread: btel_types::TelemetryId,
     call_path: CallPathId,
 ) {
-    let snapshot = pool
-        .try_acquire()
-        .unwrap()
-        .finish_value(SnapshotValue::Int(value));
+    let snapshot = pool.try_acquire().unwrap().finish_value(
+        SnapshotValue::Int(value),
+        &mut btel_snapshot::Shaper::default(),
+    );
     publisher.span(
         thread,
         &mut SpanRecord::<Snapshot, Snapshot>::FunctionSpanAnnouncement {

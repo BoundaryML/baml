@@ -13,19 +13,23 @@ use std::{
 use baml_type::{DeclarationName, typetag::TypeTag};
 /// The string type the builder takes, so callers need not depend on `bex_str`.
 pub use bex_str::BexStr;
+use hash::Absorb as _;
 use num_bigint::BigInt;
 
 pub mod context;
 mod decode;
 pub use decode::{
     BlobError, DecodeLimits, DecodedName, DecodedObject, DecodedRoot, DecodedSnapshot,
-    DecodedValue, Entries, SHALLOW_TYPE_BYTES, SharedSnapshot, TypeDescription, decode_blob,
+    DecodedValue, Entries, NodeId, SHALLOW_TYPE_BYTES, SharedSnapshot, TypeDescription,
+    decode_blob,
 };
 mod encoding;
-pub use encoding::{BLOB_MAGIC, BLOB_VERSION};
+pub use encoding::{BLOB_MAGIC, BLOB_VERSION, BlobScratch};
 mod hash;
-pub use hash::SnapshotId;
+pub use hash::CasId;
 mod memory;
+mod shape;
+pub use shape::Shaper;
 mod tags;
 
 macro_rules! index {
@@ -46,7 +50,6 @@ pub struct Range<T> {
     start: u32,
     len: u32,
     kind: PhantomData<fn() -> T>,
-    hash: hash::Digest,
 }
 impl<T> Copy for Range<T> {}
 impl<T> Clone for Range<T> {
@@ -68,7 +71,6 @@ impl<T> Range<T> {
             start: 0,
             len: 0,
             kind: PhantomData,
-            hash: hash::Hasher::new(tags::HashDomain::Range).finish(),
         }
     }
     pub fn len(self) -> usize {
@@ -77,13 +79,29 @@ impl<T> Range<T> {
     pub fn is_empty(self) -> bool {
         self.len == 0
     }
-    fn new(start: usize, len: usize, hash: hash::Digest) -> Self {
+    fn new(start: usize, len: usize) -> Self {
         Self {
             start: u32::try_from(start).expect("arena exhausted"),
             len: u32::try_from(len).expect("arena exhausted"),
             kind: PhantomData,
-            hash,
         }
+    }
+    fn indexes(self) -> std::ops::Range<usize> {
+        self.start as usize..self.start as usize + self.len as usize
+    }
+}
+/// Copied bytes and the content digest computed while copying them.
+#[derive(Clone, Copy, Debug)]
+pub struct Uint8ArrayData {
+    range: Range<u8>,
+    digest: hash::Digest,
+}
+impl Uint8ArrayData {
+    pub fn len(self) -> usize {
+        self.range.len()
+    }
+    pub fn is_empty(self) -> bool {
+        self.range.is_empty()
     }
 }
 /// Owned nominal identity, including its tag; names alone are not identity.
@@ -143,8 +161,8 @@ pub struct MapEntry {
 }
 #[derive(Debug)]
 pub enum SnapshotObject {
-    Bytes {
-        data: Range<u8>,
+    Uint8Array {
+        data: Uint8ArrayData,
         original_len: usize,
     },
     List {
@@ -278,18 +296,29 @@ struct Storage {
     strings: Vec<BexStr>,
     bigints: Vec<Arc<BigInt>>,
     types: Vec<OwnedType>,
-    root: Option<SnapshotRoot>,
     stats: CaptureStats,
     charged: usize,
     content: usize,
     string_hashes: Vec<hash::Digest>,
     bigint_hashes: Vec<hash::Digest>,
     type_hashes: Vec<hash::Digest>,
-    object_hashes: Vec<hash::Digest>,
-    value_hash: hash::Hasher,
-    entry_hash: hash::Hasher,
-    type_hash: hash::Hasher,
-    id: Option<SnapshotId>,
+    /// Shaped blobs, children before parents; the last is the capture root.
+    /// Empty until the capture is finished.
+    blobs: Vec<BlobEntry>,
+    /// Each blob's objects in blob-local order, concatenated.
+    members: Vec<ObjectId>,
+    /// Each blob's children in first-use order, concatenated.
+    blob_children: Vec<BlobIndex>,
+}
+/// Index of a blob in its snapshot's blob table.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct BlobIndex(u32);
+#[derive(Clone, Copy, Debug)]
+struct BlobEntry {
+    id: CasId,
+    root: SnapshotRoot,
+    members: Range<ObjectId>,
+    children: Range<BlobIndex>,
 }
 /// Exclusive pointer-sized owner, frozen before publication.
 /// ```compile_fail
@@ -311,12 +340,51 @@ impl std::fmt::Debug for Snapshot {
             .finish()
     }
 }
+/// One content-addressed blob of a shaped snapshot.
+#[derive(Clone, Copy)]
+pub struct Blob<'s> {
+    snapshot: &'s Snapshot,
+    index: BlobIndex,
+}
+impl std::fmt::Debug for Blob<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Blob").field("id", &self.id()).finish()
+    }
+}
+impl<'s> Blob<'s> {
+    pub fn id(&self) -> CasId {
+        self.entry().id
+    }
+    fn entry(&self) -> &'s BlobEntry {
+        &self.snapshot.0.blobs[self.index.0 as usize]
+    }
+}
 impl Snapshot {
-    pub fn id(&self) -> SnapshotId {
-        self.0.id.expect("frozen hash")
+    /// The blob a recording references for this capture.
+    pub fn root_blob(&self) -> Blob<'_> {
+        let last = self
+            .0
+            .blobs
+            .len()
+            .checked_sub(1)
+            .unwrap_or_else(|| unreachable!("a finished snapshot has a root blob"));
+        Blob {
+            snapshot: self,
+            index: BlobIndex(u32::try_from(last).expect("bounded blob count")),
+        }
+    }
+    pub fn root_id(&self) -> CasId {
+        self.root_blob().id()
+    }
+    /// Every blob, each after the blobs it references; the root is last.
+    pub fn blobs(&self) -> impl ExactSizeIterator<Item = Blob<'_>> + '_ {
+        (0..self.0.blobs.len()).map(|index| Blob {
+            snapshot: self,
+            index: BlobIndex(u32::try_from(index).expect("bounded blob count")),
+        })
     }
     pub fn root(&self) -> SnapshotRoot {
-        self.0.root.expect("frozen root")
+        self.root_blob().entry().root
     }
     pub fn value(&self) -> Option<SnapshotValue> {
         match self.root() {
@@ -331,7 +399,7 @@ impl Snapshot {
         }
     }
     pub fn roots(&self) -> &[SnapshotValue] {
-        match self.0.root.as_ref().unwrap() {
+        match &self.root_blob().entry().root {
             SnapshotRoot::Value(value) => std::slice::from_ref(value),
             SnapshotRoot::FunctionArgs(args) => self.values(args.slots),
         }
@@ -351,8 +419,8 @@ impl Snapshot {
     pub fn bigint(&self, id: BigintId) -> &Arc<BigInt> {
         &self.0.bigints[id.0 as usize]
     }
-    pub fn bytes(&self, range: Range<u8>) -> &[u8] {
-        &self.0.bytes[range.start as usize..][..range.len as usize]
+    pub fn bytes(&self, data: Uint8ArrayData) -> &[u8] {
+        &self.0.bytes[data.range.indexes()]
     }
     pub fn ty(&self, id: TypeId) -> &OwnedType {
         &self.0.types[id.0 as usize]
@@ -378,7 +446,9 @@ impl Snapshot {
             + std::mem::size_of_val(self.0.string_hashes.as_slice())
             + std::mem::size_of_val(self.0.bigint_hashes.as_slice())
             + std::mem::size_of_val(self.0.type_hashes.as_slice())
-            + std::mem::size_of_val(self.0.object_hashes.as_slice())
+            + std::mem::size_of_val(self.0.blobs.as_slice())
+            + std::mem::size_of_val(self.0.members.as_slice())
+            + std::mem::size_of_val(self.0.blob_children.as_slice())
     }
 }
 const _: () = assert!(std::mem::size_of::<Snapshot>() == std::mem::size_of::<usize>());
@@ -431,18 +501,15 @@ impl SnapshotPool {
                 strings: Vec::new(),
                 bigints: Vec::new(),
                 types: Vec::new(),
-                root: None,
                 stats: CaptureStats::default(),
                 charged: std::mem::size_of::<Storage>(),
                 content: 0,
                 string_hashes: Vec::new(),
                 bigint_hashes: Vec::new(),
                 type_hashes: Vec::new(),
-                object_hashes: Vec::new(),
-                value_hash: hash::Hasher::new(tags::HashDomain::Range),
-                entry_hash: hash::Hasher::new(tags::HashDomain::Range),
-                type_hash: hash::Hasher::new(tags::HashDomain::Range),
-                id: None,
+                blobs: Vec::new(),
+                members: Vec::new(),
+                blob_children: Vec::new(),
             });
             self.0.add_bytes(storage.charged);
             state.allocated += 1;
@@ -589,25 +656,13 @@ impl Builder {
         let id = ObjectId(u32::try_from(s.objects.len()).expect("bounded objects"));
         grow(&mut s.objects, 1, s.owner.as_ref().unwrap(), &mut s.charged);
         s.objects.push(SnapshotObject::Truncated(Limit::Objects));
-        grow(
-            &mut s.object_hashes,
-            1,
-            s.owner.as_ref().unwrap(),
-            &mut s.charged,
-        );
-        s.object_hashes
-            .push(hash::object(&SnapshotObject::Truncated(Limit::Objects), s));
         Some(id)
     }
     pub fn set_object(&mut self, id: ObjectId, object: SnapshotObject) {
-        let s = self.storage();
-        s.object_hashes[id.0 as usize] = hash::object(&object, s);
-        s.objects[id.0 as usize] = object;
+        self.storage().objects[id.0 as usize] = object;
     }
     pub fn value_start(&mut self) -> usize {
-        let s = self.storage();
-        s.value_hash = hash::Hasher::new(tags::HashDomain::Range);
-        s.values.len()
+        self.storage().values.len()
     }
     /// Reserve capacity once for a container, without initializing unused slots.
     pub fn reserve_values(&mut self, count: usize) {
@@ -624,25 +679,13 @@ impl Builder {
         assert!(self.remaining_values() > 0);
         let s = self.storage();
         grow(&mut s.values, 1, s.owner.as_ref().unwrap(), &mut s.charged);
-        hash::value(
-            &mut s.value_hash,
-            value,
-            &s.string_hashes,
-            &s.bigint_hashes,
-            &s.type_hashes,
-        );
         s.values.push(value);
     }
     pub fn value_range(&mut self, start: usize) -> Range<SnapshotValue> {
-        {
-            let s = self.storage();
-            Range::new(start, s.values.len() - start, s.value_hash.finish())
-        }
+        Range::new(start, self.storage().values.len() - start)
     }
     pub fn entry_start(&mut self) -> usize {
-        let s = self.storage();
-        s.entry_hash = hash::Hasher::new(tags::HashDomain::Range);
-        s.entries.len()
+        self.storage().entries.len()
     }
     pub fn reserve_entries(&mut self, count: usize) {
         assert!(count <= self.remaining_entries());
@@ -658,24 +701,13 @@ impl Builder {
         assert!(self.remaining_entries() > 0);
         let s = self.storage();
         grow(&mut s.entries, 1, s.owner.as_ref().unwrap(), &mut s.charged);
-        s.entry_hash.string(key);
-        hash::value(
-            &mut s.entry_hash,
-            value,
-            &s.string_hashes,
-            &s.bigint_hashes,
-            &s.type_hashes,
-        );
         s.entries.push(MapEntry {
             key: key.clone(),
             value,
         });
     }
     pub fn entry_range(&mut self, start: usize) -> Range<MapEntry> {
-        {
-            let s = self.storage();
-            Range::new(start, s.entries.len() - start, s.entry_hash.finish())
-        }
+        Range::new(start, self.storage().entries.len() - start)
     }
     /// Logical leaf bytes; not total retained backing (a slice can own a larger string).
     pub fn content(&mut self, bytes: usize, shared: bool) -> bool {
@@ -730,9 +762,7 @@ impl Builder {
         Some(id)
     }
     pub fn type_start(&mut self) -> usize {
-        let s = self.storage();
-        s.type_hash = hash::Hasher::new(tags::HashDomain::Range);
-        s.types.len()
+        self.storage().types.len()
     }
     pub fn push_type(&mut self, ty: OwnedType) -> TypeId {
         let s = self.storage();
@@ -744,19 +774,14 @@ impl Builder {
             s.owner.as_ref().unwrap(),
             &mut s.charged,
         );
-        let hash = hash::ty(&ty);
-        s.type_hash.digest(hash);
-        s.type_hashes.push(hash);
+        s.type_hashes.push(hash::ty(&ty));
         s.types.push(ty);
         id
     }
     pub fn type_range(&mut self, start: usize) -> Range<OwnedType> {
-        {
-            let s = self.storage();
-            Range::new(start, s.types.len() - start, s.type_hash.finish())
-        }
+        Range::new(start, self.storage().types.len() - start)
     }
-    pub fn copy_bytes(&mut self, bytes: &[u8]) -> Range<u8> {
+    pub fn copy_bytes(&mut self, bytes: &[u8]) -> Uint8ArrayData {
         let count = bytes.len().min(self.remaining_bytes());
         if count < bytes.len() {
             self.limited(Limit::Bytes);
@@ -770,28 +795,37 @@ impl Builder {
             s.owner.as_ref().unwrap(),
             &mut s.charged,
         );
-        let mut hash = hash::Hasher::new(tags::HashDomain::Range);
+        let mut digest = hash::Hasher::new(tags::HashDomain::Uint8Array);
         for chunk in bytes[..count].chunks(btel_settings::snapshot::COPY_HASH_BATCH_BYTES) {
-            hash.raw(chunk);
+            digest.absorb(chunk);
             s.bytes.extend_from_slice(chunk);
         }
-        Range::new(start, count, hash.finish())
+        Uint8ArrayData {
+            range: Range::new(start, count),
+            digest: digest.finish(),
+        }
     }
-    pub fn finish_value(mut self, value: SnapshotValue) -> Snapshot {
-        self.storage().root = Some(SnapshotRoot::Value(value));
-        self.finish()
+    pub fn finish_value(self, value: SnapshotValue, shaper: &mut Shaper) -> Snapshot {
+        self.finish(SnapshotRoot::Value(value), shaper)
     }
     /// Argument slots are written before processing deferred object children.
-    pub fn finish_args(mut self, parameter_count: usize, slots: Range<SnapshotValue>) -> Snapshot {
-        self.storage().root = Some(SnapshotRoot::FunctionArgs(FunctionArgs {
-            parameter_count,
-            slots,
-        }));
-        self.finish()
+    pub fn finish_args(
+        self,
+        parameter_count: usize,
+        slots: Range<SnapshotValue>,
+        shaper: &mut Shaper,
+    ) -> Snapshot {
+        self.finish(
+            SnapshotRoot::FunctionArgs(FunctionArgs {
+                parameter_count,
+                slots,
+            }),
+            shaper,
+        )
     }
-    fn finish(mut self) -> Snapshot {
-        let s = self.storage();
-        s.id = Some(hash::snapshot(s));
+    /// Shape the capture into blobs; the snapshot is immutable afterwards.
+    fn finish(mut self, root: SnapshotRoot, shaper: &mut Shaper) -> Snapshot {
+        shaper.shape(self.storage(), root);
         Snapshot(std::mem::ManuallyDrop::new(self.0.take().unwrap()))
     }
 }
@@ -807,12 +841,9 @@ fn recycle(mut storage: Box<Storage>) {
     storage.string_hashes.clear();
     storage.bigint_hashes.clear();
     storage.type_hashes.clear();
-    storage.object_hashes.clear();
-    storage.id = None;
-    storage.value_hash = hash::Hasher::new(tags::HashDomain::Range);
-    storage.entry_hash = hash::Hasher::new(tags::HashDomain::Range);
-    storage.type_hash = hash::Hasher::new(tags::HashDomain::Range);
-    storage.root = None;
+    storage.blobs.clear();
+    storage.members.clear();
+    storage.blob_children.clear();
     storage.stats = CaptureStats::default();
     storage.content = 0;
     let mut state = pool
@@ -858,9 +889,10 @@ mod tests;
 /// dropped and the snapshot says so. `None` when the pool has no slot.
 pub fn string_map(pool: &SnapshotPool, entries: &[(String, String)]) -> Option<Snapshot> {
     let mut b = pool.try_acquire()?;
+    let mut shaper = Shaper::default();
     let Some(map) = b.reserve_object() else {
         let truncated = b.limited(Limit::Objects);
-        return Some(b.finish_value(truncated));
+        return Some(b.finish_value(truncated, &mut shaper));
     };
     let key_type = b.push_type(OwnedType::string());
     let value_type = b.push_type(OwnedType::string());
@@ -891,5 +923,5 @@ pub fn string_map(pool: &SnapshotPool, entries: &[(String, String)]) -> Option<S
             original_len: entries.len(),
         },
     );
-    Some(b.finish_value(SnapshotValue::Object(map)))
+    Some(b.finish_value(SnapshotValue::Object(map), &mut shaper))
 }

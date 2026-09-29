@@ -13,9 +13,8 @@ fn blob_path(project: &std::path::Path, hex: &str) -> std::path::PathBuf {
         .step_by(2)
         .map(|at| u8::from_str_radix(&hex[at..at + 2], 16).unwrap())
         .collect();
-    btel_reader::layout::SourceLayout::for_project(project).blob_path(
-        btel_reader::SnapshotId::from_bytes(bytes.try_into().unwrap()),
-    )
+    btel_reader::layout::SourceLayout::for_project(project)
+        .blob_path(btel_reader::CasId::from_bytes(bytes.try_into().unwrap()))
 }
 
 /// Captured inputs and value CAS ids of a function's calls, oldest first.

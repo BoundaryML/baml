@@ -36,7 +36,9 @@ impl Snapshot {
             string_hashes,
             bigint_hashes,
             type_hashes,
-            object_hashes,
+            blobs,
+            members,
+            blob_children,
         );
         for string in &s.strings {
             bytes = bytes.checked_add(string.retained_heap_bytes()?)?;
@@ -192,7 +194,7 @@ mod tests {
     fn scalar(pool: &SnapshotPool) -> Snapshot {
         pool.try_acquire()
             .unwrap()
-            .finish_value(SnapshotValue::Null)
+            .finish_value(SnapshotValue::Null, &mut crate::Shaper::default())
     }
 
     #[test]
@@ -238,7 +240,7 @@ mod tests {
             .unwrap();
         assert!(
             builder
-                .finish_value(SnapshotValue::Bigint(id))
+                .finish_value(SnapshotValue::Bigint(id), &mut crate::Shaper::default())
                 .retained_bytes()
                 .is_none()
         );

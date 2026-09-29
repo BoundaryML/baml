@@ -217,7 +217,7 @@ fn hex(bytes: &[u8]) -> String {
     result
 }
 
-fn snapshot_hex(id: proto::SnapshotId) -> String {
+fn snapshot_hex(id: proto::CasId) -> String {
     hex(&[id.low.to_le_bytes(), id.high.to_le_bytes()].concat())
 }
 
@@ -403,15 +403,15 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
         }
         assert!(!actual.contains(&skipped_id));
         for candidate in candidates {
-            assert_eq!(candidate["snapshot_format_version"], 2);
+            assert_eq!(candidate["snapshot_format_version"], 3);
             offered.insert(candidate["snapshot_id"].as_str().unwrap().to_owned());
         }
         for object in envelope.cas_objects {
             uploaded += 1;
-            assert_eq!(object.snapshot_format_version, 2);
+            assert_eq!(object.snapshot_format_version, 3);
             assert_eq!(object.snapshot_id.len(), 16);
             assert_eq!(object.blob_sha256.len(), 32);
-            assert!(object.blob.len() >= 35);
+            assert!(object.blob.len() >= 38);
             assert_eq!(&object.blob[..8], b"BTELCAS\0");
             assert_eq!(&object.blob[12..28], object.snapshot_id);
         }

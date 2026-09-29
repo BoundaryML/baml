@@ -86,7 +86,7 @@ pub struct ProcessRecording {
 
 struct ProcessHeader {
     info: btel_types::ProcessInfo,
-    source: Option<proto::SnapshotId>,
+    source: Option<proto::CasId>,
     exit: std::sync::Arc<btel_types::ProcessExitSlot>,
 }
 
@@ -165,7 +165,7 @@ impl RecordingBuilder {
     /// end marker reports `exit` when the host set it before shutdown.
     #[must_use]
     pub fn with_process(mut self, process: ProcessRecording) -> Self {
-        let source = process.sources.as_ref().map(crate::snapshot_id);
+        let source = process.sources.as_ref().map(crate::cas_id);
         if let Some(sources) = process.sources {
             self.pending_captures.push(sources);
         }

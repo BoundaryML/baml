@@ -68,9 +68,10 @@ fn files(count: usize) -> Vec<SealedFile> {
 }
 
 fn scalar(pool: &SnapshotPool, value: i64) -> Snapshot {
-    pool.try_acquire()
-        .unwrap()
-        .finish_value(SnapshotValue::Int(value))
+    pool.try_acquire().unwrap().finish_value(
+        SnapshotValue::Int(value),
+        &mut btel_snapshot::Shaper::default(),
+    )
 }
 
 fn large(pool: &SnapshotPool) -> Snapshot {
@@ -80,12 +81,15 @@ fn large(pool: &SnapshotPool) -> Snapshot {
     let id = builder.reserve_object().unwrap();
     builder.set_object(
         id,
-        SnapshotObject::Bytes {
+        SnapshotObject::Uint8Array {
             data,
             original_len: bytes.len(),
         },
     );
-    builder.finish_value(SnapshotValue::Object(id))
+    builder.finish_value(
+        SnapshotValue::Object(id),
+        &mut btel_snapshot::Shaper::default(),
+    )
 }
 
 fn proposed(id: u32, kind: UploadKind, members: &[u32]) -> ProposedUploadTarget {
@@ -481,8 +485,10 @@ async fn mixed_plan_prunes_without_serializing_and_uploads_canonical_envelopes()
         .filter(|(i, _)| *i != 2 && *i != 4)
         .map(|(_, s)| {
             let mut bytes = Vec::new();
-            s.write_blob(&mut bytes).unwrap();
-            (s.id().as_bytes().to_vec(), bytes)
+            s.root_blob()
+                .write(&mut btel_snapshot::BlobScratch::default(), &mut bytes)
+                .unwrap();
+            (s.root_id().as_bytes().to_vec(), bytes)
         })
         .collect();
     let file = files(1).pop().unwrap();
@@ -535,7 +541,7 @@ async fn mixed_plan_prunes_without_serializing_and_uploads_canonical_envelopes()
             (body.upload_id == "1-0").then_some(&recording_bytes)
         );
         for object in body.cas_objects {
-            assert_eq!(object.snapshot_format_version, 2);
+            assert_eq!(object.snapshot_format_version, 3);
             assert_eq!(object.blob_sha256, Sha256::digest(&object.blob).to_vec());
             uploaded.push((object.snapshot_id, object.blob));
         }

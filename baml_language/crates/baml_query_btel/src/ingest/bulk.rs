@@ -21,9 +21,9 @@ use rusqlite::{Transaction, params};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::{
-    Totals, id,
+    Totals, cas_id, id,
     profile::{self, Counts, Part, PathFacts, Sysop},
-    quantity, sequence_i64, snapshot_id,
+    quantity, sequence_i64,
 };
 use crate::{Error, functions};
 
@@ -629,7 +629,7 @@ impl Bulk {
                                 reentry: None,
                                 announced_sequence: Some(saturating_sequence(sequence)),
                                 entered: tick(entry.entered_at_ticks),
-                                inputs_cas: entry.inputs_cas_id.as_ref().map(snapshot_id),
+                                inputs_cas: entry.inputs_cas_id.as_ref().map(cas_id),
                                 completed_sequence: None,
                                 late: None,
                                 exited: None,
@@ -699,7 +699,7 @@ impl Bulk {
         let entered = tick(done.entered_at_ticks);
         let exited = tick(done.exited_at_ticks);
         let self_await = tick(done.self_await_ticks);
-        let value_cas = done.value_cas_id.as_ref().map(snapshot_id);
+        let value_cas = done.value_cas_id.as_ref().map(cas_id);
         let completed_sequence = Some(saturating_sequence(sequence));
         match self.calls.get_mut(&done.id) {
             None => {

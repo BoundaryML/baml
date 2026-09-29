@@ -3,7 +3,9 @@
 //! explicitly unavailable. Validate both operands before deciding inequality.
 use std::collections::{BTreeMap, HashSet};
 
-use btel_snapshot::{DecodedName, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue};
+use btel_snapshot::{
+    DecodedName, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, NodeId,
+};
 use serde_json::Value as Json;
 
 use super::{CmpOp, Leaf, Nav, Unavailable, compare, leaf_of};
@@ -59,7 +61,7 @@ enum Value<'a> {
     Scalar(Leaf<'a>),
     Unsigned(u64),
     Omitted,
-    Bytes(&'a [u8]),
+    Uint8Array(&'a [u8]),
     Enum(&'a DecodedName, &'a str),
     List(Vec<Self>),
     Map(Fields<'a>),
@@ -75,7 +77,7 @@ impl Value<'_> {
             }
             (Self::Scalar(a), Self::Scalar(b)) => compare(*a, CmpOp::Eq, *b) == Some(true),
             (Self::Omitted, Self::Omitted) => true,
-            (Self::Bytes(a), Self::Bytes(b)) => a == b,
+            (Self::Uint8Array(a), Self::Uint8Array(b)) => a == b,
             (Self::Enum(a, x), Self::Enum(b, y)) => a == b && x == y,
             (Self::List(a), Self::List(b)) => {
                 a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.equal(y))
@@ -86,7 +88,7 @@ impl Value<'_> {
                 Self::Unsigned(_)
                 | Self::Scalar(_)
                 | Self::Omitted
-                | Self::Bytes(_)
+                | Self::Uint8Array(_)
                 | Self::Enum(..)
                 | Self::List(_)
                 | Self::Map(_)
@@ -105,7 +107,7 @@ struct Builder<'a> {
     limits: &'a Limits,
     nodes: usize,
     bytes: usize,
-    active: HashSet<u32>,
+    active: HashSet<NodeId>,
 }
 
 impl<'a> Builder<'a> {
@@ -221,7 +223,7 @@ impl<'a> Builder<'a> {
     fn declaration<'b>(
         &mut self,
         s: &'b DecodedSnapshot,
-        id: u32,
+        id: NodeId,
         expected_enum: bool,
     ) -> Result<&'b DecodedName, Error> {
         match s.object(id) {
@@ -234,7 +236,7 @@ impl<'a> Builder<'a> {
                 Err(Error::Evidence(Unavailable::Truncated(*reason)))
             }
             DecodedObject::Declaration { .. }
-            | DecodedObject::Bytes { .. }
+            | DecodedObject::Uint8Array { .. }
             | DecodedObject::List { .. }
             | DecodedObject::Map { .. }
             | DecodedObject::Instance { .. }
@@ -272,10 +274,10 @@ impl<'a> Builder<'a> {
         depth: usize,
     ) -> Result<Value<'b>, Error> {
         Ok(match object {
-            DecodedObject::Bytes { data, original_len } => {
+            DecodedObject::Uint8Array { data, original_len } => {
                 complete(data.len(), *original_len)?;
                 self.bytes(data.len())?;
-                Value::Bytes(data)
+                Value::Uint8Array(data)
             }
             DecodedObject::List {
                 items,

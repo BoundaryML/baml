@@ -2,7 +2,7 @@
 //! is an explicit outcome, and a later read may find a blob that arrived since.
 use std::{fs, io, io::Read, path::PathBuf, sync::Arc};
 
-use btel_snapshot::{BlobError, DecodeLimits, DecodedSnapshot, SnapshotId};
+use btel_snapshot::{BlobError, CasId, DecodeLimits, DecodedSnapshot};
 
 #[derive(Clone, Copy, Debug)]
 pub struct CasLimits {
@@ -71,12 +71,12 @@ impl CasStore {
         &self.limits
     }
 
-    pub fn path(&self, id: SnapshotId) -> PathBuf {
+    pub fn path(&self, id: CasId) -> PathBuf {
         btel_file::cas_path(&self.root, id)
     }
 
     /// Read, decode and verify one blob.
-    pub fn load(&self, id: SnapshotId) -> CasLoad {
+    pub fn load(&self, id: CasId) -> CasLoad {
         let path = self.path(id);
         let file = match fs::File::open(&path) {
             Ok(file) => file,

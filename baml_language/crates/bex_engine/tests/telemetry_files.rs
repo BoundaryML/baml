@@ -300,7 +300,7 @@ async fn cas_storage_failure_disables_recording_but_execution_continues() {
     assert!(engine.telemetry_result().unwrap().is_err());
 }
 
-fn assert_cas_blob(project: &std::path::Path, id: proto::SnapshotId) {
+fn assert_cas_blob(project: &std::path::Path, id: proto::CasId) {
     use std::fmt::Write as _;
     let bytes: Vec<_> = id
         .low
@@ -313,14 +313,14 @@ fn assert_cas_blob(project: &std::path::Path, id: proto::SnapshotId) {
         write!(&mut name, "{byte:02x}").unwrap();
     }
     let path = project
-        .join(".baml/btel/cas/v2")
+        .join(".baml/btel/cas/v3")
         .join(&name[..2])
         .join(&name[2..4])
         .join(&name[4..6])
         .join(name);
     let blob =
         std::fs::read(path).expect("every published CAS reference must have a completed blob");
-    assert!(blob.len() >= 35);
+    assert!(blob.len() >= 38);
     assert_eq!(&blob[..8], b"BTELCAS\0");
     assert_eq!(&blob[12..28], bytes);
 }

@@ -20,7 +20,7 @@ use btel_types::{
 pub enum ContextReference {
     Unavailable,
     Empty,
-    Snapshot(btel_snapshot::SnapshotId),
+    Snapshot(btel_snapshot::CasId),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -112,7 +112,7 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
     },
     /// Reselect an already handed-off snapshot without recapturing its values.
     /// The reference does not imply that delivery of the blob succeeded.
-    ContextReferenced { id: btel_snapshot::SnapshotId },
+    ContextReferenced { id: btel_snapshot::CasId },
     /// An explicitly empty execution context, distinct from an unavailable one.
     ContextCleared,
     /// A point observation with context selected by the surrounding run.

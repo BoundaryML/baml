@@ -18,7 +18,7 @@ use btel_reader::{
     timing::{Clock, Conversion, EpochStatus, TimingState, UtcAnchor, format_unix_ns},
     value::{self, CmpOp, Kind, Nav, Operand, RenderLimits, Root, Scalar, Segment, equality},
 };
-use btel_snapshot::{DecodedSnapshot, SnapshotId};
+use btel_snapshot::{CasId, DecodedSnapshot};
 use rusqlite::{
     Connection, Error as SqlError,
     functions::{Aggregate, Context, FunctionFlags},
@@ -120,7 +120,7 @@ impl QueryContext {
             state.metrics.cas_cache_hits += 1;
             return snapshot.clone();
         }
-        let load = self.cas.load(SnapshotId::from_bytes(id));
+        let load = self.cas.load(CasId::from_bytes(id));
         state.metrics.cas_loads += 1;
         state.metrics.cas_bytes_read += load.bytes_read;
         if state.blobs.len() < self.limits.max_cached_blobs
@@ -836,9 +836,17 @@ pub(crate) fn inline_handle(value: &Inline) -> Vec<u8> {
     let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
     let mut builder = pool.try_acquire().expect("a fresh pool has a slot");
     let root = build_inline(&mut builder, value);
-    let snapshot = builder.finish_value(root);
+    let snapshot = builder.finish_value(root, &mut btel_snapshot::Shaper::default());
+    debug_assert_eq!(
+        snapshot.blobs().len(),
+        1,
+        "a handle carries one blob, so an inline value must not reference others"
+    );
     let mut blob = Vec::new();
-    snapshot.write_blob(&mut blob).expect("writing to memory");
+    snapshot
+        .root_blob()
+        .write(&mut btel_snapshot::BlobScratch::default(), &mut blob)
+        .expect("writing to memory");
     Handle {
         kind: INLINE,
         pending: false,

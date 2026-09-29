@@ -1,4 +1,4 @@
-//! Stable tag assignments shared by CAS blob and snapshot hash formats 1 and 2.
+//! Stable tag assignments shared by CAS blob and snapshot hash formats 1 to 3.
 //! Changing an assignment requires a format version change.
 
 use crate::{Description, Limit};
@@ -26,7 +26,7 @@ pub(super) enum ValueTag {
 
 #[repr(u8)]
 pub(super) enum ObjectTag {
-    Bytes = 0,
+    Uint8Array = 0,
     List = 1,
     Map = 2,
     Instance = 3,
@@ -49,7 +49,9 @@ pub(super) enum HashDomain {
     Bigint = 2,
     Type = 3,
     Object = 4,
-    Snapshot = 5,
+    Blob = 5,
+    /// `uint8array` contents, hashed while they are copied.
+    Uint8Array = 6,
     Range = 32,
 }
 

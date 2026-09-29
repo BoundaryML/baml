@@ -8,7 +8,7 @@ use std::{
 };
 
 use btel_recorder::SealedFile;
-use btel_snapshot::Snapshot;
+use btel_snapshot::{BlobScratch, Snapshot};
 use bytes::Bytes;
 use futures::FutureExt;
 use prost::Message;
@@ -378,6 +378,11 @@ impl BcsDeliveryHandle {
             .checked_mul(std::mem::size_of::<Snapshot>())
             .ok_or(DeliveryError::Capacity)?;
         for (index, snapshot) in candidates.iter().enumerate() {
+            debug_assert_eq!(
+                snapshot.blobs().len(),
+                1,
+                "a candidate uploads only its capture's root blob"
+            );
             let size = match retained_sizes {
                 Some(sizes) => sizes[index],
                 None => snapshot.retained_bytes().ok_or(DeliveryError::Capacity)?,
@@ -388,7 +393,7 @@ impl BcsDeliveryHandle {
                 .iter()
                 .any(|p| p.kind == UploadKind::CasObject && p.candidate_indices.contains(&index));
             metadata.push(CasCandidate {
-                snapshot_id: hex::encode(snapshot.id().as_bytes()),
+                snapshot_id: hex::encode(snapshot.root_id().as_bytes()),
                 snapshot_format_version: btel_settings::snapshot::BLOB_VERSION,
                 size_class: standalone.then_some(CasSizeClass::Large),
             });
@@ -901,10 +906,11 @@ async fn assemble(
                     .ok_or(DeliveryError::InvalidPlan)?;
                 let mut writer = LimitedWriter::new(limit - envelope.encoded_len());
                 snapshot
-                    .write_blob(&mut writer)
+                    .root_blob()
+                    .write(&mut BlobScratch::default(), &mut writer)
                     .map_err(|_| DeliveryError::Encoding)?;
                 let object = CasObject {
-                    snapshot_id: snapshot.id().as_bytes().to_vec(),
+                    snapshot_id: snapshot.root_id().as_bytes().to_vec(),
                     snapshot_format_version: btel_settings::snapshot::BLOB_VERSION,
                     blob_sha256: Sha256::digest(&writer.bytes).to_vec(),
                     blob: writer.bytes.into_boxed_slice().into_vec(),

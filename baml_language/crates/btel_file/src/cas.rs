@@ -1,17 +1,19 @@
 //! Project/home-scoped immutable CAS publication. Concurrent recording writers
 //! may race on the same digest; only a complete, closed blob acquires that name.
+//! A capture's blobs are published children first, so a published blob's
+//! children were already published by this writer or found in place.
 use std::{
     fs,
     io::{self, BufWriter, Read, Write},
     path::{Path, PathBuf},
 };
 
-use btel_snapshot::{Snapshot, SnapshotId};
+use btel_snapshot::{Blob, BlobScratch, CasId, Snapshot};
 
 use crate::{LocalDeliveryError, io_error};
 
 /// Resolve beneath the unversioned CAS root, isolating each blob format version.
-pub fn cas_path(root: &Path, id: SnapshotId) -> PathBuf {
+pub fn cas_path(root: &Path, id: CasId) -> PathBuf {
     use std::fmt::Write as _;
     let mut name = String::with_capacity(32);
     for byte in id.as_bytes() {
@@ -25,7 +27,19 @@ pub fn cas_path(root: &Path, id: SnapshotId) -> PathBuf {
 }
 
 pub(super) fn write_snapshot(root: &Path, snapshot: &Snapshot) -> Result<(), LocalDeliveryError> {
-    let destination = cas_path(root, snapshot.id());
+    let mut scratch = BlobScratch::default();
+    for blob in snapshot.blobs() {
+        write_blob(root, blob, &mut scratch)?;
+    }
+    Ok(())
+}
+
+fn write_blob(
+    root: &Path,
+    blob: Blob<'_>,
+    scratch: &mut BlobScratch,
+) -> Result<(), LocalDeliveryError> {
+    let destination = cas_path(root, blob.id());
     match fs::File::open(&destination) {
         Ok(mut existing) => {
             // Existing immutable entries are reused. Validate their envelope;
@@ -36,7 +50,7 @@ pub(super) fn write_snapshot(root: &Path, snapshot: &Snapshot) -> Result<(), Loc
                 .map_err(|e| io_error(&destination, &e))?;
             if header[..8] != btel_snapshot::BLOB_MAGIC
                 || header[8..12] != btel_snapshot::BLOB_VERSION.to_le_bytes()
-                || header[12..] != *snapshot.id().as_bytes()
+                || header[12..] != *blob.id().as_bytes()
             {
                 return Err(LocalDeliveryError(format!(
                     "invalid CAS header: {}",
@@ -60,8 +74,7 @@ pub(super) fn write_snapshot(root: &Path, snapshot: &Snapshot) -> Result<(), Loc
             btel_settings::local_files::CAS_WRITE_BUFFER_BYTES,
             temp.as_file_mut(),
         );
-        snapshot
-            .write_blob(&mut writer)
+        blob.write(scratch, &mut writer)
             .map_err(|e| io_error(&destination, &e))?;
         writer.flush().map_err(|e| io_error(&destination, &e))?;
     }

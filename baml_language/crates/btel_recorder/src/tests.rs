@@ -823,5 +823,8 @@ fn outcome_merge_growth_and_spills_keep_exact_encoded_size() {
 fn snapshot() -> btel_snapshot::Snapshot {
     let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
     let b = pool.try_acquire().unwrap();
-    b.finish_value(btel_snapshot::SnapshotValue::Int(42))
+    b.finish_value(
+        btel_snapshot::SnapshotValue::Int(42),
+        &mut btel_snapshot::Shaper::default(),
+    )
 }

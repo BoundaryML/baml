@@ -8,11 +8,11 @@ use btel_snapshot::{
 };
 use sys_native::SysOpsExt;
 
-fn capture_id(id: &proto::SnapshotId) -> btel_snapshot::SnapshotId {
+fn capture_id(id: &proto::CasId) -> btel_snapshot::CasId {
     let mut digest = [0; 16];
     digest[..8].copy_from_slice(&id.low.to_le_bytes());
     digest[8..].copy_from_slice(&id.high.to_le_bytes());
-    btel_snapshot::SnapshotId::from_bytes(digest)
+    btel_snapshot::CasId::from_bytes(digest)
 }
 
 struct Recording {
@@ -150,7 +150,7 @@ impl Recording {
         (result, recording)
     }
 
-    fn blob(&self, id: &proto::SnapshotId) -> Vec<u8> {
+    fn blob(&self, id: &proto::CasId) -> Vec<u8> {
         let id = capture_id(id);
         let path = btel_file::cas_path(&self.directory.path().join("cas"), id);
         let bytes = std::fs::read(path).unwrap();
@@ -163,11 +163,7 @@ impl Recording {
     /// A failure captures the `baml.errors.Context` a handler would bind: its
     /// `error` is the thrown value `expected` holds.
     #[track_caller]
-    fn assert_error_capture(
-        &self,
-        actual: Option<&proto::SnapshotId>,
-        expected: Option<&Snapshot>,
-    ) {
+    fn assert_error_capture(&self, actual: Option<&proto::CasId>, expected: Option<&Snapshot>) {
         use btel_snapshot::{DecodeLimits, DecodedObject, DecodedRoot, DecodedValue, decode_blob};
         let (actual, expected) = match (actual, expected) {
             (None, None) => return,
@@ -186,7 +182,10 @@ impl Recording {
             panic!("expected a baml.errors.Context instance");
         };
         let mut bytes = Vec::new();
-        expected.write_blob(&mut bytes).unwrap();
+        expected
+            .root_blob()
+            .write(&mut btel_snapshot::BlobScratch::default(), &mut bytes)
+            .unwrap();
         let expected = decode_blob(&bytes, &DecodeLimits::default()).unwrap();
         let DecodedRoot::Value(value) = &expected.root else {
             panic!("expected a captured value");
@@ -200,16 +199,22 @@ impl Recording {
     }
 
     #[track_caller]
-    fn assert_capture(&self, actual: Option<&proto::SnapshotId>, expected: Option<&Snapshot>) {
+    fn assert_capture(&self, actual: Option<&proto::CasId>, expected: Option<&Snapshot>) {
         match (actual, expected) {
             (None, None) => {}
             (Some(actual), Some(expected)) => {
-                if capture_id(actual) != expected.id() {
+                if capture_id(actual) != expected.root_id() {
                     // Not the value itself: a failure's context around it.
                     return self.assert_error_capture(Some(actual), Some(expected));
                 }
                 let mut expected_bytes = Vec::new();
-                expected.write_blob(&mut expected_bytes).unwrap();
+                expected
+                    .root_blob()
+                    .write(
+                        &mut btel_snapshot::BlobScratch::default(),
+                        &mut expected_bytes,
+                    )
+                    .unwrap();
                 assert_eq!(self.blob(actual), expected_bytes);
             }
             _ => panic!(
@@ -269,10 +274,10 @@ fn finish(mut builder: Builder, args: bool, roots: &[Value]) -> Snapshot {
             builder.push_value(*root);
         }
         let slots = builder.value_range(start);
-        builder.finish_args(roots.len(), slots)
+        builder.finish_args(roots.len(), slots, &mut btel_snapshot::Shaper::default())
     } else {
         assert_eq!(roots.len(), 1);
-        builder.finish_value(roots[0])
+        builder.finish_value(roots[0], &mut btel_snapshot::Shaper::default())
     }
 }
 
@@ -289,7 +294,7 @@ fn scalar(builder: &mut Builder, value: &External) -> Value {
             let data = builder.copy_bytes(value);
             builder.set_object(
                 object,
-                SnapshotObject::Bytes {
+                SnapshotObject::Uint8Array {
                     data,
                     original_len: value.len(),
                 },
@@ -713,7 +718,7 @@ async fn call_structure(program: &Program) {
                 entry
                     .inputs_cas_id
                     .as_ref()
-                    .is_some_and(|id| capture_id(id) == child_args.id())
+                    .is_some_and(|id| capture_id(id) == child_args.root_id())
             })
             .unwrap();
         recording.assert_capture(child.1.inputs_cas_id.as_ref(), Some(&child_args));
@@ -762,7 +767,7 @@ async fn call_structure(program: &Program) {
                 .find(|(_, _, done)| {
                     done.value_cas_id
                         .as_ref()
-                        .is_some_and(|id| capture_id(id) == expected.id())
+                        .is_some_and(|id| capture_id(id) == expected.root_id())
                 })
                 .unwrap();
             recording.assert_capture(

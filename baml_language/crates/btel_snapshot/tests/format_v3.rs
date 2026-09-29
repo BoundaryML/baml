@@ -1,10 +1,13 @@
-//! Frozen v2 bytes, including snapshot IDs, covering every format tag.
+//! Frozen v3 bytes, including blob IDs, covering every format tag.
+//!
+//! Regenerating these fixtures is a format change: review the printed bytes
+//! from `print_format_v3_encodings` rather than copying them blindly.
 use std::{fmt::Write as _, sync::Arc};
 
 use baml_type::{DeclarationName, RealizedTy, TaggedTypeName, TypeName, typetag::TypeTag};
 use btel_snapshot::{
-    Description, Limit, Limits, Snapshot, SnapshotObject as O, SnapshotPool, SnapshotValue as V,
-    TypeIdentity,
+    BlobScratch, Description, Limit, Limits, Shaper, Snapshot, SnapshotObject as O, SnapshotPool,
+    SnapshotValue as V, TypeIdentity,
 };
 
 fn hex(bytes: &[u8]) -> String {
@@ -40,7 +43,7 @@ fn graph(pool: &SnapshotPool, arguments: bool) -> Snapshot {
     let bytes = b.copy_bytes(b"abc");
     let mut objects = vec![declaration];
     for object in [
-        O::Bytes {
+        O::Uint8Array {
             data: bytes,
             original_len: 5,
         },
@@ -129,35 +132,65 @@ fn graph(pool: &SnapshotPool, arguments: bool) -> Snapshot {
         b.push_value(V::Object(object));
     }
     let slots = b.value_range(root_start);
+    // The value root is a list of the same values. Unreachable from the
+    // argument root, it is not part of that blob.
+    let everything = b.reserve_object().unwrap();
+    b.set_object(
+        everything,
+        O::List {
+            element_type: ty,
+            items: slots,
+            original_len: slots.len(),
+        },
+    );
     if arguments {
-        b.finish_args(slots.len() + 1, slots)
+        b.finish_args(slots.len() + 1, slots, &mut Shaper::default())
     } else {
-        b.finish_value(V::Object(cycle))
+        b.finish_value(V::Object(everything), &mut Shaper::default())
     }
 }
 
+fn root_blob(snapshot: &Snapshot) -> Vec<u8> {
+    assert_eq!(snapshot.blobs().len(), 1);
+    let mut bytes = Vec::new();
+    snapshot
+        .root_blob()
+        .write(&mut BlobScratch::default(), &mut bytes)
+        .unwrap();
+    bytes
+}
+
 #[test]
-fn all_snapshot_tags_preserve_v2_bytes_and_content_ids() {
+fn all_snapshot_tags_preserve_v3_bytes_and_content_ids() {
     let pool = SnapshotPool::new(1, Limits::default());
     for (arguments, expected) in [
-        (true, include_str!("fixtures/format_v2_args.hex")),
-        (false, include_str!("fixtures/format_v2_value.hex")),
+        (true, include_str!("fixtures/format_v3_args.hex")),
+        (false, include_str!("fixtures/format_v3_value.hex")),
     ] {
         let snapshot = graph(&pool, arguments);
-        let mut bytes = Vec::new();
-        snapshot.write_blob(&mut bytes).unwrap();
+        let bytes = root_blob(&snapshot);
         assert_eq!(hex(&bytes), expected.trim());
-        assert_eq!(&bytes[12..28], snapshot.id().as_bytes());
+        assert_eq!(&bytes[12..28], snapshot.root_id().as_bytes());
         let decoded = btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default())
-            .expect("the reader must verify the frozen v2 fixture");
-        assert_eq!(decoded.id, snapshot.id());
+            .expect("the reader must verify the frozen v3 fixture");
+        assert_eq!(decoded.id, snapshot.root_id());
         drop(snapshot);
         assert_eq!(pool.stats().in_use, 0);
     }
 }
 
 #[test]
-fn nominal_identity_tags_preserve_v2_bytes() {
+#[ignore = "prints current encodings for review; never rewrites the fixtures"]
+#[expect(clippy::print_stdout, reason = "the output is the point")]
+fn print_format_v3_encodings() {
+    let pool = SnapshotPool::new(1, Limits::default());
+    for arguments in [true, false] {
+        println!("{arguments}: {}", hex(&root_blob(&graph(&pool, arguments))));
+    }
+}
+
+#[test]
+fn nominal_identity_tags_preserve_v3_bytes() {
     let tag = TypeTag::from_i64(42);
     let name = DeclarationName::Declared(TypeName::local("Golden".into()));
     assert_eq!(

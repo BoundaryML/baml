@@ -527,7 +527,7 @@ impl TelemetryRuntime {
                             captured_context
                                 .as_ref()
                                 .map_or(ContextReference::Unavailable, |snapshot| {
-                                    ContextReference::Snapshot(snapshot.id())
+                                    ContextReference::Snapshot(snapshot.root_id())
                                 }),
                         );
                     }
@@ -581,7 +581,7 @@ impl TelemetryRuntime {
                     },
                     ContextReference::Snapshot(id) => {
                         if let Some(snapshot) = snapshot.take() {
-                            debug_assert_eq!(id, snapshot.id());
+                            debug_assert_eq!(id, snapshot.root_id());
                             SpanRecord::ContextSelected {
                                 captured_context: Some(snapshot),
                             }
@@ -716,12 +716,11 @@ mod tests {
             parent_id: id,
             call_path: btel_types::CallPathId::ROOT,
             entered_at: btel_types::ClockInstant::from_ticks(1),
-            captured_inputs: Some(
-                runtime
-                    .acquire_snapshot()
-                    .unwrap()
-                    .finish_args(0, btel_snapshot::Range::empty()),
-            ),
+            captured_inputs: Some(runtime.acquire_snapshot().unwrap().finish_args(
+                0,
+                btel_snapshot::Range::empty(),
+                &mut btel_snapshot::Shaper::default(),
+            )),
         }
     }
 
@@ -785,10 +784,11 @@ mod tests {
         let (mut runtime, pool) = manual_runtime();
         Arc::get_mut(&mut runtime).unwrap().snapshots =
             btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
-        let held = runtime
-            .acquire_snapshot()
-            .unwrap()
-            .finish_args(0, btel_snapshot::Range::empty());
+        let held = runtime.acquire_snapshot().unwrap().finish_args(
+            0,
+            btel_snapshot::Range::empty(),
+            &mut btel_snapshot::Shaper::default(),
+        );
         let id = allocate_telemetry_id();
         let _scope = runtime.enter();
         runtime.write_span(
@@ -1061,12 +1061,11 @@ mod tests {
                     parent_id: thread_id,
                     call_path: btel_types::CallPathId::ROOT,
                     entered_at: btel_types::ClockInstant::from_ticks(1),
-                    captured_inputs: Some(
-                        runtime
-                            .acquire_snapshot()
-                            .unwrap()
-                            .finish_args(0, btel_snapshot::Range::empty()),
-                    ),
+                    captured_inputs: Some(runtime.acquire_snapshot().unwrap().finish_args(
+                        0,
+                        btel_snapshot::Range::empty(),
+                        &mut btel_snapshot::Shaper::default(),
+                    )),
                 },
             );
             drop(nested);
