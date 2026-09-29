@@ -433,8 +433,6 @@ impl BexHeap {
 
         // BFS from roots — copy every reachable object into inactive.
         let mut worklist: Vec<HeapPtr> = roots.to_vec();
-        // Surviving bytes the collector copies (see `gc_policy::live_backing_bytes`).
-        let mut live_backing_bytes_total: usize = 0;
 
         profile.finish_phase(crate::gc_profile::HeapPhase::Prepare);
 
@@ -473,8 +471,6 @@ impl BexHeap {
             // Enqueue this object's outgoing heap references.
             // SAFETY: We just wrote the object into inactive, pointer is valid.
             let obj = unsafe { new_ptr.get() };
-            live_backing_bytes_total =
-                live_backing_bytes_total.saturating_add(crate::gc_policy::live_backing_bytes(obj));
             self.add_references_to_worklist(obj, &mut worklist);
         }
 
@@ -511,6 +507,13 @@ impl BexHeap {
 
         // SAFETY: GC runs at safepoints.
         let live_count = unsafe { self.inactive_ref().len() };
+        // Bytes the collector copied along with the survivors, including those
+        // kept alive for finalizers and unobserved spawn errors.
+        // SAFETY: GC runs at safepoints.
+        let live_backing_bytes = unsafe { self.inactive_ref() }
+            .iter()
+            .map(crate::gc_policy::live_backing_bytes)
+            .fold(0usize, usize::saturating_add);
         let collected_count = old_count.saturating_sub(live_count);
 
         // Swap inactive ↔ Gen2; clear Gen0 and Gen1.
@@ -567,7 +570,7 @@ impl BexHeap {
         self.gc_policy.after_full(
             live_count
                 .saturating_mul(size_of::<Object>())
-                .saturating_add(live_backing_bytes_total),
+                .saturating_add(live_backing_bytes),
         );
 
         // Reset the actual-object counter used by GC profiling.

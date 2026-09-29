@@ -8,7 +8,7 @@
 //!
 //! After a full collection the allowance is `LIVE_HEADROOM` times the live size:
 //! surviving slots plus the byte-array buffers the collector copied (see
-//! [`live_backing_bytes`]), and at least `MIN_FULL_BUDGET`.
+//! `live_backing_bytes`), and at least `MIN_FULL_BUDGET`.
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicUsize, Ordering},
