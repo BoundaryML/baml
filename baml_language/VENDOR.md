@@ -23,6 +23,8 @@ Pin the upstream commit and retain the source tree, `Cargo.lock`, `rust-toolchai
 
 The [build-script integration audit](BUILD_SCRIPTS.md) inventories BAML-owned generation steps, tools, inputs, outputs, and linker settings for build systems that replace Cargo scripts. It also identifies current integration gaps: protobuf scripts force the bundled compiler, and the bridge schema build writes generated SDK files into the source tree. Reduced runtime features do not yet remove those build-time requirements.
 
+The [`baml-generate-builtins` and `baml-generate-stdlib` commands](BUILD_SCRIPTS.md#standalone-generation-commands) expose the existing Rust generators for external build actions. They write to explicit output directories and share their implementations with Cargo's build scripts. Ordinary runtime builds continue to call those implementations directly.
+
 When importing without Git metadata, set `BAML_GIT_SHA` to the full lowercase commit ID identifying the imported source. BAML uses this value in its artifact fingerprint; development builds require it when a commit cannot be read from Git. Retain downstream patches separately so that the commit ID and patch set together identify the build inputs.
 
 Run the following commands from `baml_language/`. After replacing the provider dependencies described below, build the Python native bridge with outbound restrictions enabled:

@@ -1,6 +1,6 @@
 # Build-script integration audit
 
-This audit inventories the 17 BAML-owned Cargo build scripts in the `baml_language` workspace at source revision `8372adbbc28054fd211379bc680005b5ba605ae9`. It describes current behavior and the remaining work for source imports that replace Cargo build scripts with declared build actions. The integration changes recommended below are not yet implemented. See [Vendoring BAML](VENDOR.md) for runtime providers, feature selection, and dependency verification.
+This audit inventories the 17 BAML-owned Cargo build scripts in the `baml_language` workspace at the revision being vendored. It describes current behavior, the standalone generation commands available to external build systems, and the remaining work for source imports that replace Cargo scripts with declared build actions. See [Vendoring BAML](VENDOR.md) for runtime providers, feature selection, and dependency verification.
 
 ## Scope and findings
 
@@ -28,7 +28,7 @@ Paths in this table are relative to `baml_language`. Generated files are under t
 | [`btel_bcs`](crates/btel_bcs/build.rs) | Python and CLI | `proto/cloud.proto`, Prost, vendored `protoc` | `btel.cloud.v1.rs`; explicitly sets Prost's compiler executable |
 | [`btel_recorder`](crates/btel_recorder/build.rs) | Python and CLI | `proto/recording.proto`, Prost, vendored `protoc` | `baml.btel.recording.v2.rs`; explicitly sets Prost's compiler executable |
 | [`bridge_ctypes`](crates/bridge_ctypes/build.rs) | Python and CLI | Sorted `types/**/*.proto`, Prost, vendored `protoc` with Python and `.pyi` generation | `baml_bridge.cffi.v1.rs`; also overwrites `sdks/rust/bridge_rust/src/wire/baml_bridge.cffi.v1.rs` and Python `*_pb2.py` / `*_pb2.pyi` files under `sdks/python/src/baml_bridge/cffi/v1/`; overrides `PROTOC` |
-| [`bex_project`](crates/bex_project/build.rs) | Python and CLI | The BAML compiler built for the host, embedded stdlib, BAML version/channel, and `src/precompiled_stdlib_config.rs` | `stdlib_prefix.borsh`, containing package interfaces and bytecode compiled at optimization level one; no subprocess or network request in the script |
+| [`bex_project`](crates/bex_project/build.rs) | Python and CLI | The BAML compiler built for the host, embedded stdlib, BAML version/channel, and [`stdlib_prefix::runtime`](crates/baml_db/src/stdlib_prefix/runtime.rs) configuration | `stdlib_prefix.borsh`, containing package interfaces and bytecode compiled at optimization level one; no subprocess or network request in the script |
 | [`sdkgen_cpp`](sdks/cpp/sdkgen_cpp/build.rs) | CLI | Eight checked-in `.pb.h` / `.pb.cc` files for `baml_handle`, `baml_inbound`, `baml_outbound`, and `baml_type` under `sdks/cpp/bridge_cpp/pb/baml_bridge/cffi/v1/`; `flate2` | Eight files with `.gz` appended to their names. Does not invoke `protoc` or a C++ compiler. Its `protoc-bin-vendored` dependency is test-only. |
 | [`bridge_cffi`](crates/bridge_cffi/build.rs) | Python | Cargo `TARGET`; watches `cbindgen.toml`, `src/lib.rs`, and the script | Emits `BAML_CFFI_TARGET`. Does not generate a header or invoke cbindgen. |
 | [`bridge_python`](sdks/python/rust/bridge_python/build.rs) | Python | Target, Rust compiler, and Python configuration through `pyo3-build-config` | Emits extension-module and Python library rpath linker arguments. No BAML-generated files. The downstream Python toolchain must supply the matching PyO3 configuration. |
@@ -50,6 +50,27 @@ These scripts are outside both selected production dependency graphs. They matte
 
 Third-party crates and in-tree third-party forks are outside this BAML-owned script inventory. Inspect their normal and build dependency graphs with the final provider and feature selection. In particular, making BAML's own protobuf compiler optional would not by itself remove every third-party build script.
 
+## Standalone generation commands
+
+Two host executables expose the production builtin and stdlib generation steps. Their implementations are shared with the corresponding `build.rs` files. Cargo continues to call the Rust functions directly: a normal Python or CLI dependency build does not build or launch these executables. Explicit tool builds and workspace-wide builds can build them.
+
+The following Cargo command builds the tools for local use. A Bazel or Blaze integration can instead define host Rust executable targets for [`baml-generate-builtins`](crates/baml_builtins2_codegen/src/bin/generate_builtins.rs) and [`baml-generate-stdlib`](crates/baml_db/src/bin/generate_stdlib.rs) with the dependencies from their owning crates. The resulting commands do not invoke Cargo, read the checkout at runtime, or require Git or `protoc` on their execution path.
+
+```sh
+cargo build --locked -p baml_builtins2_codegen --bin baml-generate-builtins -p baml_db --bin baml-generate-stdlib
+target/debug/baml-generate-builtins bex_vm_types --out-dir generated/bex_vm_types
+target/debug/baml-generate-builtins sys_types --out-dir generated/sys_types
+target/debug/baml-generate-builtins sys_ops --out-dir generated/sys_ops
+target/debug/baml-generate-builtins bex_vm --out-dir generated/bex_vm
+target/debug/baml-generate-stdlib --out-dir generated/bex_project
+```
+
+Each command writes only into the supplied directory and creates it if necessary. Use a separate directory per consuming crate: `sys_ops` and `sys_types` both produce an `io_generated.rs` with different contents. The output filenames are listed in the inventory. No Cargo environment variables are required when running the compiled executables. Source identity and version configuration are inputs when compiling the tools, just as they are for the runtime.
+
+Keep the two tool targets separate. The builtin generator depends on the parser and AST layers; the stdlib generator depends on the compiler, which consumes generated builtin types. Build the builtin generator for the execution platform, generate those types for the relevant host/target crates, then build and run the stdlib generator. Both tools must use the same source revision and configuration as their consumers. A cross-compiled runtime still uses generators that execute on the build host.
+
+The commands cover the four builtin scripts and production stdlib artifact. They do not replace protobuf generation, linker configuration, SDK regeneration, or the multi-level test artifact in `baml_tests`. The repository does not currently supply Bazel or Blaze rules.
+
 ## Recommended integration changes
 
 ### Supplied protobuf compiler
@@ -62,7 +83,7 @@ Make `protoc-bin-vendored` an optional build dependency and propagate the existi
 
 Move the committed Rust and Python SDK regeneration out of `bridge_ctypes/build.rs` into an explicit maintenance command. Normal compilation should write only the crate's required generated Rust file under `OUT_DIR`. Update the existing [protobuf sync job](../.github/workflows/ci.yaml) and [regeneration instructions](crates/bridge_ctypes/README.md) to invoke the maintenance command, retaining the committed SDK files and drift checks.
 
-For Blaze or another build system that does not run Cargo scripts, declare protobuf, builtin Rust generation, stdlib compilation, and C++ source compression as host actions with the inputs and outputs listed above. Compile the generated Rust with the same Prost configuration and compatible runtime dependency as the consuming crate. Supply each crate's output directory for its `include!` / `include_bytes!` expressions, and reproduce the emitted environment values and target-specific linker settings. There is currently no unified BAML command that exports all these outputs for an external build system.
+For Blaze or another build system that does not run Cargo scripts, declare protobuf, builtin Rust generation, stdlib compilation, and C++ source compression as host actions with the inputs and outputs listed above. Use the standalone commands for builtin and production stdlib generation. Compile the generated protobuf Rust with the same Prost configuration and compatible runtime dependency as the consuming crate. Supply each crate's output directory for its `include!` / `include_bytes!` expressions, and reproduce the emitted environment values and target-specific linker settings.
 
 ### Build identity and reproducibility
 
@@ -80,4 +101,12 @@ cargo tree --locked -p baml_cli -p bridge_python --target all -e normal,build
 cargo tree --locked -p baml_cli -p bridge_python --target all -e normal,build --no-default-features --features no-phone-home,bridge_python/bundle-http
 ```
 
-The counts and findings above are source and dependency analysis, not a completed Blaze build or an immutable-source build test. Acceptance of the recommended changes requires an actual Python/CLI build using a supplied `protoc`, no `protoc-bin-vendored*` packages in the selected reduced normal/build graph, no source-tree writes during ordinary compilation, and successful Python import and representative CLI operations. Separately verify that the explicit SDK generation command preserves the existing generated files and that default developer builds still work. External build rules must be validated in the integrator's environment.
+Run the generator parity check with:
+
+```sh
+python3 scripts/check_build_generators.py
+```
+
+It verifies that an ordinary runtime build does not build the standalone commands, then compiles and runs both commands outside the checkout with Cargo environment variables removed and an empty executable search path. All ten generated Rust files and the stdlib artifact must be byte-identical to Cargo's outputs. It also checks help, invalid arguments, and the expected output locations. This check runs in CI.
+
+The counts and findings above are source and dependency analysis, not a completed Blaze build or an immutable-source build test. Acceptance of the remaining integration changes requires an actual Python/CLI build using a supplied `protoc`, no `protoc-bin-vendored*` packages in the selected reduced normal/build graph, no source-tree writes during ordinary compilation, and successful Python import and representative CLI operations. Separately verify that the future explicit SDK generation command preserves the existing generated files and that default developer builds still work. External build rules must be validated in the integrator's environment.

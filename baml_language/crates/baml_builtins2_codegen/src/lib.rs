@@ -3,6 +3,7 @@ mod codegen_errors;
 mod codegen_io;
 mod codegen_panics;
 mod extract;
+mod generate;
 mod rust_ident;
 mod types;
 
@@ -16,6 +17,7 @@ pub use codegen_panics::generate_panic_enums;
 pub use extract::{
     ExtractNativeBuiltinsError, extract_native_builtins, extract_native_builtins_for,
 };
+pub use generate::{BuiltinCrate, generate};
 pub use types::{
     BamlType, BuiltinPipeline, NativeBuiltin, NativeClassDef, NativeClassField, Param, Receiver,
     ReceiverType,

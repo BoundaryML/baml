@@ -13,6 +13,12 @@ license = { workspace = true }
 [lib]
 doctest = false
 
+[[bin]]
+name = "baml-generate-stdlib"
+path = "src/bin/generate_stdlib.rs"
+test = false
+bench = false
+
 [lints]
 workspace = true
 
@@ -30,6 +36,7 @@ baml_compiler_lexer = { workspace = true }
 baml_compiler_parser = { workspace = true }
 baml_compiler_syntax = { workspace = true }
 baml_type = { workspace = true }
+baml_version = { workspace = true }
 bex_vm_types = { workspace = true }
 borsh = { workspace = true }
 ignore = { workspace = true }

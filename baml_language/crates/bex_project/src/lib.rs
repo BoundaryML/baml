@@ -41,7 +41,6 @@ use thiserror::Error;
 mod bex;
 mod fs;
 mod precompiled_stdlib;
-mod precompiled_stdlib_config;
 mod runtime_compile;
 
 pub fn runtime_compiler() -> Arc<dyn bex_engine::RuntimeCompiler> {

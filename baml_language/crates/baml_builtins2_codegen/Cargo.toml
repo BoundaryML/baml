@@ -14,6 +14,12 @@ description = "Build-time code generation for BAML builtins from compiler2 .baml
 [lib]
 doctest = false
 
+[[bin]]
+name = "baml-generate-builtins"
+path = "src/bin/generate_builtins.rs"
+test = false
+bench = false
+
 [lints]
 workspace = true
 

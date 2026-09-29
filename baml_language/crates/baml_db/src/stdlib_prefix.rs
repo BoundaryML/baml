@@ -21,6 +21,8 @@ use bex_vm_types::Program;
 
 use crate::ProjectDatabase;
 
+pub mod runtime;
+
 /// The compiler-built stdlib slice: every stdlib package's typed interface
 /// alongside the bytecode prefix compiled from those same sources.
 ///

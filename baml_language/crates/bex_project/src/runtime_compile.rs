@@ -2646,7 +2646,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
         let emitted = emit_units_with_stdlib(
             &db,
             workspace,
-            crate::precompiled_stdlib_config::OPT_LEVEL,
+            baml_db::stdlib_prefix::runtime::OPT_LEVEL,
             &stdlib.program,
         )
         .map_err(|error| {

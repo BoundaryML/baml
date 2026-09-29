@@ -233,6 +233,10 @@ jobs:
         run: cargo test --locked -p baml_crypto_provider -p baml_crypto_types -p baml_crypto -p baml_http_provider
         working-directory: baml_language
 
+      - name: "Standalone build generator parity"
+        run: python3 scripts/check_build_generators.py
+        working-directory: baml_language
+
       - name: "Rust SDK local-only loader"
         run: cargo test --locked -p baml_bridge --no-default-features --lib
         working-directory: baml_language

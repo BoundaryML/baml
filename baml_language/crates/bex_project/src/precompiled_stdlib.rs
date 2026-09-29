@@ -20,7 +20,7 @@ pub(crate) fn load() -> Result<PrecompiledStdlib, String> {
     let (key, interfaces, program): (String, BTreeMap<String, Vec<u8>>, Program) =
         borsh::from_slice(ARTIFACT)
             .map_err(|error| format!("decode compiler-built stdlib artifact: {error}"))?;
-    let expected_key = crate::precompiled_stdlib_config::artifact_key();
+    let expected_key = baml_db::stdlib_prefix::runtime::artifact_key();
     if key != expected_key {
         return Err(format!(
             "compiler-built stdlib artifact key mismatch: expected `{expected_key}`, got `{key}`"
