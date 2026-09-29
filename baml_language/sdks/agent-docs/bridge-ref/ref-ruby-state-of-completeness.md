@@ -19,7 +19,7 @@ This change adds generated Ruby/Sorbet packages, synchronous calls through the V
 | Required args (positional) | ✅ | ✅ | Required parameters are positional: [`test_main_single_required_arg_round_trips`][function-main]; multi-argument calls in [`test_streaming_e2e_stream_doc_collect_in_baml`][streaming] via the replay server's two-argument `replay_serve_until_shutdown`. |
 | Required args (keyword) | ✅ | n/a | Required arguments are generated as positional parameters. |
 | Optional args (omitted → default) | ✅ | ❌ | Generated defaults raise `UnsupportedTypeError`; omission is not implemented. |
-| Optional args (supplied) | ✅ | 🚧 | Nilable keywords work. Default handling still raises; this is not full optional-argument support. |
+| Optional args (supplied) | ✅ | ❌ | Nilable arguments are generated as `nil`-default keywords, but no call test exercises them yet; defaulted arguments raise. |
 | Streaming | ✅ | ❌ | No Ruby stream wrapper. The collect tests drain streams inside BAML and return ordinary values. |
 | `$build_request` companion | ✅ | ❌ | No generated companion. |
 | Generic function / method (inferred) | ✅ | ❌ | Generic callables are not generated. |

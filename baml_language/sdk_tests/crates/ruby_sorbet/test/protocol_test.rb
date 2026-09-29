@@ -93,6 +93,13 @@ class ProtocolTest < Minitest::Test
     assert_equal "HAPPY", enum.value
   end
 
+  def test_literal_map_keys_decode_as_their_primitive
+    [[{ string_value: "k" }, "k", "k"], [{ int_value: 3 }, "3", 3], [{ bool_value: true }, "true", true]].each do |literal, wire, ruby|
+      decoded = decode(map_value: { key_type: { literal: literal }, entries: [{ key: wire, value: { int_value: 7 } }] })
+      assert_equal({ ruby => 7 }, decoded)
+    end
+  end
+
   def test_empty_containers
     assert_empty decode(list_value: {})
     assert_empty decode(map_value: { key_type: primitive("STRING") })

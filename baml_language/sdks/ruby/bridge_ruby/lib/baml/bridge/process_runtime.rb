@@ -58,11 +58,19 @@ module Baml
       def call(compiled_program_bytes, function_name, arguments)
         initialize!(compiled_program_bytes)
         encoded = Protocol.encode_call(@api.new_function_call, function_name, arguments)
-        callback_id, result = register_call
-        begin
-          @api.call_function(encoded, callback_id)
-        rescue Exception => error # rubocop:disable Lint/RescueException -- unblock a failed dispatch
-          receive_result(callback_id, error)
+        # Defer Timeout/Thread#raise so an interrupt cannot land between
+        # registering and dispatching, or be swallowed by a dispatch failure.
+        # Once dispatched, the callback owns completion; an interrupted caller
+        # just stops waiting.
+        result = Thread.handle_interrupt(Exception => :never) do
+          callback_id, queue = register_call
+          begin
+            @api.call_function(encoded, callback_id)
+          rescue Exception # rubocop:disable Lint/RescueException -- a failed dispatch never reaches the callback
+            @pending_mutex.synchronize { @pending.delete(callback_id) }
+            raise
+          end
+          queue
         end
         outcome = result.pop
         raise outcome if outcome.is_a?(Exception)

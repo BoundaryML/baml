@@ -119,6 +119,17 @@ class BridgeCallTest < Minitest::Test
     assert_empty pending
   end
 
+  def test_dispatch_failure_after_delivery_is_not_swallowed
+    # The callback completed the call before dispatch unwound; the caller's
+    # exception still wins and the registry stays clean.
+    @api.dispatch = lambda do |_args, id|
+      @api.deliver(id, ok: { string_value: "done" })
+      raise Interrupt
+    end
+    assert_raises(Interrupt) { call }
+    assert_empty pending
+  end
+
   def test_unsupported_argument_and_result_kinds
     error = assert_raises(Baml::Bridge::UnsupportedTypeError) { call("value" => Object.new) }
     assert_includes error.message, "Object"

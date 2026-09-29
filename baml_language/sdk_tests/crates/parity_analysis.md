@@ -2,9 +2,9 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 713. IDs with complete required parity: 85. Required gaps: 4960.
+Distinct exact test IDs: 714. IDs with complete required parity: 86. Required gaps: 4960.
 
-Baseline ratchet: UNCHANGED. Required gaps: 4960 (baseline: 4960). Present declarations: 2088 (baseline: 2088). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: UNCHANGED. Required gaps: 4960 (baseline: 4960). Present declarations: 2089 (baseline: 2089). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
@@ -456,6 +456,7 @@ Parity is the share of the 312 test IDs declared in `python_pydantic2` that are 
 | llm_functions/prompt_is_reusable_and_media_survives_request_preview | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python's portable Prompt and media wrapper surface |
 | llm_functions/replay_server_cleans_up_after_success | - | - | - | - | - | - | - | - | - | - | y | ruby_sorbet | Ruby replay harness removes environment overrides after success |
 | llm_functions/replay_server_failure_surfaces_and_cleans_up | - | - | - | - | - | - | - | - | - | - | y | ruby_sorbet | Ruby replay harness propagates thread failures and removes temporary state |
+| llm_functions/replay_server_restores_preexisting_env | - | - | - | - | - | - | - | - | - | - | y | ruby_sorbet | Ruby replay harness restores pre-existing environment values |
 | llm_functions/replay_server_sync_namespace_bindings | - | - | - | - | - | - | - | - | - | - | y | ruby_sorbet | Ruby generates only sync replay bindings, not Python's async siblings |
 | llm_functions/sentiment_wire_values_use_the_generated_enum | - | - | - | - | - | - | - | - | - | - | y | ruby_sorbet | Ruby T::Enum registration and protobuf encoding and decoding |
 | llm_functions/spec_projection_honors_cancellation | - | - | - | - | - | - | - | y | - | - | - | go | pins Go context cancellation through the Spec projection. |

@@ -20,8 +20,11 @@ module ReplayHarness
     raise "could not locate the sdk_tests/ ancestor directory"
   end
 
+  ENV_KEYS = %w[BAML_REPLAY_BASE_URL BAML_REPLAY_API_KEY].freeze
+
   def with_server(recording)
     recording = recording_path(recording)
+    saved_env = ENV.to_h.slice(*ENV_KEYS)
     Tempfile.create("baml-ruby-replay") do |file|
       addr_file = file.path
       file.close
@@ -61,12 +64,10 @@ module ReplayHarness
           end
         ensure
           begin
+            # A server that will not stop fails this test; the process exit reaps it.
             raise Timeout::Error, "replay server did not stop within 10s" unless thread.join(10)
           ensure
-            thread.kill if thread.alive?
-            File.unlink(addr_file) if File.exist?(addr_file)
-            ENV.delete("BAML_REPLAY_BASE_URL")
-            ENV.delete("BAML_REPLAY_API_KEY")
+            ENV_KEYS.each { |key| saved_env.key?(key) ? ENV[key] = saved_env[key] : ENV.delete(key) }
           end
         end
       end

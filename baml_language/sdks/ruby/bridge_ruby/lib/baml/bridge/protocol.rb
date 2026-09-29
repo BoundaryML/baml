@@ -155,17 +155,29 @@ module Baml
           case type.primitive.kind
           when :BAML_TY_PRIMITIVE_STRING then key
           when :BAML_TY_PRIMITIVE_INT then Integer(key, 10)
-          when :BAML_TY_PRIMITIVE_BOOL
-            return true if key == "true"
-            return false if key == "false"
-
-            raise Error, "BAML returned an invalid bool map key #{key.inspect}"
+          when :BAML_TY_PRIMITIVE_BOOL then decode_bool_key(key)
           else
             raise UnsupportedTypeError, "BAML map key type #{type.primitive.kind} is not yet supported"
+          end
+        when :literal
+          # The generator types literal keys as their primitive (String, Integer, T::Boolean).
+          case type.literal.literal
+          when :string_value then key
+          when :int_value then Integer(key, 10)
+          when :bool_value then decode_bool_key(key)
+          else
+            raise UnsupportedTypeError, "BAML map key literal #{type.literal.literal} is not yet supported"
           end
         else
           raise UnsupportedTypeError, "BAML map key type #{type&.ty.inspect} is not yet supported"
         end
+      end
+
+      def decode_bool_key(key)
+        return true if key == "true"
+        return false if key == "false"
+
+        raise Error, "BAML returned an invalid bool map key #{key.inspect}"
       end
 
       def raise_failure(error_class, value)

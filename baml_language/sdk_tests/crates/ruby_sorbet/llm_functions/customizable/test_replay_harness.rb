@@ -36,4 +36,16 @@ class ReplayHarnessTest < Minitest::Test
     assert_nil ENV["BAML_REPLAY_BASE_URL"]
     assert_nil ENV["BAML_REPLAY_API_KEY"]
   end
+
+  # SDK_PARITY_LINT(skip): Ruby replay harness restores pre-existing environment values
+  def test_replay_server_restores_preexisting_env
+    ENV["BAML_REPLAY_BASE_URL"] = "http://preexisting"
+    ENV["BAML_REPLAY_API_KEY"] = "preexisting-key"
+    ReplayHarness.with_server("replay_extract_doc") { |addr| assert_equal "http://#{addr}", ENV["BAML_REPLAY_BASE_URL"] }
+    assert_equal "http://preexisting", ENV["BAML_REPLAY_BASE_URL"]
+    assert_equal "preexisting-key", ENV["BAML_REPLAY_API_KEY"]
+  ensure
+    ENV.delete("BAML_REPLAY_BASE_URL")
+    ENV.delete("BAML_REPLAY_API_KEY")
+  end
 end
