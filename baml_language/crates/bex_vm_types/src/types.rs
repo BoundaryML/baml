@@ -96,7 +96,9 @@ pub struct Program {
     /// named-item lookup, and recursive-alias rendering.
     pub packages: Vec<ProgramPackage>,
     /// The packages whose `$init` runs, as ordinals into [`Self::packages`],
-    /// in initialization order: every package after the packages it reaches.
+    /// in initialization order: every package after each package with `let`s
+    /// it reaches, directly or through packages without any; packages free to
+    /// initialize together go by name, then by position in the link set.
     pub init_order: Vec<u32>,
     /// The package the program was compiled for — the world's root — as an
     /// ordinal into [`Self::packages`]: the viewpoint every host-supplied

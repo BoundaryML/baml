@@ -2,7 +2,7 @@
 //! its init part, then its test part — and, separately, the order the init
 //! parts execute in.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet};
 
 use baml_base::Name;
 use baml_linker_types::InitTail;
@@ -20,7 +20,7 @@ pub(super) struct LayoutOrder {
     members: Vec<LinkPackageId>,
     /// The packages with an init part, in initialization order.
     init: Vec<LinkPackageId>,
-    /// The packages with a test part, by name.
+    /// The packages with a test part, by name, then by position.
     tests: Vec<LinkPackageId>,
 }
 
@@ -45,7 +45,7 @@ impl LayoutOrder {
         };
         let init = init_order(set, &with_part(TailPart::Init))?;
         let mut tests = with_part(TailPart::Test);
-        tests.sort_by(|a, b| set.name(*a).as_str().cmp(set.name(*b).as_str()));
+        tests.sort_by_key(|&id| (set.name(id).as_str(), id));
         Ok(Self {
             members,
             init,
@@ -85,7 +85,7 @@ impl LayoutOrder {
         &self.init
     }
 
-    /// The packages with a test part, by name.
+    /// The packages with a test part, by name, then by position.
     pub(super) fn test_order(&self) -> &[LinkPackageId] {
         &self.tests
     }
@@ -100,60 +100,93 @@ impl LayoutOrder {
     }
 }
 
-/// Package initialization order: Kahn over the set's edges restricted to
-/// `members`, alphabetical ties, exactly as the whole-program emit orders
-/// `$init`.
+/// Package initialization order: a package with `let`s initializes after
+/// every package with `let`s it reaches over the set's edges — directly, or
+/// through packages that have none — and among the packages free to
+/// initialize, the least by `(name, position)` goes first, so one set has
+/// one order.
+///
+/// Reach is taken over every edge rather than between the members alone:
+/// the packages without `let`s between two members still carry the
+/// dependency. The language packages reach one another, so the graph over
+/// all packages is not acyclic; only two MEMBERS that reach each other are an
+/// error ([`LinkError::InitCycle`]). Reach is transitive, so with no such
+/// pair the order it induces on the members is a strict partial order, and
+/// every member is placed.
 fn init_order(
     set: &LinkSet<'_>,
     members: &[LinkPackageId],
 ) -> Result<Vec<LinkPackageId>, LinkError> {
-    let member_set: HashSet<LinkPackageId> = members.iter().copied().collect();
-    let mut in_degree: HashMap<LinkPackageId, usize> = members.iter().map(|&id| (id, 0)).collect();
-    let mut dependents: HashMap<LinkPackageId, Vec<LinkPackageId>> = HashMap::new();
-    for &id in members {
-        for edge in &set.package(id).edges {
-            let dependency = edge.target;
-            if dependency != id && member_set.contains(&dependency) {
-                *in_degree.entry(id).or_insert(0) += 1;
-                dependents.entry(dependency).or_default().push(id);
+    let reach = |from: LinkPackageId| -> BTreeSet<LinkPackageId> {
+        let mut reached = BTreeSet::new();
+        let mut stack = vec![from];
+        while let Some(id) = stack.pop() {
+            for edge in &set.package(id).edges {
+                if reached.insert(edge.target) {
+                    stack.push(edge.target);
+                }
+            }
+        }
+        reached
+    };
+    // Each member's prerequisites: the other members it reaches.
+    let prerequisites: BTreeMap<LinkPackageId, Vec<LinkPackageId>> = members
+        .iter()
+        .map(|&id| {
+            let reached = reach(id);
+            let before = members
+                .iter()
+                .copied()
+                .filter(|&other| other != id && reached.contains(&other))
+                .collect();
+            (id, before)
+        })
+        .collect();
+    for (&id, before) in &prerequisites {
+        if let Some(&other) = before
+            .iter()
+            .find(|&&other| other > id && prerequisites[&other].contains(&id))
+        {
+            return Err(LinkError::InitCycle {
+                package: set.name(id).clone(),
+                other: set.name(other).clone(),
+            });
+        }
+    }
+
+    let mut dependents: BTreeMap<LinkPackageId, Vec<LinkPackageId>> = BTreeMap::new();
+    let mut waiting: BTreeMap<LinkPackageId, usize> = BTreeMap::new();
+    for (&id, before) in &prerequisites {
+        waiting.insert(id, before.len());
+        for &prerequisite in before {
+            dependents.entry(prerequisite).or_default().push(id);
+        }
+    }
+    let key = |id: LinkPackageId| (set.name(id).as_str(), id);
+    let mut ready: BTreeSet<(&str, LinkPackageId)> = waiting
+        .iter()
+        .filter(|(_, count)| **count == 0)
+        .map(|(&id, _)| key(id))
+        .collect();
+    let mut order = Vec::with_capacity(members.len());
+    while let Some((_, id)) = ready.pop_first() {
+        order.push(id);
+        for &dependent in dependents.get(&id).into_iter().flatten() {
+            let count = waiting
+                .get_mut(&dependent)
+                .unwrap_or_else(|| unreachable!("every dependent is a member"));
+            *count -= 1;
+            if *count == 0 {
+                ready.insert(key(dependent));
             }
         }
     }
-    let by_name =
-        |a: &LinkPackageId, b: &LinkPackageId| set.name(*a).as_str().cmp(set.name(*b).as_str());
-    let mut ready: Vec<LinkPackageId> = in_degree
-        .iter()
-        .filter(|(_, degree)| **degree == 0)
-        .map(|(&id, _)| id)
-        .collect();
-    ready.sort_by(by_name);
-    let mut queue: VecDeque<LinkPackageId> = ready.into_iter().collect();
-    let mut order = Vec::with_capacity(members.len());
-    while let Some(id) = queue.pop_front() {
-        order.push(id);
-        let mut released: Vec<LinkPackageId> = dependents
-            .get(&id)
-            .into_iter()
-            .flatten()
-            .filter(|dependent| {
-                let degree = in_degree
-                    .get_mut(dependent)
-                    .unwrap_or_else(|| unreachable!("every dependent is a member"));
-                *degree -= 1;
-                *degree == 0
-            })
-            .copied()
-            .collect();
-        released.sort_by(by_name);
-        queue.extend(released);
-    }
-    if order.len() == members.len() {
-        Ok(order)
-    } else {
-        Err(LinkError::invalid(
-            "package dependency cycle among packages with `let`s",
-        ))
-    }
+    debug_assert_eq!(
+        order.len(),
+        members.len(),
+        "with no two members reaching each other, every member is placed"
+    );
+    Ok(order)
 }
 
 /// Every unit's and tail's slot layout.

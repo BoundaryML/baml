@@ -627,6 +627,126 @@ fn layout_is_package_major_in_set_order() {
     }
 }
 
+/// An init tail whose `$init` does nothing: what a package with `let`s
+/// carries, as far as the init order is concerned.
+fn let_bearing_tail(name: &str) -> InitTail {
+    InitTail {
+        objects: vec![func(&format!("{name}.$init"), vec![Instruction::Return])],
+        slot_objects: vec![0],
+        init: Some(0),
+        test_objects_start: 1,
+        test_slots_start: 1,
+        ..InitTail::default()
+    }
+}
+
+/// One package of an init-order scenario: its name, its edges by the
+/// target's position, and whether it has `let`s.
+struct Member {
+    name: &'static str,
+    edges: Vec<(&'static str, u32)>,
+    lets: bool,
+}
+
+fn with_lets(name: &'static str, edges: &[(&'static str, u32)]) -> Member {
+    Member {
+        name,
+        edges: edges.to_vec(),
+        lets: true,
+    }
+}
+
+fn without_lets(name: &'static str, edges: &[(&'static str, u32)]) -> Member {
+    Member {
+        name,
+        edges: edges.to_vec(),
+        lets: false,
+    }
+}
+
+/// The init order of a set of packages, in set order.
+fn init_order_of(members: &[Member]) -> Result<Vec<u32>, LinkError> {
+    let record = interface_record(b"iface");
+    let empty = CompilationUnit::default();
+    let tails: Vec<Option<InitTail>> = members
+        .iter()
+        .map(|member| member.lets.then(|| let_bearing_tail(member.name)))
+        .collect();
+    let set = LinkSet {
+        packages: members
+            .iter()
+            .zip(&tails)
+            .map(|(member, tail)| {
+                let mut linked = package(member.name, member.edges.clone(), &empty, &record);
+                linked.tail = tail.as_ref();
+                linked
+            })
+            .collect(),
+        root: LinkPackageId(0),
+    };
+    link(&set).map(|program| program.init_order)
+}
+
+/// A package's `let`s may read the `let`s of any package it reaches, through
+/// packages that have none: `app` reaches `zeta` only through `mid`, and
+/// still initializes after it, whatever the names say.
+#[test]
+fn init_order_follows_reach_through_packages_without_lets() {
+    let order = init_order_of(&[
+        with_lets("app", &[("mid", 1)]),
+        without_lets("mid", &[("zeta", 2)]),
+        with_lets("zeta", &[]),
+    ]);
+    assert_eq!(order, Ok(vec![2, 0]));
+}
+
+/// Packages without `let`s may reach each other — the language packages all
+/// do — without ordering anything.
+#[test]
+fn packages_without_lets_may_reach_each_other() {
+    let order = init_order_of(&[
+        with_lets("app", &[("left", 1)]),
+        without_lets("left", &[("right", 2)]),
+        without_lets("right", &[("left", 1), ("zeta", 3)]),
+        with_lets("zeta", &[]),
+    ]);
+    assert_eq!(order, Ok(vec![3, 0]));
+}
+
+/// Two packages may share a name (names live on edges); the order among
+/// packages free to initialize is by name, then by position, so every link
+/// of one set orders them the same way.
+#[test]
+fn init_order_breaks_a_tie_between_same_named_packages_by_position() {
+    let set = [
+        with_lets("user", &[]),
+        with_lets("lib", &[]),
+        with_lets("lib", &[]),
+        with_lets("lib", &[]),
+    ];
+    for _ in 0..32 {
+        assert_eq!(init_order_of(&set), Ok(vec![1, 2, 3, 0]));
+    }
+}
+
+/// Two packages with `let`s that reach each other cannot both initialize
+/// after the other.
+#[test]
+fn an_init_cycle_is_refused_naming_both_packages() {
+    let order = init_order_of(&[
+        without_lets("user", &[]),
+        with_lets("ping", &[("pong", 2)]),
+        with_lets("pong", &[("ping", 1)]),
+    ]);
+    assert_eq!(
+        order,
+        Err(LinkError::InitCycle {
+            package: Name::new("ping"),
+            other: Name::new("pong"),
+        })
+    );
+}
+
 #[test]
 fn init_order_is_topological_with_alphabetical_ties() {
     // `a` depends on `c`; `b` is independent. In-degree-zero packages sort

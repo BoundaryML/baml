@@ -28,6 +28,9 @@ pub enum LinkError {
     /// A package's edge table reaches two packages under one name, so the
     /// name would resolve to neither.
     DuplicateEdge { package: Name, edge: Name },
+    /// Two packages with `let`s reach each other, so neither can initialize
+    /// after the other.
+    InitCycle { package: Name, other: Name },
     /// A unit is malformed: an index outside its declared space, a table that
     /// contradicts its buckets, an entry that violates the format's laws.
     InvalidUnit(String),
@@ -74,6 +77,11 @@ impl std::fmt::Display for LinkError {
             Self::DuplicateEdge { package, edge } => {
                 write!(f, "package `{package}` reaches two packages as `{edge}`")
             }
+            Self::InitCycle { package, other } => write!(
+                f,
+                "packages `{package}` and `{other}` reach each other and both have `let`s, so \
+                 neither can initialize first"
+            ),
             Self::InvalidUnit(message) => write!(f, "invalid unit: {message}"),
         }
     }
