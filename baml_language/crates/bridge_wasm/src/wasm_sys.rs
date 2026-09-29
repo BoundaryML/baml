@@ -115,6 +115,19 @@ impl io::IoClassSysReadPipe for WasmSys {
         })
     }
 
+    fn _read_lines(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _readpipe: io::owned::sys::ReadPipe,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<Vec<String>>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+
     fn close(
         &self,
         _heap: &Arc<BexHeap>,

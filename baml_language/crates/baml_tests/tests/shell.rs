@@ -311,6 +311,105 @@ async fn start_process_iterates_lines_and_final_unterminated_line() {
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
+async fn start_process_lines_strip_crlf_and_replace_invalid_utf8() {
+    let output = baml_test!(
+        r#"
+            function main() -> string throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process(
+                    "sh",
+                    ["-c", "printf 'a\r\n\r\nb\\377c\r\r\nlast\r'"],
+                    null,
+                );
+                defer { process.close() }
+
+                let lines = process.stdout.lines().collect();
+                let _ = process.wait();
+                lines.join("|")
+            }
+        "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "a||b\u{FFFD}c\r|last".to_string().into()
+        ))
+    );
+}
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_lines_span_read_chunks() {
+    // 20,000 lines of 98 bytes plus one 200,000-byte line: lines cross every
+    // 64 KiB read boundary, and one line needs several reads.
+    let output = baml_test!(
+        r#"
+            function main() -> string throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process(
+                    "sh",
+                    ["-c", "yes 0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456 | head -n 20000; head -c 200000 /dev/zero | tr '\\0' x; echo; echo end"],
+                    null,
+                );
+                defer { process.close() }
+
+                let count = 0;
+                let bytes = 0;
+                let longest = 0;
+                let last = "";
+                for (let line in process.stdout.lines()) {
+                    count += 1;
+                    bytes += line.byte_length();
+                    if (line.byte_length() > longest) {
+                        longest = line.byte_length();
+                    }
+                    last = line;
+                }
+                let _ = process.wait();
+                `${count} ${bytes} ${longest} ${last}`
+            }
+        "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "20002 2140003 200000 end".to_string().into()
+        ))
+    );
+}
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_read_after_lines_sees_partial_line() {
+    let output = baml_test!(
+        r#"
+            function main() -> string throws baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout {
+                let process = baml.sys.start_process(
+                    "sh",
+                    ["-c", "printf 'first\nsecond\nthird'"],
+                    null,
+                );
+                defer { process.close() }
+
+                let first = match (process.stdout.lines().next()) {
+                    let line: string => line,
+                    baml.iter.Done => "",
+                };
+                let rest = process.stdout.text();
+                let _ = process.wait();
+                first + "|" + rest
+            }
+        "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("first|third".to_string().into()))
+    );
+}
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
 async fn start_process_reads_complete_stdout_as_text() {
     let output = baml_test!(
         r#"

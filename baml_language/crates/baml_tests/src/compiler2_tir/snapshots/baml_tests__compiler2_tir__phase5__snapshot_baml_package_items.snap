@@ -296,12 +296,11 @@ namespace baml.sys:
   class Process { methods: [wait, kill, close] }
   class ProcessExit { methods: [ok] }
   class ProcessOptions { methods: [] }
-  class ReadPipe { methods: [close, lines] }
+  class ReadPipe { methods: [close, lines, _read_lines] }
   class ReadPipeLines { methods: [] }
   class ShellOutput { methods: [ok] }
   enum StderrMode
   class WritePipe { methods: [close] }
-  function _strip_carriage_return
   function argv
   function collect_garbage
   function exec
