@@ -26,6 +26,15 @@ use text_size::TextRange;
 
 use crate::render::{Spell, Viewpoint};
 
+/// The container shape an [`TirTypeError::InvariantContainerPattern`] names,
+/// which picks the reflection entry point the warning suggests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum InvariantContainerKind {
+    List,
+    Map,
+    Class,
+}
+
 /// How a value typed by a block-scoped `type T = …` binding would leave its
 /// block (E0172); the two roads have different remedies.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -562,6 +571,17 @@ pub enum TirTypeError {
     /// A condition whose truthiness is statically known. The type is included
     /// when it alone proves the result (rather than boolean composition).
     ConditionAlwaysConstant { ty: Option<Ty>, always_true: bool },
+    /// A type pattern whose container type argument mentions `unknown`
+    /// (`unknown[]`, `map<string, unknown>`, `Box<unknown>`) tested against a
+    /// scrutinee that can hold the same container at another type argument.
+    /// Generics are invariant, so the runtime test only matches containers
+    /// built with exactly `pattern`'s arguments - an `int[]` value silently
+    /// misses an `unknown[]` arm. A warning (E0176): the arm is not dead, just
+    /// narrower than it reads.
+    InvariantContainerPattern {
+        pattern: Ty,
+        kind: InvariantContainerKind,
+    },
     /// A function value tested without being called.
     UncalledFunctionInCondition {
         name: String,
@@ -1785,6 +1805,38 @@ impl TirTypeError {
                 }
                 TirTypeError::UncalledFunctionInCondition { name, .. } => {
                     write!(f, "function `{name}` is always truthy")
+                }
+                TirTypeError::InvariantContainerPattern { pattern, kind } => {
+                    let (only, example, any, workaround) = match (kind, pattern) {
+                        (InvariantContainerKind::List, Ty::List(element)) => (
+                            format!(
+                                "arrays whose element type is exactly `{}`",
+                                element.spell(vp)
+                            ),
+                            "an `int[]`",
+                            "array",
+                            "`reflect.Type.of_value(v).as_array()`",
+                        ),
+                        (InvariantContainerKind::Map, Ty::Map { value, .. }) => (
+                            format!("maps whose value type is exactly `{}`", value.spell(vp)),
+                            "a `map<string, int>`",
+                            "map",
+                            "`reflect.Type.of_value(v).as_map()`",
+                        ),
+                        _ => (
+                            "instances whose type arguments are exactly those written".to_string(),
+                            "one built at other type arguments",
+                            "instance",
+                            "`reflect.Type.of_value(v)`",
+                        ),
+                    };
+                    write!(
+                        f,
+                        "`{}` only matches {only}: generic types are invariant, so {example} value \
+                         never matches it; to test for any {any}, use {workaround} and re-match \
+                         with `unreflect`",
+                        pattern.spell(vp)
+                    )
                 }
                 TirTypeError::ConditionAlwaysConstant { ty, always_true } => {
                     let (always, never) = if *always_true {

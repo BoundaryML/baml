@@ -194,9 +194,9 @@ test "match_invariance_mixed_first_arm_captures_union_list" {
 // ─── 6. `unknown[]` is invariant, not "any list" ──────────────────────────────
 // Invariance applies to the top type like any other element type: `unknown[]`
 // denotes lists whose element type is `unknown`, so an `int[]` value is NOT a
-// member (the match-anything container position is the wildcard hole `_`, not
-// the `unknown` type). A list constructed *at* element type `unknown` (the
-// literal adopts the ascribed element type) IS a member.
+// member (there is no match-anything container pattern; the compiler warns
+// with E0176 and points at reflection). A list constructed *at* element type
+// `unknown` (the literal adopts the ascribed element type) IS a member.
 
 function int_list_is_not_unknown_list_fn() -> bool {
     let a: int[] = [1, 2];

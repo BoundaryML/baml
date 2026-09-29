@@ -1152,6 +1152,14 @@ enum PendingDiag<'db> {
         expected: Ty,
         found: Ty,
     },
+    /// A type pattern naming a container at an `unknown`-mentioning type
+    /// argument against a scrutinee that can hold the same container at
+    /// another argument - the invariant-generics trap (E0176, a warning).
+    InvariantContainerPattern {
+        pat: PatId,
+        pattern: baml_type::Ty,
+        kind: crate::diagnostics::InvariantContainerKind,
+    },
     OperatorNotApplicable {
         expr: ExprId,
         interface: &'static str,
@@ -12076,6 +12084,15 @@ impl<'db> InferenceContext<'db> {
                                 got: self.plain_finalized(&found),
                             },
                             severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Pat(pat),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::InvariantContainerPattern { pat, pattern, kind } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::InvariantContainerPattern { pattern, kind },
+                            severity: DiagnosticSeverity::Warning,
                             primary: DiagnosticLocation::Pat(pat),
                             related: Vec::new(),
                         });
