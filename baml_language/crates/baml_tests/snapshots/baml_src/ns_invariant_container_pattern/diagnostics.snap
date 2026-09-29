@@ -64,3 +64,12 @@ source: crates/baml_tests/src/corpus.rs
  119 │     v is unknown[]
      ·          ─────────
      ╰────
+
+  [type] E0176
+
+  ⚠ `baml.future.Future<unknown, never>` only matches futures whose type arguments are exactly those written: generic types are invariant, so a `Future<int, never>` value never matches it; to test
+  │ for any future, use `reflect.Type.of_value(v)` and re-match with `unreflect`
+     ╭─[invariant_container_pattern.baml:131:10]
+ 131 │     v is baml.future.Future<unknown, never>
+     ·          ──────────────────────────────────
+     ╰────

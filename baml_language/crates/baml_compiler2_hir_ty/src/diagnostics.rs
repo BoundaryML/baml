@@ -33,6 +33,7 @@ pub enum InvariantContainerKind {
     List,
     Map,
     Class,
+    Future,
 }
 
 /// How a value typed by a block-scoped `type T = …` binding would leave its
@@ -1822,6 +1823,12 @@ impl TirTypeError {
                             "a `map<string, int>`",
                             "map",
                             "`reflect.Type.of_value(v).as_map()`",
+                        ),
+                        (InvariantContainerKind::Future, _) => (
+                            "futures whose type arguments are exactly those written".to_string(),
+                            "a `Future<int, never>`",
+                            "future",
+                            "`reflect.Type.of_value(v)`",
                         ),
                         _ => (
                             "instances whose type arguments are exactly those written".to_string(),

@@ -124,6 +124,18 @@ test "json_array_misses_unknown_array" {
     assert.equal(json_is_unknown_array(v), false)
 }
 
+// Futures are invariant containers too.
+function one() -> int { 1 }
+
+function is_unknown_future(v: unknown) -> bool {
+    v is baml.future.Future<unknown, never>
+}
+
+test "int_future_misses_unknown_future" {
+    let f = spawn { one() };
+    assert.equal(is_unknown_future(f), false)
+}
+
 // --- E0176 stays quiet -----------------------------------------------------------
 
 // The scrutinee's container member is exactly the pattern: the test is exact.

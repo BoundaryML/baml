@@ -508,6 +508,7 @@ impl<'db> InferenceContext<'db> {
             }
             Pattern::Or(alts) => {
                 let alts = alts.clone();
+                let pending_before = self.pending_diags.len();
                 self.or_probe_depth += 1;
                 let outcomes: Vec<PatternOutcome> = alts
                     .iter()
@@ -527,7 +528,19 @@ impl<'db> InferenceContext<'db> {
                     })
                     .collect();
                 let whole = self.union_of(&whole);
-                self.check_pattern_type_overlap(pat, scrut, &whole);
+                if self.check_pattern_type_overlap(pat, scrut, &whole) {
+                    // The dead chain is the report; an alternative's
+                    // weaker E0176 is noise on top of it.
+                    let mut index = 0;
+                    self.pending_diags.retain(|pending| {
+                        index += 1;
+                        index <= pending_before
+                            || !matches!(
+                                pending,
+                                super::PendingDiag::InvariantContainerPattern { .. }
+                            )
+                    });
+                }
                 // Alternatives bind the SAME names (HIR enforces); their
                 // NARROW types must agree - a name bound `int` in one alt
                 // and `string` in another has no one type at the join.
@@ -786,7 +799,8 @@ impl<'db> InferenceContext<'db> {
 
     /// The invariant-container trap (E0176, a warning): a type pattern
     /// naming a container whose type argument mentions `unknown`
-    /// (`unknown[]`, `map<string, unknown>`, `Box<unknown>`) reads as "any
+    /// (`unknown[]`, `map<string, unknown>`, `Box<unknown>`, a `Future` at
+    /// `unknown`) reads as "any
     /// array" / "any map", but generics are invariant, so the runtime test
     /// matches only containers built at exactly those arguments - an `int[]`
     /// value misses an `unknown[]` arm and falls through silently.
@@ -845,6 +859,7 @@ impl<'db> InferenceContext<'db> {
             baml_type::Ty::List(element) => (K::List, vec![element]),
             baml_type::Ty::Map { key, value, .. } => (K::Map, vec![key, value]),
             baml_type::Ty::Class(_, args) => (K::Class, args.iter().collect()),
+            baml_type::Ty::Future(value, error) => (K::Future, vec![value, error]),
             _ => return None,
         };
         args.into_iter()
@@ -867,6 +882,9 @@ impl<'db> InferenceContext<'db> {
             baml_type::Ty::Class(_, args) | baml_type::Ty::Union(args) => {
                 args.iter().any(|arg| self.mentions_unknown(arg, fuel - 1))
             }
+            baml_type::Ty::Future(value, error) => {
+                self.mentions_unknown(&value, fuel - 1) || self.mentions_unknown(&error, fuel - 1)
+            }
             _ => false,
         }
     }
@@ -878,7 +896,9 @@ impl<'db> InferenceContext<'db> {
         let member = self.expand_alias_chain(member);
         let same_kind = match (pattern, &member) {
             (_, P::Unknown | P::TypeVar(_)) => return true,
-            (P::List(_), P::List(_)) | (P::Map { .. }, P::Map { .. }) => true,
+            (P::List(_), P::List(_))
+            | (P::Map { .. }, P::Map { .. })
+            | (P::Future(..), P::Future(..)) => true,
             (P::Class(pattern_name, _), P::Class(member_name, _)) => pattern_name == member_name,
             _ => false,
         };

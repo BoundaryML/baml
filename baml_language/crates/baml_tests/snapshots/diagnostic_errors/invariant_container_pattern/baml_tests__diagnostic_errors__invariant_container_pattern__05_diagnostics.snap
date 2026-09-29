@@ -1,0 +1,30 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+   ╭─[invariant_container_pattern.baml:8:16]
+ 8 │         let a: unknown[] => "a"
+   ·                ────┬────
+   ·                    ╰── expected `int[]`, found `unknown[]`
+   ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[invariant_container_pattern.baml:17:16]
+ 17 │         let a: unknown[] | string => "a"
+    ·                ─────────┬────────
+    ·                         ╰── expected `int[]`, found `string | unknown[]`
+    ╰────
+
+  [type] E0176
+
+  ⚠ `unknown[]` only matches arrays whose element type is exactly `unknown`: generic types are invariant, so an `int[]` value never matches it; to test for any array, use
+  │ `reflect.Type.of_value(v).as_array()` and re-match with `unreflect`
+    ╭─[invariant_container_pattern.baml:25:16]
+ 25 │         let a: unknown[] | string => "a"
+    ·                ─────────
+    ╰────
