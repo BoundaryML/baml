@@ -34,13 +34,13 @@ Mostly it behaves like JavaScript/TypeScript, with very similar syntax — but B
 ## Best practices and info
 
 - **LLM function = typed return.** The RETURN TYPE *is* the schema the model must produce (`class`, `enum`, literal union, `string[]`, `T?`). Structured output is just a typed value — hand it to ordinary code.
-- **Prompts are backtick strings with `${...}` interpolation.** Write `prompt:` ``… ${arg} …``, and **always inject `${ctx.output_format}`** for a structured return. Escape with `\`` / `\${`; nest with extra backticks.
-- **Clients are values, not config blocks.** `client Fast = openai.ResponsesClient.new(model = "…", api_key = env.OPENAI_API_KEY);` — the old `client<llm> Name { provider: …, options: {…} }` block is **removed**. Anything implementing `ai.Client` works (`openai.ResponsesClient`, `openai.ChatClient`, `anthropic.AnthropicClient`, …; constructor parameters differ by provider). `api_key` and `base_url` accept `ai.Credential`: a literal string, `null` for the provider default, or a late-bound `env.NAME` reference resolved at request time. Compose reliability by **wrapping**: `ai.clients.Retry.new(inner = c, max_attempts = 3)` and `ai.clients.RoundRobin.new(members = […])` have `.new`, but `ai.clients.Fallback { members: […] }` does **not** — construct it as a class literal. Then use `client: Fast` in the function, or the shorthand `client: "openai/gpt-4o-mini"`. `baml describe openai` / `baml describe ai.Credential` / `baml describe ai.clients`.
-- **Shape the schema with field attributes.** `@description("…")` adds a `///` hint the model sees in `${ctx.output_format}`; `@alias("name")` renames the emitted JSON key. Chain: `tags: string[] @alias("labels") @description("…")`.
-- **Test the pure code, not the model.** Unit-test orchestration/post-processing on literal data with `assert.`*. Calling an LLM function in a `test` makes a real request — not an offline test. (`f$parse`/`f$render_prompt`/`f$build_request` exist for debugging.)
+- **Prompts are backtick strings with `${...}` interpolation.** Write `prompt:` ``… ${arg} …``, and **always inject `${ctx.output_format()}`** for a structured return. Escape with `\`` / `\${`; nest with extra backticks.
+- **Clients are values, not config blocks.** `client Fast = openai.ResponsesClient.new(model = "…", api_key = env.OPENAI_API_KEY);` — the old `client<llm> Name { provider: …, options: {…} }` block is **removed**. Anything implementing `ai.Client` works (`openai.ResponsesClient`, `openai.ChatClient`, `anthropic.Client`, …; constructor parameters differ by provider). `api_key` and `base_url` accept `ai.Credential`: a literal string, `null` for the provider default, or a late-bound `env.NAME` reference resolved at request time. Compose reliability by **wrapping**: `ai.clients.Retry.new(inner = c, max_attempts = 3)` and `ai.clients.RoundRobin.new(members = […])` have `.new`, but `ai.clients.Fallback { members: […] }` does **not** — construct it as a class literal. Then use `client: Fast` in the function, or the shorthand `client: "openai/gpt-4o-mini"`. `baml describe openai` / `baml describe ai.Credential` / `baml describe ai.clients`.
+- **Shape the schema with field attributes.** `@description("…")` adds a `///` hint the model sees in `${ctx.output_format()}`; `@alias("name")` renames the emitted JSON key. Chain: `tags: string[] @alias("labels") @description("…")`.
+- **Test the pure code, not the model.** Unit-test orchestration/post-processing on literal data with `assert.`*. Calling an LLM function in a `test` with a live client makes a real request. To test prompts, requests, and parsing offline, use `F@spec(args)` or a scripted client (see [Running AI functions](#running-ai-functions)).
 - **Build strings with interpolation, not coercion.** ``score=${n}`` stringifies any value (implicit `.to_string()`); call `.to_string()` for the string alone. `+` needs both sides already strings (`"n=" + 5` won't compile).
 - **`catch` for some, `catch_all` for all.** `expr catch (e) { baml.errors.ParseError => fallback }` handles a *specific* error; `expr catch_all (e) { _ => fallback }` is *exhaustive* — for a workflow top / entrypoint. Errors propagate implicitly; callers needn't re-declare. **Raise** with `throw baml.errors.InvalidArgument { message: "…" }` (error types are the builtin `baml.errors.*` classes — `InvalidArgument`/`ParseError`/`Io`/`Timeout`/…; `baml describe baml.errors`); annotate a fallible signature with `-> T throws ErrType`. Prefer a typed result **union** (`type R = Ok | Err`) over throwing for ordinary control flow.
-- **Interfaces = shared behavior + dynamic dispatch.** `interface I { function m(self) -> T }` (methods may have default bodies); a class opts in via `implements I { … }`; a value typed `I` (or `I[]`) dispatches to the implementor at runtime. Interfaces can also declare associated types and generic bounds. `baml describe interfaces`.
+- **Interfaces = shared behavior + dynamic dispatch.** `interface I { function m(self) -> T throws never }` (each method declares its `throws` clause and may have a default body); a class opts in via `implements I { … }`; a value typed `I` (or `I[]`) dispatches to the implementor at runtime. Interfaces can also declare associated types and generic bounds. `baml describe interfaces`.
 - **Pattern matching.** `match (v) { … }` over values/types; arms are `pattern => expr` — literals, `let x: T` (bind + narrow), class destructure `T { f: let y }`, or-patterns `A | B`, guards `… if cond`, `_`; must be exhaustive. Also `v is T` → bool (narrows) and `if let x: T = v { … } else { … }`. `baml describe patterns`.
 - **Concurrency = green threads.** `spawn { … }` returns a `Future`; `await` collects it. Combine many with `baml.future.all` / `all_settled` / `race` / `any`. `all_settled` returns `Success<T>`, `Failure<E>`, or `Panicked` for each input; input cancellation is a `Panicked` outcome. Configure a spawn with a `with` clause: `spawn with limit, token { … }` — each value listed is a `baml.spawn.Modifier` that transforms the plan the spawn builds, left to right. `baml.spawn.Limit.new(n)` caps concurrency (excess spawns queue), a `baml.spawn.CancelToken` cancels cooperatively, `baml.spawn.Root.new()` detaches the task from its spawner's cancellation. `baml describe spawn` / `baml describe baml.future`.
 - **Resource safety — `defer`, `cleanup`, `catch (e, ctx)`.** `defer { … }` runs a block at scope exit, LIFO, on *every* path (return / throw / fall-through) — like Go. A class method named `function cleanup(self) -> void` is a **finalizer**: it runs at most once per instance whether you call it, `defer` it, or the GC reclaims it. `catch (e, ctx)` binds an **`ErrorContext`** alongside the error — an error thrown while handling another chains onto it, so `ctx.root_cause()` / `ctx.cause` walk back to the original failure and `ctx.to_string()` renders the whole chain (Python `__context__`-style). `while let PATTERN = expr { … }` loops until the pattern fails (e.g. draining a `T?`-returning `.pop()`).
@@ -62,7 +62,39 @@ Mostly it behaves like JavaScript/TypeScript, with very similar syntax — but B
 - BAML has `log.info(..)`, `log.debug(..)`, `log.warn(..)`, and `log.error(..)`.
 - `baml pack` can create a binary.
 - Use backticks instead of the removed `#" "#` string syntax.
+- **Reflection.** BAML has full reflection: `reflect.Type.of<T>()`, function signatures, `reflect.call_any`, and classes and enums built at runtime. Explore it with `baml describe reflect`.
 
+## Project layout and conventions
+
+1. For a multi-step LLM workflow, you can mirror its steps in the tree: numbered folders (`1_extract/`, `2_classify/`) and a top function that only calls the steps in order.
+2. Group related files into directories once a folder gets crowded (past about 8 files); folders without an `ns_` prefix don't create namespaces, so nest freely.
+3. AI functions and their output classes go in `<name>.prompt.baml` with no logic; the code around them in `<name>.baml`; tests in `<name>.test.baml`, or at the bottom of the source file, as in Rust.
+4. Files stay under 400 lines; a function with phases calls one named function per `//#` phase.
+5. Each file gets a one-line header saying what it holds; other comments say why, in at most 10 words.
+6. On output types, `///` comments, `@description`, and enum names all render into `ctx.output_format()`, so editing them edits the prompt; put notes in `//` comments.
+7. Entry points take `client: ai.Client? = null` and pass it to every call; tests run offline on scripted replies.
+
+## Running AI functions
+
+`F(args)` is shorthand for `ai.Agent.new(client = …).run(F@spec(args)).value`. `F@spec(args)` is an unrun, immutable `ai.FunctionSpec<Out>`:
+- `.call(client = c)` runs it.
+- `.build_request(client = c)` returns the provider HTTP request with no I/O; use it to test prompts and clients.
+- `.parse(reply)` parses a saved reply.
+- `.prompt()` and `.output_type()` inspect it.
+
+`ai.Agent.new(max_steps = 12, schema_attempts = 2, client, on_event)` is the default loop. It runs the model's tool calls in parallel, and re-asks with a correction when a reply won't parse (that retry doesn't count as a step). It returns `ai.RunResult { value, journal, usage }`.
+
+`on_event` (on `Agent.new` or `.call`) receives each `ai.events.Event` as it happens:
+- `RunStarted`
+- `UserMessage` and `AssistantMessage`
+- `ToolRequested`, `ToolCompleted`, and `ToolFailed`
+- `Usage`
+- `LLMCall`, with the raw HTTP request and response and its timing
+- `FinalProduced`
+
+Use it for logs, progress, and cost. A listener that throws can't fail the run (`ai.events.guard`).
+
+To add cross-cutting behavior (metering, caching, replay, budgets), write a class that `implements ai.Runner { type Error = …; function run<Out>(self, spec: ai.FunctionSpec<Out>) -> ai.RunResult<Out> throws Self.Error }`, usually wrapping an inner `ai.Agent`. To fake or wrap a model, write one that `implements ai.Client { id, render, invoke }`. Pass either wherever a client or runner is taken, and keep AI functions free of that plumbing.
 
 For anything not shown (signatures, niche stdlib, advanced features), run **`baml describe <name>`** — the CLI is the docs; never guess the stdlib.
 
@@ -91,11 +123,11 @@ client Fast = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = env.OP
 // Compose reliability by wrapping a client. `Retry`/`RoundRobin` have `.new(...)`;
 // `Fallback` has no `.new`, so construct it as a class literal.
 client Reliable = ai.clients.Retry.new(inner = Fast, max_attempts = 3);
-client Safe = ai.clients.Fallback { members: [Reliable, anthropic.AnthropicClient.new(model = "claude-sonnet-5")] };
+client Safe = ai.clients.Fallback { members: [Reliable, anthropic.Client.new(model = "claude-sonnet-5")] };
 
 function Extract(raw: string) -> Invoice {
     client: Reliable                              // or shorthand: "openai/gpt-4o-mini"
-    prompt: `Extract the invoice. ${ctx.output_format}\n${raw}`
+    prompt: `Extract the invoice. ${ctx.output_format()}\n${raw}`
 }
 
 // Structured output is just a typed value - hand it to ordinary code.
@@ -115,7 +147,8 @@ test "post-process a literal Invoice - no model call" {
     };
     assert.equal(high_total(inv), 900.0);                        // default min_amount = 0.0
     assert.equal(high_total(inv, min_amount = 1000.0), 0.0);     // keyword arg
-    let parsed = Extract$parse(`{"seller":"Acme","status":"draft","items":[],"note":null}`);
+    // `Extract@spec(...)` binds the call without running it; `.parse` reads a saved reply.
+    let parsed = Extract@spec("raw").parse(`{"seller":"Acme","status":"draft","items":[],"note":null}`);
     assert.equal(parsed.vendor, "Acme")
 }
 ```
@@ -183,8 +216,8 @@ test "lang" {
 
 ```baml
 interface Animal {
-    function sound(self) -> string
-    function describe(self) -> string { `${self.sound()}!` } // default method
+    function sound(self) -> string throws never
+    function describe(self) -> string throws never { `${self.sound()}!` } // default method
 }
 
 class Dog {
