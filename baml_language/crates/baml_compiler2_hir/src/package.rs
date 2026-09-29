@@ -7,9 +7,14 @@
 //! within a package into a single lookup structure — the top-level
 //! cross-file query used by the TIR layer for name resolution.
 
+use std::collections::{HashMap, VecDeque};
+
 use baml_base::{LangPackage, LangRoots, Name, SourceFile, SourceRoot, SourceRootKind, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase};
-use baml_type::{DeclName, RESERVED_USER_PACKAGE, TypeName};
+use baml_type::{
+    DeclName, RESERVED_USER_PACKAGE, TypeName,
+    wire::{DepSlot, Digest, Locator},
+};
 use indexmap::IndexMap;
 
 use crate::{
@@ -229,14 +234,16 @@ pub fn is_precompiled_stdlib(db: &dyn crate::Db, root: SourceRoot) -> bool {
 /// else — for a nameless root nothing depends on, the primary package of a
 /// project with no manifest — the default [`RESERVED_USER_PACKAGE`].
 ///
-/// This is the boundary's table. Compile-time heads carry the root itself
-/// ([`DeclName`]) and never a spelling; the spelling is consulted exactly
-/// where a head leaves the session — emit, package-interface export,
-/// describe/export output, canonical dumps — and where one enters it (a
-/// package-interface blob, a throw-fact seed). Today every root in the
-/// database is compiled into one program, so the table is database-wide and
-/// viewpoint-free; when emit compiles a root's closure alone it becomes
-/// per-closure.
+/// This is the rendering boundary's table. Compile-time heads carry the root
+/// itself ([`DeclName`]) and never a spelling; the spelling is consulted
+/// exactly where a head is rendered as a program-wide name — emit's runtime
+/// templates, describe/export output, canonical dumps, the throw-fact seed —
+/// and where such a name re-enters. A package interface blob does NOT use it:
+/// its heads are slots of its own dependency table ([`DependencyTable`]),
+/// bound by walking edges, so the blob means the same declarations in every
+/// database. Today every root in the database is compiled into one program,
+/// so the table is database-wide and viewpoint-free; when emit compiles a
+/// root's closure alone it becomes per-closure.
 ///
 /// A spelling two roots share, or a root reached under two names, is a
 /// [`collision`](Self::collisions): a boundary that needs the table injective
@@ -872,5 +879,161 @@ mod tests {
         assert_eq!(dependency_named(&db, app, &Name::new("leaf")), None);
         assert_eq!(package_dependency_closure(&db, app), &[mid, leaf]);
         assert_eq!(package_dependency_closure(&db, leaf), &[]);
+    }
+}
+
+// ── Dependency tables ────────────────────────────────────────────────────────
+
+/// The shortest edge path from `owner` to `target`, as `(parent, edge name,
+/// child)` hops in order — breadth-first over the edge tables, so the located
+/// root is always the nearest one. `None` when no edge path from `owner`
+/// reaches `target`.
+pub fn edge_path(
+    db: &dyn crate::Db,
+    owner: SourceRoot,
+    target: SourceRoot,
+) -> Option<Vec<(SourceRoot, Name, SourceRoot)>> {
+    let mut parents: HashMap<SourceRoot, (SourceRoot, Name)> = HashMap::new();
+    let mut queue = VecDeque::from([owner]);
+    while let Some(current) = queue.pop_front() {
+        if current == target {
+            break;
+        }
+        for (edge, root) in edge_table(db, current) {
+            if root == owner || parents.contains_key(&root) {
+                continue;
+            }
+            parents.insert(root, (current, edge));
+            queue.push_back(root);
+        }
+    }
+    let mut hops = Vec::new();
+    let mut child = target;
+    while let Some((parent, edge)) = parents.get(&child) {
+        hops.push((*parent, edge.clone(), child));
+        child = *parent;
+    }
+    if child != owner {
+        return None;
+    }
+    hops.reverse();
+    Some(hops)
+}
+
+/// An artifact's dependency table under construction: one slot per package
+/// root the artifact's owner names, located through the owner's edge table
+/// directly or through an earlier slot's ([`Locator`]). The one interner
+/// behind every wire artifact — a package interface's rows and a compilation
+/// unit's imports spell foreign declarations by these slots — so the two
+/// agree on what a slot means by construction.
+#[derive(Debug, Clone)]
+pub struct DependencyTable {
+    owner: SourceRoot,
+    /// Slot `k + 1`: the root it binds, and the hop that located it.
+    entries: Vec<(SourceRoot, DepSlot, Name)>,
+}
+
+impl DependencyTable {
+    pub fn new(owner: SourceRoot) -> Self {
+        Self {
+            owner,
+            entries: Vec::new(),
+        }
+    }
+
+    /// The package the table belongs to: slot [`DepSlot::SELF`].
+    pub fn owner(&self) -> SourceRoot {
+        self.owner
+    }
+
+    /// The slot `root` is (or becomes) bound to. A root the owner has no
+    /// direct edge to is located through the nearest package that does: the
+    /// path from the owner is interned hop by hop, each hop `via` its
+    /// parent's slot.
+    ///
+    /// # Panics
+    ///
+    /// When no edge path from the owner reaches `root`. Every head an
+    /// artifact names lies in its owner's dependency closure — the checker
+    /// resolved it through those edges — so this is an internal invariant,
+    /// not an input error.
+    pub fn slot(&mut self, db: &dyn crate::Db, root: SourceRoot) -> DepSlot {
+        if root == self.owner {
+            return DepSlot::SELF;
+        }
+        if let Some(slot) = self.existing(root) {
+            return slot;
+        }
+        let path = edge_path(db, self.owner, root).unwrap_or_else(|| {
+            unreachable!(
+                "package `{}` names package `{}`, which no edge path from it reaches",
+                self.owner.path(db).display(),
+                root.path(db).display()
+            )
+        });
+        for (parent, edge, hop) in path {
+            if self.existing(hop).is_some() {
+                continue;
+            }
+            let via = if parent == self.owner {
+                DepSlot::SELF
+            } else {
+                self.existing(parent)
+                    .unwrap_or_else(|| unreachable!("a path's parent is interned before its child"))
+            };
+            self.entries.push((hop, via, edge));
+        }
+        self.existing(root)
+            .unwrap_or_else(|| unreachable!("the path ends at the root"))
+    }
+
+    fn existing(&self, root: SourceRoot) -> Option<DepSlot> {
+        self.entries
+            .iter()
+            .position(|(bound, _, _)| *bound == root)
+            .map(DepSlot::of_dependency_index)
+    }
+
+    /// The root bound to `slot`.
+    pub fn root_of(&self, slot: DepSlot) -> SourceRoot {
+        match slot.dependency_index() {
+            None => self.owner,
+            Some(index) => self.entries[index].0,
+        }
+    }
+
+    /// The roots bound to slots `1..`, in slot order.
+    pub fn roots(&self) -> impl Iterator<Item = SourceRoot> + '_ {
+        self.entries.iter().map(|(root, _, _)| *root)
+    }
+
+    /// The table as an artifact carries it: a direct entry is
+    /// [`Locator::Direct`] with `digest(root)` — the interface payload the
+    /// owner compiled against — or [`Locator::Prelude`] for a language
+    /// package (a `Stdlib` root; no payload by design); a transitive entry is
+    /// [`Locator::Transitive`], covered by its parent's digest.
+    pub fn locators(
+        &self,
+        db: &dyn crate::Db,
+        mut digest: impl FnMut(SourceRoot) -> Digest,
+    ) -> Vec<Locator> {
+        self.entries
+            .iter()
+            .map(|(root, via, edge)| {
+                if !via.is_self() {
+                    Locator::Transitive {
+                        via: *via,
+                        edge: edge.clone(),
+                    }
+                } else if root.kind(db) == SourceRootKind::Stdlib {
+                    Locator::Prelude { edge: edge.clone() }
+                } else {
+                    Locator::Direct {
+                        edge: edge.clone(),
+                        digest: digest(*root),
+                    }
+                }
+            })
+            .collect()
     }
 }

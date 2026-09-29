@@ -12,15 +12,22 @@
 //!   viewpoint — a `DeclName` has no `Display`, no `Borsh`, and no
 //!   `HeadDisplay`, so every db-free spelling of a compiler type is a compile
 //!   error rather than a leak.
-//! - The wire keys by spelling: [`TypeName`](crate::TypeName) carries a
-//!   [`Package`], the artifact's own root (`Local`) or a dependency by the name
-//!   the artifact's edges give it (`Dep`). An artifact is its own viewpoint, so
-//!   this is edge-relative naming by construction (rustc's `LOCAL_CRATE`).
+//! - A package interface blob keys by SLOT: [`WireName`] carries a
+//!   [`DepSlot`](crate::wire::DepSlot) into the blob's own dependency table
+//!   ([`Locator`](crate::wire::Locator)), whose entries are edge paths from
+//!   the exporting package. The importing root binds the slots by walking its
+//!   own edges, so a blob resolves identically under every alias and in every
+//!   database (rustc's `crate_deps` + `CrateNum`).
+//! - The runtime and display lanes key by spelling: [`TypeName`](crate::TypeName)
+//!   carries a [`Package`], the artifact's own root (`Local`) or a dependency
+//!   by the name the artifact's edges give it (`Dep`). An artifact is its own
+//!   viewpoint, so this is edge-relative naming by construction (rustc's
+//!   `LOCAL_CRATE`); it is only ever read where the reader holds exactly the
+//!   edge table the name was spelled from.
 //!
-//! The emit boundary maps the first to the second through the emitting
-//! package's dependency edges; the import boundary (a package interface blob)
-//! maps back through the importing root's edges. Nothing in between compares
-//! a package name string.
+//! The export boundary maps the first to the second through the exporting
+//! package's dependency table; the import boundary maps back through the
+//! importing root's edges. Nothing in between compares a package name string.
 
 use std::fmt;
 
@@ -123,6 +130,25 @@ pub struct QualifiedTypeName<P = Package> {
 /// The compiler's qualified name: the declaring package IS its source root.
 /// Session-local — never rendered without a viewpoint, never serialized.
 pub type DeclName = QualifiedTypeName<SourceRoot>;
+
+/// A package interface blob's qualified name: the declaring package is a slot
+/// in the blob's own dependency table ([`Locator`](crate::wire::Locator)), and
+/// [`DepSlot::SELF`](crate::wire::DepSlot::SELF) is the exporting package
+/// itself. Resolved back to a [`DeclName`] by walking the importing root's
+/// edges, never by a spelling.
+pub type WireName = QualifiedTypeName<crate::wire::DepSlot>;
+
+impl WireName {
+    /// A declaration of the exporting package itself.
+    pub fn own(namespace: Vec<Name>, name: Name) -> Self {
+        Self::qualified(crate::wire::DepSlot::SELF, namespace, name)
+    }
+
+    /// The dependency-table slot of the declaring package.
+    pub fn slot(&self) -> crate::wire::DepSlot {
+        self.pkg
+    }
+}
 
 impl<P> QualifiedTypeName<P> {
     /// A qualified name under package key `pkg`.

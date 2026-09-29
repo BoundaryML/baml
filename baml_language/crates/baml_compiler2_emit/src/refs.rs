@@ -11,7 +11,7 @@
 //! declaration's operand — so nothing in a unit carries a rendered name or a
 //! tag, and a head names nothing the import table does not list.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 
 use baml_base::{Name, SourceRoot};
 use baml_compiler2_hir::{
@@ -21,7 +21,7 @@ use baml_compiler2_hir::{
         MethodOwner, class_data, enum_data, function_data, interface_data, let_data, method_owner,
     },
     loc::{ClassLoc, DeclRef, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, TypeAliasLoc},
-    package::{edge_table, spelling},
+    package::{DependencyTable, edge_table, spelling},
 };
 use baml_compiler2_hir_ty::{
     callable::ExternalCallTarget,
@@ -31,7 +31,7 @@ use baml_compiler2_hir_ty::{
     package_interface::interface_digest,
 };
 use baml_compiler2_mir::RuntimeLowering;
-use baml_linker_types::{DeclKey, DepSlot, DependencyEntry, ImportEntry, import_operand};
+use baml_linker_types::{DeclKey, ImportEntry, Locator, import_operand};
 use baml_type::{DeclName, TypeName};
 use bex_vm_types::{
     BodyKey, DeclPath, FnPath, GlobalIndex, ImplBodyKey, InterfaceKey, ObjectIndex, TypeHead,
@@ -192,128 +192,14 @@ fn extern_function_coords<'db>(
 
 // ── Interned tables ──────────────────────────────────────────────────────────
 
-/// A unit's or tail's dependency table, interned on first use: one slot per
-/// package root the table's owner reaches, located through the owner's edge
-/// table directly or through an earlier slot's.
-pub(crate) struct DependencyTable {
-    owner: SourceRoot,
-    entries: Vec<(SourceRoot, DependencyEntry)>,
-}
-
-impl DependencyTable {
-    pub(crate) fn new(owner: SourceRoot) -> Self {
-        Self {
-            owner,
-            entries: Vec::new(),
-        }
-    }
-
-    /// The slot `root` is (or becomes) bound to. A root the owner has no
-    /// direct edge to is located through the nearest package that does: the
-    /// path from the owner is interned hop by hop, each hop `via` its
-    /// parent's slot.
-    pub(crate) fn slot(&mut self, db: &dyn crate::Db, root: SourceRoot) -> DepSlot {
-        if root == self.owner {
-            return DepSlot::SELF;
-        }
-        if let Some(slot) = self.existing(root) {
-            return slot;
-        }
-        for (parent, edge, hop) in self.path_to(db, root) {
-            if self.existing(hop).is_some() {
-                continue;
-            }
-            let via = if parent == self.owner {
-                DepSlot::SELF
-            } else {
-                self.existing(parent)
-                    .unwrap_or_else(|| unreachable!("a path's parent is interned before its child"))
-            };
-            // Fingerprinted when the table is sealed (`into_entries`).
-            self.entries.push((
-                hop,
-                DependencyEntry {
-                    edge,
-                    via,
-                    fingerprint: None,
-                },
-            ));
-        }
-        self.existing(root)
-            .unwrap_or_else(|| unreachable!("the path ends at the root"))
-    }
-
-    fn existing(&self, root: SourceRoot) -> Option<DepSlot> {
-        self.entries
-            .iter()
-            .position(|(bound, _)| *bound == root)
-            .map(DepSlot::of_dependency_index)
-    }
-
-    /// The root bound to `slot`.
-    pub(crate) fn root_of(&self, slot: DepSlot) -> SourceRoot {
-        match slot.dependency_index() {
-            None => self.owner,
-            Some(index) => self.entries[index].0,
-        }
-    }
-
-    /// The shortest edge path from the owner to `target`, as
-    /// `(parent, edge name, child)` hops, in order. Breadth-first over the
-    /// edge tables, so the located root is always the nearest one.
-    fn path_to(
-        &self,
-        db: &dyn crate::Db,
-        target: SourceRoot,
-    ) -> Vec<(SourceRoot, Name, SourceRoot)> {
-        let mut parents: HashMap<SourceRoot, (SourceRoot, Name)> = HashMap::new();
-        let mut queue = VecDeque::from([self.owner]);
-        while let Some(current) = queue.pop_front() {
-            if current == target {
-                break;
-            }
-            for (edge, root) in edge_table(db, current) {
-                if root == self.owner || parents.contains_key(&root) {
-                    continue;
-                }
-                parents.insert(root, (current, edge));
-                queue.push_back(root);
-            }
-        }
-        let mut hops = Vec::new();
-        let mut child = target;
-        while let Some((parent, edge)) = parents.get(&child) {
-            hops.push((*parent, edge.clone(), child));
-            child = *parent;
-        }
-        assert!(
-            child == self.owner,
-            "package `{}` references package `{}`, which no edge path from it reaches",
-            self.owner.path(db).display(),
-            target.path(db).display()
-        );
-        hops.reverse();
-        hops
-    }
-
-    /// The table as the unit carries it, each entry fingerprinted with the
-    /// interface its owner compiled against: a direct dependency's payload
-    /// digest ([`interface_digest`]), the value the linker checks the bound
-    /// package's record against. `None` exactly where the link has no
-    /// payload to check — a prelude package (a `Stdlib` root; no blob by
-    /// design, the toolchain pairing is the build fingerprint's) and a
-    /// transitive root (the owner read no interface of it).
-    pub(crate) fn into_entries(self, db: &dyn crate::Db) -> Vec<DependencyEntry> {
-        self.entries
-            .into_iter()
-            .map(|(root, mut entry)| {
-                if entry.via.is_self() && root.kind(db) != baml_base::SourceRootKind::Stdlib {
-                    entry.fingerprint = Some(interface_digest(db, root));
-                }
-                entry
-            })
-            .collect()
-    }
+/// A unit's or tail's dependency table as the unit carries it
+/// ([`DependencyTable::locators`]): each direct entry fingerprinted with the
+/// digest of the interface its owner compiled against ([`interface_digest`]),
+/// the value the linker checks the bound package's record against; a
+/// prelude entry and a transitive entry carry none — the toolchain pairing
+/// covers the prelude, the parent's digest covers a transitive root.
+pub(crate) fn dependency_locators(db: &dyn crate::Db, deps: &DependencyTable) -> Vec<Locator> {
+    deps.locators(db, |root| interface_digest(db, root))
 }
 
 /// One index space's import table, interned on first use.

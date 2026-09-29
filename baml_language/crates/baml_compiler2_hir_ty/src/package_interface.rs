@@ -16,9 +16,15 @@ use baml_compiler2_hir::{
     contributions::Definition,
     file_package,
     loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc, TypeAliasLoc},
-    package::{PackageItems, accessible_package, is_precompiled_stdlib, is_served_from_interface},
+    package::{
+        DependencyTable, PackageItems, accessible_package, edge_table, is_precompiled_stdlib,
+        is_served_from_interface,
+    },
 };
-use baml_type::{DeclName, FunctionParamMode, FunctionParamTy, Head, ParamTy, Ty, TypeName};
+use baml_type::{
+    DeclName, FunctionParamMode, FunctionParamTy, Head, ParamTy, Ty, TypeName, WireName,
+    wire::{DepSlot, Digest, Locator},
+};
 use indexmap::IndexMap;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -58,10 +64,10 @@ pub fn stdlib_honest_derivations() -> usize {
 ///
 /// Generic over the head like the types it holds: in the database it is
 /// root-headed (`DeclName`, the default); on the wire — the cache seed, the
-/// precompiled stdlib, a runtime mount's blob — it is name-headed
-/// (`PackageInterface<TypeName>`), spelled by the exporting root's
-/// [`Spelling`](baml_compiler2_hir::package::Spelling) and resolved back
-/// through the importing root's edges ([`import_interface`]).
+/// precompiled stdlib, a runtime mount's blob — it is slot-headed
+/// (`PackageInterface<WireName>` inside a [`WireInterface`]), every head a
+/// slot of the blob's own dependency table, bound back to roots through the
+/// importing root's edges ([`import_interface`]).
 #[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct PackageInterface<N: Head = DeclName> {
     /// All exported types: namespace path -> name -> `ExportedType`
@@ -86,6 +92,25 @@ pub struct PackageInterface<N: Head = DeclName> {
     /// type. A name is exported once: as a row or as a re-export. Only a
     /// package that had no compile (a `with_types` view) has entries today.
     pub reexports: IndexMap<Vec<Name>, IndexMap<Name, ReExport<N>>>,
+}
+
+/// A package interface as an artifact carries it: the rows, with every head
+/// addressed by a slot of the blob's own dependency table.
+///
+/// The table is the blob's whole view of the world outside the exporting
+/// package — a [`Locator::Direct`] entry for EVERY direct non-prelude edge,
+/// carrying the digest of the interface the export read, so this blob's
+/// digest is Merkle over its dependencies' (a change anywhere in the closure
+/// that reaches this package's surface changes it); a [`Locator::Prelude`]
+/// entry for each language package a row names; a [`Locator::Transitive`]
+/// entry for each further root a row names, located through an earlier
+/// slot's edge. A reader binds the slots by walking its own edges
+/// ([`import_interface`]); no row is ever resolved by a spelling, so the same
+/// bytes mean the same declarations in every database and under every alias.
+#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub struct WireInterface {
+    pub dependencies: Vec<Locator>,
+    pub rows: PackageInterface<WireName>,
 }
 
 /// What a re-export names: a type declaration, or a free function.
@@ -645,26 +670,6 @@ pub fn defining_head(db: &dyn baml_compiler2_hir::Db, head: DeclName) -> DeclNam
     head
 }
 
-/// The compile-time head a wire name denotes as seen from `viewpoint`
-/// ([`Spelling::resolve`](baml_compiler2_hir::package::Spelling::resolve)),
-/// followed through re-exports to the declaration it names. The one road a
-/// wire head takes into the database. A head of `viewpoint` itself is never
-/// followed: a package's own name is its own declaration (a re-export of
-/// itself is refused at import), and `viewpoint`'s interface may be the one
-/// under construction.
-pub fn resolve_wire_head(
-    db: &dyn baml_compiler2_hir::Db,
-    viewpoint: baml_base::SourceRoot,
-    name: &TypeName,
-) -> Option<DeclName> {
-    let head = baml_compiler2_hir::package::spelling(db).resolve(db, viewpoint, name)?;
-    Some(if head.root() == viewpoint {
-        head
-    } else {
-        defining_head(db, head)
-    })
-}
-
 /// Every declaration `root` re-exports, by its defining identity, to the
 /// path `root` exports it under — what a viewpoint reaching `root` by an
 /// edge spells that declaration by. Empty for a package with no re-exports.
@@ -685,52 +690,32 @@ pub fn reexport_paths(
     paths
 }
 
-/// The wire spelling of `decl` from `viewpoint`: `viewpoint`'s own
-/// declaration as `Local` — never by the name the program happens to reach
-/// `viewpoint` under, so the interface it exports is the same bytes whether
-/// it compiled as a program's root or as one of its dependencies, and mounts
-/// under any alias — a dependency's by the edge that reaches it, a
-/// declaration a dependency re-exports by that dependency's edge and the
-/// re-export's path — every spelling `viewpoint`'s importer resolves through
-/// `viewpoint`'s edges alone — else by the program's spelling of its root (a
-/// transitive dependency's declaration reaching `viewpoint` through a
-/// signature).
-pub fn wire_from(
-    db: &dyn baml_compiler2_hir::Db,
-    viewpoint: baml_base::SourceRoot,
-    decl: &DeclName,
-) -> TypeName {
-    let spelling = baml_compiler2_hir::package::spelling(db);
-    if decl.root() == viewpoint {
-        return TypeName::qualified(
-            baml_type::Package::Local,
-            decl.namespace().clone(),
-            decl.name().clone(),
-        );
-    }
-    let edges = viewpoint.dependencies(db);
-    if let Some(edge) = edges.iter().find(|edge| edge.root == decl.root()) {
-        return TypeName::new(
-            edge.name.clone(),
-            decl.namespace().clone(),
-            decl.name().clone(),
-        );
-    }
-    for edge in edges {
-        if let Some((namespace, name)) = reexport_paths(db, edge.root).get(decl) {
-            return TypeName::new(edge.name.clone(), namespace.clone(), name.clone());
-        }
-    }
-    spelling.wire(decl)
-}
-
 /// Why [`import_interface`] refused a wire interface: it is not a faithful
 /// export of the root it is being mounted as. Every spelling is canonical.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImportError {
-    /// A wire head the importing root cannot reach: the explicit
-    /// unspellable-from-here outcome.
-    UnresolvedHead(TypeName),
+    /// A dependency-table entry is located through a slot that is not
+    /// earlier than it (or its own).
+    UnorderedLocator { slot: u32, via: u32 },
+    /// A dependency-table entry names an edge the package it is located
+    /// through does not have: the blob assumes a world this root is not in.
+    UnknownDependency { slot: u32, edge: Name },
+    /// A direct entry names a language package: the prelude carries no
+    /// payload to bind against.
+    PreludeAsDependency { edge: Name },
+    /// A prelude entry names an ordinary dependency, whose payload the
+    /// compile should have read.
+    DependencyAsPrelude { edge: Name },
+    /// The interface the blob was compiled against is not the interface the
+    /// package bound to the edge serves or exports here (OCaml's
+    /// "inconsistent assumptions over interface").
+    DependencyMismatch {
+        edge: Name,
+        expected: Digest,
+        found: Digest,
+    },
+    /// A row's head names a slot the blob's dependency table does not have.
+    SlotOutOfRange { slot: u32, name: Name },
     /// A row claims an identity other than the key it is exported under
     /// (a type row's `qtn`, a callable row's `target`), so a consumer
     /// minting from the key and one reading the row would disagree about
@@ -793,9 +778,38 @@ pub enum ImportError {
 impl std::fmt::Display for ImportError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::UnresolvedHead(name) => write!(
+            Self::UnorderedLocator { slot, via } => write!(
                 f,
-                "the interface names `{name}`, whose package this package cannot reach"
+                "dependency slot {slot} is located through slot {via}, which is not earlier"
+            ),
+            Self::UnknownDependency { slot, edge } => write!(
+                f,
+                "dependency slot {slot} is located by edge `{edge}`, which the package it is located \
+                 through does not have"
+            ),
+            Self::PreludeAsDependency { edge } => write!(
+                f,
+                "dependency `{edge}` is a language package but the interface records an interface \
+                 digest for it"
+            ),
+            Self::DependencyAsPrelude { edge } => write!(
+                f,
+                "dependency `{edge}` is not a language package but the interface records it as one"
+            ),
+            Self::DependencyMismatch {
+                edge,
+                expected,
+                found,
+            } => write!(
+                f,
+                "dependency `{edge}` serves interface {} but the interface was compiled against {}",
+                hex(found),
+                hex(expected)
+            ),
+            Self::SlotOutOfRange { slot, name } => write!(
+                f,
+                "the interface names `{name}` in dependency slot {slot}, which its dependency table \
+                 does not have"
             ),
             Self::RowIdentity { kind, key, claimed } => {
                 write!(
@@ -885,13 +899,94 @@ impl std::fmt::Display for ImportError {
 pub fn import_interface(
     db: &dyn baml_compiler2_hir::Db,
     root: baml_base::SourceRoot,
-    wire: &PackageInterface<TypeName>,
+    wire: &WireInterface,
 ) -> Result<PackageInterface, ImportError> {
-    let interface = wire.try_map_heads(&mut |name| {
-        resolve_wire_head(db, root, name).ok_or_else(|| ImportError::UnresolvedHead(name.clone()))
+    let bound = bind_locators(db, root, &wire.dependencies)?;
+    let interface = wire.rows.try_map_heads(&mut |name: &WireName| {
+        let Some(&declaring) = bound.get(name.slot().0 as usize) else {
+            return Err(ImportError::SlotOutOfRange {
+                slot: name.slot().0,
+                name: name.name().clone(),
+            });
+        };
+        let head = DeclName::in_root(declaring, name.namespace().clone(), name.name().clone());
+        // A head of `root` itself is never followed: a package's own name is
+        // its own declaration (a re-export of itself is refused below), and
+        // `root`'s interface may be the one under construction.
+        Ok(if declaring == root {
+            head
+        } else {
+            defining_head(db, head)
+        })
     })?;
     validate_row_identities(db, root, &interface)?;
     Ok(interface)
+}
+
+/// Bind a blob's dependency table from `root`'s edges: slot `k + 1` is entry
+/// `k`'s edge in the edge table of the root bound to its `via` (slot 0 is
+/// `root`); a direct entry binds only a package whose interface digest
+/// ([`interface_digest`]) is the one the blob was compiled against, and a
+/// prelude entry binds only a language package. The one road a wire head
+/// takes into the database: no slot is ever resolved by a spelling.
+fn bind_locators(
+    db: &dyn baml_compiler2_hir::Db,
+    root: baml_base::SourceRoot,
+    locators: &[Locator],
+) -> Result<Vec<baml_base::SourceRoot>, ImportError> {
+    let mut bound = vec![root];
+    for (index, locator) in locators.iter().enumerate() {
+        let slot = DepSlot::of_dependency_index(index);
+        let via = locator.via();
+        let Some(&parent) = bound.get(via.0 as usize) else {
+            return Err(ImportError::UnorderedLocator {
+                slot: slot.0,
+                via: via.0,
+            });
+        };
+        let Some((_, target)) = edge_table(db, parent)
+            .into_iter()
+            .find(|(edge, _)| edge == locator.edge())
+        else {
+            return Err(ImportError::UnknownDependency {
+                slot: slot.0,
+                edge: locator.edge().clone(),
+            });
+        };
+        let is_prelude = target.kind(db) == baml_base::SourceRootKind::Stdlib;
+        match locator {
+            Locator::Direct { edge, digest } => {
+                if is_prelude {
+                    return Err(ImportError::PreludeAsDependency { edge: edge.clone() });
+                }
+                let found = interface_digest(db, target);
+                if found != *digest {
+                    return Err(ImportError::DependencyMismatch {
+                        edge: edge.clone(),
+                        expected: *digest,
+                        found,
+                    });
+                }
+            }
+            Locator::Prelude { edge } => {
+                if !is_prelude {
+                    return Err(ImportError::DependencyAsPrelude { edge: edge.clone() });
+                }
+            }
+            Locator::Transitive { .. } => {}
+        }
+        bound.push(target);
+    }
+    Ok(bound)
+}
+
+/// A digest as diagnostics print it.
+fn hex(digest: &Digest) -> String {
+    use std::fmt::Write as _;
+    digest.iter().fold(String::new(), |mut out, byte| {
+        let _ = write!(out, "{byte:02x}");
+        out
+    })
 }
 
 /// Every row's claimed identity must be the key it is exported under: a
@@ -1257,36 +1352,62 @@ fn validate_row_identities(
     Ok(())
 }
 
-/// `root`'s interface spelled for the wire: every head as `root` spells it
-/// ([`wire_from`]), so an importer resolves each through `root`'s edges.
+/// `root`'s interface as an artifact carries it ([`WireInterface`]): every
+/// head a slot of a dependency table built from `root`'s own edges, so an
+/// importer binds each through `root`'s edges and never through a spelling.
+/// The table lists every direct non-prelude edge first, in edge order, then
+/// each further package a row names as it is first met — so the bytes are a
+/// function of `root`'s sources and its edge table alone: the same whether
+/// `root` compiles as a program's root or as a dependency, and under whatever
+/// alias a consumer mounts it.
 pub fn export_interface(
     db: &dyn baml_compiler2_hir::Db,
     root: baml_base::SourceRoot,
-) -> PackageInterface<TypeName> {
-    package_interface(db, root)
-        .try_map_heads::<_, std::convert::Infallible>(&mut |decl| Ok(wire_from(db, root, decl)))
-        .unwrap_or_else(|never| match never {})
+) -> WireInterface {
+    let mut table = DependencyTable::new(root);
+    // Every direct non-prelude edge, in edge order, named by a row or not:
+    // the digest of each is what makes this blob's digest cover its closure.
+    for (_, dependency) in edge_table(db, root) {
+        if dependency.kind(db) != baml_base::SourceRootKind::Stdlib {
+            table.slot(db, dependency);
+        }
+    }
+    let rows = package_interface(db, root)
+        .try_map_heads::<_, std::convert::Infallible>(&mut |decl| {
+            Ok(decl.map_key(|declaring| table.slot(db, *declaring)))
+        })
+        .unwrap_or_else(|never| match never {});
+    let dependencies = table.locators(db, |dependency| interface_digest(db, dependency));
+    WireInterface { dependencies, rows }
 }
 
-/// The digest of the interface a dependent of `root` compiles against: sha256
-/// over the serialized [`PackageInterface`] payload — the blob's own payload
-/// when `root` is served from one (a mount, a precompiled stdlib package),
-/// else the interface as [`export_interface`] spells it, which is exactly the
-/// payload the emitter writes into `root`'s package record. Consumer, linker,
-/// and grafter therefore hash the same bytes: what a compiled output's
-/// dependency on `root` is a function of — a change to `root` that leaves
-/// this digest alone cannot change what its dependents compile to.
-pub fn interface_digest(db: &dyn baml_compiler2_hir::Db, root: baml_base::SourceRoot) -> [u8; 32] {
+/// The digest of the interface a dependent of `root` compiles against:
+/// SHA-256 over the serialized [`WireInterface`] — the blob's payload when
+/// `root` is served from a mount's artifact; the bytes themselves when it is
+/// served from the precompiled stdlib (raw Borsh, no envelope: the
+/// distinction the database decodes by); else the interface as
+/// [`export_interface`] spells it, which is exactly the payload the emitter
+/// writes into `root`'s package record. Consumer, linker, and grafter
+/// therefore hash the same bytes. A `WireInterface` embeds the digest of
+/// every direct dependency, so this digest covers `root`'s whole dependency
+/// closure: a change anywhere in it that alters what `root`'s dependents
+/// compile against changes this value, and a change that leaves it alone
+/// cannot change what they compile to.
+#[salsa::tracked]
+pub fn interface_digest(db: &dyn baml_compiler2_hir::Db, root: baml_base::SourceRoot) -> Digest {
     use sha2::Digest as _;
-    if let Some(blob) = root.interface(db) {
+    if let Some(bytes) = root.interface(db) {
+        if root.kind(db) == baml_base::SourceRootKind::Stdlib {
+            return sha2::Sha256::digest(bytes).into();
+        }
         // The database validated the envelope when it added the root.
-        return baml_artifact::payload_digest(baml_artifact::ArtifactKind::PackageInterface, blob)
+        return baml_artifact::payload_digest(baml_artifact::ArtifactKind::PackageInterface, bytes)
             .unwrap_or_else(|error| {
                 unreachable!("a served root's interface is a valid artifact: {error}")
             });
     }
     let bytes = borsh::to_vec(&export_interface(db, root))
-        .unwrap_or_else(|_| unreachable!("a PackageInterface serializes"));
+        .unwrap_or_else(|_| unreachable!("a WireInterface serializes"));
     sha2::Sha256::digest(&bytes).into()
 }
 
@@ -1855,7 +1976,7 @@ pub fn package_interface(
         // does not decode or is not a faithful export is a compiler bug,
         // never a stale cache: fail loud rather than silently deriving the
         // package from source.
-        let wire = borsh::from_slice::<PackageInterface<TypeName>>(bytes).unwrap_or_else(|error| {
+        let wire = borsh::from_slice::<WireInterface>(bytes).unwrap_or_else(|error| {
             panic!(
                 "seeded interface for stdlib package `{}` does not decode: {error}",
                 name.as_str()
@@ -1879,11 +2000,11 @@ pub fn package_interface(
         let precompiled = is_precompiled_stdlib(db, pkg_id);
         let spelled = baml_compiler2_hir::package::spelling(db).of(pkg_id).clone();
         let wire = if precompiled {
-            borsh::from_slice::<PackageInterface<TypeName>>(bytes).unwrap_or_else(|error| {
+            borsh::from_slice::<WireInterface>(bytes).unwrap_or_else(|error| {
                 panic!("compiler-built package `{spelled}` has an invalid interface: {error}")
             })
         } else {
-            baml_artifact::decode::<PackageInterface<TypeName>>(
+            baml_artifact::decode::<WireInterface>(
                 baml_artifact::ArtifactKind::PackageInterface,
                 bytes,
             )

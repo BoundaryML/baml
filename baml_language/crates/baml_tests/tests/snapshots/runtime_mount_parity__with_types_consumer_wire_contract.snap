@@ -2,10 +2,10 @@
 source: crates/baml_tests/tests/runtime_mount_parity.rs
 expression: wire_contract(&artifact.emitted.unit)
 ---
-dep @1 app via @0 fingerprinted
+dep @1 app direct, digested
 dep @2 $1 via @1
 dep @3 $0 via @1
-dep @4 baml via @0
+dep @4 baml prelude
 import object @2 enum Level
 import object @3 class Minted
 import object @4 interface ToString

@@ -531,6 +531,34 @@ impl ProjectDatabase {
             })
             .collect();
         self.stdlib_prelude = Arc::from(prelude);
+
+        // A precompiled root's blob is validated here, with every language
+        // package installed and recorded: its dependency table locates its
+        // siblings under their fixed names, which no root's edge table shows
+        // until the layout is complete. A compiler-built blob that does not
+        // bind is a compiler bug, never a stale cache: fail loud.
+        for package in &layout.packages {
+            let root = roots[package.name];
+            let Some(bytes) = root.interface(self) else {
+                continue;
+            };
+            let wire =
+                Self::decode_interface(SourceRootKind::Stdlib, bytes).unwrap_or_else(|err| {
+                    panic!(
+                        "cannot install the stdlib source root for `{}`: {err}",
+                        package.name
+                    )
+                });
+            if let Err(error) =
+                baml_compiler2_hir_ty::package_interface::import_interface(self, root, &wire)
+            {
+                panic!(
+                    "cannot install the stdlib source root for `{}`: invalid package interface: \
+                     {error}",
+                    package.name
+                );
+            }
+        }
     }
 
     /// The prelude edges every non-`Stdlib` root carries (empty until the
@@ -610,11 +638,16 @@ impl ProjectDatabase {
         Arc::make_mut(&mut self.roots_by_path).insert(path, root);
 
         // A served-from-interface root's blob must be a faithful export of
-        // the root it now is: every head it spells names the root itself or
-        // a package reached by one of its edges, and every row is the row
-        // its key exports it as (`import_interface`). A blob that fails
-        // either is not mountable here, and the root does not stay.
-        if let Some(wire) = wire_interface
+        // the root it now is: every slot of its dependency table binds
+        // through the root's edges, and every row is the row its key exports
+        // it as (`import_interface`). A blob that fails either is not
+        // mountable here, and the root does not stay. A precompiled stdlib
+        // root is validated by `install_stdlib` once the whole layout exists
+        // instead: its blob reaches the language packages under their fixed
+        // names, which the edge table only carries after the installer has
+        // recorded them.
+        if kind != SourceRootKind::Stdlib
+            && let Some(wire) = wire_interface
             && let Err(error) =
                 baml_compiler2_hir_ty::package_interface::import_interface(self, root, &wire)
         {
@@ -708,21 +741,17 @@ impl ProjectDatabase {
     }
 
     /// A served-from-interface root's bytes must decode: a precompiled stdlib
-    /// package is raw `borsh(PackageInterface)`, anything else a versioned
-    /// `baml_artifact`.
+    /// package is raw `borsh(WireInterface)`, anything else a versioned
+    /// `baml_artifact` — the same distinction `interface_digest` hashes by.
     fn decode_interface(
         kind: SourceRootKind,
         bytes: &[u8],
-    ) -> Result<
-        baml_compiler2_hir_ty::package_interface::PackageInterface<baml_type::TypeName>,
-        SourceRootError,
-    > {
-        use baml_compiler2_hir_ty::package_interface::PackageInterface;
+    ) -> Result<baml_compiler2_hir_ty::package_interface::WireInterface, SourceRootError> {
+        use baml_compiler2_hir_ty::package_interface::WireInterface;
         let decoded = if kind == SourceRootKind::Stdlib {
-            borsh::from_slice::<PackageInterface<baml_type::TypeName>>(bytes)
-                .map_err(|error| error.to_string())
+            borsh::from_slice::<WireInterface>(bytes).map_err(|error| error.to_string())
         } else {
-            baml_artifact::decode::<PackageInterface<baml_type::TypeName>>(
+            baml_artifact::decode::<WireInterface>(
                 baml_artifact::ArtifactKind::PackageInterface,
                 bytes,
             )
@@ -1647,13 +1676,19 @@ mod tests {
         ));
         let blob = baml_artifact::encode(
             baml_artifact::ArtifactKind::PackageInterface,
-            &baml_compiler2_hir_ty::package_interface::PackageInterface::<baml_type::TypeName> {
-                types: std::iter::empty().collect(),
-                functions: std::iter::empty().collect(),
-                throw_sets: baml_compiler2_hir_ty::package_interface::FunctionThrowSets::default(),
-                namespaces: std::collections::BTreeSet::default(),
-                impls: Vec::default(),
-                reexports: indexmap::IndexMap::default(),
+            &baml_compiler2_hir_ty::package_interface::WireInterface {
+                dependencies: Vec::new(),
+                rows: baml_compiler2_hir_ty::package_interface::PackageInterface::<
+                    baml_type::WireName,
+                > {
+                    types: std::iter::empty().collect(),
+                    functions: std::iter::empty().collect(),
+                    throw_sets:
+                        baml_compiler2_hir_ty::package_interface::FunctionThrowSets::default(),
+                    namespaces: std::collections::BTreeSet::default(),
+                    impls: Vec::default(),
+                    reexports: indexmap::IndexMap::default(),
+                },
             },
         )
         .unwrap();

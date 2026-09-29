@@ -40,7 +40,7 @@ pub(super) struct BodyPass<'db> {
 
 /// The interned tables a resolver accumulated, detached from its borrows.
 pub(super) struct RefTables {
-    pub(super) deps: crate::refs::DependencyTable,
+    pub(super) deps: baml_compiler2_hir::package::DependencyTable,
     pub(super) imports: ImportTables,
 }
 

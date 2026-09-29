@@ -85,7 +85,7 @@ pub(super) fn finish<'db>(
     Ok((
         EmittedPackage {
             unit: CompilationUnit {
-                dependencies: refs.deps.into_entries(db),
+                dependencies: crate::refs::dependency_locators(db, &refs.deps),
                 classes,
                 enums,
                 interfaces,
@@ -249,7 +249,7 @@ fn bake_rules<'db>(
 
 /// Give a tail its tables: the resolver's dependency and import tables.
 fn seal_tail(db: &dyn crate::Db, (mut tail, tail_refs): (InitTail, RefTables)) -> InitTail {
-    tail.dependencies = tail_refs.deps.into_entries(db);
+    tail.dependencies = crate::refs::dependency_locators(db, &tail_refs.deps);
     tail.object_imports = tail_refs.imports.objects.into_entries();
     tail.global_imports = tail_refs.imports.globals.into_entries();
     tail

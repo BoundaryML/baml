@@ -348,16 +348,22 @@ fn fingerprint_world(library: &str) -> (ProjectDatabase, baml_db::SourceRoot) {
     (db, app)
 }
 
-/// The consumer's fingerprint of `app`: the one entry its unit records.
+/// The consumer's fingerprint of `app`: the digest its unit's direct entry
+/// for `app` records.
 fn app_fingerprint(consumer: &baml_linker_types::EmittedPackage) -> [u8; 32] {
     consumer
         .unit
         .dependencies
         .iter()
-        .find(|entry| entry.edge.as_str() == "app")
-        .expect("the consumer reaches `app`")
-        .fingerprint
-        .expect("a direct dependency is fingerprinted")
+        .find_map(|locator| match locator {
+            baml_linker_types::Locator::Direct { edge, digest } if edge.as_str() == "app" => {
+                Some(*digest)
+            }
+            baml_linker_types::Locator::Direct { .. }
+            | baml_linker_types::Locator::Prelude { .. }
+            | baml_linker_types::Locator::Transitive { .. } => None,
+        })
+        .expect("the consumer reaches `app` directly, fingerprinted")
 }
 
 #[test]
@@ -447,5 +453,116 @@ fn a_dependency_body_change_that_alters_inferred_throws_changes_the_fingerprint(
             assert_eq!(found, digest(&after, app_after));
         }
         other => panic!("expected an interface mismatch, got {other:?}"),
+    }
+}
+
+// ── Merkle: a transitive change is a direct change ───────────────────────────
+//
+// A consumer bakes the LAYOUT of types it reaches only through a dependency's
+// API (`app.make().size` indexes `core.Widget`'s field) with no import of
+// them. The interface blob embeds the digest of every direct dependency, so
+// `app`'s digest covers `core`: reordering `core.Widget`'s fields changes
+// `app`'s digest with `app`'s source untouched, and the consumer compiled
+// against the old layout is refused.
+
+const CORE_V1: &str = r#"
+class Widget {
+    size int
+    label string
+}
+"#;
+
+const CORE_REORDERED: &str = r#"
+class Widget {
+    label string
+    size int
+}
+"#;
+
+const APP_OVER_CORE: &str = r#"
+function make() -> core.Widget {
+    core.Widget { size: 7, label: "w" }
+}
+"#;
+
+const TRANSITIVE_CONSUMER: &str = r#"
+function main() -> int {
+    app.make().size
+}
+"#;
+
+/// `user → app → core`, the workspace with no edge of its own to `core`.
+fn transitive_world(core: &str) -> (ProjectDatabase, baml_db::SourceRoot) {
+    let mut db = ProjectDatabase::new();
+    db.workspace(Path::new(FINGERPRINT_ROOT));
+    let app = db.dependency("app");
+    let core_root = db
+        .add_source_root(
+            baml_db::SourceRootSpec::new("<builtin>/core", baml_base::SourceRootKind::Dependency)
+                .named(baml_base::Name::new("core")),
+        )
+        .expect("the core root is added");
+    db.add_dependency(
+        app,
+        baml_base::Dependency {
+            name: baml_base::Name::new("core"),
+            root: core_root,
+        },
+    )
+    .expect("app reaches core");
+    db.file("<builtin>/core/lib.baml", core);
+    db.file("<builtin>/app/lib.baml", APP_OVER_CORE);
+    db.file(
+        Path::new(FINGERPRINT_ROOT).join("main.baml"),
+        TRANSITIVE_CONSUMER,
+    );
+    baml_db::testing::assert_no_diagnostic_errors(&db);
+    (db, app)
+}
+
+#[test]
+fn a_transitive_layout_change_changes_the_direct_dependency_digest_and_refuses_the_stale_unit() {
+    let (before, app_before) = transitive_world(CORE_V1);
+    let (after, app_after) = transitive_world(CORE_REORDERED);
+    let digest = baml_compiler2_hir_ty::package_interface::interface_digest;
+    assert_ne!(
+        digest(&before, app_before),
+        digest(&after, app_after),
+        "`app`'s interface embeds `core`'s digest"
+    );
+
+    let consumer_before = emit_package(&before, package(&before), OptLevel::Two).expect("emit");
+    let consumer_after = emit_package(&after, package(&after), OptLevel::Two).expect("emit");
+    assert_ne!(
+        borsh::to_vec(&consumer_before.unit).expect("serialize"),
+        borsh::to_vec(&consumer_after.unit).expect("serialize"),
+        "the consumer baked `core.Widget`'s layout"
+    );
+    assert_eq!(
+        app_fingerprint(&consumer_before),
+        digest(&before, app_before)
+    );
+
+    compile_program(&after, package(&after), OptLevel::Two).expect("the new world links");
+    let error = baml_db::compile_program_with(
+        &after,
+        package(&after),
+        OptLevel::Two,
+        &ServedConsumer(&consumer_before),
+    )
+    .expect_err("a consumer of the old layout must not link");
+    match error {
+        baml_db::CompileProgramError::Link(baml_linker::LinkError::InterfaceMismatch {
+            package,
+            edge,
+            expected,
+            found,
+        }) => {
+            assert_eq!(package.as_str(), "user");
+            assert_eq!(edge.as_str(), "app");
+            assert_eq!(expected, digest(&before, app_before));
+            assert_eq!(found, digest(&after, app_after));
+        }
+        other => panic!("expected an interface mismatch on `app`, got {other:?}"),
     }
 }

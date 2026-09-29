@@ -4,7 +4,7 @@
 //! `(name, crate hash)`): a unit compiled against one interface never links
 //! against another.
 
-use baml_linker_types::{DependencyEntry, PackageRecord};
+use baml_linker_types::{Locator, PackageRecord};
 use bex_vm_types::types::EdgeKind;
 
 use super::{LinkError, LinkPackageId, Linker, PerPackage};
@@ -32,26 +32,28 @@ impl Linker<'_, '_> {
 
     /// Bind one dependency table (a unit's or a tail's): slot `k + 1` is the
     /// package entry `k`'s edge names in the edge table of the package bound
-    /// to `via`, and the entry's fingerprint must be the digest of that
-    /// package's interface payload. The fingerprint is present exactly where
-    /// there is a payload to check: a direct dependency carries one; a
-    /// prelude package (no blob by design — the toolchain pairing is the
-    /// build fingerprint's) and a transitive root (an interface the owner
-    /// never read) carry none.
+    /// to its `via`, and the entry's kind must be the edge's — a direct entry
+    /// binds a declared edge whose package's interface payload has the
+    /// recorded digest, a prelude entry a prelude edge, a transitive entry
+    /// either (its parent's digest covers it). A static link set holds
+    /// packages reached under declared and prelude names only; a view's
+    /// re-export edge and an anonymous declaration's edge exist on runtime
+    /// package objects.
     fn bind(
         &self,
         owner: LinkPackageId,
-        dependencies: &[DependencyEntry],
+        dependencies: &[Locator],
     ) -> Result<Vec<LinkPackageId>, LinkError> {
         let owner_name = self.set.name(owner);
         let mut bound = vec![owner];
-        for (index, entry) in dependencies.iter().enumerate() {
-            let Some(&parent) = bound.get(entry.via.0 as usize) else {
+        for (index, locator) in dependencies.iter().enumerate() {
+            let via = locator.via();
+            let Some(&parent) = bound.get(via.0 as usize) else {
                 return Err(LinkError::invalid(format!(
                     "package `{owner_name}` dependency slot {} is reached via slot {}, which is \
                      not earlier",
                     index + 1,
-                    entry.via.0
+                    via.0
                 )));
             };
             let Some(edge) = self
@@ -59,70 +61,77 @@ impl Linker<'_, '_> {
                 .package(parent)
                 .edges
                 .iter()
-                .find(|edge| edge.name == entry.edge)
+                .find(|edge| edge.name == *locator.edge())
             else {
                 return Err(LinkError::UnknownDependency {
                     package: owner_name.clone(),
-                    edge: entry.edge.clone(),
+                    edge: locator.edge().clone(),
                 });
             };
-            Self::verify_fingerprint(
-                owner_name,
-                entry,
-                edge.kind,
-                self.set.package(edge.target).record,
-            )?;
+            let runtime_only = |what: &str| {
+                LinkError::invalid(format!(
+                    "package `{owner_name}` reaches `{}` through a runtime-only {what} edge",
+                    locator.edge()
+                ))
+            };
+            match (locator, edge.kind) {
+                (Locator::Direct { edge: name, digest }, EdgeKind::Declared) => {
+                    Self::verify_digest(
+                        owner_name,
+                        name,
+                        *digest,
+                        self.set.package(edge.target).record,
+                    )?;
+                }
+                (Locator::Direct { edge: name, .. }, EdgeKind::Prelude) => {
+                    return Err(LinkError::invalid(format!(
+                        "package `{owner_name}` records an interface fingerprint for the prelude \
+                         package `{name}`"
+                    )));
+                }
+                (Locator::Prelude { .. }, EdgeKind::Prelude) => {}
+                (Locator::Prelude { edge: name }, EdgeKind::Declared) => {
+                    return Err(LinkError::invalid(format!(
+                        "package `{owner_name}` records no interface fingerprint for its dependency \
+                         `{name}`"
+                    )));
+                }
+                (Locator::Transitive { .. }, EdgeKind::Declared | EdgeKind::Prelude) => {}
+                (
+                    Locator::Direct { .. } | Locator::Prelude { .. } | Locator::Transitive { .. },
+                    EdgeKind::ReExported,
+                ) => return Err(runtime_only("re-export")),
+                (
+                    Locator::Direct { .. } | Locator::Prelude { .. } | Locator::Transitive { .. },
+                    EdgeKind::Anonymous,
+                ) => return Err(runtime_only("anonymous-declaration")),
+            }
             bound.push(edge.target);
         }
         Ok(bound)
     }
 
-    fn verify_fingerprint(
+    /// The fingerprint law for a direct dependency: the bound package's
+    /// interface payload must have the digest the unit was compiled against
+    /// (rustc's `(name, crate hash)`) — the edge locates, the digest binds.
+    fn verify_digest(
         owner_name: &baml_base::Name,
-        entry: &DependencyEntry,
-        kind: EdgeKind,
+        edge: &baml_base::Name,
+        expected: baml_linker_types::Digest,
         record: &PackageRecord,
     ) -> Result<(), LinkError> {
-        let expected = match (kind, entry.fingerprint) {
-            (EdgeKind::Prelude, None) => return Ok(()),
-            (EdgeKind::Prelude, Some(_)) => {
-                return Err(LinkError::invalid(format!(
-                    "package `{owner_name}` records an interface fingerprint for the prelude \
-                     package `{}`",
-                    entry.edge
-                )));
-            }
-            (EdgeKind::Declared, None) if entry.via.is_self() => {
-                return Err(LinkError::invalid(format!(
-                    "package `{owner_name}` records no interface fingerprint for its dependency \
-                     `{}`",
-                    entry.edge
-                )));
-            }
-            (EdgeKind::Declared, None) => return Ok(()),
-            (EdgeKind::Declared, Some(expected)) => expected,
-            // A static link set holds packages reached under declared and
-            // prelude names only; a view's re-export edge and an anonymous
-            // declaration's edge exist on runtime package objects.
-            (EdgeKind::ReExported | EdgeKind::Anonymous, _) => {
-                return Err(LinkError::invalid(format!(
-                    "package `{owner_name}` reaches `{}` through a runtime-only edge",
-                    entry.edge
-                )));
-            }
-        };
         let found = baml_artifact::payload_digest(
             baml_artifact::ArtifactKind::PackageInterface,
             &record.interface_blob,
         )
         .map_err(|_| LinkError::MissingInterface {
             package: owner_name.clone(),
-            edge: entry.edge.clone(),
+            edge: edge.clone(),
         })?;
         if found != expected {
             return Err(LinkError::InterfaceMismatch {
                 package: owner_name.clone(),
-                edge: entry.edge.clone(),
+                edge: edge.clone(),
                 expected,
                 found,
             });

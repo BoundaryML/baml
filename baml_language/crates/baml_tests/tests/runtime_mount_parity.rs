@@ -185,18 +185,17 @@ fn assert_bytes_identical(label: &str, left: &[u8], right: &[u8]) {
 /// rules. Rendered one fact per line so the golden reads as a table.
 fn wire_contract(unit: &CompilationUnit) -> String {
     let mut lines = Vec::new();
-    for (index, entry) in unit.dependencies.iter().enumerate() {
-        lines.push(format!(
-            "dep @{} {} via @{}{}",
-            index + 1,
-            entry.edge,
-            entry.via.0,
-            if entry.fingerprint.is_some() {
-                " fingerprinted"
-            } else {
-                ""
+    for (index, locator) in unit.dependencies.iter().enumerate() {
+        let slot = index + 1;
+        lines.push(match locator {
+            baml_linker_types::Locator::Direct { edge, .. } => {
+                format!("dep @{slot} {edge} direct, digested")
             }
-        ));
+            baml_linker_types::Locator::Prelude { edge } => format!("dep @{slot} {edge} prelude"),
+            baml_linker_types::Locator::Transitive { via, edge } => {
+                format!("dep @{slot} {edge} via @{}", via.0)
+            }
+        });
     }
     for entry in &unit.object_imports {
         lines.push(format!(
@@ -254,7 +253,7 @@ fn runtime_mount_consumer_unit_is_byte_identical_to_the_source_dependency_compil
     let app_slot = mounted_unit
         .dependencies
         .iter()
-        .position(|entry| entry.edge.as_str() == "app")
+        .position(|locator| locator.edge().as_str() == "app")
         .map(baml_linker_types::DepSlot::of_dependency_index)
         .expect("the consumer reaches `app`");
     assert!(
@@ -291,14 +290,17 @@ fn runtime_mount_consumer_unit_is_byte_identical_to_the_source_dependency_compil
 /// through the view's edge, never from the view.
 #[test]
 fn with_types_consumer_wire_contract_is_pinned() {
-    use baml_compiler2_hir_ty::package_interface::PackageInterface;
-    let empty = PackageInterface::<baml_type::TypeName> {
-        types: indexmap::IndexMap::new(),
-        functions: indexmap::IndexMap::new(),
-        throw_sets: Default::default(),
-        namespaces: Default::default(),
-        impls: Vec::new(),
-        reexports: indexmap::IndexMap::new(),
+    use baml_compiler2_hir_ty::package_interface::{PackageInterface, WireInterface};
+    let empty = WireInterface {
+        dependencies: Vec::new(),
+        rows: PackageInterface::<baml_type::WireName> {
+            types: indexmap::IndexMap::new(),
+            functions: indexmap::IndexMap::new(),
+            throw_sets: Default::default(),
+            namespaces: Default::default(),
+            impls: Vec::new(),
+            reexports: indexmap::IndexMap::new(),
+        },
     };
     let interface_blob =
         baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &empty)

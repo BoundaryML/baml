@@ -15,15 +15,19 @@ use baml_compiler2_hir_ty::{
     impls::{ResolvedImplFacts, impl_facts, package_impl_locs},
     package_interface::{
         ExportedFunction, ExportedImpl, ExportedImplOrigin, ExportedType, PackageInterface,
-        ReExport, ResolvedValue, export_interface, exported_takes_self, import_interface,
-        package_interface, package_resolution_context, reduce_ground_projections,
+        ReExport, ResolvedValue, WireInterface, export_interface, exported_takes_self,
+        import_interface, interface_digest, package_interface, package_resolution_context,
+        reduce_ground_projections,
     },
 };
 use baml_db::{
     ProjectDatabase, SourceRootError, collect_diagnostics, testing::assert_no_diagnostic_errors,
 };
 use baml_tests::engine::TestDbExt;
-use baml_type::{DeclName, ParamTy, TypeName};
+use baml_type::{
+    DeclName, ParamTy, TypeName, WireName,
+    wire::{DepSlot, Locator},
+};
 
 const LIBRARY: &str = r#"
 interface Parent {
@@ -183,14 +187,73 @@ fn mounted_interface_skew_is_rejected_before_installation() {
     );
 }
 
-/// The library's wire interface with `forge` applied, encoded.
+/// The library's wire interface with `forge` applied, encoded. The forge
+/// edits the rows spelled by edge name ([`named`]); they go back onto the
+/// blob's own dependency table ([`slotted`]).
 fn forged_library_blob(forge: impl FnOnce(&mut PackageInterface<TypeName>)) -> Vec<u8> {
     let db = library_db();
     assert_no_diagnostic_errors(&db);
-    let mut interface = export_interface(&db, app_root(&db));
+    let wire = export_interface(&db, app_root(&db));
+    let mut interface = named(&wire);
     forge(&mut interface);
-    baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
+    encode_wire(&slotted("app", wire.dependencies, interface))
+}
+
+fn encode_wire(wire: &WireInterface) -> Vec<u8> {
+    baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, wire)
         .expect("package interface serializes")
+}
+
+/// A blob's rows spelled by the edge name of each head's slot (`Local` for
+/// the exporting package itself): the legible form the forges below edit.
+fn named(wire: &WireInterface) -> PackageInterface<TypeName> {
+    wire.rows
+        .try_map_heads::<_, std::convert::Infallible>(&mut |name: &WireName| {
+            Ok(match name.slot().dependency_index() {
+                None => TypeName::qualified(
+                    baml_type::Package::Local,
+                    name.namespace().clone(),
+                    name.name().clone(),
+                ),
+                Some(index) => TypeName::new(
+                    wire.dependencies[index].edge().clone(),
+                    name.namespace().clone(),
+                    name.name().clone(),
+                ),
+            })
+        })
+        .unwrap_or_else(|never| match never {})
+}
+
+/// Rows spelled by edge name, back onto a dependency table: `own` (and
+/// `Local`) spells the exporting package itself; an edge the table lacks
+/// joins it as a prelude entry — the forges name language packages only.
+fn slotted(own: &str, mut table: Vec<Locator>, rows: PackageInterface<TypeName>) -> WireInterface {
+    let rows = rows
+        .try_map_heads::<_, std::convert::Infallible>(&mut |name: &TypeName| {
+            if name.is_local() || name.package().as_str() == own {
+                return Ok(WireName::own(name.namespace().clone(), name.name().clone()));
+            }
+            let index = table
+                .iter()
+                .position(|locator| locator.edge() == name.package())
+                .unwrap_or_else(|| {
+                    table.push(Locator::Prelude {
+                        edge: name.package().clone(),
+                    });
+                    table.len() - 1
+                });
+            Ok(WireName::qualified(
+                DepSlot::of_dependency_index(index),
+                name.namespace().clone(),
+                name.name().clone(),
+            ))
+        })
+        .unwrap_or_else(|never| match never {});
+    WireInterface {
+        dependencies: table,
+        rows,
+    }
 }
 
 /// The message mounting `blob` as `app` is refused with.
@@ -578,18 +641,14 @@ class Widget {
     );
     assert_no_diagnostic_errors(&db);
     let faithful = export_interface(&db, app_root(&db));
-    let encode = |interface: &PackageInterface<TypeName>| {
-        baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
-            .expect("package interface serializes")
-    };
 
     let mut consumer = ProjectDatabase::new();
     consumer.workspace(std::path::Path::new(
         "/hir-ty-package-interface-dependency-impl-consumer",
     ));
-    consumer.mount("app", encode(&faithful));
+    consumer.mount("app", encode_wire(&faithful));
 
-    let mut forged = faithful.clone();
+    let mut forged = named(&faithful);
     let row = forged
         .impls
         .iter_mut()
@@ -603,7 +662,7 @@ class Widget {
     };
     row.methods.push(bogus);
     assert_eq!(
-        mount_refusal(encode(&forged)),
+        mount_refusal(encode_wire(&slotted("app", faithful.dependencies, forged))),
         "an impl of `baml.ToString` provides `bogus`, which the interface does not declare"
     );
 }
@@ -815,6 +874,7 @@ fn enriched_interface_is_symbolic_loc_free_and_borsh_stable() {
         default_methods,
         ..
     } = interface
+        .rows
         .lookup_type(&[], &Name::new("View"))
         .expect("View export")
     else {
@@ -849,6 +909,7 @@ fn enriched_interface_is_symbolic_loc_free_and_borsh_stable() {
     let ExportedType::Class {
         fields: box_fields, ..
     } = interface
+        .rows
         .lookup_type(&[], &Name::new("Box"))
         .expect("Box export")
     else {
@@ -857,14 +918,15 @@ fn enriched_interface_is_symbolic_loc_free_and_borsh_stable() {
     assert_eq!(box_fields[0].2.description.as_deref(), Some("payload"));
 
     let choose = interface
+        .rows
         .lookup_function(&[], &Name::new("choose"))
         .expect("choose export");
     assert_eq!(choose.generic_params.len(), 1);
     assert_eq!(choose.generic_param_bounds[0].len(), 1);
     assert_eq!(choose.linkability, ExternalLinkability::Linkable);
     assert!(matches!(choose.target, ExternalCallTarget::Free { .. }));
-    assert_eq!(interface.impls.len(), 2);
-    assert!(interface.impls.iter().any(|implementation| {
+    assert_eq!(interface.rows.impls.len(), 2);
+    assert!(interface.rows.impls.iter().any(|implementation| {
         implementation.interface.name.name().as_str() == "View"
             && implementation
                 .methods
@@ -1824,8 +1886,16 @@ fn view_world(reexports: &[(&str, ReExport<TypeName>)]) -> Result<ProjectDatabas
             .map(|(name, reexport)| (Name::new(*name), reexport.clone()))
             .collect(),
     );
-    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
-        .expect("the view's interface encodes");
+    // The view's one edge, `app`, is its one direct entry, bound to the
+    // library's interface as mounted here.
+    let blob = encode_wire(&slotted(
+        "view",
+        vec![Locator::Direct {
+            edge: Name::new("app"),
+            digest: interface_digest(&db, lib),
+        }],
+        interface,
+    ));
     let view = db
         .add_source_root(
             baml_db::SourceRootSpec::new("<builtin>/view", baml_base::SourceRootKind::Dynamic)
@@ -1854,9 +1924,7 @@ fn view_world(reexports: &[(&str, ReExport<TypeName>)]) -> Result<ProjectDatabas
 #[test]
 fn a_re_export_resolves_to_the_defining_declaration() {
     use baml_compiler2_hir_ty::{
-        package_interface::{
-            exported_function_head, exported_type_row, resolve_wire_head, wire_from,
-        },
+        package_interface::{exported_function_head, exported_type_row},
         render::Viewpoint,
     };
     let mut db = view_world(&[
@@ -1886,17 +1954,8 @@ fn a_re_export_resolves_to_the_defining_declaration() {
         exported_function_head(&db, view, &[], &Name::new("choose")),
         Some(DeclName::in_root(lib, Vec::new(), Name::new("choose")))
     );
-    // A wire head spelled through the view resolves to the defining pair.
-    assert_eq!(
-        resolve_wire_head(&db, workspace, &wire_name("view", &[], "Twin")),
-        Some(entry.clone())
-    );
-    // The consumer has no edge to `lib`: it spells and renders the
-    // declaration by the re-export that reaches it.
-    assert_eq!(
-        wire_from(&db, workspace, &entry),
-        wire_name("view", &[], "Entry")
-    );
+    // The consumer has no edge to `lib`: it RENDERS the declaration by the
+    // re-export that reaches it.
     let viewpoint = Viewpoint::user_facing(&db, workspace);
     assert_eq!(viewpoint.path(&entry), "view.Entry");
     assert_eq!(viewpoint.source_path(&entry).as_deref(), Ok("view.Entry"));
@@ -1908,6 +1967,42 @@ fn a_re_export_resolves_to_the_defining_declaration() {
          function g(value: view.Entry) -> view.Twin throws never { value }",
     );
     assert_no_diagnostic_errors(&db);
+
+    // On the wire the consumer LOCATES the declaration's package by the edge
+    // path through the view — a transitive slot via the view's own `app`
+    // edge — never by a spelling of its own or of the program's.
+    let wire = export_interface(&db, workspace);
+    let view_slot = DepSlot::of_dependency_index(
+        wire.dependencies
+            .iter()
+            .position(|locator| {
+                matches!(locator, Locator::Direct { edge, .. } if edge.as_str() == "view")
+            })
+            .expect("the view is a direct entry"),
+    );
+    let lib_slot = DepSlot::of_dependency_index(
+        wire.dependencies
+            .iter()
+            .position(|locator| {
+                matches!(
+                    locator,
+                    Locator::Transitive { via, edge } if *via == view_slot && edge.as_str() == "app"
+                )
+            })
+            .expect("the library is located through the view's `app` edge"),
+    );
+    let entry_head = WireName::qualified(lib_slot, Vec::new(), Name::new("Entry"));
+    for function in ["f", "g"] {
+        let row = wire
+            .rows
+            .lookup_function(&[], &Name::new(function))
+            .unwrap_or_else(|| panic!("`{function}` is exported"));
+        assert!(
+            matches!(&row.return_type, baml_type::Ty::Class(head, _) if *head == entry_head),
+            "`{function}` returns the library's `Entry` by slot, got {:?}",
+            row.return_type
+        );
+    }
 }
 
 #[test]
@@ -1917,6 +2012,78 @@ fn a_self_re_export_is_refused() {
     assert_eq!(
         refused,
         "the re-export `view.Entry` names a declaration of the package itself"
+    );
+}
+
+/// A blob's direct entry carries the digest of the interface it was compiled
+/// against; mounted beside a package serving another interface under that
+/// edge, it is refused at the mount (OCaml's "inconsistent assumptions over
+/// interface") before anything reads a row. An entry naming an edge the
+/// mount does not have is refused the same way.
+#[test]
+fn a_blob_compiled_against_another_interface_is_refused_at_the_mount() {
+    let refusal = |table: Vec<Locator>| -> String {
+        let mut db = ProjectDatabase::new();
+        db.workspace(std::path::Path::new("/hir-ty-package-interface-stale-view"));
+        let lib = db
+            .add_source_root(
+                baml_db::SourceRootSpec::new("<builtin>/app", baml_base::SourceRootKind::Dynamic)
+                    .named(Name::new("app"))
+                    .served_from(library_blob()),
+            )
+            .expect("the library mounts");
+        let mut rows = PackageInterface::<TypeName> {
+            types: Default::default(),
+            functions: Default::default(),
+            throw_sets: Default::default(),
+            namespaces: [Vec::new()].into_iter().collect(),
+            impls: Vec::new(),
+            reexports: Default::default(),
+        };
+        rows.reexports.insert(
+            Vec::new(),
+            [(
+                Name::new("Entry"),
+                ReExport::Type(wire_name("app", &[], "Entry")),
+            )]
+            .into_iter()
+            .collect(),
+        );
+        let blob = encode_wire(&slotted("view", table, rows));
+        match db.add_source_root(
+            baml_db::SourceRootSpec::new("<builtin>/view", baml_base::SourceRootKind::Dynamic)
+                .named(Name::new("view"))
+                .depending_on(vec![baml_base::Dependency {
+                    name: Name::new("app"),
+                    root: lib,
+                }])
+                .served_from(blob),
+        ) {
+            Err(SourceRootError::InvalidInterface { message }) => message,
+            other => panic!("a stale or misaddressed blob is refused at the mount, got {other:?}"),
+        }
+    };
+
+    let stale = refusal(vec![Locator::Direct {
+        edge: Name::new("app"),
+        digest: [7; 32],
+    }]);
+    assert!(
+        stale.starts_with("dependency `app` serves interface ")
+            && stale.ends_with(&format!(
+                "but the interface was compiled against {}",
+                "07".repeat(32)
+            )),
+        "{stale}"
+    );
+
+    assert_eq!(
+        refusal(vec![Locator::Direct {
+            edge: Name::new("nope"),
+            digest: [7; 32],
+        }]),
+        "dependency slot 1 is located by edge `nope`, which the package it is located through does \
+         not have"
     );
 }
 

@@ -34,7 +34,9 @@ use crate::{ProjectDatabase, program::PackageCache};
 /// emit, and a user package emitted against interfaces the served outputs
 /// were not compiled from would not link against them.
 pub struct StdlibPrefix {
-    /// Stdlib package name -> `borsh(PackageInterface)`.
+    /// Stdlib package name -> `borsh(WireInterface)`, raw (no artifact
+    /// envelope): the precompiled stdlib is paired with its build by the
+    /// prefix's own key.
     pub interfaces: BTreeMap<String, Vec<u8>>,
     /// Stdlib package name -> the package's output at `opt`.
     pub packages: BTreeMap<String, EmittedPackage>,

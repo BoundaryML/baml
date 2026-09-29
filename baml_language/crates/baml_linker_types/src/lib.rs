@@ -4,7 +4,7 @@
 //! A [`CompilationUnit`] is what the emitter produces for ONE package. It is
 //! a pure function of the package's sources and of the interfaces of the
 //! packages it reaches: the package's own definitions in per-kind buckets, a
-//! [dependency table](DependencyEntry), an [import table](ImportEntry) whose
+//! [dependency table](Locator), an [import table](ImportEntry) whose
 //! entries name a declaration *inside* a dependency by that package's own
 //! item coordinates, an [export table](ExportTable) in the same coordinates,
 //! and code whose index operands are local-or-import ordinals. The linker
@@ -79,62 +79,9 @@ pub fn import_operand(ordinal: usize) -> usize {
 /// owning package's own coordinates — never a consumer's spelling of them.
 pub type ItemPath = LocalName;
 
-/// SHA-256 over the raw Borsh payload of a package interface: the surface a
-/// compile assumed of a dependency, checked at link against the package that
-/// binds the slot.
-pub type Digest = [u8; 32];
-
-/// A slot in a unit's (or tail's) dependency table. Slot `0` is the unit's own
-/// package and is never stored; slot `k >= 1` is `dependencies[k - 1]`.
-#[derive(
-    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize,
-)]
-pub struct DepSlot(pub u32);
-
-impl DepSlot {
-    /// The unit's own package. As an IMPORT's slot it is meaningful only for
-    /// a session submission, whose package already holds the declarations of
-    /// earlier submissions; any other unit's own declarations are locals.
-    pub const SELF: Self = Self(0);
-
-    #[must_use]
-    pub fn is_self(self) -> bool {
-        self == Self::SELF
-    }
-
-    /// The slot for entry `index` of a dependency table.
-    #[must_use]
-    pub fn of_dependency_index(index: usize) -> Self {
-        Self(u32::try_from(index + 1).expect("dependency tables fit u32"))
-    }
-
-    /// The dependency-table entry this slot names, or `None` for
-    /// [`Self::SELF`].
-    #[must_use]
-    pub fn dependency_index(self) -> Option<usize> {
-        self.0.checked_sub(1).map(|k| k as usize)
-    }
-}
-
-/// One dependency of a unit: which package binds slot `k + 1`, and the
-/// interface the compile assumed of it.
-///
-/// One entry per package ROOT: a package mounted under two aliases is one
-/// root, located by its first alias. The table is topologically ordered —
-/// `via` always names an earlier slot — so a transitive root (one the
-/// consumer cannot spell from source but can reach through a dependency's
-/// API) is located through its parent's edge table.
-#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
-pub struct DependencyEntry {
-    /// The edge name that locates the package in `via`'s edge table.
-    pub edge: Name,
-    /// Whose edge table `edge` is read from: [`DepSlot::SELF`] for a direct
-    /// dependency, an earlier slot for a transitive one.
-    pub via: DepSlot,
-    /// Digest of the interface payload this compile read; `None` for a
-    /// transitive root, whose interface the consumer never read.
-    pub fingerprint: Option<Digest>,
-}
+/// The dependency table's vocabulary, shared with the package interface blob
+/// so a unit's imports and an interface's rows locate packages the same way.
+pub use baml_type::wire::{DepSlot, Digest, Locator};
 
 /// An import: the declaration a unit references, addressed inside the package
 /// bound to `dep`.
@@ -240,14 +187,15 @@ pub struct ProgramMethodImplFrag {
 
 /// One package's relocatable compiled output for one link.
 ///
-/// Definitions are bucketed by kind so the linker can interleave them
-/// pass-major across the units of a package group, reproducing the flat pool
-/// order of a whole-program emit. Every index operand inside these objects
-/// uses the module-level convention.
+/// Definitions are bucketed by kind so the linker can place each bucket at
+/// its own base in the package-major image. Every index operand inside these
+/// objects uses the module-level convention.
 #[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 pub struct CompilationUnit {
-    /// The packages this unit reaches, by slot (see [`DepSlot`]).
-    pub dependencies: Vec<DependencyEntry>,
+    /// The packages this unit reaches, by slot (see [`DepSlot`]): the
+    /// dependency table every import and head of the unit is addressed
+    /// through.
+    pub dependencies: Vec<Locator>,
 
     // --- definitions, bucketed by kind ---
     /// `Object::Class` definitions, in declaration order.
@@ -302,7 +250,7 @@ pub struct PackageRecord {
 #[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 pub struct InitTail {
     /// The packages this tail reaches, by slot (see [`DepSlot`]).
-    pub dependencies: Vec<DependencyEntry>,
+    pub dependencies: Vec<Locator>,
     /// Tail objects in pool order: the init part `[0, test_objects_start)`
     /// then the test part.
     pub objects: Vec<Object>,

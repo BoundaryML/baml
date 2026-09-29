@@ -57,6 +57,7 @@ pub mod type_kind;
 pub mod typetag;
 pub mod unify;
 pub mod user_facing;
+pub mod wire;
 pub use call_layout::{CallLayout, LayoutMismatch};
 pub use declaration_name::DeclarationName;
 pub use defs::*;

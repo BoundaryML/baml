@@ -1640,13 +1640,13 @@ mod tests {
             .cache
             .load_package_shared(&key)
             .expect("the user package's entry is present");
+        // A direct entry on the prelude edge: the linker refuses it.
         forged
             .unit
             .dependencies
-            .push(baml_linker_types::DependencyEntry {
+            .push(baml_linker_types::Locator::Direct {
                 edge: baml_db::Name::new("baml"),
-                via: baml_linker_types::DepSlot::SELF,
-                fingerprint: Some([7; 32]),
+                digest: [7; 32],
             });
         ctx1.cache
             .store_package_shared(&key, &forged)
@@ -1919,7 +1919,7 @@ mod tests {
         use baml_db::{
             Name,
             baml_compiler2_hir_ty::package_interface::{
-                FunctionThrowSets, PackageInterface, package_interface,
+                FunctionThrowSets, PackageInterface, WireInterface, package_interface,
             },
         };
 
@@ -1931,16 +1931,19 @@ mod tests {
         // process-global honest-derivation counter (racy under parallel tests).
         let (mut db, _) = build_db(&[("a.baml", A_V1)]);
 
-        let sentinel = PackageInterface::<baml_type::TypeName> {
-            types: Default::default(),
-            functions: Default::default(),
-            throw_sets: FunctionThrowSets {
-                direct: Default::default(),
-                transitive: Default::default(),
+        let sentinel = WireInterface {
+            dependencies: Vec::new(),
+            rows: PackageInterface::<baml_type::WireName> {
+                types: Default::default(),
+                functions: Default::default(),
+                throw_sets: FunctionThrowSets {
+                    direct: Default::default(),
+                    transitive: Default::default(),
+                },
+                namespaces: Default::default(),
+                impls: Default::default(),
+                reexports: Default::default(),
             },
-            namespaces: Default::default(),
-            impls: Default::default(),
-            reexports: Default::default(),
         };
         let mut seed = BTreeMap::new();
         seed.insert(

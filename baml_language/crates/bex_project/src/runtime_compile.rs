@@ -20,9 +20,14 @@ use baml_compiler2_hir::{
     body::{BodyOwnerId, LetBody, let_body},
     contributions::Definition,
 };
-use baml_compiler2_hir_ty::package_interface::{PackageInterface, export_interface};
+use baml_compiler2_hir_ty::package_interface::{
+    PackageInterface, WireInterface, export_interface, interface_digest,
+};
 use baml_db::{Dependency, ProjectDatabase, SourceRootSpec, collect_diagnostics};
-use baml_type::TypeName;
+use baml_type::{
+    TypeName, WireName,
+    wire::{DepSlot, Digest, Locator},
+};
 use bex_engine::RuntimeCompiler;
 use bex_vm::{
     ArtifactKind, RuntimeCompileArtifact, RuntimeSessionCompileArtifact, RuntimeSessionStep,
@@ -121,13 +126,20 @@ fn mount_order(
 /// surface (`bex_vm_types::RuntimeProjectedSurface`): its own class, enum
 /// and alias rows, its impl rows, the declarations it re-exports by name,
 /// and — for every re-exported edge — every export of the target, by the
-/// target's path (`built` holds the targets' wire interfaces; the order the
-/// roots are created in guarantees it). A name exported twice is E0011.
+/// target's path (`built` holds the targets' rows; the order the roots are
+/// created in guarantees it). A name exported twice is E0011.
+///
+/// The surface spells every foreign head through one of the mount's own
+/// edges (or a language package's fixed name), so the blob's dependency
+/// table is exactly those edges: every non-prelude edge a direct entry
+/// carrying its target's digest (`digest_of`), a language package a prelude
+/// entry — the same table an export of a compiled package builds.
 fn projected_interface(
     surface: &bex_vm_types::RuntimeProjectedSurface,
     edges: &IndexMap<Name, bex_vm_types::RuntimeMountEdge>,
-    built: &IndexMap<bex_vm_types::RuntimePackageIdentity, PackageInterface<TypeName>>,
-) -> Result<PackageInterface<TypeName>, RuntimeCompileDiagnostic> {
+    built: &IndexMap<bex_vm_types::RuntimePackageIdentity, PackageInterface<WireName>>,
+    digest_of: &dyn Fn(bex_vm_types::RuntimePackageIdentity) -> Digest,
+) -> Result<WireInterface, RuntimeCompileDiagnostic> {
     use baml_compiler2_hir_ty::package_interface::{
         ExportedFieldAttrs, ExportedImpl, ExportedImplOrigin, ExportedType, ReExport,
     };
@@ -327,7 +339,52 @@ fn projected_interface(
             methods: Vec::new(),
         });
     }
-    Ok(interface)
+    // Every edge of the mount is a slot, in edge order; a language package
+    // the surface names by its fixed name — the engine spells the prelude by
+    // its declared names, never through an edge — joins the table on demand.
+    let mut table: Vec<(Name, Locator)> = edges
+        .iter()
+        .map(|(edge, mount_edge)| {
+            let locator = match mount_edge.kind {
+                bex_vm_types::types::EdgeKind::Prelude => Locator::Prelude { edge: edge.clone() },
+                bex_vm_types::types::EdgeKind::Declared
+                | bex_vm_types::types::EdgeKind::ReExported
+                | bex_vm_types::types::EdgeKind::Anonymous => Locator::Direct {
+                    edge: edge.clone(),
+                    digest: digest_of(mount_edge.target),
+                },
+            };
+            (edge.clone(), locator)
+        })
+        .collect();
+    let rows = interface.try_map_heads(&mut |name: &TypeName| {
+        if name.is_local() {
+            return Ok(WireName::own(name.namespace().clone(), name.name().clone()));
+        }
+        let edge = name.package();
+        let index = match table.iter().position(|(slotted, _)| slotted == edge) {
+            Some(index) => index,
+            None if baml_builtins2::stdlib_package_names().contains(&edge.as_str()) => {
+                table.push((edge.clone(), Locator::Prelude { edge: edge.clone() }));
+                table.len() - 1
+            }
+            None => {
+                return Err(mount_diagnostic(
+                    "E_RUNTIME_MOUNT",
+                    format!("the projected surface names `{name}` through no edge of the mount"),
+                ));
+            }
+        };
+        Ok(WireName::qualified(
+            DepSlot::of_dependency_index(index),
+            name.namespace().clone(),
+            name.name().clone(),
+        ))
+    })?;
+    Ok(WireInterface {
+        dependencies: table.into_iter().map(|(_, locator)| locator).collect(),
+        rows,
+    })
 }
 
 /// The names the roots of a request take, made distinct: an aliased package
@@ -1533,7 +1590,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
         let names = root_names(&packages, &aliases);
         let mut mount_roots: IndexMap<bex_vm_types::RuntimePackageIdentity, baml_base::SourceRoot> =
             IndexMap::new();
-        let mut built: IndexMap<bex_vm_types::RuntimePackageIdentity, PackageInterface<TypeName>> =
+        let mut built: IndexMap<bex_vm_types::RuntimePackageIdentity, PackageInterface<WireName>> =
             IndexMap::new();
         for identity in mount_order(&packages)
             .map_err(|error| vec![mount_diagnostic("E_RUNTIME_MOUNT", error)])?
@@ -1542,22 +1599,27 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             let name = names[&identity].clone();
             let (interface, blob) = match &mount.surface {
                 bex_vm_types::RuntimeMountSurface::Compiled(blob) => {
-                    let interface = baml_artifact::decode::<PackageInterface<TypeName>>(
+                    let interface = baml_artifact::decode::<WireInterface>(
                         baml_artifact::ArtifactKind::PackageInterface,
                         blob,
                     )
                     .map_err(|error| mount_error(&name, &error))?;
-                    (interface, blob.clone())
+                    (interface.rows, blob.clone())
                 }
                 bex_vm_types::RuntimeMountSurface::Projected(surface) => {
-                    let interface = projected_interface(surface, &mount.edges, &built)
+                    // Every edge's target is mounted already (`mount_order`),
+                    // so its digest is the digest of the root serving it.
+                    let interface =
+                        projected_interface(surface, &mount.edges, &built, &|identity| {
+                            interface_digest(&db, mount_roots[&identity])
+                        })
                         .map_err(|diagnostic| vec![diagnostic])?;
                     let blob = baml_artifact::encode(
                         baml_artifact::ArtifactKind::PackageInterface,
                         &interface,
                     )
                     .map_err(|error| mount_error(&name, &error))?;
-                    (interface, blob)
+                    (interface.rows, blob)
                 }
             };
             let edges = mount

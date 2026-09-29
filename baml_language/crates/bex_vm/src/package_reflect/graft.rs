@@ -40,8 +40,8 @@
 use std::collections::HashMap;
 
 use baml_linker_types::{
-    CompilationUnit, DeclKey, DepSlot, DependencyEntry, EmittedPackage, ImportEntry, InitTail,
-    LocalRef, ProgramImplRuleFrag, SessionInitializer, import_ordinal,
+    CompilationUnit, DeclKey, DepSlot, EmittedPackage, ImportEntry, InitTail, LocalRef, Locator,
+    ProgramImplRuleFrag, SessionInitializer, import_ordinal,
 };
 use baml_type::typetag::TypeTag;
 use bex_heap::TlabHolder;
@@ -586,26 +586,27 @@ enum Bound {
 fn bind_slots(
     vm: &BexVm,
     package_ptr: HeapPtr,
-    entries: &[DependencyEntry],
+    entries: &[Locator],
 ) -> Result<Vec<Bound>, VmRustFnError> {
     let mut bound: Vec<Bound> = Vec::with_capacity(entries.len());
-    for (index, entry) in entries.iter().enumerate() {
-        let parent = match entry.via.dependency_index() {
+    for (index, locator) in entries.iter().enumerate() {
+        let via = locator.via();
+        let parent = match via.dependency_index() {
             None => package_ptr,
-            Some(via) => match bound.get(via) {
+            Some(via_index) => match bound.get(via_index) {
                 Some(Bound::Package(parent)) => *parent,
                 Some(Bound::Declaration(_)) => {
                     return Err(link_error(format!(
                         "dependency slot {} is reached via slot {}, a declaration with no edges",
                         index + 1,
-                        entry.via.0
+                        via.0
                     )));
                 }
                 None => {
                     return Err(link_error(format!(
                         "dependency slot {} is reached via slot {}, which is not earlier",
                         index + 1,
-                        entry.via.0
+                        via.0
                     )));
                 }
             },
@@ -613,13 +614,13 @@ fn bind_slots(
         let Object::Package(package) = vm.get_object(parent) else {
             unreachable!("a bound dependency slot is a package")
         };
-        let edge = package.edges.get(&entry.edge).ok_or_else(|| {
+        let edge = package.edges.get(locator.edge()).ok_or_else(|| {
             link_error(format!(
                 "dependency `{}` names no package the compile was given",
-                entry.edge
+                locator.edge()
             ))
         })?;
-        verify_fingerprint(vm, entry, edge.kind, edge.target)?;
+        verify_fingerprint(vm, locator, edge.kind, edge.target)?;
         bound.push(match edge.kind {
             EdgeKind::Anonymous => Bound::Declaration(edge.target),
             EdgeKind::Declared | EdgeKind::ReExported | EdgeKind::Prelude => {
@@ -632,38 +633,39 @@ fn bind_slots(
 
 /// The static linker's fingerprint law, as a consistency assertion over the
 /// package objects the artifact's pins already bound by identity: a direct
-/// dependency's entry carries the digest of the interface payload the compile
-/// read, and a package served from a compiled blob must still carry those
-/// bytes. A projected surface (a `with_types` view, an anonymous declaration)
-/// has no payload — the compile read the seam's projection of it — so the
-/// pin is its whole identity. The prelude and transitive roots carry no
-/// fingerprint, as in the static lane.
+/// entry carries the digest of the interface payload the compile read, and a
+/// package served from a compiled blob must still carry those bytes. A
+/// projected surface (a `with_types` view, an anonymous declaration) has no
+/// payload — the compile read the seam's projection of it — so the pin is its
+/// whole identity. A prelude entry binds a prelude edge and a transitive
+/// entry either kind; neither carries a digest, as in the static lane.
 fn verify_fingerprint(
     vm: &BexVm,
-    entry: &DependencyEntry,
+    locator: &Locator,
     kind: EdgeKind,
     target: HeapPtr,
 ) -> Result<(), VmRustFnError> {
-    let expected = match (kind, entry.fingerprint) {
-        (EdgeKind::Prelude, None) => return Ok(()),
-        (EdgeKind::Prelude, Some(_)) => {
-            return Err(link_error(format!(
-                "dependency `{}` is a prelude package but carries an interface fingerprint",
-                entry.edge
-            )));
-        }
-        (EdgeKind::Declared | EdgeKind::ReExported | EdgeKind::Anonymous, None) => {
-            if entry.via.is_self() {
-                return Err(link_error(format!(
-                    "dependency `{}` carries no interface fingerprint",
-                    entry.edge
-                )));
-            }
+    let (edge, expected) = match (locator, kind) {
+        (Locator::Prelude { .. }, EdgeKind::Prelude) | (Locator::Transitive { .. }, _) => {
             return Ok(());
         }
-        (EdgeKind::Declared | EdgeKind::ReExported | EdgeKind::Anonymous, Some(expected)) => {
-            expected
+        (
+            Locator::Prelude { edge },
+            EdgeKind::Declared | EdgeKind::ReExported | EdgeKind::Anonymous,
+        ) => {
+            return Err(link_error(format!(
+                "dependency `{edge}` carries no interface fingerprint"
+            )));
         }
+        (Locator::Direct { edge, .. }, EdgeKind::Prelude) => {
+            return Err(link_error(format!(
+                "dependency `{edge}` is a prelude package but carries an interface fingerprint"
+            )));
+        }
+        (
+            Locator::Direct { edge, digest },
+            EdgeKind::Declared | EdgeKind::ReExported | EdgeKind::Anonymous,
+        ) => (edge, *digest),
     };
     let blob = match vm.get_object(target) {
         Object::Package(target) => match &target.surface {
@@ -680,14 +682,12 @@ fn verify_fingerprint(
     let found = baml_artifact::payload_digest(baml_artifact::ArtifactKind::PackageInterface, blob)
         .map_err(|error| {
             link_error(format!(
-                "dependency `{}` carries an interface payload that does not decode: {error}",
-                entry.edge
+                "dependency `{edge}` carries an interface payload that does not decode: {error}"
             ))
         })?;
     if found != expected {
         return Err(link_error(format!(
-            "dependency `{}` is not the interface the artifact was compiled against",
-            entry.edge
+            "dependency `{edge}` is not the interface the artifact was compiled against"
         )));
     }
     Ok(())

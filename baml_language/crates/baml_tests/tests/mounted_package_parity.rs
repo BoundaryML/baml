@@ -25,7 +25,7 @@
 
 use baml_base::Name;
 use baml_compiler2_emit::{OptLevel, emit_package};
-use baml_compiler2_hir_ty::package_interface::{ExportedType, PackageInterface, export_interface};
+use baml_compiler2_hir_ty::package_interface::{ExportedType, WireInterface, export_interface};
 use baml_db::{
     EmittedPackage, PackageCache, ProjectDatabase, collect_diagnostics, compile_program,
     compile_program_with, testing::assert_no_diagnostic_errors,
@@ -155,7 +155,7 @@ fn library_db() -> ProjectDatabase {
 
 struct LibraryArtifacts {
     blob: Vec<u8>,
-    interface: PackageInterface<baml_type::TypeName>,
+    interface: WireInterface,
     /// `app`'s run artifact: what a store serves for its mount.
     emitted: EmittedPackage,
 }
@@ -197,7 +197,7 @@ fn library_artifacts() -> LibraryArtifacts {
     let interface = export_interface(&db, app);
     let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
         .expect("serialize app package interface");
-    let round_trip = baml_artifact::decode::<PackageInterface<baml_type::TypeName>>(
+    let round_trip = baml_artifact::decode::<WireInterface>(
         baml_artifact::ArtifactKind::PackageInterface,
         &blob,
     )
@@ -462,6 +462,7 @@ fn exported_impl_method_preserves_synthetic_callback_effect_params() {
     let artifacts = library_artifacts();
     let runner = artifacts
         .interface
+        .rows
         .impls
         .iter()
         .find(|implementation| {
@@ -573,21 +574,25 @@ fn blob_vs_blob_overlap_is_not_expressible_for_valid_artifacts() {
     // and therefore would reject any downstream overlapping source impl before
     // that downstream package could become a second valid blob.
     let artifacts = library_artifacts();
-    assert!(artifacts.interface.impls.iter().any(|implementation| {
+    assert!(artifacts.interface.rows.impls.iter().any(|implementation| {
         implementation.interface.name.name().as_str() == "Tagged"
             && matches!(implementation.for_ty_pattern, baml_type::Ty::TypeVar(_))
     }));
     assert!(matches!(
-        artifacts.interface.lookup_type(&[], &Name::new("Tagged")),
+        artifacts
+            .interface
+            .rows
+            .lookup_type(&[], &Name::new("Tagged")),
         Some(ExportedType::Interface { .. })
     ));
 }
 
 /// `app`'s interface with one free function the consumers below never name
 /// removed: a different interface, hence a different fingerprint.
-fn mutated_interface(artifacts: &LibraryArtifacts) -> PackageInterface<baml_type::TypeName> {
+fn mutated_interface(artifacts: &LibraryArtifacts) -> WireInterface {
     let mut interface = artifacts.interface.clone();
     let root_functions = interface
+        .rows
         .functions
         .get_mut(&Vec::new())
         .expect("the library exports root-level functions");
@@ -597,7 +602,7 @@ fn mutated_interface(artifacts: &LibraryArtifacts) -> PackageInterface<baml_type
     interface
 }
 
-fn encode_interface(interface: &PackageInterface<baml_type::TypeName>) -> Vec<u8> {
+fn encode_interface(interface: &WireInterface) -> Vec<u8> {
     baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
         .expect("serialize app package interface")
 }
