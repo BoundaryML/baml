@@ -25,9 +25,10 @@
 //!   `<project>/.baml/cache`). Content addressing makes a shared directory
 //!   safe across projects.
 //! - `BAML_CACHE_VERIFY=1` — tripwire mode: never serve from the cache;
-//!   compile, then hard-fail if the fresh bytecode differs from a cached
-//!   entry under the same key (catches emit nondeterminism and missing
-//!   cache-key inputs). Also runs the stdlib-interface and per-file
+//!   compile, then hard-fail if a fresh package output or the fresh bytecode
+//!   differs from the cached entry under the same key (catches emit
+//!   nondeterminism and missing cache-key inputs, at both tiers — Go's
+//!   `GODEBUG=gocacheverify=1`). Also runs the stdlib-interface and per-file
 //!   diagnostics oracles. Too expensive to leave always-on.
 //! - `BAML_CACHE_SAMPLED_VERIFY` — sampled field verification, the always-on
 //!   complement to full verify (rustc's "1-in-N compiles verifies one
@@ -108,6 +109,50 @@ pub(crate) struct CacheContext {
     /// and the tests assert.
     packages_served: AtomicUsize,
     packages_emitted: AtomicUsize,
+    /// Under `BAML_CACHE_VERIFY`, every package whose fresh output differed
+    /// from the entry stored under its key, reported by
+    /// [`Self::verify_packages`]. Empty otherwise.
+    package_mismatches: Mutex<Vec<PackageMismatch>>,
+}
+
+/// A package whose cached output differs from a fresh emit under one key.
+struct PackageMismatch {
+    /// The package's source root, as the report names it.
+    package: PathBuf,
+    key: CacheKey,
+    divergence: PackageDivergence,
+}
+
+/// How a stored package entry differs from a fresh emit of the package.
+#[derive(Debug, PartialEq, Eq)]
+enum PackageDivergence {
+    /// The entry decodes, and these parts of it differ.
+    Parts {
+        parts: Vec<&'static str>,
+        cached_bytes: usize,
+        fresh_bytes: usize,
+    },
+    /// The entry does not decode as a package output.
+    Undecodable { cached_bytes: usize },
+}
+
+impl std::fmt::Display for PackageDivergence {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Parts {
+                parts,
+                cached_bytes,
+                fresh_bytes,
+            } => write!(
+                f,
+                "differs in its {} ({cached_bytes} cached vs {fresh_bytes} fresh bytes)",
+                parts.join(", ")
+            ),
+            Self::Undecodable { cached_bytes } => {
+                write!(f, "the cached entry ({cached_bytes} bytes) does not decode")
+            }
+        }
+    }
 }
 
 impl CacheContext {
@@ -156,6 +201,7 @@ impl CacheContext {
             digests: Mutex::new(HashMap::new()),
             packages_served: AtomicUsize::new(0),
             packages_emitted: AtomicUsize::new(0),
+            package_mismatches: Mutex::new(Vec::new()),
         })
     }
 
@@ -543,11 +589,99 @@ impl CacheContext {
     pub(crate) fn packages_emitted(&self) -> usize {
         self.packages_emitted.load(Ordering::Relaxed)
     }
+
+    /// How the entry stored under `key` differs from `emitted`; `None` when
+    /// the cache holds no entry there, or exactly `emitted`'s bytes.
+    fn stored_package_divergence(
+        &self,
+        key: &CacheKey,
+        emitted: &EmittedPackage,
+    ) -> Option<PackageDivergence> {
+        let cached = self.cache.load_raw(key)?;
+        let fresh = borsh::to_vec(emitted).expect("a package output serializes");
+        if cached == fresh {
+            return None;
+        }
+        let Ok(stored) = borsh::from_slice::<EmittedPackage>(&cached) else {
+            return Some(PackageDivergence::Undecodable {
+                cached_bytes: cached.len(),
+            });
+        };
+        let bytes = |part: &dyn Fn(&EmittedPackage) -> Vec<u8>| (part(&stored), part(emitted));
+        let parts = [
+            (
+                "unit",
+                bytes(&|package| borsh::to_vec(&package.unit).expect("a unit serializes")),
+            ),
+            (
+                "record",
+                bytes(&|package| borsh::to_vec(&package.record).expect("a record serializes")),
+            ),
+            (
+                "tail",
+                bytes(&|package| borsh::to_vec(&package.tail).expect("a tail serializes")),
+            ),
+        ]
+        .into_iter()
+        .filter(|(_, (stored, fresh))| stored != fresh)
+        .map(|(part, _)| part)
+        .collect();
+        Some(PackageDivergence::Parts {
+            parts,
+            cached_bytes: cached.len(),
+            fresh_bytes: fresh.len(),
+        })
+    }
+
+    fn record_package_mismatch(&self, mismatch: PackageMismatch) {
+        self.package_mismatches
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(mismatch);
+    }
+
+    /// The `BAML_CACHE_VERIFY` tripwire for the per-package tier: fail if any
+    /// package emitted by this context's compiles differed from the entry
+    /// stored under its key. The compare itself runs where the fresh output
+    /// is offered to the cache ([`PackageCache::store`]), before it could
+    /// replace the stored entry.
+    pub(crate) fn verify_packages(&self) -> anyhow::Result<()> {
+        let mismatches = std::mem::take(
+            &mut *self
+                .package_mismatches
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        if mismatches.is_empty() {
+            return Ok(());
+        }
+        let report = mismatches
+            .iter()
+            .map(|mismatch| {
+                format!(
+                    "  package `{}` (key {}): {}",
+                    mismatch.package.display(),
+                    mismatch.key.hex(),
+                    mismatch.divergence
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        anyhow::bail!(
+            "BAML_CACHE_VERIFY: the cached output of {} package(s) differs from a fresh emit \
+             under the same key. This means emit is nondeterministic or a package-key input \
+             is missing — please report this.\n{report}",
+            mismatches.len()
+        )
+    }
 }
 
 /// A package's output is served by its key and offered back under it. Under
 /// `BAML_CACHE_VERIFY` nothing is served — the tripwire exercises the full
-/// compile path — but everything emitted is still stored.
+/// compile path — and a fresh output is compared with the entry stored under
+/// its key before it may replace it: a difference is recorded for
+/// [`CacheContext::verify_packages`], and the stored entry is kept as the
+/// evidence.
 impl PackageCache for CacheContext {
     fn load(
         &self,
@@ -575,6 +709,16 @@ impl PackageCache for CacheContext {
     ) {
         self.packages_emitted.fetch_add(1, Ordering::Relaxed);
         let key = self.package_key(db, root, opt);
+        if Self::verify_enabled()
+            && let Some(divergence) = self.stored_package_divergence(&key, emitted)
+        {
+            self.record_package_mismatch(PackageMismatch {
+                package: root.path(db).to_path_buf(),
+                key,
+                divergence,
+            });
+            return;
+        }
         if let Err(e) = self.cache.store_package_shared(&key, emitted) {
             cache_debug(format_args!(
                 "package store failed for {}: {e}",
@@ -909,6 +1053,7 @@ impl CacheContext {
         stdlib_interface_hit: bool,
     ) -> anyhow::Result<()> {
         let (db, package) = (&session.db, session.package);
+        self.verify_packages()?;
         self.verify_against(program)?;
         self.verify_stdlib_interface(db)?;
         self.verify_diagnostics(db, package)?;
@@ -1832,6 +1977,72 @@ mod tests {
             g_throws,
             "an unseeded function still infers honestly"
         );
+    }
+
+    /// The per-package tripwire: a stored package entry that differs from a
+    /// fresh emit under the same key is reported with the parts that differ,
+    /// and a faithful entry passes.
+    #[test]
+    fn verify_names_a_package_whose_stored_output_differs_from_a_fresh_emit() {
+        if cache_disabled() {
+            return;
+        }
+        let root = bc_root();
+        let files = [("a.baml", A_V1), ("b.baml", B)];
+        let _ = compile_and_store_v1(&root, &files);
+        let r = resolved(&root, &files);
+        let (db, pkg) = crate::project_load::build_db_from_sources(&r, |_| {});
+        let ctx = CacheContext::open(&r).expect("cache reopens");
+        let key = ctx.package_key(&db, pkg, CLI_OPT_LEVEL);
+        let fresh = baml_db::baml_compiler2_emit::emit_package(&db, pkg, CLI_OPT_LEVEL)
+            .expect("the package emits");
+        assert_eq!(
+            ctx.stored_package_divergence(&key, &fresh),
+            None,
+            "the stored output is the fresh one"
+        );
+
+        // The same output with its first function renamed.
+        let mut forged = fresh.clone();
+        let Some(bex_vm_types::Object::Function(function)) = forged.unit.code.first_mut() else {
+            panic!("the user package's code starts with a function");
+        };
+        function.name.push('!');
+        ctx.cache
+            .store_package_shared(&key, &forged)
+            .expect("the forged entry stores");
+        let divergence = ctx
+            .stored_package_divergence(&key, &fresh)
+            .expect("the forged entry differs");
+        assert!(
+            matches!(&divergence, PackageDivergence::Parts { parts, .. } if parts == &["unit"]),
+            "only the unit differs: {divergence}"
+        );
+
+        ctx.record_package_mismatch(PackageMismatch {
+            package: root.clone(),
+            key,
+            divergence,
+        });
+        let message = ctx
+            .verify_packages()
+            .expect_err("a recorded mismatch fails verification")
+            .to_string();
+        assert!(
+            message.contains(&key.hex()) && message.contains("differs in its unit ("),
+            "the report names the entry and the part: {message}"
+        );
+        ctx.verify_packages()
+            .expect("a mismatch is reported once, by the verification that found it");
+
+        ctx.cache
+            .store_raw(&key, &[0xde, 0xad])
+            .expect("the garbage entry stores");
+        assert_eq!(
+            ctx.stored_package_divergence(&key, &fresh),
+            Some(PackageDivergence::Undecodable { cached_bytes: 2 })
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

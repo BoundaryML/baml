@@ -259,6 +259,85 @@ fn parallel_program_is_byte_identical_to_serial() {
     );
 }
 
+/// Every package emitted in a rayon pool of `threads` threads: one thread
+/// takes the serial code pass, more take the parallel one.
+fn emitted_bytes_with(
+    threads: usize,
+    build: impl Fn() -> ProjectDatabase + Send + Sync,
+) -> Vec<EmittedBytes> {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(threads)
+        .build()
+        .expect("build rayon pool")
+        .install(|| emitted_bytes(&build(), OptLevel::Two))
+}
+
+/// Which packages' units, records, or tails differ between two emissions.
+fn diverging_parts(serial: &[EmittedBytes], parallel: &[EmittedBytes]) -> Vec<String> {
+    assert_eq!(
+        serial
+            .iter()
+            .map(|package| &package.name)
+            .collect::<Vec<_>>(),
+        parallel
+            .iter()
+            .map(|package| &package.name)
+            .collect::<Vec<_>>(),
+        "both emissions hold the same packages"
+    );
+    serial
+        .iter()
+        .zip(parallel)
+        .flat_map(|(serial, parallel)| {
+            [
+                ("unit", serial.unit != parallel.unit),
+                ("record", serial.record != parallel.record),
+                ("tail", serial.tail != parallel.tail),
+            ]
+            .into_iter()
+            .filter(|(_, differs)| *differs)
+            .map(|(part, _)| format!("{}: {part}", serial.name))
+        })
+        .collect()
+}
+
+/// A unit is what the cache stores and serves, so the parallel code pass
+/// must reproduce the serial pass's UNITS, not only the program they link
+/// into: a unit that differs by thread count is a cache entry that differs
+/// by core count under one key.
+#[test]
+fn parallel_units_are_byte_identical_to_serial() {
+    let sources = baml_src_sources();
+    let serial = emitted_bytes_with(1, || baml_src_db(&sources));
+    let parallel = emitted_bytes_with(4, || baml_src_db(&sources));
+    let diverging = diverging_parts(&serial, &parallel);
+    assert!(
+        diverging.is_empty(),
+        "the parallel code pass diverges from the serial one: {diverging:?}"
+    );
+}
+
+/// A body that first calls a dependency's function and then names another
+/// dependency's class meets the two packages in that order, one in the
+/// global space and one in the object space: the unit's dependency table
+/// lists them in the order the body met them, whichever pass compiled it.
+#[test]
+fn a_body_meets_its_dependencies_in_one_order_whichever_pass_compiles_it() {
+    const BODY: &str = r#"function f() -> baml.errors.Io {
+  assert.is_true(true);
+  baml.errors.Io { message: "boom" }
+}
+"#;
+    let build = || build_db(ROOT, &[("main.baml", BODY)]);
+    let serial = emitted_bytes_with(1, build);
+    let parallel = emitted_bytes_with(4, build);
+    let diverging = diverging_parts(&serial, &parallel);
+    assert!(
+        diverging.is_empty(),
+        "the parallel code pass diverges from the serial one: {diverging:?}"
+    );
+}
+
 /// A package's unit is a pure function of its own sources and its
 /// dependencies' interfaces: the stdlib's packages emit the same bytes under
 /// two different user packages.

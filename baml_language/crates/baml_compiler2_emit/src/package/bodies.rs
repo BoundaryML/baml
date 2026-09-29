@@ -12,7 +12,7 @@ use baml_compiler2_hir::{
 use baml_compiler2_mir::{
     MirFunction, MirFunctionBody, MirFunctionKind, RuntimeLowering, lower_function, native_key_for,
 };
-use baml_linker_types::{DeclKey, import_operand, import_ordinal};
+use baml_linker_types::{DeclKey, DepSlot, import_operand, import_ordinal};
 use bex_vm_types::{
     Function, GlobalIndex, Object, ObjectIndex, ObjectPool, TypeHead,
     head_walk::{visit_function_heads_mut, visit_object_heads_mut},
@@ -239,10 +239,11 @@ struct WorkerItem {
 /// Stage B compiles each body on a worker into a fresh fragment pool based
 /// at the code bucket's start, with a fresh resolver whose dependency slots
 /// and import ordinals are numbered by first use WITHIN THE ITEM; Stage C
-/// merges the fragments in the serial pass's order, remapping each item's
-/// ordinals into the unit-wide tables — first use per item, items in order,
-/// is exactly the order the serial pass interns in — and replaying the
-/// generic-value interning the serial pass performs across bodies.
+/// merges the fragments in the serial pass's order, replaying each item's
+/// dependency table and remapping its ordinals into the unit-wide tables —
+/// first use per item, items in order, is exactly the order the serial pass
+/// interns in — and replaying the generic-value interning the serial pass
+/// performs across bodies.
 fn emit_bodies_parallel<'db>(
     db: &'db dyn crate::Db,
     class_fields: &ClassFieldSnapshot<'db>,
@@ -364,9 +365,18 @@ fn emit_bodies_parallel<'db>(
 }
 
 /// Splice one worker's fragment into the unit's code bucket, remapping the
-/// item's import ordinals into the unit's tables and every fragment-relative
-/// object operand to its merged index, with the generic-value interning the
-/// serial pass performs replayed in order.
+/// item's dependency slots and import ordinals into the unit's tables and
+/// every fragment-relative object operand to its merged index, with the
+/// generic-value interning the serial pass performs replayed in order.
+///
+/// The item's dependency table is replayed first, in its own slot order. The
+/// item met its dependencies in the order the serial pass meets them while
+/// compiling the same body, and a slot interns the hops of its path before
+/// the slot itself, so replaying that order interns in the unit exactly the
+/// packages the serial pass would, in the order it would. The dependency
+/// table is shared by both import spaces: remapping the spaces one after the
+/// other instead would intern a body's object imports' packages ahead of its
+/// global imports' packages.
 fn merge_item(
     code: &mut ObjectPool,
     base: usize,
@@ -381,14 +391,17 @@ fn merge_item(
     } = item;
     let db = refs.db;
     let PackageRefs { deps, imports, .. } = refs;
-    let mut remap = |space: &crate::refs::ImportSpace, target: &mut crate::refs::ImportSpace| {
+    // The unit's slot for each of the item's, by the item's slot number.
+    let slots: Vec<DepSlot> = std::iter::once(DepSlot::SELF)
+        .chain(item_refs.deps.roots().map(|root| deps.slot(db, root)))
+        .collect();
+    let remap = |space: &crate::refs::ImportSpace, target: &mut crate::refs::ImportSpace| {
         space
             .entries()
             .iter()
             .map(|entry| {
-                let root = item_refs.deps.root_of(entry.key.dep);
                 let key = DeclKey {
-                    dep: deps.slot(db, root),
+                    dep: slots[entry.key.dep.0 as usize],
                     path: entry.key.path.clone(),
                 };
                 target.intern(key)
