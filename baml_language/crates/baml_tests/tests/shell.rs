@@ -340,7 +340,7 @@ async fn start_process_lines_strip_crlf_and_replace_invalid_utf8() {
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
 async fn start_process_lines_span_read_chunks() {
-    // 20,000 lines of 100 bytes plus one 200,000-byte line: lines cross every
+    // 20,000 lines of 98 bytes plus one 200,000-byte line: lines cross every
     // 64 KiB read boundary, and one line needs several reads.
     let output = baml_test!(
         r#"
@@ -373,7 +373,7 @@ async fn start_process_lines_span_read_chunks() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "20002 2200003 200000 end".to_string().into()
+            "20002 2140003 200000 end".to_string().into()
         ))
     );
 }
