@@ -1809,3 +1809,112 @@ fn single_variant_enum_union_is_idempotent() {
         &ctx
     ));
 }
+
+// ── cross-category fast reject ───────────────────────────────────────────--
+
+/// A `json`-shaped recursive alias: `J = null | bool | int | float | string |
+/// J[] | map<string, J>`.
+fn json_alias(ctx: &mut Ctx) -> Ty {
+    ctx.aliases.insert(
+        qtn("J"),
+        union(vec![
+            Ty::null(),
+            Ty::bool(),
+            Ty::int(),
+            Ty::float(),
+            Ty::string(),
+            list(alias("J")),
+            map_ty(Ty::string(), alias("J")),
+        ]),
+    );
+    alias("J")
+}
+
+#[test]
+fn container_type_test_misses_are_refuted_by_category() {
+    // The runtime `v is J[]` / `match` arm shape: a value's concrete container
+    // type against a pattern of the other container kind. Both sides mention
+    // the recursive alias, so the canonical walk would run the μ automaton.
+    let mut ctx = Ctx::default();
+    let j = json_alias(&mut ctx);
+    let j_list = list(j.clone());
+    let j_map = map_ty(Ty::string(), j.clone());
+
+    assert!(subtype_refuted_by_category(&j_map, &j_list));
+    assert!(subtype_refuted_by_category(&j_list, &j_map));
+    assert!(!is_subtype(&j_map, &j_list, &ctx));
+    assert!(!is_subtype(&j_list, &j_map, &ctx));
+    // A union arm none of whose members shares the value's category.
+    assert!(subtype_refuted_by_category(
+        &j_map,
+        &union(vec![Ty::string(), j_list.clone()])
+    ));
+    assert!(!is_subtype(
+        &j_map,
+        &union(vec![Ty::string(), j_list.clone()]),
+        &ctx
+    ));
+
+    // Hits and undecidable heads are left to the canonical walk.
+    assert!(!subtype_refuted_by_category(&j_map, &j));
+    assert!(is_subtype(&j_map, &j, &ctx));
+    assert!(is_subtype(&j_list, &j, &ctx));
+    assert!(!subtype_refuted_by_category(&j_map, &j_map));
+    assert!(!subtype_refuted_by_category(
+        &j_map,
+        &union(vec![Ty::string(), j.clone()])
+    ));
+}
+
+#[test]
+fn category_refutation_agrees_with_the_canonical_walk() {
+    // Whenever the fast reject fires, the full canonical relation must also say
+    // `false` — across literals, enums, interfaces, aliases, unions, `never`,
+    // and `unknown`.
+    let mut ctx = Ctx::default();
+    let j = json_alias(&mut ctx);
+    ctx.enums
+        .insert(qtn("E"), vec![Name::new("A"), Name::new("B")]);
+    ctx.impls.push((qtn("Dog"), qtn("Animal")));
+    ctx.prim_impls.push(("int", qtn("Animal")));
+    let types = vec![
+        Ty::int(),
+        Ty::float(),
+        Ty::string(),
+        Ty::bool(),
+        Ty::null(),
+        lit_int(1),
+        lit_str("a"),
+        lit_bool(true),
+        class("Dog"),
+        class1("Box", Ty::int()),
+        iface("Animal"),
+        enum_ty("E"),
+        variant("E", "A"),
+        list(Ty::int()),
+        list(j.clone()),
+        map_ty(Ty::string(), j.clone()),
+        map_ty(Ty::string(), Ty::int()),
+        j.clone(),
+        union(vec![]),
+        union(vec![Ty::int(), Ty::string()]),
+        union(vec![variant("E", "A"), variant("E", "B")]),
+        union(vec![lit_bool(true), lit_bool(false)]),
+        union(vec![list(Ty::int()), iface("Animal")]),
+        Ty::Never,
+        Ty::Unknown,
+        typevar(0, "T"),
+    ];
+    for sub in &types {
+        for sup in &types {
+            if subtype_refuted_by_category(sub, sup) {
+                let canonical_sub = NormalTy::canonical(sub, &ctx);
+                let canonical_sup = NormalTy::canonical(sup, &ctx);
+                assert!(
+                    !canonical_sub.is_subtype_of(&canonical_sup, &ctx, &mut HashSet::new()),
+                    "fast reject disagrees with the canonical walk: {sub:?} <: {sup:?}",
+                );
+            }
+        }
+    }
+}
