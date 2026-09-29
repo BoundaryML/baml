@@ -643,6 +643,7 @@ fn .<lambda(BacktickPrompt@spec, 0)>( __spec_output_format: ai.OutputFormat) -> 
     }
 
     bb1: {
+        _7 = const "";
         _14 = copy _6;
         _15 = copy *capture[0];
         _16 = load_type(unknown);
