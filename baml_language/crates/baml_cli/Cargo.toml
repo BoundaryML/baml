@@ -60,7 +60,6 @@ mime_guess = { workspace = true }
 rayon = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_yaml2 = { workspace = true }
 sha2 = { workspace = true }
 strsim = { workspace = true }
 text-size = { workspace = true }
@@ -69,6 +68,7 @@ toml = { workspace = true }
 toml_edit = { workspace = true }
 uuid = { workspace = true }
 webbrowser = { workspace = true }
+yaml-rust2 = { workspace = true }
 
 [features]
 baml-defaults = [

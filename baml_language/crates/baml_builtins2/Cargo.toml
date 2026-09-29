@@ -19,7 +19,7 @@ baml_base = { workspace = true }
 baml_type = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
-serde_yaml2 = { workspace = true }
+yaml-rust2 = { workspace = true }
 
 [lints]
 workspace = true

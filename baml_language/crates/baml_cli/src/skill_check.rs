@@ -10,7 +10,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use serde::Deserialize;
+use yaml_rust2::YamlLoader;
 
 use crate::{agent_command::SKILL_NAME, output::AgentSkillCheckPolicy};
 
@@ -26,17 +26,6 @@ enum SkillStatus {
     Missing,
     Current,
     Outdated,
-}
-
-#[derive(Deserialize)]
-struct SkillFrontmatter {
-    metadata: SkillMetadata,
-}
-
-#[derive(Deserialize)]
-struct SkillMetadata {
-    #[serde(rename = "baml-toolchain-version")]
-    toolchain_version: String,
 }
 
 pub(crate) fn check(project: Option<&Path>) -> anyhow::Result<()> {
@@ -124,9 +113,7 @@ fn installed_toolchain_version(path: &Path) -> std::io::Result<Option<String>> {
     for line in lines {
         let line = line?;
         if line == "---" {
-            return Ok(serde_yaml2::from_str::<SkillFrontmatter>(&frontmatter)
-                .ok()
-                .map(|parsed| parsed.metadata.toolchain_version));
+            return Ok(toolchain_version_from_yaml(&frontmatter));
         }
         frontmatter.push_str(&line);
         frontmatter.push('\n');
@@ -134,9 +121,47 @@ fn installed_toolchain_version(path: &Path) -> std::io::Result<Option<String>> {
     Ok(None)
 }
 
+fn toolchain_version_from_yaml(frontmatter: &str) -> Option<String> {
+    let documents = YamlLoader::load_from_str(frontmatter).ok()?;
+    let [document] = documents.as_slice() else {
+        return None;
+    };
+    document["metadata"]["baml-toolchain-version"]
+        .as_str()
+        .map(str::to_owned)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn skill_metadata_supports_yaml_quotes_comments_and_aliases() {
+        for source in [
+            "metadata: {baml-toolchain-version: '0.1.0'} # comment\n",
+            "metadata:\n  baml-toolchain-version: \"0.1.0\"\n",
+            "version: &version 0.1.0\nmetadata:\n  baml-toolchain-version: *version\n",
+        ] {
+            assert_eq!(
+                toolchain_version_from_yaml(source).as_deref(),
+                Some("0.1.0")
+            );
+        }
+    }
+
+    #[test]
+    fn skill_metadata_rejects_invalid_or_ambiguous_versions() {
+        for source in [
+            "[",
+            "metadata: {}\n",
+            "metadata: {baml-toolchain-version: 1}\n",
+            "metadata: {baml-toolchain-version: null}\n",
+            "metadata:\n  baml-toolchain-version: old\n  baml-toolchain-version: new\n",
+            "metadata: {baml-toolchain-version: old}\n---\nmetadata: {baml-toolchain-version: new}\n",
+        ] {
+            assert_eq!(toolchain_version_from_yaml(source), None, "{source}");
+        }
+    }
 
     #[test]
     fn warning_tracks_local_skill_status() {

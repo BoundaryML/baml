@@ -5,6 +5,8 @@
 
 use std::{collections::HashMap, sync::LazyLock};
 
+use yaml_rust2::{Yaml, YamlLoader};
+
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct LanguageTopic {
     pub summary: String,
@@ -21,16 +23,61 @@ pub struct TypescriptCrosswalkTopic {
     pub see: Option<String>,
 }
 
-static LANGUAGE_TOPICS: LazyLock<HashMap<String, LanguageTopic>> = LazyLock::new(|| {
-    serde_yaml2::from_str(crate::BAML_KEYWORDS_YAML)
-        .expect("failed to parse embedded BAML language topics")
-});
+static LANGUAGE_TOPICS: LazyLock<HashMap<String, LanguageTopic>> =
+    LazyLock::new(|| load_topics(crate::BAML_KEYWORDS_YAML, language_topic_from_yaml));
 
 static TYPESCRIPT_CROSSWALK_TOPICS: LazyLock<HashMap<String, TypescriptCrosswalkTopic>> =
     LazyLock::new(|| {
-        serde_yaml2::from_str(crate::TS_KEYWORDS_YAML)
-            .expect("failed to parse embedded TypeScript crosswalk topics")
+        load_topics(crate::TS_KEYWORDS_YAML, |topic| TypescriptCrosswalkTopic {
+            message: required_string(topic, "message"),
+            see: optional_string(topic, "see"),
+        })
     });
+
+// These embedded registries contain string fields only. Read their schema
+// directly so all YAML consumers can share the same parser dependency.
+fn load_topics<T>(source: &str, parse_topic: impl Fn(&Yaml) -> T) -> HashMap<String, T> {
+    let documents = YamlLoader::load_from_str(source).expect("invalid embedded topic YAML");
+    let [document] = documents.as_slice() else {
+        panic!("embedded topics must contain exactly one YAML document");
+    };
+    document
+        .as_hash()
+        .expect("embedded topics must be a YAML mapping")
+        .iter()
+        .map(|(name, topic)| {
+            let name = name.as_str().expect("embedded topic names must be strings");
+            assert!(
+                topic.as_hash().is_some(),
+                "topic `{name}` must be a mapping"
+            );
+            (name.to_owned(), parse_topic(topic))
+        })
+        .collect()
+}
+
+fn language_topic_from_yaml(topic: &Yaml) -> LanguageTopic {
+    LanguageTopic {
+        summary: required_string(topic, "summary"),
+        syntax: optional_string(topic, "syntax"),
+        details: optional_string(topic, "details"),
+    }
+}
+
+fn required_string(topic: &Yaml, field: &str) -> String {
+    topic[field]
+        .as_str()
+        .unwrap_or_else(|| panic!("embedded topic field `{field}` must be a string"))
+        .to_owned()
+}
+
+fn optional_string(topic: &Yaml, field: &str) -> Option<String> {
+    match &topic[field] {
+        Yaml::BadValue | Yaml::Null => None,
+        Yaml::String(value) => Some(value.clone()),
+        _ => panic!("embedded topic field `{field}` must be a string or null"),
+    }
+}
 
 pub fn language_topic(name: &str) -> Option<&'static LanguageTopic> {
     LANGUAGE_TOPICS.get(name)
@@ -55,6 +102,18 @@ pub fn has_describe_topic(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn topic_yaml_preserves_block_strings_and_optional_fields() {
+        let topics = load_topics(
+            "test:\n  summary: |\n    First line.\n    Second line.\n  syntax: null\n",
+            language_topic_from_yaml,
+        );
+        let topic = &topics["test"];
+        assert_eq!(topic.summary, "First line.\nSecond line.\n");
+        assert_eq!(topic.syntax, None);
+        assert_eq!(topic.details, None);
+    }
 
     #[test]
     fn schema_attributes_and_intrinsic_types_have_topics() {
