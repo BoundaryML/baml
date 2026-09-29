@@ -415,6 +415,8 @@ pub enum DiagnosticId {
     InvalidRegexPattern,
     /// An unparenthesized function/union boundary has two syntactic owners (E0175).
     AmbiguousUnion,
+    /// A `-> void` function or lambda body evaluates to a value (E0176).
+    VoidBodyReturnsValue,
 }
 
 impl DiagnosticId {
@@ -624,6 +626,7 @@ impl DiagnosticId {
             DiagnosticId::InterfaceMethodMissingThrows => "E0170",
             DiagnosticId::InvalidRegexPattern => "E0174",
             DiagnosticId::AmbiguousUnion => "E0175",
+            DiagnosticId::VoidBodyReturnsValue => "E0176",
             DiagnosticId::TypeMustBeKnown => "E0155",
             DiagnosticId::InvalidBuiltinTypeArguments => "E0171",
             DiagnosticId::ScopedTypeEscapesBlock => "E0172",

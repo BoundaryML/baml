@@ -1,7 +1,7 @@
-// Void LAMBDA bodies discard their tail value (test bodies are
-// synthesized `() -> void` lambdas) - the statement semantics void
-// functions already get; a statement-position catch yielding a value
-// is fine.
+// Void LAMBDA bodies must not evaluate to a value (E0176), like void
+// functions; test bodies are synthesized `() -> void` lambdas. A
+// statement-position catch yielding a value is fine: the `;` after it
+// discards the value.
 function ptc_id(x: int) -> int throws never {
     let y = x;
      // ^ int
@@ -17,5 +17,5 @@ test "ptc_probe" {
         }
     } catch (e) {
         string => null
-    }
+    };
 }

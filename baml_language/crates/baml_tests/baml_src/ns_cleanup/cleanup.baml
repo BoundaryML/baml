@@ -116,7 +116,7 @@ class Resource {
 
 function abandon(log: string[]) -> void throws never {
     let resource = Resource { log };
-    resource.log.push("created")
+    resource.log.push("created");
 }
 
 test "collect_garbage runs unreachable cleanup before returning" {

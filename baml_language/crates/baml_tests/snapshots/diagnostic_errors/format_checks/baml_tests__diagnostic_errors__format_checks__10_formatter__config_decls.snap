@@ -362,14 +362,14 @@ function TestTarget() -> string {
 }
 
 test "BasicTest" {
-    TestTarget()
+    TestTarget();
 }
 
 // ===== Trivia on test declaration (line comments) =====
 // 1 test keyword leading
 test "TriviaTest" { // 6 open brace trailing
     // 7 body leading
-    TestTarget() // 8 body trailing
+    TestTarget(); // 8 body trailing
     // 9 close brace leading
 } // 10 close brace trailing
 
@@ -377,7 +377,7 @@ test "TriviaTest" { // 6 open brace trailing
 /* 1 test keyword leading */
 test "TriviaTestBlock" { /* 6 open brace trailing */
     /* 7 body leading */
-    TestTarget() /* 8 body trailing */
+    TestTarget(); /* 8 body trailing */
     /* 9 close brace leading */
 } /* 10 close brace trailing */
 

@@ -1,0 +1,62 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0176
+
+  × a `void` body must not evaluate to a value, but this one is `5`; end it with `;` to discard the value (in a `test`, use `assert.*` to check a condition)
+   ╭─[void_body_returns_value.baml:7:5]
+ 7 │     5
+   ·     ─
+   ╰────
+
+  [type] E0176
+
+  × a `void` body must not evaluate to a value, but this one is `bool`; end it with `;` to discard the value (in a `test`, use `assert.*` to check a condition)
+    ╭─[void_body_returns_value.baml:11:5]
+ 11 │     a == b
+    ·     ──────
+    ╰────
+
+  [type] E0176
+
+  × a `void` body must not evaluate to a value, but this one is `1 | 2`; end it with `;` to discard the value (in a `test`, use `assert.*` to check a condition)
+    ╭─[void_body_returns_value.baml:15:5]
+ 15 │ ╭─▶     if (c) {
+ 16 │ │           1
+ 17 │ │       } else {
+ 18 │ │           2
+ 19 │ ╰─▶     }
+    ╰────
+
+  [type] E0176
+
+  × a `void` body must not evaluate to a value, but this one is `int`; end it with `;` to discard the value (in a `test`, use `assert.*` to check a condition)
+    ╭─[void_body_returns_value.baml:24:5]
+ 24 │     xs.push(1)
+    ·     ──────────
+    ╰────
+
+  [type] E0176
+
+  × a `void` body must not evaluate to a value, but this one is `false`; end it with `;` to discard the value (in a `test`, use `assert.*` to check a condition)
+    ╭─[void_body_returns_value.baml:29:9]
+ 29 │         1 == 2
+    ·         ──────
+    ╰────
+
+  [type] E0176
+
+  × a `void` body must not evaluate to a value, but this one is `false`; end it with `;` to discard the value (in a `test`, use `assert.*` to check a condition)
+    ╭─[void_body_returns_value.baml:35:5]
+ 35 │     1 == 2
+    ·     ──────
+    ╰────
+
+  [type] E0176
+
+  × a `void` body must not evaluate to a value, but this one is `false`; end it with `;` to discard the value (in a `test`, use `assert.*` to check a condition)
+    ╭─[void_body_returns_value.baml:40:9]
+ 40 │         false
+    ·         ─────
+    ╰────
