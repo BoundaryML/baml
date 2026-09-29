@@ -109,7 +109,7 @@ pub(crate) fn replace_runtime(rt: Arc<dyn Bex>) -> Result<(), BridgeError> {
     let previous = guard.replace(rt);
     drop(guard);
     if let Some(previous) = previous {
-        get_tokio_runtime()?.spawn(previous.shutdown());
+        get_tokio_runtime()?.spawn(previous.shutdown(None));
     }
     Ok(())
 }

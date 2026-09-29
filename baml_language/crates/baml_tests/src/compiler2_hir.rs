@@ -2162,6 +2162,57 @@ function foo(user: User) -> string {
         );
     }
 
+    /// A `//baml:` directive between an item's `///` doc and its declaration
+    /// is part of the declaration, not a comment: the doc stays attached.
+    /// Every documented native in the stdlib has this shape (`/// …`, then
+    /// `//baml:mut_self`, then `function push(…)`). An ordinary `// …` line
+    /// there still detaches the doc.
+    #[test]
+    fn a_directive_between_doc_and_declaration_keeps_the_doc() {
+        let mut db = make_db();
+        let src = r##"/// Directed.
+//baml:vm
+function directed(x: int) -> int { x }
+
+/// Before.
+//baml:vm
+/// After.
+function spanning(x: int) -> int { x }
+
+/// Detached.
+// an ordinary comment
+function detached(x: int) -> int { x }
+
+class Holder {
+  n int
+
+  /// The method's own doc.
+  //baml:mut_self
+  function method(self) -> int { 1 }
+}
+"##;
+        let file = db.file("directives.baml", src);
+        let doc = |loc| {
+            baml_compiler2_hir::item_data::function_data(&db, loc)
+                .docstring
+                .clone()
+        };
+
+        assert_eq!(
+            doc(find_function_loc(&db, file, "directed")).as_deref(),
+            Some("Directed.")
+        );
+        assert_eq!(
+            doc(find_function_loc(&db, file, "spanning")).as_deref(),
+            Some("Before.\nAfter.")
+        );
+        assert_eq!(doc(find_function_loc(&db, file, "detached")), None);
+        assert_eq!(
+            doc(find_method_loc(&db, file, "Holder", "method")).as_deref(),
+            Some("The method's own doc.")
+        );
+    }
+
     /// Every item kind's name span (and the config kinds' full spans) must
     /// slice to exactly the identifier written in source, and the docstrings
     /// added for type aliases and free `implements … for …` blocks must

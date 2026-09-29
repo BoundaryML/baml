@@ -11,7 +11,7 @@ function fixtures.catch_throw.CatchWithFallback(x: int) -> string {
     load_var _2
     is_type int
     pop_jump_if_true L0
-    load_var _2
+    load_var2 2 3
     rethrow
 
   L0:
@@ -29,7 +29,7 @@ function fixtures.catch_throw.SingleCatchWildcard(x: int) -> string {
     load_var x
     call user.fixtures.catch_throw.MayFail
     jump L0
-    load_var e
+    load_var2 2 3
     throw_if_panic
     load_const "caught"
 

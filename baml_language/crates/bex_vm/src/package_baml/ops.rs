@@ -558,8 +558,7 @@ impl EqualsDriver {
             | (Object::Closure(_), Object::Closure(_))
             | (Object::Class(_), Object::Class(_))
             | (Object::Enum(_), Object::Enum(_))
-            | (Object::TypeAlias(_), Object::TypeAlias(_))
-            | (Object::UnscheduledFuture(_), Object::UnscheduledFuture(_)) => step(pa == pb),
+            | (Object::TypeAlias(_), Object::TypeAlias(_)) => step(pa == pb),
             (
                 Object::Function(_)
                 | Object::Interface(_)
@@ -569,7 +568,6 @@ impl EqualsDriver {
                 | Object::Class(_)
                 | Object::Enum(_)
                 | Object::TypeAlias(_)
-                | Object::UnscheduledFuture(_)
                 | Object::RustData(_),
                 _,
             ) => Cmp::NotEqual,

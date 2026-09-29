@@ -1557,7 +1557,7 @@ class ChatStreamDecoder {
         for (let raw in ai.stream.decode_sse_batch(batch)) {
             if let data: string = raw.data {
                 if (data.trim() == "[DONE]") {
-                    out.push(ai.stream.TurnDone {  });
+                    out.push(ai.stream.TurnDone {});
                 } else {
                     let parsed: CcStreamChunk? = baml.json.to<CcStreamChunk>(baml.json.parse(data)) catch_all (e) {
                         _ => null,

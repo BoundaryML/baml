@@ -388,7 +388,7 @@ async fn start_process_stdout_read_is_cancellable() {
                 defer { process.close() }
 
                 let tok = baml.spawn.CancelToken.new();
-                let read = spawn with baml.spawn.options(cancel = tok) {
+                let read = spawn with tok {
                     process.stdout.lines().next()
                 };
                 let deadline = spawn {

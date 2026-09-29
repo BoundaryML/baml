@@ -78,5 +78,5 @@ async fn prepared_handle_call_survives_release_of_its_key() {
     let bytes = bridge_cffi::invoke_prepared(runtime, prepared).await;
     assert_eq!(ok_value(&bytes), baml_outbound_value::Value::IntValue(42));
 
-    bridge_cffi::shutdown_runtime().await.unwrap();
+    bridge_cffi::shutdown_runtime(None).await.unwrap();
 }

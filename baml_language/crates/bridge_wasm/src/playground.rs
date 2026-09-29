@@ -56,7 +56,7 @@ impl PlaygroundState {
             return;
         };
         wasm_bindgen_futures::spawn_local(async move {
-            bex_project::Bex::shutdown(installed.engine).await;
+            bex_project::Bex::shutdown(installed.engine, None).await;
         });
     }
 

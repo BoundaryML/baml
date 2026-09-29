@@ -225,7 +225,6 @@ impl Scratch {
                 Object::GenericFunction(_) => describe(Description::GenericFunction),
                 Object::HostClosure(_) => describe(Description::HostFunction),
                 Object::Future(_) => describe(Description::Future),
-                Object::UnscheduledFuture(_) => describe(Description::UnscheduledFuture),
                 Object::Package(_) => describe(Description::Package),
                 Object::Interface(_) => describe(Description::Interface),
                 Object::ImplRule(_) => describe(Description::Implementation),

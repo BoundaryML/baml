@@ -4,7 +4,7 @@
 
 function items() -> root.engine.Item[] throws never {
     let flows: root.engine.Item[] = shapes().map((shape) -> {
-        FlowItem { shape, status: root.engine.Verified {  }, sites: root.algebra.all_sites() }
+        FlowItem { shape, status: root.engine.Verified {}, sites: root.algebra.all_sites() }
     });
-    flows.concat([UnguardedCycleItem {  }, NestedUnionLetItem {  }])
+    flows.concat([UnguardedCycleItem {}, NestedUnionLetItem {}])
 }

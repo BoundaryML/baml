@@ -1,0 +1,37 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0155
+
+  × type annotations needed
+  │ full type: `!error[]`
+    ╭─[obligation_diagnostics.baml:32:48]
+ 32 │     let u = if (flag) { Only { v: 1 } } else { [] };
+    ·                                                ──
+    ╰────
+
+  [type] E0155
+
+  × type annotations needed: more than one implementation could make type `W` implement `Conv<!error>`
+    ╭─[obligation_diagnostics.baml:57:5]
+ 57 │     needs_conv(w)
+    ·     ─────────────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[obligation_diagnostics.baml:81:13]
+ 81 │     takes_b(c.as<A1>)
+    ·             ────┬───
+    ·                 ╰── expected `B1`, found `A1`
+    ╰────
+
+  [type] E0001
+
+  × type `C1` does not implement interface `A1`
+    ╭─[obligation_diagnostics.baml:81:13]
+ 81 │     takes_b(c.as<A1>)
+    ·             ────────
+    ╰────

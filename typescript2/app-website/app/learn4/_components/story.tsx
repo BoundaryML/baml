@@ -117,17 +117,17 @@ function work(i: int) -> int {
   i * i
 }`;
 
-const BAML_SPAWN_ADV = `// cap shard work at two in flight; extras queue fifo in the group
+const BAML_SPAWN_ADV = `// cap shard work at two in flight; extras wait for a slot
 function main() -> int {
-  let pool = baml.spawn.TaskGroup.new(2, name = "shards");
+  let pool = baml.spawn.Limit.new(2);
 
-  let a = spawn "shard-0" with baml.spawn.options(group = pool) {
+  let a = spawn "shard-0" with pool {
     checksum(0, 50000)
   };
-  let b = spawn "shard-1" with baml.spawn.options(group = pool) {
+  let b = spawn "shard-1" with pool {
     checksum(50000, 100000)
   };
-  let c = spawn "shard-2" with baml.spawn.options(group = pool) {
+  let c = spawn "shard-2" with pool {
     read_segment(7)
   };
 
@@ -833,7 +833,7 @@ export function Story() {
         </div>
         <p className="l4-lead" style={{ marginTop: '2.6rem' }}>
           {
-            'And organizing the work is built in. Limiting concurrency in Python means hand-rolling a semaphore and threading it through every call site. In BAML a queue is part of the spawn: groups carry a cap, extras queue in order, and the whole group cancels as a unit.'
+            'And organizing the work is built in. Limiting concurrency in Python means hand-rolling a semaphore and threading it through every call site. In BAML the cap is part of the spawn: a limit is a value you write after `with`, extras wait for a slot, and any spawn can take a cancel token too.'
           }
         </p>
         <div className="l4-pair">
@@ -848,13 +848,13 @@ export function Story() {
               />
             </div>
             <div>
-              <p className="l4-pane-label">how the group schedules it</p>
+              <p className="l4-pane-label">how the limit schedules it</p>
               <PoolSchedule />
             </div>
           </div>
           <div>
             <p className="l4-pane-label l4-pane-label--after">
-              after — baml · a group with a cap
+              after — baml · a spawn with a cap
             </p>
             <BamlEditor
               filename="shards.baml"
@@ -863,7 +863,7 @@ export function Story() {
             />
             <p className="l4-note">
               {
-                'The group caps the shards at two in flight; the corrupt segment throws; the catch arm recovers its offset — the future carries the error type of its body. Hit Run: this executes here, and main returns 4999953584.'
+                'The limit caps the shards at two in flight; the corrupt segment throws; the catch arm recovers its offset — the future carries the error type of its body. Hit Run: this executes here, and main returns 4999953584.'
               }
             </p>
           </div>

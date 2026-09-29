@@ -1009,7 +1009,7 @@ mod tests {
             .await
             .expect("a timed function runs on the playground platform");
         assert_eq!(value, bex_project::BexExternalValue::Bool(true));
-        bex_project::Bex::shutdown(engine).await;
+        bex_project::Bex::shutdown(engine, None).await;
     }
 
     fn framed(body: &str) -> Vec<u8> {

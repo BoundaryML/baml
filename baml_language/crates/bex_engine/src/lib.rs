@@ -112,8 +112,8 @@ pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
 use bex_vm::{BexVm, VmEventSourceLocation, VmExecState};
 use bex_vm_types::{
-    FunctionMeta, FunctionOrigin, GlobalIndex, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
-    TaskGroupInner, UnscheduledFuture, Value, ValueKind, VmGlobals,
+    Admission, AdmissionTicket, FunctionMeta, FunctionOrigin, GlobalIndex, GlobalPool, HeapPtr,
+    LimitSet, Object, RealizedTy, SharedGlobals, SysOp, Value, ValueKind, VmGlobals,
 };
 // Re-export CancellationToken for callers.
 pub use function_call_context::{
@@ -183,7 +183,7 @@ impl Drop for ParkRequestGuard {
 use crate::logger::{TraceLogMetadata, TraceLogger};
 pub use crate::{
     future::{FutureManager, FutureManagerGuard, FutureManagerInner},
-    thread::BexThread,
+    thread::{BexThread, TaskCancel},
 };
 
 /// Definitions attached to runtime-minted type arguments for one sys-op call.
@@ -236,6 +236,9 @@ pub struct UnhandledSpawnError {
     pub report_id: usize,
     pub value: BexExternalValue,
     pub trace: Vec<bex_vm::StackFrame>,
+    /// The task had been cancelled, whatever cancelled it (`f.cancel()`, a
+    /// linked token, its parent, shutdown), so its error is not a failure of
+    /// the program.
     pub cancelled: bool,
 }
 
@@ -1028,14 +1031,92 @@ pub(crate) fn op_error_to_throw_value(
     }
 }
 
-/// Decoded `baml.spawn.Params` fields (BEP-034 middleware) — see
-/// [`BexEngine::read_spawn_params`].
-struct SpawnParamsData {
-    body: HeapPtr,
+/// How a park (`park`) ended.
+enum Park<T> {
+    /// The wait finished.
+    Done(T),
+    /// The thread's token fired while it was unshielded: deliver cancellation.
+    Cancelled,
+}
+
+/// Where a thread observed its cancellation: the yield point decides how the
+/// injected `baml.panics.Cancelled` enters the VM.
+#[derive(Clone, Copy)]
+enum CancelSite {
+    /// Suspended in a sys-op call: the panic is that op's error.
+    SysOp(SysOp),
+    /// Suspended at an `Await` / `AwaitAny` opcode: the panic is raised at
+    /// the await.
+    Await,
+}
+
+/// A spawn edge: what the `baml.spawn.Plan` a `spawn` built describes.
+struct SpawnRequest {
+    body: SpawnedBody,
+    context: btel_types::context::Context,
     name: Option<String>,
-    group: Option<Arc<TaskGroupInner>>,
-    cancel: Option<CancellationToken>,
-    detach: bool,
+    /// The `T` of the `Future<T, E>` the edge yields.
+    returns: RealizedTy,
+    /// The `E` of that future.
+    throws: RealizedTy,
+    /// The task's cancellation parent is the runtime, not the spawner
+    /// (a plan under `baml.spawn.Root`).
+    root: bool,
+    /// Tokens the plan links in: any of them firing cancels the task and its
+    /// descendants.
+    linked: Vec<CancellationToken>,
+}
+
+/// What a spawned task runs, and what stands between it and running.
+struct SpawnedBody {
+    /// The callable the task enters: the plan's body, `() -> T throws E`.
+    entry: HeapPtr,
+    gate: EntryGate,
+}
+
+/// What admits a spawned task before its first instruction.
+enum EntryGate {
+    Open,
+    /// Every limit of the plan, taken together.
+    Limits(LimitSet),
+}
+
+/// A task registered with its gate, synchronously at the spawn site, so the
+/// gate's counts observe it before the task is polled.
+enum EntryTicket {
+    Open,
+    Limits(AdmissionTicket),
+}
+
+/// Admission, held for the task's lifetime and released on drop.
+#[expect(dead_code, reason = "held for its Drop, which releases the slots")]
+enum EntryPermit {
+    Open,
+    Limits(Admission),
+}
+
+impl EntryGate {
+    fn register(self) -> EntryTicket {
+        match self {
+            EntryGate::Open => EntryTicket::Open,
+            EntryGate::Limits(limits) => EntryTicket::Limits(limits.admit()),
+        }
+    }
+}
+
+impl EntryTicket {
+    /// Wait for admission — without the heap permit, so a queued task never
+    /// blocks GC. `None` when any of `cancelled_by` (the task's own token and
+    /// every token linked into it) fired while it was queued: its body never
+    /// runs.
+    async fn acquire(self, cancelled_by: &[CancellationToken]) -> Option<EntryPermit> {
+        match self {
+            EntryTicket::Open => Some(EntryPermit::Open),
+            EntryTicket::Limits(ticket) => {
+                ticket.acquire(cancelled_by).await.map(EntryPermit::Limits)
+            }
+        }
+    }
 }
 
 /// Enforce the host callable's declared throws contract `E` on a
@@ -2329,6 +2410,23 @@ impl BexEngine {
         }
     }
 
+    /// Fire the cancellation token of every call in flight, returning how
+    /// many. A reserved cancellation (`pending`) never started, so it is left
+    /// alone.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn cancel_active_calls(&self) -> usize {
+        let calls = self
+            .active_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut cancelled = 0;
+        for call in calls.values().filter(|call| !call.pending) {
+            call.cancel.cancel();
+            cancelled += 1;
+        }
+        cancelled
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     fn active_call_count(&self) -> usize {
         self.active_calls
@@ -2360,13 +2458,17 @@ impl BexEngine {
     /// Wait for spawned work to settle, then run the final GC sweep that
     /// surfaces unreachable unobserved errors.
     pub async fn shutdown(self: &Arc<Self>) {
-        self.shutdown_with_progress(|count| {
-            tracing::warn!(
-                count,
-                "BAML is still waiting for active futures to finish (press Ctrl+C to cancel now)"
-            );
-        })
-        .await;
+        self.shutdown_with_progress(Self::report_shutdown_wait)
+            .await;
+    }
+
+    /// The default report while shutdown waits: `count` calls or futures are
+    /// still running.
+    pub fn report_shutdown_wait(count: usize) {
+        tracing::warn!(
+            count,
+            "BAML is still waiting for active futures to finish (press Ctrl+C to cancel now)"
+        );
     }
 
     /// Shut down the engine, reporting the number of active BAML futures every
@@ -2380,12 +2482,17 @@ impl BexEngine {
     }
 
     /// Shut down the engine like [`Self::shutdown_with_progress`], but bound
-    /// the wait for *orphaned background futures* — spawned work still pending
-    /// after every active call has finished (a fire-and-forget server task
-    /// whose owning test died before cleanup, for example).
+    /// the whole wait by `grace`, measured from the start of shutdown: first
+    /// for in-flight calls, then for *orphaned background futures* — spawned
+    /// work still pending after every call has finished (a fire-and-forget
+    /// server task whose owning test died before cleanup, for example).
     ///
-    /// The deadline covers only that orphan phase; in-flight calls are always
-    /// waited for (they carry their own timeouts). When `grace` elapses:
+    /// A call runs until it finishes or observes its cancellation, and one
+    /// that catches `Cancelled` or cleans up slowly may never finish. So when
+    /// `grace` elapses with calls in flight, every call's cancellation token
+    /// fires, the calls get one bounded window to unwind, and shutdown stops
+    /// waiting for any still running: they die with the process. Then, for
+    /// the orphans:
     ///
     /// 1. every pending future's cancellation token fires (cooperative:
     ///    producers observing their token unwind and settle on their own),
@@ -2424,33 +2531,65 @@ impl BexEngine {
         let Some(shutdown) = self.begin_shutdown().await else {
             return;
         };
+        // tokio's `Instant`, not std's: the periodic-report and deadline tests
+        // drive these loops under tokio's paused clock, where std time stands
+        // still while tokio time advances.
+        #[cfg(not(target_arch = "wasm32"))]
+        let deadline = grace.map(|grace| tokio::time::Instant::now() + grace);
+        // One wait slice: the report interval, cut short at the deadline.
+        #[cfg(not(target_arch = "wasm32"))]
+        let wait_step = || match deadline {
+            Some(deadline) => WAIT_LOG_INTERVAL
+                .min(deadline.saturating_duration_since(tokio::time::Instant::now()))
+                .max(std::time::Duration::from_millis(10)),
+            None => WAIT_LOG_INTERVAL,
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        let past_deadline =
+            || deadline.is_some_and(|deadline| tokio::time::Instant::now() >= deadline);
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut abandoned = false;
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut last_wait_report = tokio::time::Instant::now();
         #[cfg(not(target_arch = "wasm32"))]
         loop {
-            if tokio::time::timeout(WAIT_LOG_INTERVAL, self.wait_for_active_calls())
+            if tokio::time::timeout(wait_step(), self.wait_for_active_calls())
                 .await
                 .is_ok()
             {
                 break;
             }
+            if past_deadline() {
+                let cancelled = self.cancel_active_calls();
+                if tokio::time::timeout(CANCEL_SETTLE_GRACE, self.wait_for_active_calls())
+                    .await
+                    .is_err()
+                {
+                    tracing::warn!(
+                        cancelled,
+                        abandoned = self.active_call_count(),
+                        "shutdown deadline reached; abandoned in-flight calls that did not \
+                         finish after cancellation"
+                    );
+                    abandoned = true;
+                }
+                break;
+            }
             let count = self.active_call_count();
-            if count != 0 {
+            if count != 0 && last_wait_report.elapsed() >= WAIT_LOG_INTERVAL {
+                last_wait_report = tokio::time::Instant::now();
                 on_wait(count);
             }
         }
         #[cfg(target_arch = "wasm32")]
         self.wait_for_active_calls().await;
 
-        // tokio's `Instant`, not std's: the periodic-report and deadline tests
-        // drive this loop under tokio's paused clock, where std time stands
-        // still while tokio time advances.
         #[cfg(not(target_arch = "wasm32"))]
-        let orphan_wait_started = tokio::time::Instant::now();
-        #[cfg(not(target_arch = "wasm32"))]
-        let mut last_wait_report = tokio::time::Instant::now();
+        {
+            last_wait_report = tokio::time::Instant::now();
+        }
         #[cfg(not(target_arch = "wasm32"))]
         let mut on_leaks = Some(on_leaks);
-        #[cfg(not(target_arch = "wasm32"))]
-        let mut abandoned = false;
         loop {
             let handles = self
                 .futures
@@ -2466,9 +2605,7 @@ impl BexEngine {
             };
             #[cfg(not(target_arch = "wasm32"))]
             {
-                if let Some(grace) = grace
-                    && orphan_wait_started.elapsed() >= grace
-                {
+                if past_deadline() {
                     // Deadline reached: cancel cooperatively, give producers
                     // one bounded window to settle, then force-settle the
                     // rest so the drain below empties and shutdown completes.
@@ -2492,13 +2629,7 @@ impl BexEngine {
                     abandoned = true;
                     continue;
                 }
-                let step = match grace {
-                    Some(grace) => WAIT_LOG_INTERVAL
-                        .min(grace.saturating_sub(orphan_wait_started.elapsed()))
-                        .max(std::time::Duration::from_millis(10)),
-                    None => WAIT_LOG_INTERVAL,
-                };
-                if tokio::time::timeout(step, wait).await.is_err() {
+                if tokio::time::timeout(wait_step(), wait).await.is_err() {
                     let count = self.active_future_count().await;
                     if count != 0 && last_wait_report.elapsed() >= WAIT_LOG_INTERVAL {
                         last_wait_report = tokio::time::Instant::now();
@@ -3307,7 +3438,6 @@ impl BexEngine {
             host_call_id,
             boundary,
             logger,
-            cancel,
             copy_objects,
         )
         .await
@@ -3339,7 +3469,7 @@ impl BexEngine {
         // Spawned children build their own `BexThread`s in `spawn_thread`.
         let mut vm = vm;
         vm.thread_id = self.next_bex_thread_id().0;
-        let root_thread = BexThread::new_root(vm, cancel);
+        let root_thread = BexThread::new_root(vm, TaskCancel::root(cancel));
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
         inactive.acquire().await
     }
@@ -3364,7 +3494,6 @@ impl BexEngine {
 
         logger: TraceLogger,
 
-        cancel: CancellationToken,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
         // Finish fallible host type narrowing before setting the entry frame.
@@ -3435,7 +3564,6 @@ impl BexEngine {
                 thread,
                 host_call_id,
                 log_capture,
-                &cancel,
                 copy_objects,
             )
             .await
@@ -3904,7 +4032,6 @@ impl BexEngine {
             host_call_id,
             boundary,
             logger,
-            cancel,
             copy_objects,
         )
         .await
@@ -4420,10 +4547,16 @@ impl BexEngine {
         trace: Vec<bex_vm::StackFrame>,
     ) -> Result<(), EngineError> {
         let child_cancel = thread.vm_thread_cancel().clone();
+        // Read before the error fires the task's own token below: whether the
+        // task had been cancelled, by any route, when it failed.
+        let cancelled = child_cancel.is_cancelled();
         // Before any awaiter can observe the error: record which raise failed
         // this future, so every await of it can name the error's origin.
         thread.vm.link_escaped_error_to_future(future_id);
         let mut guard = self.futures.acquire(thread.proof()).await;
+        if cancelled {
+            guard.mark_cancelled(future_id)?;
+        }
         guard.err_future(future_id, value, trace)?;
         drop(guard);
         child_cancel.cancel();
@@ -4631,8 +4764,159 @@ impl BexEngine {
         let thrown = bex_vm::errors::VmThrown {
             value: vm_value,
             throw_kind,
-            language_is_rethrow: false,
+            context: None,
         };
+        self.unwind_injected_thrown(thread, call_id, thrown, throws_type)
+            .await
+    }
+
+    /// Take the thread out of `active`, release it, and park it on `wait`,
+    /// racing the thread's token; the thread is back in `active` on return.
+    /// Cancellation is delivered only to an unshielded thread, and whether
+    /// the thread is shielded is read only once the token has fired — at
+    /// park time if it already has, otherwise when it fires during the
+    /// park; a parked VM's frames do not change, so the answer is the same.
+    /// A shielded thread ignores the firing and waits `wait` out. Runs the
+    /// heuristic GC check while parked (no permit dance needed: already
+    /// released), and records the wait against the VM's pending telemetry
+    /// wait, ended at the observed completion, before the permit is
+    /// reacquired. Returns that wait's length too when one was observed, for
+    /// a caller that accounts for it further (a sys-op's time).
+    async fn park<T>(
+        self: &Arc<Self>,
+        active: &mut Option<ActiveHeapPermit<BexThread>>,
+        cancel: &TaskCancel,
+        wait: impl std::future::Future<Output = T>,
+    ) -> (Park<T>, Option<bex_vm::telemetry::ClockDuration>) {
+        use bex_vm::telemetry::{ClockDuration, ClockInstant};
+
+        fn waited(
+            wait: Option<&(usize, ClockInstant, Arc<btel_clock::ClockEpoch>)>,
+        ) -> ClockDuration {
+            wait.map_or(ClockDuration::ZERO, |(_, start, clock)| {
+                start.elapsed_until(clock.read())
+            })
+        }
+
+        let mut thread = active.take().expect("active execution permit");
+        let fired_at_park = cancel.is_cancelled();
+        let shielded_at_park = fired_at_park && thread.vm_thread_is_shielded();
+        let telemetry_wait = thread.vm.take_telemetry_wait().map(|(frame, start)| {
+            (
+                frame,
+                start,
+                Arc::clone(
+                    thread
+                        .vm
+                        .telemetry_clock()
+                        .expect("observed wait has clock"),
+                ),
+            )
+        });
+        let inactive = thread.release();
+        self.maybe_collect_garbage().await;
+        let mut wait = std::pin::pin!(wait);
+        let done = tokio::select! {
+            biased;
+            () = cancel.cancelled(), if !shielded_at_park => None,
+            value = &mut wait => Some(value),
+        };
+        let (thread, parked, elapsed) = match done {
+            Some(value) => {
+                let elapsed = waited(telemetry_wait.as_ref());
+                (inactive.acquire().await, Park::Done(value), elapsed)
+            }
+            None => {
+                let elapsed = waited(telemetry_wait.as_ref());
+                let thread = inactive.acquire().await;
+                // Fired at park time on an unshielded thread (the walk
+                // already ran), or fired while parked: read the shield now.
+                if fired_at_park || !thread.vm_thread_is_shielded() {
+                    (thread, Park::Cancelled, elapsed)
+                } else {
+                    let inactive = thread.release();
+                    let value = wait.await;
+                    let elapsed = waited(telemetry_wait.as_ref());
+                    (inactive.acquire().await, Park::Done(value), elapsed)
+                }
+            }
+        };
+        let thread = active.insert(thread);
+        let observed = telemetry_wait.is_some().then_some(elapsed);
+        thread
+            .vm
+            .record_telemetry_wait(telemetry_wait.map(|(frame, _, _)| frame), elapsed);
+        (parked, observed)
+    }
+
+    /// Deliver this thread's cancellation as a `baml.panics.Cancelled` throw
+    /// injected into the VM's exception unwinder, so the body unwinds through
+    /// its `defer` bodies and a `catch` may handle it. Called at every yield
+    /// point that observes the fired token while the thread is not shielded
+    /// (see [`BexThread::vm_thread_is_shielded`]): catching the panic does
+    /// not un-cancel the task, the next unshielded yield point delivers it
+    /// again.
+    ///
+    /// Returns as [`Self::inject_sysop_throw`] does: `Ok(None)` when a handler
+    /// caught the panic and execution continues there, `Ok(Some(outcome))`
+    /// when it escaped every handler and the thread terminated — a spawned
+    /// child settles `Cancelled`, a root surfaces the panic to the host.
+    async fn inject_cancellation(
+        self: &Arc<Self>,
+        thread: &mut ActiveHeapPermit<BexThread>,
+        call_id: CallId,
+        site: CancelSite,
+        throws_type: Option<&RuntimeTy>,
+    ) -> Result<Option<ThreadOutcome>, EngineError> {
+        debug_assert!(
+            !thread.vm_thread_is_shielded(),
+            "a shielded thread never observes the token"
+        );
+        match site {
+            CancelSite::SysOp(operation) => {
+                // The panic is the op's error: unwind from the call site like
+                // any sys-op error.
+                self.inject_sysop_throw(
+                    thread,
+                    call_id,
+                    OpError::new(operation, sys_types::VmPanic::Cancelled),
+                    throws_type,
+                    None,
+                )
+                .await
+            }
+            CancelSite::Await => {
+                // `pc` sits on the `Await` / `AwaitAny` opcode (the VM puts
+                // it back there before yielding), so the panic is raised at
+                // the await itself — the same place the opcode raises
+                // `Cancelled` when the awaited future settles cancelled.
+                let (value, throw_kind) = op_error_to_throw_value(
+                    &mut thread.vm,
+                    bex_vm::errors::VmRustFnError::Panic(sys_types::VmPanic::Cancelled),
+                )
+                .map_err(EngineError::VmInternalError)?;
+                let thrown = bex_vm::errors::VmThrown {
+                    value,
+                    throw_kind,
+                    context: None,
+                };
+                self.unwind_injected_thrown(thread, call_id, thrown, throws_type)
+                    .await
+            }
+        }
+    }
+
+    /// Unwind an engine-injected throw through the VM: `Ok(None)` when a
+    /// handler caught it and execution continues at the catch body,
+    /// `Ok(Some(outcome))` when it escaped every handler and the thread
+    /// terminated ([`Self::route_unhandled_vm_throw`]).
+    async fn unwind_injected_thrown(
+        self: &Arc<Self>,
+        thread: &mut ActiveHeapPermit<BexThread>,
+        call_id: CallId,
+        thrown: bex_vm::errors::VmThrown,
+        throws_type: Option<&RuntimeTy>,
+    ) -> Result<Option<ThreadOutcome>, EngineError> {
         let unwind_result = thread.vm.try_handle_external_thrown(thrown);
 
         match unwind_result {
@@ -4680,62 +4964,113 @@ impl BexEngine {
         }
     }
 
-    /// Read the spawn parameters out of a `baml.spawn.Params` instance
-    /// (BEP-034 middleware: the value a `spawn ... with` transformer pipeline
-    /// produced). Fields are read BY INDEX in declaration order — body=0,
-    /// name=1, group=2, cancel=3, detach=4 — keep in sync with
-    /// `ns_spawn/spawn.baml`. Returns `None` when the value is not a
-    /// well-formed `Params` (caller falls back to the spawn operands).
-    ///
-    /// Safe to deref the pointers because the caller holds the active heap
-    /// permit and `params` is rooted by the `UnscheduledFuture` being handled.
-    fn read_spawn_params(params: HeapPtr) -> Option<SpawnParamsData> {
-        // Fields 2/3 helper: `group` / `cancel` are `TaskGroup` / `CancelToken`
-        // instances whose `_handle` field (index 0) is `Object::RustData`.
-        fn handle_object(value: Value) -> Option<&'static Object> {
-            let inst_ptr = value.as_object_ptr()?;
-            let Object::Instance(inst) = (unsafe { inst_ptr.get() }) else {
-                return None;
-            };
-            let handle_ptr = inst.load_field(0).as_object_ptr()?;
-            Some(unsafe { handle_ptr.get() })
-        }
-
-        let Object::Instance(instance) = (unsafe { params.get() }) else {
-            return None;
+    /// Start the task a spawn edge describes and push its future onto the
+    /// spawning VM's stack: derive the child's token, allocate the future
+    /// under the spawner's permit, and hand the body to [`Self::spawn_thread`].
+    async fn spawn_edge(
+        self: &Arc<Self>,
+        thread: &mut ActiveHeapPermit<BexThread>,
+        request: SpawnRequest,
+        telemetry: Option<bex_vm::telemetry::ThreadSpawnContext>,
+        call_id: CallId,
+        cancel: &TaskCancel,
+        log_capture: Option<&LogCaptureContext>,
+    ) -> Result<(), EngineError> {
+        let SpawnRequest {
+            body: spawned,
+            context,
+            name: spawn_name,
+            returns,
+            throws,
+            root,
+            linked,
+        } = request;
+        // Each spawned task is cancelled with its parent: its own token is a
+        // child of the parent's, so parent → child cascade falls out of the
+        // token tree, and it inherits the tokens linked into the parent. A
+        // rooted spawn (`baml.spawn.Root`) instead starts with a fresh,
+        // independent token and none of the parent's, so the parent's
+        // cancellation (and unhandled-throw cascade) does NOT reach it — it
+        // behaves like a top-level task. So does a spawn from inside a
+        // shield: cleanup that delegates must not hand its work a
+        // cancellation that has already fired; the child stays cancellable
+        // through its own handle and token.
+        let child_cancel = if root || thread.vm_thread_is_shielded() {
+            TaskCancel::detached(linked)
+        } else {
+            cancel.child(linked)
         };
-        // Field 0: `body` — the closure the spawned thread runs. A middleware
-        // transformer may have wrapped or replaced the original spawn body.
-        let body = instance.load_field(0).as_object_ptr()?;
+        let child_thread_id = self.next_bex_thread_id().0;
+        // Provenance for shutdown leak reports: the written spawn
+        // name when there is one, else the function this spawn
+        // expression appears in.
+        let spawn_origin: std::sync::Arc<str> = spawn_name
+            .clone()
+            .or_else(|| thread.vm.current_function_name())
+            .unwrap_or_else(|| "<unknown spawn site>".to_string())
+            .into();
+        // Allocate the child's future under the parent's
+        // already-held permit, then hand the id to `spawn_thread`.
+        //
+        // Acquiring a *fresh* heap permit inside the spawn path
+        // (while this task still holds its own) deadlocks against
+        // GC: `HeapPermitManager::request_park` drains the entire
+        // semaphore via `acquire_many(MAX_PERMITS)`, and tokio's
+        // semaphore is fair — so a nested 1-permit acquire queues
+        // *behind* a pending park request, which in turn cannot
+        // proceed until *this* task's permit is released. The task
+        // can't release until the spawn completes → cycle, with all
+        // workers idle. Keeping the spawn path to a single permit
+        // per task (this `new_future` runs under `thread`) avoids
+        // it. The guard is dropped before the `spawn_thread` await
+        // so no non-`Send` guard crosses a yield point.
+        let future_ptr = {
+            let mut guard = self.futures.acquire(thread.proof()).await;
+            let (future_id, future_ptr) =
+                guard.new_future(returns, throws, child_cancel.own().clone(), spawn_origin);
+            drop(guard);
+            Arc::clone(self)
+                .spawn_thread(
+                    child_cancel,
+                    spawned,
+                    spawn_name,
+                    call_id,
+                    future_id,
+                    child_thread_id,
+                    telemetry,
+                    context,
+                    log_capture.cloned(),
+                )
+                .await?;
+            future_ptr
+        };
+        thread.vm.stack.push(Value::object(future_ptr));
+        Ok(())
+    }
 
-        // Field 1: `name` — optional human-readable label.
-        let name =
-            instance
-                .load_field(1)
-                .as_object_ptr()
-                .and_then(|ptr| match unsafe { ptr.get() } {
-                    Object::String(s) => Some(s.to_string()),
-                    _ => None,
-                });
-
-        let group = handle_object(instance.load_field(2)).and_then(|obj| match obj {
-            Object::RustData(data) => data.clone().downcast::<TaskGroupInner>().ok(),
-            _ => None,
-        });
-        let cancel = handle_object(instance.load_field(3)).and_then(|obj| match obj {
-            Object::RustData(data) => data.downcast_ref::<CancellationToken>().cloned(),
-            _ => None,
-        });
-
-        // Field 4: `detach`.
-        let detach = instance.load_field(4).as_bool().unwrap_or(false);
-
-        Some(SpawnParamsData {
-            body,
-            name,
-            group,
-            cancel,
-            detach,
+    /// The spawn edge the `baml.spawn.Plan` instance `plan` describes.
+    fn spawn_request(
+        thread: &ActiveHeapPermit<BexThread>,
+        plan: HeapPtr,
+        context: btel_types::context::Context,
+    ) -> Result<SpawnRequest, EngineError> {
+        let launch = bex_vm::package_baml::spawn_launch(&thread.vm, Value::object(plan))
+            .map_err(EngineError::VmInternalError)?;
+        Ok(SpawnRequest {
+            body: SpawnedBody {
+                entry: launch.body,
+                gate: if launch.limits.is_empty() {
+                    EntryGate::Open
+                } else {
+                    EntryGate::Limits(launch.limits)
+                },
+            },
+            context,
+            name: launch.name,
+            returns: launch.returns,
+            throws: launch.throws,
+            root: launch.root,
+            linked: launch.cancel,
         })
     }
 
@@ -4759,11 +5094,9 @@ impl BexEngine {
     )]
     fn spawn_thread(
         self: Arc<Self>,
-        child_cancel: CancellationToken,
-        closure: HeapPtr,
+        child_cancel: TaskCancel,
+        body: SpawnedBody,
         name: Option<String>,
-        user_cancel: Option<CancellationToken>,
-        group: Option<Arc<TaskGroupInner>>,
         call_id: CallId,
         future_id: FutureId,
         thread_id: u64,
@@ -4775,10 +5108,8 @@ impl BexEngine {
     > {
         Box::pin(self.spawn_thread_inner(
             child_cancel,
-            closure,
+            body,
             name,
-            user_cancel,
-            group,
             call_id,
             future_id,
             thread_id,
@@ -4800,11 +5131,9 @@ impl BexEngine {
     #[allow(clippy::too_many_arguments)]
     async fn spawn_thread_inner(
         self: Arc<Self>,
-        child_cancel: CancellationToken,
-        closure: HeapPtr,
+        child_cancel: TaskCancel,
+        body: SpawnedBody,
         name: Option<String>,
-        user_cancel: Option<CancellationToken>,
-        group: Option<Arc<TaskGroupInner>>,
         call_id: CallId,
         future_id: FutureId,
         thread_id: u64,
@@ -4815,34 +5144,17 @@ impl BexEngine {
         // Count the producer until its task exits, even if its future was
         // cancelled or removed earlier. Created before the task is scheduled.
         let work_guard = self.bex_work.register_work();
-        // BEP-034 spawn options: link a user-provided `CancelToken`
-        // (`with baml.spawn.options(cancel = ...)`) into this spawn's effective
-        // token. Firing the user token cancels the child; the watcher
-        // self-terminates when `child_cancel` fires (body done / cancelled
-        // / parent cascade) so it never outlives the spawn. (The token itself
-        // — fresh for `detach = true`, a child of the parent's otherwise — is
-        // derived at the dispatch site, where the future is also allocated.)
-        if let Some(user) = user_cancel {
-            let linked = child_cancel.clone();
-            let watcher = async move {
-                tokio::select! {
-                    biased;
-                    () = user.cancelled() => linked.cancel(),
-                    () = linked.cancelled() => {}
-                }
-            };
-            #[cfg(not(target_arch = "wasm32"))]
-            tokio::spawn(watcher);
-            #[cfg(target_arch = "wasm32")]
-            wasm_bindgen_futures::spawn_local(watcher);
-        }
+        let SpawnedBody { entry, gate } = body;
+        // A queued task waits on every token that cancels it, so a launch
+        // cancelled while it waits is never admitted.
+        let cancelled_by: Vec<CancellationToken> = child_cancel.tokens().cloned().collect();
 
-        // BEP-034 rate limiting: register with the TaskGroup *synchronously*,
-        // here (before the body task is polled), so a `group.cancel()` /
-        // `active_count()` issued right after `spawn` already observes this
-        // member. The returned ticket is `acquire`d (parked on) inside the body
-        // task, so a queued task does not hold the heap permit while waiting.
-        let group_ticket = group.map(|group| group.register(child_cancel.clone()));
+        // Register with the entry gate *synchronously*, here (before the body
+        // task is polled), so a count read right after `spawn` already
+        // observes this task. The returned ticket is `acquire`d (parked on)
+        // inside the body task, so a queued task does not hold the heap
+        // permit while waiting.
+        let entry_ticket = gate.register();
 
         // Build the child VM up-front (synchronously) so the await on the
         // permit only holds Send values across yield points.
@@ -4865,7 +5177,7 @@ impl BexEngine {
         }
 
         child_vm.set_root_context(context);
-        child_vm.set_entry_point(closure, &[]);
+        child_vm.set_entry_point(entry, &[]);
 
         // Register a new (inactive) permit for the child. `new_permit` only
         // takes the holders mutex — it does NOT acquire a semaphore permit —
@@ -4879,51 +5191,38 @@ impl BexEngine {
         let engine = self;
         let return_type = RuntimeTy::Null;
         let task = async move {
-            // BEP-034 rate limiting: if this spawn joined a `TaskGroup`, park
-            // here — WITHOUT the heap permit, so a queued task doesn't block GC
-            // — until a slot frees. A task cancelled while queued (group/user/
-            // parent) settles its future `Cancelled` and never runs its body.
-            // The permit is held for the body's lifetime and releases the slot
-            // (waking the next FIFO waiter) on drop.
-            let _group_permit = match group_ticket {
-                Some(ticket) => match ticket.acquire().await {
-                    Some(permit) => Some(permit),
-                    None => {
-                        let mut permit = inactive.acquire().await;
-
-                        let settled = engine.settle_child_cancelled(&mut permit, future_id).await;
-                        engine.finish_thread_telemetry(
-                            &mut permit,
-                            if settled.is_ok() {
-                                bex_vm::telemetry::InvocationOutcome::Cancelled
-                            } else {
-                                bex_vm::telemetry::InvocationOutcome::Errored
-                            },
-                        );
-                        if let Err(err) = settled {
-                            tracing::error!(
-                                ?err,
-                                ?future_id,
-                                "failed to settle queued-then-cancelled spawn"
-                            );
-                        }
-                        return;
-                    }
-                },
-                None => None,
+            // If this spawn is gated, park here — WITHOUT the heap permit, so a
+            // queued task doesn't block GC — until it is admitted. The permit is
+            // held for the body's lifetime and releases its slots (admitting the
+            // next waiter) on drop.
+            let admitted = entry_ticket.acquire(&cancelled_by).await;
+            let mut permit = inactive.acquire().await;
+            // A task cancelled before its first instruction never starts,
+            // whatever its gate: one cancelled while queued is refused by
+            // `acquire`, and one admitted at once is caught here. Its future
+            // settles `Cancelled` and its body never runs.
+            let Some(_entry_permit) = admitted.filter(|_| !child_cancel.is_cancelled()) else {
+                let settled = engine.settle_child_cancelled(&mut permit, future_id).await;
+                engine.finish_thread_telemetry(
+                    &mut permit,
+                    if settled.is_ok() {
+                        bex_vm::telemetry::InvocationOutcome::Cancelled
+                    } else {
+                        bex_vm::telemetry::InvocationOutcome::Errored
+                    },
+                );
+                if let Err(err) = settled {
+                    tracing::error!(
+                        ?err,
+                        ?future_id,
+                        "failed to settle a spawn cancelled before it started"
+                    );
+                }
+                return;
             };
-            let permit = inactive.acquire().await;
 
             match engine
-                .run_thread_event_loop(
-                    return_type,
-                    None,
-                    permit,
-                    call_id,
-                    log_capture,
-                    &child_cancel,
-                    true,
-                )
+                .run_thread_event_loop(return_type, None, permit, call_id, log_capture, true)
                 .await
             {
                 Ok(ThreadOutcome::SettledChild(_)) => {}
@@ -4991,7 +5290,6 @@ impl BexEngine {
         thread: ActiveHeapPermit<BexThread>,
         call_id: CallId,
         log_capture: Option<LogCaptureContext>,
-        cancel: &CancellationToken,
         copy_objects: bool,
     ) -> Result<ThreadOutcome, EngineError> {
         let execution = self.run_thread_event_loop_inner(
@@ -5000,7 +5298,6 @@ impl BexEngine {
             thread,
             call_id,
             log_capture,
-            cancel,
             copy_objects,
         );
         #[cfg(not(target_arch = "wasm32"))]
@@ -5021,10 +5318,12 @@ impl BexEngine {
         call_id: CallId,
 
         log_capture: Option<LogCaptureContext>,
-        cancel: &CancellationToken,
         copy_objects: bool,
     ) -> Result<ThreadOutcome, EngineError> {
-        use bex_vm::telemetry::{ClockDuration, InvocationOutcome};
+        use bex_vm::telemetry::InvocationOutcome;
+
+        let cancel = thread.vm_thread_cancel().clone();
+        let cancel = &cancel;
 
         // The completion boundary owns the VM even when execution propagates
         // an error with `?` or returns early. Only the non-fallible parking
@@ -5104,15 +5403,11 @@ impl BexEngine {
                             guard.fulfill_future(future_id, value)?;
                             return Ok(ThreadOutcome::SettledChild(InvocationOutcome::Ok));
                         }
-                        // "Cancel wins" semantics: if cancellation races with a
-                        // completed VM step, report a cancellation panic rather
-                        // than returning a success value.
-                        let cancelled = cancel.is_cancelled();
-
-                        if cancelled {
-                            return Err(cancelled_unhandled_throw());
-                        }
-
+                        // A body that reached completion had no checkpoint left
+                        // at which to observe a fired token (or handled the
+                        // cancellation it received): per BEP-034 it runs to
+                        // completion and its value stands, for a root call as
+                        // for a spawned child.
                         let return_value = if !copy_objects {
                             if let Some(ptr) = value.as_object_ptr() {
                                 // SAFETY: the active thread holds the heap permit
@@ -5171,31 +5466,32 @@ impl BexEngine {
                         // `Object::Future` is allocated and no `FutureManager`
                         // entry is created — the schedule/await dance would be
                         // pure overhead because the user never sees the future.
-                        #[allow(clippy::large_enum_variant)]
-                        enum SysOpOutcome {
-                            Cancelled,
-                            Result(Result<BexExternalValue, OpError>),
-                        }
 
                         // Honor an already-cancelled call before traversing and
                         // externalizing sys-op arguments. Host-call argument packs
                         // can contain arbitrarily large value trees; cancellation
                         // must remain an O(1) pre-check rather than paying that
                         // conversion cost for an operation that will never run.
-                        if cancel.is_cancelled() {
-                            // Cancel-at-yield: spawned children settle as
-                            // Cancelled so the heap Future no longer hangs
-                            // at Pending; root threads surface the cancel
-                            // to the host.
-
-                            if let Some(future_id) = thread.vm_thread_settles_future() {
-                                self.settle_child_cancelled(thread, future_id).await?;
-                                return Ok(ThreadOutcome::SettledChild(
-                                    InvocationOutcome::Cancelled,
-                                ));
+                        if cancel.is_cancelled() && !thread.vm_thread_is_shielded() {
+                            if let Some(outcome) = self
+                                .inject_cancellation(
+                                    thread,
+                                    call_id,
+                                    CancelSite::SysOp(operation),
+                                    throws_type.as_ref(),
+                                )
+                                .await?
+                            {
+                                return Ok(outcome);
                             }
-                            return Err(cancelled_unhandled_throw());
+                            continue;
                         }
+                        // The op observes the thread's sys-op token, never
+                        // `cancel` itself: whether this thread is shielded is
+                        // read only once `cancel` fires (`park`), and a delivery
+                        // fires the op's token then. A shielded thread's cleanup
+                        // runs its sys-ops to completion.
+                        let op_cancel = thread.sysop_cancel.clone();
 
                         let runtime_type_overlay =
                             self.runtime_type_overlay(&thread.vm, &args, thread.proof());
@@ -5306,7 +5602,7 @@ impl BexEngine {
                                 &bex_args,
                                 &runtime_type_overlay,
                                 call_id,
-                                cancel,
+                                &op_cancel,
                                 thread.proof(),
                                 runtime_schema_overlay.as_ref(),
                             )
@@ -5328,58 +5624,30 @@ impl BexEngine {
                                 // before touching VM state.
 
                                 thread.vm.begin_sys_op_telemetry_wait();
-                                let wait = thread.vm.take_telemetry_wait().map(|(frame, start)| {
-                                    (
-                                        frame,
-                                        start,
-                                        Arc::clone(
-                                            thread
-                                                .vm
-                                                .telemetry_clock()
-                                                .expect("observed wait has clock"),
-                                        ),
-                                    )
-                                });
-                                let (resumed, outcome, elapsed) = async {
-                                    let inactive =
-                                        active.take().expect("active execution permit").release();
-                                    self.maybe_collect_garbage().await;
-                                    let outcome = tokio::select! {
-                                        biased;
-                                        () = cancel.cancelled() => SysOpOutcome::Cancelled,
-                                        r = fut                  => SysOpOutcome::Result(r),
-                                    };
-
-                                    // End at observed completion, before permit reacquisition.
-                                    let elapsed = wait
-                                        .as_ref()
-                                        .map_or(ClockDuration::ZERO, |(_, start, clock)| {
-                                            start.elapsed_until(clock.read())
-                                        });
-                                    (inactive.acquire().await, outcome, elapsed)
+                                let (parked, waited) = self.park(&mut active, cancel, fut).await;
+                                thread = active.as_mut().expect("active execution permit");
+                                if let Some(waited) = waited {
+                                    thread.vm.record_sysop_time(waited);
                                 }
-                                .await;
-                                thread = active.insert(resumed);
-                                let observed = wait.is_some();
-                                thread.vm.record_telemetry_wait(
-                                    wait.map(|(frame, _, _)| frame),
-                                    elapsed,
-                                );
-                                if observed {
-                                    thread.vm.record_sysop_time(elapsed);
-                                }
-
-                                match outcome {
-                                    SysOpOutcome::Cancelled => {
-                                        if let Some(future_id) = thread.vm_thread_settles_future() {
-                                            self.settle_child_cancelled(thread, future_id).await?;
-                                            return Ok(ThreadOutcome::SettledChild(
-                                                InvocationOutcome::Cancelled,
-                                            ));
+                                match parked {
+                                    Park::Cancelled => {
+                                        // The op is abandoned: stop it, and give
+                                        // the ops that follow a clean token.
+                                        thread.vm_thread_abort_sysop();
+                                        if let Some(outcome) = self
+                                            .inject_cancellation(
+                                                thread,
+                                                call_id,
+                                                CancelSite::SysOp(operation),
+                                                throws_type.as_ref(),
+                                            )
+                                            .await?
+                                        {
+                                            return Ok(outcome);
                                         }
-                                        return Err(cancelled_unhandled_throw());
+                                        continue;
                                     }
-                                    SysOpOutcome::Result(r) => r,
+                                    Park::Done(r) => r,
                                 }
                             }
                         };
@@ -5500,93 +5768,20 @@ impl BexEngine {
                     }
 
                     VmExecState::Spawn {
-                        future: unscheduled,
+                        plan,
                         telemetry,
                         context,
                     } => {
-                        // BEP-034: pull the closure + name off the
-                        // `UnscheduledFuture` heap object and hand them to
-                        // `spawn_thread`, which allocates the future and
-                        // dispatches the body on a fresh `BexThread`.
-                        let unscheduled = thread
-                            .vm
-                            .unscheduled_future(unscheduled)
-                            .map_err(EngineError::VmInternalError)?;
-                        let UnscheduledFuture {
-                            closure,
-                            name: name_ptr,
-                            config: config_ptr,
-                            returns,
-                            throws,
-                        } = unscheduled.clone();
-                        let spawn_name: Option<String> =
-                            name_ptr.and_then(|ptr| match unsafe { ptr.get() } {
-                                Object::String(s) => Some(s.to_string()),
-                                _ => None,
-                            });
-                        // BEP-034 middleware: a `spawn ... with` lowers its final
-                        // transformed `baml.spawn.Params` into the config
-                        // operand. The params override the spawn operands — a
-                        // transformer may have wrapped/replaced the body or set a
-                        // name — and carry the options: `cancel` links into the
-                        // child's effective token; `detach` decouples it from the
-                        // parent; `group` rate-limits it.
-                        let params = config_ptr.and_then(Self::read_spawn_params);
-                        let (closure, spawn_name) = match &params {
-                            Some(p) => (p.body, p.name.clone().or(spawn_name)),
-                            None => (closure, spawn_name),
-                        };
-                        let (user_cancel, group, detach) = match params {
-                            Some(p) => (p.cancel, p.group, p.detach),
-                            None => (None, None, false),
-                        };
-                        // Each spawned thread gets a child cancel token so parent →
-                        // child cascade falls out of the token tree without bespoke
-                        // tracking. A `detach = true` spawn instead gets a fresh,
-                        // independent token so the parent's cancellation (and
-                        // unhandled-throw cascade) does NOT reach it — it behaves
-                        // like a top-level task.
-                        let child_cancel = if detach {
-                            CancellationToken::new()
-                        } else {
-                            cancel.child_token()
-                        };
-                        let child_thread_id = self.next_bex_thread_id().0;
-                        // Provenance for shutdown leak reports: the written spawn
-                        // name when there is one, else the function this spawn
-                        // expression appears in.
-                        let spawn_origin: std::sync::Arc<str> = spawn_name
-                            .clone()
-                            .or_else(|| thread.vm.current_function_name())
-                            .unwrap_or_else(|| "<unknown spawn site>".to_string())
-                            .into();
-                        let future_ptr = {
-                            let mut guard = self.futures.acquire(thread.proof()).await;
-                            let (future_id, future_ptr) = guard.new_future(
-                                returns,
-                                throws,
-                                child_cancel.clone(),
-                                spawn_origin,
-                            );
-                            drop(guard);
-                            Arc::clone(self)
-                                .spawn_thread(
-                                    child_cancel,
-                                    closure,
-                                    spawn_name,
-                                    user_cancel,
-                                    group,
-                                    call_id,
-                                    future_id,
-                                    child_thread_id,
-                                    telemetry,
-                                    context,
-                                    log_capture.clone(),
-                                )
-                                .await?;
-                            future_ptr
-                        };
-                        thread.vm.stack.push(Value::object(future_ptr));
+                        let request = Self::spawn_request(thread, plan, context)?;
+                        self.spawn_edge(
+                            thread,
+                            request,
+                            telemetry,
+                            call_id,
+                            cancel,
+                            log_capture.as_ref(),
+                        )
+                        .await?;
 
                         // Spawn setup can yield to Tokio while retaining the
                         // parent's heap permit. Cooperate only after the child
@@ -5618,23 +5813,19 @@ impl BexEngine {
                         // so the heap Future settles instead of leaking as
                         // Pending. Mirrors the `VmError::ThrownUnhandled`
                         // arm above for a Cancelled panic from the VM side.
-                        if cancel.is_cancelled() {
-                            if let Some(future_id) = thread.vm_thread_settles_future() {
-                                self.settle_child_cancelled(thread, future_id).await?;
-                                return Ok(ThreadOutcome::SettledChild(
-                                    InvocationOutcome::Cancelled,
-                                ));
+                        if cancel.is_cancelled() && !thread.vm_thread_is_shielded() {
+                            if let Some(outcome) = self
+                                .inject_cancellation(
+                                    thread,
+                                    call_id,
+                                    CancelSite::Await,
+                                    throws_type.as_ref(),
+                                )
+                                .await?
+                            {
+                                return Ok(outcome);
                             }
-                            return Err(cancelled_unhandled_throw());
-                        }
-                        #[allow(clippy::items_after_statements)]
-                        // Outcome of the SetOnce-vs-cancel race below. Inline
-                        // here because moving it to module scope just for
-                        // clippy's preference would split the readers'
-                        // attention across two files.
-                        enum AwaitOutcome {
-                            Cancelled,
-                            Done(Result<(), EngineError>),
+                            continue;
                         }
                         // Tightly-scoped guard so the proof's borrow on `vm`
                         // ends before we release the VM permit below.
@@ -5644,66 +5835,34 @@ impl BexEngine {
                             drop(g);
                             future?
                         };
-                        // Release the VM permit before the SetOnce wait — the
-                        // wait is the safepoint. Holding a permit through the
-                        // wait would deadlock concurrent GC park (which needs
-                        // every permit) against the spawned task that fulfils
-                        // this future (which needs a permit to write the heap).
-
-                        let wait = thread.vm.take_telemetry_wait().map(|(frame, start)| {
-                            (
-                                frame,
-                                start,
-                                Arc::clone(
-                                    thread
-                                        .vm
-                                        .telemetry_clock()
-                                        .expect("observed wait has clock"),
-                                ),
-                            )
-                        });
-                        let (resumed, outcome, elapsed) = async {
-                            let inactive =
-                                active.take().expect("active execution permit").release();
-                            // While parked, run a heuristic-driven GC check (no
-                            // permit dance needed since we're already released).
-                            self.maybe_collect_garbage().await;
-                            // Race the SetOnce wait against the thread's own
-                            // cancel token so an unrelated-future await
-                            // doesn't hang when the thread itself is cancelled
-                            // (cascade only saves us when the awaited future is
-                            // a descendant whose token derives from ours).
-                            let outcome = tokio::select! {
-                                biased;
-                                () = cancel.cancelled() => AwaitOutcome::Cancelled,
-                                r = future              => AwaitOutcome::Done(r),
-                            };
-
-                            // End at observed completion, before permit reacquisition.
-                            let elapsed = wait
-                                .as_ref()
-                                .map_or(ClockDuration::ZERO, |(_, start, clock)| {
-                                    start.elapsed_until(clock.read())
-                                });
-                            (inactive.acquire().await, outcome, elapsed)
-                        }
-                        .await;
-                        thread = active.insert(resumed);
-                        thread
-                            .vm
-                            .record_telemetry_wait(wait.map(|(frame, _, _)| frame), elapsed);
-
-                        match outcome {
-                            AwaitOutcome::Cancelled => {
-                                if let Some(future_id) = thread.vm_thread_settles_future() {
-                                    self.settle_child_cancelled(thread, future_id).await?;
-                                    return Ok(ThreadOutcome::SettledChild(
-                                        InvocationOutcome::Cancelled,
-                                    ));
+                        // The SetOnce wait is the safepoint: `park` releases the
+                        // VM permit for it. Holding a permit through the wait
+                        // would deadlock concurrent GC park (which needs every
+                        // permit) against the spawned task that fulfils this
+                        // future (which needs a permit to write the heap). The
+                        // wait races the thread's own cancel token so an
+                        // unrelated-future await doesn't hang when the thread
+                        // itself is cancelled (cascade only saves us when the
+                        // awaited future is a descendant whose token derives
+                        // from ours).
+                        let (parked, _) = self.park(&mut active, cancel, future).await;
+                        thread = active.as_mut().expect("active execution permit");
+                        match parked {
+                            Park::Cancelled => {
+                                if let Some(outcome) = self
+                                    .inject_cancellation(
+                                        thread,
+                                        call_id,
+                                        CancelSite::Await,
+                                        throws_type.as_ref(),
+                                    )
+                                    .await?
+                                {
+                                    return Ok(outcome);
                                 }
-                                return Err(cancelled_unhandled_throw());
+                                continue;
                             }
-                            AwaitOutcome::Done(r) => r?,
+                            Park::Done(r) => r?,
                         }
                     }
 
@@ -5719,19 +5878,19 @@ impl BexEngine {
                         // Fail-fast on our own cancellation, exactly as `Await`
                         // does: the next suspension point after the token fires
                         // must surface `Cancelled`.
-                        if cancel.is_cancelled() {
-                            if let Some(future_id) = thread.vm_thread_settles_future() {
-                                self.settle_child_cancelled(thread, future_id).await?;
-                                return Ok(ThreadOutcome::SettledChild(
-                                    InvocationOutcome::Cancelled,
-                                ));
+                        if cancel.is_cancelled() && !thread.vm_thread_is_shielded() {
+                            if let Some(outcome) = self
+                                .inject_cancellation(
+                                    thread,
+                                    call_id,
+                                    CancelSite::Await,
+                                    throws_type.as_ref(),
+                                )
+                                .await?
+                            {
+                                return Ok(outcome);
                             }
-                            return Err(cancelled_unhandled_throw());
-                        }
-                        #[allow(clippy::items_after_statements)]
-                        enum AwaitAnyOutcome {
-                            Cancelled,
-                            Done(Result<(), EngineError>),
+                            continue;
                         }
                         // Build one SetOnce waiter per pending input. Each waiter
                         // is self-contained (clones the future's `Arc<SetOnce>`),
@@ -5747,72 +5906,48 @@ impl BexEngine {
                             ws.into_iter().collect::<Result<Vec<_>, _>>()?
                         };
 
-                        let wait = thread.vm.take_telemetry_wait().map(|(frame, start)| {
-                            (
-                                frame,
-                                start,
-                                Arc::clone(
-                                    thread
-                                        .vm
-                                        .telemetry_clock()
-                                        .expect("observed wait has clock"),
-                                ),
-                            )
-                        });
-                        let (resumed, outcome, elapsed) = async {
-                            let inactive =
-                                active.take().expect("active execution permit").release();
-                            self.maybe_collect_garbage().await;
-                            let outcome = if waiters.is_empty() {
-                                // Empty INPUT array: `future_ready` returns a waiter
-                                // for every id — already-settled inputs yield
-                                // immediately-ready waiters — so empty waiters ⟺
-                                // empty `future_ids`. Per BEP-034 (matching JS
-                                // `Promise.race([])`), racing an empty array never
-                                // settles: park on cancellation rather than busy-spin
-                                // or panic in `select_all` (which rejects an empty
-                                // iterator).
-                                cancel.cancelled().await;
-                                AwaitAnyOutcome::Cancelled
-                            } else {
-                                let first_settled =
-                                    futures::future::select_all(waiters.into_iter().map(Box::pin));
-                                tokio::select! {
-                                    biased;
-                                    () = cancel.cancelled() => AwaitAnyOutcome::Cancelled,
-                                    (r, _idx, _rest) = first_settled => AwaitAnyOutcome::Done(r),
+                        // Empty INPUT array: `future_ready` returns a waiter for
+                        // every id — already-settled inputs yield immediately-ready
+                        // waiters — so empty waiters ⟺ empty `future_ids`. Per
+                        // BEP-034 (matching JS `Promise.race([])`), racing an empty
+                        // array never settles: park on cancellation alone rather
+                        // than busy-spin or panic in `select_all` (which rejects an
+                        // empty iterator); a shielded thread parks for good, the
+                        // documented `race([])` outcome.
+                        let first_settled = if waiters.is_empty() {
+                            futures::future::Either::Left(std::future::pending::<
+                                Result<(), EngineError>,
+                            >())
+                        } else {
+                            futures::future::Either::Right(async move {
+                                let (r, _idx, _rest) =
+                                    futures::future::select_all(waiters.into_iter().map(Box::pin))
+                                        .await;
+                                r
+                            })
+                        };
+                        let (parked, _) = self.park(&mut active, cancel, first_settled).await;
+                        thread = active.as_mut().expect("active execution permit");
+                        match parked {
+                            Park::Cancelled => {
+                                if let Some(outcome) = self
+                                    .inject_cancellation(
+                                        thread,
+                                        call_id,
+                                        CancelSite::Await,
+                                        throws_type.as_ref(),
+                                    )
+                                    .await?
+                                {
+                                    return Ok(outcome);
                                 }
-                            };
-
-                            // End at observed completion, before permit reacquisition.
-                            let elapsed = wait
-                                .as_ref()
-                                .map_or(ClockDuration::ZERO, |(_, start, clock)| {
-                                    start.elapsed_until(clock.read())
-                                });
-                            (inactive.acquire().await, outcome, elapsed)
-                        }
-                        .await;
-                        thread = active.insert(resumed);
-                        thread
-                            .vm
-                            .record_telemetry_wait(wait.map(|(frame, _, _)| frame), elapsed);
-
-                        match outcome {
-                            AwaitAnyOutcome::Cancelled => {
-                                if let Some(future_id) = thread.vm_thread_settles_future() {
-                                    self.settle_child_cancelled(thread, future_id).await?;
-                                    return Ok(ThreadOutcome::SettledChild(
-                                        InvocationOutcome::Cancelled,
-                                    ));
-                                }
-                                return Err(cancelled_unhandled_throw());
+                                continue;
                             }
                             // Only an internal-error future surfaces here; normal
                             // BAML success/throw/cancel settles resolve the SetOnce
                             // with `Ok(())` and are observed when the VM re-reads
                             // the future (and the stdlib `await futures[i]` it).
-                            AwaitAnyOutcome::Done(r) => r?,
+                            Park::Done(r) => r?,
                         }
                     }
 

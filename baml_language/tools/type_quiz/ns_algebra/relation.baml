@@ -312,7 +312,7 @@ function mirror(r: Relation) -> Relation throws never {
 function flip(k: Knowledge) -> Knowledge throws never {
     match (k) {
         let r: Relation => mirror(r),
-        Undecided => Undecided {  },
+        Undecided => Undecided {},
     }
 }
 
@@ -332,7 +332,7 @@ function invariant(k: Knowledge) -> Knowledge throws never {
     match (k) {
         Relation.Sub | Relation.Super | Relation.Unrelated => Relation.Unrelated,
         Relation.Equiv => Relation.Equiv,
-        Undecided => Undecided {  },
+        Undecided => Undecided {},
     }
 }
 
@@ -346,13 +346,13 @@ function absorbing(k: Knowledge) -> Knowledge throws never {
         Relation.Sub => Relation.Sub,
         Relation.Super => Relation.Super,
         Relation.Equiv => Relation.Equiv,
-        Relation.Unrelated | Undecided => Undecided {  },
+        Relation.Unrelated | Undecided => Undecided {},
     }
 }
 
 /// A transfer that knows nothing.
 function undecided(k: Knowledge) -> Knowledge throws never {
-    Undecided {  }
+    Undecided {}
 }
 
 /// Whether a value of `left` can flow into a slot of `right`.
@@ -411,8 +411,8 @@ function in_fn_param(d: Derivation, ret: Ty, rule: root.engine.Rule) -> Derivati
     then(
         d,
         rule,
-        Fn.new([left_of(d)], [], ret, Never {  }),
-        Fn.new([right_of(d)], [], ret, Never {  }),
+        Fn.new([left_of(d)], [], ret, Never {}),
+        Fn.new([right_of(d)], [], ret, Never {}),
         contravariant,
     )
 }
@@ -422,8 +422,8 @@ function in_fn_return(d: Derivation, rule: root.engine.Rule) -> Derivation throw
     then(
         d,
         rule,
-        Fn.new([], [], left_of(d), Never {  }),
-        Fn.new([], [], right_of(d), Never {  }),
+        Fn.new([], [], left_of(d), Never {}),
+        Fn.new([], [], right_of(d), Never {}),
         covariant,
     )
 }

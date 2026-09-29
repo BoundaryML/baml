@@ -1,0 +1,119 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0176
+
+  × `baml` cannot be used as a binding name: syntax such as `spawn` and `env.X` refers to the `baml` package, which this binding would hide. A class or function may still be named `baml`.
+   ╭─[reserved_binding_name.baml:8:5]
+ 8 │     let baml = 5;
+   ·     ────┬───
+   ·         ╰── reserved binding name
+   ╰────
+
+  [hir] E0176
+
+  × `baml` cannot be used as a binding name: syntax such as `spawn` and `env.X` refers to the `baml` package, which this binding would hide. A class or function may still be named `baml`.
+    ╭─[reserved_binding_name.baml:12:20]
+ 12 │ function parameter(baml: int) -> int throws never {
+    ·                    ──┬─
+    ·                      ╰── reserved binding name
+    ╰────
+
+  [hir] E0176
+
+  × `baml` cannot be used as a binding name: syntax such as `spawn` and `env.X` refers to the `baml` package, which this binding would hide. A class or function may still be named `baml`.
+    ╭─[reserved_binding_name.baml:17:14]
+ 17 │     let f = (baml: int) -> int throws never { baml };
+    ·              ──┬─
+    ·                ╰── reserved binding name
+    ╰────
+
+  [hir] E0176
+
+  × `baml` cannot be used as a binding name: syntax such as `spawn` and `env.X` refers to the `baml` package, which this binding would hide. A class or function may still be named `baml`.
+    ╭─[reserved_binding_name.baml:24:15]
+ 24 │     let Box { baml } = b;
+    ·               ──┬─
+    ·                 ╰── reserved binding name
+    ╰────
+
+  [hir] E0176
+
+  × `baml` cannot be used as a binding name: syntax such as `spawn` and `env.X` refers to the `baml` package, which this binding would hide. A class or function may still be named `baml`.
+    ╭─[reserved_binding_name.baml:30:10]
+ 30 │     for (let baml in xs) {
+    ·          ────┬───
+    ·              ╰── reserved binding name
+    ╰────
+
+  [hir] E0176
+
+  × `baml` cannot be used as a binding name: syntax such as `spawn` and `env.X` refers to the `baml` package, which this binding would hide. A class or function may still be named `baml`.
+    ╭─[reserved_binding_name.baml:37:26]
+ 37 │     { throw "x" } catch (baml) { _ => "caught" }
+    ·                          ──┬─
+    ·                            ╰── reserved binding name
+    ╰────
+
+  [hir] E0176
+
+  × `baml` cannot be used as a binding name: syntax such as `spawn` and `env.X` refers to the `baml` package, which this binding would hide. A class or function may still be named `baml`.
+    ╭─[reserved_binding_name.baml:41:10]
+ 41 │     type baml = int;
+    ·          ──┬─
+    ·            ╰── reserved binding name
+    ╰────
+
+  [hir] E0176
+
+  × `baml` cannot be used as a binding name: syntax such as `spawn` and `env.X` refers to the `baml` package, which this binding would hide. A class or function may still be named `baml`.
+    ╭─[reserved_binding_name.baml:46:10]
+ 46 │     type baml = unreflect(t);
+    ·          ──┬─
+    ·            ╰── reserved binding name
+    ╰────
+
+  [hir] E0176
+
+  × `baml` cannot be used as a binding name: syntax such as `spawn` and `env.X` refers to the `baml` package, which this binding would hide. A class or function may still be named `baml`.
+    ╭─[reserved_binding_name.baml:56:5]
+ 56 │     let baml = 5;
+    ·     ────┬───
+    ·         ╰── reserved binding name
+    ╰────
+
+  [hir] E0176
+
+  × `baml` cannot be used as a binding name: syntax such as `spawn` and `env.X` refers to the `baml` package, which this binding would hide. A class or function may still be named `baml`.
+    ╭─[reserved_binding_name.baml:62:37]
+ 62 │ function refused_parameter_in_scope(baml: int) -> int {
+    ·                                     ──┬─
+    ·                                       ╰── reserved binding name
+    ╰────
+
+  [hir] E0176
+
+  × `baml` cannot be used as a binding name: syntax such as `spawn` and `env.X` refers to the `baml` package, which this binding would hide. A class or function may still be named `baml`.
+    ╭─[reserved_binding_name.baml:68:10]
+ 68 │     type baml = int;
+    ·          ──┬─
+    ·            ╰── reserved binding name
+    ╰────
+
+  [hir] E0176
+
+  × `baml` cannot be used as a binding name: syntax such as `spawn` and `env.X` refers to the `baml` package, which this binding would hide. A class or function may still be named `baml`.
+    ╭─[reserved_binding_name.baml:74:5]
+ 74 │     let baml = 5;
+    ·     ────┬───
+    ·         ╰── reserved binding name
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `undefined_in_body`
+    ╭─[reserved_binding_name.baml:75:24]
+ 75 │     let task = spawn { undefined_in_body + 1 };
+    ·                        ─────────────────
+    ╰────

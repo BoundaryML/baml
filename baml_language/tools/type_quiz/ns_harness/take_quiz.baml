@@ -678,14 +678,16 @@ function take_quiz(
         .filter((m) -> {
             m != ""
         });
-    let group = baml.spawn.TaskGroup.new(concurrency.max(1));
+    // `Limit` replaced `TaskGroup`: a pure admission counter, capacity
+    // positive (`.max(1)` is what makes the arm below unreachable).
+    let limit = baml.spawn.Limit.new(concurrency.max(1)) catch (e) {
+        baml.errors.InvalidArgument => baml.sys.panic("max(1) is positive"),
+    };
     let futures: baml.future.Future<Run, never>[] = [];
     for (let i = 0; i < sessions; i = i + 1) {
         for (let model in named) {
             let session = first + i;
-            futures.push(spawn with baml.spawn.options(group = group) {
-                sit(settings, model, session, system)
-            });
+            futures.push(spawn with limit { sit(settings, model, session, system) });
         }
     }
     let runs: Run[] = [];

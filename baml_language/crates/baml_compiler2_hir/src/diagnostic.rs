@@ -54,6 +54,9 @@ pub enum Hir2Diagnostic {
     },
     /// Builtin-only syntax used outside builtin stdlib files.
     BuiltinOnlySyntax { feature: String, span: TextRange },
+    /// A value binding or body type binding named a package root the
+    /// compiler emits in a desugar.
+    ReservedBindingName { name: Name, span: TextRange },
     /// Generic single-span diagnostic for builtin contract validation.
     DiagnosticMessage {
         diagnostic_id: DiagnosticId,
@@ -411,6 +414,22 @@ impl Hir2Diagnostic {
                 .with_primary(Span { file_id, range: *span }, "not valid here")
                 .with_phase(DiagnosticPhase::Hir)
             }
+            Hir2Diagnostic::ReservedBindingName { name, span } => Diagnostic::error(
+                DiagnosticId::ReservedBindingName,
+                format!(
+                    "`{name}` cannot be used as a binding name: syntax such as `spawn` and \
+                     `env.X` refers to the `{name}` package, which this binding would hide. A \
+                     class or function may still be named `{name}`."
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "reserved binding name",
+            )
+            .with_phase(DiagnosticPhase::Hir),
             Hir2Diagnostic::BuiltinOnlySyntax { feature, span } => Diagnostic::error(
                 DiagnosticId::InvalidAttributeContext,
                 format!("builtin-only syntax `{feature}` is only allowed in builtin stdlib files"),

@@ -90,6 +90,14 @@ fn s15_sweep_baml_src() {
                 ));
             }
         }
+        for (&(start, end), rendered) in &channel.implements {
+            for entry in rendered {
+                channel_entries.push(format!(
+                    "{rel}:{start}..{end} `{}`: {entry}",
+                    snippet(content, start, end)
+                ));
+            }
+        }
         for range in &channel.non_exhaustive {
             let (start, end) = (u32::from(range.start()), u32::from(range.end()));
             channel_entries.push(format!(

@@ -8,7 +8,6 @@
 //! (rethrow) or a future link (await). Equal values alone never link two
 //! raises. An `UnknownError` conversion never establishes a proven link:
 //! the VM does not record where the converted value came from.
-use std::sync::Arc;
 
 use bex_vm_types::{
     Function, Object,
@@ -24,8 +23,8 @@ use btel_types::{
     CallPathId, ClockInstant, FunctionId, TelemetryId, TelemetryPolicyId, allocate_telemetry_id,
 };
 
-use super::{BexVm, Frame, ThrowContext};
-use crate::telemetry::{ActiveHandler, FrameScope, LandingMatch};
+use super::{BexVm, Frame};
+use crate::telemetry::LandingMatch;
 
 /// How unwinding was entered, when the faulting opcode alone cannot say.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -135,67 +134,37 @@ fn from_match(found: LandingMatch, via: OriginVia) -> RaiseOrigin {
     }
 }
 
-/// One live bytecode frame, for landing-note lookups.
-struct HandlerFrame {
-    depth: usize,
-    function: Option<FunctionId>,
-    pc: usize,
-    locals_offset: bex_vm_types::StackIndex,
-    code: &'static bex_vm_types::bytecode::CompactCode,
-}
-
-/// Whether `pc` lies in the body of the catch or defer pad entered at
-/// `handler_pc`: its dispatch block, arm blocks or pad body.
-fn in_handler_body(
-    code: &bex_vm_types::bytecode::CompactCode,
-    handler_pc: usize,
-    pc: usize,
-) -> bool {
-    code.handler_context_table
-        .iter()
-        .any(|entry| entry.handler_pc == handler_pc && (entry.start_pc..entry.end_pc).contains(&pc))
-}
-
-/// Whether any instruction in the handler's body stores into frame-local
-/// `local`. Conservative: undecodable code counts as a store.
-fn handler_writes_local(
-    code: &bex_vm_types::bytecode::CompactCode,
-    handler_pc: usize,
-    local: usize,
-) -> bool {
+/// Whether any instruction of the function stores into frame-local `local`.
+/// Conservative: undecodable code counts as a store.
+fn writes_local(code: &bex_vm_types::bytecode::CompactCode, local: usize) -> bool {
     let operand = |at: usize| -> Option<usize> {
         let bytes = code.code.get(at..at + 4)?;
         usize::try_from(u32::from_le_bytes(bytes.try_into().ok()?)).ok()
     };
-    code.handler_context_table
-        .iter()
-        .filter(|entry| entry.handler_pc == handler_pc)
-        .any(|entry| {
-            let mut pc = entry.start_pc;
-            while pc < entry.end_pc {
-                let Some(op) = code
-                    .code
-                    .get(pc)
-                    .and_then(|byte| OpCode::try_from(*byte).ok())
-                else {
-                    return true;
-                };
-                let stored = match op {
-                    OpCode::StoreVar | OpCode::StoreVarLoadVar => vec![operand(pc + 1)],
-                    OpCode::StoreVar2 => vec![operand(pc + 1), operand(pc + 5)],
-                    OpCode::NarrowBind => vec![operand(pc + 5)],
-                    _ => Vec::new(),
-                };
-                if stored
-                    .iter()
-                    .any(|slot| slot.is_none_or(|slot| slot == local))
-                {
-                    return true;
-                }
-                pc += op.encoded_size();
-            }
-            false
-        })
+    let mut pc = 0;
+    while pc < code.code.len() {
+        let Some(op) = code
+            .code
+            .get(pc)
+            .and_then(|byte| OpCode::try_from(*byte).ok())
+        else {
+            return true;
+        };
+        let stored = match op {
+            OpCode::StoreVar | OpCode::StoreVarLoadVar => vec![operand(pc + 1)],
+            OpCode::StoreVar2 => vec![operand(pc + 1), operand(pc + 5)],
+            OpCode::NarrowBind => vec![operand(pc + 5)],
+            _ => Vec::new(),
+        };
+        if stored
+            .iter()
+            .any(|slot| slot.is_none_or(|slot| slot == local))
+        {
+            return true;
+        }
+        pc += op.encoded_size();
+    }
+    false
 }
 
 impl BexVm {
@@ -244,114 +213,37 @@ impl BexVm {
         }
     }
 
-    /// Landings of handlers running in the rethrowing frame whose slot still
-    /// holds the value. See `ErrorBook::lookup` for when a note counts.
-    fn rethrow_origin(&self, frame: Option<usize>, value: bex_vm_types::Value) -> RaiseOrigin {
-        let Some(frame) = frame else {
-            return RaiseOrigin::Unresolved {
-                reason: UnresolvedOrigin::NoLanding,
-                via: OriginVia::Rethrow,
-            };
+    /// The raise a rethrow continues, found by the `baml.errors.Context` it
+    /// carries: the landing whose context slot, in a live frame, still holds
+    /// that object. `None` when the unwinder did not carry a context, which
+    /// makes it a new throw.
+    fn rethrow_origin(&self, carried: Option<bex_vm_types::Value>) -> RaiseOrigin {
+        let unresolved = RaiseOrigin::Unresolved {
+            reason: UnresolvedOrigin::NoLanding,
+            via: OriginVia::Rethrow,
         };
-        let frames: Vec<HandlerFrame> = self.handler_frame(frame).into_iter().collect();
-        from_match(self.landing_origin(&frames, value), OriginVia::Rethrow)
-    }
-
-    /// A live bytecode frame's compiled handler tables and current PC: the
-    /// live PC for the innermost bytecode frame, the call site for the others,
-    /// as the unwinder uses them.
-    fn handler_frame(&self, idx: usize) -> Option<HandlerFrame> {
-        let Some(Frame::Bytecode(frame)) = self.frames.get(idx) else {
-            return None;
+        let Some(context) = carried else {
+            return unresolved;
         };
-        let innermost = self
-            .frames
-            .iter()
-            .rposition(|frame| matches!(frame, Frame::Bytecode(_)));
-        // SAFETY: the bytecode frame roots its function under the permit.
-        let function = unsafe { self.load_function(idx) }.ok()?;
-        Some(HandlerFrame {
-            depth: idx,
-            function: self.frame_telemetry_function(idx),
-            pc: if innermost == Some(idx) {
-                self.cur_pc
-            } else {
-                frame.faulting_pc
-            },
-            locals_offset: frame.locals_offset,
-            code: function.bytecode.compact.as_ref()?,
-        })
-    }
-
-    fn landing_origin(&self, frames: &[HandlerFrame], value: bex_vm_types::Value) -> LandingMatch {
         let Some(book) = self
             .telemetry
             .as_ref()
             .and_then(|telemetry| telemetry.error_book_ref())
         else {
-            return LandingMatch::Unresolved(UnresolvedOrigin::NoLanding);
+            return unresolved;
         };
-        let in_body: Vec<Box<dyn Fn(usize, usize) -> bool>> = frames
+        let live: Vec<(usize, Option<FunctionId>)> = self
+            .frames
             .iter()
-            .map(|frame| {
-                let code = frame.code;
-                Box::new(move |handler_pc, pc| in_handler_body(code, handler_pc, pc))
-                    as Box<dyn Fn(usize, usize) -> bool>
-            })
-            .collect();
-        let scopes: Vec<FrameScope<'_>> = frames
-            .iter()
-            .zip(&in_body)
-            .map(|(frame, in_body)| FrameScope {
-                depth: frame.depth,
-                function: frame.function,
-                active: Self::active_handlers(frame),
-                in_body: in_body.as_ref(),
-            })
+            .enumerate()
+            .filter(|(_, frame)| matches!(frame, Frame::Bytecode(_)))
+            .map(|(depth, _)| (depth, self.frame_telemetry_function(depth)))
             .collect();
         let stack = &self.stack.0;
-        book.lookup(&scopes, |slot| slot < stack.len() && stack[slot] == value)
-    }
-
-    /// Handlers whose body covers the frame's PC, with their error slots and
-    /// whether their body can store into those slots.
-    fn active_handlers(frame: &HandlerFrame) -> Vec<ActiveHandler> {
-        let mut handlers: Vec<usize> = frame
-            .code
-            .handler_context_table
-            .iter()
-            .filter(|entry| (entry.start_pc..entry.end_pc).contains(&frame.pc))
-            .map(|entry| entry.handler_pc)
-            .collect();
-        handlers.sort_unstable();
-        handlers.dedup();
-        handlers
-            .into_iter()
-            .map(|handler_pc| {
-                let mut locals: Vec<usize> = frame
-                    .code
-                    .exception_table
-                    .iter()
-                    .filter(|entry| entry.handler_pc == handler_pc)
-                    .map(|entry| entry.error_slot)
-                    .collect();
-                locals.sort_unstable();
-                locals.dedup();
-                let written = locals
-                    .iter()
-                    .any(|local| handler_writes_local(frame.code, handler_pc, *local));
-                ActiveHandler {
-                    handler_pc,
-                    error_slots: locals
-                        .iter()
-                        .map(|local| {
-                            Self::local_slot_stack_index(frame.locals_offset, *local).raw()
-                        })
-                        .collect(),
-                    slot_written: written,
-                }
-            })
-            .collect()
+        from_match(
+            book.lookup(&live, |slot| slot < stack.len() && stack[slot] == context),
+            OriginVia::Rethrow,
+        )
     }
 
     /// The failed future's recorded raise. The await leaves its operand on
@@ -428,8 +320,10 @@ impl BexVm {
         })
     }
 
-    /// Record the start of an unwind. `carried_context` is the throw context
-    /// the unwinder consumed or read for this raise: its trace becomes
+    /// Record the start of an unwind. `carried_context` is the
+    /// `baml.errors.Context` the error already carries (a caught error raised
+    /// again, one awaited from another task, or, when `converted`, a
+    /// conversion of the error a handler is handling): its trace becomes
     /// inherited evidence when the origin cannot be proven. `current` is the
     /// unwinder's frame and its already loaded function.
     ///
@@ -442,8 +336,8 @@ impl BexVm {
         thrown: &VmThrown,
         entry: RaiseEntry,
         current: Option<(usize, &'static Function)>,
-        carried_context: Option<&ThrowContext>,
-        consumed_preserved: bool,
+        carried_context: Option<bex_vm_types::Value>,
+        converted: bool,
     ) -> Option<UnwindEvidence> {
         if !self
             .telemetry
@@ -469,15 +363,13 @@ impl BexVm {
         };
         let kind = self.raise_kind(entry, raise_function, thrown);
         let origin = match kind {
-            RaiseKind::Rethrow | RaiseKind::PanicRethrow => {
-                self.rethrow_origin(raise_frame, thrown.value)
-            }
+            RaiseKind::Rethrow | RaiseKind::PanicRethrow => self.rethrow_origin(carried_context),
             RaiseKind::Await => self.await_origin(),
             // The converted value's source is only known by value. A catch
             // slot holding an equal value, even a running catch's, does not
             // show that the conversion read it, so the source's trace is kept
             // as inherited evidence and no origin is claimed.
-            _ if consumed_preserved => RaiseOrigin::Unresolved {
+            _ if converted => RaiseOrigin::Unresolved {
                 reason: UnresolvedOrigin::SourceNotRecorded,
                 via: OriginVia::Normalization,
             },
@@ -506,11 +398,14 @@ impl BexVm {
                 self.error_frames(raise_frame),
             )
         };
-        let inherited_trace: Option<&Arc<[StackFrame]>> = match origin {
+        // The trace the error already carries, read from its context only when
+        // this raise inherits it.
+        let inherited_trace: Option<Vec<StackFrame>> = match origin {
             RaiseOrigin::Fresh | RaiseOrigin::Proven { .. } => None,
-            _ => carried_context.map(|context| &context.trace),
+            _ => carried_context.and_then(|context| self.context_trace(context).ok()),
         };
         let inherited: Vec<InheritedFrame> = inherited_trace
+            .as_deref()
             .map(|trace| {
                 trace
                     .iter()
@@ -660,17 +555,24 @@ impl BexVm {
         }
     }
 
-    /// Unwinding stored the error in a handler's slot of frame `depth`, whose
-    /// function the unwinder loaded.
+    /// Unwinding landed the error in a handler of frame `depth`, whose
+    /// function the unwinder loaded, and stored its context in frame-local
+    /// `context_local` (absolute stack index `context_slot`).
     #[cold]
     pub(super) fn error_caught(
         &mut self,
         evidence: UnwindEvidence,
         depth: usize,
         function: &Function,
-        slot: usize,
+        context_local: usize,
+        context_slot: usize,
         handler_pc: usize,
     ) {
+        let trusted = function
+            .bytecode
+            .compact
+            .as_ref()
+            .is_some_and(|code| !writes_local(code, context_local));
         // The same ID a note lookup reads back with `frame_telemetry_function`.
         let handler_function = if evidence.on_path {
             function.telemetry_function_id
@@ -684,7 +586,8 @@ impl BexVm {
             depth,
             handler_function,
             handler_pc,
-            slot,
+            context_slot,
+            trusted,
             evidence.raise,
             evidence.origin,
         );

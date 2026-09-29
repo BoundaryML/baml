@@ -1178,7 +1178,7 @@ function _stream_events(
                     },
                 );
             };
-            out.push(ai.stream.TurnDone {  });
+            out.push(ai.stream.TurnDone {});
             null
         },
         _ => null,

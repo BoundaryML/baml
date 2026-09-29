@@ -463,3 +463,23 @@ test "an agent spec takes a scoped runtime type" {
     ).run(DynamicOutput@spec<Out>())
     assert.equal(reflect.class.get_field<string>(run.value, "name"), "Pixel")
 }
+
+// A written type argument resolves to the parameter the name denotes where
+// it is written — the scoped binding inside its block, the function's
+// parameter outside — by identity, not by which same-named parameter was
+// bound most recently.
+function written_args_under_a_shadow<T>(log: string[], t: reflect.Type) -> void {
+    {
+        type T = unreflect(t)
+        log.push(reflect.Type.of<T>().to_string())
+        log.push(reflect.Type.of<T[]>().to_string())
+    }
+    log.push(reflect.Type.of<T>().to_string())
+    log.push(reflect.Type.of<T[]>().to_string())
+}
+
+test "a written type argument names the parameter visible where it is written" {
+    let log: string[] = []
+    written_args_under_a_shadow<string>(log, reflect.Type.of<int>())
+    assert.equal(log, ["int", "int[]", "string", "string[]"])
+}

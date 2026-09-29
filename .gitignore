@@ -186,9 +186,11 @@ target/
 
 baml-graph/_site/
 
-# claude (shared project settings are checked in; everything else is per-user)
-.claude/*
-!.claude/settings.json
+# claude (shared project settings are checked in; everything else is per-user).
+# `**/` keeps nested `.claude/` directories ignored too: a pattern with a
+# slash in it otherwise matches only at the repository root.
+**/.claude/*
+!/.claude/settings.json
 rpi/
 
 # Riptide artifacts (cloud-synced)

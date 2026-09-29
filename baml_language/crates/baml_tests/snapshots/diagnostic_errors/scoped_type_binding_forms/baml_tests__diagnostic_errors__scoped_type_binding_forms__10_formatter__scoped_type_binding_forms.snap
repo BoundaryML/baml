@@ -28,12 +28,9 @@ function unknown_operand(x: unknown) -> bool {
     reflect.Type.of<T>() == reflect.Type.of<int>()
 }
 
-// An open operand is judged when its variable solves. BUG: it never does
-// here. The variable carries the literal `1` below and the operand contract
-// above, and a class whose bounds conflict is dropped without a report (the
-// same road that lets `ys: string[]` take an inferred `int`), so this
-// compiles clean and reaches the VM as an internal error. Expected: E0001
-// at `v`.
+// An open operand whose variable can never solve: it carries the literal
+// `1` and the operand contract, which no type meets, so the contract is
+// reported at `v` (E0001).
 function operand_solved_to_int() -> int {
     let v = ident(1);
     type T = unreflect(v)

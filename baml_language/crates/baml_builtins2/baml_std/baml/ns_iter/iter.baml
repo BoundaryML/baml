@@ -160,7 +160,7 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
         self,
         fn: (Self.Item) -> Iterable<Item = R, Error = E3> throws E2,
     ) -> Iterator<Item = R, Error = Self.Error | E2 | E3> throws never {
-        FlatMap<Self.Item, R, Self.Error, E2, E3> { source: self, func: fn, inner: Done {  } }
+        FlatMap<Self.Item, R, Self.Error, E2, E3> { source: self, func: fn, inner: Done {} }
     }
 
     /// Returns an iterator over every `n`th element, starting with the first.
@@ -209,7 +209,7 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
     /// A `baml.iter.Peekable` yielding exactly what `self` yields, plus a `peek`
     /// that reads the next element without consuming it.
     function peekable(self) -> Peekable<Self.Item, Self.Error> throws never {
-        Peekable<Self.Item, Self.Error> { source: self, buffer: Done {  }, has_buffer: false }
+        Peekable<Self.Item, Self.Error> { source: self, buffer: Done {}, has_buffer: false }
     }
 
     /// Returns an iterator over at most the first `n` elements.
@@ -541,7 +541,7 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
 function flatten<R, E, E3, I extends Iterable<Item = R, Error = E3>>(
     src: Iterator<Item = I, Error = E>,
 ) -> Iterator<Item = R, Error = E | E3> throws never {
-    Flatten<I, R, E, E3> { source: src, inner: Done {  } }
+    Flatten<I, R, E, E3> { source: src, inner: Done {} }
 }
 
 /// The iterator implementation for an array.
@@ -582,7 +582,7 @@ class ArrayIterator<T> {
             // T is itself nullable, a stored null element must be yielded, not
             // treated as the end of iteration.
             if (self.idx >= self.arr.length()) {
-                return Done {  };
+                return Done {};
             }
             // Index access yields the element at type `T` directly — in-bounds by
             // the check above. No `at()`-plus-match: gating every element on a
@@ -652,7 +652,7 @@ class Range {
                 self.i += self.step;
                 cur
             } else {
-                Done {  }
+                Done {}
             }
         }
     }
@@ -703,7 +703,7 @@ class Repeat<T> {
                 self.count -= 1;
                 self.value
             } else {
-                Done {  }
+                Done {}
             }
         }
     }
@@ -739,7 +739,7 @@ class Map<T, R, E, E2> {
 
         function next(self) -> R | Done throws E | E2 {
             match (self.source.next()) {
-                Done => Done {  },
+                Done => Done {},
                 let x: T => self.func(x),
             }
         }
@@ -774,7 +774,7 @@ class Filter<T, E, E2> {
             while (true) {
                 match (self.source.next()) {
                     Done => {
-                        return Done {  };
+                        return Done {};
                     },
                     let x: T => {
                         if (self.predicate(x)) {
@@ -783,7 +783,7 @@ class Filter<T, E, E2> {
                     },
                 }
             }
-            Done {  }
+            Done {}
         }
     }
 }
@@ -816,7 +816,7 @@ class FilterMap<T, R, E, E2> {
             while (true) {
                 match (self.source.next()) {
                     Done => {
-                        return Done {  };
+                        return Done {};
                     },
                     let x: T => {
                         match (self.func(x)) {
@@ -828,7 +828,7 @@ class FilterMap<T, R, E, E2> {
                     },
                 }
             }
-            Done {  }
+            Done {}
         }
     }
 }
@@ -868,7 +868,7 @@ class FlatMap<T, R, E, E2, E3> {
                     let cur: Iterator<Item = R, Error = E3> => {
                         match (cur.next()) {
                             Done => {
-                                self.inner = Done {  };
+                                self.inner = Done {};
                             },
                             let y: R => {
                                 return y;
@@ -878,7 +878,7 @@ class FlatMap<T, R, E, E2, E3> {
                     Done => {
                         match (self.source.next()) {
                             Done => {
-                                return Done {  };
+                                return Done {};
                             },
                             let x: T => {
                                 let it = self.func(x).iter();
@@ -888,7 +888,7 @@ class FlatMap<T, R, E, E2, E3> {
                     },
                 }
             }
-            Done {  }
+            Done {}
         }
     }
 }
@@ -924,7 +924,7 @@ class Flatten<I extends Iterable<Item = R, Error = E3>, R, E, E3> {
                     let cur: Iterator<Item = R, Error = E3> => {
                         match (cur.next()) {
                             Done => {
-                                self.inner = Done {  };
+                                self.inner = Done {};
                             },
                             let y: R => {
                                 return y;
@@ -934,7 +934,7 @@ class Flatten<I extends Iterable<Item = R, Error = E3>, R, E, E3> {
                     Done => {
                         match (self.source.next()) {
                             Done => {
-                                return Done {  };
+                                return Done {};
                             },
                             let x: I => {
                                 let it = x.iter();
@@ -944,7 +944,7 @@ class Flatten<I extends Iterable<Item = R, Error = E3>, R, E, E3> {
                     },
                 }
             }
-            Done {  }
+            Done {}
         }
     }
 }
@@ -1004,7 +1004,7 @@ class Peekable<T, E> {
         function next(self) -> T | Done throws E {
             if (self.has_buffer) {
                 let v = self.buffer;
-                self.buffer = Done {  };
+                self.buffer = Done {};
                 self.has_buffer = false;
                 return v;
             }
@@ -1049,7 +1049,7 @@ class StepBy<T, E> {
             for (let i = 0; i < self.n - 1; i += 1) {
                 match (self.source.next()) {
                     Done => {
-                        return Done {  };
+                        return Done {};
                     },
                     let x: T => {},
                 }
@@ -1128,7 +1128,7 @@ class Take<T, E> {
 
         function next(self) -> T | Done throws E {
             if (self.remaining <= 0) {
-                return Done {  };
+                return Done {};
             }
             // Spend a slot only once the source has actually yielded an item.
             // Decrementing first would lose a slot when `next` throws and the
@@ -1143,7 +1143,7 @@ class Take<T, E> {
                     return x;
                 },
             }
-            Done {  }
+            Done {}
         }
     }
 }
@@ -1183,7 +1183,7 @@ class Skip<T, E> {
                 match (self.source.next()) {
                     Done => {
                         self.remaining = 0;
-                        return Done {  };
+                        return Done {};
                     },
                     let x: T => {
                         self.remaining -= 1;
@@ -1224,7 +1224,7 @@ class TakeWhile<T, E, E2> {
 
         function next(self) -> T | Done throws E | E2 {
             if (self.done) {
-                return Done {  };
+                return Done {};
             }
             match (self.source.next()) {
                 Done => {
@@ -1237,7 +1237,7 @@ class TakeWhile<T, E, E2> {
                     self.done = true;
                 },
             }
-            Done {  }
+            Done {}
         }
     }
 }
@@ -1273,7 +1273,7 @@ class SkipWhile<T, E, E2> {
                 match (self.source.next()) {
                     Done => {
                         self.skipping = false;
-                        return Done {  };
+                        return Done {};
                     },
                     let x: T => {
                         if (!self.predicate(x)) {

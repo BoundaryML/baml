@@ -76,7 +76,7 @@ class ReadPipeLines {
 
         /// Wait for and return the next line, or `Done` at EOF.
         function next(self) -> string | root.iter.Done throws root.errors.Io {
-            let line: string | root.iter.Done = root.iter.Done {  };
+            let line: string | root.iter.Done = root.iter.Done {};
             let framing = true;
             while (framing) {
                 match (self._pending.index_of(10)) {

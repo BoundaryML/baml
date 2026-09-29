@@ -42,7 +42,7 @@ Mostly it behaves like JavaScript/TypeScript, with very similar syntax — but B
 - **`catch` for some, `catch_all` for all.** `expr catch (e) { baml.errors.ParseError => fallback }` handles a *specific* error; `expr catch_all (e) { _ => fallback }` is *exhaustive* — for a workflow top / entrypoint. Errors propagate implicitly; callers needn't re-declare. **Raise** with `throw baml.errors.InvalidArgument { message: "…" }` (error types are the builtin `baml.errors.*` classes — `InvalidArgument`/`ParseError`/`Io`/`Timeout`/…; `baml describe baml.errors`); annotate a fallible signature with `-> T throws ErrType`. Prefer a typed result **union** (`type R = Ok | Err`) over throwing for ordinary control flow.
 - **Interfaces = shared behavior + dynamic dispatch.** `interface I { function m(self) -> T }` (methods may have default bodies); a class opts in via `implements I { … }`; a value typed `I` (or `I[]`) dispatches to the implementor at runtime. Interfaces can also declare associated types and generic bounds. `baml describe interfaces`.
 - **Pattern matching.** `match (v) { … }` over values/types; arms are `pattern => expr` — literals, `let x: T` (bind + narrow), class destructure `T { f: let y }`, or-patterns `A | B`, guards `… if cond`, `_`; must be exhaustive. Also `v is T` → bool (narrows) and `if let x: T = v { … } else { … }`. `baml describe patterns`.
-- **Concurrency = green threads.** `spawn { … }` returns a `Future`; `await` collects it. Combine many with `baml.future.all` / `all_settled` / `race` / `any`. `all_settled` returns `Success<T>`, `Failure<E>`, or `Panicked` for each input; input cancellation is a `Panicked` outcome. Configure a spawn with a `with` clause: `spawn with baml.spawn.options(group = g, cancel = tok, detach = true) { … }` — `baml.spawn.TaskGroup.new(n)` caps concurrency (excess spawns queue FIFO), a `baml.spawn.CancelToken` cancels cooperatively. `baml describe spawn` / `baml describe baml.future`.
+- **Concurrency = green threads.** `spawn { … }` returns a `Future`; `await` collects it. Combine many with `baml.future.all` / `all_settled` / `race` / `any`. `all_settled` returns `Success<T>`, `Failure<E>`, or `Panicked` for each input; input cancellation is a `Panicked` outcome. Configure a spawn with a `with` clause: `spawn with limit, token { … }` — each value listed is a `baml.spawn.Modifier` that transforms the plan the spawn builds, left to right. `baml.spawn.Limit.new(n)` caps concurrency (excess spawns queue), a `baml.spawn.CancelToken` cancels cooperatively, `baml.spawn.Root.new()` detaches the task from its spawner's cancellation. `baml describe spawn` / `baml describe baml.future`.
 - **Resource safety — `defer`, `cleanup`, `catch (e, ctx)`.** `defer { … }` runs a block at scope exit, LIFO, on *every* path (return / throw / fall-through) — like Go. A class method named `function cleanup(self) -> void` is a **finalizer**: it runs at most once per instance whether you call it, `defer` it, or the GC reclaims it. `catch (e, ctx)` binds an **`ErrorContext`** alongside the error — an error thrown while handling another chains onto it, so `ctx.root_cause()` / `ctx.cause` walk back to the original failure and `ctx.to_string()` renders the whole chain (Python `__context__`-style). `while let PATTERN = expr { … }` loops until the pattern fails (e.g. draining a `T?`-returning `.pop()`).
 - **Call BAML from Python / TS.** Declare a `[generator.<name>]` in `baml.toml`, run `baml generate`, then import the typed `baml_sdk`. Install + usage: `baml describe python` / `baml describe typescript` / `baml describe baml_sdk`.
 - **Safe access over indexing.** Subscript panics on a missing index/key; use `.at(i)`/`.get(k)` (→ `T?`), reach through with `?.`, default with `??` (parenthesize: `(m.get(k) ?? 0) + 1`).
@@ -300,12 +300,12 @@ function concurrent_squares(xs: int[]) -> int {
     squares.reduce((a, b) -> { a + b }, 0)
 }
 
-// Configure a spawn with `with baml.spawn.options(...)`: a TaskGroup caps concurrency
-// (excess spawns queue), a CancelToken cancels cooperatively, detach reparents the task.
+// Each value after `with` is a `baml.spawn.Modifier`: a Limit caps concurrency (excess
+// spawns queue), a CancelToken cancels cooperatively, a Root detaches from the spawner.
 function rate_limited() -> int {
-    let g = baml.spawn.TaskGroup.new(2);
-    let a = spawn with baml.spawn.options(group = g) { 1 };
-    let b = spawn with baml.spawn.options(group = g) { 2 };
+    let g = baml.spawn.Limit.new(2);
+    let a = spawn with g { 1 };
+    let b = spawn with g { 2 };
     (await a) + (await b)
 }
 

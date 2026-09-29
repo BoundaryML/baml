@@ -872,9 +872,6 @@ impl BexEngine {
             Object::Future(_) => Err(EngineError::CannotConvert {
                 type_name: "future".to_string(),
             }),
-            Object::UnscheduledFuture(_) => Err(EngineError::CannotConvert {
-                type_name: "unscheduled_future".to_string(),
-            }),
             Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
             // Identity never crosses as *data* (BEP-066 H-4): no mint, digest
             // or pointer is serialized. It may cross as a rooted reference —
@@ -4092,7 +4089,6 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                 | Object::Class(_)
                 | Object::Enum(_)
                 | Object::Future(_)
-                | Object::UnscheduledFuture(_)
                 | Object::RustData(_)
                 | Object::Type(_) => None,
                 #[cfg(feature = "heap_debug")]

@@ -359,7 +359,11 @@ pub enum ThrowKind {
 pub struct VmThrown {
     pub value: Value,
     pub throw_kind: ThrowKind,
-    pub language_is_rethrow: bool,
+    /// The `baml.errors.Context` this error already has: a caught error raised
+    /// again, or one arriving from another task, travels with the context of
+    /// its original throw. `None` for a new failure, whose context the
+    /// unwinder builds at the throw site.
+    pub context: Option<Value>,
 }
 
 impl VmThrown {
@@ -368,16 +372,18 @@ impl VmThrown {
         Self {
             value,
             throw_kind: ThrowKind::Fresh,
-            language_is_rethrow: false,
+            context: None,
         }
     }
 
+    /// `value` raised again with the `baml.errors.Context` of its original
+    /// throw.
     #[must_use]
-    pub const fn rethrow(value: Value, language_is_rethrow: bool) -> Self {
+    pub const fn rethrow(value: Value, context: Value) -> Self {
         Self {
             value,
             throw_kind: ThrowKind::Rethrow,
-            language_is_rethrow,
+            context: Some(context),
         }
     }
 }
@@ -463,7 +469,6 @@ pub struct StackFrame {
     /// `<builtin>/…` for standard-library functions, empty for synthesized
     /// functions with no source at all.
     pub file_path: String,
-    pub function_span: baml_type::Span,
     pub error_line: usize,
 }
 

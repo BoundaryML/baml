@@ -18,11 +18,11 @@ pub mod heap_ptr;
 pub mod identity;
 pub mod indexable;
 pub mod lazy_biased_mutex;
+pub mod limit;
 pub mod link;
 pub mod relink;
 mod roots;
 pub mod runtime_compile;
-pub mod task_group;
 pub mod trace;
 pub mod type_head;
 pub mod types;
@@ -35,6 +35,7 @@ pub use heap_ptr::HeapPtr;
 pub use indexable::{
     GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
 };
+pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet};
 pub use link::LinkError;
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use runtime_compile::{
@@ -48,7 +49,6 @@ pub use runtime_compile::{
     RuntimeSessionStepKind, RuntimeSourceSpan, RuntimeTypeMount, SessionContract, SessionEvalLease,
     SessionVisibleKind, SessionVisibleSymbol,
 };
-pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};
 pub use type_head::TypeHead;
 
 // ── The runtime's instantiation of the `baml_type` family ────────────────────
@@ -164,8 +164,8 @@ pub use types::{
     GenericFunction, HostClosure, ImplCoherenceKey, Instance, InterfaceBound, LockedContainer,
     LockedReadGuard, LockedWriteGuard, MapContainer, MapReadGuard, MapWriteGuard, MediaValue,
     Object, ObjectType, PanicClass, Program, PromptAst, RetryPolicyMeta, SysOp, SysOpErrorCategory,
-    SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard,
-    UnscheduledFuture, Value, ValueKind, Variant, format_float, sys_op_for_path, type_tags,
+    SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard, Value,
+    ValueKind, Variant, format_float, sys_op_for_path, type_tags,
 };
 pub use unit::{
     CompilationUnit, ExportTable, GenericFnKey, InitTail, LocalRef, ProgramImplRuleFrag,

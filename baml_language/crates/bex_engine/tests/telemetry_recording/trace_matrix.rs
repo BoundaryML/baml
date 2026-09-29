@@ -1179,7 +1179,7 @@ fn trace_contract_end_to_end() {
             if mode == "medium" {
                 capture_flags(&program).await;
                 Box::pin(scalar_values(&program)).await;
-                arguments_and_graphs(&program).await;
+                Box::pin(arguments_and_graphs(&program)).await;
                 call_structure(&program).await;
                 callable_shapes(&program).await;
                 exceptional_completion(&program).await;

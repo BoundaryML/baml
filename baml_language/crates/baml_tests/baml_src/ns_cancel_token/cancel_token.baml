@@ -1,17 +1,17 @@
-// BEP-034 spawn options — `spawn ... with baml.spawn.options(cancel = tok)`.
+// A `CancelToken` as a spawn modifier — `spawn ... with tok` (BEP-040).
 //
 // Helpers are top-level functions (test-block locals hit the known
 // local-boxing VM bug; see ns_cancel_cascade/cancel_cascade.baml).
 //
-// Only deterministic, `await`-based assertions live here: a CancelToken fires
-// the spawn's effective token via an async watcher, so reading `f.state()`
-// immediately after `tok.cancel()` would race the watcher. `await` blocks
-// until the future settles, so its outcome is deterministic.
+// Only deterministic, `await`-based assertions live here: a cancelled task
+// settles its own future once it unwinds, so reading `f.state()` right after
+// `tok.cancel()` would race it. `await` blocks until the future settles, so
+// its outcome is deterministic.
 
 // Awaiting a token-cancelled spawn re-throws `Cancelled`, which is catchable.
 function await_token_cancelled_catches() -> int {
     let tok = baml.spawn.CancelToken.new();
-    let f = spawn with baml.spawn.options(cancel = tok) {
+    let f = spawn with tok {
         baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
         42
     };
@@ -27,7 +27,7 @@ test "await_token_cancelled_catches" {
 // not perturb the happy path.
 function uncancelled_token_completes() -> int {
     let tok = baml.spawn.CancelToken.new();
-    let f = spawn with baml.spawn.options(cancel = tok) { 42 };
+    let f = spawn with tok { 42 };
     await f
 }
 
@@ -49,14 +49,196 @@ test "token_is_cancelled_reflects_cancel" {
     assert.equal(token_is_cancelled_reflects_cancel(), [false, true])
 }
 
-// `detach = true` opts out of the parent cascade but must not break normal
-// completion (its survival/cascade-independence is verified by construction in
-// the engine: a detached spawn gets a fresh effective token).
-function detached_spawn_completes() -> int {
-    let f = spawn with baml.spawn.options(detach = true) { 42 };
+// `Root` takes the task out of the parent's cancellation cascade but must not
+// break normal completion (that it outlives a cancelled spawner is pinned in
+// `ns_spawn_plan`).
+function rooted_spawn_completes() -> int {
+    let f = spawn with baml.spawn.Root.new() { 42 };
     await f
 }
 
-test "detached_spawn_completes" {
-    assert.equal(detached_spawn_completes(), 42)
+test "rooted_spawn_completes" {
+    assert.equal(rooted_spawn_completes(), 42)
+}
+
+// `CancelToken.any` holds its inputs rather than forwarding them through a
+// task, so a composite reports an input's cancellation at once — no watcher
+// has to be scheduled first.
+function any_reports_an_input_at_once() -> bool[] {
+    let a = baml.spawn.CancelToken.new();
+    let b = baml.spawn.CancelToken.new();
+    let either = baml.spawn.CancelToken.any([a, b]);
+    let before = either.is_cancelled();
+    let _ = b.cancel();
+    [before, either.is_cancelled(), either.cancel() == 0]
+}
+
+test "any_reports_an_input_at_once" {
+    assert.equal(any_reports_an_input_at_once(), [false, true, true])
+}
+
+// Cancelling a composite never reaches its inputs.
+function any_cancel_is_one_way() -> bool[] {
+    let a = baml.spawn.CancelToken.new();
+    let either = baml.spawn.CancelToken.any([a]);
+    let _ = either.cancel();
+    [either.is_cancelled(), a.is_cancelled()]
+}
+
+test "any_cancel_is_one_way" {
+    assert.equal(any_cancel_is_one_way(), [true, false])
+}
+
+// A composite of a composite fires on the innermost input.
+function nested_any_fires_on_an_inner_input() -> bool {
+    let inner = baml.spawn.CancelToken.new();
+    let outer = baml.spawn.CancelToken.any([
+        baml.spawn.CancelToken.any([inner]),
+        baml.spawn.CancelToken.new(),
+    ]);
+    let _ = inner.cancel();
+    outer.is_cancelled()
+}
+
+test "nested_any_fires_on_an_inner_input" {
+    assert.is_true(nested_any_fires_on_an_inner_input())
+}
+
+// A spawn linked to a composite is cancelled by any input...
+function spawn_with_any_cancelled_by_an_input() -> int {
+    let a = baml.spawn.CancelToken.new();
+    let f = spawn with baml.spawn.CancelToken.any([baml.spawn.CancelToken.new(), a]) {
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+        42
+    };
+    let _ = a.cancel();
+    (await f) catch (e) { baml.panics.Cancelled => 0 }
+}
+
+test "spawn_with_any_cancelled_by_an_input" {
+    assert.equal(spawn_with_any_cancelled_by_an_input(), 0)
+}
+
+// ...and by the composite itself.
+function spawn_with_any_cancelled_by_the_composite() -> int {
+    let either = baml.spawn.CancelToken.any([baml.spawn.CancelToken.new()]);
+    let f = spawn with either {
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+        42
+    };
+    let _ = either.cancel();
+    (await f) catch (e) { baml.panics.Cancelled => 0 }
+}
+
+test "spawn_with_any_cancelled_by_the_composite" {
+    assert.equal(spawn_with_any_cancelled_by_the_composite(), 0)
+}
+
+// A token linked into a task cancels the tasks it spawned too, for as long as
+// they run, including after the task that linked it has finished.
+function linked_token_reaches_a_descendant() -> int {
+    let token = baml.spawn.CancelToken.new();
+    let children: baml.future.Future<int, baml.errors.Io>[] = [];
+    let parent = spawn with token {
+        children.push(spawn {
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+            7
+        });
+        0
+    };
+    await parent;
+    // Let the parent's task end, not only settle its future.
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+    let _ = token.cancel();
+    (await children[0]) catch (e) { baml.panics.Cancelled => -1 }
+}
+
+test "linked_token_reaches_a_descendant" {
+    assert.equal(linked_token_reaches_a_descendant(), -1)
+}
+
+// ...but not a `Root` one, which has no cancellation parent.
+function linked_token_skips_a_rooted_descendant() -> int {
+    let token = baml.spawn.CancelToken.new();
+    let children: baml.future.Future<int, baml.errors.Io>[] = [];
+    let parent = spawn with token {
+        children.push(spawn with baml.spawn.Root.new() {
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+            7
+        });
+        0
+    };
+    await parent;
+    let _ = token.cancel();
+    (await children[0]) catch (e) { baml.panics.Cancelled => -1 }
+}
+
+test "linked_token_skips_a_rooted_descendant" {
+    assert.equal(linked_token_skips_a_rooted_descendant(), 7)
+}
+
+// A task whose token has already fired never starts, whatever gates it: its
+// body never runs, not even up to a first checkpoint, so a body with none
+// cannot complete, and its `defer` never runs either. Its future settles
+// `Cancelled`.
+class StartLog {
+    steps: string[]
+}
+
+function never_starts_open() -> string {
+    let log = StartLog { steps: [] };
+    let token = baml.spawn.CancelToken.new();
+    let _ = token.cancel();
+    let f = spawn with token {
+        defer {
+            log.steps.push("defer");
+        }
+        log.steps.push("body");
+        1
+    };
+    let outcome = (await f) catch (e) { baml.panics.Cancelled => 0 };
+    `${outcome}:${log.steps.join(",")}`
+}
+
+test "an_already_cancelled_task_never_starts" {
+    assert.equal(never_starts_open(), "0:")
+}
+
+// A free slot admits the task at once, and it still never starts; the slot
+// goes to the next task.
+function never_starts_admitted() -> string {
+    let log = StartLog { steps: [] };
+    let limit = baml.spawn.Limit.new(1) catch (e) {
+        baml.errors.InvalidArgument => baml.sys.panic("positive")
+    };
+    let token = baml.spawn.CancelToken.new();
+    let _ = token.cancel();
+    let f = spawn with limit, token {
+        log.steps.push("body");
+        1
+    };
+    let outcome = (await f) catch (e) { baml.panics.Cancelled => 0 };
+    let next = spawn with limit { 2 };
+    `${outcome}:${log.steps.join(",")}:${await next}`
+}
+
+test "an_already_cancelled_task_never_starts_through_a_free_slot" {
+    assert.equal(never_starts_admitted(), "0::2")
+}
+
+// A `Root` task drops its spawner's cancellation, not the tokens it is given.
+function never_starts_rooted() -> string {
+    let log = StartLog { steps: [] };
+    let token = baml.spawn.CancelToken.new();
+    let _ = token.cancel();
+    let f = spawn with baml.spawn.Root.new(), token {
+        log.steps.push("body");
+        1
+    };
+    let outcome = (await f) catch (e) { baml.panics.Cancelled => 0 };
+    `${outcome}:${log.steps.join(",")}`
+}
+
+test "an_already_cancelled_rooted_task_never_starts" {
+    assert.equal(never_starts_rooted(), "0:")
 }

@@ -211,6 +211,7 @@ fn extract_scoped(
                 Item::ImplementsFor(impl_def) => {
                     extract_from_implements_for(
                         impl_def,
+                        &items,
                         &namespace_prefix,
                         &cst_root,
                         &path,
@@ -367,10 +368,7 @@ fn extract_from_class(
                 .split_once('.')
                 .map_or("", |(_, namespaces)| namespaces)
                 .to_string(),
-            // Mirrors `extract_class_fields`: dedicated-variant types and
-            // field-less (opaque/marker) classes get no `view::` struct.
-            instance_backed: !matches!(class_name, "Array" | "Map" | "String" | "Uint8Array")
-                && !class_def.fields.is_empty(),
+            instance_backed: class_is_instance_backed(class_def),
             class_generics: class_generics.clone(),
             receiver_type,
         });
@@ -422,10 +420,23 @@ fn extract_from_class(
     }
 }
 
+/// Whether `class_def`'s values are `Object::Instance`s with a generated `view::`
+/// struct. Classes that keep dedicated `Object` variants (Array, Map, String,
+/// `Uint8Array`) are not, and neither are field-less classes (pure namespace
+/// markers, method-only and opaque classes). The ONE rule behind
+/// [`extract_class_fields`] and every receiver built for the class, so a
+/// receiver can never promise a view struct that was not generated.
+fn class_is_instance_backed(class_def: &ClassDef) -> bool {
+    !matches!(
+        class_def.name.as_str(),
+        "Array" | "Map" | "String" | "Uint8Array"
+    ) && !class_def.fields.is_empty()
+}
+
 /// Extract field definitions from a class, producing a `NativeClassDef`.
 ///
-/// Returns `None` for classes that keep dedicated `Object` variants (Array, Map, String, `Uint8Array`)
-/// since they don't use `Object::Instance`.
+/// Returns `None` for classes that are not instance-backed
+/// ([`class_is_instance_backed`]).
 fn extract_class_fields(
     class_def: &ClassDef,
     namespace_prefix: &str,
@@ -433,14 +444,7 @@ fn extract_class_fields(
 ) -> Option<NativeClassDef> {
     let class_name = class_def.name.as_str();
 
-    // Skip classes with dedicated Object variants — they are not Instance-based.
-    match class_name {
-        "Array" | "Map" | "String" | "Uint8Array" => return None,
-        _ => {}
-    }
-
-    // Skip classes with no fields (pure namespace markers or method-only classes).
-    if class_def.fields.is_empty() {
+    if !class_is_instance_backed(class_def) {
         return None;
     }
 
@@ -573,21 +577,40 @@ fn extract_from_free_function(
 /// `get_native_fn` resolves the function the VM looks up.
 ///
 /// The receiver (`self`) and any `Self`-typed parameters are mapped to the
-/// `for` target's primitive class so the existing receiver/argument extraction
-/// machinery applies (`int` → `i64`, `bigint` → `Arc<BigInt>`, etc.). Only
-/// blocks implemented for a built-in primitive or container are native-backed;
-/// blocks for user-defined types compile as ordinary bytecode and are skipped.
+/// `for` target's receiver class so the existing receiver/argument extraction
+/// machinery applies (`int` → `i64`, `bigint` → `Arc<BigInt>`, a class → its
+/// instance, etc.). A native method's block must be implemented for a built-in
+/// primitive or container, or for a class declared in the same file
+/// ([`ImplReceiver`]); a block whose methods are all ordinary bytecode needs no
+/// receiver and is skipped whatever its target.
 fn extract_from_implements_for(
     impl_def: &ImplementsForDef,
+    items: &[Item],
     namespace_prefix: &str,
     cst_root: &SyntaxNode,
     source_file: &str,
     vm_builtins: &mut Vec<NativeBuiltin>,
     io_builtins: &mut Vec<NativeBuiltin>,
 ) {
-    let Some(recv_class) = receiver_class_for_target(&impl_def.for_target) else {
+    if impl_def
+        .methods
+        .iter()
+        .all(|method| extract_builtin_pipeline(method).is_none())
+    {
         return;
-    };
+    }
+    // A native method with no receiver the codegen can extract would register
+    // nothing, and the VM would fail to resolve it at the first call. Reject
+    // it here instead.
+    let impl_receiver =
+        ImplReceiver::for_target(&impl_def.for_target, items).unwrap_or_else(|| {
+            panic!(
+                "baml codegen error: {source_file}: `implement {} for {}` has a native method, \
+             but its `for` target is neither a built-in primitive/container nor a class \
+             declared in the same file",
+                impl_def.interface_target, impl_def.for_target
+            )
+        });
 
     // The synthetic class segment must match MIR's `{iface}$for${for}` exactly.
     let synthetic_class = format!("{}$for${}", impl_def.interface_target, impl_def.for_target);
@@ -602,11 +625,12 @@ fn extract_from_implements_for(
     let self_baml = type_expr_to_baml_type(&impl_def.for_target, &impl_generics);
 
     // Container element comparison reads heap values, so it needs a `&BexVm`;
-    // scalar comparisons operate on `Copy`/`Arc` receivers and need no VM. A
-    // method-level `//baml:vm` / `//baml:mut_vm` directive overrides this default.
-    let default_vm_usage = match recv_class {
-        "Array" | "Map" => VmUsage::Ref,
-        _ => VmUsage::None,
+    // scalar comparisons operate on `Copy`/`Arc` receivers and need no VM, and a
+    // class method says what it needs. A method-level `//baml:vm` /
+    // `//baml:mut_vm` directive overrides this default.
+    let default_vm_usage = match impl_receiver {
+        ImplReceiver::Builtin("Array" | "Map") => VmUsage::Ref,
+        ImplReceiver::Builtin(_) | ImplReceiver::Class(_) => VmUsage::None,
     };
 
     for method in &impl_def.methods {
@@ -664,14 +688,14 @@ fn extract_from_implements_for(
         };
 
         let receiver = Some(Receiver {
-            class_name: recv_class.to_string(),
+            class_name: impl_receiver.class_name().to_string(),
             // The prefix's first segment is the PACKAGE (`baml.media`,
             // `reflect.array`); the receiver namespace is everything after it.
             namespace: namespace_prefix
                 .split_once('.')
                 .map_or("", |(_, namespaces)| namespaces)
                 .to_string(),
-            instance_backed: false,
+            instance_backed: impl_receiver.is_instance_backed(),
             class_generics: impl_generics.clone(),
             receiver_type: ReceiverType::RefSelf,
         });
@@ -721,22 +745,61 @@ fn extract_from_implements_for(
     }
 }
 
-/// Map a `for` target type expression to the receiver class name whose
-/// extraction logic the codegen already knows. Returns `None` for targets that
-/// are not native-backed primitives/containers.
-fn receiver_class_for_target(ty: &TypeExpr) -> Option<&'static str> {
-    Some(match &ty.kind {
-        TypeExprKind::Int => "Int",
-        TypeExprKind::Bigint => "Bigint",
-        TypeExprKind::Float => "Float",
-        TypeExprKind::Bool => "Bool",
-        TypeExprKind::Null => "Null",
-        TypeExprKind::String => "String",
-        TypeExprKind::Uint8Array => "Uint8Array",
-        TypeExprKind::List { .. } => "Array",
-        TypeExprKind::Map { .. } => "Map",
-        _ => return None,
-    })
+/// What `self` is in an `implement ... for <target>` block's native methods:
+/// the receiver the codegen generates extraction for.
+#[derive(Clone, Copy)]
+enum ImplReceiver<'a> {
+    /// A built-in primitive or container, by the receiver class name whose
+    /// extraction logic the codegen already knows.
+    Builtin(&'static str),
+    /// A class declared in the same file as the block, so its receiver is the
+    /// one [`extract_from_class`] builds for the class's own methods.
+    Class(&'a ClassDef),
+}
+
+impl<'a> ImplReceiver<'a> {
+    /// The receiver for a `for` target type expression, or `None` when the
+    /// target is neither a primitive/container nor a class among `items` (the
+    /// items of the block's own file).
+    fn for_target(ty: &TypeExpr, items: &'a [Item]) -> Option<Self> {
+        Some(match &ty.kind {
+            TypeExprKind::Int => Self::Builtin("Int"),
+            TypeExprKind::Bigint => Self::Builtin("Bigint"),
+            TypeExprKind::Float => Self::Builtin("Float"),
+            TypeExprKind::Bool => Self::Builtin("Bool"),
+            TypeExprKind::Null => Self::Builtin("Null"),
+            TypeExprKind::String => Self::Builtin("String"),
+            TypeExprKind::Uint8Array => Self::Builtin("Uint8Array"),
+            TypeExprKind::List { .. } => Self::Builtin("Array"),
+            TypeExprKind::Map { .. } => Self::Builtin("Map"),
+            TypeExprKind::Path { segments, .. } => {
+                let [name] = segments.as_slice() else {
+                    return None;
+                };
+                return items.iter().find_map(|item| match item {
+                    Item::Class(class_def) if class_def.name == *name => {
+                        Some(Self::Class(class_def))
+                    }
+                    _ => None,
+                });
+            }
+            _ => return None,
+        })
+    }
+
+    fn class_name(self) -> &'a str {
+        match self {
+            Self::Builtin(name) => name,
+            Self::Class(class_def) => class_def.name.as_str(),
+        }
+    }
+
+    fn is_instance_backed(self) -> bool {
+        match self {
+            Self::Builtin(_) => false,
+            Self::Class(class_def) => class_is_instance_backed(class_def),
+        }
+    }
 }
 
 /// Like [`type_expr_to_baml_type`] but resolves a `Self` path to `self_baml`
@@ -1410,6 +1473,90 @@ mod tests {
             .find(|b| b.path == "baml.String.split")
             .expect("missing String.split");
         assert_eq!(string_split.vm_usage, VmUsage::None);
+    }
+
+    /// A native method in an `implements ... for <Class>` block is extracted
+    /// under the `{iface}$for${Class}` key MIR mints for it, with the class as
+    /// its receiver — instance-backed exactly when the class's own methods are.
+    /// (No stdlib file has one today, so the block is written here.)
+    #[test]
+    fn impl_block_natives_extract_for_a_class_target() {
+        let source = r#"
+interface Modifier<T, E> {
+    function apply(self, value: T) -> T throws E;
+}
+
+class Limit {
+    _handle: $rust_type,
+}
+
+class Root {}
+
+implements<T, E> Modifier<T, E> for Limit {
+    //baml:mut_vm
+    //baml:fallible
+    function apply(self, value: T) -> T throws E {
+        $rust_function
+    }
+}
+
+implements<T, E> Modifier<T, E> for Root {
+    function apply(self, value: T) -> T throws E {
+        $rust_function
+    }
+}
+"#;
+        let tokens = baml_compiler_lexer::lex_lossless(source, FileId::new(0));
+        let (green, errors) = baml_compiler_parser::parse_file(&tokens);
+        assert!(errors.is_empty(), "the source parses");
+        let cst_root = SyntaxNode::new_root(green);
+        let (items, diags, _) = baml_compiler2_ast::lower_file(&cst_root);
+        assert!(diags.is_empty(), "the source lowers");
+
+        let mut vm_builtins = Vec::new();
+        let mut io_builtins = Vec::new();
+        for item in &items {
+            if let Item::ImplementsFor(impl_def) = item {
+                extract_from_implements_for(
+                    impl_def,
+                    &items,
+                    "test",
+                    &cst_root,
+                    "test.baml",
+                    &mut vm_builtins,
+                    &mut io_builtins,
+                );
+            }
+        }
+        assert!(io_builtins.is_empty());
+        let apply_for = |class: &str| {
+            let path = format!("test.Modifier<T, E>$for${class}.apply");
+            vm_builtins
+                .iter()
+                .find(|b| b.path == path)
+                .unwrap_or_else(|| panic!("missing {path}"))
+        };
+
+        let limit = apply_for("Limit");
+        assert_eq!(
+            limit.class_segment.as_deref(),
+            Some("Modifier<T, E>$for$Limit")
+        );
+        assert_eq!(limit.generics, vec!["T", "E"]);
+        assert_eq!(limit.vm_usage, VmUsage::MutRef);
+        assert!(limit.fallible);
+        let receiver = limit
+            .receiver
+            .as_ref()
+            .expect("impl methods have a receiver");
+        assert_eq!(receiver.class_name, "Limit");
+        assert!(receiver.instance_backed, "`Limit` has a `_handle` field");
+
+        // `Root` declares no fields, so it gets no `view::` struct — from an
+        // impl block just as from the class's own methods.
+        let root = apply_for("Root").receiver.as_ref().unwrap();
+        assert_eq!(root.class_name, "Root");
+        assert!(!root.instance_backed);
     }
 
     #[test]

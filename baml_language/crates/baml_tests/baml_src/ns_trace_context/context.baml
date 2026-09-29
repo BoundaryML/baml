@@ -109,3 +109,28 @@ test "null identity inherits and repeated patches replace or remove metadata key
     assert.equal(read($trace = options).metadata.length(), 0);
     assert.equal(read($trace = options).distinct_id, "parent");
 }
+
+class TraceContextModifier {}
+
+implements<T, E> baml.spawn.Modifier<T, E> for TraceContextModifier {
+    function apply(self, plan: baml.spawn.Plan<T, E>) -> baml.spawn.Plan<T, E> throws never {
+        trace.update_context(metadata = { "phase": "modifier" });
+        plan
+    }
+}
+
+test "spawn modifier calls do not leak their local context into the launched task" {
+    trace.update_context(metadata = { "phase": "parent" });
+    let modifier = TraceContextModifier {};
+    let child = spawn with modifier { trace.current_context() };
+    assert.equal((await child).metadata["phase"], "parent");
+    assert.equal(trace.current_context().metadata["phase"], "parent");
+}
+
+test "rooted spawns retain context even though their cancellation parent changes" {
+    trace.update_context(metadata = { "version": 1 });
+    let child = spawn with baml.spawn.Root.new() { trace.current_context() };
+    trace.update_context(metadata = { "version": 2 });
+    assert.equal((await child).metadata["version"], 1);
+    assert.equal(trace.current_context().metadata["version"], 2);
+}

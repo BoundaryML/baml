@@ -1904,7 +1904,6 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::VoidUsedAsValue => DiagnosticId::TypeMismatch,
         TirTypeError::VoidFunctionResultUsed => DiagnosticId::TypeMismatch,
         TirTypeError::TraceOpaqueValue => DiagnosticId::TypeMismatch,
-        TirTypeError::SpawnWithNotATransformer { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::NotCallable { .. } => DiagnosticId::NotCallable,
         TirTypeError::NotIterable { .. } => DiagnosticId::NotCallable,
         TirTypeError::NotIndexable { .. } => DiagnosticId::NotIndexable,
@@ -1960,6 +1959,8 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::GenericFunctionValueNotSpecialized { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::WrongTypeArgArity { .. } => DiagnosticId::ArgumentCountMismatch,
         TirTypeError::ScopedTypeEscapesBlock { .. } => DiagnosticId::ScopedTypeEscapesBlock,
+        TirTypeError::CannotConstructOpaqueClass { .. } => DiagnosticId::CannotConstructOpaqueClass,
+        TirTypeError::CallSiteBuiltinValue { .. } => DiagnosticId::CallSiteBuiltinValue,
         // Optional chaining diagnostics
         TirTypeError::UnnecessaryOptionalChaining { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::UnnecessaryNullCoalesce { .. } => DiagnosticId::InvalidOperator,
@@ -2000,6 +2001,7 @@ fn tir_type_error_to_diagnostic_id(
         // A `_` placeholder in a non-inferable position.
         TirTypeError::CannotInferType => DiagnosticId::WildcardTypeNotAllowed,
         TirTypeError::TypeMustBeKnown { .. } => DiagnosticId::TypeMustBeKnown,
+        TirTypeError::AmbiguousImplementation { .. } => DiagnosticId::TypeMustBeKnown,
         // Generic-parameter / associated-type declaration hygiene.
         TirTypeError::TypeParamShadowedImplParam { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::DuplicateGenericParam { .. }

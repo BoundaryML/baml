@@ -415,9 +415,12 @@ fn install_unhandled_spawn_error_handler(runtime: &Arc<dyn Bex>) {
 #[cfg(target_arch = "wasm32")]
 fn install_unhandled_spawn_error_handler(_: &Arc<dyn Bex>) {}
 
-pub async fn shutdown_runtime() -> Result<(), BridgeError> {
+/// Shut down the process-wide runtime, if one is installed. `grace` bounds
+/// the wait for its in-flight calls and spawned work (`None` waits for as long
+/// as they take).
+pub async fn shutdown_runtime(grace: Option<std::time::Duration>) -> Result<(), BridgeError> {
     if let Some(runtime) = platform::take_runtime()? {
-        runtime.shutdown().await;
+        runtime.shutdown(grace).await;
     }
     Ok(())
 }

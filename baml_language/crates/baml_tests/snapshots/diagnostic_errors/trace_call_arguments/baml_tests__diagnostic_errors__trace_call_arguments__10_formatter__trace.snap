@@ -34,15 +34,15 @@ function OptionalNativeTrace() -> trace.SpanId? {
 }
 
 function ConstructOptions() -> trace.Options {
-    trace.Options {  }
+    trace.Options {}
 }
 
 function ConstructReservation() -> trace.ReservedSpan {
-    trace.ReservedSpan {  }
+    trace.ReservedSpan {}
 }
 
 function ConstructIdentity() -> trace.SpanId {
-    trace.SpanId {  }
+    trace.SpanId {}
 }
 
 function ReadOpaqueField(options: trace.Options) -> unknown {

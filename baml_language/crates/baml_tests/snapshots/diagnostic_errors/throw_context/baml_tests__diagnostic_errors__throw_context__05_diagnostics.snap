@@ -40,7 +40,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0155
 
   × type annotations needed
-  │ full type: `unknown[]`
+  │ full type: `!error[]`
     ╭─[throw_context.baml:10:11]
  10 │     throw [];
     ·           ──
@@ -49,7 +49,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0155
 
   × type annotations needed
-  │ full type: `unknown[]`
+  │ full type: `!error[]`
     ╭─[throw_context.baml:14:11]
  14 │     throw [];
     ·           ──
@@ -58,7 +58,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0155
 
   × type annotations needed
-  │ full type: `unknown[]`
+  │ full type: `!error[]`
     ╭─[throw_context.baml:18:11]
  18 │     throw [];
     ·           ──
@@ -67,7 +67,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0155
 
   × type annotations needed
-  │ full type: `unknown[]`
+  │ full type: `!error[]`
     ╭─[throw_context.baml:22:13]
  22 │     { throw []; } catch (e) {
     ·             ──
@@ -76,7 +76,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0155
 
   × type annotations needed
-  │ full type: `unknown[]`
+  │ full type: `!error[]`
     ╭─[throw_context.baml:28:27]
  28 │     let f = () -> { throw []; };
     ·                           ──

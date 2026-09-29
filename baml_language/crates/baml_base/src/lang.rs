@@ -29,6 +29,30 @@ pub enum LangPackage {
     Trace,
 }
 
+/// The package roots the COMPILER itself spells in the paths its desugars
+/// emit, and which a binding in a body therefore may not shadow.
+///
+/// A desugar lowers to source-level paths (`spawn { .. }` becomes
+/// `baml.spawn.Plan.new(..)`, `env.X` becomes `baml.env.ref(..)`), and those
+/// paths resolve in the user's own scope: a local named `baml`, or a body
+/// `type baml = ..` binding, wins over the package, and every `spawn` in its
+/// scope fails. Items do NOT shadow a package root this way, so a user class
+/// or function may still be named `baml` - only a binding is reserved.
+///
+/// Deliberately not every language package: `#4543` ruled that a language
+/// root is an ordinary package a user name shadows like any other (a local
+/// named `reflect` is legal and tested). Only the roots the compiler emits
+/// are reserved, which is why this list is here rather than being derived
+/// from [`LangPackage::ALL`].
+pub const DESUGAR_PATH_ROOTS: &[&str] = &[LangPackage::Baml.manifest_name()];
+
+/// Whether a binding named `name` is refused (E0176): it would shadow one of
+/// [`DESUGAR_PATH_ROOTS`]. The one rule behind both the report, at every
+/// binding declaration, and the checker's treatment of a refused binding.
+pub fn is_reserved_binding_name(name: &str) -> bool {
+    DESUGAR_PATH_ROOTS.contains(&name)
+}
+
 impl LangPackage {
     pub const ALL: [Self; 5] = [Self::Baml, Self::Reflect, Self::Ai, Self::Log, Self::Trace];
 

@@ -1220,7 +1220,7 @@ function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[
                         null
                     },
                     "message_stop" => {
-                        out.push(ai.stream.TurnDone {  });
+                        out.push(ai.stream.TurnDone {});
                         null
                     },
                     // content_block_stop and ping carry nothing to fold.

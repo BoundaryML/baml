@@ -75,8 +75,18 @@ async fn conversion_errors_and_terminal_outcomes_finalize() {
             false,
             InvocationOutcome::Errored,
         ),
+        // A body with no checkpoint left runs to completion even once its
+        // token has fired, and its value stands.
         (
             "function Main() -> int { 1 }",
+            RuntimeTy::int(),
+            None,
+            true,
+            InvocationOutcome::Ok,
+        ),
+        // The first checkpoint after the token fires delivers `Cancelled`.
+        (
+            "function Main() -> int { baml.sys.sleep(baml.time.Duration.from_milliseconds(1)); 1 }",
             RuntimeTy::int(),
             None,
             true,
@@ -95,21 +105,13 @@ async fn conversion_errors_and_terminal_outcomes_finalize() {
         let cancel = CancellationToken::new();
         let thread = entry(&engine, &cancel, &[]).await;
         let id = thread.vm.thread_id;
-        // Set cancellation after entry so the loop's cancel-wins path, not
+        // Set cancellation after entry so the loop's delivery, not
         // call_function's preflight cancellation check, owns completion.
         if cancelled {
             cancel.cancel();
         }
         let result = engine
-            .run_thread_event_loop(
-                return_type,
-                throws_type,
-                thread,
-                CallId::next(),
-                None,
-                &cancel,
-                true,
-            )
+            .run_thread_event_loop(return_type, throws_type, thread, CallId::next(), None, true)
             .await;
         if source.contains("baml.sys.exit") {
             assert!(matches!(result, Err(EngineError::Exit { code: 7 })));
@@ -157,15 +159,7 @@ async fn ready_and_suspended_sysop_failures_finalize() {
         let thread = entry(&engine, &cancel, &[]).await;
         let id = thread.vm.thread_id;
         let result = engine
-            .run_thread_event_loop(
-                RuntimeTy::int(),
-                None,
-                thread,
-                CallId::next(),
-                None,
-                &cancel,
-                true,
-            )
+            .run_thread_event_loop(RuntimeTy::int(), None, thread, CallId::next(), None, true)
             .await;
         assert!(result.is_err());
         assert_completed(&engine, &[(id, InvocationOutcome::Errored)]);
@@ -195,15 +189,7 @@ async fn await_lookup_failure_finalizes() {
             .set_entry_point(*function, &[Value::object(future)]);
         let id = thread.vm.thread_id;
         let result = engine
-            .run_thread_event_loop(
-                RuntimeTy::int(),
-                None,
-                thread,
-                CallId::next(),
-                None,
-                &cancel,
-                true,
-            )
+            .run_thread_event_loop(RuntimeTy::int(), None, thread, CallId::next(), None, true)
             .await;
         assert!(matches!(result, Err(EngineError::FutureNotFound { .. })));
         assert_completed(&engine, &[(id, InvocationOutcome::Errored)]);
@@ -237,7 +223,6 @@ async fn suspended_await_failure_and_cancellation_finalize() {
                 thread,
                 CallId::next(),
                 None,
-                &cancel,
                 true,
             );
             tokio::pin!(running);
@@ -336,10 +321,11 @@ async fn queued_and_running_child_cancellation_finish_once() {
         (
             false,
             r#"function Main() -> int {
-            let g = baml.spawn.TaskGroup.new(1);
-            let active = spawn with baml.spawn.options(group = g) { 7 };
-            let queued = spawn with baml.spawn.options(group = g) { 99 };
-            g.cancel(active = false);
+            let g = baml.spawn.Limit.new(1);
+            let token = baml.spawn.CancelToken.new();
+            let active = spawn with g { 7 };
+            let queued = spawn with g, token { 99 };
+            token.cancel();
             let a = await active;
             let b = (await queued) catch (e) { baml.panics.Cancelled => 0 };
             a + b
@@ -354,6 +340,7 @@ async fn queued_and_running_child_cancellation_finish_once() {
                 99
             };
             let a = await active;
+            cancelled.cancel();
             let b = (await cancelled) catch (e) { baml.panics.Cancelled => 0 };
             a + b
         }"#,
@@ -361,13 +348,11 @@ async fn queued_and_running_child_cancellation_finish_once() {
     ] {
         let (started_tx, mut started_rx) = tokio::sync::mpsc::unbounded_channel();
         let mut ops = sys_native::SysOps::native();
-        ops.baml_sys_sleep = Arc::new(move |_, _, _, ctx, _| {
+        ops.baml_sys_sleep = Arc::new(move |_, _, _, _, _| {
             let started_tx = started_tx.clone();
-            let cancel = ctx.cancel.clone();
             SysOpResult::Async(Box::pin(async move {
                 // Report only after this child's sys-op future is polled.
-                // The test cancels this child, leaving its parent uncancelled.
-                started_tx.send(cancel).unwrap();
+                started_tx.send(()).unwrap();
                 std::future::pending().await
             }))
         });
@@ -379,23 +364,25 @@ async fn queued_and_running_child_cancellation_finish_once() {
             )
             .unwrap(),
         );
-        let running = engine.call_function(
-            "Main",
-            vec![],
-            FunctionCallContextBuilder::new(CallId::next()).build(),
-            true,
-        );
-        tokio::pin!(running);
-        if running_child {
-            tokio::select! {
-                token = tokio::time::timeout(std::time::Duration::from_secs(10), started_rx.recv()) => {
-                    token.expect("child must reach its sys-op").unwrap().cancel();
-                }
-                result = &mut running => panic!("call finished before child cancellation: {result:?}"),
-            }
-        }
-        let result = running.await.unwrap();
+        // `Main` cancels the child through its future, leaving itself
+        // uncancelled. On this current-thread runtime both children run
+        // before `Main` resumes from its first `await`, so the running child
+        // is parked in its sys-op by then.
+        let result = engine
+            .call_function(
+                "Main",
+                vec![],
+                FunctionCallContextBuilder::new(CallId::next()).build(),
+                true,
+            )
+            .await
+            .unwrap();
         assert_eq!(result, BexExternalValue::Int(7));
+        assert_eq!(
+            started_rx.try_recv().is_ok(),
+            running_child,
+            "only the running child reaches its sys-op before it is cancelled"
+        );
         assert_completed(
             &engine,
             &[
@@ -423,15 +410,7 @@ async fn child_internal_error_settles_and_finishes_both_threads() {
     // inside a dispatched child and propagation through its parent's await.
     let thread = entry(&engine, &cancel, &[Value::int(7)]).await;
     let result = engine
-        .run_thread_event_loop(
-            RuntimeTy::int(),
-            None,
-            thread,
-            CallId::next(),
-            None,
-            &cancel,
-            true,
-        )
+        .run_thread_event_loop(RuntimeTy::int(), None, thread, CallId::next(), None, true)
         .await;
     assert!(result.is_err());
     assert_completed(
@@ -465,15 +444,7 @@ async fn clock_restore_invalidates_inflight_timing_without_changing_execution() 
     assert_eq!(old.status(), TimingStatus::Restored);
     assert_ne!(replacement.metadata().epoch, old.metadata().epoch);
     let result = engine
-        .run_thread_event_loop(
-            RuntimeTy::int(),
-            None,
-            thread,
-            CallId::next(),
-            None,
-            &cancel,
-            true,
-        )
+        .run_thread_event_loop(RuntimeTy::int(), None, thread, CallId::next(), None, true)
         .await;
     assert!(matches!(
         result,

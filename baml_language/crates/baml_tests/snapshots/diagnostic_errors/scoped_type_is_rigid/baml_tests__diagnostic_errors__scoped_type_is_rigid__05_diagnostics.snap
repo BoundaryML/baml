@@ -4,11 +4,10 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
 
-  × mismatched types
+  × type `T` does not implement interface `Named`
     ╭─[scoped_type_is_rigid.baml:29:5]
  29 │     needs_bound<T>()
-    ·     ────────┬───────
-    ·             ╰── expected `Named`, found `T`
+    ·     ────────────────
     ╰────
 
   [type] E0001

@@ -888,3 +888,77 @@ test "test_bigint_map_entry_addition" {
     values["remaining"] += 6n;
     assert.equal(values["remaining"], 21n)
 }
+
+// ─── generic binop path (specialization declined) ─────────────────────────────
+//
+// Emit normally routes bigint arithmetic to the specialized `*Bigint` opcodes.
+// An operand read from a cell a spawned closure shares makes it decline (the
+// #3583 race guard) and fall back to the generic `bin_op`, which used to fail
+// at runtime because the generic handler had no bigint arm (BAMLGH-79); these
+// pin every operator on that path, plus `<` which always worked and is the
+// control.
+
+function bigint_spawn_captured_add(n: bigint) -> bigint { let p = spawn { n + 1n }; await p }
+function bigint_spawn_captured_sub(n: bigint) -> bigint { let p = spawn { n - 1n }; await p }
+function bigint_spawn_captured_mul(n: bigint) -> bigint { let p = spawn { n * 2n }; await p }
+function bigint_spawn_captured_div(n: bigint) -> bigint { let p = spawn { n / 2n }; await p }
+function bigint_spawn_captured_mod(n: bigint) -> bigint { let p = spawn { n % 3n }; await p }
+function bigint_spawn_captured_shl(n: bigint) -> bigint { let p = spawn { n << 2n }; await p }
+function bigint_spawn_captured_bitand(n: bigint) -> bigint { let p = spawn { n & 6n }; await p }
+function bigint_spawn_captured_mixed_int(n: bigint) -> bigint { let p = spawn { n + 1 }; await p }
+function bigint_spawn_captured_mixed_int_left(n: bigint) -> bigint { let p = spawn { 1 + n }; await p }
+function bigint_spawn_captured_lt(n: bigint) -> bool { let p = spawn { n < 20n }; await p }
+
+test "bigint_generic_path_spawn_captured_add" {
+    assert.equal(bigint_spawn_captured_add(10n), 11n)
+}
+
+test "bigint_generic_path_spawn_captured_sub" {
+    assert.equal(bigint_spawn_captured_sub(10n), 9n)
+}
+
+test "bigint_generic_path_spawn_captured_mul" {
+    assert.equal(bigint_spawn_captured_mul(10n), 20n)
+}
+
+test "bigint_generic_path_spawn_captured_div" {
+    assert.equal(bigint_spawn_captured_div(10n), 5n)
+}
+
+test "bigint_generic_path_spawn_captured_mod" {
+    assert.equal(bigint_spawn_captured_mod(10n), 1n)
+}
+
+test "bigint_generic_path_spawn_captured_shl" {
+    assert.equal(bigint_spawn_captured_shl(10n), 40n)
+}
+
+test "bigint_generic_path_spawn_captured_bitand" {
+    assert.equal(bigint_spawn_captured_bitand(10n), 2n)
+}
+
+test "bigint_generic_path_spawn_captured_mixed_int" {
+    assert.equal(bigint_spawn_captured_mixed_int(10n), 11n)
+}
+
+test "bigint_generic_path_spawn_captured_mixed_int_left" {
+    assert.equal(bigint_spawn_captured_mixed_int_left(10n), 11n)
+}
+
+test "bigint_generic_path_spawn_captured_lt_control" {
+    assert.is_true(bigint_spawn_captured_lt(10n))
+}
+
+// The generic path still throws the same catchable panics as the specialized
+// opcodes: a captured-operand division by zero is `DivisionByZero`, not an
+// internal error.
+function bigint_spawn_captured_div_by_zero(n: bigint) -> bigint { let p = spawn { n / 0n }; await p }
+
+test "bigint_generic_path_spawn_captured_div_by_zero" {
+    {
+        bigint_spawn_captured_div_by_zero(1n);
+        baml.sys.panic("expected captured 1n / 0n to throw")
+    } catch (e) {
+        baml.panics.DivisionByZero => null
+    }
+}

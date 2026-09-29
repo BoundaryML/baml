@@ -45,15 +45,11 @@ fn usage() -> (f64, u64) {
     );
     // SAFETY: initialized by the successful call above.
     let usage = unsafe { usage.assume_init() };
-    let duration = |time: libc::timeval| {
-        std::time::Duration::from_secs(time.tv_sec.try_into().expect("nonnegative CPU seconds"))
-            + std::time::Duration::from_micros(
-                time.tv_usec
-                    .try_into()
-                    .expect("nonnegative CPU microseconds"),
-            )
-    };
-    let cpu = (duration(usage.ru_utime) + duration(usage.ru_stime)).as_secs_f64();
+    // `tv_usec` is `i32` on macOS and `i64` on Linux; two sub-second counts
+    // fit in a `u32` either way.
+    let micros = u32::try_from(usage.ru_utime.tv_usec + usage.ru_stime.tv_usec)
+        .expect("two sub-second microsecond counts fit in u32");
+    let cpu = usage.ru_utime.tv_sec as f64 + usage.ru_stime.tv_sec as f64 + f64::from(micros) / 1e6;
     (cpu, usage.ru_maxrss as u64 * 1024)
 }
 

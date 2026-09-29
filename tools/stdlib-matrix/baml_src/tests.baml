@@ -289,11 +289,11 @@ function fixture_matrix(sha: string, ts_version: string) -> SymbolMatrix {
     matrix
 }
 
-function fixture_judgement(ts: string, baml: string) -> Judgement {
+function fixture_judgement(ts: string, counterpart: string) -> Judgement {
     let none: string[] = [];
     Judgement {
         ts: ts,
-        baml: [baml],
+        baml: [counterpart],
         verdict: "match",
         basis: "model",
         confidence: "high",
@@ -871,12 +871,12 @@ test "the strongest verdict about a symbol is the one that counts" {
 function fixture_finding(
     ts: string,
     verdict: "match" | "divergent" | "unnecessary" | "none",
-    baml: string[],
+    counterparts: string[],
 ) -> Finding {
     Finding {
         ts: ts,
         verdict: verdict,
-        baml: baml,
+        baml: counterparts,
         confidence: "high",
         reason: "fixture",
         divergence: null,

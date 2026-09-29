@@ -11,10 +11,13 @@
 //!   variables STALLS (rust-analyzer's Ambiguous - retried next round,
 //!   never an early failure); a ground attempt succeeds (possibly
 //!   unifying its output variable, which is what un-stalls other work)
-//!   or definitively fails (a recorded mismatch, the output erased).
+//!   or definitively fails (a reported diagnostic, the output erased).
 //! - After fixpoint, still-stalled obligations fail CLOSED: their
-//!   outputs erase through the ordinary finalize rules (ruling 2), and
-//!   S17 renders the ambiguity.
+//!   outputs erase through the ordinary finalize rules (ruling 2), and a
+//!   goal that stalled because SEVERAL candidates proved it reports that
+//!   ambiguity ([`InferenceContext::settle_stalled_obligations`]). Each
+//!   stall records which of the two it was ([`Stall`]), so settling reads
+//!   the reason instead of re-deriving one from the leftover type.
 //!
 //! The interleave exists because of a real deadlock: an operator
 //! obligation's output can be a LOWER BOUND of the very variable its
@@ -33,22 +36,55 @@ use baml_type::interned::{InferInterface, InferTy, Ty, TyVocabulary};
 
 use super::InferenceContext;
 
+/// Why a type must implement an interface, which decides what proves it.
+///
+/// `TYPE_SYSTEM.md` derives subtyping FROM implements (a concrete `C <: I`
+/// exactly when `C` implements `I`), and the arrow never runs backwards. A
+/// goal that licenses dispatch on a TYPE is answered by the implements
+/// relation, which is nominal: an impl row exists or it fails, so `never`
+/// implements nothing it has no impl for. A goal that asks whether a VALUE
+/// may be used through the interface is answered by subtyping, where `never`
+/// holds vacuously and a union holds when every member does.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum GoalPurpose {
+    /// A value used through the interface: flowing into an existential,
+    /// iterated, or the receiver a method call dispatches on. Dispatch is
+    /// keyed by the value at run time, so this is value inhabitation.
+    Coercion,
+    /// A declared bound on a generic param — a function's or class's own, or
+    /// an impl header's, replayed when the impl is selected. Code under the
+    /// bound may dispatch on the TYPE (`(T as I).make()`), so it is nominal,
+    /// and the argument must be concrete (E0001): an abstract type has no
+    /// single runtime type to dispatch on, and no impl makes an existential
+    /// an implementor (`TYPE_SYSTEM.md`, "Generics on Functions"). The impl
+    /// header is no exception — a blanket impl applies "to all concrete
+    /// types satisfying the bounds" — and the ground resolver already rejects
+    /// the candidate there, so selection must too or the two disagree.
+    Bound,
+}
+
 /// One registered obligation.
 pub(super) enum Obligation {
-    /// `ty` must implement `interface` (call-site bound checks). Failure
-    /// records a mismatch at `at`; there is no output to bind.
+    /// `ty` must implement `interface`. There is no output to bind, but
+    /// selection unifies the goal against the one impl (or bound) that
+    /// proves it, which is how a goal's open args and pins solve. A failure
+    /// reports the nominal does-not-implement diagnostic at `at`.
     Implements {
         ty: Ty,
         interface: InferInterface,
         at: ExprId,
-        /// True for a GENERIC-PARAM bound obligation: only a concrete
-        /// type can instantiate an interface-bounded parameter (an
-        /// abstract arg - union or interface existential - has no single
-        /// runtime type to dispatch on), so those reject with
-        /// `BoundedTypeArgNotConcrete` even when the implements relation
-        /// would hold. False for coercion/iterability goals, where an
-        /// existential legitimately satisfies the interface.
-        not_concrete_rejects: bool,
+        purpose: GoalPurpose,
+        /// The goals whose confirmed impls required this one, the program's
+        /// own goal first; empty for a goal the program asked directly. A
+        /// report names the goal that failed and notes each of these, so a
+        /// bound replayed from an impl header is tied back to what the
+        /// program wrote (rustc's `ImplDerivedObligation`). Its length is how
+        /// many impl headers were confirmed to reach this goal: a bounded
+        /// blanket impl can be satisfied by another, so confirming one
+        /// registers its own bounds, and this length is the budget that stops
+        /// a self-satisfying impl from doing that forever (see
+        /// [`InferenceContext::attempt`]).
+        required_for: Vec<RequiredFor>,
     },
     /// `lhs <op-interface> rhs` deferred: discharge re-runs the SAME
     /// ground operator dispatch (union distribution, literal widening,
@@ -63,16 +99,146 @@ pub(super) enum Obligation {
     },
 }
 
+impl Obligation {
+    /// A goal the program asks directly: `ty` must implement `interface` for
+    /// `purpose`, reported at `at`.
+    pub(super) fn implements(
+        ty: Ty,
+        interface: InferInterface,
+        at: ExprId,
+        purpose: GoalPurpose,
+    ) -> Self {
+        Obligation::Implements {
+            ty,
+            interface,
+            at,
+            purpose,
+            required_for: Vec::new(),
+        }
+    }
+}
+
+/// A goal that confirming an impl for it made another goal of: the impl's
+/// bounds had to hold for `subject` to implement `interface`.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct RequiredFor {
+    /// As the goal spelled it.
+    pub(super) subject: Ty,
+    pub(super) interface: InferInterface,
+}
+
+/// An impl's interface reference (its own, or one of its bounds) at a
+/// confirmation's `instantiation` of the impl's params.
+fn instantiate_interface(
+    interface: &baml_type::interned::ClosedInterface,
+    instantiation: &rustc_hash::FxHashMap<baml_type::ParamTy, Ty>,
+) -> InferInterface {
+    InferInterface::new(
+        interface.name.clone(),
+        interface
+            .generics
+            .iter()
+            .map(|ty| ty.substitute_bindings(instantiation))
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
+        interface
+            .associated_types
+            .iter()
+            .map(|(name, ty)| (name.clone(), ty.substitute_bindings(instantiation)))
+            .collect(),
+    )
+}
+
+/// Whether a bound must refuse `head` before consulting any implementation:
+/// the type has no single runtime type for code under the bound to dispatch
+/// on (`TYPE_SYSTEM.md`, "Generics on Functions"), because it spans several
+/// (a union, an existential, `unknown`) or none (`never`, `void`).
+fn is_abstract_head(head: &InferTy) -> bool {
+    match head {
+        InferTy::Union(..)
+        | InferTy::Interface(..)
+        | InferTy::Unknown
+        | InferTy::Never
+        | InferTy::Void => true,
+        InferTy::Int
+        | InferTy::Bigint
+        | InferTy::Float
+        | InferTy::String
+        | InferTy::Bool
+        | InferTy::Null
+        | InferTy::Uint8Array
+        | InferTy::Media(..)
+        | InferTy::Class(..)
+        | InferTy::Enum(..)
+        | InferTy::List(..)
+        | InferTy::Map { .. }
+        | InferTy::Function { .. }
+        | InferTy::Future(..)
+        | InferTy::Type
+        | InferTy::Resource
+        | InferTy::PromptAst
+        | InferTy::RustType => false,
+        // Literal types are not refused here but left to the implements
+        // verdict (a literal was widened to its base before this is asked).
+        InferTy::Literal(..) | InferTy::EnumVariant(..) => false,
+        // Symbolic: concreteness is the variable's own bound, which
+        // caller-bound selection proves.
+        InferTy::TypeVar(..) | InferTy::AssociatedTypeProjection { .. } => false,
+        // Not decided here: an open variable stalls, an alias head is
+        // expanded before this is asked, and an error was reported already.
+        InferTy::InferVar { .. } | InferTy::TypeAlias(..) | InferTy::Error => false,
+    }
+}
+
 enum Attempt {
-    /// Live variables remain: retry next round.
-    Stalled,
+    /// Undecided this round: retry next.
+    Stalled(Stall),
     /// Discharged (successfully or with a recorded failure).
     Done,
 }
 
+/// Why an attempt could not decide its goal - and so, at quiescence, which
+/// diagnostic owns it.
+#[derive(Clone, Copy)]
+enum Stall {
+    /// Part of the goal is still unsolved: the subject is a variable, a
+    /// union has not closed, or a projection's base has not resolved. No
+    /// candidate was ever consulted, so there is nothing to call ambiguous;
+    /// the diagnostics for an undetermined type own it.
+    Unresolved,
+    /// The goal is decidable and MORE THAN ONE candidate decides it. More
+    /// solving may still prune the set, so it retries; if nothing does, it
+    /// is rustc's E0283 ("type annotations needed").
+    Ambiguous,
+}
+
+/// A registered obligation and what its last attempt learned about it.
+pub(super) struct Pending {
+    obligation: Obligation,
+    /// Why the last attempt left it pending, or `None` before its first.
+    /// Settling treats `None` as undecided rather than ambiguous: a goal
+    /// registered after the fixpoint's last round was never asked, so
+    /// nothing observed more than one candidate for it.
+    stall: Option<Stall>,
+}
+
+/// The outcome of candidate selection for a goal whose subject is known.
+enum Selection {
+    /// Exactly one candidate applied, and confirming it committed its
+    /// unifications.
+    Confirmed,
+    /// Several candidates apply; more solving may prune them.
+    Ambiguous,
+    /// No candidate can apply, whatever the goal's open variables become.
+    NoCandidate,
+}
+
 impl<'db> InferenceContext<'db> {
     pub(super) fn register_obligation(&mut self, obligation: Obligation) {
-        self.obligations.push(obligation);
+        self.obligations.push(Pending {
+            obligation,
+            stall: None,
+        });
     }
 
     /// One discharge round over every pending obligation. Returns whether
@@ -80,10 +246,13 @@ impl<'db> InferenceContext<'db> {
     pub(super) fn discharge_obligations_once(&mut self) -> bool {
         let pending = std::mem::take(&mut self.obligations);
         let mut progressed = false;
-        for obligation in pending {
+        for Pending { obligation, .. } in pending {
             match self.attempt(&obligation) {
                 Attempt::Done => progressed = true,
-                Attempt::Stalled => self.obligations.push(obligation),
+                Attempt::Stalled(stall) => self.obligations.push(Pending {
+                    obligation,
+                    stall: Some(stall),
+                }),
             }
         }
         progressed
@@ -95,69 +264,132 @@ impl<'db> InferenceContext<'db> {
                 ty,
                 interface,
                 at,
-                not_concrete_rejects,
+                purpose,
+                required_for,
             } => {
+                let at = *at;
+                let purpose = *purpose;
                 let ty = self.table.resolve_completely(ty);
                 let interface = self.resolve_interface_ref(interface);
                 if ty.has_error() {
                     return Attempt::Done;
                 }
+                // An alias is a spelling device and a literal implements
+                // what its base primitive does, so the goal is JUDGED for
+                // the type the alias denotes, widened; a report names the
+                // type as written.
+                let subject = ty;
+                let mut ty = widen_literal(&self.expand_alias_ty(&subject));
+                // One spelling, one verdict (B-1576): resolution can ground a
+                // syntactic union after this obligation registered, and the
+                // canonical form may be a single member. An OPEN union may
+                // still collapse, so only a coercion (which needs every
+                // member either way) acts on it before it closes.
+                if let InferTy::Union(..) = ty.kind() {
+                    match baml_type::interned::ClosedTy::try_from(&ty) {
+                        // The canonical form of a recursive alias's
+                        // unfolding is the alias again.
+                        Ok(closed) => {
+                            ty = self.canonicalize_unions(&closed).into_ty();
+                            ty = self.expand_alias_ty(&ty);
+                        }
+                        Err(_) if purpose != GoalPurpose::Coercion => {
+                            return Attempt::Stalled(Stall::Unresolved);
+                        }
+                        Err(_) => {}
+                    }
+                }
+                if purpose == GoalPurpose::Coercion {
+                    match ty.kind() {
+                        // `never` inhabits every type.
+                        InferTy::Never => return Attempt::Done,
+                        // A union value is used through the interface by
+                        // whichever member it holds, so every member must
+                        // implement it (the spec's Variance rule 2.1).
+                        InferTy::Union(members) => {
+                            for member in members {
+                                self.register_obligation(Obligation::Implements {
+                                    ty: member.clone(),
+                                    interface: interface.clone(),
+                                    at,
+                                    purpose,
+                                    required_for: required_for.clone(),
+                                });
+                            }
+                            return Attempt::Done;
+                        }
+                        _ => {}
+                    }
+                }
+                // An abstract argument has no single runtime type to
+                // dispatch on (E0001), whatever its args become. Checked
+                // before the shared verdict, whose existential arm answers by
+                // the existential's own reference — right for a coercion
+                // (a `Show` value is usable as a `Show`), never for a bound.
+                if purpose == GoalPurpose::Bound && is_abstract_head(ty.kind()) {
+                    self.pending_diags
+                        .push(super::PendingDiag::BoundedArgNotConcrete {
+                            expr: at,
+                            arg: ty,
+                            bound: interface,
+                            required_for: required_for.clone(),
+                        });
+                    return Attempt::Done;
+                }
                 if let Ok(closed) = baml_type::interned::ClosedTy::try_from(&ty)
                     && !interface_has_infer(&interface)
                 {
-                    // One spelling, one verdict (B-1576): resolution can
-                    // ground a syntactic union after this obligation
-                    // registered. Judge the canonical form - the same
-                    // spelling finalize's mismatch filter re-judges - so
-                    // verdict and report cannot diverge.
-                    let ty = self.canonicalize_unions(&closed).into_ty();
-                    if *not_concrete_rejects
-                        && matches!(ty.kind(), InferTy::Interface(..) | InferTy::Union(..))
-                    {
-                        self.pending_diags
-                            .push(super::PendingDiag::BoundedArgNotConcrete {
-                                expr: *at,
-                                arg: ty.clone(),
-                                bound: interface.clone(),
-                            });
-                        return Attempt::Done;
-                    }
-                    if !self.implements_holds(&ty, &interface) {
-                        // BUG: this reduction launders a NOMINAL verdict ("no
-                        // impl exists") into a SUBTYPING pair — and the
-                        // mismatch finalization pass re-judges pairs with
-                        // `cached_subtype`, which holds vacuously for
-                        // `never <: I-existential`, erasing the failure.
-                        // `plain<never>(1)` under `T extends I` therefore
-                        // checks clean and dies in the VM's (correctly
-                        // nominal) impl resolver. Fix = a dedicated
-                        // does-not-implement channel whose deferred re-check
-                        // re-runs `implements_holds`, never `sub`. Full
-                        // analysis: HANDOFF_implements_not_subtyping.md.
-                        let expected = interface.existential();
-                        self.result
-                            .type_mismatches
-                            .insert(*at, (expected, ty.clone()));
+                    // Every purpose shares the verdict: past `never` and
+                    // unions (handled above for a coercion), a value
+                    // inhabits an existential exactly when its type
+                    // implements it.
+                    let judged = self.canonicalize_unions(&closed).into_ty();
+                    if !self.implements_holds(&judged, &interface) {
+                        self.report_not_implemented(at, subject, &interface, required_for);
                     }
                     return Attempt::Done;
                 }
-                // Object candidates (rustc's
-                // `assemble_candidates_from_object_ty`): an existential
-                // subject has no impl to select - it proves the goal
-                // from its OWN reference plus its `requires` closure.
-                if matches!(ty.kind(), InferTy::Interface(..)) {
-                    return self.select_object(&ty, &interface, *at);
+                // The ground resolver bounds the same recursion with
+                // `BLANKET_IMPL_BOUND_DEPTH` and fails the candidate when it
+                // runs out (`bounds_hold`), so an exhausted chain reports
+                // "does not implement" on both paths. Selection needs the
+                // budget as well as the cycle check that resolver has: each
+                // round instantiates the impl header with FRESH variables, so
+                // a self-satisfying impl (`implements<X, T extends Cyc<X>>
+                // Cyc<X> for T`) never re-registers an EQUAL goal - it grows
+                // one, and equality alone would never stop it.
+                if required_for.len() > crate::impls::BLANKET_IMPL_BOUND_DEPTH as usize {
+                    self.report_not_implemented(at, subject, &interface, required_for);
+                    return Attempt::Done;
                 }
-                // Variable-bearing goal: rustc's SELECTION, licensed by a
-                // known concrete head (candidates filter by it). A goal
-                // whose head is itself unknown - a bare inference var or
-                // a rigid var - stays Stalled: nothing filters the
-                // candidate set, and guessing is the one thing
-                // fulfillment never does.
-                if crate::impls::is_concrete_receiver(&ty) {
-                    return self.select_impl(&ty, &interface, *at);
+                let selection = match ty.kind() {
+                    // Nothing filters the candidate set yet: a head still
+                    // unknown, or a projection whose base has not resolved.
+                    // Guessing is the one thing fulfillment never does.
+                    InferTy::InferVar { .. } | InferTy::AssociatedTypeProjection { .. } => {
+                        return Attempt::Stalled(Stall::Unresolved);
+                    }
+                    // Object candidates (rustc's
+                    // `assemble_candidates_from_object_ty`): an existential
+                    // subject has no impl to select - it proves the goal
+                    // from its OWN reference plus its `requires` closure.
+                    InferTy::Interface(..) => self.select_object(&ty, &interface),
+                    // Caller-bound candidates (rustc's
+                    // `assemble_candidates_from_caller_bounds`): a rigid
+                    // var proves the goal from the bounds it carries.
+                    InferTy::TypeVar(..) => self.select_param_env(&ty, &interface),
+                    // Every other head is known, and filters the impls. A
+                    // (closed) union finds none: no impl subject is a union.
+                    _ => self.select_impl(&ty, &subject, &interface, at, required_for),
+                };
+                match selection {
+                    Selection::Confirmed => Attempt::Done,
+                    Selection::Ambiguous => Attempt::Stalled(Stall::Ambiguous),
+                    Selection::NoCandidate => {
+                        self.report_not_implemented(at, subject, &interface, required_for);
+                        Attempt::Done
+                    }
                 }
-                Attempt::Stalled
             }
             Obligation::Operator {
                 interface,
@@ -170,7 +402,7 @@ impl<'db> InferenceContext<'db> {
                 let lhs = self.table.resolve_completely(lhs);
                 let rhs = rhs.as_ref().map(|rhs| self.table.resolve_completely(rhs));
                 if lhs.has_infer() || rhs.as_ref().is_some_and(Ty::has_infer) {
-                    return Attempt::Stalled;
+                    return Attempt::Stalled(Stall::Unresolved);
                 }
                 let result = self.dispatch_operator(interface, &lhs, rhs.as_ref());
                 if result.has_error() {
@@ -186,13 +418,20 @@ impl<'db> InferenceContext<'db> {
     /// inversion B-898 needs): every candidate is tried under a table
     /// snapshot and rolled back; EXACTLY ONE applying confirms it - the
     /// header unification commits, constraining the goal's inference
-    /// variables. Zero applicable is a definite failure (the mismatch
-    /// records); several is genuine ambiguity - Stalled, retried once
-    /// more information may prune, failing closed through finalize
+    /// variables. Zero applicable is a definite failure (reported);
+    /// several is genuine ambiguity - Stalled, retried once more
+    /// information may prune, reported at quiescence if it never does
     /// (rustc's "type annotations needed"). Committing on uniqueness is
     /// sound because coherence (I7) guarantees at most one impl per
     /// realized instance.
-    fn select_impl(&mut self, goal: &Ty, interface: &InferInterface, at: ExprId) -> Attempt {
+    fn select_impl(
+        &mut self,
+        goal: &Ty,
+        subject: &Ty,
+        interface: &InferInterface,
+        at: ExprId,
+        required_for: &[RequiredFor],
+    ) -> Selection {
         let candidates = crate::impls::impl_candidates(self.db, goal, &interface.name);
         let mut applicable = None;
         for facts in candidates {
@@ -201,23 +440,24 @@ impl<'db> InferenceContext<'db> {
             self.rollback_probe(probe);
             if applies {
                 if applicable.is_some() {
-                    return Attempt::Stalled;
+                    return Selection::Ambiguous;
                 }
                 applicable = Some(facts);
             }
         }
         let Some(facts) = applicable else {
-            let expected = interface.existential();
-            self.result
-                .type_mismatches
-                .insert(at, (expected, goal.clone()));
-            return Attempt::Done;
+            return Selection::NoCandidate;
         };
         let instantiation = self
             .confirm_impl(goal, interface, facts)
             .expect("the unique applicable candidate re-confirms");
-        self.register_impl_bound_obligations(facts, &instantiation, at);
-        Attempt::Done
+        let mut nested = required_for.to_vec();
+        nested.push(RequiredFor {
+            subject: subject.clone(),
+            interface: interface.clone(),
+        });
+        self.register_impl_bound_obligations(facts, &instantiation, at, &nested);
+        Selection::Confirmed
     }
 
     /// Object selection: the existential subject's own reference and its
@@ -225,10 +465,10 @@ impl<'db> InferenceContext<'db> {
     /// confirms by unifying args and the goal's pins (`Iterator<Error =
     /// never>` proving `Iterable<Error = ?E2>` commits `?E2 := never`).
     /// As in impl selection: exactly one applicable head commits,
-    /// several stall, none records the mismatch.
-    fn select_object(&mut self, subject: &Ty, goal: &InferInterface, at: ExprId) -> Attempt {
+    /// several stall, none reports.
+    fn select_object(&mut self, subject: &Ty, goal: &InferInterface) -> Selection {
         let InferTy::Interface(name, args, pins) = subject.kind() else {
-            return Attempt::Stalled;
+            unreachable!("object selection is for an existential subject")
         };
         let subject_target = InferInterface::new(name.clone(), args.clone(), pins.clone());
         let heads = crate::impls::requires_heads(self.db, &subject_target, subject, 8);
@@ -240,21 +480,171 @@ impl<'db> InferenceContext<'db> {
             self.rollback_probe(probe);
             if applies {
                 if applicable.is_some() {
-                    return Attempt::Stalled;
+                    return Selection::Ambiguous;
                 }
                 applicable = Some(head);
             }
         }
         let Some(head) = applicable else {
-            let expected = goal.existential();
-            self.result
-                .type_mismatches
-                .insert(at, (expected, subject.clone()));
-            return Attempt::Done;
+            return Selection::NoCandidate;
         };
         let confirmed = self.confirm_object(head, &goal_target);
         debug_assert!(confirmed, "the unique applicable head re-confirms");
-        Attempt::Done
+        Selection::Confirmed
+    }
+
+    /// Caller-bound selection: a rigid var implements what its carried
+    /// bounds and their `requires` closure say. A matching head confirms
+    /// by unifying args, and each goal pin with the head's pin - or, where
+    /// the bound leaves the member unpinned, with the rigid projection
+    /// `(subject as Head).Member` (rustc normalizes the same member to its
+    /// placeholder projection). As in impl selection: exactly one
+    /// applicable head commits, several stall, none reports.
+    fn select_param_env(&mut self, subject: &Ty, goal: &InferInterface) -> Selection {
+        let InferTy::TypeVar(param) = subject.kind() else {
+            unreachable!("caller-bound selection is for a rigid var subject")
+        };
+        let carried = baml_type::normalize::TypeContext::type_var_bound(&self.facts, param);
+        // One head, one candidate: two bounds whose `requires` closures meet
+        // (a diamond, or `T extends C & A` where `A requires C`) reach the
+        // same head twice, and a head is not ambiguous with itself.
+        let mut heads: Vec<InferInterface> = Vec::new();
+        for bound in &carried {
+            for head in crate::impls::requires_heads(
+                self.db,
+                &InferInterface::from_constraint(bound),
+                subject,
+                8,
+            ) {
+                if !heads.contains(&head) {
+                    heads.push(head);
+                }
+            }
+        }
+        let mut applicable = None;
+        for head in &heads {
+            let probe = self.probe();
+            let applies = self.confirm_param_head(subject, head, goal);
+            self.rollback_probe(probe);
+            if applies {
+                if applicable.is_some() {
+                    return Selection::Ambiguous;
+                }
+                applicable = Some(head);
+            }
+        }
+        let Some(head) = applicable else {
+            return Selection::NoCandidate;
+        };
+        let confirmed = self.confirm_param_head(subject, head, goal);
+        debug_assert!(confirmed, "the unique applicable bound re-confirms");
+        Selection::Confirmed
+    }
+
+    /// One carried head against the goal: [`Self::confirm_object`]'s args
+    /// and pins, except that a member the bound does not pin is the rigid
+    /// var's own projection rather than a failure.
+    fn confirm_param_head(
+        &mut self,
+        subject: &Ty,
+        head: &InferInterface,
+        goal: &InferInterface,
+    ) -> bool {
+        if head.name != goal.name || head.generics.len() != goal.generics.len() {
+            return false;
+        }
+        for (have, want) in head.generics.iter().zip(&goal.generics) {
+            if self.table.unify(have, want).is_err() {
+                return false;
+            }
+        }
+        for (name, want_pin) in &goal.associated_types {
+            let have_pin = head
+                .associated_types
+                .iter()
+                .find(|(have_name, _)| have_name == name)
+                .map_or_else(
+                    || {
+                        Ty::intern(InferTy::AssociatedTypeProjection {
+                            base: subject.clone(),
+                            interface: head.clone(),
+                            member: name.clone(),
+                        })
+                    },
+                    |(_, have_pin)| have_pin.clone(),
+                );
+            if self.table.unify(&have_pin, want_pin).is_err() {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Records that `subject` does not implement `interface`: the nominal
+    /// verdict, reported as such rather than as a subtyping mismatch (which
+    /// the finalize filter would re-judge, and `never <: I` holds
+    /// vacuously). One report per anchor, subject, and interface - a goal
+    /// can register more than once for the same expression.
+    fn report_not_implemented(
+        &mut self,
+        at: ExprId,
+        subject: Ty,
+        interface: &InferInterface,
+        required_for: &[RequiredFor],
+    ) {
+        let interface = interface.existential();
+        let already = self.pending_diags.iter().any(|pending| {
+            matches!(
+                pending,
+                super::PendingDiag::DoesNotImplement { expr, value, interface: reported, .. }
+                    if *expr == at && *value == subject && *reported == interface
+            )
+        });
+        if !already {
+            self.pending_diags
+                .push(super::PendingDiag::DoesNotImplement {
+                    expr: at,
+                    value: subject,
+                    interface,
+                    required_for: required_for.to_vec(),
+                });
+        }
+    }
+
+    /// Settles the goals still pending at quiescence, when no more solving
+    /// can happen. The recorded stall REASON decides, not a guess re-derived
+    /// from the leftover type: "more than one implementation could make this
+    /// work" is rustc's E0283 and is only true of a goal that actually found
+    /// more than one. Everything else stalled because part of it never
+    /// resolved - no candidate was ever consulted - and the diagnostics for
+    /// an undetermined type own it, as they own the deferred subs' residue.
+    pub(super) fn settle_stalled_obligations(&mut self) {
+        for Pending { obligation, stall } in std::mem::take(&mut self.obligations) {
+            // An operator stalls only on an unsolved operand, so one pattern
+            // covers both kinds: ambiguity is impl selection's outcome alone.
+            let (
+                Obligation::Implements {
+                    ty,
+                    interface,
+                    at,
+                    required_for,
+                    ..
+                },
+                Some(Stall::Ambiguous),
+            ) = (obligation, stall)
+            else {
+                continue;
+            };
+            let ty = self.table.resolve_completely(&ty);
+            let interface = self.resolve_interface_ref(&interface).existential();
+            self.pending_diags
+                .push(super::PendingDiag::AmbiguousImplementation {
+                    expr: at,
+                    value: ty,
+                    interface,
+                    required_for,
+                });
+        }
     }
 
     /// One object head against the goal: names equal, args unify
@@ -288,40 +678,30 @@ impl<'db> InferenceContext<'db> {
     /// The impl's declared bounds at `instantiation` become NESTED
     /// obligations (rustc's confirmation side conditions) - the
     /// fulfillment loop discharges them next round. Shared by selection
-    /// and the method probe.
+    /// and the method probe; `required_for` ends with the goal the impl was
+    /// confirmed for.
     fn register_impl_bound_obligations(
         &mut self,
         facts: &crate::impls::ImplFacts<'_>,
         instantiation: &rustc_hash::FxHashMap<baml_type::ParamTy, Ty>,
         at: ExprId,
+        required_for: &[RequiredFor],
     ) {
+        debug_assert!(
+            !required_for.is_empty(),
+            "a header bound is required for the goal its impl was confirmed for"
+        );
         for (param, bounds) in &facts.generic_params {
             let Some(arg) = instantiation.get(param) else {
                 continue;
             };
             for bound in bounds {
-                let interface = InferInterface::new(
-                    bound.name.clone(),
-                    bound
-                        .generics
-                        .iter()
-                        .map(|ty| ty.substitute_bindings(instantiation))
-                        .collect::<Vec<_>>()
-                        .into_boxed_slice(),
-                    bound
-                        .associated_types
-                        .iter()
-                        .map(|(name, ty)| (name.clone(), ty.substitute_bindings(instantiation)))
-                        .collect(),
-                );
                 self.register_obligation(Obligation::Implements {
                     ty: arg.clone(),
-                    interface,
+                    interface: instantiate_interface(bound, instantiation),
                     at,
-                    // Impl-header confirmation replays the impl's own
-                    // bounds; selection already admitted the receiver, so
-                    // keep the plain implements judgement.
-                    not_concrete_rejects: false,
+                    purpose: GoalPurpose::Bound,
+                    required_for: required_for.to_vec(),
                 });
             }
         }
@@ -351,7 +731,8 @@ impl<'db> InferenceContext<'db> {
             .zip(interface.generics.iter())
         {
             let pattern = pattern.substitute_bindings(&instantiation);
-            self.table.unify(requested, &pattern).ok()?;
+            let requested = crate::impls::unfold_aliases_against(&pattern, requested, &self.facts);
+            self.table.unify(&requested, &pattern).ok()?;
         }
         for (name, requested) in &interface.associated_types {
             let supplied = facts
@@ -433,7 +814,10 @@ impl<'db> InferenceContext<'db> {
             .for_ty_pattern
             .as_ty()
             .substitute_bindings(&instantiation);
-        self.table.unify(goal, &for_ty).ok()?;
+        // Unification is structural: an alias nested where the header has
+        // structure meets it unfolded.
+        let goal = crate::impls::unfold_aliases_against(&for_ty, goal, &self.facts);
+        self.table.unify(&goal, &for_ty).ok()?;
         Some(instantiation)
     }
 
@@ -480,7 +864,11 @@ impl<'db> InferenceContext<'db> {
         let (member, instantiation) = self
             .probe_candidate(receiver, name, facts)
             .expect("the unique applicable candidate re-confirms");
-        self.register_impl_bound_obligations(facts, &instantiation, at);
+        let required_for = [RequiredFor {
+            subject: receiver.clone(),
+            interface: instantiate_interface(&facts.interface, &instantiation),
+        }];
+        self.register_impl_bound_obligations(facts, &instantiation, at, &required_for);
         Some(member)
     }
 
@@ -585,6 +973,16 @@ impl<'db> InferenceContext<'db> {
                 .map(|(name, ty)| (name.clone(), self.table.resolve_completely(ty)))
                 .collect(),
         )
+    }
+}
+
+/// A literal type is judged as its base primitive: `1` implements what `int`
+/// does. Only the JUDGMENT widens - a report names the subject as the user
+/// wrote it (`1`), which is why [`InferenceContext::attempt`] keeps both.
+fn widen_literal(ty: &Ty) -> Ty {
+    match ty.kind() {
+        InferTy::Literal(literal, _) => Ty::intern(super::literal_base(literal)),
+        _ => ty.clone(),
     }
 }
 

@@ -2088,3 +2088,70 @@ test "caught_panic_context_renders_trace" {
                 < (trace.index_of("baml.panics.DivisionByZero") ?? -1),
     )
 }
+
+// A catch binding the handler reassigns is still the slot the runtime lands
+// the caught error in: the handler keeps its exception-table entry, and code
+// before the reassignment reads the caught value.
+function s22_throws(n: int) -> int throws string {
+    if (n == 0) { throw "zero" }
+    10 / (n - 1)
+}
+
+function s22_read_then_reassign() -> string {
+    let r = "unset";
+    {
+        let _ = s22_throws(0);
+    } catch (e) {
+        _ => {
+            r = e;
+            e = "x";
+            r = `${r}+${e}`
+        }
+    }
+    r
+}
+
+test "a reassigned catch binding keeps its handler" {
+    assert.equal(s22_read_then_reassign(), "zero+x")
+}
+
+function s22_panic_with_reassigned_binding() -> string {
+    let r = "none";
+    {
+        {
+            let _ = s22_throws(1);
+        } catch (e) {
+            _ => {
+                r = e;
+                e = "x";
+                r = `${r}+${e}`
+            }
+        }
+    } catch_all_panics (p) {
+        _ => { r = "panic reached outer" }
+    }
+    r
+}
+
+test "a panic passes a wildcard arm that reassigns its binding" {
+    assert.equal(s22_panic_with_reassigned_binding(), "panic reached outer")
+}
+
+function s22_rethrow_reassigned() -> string {
+    let r = "unset";
+    {
+        {
+            throw "A"
+        } catch (e) {
+            _ => {
+                e = "A";
+                throw e
+            }
+        }
+    } catch (e) { _ => { r = `outer caught ${e}` } }
+    r
+}
+
+test "a reassigned catch binding rethrown reaches the enclosing catch" {
+    assert.equal(s22_rethrow_reassigned(), "outer caught A")
+}

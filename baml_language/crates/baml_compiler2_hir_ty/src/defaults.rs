@@ -317,35 +317,6 @@ fn collect_default_expr_forward_references(
             }
             shadowed.truncate(saved_len);
         }
-        Expr::Spawn {
-            name,
-            with_exprs,
-            body: spawn_body,
-        } => {
-            if let Some(name_id) = name {
-                collect_default_expr_forward_references(
-                    *name_id,
-                    body,
-                    later_params,
-                    shadowed,
-                    refs,
-                );
-            }
-            for with_id in with_exprs {
-                collect_default_expr_forward_references(
-                    *with_id,
-                    body,
-                    later_params,
-                    shadowed,
-                    refs,
-                );
-            }
-            // The spawn BODY is deferred (wrapped in a synthetic lambda
-            // and evaluated on the spawned task) — only `name` and the
-            // `with` transformers are evaluated eagerly, so a default
-            // capturing a later parameter inside `spawn { ... }` is fine.
-            let _ = spawn_body;
-        }
         Expr::Await { future } => {
             collect_default_expr_forward_references(*future, body, later_params, shadowed, refs);
         }
