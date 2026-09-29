@@ -71,6 +71,42 @@ enum Attempt {
 }
 
 impl<'db> InferenceContext<'db> {
+    /// Search bounds without solving them. A structure demand must not
+    /// commit sibling variables merely because they share a bound with it.
+    fn has_structure_operator(
+        &mut self,
+        ty: &Ty,
+        visiting: &mut rustc_hash::FxHashSet<baml_type::interned::InferVar>,
+    ) -> bool {
+        let ty = self.table.resolve_completely(ty);
+        let InferTy::InferVar { var, .. } = ty.kind() else {
+            return false;
+        };
+        let root = self
+            .table
+            .unsolved_root_var(*var)
+            .expect("resolve_completely leaves only unsolved variables");
+        if !visiting.insert(root) {
+            return false;
+        }
+        if self.obligations.iter().any(|obligation| {
+            let Obligation::Operator { out, .. } = obligation else {
+                return false;
+            };
+            let out = self.table.resolve_completely(out);
+            matches!(out.kind(), InferTy::InferVar { var, .. }
+                if self.table.unsolved_root_var(*var) == Some(root))
+        }) {
+            return true;
+        }
+        let bounds = self.table.var_bounds(root);
+        bounds
+            .lowers
+            .iter()
+            .chain(&bounds.uppers)
+            .any(|bound| self.has_structure_operator(&bound.ty, visiting))
+    }
+
     /// A structure demand can depend on pending arithmetic, e.g.
     /// `(values.reduce((a, b) -> { a + b }, 0) * 1.0).round()`.
     /// Resolve only that operator's dependencies from their current bounds;
@@ -98,7 +134,9 @@ impl<'db> InferenceContext<'db> {
         // before committing their aliases; the root guard breaks cycles
         // such as a reduce accumulator bounded by its own callback output.
         for bound in bounds.lowers.iter().chain(&bounds.uppers) {
-            self.resolve_structure_operand(&bound.ty, visiting);
+            if self.has_structure_operator(&bound.ty, &mut rustc_hash::FxHashSet::default()) {
+                self.resolve_structure_operand(&bound.ty, visiting);
+            }
         }
         let bounds = self.table.var_bounds(var);
         self.try_solve_bounded_var(var, &bounds);
