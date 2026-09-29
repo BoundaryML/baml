@@ -851,7 +851,7 @@ fn validate_references(snapshot: &DecodedSnapshot) -> Result<(), BlobError> {
     for object in &snapshot.objects {
         match object {
             DecodedObject::List { items, .. } | DecodedObject::Tuple { items, .. } => {
-                items.iter().try_for_each(check_value)?
+                items.iter().try_for_each(check_value)?;
             }
             DecodedObject::Map { entries, .. } => {
                 entries.iter().try_for_each(|(_, v)| check_value(v))?;
