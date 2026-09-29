@@ -27,6 +27,8 @@ This change adds generated Ruby/Sorbet packages, synchronous calls through the V
 | Generic function / method (subscript) | ✅ | ❌ | No subscript call API. |
 | Host callback param | ✅ | ❌ | No host-callable registration or dispatch. |
 
+Injected `on_event` callbacks are ignored (the engine applies its default); host-driven streaming remains unsupported.
+
 ## Runtime behaviors
 
 These rows describe what happens when a call returns, throws, or terminates.

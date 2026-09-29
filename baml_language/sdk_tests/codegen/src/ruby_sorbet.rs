@@ -12,7 +12,8 @@ pub fn run_all(ctx: &CodegenCtx) {
             &loaded.pool,
             &loaded.baml_bytecode,
             NamingConvention::Language,
-        );
+        )
+        .unwrap_or_else(|error| panic!("{fixture}: {error}"));
         eprintln!("Ruby {fixture} skipped: {}", skipped.join(", "));
         let root = ctx.crate_dir.join(fixture);
         let generated = root.join("generated");
