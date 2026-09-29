@@ -95,11 +95,17 @@ async fn recorded_argument_layouts_align_with_captured_input_slots() {
     let mut unavailable = 0;
     let mut paths = HashMap::new();
     let mut inputs = Vec::new();
+    let mut expected_minor = btel_settings::encoding::FORMAT_MINOR;
     for file in &read.files {
-        assert_eq!(
-            file.header.as_ref().unwrap().format_minor,
-            btel_settings::encoding::FORMAT_MINOR
-        );
+        if file.spans.as_ref().is_some_and(|spans| {
+            spans
+                .sections
+                .iter()
+                .any(|section| section.context.is_some())
+        }) {
+            expected_minor = expected_minor.max(btel_settings::encoding::CONTEXT_FORMAT_MINOR);
+        }
+        assert_eq!(file.header.as_ref().unwrap().format_minor, expected_minor);
         let definitions = file.definitions.as_ref().unwrap();
         for function in &definitions.functions {
             match function.resolution.as_ref().unwrap() {
