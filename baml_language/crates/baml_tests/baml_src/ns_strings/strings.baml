@@ -35,28 +35,26 @@ function strings_from_code_points_too_large() -> string {
     string.from_code_points([1114112])
 }
 
-// Helpers that build strings containing control characters not representable
-// as BAML string-literal escape sequences (only \n \t \r \0 \\ \" are
-// recognized by the BAML lexer).
+// Helpers that build strings containing control characters via `\xHH` /
+// `\uHHHH` string-literal escapes.
 function strings_form_feed() -> string {
     // \x0C = form feed
-    string.from_utf8(b"\x0C")
+    "\x0C"
 }
 
 function strings_low_controls() -> string {
     // \x00 \x01 \x1F
-    string.from_utf8(b"\x00\x01\x1F")
+    "\x00\x01\x1F"
 }
 
 function strings_del() -> string {
     // \x7F = DEL
-    string.from_utf8(b"\x7F")
+    "\x7F"
 }
 
-// U+00A0 NO-BREAK SPACE, encoded as UTF-8: 0xC2 0xA0.
-// BAML string literals don't support \u{...} Unicode escapes.
+// U+00A0 NO-BREAK SPACE.
 function strings_nbsp() -> string {
-    string.from_utf8(b"\xC2\xA0")
+    "\u00A0"
 }
 
 // ─── concat ──────────────────────────────────────────────────────────────────
@@ -661,8 +659,7 @@ test "string_is_whitespace_mixed_ws" {
     assert.is_true(" \t\n\r".is_whitespace())
 }
 
-// U+00A0 NO-BREAK SPACE — Unicode whitespace. BAML strings don't support
-// \u{...} escapes, so we build the character from its UTF-8 bytes.
+// U+00A0 NO-BREAK SPACE — Unicode whitespace.
 test "string_is_whitespace_unicode_nbsp" {
     assert.is_true(strings_nbsp().is_whitespace())
 }
@@ -724,9 +721,8 @@ test "string_is_ascii_with_emoji_false" {
 }
 
 // \x00 (\0) and \x7F (DEL) are both valid ASCII bytes.
-// \x7F is not a BAML string escape, so we build the test string via bytes.
 function strings_nul_and_del() -> string {
-    string.from_utf8(b"\x00\x7F")
+    "\0\x7F"
 }
 
 test "string_is_ascii_control_chars" {
@@ -832,8 +828,7 @@ test "string_is_ascii_whitespace_basic" {
     assert.is_true(" \t\n\r".is_ascii_whitespace())
 }
 
-// Form feed \x0C is ASCII whitespace. BAML strings don't support \x escapes,
-// so we decode from bytes.
+// Form feed \x0C is ASCII whitespace.
 test "string_is_ascii_whitespace_form_feed" {
     assert.is_true(strings_form_feed().is_ascii_whitespace())
 }
@@ -853,7 +848,7 @@ test "string_is_ascii_whitespace_empty_true" {
 
 // ── is_ascii_control ──
 
-// \x01 and \x1F are not representable as BAML string escapes; build via bytes.
+// \x01 and \x1F are ASCII control characters.
 test "string_is_ascii_control_low_range" {
     assert.is_true(strings_low_controls().is_ascii_control())
 }

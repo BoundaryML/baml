@@ -415,6 +415,9 @@ pub enum DiagnosticId {
     InvalidRegexPattern,
     /// An unparenthesized function/union boundary has two syntactic owners (E0175).
     AmbiguousUnion,
+    /// A string literal contains an unknown or malformed escape sequence (E0176).
+    /// Malformed `\x`/`\u` escapes are errors; unknown escapes are warnings.
+    InvalidStringEscape,
 }
 
 impl DiagnosticId {
@@ -624,6 +627,7 @@ impl DiagnosticId {
             DiagnosticId::InterfaceMethodMissingThrows => "E0170",
             DiagnosticId::InvalidRegexPattern => "E0174",
             DiagnosticId::AmbiguousUnion => "E0175",
+            DiagnosticId::InvalidStringEscape => "E0176",
             DiagnosticId::TypeMustBeKnown => "E0155",
             DiagnosticId::InvalidBuiltinTypeArguments => "E0171",
             DiagnosticId::ScopedTypeEscapesBlock => "E0172",

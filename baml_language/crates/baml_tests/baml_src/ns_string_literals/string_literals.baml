@@ -81,3 +81,61 @@ test "invalid quoted strings still produce compiler errors" {
         baml.sys.panic("escaped quote consumed the closing quote without a diagnostic")
     }
 }
+
+// ─── code-point escapes: \xHH, \uHHHH, \u{...} (JavaScript semantics) ───
+
+function hex_escape() -> string {
+    "a\x41b"
+}
+
+function unicode_escape() -> string {
+    "a\u0042b"
+}
+
+function braced_unicode_escape() -> string {
+    "\u{1F600}"
+}
+
+function surrogate_pair_escape() -> string {
+    "\uD83D\uDE00"
+}
+
+function backtick_code_point_escapes() -> string {
+    `\x41\u0042\u{43}`
+}
+
+test "code point escapes decode in quoted and backtick strings" {
+    assert.equal(hex_escape(), "aAb");
+    assert.equal(hex_escape().length(), 3);
+    assert.equal(unicode_escape(), "aBb");
+    assert.equal(unicode_escape().length(), 3);
+    assert.equal(braced_unicode_escape(), "😀");
+    assert.equal(braced_unicode_escape().length(), 1);
+    assert.equal(surrogate_pair_escape(), "😀");
+    assert.equal(backtick_code_point_escapes(), "ABC");
+    assert.equal("\x1b[0m".length(), 4);
+    assert.equal("\x1b", string.from_code_points([27]));
+    assert.equal("\xe9", "é");
+    assert.equal("\u00e9\u{E9}", "éé");
+    assert.equal("it\'s", "it's")
+}
+
+test "malformed code point escapes are compile errors" {
+    root.compiler.AssertHasCode({ "main.baml": `function f() -> string { "\\x4" }` }, "E0176");
+    root.compiler.AssertHasCode({ "main.baml": `function f() -> string { "\\u12" }` }, "E0176");
+    root.compiler.AssertHasCode({ "main.baml": `function f() -> string { "\\u{110000}" }` }, "E0176");
+    root.compiler.AssertHasCode({ "main.baml": `function f() -> string { "\\uD800" }` }, "E0176");
+    root.compiler.AssertHasCode({ "main.baml": "function f() -> string { `\\u{}` }" }, "E0176")
+}
+
+test "unknown escapes are kept verbatim with a warning" {
+    let files = { "main.baml": `function f() -> string { "a\\qb" }` };
+    let found = false;
+    for (let diagnostic in root.compiler.CompileSuccessDiagnostics(files)) {
+        if (diagnostic.code == "E0176" && diagnostic.severity == "warning") {
+            found = true;
+        }
+    }
+    assert.is_true(found);
+    root.compiler.AssertSuccessLacksMessage({ "main.baml": `function f() -> string { "\\x41\\u{41}" }` }, "invalid")
+}

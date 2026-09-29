@@ -289,7 +289,101 @@ fn lower_file_with_path_and_test_owner_impl(
         items.push(Item::Function(init_fn));
     }
 
+    check_string_escapes(root, &mut diags);
+
     (items, diags, env_var_refs)
+}
+
+/// Report unknown and malformed escape sequences in every `"..."` and
+/// backtick string literal in the file. Decoding itself happens wherever a
+/// literal is lowered and keeps such sequences verbatim; this pass is the one
+/// place that diagnoses them, so each literal is reported exactly once.
+fn check_string_escapes(root: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) {
+    use baml_base::escape::{
+        EscapeIssue, backtick_string_literal_escape_issues, string_literal_escape_issues,
+    };
+
+    let offset =
+        |n: usize| text_size::TextSize::from(u32::try_from(n).expect("literal exceeds u32 length"));
+    let mut report = |body_start: text_size::TextSize, issues: Vec<EscapeIssue>| {
+        for issue in issues {
+            let start = body_start + offset(issue.start);
+            diags.push(LoweringDiagnostic::InvalidStringEscape {
+                kind: issue.kind,
+                span: text_size::TextRange::new(start, start + offset(issue.len)),
+            });
+        }
+    };
+
+    for node in root.descendants() {
+        match node.kind() {
+            SyntaxKind::STRING_LITERAL => {
+                let text = node.text().to_string();
+                let Some(open) = text.find('"') else { continue };
+                let body = &text[open + 1..];
+                // Unclosed literals already have a parse error.
+                let Some(body) = body.strip_suffix('"') else {
+                    continue;
+                };
+                let body_start = node.text_range().start() + offset(open + 1);
+                report(body_start, string_literal_escape_issues(body));
+            }
+            SyntaxKind::BACKTICK_STRING_LITERAL => {
+                let Some(lit) = ast::BacktickStringLiteral::cast(node.clone()) else {
+                    continue;
+                };
+                let n = lit.delimiter_count();
+                let elements: Vec<_> = node.children_with_tokens().collect();
+                let total_backticks = elements
+                    .iter()
+                    .filter(|el| el.kind() == SyntaxKind::BACKTICK)
+                    .count();
+                if n == 0 || total_backticks < 2 * n {
+                    continue;
+                }
+                let closing_start = total_backticks - n;
+                // Contiguous runs of literal text between the delimiters and
+                // any `${...}` parts, as (start, end) source ranges.
+                let mut runs: Vec<text_size::TextRange> = Vec::new();
+                let mut current: Option<text_size::TextRange> = None;
+                let mut bt_seen = 0usize;
+                for el in &elements {
+                    let is_text = match el.kind() {
+                        SyntaxKind::BACKTICK => {
+                            let inside = bt_seen >= n && bt_seen < closing_start;
+                            bt_seen += 1;
+                            inside
+                        }
+                        SyntaxKind::BACKTICK_INTERPOLATION
+                        | SyntaxKind::BACKTICK_FOR_OPEN
+                        | SyntaxKind::BACKTICK_ENDFOR
+                        | SyntaxKind::BACKTICK_IF_OPEN
+                        | SyntaxKind::BACKTICK_ELSE_IF
+                        | SyntaxKind::BACKTICK_ELSE
+                        | SyntaxKind::BACKTICK_ENDIF => false,
+                        _ => bt_seen >= n && bt_seen <= closing_start,
+                    };
+                    if is_text {
+                        let range = el.text_range();
+                        current = Some(current.map_or(range, |c| c.cover(range)));
+                    } else if let Some(run) = current.take() {
+                        runs.push(run);
+                    }
+                }
+                runs.extend(current);
+                let text = node.text().to_string();
+                let node_start = node.text_range().start();
+                for run in runs {
+                    let local = run - node_start;
+                    report(
+                        run.start(),
+                        backtick_string_literal_escape_issues(&text[local]),
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Check if a just-lowered type expression contains `TypeExprKind::Missing` at the root.

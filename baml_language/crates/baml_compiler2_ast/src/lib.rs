@@ -162,8 +162,8 @@ mod tests {
 
     #[test]
     fn unescape_string_literal_preserves_unknown_sequences() {
-        assert_eq!(unescape_string_literal(r"\x41"), "\\x41");
-        assert_eq!(unescape_string_literal(r"\u0041"), "\\u0041");
+        assert_eq!(unescape_string_literal(r"\q"), "\\q");
+        assert_eq!(unescape_string_literal(r"\u0041"), "A");
     }
 
     #[test]
