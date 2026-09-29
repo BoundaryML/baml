@@ -26,7 +26,7 @@ bex_heap = { workspace = true }
 bex_project = { workspace = true }
 bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
-sys_native = { workspace = true, features = [ "bundle-http", "aws-crypto" ] }
+sys_native = { workspace = true, features = [ "bundle-http" ] }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
 indexmap = { workspace = true }

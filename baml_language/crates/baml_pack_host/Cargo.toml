@@ -26,15 +26,8 @@ libsui = { workspace = true }
 tokio = { workspace = true, features = [ "rt" ] }
 
 [features]
-default = [ "aws-crypto" ]
-aws-crypto = [ "bex_engine/aws-crypto", "bex_project/aws-crypto", "sys_native/aws-crypto" ]
-ring-crypto = [ "bex_engine/ring-crypto", "bex_project/ring-crypto", "sys_native/ring-crypto" ]
-external-crypto = [
-  "bex_engine/external-crypto",
-  "bex_project/external-crypto",
-  "sys_native/external-crypto",
-]
-native-tls = [ "sys_native/native-tls" ]
+# BAML never contacts anything on its own (see VENDOR.md).
+no-phone-home = [ "sys_native/no-phone-home" ]
 
 [[bin]]
 name = "baml-pack-host"

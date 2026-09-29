@@ -302,7 +302,7 @@ fn toolchains_dir() -> PathBuf {
 }
 
 fn manifest_cache_dir(base_url: &str) -> PathBuf {
-    if base_url == baml_release::DEFAULT_MANIFEST_BASE_URL {
+    if Some(base_url) == baml_release::default_manifest_base_url() {
         return baml_home().join("manifest-cache").join("prod");
     }
     let mut hasher = DefaultHasher::new();
@@ -1121,15 +1121,7 @@ fn fetch_manifest_with_timeout(
         Some(text) => text,
         None => {
             fetched_remote = true;
-            let client = http_client_with_timeout(timeout)?;
-            client
-                .get(&url)
-                .send()
-                .with_context(|| format!("failed to fetch {url}"))?
-                .error_for_status()
-                .with_context(|| format!("failed to fetch {url}"))?
-                .text()
-                .with_context(|| format!("failed to read {url}"))?
+            fetch_manifest_text(&url, timeout)?
         }
     };
     let manifest: ToolchainManifest = toml_or_json(&text)?;
@@ -1574,15 +1566,7 @@ fn fetch_wrapper_manifest() -> Result<WrapperManifest> {
     let base = baml_release::manifest_base_url();
     let url = format!("{base}/wrapper.json");
     let cache_path = manifest_cache_dir(&base).join("wrapper.json");
-    let client = http_client()?;
-    let text = client
-        .get(&url)
-        .send()
-        .with_context(|| format!("failed to fetch {url}"))?
-        .error_for_status()
-        .with_context(|| format!("failed to fetch {url}"))?
-        .text()
-        .with_context(|| format!("failed to read {url}"))?;
+    let text = fetch_manifest_text(&url, HTTP_TIMEOUT)?;
     write_text_atomic(&cache_path, &text)?;
     let manifest: WrapperManifest =
         serde_json::from_str(&text).context("invalid wrapper manifest")?;
@@ -1590,18 +1574,24 @@ fn fetch_wrapper_manifest() -> Result<WrapperManifest> {
     Ok(manifest)
 }
 
-#[cfg(all(feature = "self-update", not(feature = "no-self-update")))]
-fn http_client() -> Result<reqwest::blocking::Client> {
-    http_client_with_timeout(HTTP_TIMEOUT)
-}
+/// The largest manifest read into memory.
+const MAX_MANIFEST_BYTES: usize = 16 * 1024 * 1024;
 
-fn http_client_with_timeout(timeout: Duration) -> Result<reqwest::blocking::Client> {
-    baml_tls::ensure_crypto_provider()?;
-    reqwest::blocking::Client::builder()
+/// GET a release manifest as text.
+fn fetch_manifest_text(url: &str, timeout: Duration) -> Result<String> {
+    let request = baml_http::Request::get(url)
         .connect_timeout(timeout.min(Duration::from_secs(10)))
-        .timeout(timeout)
-        .build()
-        .context("failed to build HTTP client")
+        .timeout(timeout);
+    let response = baml_http::outbound::send_blocking(
+        baml_http::outbound::Destination::ReleaseManifest,
+        request,
+        MAX_MANIFEST_BYTES,
+    )
+    .with_context(|| format!("failed to fetch {url}"))?;
+    if !response.is_success() {
+        anyhow::bail!("failed to fetch {url}: HTTP {}", response.status);
+    }
+    String::from_utf8(response.body.to_vec()).with_context(|| format!("failed to read {url}"))
 }
 
 #[cfg(all(windows, feature = "self-update", not(feature = "no-self-update")))]

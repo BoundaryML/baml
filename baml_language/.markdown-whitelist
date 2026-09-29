@@ -65,3 +65,6 @@ sdks/csharp/DEVELOPMENT.md
 # Type-system quiz ledgers
 tools/type_quiz/SPEC_GAPS.md
 tools/type_quiz/COMPILER_DIVERGENCE.md
+
+# Building BAML with your own crypto/network stack, without phoning home
+VENDOR.md

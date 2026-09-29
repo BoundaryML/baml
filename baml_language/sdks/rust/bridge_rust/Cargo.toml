@@ -32,22 +32,24 @@ doctest = false
 # are baked into the shared library when *it* is built.
 [features]
 default = [ "aws-crypto" ]
-aws-crypto = [ "rustls/aws_lc_rs" ]
-ring-crypto = [ "rustls/ring" ]
+# With default features disabled, the loader uses only local library paths.
+download = [ "dep:hex", "dep:rustls", "dep:ureq" ]
+aws-crypto = [ "download", "rustls/aws_lc_rs" ]
+ring-crypto = [ "download", "rustls/ring" ]
 # Links no crypto library: the host installs a rustls CryptoProvider before
 # the loader downloads the library.
-external-crypto = [  ]
+external-crypto = [ "download" ]
 
 [dependencies]
-hex = { workspace = true }
+hex = { workspace = true, optional = true }
 indexmap = { workspace = true }
 libloading = { workspace = true }
 num-bigint = { workspace = true }
 prost = { workspace = true }
-rustls = { workspace = true, features = [ "std" ] }
+rustls = { workspace = true, features = [ "std" ], optional = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
-ureq = { workspace = true }
+ureq = { workspace = true, optional = true }
 
 [dev-dependencies]
 sha2 = { workspace = true }

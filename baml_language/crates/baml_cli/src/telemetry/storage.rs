@@ -199,10 +199,10 @@ impl Telemetry {
     /// for anything remotely identifying (e.g. project root path) — see
     /// [`super::project_id`].
     ///
-    /// Hashed on the process's rustls crypto provider (see `baml_tls`). A build
+    /// Hashed on the selected BAML crypto provider (see `baml_crypto`). A build
     /// with no provider gets `"unavailable"`; it can't send telemetry anyway.
     pub(crate) fn one_way_hash(&self, payload: &[u8]) -> String {
-        let Ok(mut hasher) = baml_tls::Sha256::new() else {
+        let Ok(mut hasher) = baml_crypto::Sha256::new() else {
             return "unavailable".to_string();
         };
         if let Ok(cfg) = self.inner.config.lock() {

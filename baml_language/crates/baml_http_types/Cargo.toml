@@ -1,0 +1,21 @@
+# The network transport BAML runs on, as an interface: HTTP requests,
+# WebSocket connections and HTTP servers. The default `baml_http_provider`
+# crate implements it; a build can replace that crate with its own.
+[package]
+name = "baml_http_types"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+bytes = { workspace = true }
+futures = { workspace = true }
+
+[lints]
+workspace = true
+
+[package.metadata.ci]
+wasm_support = false

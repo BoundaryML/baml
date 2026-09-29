@@ -1,9 +1,5 @@
-# The crypto provider a BAML `external-crypto` build uses.
-#
-# This default links no crypto and supplies no provider. To bring your own
-# (a FIPS-validated OpenSSL, AWS-LC in FIPS mode, BoringSSL, SymCrypt, ...),
-# point the workspace's `baml_crypto_provider` dependency at a crate that
-# exposes the same `provider()` function; see README.md.
+# Replace this crate to select non-TLS cryptographic implementations.
+# No backend-selection features are required elsewhere in BAML.
 [package]
 name = "baml_crypto_provider"
 version.workspace = true
@@ -14,10 +10,20 @@ license.workspace = true
 publish = false
 
 [dependencies]
-rustls = { workspace = true }
+baml_crypto_types = { workspace = true }
+aes-gcm-siv = { workspace = true }
+chacha20poly1305 = { workspace = true }
+
+[target.'cfg(all(not(target_arch = "wasm32"), not(target_os = "ios")))'.dependencies]
+aws-lc-rs = { workspace = true }
+
+# The iOS SDK uses ring because the default AWS-LC objects do not link on iOS.
+[target.'cfg(target_os = "ios")'.dependencies]
+ring = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+pem-rfc7468 = { workspace = true }
+zeroize = { workspace = true }
 
 [lints]
 workspace = true
-
-[package.metadata.ci]
-wasm_support = false

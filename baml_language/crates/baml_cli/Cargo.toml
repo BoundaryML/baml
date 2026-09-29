@@ -20,14 +20,15 @@ workspace = true
 baml_artifact = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_codegen_types = { workspace = true }
+baml_crypto = { workspace = true }
 baml_db = { workspace = true }
 baml_exec = { workspace = true }
 baml_fmt = { workspace = true }
+baml_http = { workspace = true }
 baml_ide = { workspace = true }
 baml_lsp_server = { workspace = true }
 baml_query = { workspace = true }
 baml_release = { workspace = true }
-baml_tls = { workspace = true }
 baml_type = { workspace = true }
 baml_version = { workspace = true }
 bex_cache = { workspace = true }
@@ -57,7 +58,6 @@ libsui = { workspace = true }
 mimalloc = { workspace = true }
 mime_guess = { workspace = true }
 rayon = { workspace = true }
-reqwest = { workspace = true, features = [ "blocking", "json" ] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml2 = { workspace = true }
@@ -71,42 +71,11 @@ uuid = { workspace = true }
 webbrowser = { workspace = true }
 
 [features]
-default = [ "aws-crypto" ]
-aws-crypto = [
-  "reqwest/rustls",
-  "baml_lsp_server/aws-crypto",
-  "baml_release/aws-crypto",
-  "baml_tls/aws-crypto",
-  "bex_cache/aws-crypto",
-  "bex_engine/aws-crypto",
-  "bex_project/aws-crypto",
-  "sys_native/aws-crypto",
-]
-ring-crypto = [
-  "reqwest/rustls-no-provider",
-  "baml_lsp_server/ring-crypto",
-  "baml_release/ring-crypto",
-  "baml_tls/ring-crypto",
-  "bex_cache/ring-crypto",
-  "bex_engine/ring-crypto",
-  "bex_project/ring-crypto",
-  "sys_native/ring-crypto",
-]
-external-crypto = [
-  "reqwest/rustls-no-provider",
-  "baml_lsp_server/external-crypto",
-  "baml_release/external-crypto",
-  "baml_tls/external-crypto",
-  "bex_cache/external-crypto",
-  "bex_engine/external-crypto",
-  "bex_project/external-crypto",
-  "sys_native/external-crypto",
-]
-native-tls = [ "sys_native/native-tls" ]
-rustls = [ "aws-crypto" ]
 defaults = [  ]
 internal = [  ]
 skip-integ-tests = [  ]
+# BAML never contacts anything on its own (see VENDOR.md).
+no-phone-home = [ "baml_http/no-phone-home", "sys_native/no-phone-home" ]
 
 [dev-dependencies]
 baml_tests = { workspace = true }

@@ -2372,7 +2372,6 @@ async fn proxy_request(upstream: String, req: Request<Body>) -> Response {
         return proxy_ws(upstream, req).await;
     }
 
-    let method = req.method().clone();
     let uri_path_and_query = req
         .uri()
         .path_and_query()
@@ -2380,18 +2379,16 @@ async fn proxy_request(upstream: String, req: Request<Body>) -> Response {
         .unwrap_or("/");
     let target_url = format!("{upstream}{uri_path_and_query}");
 
-    if let Err(e) = baml_tls::ensure_crypto_provider() {
-        return Response::builder()
-            .status(StatusCode::BAD_GATEWAY)
-            .body(Body::from(e.to_string()))
-            .unwrap();
-    }
-    let mut fwd = reqwest::Client::new().request(method, &target_url);
+    // The dev server is local, so this is an ordinary request on the
+    // process's network transport, not one of BAML's outbound destinations.
+    let mut fwd = baml_http::Request::new(req.method().as_str(), target_url);
     for (name, value) in req.headers() {
         if name == header::HOST {
             continue;
         }
-        fwd = fwd.header(name.clone(), value.clone());
+        if let Ok(value) = value.to_str() {
+            fwd = fwd.header(name.as_str(), value);
+        }
     }
 
     let body_bytes = match to_bytes(req.into_body(), 10 * 1024 * 1024).await {
@@ -2404,11 +2401,9 @@ async fn proxy_request(upstream: String, req: Request<Body>) -> Response {
                 .unwrap();
         }
     };
-    if !body_bytes.is_empty() {
-        fwd = fwd.body(body_bytes);
-    }
+    let fwd = fwd.body(body_bytes);
 
-    let upstream_resp = match fwd.send().await {
+    let upstream_resp = match baml_http::provider().send(fwd).await {
         Ok(r) => r,
         Err(e) => {
             tracing::warn!("Dev proxy: upstream error: {e}");
@@ -2419,9 +2414,9 @@ async fn proxy_request(upstream: String, req: Request<Body>) -> Response {
         }
     };
 
-    let mut builder = Response::builder().status(upstream_resp.status());
-    for (name, value) in upstream_resp.headers() {
-        builder = builder.header(name.clone(), value.clone());
+    let mut builder = Response::builder().status(upstream_resp.status);
+    for (name, value) in &upstream_resp.headers {
+        builder = builder.header(name.as_str(), value.as_str());
     }
 
     let resp_bytes = upstream_resp.bytes().await.unwrap_or_default();
@@ -2430,7 +2425,7 @@ async fn proxy_request(upstream: String, req: Request<Body>) -> Response {
 
 /// Proxy a WebSocket upgrade request (e.g. Vite HMR) to the upstream dev server.
 async fn proxy_ws(upstream: String, req: Request<Body>) -> Response {
-    use tokio_tungstenite::tungstenite::Message as TungMsg;
+    use baml_http::Message as UpMsg;
 
     let uri_path_and_query = req
         .uri()
@@ -2457,8 +2452,14 @@ async fn proxy_ws(upstream: String, req: Request<Body>) -> Response {
     };
 
     ws_upgrade.on_upgrade(move |client_socket| async move {
-        let upstream_ws = match tokio_tungstenite::connect_async(&ws_url).await {
-            Ok((stream, _)) => stream,
+        let upstream_ws = match baml_http::provider()
+            .connect_websocket(baml_http::WsConnectRequest {
+                url: ws_url.clone(),
+                headers: Vec::new(),
+            })
+            .await
+        {
+            Ok(socket) => socket,
             Err(e) => {
                 tracing::warn!("Dev proxy: failed to connect to upstream WS {ws_url}: {e}");
                 return;
@@ -2466,21 +2467,22 @@ async fn proxy_ws(upstream: String, req: Request<Body>) -> Response {
         };
 
         let (mut client_sink, mut client_stream) = client_socket.split();
-        let (mut upstream_sink, mut upstream_stream) = upstream_ws.split();
+        let (mut upstream_sink, mut upstream_stream) = (upstream_ws.sink, upstream_ws.source);
 
+        // Both ends answer pings themselves, so only data and close frames
+        // are relayed.
         let client_to_upstream = async {
             while let Some(Ok(msg)) = client_stream.next().await {
-                let tung_msg = match msg {
-                    AxumWsMsg::Text(t) => TungMsg::Text(t.to_string().into()),
-                    AxumWsMsg::Binary(b) => TungMsg::Binary(b.to_vec().into()),
-                    AxumWsMsg::Ping(p) => TungMsg::Ping(p.to_vec().into()),
-                    AxumWsMsg::Pong(p) => TungMsg::Pong(p.to_vec().into()),
+                let up_msg = match msg {
+                    AxumWsMsg::Text(t) => UpMsg::Text(t.to_string()),
+                    AxumWsMsg::Binary(b) => UpMsg::Binary(b.to_vec()),
+                    AxumWsMsg::Ping(_) | AxumWsMsg::Pong(_) => continue,
                     AxumWsMsg::Close(_) => {
-                        let _ = upstream_sink.send(TungMsg::Close(None)).await;
+                        let _ = upstream_sink.send(UpMsg::Close(None)).await;
                         break;
                     }
                 };
-                if upstream_sink.send(tung_msg).await.is_err() {
+                if upstream_sink.send(up_msg).await.is_err() {
                     break;
                 }
             }
@@ -2489,15 +2491,12 @@ async fn proxy_ws(upstream: String, req: Request<Body>) -> Response {
         let upstream_to_client = async {
             while let Some(Ok(msg)) = upstream_stream.next().await {
                 let axum_msg = match msg {
-                    TungMsg::Text(t) => AxumWsMsg::Text(t.to_string().into()),
-                    TungMsg::Binary(b) => AxumWsMsg::Binary(b.to_vec().into()),
-                    TungMsg::Ping(p) => AxumWsMsg::Ping(p.to_vec().into()),
-                    TungMsg::Pong(p) => AxumWsMsg::Pong(p.to_vec().into()),
-                    TungMsg::Close(_) => {
+                    UpMsg::Text(t) => AxumWsMsg::Text(t.into()),
+                    UpMsg::Binary(b) => AxumWsMsg::Binary(b.into()),
+                    UpMsg::Close(_) => {
                         let _ = client_sink.send(AxumWsMsg::Close(None)).await;
                         break;
                     }
-                    TungMsg::Frame(_) => continue,
                 };
                 if client_sink.send(axum_msg).await.is_err() {
                     break;

@@ -16,15 +16,13 @@ test = false
 doctest = false
 
 [features]
-default = [ "bundle-http", "aws-crypto" ]
+default = [ "bundle-http" ]
 bundle-http = [ "bridge_cffi/bundle-http" ]
-aws-crypto = [ "bundle-http", "bex_project/aws-crypto", "bridge_cffi/aws-crypto" ]
-ring-crypto = [ "bundle-http", "bex_project/ring-crypto", "bridge_cffi/ring-crypto" ]
-# Link no crypto library; see crates/baml_crypto_provider.
-external-crypto = [ "bundle-http", "bex_project/external-crypto", "bridge_cffi/external-crypto" ]
 # Do not add a Cargo `extension-module` feature here. PyO3 0.28 expects
 # maturin to set PYO3_BUILD_EXTENSION_MODULE only while packaging; making it a
 # normal feature lets `cargo test --all-features` disable libpython linking.
+# BAML never contacts anything on its own (see VENDOR.md).
+no-phone-home = [ "bridge_cffi/no-phone-home", "sys_native/no-phone-home" ]
 
 [dependencies]
 baml_version = { workspace = true }

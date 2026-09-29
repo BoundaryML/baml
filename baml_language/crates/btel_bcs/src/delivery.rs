@@ -12,8 +12,8 @@ use btel_snapshot::Snapshot;
 use bytes::Bytes;
 use futures::FutureExt;
 use prost::Message;
-use reqwest::{Client, StatusCode, Url};
 use tokio::sync::{Semaphore, mpsc, watch};
+use url::Url;
 
 use crate::{
     liveness::{Heartbeat, HeartbeatError},
@@ -116,9 +116,10 @@ impl DeliveryConfig {
         if base.query().is_some() || base.as_str().len() > 8192 {
             return Err(DeliveryError::InvalidConfig);
         }
-        if let Some(token) = &self.bearer_token {
-            reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
-                .map_err(|_| DeliveryError::InvalidConfig)?;
+        if let Some(token) = &self.bearer_token
+            && !crate::http::valid_header_value(&format!("Bearer {token}"))
+        {
+            return Err(DeliveryError::InvalidConfig);
         }
         if self.max_attempts == 0
             || self.request_timeout.is_zero()
@@ -399,7 +400,7 @@ impl BcsDeliveryHandle {
                 encoded_length: u64::try_from(file.bytes().len())
                     .map_err(|_| DeliveryError::Capacity)?,
                 sha256: hex::encode(
-                    baml_tls::sha256(file.bytes()).map_err(|_| DeliveryError::Http)?,
+                    baml_crypto::sha256(file.bytes()).map_err(|_| DeliveryError::Http)?,
                 ),
             },
             candidates: metadata,
@@ -547,7 +548,6 @@ impl BcsDelivery {
         on_failure: impl Fn(DeliveryError) + Send + Sync + 'static,
     ) -> Result<Self, DeliveryError> {
         config.validate()?;
-        baml_tls::ensure_crypto_provider().map_err(|_| DeliveryError::Http)?;
         let (sender, receiver) = mpsc::channel(config.max_pending_plans);
         let shared = Arc::new(Shared {
             state: Mutex::new(State {
@@ -569,14 +569,7 @@ impl BcsDelivery {
                         .enable_all()
                         .build()
                         .map_err(|_| DeliveryError::Worker)?;
-                    let client = Client::builder()
-                        .redirect(reqwest::redirect::Policy::none())
-                        .retry(reqwest::retry::never())
-                        .no_proxy()
-                        .timeout(worker_shared.config.request_timeout)
-                        .build()
-                        .map_err(|_| DeliveryError::Http)?;
-                    runtime.block_on(run_cancellable(client, worker_shared.clone(), receiver));
+                    runtime.block_on(run_cancellable(worker_shared.clone(), receiver));
                     Ok::<(), DeliveryError>(())
                 }));
                 match result {
@@ -692,14 +685,12 @@ fn now_ms() -> Result<u64, DeliveryError> {
         .ok_or(DeliveryError::Expired)
 }
 
-fn retryable(status: StatusCode) -> bool {
-    status.is_server_error()
-        || status == StatusCode::TOO_MANY_REQUESTS
-        || status == StatusCode::REQUEST_TIMEOUT
+/// Server errors, 429 Too Many Requests and 408 Request Timeout.
+fn retryable(status: u16) -> bool {
+    (500..600).contains(&status) || status == 429 || status == 408
 }
 
 async fn prepare(
-    client: &Client,
     config: &DeliveryConfig,
     request: &PrepareUploadsRequest,
     heartbeat: &Heartbeat,
@@ -715,16 +706,16 @@ async fn prepare(
         serde_json::to_writer(&mut writer, decorated.as_ref().unwrap_or(request))
             .map_err(|_| DeliveryError::Capacity)?;
         let body = Bytes::from(writer.bytes);
-        let mut post = client
-            .post(url.clone())
+        let mut post = baml_http::Request::post(url.as_str())
             .header("content-type", "application/json")
-            .header("idempotency-key", &key)
-            .body(body.clone());
+            .header("idempotency-key", key.clone())
+            .body(body.clone())
+            .timeout(config.request_timeout);
         if let Some(token) = &config.bearer_token {
-            post = post.bearer_auth(token);
+            post = post.header("authorization", format!("Bearer {token}"));
         }
-        match post.send().await {
-            Ok(response) if response.status().is_success() => {
+        match crate::http::send(post).await {
+            Ok(response) if crate::http::is_success(response.status) => {
                 match read_response(response, config.max_response_bytes).await {
                     Ok(bytes) => {
                         heartbeat.mark_control_success();
@@ -737,7 +728,7 @@ async fn prepare(
                     Err(error) => return Err(error),
                 }
             }
-            Ok(response) if !retryable(response.status()) => return Err(DeliveryError::Http),
+            Ok(response) if !retryable(response.status) => return Err(DeliveryError::Http),
             _ => {}
         }
         if attempt + 1 < config.max_attempts {
@@ -748,54 +739,54 @@ async fn prepare(
 }
 
 async fn read_response(
-    mut response: reqwest::Response,
+    response: baml_http::Response,
     limit: usize,
 ) -> Result<Vec<u8>, DeliveryError> {
-    if response.content_length().is_some_and(|n| n > limit as u64) {
+    if crate::http::content_length(&response).is_some_and(|n| n > limit as u64) {
         return Err(DeliveryError::Capacity);
     }
-    let mut writer = LimitedWriter::new(limit);
-    while let Some(chunk) = response.chunk().await.map_err(|_| DeliveryError::Http)? {
-        writer
-            .write_all(&chunk)
-            .map_err(|_| DeliveryError::Capacity)?;
-    }
-    Ok(writer.bytes)
+    crate::http::read_limited(response.body, limit)
+        .await
+        .map_err(|e| match e {
+            baml_http::CollectError::TooLarge => DeliveryError::Capacity,
+            baml_http::CollectError::Body(_) => DeliveryError::Http,
+        })
 }
 
 async fn put(
-    client: &Client,
     config: &DeliveryConfig,
     target: UploadTarget,
     body: Bytes,
     plan_expiry: u64,
 ) -> Result<(), DeliveryError> {
     let expiry = plan_expiry.min(target.expires_at_unix_ms);
-    let mut headers = reqwest::header::HeaderMap::new();
+    let mut headers: Vec<(String, String)> = Vec::new();
     for (name, value) in &target.required_headers {
-        headers.insert(
-            reqwest::header::HeaderName::from_bytes(name.as_bytes())
-                .map_err(|_| DeliveryError::InvalidPlan)?,
-            reqwest::header::HeaderValue::from_str(value)
-                .map_err(|_| DeliveryError::InvalidPlan)?,
-        );
+        if !crate::http::valid_header_name(name) || !crate::http::valid_header_value(value) {
+            return Err(DeliveryError::InvalidPlan);
+        }
+        // Later values replace earlier ones for the same name.
+        headers.retain(|(existing, _)| !existing.eq_ignore_ascii_case(name));
+        headers.push((name.to_ascii_lowercase(), value.clone()));
     }
-    headers.entry(reqwest::header::CONTENT_TYPE).or_insert(
-        reqwest::header::HeaderValue::from_static("application/x-protobuf"),
-    );
+    if !headers.iter().any(|(name, _)| name == "content-type") {
+        headers.push((
+            "content-type".to_string(),
+            "application/x-protobuf".to_string(),
+        ));
+    }
     for attempt in 0..config.max_attempts {
         let remaining = expiry
             .checked_sub(now_ms()?)
             .filter(|&ms| ms > 0)
             .ok_or(DeliveryError::Expired)?;
-        let request = client
-            .put(&target.presigned_put_url)
+        let mut request = baml_http::Request::put(target.presigned_put_url.as_str())
             .timeout(config.request_timeout.min(Duration::from_millis(remaining)))
-            .headers(headers.clone())
             .body(body.clone());
-        match request.send().await {
-            Ok(response) if response.status().is_success() => return Ok(()),
-            Ok(response) if !retryable(response.status()) => return Err(DeliveryError::Http),
+        request.headers = headers.clone();
+        match crate::http::send(request).await {
+            Ok(response) if crate::http::is_success(response.status) => return Ok(()),
+            Ok(response) if !retryable(response.status) => return Err(DeliveryError::Http),
             _ => {}
         }
         if attempt + 1 < config.max_attempts {
@@ -822,18 +813,14 @@ struct Prepared {
     reservation: Reservation,
 }
 
-async fn assemble(
-    client: &Client,
-    config: &DeliveryConfig,
-    work: Work,
-) -> Result<Prepared, DeliveryError> {
+async fn assemble(config: &DeliveryConfig, work: Work) -> Result<Prepared, DeliveryError> {
     let Work {
         file,
         candidates,
         request,
         mut reservation,
     } = work;
-    let response = prepare(client, config, &request, &reservation.shared.heartbeat).await?;
+    let response = prepare(config, &request, &reservation.shared.heartbeat).await?;
     let retry_window = config.retry_window()?;
     let now = now_ms()?;
     let horizon = |windows: usize| {
@@ -904,7 +891,7 @@ async fn assemble(
                 let object = CasObject {
                     snapshot_id: snapshot.id().as_bytes().to_vec(),
                     snapshot_format_version: btel_settings::snapshot::BLOB_VERSION,
-                    blob_sha256: baml_tls::sha256(&writer.bytes)
+                    blob_sha256: baml_crypto::sha256(&writer.bytes)
                         .map_err(|_| DeliveryError::Http)?
                         .to_vec(),
                     blob: writer.bytes.into_boxed_slice().into_vec(),
@@ -951,7 +938,6 @@ async fn assemble(
 }
 
 async fn upload(
-    client: &Client,
     config: &DeliveryConfig,
     prepared: Prepared,
     recording_slots: Arc<Semaphore>,
@@ -972,7 +958,7 @@ async fn upload(
                 .await
                 .expect("recording lane open");
             let reset_cas = !target.candidate_indices.is_empty();
-            match put(client, config, target, body, expiry).await {
+            match put(config, target, body, expiry).await {
                 Ok(()) => {
                     let mut state = shared.state.lock().unwrap();
                     state.progress.recording_acked_through = state
@@ -990,7 +976,7 @@ async fn upload(
         }
         let _slot = cas_slots.acquire().await.expect("CAS lane open");
         for (target, body) in cas {
-            if let Err(error) = put(client, config, target, body, expiry).await {
+            if let Err(error) = put(config, target, body, expiry).await {
                 shared.lose(error, true);
             }
         }
@@ -998,14 +984,14 @@ async fn upload(
     tokio::join!(recording_lane, cas_lane);
 }
 
-async fn run_cancellable(client: Client, shared: Arc<Shared>, receiver: mpsc::Receiver<Work>) {
+async fn run_cancellable(shared: Arc<Shared>, receiver: mpsc::Receiver<Work>) {
     let mut cancel = shared.cancel.subscribe();
     if *cancel.borrow() {
         return;
     }
     tokio::select! {
         _ = cancel.changed() => {}
-        result = std::panic::AssertUnwindSafe(run_worker(client, shared.clone(), receiver)).catch_unwind() => {
+        result = std::panic::AssertUnwindSafe(run_worker(shared.clone(), receiver)).catch_unwind() => {
             if result.is_err() {
                 shared.fail(DeliveryError::Worker);
             }
@@ -1014,7 +1000,7 @@ async fn run_cancellable(client: Client, shared: Arc<Shared>, receiver: mpsc::Re
     shared.heartbeat.stop();
 }
 
-async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Receiver<Work>) {
+async fn run_worker(shared: Arc<Shared>, mut receiver: mpsc::Receiver<Work>) {
     let recording_slots = Arc::new(Semaphore::new(1));
     let cas_slots = Arc::new(Semaphore::new(1));
     let mut uploads = tokio::task::JoinSet::new();
@@ -1037,12 +1023,11 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
                     match shared.config.endpoint(&work.request.recording.recording_id, "heartbeat") {
                         Ok(endpoint) => {
                             let heartbeat = shared.heartbeat.clone();
-                            let client = client.clone();
                             let token = shared.config.bearer_token.clone();
                             let timeout = shared.config.request_timeout;
                             heartbeats.spawn(async move {
                                 if std::panic::AssertUnwindSafe(
-                                    heartbeat.run(client, endpoint, token, timeout),
+                                    heartbeat.run(endpoint, token, timeout),
                                 ).catch_unwind().await.is_err() {
                                     heartbeat.observe_error(HeartbeatError::Worker);
                                 }
@@ -1051,15 +1036,14 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
                         Err(_) => shared.heartbeat.observe_error(HeartbeatError::InvalidEndpoint),
                     }
                 }
-                match assemble(&client, &shared.config, work).await {
+                match assemble(&shared.config, work).await {
                     Ok(prepared) => {
-                        let client = client.clone();
                         let shared = shared.clone();
                         let recording_slots = recording_slots.clone();
                         let cas_slots = cas_slots.clone();
                         uploads.spawn(async move {
                             upload(
-                                &client, &shared.config, prepared, recording_slots, cas_slots,
+                                &shared.config, prepared, recording_slots, cas_slots,
                             ).await;
                         });
                     }

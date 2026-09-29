@@ -9,8 +9,7 @@
 # dlopens at run time (target/debug/libbridge_cffi.*), then runs the bridge_cpp
 # core consumer smoke against that same library. The dev profile has
 # panic=unwind by default, matching the release shipping profile's
-# unwind requirement. Features mirror the workspace test convention
-# (ring-crypto instead of the default aws-crypto).
+# unwind requirement. Crypto comes from the workspace provider crate.
 #
 # This placement (out of build.rs) mirrors the python/typescript targets so
 # `cargo check`/`cargo doc` succeed without a C++ toolchain and the heavy
@@ -27,7 +26,7 @@ echo "==> sdk_test_codegen cpp (generate fixture SDKs)"
 (cd "$WORKSPACE_ROOT" && cargo run --quiet -p sdk_test_codegen -- cpp)
 
 echo "==> cargo build -p bridge_cffi (dev cdylib for cpp sdk tests)"
-(cd "$WORKSPACE_ROOT" && cargo build -p bridge_cffi --no-default-features --features ring-crypto,bundle-http)
+(cd "$WORKSPACE_ROOT" && cargo build -p bridge_cffi)
 
 # Pre-clone the pinned protobuf + abseil sources once. Every build tree
 # consumes them via FETCHCONTENT_SOURCE_DIR_* overrides (see cpp_test.sh /

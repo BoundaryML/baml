@@ -1,0 +1,16 @@
+# Backend-independent access to the selected non-TLS crypto provider.
+[package]
+name = "baml_crypto"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+baml_crypto_provider = { workspace = true }
+baml_crypto_types = { workspace = true }
+
+[lints]
+workspace = true

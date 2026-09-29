@@ -1,0 +1,29 @@
+# How BAML code reaches the network: the process's transport
+# (`baml_http_provider`) plus the registry of every destination BAML contacts
+# on its own (`outbound`).
+[package]
+name = "baml_http"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+# Builds in which BAML never contacts anything on its own: every outbound
+# destination except the user's own remote cache always fails, and their
+# URLs are left out of the binary. Requests a BAML program makes are
+# unaffected.
+no-phone-home = [  ]
+
+[dependencies]
+baml_http_provider = { workspace = true }
+baml_http_types = { workspace = true }
+tokio = { workspace = true, features = [ "rt" ] }
+
+[lints]
+workspace = true
+
+[package.metadata.ci]
+wasm_support = false

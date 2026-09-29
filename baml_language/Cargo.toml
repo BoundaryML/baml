@@ -70,6 +70,10 @@ license = "Apache-2.0"
 version = "0.0.0-beta"
 
 [workspace.dependencies]
+aws-lc-rs = { version = "1.17", default-features = false, features = [ "alloc", "non-fips" ] }
+ring = "0.17"
+pem-rfc7468 = { version = "0.7", features = [ "alloc" ] }
+zeroize = "1"
 #  Internal dependencies (baml_*)
 btel_bcs = { path = "crates/btel_bcs", default-features = false }
 btel_snapshot = { path = "crates/btel_snapshot" }
@@ -110,11 +114,16 @@ sys_regex = { path = "crates/sys_regex" }
 sys_ops = { path = "crates/sys_ops", default-features = false }
 sys_types = { path = "crates/sys_types" }
 sys_native = { path = "crates/sys_native", default-features = false }
-baml_tls = { path = "crates/baml_tls", default-features = false }
-# An `external-crypto` build gets its crypto provider from this crate. To
-# supply your own, point this at your crate with `package = "<its name>"`
-# (see crates/baml_crypto_provider/README.md).
+baml_crypto = { path = "crates/baml_crypto" }
+baml_http = { path = "crates/baml_http" }
+baml_http_types = { path = "crates/baml_http_types" }
+# A build gets its network transport from this crate. To supply your own,
+# point this at your crate with `package = "<its name>"` (see VENDOR.md).
+baml_http_provider = { path = "crates/baml_http_provider" }
+# Replace this crate to supply non-TLS cryptography, including AEAD.
+# No backend-selection features are required; see VENDOR.md.
 baml_crypto_provider = { path = "crates/baml_crypto_provider" }
+baml_crypto_types = { path = "crates/baml_crypto_types" }
 baml_path = { path = "crates/baml_path" }
 baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }
@@ -244,7 +253,6 @@ reqwest = { version = "0.13.1", default-features = false, features = [
 mimalloc = { version = "0.1.52" }
 rowan = { version = "0.16" }
 rustls = { version = "0.23.37", default-features = false }
-rustls-pemfile = "2"
 rustc-hash = { version = "2.1" }
 xxhash-rust = { version = "=0.8.15", features = [ "xxh3" ] }
 salsa = { version = "0.28.5", default-features = false, features = [

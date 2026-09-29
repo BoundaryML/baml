@@ -15,11 +15,10 @@ crate-type = [ "cdylib" ]
 # capable: the JVM analog links the same bundled HTTP client + AWS crypto so a
 # generated SDK's LLM functions work, not just the pure-BAML primitives slice.
 [features]
-default = [ "bundle-http", "aws-crypto" ]
+default = [ "bundle-http" ]
 bundle-http = [ "bridge_cffi/bundle-http" ]
-aws-crypto = [ "bundle-http", "bex_project/aws-crypto", "bridge_cffi/aws-crypto" ]
-ring-crypto = [ "bundle-http", "bex_project/ring-crypto", "bridge_cffi/ring-crypto" ]
-external-crypto = [ "bundle-http", "bex_project/external-crypto", "bridge_cffi/external-crypto" ]
+# BAML never contacts anything on its own (see VENDOR.md).
+no-phone-home = [ "bridge_cffi/no-phone-home" ]
 
 [dependencies]
 bex_project = { workspace = true }

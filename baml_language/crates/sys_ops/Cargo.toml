@@ -7,14 +7,6 @@ authors.workspace = true
 license.workspace = true
 description = "Includes definitions and some blanket impls for sys ops"
 
-[features]
-default = [ "aws-crypto" ]
-# Retained as no-op passthroughs: the crypto-provider selection moved out with
-# `sys_llm`, but downstream crates (bex_engine) still name these features.
-aws-crypto = [  ]
-ring-crypto = [  ]
-external-crypto = [  ]
-
 [build-dependencies]
 baml_builtins2 = { workspace = true }
 baml_builtins2_codegen = { workspace = true }

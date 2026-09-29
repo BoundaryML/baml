@@ -10,14 +10,9 @@ description = "Bounded direct-upload delivery for Btel recordings"
 [lints]
 workspace = true
 
-[features]
-default = [ "aws-crypto" ]
-aws-crypto = [ "reqwest/rustls", "baml_tls/aws-crypto" ]
-ring-crypto = [ "reqwest/rustls-no-provider", "baml_tls/ring-crypto" ]
-external-crypto = [ "reqwest/rustls-no-provider", "baml_tls/external-crypto" ]
-
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-baml_tls = { workspace = true }
+baml_http = { workspace = true }
+baml_crypto = { workspace = true }
 btel_processor = { workspace = true }
 btel_recorder = { workspace = true }
 btel_records = { workspace = true }
@@ -28,7 +23,7 @@ bytes = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 prost = { workspace = true }
-reqwest = { workspace = true }
+url = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "sync", "time", "net", "macros" ] }

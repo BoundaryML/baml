@@ -1,55 +1,13 @@
-//! `baml.crypto` ciphers and hashes (`$rust_function`).
-//!
-//! The AES-GCM-SIV ciphers are backed by the `aes-gcm-siv` crate and the
-//! `ChaCha20` ones by `chacha20poly1305`. `Sha256` runs on the TLS crypto
-//! provider in native builds that have one (see `baml_tls`), so a build that
-//! brings its own provider hashes with it, and on the `sha2` crate otherwise
-//! (wasm).
-//!
-//! A build that takes all its crypto from the host's provider
-//! (`external-crypto` with no bundled one) has no ciphers: no provider offers
-//! these algorithms, and none of them is FIPS-approved. Every class here keeps its runtime state in an opaque
-//! `$rust_type` field, which puts that state out of BAML's reach: no BAML
-//! expression produces a `$rust_type`, so the class constructor is the only way
-//! to build one.
-//!
-//! Crate types that share a name with the BAML class wrapping them are written
-//! out in full (`aes_gcm_siv::Aes256GcmSiv`, `sha2::Sha256`) so they are never
-//! ambiguous with the generated `view::crypto::` / `copy::crypto::` shells.
-//!
-//! # Ciphers
-//!
-//! A cipher instance holds the expanded cipher, so the AES key schedule is
-//! derived once at `new` rather than per message, and the raw key never becomes
-//! a BAML value. A wrong-length key cannot get past `new`.
-//!
-//! ## Error split
-//!
-//! `baml.errors.InvalidArgument` means the call was malformed: a wrong-length
-//! nonce, or an input past an RFC 8452 size cap. That is a bug in the calling
-//! program, independent of the ciphertext's contents.
-//! `baml.crypto.DecryptionFailure` means this ciphertext did not authenticate.
-//! The two never overlap, so a caller can retry the first and must not retry the
-//! second.
-//!
-//! # Hashes
-//!
-//! A hasher instance holds its compression state behind a mutex. Feeding and
-//! finishing both need `&mut` on the hasher, but a BAML value is shared as an
-//! immutable `Object::RustData`, so mutation has to go through interior
-//! mutability, and concurrent `update` calls on one hasher across `spawn` fibers
-//! must be serialized rather than racing on the compression state.
+//! BAML crypto values and error translation. AEAD implementations come from
+//! `baml_crypto_provider`; the VM has no fallback ciphers. Native SHA-256 uses
+//! the selected TLS provider, while browser builds retain the portable hasher.
 
 use std::{
     any::Any,
     sync::{Arc, Mutex, PoisonError},
 };
 
-use aes_gcm_siv::aead::{
-    Aead, AeadCore, KeyInit, Payload,
-    array::typenum::Unsigned,
-    {self},
-};
+use baml_crypto_types::{AeadAlgorithm, AeadCipher, AeadError};
 use bex_heap::TlabHolder;
 use bex_vm_types::types::Value;
 
@@ -68,220 +26,51 @@ use crate::{
 /// Fully-qualified name of the class thrown when a ciphertext is rejected.
 const DECRYPTION_FAILURE_FQN: &str = "baml.crypto.DecryptionFailure";
 
-/// The per-algorithm facts the shared seal and open paths report on.
-///
-/// Key, nonce, and tag lengths are not here: they come from the cipher type's
-/// own associated types, so they cannot drift from the implementation. Only the
-/// display name and the standard's length caps have to be stated.
-struct Algorithm {
-    /// Name reported in `InvalidArgument` messages and `DecryptionFailure.algorithm`.
-    name: &'static str,
-    /// Longest plaintext the standard permits, in bytes.
-    max_plaintext: u64,
-    /// Longest associated data the standard permits, in bytes.
-    max_aad: u64,
+fn operation_error(error: AeadError) -> VmRustFnError {
+    match error {
+        AeadError::InvalidArgument(message) => {
+            VmRustFnError::BamlError(VmBamlError::InvalidArgument { message })
+        }
+        AeadError::Unsupported(_) => VmRustFnError::BamlError(VmBamlError::Unsupported {
+            message: error.to_string(),
+        }),
+        _ => VmRustFnError::BamlError(VmBamlError::Io {
+            message: error.to_string(),
+        }),
+    }
 }
 
-/// RFC 8452 §6 caps both the plaintext and the associated data at 2^36 bytes.
-const AES_128_GCM_SIV: Algorithm = Algorithm {
-    name: "AES-128-GCM-SIV",
-    max_plaintext: aes_gcm_siv::P_MAX,
-    max_aad: aes_gcm_siv::A_MAX,
-};
-
-/// See [`AES_128_GCM_SIV`]; the caps do not depend on the key size.
-const AES_256_GCM_SIV: Algorithm = Algorithm {
-    name: "AES-256-GCM-SIV",
-    max_plaintext: aes_gcm_siv::P_MAX,
-    max_aad: aes_gcm_siv::A_MAX,
-};
-
-/// The first plaintext length at which the stream cipher's 32-bit block counter
-/// would wrap: 2^32 blocks of 64 bytes. `chacha20poly1305` rejects at exactly
-/// this bound, so the largest accepted plaintext is one byte below it.
-const CHACHA_MAX_PLAINTEXT: u64 = (1 << 38) - 1;
-
-/// RFC 8439 bounds the plaintext by that counter and puts no practical cap on
-/// associated data, whose length only has to fit the `u64` the Poly1305 length
-/// block encodes.
-const CHACHA20_POLY1305: Algorithm = Algorithm {
-    name: "ChaCha20-Poly1305",
-    max_plaintext: CHACHA_MAX_PLAINTEXT,
-    max_aad: u64::MAX,
-};
-
-/// See [`CHACHA20_POLY1305`]; the extended nonce changes how the subkey is
-/// derived, not the message caps.
-const XCHACHA20_POLY1305: Algorithm = Algorithm {
-    name: "XChaCha20-Poly1305",
-    max_plaintext: CHACHA_MAX_PLAINTEXT,
-    max_aad: u64::MAX,
-};
-
-fn invalid_argument(message: String) -> VmRustFnError {
-    VmRustFnError::BamlError(VmBamlError::InvalidArgument { message })
-}
-
-/// Rejects building a cipher in a build that takes all its crypto from the
-/// host's TLS crypto provider: no provider offers these ciphers.
-#[cfg(all(
-    feature = "external-crypto",
-    not(any(feature = "aws-crypto", feature = "ring-crypto"))
-))]
-fn cipher_available(algorithm: &Algorithm) -> Result<(), VmRustFnError> {
-    Err(VmRustFnError::BamlError(VmBamlError::Unsupported {
-        message: format!(
-            "{} is unavailable: this BAML build takes all its crypto from the host's TLS \
-             crypto provider (`external-crypto`), which does not offer it",
-            algorithm.name
-        ),
-    }))
-}
-
-#[cfg(not(all(
-    feature = "external-crypto",
-    not(any(feature = "aws-crypto", feature = "ring-crypto"))
-)))]
-#[allow(
-    clippy::unnecessary_wraps,
-    clippy::trivially_copy_pass_by_ref,
-    reason = "matches the variant for builds without bundled ciphers"
-)]
-fn cipher_available(_algorithm: &Algorithm) -> Result<(), VmRustFnError> {
-    Ok(())
-}
-
-/// Expand `key` into a cipher, rejecting a key that is not the algorithm's key
-/// length.
-///
-/// This is the only path to a `baml.crypto` cipher instance, so every cipher
-/// that exists was built from a correctly sized key.
-fn build_cipher<C: KeyInit>(algorithm: &Algorithm, key: &[u8]) -> Result<C, VmRustFnError> {
-    C::new_from_slice(key).map_err(|_| {
-        invalid_argument(format!(
-            "{}: key must be exactly {} bytes, got {}",
-            algorithm.name,
-            C::key_size(),
-            key.len()
-        ))
-    })
-}
-
-/// Borrow `nonce` as the fixed-size nonce `C` takes, rejecting any other length.
-///
-/// The expected length comes from `C::NonceSize`, so the 12-byte and 24-byte
-/// ciphers share this one check and neither can drift from its cipher.
-fn nonce_array<'a, C: AeadCore>(
-    algorithm: &Algorithm,
-    nonce: &'a [u8],
-) -> Result<&'a aead::Nonce<C>, VmRustFnError> {
-    <&aead::Nonce<C>>::try_from(nonce).map_err(|_| {
-        invalid_argument(format!(
-            "{}: nonce must be exactly {} bytes, got {}",
-            algorithm.name,
-            C::NonceSize::USIZE,
-            nonce.len()
-        ))
-    })
-}
-
-/// Encrypt `plaintext`, returning the ciphertext with its tag appended.
-fn seal<C: Aead>(
-    algorithm: &Algorithm,
-    cipher: &C,
+fn seal(
+    algorithm: AeadAlgorithm,
+    cipher: &dyn AeadCipher,
     nonce: &[u8],
     plaintext: &[u8],
     aad: &[u8],
 ) -> Result<Vec<u8>, VmRustFnError> {
-    let nonce = nonce_array::<C>(algorithm, nonce)?;
+    algorithm
+        .validate_encrypt(nonce, plaintext, aad)
+        .map_err(operation_error)?;
     cipher
-        .encrypt(
-            nonce,
-            Payload {
-                msg: plaintext,
-                aad,
-            },
-        )
-        .map_err(|_| {
-            // An over-long plaintext or aad is the only encryption failure mode
-            // either family has: both reject on their own caps before touching
-            // the message, and the postfix-tag `encrypt_in_place` wrapper around
-            // that cannot fail for the `Vec` buffer `Aead::encrypt` hands it.
-            invalid_argument(format!(
-                "{}: plaintext ({} bytes) must be at most {} bytes and aad ({} bytes) \
-                 at most {} bytes",
-                algorithm.name,
-                plaintext.len(),
-                algorithm.max_plaintext,
-                aad.len(),
-                algorithm.max_aad
-            ))
-        })
+        .encrypt(nonce, plaintext, aad)
+        .map_err(operation_error)
 }
 
-/// Why an authenticated-decryption attempt produced no plaintext.
-///
-/// Split out from `VmRustFnError` because a rejection has to be reported as a
-/// `DecryptionFailure` instance, which cannot be allocated while the cipher's
-/// heap instance is still borrowed. [`open`] classifies the failure and the
-/// caller allocates once the borrow is released.
-enum OpenError {
-    /// The call was malformed independently of the ciphertext's contents.
-    Invalid(VmRustFnError),
-    /// The ciphertext was rejected, with a coarse reason.
-    Rejected(String),
-}
-
-/// Authenticate and decrypt `ciphertext`.
-fn open<C: Aead>(
-    algorithm: &Algorithm,
-    cipher: &C,
+fn open(
+    algorithm: AeadAlgorithm,
+    cipher: &dyn AeadCipher,
     nonce: &[u8],
     ciphertext: &[u8],
     aad: &[u8],
-) -> Result<Vec<u8>, OpenError> {
-    let nonce = nonce_array::<C>(algorithm, nonce).map_err(OpenError::Invalid)?;
-    let tag_len = C::TagSize::USIZE;
-    // Reported separately from a tag mismatch because it is a fact the caller
-    // already holds. A ciphertext's length is public and attacker-chosen, so
-    // naming it reveals nothing, while "authentication failed" would point a
-    // caller at a key mismatch instead.
-    if ciphertext.len() < tag_len {
-        return Err(OpenError::Rejected(format!(
-            "ciphertext is shorter than the {tag_len}-byte authentication tag"
-        )));
-    }
-    let max_ciphertext = algorithm.max_plaintext.saturating_add(tag_len as u64);
-    if ciphertext.len() as u64 > max_ciphertext || aad.len() as u64 > algorithm.max_aad {
-        return Err(OpenError::Invalid(invalid_argument(format!(
-            "{}: ciphertext ({} bytes) must be at most {max_ciphertext} bytes and \
-             aad ({} bytes) at most {} bytes",
-            algorithm.name,
-            ciphertext.len(),
-            aad.len(),
-            algorithm.max_aad
-        ))));
-    }
-    cipher
-        .decrypt(
-            nonce,
-            Payload {
-                msg: ciphertext,
-                aad,
-            },
-        )
-        // Every remaining rejection is a tag-verification failure. Which of the
-        // key, nonce, aad, or ciphertext was wrong is not reported: an
-        // implementation that distinguished them would be a decryption oracle.
-        .map_err(|_| OpenError::Rejected("authentication failed".to_string()))
+) -> Result<Vec<u8>, AeadError> {
+    algorithm.validate_decrypt(nonce, ciphertext, aad)?;
+    cipher.decrypt(nonce, ciphertext, aad)
 }
 
-/// Convert an [`OpenError`] into the error the BAML `decrypt` contract declares,
-/// allocating the `DecryptionFailure` instance when the ciphertext was rejected.
-fn open_error(vm: &mut BexVm, algorithm: &str, err: OpenError) -> VmRustFnError {
-    let reason = match err {
-        OpenError::Invalid(e) => return e,
-        OpenError::Rejected(reason) => reason,
+/// Allocate the language-level exception only after releasing the cipher's VM borrow.
+fn open_error(vm: &mut BexVm, algorithm: &str, error: AeadError) -> VmRustFnError {
+    let reason = match error {
+        AeadError::AuthenticationFailed | AeadError::CiphertextTooShort => error.to_string(),
+        _ => return operation_error(error),
     };
     let Some(class_ptr) = vm.lookup_type_by_fqn(DECRYPTION_FAILURE_FQN) else {
         return VmRustFnError::InternalError(VmInternalError::MissingNativeFunction {
@@ -299,21 +88,14 @@ fn open_error(vm: &mut BexVm, algorithm: &str, err: OpenError) -> VmRustFnError 
 // AEAD ciphers
 // =========================================================================
 
-/// Implement one BAML AEAD class over its backing cipher type.
-///
-/// Every cipher's `new` / `encrypt` / `decrypt` bodies are identical; only the
-/// generated traits, the class shell, the cipher type, and the [`Algorithm`]
-/// descriptor differ. Codegen emits a class trait (`new`) plus a per-impl
-/// `Aead_for_*` trait (`encrypt` / `decrypt` — the `implements crypto.Aead`
-/// block's methods), so a blanket impl cannot express this and a macro is
-/// what keeps the four from drifting apart the way four hand-written copies
-/// would.
+/// Implement the generated class and AEAD traits using the provider's cipher.
+/// Only the generated names and requested algorithm differ between classes.
 macro_rules! impl_aead_class {
-    ($class_trait:ident, $aead_trait:ident, $class:ident, $cipher:ty, $algorithm:expr) => {
+    ($class_trait:ident, $aead_trait:ident, $class:ident, $algorithm:expr) => {
         impl $class_trait for PackageBamlImpl {
             fn new(vm: &mut BexVm, key: &[u8]) -> Result<Value, VmRustFnError> {
-                cipher_available(&$algorithm)?;
-                let cipher: $cipher = build_cipher(&$algorithm, key)?;
+                $algorithm.validate_key(key).map_err(operation_error)?;
+                let cipher = baml_crypto::aead($algorithm, key).map_err(operation_error)?;
                 let state: Arc<dyn Any + Send + Sync> = Arc::new(cipher);
                 Ok(copy::crypto::$class { _cipher: state }.to_value(vm))
             }
@@ -332,8 +114,8 @@ macro_rules! impl_aead_class {
                 aad: &[u8],
             ) -> Result<Vec<u8>, VmRustFnError> {
                 seal(
-                    &$algorithm,
-                    cipher._cipher::<$cipher>(vm),
+                    $algorithm,
+                    cipher._cipher::<Arc<dyn AeadCipher>>(vm).as_ref(),
                     nonce,
                     plaintext,
                     aad,
@@ -356,14 +138,14 @@ macro_rules! impl_aead_class {
                         instance: vm.as_instance(cipher)?,
                     };
                     open(
-                        &$algorithm,
-                        view._cipher::<$cipher>(vm),
+                        $algorithm,
+                        view._cipher::<Arc<dyn AeadCipher>>(vm).as_ref(),
                         nonce,
                         ciphertext,
                         aad,
                     )
                 };
-                opened.map_err(|e| open_error(vm, $algorithm.name, e))
+                opened.map_err(|e| open_error(vm, $algorithm.name(), e))
             }
         }
     };
@@ -373,52 +155,40 @@ impl_aead_class!(
     BamlClassCryptoAes128GcmSiv,
     BamlClassCryptoAead_for_Aes128GcmSiv,
     Aes128GcmSiv,
-    aes_gcm_siv::Aes128GcmSiv,
-    AES_128_GCM_SIV
+    AeadAlgorithm::Aes128GcmSiv
 );
 impl_aead_class!(
     BamlClassCryptoAes256GcmSiv,
     BamlClassCryptoAead_for_Aes256GcmSiv,
     Aes256GcmSiv,
-    aes_gcm_siv::Aes256GcmSiv,
-    AES_256_GCM_SIV
+    AeadAlgorithm::Aes256GcmSiv
 );
 impl_aead_class!(
     BamlClassCryptoChaCha20Poly1305,
     BamlClassCryptoAead_for_ChaCha20Poly1305,
     ChaCha20Poly1305,
-    chacha20poly1305::ChaCha20Poly1305,
-    CHACHA20_POLY1305
+    AeadAlgorithm::ChaCha20Poly1305
 );
 impl_aead_class!(
     BamlClassCryptoXChaCha20Poly1305,
     BamlClassCryptoAead_for_XChaCha20Poly1305,
     XChaCha20Poly1305,
-    chacha20poly1305::XChaCha20Poly1305,
-    XCHACHA20_POLY1305
+    AeadAlgorithm::XChaCha20Poly1305
 );
 
 // =========================================================================
 // Sha256
 // =========================================================================
 
-/// The hasher behind `baml.crypto.Sha256`: the TLS crypto provider's in native
-/// builds that have one, `sha2`'s otherwise.
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    any(
-        feature = "aws-crypto",
-        feature = "ring-crypto",
-        feature = "external-crypto"
-    )
-))]
+/// Native `baml.crypto.Sha256` always uses the selected crypto provider.
+#[cfg(not(target_arch = "wasm32"))]
 mod sha256_impl {
     use crate::errors::{VmBamlError, VmRustFnError};
 
-    pub(super) type State = baml_tls::Sha256;
+    pub(super) type State = baml_crypto::Sha256;
 
     pub(super) fn new() -> Result<State, VmRustFnError> {
-        baml_tls::Sha256::new().map_err(|e| {
+        baml_crypto::Sha256::new().map_err(|e| {
             VmRustFnError::BamlError(VmBamlError::Unsupported {
                 message: format!("Sha256: {e}"),
             })
@@ -434,14 +204,7 @@ mod sha256_impl {
     }
 }
 
-#[cfg(not(all(
-    not(target_arch = "wasm32"),
-    any(
-        feature = "aws-crypto",
-        feature = "ring-crypto",
-        feature = "external-crypto"
-    )
-)))]
+#[cfg(target_arch = "wasm32")]
 mod sha256_impl {
     use sha2::Digest;
 

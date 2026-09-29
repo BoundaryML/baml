@@ -19,6 +19,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use baml_http::outbound::{self, Destination};
 use clap::{Args, Subcommand};
 use serde::{Deserialize, Serialize};
 
@@ -27,7 +28,6 @@ use serde::{Deserialize, Serialize};
 // OAuth identifier, not a secret — but environment-specific, so it doesn't
 // belong in source.
 const BUILD_CLIENT_ID: Option<&str> = option_env!("BAML_WORKOS_CLIENT_ID");
-const DEFAULT_API_DOMAIN: &str = "https://api.workos.com";
 
 /// Hard cap on how long the device-authorization poll loop waits for the
 /// user to confirm.
@@ -35,37 +35,41 @@ const LOGIN_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Per-request cap so a black-holed network fails a login step instead of
 /// stalling it indefinitely.
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+pub(crate) const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(5);
 
 const DEVICE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:device_code";
 
-/// A blocking HTTP client with [`REQUEST_TIMEOUT`] applied.
-///
-/// Errors:
-/// - When no TLS crypto provider is available (an `external-crypto` build
-///   whose host installed none).
-pub(crate) fn http_client() -> Result<reqwest::blocking::Client> {
-    baml_tls::ensure_crypto_provider()?;
-    Ok(reqwest::blocking::Client::builder()
-        .timeout(REQUEST_TIMEOUT)
-        .build()
-        // Falls back to default settings only if the builder ever fails,
-        // which requires a broken TLS backend; a login attempt should still
-        // proceed rather than abort here.
-        .unwrap_or_default())
-}
-
-fn env_or(var: &str, default: &str) -> String {
-    std::env::var(var)
-        .ok()
-        .filter(|v| !v.trim().is_empty())
-        .unwrap_or_else(|| default.to_string())
-}
+/// The largest auth-server response read; they are small JSON documents.
+const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
 
 /// WorkOS API domain: hosts the CLI Auth device-authorization endpoints.
-fn api_domain() -> String {
-    env_or("BAML_WORKOS_API_DOMAIN", DEFAULT_API_DOMAIN)
+/// `BAML_WORKOS_API_DOMAIN` overrides the default from the outbound registry
+/// (`baml_http`).
+///
+/// Errors:
+/// - In a build with no auth server (`no-phone-home`) and no override.
+fn api_domain() -> Result<String> {
+    std::env::var("BAML_WORKOS_API_DOMAIN")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .or_else(|| Destination::Auth.default_url().map(str::to_string))
+        .context("Login is unavailable in this build.")
+}
+
+/// POSTs a form-encoded body to the auth server, returning the status and
+/// the body.
+///
+/// Errors:
+/// - On network failure, or when this build may not contact the auth server.
+fn post_form_raw(url: &str, form: &[(&str, &str)]) -> Result<(u16, Vec<u8>)> {
+    let request = baml_http::Request::post(url)
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(encode_form(form))
+        .timeout(REQUEST_TIMEOUT);
+    let response = outbound::send_blocking(Destination::Auth, request, MAX_RESPONSE_BYTES)
+        .context("Failed to reach the auth server")?;
+    Ok((response.status, response.body.to_vec()))
 }
 
 /// Resolves the WorkOS client id from the runtime environment or the
@@ -197,7 +201,7 @@ pub(crate) fn device_login(no_open: bool, existing: Credentials) -> Result<Crede
     let reporter = crate::reporter::Reporter::new();
     let client_id = client_id()?;
     let device: DeviceAuthResponse = post_form(
-        &format!("{}/user_management/authorize/device", api_domain()),
+        &format!("{}/user_management/authorize/device", api_domain()?),
         &[("client_id", client_id.as_str())],
     )
     .context("Failed to start device authorization")?;
@@ -236,7 +240,7 @@ pub(crate) fn device_login(no_open: bool, existing: Credentials) -> Result<Crede
     );
 
     let tokens = poll_token_endpoint(
-        &format!("{}/user_management/authenticate", api_domain()),
+        &format!("{}/user_management/authenticate", api_domain()?),
         &[
             ("grant_type", DEVICE_GRANT_TYPE),
             ("client_id", &client_id),
@@ -367,7 +371,6 @@ fn poll_token_endpoint(
     form: &[(&str, &str)],
     server_interval: Option<u64>,
 ) -> Result<TokenResponse> {
-    let client = http_client()?;
     let deadline = std::time::Instant::now() + LOGIN_TIMEOUT;
     let mut interval = server_interval
         .map(Duration::from_secs)
@@ -379,18 +382,11 @@ fn poll_token_endpoint(
                 LOGIN_TIMEOUT.as_secs() / 60
             );
         }
-        let resp = client
-            .post(endpoint)
-            .header("content-type", "application/x-www-form-urlencoded")
-            .body(encode_form(form))
-            .send()
-            .context("Failed to reach the auth server")?;
-        let status = resp.status();
-        let value: serde_json::Value = resp
-            .json()
-            .context("Failed to parse token endpoint response")?;
+        let (status, body) = post_form_raw(endpoint, form)?;
+        let value: serde_json::Value =
+            serde_json::from_slice(&body).context("Failed to parse token endpoint response")?;
 
-        if status.is_success() {
+        if (200..300).contains(&status) {
             return serde_json::from_value(value).context("Failed to parse token response");
         }
 
@@ -436,19 +432,14 @@ struct TokenUser {
 /// - On network failure, a non-success status (the response body is
 ///   included in the error), or a body that fails to deserialize as `T`.
 fn post_form<T: serde::de::DeserializeOwned>(url: &str, form: &[(&str, &str)]) -> Result<T> {
-    let client = http_client()?;
-    let resp = client
-        .post(url)
-        .header("content-type", "application/x-www-form-urlencoded")
-        .body(encode_form(form))
-        .send()
-        .context("Failed to reach the auth server")?;
-    let status = resp.status();
-    if !status.is_success() {
-        let body = resp.text().unwrap_or_default();
-        anyhow::bail!("Auth server returned {status}: {body}");
+    let (status, body) = post_form_raw(url, form)?;
+    if !(200..300).contains(&status) {
+        anyhow::bail!(
+            "Auth server returned {status}: {}",
+            String::from_utf8_lossy(&body)
+        );
     }
-    resp.json().context("Failed to parse auth server response")
+    serde_json::from_slice(&body).context("Failed to parse auth server response")
 }
 
 fn encode_form(form: &[(&str, &str)]) -> String {
@@ -596,7 +587,7 @@ impl Credentials {
                 .as_deref()
                 .context("session expired; run `baml auth login` again")?;
             let tokens: TokenResponse = post_form(
-                &format!("{}/user_management/authenticate", api_domain()),
+                &format!("{}/user_management/authenticate", api_domain()?),
                 &[
                     ("grant_type", "refresh_token"),
                     ("client_id", &client_id()?),
