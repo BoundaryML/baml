@@ -92,7 +92,12 @@ test "compared method inside a block still labels the unreachable branch" {
         "is compared without being called",
         "s.length()",
     );
-    assert.equal(warning.annotations.length(), 2)
+    assert.equal(warning.annotations.length(), 2);
+    let secondary = warning.annotations.find((annotation) -> {
+        !annotation.is_primary
+    })
+        ?? baml.sys.panic("missing unreachable branch annotation");
+    assert.equal(secondary.message, "this branch is unreachable")
 }
 
 test "method flowing into unknown warns in every value position" {
