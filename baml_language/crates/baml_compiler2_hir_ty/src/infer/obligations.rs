@@ -71,6 +71,53 @@ enum Attempt {
 }
 
 impl<'db> InferenceContext<'db> {
+    /// A structure demand can depend on pending arithmetic, e.g.
+    /// `(values.reduce((a, b) -> { a + b }, 0) * 1.0).round()`.
+    /// Resolve only that operator's dependencies from their current bounds;
+    /// unrelated obligations must keep waiting for the finish fixpoint.
+    /// Leave the obligation registered so finish still reports failures.
+    pub(super) fn resolve_structure_operand(
+        &mut self,
+        ty: &Ty,
+        visiting: &mut rustc_hash::FxHashSet<baml_type::interned::InferVar>,
+    ) -> Ty {
+        let resolved = self.table.resolve_completely(ty);
+        let InferTy::InferVar { var, .. } = resolved.kind() else {
+            return resolved;
+        };
+        let var = *var;
+        if !visiting.insert(var) {
+            return resolved;
+        }
+        let bounds = self.table.var_bounds(var);
+        if self.try_solve_bounded_var(var, &bounds) {
+            return self.resolve_structure_operand(&resolved, visiting);
+        }
+        let operator = self.obligations.iter().find_map(|obligation| {
+            let Obligation::Operator {
+                interface,
+                lhs,
+                rhs,
+                out,
+                ..
+            } = obligation
+            else {
+                return None;
+            };
+            (self.table.resolve_completely(out) == resolved)
+                .then(|| (*interface, lhs.clone(), rhs.clone()))
+        });
+        if let Some((interface, lhs, rhs)) = operator {
+            let lhs = self.resolve_structure_operand(&lhs, visiting);
+            let rhs = rhs.map(|rhs| self.resolve_structure_operand(&rhs, visiting));
+            if !lhs.has_infer() && !rhs.as_ref().is_some_and(Ty::has_infer) {
+                let result = self.dispatch_operator(interface, &lhs, rhs.as_ref());
+                let _ = self.table.unify(&resolved, &result);
+            }
+        }
+        self.table.resolve_completely(&resolved)
+    }
+
     pub(super) fn register_obligation(&mut self, obligation: Obligation) {
         self.obligations.push(obligation);
     }

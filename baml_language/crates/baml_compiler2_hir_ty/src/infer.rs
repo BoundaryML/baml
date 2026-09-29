@@ -12688,18 +12688,7 @@ impl<'db> InferenceContext<'db> {
     /// misses as before (the "type annotations needed" family, S17's
     /// diagnostic).
     fn structurally_resolve(&mut self, ty: &Ty) -> Ty {
-        let resolved = self.table.resolve_completely(ty);
-        let mut resolved = if let InferTy::InferVar { var, .. } = resolved.kind() {
-            let var = *var;
-            let bounds = self.table.var_bounds(var);
-            if self.try_solve_bounded_var(var, &bounds) {
-                self.table.resolve_completely(&resolved)
-            } else {
-                resolved
-            }
-        } else {
-            resolved
-        };
+        let mut resolved = self.resolve_structure_operand(ty, &mut Default::default());
         // A projection blocked behind inference vars cannot PROBE (a
         // projection is no impl subject) - the base must resolve before
         // the oracle can reduce. Force the occurring vars from their
