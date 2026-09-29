@@ -729,7 +729,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaFromBase64<'local>(
         base64,
         mime,
         "nativeMediaFromBase64",
-        MediaValue::from_base64,
+        |kind, base64, mime| MediaValue::from_base64(kind, base64.into(), mime),
     )
 }
 
@@ -800,9 +800,11 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaBase64<'local>(
     key: jlong,
 ) -> JString<'local> {
     match resolve_media(key) {
-        Some(media) => {
-            optional_string_to_jstring(&mut env, Some(media.base64()), "nativeMediaBase64")
-        }
+        Some(media) => optional_string_to_jstring(
+            &mut env,
+            Some(media.base64().as_str().to_owned()),
+            "nativeMediaBase64",
+        ),
         None => {
             throw_runtime_exception(&mut env, "nativeMediaBase64: invalid media handle key");
             JString::default()

@@ -662,8 +662,11 @@ mod tests {
             .await
             .acquire()
             .await;
-        let media =
-            MediaValue::from_base64(MediaKind::Image, "aW1hZ2UtYnl0ZXM=", Some("image/png"));
+        let media = MediaValue::from_base64(
+            MediaKind::Image,
+            "aW1hZ2UtYnl0ZXM=".into(),
+            Some("image/png"),
+        );
         let media_ptr = permit.tlab_mut().alloc(Object::RustData(media));
         let trace_heap = TraceHeap::new();
 

@@ -1033,7 +1033,7 @@ fn serialize_media(
     } else if let Some(file) = media.file() {
         ("file", file)
     } else {
-        ("base64", media.base64())
+        ("base64", media.base64().as_str().to_owned())
     };
 
     let mut obj = serde_json::Map::new();
@@ -1526,7 +1526,7 @@ fn deserialize_media(
     let media_arc: Arc<bex_vm_types::MediaValue> = match source {
         "url" => bex_vm_types::MediaValue::from_url(kind, value_str, mime),
         "file" => bex_vm_types::MediaValue::from_file(kind, value_str, mime),
-        "base64" | "inline" => bex_vm_types::MediaValue::from_base64(kind, value_str, mime),
+        "base64" | "inline" => bex_vm_types::MediaValue::from_base64(kind, value_str.into(), mime),
         other => {
             return Err(raise_decode(
                 vm,

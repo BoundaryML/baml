@@ -135,7 +135,7 @@ fn proto_media_to_bex_media(media: BamlValueMedia) -> Result<Arc<MediaValue>, Ct
     match media.value {
         Some(baml_value_media::Value::Url(url)) => Ok(MediaValue::from_url(kind, &url, mime_type)),
         Some(baml_value_media::Value::Base64(base64)) => {
-            Ok(MediaValue::from_base64(kind, &base64, mime_type))
+            Ok(MediaValue::from_base64(kind, base64.into(), mime_type))
         }
         Some(baml_value_media::Value::File(file)) => {
             Ok(MediaValue::from_file(kind, &file, mime_type))
@@ -443,7 +443,7 @@ mod tests {
             };
             assert_eq!(media.kind, MediaKind::Image);
             assert_eq!(media.mime_type().as_deref(), Some("image/png"));
-            assert_eq!(media.base64(), "aW1hZ2U=");
+            assert_eq!(media.base64().as_str(), "aW1hZ2U=");
         }
     }
 

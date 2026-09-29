@@ -461,7 +461,7 @@ fn bex_media_to_proto_media(
         value: Some(media.read_content(|content| match content {
             bex_project::MediaContent::Url { url, .. } => BamlValueMediaValue::Url(url.clone()),
             bex_project::MediaContent::Base64 { base64_data } => {
-                BamlValueMediaValue::Base64(base64_data.clone())
+                BamlValueMediaValue::Base64(base64_data.as_str().to_owned())
             }
             bex_project::MediaContent::File { file, .. } => BamlValueMediaValue::File(file.clone()),
         })),
@@ -864,7 +864,7 @@ mod tests {
         let media = Arc::new(MediaValue::new(
             bex_project::MediaKind::Image,
             MediaContent::Base64 {
-                base64_data: "aW1hZ2U=".to_string(),
+                base64_data: "aW1hZ2U=".into(),
             },
             Some("image/png".to_string()),
         ));

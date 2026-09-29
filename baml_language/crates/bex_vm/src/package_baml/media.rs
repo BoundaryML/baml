@@ -31,7 +31,7 @@ impl BamlClassMediaPdf for PackageBamlImpl {
     }
 
     fn base64(vm: &BexVm, pdf: &view::media::Pdf<'_>) -> bex_str::BexStr {
-        bex_str::BexStr::from(pdf._data::<bex_vm_types::MediaValue>(vm).base64())
+        pdf._data::<bex_vm_types::MediaValue>(vm).base64()
     }
 
     fn mime_type(vm: &BexVm, pdf: &view::media::Pdf<'_>) -> Option<bex_str::BexStr> {
@@ -67,7 +67,7 @@ impl BamlClassMediaPdf for PackageBamlImpl {
         copy::media::Pdf {
             _data: bex_vm_types::MediaValue::from_base64(
                 MediaKind::Pdf,
-                base64.as_str(),
+                base64.clone(),
                 mime_type.map(bex_str::BexStr::as_str),
             ),
         }
@@ -95,7 +95,7 @@ impl BamlClassMediaAudio for PackageBamlImpl {
     }
 
     fn base64(vm: &BexVm, audio: &view::media::Audio<'_>) -> bex_str::BexStr {
-        bex_str::BexStr::from(audio._data::<bex_vm_types::MediaValue>(vm).base64())
+        audio._data::<bex_vm_types::MediaValue>(vm).base64()
     }
 
     fn mime_type(vm: &BexVm, audio: &view::media::Audio<'_>) -> Option<bex_str::BexStr> {
@@ -135,7 +135,7 @@ impl BamlClassMediaAudio for PackageBamlImpl {
         copy::media::Audio {
             _data: bex_vm_types::MediaValue::from_base64(
                 MediaKind::Audio,
-                base64.as_str(),
+                base64.clone(),
                 mime_type.map(bex_str::BexStr::as_str),
             ),
         }
@@ -163,7 +163,7 @@ impl BamlClassMediaVideo for PackageBamlImpl {
     }
 
     fn base64(vm: &BexVm, video: &view::media::Video<'_>) -> bex_str::BexStr {
-        bex_str::BexStr::from(video._data::<bex_vm_types::MediaValue>(vm).base64())
+        video._data::<bex_vm_types::MediaValue>(vm).base64()
     }
 
     fn mime_type(vm: &BexVm, video: &view::media::Video<'_>) -> Option<bex_str::BexStr> {
@@ -203,7 +203,7 @@ impl BamlClassMediaVideo for PackageBamlImpl {
         copy::media::Video {
             _data: bex_vm_types::MediaValue::from_base64(
                 MediaKind::Video,
-                base64.as_str(),
+                base64.clone(),
                 mime_type.map(bex_str::BexStr::as_str),
             ),
         }
@@ -231,7 +231,7 @@ impl BamlClassMediaImage for PackageBamlImpl {
     }
 
     fn base64(vm: &BexVm, image: &view::media::Image<'_>) -> bex_str::BexStr {
-        bex_str::BexStr::from(image._data::<bex_vm_types::MediaValue>(vm).base64())
+        image._data::<bex_vm_types::MediaValue>(vm).base64()
     }
 
     fn mime_type(vm: &BexVm, image: &view::media::Image<'_>) -> Option<bex_str::BexStr> {
@@ -271,7 +271,7 @@ impl BamlClassMediaImage for PackageBamlImpl {
         copy::media::Image {
             _data: bex_vm_types::MediaValue::from_base64(
                 MediaKind::Image,
-                base64.as_str(),
+                base64.clone(),
                 mime_type.map(bex_str::BexStr::as_str),
             ),
         }
@@ -280,3 +280,31 @@ impl BamlClassMediaImage for PackageBamlImpl {
 
 // Namespace aggregator (only default dispatch methods, no required methods)
 impl BamlNamespaceMedia for PackageBamlImpl {}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use bex_str::BexStr;
+
+    use super::*;
+
+    #[test]
+    fn from_base64_shares_the_callers_payload() {
+        // Longer than the inline capacity, so the payload is heap-backed.
+        let payload = BexStr::from("QUJD".repeat(64));
+        let BexStr::Flat(source) = &payload else {
+            panic!("expected a heap-backed payload, got {payload:?}")
+        };
+        let image = <PackageBamlImpl as BamlClassMediaImage>::from_base64(&payload, None);
+        let stored = image
+            ._data
+            .downcast_ref::<bex_vm_types::MediaValue>()
+            .expect("media wrapper holds a MediaValue")
+            .base64();
+        let BexStr::Flat(stored) = &stored else {
+            panic!("expected a heap-backed payload, got {stored:?}")
+        };
+        assert!(Arc::ptr_eq(source, stored));
+    }
+}
