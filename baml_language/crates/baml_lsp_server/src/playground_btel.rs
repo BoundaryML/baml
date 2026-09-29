@@ -212,14 +212,22 @@ impl PlaygroundTelemetry {
             let mut spans = chunked(index, &[execution_id.to_owned()], |n| {
                 tree_sql("span_id", n)
             })?;
+            // The index keeps recorded parents as they are, so a corrupt
+            // recording can make a span its own ancestor: visit each once.
+            let mut seen = std::collections::HashSet::from([execution_id.to_owned()]);
             let mut frontier = vec![execution_id.to_owned()];
             while !frontier.is_empty() {
                 let children = chunked(index, &frontier, |n| tree_sql("parent_span_id", n))?;
-                frontier = children
-                    .iter()
-                    .filter_map(|row| row[0].as_str().map(str::to_owned))
-                    .collect();
-                spans.extend(children);
+                frontier.clear();
+                for row in children {
+                    let Some(id) = row[0].as_str().map(str::to_owned) else {
+                        continue;
+                    };
+                    if seen.insert(id.clone()) {
+                        frontier.push(id);
+                        spans.push(row);
+                    }
+                }
             }
             let ids: Vec<String> = spans
                 .iter()

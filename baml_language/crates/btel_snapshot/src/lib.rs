@@ -11,7 +11,8 @@ use std::{
 };
 
 use baml_type::{DeclarationName, typetag::TypeTag};
-use bex_str::BexStr;
+/// The string type the builder takes, so callers need not depend on `bex_str`.
+pub use bex_str::BexStr;
 use num_bigint::BigInt;
 
 mod decode;

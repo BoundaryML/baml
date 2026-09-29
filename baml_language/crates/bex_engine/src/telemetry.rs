@@ -184,7 +184,16 @@ impl TelemetryRecording {
                 process_id: bex_events::ids::ProcessEuid::current().0,
                 baml_version: baml_version::CANONICAL_VERSION.to_owned(),
                 host: self.host.clone(),
-                command: std::env::args().collect(),
+                // Arguments can hold secrets (`--api-key ...`), so a cloud
+                // recording does not upload them; local recordings keep them.
+                // `args_os`: `args` panics on an argument that is not UTF-8.
+                command: if matches!(self.destination, Destination::Cloud { .. }) {
+                    Vec::new()
+                } else {
+                    std::env::args_os()
+                        .map(|arg| arg.to_string_lossy().into_owned())
+                        .collect()
+                },
                 started_at_unix_ns: process_started_at_unix_ns(),
             },
             sources: (!self.sources.is_empty())

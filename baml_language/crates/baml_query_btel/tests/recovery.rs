@@ -715,6 +715,46 @@ fn crashes_around_commit_neither_lose_nor_double_apply_files() {
 }
 
 #[test]
+fn a_crash_after_indexing_the_process_end_still_builds_the_profiler() {
+    let project = tempfile::tempdir().unwrap();
+    let recording = Recording::new(project.path(), 11);
+    recording.write(
+        1,
+        proto::RecordingFile {
+            definitions: Some(definitions("user.Ask")),
+            clock_states: Some(state(proto::TimingStatus::Valid)),
+            aggregates: Some(aggregate(2, 20)),
+            ..Default::default()
+        },
+    );
+    recording.write(
+        2,
+        proto::RecordingFile {
+            end: Some(proto::RecordingEnd {
+                process_end: Some(proto::ProcessEnd {
+                    status: proto::ProcessStatus::Success as i32,
+                    at_unix_ns: 1_790_000_000_000_001_000,
+                }),
+            }),
+            ..Default::default()
+        },
+    );
+    // Killed after committing the process end, before building its profiler:
+    // the next refresh has no file to apply, but the rebuild is still queued.
+    crash(project.path(), "after_commit:1");
+    let mut index = Index::for_project(project.path(), options()).unwrap();
+    let metrics = index.refresh().unwrap();
+    assert_eq!(metrics.files_applied, 0);
+    assert_eq!(
+        one(
+            &mut index,
+            "SELECT function_name || ' ' || invocation_count || ' ' || total_time FROM profiler"
+        ),
+        vec![json!("user.Ask 2 20")]
+    );
+}
+
+#[test]
 fn value_callbacks_respect_the_time_budget() {
     let project = tempfile::tempdir().unwrap();
     let recording = Recording::new(project.path(), 10);

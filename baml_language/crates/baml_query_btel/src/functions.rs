@@ -881,7 +881,7 @@ pub(crate) fn inline_handle(value: &Inline) -> Vec<u8> {
 fn build_inline(b: &mut btel_snapshot::Builder, value: &Inline) -> btel_snapshot::SnapshotValue {
     use btel_snapshot::{Limit, OwnedType, SnapshotObject, SnapshotValue};
     let text = |b: &mut btel_snapshot::Builder, text: &str| {
-        b.string(&bex_str::BexStr::from(text)).map_or(
+        b.string(&btel_snapshot::BexStr::from(text)).map_or(
             SnapshotValue::Truncated(Limit::Bytes),
             SnapshotValue::String,
         )
@@ -905,7 +905,7 @@ fn build_inline(b: &mut btel_snapshot::Builder, value: &Inline) -> btel_snapshot
                 if b.remaining_entries() == 0 || !b.content(key.len(), false) {
                     break;
                 }
-                b.entry(&bex_str::BexStr::from(key.as_str()), value);
+                b.entry(&btel_snapshot::BexStr::from(key.as_str()), value);
             }
             let range = b.entry_range(start);
             b.set_object(

@@ -5,7 +5,7 @@
 //! call paths of all those recordings by profiler node, so one function
 //! reached the same way from several call sites, threads or engines is one
 //! row. Rebuilt whenever one of the process's recordings changes.
-use std::collections::{HashSet, hash_map::Entry};
+use std::collections::hash_map::Entry;
 
 use btel_reader::timing::{Clock, TimingState};
 use rusqlite::{Connection, Transaction, params, types::ValueRef};
@@ -40,11 +40,20 @@ fn add_ns(sum: &mut Option<i128>, value: Option<i64>) {
     *sum = sum.zip(value).map(|(a, b)| a + i128::from(b));
 }
 
-/// Rebuild the profiler of each of `processes`: nothing until the process's
-/// end is indexed.
-pub(super) fn rebuild(conn: &mut Connection, processes: &HashSet<Vec<u8>>) -> Result<(), Error> {
-    for process in processes {
+/// Rebuild the profiler of each process in `profile_pending`: nothing until
+/// the process's end is indexed. Each process leaves the queue in the
+/// transaction that rebuilds it.
+pub(super) fn rebuild_pending(conn: &mut Connection) -> Result<(), Error> {
+    let processes: Vec<Vec<u8>> = conn
+        .prepare("SELECT process_id FROM profile_pending")?
+        .query_map([], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    for process in &processes {
         let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        tx.execute(
+            "DELETE FROM profile_pending WHERE process_id = ?1",
+            [process],
+        )?;
         tx.execute("DELETE FROM profile_node WHERE process_id = ?1", [process])?;
         let ended: bool = tx.query_row(
             "SELECT EXISTS (SELECT 1 FROM recording

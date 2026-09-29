@@ -312,6 +312,25 @@ class TurnStream {
         if let sse: baml.http.SseStream = self._sse {
             sse.close();
         }
+        self._record_tokens();
+    }
+
+    /// (internal) Record this turn's tokens against `_usage_target`, once, as
+    /// soon as the stream ends: whether or not anyone asks for the final turn.
+    function _record_tokens(self) -> void {
+        let target = self._usage_target;
+        if (target != 0 && (self._input_tokens != null || self._output_tokens != null)) {
+            self._usage_target = 0;
+            let _ = trace._record_usage(
+                target,
+                self._usage_model,
+                self._input_tokens ?? 0,
+                self._output_tokens ?? 0,
+                null,
+                null,
+                null,
+            );
+        }
     }
 
     /// (internal) The strict-termination check: a no-op unless this stream required an
@@ -485,21 +504,7 @@ class TurnStream {
         } else {
             null
         };
-        if let u: root.events.Usage = usage {
-            let target = self._usage_target;
-            if (target != 0) {
-                self._usage_target = 0;
-                let _ = trace._record_usage(
-                    target,
-                    self._usage_model,
-                    u.input_tokens,
-                    u.output_tokens,
-                    null,
-                    null,
-                    null,
-                );
-            }
-        }
+        self._record_tokens();
         if let call: root.events.LLMCall = self._wire_call {
             if (call.timing.duration_ms == null) {
                 if let started: baml.time.Instant = self._call_started {

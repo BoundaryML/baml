@@ -1006,7 +1006,7 @@ function parse(resp: OaResponse) -> ai.ModelTurn {
             cached_input_tokens: u.input_tokens_details?.cached_tokens,
             reasoning_tokens: u.output_tokens_details?.reasoning_tokens,
             // input_tokens counts the cached share too.
-            uncached_input_tokens: (u.input_tokens ?? 0) - (u.input_tokens_details?.cached_tokens ?? 0),
+            uncached_input_tokens: ai.internal.uncached_input_tokens(u.input_tokens, u.input_tokens_details?.cached_tokens),
         }
     } else {
         null

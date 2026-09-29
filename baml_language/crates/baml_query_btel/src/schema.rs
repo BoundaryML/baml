@@ -15,7 +15,7 @@
 //!   visible; they never make a thread a root or a path a top-level path.
 
 /// Physical layout of these tables. Change on any DDL change.
-pub const SCHEMA_VERSION: i64 = 10;
+pub const SCHEMA_VERSION: i64 = 11;
 /// Interpretation of evidence into rows. Change when reconciliation changes
 /// meaning without a DDL change; either mismatch rebuilds the index.
 pub const NORMALIZATION_VERSION: i64 = 1;
@@ -332,6 +332,12 @@ CREATE TABLE profile_node (
   cancel_error_count INTEGER,
   missing_count INTEGER,
   PRIMARY KEY (process_id, node_id)
+) STRICT, WITHOUT ROWID;
+-- Processes whose profiler must be rebuilt: added in the transaction that
+-- changes or removes one of their recordings, removed in the rebuild's own
+-- transaction, so a crash between the two leaves the work for next time.
+CREATE TABLE profile_pending (
+  process_id BLOB PRIMARY KEY
 ) STRICT, WITHOUT ROWID;
 
 -- Evidence problems found while applying files. State-dependent problems

@@ -194,13 +194,11 @@ fn refresh_locked(
 
     let known = load_known(conn)?;
     let present: HashSet<[u8; 16]> = found.recordings.iter().map(|r| *r.id.as_bytes()).collect();
-    // Processes whose recordings changed: their profilers are rebuilt last.
-    let mut changed_processes = HashSet::new();
     for (recording_id, known) in &known {
         if !present.contains(recording_id) {
-            changed_processes.insert(process_of(conn, known.rec)?);
             // The whole directory is gone: its remaining valid prefix is empty.
             let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+            mark_profile_pending(&tx, known.rec)?;
             delete_facts(&tx, known.rec)?;
             tx.execute("DELETE FROM recording WHERE rec = ?1", [known.rec])?;
             tx.commit()?;
@@ -209,25 +207,28 @@ fn refresh_locked(
         }
     }
     for recording in &found.recordings {
-        let known = known.get(recording.id.as_bytes());
-        let before = known.map(|known| process_of(conn, known.rec)).transpose()?;
-        if let Some(rec) = reconcile(conn, recording, known, options, metrics)? {
-            changed_processes.insert(process_of(conn, rec)?);
-            // A rebuild can change the process a recording names.
-            changed_processes.extend(before);
-        }
+        reconcile(
+            conn,
+            recording,
+            known.get(recording.id.as_bytes()),
+            options,
+            metrics,
+        )?;
     }
-    profile::rebuild(conn, &changed_processes)?;
+    profile::rebuild_pending(conn)?;
     Ok(())
 }
 
-/// The process a recording belongs to: the one its header names, or itself.
-fn process_of(conn: &Connection, rec: i64) -> Result<Vec<u8>, Error> {
-    Ok(conn.query_row(
-        "SELECT COALESCE(process_id, recording_id) FROM recording WHERE rec = ?1",
-        [rec],
-        |r| r.get(0),
-    )?)
+/// Queue the profiler of the process `rec` belongs to (the one its header
+/// names, or the recording itself) for a rebuild, inside the transaction
+/// that changes the recording.
+fn mark_profile_pending(tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
+    tx.prepare_cached(
+        "INSERT OR IGNORE INTO profile_pending (process_id)
+         SELECT COALESCE(process_id, recording_id) FROM recording WHERE rec = ?1",
+    )?
+    .execute([rec])?;
+    Ok(())
 }
 
 fn load_known(conn: &Connection) -> Result<HashMap<[u8; 16], Known>, Error> {
@@ -335,14 +336,13 @@ enum Candidate<'a> {
     Invalid(&'a DiscoveredFile, String),
 }
 
-/// Returns the recording's `rec` when a transaction changed its facts.
 fn reconcile(
     conn: &mut Connection,
     recording: &DiscoveredRecording,
     known: Option<&Known>,
     options: &RefreshOptions,
     metrics: &mut RefreshMetrics,
-) -> Result<Option<i64>, Error> {
+) -> Result<(), Error> {
     let by_sequence: HashMap<u64, &DiscoveredFile> =
         recording.files.iter().map(|f| (f.sequence, f)).collect();
     let observed = recording.files.last().map_or(0, |f| f.sequence);
@@ -435,7 +435,7 @@ fn reconcile(
         && (pending.is_empty() || still_rejected.is_some())
         && known.frontier == frontier(&still_rejected, terminal)
     {
-        return Ok(None);
+        return Ok(());
     }
     let mut rec = known.map(|k| k.rec);
     let mut first_transaction = true;
@@ -446,7 +446,7 @@ fn reconcile(
             conn, recording, rec, rebuild, &pending, &frontier, options, metrics,
         )?;
         if fresh.stop || fresh.consumed >= pending.len() {
-            return Ok(Some(fresh.rec));
+            return Ok(());
         }
         // Beyond the in-memory budget: the rest applies incrementally.
         rec = Some(fresh.rec);
@@ -545,6 +545,8 @@ fn reconcile(
         };
         rec = Some(rec_key);
         if first_transaction && rebuild {
+            // The reset can change the process the recording names.
+            mark_profile_pending(&tx, rec_key)?;
             delete_facts(&tx, rec_key)?;
             tx.execute(
                 "UPDATE recording SET indexed_sequence = 0, terminal_sequence = NULL,
@@ -638,6 +640,10 @@ fn reconcile(
             }
         }
         applier.finish()?;
+        if (first_transaction && rebuild) || group.iter().any(|c| matches!(c, Candidate::Read(..)))
+        {
+            mark_profile_pending(&tx, rec_key)?;
+        }
         // Frontier state from this discovery snapshot.
         let state = frontier(&blocked_invalid, terminal);
         tx.execute(
@@ -665,7 +671,7 @@ fn reconcile(
             break;
         }
     }
-    Ok(rec)
+    Ok(())
 }
 
 /// The frontier after applying, given the blocking invalid file and the
@@ -773,6 +779,7 @@ fn apply_fresh<'p>(
         }
     };
     if rebuild {
+        mark_profile_pending(&tx, rec)?;
         delete_facts(&tx, rec)?;
         tx.execute(
             "UPDATE recording SET indexed_sequence = 0, terminal_sequence = NULL,
@@ -829,6 +836,9 @@ fn apply_fresh<'p>(
             terminal = Some(file.found.sequence);
         }
         metrics.files_applied += 1;
+    }
+    if rebuild || !applied.is_empty() {
+        mark_profile_pending(&tx, rec)?;
     }
     let mut blocked_invalid = None;
     if let Some((found, reason)) = &invalid {

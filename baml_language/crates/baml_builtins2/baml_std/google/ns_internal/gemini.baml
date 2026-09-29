@@ -833,7 +833,7 @@ function _gm_usage(usage: GmUsageMetadata?) -> ai.events.Usage? {
             cached_input_tokens: um.cachedContentTokenCount,
             reasoning_tokens: um.thoughtsTokenCount,
             // promptTokenCount counts the cached share too.
-            uncached_input_tokens: (um.promptTokenCount ?? 0) - (um.cachedContentTokenCount ?? 0),
+            uncached_input_tokens: ai.internal.uncached_input_tokens(um.promptTokenCount, um.cachedContentTokenCount),
         }
     } else {
         null
