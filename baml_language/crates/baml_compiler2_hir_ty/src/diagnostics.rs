@@ -112,6 +112,9 @@ pub enum SelfCallPosition {
     /// `Self` in more than one parameter (the `self` receiver counts), or
     /// nested inside a parameter's type.
     Parameter,
+    /// The one `Self`-typed parameter has a default: a call may omit it, so
+    /// there is no argument to read `Self` from.
+    OptionalParameter,
     /// `Self` nested inside an invariant constructor in the return or throws type
     /// (e.g. `-> Self[]`, `-> Box<Self>`); a bare top-level `-> Self` is allowed.
     NestedInReturn,
@@ -620,18 +623,6 @@ pub enum TirTypeError {
     SelflessMethodNeedsConcreteSelf {
         interface_name: Name,
         method_name: Name,
-        self_ty: baml_type::Ty,
-    },
-
-    /// An object-safe method whose one `Self`-typed parameter is not the
-    /// FIRST, referenced with an erased `Self`. Dispatch on an erased `Self`
-    /// reads the first argument's runtime type; a `Self` elsewhere has no
-    /// dispatch road yet, so the call needs a concrete `Self`.
-    SelfDispatchParamNotFirst {
-        interface_name: Name,
-        method_name: Name,
-        /// Zero-based position of the `Self`-typed parameter.
-        index: usize,
         self_ty: baml_type::Ty,
     },
 
@@ -1877,19 +1868,6 @@ impl TirTypeError {
                  {interface_name}).{method_name}`",
                     self_ty.spell(vp)
                 ),
-                TirTypeError::SelfDispatchParamNotFirst {
-                    interface_name,
-                    method_name,
-                    index,
-                    self_ty,
-                } => write!(
-                    f,
-                    "method `{method_name}` on interface `{interface_name}` takes `Self` as \
-                 parameter {index} (counting from 0); an erased `Self` — `{}` — is dispatched \
-                 from the first argument only, so name a concrete `Self`: `(SomeImplementor as \
-                 {interface_name}).{method_name}(...)`",
-                    self_ty.spell(vp)
-                ),
                 TirTypeError::InvalidSelfCallThroughInterface {
                     interface_name,
                     method_name,
@@ -1898,6 +1876,9 @@ impl TirTypeError {
                     let position = match position {
                         SelfCallPosition::Parameter => {
                             "more than one parameter, or nested in a parameter"
+                        }
+                        SelfCallPosition::OptionalParameter => {
+                            "a parameter with a default, which a call may omit"
                         }
                         SelfCallPosition::NestedInReturn => {
                             "its return/throws type, nested in a container (e.g. `Self[]`)"

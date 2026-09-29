@@ -1493,13 +1493,13 @@ struct InterfaceMethodShape {
     /// SUGAR question (may `a.m(..)` stand for `I.m(a, ..)`; may a value
     /// reference bind a receiver), never the dispatch one.
     takes_self: bool,
-    /// Whether the method dispatches an erased `Self` from its first
-    /// argument — its one `Self`-typed parameter is the first
-    /// ([`SelfDispatch::OnParam`]`(0)`), the `self` receiver being one such
-    /// parameter. The checker admits an erased `Self` only for these, so
-    /// every other shape reaches lowering with a concrete `Self` and takes
-    /// the type-keyed road.
-    dispatches_on_first: bool,
+    /// The declared index of the method's one required `Self`-typed
+    /// parameter ([`SelfDispatch::OnParam`]), the `self` receiver being one
+    /// such parameter at `0` — the value argument the VM derives `Self`
+    /// from. The checker admits an erased `Self` only for these, so every
+    /// other shape reaches lowering with a concrete `Self` and takes the
+    /// type-keyed road.
+    dispatch_param: Option<usize>,
     /// The interface's own declared generic parameter count.
     interface_generics: usize,
     /// Frame index where the method's OWN generics start:
@@ -3379,8 +3379,10 @@ impl<'db> LoweringContext<'db> {
     /// alike: a served interface or impl resolves exactly as a source one.
     ///
     /// Two dispatch forms, split by whether the method takes `self`:
-    /// - WITH a receiver, `Self` is DERIVED from it: the same open-world
-    ///   `VirtualCall` the member spelling emits, on `args[0]`.
+    /// - WITH a `Self`-typed argument, `Self` is DERIVED from it: the same
+    ///   open-world `VirtualCall` the member spelling emits, dispatching on
+    ///   that argument (`self` at 0, or the one required bare-`Self`
+    ///   parameter wherever it is declared).
     /// - WITHOUT one, `Self` is PASSED: the resolved `Self` type becomes
     ///   the type operand of a [`Rvalue::MakeVirtualFunction`], and the
     ///   call proceeds as an ordinary indirect call of the resolved
@@ -3422,9 +3424,9 @@ impl<'db> LoweringContext<'db> {
                         expr_id,
                     ));
                 };
-                if shape.dispatches_on_first {
-                    // The receiver road derives `Self` from the first
-                    // argument's value, so it needs only the interface VIEW
+                if let Some(self_arg) = shape.dispatch_param {
+                    // The dispatched road derives `Self` from the value of
+                    // argument `self_arg`, so it needs only the interface VIEW
                     // (the static frame prefix); the method's own type args
                     // — scoped `type T = …` slots included — are lowered by
                     // the virtual-call machinery itself.
@@ -3453,7 +3455,7 @@ impl<'db> LoweringContext<'db> {
                     let iface_args: Vec<Tir2Ty> =
                         plan.type_args[1..=shape.interface_generics].to_vec();
                     let iface_tn = self.interface_type_name(interface);
-                    return self.emit_item_call_on_receiver(
+                    return self.emit_item_call_dispatched(
                         expr_id,
                         args,
                         runtime_id,
@@ -3461,6 +3463,7 @@ impl<'db> LoweringContext<'db> {
                         &iface_tn,
                         &iface_args,
                         &method,
+                        self_arg,
                     );
                 }
                 let Some(rvalue) = self.virtual_function_rvalue(expr_id, interface, &method) else {
@@ -3483,8 +3486,10 @@ impl<'db> LoweringContext<'db> {
                 let (self_ty, view) = self.concrete_item_target(impl_block, func, &frame_type_args);
                 let method = callable_display_name(self.db, func).clone();
                 if callable_takes_self(self.db, func) {
-                    return self.emit_item_call_on_receiver(
-                        expr_id, args, runtime_id, dest, &view.0, &view.1, &method,
+                    // A `self`-taking method dispatches on its receiver, the
+                    // written first argument.
+                    return self.emit_item_call_dispatched(
+                        expr_id, args, runtime_id, dest, &view.0, &view.1, &method, 0,
                     );
                 }
                 let rvalue = self.type_keyed_function_rvalue(expr_id, &self_ty, &view, &method);
@@ -3524,12 +3529,14 @@ impl<'db> LoweringContext<'db> {
         (self_ty.to_plain(), view)
     }
 
-    /// The receiver form of an interface-item call: `self` is the written
-    /// first argument, from which the VM derives `Self`. The call plan
-    /// covers every written argument, `self` included, so the list is
-    /// lowered ONCE and split.
+    /// The dispatched form of an interface-item call: the written argument
+    /// at `self_arg` — the method's one required `Self`-typed parameter,
+    /// `self` at `0` when the method takes a receiver — is the value the VM
+    /// derives `Self` from. The call plan covers every written argument in
+    /// declared order, `self` included, so the list is lowered ONCE and
+    /// passed whole.
     #[expect(clippy::too_many_arguments)]
-    fn emit_item_call_on_receiver(
+    fn emit_item_call_dispatched(
         &mut self,
         expr_id: AstExprId,
         args: &[AstExprId],
@@ -3538,31 +3545,34 @@ impl<'db> LoweringContext<'db> {
         iface_tn: &TypeName,
         iface_args: &[Tir2Ty],
         method: &Name,
+        self_arg: usize,
     ) -> Lowered<bool> {
-        let mut arg_operands = self.lower_call_arg_operands(expr_id, args)?;
-        if arg_operands.is_empty() {
+        let arg_operands = self.lower_call_arg_operands(expr_id, args)?;
+        if self_arg >= arg_operands.len() {
             // Every other bail-out on this road returns before any lowering;
             // this one cannot. The arguments are already emitted into the
             // block, so falling through would re-lower them on the ordinary
-            // call road and evaluate a side-effecting argument twice. A
-            // `self`-taking method always carries its receiver as the first
-            // written argument, so an empty list is an internal
+            // call road and evaluate a side-effecting argument twice. The
+            // dispatch parameter is a required one the call plan always
+            // binds, so a list too short to hold it is an internal
             // inconsistency — fail at the origin.
             return Err(self.internal_error(
-                "self-taking interface item call has no receiver \
-                 argument",
+                &format!(
+                    "interface item call dispatches on argument {self_arg} but lowered only {} \
+                     argument(s)",
+                    arg_operands.len()
+                ),
                 expr_id,
             ));
         }
-        let receiver = arg_operands.remove(0);
         self.emit_virtual_call_with_value_operands(
-            receiver,
+            self_arg,
+            arg_operands,
             iface_tn,
             iface_args,
             &[],
             method,
             expr_id,
-            arg_operands,
             runtime_id,
             dest,
         )
@@ -7330,6 +7340,7 @@ impl<'db> LoweringContext<'db> {
             method,
             vec![lhs_op, rhs_op],
             /* ntypeargs */ 0,
+            /* self_arg */ 0,
             /* argument_layout */ None,
             /* runtime_id */ None,
             bool_ty,
@@ -11240,30 +11251,36 @@ impl<'db> LoweringContext<'db> {
         runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> Lowered<bool> {
-        let arg_ops = self.lower_call_arg_operands(expr_id, args)?;
+        let mut value_ops = vec![Operand::Copy(Place::Local(recv_local))];
+        value_ops.extend(self.lower_call_arg_operands(expr_id, args)?);
         self.emit_virtual_call_with_value_operands(
-            Operand::Copy(Place::Local(recv_local)),
+            0,
+            value_ops,
             iface_tn,
             iface_type_args,
             iface_assoc,
             method,
             expr_id,
-            arg_ops,
             runtime_id,
             dest,
         )
     }
 
+    /// Emit an open-world [`Terminator::VirtualCall`] over lowered value
+    /// operands: `value_ops` in the method's declared parameter order, of
+    /// which `value_ops[self_arg]` is the one the VM derives `Self` from.
+    /// The method's own type arguments are lowered here, off the interface
+    /// that DECLARES the method.
     #[expect(clippy::too_many_arguments)]
     fn emit_virtual_call_with_value_operands(
         &mut self,
-        receiver: Operand<'db>,
+        self_arg: usize,
+        value_ops: Vec<Operand<'db>>,
         iface_tn: &TypeName,
         iface_type_args: &[Tir2Ty],
         iface_assoc: &[(Name, Tir2Ty)],
         method: &Name,
         expr_id: AstExprId,
-        arg_ops: Vec<Operand<'db>>,
         runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> Lowered<bool> {
@@ -11304,10 +11321,9 @@ impl<'db> LoweringContext<'db> {
             type_arg_ops[skip..].to_vec()
         };
         let ntypeargs = method_type_arg_ops.len();
-        let mut all_args = Vec::with_capacity(ntypeargs + arg_ops.len() + 1);
+        let mut all_args = Vec::with_capacity(ntypeargs + value_ops.len());
         all_args.extend(method_type_arg_ops);
-        all_args.push(receiver);
-        all_args.extend(arg_ops);
+        all_args.extend(value_ops);
         // Non-generic interfaces (`Equals`/`Compare`) carry empty args/assoc; a
         // parameterized interface bakes its arguments into the template. The
         // template reaches the VM through `LoadType` — which substitutes the
@@ -11332,6 +11348,7 @@ impl<'db> LoweringContext<'db> {
             method.as_str(),
             all_args,
             ntypeargs,
+            self_arg,
             argument_layout,
             runtime_id_operand,
             result_ty,
@@ -11346,17 +11363,18 @@ impl<'db> LoweringContext<'db> {
     /// which builds its operands from an AST call) and by operator lowering,
     /// which has no call expression to read arguments from.
     ///
-    /// `args` must be laid out as `[method_type_args… ++ receiver ++ value_args…]`
-    /// with exactly `ntypeargs` leading type args, mirroring `Call`, and
-    /// `argument_layout` describes the value part when the site was checked
-    /// against a signature (`None` for operator lowering, whose operands are
-    /// the interface's own slots). **The
-    /// receiver is `args[ntypeargs]`** — the VM reads its runtime concrete type
-    /// as `Self` and resolves the impl off that, so passing the operands in the
-    /// wrong order silently dispatches on the wrong value. `Self` is taken from
-    /// the value, not the operand form, so a receiver may be any `Operand`
-    /// (`emit_virtual_call` always passes a local; operator lowering may pass a
-    /// constant, as in `true < false`).
+    /// `args` must be laid out as `[method_type_args… ++ value_args…]` with
+    /// exactly `ntypeargs` leading type args, mirroring `Call`, the value args
+    /// in the method's declared parameter order, and `argument_layout`
+    /// describes the value part when the site was checked against a signature
+    /// (`None` for operator lowering, whose operands are the interface's own
+    /// slots). **The dispatch argument is `args[ntypeargs + self_arg]`** — the
+    /// VM reads its runtime concrete type as `Self` and resolves the impl off
+    /// that, so passing the operands in the wrong order silently dispatches on
+    /// the wrong value. `Self` is taken from the value, not the operand form,
+    /// so the dispatch argument may be any `Operand` (`emit_virtual_call`
+    /// always passes a local; operator lowering may pass a constant, as in
+    /// `true < false`).
     ///
     /// The call splits the block — the resolved impl may be user bytecode — so
     /// lowering resumes in a fresh one. `VirtualCall`'s destination must be a
@@ -11370,6 +11388,7 @@ impl<'db> LoweringContext<'db> {
         method: &str,
         args: Vec<Operand<'db>>,
         ntypeargs: usize,
+        self_arg: usize,
         argument_layout: Option<baml_type::CallLayout>,
         runtime_id: Option<Operand<'db>>,
         result_ty: RuntimeTy,
@@ -11389,6 +11408,7 @@ impl<'db> LoweringContext<'db> {
             method.to_string(),
             args,
             ntypeargs,
+            self_arg,
             runtime_id,
             call_dest.clone(),
             resume,
@@ -11577,10 +11597,10 @@ impl<'db> LoweringContext<'db> {
                         .params
                         .first()
                         .is_some_and(|param| param.name.as_str() == "self"),
-                    dispatches_on_first: matches!(
-                        callable_self_dispatch(self.db, DeclRef::Source(fn_loc)),
-                        SelfDispatch::OnParam(0)
-                    ),
+                    dispatch_param: match callable_self_dispatch(self.db, DeclRef::Source(fn_loc)) {
+                        SelfDispatch::OnParam(index) => Some(index),
+                        SelfDispatch::NoSelfParam | SelfDispatch::Breaks(_) => None,
+                    },
                     interface_generics,
                     own_start,
                     frame_len,
@@ -11598,10 +11618,11 @@ impl<'db> LoweringContext<'db> {
                         .len();
                 Some(InterfaceMethodShape {
                     takes_self: callable_takes_self(self.db, DeclRef::External(method)),
-                    dispatches_on_first: matches!(
-                        callable_self_dispatch(self.db, DeclRef::External(method)),
-                        SelfDispatch::OnParam(0)
-                    ),
+                    dispatch_param: match callable_self_dispatch(self.db, DeclRef::External(method))
+                    {
+                        SelfDispatch::OnParam(index) => Some(index),
+                        SelfDispatch::NoSelfParam | SelfDispatch::Breaks(_) => None,
+                    },
                     interface_generics,
                     own_start,
                     frame_len,

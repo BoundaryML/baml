@@ -3222,6 +3222,7 @@ mod tests {
             method: "eq".to_string(),
             args: vec![],
             ntypeargs: 0,
+            self_arg: 0,
             runtime_id: None,
             destination: Place::Local(Local(1)),
             target,

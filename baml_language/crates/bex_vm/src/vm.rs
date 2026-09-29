@@ -8468,12 +8468,15 @@ impl BexVm {
 
                 // ── VirtualCall ───────────────────────────────────────────────
                 // Open-world interface dispatch: resolve the method at runtime
-                // from the receiver's concrete `Self` type, then take the shared
-                // frame-push call path (mirrors `Call`). Stack layout (top last):
-                // `[arg_0 (receiver), …, arg_{nargs-1}, iface_type, method_name]`.
+                // from the concrete `Self` type of value argument `self_arg`
+                // (the method's one `Self`-typed parameter — the `self`
+                // receiver at 0 in the common case), then take the shared
+                // frame-push call path (mirrors `Call`). Stack layout (top
+                // last): `[arg_0, …, arg_{nargs-1}, iface_type, method_name]`.
                 OpCode::VirtualCall | OpCode::VirtualCallWithRuntimeId => {
                     let nargs = read_u16_unchecked(code, pc) as usize;
                     let ntypeargs = usize::from(read_u16_unchecked(code, pc));
+                    let self_arg = usize::from(read_u16_unchecked(code, pc));
                     let runtime_id = if matches!(op, OpCode::VirtualCallWithRuntimeId) {
                         Some(self.stack.ensure_pop())
                     } else {
@@ -8508,15 +8511,16 @@ impl BexVm {
                         .len()
                         .checked_sub(nargs)
                         .ok_or(VmInternalError::NotEnoughItemsOnStack(nargs))?;
-                    // `Self` is the receiver's runtime concrete type; coherence makes
-                    // `(Self, iface<args>)` resolve to at most one impl. Off that rule
-                    // the method resolves through `rule_method_impl` (the provided
-                    // row, or the interface's default on a miss). `nargs` is the
-                    // interface method's slot count; the resolved impl may declare
-                    // extra optionals, so its value lane is remapped below. The
-                    // rule borrows `self`; scope it so the borrow ends before the
-                    // `&mut self` call below.
-                    let receiver = self.stack[StackIndex::from_raw(args_offset)];
+                    // `Self` is the dispatch argument's runtime concrete type;
+                    // coherence makes `(Self, iface<args>)` resolve to at most one
+                    // impl. Off that rule the method resolves through
+                    // `rule_method_impl` (the provided row, or the interface's
+                    // default on a miss). `nargs` is the interface method's slot
+                    // count in declared order — `self_arg` indexes it before the
+                    // remap below, which only widens the resolved impl's optional
+                    // lane. The rule borrows `self`; scope it so the borrow ends
+                    // before the `&mut self` call below.
+                    let receiver = self.stack[StackIndex::from_raw(args_offset + self_arg)];
                     let cache_key = if function.runtime_package.is_null() {
                         let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
                         let Object::Type(type_value) = self.get_object(iface_ptr) else {
@@ -8575,11 +8579,11 @@ impl BexVm {
                                 ),
                             }
                         };
-                        // `Self` is the receiver value's realized concrete type.
+                        // `Self` is the dispatch value's realized concrete type.
                         let self_ty = bex_vm_types::RealizedTy::from(
                             self.value_concrete_ty(receiver).unwrap_or_else(|| {
                                 unreachable!(
-                                    "value of kind {:?} cannot be a virtual-call receiver",
+                                    "value of kind {:?} cannot be a virtual-call dispatch argument",
                                     self.type_of(&receiver)
                                 )
                             }),

@@ -1963,7 +1963,6 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::InterfaceMemberRequiresReceiver { .. } => DiagnosticId::NoSuchField,
         TirTypeError::InvalidSelfCallThroughInterface { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::SelflessMethodNeedsConcreteSelf { .. } => DiagnosticId::TypeMismatch,
-        TirTypeError::SelfDispatchParamNotFirst { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::SelflessInstanceMember { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::ErasedSelfMethodValue { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::DefaultOnRequiredMethod { .. } => DiagnosticId::DefaultOnRequiredMethod,

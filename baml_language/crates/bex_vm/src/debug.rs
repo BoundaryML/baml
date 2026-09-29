@@ -152,9 +152,17 @@ pub(crate) fn display_instruction(
             display_global_ref(*function, globals, objects, compile_time_globals)
         }
         Instruction::MakeGenericFunctionFromValue { .. } => String::new(),
-        Instruction::VirtualCall { nargs, ntypeargs }
-        | Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs } => {
-            format!("nargs={nargs} ntypeargs={ntypeargs}")
+        Instruction::VirtualCall {
+            nargs,
+            ntypeargs,
+            self_arg,
+        }
+        | Instruction::VirtualCallWithRuntimeId {
+            nargs,
+            ntypeargs,
+            self_arg,
+        } => {
+            format!("nargs={nargs} ntypeargs={ntypeargs} self_arg={self_arg}")
         }
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
@@ -947,11 +955,22 @@ fn display_instruction_textual(
         Instruction::CallWithRuntimeId { .. } => format!("call_with_runtime_id {}", meta_str(&"")),
         Instruction::CallIndirect => "call_indirect".to_string(),
         Instruction::CallIndirectWithRuntimeId => "call_indirect_with_runtime_id".to_string(),
-        Instruction::VirtualCall { nargs, ntypeargs } => {
-            format!("virtual_call nargs={nargs} ntypeargs={ntypeargs}")
+        Instruction::VirtualCall {
+            nargs,
+            ntypeargs,
+            self_arg,
+        } => {
+            format!("virtual_call nargs={nargs} ntypeargs={ntypeargs} self_arg={self_arg}")
         }
-        Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs } => {
-            format!("virtual_call_with_runtime_id nargs={nargs} ntypeargs={ntypeargs}")
+        Instruction::VirtualCallWithRuntimeId {
+            nargs,
+            ntypeargs,
+            self_arg,
+        } => {
+            format!(
+                "virtual_call_with_runtime_id nargs={nargs} ntypeargs={ntypeargs} \
+                 self_arg={self_arg}"
+            )
         }
         Instruction::SysOp(_) => format!("sys_op {}", meta_str(&"")),
         Instruction::SysOpWithRuntimeId(_) => format!("sys_op_with_runtime_id {}", meta_str(&"")),
@@ -1466,7 +1485,8 @@ pub fn display_compact_bytecode(
             OpCode::VirtualCall | OpCode::VirtualCallWithRuntimeId => {
                 let nargs = read_u16(code, &mut pc);
                 let ntypeargs = read_u16(code, &mut pc);
-                writeln!(f, "nargs={nargs} ntypeargs={ntypeargs}")?;
+                let self_arg = read_u16(code, &mut pc);
+                writeln!(f, "nargs={nargs} ntypeargs={ntypeargs} self_arg={self_arg}")?;
             }
 
             OpCode::MakeClosure => {

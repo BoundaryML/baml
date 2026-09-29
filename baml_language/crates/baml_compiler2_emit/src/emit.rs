@@ -2248,16 +2248,17 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 method,
                 args,
                 ntypeargs,
+                self_arg,
                 runtime_id,
                 destination,
                 target,
                 unwind: _,
             } => {
-                // Push the method type args then the value args (receiver first),
-                // then the interface type, then the method name — the layout
-                // `OpCode::VirtualCall` expects: it pops the method name, then the
-                // interface, then the `ntypeargs` method type args, then reads the
-                // receiver (first value arg) to resolve the impl at runtime.
+                // Push the method type args then the value args (declared
+                // order), then the interface type, then the method name — the
+                // layout `OpCode::VirtualCall` expects: it pops the method name,
+                // then the interface, then the `ntypeargs` method type args, then
+                // reads value arg `self_arg` to resolve the impl at runtime.
                 unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
                 let iface_template = self.refs.anchor_template(&iface.to_template());
                 let iface_const = self.add_constant(ConstValue::Type(iface_template));
@@ -2272,10 +2273,21 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                     .unwrap_or_else(|_| unreachable!("a call's argument count fits in u16"));
                 let ntypeargs = u16::try_from(*ntypeargs)
                     .unwrap_or_else(|_| unreachable!("a call's type-argument count fits in u16"));
+                let self_arg = u16::try_from(*self_arg).unwrap_or_else(|_| {
+                    unreachable!("a virtual call's dispatch index fits in u16")
+                });
                 let instruction = if runtime_id.is_some() {
-                    Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs }
+                    Instruction::VirtualCallWithRuntimeId {
+                        nargs,
+                        ntypeargs,
+                        self_arg,
+                    }
                 } else {
-                    Instruction::VirtualCall { nargs, ntypeargs }
+                    Instruction::VirtualCall {
+                        nargs,
+                        ntypeargs,
+                        self_arg,
+                    }
                 };
                 let inst = self.emit(instruction);
                 self.record_call_layout(inst, argument_layout.as_ref());

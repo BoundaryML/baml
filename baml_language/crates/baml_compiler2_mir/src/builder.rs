@@ -437,6 +437,7 @@ impl<'db> MirBuilder<'db> {
         method: String,
         args: Vec<Operand<'db>>,
         ntypeargs: usize,
+        self_arg: usize,
         runtime_id: Option<Operand<'db>>,
         destination: Place,
         target: BlockId,
@@ -447,8 +448,9 @@ impl<'db> MirBuilder<'db> {
             "VirtualCall destination must be a local place"
         );
         debug_assert!(
-            args.len() > ntypeargs,
-            "VirtualCall must carry at least the receiver value argument"
+            self_arg < args.len() - ntypeargs,
+            "VirtualCall dispatches on value argument {self_arg} of {}",
+            args.len() - ntypeargs
         );
         self.set_terminator(Terminator::VirtualCall {
             argument_layout: None,
@@ -456,6 +458,7 @@ impl<'db> MirBuilder<'db> {
             method,
             args,
             ntypeargs,
+            self_arg,
             runtime_id,
             destination,
             target,

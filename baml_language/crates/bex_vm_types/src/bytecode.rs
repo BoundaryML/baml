@@ -753,25 +753,32 @@ pub enum Instruction {
     /// type-args-below-value-args order:
     ///
     /// ```text
-    /// [m_targ_0, ..., m_targ_{ntypeargs-1}, val_arg_0 (receiver), ..., val_arg_{nargs-1}, iface_type, method_name]
+    /// [m_targ_0, ..., m_targ_{ntypeargs-1}, val_arg_0, ..., val_arg_{nargs-1}, iface_type, method_name]
     /// ```
     ///
     /// The VM pops `method_name` (a `String`) and `iface_type` (an `Object::Type`
     /// holding the — possibly parameterized — interface), then the `ntypeargs`
     /// method-level type args (sitting below the value args, as in `Call`),
-    /// leaving the `nargs` value args (receiver first). It reads `Self` from the
-    /// receiver's runtime concrete type, resolves `<Self as iface_type>::method_name`,
+    /// leaving the `nargs` value args in the method's declared parameter order.
+    /// It reads `Self` from the runtime concrete type of `val_arg_{self_arg}` —
+    /// the method's one `Self`-typed parameter, the `self` receiver being the
+    /// common case at `self_arg = 0` — resolves `<Self as iface_type>::method_name`,
     /// and calls it like `Call`, seeding `frame.type_args` with the resolved impl's
     /// type args (its own generics for a provided
     /// method, `[Self, interface args..]` for an adopted default — associated
     /// types are not frame slots) followed by these method-level type args. `nargs` is
     /// the resolved method's arity.
     VirtualCall {
-        /// Number of value arguments (including the receiver as the first).
+        /// Number of value arguments, in the method's declared parameter order.
         nargs: u16,
         /// Number of leading method-level type arguments (`Object::Type` values),
         /// below the value args. Zero for a non-generic method.
         ntypeargs: u16,
+        /// Index (in `0..nargs`) of the value argument whose runtime concrete
+        /// type is `Self`. The checker admits an erased `Self` only for a
+        /// method with exactly one required `Self`-typed parameter, and this
+        /// is that parameter's declared position.
+        self_arg: u16,
     },
 
     /// `VirtualCall` plus a caller-provided `boundary.LocalId` operand above
@@ -779,6 +786,7 @@ pub enum Instruction {
     VirtualCallWithRuntimeId {
         nargs: u16,
         ntypeargs: u16,
+        self_arg: u16,
     },
 
     /// Throw the value on top of the stack.
@@ -1229,10 +1237,10 @@ pub enum OpCode {
     AwaitAny,
 
     // ── Appended out of group order to preserve discriminants ──
-    // Virtual interface-method call: u16 nargs + u16 ntypeargs (5 bytes). The
-    // interface type (`Object::Type`) and method-name string are pushed above the
-    // args and popped first; the callee is resolved at runtime from the receiver's
-    // `Self`.
+    // Virtual interface-method call: u16 nargs + u16 ntypeargs + u16 self_arg
+    // (7 bytes). The interface type (`Object::Type`) and method-name string are
+    // pushed above the args and popped first; the callee is resolved at runtime
+    // from the `Self` of value argument `self_arg`.
     VirtualCall,
 
     // ── Phase 6 ID-aware call forms, appended to preserve discriminants ──
@@ -1402,10 +1410,11 @@ impl OpCode {
             | Self::JumpIfFalseOrPop
             | Self::JumpIfTrueOrPop
             | Self::JumpIfNotNullOrPop
-            | Self::VirtualCall
             | Self::VirtualLoadField
-            | Self::VirtualStoreField
-            | Self::VirtualCallWithRuntimeId => 5,
+            | Self::VirtualStoreField => 5,
+
+            // 7-byte: opcode + u16 nargs + u16 ntypeargs + u16 self_arg
+            Self::VirtualCall | Self::VirtualCallWithRuntimeId => 7,
 
             Self::LoadCurrentPackage => 5,
 
@@ -1905,13 +1914,25 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::CallIndirect => f.write_str("CALL_INDIRECT"),
             Instruction::CallIndirectWithRuntimeId => f.write_str("CALL_INDIRECT_WITH_RUNTIME_ID"),
-            Instruction::VirtualCall { nargs, ntypeargs } => {
-                write!(f, "VIRTUAL_CALL nargs={nargs} ntypeargs={ntypeargs}")
-            }
-            Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs } => {
+            Instruction::VirtualCall {
+                nargs,
+                ntypeargs,
+                self_arg,
+            } => {
                 write!(
                     f,
-                    "VIRTUAL_CALL_WITH_RUNTIME_ID nargs={nargs} ntypeargs={ntypeargs}"
+                    "VIRTUAL_CALL nargs={nargs} ntypeargs={ntypeargs} self_arg={self_arg}"
+                )
+            }
+            Instruction::VirtualCallWithRuntimeId {
+                nargs,
+                ntypeargs,
+                self_arg,
+            } => {
+                write!(
+                    f,
+                    "VIRTUAL_CALL_WITH_RUNTIME_ID nargs={nargs} ntypeargs={ntypeargs} \
+                     self_arg={self_arg}"
                 )
             }
             Instruction::Throw => f.write_str("THROW"),
@@ -2525,11 +2546,24 @@ impl Bytecode {
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
                 }
 
-                // ── VirtualCall: u16 nargs, u16 ntypeargs ────────────
-                Instruction::VirtualCall { nargs, ntypeargs }
-                | Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs } => {
+                // ── VirtualCall: u16 nargs, u16 ntypeargs, u16 self_arg ──
+                Instruction::VirtualCall {
+                    nargs,
+                    ntypeargs,
+                    self_arg,
+                }
+                | Instruction::VirtualCallWithRuntimeId {
+                    nargs,
+                    ntypeargs,
+                    self_arg,
+                } => {
+                    debug_assert!(
+                        self_arg < nargs,
+                        "virtual call dispatches on value argument {self_arg} of {nargs}"
+                    );
                     code.extend_from_slice(&nargs.to_le_bytes());
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
+                    code.extend_from_slice(&self_arg.to_le_bytes());
                 }
 
                 // ── ObjectIndex operand → u32 ───────────────────────
@@ -3122,6 +3156,26 @@ mod compact_tests {
         let compact = bc.lower_to_compact();
         assert_eq!(compact.code.len(), 1);
         assert_eq!(compact.code[0], OpCode::Add as u8);
+    }
+
+    #[test]
+    fn encode_virtual_call_operands() {
+        let instruction = Instruction::VirtualCall {
+            nargs: 3,
+            ntypeargs: 1,
+            self_arg: 2,
+        };
+        let bc = make_bytecode(vec![instruction], vec![]);
+        let compact = bc.lower_to_compact();
+        assert_eq!(compact.code.len(), OpCode::VirtualCall.encoded_size());
+        assert_eq!(compact.code[0], OpCode::VirtualCall as u8);
+        assert_eq!(u16::from_le_bytes([compact.code[1], compact.code[2]]), 3);
+        assert_eq!(u16::from_le_bytes([compact.code[3], compact.code[4]]), 1);
+        assert_eq!(u16::from_le_bytes([compact.code[5], compact.code[6]]), 2);
+        assert_eq!(
+            instruction.to_string(),
+            "VIRTUAL_CALL nargs=3 ntypeargs=1 self_arg=2"
+        );
     }
 
     #[test]

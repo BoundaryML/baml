@@ -341,6 +341,7 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
             method,
             args,
             ntypeargs,
+            self_arg,
             runtime_id,
             destination,
             target,
@@ -368,7 +369,13 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
                 wrote_arg = true;
             }
             write_runtime_id_arg(f, db, wrote_arg, runtime_id.as_ref())?;
-            write!(f, ") -> [{target}")?;
+            write!(f, ")")?;
+            // The receiver position is the norm; only a dispatch elsewhere
+            // is worth a word.
+            if *self_arg != 0 {
+                write!(f, " self_arg={self_arg}")?;
+            }
+            write!(f, " -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
             }
@@ -859,6 +866,7 @@ mod tests {
             method: "eq".to_string(),
             args: Vec::new(),
             ntypeargs: 0,
+            self_arg: 0,
             runtime_id: Some(local_copy(9)),
             destination: Place::local(Local(0)),
             target: BlockId(1),

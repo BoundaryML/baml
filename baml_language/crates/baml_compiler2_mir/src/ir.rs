@@ -530,13 +530,14 @@ pub enum Terminator<'db> {
 
     /// Open-world virtual interface-method dispatch.
     ///
-    /// Used when the receiver's concrete type is not statically known — a
-    /// bounded type-var `T extends I`, an interface-existential `I`, a union,
-    /// or `Self` inside an interface default body. The implementation is
-    /// resolved **at runtime** from the receiver's concrete `Self` type against
-    /// `iface` (coherence makes `(Self, iface)` pick at most one impl), then
-    /// invoked exactly like a direct [`Terminator::Call`] — no value is
-    /// materialized. This is the open-world replacement for the old
+    /// Used when `Self`'s concrete type is not statically known — a bounded
+    /// type-var `T extends I`, an interface-existential `I`, a union, or
+    /// `Self` inside an interface default body. The implementation is
+    /// resolved **at runtime** from the concrete type of the dispatch argument
+    /// (`args[ntypeargs + self_arg]`, the method's one `Self`-typed parameter)
+    /// against `iface` (coherence makes `(Self, iface)` pick at most one
+    /// impl), then invoked exactly like a direct [`Terminator::Call`] — no
+    /// value is materialized. This is the open-world replacement for the old
     /// compile-time type-tag switch.
     VirtualCall {
         /// The value slots this site was checked against (receiver included,
@@ -550,14 +551,18 @@ pub enum Terminator<'db> {
         method: String,
         /// `args[..ntypeargs]` are the method-level type-argument values
         /// (`Object::Type`, for a generic interface method like
-        /// `Iterator.map<R, E2>`); `args[ntypeargs..]` are the value args,
-        /// **receiver first**. The receiver's runtime concrete type is the `Self`
-        /// the method resolves on; the type args are appended to the resolved
-        /// frame.
+        /// `Iterator.map<R, E2>`); `args[ntypeargs..]` are the value args in
+        /// the method's **declared parameter order** (`self` first when the
+        /// method takes a receiver). The type args are appended to the
+        /// resolved frame.
         args: Vec<Operand<'db>>,
         /// Number of leading `args` entries that are method-level type arguments.
         /// Zero for a non-generic method.
         ntypeargs: usize,
+        /// Index among the value args (`0..args.len() - ntypeargs`) of the one
+        /// whose runtime concrete type is `Self`: the method's single required
+        /// `Self`-typed parameter, `0` for a `self` receiver.
+        self_arg: usize,
         /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
         runtime_id: Option<Operand<'db>>,
         /// Where to store the result.
