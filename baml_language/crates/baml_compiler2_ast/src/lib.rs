@@ -1067,6 +1067,44 @@ function Broken() -> int {
         );
     }
 
+    /// The `let` suggestion for an assignment into a literal must itself be a
+    /// valid pattern. A dotted object key writes a nested field, which field
+    /// patterns cannot spell, so it gets the plain message. (A Rust test
+    /// because the formatter rejects dotted keys in class literals, keeping
+    /// this out of the `diagnostic_errors` corpus.)
+    #[test]
+    fn assignment_into_literal_suggests_let_only_for_plain_names() {
+        let source = r#"
+function f() -> int {
+  let x = 0;
+  let n = 0;
+  [x, n] = [1, 2];
+  Pair { left.a: n } = mk();
+  0
+}
+"#;
+        let tokens = lex_lossless(source, FileId::new(0));
+        let (green, _errors) = parse_file(&tokens);
+        let root = SyntaxNode::new_root(green);
+        let (_items, diags, _env_var_refs) = lower_file(&root);
+        let suggestions: Vec<_> = diags
+            .iter()
+            .filter_map(|diag| match diag {
+                crate::LoweringDiagnostic::InvalidAssignmentTarget { suggestion, .. } => {
+                    Some(suggestion.clone())
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            suggestions,
+            vec![
+                Some("let [let x, let n] = [1, 2] else { … };".to_string()),
+                None,
+            ]
+        );
+    }
+
     #[test]
     fn removed_hash_string_does_not_lower_to_a_string_literal() {
         let source = r##"
