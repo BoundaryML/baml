@@ -47,6 +47,35 @@ function runtime_type_binding(t: reflect.Type) -> int throws never {
     1
 }
 
+// A refused binding is reported once, at its name. Nothing in its scope
+// reports because of it: a value binding reads as an error type wherever it
+// is used (so the desugared `spawn` and `env.X` paths stay silent, while the
+// task body is still checked), and a refused `type` binding never enters
+// scope, so `spawn` keeps its meaning.
+function refused_value_in_scope() -> int {
+    let baml = 5;
+    let task = spawn { 1 };
+    let home = env.HOME;
+    baml + 1
+}
+
+function refused_parameter_in_scope(baml: int) -> int {
+    let task = spawn { 1 };
+    baml
+}
+
+function refused_type_in_scope() -> int throws never {
+    type baml = int;
+    let task = spawn { 1 };
+    1
+}
+
+function task_body_still_checked() -> int {
+    let baml = 5;
+    let task = spawn { undefined_in_body + 1 };
+    0
+}
+
 // An ITEM may still take the name: an item does not shadow a package root the
 // way a local does, so these are legal and produce no diagnostic.
 class baml { label: string }

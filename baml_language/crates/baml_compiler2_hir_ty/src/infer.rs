@@ -3083,12 +3083,19 @@ impl<'db> InferenceContext<'db> {
             0,
             "a body's statement arena stays below the scoped-parameter bit"
         );
+        let refused = baml_base::lang::is_reserved_binding_name(name.as_str());
         let binding = ScopedTypeBinding {
             name: name.clone(),
             parameter: baml_type::ParamTy::new(SCOPED_PARAM_BIT | index, name),
             source,
         };
         self.result.type_bindings.insert(stmt, binding.clone());
+        // A refused binding (E0176, reported at its name) never enters scope,
+        // so the name keeps meaning the package it would have hidden, and the
+        // desugared paths in the block (`spawn`, `env.X`) resolve as written.
+        if refused {
+            return;
+        }
         self.table.bind_scoped_param(&binding.parameter);
         self.scoped_type_bindings.push(binding);
     }
@@ -9928,6 +9935,27 @@ impl<'db> InferenceContext<'db> {
         None
     }
 
+    /// Whether `binding` takes a reserved name, so its declaration was refused
+    /// (E0176): HIR reports that at every binding declaration, by the same
+    /// rule.
+    fn is_refused_binding(&self, binding: BindingId) -> bool {
+        let name = match binding.kind {
+            BindingKind::Local(_) => self.index.local_binding(binding).map(|local| &local.name),
+            BindingKind::Parameter(param_index) => self
+                .index
+                .scope_bindings
+                .get(binding.scope.index() as usize)
+                .and_then(|scope| {
+                    scope
+                        .params
+                        .iter()
+                        .find(|(_, index)| *index == param_index)
+                        .map(|(name, _)| name)
+                }),
+        };
+        name.is_some_and(|name| baml_base::lang::is_reserved_binding_name(name.as_str()))
+    }
+
     /// Resolves a path expression to a local binding or a parameter through
     /// the semantic index. Owner parameters come from the lowered signature;
     /// lambda parameters from the signatures `infer_lambda` deduced.
@@ -9937,6 +9965,13 @@ impl<'db> InferenceContext<'db> {
             return Ty::error();
         };
         match self.index.path_resolution(key) {
+            // A refused binding (E0176, reported at its declaration) reads as
+            // `Error`, so nothing that uses it reports again: neither the
+            // program's own uses nor a desugared path such as `spawn`'s
+            // `baml.spawn.Plan.new`, whose arguments are still checked.
+            Some(PathResolution::Local(binding_id)) if self.is_refused_binding(binding_id) => {
+                Ty::error()
+            }
             Some(PathResolution::Local(binding_id)) => match binding_id.kind {
                 BindingKind::Local(_) => {
                     // The flow overlay wins over the declared/widened

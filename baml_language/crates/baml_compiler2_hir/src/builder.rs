@@ -333,7 +333,7 @@ impl<'db> SemanticIndexBuilder<'db> {
     /// and a binding shadows a package root where an item does not, so it
     /// would break every desugared path in scope.
     fn reject_reserved_binding_name(&mut self, name: &Name, span: TextRange) {
-        if baml_base::lang::DESUGAR_PATH_ROOTS.contains(&name.as_str()) {
+        if baml_base::lang::is_reserved_binding_name(name.as_str()) {
             self.diagnostics.push(Hir2Diagnostic::ReservedBindingName {
                 name: name.clone(),
                 span,

@@ -46,6 +46,13 @@ pub enum LangPackage {
 /// from [`LangPackage::ALL`].
 pub const DESUGAR_PATH_ROOTS: &[&str] = &[LangPackage::Baml.manifest_name()];
 
+/// Whether a binding named `name` is refused (E0176): it would shadow one of
+/// [`DESUGAR_PATH_ROOTS`]. The one rule behind both the report, at every
+/// binding declaration, and the checker's treatment of a refused binding.
+pub fn is_reserved_binding_name(name: &str) -> bool {
+    DESUGAR_PATH_ROOTS.contains(&name)
+}
+
 impl LangPackage {
     pub const ALL: [Self; 5] = [Self::Baml, Self::Reflect, Self::Ai, Self::Log, Self::Trace];
 
