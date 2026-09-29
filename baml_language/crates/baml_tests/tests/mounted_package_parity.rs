@@ -522,8 +522,8 @@ implement app.Tagged for Mine {
 
 /// A user impl for a mounted ALIAS overlaps a user impl for the alias's body
 /// in both lanes: the blob's alias rows are the only place a mounted
-/// package's aliases exist (link stubs carry none), and an alias coherence
-/// cannot expand fails open — the unifier's fallback verdict is "disjoint".
+/// package's aliases exist, and an alias coherence cannot expand fails open —
+/// the unifier's fallback verdict is "disjoint".
 #[test]
 fn alias_headed_overlap_is_e0132_in_both_lanes() {
     const USER: &str = r#"

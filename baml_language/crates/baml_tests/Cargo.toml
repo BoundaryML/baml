@@ -65,6 +65,7 @@ rayon = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = [ "rt-multi-thread", "macros", "net" ] }
+walkdir = { workspace = true }
 wiremock = { workspace = true }
 
 [[bench]]

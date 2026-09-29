@@ -7,6 +7,7 @@ use std::path::Path;
 
 use baml_base::SourceFile;
 use baml_compiler2_hir::loc::DeclRef;
+use baml_compiler2_hir_ty::extern_loc::ExternDefinition;
 use baml_db::ProjectDatabase;
 use text_size::TextSize;
 
@@ -291,18 +292,75 @@ fn hover_owner_of_a_mounted_method_matches_the_source_lane() {
     assert_eq!(owner_of("greet()").as_deref(), Some("app.Tagged"));
 }
 
-/// BUG (pinned): a served package's free function has no symbol — `Item`
-/// carries source definitions only. Flips when the definition lane gains
-/// its provenance-total ref (PR-4's `DefinitionRef`); see `resolve.rs`.
+/// A served package's free function and type names are symbols — each the
+/// row's defining identity — with hover and references, no definition site,
+/// and no rename: there is no source to rewrite.
 #[test]
-fn a_mounted_free_function_has_no_symbol_yet() {
+fn served_items_are_symbols_with_rows_and_no_location() {
     let (db, file) = mounted_with(ROW_LIBRARY, ROW_CONSUMER);
-    assert!(symbol_at(&db, file, inside(ROW_CONSUMER, "free_fn")).is_none());
+    let free_fn = inside(ROW_CONSUMER, "free_fn");
+    // The return annotation `-> app.Widget throws never`: a type name in a
+    // position no expression claims.
+    let widget = inside(ROW_CONSUMER, "Widget throws");
+    assert!(matches!(
+        symbol_at(&db, file, free_fn),
+        Some(SymbolTarget::Item(DeclRef::External(
+            ExternDefinition::Function(_)
+        )))
+    ));
+    assert!(matches!(
+        symbol_at(&db, file, widget),
+        Some(SymbolTarget::Item(DeclRef::External(
+            ExternDefinition::Class(_)
+        )))
+    ));
+
+    assert!(definition_at(&db, file, free_fn).is_none());
+    assert!(definition_at(&db, file, widget).is_none());
+
+    let Some(TypeInfo::Function {
+        name,
+        params,
+        return_type,
+        owner,
+        ..
+    }) = type_at(&db, file, free_fn)
+    else {
+        panic!("a served free function hovers as a function");
+    };
+    assert_eq!(name, "free_fn");
+    assert_eq!(params.len(), 1);
+    assert_eq!(params[0].ty, "int");
+    assert_eq!(return_type.as_deref(), Some("int"));
+    assert_eq!(owner.as_deref(), Some("app"));
+    let Some(TypeInfo::Class {
+        name,
+        fields,
+        canonical_fqn,
+        ..
+    }) = type_at(&db, file, widget)
+    else {
+        panic!("a served class hovers as a class");
+    };
+    assert_eq!(name, "Widget");
+    assert_eq!(fields, vec![("size".to_string(), "int".to_string())]);
+    assert_eq!(canonical_fqn, "app.Widget");
+
+    // Every spelling of the row in the consumer is a reference: the call
+    // `app.free_fn(..)`; the class in a return annotation, a constructor,
+    // and a parameter annotation.
+    assert_eq!(usages_at(&db, file, free_fn).len(), 1);
+    assert_eq!(usages_at(&db, file, widget).len(), 3);
+
+    assert!(matches!(
+        rename(&db, file, free_fn, "renamed"),
+        Err(RenameError::NotInWorkspace { .. })
+    ));
 }
 
 /// A constructor key of a served class is the same field every member
-/// access resolves to — the exported row's, never a link stub's — so
-/// references on the field find the key too.
+/// access resolves to — the exported row's — so references on the field
+/// find the key too.
 #[test]
 fn constructor_key_of_a_mounted_class_shares_the_field_identity() {
     let (db, file) = mounted_with(ROW_LIBRARY, ROW_CONSUMER);
@@ -357,33 +415,6 @@ fn rename_on_a_mounted_member_is_refused_as_outside_the_workspace() {
             "`{needle}` is a row member"
         );
     }
-}
-
-/// The runtime-mount lane also installs link stubs under the served root.
-/// A served root resolves through its interface even then: a constructor
-/// key still names the exported row's field, and goto never lands in a stub.
-#[test]
-fn a_served_root_with_link_stubs_still_resolves_through_its_rows() {
-    let blob = export_blob("app", ROW_LIBRARY);
-    let mut db = ProjectDatabase::new();
-    db.workspace(Path::new("/ide-mounted-stubbed"));
-    db.mount("app", blob);
-    db.file(
-        Path::new("<builtin>/app/runtime_mount_0_0.baml"),
-        "class Widget {\n  size int\n}\n",
-    );
-    let file = db.file(Path::new("/ide-mounted-stubbed/main.baml"), ROW_CONSUMER);
-    assert!(matches!(
-        symbol_at(&db, file, inside(ROW_CONSUMER, "size: n")),
-        Some(SymbolTarget::Field {
-            class: DeclRef::External(_),
-            field_index: 0,
-        })
-    ));
-    assert!(
-        definition_at(&db, file, inside(ROW_CONSUMER, "size)")).is_none(),
-        "a stub is never a navigation target"
-    );
 }
 
 /// Rows the earlier tests never touched: an enum variant, an interface

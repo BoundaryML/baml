@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 
 use baml_base::Literal as LiteralValue;
 use baml_compiler2_hir::loc::FunctionLoc;
-use baml_compiler2_hir_ty::package_interface::{ExportedType, PackageInterface, package_interface};
+use baml_compiler2_hir_ty::{layout, package_interface::PackageInterface};
 use baml_db::{Name, ProjectDatabase};
 use baml_type::{FunctionParamMode, Ty};
 use serde::Serialize;
@@ -161,7 +161,6 @@ pub(crate) fn function_param_schemas(
     let mut cx = SchemaCx {
         db,
         user_root: baml_compiler2_hir::file_package::file_package(db, function.file(db)).root,
-        user_iface: iface,
         table,
     };
     let parameter_defaults =
@@ -192,7 +191,6 @@ pub(crate) fn function_param_schemas(
 struct SchemaCx<'db, 't> {
     db: &'db ProjectDatabase,
     user_root: baml_base::SourceRoot,
-    user_iface: &'db PackageInterface,
     /// Named types encountered so far, shared across every function of the
     /// project update. Doubles as the occurs-check for recursive types: a
     /// placeholder entry goes in before a body expands, so self-references
@@ -200,19 +198,7 @@ struct SchemaCx<'db, 't> {
     table: &'t mut BTreeMap<String, TypeSchema>,
 }
 
-impl<'db> SchemaCx<'db, '_> {
-    /// Resolve a type name to its exported definition: own-package types via
-    /// the user interface, dependency types (stdlib/builtins) via that
-    /// package's own Salsa-cached interface. A miss is expected mid-edit and
-    /// for undeclared packages — callers degrade to `Unsupported`.
-    fn lookup_type(&self, qtn: &baml_type::DeclName) -> Option<&'db ExportedType> {
-        if qtn.root() == self.user_root {
-            self.user_iface.lookup_type(qtn.namespace(), qtn.name())
-        } else {
-            package_interface(self.db, qtn.root()).lookup_type(qtn.namespace(), qtn.name())
-        }
-    }
-
+impl SchemaCx<'_, '_> {
     /// The canonical path a named type is tabled under.
     fn key(&self, qtn: &baml_type::DeclName) -> String {
         crate::render::canonical_path(self.db, qtn)
@@ -248,23 +234,29 @@ impl<'db> SchemaCx<'db, '_> {
                 Some(value) => FieldSchema::Literal { value },
                 None => self.unsupported(ty),
             },
-            Ty::Enum(qtn) => match self.lookup_type(qtn) {
-                Some(ExportedType::Enum { variants, .. }) => {
+            // Named types resolve by identity, whichever lane declares them
+            // (`layout::*_ref_of`); a miss is expected mid-edit and for
+            // undeclared packages — it degrades to `Unsupported`.
+            Ty::Enum(qtn) => match layout::enum_ref_of(self.db, qtn) {
+                Some(enum_ref) => {
                     let name = self.key(qtn);
-                    let values = variants.iter().map(ToString::to_string).collect();
+                    let values = layout::enum_variants(self.db, enum_ref)
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect();
                     self.table
                         .entry(name.clone())
                         .or_insert(TypeSchema::Enum { values });
                     FieldSchema::Ref { name }
                 }
-                _ => self.unsupported(ty),
+                None => self.unsupported(ty),
             },
-            Ty::EnumVariant(qtn, variant) => match self.lookup_type(qtn) {
-                Some(ExportedType::Enum { .. }) => FieldSchema::EnumVariant {
+            Ty::EnumVariant(qtn, variant) => match layout::enum_ref_of(self.db, qtn) {
+                Some(_) => FieldSchema::EnumVariant {
                     name: self.key(qtn),
                     value: variant.to_string(),
                 },
-                _ => self.unsupported(ty),
+                None => self.unsupported(ty),
             },
             Ty::Class(qtn, args) => {
                 // Generic instantiations are out of scope: the `$baml` marker
@@ -276,20 +268,16 @@ impl<'db> SchemaCx<'db, '_> {
                 if self.table.contains_key(&name) {
                     return FieldSchema::Ref { name };
                 }
-                match self.lookup_type(qtn) {
-                    Some(ExportedType::Class {
-                        fields,
-                        generic_params,
-                        ..
-                    }) if generic_params.is_empty() => {
+                match layout::class_ref_of(self.db, qtn) {
+                    Some(class) if layout::class_generic_params(self.db, class).is_empty() => {
                         // Placeholder before expanding the body: recursive
                         // references hit the contains_key check above and
                         // resolve to a Ref, so each class expands exactly once.
                         self.table
                             .insert(name.clone(), TypeSchema::Class { fields: Vec::new() });
-                        let fields = fields
+                        let fields = layout::class_fields(self.db, class)
                             .iter()
-                            .map(|(field_name, field_ty, _attrs)| FieldSchemaField {
+                            .map(|(field_name, field_ty)| FieldSchemaField {
                                 name: field_name.to_string(),
                                 schema: self.field_schema(field_ty, depth + 1),
                             })
@@ -312,8 +300,8 @@ impl<'db> SchemaCx<'db, '_> {
                 if self.table.contains_key(&name) {
                     return FieldSchema::Ref { name };
                 }
-                match self.lookup_type(qtn) {
-                    Some(ExportedType::TypeAlias { resolved, .. }) => {
+                match layout::alias_ref_of(self.db, qtn) {
+                    Some(alias) => {
                         // Placeholder before expanding the target: recursive
                         // references hit the contains_key check above, so each
                         // alias expands exactly once.
@@ -323,12 +311,13 @@ impl<'db> SchemaCx<'db, '_> {
                                 schema: FieldSchema::Null,
                             },
                         );
-                        let schema = self.field_schema(resolved, depth + 1);
+                        let resolved = layout::alias_value(self.db, alias);
+                        let schema = self.field_schema(&resolved, depth + 1);
                         self.table
                             .insert(name.clone(), TypeSchema::Alias { schema });
                         FieldSchema::Ref { name }
                     }
-                    _ => self.unsupported(ty),
+                    None => self.unsupported(ty),
                 }
             }
             Ty::List(item) => FieldSchema::List {

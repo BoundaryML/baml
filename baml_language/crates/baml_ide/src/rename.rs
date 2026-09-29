@@ -202,6 +202,12 @@ fn renameable(
     };
     let name = token.text().to_string();
 
+    // A served package's row has no source to rewrite: the same refusal the
+    // declaration loop below gives a read-only source root.
+    if let SymbolTarget::Item(DeclRef::External(_)) = target {
+        return Err(RenameError::NotInWorkspace { name });
+    }
+
     // The group first: a served package's row member has no declaration
     // location at all, and the group builder is where that is reported as
     // what it is — a name outside the workspace — rather than as "no

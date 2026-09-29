@@ -16,8 +16,11 @@
 //! global imports, lay out objects (interning generic values), resolve object
 //! imports, assemble — with one relocation walk over an operand space and one
 //! set of structural checks: an import of one kind never binds an export of
-//! another, a package never exports one path twice, and an unbindable
-//! dependency or import is an error.
+//! another, a package never exports one path twice, an unbindable dependency
+//! or import is an error, and a direct dependency binds only to a package
+//! whose interface payload carries the fingerprint the unit was compiled
+//! against ([`LinkError::InterfaceMismatch`] — the edge locates, the
+//! fingerprint binds).
 //!
 //! # Type tags
 //!

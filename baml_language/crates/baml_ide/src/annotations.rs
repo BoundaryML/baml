@@ -520,7 +520,7 @@ fn is_assert_without_hints(
     // The syntax can also name a local `assert` value or a user namespace.
     // Only the embedded standard assertion package gets this suppression.
     let offset = callee_span.end() - TextSize::from(1);
-    let Some(SymbolTarget::Item(Definition::Function(function))) =
+    let Some(SymbolTarget::Item(DeclRef::Source(Definition::Function(function)))) =
         crate::resolve::symbol_at(db, file, offset)
     else {
         return false;
@@ -541,7 +541,7 @@ fn parameter_definition(
     let offset = callee_span.end() - TextSize::from(1);
     // Only a source-lane function has a parameter span to link to; a method
     // served from a package interface (`DeclRef::External`) has no source.
-    let (SymbolTarget::Item(Definition::Function(function))
+    let (SymbolTarget::Item(DeclRef::Source(Definition::Function(function)))
     | SymbolTarget::Method {
         func: DeclRef::Source(function),
     }) = crate::resolve::symbol_at(db, file, offset)?
