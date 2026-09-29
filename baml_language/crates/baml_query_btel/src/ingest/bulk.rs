@@ -4,16 +4,15 @@
 //! files merge into maps under the same rules the incremental `Applier`
 //! applies with SQL: the first definition wins and a different one is a
 //! conflict with an issue, references without definitions become
-//! placeholders, and announcements, completions, raises and ends merge by
-//! identity. Derived columns (execution roots, path depths, child time,
-//! raise paths and sites) are computed once from the final evidence instead
-//! of being repaired after every batch. Then every row is written once, in
-//! key order.
-use std::collections::BTreeMap;
+//! placeholders, and announcements and completions merge by identity.
+//! Derived columns (execution roots, path depths, child time, profiler
+//! nodes) are computed once from the final evidence instead of being
+//! repaired after every batch. Then every row is written once, in key order.
+use std::{borrow::Cow, collections::BTreeMap};
 
 use btel_reader::{
     evidence::{self, ArgumentNames},
-    source_map::{SiteState, SourceMap},
+    source_map::SourceMap,
     timing::EpochStatus,
 };
 use btel_recorder::proto::{self, function_definition::Resolution, span_event::Event};
@@ -21,15 +20,8 @@ use prost::Message as _;
 use rusqlite::{Transaction, params};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use super::{
-    Totals, id, quantity, sequence_i64,
-    sites::{self, Site, Source},
-    snapshot_id,
-};
+use super::{Totals, id, quantity, sequence_i64, snapshot_id};
 use crate::Error;
-
-/// Callers listed per raise path; with the raising frame, `MAX_ERROR_FRAMES`.
-const MAX_PATH_CALLERS: usize = 63;
 
 struct Issue {
     sequence: u64,
@@ -95,6 +87,7 @@ struct SmallTotals {
     self_await: u64,
     errored: u64,
     cancelled: u64,
+    panicked: u64,
     evidence: u8,
     /// The node's sums are in `Bulk::large_aggregates` instead.
     large: bool,
@@ -104,13 +97,22 @@ impl SmallTotals {
     /// Add a delta; `false` (and unchanged) when a sum would not fit.
     fn add(&mut self, delta: &Totals) -> bool {
         let sum = |a: u64, b: u128| u64::try_from(b).ok().and_then(|b| a.checked_add(b));
-        let (Some(count), Some(duration), Some(self_await), Some(errored), Some(cancelled)) = (
+        let (
+            Some(count),
+            Some(duration),
+            Some(self_await),
+            Some(errored),
+            Some(cancelled),
+            Some(panicked),
+        ) = (
             sum(self.count, delta.count),
             sum(self.duration, delta.duration),
             sum(self.self_await, delta.self_await),
             sum(self.errored, delta.outcomes.errored),
             sum(self.cancelled, delta.outcomes.cancelled),
-        ) else {
+            sum(self.panicked, delta.outcomes.panicked),
+        )
+        else {
             return false;
         };
         let Ok(evidence) = u8::try_from(i64::from(self.evidence) | delta.outcomes.evidence) else {
@@ -122,6 +124,7 @@ impl SmallTotals {
             self_await,
             errored,
             cancelled,
+            panicked,
             evidence,
             large: false,
         };
@@ -137,6 +140,7 @@ impl SmallTotals {
                 evidence: i64::from(self.evidence),
                 errored: u128::from(self.errored),
                 cancelled: u128::from(self.cancelled),
+                panicked: u128::from(self.panicked),
             },
         }
     }
@@ -266,6 +270,7 @@ const THREAD_COMPLETION_CONFLICT: u16 = 1 << 6;
 const THREAD_CONFLICT: u16 = 1 << 7;
 const THREAD_ROOT_DONE: u16 = 1 << 8;
 const THREAD_HAS_ROOT: u16 = 1 << 9;
+const THREAD_PANICKED: u16 = 1 << 10;
 
 /// A thread: its first definition and first completion, or a placeholder,
 /// and its derived execution root. Packed like `PathRow`.
@@ -324,10 +329,11 @@ impl ThreadRow {
         })
     }
 
-    fn complete(&mut self, ticks: Option<i64>, outcome: i64) {
+    fn complete(&mut self, ticks: Option<i64>, outcome: i64, panicked: bool) {
         self.completed_ticks = ticks.unwrap_or(0);
         self.set(THREAD_HAS_COMPLETED_TICKS, ticks.is_some());
         self.outcome = outcome;
+        self.set(THREAD_PANICKED, panicked);
         self.set(THREAD_COMPLETED, true);
     }
 
@@ -375,53 +381,10 @@ struct CallRow {
     exited: Option<i64>,
     self_await: Option<i64>,
     outcome: Option<i64>,
+    panicked: Option<bool>,
     needs_announcement: Option<bool>,
     value_cas: Option<[u8; 16]>,
     conflict: i64,
-}
-
-struct RaiseFields {
-    sequence: i64,
-    thread: u64,
-    raised_ticks: Option<i64>,
-    kind: i32,
-    function: Option<u64>,
-    pc: Option<u32>,
-    origin_state: i32,
-    origin_raise: Option<u64>,
-    previous_raise: Option<u64>,
-    origin_via: Option<i32>,
-    origin_candidates: Option<u32>,
-    unresolved_reason: Option<i32>,
-    frame_count: u32,
-    inherited_count: u32,
-    inherited: Option<String>,
-    evidence: Vec<u8>,
-    call_path: Option<u32>,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-struct EndFields {
-    sequence: i64,
-    result: i32,
-    handler_function: Option<u64>,
-    handler_pc: Option<u32>,
-    unwound_frames: u32,
-}
-
-#[derive(Default)]
-struct RaiseRow {
-    /// `None`: an end whose raise is not indexed.
-    raise: Option<RaiseFields>,
-    end: Option<EndFields>,
-    conflict: bool,
-    end_conflict: bool,
-}
-
-struct FrameRow {
-    function: Option<u64>,
-    pc: Option<u32>,
-    native: bool,
 }
 
 /// One recording's facts, merged in memory.
@@ -437,13 +400,15 @@ pub(super) struct Bulk {
     /// Nodes whose sums outgrew `SmallTotals`, summed exactly.
     large_aggregates: FxHashMap<u64, Totals>,
     calls: Table<u64, CallRow>,
-    raises: Table<u64, RaiseRow>,
-    frames: BTreeMap<(u64, i64), FrameRow>,
-    /// `(raise, call, role)` to the first link's sequence.
-    links: BTreeMap<(u64, u64, i32), i64>,
-    /// A call is unwound by at most one raise.
-    unwound_by: FxHashMap<u64, u64>,
-    raise_paths: FxHashSet<u32>,
+    /// Futures' names, first one wins; rare next to threads.
+    thread_names: FxHashMap<u64, String>,
+    /// Sysop count and ticks per call path.
+    sysops: BTreeMap<u32, (u128, u128)>,
+    /// `(sequence, position)` to one model turn's usage.
+    usage: BTreeMap<(u64, usize), proto::ModelUsage>,
+    /// The first header that names the process, and how it ended.
+    process: Option<proto::RecordingHeader>,
+    process_end: Option<proto::ProcessEnd>,
     issues: Vec<Issue>,
 }
 
@@ -542,10 +507,6 @@ impl<K: Copy + Eq + std::hash::Hash, V> std::ops::Index<&K> for Table<K, V> {
     }
 }
 
-fn valid_enum(value: i32, max: i32) -> bool {
-    (1..=max).contains(&value)
-}
-
 /// Record an issue while a map entry is still borrowed.
 fn push_issue(
     issues: &mut Vec<Issue>,
@@ -582,15 +543,6 @@ impl Bulk {
         push_issue(&mut self.issues, sequence, code, subject, detail);
     }
 
-    fn invalid_error(&mut self, sequence: u64, what: &str) {
-        self.issue(
-            sequence,
-            "error_evidence_invalid",
-            None,
-            &format!("a malformed {what} was skipped; other evidence in the file was applied"),
-        );
-    }
-
     /// Fold one file, like `Applier::apply`.
     pub(super) fn apply(&mut self, sequence: u64, file: &proto::RecordingFile) {
         let mut ticks_out_of_range = false;
@@ -599,6 +551,14 @@ impl Bulk {
             ticks_out_of_range |= converted.is_none();
             converted
         };
+        if self.process.is_none()
+            && let Some(header) = file.header.as_ref().filter(|h| h.process_id.is_some())
+        {
+            self.process = Some(header.clone());
+        }
+        if let Some(end) = file.end.as_ref().and_then(|end| end.process_end) {
+            self.process_end = Some(end);
+        }
         if let Some(definitions) = &file.definitions {
             for function in &definitions.functions {
                 self.function(sequence, function);
@@ -660,15 +620,18 @@ impl Bulk {
                 *exact = exact.add(totals);
             }
         }
-        if let Some(batch) = &file.errors {
-            for raise in &batch.raises {
-                self.raise(sequence, raise, &mut tick);
+        if let Some(batch) = &file.aggregates {
+            for time in &batch.sysop_times {
+                let (path, _) = evidence::split_node(time.node);
+                self.refer_path(path);
+                let entry = self.sysops.entry(path).or_default();
+                entry.0 = entry.0.saturating_add(u128::from(time.sysops));
+                entry.1 = entry.1.saturating_add(u128::from(time.total_ticks));
             }
-            for link in &batch.call_links {
-                self.link(sequence, link);
-            }
-            for end in &batch.unwind_ends {
-                self.unwind_end(sequence, end);
+        }
+        if let Some(usage) = &file.usage {
+            for (position, entry) in usage.entries.iter().enumerate() {
+                self.usage.insert((sequence, position), entry.clone());
             }
         }
         if let Some(spans) = &file.spans {
@@ -686,7 +649,7 @@ impl Bulk {
                             let outcome = i64::from(done.outcome);
                             let row = self.threads.row(section.thread_id);
                             match row.completion() {
-                                None => row.complete(completed, outcome),
+                                None => row.complete(completed, outcome, done.panicked),
                                 Some(first) if first == (completed, outcome) => {}
                                 Some(_) => {
                                     row.set(THREAD_COMPLETION_CONFLICT, true);
@@ -715,6 +678,7 @@ impl Bulk {
                                 exited: None,
                                 self_await: None,
                                 outcome: None,
+                                panicked: None,
                                 needs_announcement: None,
                                 value_cas: None,
                                 conflict: 0,
@@ -793,6 +757,7 @@ impl Bulk {
                         exited,
                         self_await,
                         outcome: Some(outcome.code()),
+                        panicked: Some(done.panicked),
                         needs_announcement: Some(needs_announcement),
                         value_cas,
                         conflict: 0,
@@ -816,6 +781,7 @@ impl Bulk {
                 row.exited = exited;
                 row.self_await = self_await;
                 row.outcome = Some(outcome.code());
+                row.panicked = Some(done.panicked);
                 row.needs_announcement = Some(needs_announcement);
                 row.value_cas = value_cas;
             }
@@ -910,6 +876,11 @@ impl Bulk {
     }
 
     fn thread(&mut self, sequence: u64, thread: &proto::ThreadDefinition, started: Option<i64>) {
+        if let Some(name) = &thread.name {
+            self.thread_names
+                .entry(thread.thread_id)
+                .or_insert_with(|| name.clone());
+        }
         self.refer_epoch(thread.clock_epoch_id);
         if thread.spawn_call_path_id != 0 {
             self.refer_path(thread.spawn_call_path_id);
@@ -970,181 +941,16 @@ impl Bulk {
         }
     }
 
-    fn raise(
-        &mut self,
-        sequence: u64,
-        raise: &proto::ErrorRaise,
-        tick: &mut impl FnMut(u64) -> Option<i64>,
-    ) {
-        let origin_ok = match raise.origin_state {
-            1 => raise.origin_raise_id.is_none(),
-            2 => raise.origin_raise_id.is_some_and(|id| id != 0),
-            3 | 4 => raise.origin_raise_id.is_none(),
-            _ => false,
-        };
-        if raise.raise_id == 0
-            || raise.thread_id == 0
-            || !valid_enum(raise.kind, 8)
-            || !origin_ok
-            || raise.function_id == Some(0)
-            || raise.frames.len() > usize::try_from(raise.frame_count).unwrap_or(usize::MAX)
-            || raise.call_path_id == Some(0)
-            || (raise.call_path_id.is_some() && !raise.frames.is_empty())
-        {
-            return self.invalid_error(sequence, "error raise");
-        }
-        let encoded = raise.encode_to_vec();
-        if let Some(existing) = self.raises.get_mut(&raise.raise_id)
-            && let Some(first) = &existing.raise
-        {
-            if first.evidence != encoded {
-                existing.conflict = true;
-                push_issue(
-                    &mut self.issues,
-                    sequence,
-                    "error_raise_conflict",
-                    Some(raise.raise_id.to_string()),
-                    "two different records for one raise; the first is kept",
-                );
-            }
-            return;
-        }
-        self.refer_thread(raise.thread_id);
-        if let Some(function) = raise.function_id {
-            self.refer_function(function);
-        }
-        if let Some(path) = raise.call_path_id {
-            self.refer_path(path);
-            self.raise_paths.insert(path);
-        }
-        let inherited = (!raise.inherited_frames.is_empty()).then(|| {
-            serde_json::Value::Array(
-                raise
-                    .inherited_frames
-                    .iter()
-                    .map(|frame| {
-                        serde_json::json!({
-                            "function": frame.function_name,
-                            "file": frame.file,
-                            "line": (frame.line != 0).then_some(frame.line),
-                        })
-                    })
-                    .collect(),
-            )
-            .to_string()
-        });
-        let fields = RaiseFields {
-            sequence: saturating_sequence(sequence),
-            thread: raise.thread_id,
-            raised_ticks: tick(raise.raised_at_ticks),
-            kind: raise.kind,
-            function: raise.function_id,
-            pc: raise.pc,
-            origin_state: raise.origin_state,
-            origin_raise: raise.origin_raise_id,
-            previous_raise: raise.previous_raise_id.filter(|id| *id != 0),
-            origin_via: (raise.origin_via != 0).then_some(raise.origin_via),
-            origin_candidates: (raise.origin_state == 3).then_some(raise.origin_candidates),
-            unresolved_reason: (raise.origin_state == 4).then_some(raise.unresolved_reason),
-            frame_count: raise.frame_count,
-            inherited_count: raise.inherited_frame_count,
-            inherited,
-            evidence: encoded,
-            call_path: raise.call_path_id,
-        };
-        self.raises.row(raise.raise_id).raise = Some(fields);
-        for (position, entry) in raise.frames.iter().enumerate() {
-            let function = entry.function_id.filter(|id| *id != 0);
-            if let Some(function) = function {
-                self.refer_function(function);
-            }
-            self.frames.insert(
-                (raise.raise_id, i64::try_from(position).unwrap_or(i64::MAX)),
-                FrameRow {
-                    function,
-                    pc: entry.pc,
-                    native: entry.native,
-                },
-            );
-        }
-    }
-
-    fn link(&mut self, sequence: u64, link: &proto::ErrorCallLink) {
-        if link.raise_id == 0 || link.call_id == 0 || !valid_enum(link.role, 2) {
-            return self.invalid_error(sequence, "error call link");
-        }
-        let key = (link.raise_id, link.call_id, link.role);
-        if link.role == 2 {
-            // The unique unwound link and the key are ignored alike; only a
-            // different owner is a conflict.
-            if let Some(owner) = self.unwound_by.get(&link.call_id) {
-                if *owner != link.raise_id {
-                    self.issue(
-                        sequence,
-                        "error_link_conflict",
-                        Some(link.call_id.to_string()),
-                        "two raises claim to have failed one call; the first is kept",
-                    );
-                }
-                return;
-            }
-            self.unwound_by.insert(link.call_id, link.raise_id);
-        }
-        self.links
-            .entry(key)
-            .or_insert_with(|| saturating_sequence(sequence));
-    }
-
-    fn unwind_end(&mut self, sequence: u64, end: &proto::ErrorUnwindEnd) {
-        let caught = end.result == 1;
-        if end.raise_id == 0
-            || !valid_enum(end.result, 4)
-            || end.handler_function_id == Some(0)
-            || caught != end.handler_pc.is_some()
-        {
-            return self.invalid_error(sequence, "unwind end");
-        }
-        if let Some(function) = end.handler_function_id {
-            self.refer_function(function);
-        }
-        let fields = EndFields {
-            sequence: saturating_sequence(sequence),
-            result: end.result,
-            handler_function: end.handler_function_id,
-            handler_pc: end.handler_pc,
-            unwound_frames: end.unwound_frames,
-        };
-        let row = self.raises.row(end.raise_id);
-        match row.end {
-            None => row.end = Some(fields),
-            Some(first)
-                if first.result == fields.result
-                    && first.handler_function == fields.handler_function
-                    && first.handler_pc == fields.handler_pc
-                    && first.unwound_frames == fields.unwound_frames => {}
-            Some(_) => {
-                row.end_conflict = true;
-                push_issue(
-                    &mut self.issues,
-                    sequence,
-                    "error_end_conflict",
-                    Some(end.raise_id.to_string()),
-                    "a raise ended twice with different evidence; the first is kept",
-                );
-            }
-        }
-    }
-
-    /// Derive and write every row of recording `rec`, which has no facts.
     pub(super) fn write(mut self, tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
         self.report_call_conflicts();
         self.resolve_roots();
         self.resolve_depths();
         self.sum_child_ticks();
-        let mut sites = Sites::new(&self.functions);
+        let nodes = self.resolve_nodes();
+        self.write_process(tx, rec)?;
         self.write_functions(tx, rec)?;
         with_indexes_deferred(tx, "call_path", self.paths.len(), || {
-            self.write_paths(tx, rec, &mut sites)
+            self.write_paths(tx, rec, &nodes)
         })?;
         with_indexes_deferred(tx, "thread", self.threads.len(), || {
             self.write_threads(tx, rec)
@@ -1152,7 +958,8 @@ impl Bulk {
         self.write_clocks(tx, rec)?;
         self.write_aggregates(tx, rec)?;
         with_indexes_deferred(tx, "call", self.calls.len(), || self.write_calls(tx, rec))?;
-        self.write_errors(tx, rec, &mut sites)?;
+        self.write_sysops(tx, rec)?;
+        self.write_usage(tx, rec)?;
         let mut insert = tx.prepare_cached(
             "INSERT INTO issue (rec, sequence, code, subject, detail) VALUES (?1, ?2, ?3, ?4, ?5)",
         )?;
@@ -1299,6 +1106,121 @@ impl Bulk {
         }
     }
 
+    /// Each path's profiler node, like `ingest::resolve_nodes`: known once
+    /// the path's function and every ancestor's are, cycles never.
+    fn resolve_nodes(&self) -> FxHashMap<u32, i64> {
+        let mut nodes: FxHashMap<u32, Option<i64>> = FxHashMap::default();
+        let mut chain = Vec::new();
+        let mut on_chain = FxHashSet::default();
+        for start in self.paths.keys().copied() {
+            let mut current = start;
+            on_chain.clear();
+            // Walk up to a resolved ancestor, a top-level path, or a gap.
+            let mut parent_node: Option<Option<i64>> = loop {
+                if let Some(known) = nodes.get(&current) {
+                    break Some(*known);
+                }
+                let Some(def) = self.paths.get(&current).and_then(PathRow::def) else {
+                    break Some(None);
+                };
+                if !on_chain.insert(current) {
+                    break Some(None);
+                }
+                chain.push((current, def));
+                if def.parent == 0 {
+                    break None;
+                }
+                current = def.parent;
+            };
+            // Resolve downward: `None` is the top level, `Some(None)` a gap.
+            while let Some((path, def)) = chain.pop() {
+                let node = match parent_node {
+                    Some(None) => None,
+                    parent => self.node_name(def.callee).map(|name| {
+                        crate::functions::node_hash(parent.flatten(), &name, i64::from(def.edge))
+                    }),
+                };
+                nodes.insert(path, node);
+                parent_node = Some(node);
+            }
+        }
+        nodes
+            .into_iter()
+            .filter_map(|(path, node)| node.map(|node| (path, node)))
+            .collect()
+    }
+
+    /// A callee's name in profiler nodes; `None` until anything is known.
+    fn node_name(&self, function: u64) -> Option<Cow<'_, str>> {
+        let row = self.functions.get(&function)?;
+        match (row.state, &row.metadata) {
+            (2, Some(meta)) => Some(Cow::Borrowed(&meta.wire.fqn)),
+            (1, _) => Some(Cow::Owned(format!("#{function:016X}"))),
+            _ => None,
+        }
+    }
+
+    fn write_process(&self, tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
+        let file = proto::RecordingFile {
+            header: self.process.clone(),
+            end: self.process_end.map(|end| proto::RecordingEnd {
+                process_end: Some(end),
+            }),
+            ..Default::default()
+        };
+        if file.header.is_some() {
+            super::record_process(tx, rec, &file)?;
+        } else if let Some(end) = self.process_end {
+            tx.execute(
+                "UPDATE recording SET process_end_status = ?2, process_end_ns = ?3 WHERE rec = ?1",
+                params![rec, end.status, end.at_unix_ns],
+            )?;
+        }
+        Ok(())
+    }
+
+    fn write_sysops(&self, tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
+        let paths: Vec<u32> = self.sysops.keys().copied().collect();
+        insert_rows(
+            tx,
+            "sysop (rec, call_path_id, sysops, total_ticks)",
+            4,
+            &paths,
+            |b, path| {
+                let (sysops, ticks) = self.sysops[&path];
+                b.bind(rec)?;
+                b.bind(i64::from(path))?;
+                b.bind(i64::try_from(sysops).unwrap_or(i64::MAX))?;
+                b.bind(i64::try_from(ticks).ok())
+            },
+        )
+    }
+
+    fn write_usage(&self, tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
+        let keys: Vec<(u64, usize)> = self.usage.keys().copied().collect();
+        let saturating = |value: u64| i64::try_from(value).unwrap_or(i64::MAX);
+        insert_rows(
+            tx,
+            "model_usage (rec, sequence, position, node_id, model, input_tokens, output_tokens,
+               cache_read_tokens, cache_write_tokens, reasoning_tokens)",
+            10,
+            &keys,
+            |b, key| {
+                let entry = &self.usage[&key];
+                b.bind(rec)?;
+                b.bind(saturating(key.0))?;
+                b.bind(i64::try_from(key.1).unwrap_or(i64::MAX))?;
+                b.bind(id(entry.node_id))?;
+                b.bind(&entry.model)?;
+                b.bind(saturating(entry.input_tokens))?;
+                b.bind(saturating(entry.output_tokens))?;
+                b.bind(entry.cache_read_tokens.map(saturating))?;
+                b.bind(entry.cache_write_tokens.map(saturating))?;
+                b.bind(entry.reasoning_tokens.map(saturating))
+            },
+        )
+    }
+
     fn write_functions(&self, tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
         let mut ids: Vec<u64> = self.functions.keys().copied().collect();
         ids.sort_unstable();
@@ -1384,17 +1306,16 @@ impl Bulk {
         &self,
         tx: &Transaction<'_>,
         rec: i64,
-        sites: &mut Sites<'_>,
+        nodes: &FxHashMap<u32, i64>,
     ) -> Result<(), Error> {
         let mut ids: Vec<u32> = self.paths.keys().copied().collect();
         ids.sort_unstable();
         insert_rows(
             tx,
             "call_path (rec, call_path_id, defined, thread_id, parent_call_path_id,
-               caller_function_id, caller_pc, callee_function_id, edge, depth,
-               direct_child_ticks, site_state, site_file, site_line, site_start, site_end,
-               conflict)",
-            17,
+               caller_function_id, caller_pc, callee_function_id, edge, depth, node_id,
+               direct_child_ticks, conflict)",
+            13,
             &ids,
             |b, path| {
                 let row = &self.paths[&path];
@@ -1417,18 +1338,8 @@ impl Bulk {
                         b.bind(row.depth().value())?;
                     }
                 }
+                b.bind(nodes.get(&path).copied())?;
                 b.bind(row.child_ticks())?;
-                match def {
-                    None => b.nulls(5)?,
-                    Some(def) => {
-                        let site = sites.site(
-                            def.caller,
-                            Some(i64::from(def.caller_pc)),
-                            SiteState::NoCaller,
-                        );
-                        b.site(sites.get(site))?;
-                    }
-                }
                 b.bind(row.conflict())
             },
         )
@@ -1440,9 +1351,9 @@ impl Bulk {
         insert_rows(
             tx,
             "thread (rec, thread_id, defined, parent_id, spawn_call_path_id, started_ticks,
-               epoch_id, announced, completed_ticks, outcome, completion_conflict, root_id,
-               conflict, started_ms, start_pending)",
-            15,
+               epoch_id, announced, completed_ticks, outcome, panicked, name,
+               completion_conflict, root_id, conflict, started_ms, start_pending)",
+            17,
             &ids,
             |b, thread| {
                 let row = &self.threads[&thread];
@@ -1458,6 +1369,8 @@ impl Bulk {
                 b.bind(row.has(THREAD_ANNOUNCED))?;
                 b.bind(completion.and_then(|(ticks, _)| ticks))?;
                 b.bind(completion.map(|(_, outcome)| outcome))?;
+                b.bind(row.has(THREAD_PANICKED))?;
+                b.bind(self.thread_names.get(&thread))?;
                 b.bind(row.has(THREAD_COMPLETION_CONFLICT))?;
                 b.bind(row.root().value().map(id))?;
                 b.bind(row.has(THREAD_CONFLICT))?;
@@ -1538,8 +1451,8 @@ impl Bulk {
             tx,
             "aggregate (rec, node, call_count, duration_ticks, self_await_ticks, count_exact,
                duration_exact, self_await_exact, outcome_evidence, ok_calls, errored_calls,
-               cancelled_calls, errored_exact, cancelled_exact)",
-            14,
+               cancelled_calls, errored_exact, cancelled_exact, panicked_calls, panicked_exact)",
+            16,
             &nodes,
             |b, node| {
                 let total = self.totals(node).expect("collected above");
@@ -1557,7 +1470,9 @@ impl Bulk {
                 b.bind(errored_calls)?;
                 b.bind(cancelled_calls)?;
                 b.bind(total.outcomes.errored.to_string())?;
-                b.bind(total.outcomes.cancelled.to_string())
+                b.bind(total.outcomes.cancelled.to_string())?;
+                b.bind(total.outcomes.panicked())?;
+                b.bind(total.outcomes.panicked.to_string())
             },
         )
     }
@@ -1569,8 +1484,9 @@ impl Bulk {
             tx,
             "call (rec, call_id, thread_id, parent_id, call_path_id, reentry,
                announced_sequence, entered_ticks, inputs_cas, completed_sequence, late,
-               exited_ticks, self_await_ticks, outcome, needs_announcement, value_cas, conflict)",
-            17,
+               exited_ticks, self_await_ticks, outcome, panicked, needs_announcement, value_cas,
+               conflict)",
+            18,
             &ids,
             |b, call| {
                 let row = &self.calls[&call];
@@ -1588,196 +1504,12 @@ impl Bulk {
                 b.bind(row.exited)?;
                 b.bind(row.self_await)?;
                 b.bind(row.outcome)?;
+                b.bind(row.panicked)?;
                 b.bind(row.needs_announcement)?;
                 b.bind(row.value_cas.as_ref().map(<[u8; 16]>::as_slice))?;
                 b.bind(row.conflict)
             },
         )
-    }
-
-    fn write_errors(
-        &self,
-        tx: &Transaction<'_>,
-        rec: i64,
-        sites: &mut Sites<'_>,
-    ) -> Result<(), Error> {
-        let mut ids: Vec<u64> = self.raises.keys().copied().collect();
-        ids.sort_unstable();
-        let resolved: Vec<(Option<usize>, Option<usize>)> = ids
-            .iter()
-            .map(|raise_id| {
-                let row = &self.raises[raise_id];
-                let site = row.raise.as_ref().map(|raise| {
-                    let absent = if raise.pc.is_some() {
-                        SiteState::NoFunction
-                    } else {
-                        SiteState::NoPc
-                    };
-                    sites.site(raise.function, raise.pc.map(i64::from), absent)
-                });
-                let handler = row.end.and_then(|end| {
-                    (end.handler_function.is_some() || end.handler_pc.is_some()).then(|| {
-                        sites.site(
-                            end.handler_function,
-                            end.handler_pc.map(i64::from),
-                            SiteState::NoFunction,
-                        )
-                    })
-                });
-                (site, handler)
-            })
-            .collect();
-        let rows: Vec<usize> = (0..ids.len()).collect();
-        insert_rows(
-            tx,
-            "error_raise (rec, raise_id, defined, sequence, thread_id, raised_ticks, kind,
-               function_id, pc, origin_state, origin_raise_id, previous_raise_id, origin_via,
-               origin_candidates, unresolved_reason, frame_count, call_path_id,
-               inherited_count, inherited, evidence, site_state, site_file, site_line,
-               site_start, site_end, end_sequence, end_result, handler_function_id,
-               handler_pc, unwound_frames, handler_site_state, handler_site_file,
-               handler_site_line, handler_site_start, handler_site_end, conflict,
-               end_conflict)",
-            37,
-            &rows,
-            |b, index| {
-                let raise_id = ids[index];
-                let row = &self.raises[&raise_id];
-                let raise = row.raise.as_ref();
-                let (site, handler) = resolved[index];
-                b.bind(rec)?;
-                b.bind(id(raise_id))?;
-                b.bind(raise.is_some())?;
-                b.bind(raise.map(|r| r.sequence))?;
-                b.bind(raise.map(|r| id(r.thread)))?;
-                b.bind(raise.and_then(|r| r.raised_ticks))?;
-                b.bind(raise.map(|r| r.kind))?;
-                b.bind(raise.and_then(|r| r.function).map(id))?;
-                b.bind(raise.and_then(|r| r.pc))?;
-                b.bind(raise.map(|r| r.origin_state))?;
-                b.bind(raise.and_then(|r| r.origin_raise).map(id))?;
-                b.bind(raise.and_then(|r| r.previous_raise).map(id))?;
-                b.bind(raise.and_then(|r| r.origin_via))?;
-                b.bind(raise.and_then(|r| r.origin_candidates))?;
-                b.bind(raise.and_then(|r| r.unresolved_reason))?;
-                b.bind(raise.map(|r| r.frame_count))?;
-                b.bind(raise.and_then(|r| r.call_path).map(i64::from))?;
-                b.bind(raise.map(|r| r.inherited_count))?;
-                b.bind(raise.and_then(|r| r.inherited.as_deref()))?;
-                b.bind(raise.map(|r| r.evidence.as_slice()))?;
-                match site {
-                    None => b.nulls(5)?,
-                    Some(site) => b.site(sites.get(site))?,
-                }
-                let end = row.end;
-                b.bind(end.map(|e| e.sequence))?;
-                b.bind(end.map(|e| e.result))?;
-                b.bind(end.and_then(|e| e.handler_function).map(id))?;
-                b.bind(end.and_then(|e| e.handler_pc))?;
-                b.bind(end.map(|e| e.unwound_frames))?;
-                match handler {
-                    None => b.nulls(5)?,
-                    Some(site) => b.site(sites.get(site))?,
-                }
-                b.bind(row.conflict)?;
-                b.bind(row.end_conflict)
-            },
-        )?;
-        let frames: Vec<(&(u64, i64), &FrameRow)> = self.frames.iter().collect();
-        let frame_sites: Vec<usize> = frames
-            .iter()
-            .map(|(_, frame)| {
-                if frame.native {
-                    // Native code has no BAML source; its caller frame has the site.
-                    sites.site(None, None, SiteState::NoPc)
-                } else {
-                    sites.site(
-                        frame.function,
-                        frame.pc.map(i64::from),
-                        SiteState::NoFunction,
-                    )
-                }
-            })
-            .collect();
-        let rows: Vec<usize> = (0..frames.len()).collect();
-        insert_rows(
-            tx,
-            "error_frame (rec, raise_id, position, function_id, pc, native, site_state,
-               site_file, site_line, site_start, site_end)",
-            11,
-            &rows,
-            |b, index| {
-                let ((raise, position), frame) = frames[index];
-                b.bind(rec)?;
-                b.bind(id(*raise))?;
-                b.bind(*position)?;
-                b.bind(frame.function.map(id))?;
-                b.bind(frame.pc)?;
-                b.bind(frame.native)?;
-                b.site(sites.get(frame_sites[index]))
-            },
-        )?;
-        let links: Vec<(&(u64, u64, i32), &i64)> = self.links.iter().collect();
-        let rows: Vec<usize> = (0..links.len()).collect();
-        insert_rows(
-            tx,
-            "error_link (rec, raise_id, call_id, role, sequence)",
-            5,
-            &rows,
-            |b, index| {
-                let ((raise, call, role), sequence) = links[index];
-                b.bind(rec)?;
-                b.bind(id(*raise))?;
-                b.bind(id(*call))?;
-                b.bind(*role)?;
-                b.bind(*sequence)
-            },
-        )?;
-        self.write_raise_paths(tx, rec)
-    }
-
-    /// The callers of each raise path, when every path up to the thread's
-    /// first frame is defined, like `errors::build_raise_paths`.
-    fn write_raise_paths(&self, tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
-        let mut paths: Vec<u32> = self.raise_paths.iter().copied().collect();
-        paths.sort_unstable();
-        let mut state = tx.prepare_cached(
-            "INSERT INTO raise_path (rec, call_path_id, built) VALUES (?1, ?2, ?3)",
-        )?;
-        let mut frame = tx.prepare_cached(
-            "INSERT INTO raise_path_frame (rec, call_path_id, position, frame_path_id)
-             VALUES (?1, ?2, ?3, ?4)",
-        )?;
-        for path in paths {
-            let mut frames = Vec::new();
-            let mut current = path;
-            let complete = loop {
-                let Some(def) = self.paths.get(&current).and_then(PathRow::def) else {
-                    break false;
-                };
-                if def.caller.is_none() || def.edge != 1 {
-                    break true;
-                }
-                frames.push(current);
-                if def.parent != 0 && frames.len() < MAX_PATH_CALLERS {
-                    current = def.parent;
-                } else {
-                    break true;
-                }
-            };
-            state.execute(params![rec, i64::from(path), complete])?;
-            if complete {
-                for (index, callers) in frames.iter().enumerate() {
-                    frame.execute(params![
-                        rec,
-                        i64::from(path),
-                        i64::try_from(index + 1).unwrap_or(i64::MAX),
-                        i64::from(*callers)
-                    ])?;
-                }
-            }
-        }
-        Ok(())
     }
 }
 
@@ -1802,14 +1534,6 @@ impl Binder<'_, '_> {
             self.bind(rusqlite::types::Null)?;
         }
         Ok(())
-    }
-
-    fn site(&mut self, site: &Site) -> rusqlite::Result<()> {
-        self.bind(site.state)?;
-        self.bind(site.file.as_deref())?;
-        self.bind(site.line)?;
-        self.bind(site.start)?;
-        self.bind(site.end)
     }
 }
 
@@ -1897,65 +1621,4 @@ fn with_indexes_deferred(
 
 fn saturating_sequence(sequence: u64) -> i64 {
     i64::try_from(sequence).unwrap_or(i64::MAX)
-}
-
-/// Sites memoized by function, PC and the state for an absent function:
-/// every call path at one call site resolves once.
-struct Sites<'f> {
-    functions: &'f FxHashMap<u64, FunctionRow>,
-    sources: FxHashMap<u64, Option<Source>>,
-    memo: FxHashMap<(Option<u64>, Option<i64>, &'static str), usize>,
-    resolved: Vec<Site>,
-}
-
-impl<'f> Sites<'f> {
-    fn new(functions: &'f FxHashMap<u64, FunctionRow>) -> Self {
-        Self {
-            functions,
-            sources: FxHashMap::default(),
-            memo: FxHashMap::default(),
-            resolved: Vec::new(),
-        }
-    }
-
-    fn get(&self, index: usize) -> &Site {
-        &self.resolved[index]
-    }
-
-    /// The index of a site; `get` reads it.
-    fn site(&mut self, function: Option<u64>, pc: Option<i64>, absent: SiteState) -> usize {
-        let key = (function, pc, absent.label());
-        match self.memo.get(&key) {
-            Some(index) => *index,
-            None => {
-                let site = match function {
-                    None => Site::missing(absent),
-                    Some(function) => {
-                        let functions = self.functions;
-                        let source = self
-                            .sources
-                            .entry(function)
-                            .or_insert_with(|| functions.get(&function).map(source_of));
-                        sites::site_in(source.as_ref(), pc)
-                    }
-                };
-                self.resolved.push(site);
-                self.memo.insert(key, self.resolved.len() - 1);
-                self.resolved.len() - 1
-            }
-        }
-    }
-}
-
-fn source_of(row: &FunctionRow) -> Source {
-    let meta = row.metadata.as_deref();
-    Source {
-        state: row.state,
-        conflict: row.conflict,
-        file: meta.and_then(|m| m.wire.source_file.clone()),
-        map_state: meta.and_then(|m| m.map_state),
-        map: meta
-            .and_then(|m| m.map_blob.as_deref())
-            .and_then(SourceMap::decode),
-    }
 }

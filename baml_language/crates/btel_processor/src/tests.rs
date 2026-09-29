@@ -175,6 +175,7 @@ fn bounded_processing_releases_captures_and_clock_ownership() {
         completed_at: ClockInstant::from_ticks(2),
         outcome: InvocationOutcome::Ok,
         clock: clock.clone(),
+        name: None,
     });
     producer.write_span(SpanRecord::FunctionSpanAnnouncement {
         id: allocate_telemetry_id(),
@@ -419,6 +420,7 @@ fn all_completions_combine_once_and_borrowed_spans_release_captures() {
         completed_at: ClockInstant::from_ticks(30),
         outcome: InvocationOutcome::Ok,
         clock: clock.clone(),
+        name: None,
     });
     pool.close_admission();
     drop(producer);
@@ -432,10 +434,11 @@ fn all_completions_combine_once_and_borrowed_spans_release_captures() {
             node: CallPathNodeId::new(path, false),
             count: 3,
             total_duration: ClockDuration::from_ticks(20),
-            total_io_duration: AwaitDuration::ZERO.saturating_add(ClockDuration::from_ticks(9)),
+            total_self_await: AwaitDuration::ZERO.saturating_add(ClockDuration::from_ticks(9)),
             // Errored timing, successful span, cancelled late span.
             errored: 1,
             cancelled: 1,
+            ..Default::default()
         }
     );
     assert_eq!(
@@ -444,9 +447,10 @@ fn all_completions_combine_once_and_borrowed_spans_release_captures() {
             node: CallPathNodeId::new(path, true),
             count: 1,
             total_duration: ClockDuration::from_ticks(10),
-            total_io_duration: AwaitDuration::ZERO.saturating_add(ClockDuration::from_ticks(3)),
+            total_self_await: AwaitDuration::ZERO.saturating_add(ClockDuration::from_ticks(3)),
             errored: 1,
             cancelled: 0,
+            ..Default::default()
         }
     );
     assert_eq!(receiver.deltas.iter().map(|d| d.count).sum::<u64>(), 4);
@@ -462,7 +466,7 @@ fn all_completions_combine_once_and_borrowed_spans_release_captures() {
         receiver
             .deltas
             .iter()
-            .map(|d| d.total_io_duration.get().get())
+            .map(|d| d.total_self_await.get().get())
             .sum::<u64>(),
         12
     );
@@ -606,6 +610,7 @@ fn every_completion_form_and_timing_outcome_counts_once_by_outcome() {
             completed_at: ClockInstant::from_ticks(2),
             outcome,
             clock: clock.clone(),
+            name: None,
         });
     }
     producer.write_span(SpanRecord::FunctionSpanAnnouncement {
@@ -802,7 +807,7 @@ fn combiner_collisions_and_overflow_preserve_exact_totals() {
         let total = actual.entry(d.node).or_default();
         total[0] += u128::from(d.count);
         total[1] += u128::from(d.total_duration.get());
-        total[2] += u128::from(d.total_io_duration.get().get());
+        total[2] += u128::from(d.total_self_await.get().get());
         total[3] += u128::from(d.errored);
         total[4] += u128::from(d.cancelled);
     };
@@ -814,10 +819,10 @@ fn combiner_collisions_and_overflow_preserve_exact_totals() {
             node: CallPathNodeId::new(path, i % 3 == 0),
             count,
             total_duration: ClockDuration::from_ticks(amount),
-            total_io_duration: AwaitDuration::ZERO
-                .saturating_add(ClockDuration::from_ticks(amount)),
+            total_self_await: AwaitDuration::ZERO.saturating_add(ClockDuration::from_ticks(amount)),
             errored: count / 2,
             cancelled: count / 4 * u64::from(i % 5 != 0),
+            ..Default::default()
         };
         let total = expected.entry(d.node).or_default();
         total[0] += u128::from(d.count);
@@ -835,9 +840,10 @@ fn combiner_collisions_and_overflow_preserve_exact_totals() {
             node: CallPathNodeId::new(path, false),
             count: u64::MAX,
             total_duration: ClockDuration::from_ticks(u64::MAX),
-            total_io_duration: AwaitDuration::ZERO,
+            total_self_await: AwaitDuration::ZERO,
             errored: u64::MAX - 1,
             cancelled: 1,
+            ..Default::default()
         };
         let total = expected.entry(d.node).or_default();
         total[0] += u128::from(u64::MAX);
@@ -861,9 +867,10 @@ fn no_sink_publisher_bounds_unique_paths_and_flushes_before_overflow() {
                 node: CallPathNodeId::new(CallPathId::new_non_root(raw).unwrap(), false),
                 count: 1,
                 total_duration: ClockDuration::from_ticks(u64::MAX),
-                total_io_duration: AwaitDuration::ZERO,
+                total_self_await: AwaitDuration::ZERO,
                 errored: 0,
                 cancelled: 0,
+                ..Default::default()
             },
         );
         assert!(publisher.pending().len() <= 2);

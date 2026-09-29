@@ -154,6 +154,7 @@ pub struct ThreadTelemetry {
     started_at: ClockInstant,
     started: bool,
     completed: bool,
+    name: Option<btel_records::ThreadName>,
 }
 
 pub struct TelemetryState {
@@ -203,6 +204,7 @@ impl TelemetryState {
                 started_at,
                 started: false,
                 completed: false,
+                name: None,
             },
             call_paths: FxHashMap::default(),
             call_path_keys: FxHashMap::default(),
@@ -243,6 +245,12 @@ impl TelemetryState {
         self.thread.active_call_path = context.spawn_call_path;
     }
 
+    /// Name this thread's future before it starts; its records carry it.
+    pub fn set_thread_name(&mut self, name: &str) {
+        assert!(!self.thread.started, "telemetry thread already started");
+        self.thread.name = Some(Arc::new(Box::from(name)));
+    }
+
     pub fn start_thread(&mut self) {
         if self.thread.started {
             return;
@@ -254,7 +262,25 @@ impl TelemetryState {
             parent_id: self.thread.parent_id,
             spawn_call_path: self.thread.spawn_call_path,
             started_at: self.thread.started_at,
+            name: self.thread.name.clone(),
         });
+    }
+
+    /// Charge one sysop's time to the innermost observed call path. Outside
+    /// every observed frame the time belongs to no node and is dropped.
+    #[inline]
+    pub fn record_sysop_time(&mut self, elapsed: ClockDuration) {
+        let call_path = self.thread.active_call_path;
+        if call_path != CallPathId::ROOT {
+            self.write_timing(TimingRecord::SysOpTime { call_path, elapsed });
+        }
+    }
+
+    /// Tokens one model turn used, charged to `node`: the span or thread
+    /// that was active when the call started.
+    #[cold]
+    pub fn record_model_usage(&mut self, usage: btel_records::ModelUsage) {
+        self.write_span(SpanRecord::ModelUsage(Box::new(usage)));
     }
 
     #[inline(always)]
@@ -507,6 +533,21 @@ impl TelemetryState {
         }
     }
 
+    /// Whether an errored completion of this frame may capture its error:
+    /// the frame is a span or has a policy (it may be promoted) and error
+    /// capture is on. Lets the unwinder build the error's context only when
+    /// some frame can record it.
+    pub fn wants_error_capture(&self, telemetry: &FrameTelemetry, function: &Function) -> bool {
+        let policy_id = function.telemetry_policy_id.load();
+        if !telemetry.is_span() && policy_id == btel_types::TelemetryPolicyId::NONE {
+            return false;
+        }
+        telemetry.error_override.unwrap_or(
+            telemetry.flags & INHERITED_CAPTURE_ERROR != 0
+                || self.policy_by_id(policy_id).capture_error,
+        )
+    }
+
     #[inline(always)]
     /// # Safety
     /// The result/error and its reachable objects must remain live under the VM
@@ -562,7 +603,9 @@ impl TelemetryState {
             {
                 value
             }
-            InvocationOutcome::Errored | InvocationOutcome::Cancelled
+            InvocationOutcome::Errored
+            | InvocationOutcome::Cancelled
+            | InvocationOutcome::Panicked
                 if telemetry.error_override.unwrap_or(
                     telemetry.flags & INHERITED_CAPTURE_ERROR != 0 || policy.capture_error,
                 ) =>
@@ -713,6 +756,50 @@ impl TelemetryState {
                         captured_value,
                     },
                 ),
+                (InvocationOutcome::Panicked, false, false) => {
+                    self.write_span(SpanRecord::FunctionSpanCompletionPanicked {
+                        id,
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value,
+                    });
+                }
+                (InvocationOutcome::Panicked, false, true) => self.write_span(
+                    SpanRecord::FunctionSpanCompletionPanickedNeedsAnnouncement {
+                        id,
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value,
+                    },
+                ),
+                (InvocationOutcome::Panicked, true, false) => {
+                    self.write_span(SpanRecord::FunctionSpanCompletionPanickedReentry {
+                        id,
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value,
+                    });
+                }
+                (InvocationOutcome::Panicked, true, true) => self.write_span(
+                    SpanRecord::FunctionSpanCompletionPanickedReentryNeedsAnnouncement {
+                        id,
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value,
+                    },
+                ),
             }
             self.thread.active_id = telemetry.saved_parent_id;
         } else if policy::promotes(policy, elapsed, outcome, self.clock.domain()) {
@@ -785,6 +872,28 @@ impl TelemetryState {
                         captured_value,
                     });
                 }
+                (InvocationOutcome::Panicked, false) => {
+                    self.write_span(SpanRecord::LateFunctionSpanCompletionPanicked {
+                        id: allocate_telemetry_id(),
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value,
+                    });
+                }
+                (InvocationOutcome::Panicked, true) => {
+                    self.write_span(SpanRecord::LateFunctionSpanCompletionPanickedReentry {
+                        id: allocate_telemetry_id(),
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value,
+                    });
+                }
             }
         } else {
             self.write_timing(TimingRecord::FunctionTimingCompletion {
@@ -813,6 +922,7 @@ impl TelemetryState {
             started_at: self.thread.started_at,
             completed_at: self.clock.read(),
             outcome,
+            name: self.thread.name.clone(),
         });
         self.clock.finish_thread();
     }
@@ -1288,9 +1398,9 @@ mod tests {
                     let expected_inputs = inputs.unwrap_or(capture_inputs);
                     let expected_value = match outcome {
                         InvocationOutcome::Ok => output.unwrap_or(capture_output),
-                        InvocationOutcome::Errored | InvocationOutcome::Cancelled => {
-                            error.unwrap_or(capture_error)
-                        }
+                        InvocationOutcome::Errored
+                        | InvocationOutcome::Cancelled
+                        | InvocationOutcome::Panicked => error.unwrap_or(capture_error),
                     };
                     let inputs = state
                         .span_records()
@@ -2064,7 +2174,7 @@ mod tests {
                     reentry,
                     ..
                 } => Some((await_time.get().get(), *reentry)),
-                TimingRecord::ThreadSelected { .. } => None,
+                TimingRecord::ThreadSelected { .. } | TimingRecord::SysOpTime { .. } => None,
             })
             .collect();
         // Completion must carry each invocation's own wait, without rolling

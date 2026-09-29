@@ -16,10 +16,10 @@ pub const TIMING_RECORD_MAX_BYTES: usize = 32;
 pub const SPAN_RECORD_MAX_BYTES: usize = 56;
 /// **Checked layout.** Determines combining-cache slot footprint; review together with its
 /// representation and measurements. Includes the errored/cancelled outcome counters.
-pub const AGGREGATE_DELTA_BYTES: usize = 48;
+pub const AGGREGATE_DELTA_BYTES: usize = 56;
 /// **Checked layout.** Second-level totals footprint in the publisher map, including the
 /// errored/cancelled outcome counters.
-pub const AGGREGATE_TOTALS_BYTES: usize = 40;
+pub const AGGREGATE_TOTALS_BYTES: usize = 48;
 /// **Checked layout.** Per-producer context footprint; review worker-capacity memory when
 /// changing.
 pub const DECODER_CONTEXT_BYTES: usize = 16;

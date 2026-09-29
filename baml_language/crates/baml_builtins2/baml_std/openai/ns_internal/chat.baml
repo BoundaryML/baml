@@ -1353,6 +1353,8 @@ function chat_parse(
                 output_tokens: u.completion_tokens ?? 0,
                 cached_input_tokens: u.prompt_tokens_details?.cached_tokens,
                 reasoning_tokens: u.completion_tokens_details?.reasoning_tokens,
+                // prompt_tokens counts the cached share too.
+                uncached_input_tokens: (u.prompt_tokens ?? 0) - (u.prompt_tokens_details?.cached_tokens ?? 0),
             }
         },
         null => null,
@@ -1441,7 +1443,7 @@ function _chat_send(
         selected: true,
         sse_responses: null,
     };
-    ai.ModelTurn { ...turn, calls: [call] }
+    ai.ModelTurn { ...turn, calls: [call], model: decoded.model }
 }
 
 /// The one internal entry point: render, send, normalize — one model turn.
@@ -1693,6 +1695,7 @@ function chat_invoke_stream(
             }
         },
         require_terminal = compat.provider,
+        model = params.model,
     );
     let call = ai.events.LLMCall {
         client_name: chat_client_id(compat, params),

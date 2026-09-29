@@ -1361,6 +1361,9 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
                 // Converse reports no separate reasoning-token count; the
                 // thinking tokens are already inside outputTokens.
                 reasoning_tokens: null,
+                cache_write_input_tokens: reported.cacheWriteInputTokens,
+                // inputTokens excludes both cache counts.
+                uncached_input_tokens: reported.inputTokens,
             }
         },
     };
@@ -1381,5 +1384,5 @@ function invoke(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.Mode
         capture_wire = client.capture_wire,
     );
     let turn = parse_response(sent.value);
-    ai.ModelTurn { ...turn, calls: [sent.call] }
+    ai.ModelTurn { ...turn, calls: [sent.call], model: client.model }
 }

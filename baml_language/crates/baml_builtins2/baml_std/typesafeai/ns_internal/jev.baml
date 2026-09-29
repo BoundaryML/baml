@@ -391,6 +391,7 @@ function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
     }
     let value = assemble(input.output_type, [], values);
     ai.ModelTurn {
+        model: c.model,
         content: [ai.content.Text { text: baml.json.to_string(value) }],
         parsed_output: ai.ParsedOutput { value: value },
         stop_reason: ai.content.StopReason.Complete,
@@ -402,6 +403,7 @@ function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
                     output_tokens: usage.output_tokens,
                     cached_input_tokens: null,
                     reasoning_tokens: null,
+                    uncached_input_tokens: usage.input_tokens,
                 }
             },
             null => null,

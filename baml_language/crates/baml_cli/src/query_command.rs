@@ -25,7 +25,7 @@ pub enum QueryFormat {
 }
 
 /// Query local recordings with SQL. BAML values navigate with brackets:
-/// `SELECT output['items'][0]['name'] FROM calls WHERE args['customer']['age'] >= 30`.
+/// `SELECT output_value['items'][0]['name'] FROM spans WHERE input_args['customer']['age'] >= 30`.
 #[derive(Debug, Parser)]
 pub struct QueryArgs {
     /// One read-only SELECT (`-` reads stdin). See `--schema` for relations.
@@ -89,7 +89,7 @@ fn parse_duration(value: &str) -> Result<Duration, String> {
         .map_err(|e| e.to_string())
 }
 
-/// Value functions and retired names, after the relations.
+/// Value functions, after the relations.
 fn print_guide() {
     println!("BAML value functions:");
     println!(
@@ -98,11 +98,6 @@ fn print_guide() {
     println!(
         "  baml_kind(v)         null, bool, int, float, string, bigint, enum, json (structured), missing, unavailable"
     );
-    println!();
-    println!("Old tracer relations that are not available:");
-    for (name, advice) in catalog::RETIRED {
-        println!("  {name:<15} {advice}");
-    }
 }
 
 impl QueryArgs {
@@ -117,9 +112,6 @@ impl QueryArgs {
             .collect();
         if relations.is_empty() {
             let table = self.table.as_deref().unwrap_or_default();
-            if let Some(advice) = catalog::retired(table) {
-                anyhow::bail!("`{table}` from the old tracer is not available: {advice}");
-            }
             anyhow::bail!("unknown relation `{table}`");
         }
         match self.format {

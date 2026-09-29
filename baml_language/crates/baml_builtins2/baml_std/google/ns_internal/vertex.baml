@@ -374,7 +374,7 @@ function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.Mod
             request_timeout_ms = c.request_timeout_ms,
         );
         let turn = anthropic.internal.parse(sent.value);
-        return ai.ModelTurn { ...turn, calls: [sent.call] };
+        return ai.ModelTurn { ...turn, calls: [sent.call], model: c.model };
     }
     let seq = input.journal.entries().length();
     let sent = ai.wire.send_as_with_wire<root.internal.GmResponse>(
@@ -385,7 +385,7 @@ function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.Mod
         request_timeout_ms = c.request_timeout_ms,
     );
     let turn = root.internal.parse(sent.value, seq, provider = "vertex");
-    ai.ModelTurn { ...turn, calls: [sent.call] }
+    ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
 }
 
 function _vertex_decode_batch(batch: string) -> ai.stream.Event[] {
@@ -422,6 +422,7 @@ function vertex_invoke_stream(
                 }
             },
             require_terminal = "vertex",
+            model = c.model,
         )
     } else {
         ai.stream.TurnStream.from_sse(
@@ -432,6 +433,7 @@ function vertex_invoke_stream(
                 }
             },
             require_terminal = "vertex",
+            model = c.model,
         )
     };
     let call = ai.events.LLMCall {

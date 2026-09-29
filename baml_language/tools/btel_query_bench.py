@@ -26,16 +26,18 @@ import time
 
 WORKLOADS = ["tiny", "dense", "spawn", "capture-repeat", "capture-unique"]
 QUERIES = {
-    "count": "SELECT count(*) FROM calls",
-    # Every column: SQLite evaluates each per-execution subquery before sorting.
-    "executions": "SELECT * FROM executions ORDER BY started_at_ms DESC LIMIT 20",
-    "stats": "SELECT fqn, sum(call_count) AS calls, sum(total_duration_ns) AS total_ns "
-    "FROM function_stats GROUP BY fqn ORDER BY calls DESC",
-    "slowest": "SELECT call_id, fqn, duration_ns FROM calls ORDER BY duration_ns DESC LIMIT 10",
-    "cas_filter": "SELECT count(*) FROM calls WHERE args['n'] = 7",
-    "cas_render": "SELECT args['n'], output FROM calls WHERE fqn LIKE '%capture' LIMIT 50",
+    "count": "SELECT count(*) FROM spans",
+    # Newest root calls: every span's start is formatted before sorting.
+    "roots": "SELECT * FROM spans WHERE span_type = 'future' AND parent_span_id IS NULL "
+    "ORDER BY start_time DESC LIMIT 20",
+    "stats": "SELECT function_name, sum(invocation_count) AS calls, sum(total_time) AS total_ns "
+    "FROM profiler GROUP BY function_name ORDER BY calls DESC",
+    "slowest": "SELECT span_id, span_name, duration FROM spans ORDER BY duration DESC LIMIT 10",
+    "cas_filter": "SELECT count(*) FROM spans WHERE input_args['n'] = 7",
+    "cas_render": "SELECT input_args['n'], output_value FROM spans "
+    "WHERE span_name LIKE '%capture' LIMIT 50",
 }
-METADATA_QUERIES = ["count", "executions", "stats", "slowest"]
+METADATA_QUERIES = ["count", "roots", "stats", "slowest"]
 
 
 class Child:

@@ -1005,6 +1005,8 @@ function parse(resp: OaResponse) -> ai.ModelTurn {
             output_tokens: u.output_tokens ?? 0,
             cached_input_tokens: u.input_tokens_details?.cached_tokens,
             reasoning_tokens: u.output_tokens_details?.reasoning_tokens,
+            // input_tokens counts the cached share too.
+            uncached_input_tokens: (u.input_tokens ?? 0) - (u.input_tokens_details?.cached_tokens ?? 0),
         }
     } else {
         null
@@ -1023,7 +1025,7 @@ function invoke(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.ModelTu
         request_timeout_ms = c.request_timeout_ms,
     );
     let turn = parse(sent.value);
-    ai.ModelTurn { ...turn, calls: [sent.call] }
+    ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
 }
 
 // ---------------------------------------------------------------------------
@@ -1272,6 +1274,7 @@ function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.
             }
         },
         require_terminal = "openai",
+        model = c.model,
     );
     let call = ai.events.LLMCall {
         client_name: c.id(),

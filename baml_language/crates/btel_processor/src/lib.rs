@@ -53,7 +53,7 @@ impl<P> Processing<P> {
         path: CallPathId,
         entered: ClockInstant,
         exited: ClockInstant,
-        io: AwaitDuration,
+        self_await: AwaitDuration,
         reentry: bool,
         outcome: InvocationOutcome,
     ) where
@@ -63,9 +63,10 @@ impl<P> Processing<P> {
             node: CallPathNodeId::new(path, reentry),
             count: 1,
             total_duration: entered.elapsed_until(exited),
-            total_io_duration: io,
-            errored: u64::from(outcome == InvocationOutcome::Errored),
+            total_self_await: self_await,
+            errored: u64::from(outcome.is_error()),
             cancelled: u64::from(outcome == InvocationOutcome::Cancelled),
+            panicked: u64::from(outcome == InvocationOutcome::Panicked),
         };
         self.cache.observe(delta, |delta| {
             publisher::publish_aggregate(&mut self.publisher, delta);
@@ -95,6 +96,10 @@ impl<P> Processing<P> {
                     self.sample::<I, V>(
                         call_path, entered_at, exited_at, await_time, reentry, outcome,
                     );
+                }
+                TimingRecord::SysOpTime { call_path, elapsed } => {
+                    assert!(thread.is_some(), "sysop time without thread selector");
+                    self.publisher.sysop_time(call_path, elapsed);
                 }
             }
         }
@@ -234,6 +239,37 @@ impl<P> Processing<P> {
                     InvocationOutcome::Cancelled,
                 );
             }
+            SpanRecord::FunctionSpanCompletionPanicked {
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                ..
+            }
+            | SpanRecord::FunctionSpanCompletionPanickedNeedsAnnouncement {
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                ..
+            }
+            | SpanRecord::LateFunctionSpanCompletionPanicked {
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                ..
+            } => {
+                assert!(thread.is_some(), "span completion without thread selector");
+                self.sample::<I, V>(
+                    *call_path,
+                    *entered_at,
+                    *exited_at,
+                    *await_time,
+                    false,
+                    InvocationOutcome::Panicked,
+                );
+            }
             SpanRecord::FunctionSpanCompletionOkReentry {
                 call_path,
                 entered_at,
@@ -325,6 +361,37 @@ impl<P> Processing<P> {
                     *await_time,
                     true,
                     InvocationOutcome::Cancelled,
+                );
+            }
+            SpanRecord::FunctionSpanCompletionPanickedReentry {
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                ..
+            }
+            | SpanRecord::FunctionSpanCompletionPanickedReentryNeedsAnnouncement {
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                ..
+            }
+            | SpanRecord::LateFunctionSpanCompletionPanickedReentry {
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                ..
+            } => {
+                assert!(thread.is_some(), "span completion without thread selector");
+                self.sample::<I, V>(
+                    *call_path,
+                    *entered_at,
+                    *exited_at,
+                    *await_time,
+                    true,
+                    InvocationOutcome::Panicked,
                 );
             }
             _ => {}

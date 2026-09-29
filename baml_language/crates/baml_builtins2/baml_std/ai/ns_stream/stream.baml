@@ -161,6 +161,13 @@ class TurnStream {
     // falls back to _call_started when a provider did not set it.
     _ttft_from: baml.time.Instant?,
     _capture_sse: bool,
+    // Where this stream's token usage is recorded: the span or thread that
+    // opened it, not whoever pulls it. 0 records nothing (scripted streams,
+    // relays, whose member stream records its own usage, and a stream whose
+    // usage is already recorded).
+    _usage_target: int,
+    // The model the client asked for, which prices the usage.
+    _usage_model: string?,
 
     /// A turn stream over a live SSE connection. `decode` receives the raw
     /// batch string from `sse.next()` (a JSON array of SseEvent objects; see
@@ -173,10 +180,14 @@ class TurnStream {
     /// before that event arrives, rather than reporting the truncated text as a
     /// completed turn. Leave it null (the default) only for a protocol whose
     /// sole end-of-turn signal IS the socket closing.
+    ///
+    /// `model` is the model the request names; the stream's token usage is
+    /// recorded under it.
     function from_sse(
         sse: baml.http.SseStream,
         decode: (string) -> Event[] throws root.errors.InvokeError,
         require_terminal: string? = null,
+        model: string? = null,
     ) -> TurnStream {
         TurnStream {
             _event_source: null,
@@ -198,6 +209,8 @@ class TurnStream {
             _call_started: null,
             _ttft_from: null,
             _capture_sse: false,
+            _usage_target: trace._usage_target(),
+            _usage_model: model,
         }
     }
 
@@ -226,6 +239,8 @@ class TurnStream {
             _call_started: null,
             _ttft_from: null,
             _capture_sse: false,
+            _usage_target: 0,
+            _usage_model: null,
         }
     }
 
@@ -255,6 +270,8 @@ class TurnStream {
             _call_started: null,
             _ttft_from: null,
             _capture_sse: false,
+            _usage_target: 0,
+            _usage_model: null,
         }
     }
 
@@ -462,10 +479,27 @@ class TurnStream {
                 output_tokens: self._output_tokens ?? 0,
                 cached_input_tokens: null,
                 reasoning_tokens: null,
+                cache_write_input_tokens: null,
+                uncached_input_tokens: null,
             }
         } else {
             null
         };
+        if let u: root.events.Usage = usage {
+            let target = self._usage_target;
+            if (target != 0) {
+                self._usage_target = 0;
+                let _ = trace._record_usage(
+                    target,
+                    self._usage_model,
+                    u.input_tokens,
+                    u.output_tokens,
+                    null,
+                    null,
+                    null,
+                );
+            }
+        }
         if let call: root.events.LLMCall = self._wire_call {
             if (call.timing.duration_ms == null) {
                 if let started: baml.time.Instant = self._call_started {

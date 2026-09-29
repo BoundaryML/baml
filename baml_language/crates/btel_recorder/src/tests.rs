@@ -417,6 +417,7 @@ fn converted_output_outlives_recycled_chunks_and_preserves_selector_context() {
         completed_at: ClockInstant::from_ticks(8),
         outcome: InvocationOutcome::Errored,
         clock: clock.clone(),
+        name: None,
     });
     producer.write_span(SpanRecord::CallPathDefined {
         call_path: path,
@@ -579,10 +580,11 @@ fn second_level_merging_preserves_all_contributions_and_resets_windows() {
             node,
             count: 1,
             total_duration: ClockDuration::from_ticks(u64::from(i)),
-            total_io_duration: AwaitDuration::ZERO
+            total_self_await: AwaitDuration::ZERO
                 .saturating_add(ClockDuration::from_ticks(u64::from(i % 19))),
             errored,
             cancelled,
+            ..Default::default()
         };
         publisher.aggregate(delta);
         let totals = expected.entry(node.get()).or_default();
@@ -600,9 +602,10 @@ fn second_level_merging_preserves_all_contributions_and_resets_windows() {
         node,
         count: 7,
         total_duration: ClockDuration::from_ticks(13),
-        total_io_duration: AwaitDuration::ZERO,
+        total_self_await: AwaitDuration::ZERO,
         errored: 2,
         cancelled: 3,
+        ..Default::default()
     });
     publisher.flush();
     drop(publisher);
@@ -639,7 +642,8 @@ fn second_level_merging_preserves_all_contributions_and_resets_windows() {
             total_self_await_ticks: 0,
             outcomes: Some(proto::AggregateOutcomes {
                 errored: 2,
-                cancelled: 3
+                cancelled: 3,
+                panicked: Some(0),
             }),
         }]
     );
@@ -664,10 +668,11 @@ fn overflow_spills_whole_delta_without_partial_updates_or_mid_callback_flush() {
                 node,
                 count: values[0],
                 total_duration: ClockDuration::from_ticks(values[1]),
-                total_io_duration: AwaitDuration::ZERO
+                total_self_await: AwaitDuration::ZERO
                     .saturating_add(ClockDuration::from_ticks(values[2])),
                 errored: values[3],
                 cancelled: values[4],
+                ..Default::default()
             });
             for (total, value) in expected
                 .entry(node.get())
@@ -732,12 +737,14 @@ fn outcomes_are_present_at_zero_and_absence_stays_distinguishable() {
         entry.outcomes,
         Some(proto::AggregateOutcomes {
             errored: 0,
-            cancelled: 0
+            cancelled: 0,
+            panicked: Some(0),
         })
     );
-    // Field 5, length 0: all four completions succeeded.
+    // Field 5 holding only a zero panic count (field 3): all four
+    // completions succeeded, and none panicked.
     let bytes = entry.encode_to_vec();
-    assert!(bytes.ends_with(&[0x2a, 0x00]));
+    assert!(bytes.ends_with(&[0x2a, 0x02, 0x18, 0x00]));
     let decoded = proto::AggregateDelta::decode(bytes.as_slice()).unwrap();
     assert_eq!(decoded.outcomes, entry.outcomes);
     // An older producer's entry has no field 5: outcomes are unknown, not zero.
@@ -746,7 +753,7 @@ fn outcomes_are_present_at_zero_and_absence_stays_distinguishable() {
         ..*entry
     }
     .encode_to_vec();
-    assert_eq!(old.len() + 2, bytes.len());
+    assert_eq!(old.len() + 4, bytes.len());
     assert_eq!(
         proto::AggregateDelta::decode(old.as_slice())
             .unwrap()
@@ -797,14 +804,16 @@ fn outcome_merge_growth_and_spills_keep_exact_encoded_size() {
                 129 + (1 << 14),
                 proto::AggregateOutcomes {
                     errored: 127,
-                    cancelled: 1 + (1 << 14)
+                    cancelled: 1 + (1 << 14),
+                    panicked: Some(0),
                 }
             ),
             (
                 u64::MAX,
                 proto::AggregateOutcomes {
                     errored: 1 << 40,
-                    cancelled: 1
+                    cancelled: 1,
+                    panicked: Some(0),
                 }
             ),
         ]

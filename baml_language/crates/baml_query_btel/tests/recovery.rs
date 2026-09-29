@@ -40,6 +40,7 @@ impl Recording {
             format_minor: 1,
             recording_id: self.id.to_vec(),
             source_snapshot_id: None,
+            ..Default::default()
         });
         file.sequence = sequence;
         let part = self.dir.join(format!("{sequence:020}.btel.part"));
@@ -98,6 +99,7 @@ fn definitions(fqn: &str) -> proto::Definitions {
             spawn_call_path_id: 0,
             started_at_ticks: 900,
             clock_epoch_id: EPOCH,
+            ..Default::default()
         }],
         clock_epochs: vec![epoch()],
     }
@@ -122,6 +124,7 @@ fn aggregate(count: u64, duration: u64) -> proto::AggregateBatch {
             total_self_await_ticks: 0,
             outcomes: None,
         }],
+        ..Default::default()
     }
 }
 
@@ -160,6 +163,7 @@ fn complete(parent: u64, flags: u32) -> Event {
         self_await_ticks: 100,
         completion_flags: flags,
         value_cas_id: None,
+        ..Default::default()
     })
 }
 
@@ -189,8 +193,55 @@ fn one(index: &mut Index, sql: &str) -> Vec<Json> {
     result.rows[0].clone()
 }
 
+/// The index's own tables, for evidence the public tables do not show: the
+/// profiler waits for a process's end, but every applied delta is here.
+fn internal(index: &Index, sql: &str) -> Vec<Vec<Json>> {
+    let conn = index.connection();
+    let mut statement = conn.prepare(sql).unwrap();
+    let width = statement.column_count();
+    statement
+        .query_map([], |r| {
+            (0..width)
+                .map(|i| {
+                    Ok(match r.get::<_, rusqlite::types::Value>(i)? {
+                        rusqlite::types::Value::Null => Json::Null,
+                        rusqlite::types::Value::Integer(n) => json!(n),
+                        rusqlite::types::Value::Real(f) => json!(f),
+                        rusqlite::types::Value::Text(t) => json!(t),
+                        rusqlite::types::Value::Blob(b) => json!(btel_reader::discovery::hex(&b)),
+                    })
+                })
+                .collect()
+        })
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap()
+}
+
 fn count(index: &mut Index) -> Json {
-    one(index, "SELECT SUM(call_count) FROM function_stats")[0].clone()
+    internal(index, "SELECT SUM(call_count) FROM aggregate")[0][0].clone()
+}
+
+fn issues(index: &Index) -> Vec<Json> {
+    internal(index, "SELECT code FROM issue ORDER BY code")
+        .into_iter()
+        .map(|mut row| row.remove(0))
+        .collect()
+}
+
+/// `(state, indexed, observed, blocked)` of the only recording, as every
+/// query's outcome reports it.
+fn extent(index: &mut Index) -> (String, i64, i64, Option<i64>) {
+    let outcome = run(index, "SELECT 1").outcome;
+    let [recording] = outcome.recordings.as_slice() else {
+        panic!("one recording: {:?}", outcome.recordings)
+    };
+    (
+        recording.state.clone(),
+        recording.indexed_sequence,
+        recording.observed_sequence,
+        recording.blocked_sequence,
+    )
 }
 
 #[test]
@@ -208,32 +259,16 @@ fn late_definitions_completions_and_clock_invalidation_repair_derived_fields() {
     );
     let mut index = Index::for_project(project.path(), options()).unwrap();
     index.refresh().unwrap();
+    // Started, not finished, and nothing known about it yet.
     assert_eq!(
         one(
             &mut index,
-            "SELECT status, fqn, execution_id, timing_state, duration_ns FROM calls"
+            "SELECT is_complete, span_name, profiler_node_id, start_time FROM span_announcements"
         ),
-        vec![
-            json!("incomplete"),
-            Json::Null,
-            Json::Null,
-            json!("incomplete"),
-            Json::Null
-        ]
+        vec![json!(0), Json::Null, Json::Null, Json::Null]
     );
-    assert_eq!(
-        one(
-            &mut index,
-            "SELECT fqn, call_count, timing_state, total_duration_ns FROM function_stats"
-        ),
-        vec![Json::Null, json!(1), json!("unknown_clock"), Json::Null]
-    );
-    let issues = run(&mut index, "SELECT code FROM issues ORDER BY code");
-    assert!(
-        issues.rows.contains(&vec![json!("call_path_undefined")]),
-        "{:?}",
-        issues.rows
-    );
+    assert!(run(&mut index, "SELECT * FROM spans").rows.is_empty());
+    assert_eq!(count(&mut index), json!(1));
 
     // File 2: definitions, a valid clock state, the completion.
     recording.write(
@@ -246,6 +281,7 @@ fn late_definitions_completions_and_clock_invalidation_repair_derived_fields() {
                 Event::ThreadCompletion(proto::ThreadCompletion {
                     completed_at_ticks: 2000,
                     outcome: proto::InvocationOutcome::Ok as i32,
+                    ..Default::default()
                 }),
             ])),
             ..Default::default()
@@ -253,40 +289,33 @@ fn late_definitions_completions_and_clock_invalidation_repair_derived_fields() {
     );
     let metrics = index.refresh().unwrap();
     assert_eq!((metrics.files_decoded, metrics.files_unchanged), (1, 1));
+    let ask = run(
+        &mut index,
+        "SELECT span_type, status, span_name, profiler_node_id IS NOT NULL, duration, start_time
+         FROM spans ORDER BY span_type",
+    );
     assert_eq!(
-        one(
-            &mut index,
-            "SELECT status, fqn, execution_id IS NOT NULL, timing_state, duration_ns, self_await_ns FROM calls"
-        ),
+        ask.rows,
         vec![
-            json!("ok"),
-            json!("user.Ask"),
-            json!(1),
-            json!("valid"),
-            json!(500),
-            json!(100)
+            vec![
+                json!("function"),
+                json!("return"),
+                json!("user.Ask"),
+                json!(1),
+                json!(500),
+                json!("2026-09-21T14:13:20.000001Z")
+            ],
+            vec![
+                json!("future"),
+                json!("return"),
+                json!("user.Ask"),
+                json!(1),
+                json!(1100),
+                json!("2026-09-21T14:13:20.000000Z")
+            ],
         ]
     );
-    assert_eq!(
-        one(
-            &mut index,
-            "SELECT entry_fqn, status, duration_ns, started_at FROM executions"
-        ),
-        vec![
-            json!("user.Ask"),
-            json!("ok"),
-            json!(1100),
-            json!("2026-09-21T14:13:20.000000Z")
-        ]
-    );
-    assert_eq!(
-        one(
-            &mut index,
-            "SELECT fqn, call_count, total_duration_ns, timing_state FROM function_stats"
-        ),
-        vec![json!("user.Ask"), json!(1), json!(500), json!("valid")]
-    );
-    assert!(run(&mut index, "SELECT * FROM issues").rows.is_empty());
+    assert!(issues(&index).is_empty());
 
     // File 3: the epoch is invalidated; durations become unavailable.
     recording.write(
@@ -298,23 +327,10 @@ fn late_definitions_completions_and_clock_invalidation_repair_derived_fields() {
     );
     index.refresh().unwrap();
     assert_eq!(
-        one(&mut index, "SELECT duration_ns, timing_state FROM calls"),
-        vec![Json::Null, json!("invalidated_discontinuity")]
+        run(&mut index, "SELECT duration FROM spans").rows,
+        vec![vec![Json::Null], vec![Json::Null]]
     );
-    assert_eq!(
-        one(
-            &mut index,
-            "SELECT duration_ns, timing_state FROM executions"
-        ),
-        vec![Json::Null, json!("invalidated_discontinuity")]
-    );
-    assert_eq!(
-        one(
-            &mut index,
-            "SELECT total_duration_ns, timing_state, call_count FROM function_stats"
-        ),
-        vec![Json::Null, json!("invalidated_discontinuity"), json!(1)]
-    );
+    assert_eq!(count(&mut index), json!(1));
 }
 
 #[test]
@@ -333,22 +349,15 @@ fn completion_before_its_announcement_waits_for_inputs() {
     );
     let mut index = Index::for_project(project.path(), options()).unwrap();
     index.refresh().unwrap();
-    assert_eq!(
-        one(&mut index, "SELECT status, args_state FROM calls"),
-        vec![json!("ok"), json!("pending")]
-    );
-    assert_eq!(
-        one(&mut index, "SELECT code FROM issues")[0],
-        json!("announcement_pending")
-    );
     // Reading the inputs now is unavailable evidence, not a non-match.
     let pending = run(
         &mut index,
-        "SELECT args[0], baml_value_state(args[0]) FROM calls",
+        "SELECT status, input_args[0], baml_value_state(input_args[0]) FROM spans
+         WHERE span_type = 'function'",
     );
     assert_eq!(
         pending.rows,
-        vec![vec![Json::Null, json!("capture_pending")]]
+        vec![vec![json!("return"), Json::Null, json!("capture_pending")]]
     );
     assert_eq!(pending.outcome.status, Status::Incomplete);
     assert_eq!(pending.outcome.diagnostics[0].code, "capture_pending");
@@ -361,15 +370,15 @@ fn completion_before_its_announcement_waits_for_inputs() {
     );
     index.refresh().unwrap();
     assert_eq!(
-        one(
-            &mut index,
-            "SELECT status, args_state, args_cas_id FROM calls"
-        ),
-        vec![json!("ok"), json!("reference"), json!("07".repeat(16))]
+        internal(&index, "SELECT outcome, lower(hex(inputs_cas)) FROM call"),
+        vec![vec![json!(1), json!("07".repeat(16))]]
     );
-    assert!(run(&mut index, "SELECT * FROM issues").rows.is_empty());
+    assert!(issues(&index).is_empty());
     // The inputs blob was never delivered: an explicit unavailable outcome.
-    let result = run(&mut index, "SELECT args[0] FROM calls");
+    let result = run(
+        &mut index,
+        "SELECT input_args[0] FROM spans WHERE span_type = 'function'",
+    );
     assert_eq!(result.rows, vec![vec![Json::Null]]);
     assert_eq!(result.outcome.status, Status::Incomplete);
     assert_eq!(result.outcome.diagnostics[0].code, "cas_missing");
@@ -400,13 +409,8 @@ fn conflicting_evidence_is_reported_and_first_definitions_kept() {
     );
     let mut index = Index::for_project(project.path(), options()).unwrap();
     index.refresh().unwrap();
-    let codes: Vec<Json> = run(&mut index, "SELECT code FROM issues ORDER BY code")
-        .rows
-        .into_iter()
-        .map(|mut row| row.remove(0))
-        .collect();
     assert_eq!(
-        codes,
+        issues(&index),
         vec![
             json!("call_evidence_conflict"),
             json!("clock_epoch_conflict"),
@@ -414,8 +418,11 @@ fn conflicting_evidence_is_reported_and_first_definitions_kept() {
         ]
     );
     assert_eq!(
-        one(&mut index, "SELECT fqn, timing_state FROM calls"),
-        vec![json!("user.Ask"), json!("conflicted")],
+        one(
+            &mut index,
+            "SELECT span_name, duration FROM spans WHERE span_type = 'function'"
+        ),
+        vec![json!("user.Ask"), Json::Null],
         "first metadata kept; a conflicting clock makes timing unavailable"
     );
 }
@@ -429,19 +436,13 @@ fn gaps_and_invalid_files_stop_indexing_until_repaired() {
     }
     let mut index = Index::for_project(project.path(), options()).unwrap();
     index.refresh().unwrap();
-    assert_eq!(
-        one(
-            &mut index,
-            "SELECT state, indexed_sequence, observed_sequence, blocked_sequence FROM recordings"
-        ),
-        vec![json!("gap"), json!(2), json!(5), json!(3)]
-    );
+    assert_eq!(extent(&mut index), ("gap".into(), 2, 5, Some(3)));
     assert_eq!(
         count(&mut index),
         json!(2),
         "files beyond a gap are not facts"
     );
-    let gap = run(&mut index, "SELECT COUNT(*) FROM calls");
+    let gap = run(&mut index, "SELECT COUNT(*) FROM spans");
     assert_eq!(gap.outcome.status, Status::Incomplete);
     assert_eq!(gap.outcome.diagnostics[0].code, "recording_gap");
 
@@ -450,21 +451,12 @@ fn gaps_and_invalid_files_stop_indexing_until_repaired() {
     assert_eq!(metrics.files_applied, 3);
     assert_eq!(metrics.recordings_rebuilt, 0);
     assert_eq!(count(&mut index), json!(5));
-    assert_eq!(
-        one(&mut index, "SELECT state FROM recordings")[0],
-        json!("unsealed")
-    );
+    assert_eq!(extent(&mut index).0, "unsealed");
 
     std::fs::write(recording.path(6), b"not a recording file").unwrap();
     recording.write(7, only_aggregate(1));
     index.refresh().unwrap();
-    assert_eq!(
-        one(
-            &mut index,
-            "SELECT state, indexed_sequence, blocked_sequence FROM recordings"
-        ),
-        vec![json!("invalid_file"), json!(5), json!(6)]
-    );
+    assert_eq!(extent(&mut index), ("invalid_file".into(), 5, 7, Some(6)));
     assert_eq!(count(&mut index), json!(5));
     // Unchanged invalid file: neither decoded again nor written about.
     let again = index.refresh().unwrap();
@@ -521,30 +513,29 @@ fn changed_or_deleted_applied_files_rebuild_from_the_remaining_prefix() {
     std::fs::remove_file(recording.path(3)).unwrap();
     index.refresh().unwrap();
     assert_eq!(count(&mut index), json!(11));
-    assert_eq!(
-        one(
-            &mut index,
-            "SELECT state, indexed_sequence, blocked_sequence FROM recordings"
-        ),
-        vec![json!("gap"), json!(2), json!(3)]
-    );
+    assert_eq!(extent(&mut index), ("gap".into(), 2, 4, Some(3)));
     std::fs::remove_dir_all(&recording.dir).unwrap();
     let removed = index.refresh().unwrap();
     assert_eq!(removed.recordings_removed, 1);
-    assert!(run(&mut index, "SELECT * FROM recordings").rows.is_empty());
+    assert!(run(&mut index, "SELECT 1").outcome.recordings.is_empty());
 }
 
 fn dump(index: &mut Index) -> Vec<Vec<Vec<Json>>> {
-    [
-        "SELECT * FROM recordings ORDER BY 1",
-        "SELECT * FROM executions ORDER BY 1",
-        "SELECT call_id, execution_id, fqn, status, duration_ns, timing_state, args, output, error FROM calls ORDER BY 1",
-        "SELECT * FROM function_stats ORDER BY 1, 3",
-        "SELECT * FROM issues ORDER BY 1, 2, 3, 4",
+    let mut tables: Vec<Vec<Vec<Json>>> = [
+        "SELECT * FROM processes ORDER BY 1",
+        "SELECT * FROM spans ORDER BY 1",
+        "SELECT * FROM span_announcements ORDER BY 1",
+        "SELECT * FROM profiler ORDER BY 1",
     ]
     .into_iter()
     .map(|sql| run(index, sql).rows)
-    .collect()
+    .collect();
+    tables.push(internal(
+        index,
+        "SELECT node, call_count, duration_ticks FROM aggregate ORDER BY node",
+    ));
+    tables.push(internal(index, "SELECT code FROM issue ORDER BY code"));
+    tables
 }
 
 #[test]
@@ -623,7 +614,7 @@ fn a_held_writer_lock_times_out_instead_of_answering_stale() {
             .unwrap();
     let error = index
         .refresh_and_query(&QueryRequest {
-            sql: "SELECT COUNT(*) FROM recordings".into(),
+            sql: "SELECT COUNT(*) FROM processes".into(),
             ..QueryRequest::default()
         })
         .unwrap_err();
@@ -739,7 +730,7 @@ fn value_callbacks_respect_the_time_budget() {
     index.refresh().unwrap();
     let error = index
         .query(&QueryRequest {
-            sql: "SELECT args FROM calls".into(),
+            sql: "SELECT input_args FROM span_announcements".into(),
             budgets: baml_query_btel::Budgets {
                 max_duration: Some(Duration::ZERO),
                 ..baml_query_btel::Budgets::default()

@@ -15,7 +15,7 @@
 //!   visible; they never make a thread a root or a path a top-level path.
 
 /// Physical layout of these tables. Change on any DDL change.
-pub const SCHEMA_VERSION: i64 = 9;
+pub const SCHEMA_VERSION: i64 = 10;
 /// Interpretation of evidence into rows. Change when reconciliation changes
 /// meaning without a DDL change; either mismatch rebuilds the index.
 pub const NORMALIZATION_VERSION: i64 = 1;
@@ -43,8 +43,26 @@ CREATE TABLE recording (
   partial_files INTEGER NOT NULL DEFAULT 0,
   files_after_end INTEGER NOT NULL DEFAULT 0,
   indexed_bytes INTEGER NOT NULL DEFAULT 0,
-  generation INTEGER NOT NULL DEFAULT 0
+  generation INTEGER NOT NULL DEFAULT 0,
+  -- The process that ran this engine, from the first header that names it
+  -- (format minor 3). Engines of one process share process_id; recordings
+  -- without one are their own process.
+  process_id BLOB,
+  baml_version TEXT,
+  host TEXT,
+  -- JSON array of the process's arguments.
+  command TEXT,
+  process_started_ns INTEGER,
+  -- CAS id of the project's sources, a map<path, content> snapshot.
+  source_cas BLOB,
+  -- How the process ended, when this recording's end marker says so:
+  -- 1 success, 2 error, 3 panicked.
+  process_end_status INTEGER,
+  process_end_ns INTEGER,
+  -- Newest modification time of an applied file, Unix nanoseconds.
+  updated_ns INTEGER
 ) STRICT;
+CREATE INDEX recording_by_process ON recording (process_id);
 
 -- One row per applied file. Facts, totals and this ledger commit together.
 CREATE TABLE ledger (
@@ -130,20 +148,15 @@ CREATE TABLE call_path (
   edge INTEGER,
   -- Distance from a top-level path (0), once every ancestor is defined.
   depth INTEGER,
+  -- The profiler node: a hash of the function names from the top-level
+  -- path down, with each edge kind. NULL until every ancestor's function is
+  -- known; cleared and recomputed when one of them changes.
+  node_id INTEGER,
   -- Sum of synchronous children's normal-node duration totals: a child
   -- adds its total when it is defined, then each later delta, in the same
   -- transaction. Reentry and spawn time are excluded. NULL means overflow;
   -- nanoseconds and clock validity are still evaluated at query time.
   direct_child_ticks INTEGER DEFAULT 0,
-  -- The call or spawn expression at caller_pc, resolved in the caller's
-  -- recorded source map (btel_reader::source_map::SiteState labels). NULL
-  -- until the path is defined; re-resolved when the caller's definition
-  -- arrives later.
-  site_state TEXT,
-  site_file TEXT,
-  site_line INTEGER,
-  site_start INTEGER,
-  site_end INTEGER,
   conflict INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (rec, call_path_id)
 ) STRICT, WITHOUT ROWID;
@@ -151,11 +164,8 @@ CREATE TABLE call_path (
 -- SQLite otherwise prefers scanning the recording's primary-key range.
 CREATE INDEX call_path_by_thread
   ON call_path (rec, thread_id, parent_call_path_id, edge, callee_function_id);
--- Paths whose site a later definition of their caller can still change.
--- A first definition only changes unresolved sites; a conflicting one
--- scans the recording's paths instead.
-CREATE INDEX call_path_unsited ON call_path (rec, caller_function_id)
-  WHERE site_state != 'resolved';
+-- Paths still waiting for a profiler node.
+CREATE INDEX call_path_unnoded ON call_path (rec) WHERE node_id IS NULL;
 -- Paths still waiting for a depth: resolution touches only these.
 CREATE INDEX call_path_undepthed ON call_path (rec) WHERE depth IS NULL;
 
@@ -170,20 +180,25 @@ CREATE TABLE thread (
   announced INTEGER NOT NULL DEFAULT 0,
   completed_ticks INTEGER,
   outcome INTEGER,
+  -- 1 when a panic ended it (outcome is errored).
+  panicked INTEGER NOT NULL DEFAULT 0,
+  -- The future's name, when the spawn gave it one.
+  name TEXT,
   -- A second completion disagreed with the first (which is kept).
   completion_conflict INTEGER NOT NULL DEFAULT 0,
   -- The execution (root thread) this thread belongs to, once resolvable.
   root_id BLOB,
   conflict INTEGER NOT NULL DEFAULT 0,
-  -- A root's start in Unix milliseconds, as `executions.started_at_ms`
-  -- reports it; stored so the newest executions are an index read.
+  -- A root's start in Unix milliseconds, stored so the newest root calls
+  -- are an index read.
   started_ms INTEGER,
   -- Set when the start or its clock may have changed since `started_ms`.
   start_pending INTEGER NOT NULL DEFAULT 1,
   PRIMARY KEY (rec, thread_id)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX thread_by_root ON thread (rec, root_id);
-CREATE INDEX execution_by_start ON thread (started_ms) WHERE defined = 1 AND parent_id IS NULL;
+CREATE INDEX thread_by_parent ON thread (rec, parent_id);
+CREATE INDEX root_by_start ON thread (started_ms) WHERE defined = 1 AND parent_id IS NULL;
 CREATE INDEX thread_start_pending ON thread (rec) WHERE start_pending = 1;
 -- Threads still waiting for their execution: root resolution after each
 -- transaction touches only these, not the recording's history.
@@ -235,8 +250,36 @@ CREATE TABLE aggregate (
   cancelled_calls INTEGER,
   errored_exact TEXT NOT NULL,
   cancelled_exact TEXT NOT NULL,
+  -- The errored calls a panic ended; NULL unless every delta counted them.
+  panicked_calls INTEGER,
+  panicked_exact TEXT NOT NULL DEFAULT '0',
   PRIMARY KEY (rec, node)
 ) STRICT, WITHOUT ROWID;
+
+-- Time spent in sysops per call path; total_ticks NULL once it overflows.
+CREATE TABLE sysop (
+  rec INTEGER NOT NULL,
+  call_path_id INTEGER NOT NULL,
+  sysops INTEGER NOT NULL,
+  total_ticks INTEGER,
+  PRIMARY KEY (rec, call_path_id)
+) STRICT, WITHOUT ROWID;
+
+-- Tokens each model turn used, in file order; several rows can name one node.
+CREATE TABLE model_usage (
+  rec INTEGER NOT NULL,
+  sequence INTEGER NOT NULL,
+  position INTEGER NOT NULL,
+  node_id BLOB NOT NULL,
+  model TEXT,
+  input_tokens INTEGER NOT NULL,
+  output_tokens INTEGER NOT NULL,
+  cache_read_tokens INTEGER,
+  cache_write_tokens INTEGER,
+  reasoning_tokens INTEGER,
+  PRIMARY KEY (rec, sequence, position)
+) STRICT, WITHOUT ROWID;
+CREATE INDEX model_usage_by_node ON model_usage (rec, node_id);
 
 -- Retained calls, merged from announcements and completions by identity.
 CREATE TABLE call (
@@ -254,6 +297,8 @@ CREATE TABLE call (
   exited_ticks INTEGER,
   self_await_ticks INTEGER,
   outcome INTEGER,
+  -- 1 when a panic ended it (outcome is errored).
+  panicked INTEGER,
   needs_announcement INTEGER,
   value_cas BLOB,
   conflict INTEGER NOT NULL DEFAULT 0,
@@ -267,110 +312,27 @@ CREATE INDEX call_unreported_conflict ON call (rec) WHERE conflict = 1;
 CREATE INDEX call_pending ON call (rec)
   WHERE needs_announcement = 1 AND announced_sequence IS NULL;
 
--- One observed start of unwinding (a raise), merged with its end by ID.
--- Enum columns hold the wire enum values. defined = 0 is an end whose raise
--- is not indexed. Sites use the same states as call_path.site_state.
-CREATE TABLE error_raise (
-  rec INTEGER NOT NULL,
-  raise_id BLOB NOT NULL,
-  defined INTEGER NOT NULL,
-  sequence INTEGER,
-  thread_id BLOB,
-  raised_ticks INTEGER,
-  kind INTEGER,
-  function_id BLOB,
-  pc INTEGER,
-  origin_state INTEGER,
-  origin_raise_id BLOB,
-  previous_raise_id BLOB,
-  origin_via INTEGER,
-  origin_candidates INTEGER,
-  unresolved_reason INTEGER,
-  frame_count INTEGER,
-  -- The raising frame's call path: the stack is function_id at pc, then
-  -- the callers raise_path_frame lists. NULL when error_frame lists it.
-  call_path_id INTEGER,
-  inherited_count INTEGER,
-  -- JSON array of {function, file, line}; NULL when none was recorded.
-  inherited TEXT,
-  -- Encoded raise, compared to detect conflicting duplicates.
-  evidence BLOB,
-  site_state TEXT,
-  site_file TEXT,
-  site_line INTEGER,
-  site_start INTEGER,
-  site_end INTEGER,
-  end_sequence INTEGER,
-  end_result INTEGER,
-  handler_function_id BLOB,
-  handler_pc INTEGER,
-  unwound_frames INTEGER,
-  handler_site_state TEXT,
-  handler_site_file TEXT,
-  handler_site_line INTEGER,
-  handler_site_start INTEGER,
-  handler_site_end INTEGER,
-  conflict INTEGER NOT NULL DEFAULT 0,
-  end_conflict INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (rec, raise_id)
+-- The profiler of each ended process: one row per calling-context node,
+-- merged over every recording of the process in this index. Rebuilt when a
+-- process's recordings change after its end was indexed.
+CREATE TABLE profile_node (
+  process_id BLOB NOT NULL,
+  node_id INTEGER NOT NULL,
+  parent_node_id INTEGER,
+  function_name TEXT,
+  total_ns INTEGER,
+  self_ns INTEGER,
+  io_total_ns INTEGER,
+  io_self_ns INTEGER,
+  invocation_count INTEGER,
+  return_count INTEGER,
+  error_count INTEGER,
+  panic_error_count INTEGER,
+  user_error_count INTEGER,
+  cancel_error_count INTEGER,
+  missing_count INTEGER,
+  PRIMARY KEY (process_id, node_id)
 ) STRICT, WITHOUT ROWID;
-CREATE INDEX error_raise_by_origin ON error_raise (rec, origin_raise_id);
-CREATE INDEX error_raise_by_function ON error_raise (rec, function_id);
-CREATE INDEX error_raise_by_handler ON error_raise (rec, handler_function_id);
-CREATE INDEX error_raise_by_thread ON error_raise (rec, thread_id);
-
--- Call paths that name raise stacks (error_raise.call_path_id). built = 1
--- once raise_path_frame lists the path's callers; 0 while a path it walks
--- through is not defined yet. One row per path, not per raise.
-CREATE TABLE raise_path (
-  rec INTEGER NOT NULL,
-  call_path_id INTEGER NOT NULL,
-  built INTEGER NOT NULL,
-  PRIMARY KEY (rec, call_path_id)
-) STRICT, WITHOUT ROWID;
-CREATE INDEX raise_path_unbuilt ON raise_path (rec) WHERE built = 0;
-
--- The callers on a raise path, innermost first. Position 1 is the raising
--- frame's caller: frame_path_id's caller_function_id at its caller_pc, with
--- that path's call site. Ends at the thread's first frame, at most 63 rows.
-CREATE TABLE raise_path_frame (
-  rec INTEGER NOT NULL,
-  call_path_id INTEGER NOT NULL,
-  position INTEGER NOT NULL,
-  frame_path_id INTEGER NOT NULL,
-  PRIMARY KEY (rec, call_path_id, position)
-) STRICT, WITHOUT ROWID;
-
--- A raise's live stack, innermost first (position 0), when it was recorded
--- explicitly because no call path covered it.
-CREATE TABLE error_frame (
-  rec INTEGER NOT NULL,
-  raise_id BLOB NOT NULL,
-  position INTEGER NOT NULL,
-  function_id BLOB,
-  pc INTEGER,
-  native INTEGER NOT NULL,
-  site_state TEXT,
-  site_file TEXT,
-  site_line INTEGER,
-  site_start INTEGER,
-  site_end INTEGER,
-  PRIMARY KEY (rec, raise_id, position)
-) STRICT, WITHOUT ROWID;
-CREATE INDEX error_frame_by_function ON error_frame (rec, function_id);
-
--- Retained calls a raise names: role 1 its raise frame, 2 a call it unwound.
-CREATE TABLE error_link (
-  rec INTEGER NOT NULL,
-  raise_id BLOB NOT NULL,
-  call_id BLOB NOT NULL,
-  role INTEGER NOT NULL,
-  sequence INTEGER NOT NULL,
-  PRIMARY KEY (rec, raise_id, call_id, role)
-) STRICT, WITHOUT ROWID;
--- A call completes once, so one raise can have unwound it.
-CREATE UNIQUE INDEX error_link_unwound ON error_link (rec, call_id) WHERE role = 2;
-CREATE INDEX error_link_by_call ON error_link (rec, call_id, role);
 
 -- Evidence problems found while applying files. State-dependent problems
 -- (gaps, unresolved references) are derived at query time instead.
@@ -396,12 +358,9 @@ pub const FACT_TABLES: &[&str] = &[
     "epoch",
     "epoch_state",
     "aggregate",
+    "sysop",
+    "model_usage",
     "call",
-    "error_raise",
-    "raise_path",
-    "raise_path_frame",
-    "error_frame",
-    "error_link",
     "issue",
 ];
 
@@ -417,11 +376,9 @@ pub const ALL_TABLES: &[&str] = &[
     "epoch",
     "epoch_state",
     "aggregate",
+    "sysop",
+    "model_usage",
     "call",
-    "error_raise",
-    "raise_path",
-    "raise_path_frame",
-    "error_frame",
-    "error_link",
+    "profile_node",
     "issue",
 ];
