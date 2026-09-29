@@ -815,6 +815,65 @@ mod tests {
     }
 
     #[test]
+    fn recursion_through_a_nullable_tuple_element_boxes_the_enum_reference() {
+        let a = name("user", &[], "A");
+        let union_field = Ty::Union(Box::new([
+            Ty::Tuple(Box::new([
+                Ty::Union(Box::new([Ty::Class(a.clone(), Box::new([])), Ty::Null])),
+                Ty::Int,
+            ])),
+            Ty::Bool,
+        ]));
+        let pool = SymbolPool::from([(
+            a.clone(),
+            class_symbol(
+                &a,
+                vec![baml_sdkgen_types::ClassProperty {
+                    name: baml_base::Name::new("x"),
+                    docstring: None,
+                    ty: union_field,
+                }],
+                Vec::new(),
+                Vec::new(),
+            ),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        assert!(
+            flat(lib).contains("pubx:::std::boxed::Box<crate::AIntTupleOrBool>"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn a_null_tuple_element_in_a_union_arm_is_unit() {
+        let n = name("user", &[], "f");
+        let arg = Ty::Union(Box::new([Ty::Tuple(Box::new([Ty::Null])), Ty::Int]));
+        let pool = SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, arg, Ty::String)))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        assert!(flat(lib).contains("NullTuple(((),))"), "{lib}");
+    }
+
+    #[test]
+    fn tuples_wider_than_the_bridge_supports_are_skipped() {
+        let n = name("user", &[], "f");
+        let arg = Ty::Tuple(vec![Ty::Int; 13].into_boxed_slice());
+        let pool = SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, arg, Ty::String)))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(
+            generated
+                .warnings
+                .iter()
+                .any(|w| format!("{w:?}").contains("13 elements")),
+            "{:?}",
+            generated.warnings
+        );
+    }
+
+    #[test]
     fn unions_inside_tuples_register_in_the_leaf() {
         let n = name("user", &[], "f");
         let arg = Ty::Tuple(Box::new([

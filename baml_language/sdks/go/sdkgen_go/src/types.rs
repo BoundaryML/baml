@@ -539,6 +539,7 @@ fn is_reflect_kind_type(name: &Name) -> bool {
                         | "literal"
                         | "map"
                         | "primitive"
+                        | "tuple"
                         | "union"
                 )
     ) && name.package().as_str() == "baml"

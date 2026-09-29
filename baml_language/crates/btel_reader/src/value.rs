@@ -187,6 +187,10 @@ fn step<'a>(
                 items,
                 original_len,
                 ..
+            }
+            | DecodedObject::Tuple {
+                items,
+                original_len,
             },
             Segment::Index(index),
         ) => {
@@ -695,7 +699,7 @@ impl<'a> Renderer<'a> {
         }
         while let Some(id) = stack.pop() {
             match snapshot.object(id) {
-                DecodedObject::List { items, .. } => {
+                DecodedObject::List { items, .. } | DecodedObject::Tuple { items, .. } => {
                     for item in items {
                         visit(item, &mut counts, &mut stack);
                     }
@@ -803,6 +807,21 @@ impl<'a> Renderer<'a> {
                     return Json::Array(rendered);
                 }
                 map.insert("$list".into(), Json::Array(rendered));
+                if items.len() as u64 != *original_len {
+                    map.insert("$original_len".into(), Json::from(*original_len));
+                }
+            }
+            // A tuple renders as a JSON array, like BAML's own JSON encoding;
+            // the envelope form marks it as a tuple when it must be wrapped.
+            DecodedObject::Tuple {
+                items,
+                original_len,
+            } => {
+                let rendered = items.iter().map(|v| self.value(v, depth + 1)).collect();
+                if shared.is_none() && items.len() as u64 == *original_len {
+                    return Json::Array(rendered);
+                }
+                map.insert("$tuple".into(), Json::Array(rendered));
                 if items.len() as u64 != *original_len {
                     map.insert("$original_len".into(), Json::from(*original_len));
                 }

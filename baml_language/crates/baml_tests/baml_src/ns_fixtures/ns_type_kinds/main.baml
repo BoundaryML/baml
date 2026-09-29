@@ -40,4 +40,5 @@ function exercise_all_kinds() -> bool {
     && classify(reflect.Type.of<Marker>()) == "interface"
     && classify(reflect.Type.of<int>()) == "primitive"
     && classify(reflect.Type.of<Callback>()) == "function"
+    && classify(reflect.Type.of<(int, string)>()) == "tuple"
 }

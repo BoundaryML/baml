@@ -1396,11 +1396,14 @@ impl BexEngine {
         dynamic_enums: &indexmap::IndexMap<String, bex_external_types::Handle>,
         runtime_named_objects: Option<&indexmap::IndexMap<String, HeapPtr>>,
     ) -> Result<Value, EngineError> {
+        // Callers peel slots by arity (`peel_tuple_slots`), so a mismatch is
+        // a caller bug; never index past the slots.
+        debug_assert!(slots.is_none_or(|slots| slots.len() == items.len()));
         let values = items
             .into_iter()
             .enumerate()
             .map(|(i, v)| {
-                let slot = slots.map(|slots| &slots[i]);
+                let slot = slots.and_then(|slots| slots.get(i));
                 let v = match slot {
                     Some(ty) => self.coerce_inbound_arg(v, ty)?,
                     None => v,

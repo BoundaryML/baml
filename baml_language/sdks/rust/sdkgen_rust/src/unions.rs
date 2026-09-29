@@ -373,9 +373,11 @@ pub(crate) fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
             analysis.is_emitted(name)
         }
         Ty::List(inner) => arm_is_representable(inner, analysis),
+        // A `null` element is the unit `()`; only a top-level `null` arm is
+        // optionality (stripped before arms are classified).
         Ty::Tuple(items) => items
             .iter()
-            .all(|item| arm_is_representable(item, analysis)),
+            .all(|item| matches!(item, Ty::Null) || arm_is_representable(item, analysis)),
         Ty::Map { key, value, .. } => {
             matches!(key.as_ref(), Ty::String) && arm_is_representable(value, analysis)
         }
@@ -425,7 +427,10 @@ fn variant_name(arm: &Ty) -> Option<String> {
         Ty::Tuple(items) => {
             let mut name = String::new();
             for item in items {
-                name.push_str(&variant_name(item)?);
+                match item {
+                    Ty::Null => name.push_str("Null"),
+                    item => name.push_str(&variant_name(item)?),
+                }
             }
             name.push_str("Tuple");
             Some(name)

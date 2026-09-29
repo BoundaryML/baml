@@ -136,6 +136,11 @@ pub enum DecodedObject {
         items: Vec<DecodedValue>,
         original_len: u64,
     },
+    /// A tuple: no element type (a tuple's type is its elements' types).
+    Tuple {
+        items: Vec<DecodedValue>,
+        original_len: u64,
+    },
     Map {
         key_type: TypeDescription,
         value_type: TypeDescription,
@@ -644,6 +649,17 @@ impl<'a> Reader<'a, '_> {
                 range(&mut h, items.len(), digest);
                 DecodedObject::List {
                     element_type,
+                    items,
+                    original_len,
+                }
+            }
+            9 => {
+                // Mirrors the encoder: tag, original length, then the items.
+                let original_len = self.u64()?;
+                let (items, digest) = self.values()?;
+                h.number(original_len);
+                range(&mut h, items.len(), digest);
+                DecodedObject::Tuple {
                     items,
                     original_len,
                 }
