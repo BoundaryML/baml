@@ -10814,6 +10814,7 @@ impl<'db> InferenceContext<'db> {
                 break;
             }
         }
+        self.report_contradictory_bounds();
         // Quiescence: a residue pair still open on BOTH sides can never
         // be decided by more solving. Skolemize the unsolved vars (rigid
         // placeholders - the leak-check discipline) and judge: a pair no
@@ -12572,63 +12573,7 @@ impl<'db> InferenceContext<'db> {
                 None => return false,
             }
         } else {
-            // The MAXIMUM lower is the join when one exists - the
-            // mirror of the uppers' minimum-meet rule, TS's
-            // best-common-supertype. Raw candidates first, so an
-            // exact literal demand keeps the literal (`pair(three(),
-            // 3)` is `3`); ruling 1's fresh widening is the RETRY
-            // when raw candidates have no maximum (`pair(1, 2)`
-            // widens to `int`), never a way to lose one. Still no
-            // maximum - genuinely incompatible arguments - is a
-            // mismatch (Error until the S17 diagnostic), and the
-            // choice is checked against every upper.
-            let widened: Vec<Ty> = lowers.iter().map(|ty| self.widen_fresh(ty)).collect();
-            let widening: Vec<bool> = lowers
-                .iter()
-                .zip(&widened)
-                .map(|(lower, wide)| lower != wide)
-                .collect();
-            let maximum_of = |candidates: &[Ty]| -> Option<Ty> {
-                let subsumes_all = |candidate: &&Ty| {
-                    candidates
-                        .iter()
-                        .all(|lower| self.cached_subtype(lower, candidate))
-                };
-                // Prefer a non-widening witness: the solution's
-                // freshness decides binding-site widening later, and a
-                // rigid `3` holding a fresh `3` must keep the demand
-                // rigid.
-                candidates
-                    .iter()
-                    .enumerate()
-                    .filter(|(index, _)| !widening[*index])
-                    .map(|(_, candidate)| candidate)
-                    .find(subsumes_all)
-                    .or_else(|| candidates.iter().find(subsumes_all))
-                    .cloned()
-            };
-            // An ALL-widening candidate set widens by DEFAULT
-            // (ruling 1's generation-site rule: `push(1)` infers
-            // `int[]`, and a fresh `100 | 999` join widens the same
-            // way); a non-widening candidate anchors the raw literals
-            // instead (`pair(three(), 3)` keeps `3`) - TS's split
-            // exactly. A default never overrides an actual
-            // constraint: the call's expectation reaches the var as
-            // an upper bound (r-a's check_call_arguments unifies
-            // expected_output with formal_output BEFORE the args
-            // commit, expr.rs:1987; rustc applies literal fallback
-            // only to otherwise-unconstrained vars), so when the
-            // widened join violates an upper, the raw literals get
-            // their turn instead of manufacturing a conflict
-            // (`-> 42 { id(42) }` is `42`, not Error).
-            let maximum = if widening.iter().all(|&flag| flag) {
-                maximum_of(&widened)
-                    .filter(|max| uppers.iter().all(|upper| self.cached_subtype(max, upper)))
-                    .or_else(|| maximum_of(&lowers))
-            } else {
-                maximum_of(&lowers).or_else(|| maximum_of(&widened))
-            };
-            match maximum {
+            match self.lowers_join(&lowers, &uppers) {
                 Some(maximum)
                     if uppers
                         .iter()
@@ -12637,18 +12582,23 @@ impl<'db> InferenceContext<'db> {
                     maximum
                 }
                 _ => {
-                    // No join: genuinely incompatible demands. A monomorphic
-                    // source with no initial type follows first-demand order:
-                    // the first ground demand wins so later incompatible
-                    // demands report through the provisional re-check at
-                    // finalize. Other vars, such as call instantiations, fail
-                    // resolution instead.
+                    // No join under the uppers: genuinely incompatible
+                    // demands. A monomorphic source with no initial type
+                    // follows first-demand order: the first ground demand
+                    // wins so later incompatible demands report through the
+                    // provisional re-check at finalize. Other vars, such as
+                    // call instantiations, stay unsolved, and quiescence
+                    // reports the contradiction
+                    // ([`InferenceContext::report_contradictory_bounds`]).
                     if self
                         .table
                         .unsolved_policy(var)
                         .is_some_and(unify::VarPolicy::first_demand_commits)
                     {
-                        widened.first().cloned().unwrap_or_else(Ty::error)
+                        lowers
+                            .first()
+                            .map(|lower| self.widen_fresh(lower))
+                            .unwrap_or_else(Ty::error)
                     } else {
                         return false;
                     }
@@ -12685,6 +12635,137 @@ impl<'db> InferenceContext<'db> {
         }
         self.table.solve(var, solution);
         true
+    }
+
+    /// Reports each value variable (a call instantiation or a hole) still
+    /// unsolved at quiescence whose ground bounds contradict each other: its
+    /// lower bounds have a join, and the join violates an upper bound, so
+    /// no type satisfies both. Solving can never repair that (another lower
+    /// only raises the join, another upper only adds a demand), and the
+    /// variable is otherwise filled with `Error` at finalize, which every
+    /// later check accepts: the program would pass with no report.
+    ///
+    /// The mismatch is the violated upper against the join, at the
+    /// expression the upper was recorded with: the demand itself, or the
+    /// value it reached as the bounds propagated. A bound carrying `Error`
+    /// is the cascade of a failure already reported, and lowers with no
+    /// common candidate (`pair(1, "hello")`) are an undecided join, not a
+    /// contradiction; both are left alone.
+    fn report_contradictory_bounds(&mut self) {
+        for (var, bounds) in self.table.unsolved_bounded_vars() {
+            if self.table.unsolved_policy(var) != Some(unify::VarPolicy::Value) {
+                continue;
+            }
+            let ground = |table: &mut unify::InferenceTable, bounds: &[unify::Bound]| {
+                bounds
+                    .iter()
+                    .map(|bound| unify::Bound {
+                        ty: table.resolve_completely(&bound.ty),
+                        anchor: bound.anchor,
+                    })
+                    .filter(|bound| !bound.ty.has_infer())
+                    .collect::<Vec<_>>()
+            };
+            let lower_bounds = ground(&mut self.table, &bounds.lowers);
+            let upper_bounds: Vec<unify::Bound> = ground(&mut self.table, &bounds.uppers)
+                .into_iter()
+                .filter(|bound| !matches!(bound.ty.kind(), InferTy::Unknown))
+                .collect();
+            if lower_bounds.is_empty()
+                || upper_bounds.is_empty()
+                || lower_bounds
+                    .iter()
+                    .chain(&upper_bounds)
+                    .any(|bound| bound.ty.has_error())
+            {
+                continue;
+            }
+            let lowers: Vec<Ty> = lower_bounds.iter().map(|bound| bound.ty.clone()).collect();
+            let uppers: Vec<Ty> = upper_bounds.iter().map(|bound| bound.ty.clone()).collect();
+            let Some(join) = self.lowers_join(&lowers, &uppers) else {
+                continue;
+            };
+            let Some(violated) = upper_bounds
+                .iter()
+                .find(|upper| !self.cached_subtype(&join, &upper.ty))
+            else {
+                continue;
+            };
+            let Some(anchor) = violated
+                .anchor
+                .or_else(|| lower_bounds.iter().find_map(|bound| bound.anchor))
+                .or(self.body_root)
+            else {
+                continue;
+            };
+            self.diagnosed_infer_vars.insert(var);
+            self.result
+                .type_mismatches
+                .entry(anchor)
+                .or_insert((violated.ty.clone(), join));
+        }
+    }
+
+    /// The JOIN of a class's ground lower bounds under its ground `uppers`,
+    /// or `None` when the lowers have no common candidate (BAML forms no
+    /// union join here). `lowers` must not be empty.
+    fn lowers_join(&mut self, lowers: &[Ty], uppers: &[Ty]) -> Option<Ty> {
+        debug_assert!(!lowers.is_empty(), "a join needs a lower bound");
+        // The MAXIMUM lower is the join when one exists - the
+        // mirror of the uppers' minimum-meet rule, TS's
+        // best-common-supertype. Raw candidates first, so an
+        // exact literal demand keeps the literal (`pair(three(),
+        // 3)` is `3`); ruling 1's fresh widening is the RETRY
+        // when raw candidates have no maximum (`pair(1, 2)`
+        // widens to `int`), never a way to lose one. Still no
+        // maximum means the lowers have no common candidate. The
+        // caller checks the choice against every upper.
+        let widened: Vec<Ty> = lowers.iter().map(|ty| self.widen_fresh(ty)).collect();
+        let widening: Vec<bool> = lowers
+            .iter()
+            .zip(&widened)
+            .map(|(lower, wide)| lower != wide)
+            .collect();
+        let maximum_of = |candidates: &[Ty]| -> Option<Ty> {
+            let subsumes_all = |candidate: &&Ty| {
+                candidates
+                    .iter()
+                    .all(|lower| self.cached_subtype(lower, candidate))
+            };
+            // Prefer a non-widening witness: the solution's
+            // freshness decides binding-site widening later, and a
+            // rigid `3` holding a fresh `3` must keep the demand
+            // rigid.
+            candidates
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| !widening[*index])
+                .map(|(_, candidate)| candidate)
+                .find(subsumes_all)
+                .or_else(|| candidates.iter().find(subsumes_all))
+                .cloned()
+        };
+        // An ALL-widening candidate set widens by DEFAULT
+        // (ruling 1's generation-site rule: `push(1)` infers
+        // `int[]`, and a fresh `100 | 999` join widens the same
+        // way); a non-widening candidate anchors the raw literals
+        // instead (`pair(three(), 3)` keeps `3`) - TS's split
+        // exactly. A default never overrides an actual
+        // constraint: the call's expectation reaches the var as
+        // an upper bound (r-a's check_call_arguments unifies
+        // expected_output with formal_output BEFORE the args
+        // commit, expr.rs:1987; rustc applies literal fallback
+        // only to otherwise-unconstrained vars), so when the
+        // widened join violates an upper, the raw literals get
+        // their turn instead of manufacturing a conflict
+        // (`-> 42 { id(42) }` is `42`, not Error).
+        if widening.iter().all(|&flag| flag) {
+            maximum_of(&widened)
+                .filter(|max| uppers.iter().all(|upper| self.cached_subtype(max, upper)))
+                .or_else(|| maximum_of(lowers))
+        } else {
+            maximum_of(lowers).or_else(|| maximum_of(&widened))
+        }
     }
 
     /// rustc's `structurally_resolve_type`: where the walk needs a
