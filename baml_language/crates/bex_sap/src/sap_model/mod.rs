@@ -21,7 +21,7 @@ pub use type_name::TypeName;
 
 use crate::baml_value::{
     BamlArray, BamlBigint, BamlBool, BamlClass, BamlEnum, BamlFloat, BamlInt, BamlMap, BamlMedia,
-    BamlNull, BamlPrimitive, BamlStreamState, BamlString, BamlValue,
+    BamlNull, BamlPrimitive, BamlStreamState, BamlString, BamlTuple, BamlValue,
 };
 
 /// An identifier for a type. Used to look up a type in a [`TypeRefDb`].
@@ -97,7 +97,8 @@ impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
 
     /// BEP-075's field-default table over `ty`: nullable types → `null`, literals → the
     /// literal, `string` → `""`, arrays and maps → empty, a one-variant enum → its variant, a
-    /// class → all of its fields' defaults, and everything else (numbers, `bool`, media, other
+    /// class → all of its fields' defaults, a tuple → all of its elements' defaults, and
+    /// everything else (numbers, `bool`, media, other
     /// enums, non-nullable unions, a class with a `never` field or containing itself) →
     /// [`DefaultValue::Never`].
     ///
@@ -112,7 +113,8 @@ impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
     }
 
     /// What a complete object may omit: `null` for nullable types and an empty container for
-    /// arrays and maps. Anything else is required ([`DefaultValue::Never`]).
+    /// arrays and maps. Anything else is required ([`DefaultValue::Never`]), including tuples:
+    /// no single value stands in for an omitted fixed-arity tuple.
     ///
     /// # Errors
     /// `ty` names something the database does not contain.
@@ -197,6 +199,7 @@ impl<'t, N: TypeIdent> DefaultDeriver<'t, N> {
             },
             TyResolvedRef::Union(u) => self.union_default(u)?,
             TyResolvedRef::Class(c) => self.class_default(c)?,
+            TyResolvedRef::Tuple(t) => self.tuple_default(t)?,
             TyResolvedRef::StreamState(s) => match self.partial(&s.value)? {
                 DefaultValue::Never => DefaultValue::Never,
                 inner => DefaultValue::StreamStatePending(Box::new(inner)),
@@ -243,6 +246,21 @@ impl<'t, N: TypeIdent> DefaultDeriver<'t, N> {
         Ok(default)
     }
 
+    /// Every element's default, or `never` if any element has none.
+    ///
+    /// A tuple cannot contain itself without indirection (the named-entry guard in
+    /// [`Self::resolved`] catches `type T = (int, T)`), so no class-style stack is needed.
+    fn tuple_default(&mut self, tuple: &'t TupleTy<'t, N>) -> Result<DefaultValue<N>, &'t N> {
+        let mut items = Vec::with_capacity(tuple.items.len());
+        for item in &tuple.items {
+            match self.partial(item)? {
+                DefaultValue::Never => return Ok(DefaultValue::Never),
+                default => items.push(default),
+            }
+        }
+        Ok(DefaultValue::Tuple(items))
+    }
+
     fn missing(&mut self, ty: &'t Ty<'t, N>) -> Result<DefaultValue<N>, &'t N> {
         self.resolved(ty, Self::missing_resolved)
     }
@@ -268,6 +286,7 @@ impl<'t, N: TypeIdent> DefaultDeriver<'t, N> {
             | TyResolvedRef::LiteralBigint(_)
             | TyResolvedRef::LiteralBool(_)
             | TyResolvedRef::Class(_)
+            | TyResolvedRef::Tuple(_)
             | TyResolvedRef::Enum(_)
             | TyResolvedRef::EnumVariant(_) => DefaultValue::Never,
         })
@@ -301,6 +320,8 @@ pub enum TyResolved<'t, N: TypeIdent> {
     LiteralBigint(BigintLiteralTy),
     LiteralBool(BoolLiteralTy),
     Array(ArrayTy<'t, N>),
+    /// A fixed-arity tuple `(T1, T2, ...)`, written as a JSON array of exactly that length.
+    Tuple(TupleTy<'t, N>),
     Map(MapTy<'t, N>),
     Class(ClassTy<'t, N>),
     Enum(EnumTy<'t, N>),
@@ -353,6 +374,7 @@ impl<'t, N: TypeIdent> TyResolved<'t, N> {
             TyResolved::LiteralBigint(v) => TyResolvedRef::LiteralBigint(v),
             TyResolved::LiteralBool(v) => TyResolvedRef::LiteralBool(v),
             TyResolved::Array(a) => TyResolvedRef::Array(a),
+            TyResolved::Tuple(t) => TyResolvedRef::Tuple(t),
             TyResolved::Map(m) => TyResolvedRef::Map(m),
             TyResolved::Class(c) => TyResolvedRef::Class(c),
             TyResolved::Enum(e) => TyResolvedRef::Enum(e),
@@ -381,6 +403,8 @@ pub enum TyResolvedRef<'t, N: TypeIdent> {
     LiteralBigint(&'t BigintLiteralTy),
     LiteralBool(&'t BoolLiteralTy),
     Array(&'t ArrayTy<'t, N>),
+    /// A fixed-arity tuple `(T1, T2, ...)`, written as a JSON array of exactly that length.
+    Tuple(&'t TupleTy<'t, N>),
     Map(&'t MapTy<'t, N>),
     Class(&'t ClassTy<'t, N>),
     Enum(&'t EnumTy<'t, N>),
@@ -438,9 +462,9 @@ where
 
 #[derive(Clone, From)]
 pub enum Ty<'t, N: TypeIdent> {
-    #[from(TyResolved<'t, N>, LiteralTy<'t>, StringLiteralTy<'t>, IntLiteralTy, BoolLiteralTy, ArrayTy<'t, N>, MapTy<'t, N>, ClassTy<'t, N>, EnumTy<'t, N>, UnionTy<'t, N>, StreamStateTy<'t, N>)]
+    #[from(TyResolved<'t, N>, LiteralTy<'t>, StringLiteralTy<'t>, IntLiteralTy, BoolLiteralTy, ArrayTy<'t, N>, TupleTy<'t, N>, MapTy<'t, N>, ClassTy<'t, N>, EnumTy<'t, N>, UnionTy<'t, N>, StreamStateTy<'t, N>)]
     Resolved(TyResolved<'t, N>),
-    #[from(TyResolvedRef<'t, N>, PrimitiveTy, IntTy, FloatTy, StringTy, BoolTy, NullTy, MediaTy, &'t LiteralTy<'t>, &'t StringLiteralTy<'t>, &'t IntLiteralTy, &'t BoolLiteralTy, &'t ArrayTy<'t, N>, &'t MapTy<'t, N>, &'t ClassTy<'t, N>, &'t EnumTy<'t, N>, &'t UnionTy<'t, N>, &'t StreamStateTy<'t, N>)]
+    #[from(TyResolvedRef<'t, N>, PrimitiveTy, IntTy, FloatTy, StringTy, BoolTy, NullTy, MediaTy, &'t LiteralTy<'t>, &'t StringLiteralTy<'t>, &'t IntLiteralTy, &'t BoolLiteralTy, &'t ArrayTy<'t, N>, &'t TupleTy<'t, N>, &'t MapTy<'t, N>, &'t ClassTy<'t, N>, &'t EnumTy<'t, N>, &'t UnionTy<'t, N>, &'t StreamStateTy<'t, N>)]
     ResolvedRef(TyResolvedRef<'t, N>),
     /// Type needs to be looked up in the [`TypeRefDb`].
     /// This is since types may be recursive so we need some indirection.
@@ -682,6 +706,21 @@ where
     type Value = BamlArray<'s, 'v, 't, N>;
 }
 
+/// A fixed-arity tuple `(T1, T2, ...)` (at least one element). In JSON it is an array of
+/// exactly `items.len()` values, position `i` holding a `T{i+1}`.
+///
+/// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
+#[derive(Clone, PartialEq)]
+pub struct TupleTy<'t, N: TypeIdent> {
+    pub items: Vec<Ty<'t, N>>,
+}
+impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for TupleTy<'t, N>
+where
+    's: 'v,
+{
+    type Value = BamlTuple<'s, 'v, 't, N>;
+}
+
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
 #[derive(Clone, PartialEq)]
 pub struct MapTy<'t, N: TypeIdent> {
@@ -860,6 +899,8 @@ pub enum DefaultValue<N: TypeIdent> {
     },
     /// A `StreamState` field that has not started, around the inner type's default.
     StreamStatePending(Box<DefaultValue<N>>),
+    /// A tuple whose every element has a default, in element order.
+    Tuple(Vec<DefaultValue<N>>),
 }
 
 impl<N: TypeIdent> fmt::Debug for DefaultValue<N> {
@@ -882,6 +923,13 @@ impl<N: TypeIdent> fmt::Debug for DefaultValue<N> {
                 variant_name,
             } => write!(f, "{enum_name}.{variant_name}"),
             DefaultValue::StreamStatePending(inner) => write!(f, "Pending({inner:?})"),
+            DefaultValue::Tuple(items) => {
+                let mut t = f.debug_tuple("");
+                for item in items {
+                    t.field(item);
+                }
+                t.finish()
+            }
         }
     }
 }

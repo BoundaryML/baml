@@ -59,6 +59,7 @@ pub enum TraceValue {
     String(String),
     Bytes(Vec<u8>),
     Array(Vec<TraceValueRef>),
+    Tuple(Vec<TraceValueRef>),
     Map(Vec<(String, TraceValueRef)>),
     Media(TraceMediaValue),
     Instance {
@@ -328,7 +329,7 @@ impl TraceSnapshotBuilder {
         let object = unsafe { ptr.get() };
         let tracks_recursion = matches!(
             object,
-            Object::Array(_) | Object::Map(_) | Object::Instance(_)
+            Object::Array(_) | Object::Map(_) | Object::Instance(_) | Object::Tuple(_)
         );
         if tracks_recursion && self.in_progress.contains(&ptr) {
             return self.omitted(TraceOmissionReason::CyclicReference, "cyclic reference");
@@ -361,6 +362,13 @@ impl TraceSnapshotBuilder {
                     items.push(self.copy_value(heap, permit, value)?);
                 }
                 self.alloc(TraceValue::Array(items))
+            }
+            Object::Tuple(elements) => {
+                let mut items = Self::vec_with_capacity(elements.len())?;
+                for value in elements.iter().copied() {
+                    items.push(self.copy_value(heap, permit, value)?);
+                }
+                self.alloc(TraceValue::Tuple(items))
             }
             Object::Map(map) => {
                 let map = map.data.lock();
@@ -545,6 +553,7 @@ fn unsupported_object_message(object: &Object) -> &'static str {
         | Object::Bigint(_)
         | Object::Uint8Array(_)
         | Object::Array(_)
+        | Object::Tuple(_)
         | Object::Map(_)
         | Object::Instance(_)
         | Object::Variant(_)

@@ -1178,6 +1178,7 @@ pub fn reduce_ground_projections(db: &dyn baml_compiler2_hir::Db, ty: &Ty, fuel:
         },
         Ty::Future(value, error) => Ty::Future(Box::new(recurse(value)), Box::new(recurse(error))),
         Ty::Union(members) => Ty::Union(members.iter().map(recurse).collect()),
+        Ty::Tuple(elements) => Ty::Tuple(elements.iter().map(recurse).collect()),
         Ty::Class(name, args) => Ty::Class(name.clone(), args.iter().map(recurse).collect()),
         Ty::Interface(name, args, pins) => Ty::Interface(
             name.clone(),

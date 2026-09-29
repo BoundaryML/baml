@@ -102,6 +102,12 @@ class Type {
     function as_function(self) -> reflect.function.Type? throws never {
         $rust_function
     }
+    /// The tuple view of this type, or `null` when it does not describe
+    /// a tuple.
+    //baml:mut_vm
+    function as_tuple(self) -> reflect.tuple.Type? throws never {
+        $rust_function
+    }
 
     /// (internal) Internal shared-render-boundary guard for BEP-066 R-1 and R-3.
     //baml:mut_vm

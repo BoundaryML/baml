@@ -432,6 +432,31 @@ struct BamlValueMapDefaultTypeInternal {
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 BamlValueMapDefaultTypeInternal _BamlValueMap_default_instance_;
 
+inline constexpr BamlValueTuple::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : items_{},
+        _cached_size_{0} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR BamlValueTuple::BamlValueTuple(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(BamlValueTuple_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct BamlValueTupleDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR BamlValueTupleDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~BamlValueTupleDefaultTypeInternal() {}
+  union {
+    BamlValueTuple _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 BamlValueTupleDefaultTypeInternal _BamlValueTuple_default_instance_;
+
 inline constexpr BamlValueUnionVariant::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
@@ -1937,6 +1962,19 @@ void BamlOutboundValue::clear_ty_def_value() {
     clear_has_value();
   }
 }
+void BamlOutboundValue::set_allocated_tuple_value(::baml_bridge::cffi::v1::BamlValueTuple* PROTOBUF_NULLABLE tuple_value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_value();
+  if (tuple_value) {
+    ::google::protobuf::Arena* submessage_arena = tuple_value->GetArena();
+    if (message_arena != submessage_arena) {
+      tuple_value = ::google::protobuf::internal::GetOwnedMessage(message_arena, tuple_value, submessage_arena);
+    }
+    set_has_tuple_value();
+    _impl_.value_.tuple_value_ = tuple_value;
+  }
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlOutboundValue.tuple_value)
+}
 BamlOutboundValue::BamlOutboundValue(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::MessageLite(arena, BamlOutboundValue_class_data_.base()) {
@@ -2023,6 +2061,9 @@ BamlOutboundValue::BamlOutboundValue(
         break;
       case kTyDefValue:
         _impl_.value_.ty_def_value_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.value_.ty_def_value_);
+        break;
+      case kTupleValue:
+        _impl_.value_.tuple_value_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.value_.tuple_value_);
         break;
   }
 
@@ -2200,6 +2241,16 @@ void BamlOutboundValue::clear_value() {
       }
       break;
     }
+    case kTupleValue: {
+      if (GetArena() == nullptr) {
+        delete _impl_.value_.tuple_value_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        if (_impl_.value_.tuple_value_ != nullptr) {
+          _impl_.value_.tuple_value_->Clear();
+        }
+      }
+      break;
+    }
     case VALUE_NOT_SET: {
       break;
     }
@@ -2248,17 +2299,17 @@ BamlOutboundValue::GetClassData() const {
   return BamlOutboundValue_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<0, 18, 12, 86, 2>
+const ::_pbi::TcParseTable<0, 19, 13, 86, 2>
 BamlOutboundValue::_table_ = {
   {
     0,  // no _has_bits_
     0, // no _extensions_
-    22, 0,  // max_field_number, fast_idx_mask
+    23, 0,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4290798081,  // skipmap
+    4286603777,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    18,  // num_field_entries
-    12,  // num_aux_entries
+    19,  // num_field_entries
+    13,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     BamlOutboundValue_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -2325,6 +2376,9 @@ BamlOutboundValue::_table_ = {
     // .baml_bridge.cffi.v1.BamlTyDef ty_def_value = 22;
     {PROTOBUF_FIELD_OFFSET(BamlOutboundValue, _impl_.value_.ty_def_value_), _Internal::kOneofCaseOffset + 0, 11,
     (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .baml_bridge.cffi.v1.BamlValueTuple tuple_value = 23;
+    {PROTOBUF_FIELD_OFFSET(BamlOutboundValue, _impl_.value_.tuple_value_), _Internal::kOneofCaseOffset + 0, 12,
+    (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlValueNull>()},
@@ -2339,6 +2393,7 @@ BamlOutboundValue::_table_ = {
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlValuePromptAst>()},
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTy>()},
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyDef>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlValueTuple>()},
   }},
   {{
     "\45\0\14\0\0\0\0\0\0\0\0\0\0\0\0\0\14\0\0\0\0\0\0\0"
@@ -2483,6 +2538,12 @@ PROTOBUF_NOINLINE void BamlOutboundValue::Clear() {
           stream);
       break;
     }
+    case kTupleValue: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          23, *this_._impl_.value_.tuple_value_, this_._impl_.value_.tuple_value_->GetCachedSize(), target,
+          stream);
+      break;
+    }
     default:
       break;
   }
@@ -2614,6 +2675,12 @@ PROTOBUF_NOINLINE void BamlOutboundValue::Clear() {
     case kTyDefValue: {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.value_.ty_def_value_);
+      break;
+    }
+    // .baml_bridge.cffi.v1.BamlValueTuple tuple_value = 23;
+    case kTupleValue: {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.value_.tuple_value_);
       break;
     }
     case VALUE_NOT_SET: {
@@ -2773,6 +2840,14 @@ void BamlOutboundValue::MergeImpl(::google::protobuf::MessageLite& to_msg, const
           _this->_impl_.value_.ty_def_value_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.value_.ty_def_value_);
         } else {
           _this->_impl_.value_.ty_def_value_->CheckTypeAndMergeFrom(*from._impl_.value_.ty_def_value_);
+        }
+        break;
+      }
+      case kTupleValue: {
+        if (oneof_needs_init) {
+          _this->_impl_.value_.tuple_value_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.value_.tuple_value_);
+        } else {
+          _this->_impl_.value_.tuple_value_->CheckTypeAndMergeFrom(*from._impl_.value_.tuple_value_);
         }
         break;
       }
@@ -3634,6 +3709,255 @@ void BamlValueList::InternalSwap(BamlValueList* PROTOBUF_RESTRICT PROTOBUF_NONNU
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.items_.InternalSwap(&other->_impl_.items_);
   swap(_impl_.item_type_, other->_impl_.item_type_);
+}
+
+// ===================================================================
+
+class BamlValueTuple::_Internal {
+ public:
+};
+
+BamlValueTuple::BamlValueTuple(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, BamlValueTuple_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:baml_bridge.cffi.v1.BamlValueTuple)
+}
+PROTOBUF_NDEBUG_INLINE BamlValueTuple::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    const ::baml_bridge::cffi::v1::BamlValueTuple& from_msg)
+      : items_{visibility, arena, from.items_},
+        _cached_size_{0} {}
+
+BamlValueTuple::BamlValueTuple(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const BamlValueTuple& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, BamlValueTuple_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  BamlValueTuple* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<std::string>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:baml_bridge.cffi.v1.BamlValueTuple)
+}
+PROTOBUF_NDEBUG_INLINE BamlValueTuple::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : items_{visibility, arena},
+        _cached_size_{0} {}
+
+inline void BamlValueTuple::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+BamlValueTuple::~BamlValueTuple() {
+  // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.BamlValueTuple)
+  SharedDtor(*this);
+}
+inline void BamlValueTuple::SharedDtor(MessageLite& self) {
+  BamlValueTuple& this_ = static_cast<BamlValueTuple&>(self);
+  this_._internal_metadata_.Delete<std::string>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL BamlValueTuple::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BamlValueTuple(arena);
+}
+constexpr auto BamlValueTuple::InternalNewImpl_() {
+  constexpr auto arena_bits = ::google::protobuf::internal::EncodePlacementArenaOffsets({
+      PROTOBUF_FIELD_OFFSET(BamlValueTuple, _impl_.items_) +
+          decltype(BamlValueTuple::_impl_.items_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::MessageLite::internal_visibility()),
+  });
+  if (arena_bits.has_value()) {
+    return ::google::protobuf::internal::MessageCreator::ZeroInit(
+        sizeof(BamlValueTuple), alignof(BamlValueTuple), *arena_bits);
+  } else {
+    return ::google::protobuf::internal::MessageCreator(&BamlValueTuple::PlacementNew_,
+                                 sizeof(BamlValueTuple),
+                                 alignof(BamlValueTuple));
+  }
+}
+constexpr auto BamlValueTuple::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataLite<35>{
+      {
+          &_BamlValueTuple_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &BamlValueTuple::MergeImpl,
+          ::google::protobuf::MessageLite::GetNewImpl<BamlValueTuple>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BamlValueTuple::SharedDtor,
+          ::google::protobuf::MessageLite::GetClearImpl<BamlValueTuple>(), &BamlValueTuple::ByteSizeLong,
+              &BamlValueTuple::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BamlValueTuple, _impl_._cached_size_),
+          true,
+      },
+      "baml_bridge.cffi.v1.BamlValueTuple",
+  };
+}
+
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataLite<35> BamlValueTuple_class_data_ =
+    BamlValueTuple::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BamlValueTuple::GetClassData() const {
+  return BamlValueTuple_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<0, 1, 1, 0, 2>
+BamlValueTuple::_table_ = {
+  {
+    0,  // no _has_bits_
+    0, // no _extensions_
+    1, 0,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967294,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    1,  // num_field_entries
+    1,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    BamlValueTuple_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallbackLite,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlValueTuple>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // repeated .baml_bridge.cffi.v1.BamlOutboundValue items = 1;
+    {::_pbi::TcParser::FastMtR1,
+     {10, 63, 0, PROTOBUF_FIELD_OFFSET(BamlValueTuple, _impl_.items_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // repeated .baml_bridge.cffi.v1.BamlOutboundValue items = 1;
+    {PROTOBUF_FIELD_OFFSET(BamlValueTuple, _impl_.items_), 0, 0,
+    (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+  }},
+  {{
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlOutboundValue>()},
+  }},
+  {{
+  }},
+};
+PROTOBUF_NOINLINE void BamlValueTuple::Clear() {
+// @@protoc_insertion_point(message_clear_start:baml_bridge.cffi.v1.BamlValueTuple)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.items_.Clear();
+  _internal_metadata_.Clear<std::string>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BamlValueTuple::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BamlValueTuple& this_ = static_cast<const BamlValueTuple&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BamlValueTuple::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BamlValueTuple& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(serialize_to_array_start:baml_bridge.cffi.v1.BamlValueTuple)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  // repeated .baml_bridge.cffi.v1.BamlOutboundValue items = 1;
+  for (unsigned i = 0, n = static_cast<unsigned>(
+                           this_._internal_items_size());
+       i < n; i++) {
+    const auto& repfield = this_._internal_items().Get(i);
+    target =
+        ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+            1, repfield, repfield.GetCachedSize(),
+            target, stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(
+        this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).data(),
+        static_cast<int>(this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:baml_bridge.cffi.v1.BamlValueTuple)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BamlValueTuple::ByteSizeLong(const MessageLite& base) {
+  const BamlValueTuple& this_ = static_cast<const BamlValueTuple&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BamlValueTuple::ByteSizeLong() const {
+  const BamlValueTuple& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:baml_bridge.cffi.v1.BamlValueTuple)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+   {
+    // repeated .baml_bridge.cffi.v1.BamlOutboundValue items = 1;
+    {
+      total_size += 1UL * this_._internal_items_size();
+      for (const auto& msg : this_._internal_items()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+  }
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    total_size += this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size();
+  }
+  this_._impl_._cached_size_.Set(::_pbi::ToCachedSize(total_size));
+  return total_size;
+}
+
+void BamlValueTuple::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<BamlValueTuple*>(&to_msg);
+  auto& from = static_cast<const BamlValueTuple&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:baml_bridge.cffi.v1.BamlValueTuple)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_internal_mutable_items()->MergeFrom(
+      from._internal_items());
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void BamlValueTuple::CopyFrom(const BamlValueTuple& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:baml_bridge.cffi.v1.BamlValueTuple)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BamlValueTuple::InternalSwap(BamlValueTuple* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  _impl_.items_.InternalSwap(&other->_impl_.items_);
 }
 
 // ===================================================================

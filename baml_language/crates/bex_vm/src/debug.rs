@@ -233,6 +233,7 @@ pub(crate) fn display_instruction(
         | Instruction::StoreVar2(..)
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
+        | Instruction::AllocTuple(_)
         | Instruction::AllocMap(_)
         | Instruction::LoadArrayElement
         | Instruction::LoadMapElement
@@ -433,7 +434,8 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::AllocInstance { .. }
         | Instruction::InitInstance(_)
         | Instruction::AllocVariant(_)
-        | Instruction::AllocArray(_) => Style::new().cyan(),
+        | Instruction::AllocArray(_)
+        | Instruction::AllocTuple(_) => Style::new().cyan(),
         Instruction::SysOp(_) | Instruction::Spawn | Instruction::Await | Instruction::AwaitAny => {
             Style::new().green().bright()
         }
@@ -897,6 +899,7 @@ fn display_instruction_textual(
 
         // --- Allocation ---
         Instruction::AllocArray(n) => format!("alloc_array {n}"),
+        Instruction::AllocTuple(n) => format!("alloc_tuple {n}"),
         Instruction::AllocMap(n) => format!("alloc_map {n}"),
         Instruction::AllocInstance {
             class_obj: _,
@@ -1380,6 +1383,7 @@ pub fn display_compact_bytecode(
             | OpCode::Pop
             | OpCode::Copy
             | OpCode::AllocArray
+            | OpCode::AllocTuple
             | OpCode::AllocMap
             | OpCode::InitInstance
             | OpCode::AllocVariant

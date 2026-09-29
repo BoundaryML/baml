@@ -85,6 +85,11 @@ pub enum TypeExprKind {
     Union {
         variants: Vec<TypeExpr>,
     },
+    /// `(A, B)`, `(A,)` — tuple type. Always at least one element; a tuple
+    /// type is distinguished from grouping by a comma, not by arity.
+    Tuple {
+        elements: Vec<TypeExpr>,
+    },
     /// Literal types in unions: `"user"`, `200`, `3.14`, `true`.
     Literal {
         value: baml_base::Literal,
@@ -219,6 +224,11 @@ impl TypeExpr {
             TypeExprKind::Union { variants, .. } => {
                 for variant in variants {
                     variant.collect_spans(out);
+                }
+            }
+            TypeExprKind::Tuple { elements } => {
+                for element in elements {
+                    element.collect_spans(out);
                 }
             }
             TypeExprKind::Function {
@@ -359,6 +369,19 @@ impl std::fmt::Display for TypeExprKind {
                     }
                 }
                 Ok(())
+            }
+            TypeExprKind::Tuple { elements } => {
+                write!(f, "(")?;
+                for (i, e) in elements.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{e}")?;
+                }
+                if elements.len() == 1 {
+                    write!(f, ",")?;
+                }
+                write!(f, ")")
             }
             TypeExprKind::Literal { value, .. } => write!(f, "{value}"),
             TypeExprKind::Function {
@@ -966,6 +989,10 @@ pub enum Expr {
     Array {
         elements: Vec<ExprId>,
     },
+    /// Tuple literal: `(a, b)`, `(a,)`. At least one element.
+    Tuple {
+        elements: Vec<ExprId>,
+    },
     Map {
         entries: Vec<MapExprEntry>,
     },
@@ -979,6 +1006,12 @@ pub enum Expr {
     MemberAccess {
         base: ExprId,
         member: Name,
+    },
+    /// Tuple element access: `t.0`. Kept apart from `MemberAccess` so a
+    /// positional index never reaches name-based member resolution.
+    TupleIndex {
+        base: ExprId,
+        index: u32,
     },
     /// Explicit static projection/upcast: `expr.as<T>`.
     Upcast {
@@ -1304,6 +1337,9 @@ pub enum Pattern {
         suffix: Vec<PatId>,
         ascription: Option<TypeExpr>,
     },
+    /// `(p1, p2)`, `(p1,)` — tuple destructure. Matches a tuple of exactly
+    /// this arity whose elements match the sub-patterns. At least one element.
+    Tuple(Vec<PatId>),
     /// Bare type expression in pattern position. Subsumes literal patterns
     /// (`42`, `"hi"`, `true`), `null`, enum variants (`Status.Active`),
     /// path types, generics, function types, etc. — anything in `TypeExpr`.
@@ -1401,6 +1437,11 @@ impl Pattern {
                     patterns[id].collect_bound_names(patterns, out);
                 }
                 for id in suffix {
+                    patterns[*id].collect_bound_names(patterns, out);
+                }
+            }
+            Pattern::Tuple(elements) => {
+                for id in elements {
                     patterns[*id].collect_bound_names(patterns, out);
                 }
             }

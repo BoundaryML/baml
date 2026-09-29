@@ -94,6 +94,46 @@ struct UnionReg {
     arms: Vec<(String, String)>,
 }
 
+/// Tuple types are not yet supported by the Java generator (no runtime
+/// `TupleN` records, descriptors, or registry arm identity exist yet). The
+/// emitter has no per-symbol skip channel and its public entry points are
+/// infallible, so — like the `naming_convention` assertion — it fails closed
+/// up front, naming the first offending symbol, rather than erasing tuples to
+/// `java.lang.Object` (which would also collide union-arm registry keys).
+fn reject_tuple_types(pool: &SymbolPool) {
+    fn check(owner: &baml_sdkgen_types::Name, ty: &Ty) {
+        baml_sdkgen_types::visit_type(ty, &mut |node| {
+            if matches!(node, Ty::Tuple(_)) {
+                crate::translate_ty::unsupported_tuple(node, Some(owner));
+            }
+        });
+    }
+    fn check_function(owner: &baml_sdkgen_types::Name, function: &Function) {
+        for argument in &function.arguments {
+            check(owner, &argument.ty);
+        }
+        check(owner, &function.return_type);
+        if let Some(throws) = &function.throws {
+            check(owner, throws);
+        }
+    }
+    for (name, symbol) in pool {
+        match symbol {
+            Symbol::Class(class) => {
+                for property in &class.properties {
+                    check(name, &property.ty);
+                }
+                for method in class.static_methods.iter().chain(&class.instance_methods) {
+                    check_function(name, method);
+                }
+            }
+            Symbol::Function(function) => check_function(name, function),
+            Symbol::TypeAlias(alias) => check(name, &alias.resolves_to),
+            Symbol::Enum(_) => {}
+        }
+    }
+}
+
 /// Build the Java SDK output tree for `pool`. Returned paths are
 /// relative to the `baml_sdk/` output root.
 pub fn to_source_code(
@@ -115,6 +155,7 @@ fn to_source_code_internal(
         matches!(naming_convention, NamingConvention::PreserveCase),
         "sdkgen_java only supports naming_convention = PreserveCase (got {naming_convention})",
     );
+    reject_tuple_types(pool);
     let mut out: HashMap<PathBuf, String> = HashMap::new();
 
     // Alias table for translate_ty: non-recursive aliases erase at
@@ -530,6 +571,7 @@ pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
         | Ty::Never
         | Ty::Future(..) => "unknown".to_string(),
         Ty::Union(..) => "union".to_string(), // banned by validate(); defensive
+        Ty::Tuple(..) => crate::translate_ty::unsupported_tuple(ty, None),
     }
 }
 
@@ -797,6 +839,20 @@ mod tests {
 
     fn emit_sdk(pool: &SymbolPool) -> HashMap<PathBuf, String> {
         to_source_code(pool, &[], NamingConvention::PreserveCase)
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "tuple types are not yet supported by the Java generator (`user.Holder` uses `(int, string)`)"
+    )]
+    fn tuple_types_fail_closed() {
+        let holder = name("user", &[], "Holder");
+        let tuple = Ty::Tuple(Box::new([t_int(), t_string()]));
+        let pool = SymbolPool::from([(
+            holder.clone(),
+            class_sym_with_props(&holder, &[], vec![("pairs", t_list(tuple))], 0),
+        )]);
+        emit_sdk(&pool);
     }
 
     #[test]

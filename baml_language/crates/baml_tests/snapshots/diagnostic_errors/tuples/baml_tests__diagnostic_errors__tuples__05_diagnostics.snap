@@ -1,0 +1,92 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × cannot assign to a tuple element: tuples are immutable; build a new tuple instead
+   ╭─[tuples.baml:6:5]
+ 6 │     t.0 = 5;
+   ·     ───
+   ╰────
+
+  [type] E0007
+
+  × type `(int, string)` has no member `2`
+    ╭─[tuples.baml:12:5]
+ 12 │     t.2
+    ·     ───
+    ╰────
+
+  [type] E0007
+
+  × type `int` has no member `0`
+    ╭─[tuples.baml:17:5]
+ 17 │     x.0
+    ·     ───
+    ╰────
+
+  [type] E0008
+
+  × cannot index into type `(int, int)`
+    ╭─[tuples.baml:22:5]
+ 22 │     t[0]
+    ·     ────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[tuples.baml:26:38]
+ 26 │ ╭─▶ function wrong_arity() -> (int, int) {
+ 27 │ │       (1, 2, 3)
+ 28 │ ├─▶ }
+    · ╰──── expected `(int, int)`, found `(int, int, int)`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[tuples.baml:32:9]
+ 32 │     (1, 2)
+    ·         ┬
+    ·         ╰── expected `string`, found `2`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[tuples.baml:36:39]
+ 36 │ ╭─▶ function tuple_is_not_list() -> int[] {
+ 37 │ │       (1, 2)
+ 38 │ ├─▶ }
+    · ╰──── expected `int[]`, found `(int, int)`
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type (bool, bool); missing: (true, false)
+    ╭─[tuples.baml:42:5]
+ 42 │ ╭─▶     match (a, b) {
+ 43 │ │           (true, true) => 1,
+ 44 │ │           (false, _) => 2,
+ 45 │ ╰─▶     }
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[tuples.baml:51:9]
+ 51 │         (let a, let b, let c) => a,
+    ·         ──────────┬──────────
+    ·                   ╰── expected `(int, int)`, found `(unknown, unknown, unknown)`
+    ╰────
+
+  [hir] E0110
+
+  × `void` can only be used as a function return type, not as a tuple element
+    ╭─[tuples.baml:57:26]
+ 57 │ function void_element(t: (int, void)) -> int {
+    ·                          ─────┬─────
+    ·                               ╰── `void` not allowed here
+    ╰────

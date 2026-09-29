@@ -1764,6 +1764,12 @@ fn match_pattern(
                 })
         }
         (InferTy::List(p), InferTy::List(t)) => match_pattern(p, t, params, bindings, eq),
+        (InferTy::Tuple(p), InferTy::Tuple(t)) => {
+            p.len() == t.len()
+                && p.iter()
+                    .zip(t.iter())
+                    .all(|(p, t)| match_pattern(p, t, params, bindings, eq))
+        }
         (
             InferTy::Map {
                 key: pk, value: pv, ..

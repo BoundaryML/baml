@@ -196,7 +196,7 @@ pub const MAX_UNIFY_DEPTH: usize = 256;
 pub fn contains_bound_typevar(ty: &Ty, generic_params: &[ParamTy]) -> bool {
     match ty {
         Ty::TypeVar(name) => generic_params.contains(name),
-        Ty::Class(_, args) | Ty::Union(args) => args
+        Ty::Class(_, args) | Ty::Union(args) | Ty::Tuple(args) => args
             .iter()
             .any(|arg| contains_bound_typevar(arg, generic_params)),
         Ty::Interface(_, args, associated_bindings) => {
@@ -237,7 +237,7 @@ pub fn contains_bound_typevar(ty: &Ty, generic_params: &[ParamTy]) -> bool {
 pub fn all_typevars_within(ty: &Ty, vars: &[ParamTy]) -> bool {
     match ty {
         Ty::TypeVar(name) => vars.contains(name),
-        Ty::Class(_, args) | Ty::Union(args) => {
+        Ty::Class(_, args) | Ty::Union(args) | Ty::Tuple(args) => {
             args.iter().all(|arg| all_typevars_within(arg, vars))
         }
         Ty::Interface(_, args, associated_bindings) => {
@@ -289,7 +289,7 @@ pub fn var_under_union(param: &ParamTy, ty: &Ty) -> bool {
         match ty {
             Ty::TypeVar(candidate) => in_union && candidate == param,
             Ty::Union(members) => members.iter().any(|m| occurs(param, m, true)),
-            Ty::Class(_, args) => args.iter().any(|a| occurs(param, a, in_union)),
+            Ty::Class(_, args) | Ty::Tuple(args) => args.iter().any(|a| occurs(param, a, in_union)),
             Ty::Interface(_, args, assoc) => {
                 args.iter().any(|a| occurs(param, a, in_union))
                     || assoc.iter().any(|(_, t)| occurs(param, t, in_union))
@@ -361,6 +361,7 @@ pub fn nf(ty: &Ty, enum_variants: EnumVariants) -> Ty {
             enum_variants,
         ),
         Ty::List(inner) => Ty::List(Box::new(nf(inner, enum_variants))),
+        Ty::Tuple(elements) => Ty::Tuple(elements.iter().map(|e| nf(e, enum_variants)).collect()),
         Ty::Map { key, value } => Ty::Map {
             key: Box::new(nf(key, enum_variants)),
             value: Box::new(nf(value, enum_variants)),
@@ -620,6 +621,9 @@ fn unify_into_at(
             ))
         }
         (Ty::List(xi), Ty::List(yi)) => unify_into_at(xi, yi, vars, env, bindings, depth + 1),
+        (Ty::Tuple(xs), Ty::Tuple(ys)) if xs.len() == ys.len() => {
+            unify_all(xs, ys, vars, env, bindings, depth + 1)
+        }
         (
             Ty::Map {
                 key: xk, value: xv, ..
@@ -713,6 +717,7 @@ fn unify_into_at(
             | Ty::Interface(..)
             | Ty::List(..)
             | Ty::Map { .. }
+            | Ty::Tuple(..)
             | Ty::Future(..)
             | Ty::Int
             | Ty::Bigint
@@ -963,6 +968,7 @@ pub fn rewrite_ty<N: Head>(ty: &Ty<N>, rewrite: &mut dyn FnMut(&Ty<N>) -> Option
         Ty::Union(members) => {
             normalize_union_members(members.iter().map(|m| rewrite_ty(m, rewrite)))
         }
+        Ty::Tuple(elements) => Ty::Tuple(elements.iter().map(|e| rewrite_ty(e, rewrite)).collect()),
         Ty::Function {
             params,
             ret,
@@ -1261,7 +1267,7 @@ fn occurs_in(n: &ParamTy, t: &Ty, vars: &[ParamTy], bindings: &TypeBindings) -> 
     let t = chase_var(t, vars, bindings);
     match &t {
         Ty::TypeVar(m) => m == n,
-        Ty::Class(_, args) | Ty::Union(args) => {
+        Ty::Class(_, args) | Ty::Union(args) | Ty::Tuple(args) => {
             args.iter().any(|a| occurs_in(n, a, vars, bindings))
         }
         Ty::Interface(_, args, assoc) => {

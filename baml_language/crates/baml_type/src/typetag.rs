@@ -81,6 +81,11 @@ pub const UINT8ARRAY: i64 = 12;
 /// Bigint type tag.
 pub const BIGINT: i64 = 13;
 
+/// Tuple type tag (every tuple, whatever its arity or elements). Not 11: that
+/// slot belonged to a removed kind, and a persisted program may still carry it.
+/// No jump table keys on it: tuple tests are always structural.
+pub const TUPLE: i64 = 14;
+
 /// Base value for class type tags (classes start at 100).
 pub const CLASS_BASE: i64 = 100;
 

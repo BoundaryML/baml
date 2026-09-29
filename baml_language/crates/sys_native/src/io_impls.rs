@@ -3224,6 +3224,7 @@ fn arg_value_type(value: &BexExternalValue) -> Type {
         BexExternalValue::String(_) => Type::Object(ObjectType::String),
         BexExternalValue::Uint8Array(_) => Type::Object(ObjectType::Uint8Array),
         BexExternalValue::Array { .. } => Type::Object(ObjectType::Array),
+        BexExternalValue::Tuple { .. } => Type::Object(ObjectType::Tuple),
         BexExternalValue::Map { .. } => Type::Object(ObjectType::Map),
         BexExternalValue::Instance { .. } => Type::Object(ObjectType::Instance),
         // `ObjectType::of` folds both enum objects into `Enum`.

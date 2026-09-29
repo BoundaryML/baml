@@ -1,0 +1,48 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[tuples.baml:4:14]
+ 4 │     let e = ();
+   ·              ┬
+   ·              ╰── empty tuple `()` is not supported
+   ╰────
+
+  [hir] E0108
+
+  × could not parse type expression for parameter `x` in `empty_tuple_type`
+   ╭─[tuples.baml:8:30]
+ 8 │ function empty_tuple_type(x: ()) -> int {
+   ·                              ─┬
+   ·                               ╰── unparseable type
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[tuples.baml:8:32]
+ 8 │ function empty_tuple_type(x: ()) -> int {
+   ·                                ┬
+   ·                                ╰── empty tuple type `()` is not supported
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[tuples.baml:14:10]
+ 14 │         () => 1,
+    ·          ┬
+    ·          ╰── empty tuple pattern `()` is not supported
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[tuples.baml:21:7]
+ 21 │     t.01
+    ·       ─┬
+    ·        ╰── invalid tuple index `01`: expected a plain decimal integer like `0` or `1`
+    ╰────

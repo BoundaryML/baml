@@ -21,7 +21,8 @@ function classify(t: reflect.Type) -> string {
     reflect.map.Type => "map",
     reflect.interface.Type => "interface",
     reflect.primitive.Type => "primitive",
-    reflect.function.Type => "function"
+    reflect.function.Type => "function",
+    reflect.tuple.Type => "tuple"
   }
 }
 

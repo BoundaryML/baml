@@ -247,7 +247,7 @@ fn collect_default_expr_forward_references(
                 );
             }
         }
-        Expr::Array { elements } => {
+        Expr::Array { elements } | Expr::Tuple { elements } => {
             for expr in elements {
                 collect_default_expr_forward_references(*expr, body, later_params, shadowed, refs);
             }
@@ -281,6 +281,7 @@ fn collect_default_expr_forward_references(
             shadowed.truncate(saved_len);
         }
         Expr::MemberAccess { base, .. }
+        | Expr::TupleIndex { base, .. }
         | Expr::Upcast { base, .. }
         | Expr::OptionalMemberAccess { base, .. }
         | Expr::OptionalChain { expr: base } => {

@@ -97,6 +97,13 @@ fn simplify_impl<N: crate::Head>(
             )),
         },
 
+        RuntimeTy::Tuple(elements) => RuntimeTy::Tuple(
+            elements
+                .into_iter()
+                .map(|e| simplify_impl(e, aliases, recursive, expand_recursive_alias_unions))
+                .collect(),
+        ),
+
         // Leaf types pass through unchanged.
         _ => ty,
     }

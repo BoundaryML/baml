@@ -130,7 +130,7 @@ fn pattern_overlap_at(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>, depth:
     let member = nf(&expand_alias_head(member, &aliases), env.enum_variants);
     let (pats, members) = (union_members(&pat), union_members(&member));
     if let ([p], [m]) = (pats, members) {
-        return pattern_pair_overlap(p, m, env);
+        return pattern_pair_overlap(p, m, env, depth);
     }
     let mut result = Overlap::No;
     for p in pats {
@@ -160,7 +160,12 @@ fn union_members(ty: &Ty) -> &[Ty] {
 /// canonically — and the pairs equality wrongly calls disjoint are rescued by the
 /// top-level meet ([`pattern_atom_meet`]). A surviving overlap is then checked
 /// against the rigid params' interface bounds, which can refute it to `No`.
-fn pattern_pair_overlap(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> Overlap {
+fn pattern_pair_overlap(
+    pat: &Ty,
+    member: &Ty,
+    env: &PatternOverlapEnv<'_>,
+    depth: usize,
+) -> Overlap {
     debug_assert!(
         !matches!(pat, Ty::Union(..)) && !matches!(member, Ty::Union(..)),
         "pair sides are decomposed union members, never unions themselves"
@@ -200,7 +205,7 @@ fn pattern_pair_overlap(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> O
     let mut bindings = TypeBindings::default();
     let mut result = unify_into(pat, member, env.vars, &env.alias_ctx(), &mut bindings);
     if result == Overlap::No {
-        result = pattern_atom_meet(pat, member, env);
+        result = pattern_atom_meet(pat, member, env, depth);
         // A meet rescue proves possibility structurally, without a witness
         // substitution; bindings recorded by the *failed* equality attempt are not
         // conditions on it and must not feed bound refutation.
@@ -215,7 +220,7 @@ fn pattern_pair_overlap(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> O
 /// The top-level meets that value-set intersection has and equality-unification
 /// lacks. Only consulted after [`unify_into`] answered `No`, so equal or unifiable
 /// pairs never reach it.
-fn pattern_atom_meet(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> Overlap {
+fn pattern_atom_meet(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>, depth: usize) -> Overlap {
     // A literal shares its values with its base (`1 ⊂ int`), an enum variant with
     // its enum — symmetric here, since intersection is.
     if is_literal_subtype(pat, member) || is_literal_subtype(member, pat) {
@@ -255,6 +260,25 @@ fn pattern_atom_meet(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> Over
         // still share values — a value whose concrete function type is a structural
         // subtype of both. Equality already failed above; conservatively possible.
         (Ty::Function { .. }, Ty::Function { .. }) => Overlap::Yes,
+        // Tuples are covariant, so equality failing says nothing: two tuple
+        // types share a value iff their arities agree and every element pair
+        // does. Each element pair quantifies its own realization — an
+        // over-approximation (a var shared across elements is not tied), which
+        // errs toward possible, the sound direction.
+        (Ty::Tuple(a), Ty::Tuple(b)) => {
+            if a.len() != b.len() {
+                return Overlap::No;
+            }
+            let mut result = Overlap::Yes;
+            for (x, y) in a.iter().zip(b.iter()) {
+                match pattern_overlap_at(x, y, env, depth + 1) {
+                    Overlap::No => return Overlap::No,
+                    Overlap::Unknown => result = Overlap::Unknown,
+                    Overlap::Yes => {}
+                }
+            }
+            result
+        }
         // Unreachable by construction (the caller decomposes unions); fail toward
         // possible, the sound direction.
         (Ty::Union(..), _) | (_, Ty::Union(..)) => Overlap::Unknown,
@@ -266,6 +290,7 @@ fn pattern_atom_meet(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> Over
             Ty::Class(..)
             | Ty::List(..)
             | Ty::Map { .. }
+            | Ty::Tuple(..)
             | Ty::Future(..)
             | Ty::Int
             | Ty::Bigint

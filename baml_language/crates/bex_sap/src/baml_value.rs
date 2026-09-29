@@ -48,6 +48,7 @@ pub enum BamlValue<'s, 'v, 't, N: TypeIdent> {
     Null(BamlNull),
     Media(BamlMedia),
     Array(BamlArray<'s, 'v, 't, N>),
+    Tuple(BamlTuple<'s, 'v, 't, N>),
     Map(BamlMap<'s, 'v, 't, N>),
     Enum(BamlEnum<'t, N>),
     Class(BamlClass<'s, 'v, 't, N>),
@@ -109,6 +110,14 @@ where
 {
     pub value: Vec<BamlValueWithFlags<'s, 'v, 't, N>>,
 }
+/// A tuple value: exactly one element per position of its [`crate::sap_model::TupleTy`].
+#[derive(Debug, Clone)]
+pub struct BamlTuple<'s, 'v, 't, N: TypeIdent>
+where
+    's: 'v,
+{
+    pub value: Vec<BamlValueWithFlags<'s, 'v, 't, N>>,
+}
 #[derive(Debug, Clone)]
 pub struct BamlMap<'s, 'v, 't, N: TypeIdent>
 where
@@ -165,6 +174,7 @@ impl<N: TypeIdent> serde::Serialize for BamlValue<'_, '_, '_, N> {
             BamlValue::Null(n) => n.serialize(serializer),
             BamlValue::Media(m) => m.serialize(serializer),
             BamlValue::Array(a) => a.serialize(serializer),
+            BamlValue::Tuple(t) => t.serialize(serializer),
             BamlValue::Map(m) => m.serialize(serializer),
             BamlValue::Enum(e) => e.serialize(serializer),
             BamlValue::Class(c) => c.serialize(serializer),
@@ -217,6 +227,18 @@ impl serde::Serialize for BamlMedia {
 }
 
 impl<N: TypeIdent> serde::Serialize for BamlArray<'_, '_, '_, N> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeSeq;
+        let mut seq = serializer.serialize_seq(Some(self.value.len()))?;
+        for item in &self.value {
+            seq.serialize_element(&item.value)?;
+        }
+        seq.end()
+    }
+}
+
+/// A tuple serializes as a fixed-length JSON array.
+impl<N: TypeIdent> serde::Serialize for BamlTuple<'_, '_, '_, N> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeSeq;
         let mut seq = serializer.serialize_seq(Some(self.value.len()))?;

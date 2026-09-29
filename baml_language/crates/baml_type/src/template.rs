@@ -123,6 +123,14 @@ impl<N: Clone + PartialEq> TyTemplateOrigins<N> {
         })
     }
 
+    /// Project these origins through a tuple element.
+    pub fn tuple_element(&self, index: usize) -> Self {
+        self.project(|origin| match origin {
+            TyTemplate::Tuple(elements) => elements.get(index).cloned(),
+            _ => None,
+        })
+    }
+
     /// Project these origins through a future's value type.
     pub fn future_value(&self) -> Self {
         self.project(|origin| match origin {
@@ -206,7 +214,7 @@ fn walk_template<N: Clone>(
             child(key);
             child(value);
         }
-        TyTemplate::Union(members) | TyTemplate::Class(_, members) => {
+        TyTemplate::Union(members) | TyTemplate::Tuple(members) | TyTemplate::Class(_, members) => {
             members.iter_mut().for_each(&mut child);
         }
         TyTemplate::Interface(_, args, associated_bindings) => {
@@ -274,7 +282,7 @@ fn visit_template<N: Clone>(template: &TyTemplate<N>, visitor: &mut impl FnMut(&
             child(key);
             child(value);
         }
-        TyTemplate::Union(members) | TyTemplate::Class(_, members) => {
+        TyTemplate::Union(members) | TyTemplate::Tuple(members) | TyTemplate::Class(_, members) => {
             members.iter().for_each(&mut child);
         }
         TyTemplate::Interface(_, args, associated_bindings) => {
@@ -581,6 +589,12 @@ impl<N: crate::Head> TyTemplate<N> {
                     .map(|p| p.substitute_with_fuel(type_args, ctx, fuel))
                     .collect::<Result<_, _>>()?,
             )),
+            Self::Tuple(parts) => Ok(RealizedTy::Tuple(
+                parts
+                    .iter()
+                    .map(|p| p.substitute_with_fuel(type_args, ctx, fuel))
+                    .collect::<Result<_, _>>()?,
+            )),
             Self::Class(name, args) => Ok(RealizedTy::Class(
                 name.clone(),
                 args.iter()
@@ -791,6 +805,12 @@ impl<N: Clone> TyTemplate<N> {
                     .map(|p| p.substitute_symbolic(type_args))
                     .collect(),
             ),
+            Self::Tuple(parts) => RuntimeTy::Tuple(
+                parts
+                    .iter()
+                    .map(|p| p.substitute_symbolic(type_args))
+                    .collect(),
+            ),
             Self::Class(name, args) => RuntimeTy::Class(
                 name.clone(),
                 args.iter()
@@ -880,6 +900,7 @@ impl<N: Clone> TyTemplate<N> {
                 value: Box::new(value.to_display_ty()),
             },
             Self::Union(parts) => Ty::Union(parts.iter().map(Self::to_display_ty).collect()),
+            Self::Tuple(parts) => Ty::Tuple(parts.iter().map(Self::to_display_ty).collect()),
             Self::Class(name, args) => {
                 Ty::Class(name.clone(), args.iter().map(Self::to_display_ty).collect())
             }

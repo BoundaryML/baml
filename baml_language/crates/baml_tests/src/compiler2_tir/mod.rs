@@ -130,6 +130,9 @@ pub(crate) mod support {
                 .map(|p| pat_desc(*p, body))
                 .collect::<Vec<_>>()
                 .join(" | "),
+            Pattern::Tuple(pats) => baml_type::render_tuple(
+                &pats.iter().map(|p| pat_desc(*p, body)).collect::<Vec<_>>(),
+            ),
         }
     }
 
@@ -292,6 +295,13 @@ pub(crate) mod support {
                 let elem_strs: Vec<String> = elements.iter().map(|e| expr_desc(*e, body)).collect();
                 format!("[{}]", elem_strs.join(", "))
             }
+            Expr::Tuple { elements } => baml_type::render_tuple(
+                &elements
+                    .iter()
+                    .map(|e| expr_desc(*e, body))
+                    .collect::<Vec<_>>(),
+            ),
+            Expr::TupleIndex { base, index } => format!("{}.{index}", expr_desc(*base, body)),
             Expr::Map { entries } => {
                 let entry_strs: Vec<String> = entries
                     .iter()
@@ -1427,6 +1437,12 @@ pub(crate) mod support {
                     .map(|m| type_expr_to_string_hir(m, pkg_prefix, local_type_names))
                     .collect::<Vec<_>>()
                     .join(" | "),
+                baml_compiler2_ast::TypeExprKind::Tuple { elements } => baml_type::render_tuple(
+                    &elements
+                        .iter()
+                        .map(|e| type_expr_to_string_hir(e, pkg_prefix, local_type_names))
+                        .collect::<Vec<_>>(),
+                ),
                 baml_compiler2_ast::TypeExprKind::Literal { value: lit, .. } => lit.to_string(),
                 baml_compiler2_ast::TypeExprKind::Function {
                     params,
@@ -1572,6 +1588,12 @@ pub(crate) mod support {
                     .map(|&m| type_ref_to_string(store, m, pkg_prefix, local_type_names))
                     .collect::<Vec<_>>()
                     .join(" | "),
+                K::Tuple { elements } => baml_type::render_tuple(
+                    &elements
+                        .iter()
+                        .map(|&e| type_ref_to_string(store, e, pkg_prefix, local_type_names))
+                        .collect::<Vec<_>>(),
+                ),
                 K::Literal { value: lit } => lit.to_string(),
                 K::Function {
                     params,
@@ -1660,6 +1682,12 @@ pub(crate) mod support {
                     .map(|p| pat_desc_hir(*p, body, prefix, local_type_names))
                     .collect::<Vec<_>>()
                     .join(" | "),
+                Pattern::Tuple(pats) => baml_type::render_tuple(
+                    &pats
+                        .iter()
+                        .map(|p| pat_desc_hir(*p, body, prefix, local_type_names))
+                        .collect::<Vec<_>>(),
+                ),
                 Pattern::Type(ty) => type_expr_to_string_hir(ty, prefix, local_type_names),
                 Pattern::Class {
                     class,
@@ -1904,6 +1932,18 @@ pub(crate) mod support {
                         .map(|e| expr_desc_hir(*e, body, prefix, local_type_names))
                         .collect();
                     format!("[{}]", elem_strs.join(", "))
+                }
+                Expr::Tuple { elements } => baml_type::render_tuple(
+                    &elements
+                        .iter()
+                        .map(|e| expr_desc_hir(*e, body, prefix, local_type_names))
+                        .collect::<Vec<_>>(),
+                ),
+                Expr::TupleIndex { base, index } => {
+                    format!(
+                        "{}.{index}",
+                        expr_desc_hir(*base, body, prefix, local_type_names)
+                    )
                 }
                 Expr::Map { entries } => {
                     let entry_strs: Vec<String> = entries

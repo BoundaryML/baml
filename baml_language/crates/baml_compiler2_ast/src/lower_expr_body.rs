@@ -1827,6 +1827,7 @@ impl LoweringContext {
             SyntaxKind::BACKTICK_STRING_LITERAL => self.lower_backtick_string_literal(node),
             SyntaxKind::BYTE_STRING_LITERAL => self.lower_byte_string_literal(node),
             SyntaxKind::ARRAY_LITERAL => self.lower_array_literal(node),
+            SyntaxKind::TUPLE_EXPR => self.lower_tuple_literal(node),
             SyntaxKind::OBJECT_LITERAL => self.lower_object_literal(node),
             SyntaxKind::MAP_LITERAL => self.lower_map_literal(node),
             SyntaxKind::LAMBDA_EXPR => self.lower_lambda_expr(node),
@@ -2780,6 +2781,14 @@ impl LoweringContext {
                     None => self.alloc_pattern(Pattern::Wildcard, node.span_range()),
                 }
             }
+            SyntaxKind::TUPLE_PATTERN => {
+                let elements = node
+                    .children()
+                    .filter(|n| n.kind() == SyntaxKind::PATTERN)
+                    .map(|inner| self.lower_pattern(&inner))
+                    .collect();
+                self.alloc_pattern(Pattern::Tuple(elements), node.span_range())
+            }
             // Defensive: an unexpected node where a pattern atom should be.
             // Lower as wildcard so downstream doesn't crash; the parse error
             // (if any) will surface elsewhere.
@@ -2857,7 +2866,7 @@ impl LoweringContext {
                     &mut self.diags,
                 );
             }
-            Pattern::Or(pats) => {
+            Pattern::Or(pats) | Pattern::Tuple(pats) => {
                 for p in pats {
                     self.check_pattern_void_in_annotation(p, context);
                 }
@@ -3276,6 +3285,7 @@ impl LoweringContext {
                     | SyntaxKind::STRING_LITERAL
                     | SyntaxKind::OBJECT_LITERAL
                     | SyntaxKind::ARRAY_LITERAL
+                    | SyntaxKind::TUPLE_EXPR
                     | SyntaxKind::MAP_LITERAL
             )
         });
@@ -3697,6 +3707,7 @@ impl LoweringContext {
     fn lower_field_access_expr(&mut self, node: &SyntaxNode) -> ExprId {
         let mut base = None;
         let mut field = None;
+        let mut tuple_index = None;
         let mut field_range = None;
         let mut seen_accessor = false;
 
@@ -3722,12 +3733,28 @@ impl LoweringContext {
                     } else if seen_accessor && is_ident_token(token.kind()) {
                         field = Some(Name::new(token.text()));
                         field_range = Some(token.text_range());
+                    } else if seen_accessor && token.kind() == SyntaxKind::INTEGER_LITERAL {
+                        // Tuple element access `t.0`. The parser has already
+                        // rejected non-decimal spellings; an index too large for
+                        // `u32` saturates and is reported out of range by TIR.
+                        tuple_index = Some(token.text().parse::<u32>().unwrap_or(u32::MAX));
+                        field_range = Some(token.text_range());
                     }
                 }
             }
         }
 
         let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+        if let Some(index) = tuple_index {
+            let id = self.alloc_expr(Expr::TupleIndex { base, index }, node.span_range());
+            if let Some(range) = field_range {
+                self.source_map.member_access_member_spans.insert(id, range);
+            }
+            if self.needs_chain_wrap.remove(&base) {
+                self.needs_chain_wrap.insert(id);
+            }
+            return id;
+        }
         let member = field.unwrap_or_else(|| Name::new("_"));
 
         let id = self.alloc_expr(Expr::MemberAccess { base, member }, node.span_range());
@@ -5083,6 +5110,25 @@ impl LoweringContext {
             }
         }
         self.alloc_expr(Expr::Array { elements }, node.span_range())
+    }
+
+    /// `(a, b)` / `(a,)`. Same child shape as an array literal: element
+    /// nodes, plus bare tokens for leaf elements, separated by commas.
+    fn lower_tuple_literal(&mut self, node: &SyntaxNode) -> ExprId {
+        let mut elements = Vec::new();
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) => {
+                    elements.push(self.lower_expr(&child));
+                }
+                rowan::NodeOrToken::Token(token) => {
+                    if let Some(expr_id) = self.try_lower_bare_token(&token) {
+                        elements.push(expr_id);
+                    }
+                }
+            }
+        }
+        self.alloc_expr(Expr::Tuple { elements }, node.span_range())
     }
 
     fn lower_object_literal(&mut self, node: &SyntaxNode) -> ExprId {

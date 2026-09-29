@@ -11,8 +11,8 @@ use crate::{
     baml_value::{BamlStreamState, BamlValue},
     deserializer::types::BamlValueWithFlags,
     sap_model::{
-        ArrayTy, ClassTy, EnumTy, EnumVariantTy, MapTy, MediaTy, StreamStateTy, Ty, TyResolvedRef,
-        TypeRefDb, UnionTy,
+        ArrayTy, ClassTy, EnumTy, EnumVariantTy, MapTy, MediaTy, StreamStateTy, TupleTy, Ty,
+        TyResolvedRef, TypeRefDb, UnionTy,
     },
 };
 
@@ -57,6 +57,7 @@ impl ToBamlTy for TyResolvedRef<'_, DefKey> {
                 SapTy::Literal(baml_type::Literal::Bool(v.0), baml_type::Freshness::Regular)
             }
             TyResolvedRef::Array(a) => a.to_baml_ty(db),
+            TyResolvedRef::Tuple(t) => t.to_baml_ty(db),
             TyResolvedRef::Map(m) => m.to_baml_ty(db),
             TyResolvedRef::Class(c) => c.to_baml_ty(db),
             TyResolvedRef::Enum(e) => e.to_baml_ty(db),
@@ -88,6 +89,12 @@ impl ToBamlTy for ArrayTy<'_, DefKey> {
     fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
         let inner = self.ty.to_baml_ty(db);
         SapTy::List(Box::new(inner))
+    }
+}
+
+impl ToBamlTy for TupleTy<'_, DefKey> {
+    fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
+        SapTy::Tuple(self.items.iter().map(|item| item.to_baml_ty(db)).collect())
     }
 }
 
@@ -207,6 +214,14 @@ fn baml_value_inner_to_external(
                 items,
             }
         }
+        // A tuple carries no type metadata: its type is its elements' types.
+        BamlValue::Tuple(tuple) => BexExternalValue::Tuple {
+            items: tuple
+                .value
+                .iter()
+                .map(|item| baml_value_to_external(item, db))
+                .collect(),
+        },
         BamlValue::Map(map) => {
             let (key_type, value_type) = match ty {
                 TyResolvedRef::Map(m) => (m.key.to_baml_ty(db), m.value.to_baml_ty(db)),

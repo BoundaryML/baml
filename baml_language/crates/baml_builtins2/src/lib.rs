@@ -196,6 +196,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("reflect", "ns_interface/interface.baml"),
     builtin!("reflect", "ns_primitive/primitive.baml"),
     builtin!("reflect", "ns_function/function.baml"),
+    builtin!("reflect", "ns_tuple/tuple.baml"),
     builtin!("reflect", "ns_errors/errors.baml"),
     // --- trace package ---
     builtin!("trace", "trace.baml"),

@@ -485,7 +485,9 @@ impl OutputFormatContent {
             SapTy::Bigint => Some("Answer as a bigint".to_string()),
             SapTy::Float => Some("Answer as a float".to_string()),
             SapTy::Bool => Some("Answer as a bool".to_string()),
-            SapTy::List(..) => Some("Answer with a JSON Array using this schema:\n".to_string()),
+            SapTy::List(..) | SapTy::Tuple(..) => {
+                Some("Answer with a JSON Array using this schema:\n".to_string())
+            }
             SapTy::Class(_, _) | SapTy::Interface(_, _, _) => {
                 let end = if class_is_hoisted(ty, hoisted) {
                     " "
@@ -606,6 +608,9 @@ impl OutputFormatContent {
                                     | SapTy::Null
                             )
                         }),
+                        // A tuple already renders bracketed (`[int, string]`), so a list of
+                        // them is `[int, string][]` unless the tuple itself spans lines.
+                        SapTy::Tuple(..) => inner_str.contains('\n'),
                         _ => true,
                     };
 
@@ -615,6 +620,29 @@ impl OutputFormatContent {
                     Ok(Some(format!("({inner_str})[]")))
                 } else {
                     Ok(Some(format!("{inner_str}[]")))
+                }
+            }
+
+            // A tuple is a fixed-length JSON array: `[int, string]`, or one element per line
+            // when any element spans lines.
+            SapTy::Tuple(items) => {
+                let rendered = items
+                    .iter()
+                    .map(|item| {
+                        Ok(self
+                            .render_type_hoisted(item, options, hoisted_classes, hoisted_enums)?
+                            .unwrap_or_else(|| "unknown".to_string()))
+                    })
+                    .collect::<Result<Vec<_>, RenderError>>()?;
+                if rendered.iter().any(|item| item.contains('\n')) {
+                    let body = rendered
+                        .iter()
+                        .map(|item| item.replace('\n', "\n  "))
+                        .collect::<Vec<_>>()
+                        .join(",\n  ");
+                    Ok(Some(format!("[\n  {body}\n]")))
+                } else {
+                    Ok(Some(format!("[{}]", rendered.join(", "))))
                 }
             }
 
@@ -1374,6 +1402,12 @@ fn walk_ty(
         SapTy::List(inner) => {
             let inner_origins = origins.list_element();
             walk_ty(inner, &inner_origins, ctx, content, visited, ancestry)?;
+        }
+        SapTy::Tuple(items) => {
+            for (index, item) in items.iter().enumerate() {
+                let item_origins = origins.tuple_element(index);
+                walk_ty(item, &item_origins, ctx, content, visited, ancestry)?;
+            }
         }
         SapTy::Map { key, value, .. } => {
             let key_origins = origins.map_key();
@@ -4480,6 +4514,182 @@ Answer in JSON using this type: A"#
         assert!(
             !rendered.contains("/// \n  age"),
             "Field without description should have no comment"
+        );
+    }
+
+    // ========================================================================
+    // Tuples
+    // ========================================================================
+
+    fn ty_tuple(items: Vec<RuntimeTy>) -> RuntimeTy {
+        RuntimeTy::Tuple(items.into())
+    }
+
+    #[test]
+    fn test_render_tuple() {
+        let content = OutputFormatContent::new(ty_tuple(vec![ty_int(), ty_string()]));
+        let rendered = content.render(&RenderOptions::default()).unwrap();
+        assert_eq!(
+            rendered,
+            Some("Answer with a JSON Array using this schema:\n[int, string]".to_string())
+        );
+    }
+
+    #[test]
+    fn test_render_one_tuple() {
+        let content = OutputFormatContent::new(ty_tuple(vec![ty_bool()]));
+        let rendered = content.render(&RenderOptions::default()).unwrap();
+        assert_eq!(
+            rendered,
+            Some("Answer with a JSON Array using this schema:\n[bool]".to_string())
+        );
+    }
+
+    #[test]
+    fn test_render_list_of_tuples() {
+        let content = OutputFormatContent::new(ty_list(ty_tuple(vec![ty_int(), ty_string()])));
+        let rendered = content.render(&RenderOptions::default()).unwrap();
+        assert_eq!(
+            rendered,
+            Some("Answer with a JSON Array using this schema:\n[int, string][]".to_string())
+        );
+    }
+
+    #[test]
+    fn test_render_optional_tuple_and_union_elements() {
+        let content = OutputFormatContent::new(ty_optional(ty_tuple(vec![
+            RuntimeTy::union([ty_int(), ty_string()]),
+            ty_bool(),
+        ])));
+        let rendered = content.render(&RenderOptions::default()).unwrap();
+        assert_eq!(
+            rendered,
+            Some(
+                "Answer with a JSON Array using this schema:\n[int or string, bool] or null"
+                    .to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn test_render_tuple_with_class_is_multiline() {
+        let content = OutputFormatContent::new(ty_tuple(vec![ty_class("Point"), ty_string()]))
+            .with_class(mk_class("Point", vec![("x", ty_int()), ("y", ty_int())]));
+        let rendered = content.render(&RenderOptions::default()).unwrap();
+        assert_eq!(
+            rendered,
+            Some(String::from(
+                r#"Answer with a JSON Array using this schema:
+[
+  {
+    x: int,
+    y: int,
+  },
+  string
+]"#
+            ))
+        );
+    }
+
+    #[test]
+    fn test_render_list_of_multiline_tuples() {
+        let content =
+            OutputFormatContent::new(ty_list(ty_tuple(vec![ty_class("Point"), ty_string()])))
+                .with_class(mk_class("Point", vec![("x", ty_int())]));
+        let rendered = content.render(&RenderOptions::default()).unwrap();
+        assert_eq!(
+            rendered,
+            Some(String::from(
+                r#"Answer with a JSON Array using this schema:
+[
+  [
+    {
+      x: int,
+    },
+    string
+  ]
+]"#
+            ))
+        );
+    }
+
+    #[test]
+    fn test_build_output_format_collects_definitions_inside_tuples() {
+        let point = key(&baml_type::TypeName::local("Point".into()));
+        let color = key(&baml_type::TypeName::local("Color".into()));
+        let target = ty_tuple(vec![
+            RuntimeTy::Class(point.clone(), Box::new([])),
+            RuntimeTy::Enum(color.clone()),
+        ]);
+
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert(
+            point.clone(),
+            ctx_class_definition(&point, vec![ctx_class_field("x", ty_int(), None)]),
+        );
+        let mut enums = indexmap::IndexMap::new();
+        enums.insert(
+            color,
+            sys_types::EnumDefinition {
+                name: "Color".to_string(),
+                description: None,
+                docstring: None,
+                alias: None,
+                variants: ["Red", "Blue"]
+                    .into_iter()
+                    .map(|name| sys_types::EnumVariantDefinition {
+                        name: name.to_string(),
+                        description: None,
+                        docstring: None,
+                        alias: None,
+                    })
+                    .collect(),
+            },
+        );
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.class_definitions = Arc::new(classes);
+        ctx.enum_definitions = Arc::new(enums);
+
+        let content = build_output_format_content(&target, &ctx);
+        assert!(content.classes.contains_key("Point"));
+        assert!(content.enums.contains_key("Color"));
+        let rendered = content.render(&RenderOptions::default()).unwrap().unwrap();
+        assert_eq!(
+            rendered,
+            "Answer with a JSON Array using this schema:\n[\n  {\n    x: int,\n  },\n  'Red' or 'Blue'\n]"
+        );
+    }
+
+    #[test]
+    fn test_build_output_format_detects_recursion_through_tuple() {
+        // class Node { value: int, next: (int, Node)? }
+        let node = key(&baml_type::TypeName::local("Node".into()));
+        let node_ty = RuntimeTy::Class(node.clone(), Box::new([]));
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert(
+            node.clone(),
+            ctx_class_definition(
+                &node,
+                vec![
+                    ctx_class_field("value", ty_int(), None),
+                    ctx_class_field(
+                        "next",
+                        ty_optional(ty_tuple(vec![ty_int(), node_ty.clone()])),
+                        None,
+                    ),
+                ],
+            ),
+        );
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.class_definitions = Arc::new(classes);
+
+        let content = build_output_format_content(&node_ty, &ctx);
+        assert!(content.recursive_classes.contains("Node"));
+        let rendered = content.render(&RenderOptions::default()).unwrap().unwrap();
+        assert_eq!(
+            rendered,
+            "Node {\n  value: int,\n  next: [int, Node] or null,\n}\n\n\
+             Answer in JSON using this schema: Node"
         );
     }
 }

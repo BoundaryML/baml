@@ -73,7 +73,7 @@ fn collect_interface_tys(ty: &Ty, out: &mut BTreeSet<Name>) {
             collect_interface_tys(key, out);
             collect_interface_tys(value, out);
         }
-        Ty::Union(items) => {
+        Ty::Union(items) | Ty::Tuple(items) => {
             for item in items {
                 collect_interface_tys(item, out);
             }

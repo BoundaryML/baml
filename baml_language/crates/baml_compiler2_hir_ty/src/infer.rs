@@ -1036,6 +1036,10 @@ enum PendingDiag<'db> {
     PositionalAfterNamed {
         expr: ExprId,
     },
+    /// `t.0 = v` / `t.0 += v`: tuples are immutable.
+    TupleElementAssign {
+        expr: ExprId,
+    },
     /// The same argument name supplied twice.
     DuplicateNamedArg {
         expr: ExprId,
@@ -2686,6 +2690,31 @@ impl<'db> InferenceContext<'db> {
                     }
                 }
             }
+            Expr::Tuple { elements } => {
+                // With an expected tuple of the same arity, each element is
+                // CHECKED against its slot (tuples are covariant, so the
+                // slot types are exactly what the literal may be built at).
+                // Otherwise elements synthesize and widen, like array
+                // elements: `(1, "a")` is `(int, string)`.
+                match self.expected_tuple_elements(expected, elements.len()) {
+                    Some(slots) => {
+                        for (element, slot) in elements.iter().zip(&slots) {
+                            self.check_expr(body, *element, slot);
+                        }
+                        Ty::tuple(slots)
+                    }
+                    None => {
+                        let element_tys: Vec<Ty> = elements
+                            .iter()
+                            .map(|element| {
+                                let ty = self.infer_expr(body, *element, &Expectation::None);
+                                self.widen_fresh(&ty)
+                            })
+                            .collect();
+                        Ty::tuple(element_tys)
+                    }
+                }
+            }
             Expr::Map { entries } => {
                 // With an expected map type, entries are CHECKED against
                 // its key/value (the Array arm's rule; r-a's
@@ -2760,6 +2789,10 @@ impl<'db> InferenceContext<'db> {
             Expr::MemberAccess { base, member } => {
                 let base_ty = self.infer_expr(body, *base, &Expectation::None);
                 self.field_access(expr, &base_ty, member)
+            }
+            Expr::TupleIndex { base, index } => {
+                let base_ty = self.infer_expr(body, *base, &Expectation::None);
+                self.tuple_index(expr, &base_ty, *index)
             }
             // TS short-circuit chains: the boundary owns the `| null`.
             Expr::OptionalChain { expr: inner } => {
@@ -3618,6 +3651,16 @@ impl<'db> InferenceContext<'db> {
         // op dispatches on (element, value) with the result checked
         // against the element. No binding narrows: the container's
         // declared element type is the contract.
+        // A TUPLE-ELEMENT target (`t.0 = v`): tuples are immutable. The
+        // receiver and value still type (their own errors report), then the
+        // store is rejected here, so MIR never sees a tuple-element store.
+        if let Expr::TupleIndex { .. } = &body.exprs[target] {
+            self.infer_expr(body, target, &Expectation::None);
+            self.infer_expr(body, value, &Expectation::None);
+            self.pending_diags
+                .push(PendingDiag::TupleElementAssign { expr: target });
+            return;
+        }
         if let Expr::Index { base, index } = &body.exprs[target] {
             let (base, index) = (*base, *index);
             let element = self.infer_index(body, target, base, index, false);
@@ -4006,6 +4049,21 @@ impl<'db> InferenceContext<'db> {
                 let value_ok = self.eq_piece(&av, &bv);
                 let error_ok = self.eq_piece(&ae, &be);
                 value_ok && error_ok
+            }
+            // Tuples are covariant: Sub stays Sub elementwise.
+            (InferTy::Tuple(a_elems), InferTy::Tuple(b_elems))
+                if a_elems.len() == b_elems.len() =>
+            {
+                let pairs: Vec<(Ty, Ty)> = a_elems
+                    .iter()
+                    .cloned()
+                    .zip(b_elems.iter().cloned())
+                    .collect();
+                let mut ok = true;
+                for (a, b) in pairs {
+                    ok &= self.sub(&a, &b);
+                }
+                ok
             }
             // Function types: contravariant params, covariant ret/throws.
             (
@@ -9115,6 +9173,44 @@ impl<'db> InferenceContext<'db> {
         ty
     }
 
+    /// Tuple element access `t.0`. The receiver must resolve to a tuple
+    /// with a slot at `index`, or to a union whose every arm does (a read
+    /// through any arm lands on that arm's slot, so the result is the union
+    /// of the slots). Anything else reports like a missing member.
+    fn tuple_index(&mut self, at: ExprId, base_ty: &Ty, index: u32) -> Ty {
+        let resolved = self.structurally_resolve(base_ty);
+        if resolved.has_error() {
+            return Ty::error();
+        }
+        let arms: Vec<Ty> = match resolved.kind() {
+            InferTy::Union(members) => members
+                .iter()
+                .map(|member| self.structurally_resolve(member))
+                .collect(),
+            _ => vec![resolved.clone()],
+        };
+        let slots: Option<Vec<Ty>> = arms
+            .iter()
+            .map(|arm| match arm.kind() {
+                InferTy::Tuple(elements) => elements.get(index as usize).cloned(),
+                _ => None,
+            })
+            .collect();
+        match slots {
+            Some(slots) => self.union_of(&slots),
+            None => {
+                if self.member_probe_depth == 0 && !resolved.has_infer() {
+                    self.pending_diags.push(PendingDiag::UnresolvedMember {
+                        expr: at,
+                        base: resolved,
+                        member: baml_type::Name::new(index.to_string()),
+                    });
+                }
+                Ty::error()
+            }
+        }
+    }
+
     fn report_bare_output_format_reference(&mut self, expr: ExprId, function: FunctionRef<'db>) {
         let Some(class) = callable_owner_type(self.db, function) else {
             return;
@@ -9858,6 +9954,18 @@ impl<'db> InferenceContext<'db> {
         })
     }
 
+    /// The TUPLE literal's counterpart of `expected_list_element`: the
+    /// element slots of the unique expected tuple arm of this arity. Arity
+    /// disambiguates, so `(int, string) | (int, int, int)` still gives a
+    /// 2-tuple literal its slots.
+    fn expected_tuple_elements(&mut self, expected: &Expectation, arity: usize) -> Option<Vec<Ty>> {
+        let shape = self.expectation_shape(expected)?;
+        self.unique_expected_arm(&shape, |arm| match arm.kind() {
+            InferTy::Tuple(elements) if elements.len() == arity => Some(elements.to_vec()),
+            _ => None,
+        })
+    }
+
     /// The MAP literal's counterpart of `expected_list_element`.
     fn expected_map_entry(&mut self, expected: &Expectation) -> Option<(Ty, Ty)> {
         let shape = self.expectation_shape(expected)?;
@@ -9879,6 +9987,9 @@ impl<'db> InferenceContext<'db> {
         match &body.exprs[expr] {
             Expr::Array { .. } => self.expected_list_element(expected).is_some(),
             Expr::Map { .. } => self.expected_map_entry(expected).is_some(),
+            Expr::Tuple { elements } => self
+                .expected_tuple_elements(expected, elements.len())
+                .is_some(),
             Expr::Lambda(_) => expected
                 .only_has_type()
                 .cloned()
@@ -10208,6 +10319,12 @@ impl<'db> InferenceContext<'db> {
                 members
                     .iter()
                     .map(|member| self.ingest_lowered(member, policy))
+                    .collect(),
+            ),
+            LoweringTyShape::Tuple(elements) => InferTy::Tuple(
+                elements
+                    .iter()
+                    .map(|element| self.ingest_lowered(element, policy))
                     .collect(),
             ),
             LoweringTyShape::Class(name, args) => InferTy::Class(
@@ -11252,6 +11369,9 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::TupleElementAssign { expr } => {
+                        (TirTypeError::TupleElementNotAssignable, expr)
+                    }
                     PendingDiag::PositionalAfterNamed { expr } => {
                         (TirTypeError::PositionalArgumentAfterNamed, expr)
                     }
@@ -13045,6 +13165,7 @@ fn same_head_constructor(source: &Ty, target: &Ty) -> bool {
         (InferTy::Class(a, a_args), InferTy::Class(b, b_args)) => {
             a == b && a_args.len() == b_args.len()
         }
+        (InferTy::Tuple(a), InferTy::Tuple(b)) => a.len() == b.len(),
         (InferTy::Interface(a, a_args, _), InferTy::Interface(b, b_args, _)) => {
             a == b && a_args.len() == b_args.len()
         }
@@ -13253,6 +13374,13 @@ fn nearest_scoped_relaxation(ty: &baml_type::Ty, variance: RelaxationVariance) -
             ret: Box::new(nearest_scoped_relaxation(ret, variance)),
             throws: Box::new(nearest_scoped_relaxation(throws, variance)),
         },
+        // Tuples are covariant: relax each element in place.
+        Plain::Tuple(elements) => Plain::Tuple(
+            elements
+                .iter()
+                .map(|element| nearest_scoped_relaxation(element, variance))
+                .collect(),
+        ),
         Plain::Class(..)
         | Plain::Interface(..)
         | Plain::List(..)

@@ -153,6 +153,8 @@ fn ty_head(spelling: &Spelling, ty: &Ty) -> Option<TyHead> {
         Ty::TypeAlias(qtn) => Some(TyHead::Nominal(spelling.wire(qtn))),
         Ty::TypeVar(_) => Some(TyHead::Blanket),
         Ty::Union(_) => None,
+        // No impl attaches to a tuple (tuples implement no interfaces yet).
+        Ty::Tuple(_) => None,
         Ty::AssociatedTypeProjection { .. } => None,
         Ty::RustType | Ty::Type | Ty::Resource | Ty::PromptAst | Ty::Void => None,
         Ty::Unknown | Ty::Never | Ty::Error => None,

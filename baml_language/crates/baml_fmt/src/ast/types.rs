@@ -17,6 +17,8 @@ use crate::{
 pub enum Type {
     Unreflect(UnreflectType),
     Paren(ParenType),
+    /// `(A, B)` / `(A,)`.
+    Tuple(TupleType),
     Path(PathType),
     /// Generally only string literals are used in normal types,
     /// but other literals are valid in some contexts like match bindings.
@@ -43,6 +45,7 @@ impl Type {
         match self {
             Type::Unreflect(_) => false,
             Type::Paren(_) => false,
+            Type::Tuple(_) => false,
             Type::Path(_) => true,
             Type::Literal(_) => false,
             Type::SignedLiteral(_) => false,
@@ -100,6 +103,7 @@ impl Printable for Type {
         match self {
             Type::Unreflect(unreflect) => unreflect.print(shape, printer),
             Type::Paren(paren) => paren.print(shape, printer),
+            Type::Tuple(tuple) => tuple.print(shape, printer),
             Type::Path(path) => path.print(shape, printer),
             Type::Literal(literal) => literal.print(shape, printer),
             Type::SignedLiteral(literal) => literal.print(shape, printer),
@@ -121,6 +125,7 @@ impl Printable for Type {
         match self {
             Type::Unreflect(unreflect) => unreflect.leftmost_token(),
             Type::Paren(paren) => paren.leftmost_token(),
+            Type::Tuple(tuple) => tuple.leftmost_token(),
             Type::Path(path) => path.leftmost_token(),
             Type::Literal(literal) => literal.leftmost_token(),
             Type::SignedLiteral(literal) => literal.leftmost_token(),
@@ -137,6 +142,7 @@ impl Printable for Type {
         match self {
             Type::Unreflect(unreflect) => unreflect.rightmost_token(),
             Type::Paren(paren) => paren.rightmost_token(),
+            Type::Tuple(tuple) => tuple.rightmost_token(),
             Type::Path(path) => path.rightmost_token(),
             Type::Literal(literal) => literal.rightmost_token(),
             Type::SignedLiteral(literal) => literal.rightmost_token(),
@@ -274,6 +280,167 @@ impl ParenType {
 }
 
 impl Printable for ParenType {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer
+            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .unwrap_or_else(|| self.print_multi_line(shape, printer))
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_paren.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_paren.span()
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::TUPLE_TYPE`] node: `(A, B)` / `(A,)`.
+///
+/// Printed like function type parameters: single line when it fits,
+/// otherwise one element per line with a trailing comma. A 1-tuple always
+/// keeps its comma — `(A)` is a parenthesized type.
+#[derive(Debug)]
+pub struct TupleType {
+    pub open_paren: t::LParen,
+    pub elements: Vec<(Type, Option<t::Comma>)>,
+    pub close_paren: t::RParen,
+}
+
+impl FromCST for TupleType {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::TUPLE_TYPE)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+        let open_paren = it.expect_parse()?;
+        let mut elements = Vec::new();
+        let close_paren = loop {
+            let Some(elem) = it.next() else {
+                return Err(StrongAstError::missing(SyntaxKind::R_PAREN, it.parent));
+            };
+            if elem.kind() == SyntaxKind::R_PAREN {
+                break t::RParen::from_cst(elem)?;
+            }
+            let ty = Type::from_cst(elem)?;
+            let comma = it
+                .next_if_kind(SyntaxKind::COMMA)
+                .map(t::Comma::from_cst)
+                .transpose()?;
+            elements.push((ty, comma));
+        };
+        it.expect_end()?;
+
+        Ok(TupleType {
+            open_paren,
+            elements,
+            close_paren,
+        })
+    }
+}
+
+impl KnownKind for TupleType {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::TUPLE_TYPE
+    }
+}
+
+impl TupleType {
+    /// Should be passed a sub-printer to avoid printing trivia in the outer printer
+    /// in the event that the printer is unable to fit the tuple type on a single line.
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        printer.print_raw_token(&self.open_paren);
+        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
+        printer.try_print_trivia_single_line_squished(open_trailing)?;
+
+        let single = self.elements.len() == 1;
+        for (i, (ty, comma)) in self.elements.iter().enumerate() {
+            if printer.output.len() > shape.width {
+                return None;
+            }
+            let (ty_leading, ty_trailing) = printer.trivia.get_for_element(ty);
+            printer.try_print_trivia_single_line_squished(ty_leading)?;
+            if printer
+                .print(ty, Shape::unlimited_single_line())
+                .multi_lined
+            {
+                return None;
+            }
+            printer.try_print_trivia_single_line_squished(ty_trailing)?;
+            let is_last = i + 1 >= self.elements.len();
+            if let Some(comma) = comma {
+                let (comma_leading, comma_trailing) =
+                    printer.trivia.get_for_range_split(comma.span());
+                printer.try_print_trivia_single_line_squished(comma_leading)?;
+                // A trailing comma is dropped on a single line, except in a
+                // 1-tuple where it is what makes the tuple.
+                if !is_last || single {
+                    printer.print_raw_token(comma);
+                }
+                printer.try_print_trivia_single_line_squished(comma_trailing)?;
+            } else if !is_last || single {
+                printer.print_str(",");
+            }
+            if !is_last {
+                printer.print_str(" ");
+            }
+        }
+
+        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        printer.try_print_trivia_single_line_squished(close_leading)?;
+        printer.print_raw_token(&self.close_paren);
+
+        if printer.output.len() > shape.width {
+            None
+        } else {
+            Some(PrintInfo::default_single_line())
+        }
+    }
+}
+
+impl PrintMultiLine for TupleType {
+    /// Multi-line layout: each element on its own indented line with a
+    /// trailing comma.
+    ///
+    /// ```baml
+    /// (
+    ///     SomeLongElementType,
+    ///     AnotherElementType,
+    /// )
+    /// ```
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+
+        printer.print_raw_token(&self.open_paren);
+        printer.print_trivia_all_trailing_for(self.open_paren.span());
+        printer.print_newline();
+
+        for (ty, comma) in &self.elements {
+            printer
+                .print_trivia_all_leading_with_newline_for(ty.leftmost_token(), inner_shape.indent);
+            printer.print_spaces(inner_shape.indent);
+            printer.print(ty, inner_shape.clone());
+            if let Some(comma) = comma {
+                printer.print_raw_token(comma);
+                printer.print_trivia_all_trailing_for(comma.span());
+            } else {
+                printer.print_str(",");
+                printer.print_trivia_all_trailing_for(ty.rightmost_token());
+            }
+            printer.print_newline();
+        }
+
+        let (close_paren_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        printer.print_trivia_with_newline(close_paren_leading.trim_blanks(), inner_shape.indent);
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_paren);
+        PrintInfo::default_multi_lined()
+    }
+}
+
+impl Printable for TupleType {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer
             .try_sub_printer(|p| self.try_print_single_line(&shape, p))
@@ -477,6 +644,7 @@ impl Printable for UnionType {
 pub enum UnionTypeMember {
     Unreflect(UnreflectType),
     Paren(ParenType),
+    Tuple(TupleType),
     Path(PathType),
     Literal(Literal),
     SignedLiteral(SignedLiteralType),
@@ -499,6 +667,7 @@ impl UnionTypeMember {
             SyntaxKind::UNREFLECT_TYPE => {
                 UnreflectType::from_cst(first).map(UnionTypeMember::Unreflect)
             }
+            SyntaxKind::TUPLE_TYPE => TupleType::from_cst(first).map(UnionTypeMember::Tuple),
             SyntaxKind::MINUS => {
                 let minus = t::Minus::from_cst(first)?;
                 let literal = it.expect_next("numeric literal after '-'")?;
@@ -655,7 +824,7 @@ impl UnionTypeMember {
                 Ok(UnionTypeMember::Literal(string))
             }
             found => Err(StrongAstError::UnexpectedKindDesc {
-                expected_desc: "L_PAREN, WORD, STRING_LITERAL, INTEGER_LITERAL, BIGINT_LITERAL, or FLOAT_LITERAL"
+                expected_desc: "L_PAREN, TUPLE_TYPE, WORD, STRING_LITERAL, INTEGER_LITERAL, BIGINT_LITERAL, or FLOAT_LITERAL"
                     .into(),
                 found,
                 at: first.text_range(),
@@ -713,6 +882,7 @@ impl From<UnionTypeMember> for Type {
         match member {
             UnionTypeMember::Unreflect(unreflect) => Type::Unreflect(unreflect),
             UnionTypeMember::Paren(paren) => Type::Paren(paren),
+            UnionTypeMember::Tuple(tuple) => Type::Tuple(tuple),
             UnionTypeMember::Path(path) => Type::Path(path),
             UnionTypeMember::Literal(literal) => Type::Literal(literal),
             UnionTypeMember::SignedLiteral(literal) => Type::SignedLiteral(literal),
@@ -733,6 +903,7 @@ impl Printable for UnionTypeMember {
         match self {
             UnionTypeMember::Unreflect(unreflect) => unreflect.print(shape, printer),
             UnionTypeMember::Paren(paren) => paren.print(shape, printer),
+            UnionTypeMember::Tuple(tuple) => tuple.print(shape, printer),
             UnionTypeMember::Path(path) => path.print(shape, printer),
             UnionTypeMember::Literal(literal) => literal.print(shape, printer),
             UnionTypeMember::SignedLiteral(literal) => literal.print(shape, printer),
@@ -751,6 +922,7 @@ impl Printable for UnionTypeMember {
         match self {
             UnionTypeMember::Unreflect(unreflect) => unreflect.leftmost_token(),
             UnionTypeMember::Paren(paren) => paren.leftmost_token(),
+            UnionTypeMember::Tuple(tuple) => tuple.leftmost_token(),
             UnionTypeMember::Path(path) => path.leftmost_token(),
             UnionTypeMember::Literal(lit) => lit.leftmost_token(),
             UnionTypeMember::SignedLiteral(lit) => lit.leftmost_token(),
@@ -766,6 +938,7 @@ impl Printable for UnionTypeMember {
         match self {
             UnionTypeMember::Unreflect(unreflect) => unreflect.rightmost_token(),
             UnionTypeMember::Paren(paren) => paren.rightmost_token(),
+            UnionTypeMember::Tuple(tuple) => tuple.rightmost_token(),
             UnionTypeMember::Path(path) => path.rightmost_token(),
             UnionTypeMember::Literal(lit) => lit.rightmost_token(),
             UnionTypeMember::SignedLiteral(lit) => lit.rightmost_token(),

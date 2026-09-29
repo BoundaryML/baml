@@ -12,7 +12,7 @@ use indexmap::IndexMap;
 use crate::sap_model::{
     self, AnnotatedEnumVariant, AnnotatedField, ArrayTy, BigintLiteralTy, BigintTy, BoolLiteralTy,
     BoolTy, ClassTy, DefaultValue, EnumTy, EnumVariantTy, FloatTy, IntLiteralTy, IntTy, MapTy,
-    MediaTy, NullTy, StringLiteralTy, StringTy, Ty, TyResolved, TypeRefDb, UnionTy,
+    MediaTy, NullTy, StringLiteralTy, StringTy, TupleTy, Ty, TyResolved, TypeRefDb, UnionTy,
 };
 
 impl crate::sap_model::TypeIdent for DefKey {}
@@ -402,6 +402,12 @@ impl TypeCtx {
             SapTy::List(ty) => Ty::Resolved(TyResolved::Array(ArrayTy {
                 ty: Box::new(self.convert_ty(ty)?),
             })),
+            SapTy::Tuple(items) => Ty::Resolved(TyResolved::Tuple(TupleTy {
+                items: items
+                    .iter()
+                    .map(|ty| self.convert_ty(ty))
+                    .collect::<Result<Vec<_>, _>>()?,
+            })),
             SapTy::Map { key, value } => Ty::Resolved(TyResolved::Map(MapTy {
                 key: Box::new(self.convert_ty(key)?),
                 value: Box::new(self.convert_ty(value)?),
@@ -554,6 +560,13 @@ fn is_sap_parseable(ty: &SapTy) -> Result<Vec<DefKey>, ()> {
         SapTy::Class(name, _) | SapTy::Interface(name, _, _) => Ok(vec![name.clone()]),
         SapTy::Enum(..) | SapTy::EnumVariant(..) => Ok(Vec::new()),
         SapTy::List(inner) => is_sap_parseable(inner),
+        SapTy::Tuple(items) => {
+            let mut names = Vec::new();
+            for item in items {
+                names.extend(is_sap_parseable(item)?);
+            }
+            Ok(names)
+        }
         SapTy::Map { key, value, .. } => {
             let keys = is_sap_parseable(key)?;
             let values = is_sap_parseable(value)?;

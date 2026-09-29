@@ -1494,6 +1494,7 @@ fn typed_callable_expr(
 fn needs_inbound_descriptor(ty: &Ty, ctx: &TranslateCtx<'_>) -> bool {
     match ty {
         Ty::List(..) | Ty::Map { .. } | Ty::Union(..) | Ty::Literal(..) => true,
+        Ty::Tuple(..) => crate::translate_ty::unsupported_tuple(ty, None),
         Ty::Class(_, args) => !args.is_empty(),
         Ty::TypeAlias(name) => ctx.aliases.get(name).is_none_or(|(resolved, recursive)| {
             *recursive || needs_inbound_descriptor(resolved, ctx)

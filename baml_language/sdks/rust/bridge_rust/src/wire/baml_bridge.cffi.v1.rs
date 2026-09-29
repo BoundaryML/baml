@@ -123,7 +123,7 @@ impl BamlHandleType {
 /// the type of a function's arg (which, for a generic function, is a TypeVar).
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BamlTy {
-    #[prost(oneof = "baml_ty::Ty", tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 23, 24")]
+    #[prost(oneof = "baml_ty::Ty", tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 23, 24, 25")]
     pub ty: ::core::option::Option<baml_ty::Ty>,
 }
 /// Nested message and enum types in `BamlTy`.
@@ -181,6 +181,8 @@ pub mod baml_ty {
         AssociatedTypeProjection(::prost::alloc::boxed::Box<super::BamlTyAssociatedTypeProjection>),
         #[prost(message, tag = "24")]
         Never(super::BamlTyNever),
+        #[prost(message, tag = "25")]
+        Tuple(super::BamlTyTuple),
     }
 }
 /// A host-portable reflected type. `root` is the structural/name-reference
@@ -319,6 +321,12 @@ pub struct BamlTyOptional {
 pub struct BamlTyUnion {
     #[prost(message, repeated, tag = "1")]
     pub options: ::prost::alloc::vec::Vec<BamlTy>,
+}
+/// A fixed-arity tuple `(A, B)`: one type per position, at least one.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BamlTyTuple {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<BamlTy>,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct BamlTyUnknown {
@@ -645,7 +653,7 @@ pub struct BamlOutboundValue {
     /// Required for BAML -> CFFI
     /// But not for CFFI -> BAML (BAML always does type validation again at
     /// boundaries)
-    #[prost(oneof = "baml_outbound_value::Value", tags = "2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22")]
+    #[prost(oneof = "baml_outbound_value::Value", tags = "2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23")]
     pub value: ::core::option::Option<baml_outbound_value::Value>,
 }
 /// Nested message and enum types in `BamlOutboundValue`.
@@ -698,6 +706,10 @@ pub mod baml_outbound_value {
         /// Definition-carrying type handle. Identity is intentionally not encoded.
         #[prost(message, tag = "22")]
         TyDefValue(super::BamlTyDef),
+        /// A tuple value. Positions carry their own union envelopes where their
+        /// declared slot is a union, so no per-position type rides alongside.
+        #[prost(message, tag = "23")]
+        TupleValue(super::BamlValueTuple),
     }
 }
 /// Outbound handle envelope. Mirrors `BamlHandle` (inbound) but carries an
@@ -723,6 +735,13 @@ pub struct BamlValueList {
     #[prost(message, optional, tag = "1")]
     pub item_type: ::core::option::Option<BamlTy>,
     #[prost(message, repeated, tag = "2")]
+    pub items: ::prost::alloc::vec::Vec<BamlOutboundValue>,
+}
+/// A tuple value: exactly as many items as the tuple's arity (at least one).
+/// Hosts send tuples inbound as a list; the declared type makes it a tuple.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BamlValueTuple {
+    #[prost(message, repeated, tag = "1")]
     pub items: ::prost::alloc::vec::Vec<BamlOutboundValue>,
 }
 /// A helper message to represent map entries (used also in Class).

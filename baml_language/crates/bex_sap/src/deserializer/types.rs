@@ -60,6 +60,12 @@ impl<N: TypeIdent> std::fmt::Debug for BamlValueWithFlags<'_, '_, '_, N> {
                 .field("flags", &self.meta.flags)
                 .field("items", &arr.value)
                 .finish(),
+            BamlValue::Tuple(tuple) => f
+                .debug_struct("Tuple")
+                .field("type", &self.meta.ty.type_name().as_ref())
+                .field("flags", &self.meta.flags)
+                .field("items", &tuple.value)
+                .finish(),
             BamlValue::Map(map) => f
                 .debug_struct("Map")
                 .field("type", &self.meta.ty.type_name().as_ref())
@@ -98,7 +104,11 @@ impl<'s, 'v, 't, N: TypeIdent> BamlValueWithFlags<'s, 'v, 't, N> {
     pub fn is_composite(&self) -> bool {
         matches!(
             &self.value,
-            BamlValue::Array(_) | BamlValue::Map(_) | BamlValue::Class(_) | BamlValue::Media(_)
+            BamlValue::Array(_)
+                | BamlValue::Tuple(_)
+                | BamlValue::Map(_)
+                | BamlValue::Class(_)
+                | BamlValue::Media(_)
         )
     }
 
@@ -107,6 +117,13 @@ impl<'s, 'v, 't, N: TypeIdent> BamlValueWithFlags<'s, 'v, 't, N> {
         match &self.value {
             BamlValue::Array(arr) => {
                 base + arr
+                    .value
+                    .iter()
+                    .map(crate::baml_value::ValueWithMeta::score)
+                    .sum::<i32>()
+            }
+            BamlValue::Tuple(tuple) => {
+                base + tuple
                     .value
                     .iter()
                     .map(crate::baml_value::ValueWithMeta::score)
@@ -187,6 +204,16 @@ impl<N: TypeIdent> BamlValueWithFlags<'_, '_, '_, N> {
                     .join(" | ");
                 Cow::Owned(format!("List[{}:{inner}]", arr.value.len()))
             }
+            BamlValue::Tuple(tuple) => {
+                #[allow(clippy::redundant_closure_for_method_calls)]
+                let inner = tuple
+                    .value
+                    .iter()
+                    .map(|i| i.r#type())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Cow::Owned(format!("Tuple({inner})"))
+            }
             BamlValue::Map(..) => Cow::Borrowed("Map"),
             BamlValue::Enum(e) => Cow::Owned(format!("Enum {}", e.name)),
             BamlValue::Class(c) => Cow::Owned(format!("Class {}", c.name)),
@@ -219,6 +246,12 @@ impl<N: TypeIdent> std::fmt::Display for BamlValueWithFlags<'_, '_, '_, N> {
             BamlValue::Array(arr) => {
                 writeln!(f)?;
                 for (idx, item) in arr.value.iter().enumerate() {
+                    writeln!(f, "  {idx}: {}", item.to_string().replace('\n', "  \n"))?;
+                }
+            }
+            BamlValue::Tuple(tuple) => {
+                writeln!(f)?;
+                for (idx, item) in tuple.value.iter().enumerate() {
                     writeln!(f, "  {idx}: {}", item.to_string().replace('\n', "  \n"))?;
                 }
             }

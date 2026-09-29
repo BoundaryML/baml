@@ -204,7 +204,7 @@ pub fn walk_rvalue_type_slots(rvalue: &Rvalue<'_>, f: &mut impl FnMut(u32)) {
                     template.for_each_type_arg_ref(f);
                 }
             }
-            AggregateKind::Array | AggregateKind::EnumVariant { .. } => {}
+            AggregateKind::Array | AggregateKind::EnumVariant { .. } | AggregateKind::Tuple => {}
         },
         Rvalue::IsType { ty_template, .. } => ty_template.for_each_type_arg_ref(f),
         Rvalue::MakeClosure {

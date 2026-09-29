@@ -574,6 +574,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         .class_fields_for(head.tag())?
                         .get(*field)
                         .map(|(_, field_type)| field_type.clone()),
+                    bex_vm_types::RuntimeTy::Tuple(elements) => elements.get(*field).cloned(),
                     _ => None,
                 }
             }
@@ -3369,6 +3370,11 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
         Ok(())
     }
 
+    fn alloc_tuple(&mut self, len: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::AllocTuple(len));
+        Ok(())
+    }
+
     fn alloc_uint8array(&mut self, bytes: &[u8]) -> Result<(), Self::Error> {
         use std::fmt::Write;
         // Store the byte data as a compile-time constant template, then deep-copy
@@ -3595,7 +3601,10 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
             | TyTemplate::TypeArgRef(_)
             | TyTemplate::Interface(..)
             | TyTemplate::AssociatedTypeProjection { .. }
-            | TyTemplate::Union(..) => emit_structural(self, ty_template),
+            | TyTemplate::Union(..)
+            // A tuple's type is derived from its elements, so the element-
+            // precise value matcher is the only test (no coarse tag).
+            | TyTemplate::Tuple(..) => emit_structural(self, ty_template),
 
             // ── Function signatures ──────────────────────────────────────────
             // Signature-precise, via the same value matcher every other
@@ -3844,6 +3853,10 @@ fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
         // reaches here; returning `None` keeps that the only answer rather than
         // leaving a wrong one for the next caller to find.
         RealizedTy::Literal(..) => None,
+        // Deliberately untagged: every tuple shares one `TUPLE` tag, which
+        // would conflate `(int, int)` with `(string, string)`. Tuple tests go
+        // through the structural value matcher.
+        RealizedTy::Tuple(..) => None,
         RealizedTy::Media(..)
         | RealizedTy::Class(..)
         | RealizedTy::Interface(..)

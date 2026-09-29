@@ -125,6 +125,10 @@ impl BamlClassType for PackageReflectImpl {
         as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Function)
     }
 
+    fn as_tuple(vm: &mut BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Tuple)
+    }
+
     fn _validate_renderable(vm: &mut BexVm, self_value: &Value) -> Result<(), VmRustFnError> {
         let type_value = cloned_type_value(vm, *self_value);
         let root = match &type_value.ty {
@@ -932,6 +936,9 @@ fn is_non_data_render_type(ty: &bex_vm_types::RealizedTy) -> bool {
         | bex_vm_types::RealizedTy::Enum(..)
         | bex_vm_types::RealizedTy::List(..)
         | bex_vm_types::RealizedTy::Map { .. }
+        // A tuple renders as a fixed-length array; its elements are checked
+        // by `first_non_data_type`.
+        | bex_vm_types::RealizedTy::Tuple(..)
         | bex_vm_types::RealizedTy::Union(..)
         | bex_vm_types::RealizedTy::TypeAlias(..) => false,
     }
@@ -981,9 +988,11 @@ fn first_non_data_type(
             first_non_data_type(vm, key, path, visited)
                 .or_else(|| first_non_data_type(vm, value, path, visited))
         }
-        bex_vm_types::RealizedTy::Union(members) => members
-            .iter()
-            .find_map(|member| first_non_data_type(vm, member, path, visited)),
+        bex_vm_types::RealizedTy::Union(members) | bex_vm_types::RealizedTy::Tuple(members) => {
+            members
+                .iter()
+                .find_map(|member| first_non_data_type(vm, member, path, visited))
+        }
         bex_vm_types::RealizedTy::TypeAlias(head) => {
             if !visited.insert(head.ptr()) {
                 return None;

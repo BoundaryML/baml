@@ -166,6 +166,7 @@ fn collect_to_json_overrides(
     // Snapshot children (owned), dropping the heap borrow before recursing.
     let children: Vec<Value> = match vm.get_object(ptr) {
         Object::Array(values) => values.to_vec(),
+        Object::Tuple(elements) => elements.to_vec(),
         Object::Map(map) => map.to_index_map().values().copied().collect(),
         Object::Instance(inst) => {
             // Media instances render as a leaf (their tagged form); their single
@@ -275,6 +276,8 @@ fn render_to_serde(
         Object::String(s) => Snap::Leaf(serde_json::Value::String(s.to_string())),
         Object::Bigint(b) => Snap::Leaf(bigint_to_serde(b)),
         Object::Array(values) => Snap::Seq(values.to_vec()),
+        // A tuple is a JSON array, in element order.
+        Object::Tuple(elements) => Snap::Seq(elements.to_vec()),
         Object::Map(map) => Snap::Entries(
             map.to_index_map()
                 .into_iter()
@@ -692,6 +695,9 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
                 let arr = arr.to_vec();
                 serde_json::Value::Array(arr.iter().map(|el| value_to_serde(vm, *el)).collect())
             }
+            Object::Tuple(elements) => serde_json::Value::Array(
+                elements.iter().map(|el| value_to_serde(vm, *el)).collect(),
+            ),
             Object::Map(map) => {
                 let map = map.to_index_map();
                 let entries: serde_json::Map<String, serde_json::Value> = map
@@ -801,6 +807,24 @@ fn ty_value_to_serde(
             for (i, item) in items.into_iter().enumerate() {
                 let elem_json = with_path_segment(path, format_args!("[{i}]"), |p| {
                     ty_value_to_serde(vm, item, elem, p)
+                })?;
+                out.push(elem_json);
+            }
+            Ok(serde_json::Value::Array(out))
+        }
+
+        RealizedTy::Tuple(slots) => {
+            let items: Vec<Value> = match value.as_object_ptr() {
+                Some(ptr) => match vm.get_object(ptr) {
+                    Object::Tuple(elements) if elements.len() == slots.len() => elements.to_vec(),
+                    _ => return Err(raise_serialize(vm, "expected tuple", path, "tuple")),
+                },
+                None => return Err(raise_serialize(vm, "expected tuple", path, "tuple")),
+            };
+            let mut out = Vec::with_capacity(items.len());
+            for (i, (item, slot)) in items.into_iter().zip(slots.iter()).enumerate() {
+                let elem_json = with_path_segment(path, format_args!("[{i}]"), |p| {
+                    ty_value_to_serde(vm, item, slot, p)
                 })?;
                 out.push(elem_json);
             }
@@ -1293,6 +1317,30 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "expected array", path)),
         },
 
+        // A tuple decodes from a JSON array of exactly its arity.
+        RealizedTy::Tuple(slots) => match json {
+            serde_json::Value::Array(arr) if arr.len() == slots.len() => {
+                let mut items = Vec::with_capacity(arr.len());
+                for (i, (item, slot)) in arr.iter().zip(slots.iter()).enumerate() {
+                    let v = with_path_segment(path, format_args!("[{i}]"), |p| {
+                        ty_serde_to_value(vm, item, slot, p)
+                    })?;
+                    items.push(v);
+                }
+                Ok(Value::object(vm.tlab.alloc_tuple(items)))
+            }
+            serde_json::Value::Array(arr) => Err(raise_decode(
+                vm,
+                format!(
+                    "expected an array of {} elements, got {}",
+                    slots.len(),
+                    arr.len()
+                ),
+                path,
+            )),
+            _ => Err(raise_decode(vm, "expected array", path)),
+        },
+
         RealizedTy::Map { value: vty, .. } => match json {
             serde_json::Value::Object(map) => {
                 let mut entries: IndexMap<bex_vm_types::BexStr, Value> =
@@ -1664,6 +1712,7 @@ fn json_to_dispatch(vm: &mut BexVm, j: Value, ty: &RealizedTy) -> NativeCallResu
             }
         }
         RealizedTy::List(elem) => list_from_json_start(vm, j, elem),
+        RealizedTy::Tuple(slots) => tuple_from_json_start(vm, j, slots),
         RealizedTy::Map { value: vty, .. } => map_from_json_start(vm, j, vty),
         RealizedTy::Class(head, type_args) | RealizedTy::Interface(head, type_args, _)
             if media_kind_from_head(*head).is_none() =>
@@ -1976,6 +2025,112 @@ fn list_drive(
     NativeCallResult::Done(arr_val)
 }
 
+/// Decode a JSON array of exactly `slots.len()` elements into a tuple, each
+/// element at its own slot type. Elements that may carry a `baml.FromJson`
+/// override go through the `baml.json.to` driver, like list elements.
+fn tuple_from_json_start(vm: &mut BexVm, j: Value, slots: &[RealizedTy]) -> NativeCallResult {
+    let array = match j.as_object_ptr() {
+        Some(p) => match vm.get_object(p) {
+            Object::Array(a) => a.to_vec(),
+            _ => {
+                return NativeCallResult::Error(raise_decode(vm, "expected JSON array", ""));
+            }
+        },
+        None => {
+            return NativeCallResult::Error(raise_decode(vm, "expected JSON array", ""));
+        }
+    };
+    if array.len() != slots.len() {
+        return NativeCallResult::Error(raise_decode(
+            vm,
+            format!(
+                "expected an array of {} elements, got {}",
+                slots.len(),
+                array.len()
+            ),
+            "",
+        ));
+    }
+    tuple_drive(vm, array, slots.to_vec(), Vec::new(), 0)
+}
+
+fn tuple_drive(
+    vm: &mut BexVm,
+    array: Vec<Value>,
+    slots: Vec<RealizedTy>,
+    mut results: Vec<Value>,
+    mut idx: usize,
+) -> NativeCallResult {
+    while idx < array.len() {
+        let curr = array[idx];
+        let slot = &slots[idx];
+        if let Some(v) = optional_null_short_circuit(curr, slot) {
+            results.push(v);
+            idx += 1;
+            continue;
+        }
+        if needs_driver_decode(slot) {
+            let to_fn = match vm.find_function_by_name("baml.json.to") {
+                Some(f) => f,
+                None => return missing_to_driver(),
+            };
+            let type_args = vec![slot.clone()];
+            return NativeCallResult::YieldToCall {
+                callee: to_fn,
+                args: vec![curr],
+                type_args,
+                continuation: Box::new(TupleFromJsonCont {
+                    array,
+                    slots,
+                    results,
+                    idx,
+                }),
+            };
+        }
+        match decode_value_sync(vm, curr, slot) {
+            Ok(v) => {
+                results.push(v);
+                idx += 1;
+            }
+            Err(e) => return NativeCallResult::Error(e),
+        }
+    }
+    NativeCallResult::Done(Value::object(vm.tlab.alloc_tuple(results)))
+}
+
+struct TupleFromJsonCont {
+    array: Vec<Value>,
+    slots: Vec<RealizedTy>,
+    results: Vec<Value>,
+    idx: usize,
+}
+
+impl Continuation for TupleFromJsonCont {
+    fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        self.results.push(value);
+        let next_idx = self.idx + 1;
+        tuple_drive(vm, self.array, self.slots, self.results, next_idx)
+    }
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        let mut roots = Vec::new();
+        for v in self.array.iter().chain(self.results.iter()) {
+            if let Some(p) = v.as_object_ptr() {
+                roots.push(p);
+            }
+        }
+        roots
+    }
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        for v in self.array.iter_mut().chain(self.results.iter_mut()) {
+            if let Some(p) = v.as_object_ptr() {
+                if let Some(&new) = forwarding.get(&p) {
+                    *v = Value::object(new);
+                }
+            }
+        }
+    }
+}
+
 /// Whether decoding `ty` may need to dispatch a `baml.FromJson` override, so the
 /// caller must yield to the `baml.json.to` driver rather than decode in place.
 /// True for class/interface/list/map (after peeling an optional wrapper); false
@@ -1987,6 +2142,7 @@ fn needs_driver_decode(ty: &RealizedTy) -> bool {
         RealizedTy::Class(..)
             | RealizedTy::Interface(..)
             | RealizedTy::List(..)
+            | RealizedTy::Tuple(..)
             | RealizedTy::Map { .. }
     )
 }

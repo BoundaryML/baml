@@ -80,6 +80,10 @@ pub enum TypeRefKind {
     Union {
         variants: Box<[TypeRefId]>,
     },
+    /// `(A, B)`, `(A,)`
+    Tuple {
+        elements: Box<[TypeRefId]>,
+    },
     /// Literal types in unions: `"user"`, `200`, `3.14`, `true`.
     Literal {
         value: Literal,
@@ -270,6 +274,19 @@ impl std::fmt::Display for TypeRefDisplay<'_> {
                 }
                 Ok(())
             }
+            TypeRefKind::Tuple { elements } => {
+                write!(f, "(")?;
+                for (i, &e) in elements.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", store.display(e))?;
+                }
+                if elements.len() == 1 {
+                    write!(f, ",")?;
+                }
+                write!(f, ")")
+            }
             TypeRefKind::Literal { value } => write!(f, "{value}"),
             TypeRefKind::Function {
                 params,
@@ -424,6 +441,9 @@ impl TypeRefBuilder {
             },
             TypeExprKind::Union { variants, .. } => TypeRefKind::Union {
                 variants: variants.iter().map(|v| self.lower(v)).collect(),
+            },
+            TypeExprKind::Tuple { elements } => TypeRefKind::Tuple {
+                elements: elements.iter().map(|e| self.lower(e)).collect(),
             },
             TypeExprKind::Literal { value, .. } => TypeRefKind::Literal {
                 value: value.clone(),

@@ -58,6 +58,9 @@ pub enum Ctor {
     /// Interface destructure. Sub-patterns' types come from the interface's
     /// field view, with generic substitution applied.
     Interface(Ty),
+    /// Tuple destructure of the given arity: the only constructor of a tuple
+    /// column. Sub-patterns' types are the column tuple's element types.
+    Tuple(usize),
 
     /// "Which member of a union" tag, with arity 1. Sub-pattern's type is
     /// the member type carried by the ctor. Specialising on `UnionMember(M)`
@@ -107,11 +110,13 @@ fn class_args_identity_eq(a: &[Ty], b: &[Ty]) -> bool {
 impl PartialEq for Ctor {
     fn eq(&self, other: &Self) -> bool {
         use Ctor::{
-            Class, Interface, Missing, NonExhaustive, Or, Single, Slice, UnionMember, Wildcard,
+            Class, Interface, Missing, NonExhaustive, Or, Single, Slice, Tuple, UnionMember,
+            Wildcard,
         };
         match (self, other) {
             (Single(a), Single(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (Slice(a), Slice(b)) => a == b,
+            (Tuple(a), Tuple(b)) => a == b,
             (Class(a, aa), Class(b, ba)) => a == b && class_args_identity_eq(aa, ba),
             (Interface(a), Interface(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (UnionMember(a), UnionMember(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
@@ -128,12 +133,14 @@ impl Eq for Ctor {}
 impl std::hash::Hash for Ctor {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         use Ctor::{
-            Class, Interface, Missing, NonExhaustive, Or, Single, Slice, UnionMember, Wildcard,
+            Class, Interface, Missing, NonExhaustive, Or, Single, Slice, Tuple, UnionMember,
+            Wildcard,
         };
         std::mem::discriminant(self).hash(state);
         match self {
             Single(ty) => ty_ctor_identity(ty).hash(state),
             Slice(s) => s.hash(state),
+            Tuple(n) => n.hash(state),
             Class(qtn, args) => {
                 qtn.hash(state);
                 for arg in args {
@@ -176,6 +183,7 @@ impl Ctor {
             Ctor::Single(_) | Ctor::Wildcard | Ctor::NonExhaustive | Ctor::Missing | Ctor::Or => 0,
             Ctor::UnionMember(_) => 1,
             Ctor::Slice(shape) => shape.arity(),
+            Ctor::Tuple(arity) => *arity,
             Ctor::Class(qtn, args) => cx
                 .class_field_types(qtn, &class_ty_for_ctor(qtn, args, ty))
                 .len(),
@@ -190,12 +198,14 @@ impl Ctor {
     /// before any normal cover check runs.
     pub fn covers(&self, other: &Ctor) -> bool {
         use Ctor::{
-            Class, Interface, Missing, NonExhaustive, Or, Single, Slice, UnionMember, Wildcard,
+            Class, Interface, Missing, NonExhaustive, Or, Single, Slice, Tuple, UnionMember,
+            Wildcard,
         };
         match (self, other) {
             (Wildcard, _) => true,
             (_, Wildcard) => false,
             (Single(a), Single(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
+            (Tuple(a), Tuple(b)) => a == b,
             // Arg-sensitive, but only where decidable: a ctor pair is
             // non-covering only when the args *provably* differ. An arity
             // mismatch (a bare `Box` pattern missing its required type args)
@@ -372,6 +382,16 @@ fn write_ty_identity<N: baml_type::Head + CtorHead>(out: &mut String, ty: &Ty<N>
         Ty::Media(kind) => {
             let _ = write!(out, "P:{kind:?}");
         }
+        Ty::Tuple(elements) => {
+            out.push_str("T:(");
+            for (i, e) in elements.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                write_ty_identity(out, e);
+            }
+            out.push(')');
+        }
         Ty::Union(members) => {
             out.push_str("U:[");
             for (i, m) in members.iter().enumerate() {
@@ -520,6 +540,14 @@ impl DPat {
             ty,
         }
     }
+    pub fn tuple(fields: Vec<DPat>, ty: Ty) -> Self {
+        Self {
+            ctor: Ctor::Tuple(fields.len()),
+            arity: fields.len(),
+            fields,
+            ty,
+        }
+    }
     pub fn slice(shape: SliceShape, fields: Vec<DPat>, ty: Ty) -> Self {
         debug_assert_eq!(shape.arity(), fields.len());
         Self {
@@ -640,6 +668,14 @@ pub fn render_witness_pat(
             }
             None => w.render(vp),
         },
+        Ctor::Tuple(_) => {
+            let fields: Vec<String> = w
+                .fields
+                .iter()
+                .map(|fld| render_witness_pat(db, vp, fld))
+                .collect();
+            baml_type::render_tuple(&fields)
+        }
         _ => w.render(vp),
     }
 }
@@ -725,6 +761,11 @@ impl WitnessPat {
                         write!(f, "{}", fld.render(vp))?;
                     }
                     write!(f, " }}")
+                }
+                Ctor::Tuple(_) => {
+                    let fields: Vec<String> =
+                        self.fields.iter().map(|fld| fld.render(vp)).collect();
+                    write!(f, "{}", baml_type::render_tuple(&fields))
                 }
                 Ctor::Slice(shape) => {
                     write!(f, "[")?;
@@ -908,6 +949,8 @@ fn is_inhabited_default<C: PatCtx + ?Sized>(
             r
         }
         Ty::Union(members) => members.iter().any(|m| is_inhabited_default(m, cx, seen)),
+        // Every element is present in every tuple value.
+        Ty::Tuple(elements) => elements.iter().all(|e| is_inhabited_default(e, cx, seen)),
         // `T[]` always inhabits `[]`, so it is inhabited regardless of T.
         Ty::List(_) => true,
         _ => true,
@@ -1665,6 +1708,12 @@ fn ctor_sub_tys(cx: &dyn PatCtx, ctor: &Ctor, col_ty: &Ty) -> Vec<Ty> {
         Ctor::Class(qtn, args) => cx.class_field_types(qtn, &class_ty_for_ctor(qtn, args, col_ty)),
         Ctor::Interface(iface_ty) => cx.interface_field_types(iface_ty),
         Ctor::Slice(shape) => cx.slice_field_types(shape, col_ty),
+        Ctor::Tuple(arity) => match col_ty {
+            Ty::Tuple(elements) if elements.len() == *arity => elements.to_vec(),
+            // A column that is not this tuple (an error-recovery sentinel)
+            // suppresses verdicts below it, like `dpat_ty`'s open columns.
+            _ => vec![Ty::Error; *arity],
+        },
         // UnionMember projects a column from the union type down to the
         // member type. Specialise recurses with that single sub-column.
         Ctor::UnionMember(member_ty) => vec![member_ty.clone()],

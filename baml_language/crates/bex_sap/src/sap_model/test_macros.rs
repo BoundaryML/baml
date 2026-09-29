@@ -7,7 +7,8 @@
 //!
 //! Streaming attributes go where BAML puts them: `@@stream.done` first inside a class body,
 //! `@stream.done` / `@stream.must_exist` / `@alias("..")` after a field's type. Unions must
-//! be wrapped in `()`.
+//! be wrapped in `()`. The tuple type `(A, B)` is written `tuple(A, B)`, wrapped in `()` when
+//! it is a union member, class field type, or tuple element.
 
 #[macro_export]
 macro_rules! baml_ty {
@@ -87,6 +88,13 @@ macro_rules! baml_tyresolved {
     ([$($inner:tt)+]) => {
         $crate::sap_model::TyResolved::Array($crate::sap_model::ArrayTy {
             ty: Box::new($crate::baml_ty!($($inner)+)),
+        })
+    };
+    // `tuple(A, B)` for the tuple type `(A, B)`; each element is one token tree, so wrap
+    // unions and nested tuples in `()`.
+    (tuple($($elem:tt),+ $(,)?)) => {
+        $crate::sap_model::TyResolved::Tuple($crate::sap_model::TupleTy {
+            items: vec![$($crate::baml_ty!($elem)),+],
         })
     };
     (StreamState<$inner:tt>) => {

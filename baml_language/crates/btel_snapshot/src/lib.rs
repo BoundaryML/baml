@@ -150,6 +150,11 @@ pub enum SnapshotObject {
         items: Range<SnapshotValue>,
         original_len: usize,
     },
+    /// A tuple: no element type (a tuple's type is its elements' types).
+    Tuple {
+        items: Range<SnapshotValue>,
+        original_len: usize,
+    },
     Map {
         key_type: TypeId,
         value_type: TypeId,

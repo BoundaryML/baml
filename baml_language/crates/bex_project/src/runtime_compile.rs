@@ -140,7 +140,7 @@ impl StubViewpoint<'_> {
             }
             Ty::List(inner) => self.hides_type(inner),
             Ty::Map { key, value, .. } => self.hides_type(key) || self.hides_type(value),
-            Ty::Union(members) => members.iter().any(|ty| self.hides_type(ty)),
+            Ty::Union(members) | Ty::Tuple(members) => members.iter().any(|ty| self.hides_type(ty)),
             Ty::Function {
                 params,
                 ret,

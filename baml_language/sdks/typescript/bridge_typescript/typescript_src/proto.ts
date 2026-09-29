@@ -547,6 +547,11 @@ function decodeValueHolder(
                 return Number(lit.floatValue);
         }
     }
+    if (holder.tupleValue) {
+        // A BAML tuple decodes to a plain array, matching the generated
+        // `readonly [A, B]` types.
+        return (holder.tupleValue.items || []).map(item => decodeValueHolder(item, typeMap));
+    }
     if (holder.listValue) {
         return (holder.listValue.items || []).map(item => decodeValueHolder(item, typeMap));
     }

@@ -40,6 +40,10 @@ pub enum Expression {
     EnvAccess(EnvAccessExpr),
     Block(BlockExpr),
     ArrayInitializer(ArrayInitializer),
+    /// A tuple literal `(a, b)` / `(a,)` — a [`SyntaxKind::TUPLE_EXPR`] node.
+    /// Distinct from [`Expression::Paren`] so paren peeling never turns `(a,)`
+    /// into `a`.
+    Tuple(TupleExpr),
     MapInitializer(MapLiteral),
     ObjectInitializer(ObjectInitializer),
     RawString(t::RawString),
@@ -207,6 +211,7 @@ impl FromCST for Expression {
             SyntaxKind::ARRAY_LITERAL => {
                 ArrayInitializer::from_cst(elem).map(Expression::ArrayInitializer)?
             }
+            SyntaxKind::TUPLE_EXPR => TupleExpr::from_cst(elem).map(Expression::Tuple)?,
             SyntaxKind::MAP_LITERAL => {
                 MapLiteral::from_cst(elem).map(Expression::MapInitializer)?
             }
@@ -258,6 +263,7 @@ impl Expression {
             Expression::EnvAccess(env) => env.single_line_width(input),
             Expression::Block(_) => None,
             Expression::ArrayInitializer(array) => array.single_line_width(input),
+            Expression::Tuple(tuple) => tuple.single_line_width(input),
             Expression::MapInitializer(map) => map.single_line_width(input),
             Expression::ObjectInitializer(obj) => obj.single_line_width(input),
             Expression::RawString(raw) => {
@@ -323,6 +329,7 @@ impl Printable for Expression {
             Expression::EnvAccess(env) => env.print(shape, printer),
             Expression::Block(block) => block.print(shape, printer),
             Expression::ArrayInitializer(array) => array.print(shape, printer),
+            Expression::Tuple(tuple) => tuple.print(shape, printer),
             Expression::MapInitializer(map) => map.print(shape, printer),
             Expression::ObjectInitializer(obj) => obj.print(shape, printer),
             Expression::RawString(raw) => raw.print(shape, printer),
@@ -375,6 +382,7 @@ impl Printable for Expression {
             Expression::EnvAccess(env) => env.leftmost_token(),
             Expression::Block(block) => block.leftmost_token(),
             Expression::ArrayInitializer(array) => array.leftmost_token(),
+            Expression::Tuple(tuple) => tuple.leftmost_token(),
             Expression::MapInitializer(map) => map.leftmost_token(),
             Expression::ObjectInitializer(obj) => obj.leftmost_token(),
             Expression::RawString(raw) => raw.leftmost_token(),
@@ -410,6 +418,7 @@ impl Printable for Expression {
             Expression::EnvAccess(env) => env.rightmost_token(),
             Expression::Block(block) => block.rightmost_token(),
             Expression::ArrayInitializer(array) => array.rightmost_token(),
+            Expression::Tuple(tuple) => tuple.rightmost_token(),
             Expression::MapInitializer(map) => map.rightmost_token(),
             Expression::ObjectInitializer(obj) => obj.rightmost_token(),
             Expression::RawString(raw) => raw.rightmost_token(),
@@ -922,6 +931,7 @@ impl Expression {
             Expression::Path(_)
             | Expression::EnvAccess(_)
             | Expression::ArrayInitializer(_)
+            | Expression::Tuple(_)
             | Expression::RawString(_)
             | Expression::BacktickString(_)
             | Expression::ByteString(_) => true,
@@ -1823,9 +1833,11 @@ impl<A: Printable> Printable for ArmListItem<A> {
 #[derive(Debug)]
 pub struct MatchExpr {
     pub keyword: t::Match,
-    pub open_paren: t::LParen,
+    /// The `( … )` around the scrutinee. `None` when the scrutinee is a tuple
+    /// (`match (a, b) { … }`): the parser folds those parens into the
+    /// [`SyntaxKind::TUPLE_EXPR`] node, so the tuple prints its own.
+    pub parens: Option<(t::LParen, t::RParen)>,
     pub scrutinee: Box<Expression>,
-    pub close_paren: t::RParen,
     pub open_brace: t::LBrace,
     pub arms: Vec<ArmListItem<MatchArm>>,
     pub close_brace: t::RBrace,
@@ -1841,15 +1853,17 @@ impl FromCST for MatchExpr {
         // KW_MATCH
         let keyword = it.expect_parse()?;
 
-        // L_PAREN
-        let open_paren = it.expect_parse()?;
-
-        // Scrutinee expression (can be any node that represents an expression)
-        let scrutinee_node = it.expect_next("scrutinee expression")?;
-        let scrutinee = Box::new(Expression::from_cst(scrutinee_node)?);
-
-        // R_PAREN
-        let close_paren = it.expect_parse()?;
+        // `L_PAREN <expr> R_PAREN`, or a bare TUPLE_EXPR that owns the parens.
+        let (parens, scrutinee) = if let Some(tuple) = it.next_if_kind(SyntaxKind::TUPLE_EXPR) {
+            (None, Box::new(Expression::from_cst(tuple)?))
+        } else {
+            let open_paren: t::LParen = it.expect_parse()?;
+            // Scrutinee expression (can be any node that represents an expression)
+            let scrutinee_node = it.expect_next("scrutinee expression")?;
+            let scrutinee = Box::new(Expression::from_cst(scrutinee_node)?);
+            let close_paren: t::RParen = it.expect_parse()?;
+            (Some((open_paren, close_paren)), scrutinee)
+        };
 
         // L_BRACE
         let open_brace = it.expect_parse()?;
@@ -1885,9 +1899,8 @@ impl FromCST for MatchExpr {
 
         Ok(MatchExpr {
             keyword,
-            open_paren,
+            parens,
             scrutinee,
-            close_paren,
             open_brace,
             arms,
             close_brace,
@@ -1902,13 +1915,35 @@ impl KnownKind for MatchExpr {
 }
 
 impl MatchExpr {
+    /// Single-line width of `(scrutinee)` including the parens (a tuple
+    /// scrutinee brings its own).
+    fn scrutinee_single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let paren_width = if self.parens.is_some() {
+            const { "()".len() }
+        } else {
+            0
+        };
+        Some(paren_width + self.scrutinee.single_line_width(input)?)
+    }
+
     fn try_print_scrutinee_single_line(
         &self,
         shape: &Shape,
         printer: &mut Printer,
     ) -> Option<PrintInfo> {
-        printer.print_raw_token(&self.open_paren);
-        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
+        let Some((open_paren, close_paren)) = &self.parens else {
+            // A tuple scrutinee: its own parens and trivia handling apply.
+            if printer
+                .print(&*self.scrutinee, Shape::unlimited_single_line())
+                .multi_lined
+                || printer.output.len() > shape.width
+            {
+                return None;
+            }
+            return Some(PrintInfo::default_single_line());
+        };
+        printer.print_raw_token(open_paren);
+        let (_, open_trailing) = printer.trivia.get_for_range_split(open_paren.span());
         printer.try_print_trivia_single_line_squished(open_trailing)?;
 
         let (scrutinee_leading, scrutinee_trailing) =
@@ -1922,9 +1957,9 @@ impl MatchExpr {
         }
         printer.try_print_trivia_single_line_squished(scrutinee_trailing)?;
 
-        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        let (close_leading, _) = printer.trivia.get_for_range_split(close_paren.span());
         printer.try_print_trivia_single_line_squished(close_leading)?;
-        printer.print_raw_token(&self.close_paren);
+        printer.print_raw_token(close_paren);
 
         if printer.output.len() > shape.width {
             None
@@ -1934,17 +1969,21 @@ impl MatchExpr {
     }
 
     fn print_scrutinee_multi_line(&self, shape: &Shape, printer: &mut Printer) {
+        let Some((open_paren, close_paren)) = &self.parens else {
+            // A tuple scrutinee breaks one element per line on its own.
+            printer.print(&*self.scrutinee, shape.clone());
+            return;
+        };
         let paren_inner_indent = shape.indent + printer.config.indent_width;
-        printer.print_raw_token(&self.open_paren);
-        printer.print_trivia_all_trailing_for(self.open_paren.span());
+        printer.print_raw_token(open_paren);
+        printer.print_trivia_all_trailing_for(open_paren.span());
         printer.print_newline();
 
         printer.print_standalone_with_trivia(&*self.scrutinee, paren_inner_indent);
         printer.print_newline();
-        printer
-            .print_trivia_all_leading_with_newline_for(self.close_paren.span(), paren_inner_indent);
+        printer.print_trivia_all_leading_with_newline_for(close_paren.span(), paren_inner_indent);
         printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_paren);
+        printer.print_raw_token(close_paren);
     }
 }
 
@@ -2193,8 +2232,8 @@ impl Printable for MatchArm {
             printer.print_str(",");
             return info;
         } else if let Expression::Match(match_expr) = &self.body
-            && let Some(match_scrutinee_len) = match_expr.scrutinee.single_line_width(printer)
-            && const { "match () {".len() } + match_scrutinee_len <= line_len_remaining
+            && let Some(match_scrutinee_len) = match_expr.scrutinee_single_line_width(printer)
+            && const { "match  {".len() } + match_scrutinee_len <= line_len_remaining
         {
             // Match expressions also may go directly on the same line if
             // `match (...) {` fits. The arms can be multi-line.
@@ -3336,6 +3375,7 @@ impl Printable for IndexExpr {
 pub struct FieldAccessExpr {
     pub base: Box<Expression>,
     pub dot: t::Dot,
+    /// The member name, or a tuple index (`t.0`) held by its span.
     pub field: t::Word,
 }
 
@@ -3353,8 +3393,16 @@ impl FromCST for FieldAccessExpr {
         // DOT
         let dot = it.expect_parse()?;
 
-        // WORD (field name)
-        let field = it.expect_parse()?;
+        // WORD (field name), or INTEGER_LITERAL for tuple element access
+        // (`t.0`). The member prints verbatim from its span, so holding the
+        // integer as a `Word` keeps `t.0.1` exactly as written (the parser
+        // splits the `0.1` float token into `0`, `.`, `1`).
+        let field_elem = it.expect_next("field name")?;
+        let field = if field_elem.kind() == SyntaxKind::INTEGER_LITERAL {
+            t::Word::new_from_span(field_elem.text_range())
+        } else {
+            t::Word::from_cst(field_elem)?
+        };
 
         it.expect_end()?;
 
@@ -3984,6 +4032,215 @@ impl Printable for ArrayInitializer {
     }
     fn rightmost_token(&self) -> TextRange {
         self.close_bracket.span()
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::TUPLE_EXPR`] node: `(a, b)`, `(a,)`.
+///
+/// Laid out like [`ArrayInitializer`] with parens: single line when it fits,
+/// otherwise one element per line with a trailing comma. A 1-tuple always
+/// keeps its comma, even on a single line — `(a,)` without it is a
+/// parenthesized expression.
+#[derive(Debug)]
+pub struct TupleExpr {
+    pub open_paren: t::LParen,
+    /// The parser requires a comma between elements; only the last one's is
+    /// optional (and required for a 1-tuple).
+    pub elements: Vec<(Expression, Option<t::Comma>)>,
+    pub close_paren: t::RParen,
+}
+
+impl FromCST for TupleExpr {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::TUPLE_EXPR)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        let open_paren = it.expect_parse()?;
+
+        let mut elements = Vec::new();
+        let close_paren = loop {
+            let Some(elem) = it.next() else {
+                return Err(StrongAstError::missing(SyntaxKind::R_PAREN, it.parent));
+            };
+            if elem.kind() == SyntaxKind::R_PAREN {
+                break t::RParen::from_cst(elem)?;
+            }
+            let expr = Expression::from_cst(elem)?;
+            let comma = it
+                .next_if_kind(SyntaxKind::COMMA)
+                .map(t::Comma::from_cst)
+                .transpose()?;
+            elements.push((expr, comma));
+        };
+
+        it.expect_end()?;
+
+        Ok(TupleExpr {
+            open_paren,
+            elements,
+            close_paren,
+        })
+    }
+}
+
+impl KnownKind for TupleExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::TUPLE_EXPR
+    }
+}
+
+impl TupleExpr {
+    /// A 1-tuple needs its trailing comma in every layout.
+    fn is_single(&self) -> bool {
+        self.elements.len() == 1
+    }
+
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let mut len = const { "()".len() };
+        let (_, open_trailing) = input.trivia.get_for_range_split(self.open_paren.span());
+        len += open_trailing.try_squished_len(input.input)?;
+
+        for (i, (elem, comma)) in self.elements.iter().enumerate() {
+            let (el_leading, el_trailing) = input.trivia.get_for_element(elem);
+            len += el_leading.try_squished_len(input.input)?;
+            len += elem.single_line_width(input)?;
+
+            let is_last = i + 1 >= self.elements.len();
+            let separator = if !is_last {
+                const { ", ".len() }
+            } else if self.is_single() {
+                const { ",".len() }
+            } else {
+                0
+            };
+            if let Some(comma) = comma {
+                let (comma_leading, comma_trailing) =
+                    input.trivia.get_for_range_split(comma.span());
+                len += el_trailing.squished_len(input.input);
+                len += comma_leading.squished_len(input.input);
+                len += separator;
+                len += comma_trailing.try_squished_len(input.input)?;
+            } else {
+                len += el_trailing.try_squished_len(input.input)?;
+                len += separator;
+            }
+        }
+
+        let (close_leading, _) = input.trivia.get_for_range_split(self.close_paren.span());
+        len += close_leading.try_squished_len(input.input)?;
+        Some(len)
+    }
+
+    /// Should be passed a sub-printer to avoid printing trivia in the outer
+    /// printer in the event that the tuple does not fit on a single line.
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        printer.print_raw_token(&self.open_paren);
+        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
+        printer.try_print_trivia_single_line_squished(open_trailing)?;
+
+        for (i, (elem, comma)) in self.elements.iter().enumerate() {
+            if printer.output.len() > shape.width {
+                return None;
+            }
+
+            let (el_leading, el_trailing) = printer.trivia.get_for_element(elem);
+            printer.try_print_trivia_single_line_squished(el_leading)?;
+            if printer
+                .print(elem, Shape::unlimited_single_line())
+                .multi_lined
+            {
+                return None;
+            }
+
+            let is_last = i + 1 >= self.elements.len();
+            let separator = if !is_last {
+                ", "
+            } else if self.is_single() {
+                ","
+            } else {
+                ""
+            };
+            if let Some(comma) = comma {
+                let (comma_leading, comma_trailing) =
+                    printer.trivia.get_for_range_split(comma.span());
+                printer.print_trivia_squished(el_trailing);
+                printer.print_trivia_squished(comma_leading);
+                printer.print_str(separator);
+                printer.try_print_trivia_single_line_squished(comma_trailing)?;
+            } else {
+                printer.try_print_trivia_single_line_squished(el_trailing)?;
+                printer.print_str(separator);
+            }
+        }
+
+        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        printer.try_print_trivia_single_line_squished(close_leading)?;
+        printer.print_raw_token(&self.close_paren);
+
+        if printer.output.len() > shape.width {
+            None
+        } else {
+            Some(PrintInfo::default_single_line())
+        }
+    }
+}
+
+impl PrintMultiLine for TupleExpr {
+    /// Multi-line layout: each element on its own indented line with a
+    /// trailing comma, closing paren on its own line.
+    ///
+    /// ```baml
+    /// (
+    ///     element1,
+    ///     element2,
+    /// )
+    /// ```
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.open_paren);
+        printer.print_trivia_all_trailing_for(self.open_paren.span());
+        printer.print_newline();
+
+        let inner_indent = shape.indent + printer.config.indent_width;
+        for (elem, comma) in &self.elements {
+            let (elem_leading, elem_trailing) = printer.trivia.get_for_element(elem);
+            printer.print_trivia_with_newline(elem_leading.trim_blanks(), inner_indent);
+            printer.print_spaces(inner_indent);
+            let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
+            printer.print(elem, inner_shape);
+            if let Some(comma) = comma {
+                printer.print_trivia_squished(elem_trailing);
+                printer.print_raw_token(comma);
+                printer.print_trivia_all_trailing_for(comma.span());
+            } else {
+                printer.print_str(",");
+                printer.print_trivia_trailing(elem_trailing);
+            }
+            printer.print_newline();
+        }
+
+        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        printer.print_trivia_with_newline(close_leading.trim_trailing_blanks(), inner_indent);
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_paren);
+        PrintInfo::default_multi_lined()
+    }
+}
+
+impl Printable for TupleExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer
+            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .unwrap_or_else(|| self.print_multi_line(shape, printer))
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_paren.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_paren.span()
     }
 }
 

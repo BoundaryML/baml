@@ -410,7 +410,9 @@ fn tir_contains_projection(ty: &Tir2Ty) -> bool {
         Tir2Ty::Map {
             key: k, value: v, ..
         } => tir_contains_projection(k) || tir_contains_projection(v),
-        Tir2Ty::Union(members) => members.iter().any(tir_contains_projection),
+        Tir2Ty::Union(members) | Tir2Ty::Tuple(members) => {
+            members.iter().any(tir_contains_projection)
+        }
         Tir2Ty::Class(_, type_args) => type_args.iter().any(tir_contains_projection),
         Tir2Ty::Interface(_, type_args, associated_bindings) => {
             type_args.iter().any(tir_contains_projection)
@@ -526,6 +528,13 @@ fn lower_tir_template(
                 .iter()
                 .map(|ty| lower_tir_template(ty, resolved, generic_layout, mode))
                 .collect::<Option<Vec<_>>>()?,
+        )),
+        Tir2Ty::Tuple(parts) => Some(TyTemplate::Tuple(
+            parts
+                .iter()
+                .map(|ty| lower_tir_template(ty, resolved, generic_layout, mode))
+                .collect::<Option<Vec<_>>>()?
+                .into(),
         )),
         Tir2Ty::Class(qtn, type_args) => {
             if mode == TemplateMode::Pattern || type_args.iter().any(tir_contains_symbolic) {
@@ -802,6 +811,13 @@ pub(crate) fn ty_to_pattern_template_from_resolved_ty(ty: &RuntimeTy) -> Option<
                 .map(ty_to_pattern_template_from_resolved_ty)
                 .collect::<Option<Vec<_>>>()?,
         )),
+        RuntimeTy::Tuple(elements) => Some(TyTemplate::Tuple(
+            elements
+                .iter()
+                .map(ty_to_pattern_template_from_resolved_ty)
+                .collect::<Option<Vec<_>>>()?
+                .into(),
+        )),
         RuntimeTy::Class(tn, args) if !args.is_empty() => Some(TyTemplate::class(
             tn.clone(),
             args.iter()
@@ -910,6 +926,10 @@ fn member_is_opaque_for_tag_proof(m: &RuntimeTy) -> bool {
         | RuntimeTy::Future(..)
         | RuntimeTy::List(..)
         | RuntimeTy::Map { .. }
+        // A tuple carries the fixed `TUPLE` tag, distinct from every other
+        // shape; tuple arms themselves never take the tag path (see
+        // `type_tag_for_ty`).
+        | RuntimeTy::Tuple(..)
         | RuntimeTy::RustType
         | RuntimeTy::Type
         | RuntimeTy::Resource
@@ -1038,6 +1058,9 @@ fn switch_member_tag_sufficient(member: &RuntimeTy, scrutinee: Option<&RuntimeTy
         // A specific variant type (`Color.Red`) needs variant-level discrimination
         // the shared `ENUM` tag can't express, so always take the precise chain.
         RuntimeTy::EnumVariant(..) => false,
+        // Every tuple shares one `TUPLE` tag whatever its arity or elements, so
+        // a tuple arm always takes the precise (structural) chain.
+        RuntimeTy::Tuple(..) => false,
         RuntimeTy::Class(name, args) => {
             if args.is_empty() {
                 return true;
@@ -3381,6 +3404,12 @@ impl<'db> LoweringContext<'db> {
                 value: Box::new(Self::erase_compiler_only_ty(*value)),
             },
             Tir2Ty::Union(types) => Tir2Ty::Union(
+                types
+                    .into_iter()
+                    .map(Self::erase_compiler_only_ty)
+                    .collect(),
+            ),
+            Tir2Ty::Tuple(types) => Tir2Ty::Tuple(
                 types
                     .into_iter()
                     .map(Self::erase_compiler_only_ty)
@@ -6327,6 +6356,35 @@ impl<'db> LoweringContext<'db> {
                 let element_ty = self.array_element_template(expr_id);
                 self.builder
                     .assign(dest, Rvalue::Array(element_ty, operands));
+            }
+
+            AstExpr::Tuple { elements } => {
+                let fields: Vec<Operand<'db>> = elements
+                    .iter()
+                    .map(|&e| self.lower_to_operand(e))
+                    .collect::<Lowered<Vec<_>>>()?;
+                self.builder.assign(
+                    dest,
+                    Rvalue::Aggregate {
+                        kind: AggregateKind::Tuple,
+                        fields,
+                    },
+                );
+            }
+
+            AstExpr::TupleIndex { base, index } => {
+                // `t.0` reads slot 0 of the tuple; TIR has proved every
+                // arm of the receiver is a tuple with that slot.
+                let base_ty = self.expr_ty(base);
+                let base_op = self.lower_to_operand(base)?;
+                let base_local = self.operand_to_local(base_op, base_ty);
+                self.builder.assign(
+                    dest,
+                    Rvalue::Use(Operand::Copy(Place::Field {
+                        base: Box::new(Place::Local(base_local)),
+                        field: index as usize,
+                    })),
+                );
             }
 
             AstExpr::Map { entries } => {
@@ -13961,7 +14019,7 @@ impl<'db> LoweringContext<'db> {
     /// pattern it does not match.
     fn pattern_test_can_reject_covered_values(&self, pat_id: AstPatId) -> bool {
         match &self.body.patterns[pat_id] {
-            AstPattern::Or(parts) => parts
+            AstPattern::Or(parts) | AstPattern::Tuple(parts) => parts
                 .iter()
                 .any(|p| self.pattern_test_can_reject_covered_values(*p)),
             AstPattern::Bind {
@@ -14336,13 +14394,17 @@ impl<'db> LoweringContext<'db> {
             RuntimeTy::Future(..) => Some(baml_type::typetag::FUTURE),
             RuntimeTy::Type => Some(baml_type::typetag::TYPE),
             RuntimeTy::Class(tn, _) => self.class_type_tags.get(tn).copied(),
+            // Deliberately untagged: one `TUPLE` tag would conflate `(int, int)`
+            // with `(string, string)` in a jump table. Tuple arms go through
+            // the structural `IsType` chain.
+            RuntimeTy::Tuple(..) => None,
             _ => None,
         }
     }
 
     fn pattern_contains_structural(&self, pat_id: AstPatId) -> bool {
         match &self.body.patterns[pat_id] {
-            AstPattern::Class { .. } | AstPattern::Array { .. } => true,
+            AstPattern::Class { .. } | AstPattern::Array { .. } | AstPattern::Tuple(_) => true,
             AstPattern::Or(parts) => parts.iter().any(|p| self.pattern_contains_structural(*p)),
             AstPattern::Wildcard | AstPattern::Bind { .. } | AstPattern::Type(_) => false,
         }
@@ -14852,6 +14914,54 @@ impl<'db> LoweringContext<'db> {
                     }
                 }
             }
+            AstPattern::Tuple(elements) => {
+                // Shape: one structural test against `(unknown, …)` of this
+                // arity (tuples are covariant, so that is exactly "a tuple of
+                // n elements"), skipped when the scrutinee is statically one.
+                let arity = elements.len();
+                let statically_tuple = matches!(
+                    self.builder.local_ty(scrutinee),
+                    RuntimeTy::Tuple(slots) if slots.len() == arity
+                );
+                let refutable: Vec<(usize, AstPatId)> = elements
+                    .iter()
+                    .copied()
+                    .enumerate()
+                    .filter(|(_, sub)| !self.is_irrefutable_catch_all(*sub))
+                    .collect();
+                let shape_success = if refutable.is_empty() {
+                    success
+                } else {
+                    self.builder.create_block()
+                };
+                if statically_tuple {
+                    self.builder.goto(shape_success);
+                } else {
+                    self.emit_is_type_branch(
+                        scrutinee,
+                        RuntimeTy::Tuple(vec![RuntimeTy::Unknown; arity].into()),
+                        shape_success,
+                        failure,
+                    );
+                }
+                if !refutable.is_empty() {
+                    self.builder.set_current_block(shape_success);
+                    let last = refutable.len() - 1;
+                    for (n, (idx, sub)) in refutable.into_iter().enumerate() {
+                        let next = if n == last {
+                            success
+                        } else {
+                            self.builder.create_block()
+                        };
+                        let elem_local =
+                            self.project_tuple_pattern_element(scrutinee, sub, idx, arity);
+                        self.lower_pattern_test(elem_local, sub, next, failure)?;
+                        if n < last {
+                            self.builder.set_current_block(next);
+                        }
+                    }
+                }
+            }
             AstPattern::Array {
                 prefix,
                 rest,
@@ -14964,7 +15074,12 @@ impl<'db> LoweringContext<'db> {
             AstPattern::Or(parts) => parts
                 .iter()
                 .any(|part| self.is_irrefutable_catch_all(*part)),
-            AstPattern::Type(_) | AstPattern::Class { .. } | AstPattern::Array { .. } => false,
+            // A tuple pattern still tests the scrutinee's shape unless the
+            // scrutinee is statically a tuple; stay conservative here.
+            AstPattern::Type(_)
+            | AstPattern::Class { .. }
+            | AstPattern::Array { .. }
+            | AstPattern::Tuple(_) => false,
         }
     }
 
@@ -15072,6 +15187,17 @@ impl<'db> LoweringContext<'db> {
                     }
                 }
             }
+            AstPattern::Tuple(elements) => {
+                let arity = elements.len();
+                for (idx, elem_pat) in elements.into_iter().enumerate() {
+                    if !self.pattern_binds_names(elem_pat) {
+                        continue;
+                    }
+                    let elem_local =
+                        self.project_tuple_pattern_element(scrutinee, elem_pat, idx, arity);
+                    self.bind_pattern_inner(elem_local, elem_pat, root, elem_pat, site)?;
+                }
+            }
             AstPattern::Array {
                 prefix,
                 rest,
@@ -15147,8 +15273,60 @@ impl<'db> LoweringContext<'db> {
                     self.collect_pattern_bindings(part, out);
                 }
             }
+            AstPattern::Tuple(elements) => {
+                for part in elements {
+                    self.collect_pattern_bindings(part, out);
+                }
+            }
             AstPattern::Wildcard | AstPattern::Type(_) => {}
         }
+    }
+
+    /// Whether `pat_id` introduces any name (so a tuple element needs to be
+    /// projected in the binding phase).
+    fn pattern_binds_names(&self, pat_id: AstPatId) -> bool {
+        let mut bindings = Vec::new();
+        self.collect_pattern_bindings(pat_id, &mut bindings);
+        !bindings.is_empty()
+    }
+
+    /// Read tuple slot `index` of `scrutinee` into a fresh local typed at the
+    /// slot's static type (the union of that slot over the scrutinee's
+    /// same-arity tuple members, when the scrutinee is a union).
+    fn project_tuple_pattern_element(
+        &mut self,
+        scrutinee: Local,
+        elem_pat: AstPatId,
+        index: usize,
+        arity: usize,
+    ) -> Local {
+        fn slot(ty: &RuntimeTy, index: usize, arity: usize, out: &mut Vec<RuntimeTy>) {
+            match ty {
+                RuntimeTy::Tuple(slots) if slots.len() == arity => out.push(slots[index].clone()),
+                RuntimeTy::Union(members) => {
+                    for member in members {
+                        slot(member, index, arity, out);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut slots = Vec::new();
+        slot(&self.builder.local_ty(scrutinee), index, arity, &mut slots);
+        let elem_ty = match slots.len() {
+            0 => self.pat_ty(elem_pat),
+            1 => slots.pop().expect("one slot"),
+            _ => RuntimeTy::Union(slots.into()),
+        };
+        let elem_local = self.builder.temp(elem_ty);
+        self.builder.assign(
+            Place::local(elem_local),
+            Rvalue::Use(Operand::Copy(Place::Field {
+                base: Box::new(Place::Local(scrutinee)),
+                field: index,
+            })),
+        );
+        elem_local
     }
 
     /// Declare every name an or-pattern binds, once, ahead of the
@@ -15248,6 +15426,17 @@ impl<'db> LoweringContext<'db> {
                             site,
                         )?;
                     }
+                }
+            }
+            AstPattern::Tuple(elements) => {
+                let arity = elements.len();
+                for (idx, elem_pat) in elements.into_iter().enumerate() {
+                    if !self.pattern_binds_names(elem_pat) {
+                        continue;
+                    }
+                    let elem_local =
+                        self.project_tuple_pattern_element(scrutinee, elem_pat, idx, arity);
+                    self.assign_pattern_to_existing(elem_local, elem_pat, root, elem_pat, site)?;
                 }
             }
             AstPattern::Array {
@@ -15426,6 +15615,7 @@ fn format_type_tag_name(tag: i64) -> String {
         baml_type::typetag::NULL => "null".to_string(),
         baml_type::typetag::FLOAT => "float".to_string(),
         baml_type::typetag::LIST => "list".to_string(),
+        baml_type::typetag::TUPLE => "tuple".to_string(),
         baml_type::typetag::MAP => "map".to_string(),
         baml_type::typetag::ENUM => "enum".to_string(),
         baml_type::typetag::FUNCTION => "function".to_string(),

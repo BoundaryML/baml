@@ -42,6 +42,7 @@ fn widen_literals(ty: &Ty) -> Ty {
             value: Box::new(widen_literals(value)),
         },
         Ty::Union(members) => Ty::Union(members.iter().map(widen_literals).collect()),
+        Ty::Tuple(items) => Ty::Tuple(items.iter().map(widen_literals).collect()),
         Ty::Class(name, args) => Ty::Class(name.clone(), args.iter().map(widen_literals).collect()),
         Ty::Interface(name, generics, associated) => Ty::Interface(
             name.clone(),

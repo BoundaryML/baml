@@ -44,6 +44,7 @@ message BamlTy {
     BamlTyTypeVar type_var = 22;
     BamlTyAssociatedTypeProjection associated_type_projection = 23;
     BamlTyNever never = 24;
+    BamlTyTuple tuple = 25;
   }
 }
 
@@ -155,6 +156,11 @@ message BamlTyOptional {
 
 message BamlTyUnion {
   repeated BamlTy options = 1;
+}
+
+// A fixed-arity tuple `(A, B)`: one type per position, at least one.
+message BamlTyTuple {
+  repeated BamlTy items = 1;
 }
 
 message BamlTyUnknown {}

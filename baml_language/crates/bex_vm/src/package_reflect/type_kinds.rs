@@ -22,14 +22,15 @@ use super::{
     BamlClassInterfaceImplementation, BamlClassInterfaceReflectTypeView_for_Type,
     BamlClassInterfaceType, BamlClassLiteralReflectTypeView_for_Type, BamlClassLiteralType,
     BamlClassMapReflectTypeView_for_Type, BamlClassMapType,
-    BamlClassPrimitiveReflectTypeView_for_Type, BamlClassType,
-    BamlClassUnionReflectTypeView_for_Type, BamlClassUnionType, BamlNamespaceArray,
-    BamlNamespaceArrayReflect, BamlNamespaceClass, BamlNamespaceClassReflect, BamlNamespaceEnum,
-    BamlNamespaceEnumReflect, BamlNamespaceFunction, BamlNamespaceFunctionReflect,
-    BamlNamespaceInterface, BamlNamespaceInterfaceReflect, BamlNamespaceLiteral,
-    BamlNamespaceLiteralReflect, BamlNamespaceMap, BamlNamespaceMapReflect, BamlNamespacePrimitive,
-    BamlNamespacePrimitiveReflect, BamlNamespaceUnion, BamlNamespaceUnionReflect,
-    PackageReflectImpl, copy,
+    BamlClassPrimitiveReflectTypeView_for_Type, BamlClassTupleReflectTypeView_for_Type,
+    BamlClassTupleType, BamlClassType, BamlClassUnionReflectTypeView_for_Type, BamlClassUnionType,
+    BamlNamespaceArray, BamlNamespaceArrayReflect, BamlNamespaceClass, BamlNamespaceClassReflect,
+    BamlNamespaceEnum, BamlNamespaceEnumReflect, BamlNamespaceFunction,
+    BamlNamespaceFunctionReflect, BamlNamespaceInterface, BamlNamespaceInterfaceReflect,
+    BamlNamespaceLiteral, BamlNamespaceLiteralReflect, BamlNamespaceMap, BamlNamespaceMapReflect,
+    BamlNamespacePrimitive, BamlNamespacePrimitiveReflect, BamlNamespaceTuple,
+    BamlNamespaceTupleReflect, BamlNamespaceUnion, BamlNamespaceUnionReflect, PackageReflectImpl,
+    copy,
 };
 use crate::BexVm;
 
@@ -163,6 +164,8 @@ impl BexVm {
 }
 
 impl BamlNamespaceArray for PackageReflectImpl {}
+
+impl BamlNamespaceTuple for PackageReflectImpl {}
 
 #[derive(Clone, Debug)]
 struct InterfaceWitness {
@@ -1782,6 +1785,22 @@ impl BamlClassUnionType for PackageReflectImpl {
     }
 }
 
+impl BamlClassTupleType for PackageReflectImpl {
+    fn element_types(
+        vm: &mut BexVm,
+        r#type: &Value,
+    ) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
+        let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Tuple)?;
+        let bex_vm_types::RealizedTy::Tuple(elements) = ty else {
+            unreachable!("a Tuple-classified type is RealizedTy::Tuple")
+        };
+        Ok(elements
+            .into_iter()
+            .map(|ty| Value::object(vm.alloc_type(bex_vm_types::types::TypeValue::new(ty))))
+            .collect())
+    }
+}
+
 impl BamlClassArrayType for PackageReflectImpl {
     fn element_type(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
         let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Array)?;
@@ -1908,7 +1927,13 @@ impl BamlClassUnionReflectTypeView_for_Type for PackageReflectImpl {
     impl_as_type!(Union, union);
 }
 
+impl BamlClassTupleReflectTypeView_for_Type for PackageReflectImpl {
+    impl_as_type!(Tuple, tuple);
+}
+
 impl BamlNamespaceArrayReflect for PackageReflectImpl {}
+
+impl BamlNamespaceTupleReflect for PackageReflectImpl {}
 
 impl BamlNamespaceClassReflect for PackageReflectImpl {}
 

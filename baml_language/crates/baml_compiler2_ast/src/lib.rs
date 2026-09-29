@@ -287,6 +287,9 @@ mod tests {
             TypeExprKind::Union { variants } => TypeExprKind::Union {
                 variants: variants.iter().map(strip_spans).collect(),
             },
+            TypeExprKind::Tuple { elements } => TypeExprKind::Tuple {
+                elements: elements.iter().map(strip_spans).collect(),
+            },
             TypeExprKind::Literal { value } => TypeExprKind::Literal {
                 value: value.clone(),
             },

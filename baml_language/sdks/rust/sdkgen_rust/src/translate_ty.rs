@@ -104,6 +104,16 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
             let inner = translate_inner(inner, ctx, true)?;
             Ok(quote! { ::std::vec::Vec<#inner> })
         }
+        // Tuple elements are stored inline (no heap indirection), so the
+        // caller's `under_heap` carries through: a same-SCC class element
+        // of a tuple field still boxes. `(A,)` is Rust's 1-tuple spelling.
+        Ty::Tuple(items) => {
+            let items = items
+                .iter()
+                .map(|item| translate_inner(item, ctx, under_heap))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(quote! { (#(#items,)*) })
+        }
         Ty::Map { key, value, .. } => {
             // The language restricts map keys to strings (E0067); the
             // codegen-facing Ty is more permissive, so fail closed on
@@ -164,10 +174,8 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
                     // containment cycle — box the enum reference.
                     let boxed = !under_heap
                         && ctx.boxing_for.is_some_and(|owner| {
-                            arms.iter().any(|arm| match arm {
-                                Ty::Class(name, _) => ctx.analysis.needs_box(owner, name),
-                                _ => false,
-                            })
+                            arms.iter()
+                                .any(|arm| arm_holds_inline(arm, owner, ctx.analysis))
                         });
                     if boxed {
                         quote! { ::std::boxed::Box<#path> }
@@ -308,6 +316,19 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
         // (throws-nothing is `throws: None`, handled before translation).
         Ty::Never => Err(unsupported("never")),
         Ty::RustType => Err(unsupported("$rust_type handle")),
+    }
+}
+
+/// Whether a union-enum arm holds a class in `owner`'s containment SCC
+/// by value (directly or through inline tuple elements), which makes the
+/// enum itself part of the cycle.
+fn arm_holds_inline(arm: &Ty, owner: &Name, analysis: &Analysis) -> bool {
+    match arm {
+        Ty::Class(name, _) => analysis.needs_box(owner, name),
+        Ty::Tuple(items) => items
+            .iter()
+            .any(|item| arm_holds_inline(item, owner, analysis)),
+        _ => false,
     }
 }
 

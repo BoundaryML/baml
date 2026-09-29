@@ -166,7 +166,8 @@ macro_rules! walk_object_heads {
                 | Object::Bigint(_)
                 | Object::Uint8Array(_)
                 | Object::RustData(_)
-
+                // A tuple's type is derived from its elements: no stored head.
+                | Object::Tuple(_)
                 | Object::Float(_) => {}
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => {}

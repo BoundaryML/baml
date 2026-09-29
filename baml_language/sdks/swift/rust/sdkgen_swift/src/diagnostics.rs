@@ -62,16 +62,20 @@ pub(crate) fn callable_skip_reason(function: &Function, ctx: &TranslateCtx) -> S
         };
         if !ok {
             return format!(
-                "parameter `{}`: type `{}` is not representable in Swift",
+                "parameter `{}`: type `{}` is not representable in Swift{}",
                 arg.name.as_str(),
-                arg.ty
+                arg.ty,
+                tuple_note(&arg.ty)
             );
         }
     }
     match &function.return_type {
         Ty::Void | Ty::Never => {}
         ret if translate_ty(ret, ctx).is_none() => {
-            return format!("return type `{ret}` is not representable in Swift");
+            return format!(
+                "return type `{ret}` is not representable in Swift{}",
+                tuple_note(ret)
+            );
         }
         _ => {}
     }
@@ -84,9 +88,10 @@ pub(crate) fn class_skip_reason(class: &Class, ctx: &TranslateCtx) -> String {
     for prop in &class.properties {
         if translate_ty(&prop.ty, ctx).is_none() {
             return format!(
-                "field `{}`: type `{}` is not representable in Swift",
+                "field `{}`: type `{}` is not representable in Swift{}",
                 prop.name.as_str(),
-                prop.ty
+                prop.ty,
+                tuple_note(&prop.ty)
             );
         }
     }
@@ -104,15 +109,32 @@ pub(crate) fn alias_skip_reason(alias: &TypeAlias, ctx: &TranslateCtx) -> String
         }
         Some((arms, _)) => {
             if let Some(arm) = arms.iter().find(|arm| translate_ty(arm, ctx).is_none()) {
-                return format!("union arm `{arm}` is not representable in Swift");
+                return format!(
+                    "union arm `{arm}` is not representable in Swift{}",
+                    tuple_note(arm)
+                );
             }
         }
         None => {}
     }
     format!(
-        "target type `{}` is not representable in Swift",
-        alias.resolves_to
+        "target type `{}` is not representable in Swift{}",
+        alias.resolves_to,
+        tuple_note(&alias.resolves_to)
     )
+}
+
+/// Name the missing capability when a skipped type contains a tuple, so the
+/// manifest says *why* rather than only *what*.
+fn tuple_note(ty: &Ty) -> &'static str {
+    fn contains_tuple(ty: &Ty) -> bool {
+        matches!(ty, Ty::Tuple(_)) || baml_sdkgen_types::any_type_child(ty, contains_tuple)
+    }
+    if contains_tuple(ty) {
+        " (tuple types are not yet supported by the Swift generator)"
+    } else {
+        ""
+    }
 }
 
 /// Render the manifest file. Always emitted: an empty manifest is the

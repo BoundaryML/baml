@@ -943,6 +943,7 @@ impl RenderContext<'_> {
                     .map(|member| self.wire_type(member))
                     .collect(),
             )),
+            Ty::Tuple(items) => Ty::Tuple(items.iter().map(|item| self.wire_type(item)).collect()),
             Ty::Function {
                 params,
                 ret,
@@ -1805,6 +1806,9 @@ fn require_supported_type_inner(
             }
             _ => Err(unsupported(path, &format!("recursive type alias `{name}`"))),
         },
+        // Tuple types are not yet supported by the C# generator (a
+        // `ValueTuple` projection plus codecs is future work).
+        Ty::Tuple(_) => Err(unsupported(path, &format!("tuple type `{ty}`"))),
         _ => Err(unsupported(path, &format!("type `{ty}`"))),
     }
 }
@@ -1880,7 +1884,7 @@ fn require_unambiguous_csharp_unions(
             require_unambiguous_csharp_unions(key, model, path)?;
             require_unambiguous_csharp_unions(value, model, path)
         }
-        Ty::Class(_, arguments) => arguments
+        Ty::Class(_, arguments) | Ty::Tuple(arguments) => arguments
             .iter()
             .try_for_each(|argument| require_unambiguous_csharp_unions(argument, model, path)),
         Ty::Function {
@@ -2084,6 +2088,7 @@ fn codec_type(ty: &Ty) -> Ty {
             value: Box::new(codec_type(value)),
         },
         Ty::Union(members) => normalize_ty(&Ty::Union(members.iter().map(codec_type).collect())),
+        Ty::Tuple(items) => Ty::Tuple(items.iter().map(codec_type).collect()),
         Ty::Function {
             params,
             ret,
@@ -2749,6 +2754,12 @@ fn substitute_type_variables(ty: &Ty, parameters: &[BaseName], arguments: &[Ty])
                 .map(|member| substitute_type_variables(member, parameters, arguments))
                 .collect(),
         )),
+        Ty::Tuple(items) => Ty::Tuple(
+            items
+                .iter()
+                .map(|item| substitute_type_variables(item, parameters, arguments))
+                .collect(),
+        ),
         Ty::Function {
             params,
             ret,
@@ -6009,6 +6020,21 @@ mod tests {
         assert_eq!(
             rust_type.to_string(),
             "C# generation does not yet support type `$rust_type` at test.location",
+        );
+    }
+
+    #[test]
+    fn tuples_fail_closed_even_when_nested() {
+        let model = CodegenModel {
+            symbols: HashMap::new(),
+            callables: HashMap::new(),
+        };
+        let tuple = Ty::Tuple(Box::new([Ty::Int, Ty::String]));
+        let error = require_supported_type(&Ty::List(Box::new(tuple)), &model, "test.location")
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "C# generation does not yet support tuple type `(int, string)` at test.location",
         );
     }
 

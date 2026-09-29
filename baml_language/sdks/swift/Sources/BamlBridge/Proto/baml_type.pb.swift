@@ -376,6 +376,14 @@ nonisolated struct BamlBridge_Cffi_V1_BamlTy: @unchecked Sendable {
     set {_uniqueStorage()._ty = .never(newValue)}
   }
 
+  var tuple: BamlBridge_Cffi_V1_BamlTyTuple {
+    get {
+      if case .tuple(let v)? = _storage._ty {return v}
+      return BamlBridge_Cffi_V1_BamlTyTuple()
+    }
+    set {_uniqueStorage()._ty = .tuple(newValue)}
+  }
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   nonisolated enum OneOf_Ty: Equatable, Sendable {
@@ -407,6 +415,7 @@ nonisolated struct BamlBridge_Cffi_V1_BamlTy: @unchecked Sendable {
     case typeVar(BamlBridge_Cffi_V1_BamlTyTypeVar)
     case associatedTypeProjection(BamlBridge_Cffi_V1_BamlTyAssociatedTypeProjection)
     case never(BamlBridge_Cffi_V1_BamlTyNever)
+    case tuple(BamlBridge_Cffi_V1_BamlTyTuple)
 
   }
 
@@ -770,6 +779,19 @@ nonisolated struct BamlBridge_Cffi_V1_BamlTyUnion: Sendable {
   // methods supported on all messages.
 
   var options: [BamlBridge_Cffi_V1_BamlTy] = []
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+/// A fixed-arity tuple `(A, B)`: one type per position, at least one.
+nonisolated struct BamlBridge_Cffi_V1_BamlTyTuple: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var items: [BamlBridge_Cffi_V1_BamlTy] = []
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1173,7 +1195,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyFunctionParamMode: SwiftProtobuf.
 
 nonisolated extension BamlBridge_Cffi_V1_BamlTy: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".BamlTy"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}primitive\0\u{3}class_ty\0\u{1}enum\0\u{1}list\0\u{1}map\0\u{1}optional\0\u{1}union\0\u{1}literal\0\u{3}type_alias\0\u{1}unknown\0\u{1}media\0\u{1}interface\0\u{3}enum_variant\0\u{1}function\0\u{1}future\0\u{3}rust_type\0\u{3}meta_type\0\u{1}resource\0\u{3}prompt_ast\0\u{1}void\0\u{4}\u{2}type_var\0\u{3}associated_type_projection\0\u{1}never\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}primitive\0\u{3}class_ty\0\u{1}enum\0\u{1}list\0\u{1}map\0\u{1}optional\0\u{1}union\0\u{1}literal\0\u{3}type_alias\0\u{1}unknown\0\u{1}media\0\u{1}interface\0\u{3}enum_variant\0\u{1}function\0\u{1}future\0\u{3}rust_type\0\u{3}meta_type\0\u{1}resource\0\u{3}prompt_ast\0\u{1}void\0\u{4}\u{2}type_var\0\u{3}associated_type_projection\0\u{1}never\0\u{1}tuple\0")
 
   fileprivate class _StorageClass {
     var _ty: BamlBridge_Cffi_V1_BamlTy.OneOf_Ty?
@@ -1505,6 +1527,19 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTy: SwiftProtobuf.Message, SwiftPro
             _storage._ty = .never(v)
           }
         }()
+        case 25: try {
+          var v: BamlBridge_Cffi_V1_BamlTyTuple?
+          var hadOneofValue = false
+          if let current = _storage._ty {
+            hadOneofValue = true
+            if case .tuple(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._ty = .tuple(v)
+          }
+        }()
         default: break
         }
       }
@@ -1609,6 +1644,10 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTy: SwiftProtobuf.Message, SwiftPro
       case .never?: try {
         guard case .never(let v)? = _storage._ty else { preconditionFailure() }
         try visitor.visitSingularMessageField(value: v, fieldNumber: 24)
+      }()
+      case .tuple?: try {
+        guard case .tuple(let v)? = _storage._ty else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 25)
       }()
       case nil: break
       }
@@ -2367,6 +2406,36 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyUnion: SwiftProtobuf.Message, Swi
 
   static func ==(lhs: BamlBridge_Cffi_V1_BamlTyUnion, rhs: BamlBridge_Cffi_V1_BamlTyUnion) -> Bool {
     if lhs.options != rhs.options {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension BamlBridge_Cffi_V1_BamlTyTuple: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".BamlTyTuple"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}items\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.items) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.items.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.items, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: BamlBridge_Cffi_V1_BamlTyTuple, rhs: BamlBridge_Cffi_V1_BamlTyTuple) -> Bool {
+    if lhs.items != rhs.items {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

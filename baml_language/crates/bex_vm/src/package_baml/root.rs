@@ -270,6 +270,7 @@ pub(super) fn collect_to_string_overrides(
     // the renderer so the two stay index-aligned.
     let children: Vec<Value> = match vm.get_object(ptr) {
         Object::Array(values) => values.to_vec(),
+        Object::Tuple(elements) => elements.to_vec(),
         Object::Map(map) => map.to_index_map().values().copied().collect(),
         Object::Instance(inst) => inst.fields.iter().map(AtomicValueSlot::load).collect(),
         _ => Vec::new(),
@@ -410,6 +411,8 @@ enum DisplaySnap {
     /// An array — elements rendered as `[a, b, c]`, with at most one trailing
     /// ellipsis when diagnostic limits omit further siblings.
     Seq(Vec<Value>, bool),
+    /// A tuple — elements rendered as `(a, b)`, a 1-tuple as `(a,)`.
+    Tuple(Vec<Value>, bool),
     /// A map — entries rendered as `{"k": v, ...}` (keys are always strings, and
     /// are quoted so keys containing `:`/`,` stay unambiguous).
     Entries(Vec<(String, Value)>, bool),
@@ -587,6 +590,13 @@ pub(super) fn render_to_sink(
                 values.len() > limit,
             )
         }
+        Object::Tuple(elements) => {
+            let limit = state.snapshot_child_limit(elements.len());
+            DisplaySnap::Tuple(
+                elements.iter().take(limit).copied().collect(),
+                elements.len() > limit,
+            )
+        }
         Object::Uint8Array(bytes) => {
             let bytes = bytes.lock();
             let limit = state.snapshot_child_limit(bytes.len());
@@ -669,6 +679,31 @@ pub(super) fn render_to_sink(
             } else {
                 sink.push_text(&s);
             }
+        }
+        DisplaySnap::Tuple(values, mut truncated) => {
+            sink.push_text("(");
+            let mut rendered_count = 0;
+            for value in &values {
+                if !state.can_render_node(depth + 1) {
+                    truncated = true;
+                    break;
+                }
+                if rendered_count != 0 {
+                    sink.push_text(", ");
+                }
+                render_to_sink(vm, *value, true, depth + 1, state, sink);
+                rendered_count += 1;
+            }
+            if truncated {
+                if rendered_count != 0 {
+                    sink.push_text(", ");
+                }
+                sink.push_text(TRUNCATED_RENDER);
+            } else if rendered_count == 1 {
+                // `(a,)`: without the comma a 1-tuple would read as grouping.
+                sink.push_text(",");
+            }
+            sink.push_text(")");
         }
         DisplaySnap::Seq(values, mut truncated) => {
             sink.push_text("[");
@@ -816,6 +851,24 @@ fn deep_copy_value_recursive(
                     // no GC write barrier because it is all in gen0
                     *vm.get_object_mut(placeholder_ptr) =
                         Object::Array(Array::new(element_ty, new_values));
+                    placeholder_ptr
+                }
+
+                Object::Tuple(elements) => {
+                    // Elements may be mutable containers that lead back to
+                    // this tuple (`t = ([],)` then `t.0.push(t)`), so register
+                    // a placeholder before recursing, like arrays do. The
+                    // placeholder is gen0 and filled before anything else can
+                    // observe it, so the tuple is still built whole.
+                    let placeholder_ptr = vm.tlab.alloc_tuple(vec![Value::NULL; elements.len()]);
+                    copied_objects.insert(ptr, placeholder_ptr);
+                    let mut new_elements = Vec::with_capacity(elements.len());
+                    for element in &elements {
+                        new_elements.push(deep_copy_value_recursive(vm, *element, copied_objects)?);
+                    }
+                    // no GC write barrier because it is all in gen0
+                    *vm.get_object_mut(placeholder_ptr) =
+                        Object::Tuple(new_elements.into_boxed_slice());
                     placeholder_ptr
                 }
 
