@@ -404,9 +404,7 @@ async fn start_process_read_after_lines_sees_partial_line() {
 
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String(
-            "first|third".to_string().into()
-        ))
+        Ok(BexExternalValue::String("first|third".to_string().into()))
     );
 }
 
