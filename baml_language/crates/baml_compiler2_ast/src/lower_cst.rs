@@ -2038,11 +2038,13 @@ fn synthesize_register_call(
             // The body lowers into `$init_test`'s own arena.
             let lambda_body = ctx.lower_test_body(body_node, span);
 
+            // No return annotation: the body's value reaches `_run_test`,
+            // which fails the test when it is `false` (`testing.TestBody`).
             let lambda_def = LambdaDef {
                 kind: LambdaKind::Anonymous,
                 params: vec![],
                 defaults: FunctionDefaults::empty(),
-                return_type: Some(crate::ast::TypeExprKind::Void.at(span)),
+                return_type: None,
                 throws: None,
                 body: Some(lambda_body),
                 span,

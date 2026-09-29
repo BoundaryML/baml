@@ -29,6 +29,11 @@ function body_value_int() -> int {
     3
 }
 
+/// A `void` function returns `null` even though its tail is `false`.
+function body_value_void() -> void {
+    1 == 2
+}
+
 test "body evaluating to false fails" with expect_fail_with("test body evaluated to false") {
     1 == 2
 }
@@ -42,6 +47,13 @@ test "body with statements then a false tail fails" with expect_fail_with("test 
     xs.length() == 4
 }
 
+test "body returning false early fails" with expect_fail_with("test body evaluated to false") {
+    if (body_value_int() == 3) {
+        return false;
+    }
+    true
+}
+
 test "body evaluating to true passes" {
     1 == 1
 }
@@ -52,6 +64,24 @@ test "body calling a function that returns true passes" {
 
 test "body evaluating to a non-bool value passes" {
     body_value_int()
+}
+
+test "body calling a void function passes" {
+    body_value_void()
+}
+
+test "body calling a void lambda passes" {
+    let f = () -> void {
+        1 == 2
+    };
+    f()
+}
+
+test "body returning true early passes" {
+    if (body_value_int() == 3) {
+        return true;
+    }
+    false
 }
 
 test "body with no tail expression passes" {
