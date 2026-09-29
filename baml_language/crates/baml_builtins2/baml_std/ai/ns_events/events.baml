@@ -84,6 +84,13 @@ class Usage {
     output_tokens: int,
     cached_input_tokens: int?,
     reasoning_tokens: int?,
+    /// Tokens written to the provider's prompt cache, billed above the
+    /// input rate. Null when the provider reports none.
+    cache_write_input_tokens: int?,
+    /// Input tokens billed at the full rate: `input_tokens` without cache
+    /// reads and writes, whichever way the provider counts them. Null when
+    /// the provider cannot tell.
+    uncached_input_tokens: int?,
 }
 
 class FinalProduced {

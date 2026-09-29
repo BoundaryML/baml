@@ -11,7 +11,8 @@ use std::{
 };
 
 use baml_type::{DeclarationName, typetag::TypeTag};
-use bex_str::BexStr;
+/// The string type the builder takes, so callers need not depend on `bex_str`.
+pub use bex_str::BexStr;
 use num_bigint::BigInt;
 
 mod decode;
@@ -850,3 +851,44 @@ impl Drop for Snapshot {
 }
 #[cfg(test)]
 mod tests;
+
+/// A `map<string, string>` snapshot built outside any VM, such as a
+/// project's sources keyed by path. Entries past the pool's limits are
+/// dropped and the snapshot says so. `None` when the pool has no slot.
+pub fn string_map(pool: &SnapshotPool, entries: &[(String, String)]) -> Option<Snapshot> {
+    let mut b = pool.try_acquire()?;
+    let Some(map) = b.reserve_object() else {
+        let truncated = b.limited(Limit::Objects);
+        return Some(b.finish_value(truncated));
+    };
+    let key_type = b.push_type(OwnedType::string());
+    let value_type = b.push_type(OwnedType::string());
+    let start = b.entry_start();
+    let count = entries.len().min(b.remaining_entries());
+    b.reserve_entries(count);
+    for (key, value) in entries.iter().take(count) {
+        let key = BexStr::from(key.as_str());
+        if !b.content(key.len(), false) {
+            break;
+        }
+        let value = match b.string(&BexStr::from(value.as_str())) {
+            Some(id) => SnapshotValue::String(id),
+            None => SnapshotValue::Truncated(Limit::Bytes),
+        };
+        b.entry(&key, value);
+    }
+    let entries_range = b.entry_range(start);
+    if entries_range.len() < entries.len() {
+        b.limited(Limit::Values);
+    }
+    b.set_object(
+        map,
+        SnapshotObject::Map {
+            key_type,
+            value_type,
+            entries: entries_range,
+            original_len: entries.len(),
+        },
+    );
+    Some(b.finish_value(SnapshotValue::Object(map)))
+}

@@ -22,7 +22,7 @@ use std::{
 use btel_settings::identity::ID_RANGE_SIZE;
 pub use function_lookup::{FunctionLookup, FunctionRegistration};
 pub use functions::*;
-pub use recording::RecordingId;
+pub use recording::{ProcessExit, ProcessExitSlot, ProcessInfo, ProcessStatus, RecordingId};
 
 /// Identity of an individually identified telemetry graph node.
 ///
@@ -40,6 +40,14 @@ impl TelemetryId {
     #[inline(always)]
     pub const fn get(self) -> u64 {
         self.0.get()
+    }
+
+    /// An ID handed back from BAML code; `None` for 0.
+    pub const fn from_raw(raw: u64) -> Option<Self> {
+        match NonZeroU64::new(raw) {
+            Some(raw) => Some(Self(raw)),
+            None => None,
+        }
     }
 }
 
@@ -283,6 +291,17 @@ pub enum InvocationOutcome {
     Ok,
     Errored,
     Cancelled,
+    /// Errored by a panic: a `baml.panics` value other than `Cancelled` or
+    /// `Exit`. Still an error; the wire writes ERRORED plus a panic flag.
+    Panicked,
+}
+
+impl InvocationOutcome {
+    /// Errored, panicked included.
+    #[inline(always)]
+    pub const fn is_error(self) -> bool {
+        matches!(self, Self::Errored | Self::Panicked)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

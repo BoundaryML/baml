@@ -148,6 +148,12 @@ impl CloudPublisher {
         self
     }
 
+    #[must_use]
+    pub fn with_process(mut self, process: btel_recorder::ProcessRecording) -> Self {
+        self.recording = self.recording.with_process(process);
+        self
+    }
+
     /// Owned function definitions copied before execution, shared with the recording builder.
     #[must_use]
     pub fn with_function_metadata(
@@ -397,6 +403,14 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
         if self.failure.is_none() {
             self.start_window();
             self.recording.aggregate(delta);
+            self.seal_on_pressure();
+        }
+    }
+
+    fn sysop_time(&mut self, path: btel_types::CallPathId, elapsed: btel_types::ClockDuration) {
+        if self.failure.is_none() {
+            self.start_window();
+            self.recording.sysop_time(path, elapsed);
             self.seal_on_pressure();
         }
     }

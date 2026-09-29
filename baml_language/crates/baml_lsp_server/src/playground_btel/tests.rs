@@ -92,7 +92,6 @@ async fn recorded_playground_runs_appear_on_refresh_with_captured_values() {
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0]["entryFqn"], "user.main");
     assert_eq!(listed[0]["status"], "succeeded");
-    assert_eq!(listed[0]["callsRetained"], 1);
 
     // A second run becomes visible on a later refresh of the same index.
     call(&engine, "bob").await;
@@ -125,6 +124,8 @@ async fn recorded_playground_runs_appear_on_refresh_with_captured_values() {
         .unwrap();
     assert_eq!(unbuilt["execution"]["sourceState"], "unverified");
     assert_eq!(opened["execution"]["executionId"], newest);
+    assert_eq!(opened["execution"]["callsRetained"], 1);
+    assert_eq!(opened["execution"]["threadsTotal"], 1);
     let calls = opened["calls"].as_array().unwrap();
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0]["fqn"], "user.Ask");
@@ -136,51 +137,24 @@ async fn recorded_playground_runs_appear_on_refresh_with_captured_values() {
     assert_eq!(calls[0]["errorState"], "not_applicable");
     assert!(calls[0]["callPathId"].is_string());
 
-    // Timeline lanes and calling contexts come from the recording.
+    // Timeline lanes come from the recording.
     let threads = opened["threads"].as_array().unwrap();
     assert_eq!(threads.len(), 1);
     assert_eq!(
         threads[0]["threadId"], newest,
-        "the root thread is the execution"
+        "the root call is the execution"
     );
     assert_eq!(threads[0]["kind"], "root");
     assert_eq!(threads[0]["endStatus"], "completed");
+    assert_eq!(threads[0]["name"], Value::Null);
+    assert_eq!(calls[0]["threadId"], newest);
     assert_eq!(
-        threads[0]["name"],
+        calls[0]["parentCallId"],
         Value::Null,
-        "thread names are not recorded"
+        "Ask ran on the root call"
     );
-    let paths = opened["callPaths"].as_array().unwrap();
-    let ask = paths
-        .iter()
-        .find(|path| path["fqn"] == "user.Ask")
-        .expect("Ask's calling context");
-    assert_eq!(ask["completedCalls"], 1);
-    assert_eq!(ask["callsStarted"], Value::Null, "starts are not recorded");
-    assert_eq!(ask["completedOk"], 1);
-    assert_eq!(ask["completedError"], 0);
-    assert_eq!(ask["completedCancelled"], 0);
-    assert_eq!(ask["outcomeState"], "recorded");
-    assert_eq!(ask["edgeKind"], "call");
-    assert_eq!(ask["callPathId"], calls[0]["callPathId"]);
-    // The call expression in main, from the recording's source map.
-    assert_eq!(ask["callSiteState"], "resolved");
-    assert_eq!(ask["callSiteFile"], "test.baml");
-    assert_eq!(ask["callSiteLine"], 14);
-    let (start, end) = (
-        usize::try_from(ask["callSiteStart"].as_u64().unwrap()).unwrap(),
-        usize::try_from(ask["callSiteEnd"].as_u64().unwrap()).unwrap(),
-    );
-    assert_eq!(&SOURCE[start..end], "Ask(Customer { name: name, age: 30 })");
-    assert_eq!(calls[0]["callSiteLine"], 14);
-    let main = paths
-        .iter()
-        .find(|path| path["fqn"] == "user.main")
-        .unwrap();
-    assert_eq!(main["edgeKind"], "root");
-    assert_eq!(main["completedOk"], 1, "timing-only invocation counted");
-    assert_eq!(main["depth"], 0);
-    assert_eq!(ask["parentCallPathId"], main["callPathId"]);
+    // The playground's own process is still running: no profiler yet.
+    assert!(opened["callPaths"].as_array().unwrap().is_empty());
     assert!(opened["errors"].as_array().unwrap().is_empty());
 
     // A run whose retained call throws: the call is evidence of an error,
@@ -201,38 +175,18 @@ async fn recorded_playground_runs_appear_on_refresh_with_captured_values() {
         .open_execution(&project_text, &failed, None)
         .unwrap();
     assert_eq!(opened["execution"]["totalErrors"], Value::Null);
-    for path in opened["callPaths"].as_array().unwrap() {
-        assert_eq!(path["completedOk"], 0);
-        assert_eq!(path["completedError"], 1);
-        assert_eq!(path["completedCancelled"], 0);
-        assert_eq!(path["outcomeState"], "recorded");
-    }
-    // One recorded throw: its origin, stack and the calls it failed. The
-    // failed call is not listed a second time as an errored call.
+    // The failed call's error, with the stack its context recorded.
     let errors = opened["errors"].as_array().unwrap();
     assert_eq!(errors.len(), 1, "{errors:#?}");
     let error = &errors[0];
-    assert_eq!(error["grain"], "throw");
-    assert_eq!(error["kind"], "fresh");
-    assert_eq!(error["raiseKind"], "throw");
-    assert_eq!(error["originState"], "fresh");
+    assert_eq!(error["grain"], "errored_call");
+    assert_eq!(error["kind"], "throw");
+    assert_eq!(error["callId"], opened["calls"][0]["callId"]);
     assert_eq!(error["throwFqn"], "user.Ask");
-    assert_eq!(error["throwCallId"], opened["calls"][0]["callId"]);
-    assert_eq!(error["throwCallPathId"], opened["calls"][0]["callPathId"]);
     assert_eq!(error["throwSiteFile"], "test.baml");
     assert_eq!(error["throwSiteLine"], 10);
-    let (start, end) = (
-        usize::try_from(error["throwSiteStart"].as_u64().unwrap()).unwrap(),
-        usize::try_from(error["throwSiteEnd"].as_u64().unwrap()).unwrap(),
-    );
-    assert_eq!(&SOURCE[start..end], "throw Problem { reason: \"boom\" }");
-    assert_eq!(error["unwindResult"], "unhandled");
     assert_eq!(error["stack"], json!(["user.main", "user.Ask"]));
     assert_eq!(error["stackComplete"], true);
-    assert_eq!(
-        error["failedCallIds"],
-        json!([opened["calls"][0]["callId"]])
-    );
     let value: Value = serde_json::from_str(error["value"].as_str().unwrap()).unwrap();
     assert_eq!(value["reason"], "boom");
     engine.shutdown().await;

@@ -160,6 +160,8 @@ pub async fn record(project: &Path, runs: &[(i64, &str)]) {
         )
         .await;
     assert!(failed.is_err(), "crash must throw");
+    // Like the CLI: the process ends when this engine shuts down.
+    engine.record_process_exit(bex_engine::ProcessStatus::Error);
     tokio::time::timeout(Duration::from_secs(30), engine.shutdown())
         .await
         .expect("shutdown");
@@ -244,6 +246,11 @@ pub async fn record_program_with(
             .await;
         results.push(result.map_err(|e| format!("{e:?}")));
     }
+    engine.record_process_exit(if results.iter().all(Result::is_ok) {
+        bex_engine::ProcessStatus::Success
+    } else {
+        bex_engine::ProcessStatus::Error
+    });
     tokio::time::timeout(Duration::from_secs(30), engine.shutdown())
         .await
         .expect("shutdown");

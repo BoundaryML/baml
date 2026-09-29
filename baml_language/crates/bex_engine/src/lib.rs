@@ -79,6 +79,8 @@ pub mod logger;
 mod telemetry;
 mod thread;
 #[cfg(not(target_arch = "wasm32"))]
+pub use btel_types::ProcessStatus;
+#[cfg(not(target_arch = "wasm32"))]
 pub use telemetry::TelemetryRecording;
 mod telemetry_state;
 pub mod trace_heap;
@@ -776,6 +778,9 @@ pub struct BexEngine {
     #[cfg(test)]
     completed_threads: std::sync::Mutex<Vec<(u64, bex_vm::telemetry::InvocationOutcome)>>,
     process_euid: ProcessEuid,
+    /// A panic escaped some root call: how a host that fails because of it
+    /// reports the process's end.
+    root_panicked: std::sync::atomic::AtomicBool,
     engine_id: EngineId,
     program_id: ProgramId,
     source_snapshot_id: Option<bex_events::ids::SourceSnapshotId>,
@@ -1634,6 +1639,8 @@ impl BexEngine {
                 #[cfg(not(target_arch = "wasm32"))]
                 let recording_id = recording.as_ref().map(TelemetryRecording::id);
                 #[cfg(not(target_arch = "wasm32"))]
+                let process_exit = recording.as_ref().map(TelemetryRecording::process_exit);
+                #[cfg(not(target_arch = "wasm32"))]
                 let (runtime, delivery) = match recording {
                     // Compile-time metadata is copied once, before any VM executes.
                     Some(recording) => recording.start(
@@ -1658,6 +1665,8 @@ impl BexEngine {
                     runtime,
                     #[cfg(not(target_arch = "wasm32"))]
                     delivery,
+                    #[cfg(not(target_arch = "wasm32"))]
+                    process_exit,
                 })
             })
             .transpose()?;
@@ -1818,6 +1827,7 @@ impl BexEngine {
             #[cfg(test)]
             completed_threads: std::sync::Mutex::new(Vec::new()),
             process_euid,
+            root_panicked: std::sync::atomic::AtomicBool::new(false),
             engine_id,
             program_id,
             source_snapshot_id,
@@ -4542,12 +4552,12 @@ impl BexEngine {
                     bex_vm::telemetry::InvocationOutcome::Cancelled,
                 ));
             }
+            let outcome = thread.vm.telemetry_outcome_for_exception(value);
             self.settle_child_errored(thread, future_id, value, trace)
                 .await?;
-            return Ok(ThreadOutcome::SettledChild(
-                bex_vm::telemetry::InvocationOutcome::Errored,
-            ));
+            return Ok(ThreadOutcome::SettledChild(outcome));
         }
+        thread.escaped_outcome = Some(thread.vm.telemetry_outcome_for_exception(value));
         // A panic escaping all in-BAML catches to the host is an
         // engine-level failure mode, not a value the function opted into
         // via `throws` — so it must bypass the declared-throws re-typing and
@@ -4873,6 +4883,9 @@ impl BexEngine {
             self.trace_scope,
         );
         child_vm.thread_id = thread_id;
+        if let Some(name) = &name {
+            child_vm.set_telemetry_thread_name(name);
+        }
 
         child_vm.set_entry_point(closure, &[]);
 
@@ -5302,6 +5315,8 @@ impl BexEngine {
                                 None
                             };
 
+                        // A synchronous sysop does its work inside the call below.
+                        let sys_op_started = thread.vm.telemetry_clock().map(|clock| clock.read());
                         let sys_op_result = if let Some(request) = runtime_compile_request {
                             match request {
                                 Ok(request) => self.execute_runtime_compile(request, operation),
@@ -5320,7 +5335,15 @@ impl BexEngine {
                         };
 
                         let outcome = match sys_op_result {
-                            SysOpResult::Ready(r) => r,
+                            SysOpResult::Ready(r) => {
+                                if let (Some(started), Some(clock)) =
+                                    (sys_op_started, thread.vm.telemetry_clock())
+                                {
+                                    let elapsed = started.elapsed_until(clock.read());
+                                    thread.vm.record_sysop_time(elapsed);
+                                }
+                                r
+                            }
                             SysOpResult::Async(fut) => {
                                 // Release the heap permit so concurrent GC
                                 // can run during the wait. Re-acquire
@@ -5359,10 +5382,14 @@ impl BexEngine {
                                 }
                                 .await;
                                 thread = active.insert(resumed);
+                                let observed = wait.is_some();
                                 thread.vm.record_telemetry_wait(
                                     wait.map(|(frame, _, _)| frame),
                                     elapsed,
                                 );
+                                if observed {
+                                    thread.vm.record_sysop_time(elapsed);
+                                }
 
                                 match outcome {
                                     SysOpOutcome::Cancelled => {
@@ -5846,8 +5873,19 @@ impl BexEngine {
             Err(error) if cancel.is_cancelled() && is_cancelled_engine_error(error) => {
                 InvocationOutcome::Cancelled
             }
-            Err(_) => InvocationOutcome::Errored,
+            Err(_) => active
+                .as_mut()
+                .and_then(|thread| thread.escaped_outcome.take())
+                .unwrap_or(InvocationOutcome::Errored),
         };
+        if outcome == InvocationOutcome::Panicked
+            && active
+                .as_ref()
+                .is_some_and(|thread| thread.settles_future.is_none())
+        {
+            self.root_panicked
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
         self.finish_thread_telemetry(active.as_mut().expect("restored execution permit"), outcome);
         result
     }

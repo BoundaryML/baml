@@ -41,6 +41,15 @@ struct ScriptExpansion {
     extra_args: Vec<String>,
 }
 
+/// A failed run ended the process with a panic when one escaped a root call.
+fn failure_status(engine: &BexEngine) -> bex_engine::ProcessStatus {
+    if engine.root_panicked() {
+        bex_engine::ProcessStatus::Panicked
+    } else {
+        bex_engine::ProcessStatus::Error
+    }
+}
+
 fn report_unhandled_spawn_errors(engine: &BexEngine, reporter: &Reporter) -> bool {
     let mut failed = false;
     for report in engine.take_unhandled_spawn_errors() {
@@ -370,7 +379,7 @@ impl RunArgs {
     ) -> Result<BexEngine> {
         let bytecode = baml_compiler2_emit::generate_project_bytecode(db, package)
             .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
-        crate::runtime_telemetry::create_engine(bytecode, argv, recording_root)
+        crate::runtime_telemetry::create_engine(bytecode, argv, recording_root, Vec::new())
             .map_err(|e| anyhow!("failed to create engine: {e:?}"))
     }
 
@@ -717,9 +726,15 @@ impl RunArgs {
             ),
             logs.as_ref(),
         );
+        let status = match &dispatch_result {
+            Ok(baml_exec::DispatchResult::Ok | baml_exec::DispatchResult::Exit(0)) => {
+                bex_engine::ProcessStatus::Success
+            }
+            _ => failure_status(&engine),
+        };
         self.block_on_with_logs(
             &rt,
-            crate::shutdown::shutdown_engine_future(&engine, reporter),
+            crate::shutdown::shutdown_engine_future(&engine, reporter, status),
             logs.as_ref(),
         );
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
@@ -822,7 +837,12 @@ impl RunArgs {
 
         if let Some(program) = session.try_cached_program() {
             self.vlog(format_args!("Bytecode cache hit — skipping compile"));
-            match crate::runtime_telemetry::create_engine(program, argv.clone(), session.root()) {
+            match crate::runtime_telemetry::create_engine(
+                program,
+                argv.clone(),
+                session.root(),
+                crate::runtime_telemetry::session_sources(&session),
+            ) {
                 Ok(engine) => {
                     return Ok(Compiled {
                         db: session.db,
@@ -908,8 +928,13 @@ impl RunArgs {
             baml_db::baml_compiler2_hir_ty::package_interface::stdlib_honest_derivations()
         ));
         let program = compiled.program;
-        let engine = crate::runtime_telemetry::create_engine(program, argv, session.root())
-            .map_err(|e| anyhow!("failed to create engine: {e:?}"))?;
+        let engine = crate::runtime_telemetry::create_engine(
+            program,
+            argv,
+            session.root(),
+            crate::runtime_telemetry::session_sources(&session),
+        )
+        .map_err(|e| anyhow!("failed to create engine: {e:?}"))?;
         self.vlog(format_args!(
             "Compiled {} user function(s)",
             engine.user_functions().len()
@@ -1143,9 +1168,15 @@ impl RunArgs {
                 },
                 logs.as_ref(),
             );
+        let status = match &output_succeeded {
+            Ok(true) | Err(bex_engine::EngineError::Exit { code: 0 }) => {
+                bex_engine::ProcessStatus::Success
+            }
+            _ => failure_status(&engine),
+        };
         self.block_on_with_logs(
             &rt,
-            crate::shutdown::shutdown_engine_future(&engine, reporter),
+            crate::shutdown::shutdown_engine_future(&engine, reporter, status),
             logs.as_ref(),
         );
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);

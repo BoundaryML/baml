@@ -1109,6 +1109,7 @@ dependencies = [
  "sys_types",
  "tempfile",
  "tokio",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -1287,6 +1288,7 @@ dependencies = [
  "baml_db",
  "baml_type",
  "baml_type_runtime",
+ "baml_version",
  "bex_events",
  "bex_external_types",
  "bex_heap",

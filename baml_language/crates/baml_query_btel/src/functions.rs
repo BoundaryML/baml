@@ -2,7 +2,7 @@
 //!
 //! Identity and timing functions are pure. Value functions resolve CAS
 //! blobs lazily through the current query's context: a query that never
-//! evaluates `args`, `output` or `error` reads no blob. Within one query,
+//! evaluates `input_args`, `output_value` or `error_value` reads no blob. Within one query,
 //! hydration outcomes (including missing and corrupt blobs) are memoized
 //! under entry and byte limits; the next query starts empty and can find a
 //! blob that arrived in between.
@@ -128,6 +128,17 @@ impl QueryContext {
         load.outcome
     }
 
+    /// The snapshot a handle reads: its CAS blob, or the inline one.
+    fn load_handle(&self, state: &mut CacheState, handle: &Handle) -> CasOutcome {
+        match &handle.inline {
+            Some(blob) => match btel_snapshot::decode_blob(blob, &self.cas.limits().decode) {
+                Ok(snapshot) => CasOutcome::Available(Arc::new(snapshot)),
+                Err(error) => CasOutcome::Corrupt(error),
+            },
+            None => self.load(state, handle.cas),
+        }
+    }
+
     /// Report `code` once per distinct `key` (a handle, or a handle plus an
     /// operation marker).
     fn note(&self, key: &[u8], code: &str) {
@@ -161,7 +172,7 @@ impl QueryContext {
             Self::unavailable(&mut state, handle, PENDING);
             return Ok((Scalar::Null, Kind::Unavailable));
         }
-        let result = match self.load(&mut state, parsed.cas) {
+        let result = match self.load_handle(&mut state, &parsed) {
             CasOutcome::Available(snapshot) => {
                 let nav = value::navigate(
                     &snapshot,
@@ -208,7 +219,7 @@ impl QueryContext {
             Self::unavailable(&mut state, handle, PENDING);
             return Ok(None);
         }
-        match self.load(&mut state, parsed.cas) {
+        match self.load_handle(&mut state, &parsed) {
             CasOutcome::Available(snapshot) => {
                 let nav = value::navigate(
                     &snapshot,
@@ -245,7 +256,7 @@ impl QueryContext {
         if parsed.pending {
             return Ok(PENDING.to_owned());
         }
-        Ok(match self.load(&mut state, parsed.cas) {
+        Ok(match self.load_handle(&mut state, &parsed) {
             CasOutcome::Available(snapshot) => value::state(
                 &snapshot,
                 parsed.root(),
@@ -320,12 +331,14 @@ fn user_error(message: &str) -> SqlError {
 /// Encoded as a BLOB so it flows through views, joins and subqueries.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Handle {
-    /// 1 inputs, 2 output, 3 error.
+    /// 1 inputs, 2 output, 3 error, 4 inline (a value built by the index).
     pub kind: u8,
     /// The capture is expected but its evidence is not indexed yet (inputs
     /// of a completion whose announcement has not arrived); `cas` is unused.
     pub pending: bool,
     pub cas: [u8; 16],
+    /// Kind 4: the encoded snapshot itself; `cas` is unused.
+    pub inline: Option<Vec<u8>>,
     /// Argument slot names; `None` when not recorded.
     pub names: Option<ArgumentNames>,
     pub path: Vec<Segment>,
@@ -333,6 +346,7 @@ pub struct Handle {
 
 const HANDLE_MAGIC: [u8; 2] = [0xB7, 0x01];
 const PENDING_BIT: u8 = 0x80;
+const INLINE: u8 = 4;
 
 impl Handle {
     fn root(&self) -> Root {
@@ -347,7 +361,13 @@ impl Handle {
         let mut out = Vec::with_capacity(32);
         out.extend_from_slice(&HANDLE_MAGIC);
         out.push(self.kind | if self.pending { PENDING_BIT } else { 0 });
-        out.extend_from_slice(&self.cas);
+        match &self.inline {
+            Some(blob) => {
+                out.extend_from_slice(&component_len(blob.len()).to_le_bytes());
+                out.extend_from_slice(blob);
+            }
+            None => out.extend_from_slice(&self.cas),
+        }
         match &self.names {
             Some(names) => {
                 let names = names.encode();
@@ -367,7 +387,15 @@ impl Handle {
         let rest = bytes.strip_prefix(&HANDLE_MAGIC)?;
         let (&kind, rest) = rest.split_first()?;
         let (kind, pending) = (kind & !PENDING_BIT, kind & PENDING_BIT != 0);
-        let (cas, rest) = rest.split_at_checked(16)?;
+        let (cas, inline, rest): (&[u8], _, _) = if kind == INLINE {
+            let (len, tail) = rest.split_at_checked(4)?;
+            let len = u32::from_le_bytes(len.try_into().ok()?) as usize;
+            let (blob, tail) = tail.split_at_checked(len)?;
+            (&[0; 16], Some(blob.to_vec()), tail)
+        } else {
+            let (cas, tail) = rest.split_at_checked(16)?;
+            (cas, None, tail)
+        };
         let (&has_names, mut rest) = rest.split_first()?;
         let names = if has_names == 1 {
             let (len, tail) = rest.split_at_checked(4)?;
@@ -400,6 +428,7 @@ impl Handle {
             kind,
             pending,
             cas: cas.try_into().ok()?,
+            inline,
             names,
             path,
         })
@@ -582,14 +611,7 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
     })?;
     // `(ticks, multiplier, shift, status, epoch)` for accumulated totals.
     conn.create_scalar_function("__btel_total_ns", 5, pure, |ctx| {
-        let ticks = opt_i64(ctx, 0)?.and_then(|v| u64::try_from(v).ok());
-        let Ok(clock) = clock_at(ctx, 1)? else {
-            return Ok(None);
-        };
-        Ok(clock
-            .total_ns(ticks)
-            .ok()
-            .and_then(|ns| i64::try_from(ns).ok()))
+        Ok(total_ns(clock_at(ctx, 1)?, opt_i64(ctx, 0)?))
     })?;
     conn.create_scalar_function("__btel_total_timing", 5, pure, |ctx| {
         let ticks = opt_i64(ctx, 0)?.and_then(|v| u64::try_from(v).ok());
@@ -663,6 +685,7 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
                 .ok_or_else(|| user_error("invalid value kind"))?,
             pending: pending && opt_blob(ctx, 1)?.is_none(),
             cas: cas.try_into().map_err(|_| user_error("invalid CAS id"))?,
+            inline: None,
             names,
             path: Vec::new(),
         };
@@ -801,8 +824,267 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
         current(&s)?.state(handle)
     })?;
     register_identity_and_time(conn)?;
+    register_final_tables(conn)?;
     let _ = Null;
     Ok(())
+}
+
+/// A profiler node's identity: its parent's, the name of the function it
+/// reached and the edge that reached it (1 call, 2 spawn). The same code
+/// reached the same way has the same node in every process.
+pub(crate) fn node_hash(parent: Option<i64>, name: &str, edge: i64) -> i64 {
+    let mut hasher = xxhash_rust::xxh3::Xxh3::new();
+    match parent {
+        None => hasher.update(&[0]),
+        Some(parent) => {
+            hasher.update(&[1]);
+            hasher.update(&parent.to_be_bytes());
+        }
+    }
+    hasher.update(&(name.len() as u64).to_be_bytes());
+    hasher.update(name.as_bytes());
+    hasher.update(&edge.to_be_bytes());
+    hasher.digest().cast_signed()
+}
+
+/// A value the index builds rather than reads from the CAS.
+#[derive(Clone, Debug)]
+pub(crate) enum Inline {
+    Null,
+    Int(i64),
+    Float(f64),
+    Text(String),
+    Map(Vec<(String, Inline)>),
+    List(Vec<Inline>),
+}
+
+/// An inline value's handle: its snapshot travels inside the handle.
+pub(crate) fn inline_handle(value: &Inline) -> Vec<u8> {
+    let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+    let mut builder = pool.try_acquire().expect("a fresh pool has a slot");
+    let root = build_inline(&mut builder, value);
+    let snapshot = builder.finish_value(root);
+    let mut blob = Vec::new();
+    snapshot.write_blob(&mut blob).expect("writing to memory");
+    Handle {
+        kind: INLINE,
+        pending: false,
+        cas: [0; 16],
+        inline: Some(blob),
+        names: None,
+        path: Vec::new(),
+    }
+    .encode()
+}
+
+/// Children first: each container's values form one contiguous range.
+fn build_inline(b: &mut btel_snapshot::Builder, value: &Inline) -> btel_snapshot::SnapshotValue {
+    use btel_snapshot::{Limit, OwnedType, SnapshotObject, SnapshotValue};
+    let text = |b: &mut btel_snapshot::Builder, text: &str| {
+        b.string(&btel_snapshot::BexStr::from(text)).map_or(
+            SnapshotValue::Truncated(Limit::Bytes),
+            SnapshotValue::String,
+        )
+    };
+    match value {
+        Inline::Null => SnapshotValue::Null,
+        Inline::Int(n) => SnapshotValue::Int(*n),
+        Inline::Float(f) => SnapshotValue::Float(*f),
+        Inline::Text(t) => text(b, t),
+        Inline::Map(entries) => {
+            let values: Vec<SnapshotValue> =
+                entries.iter().map(|(_, v)| build_inline(b, v)).collect();
+            let Some(id) = b.reserve_object() else {
+                return SnapshotValue::Truncated(Limit::Objects);
+            };
+            let key_type = b.push_type(OwnedType::string());
+            let value_type = b.push_type(OwnedType::unknown());
+            let start = b.entry_start();
+            b.reserve_entries(entries.len().min(b.remaining_entries()));
+            for ((key, _), value) in entries.iter().zip(values) {
+                if b.remaining_entries() == 0 || !b.content(key.len(), false) {
+                    break;
+                }
+                b.entry(&btel_snapshot::BexStr::from(key.as_str()), value);
+            }
+            let range = b.entry_range(start);
+            b.set_object(
+                id,
+                SnapshotObject::Map {
+                    key_type,
+                    value_type,
+                    entries: range,
+                    original_len: entries.len(),
+                },
+            );
+            SnapshotValue::Object(id)
+        }
+        Inline::List(items) => {
+            let values: Vec<SnapshotValue> = items.iter().map(|v| build_inline(b, v)).collect();
+            let Some(id) = b.reserve_object() else {
+                return SnapshotValue::Truncated(Limit::Objects);
+            };
+            let element_type = b.push_type(OwnedType::unknown());
+            let start = b.value_start();
+            b.reserve_values(values.len().min(b.remaining_values()));
+            for value in values {
+                if b.remaining_values() == 0 {
+                    break;
+                }
+                b.push_value(value);
+            }
+            let range = b.value_range(start);
+            b.set_object(
+                id,
+                SnapshotObject::List {
+                    element_type,
+                    items: range,
+                    original_len: items.len(),
+                },
+            );
+            SnapshotValue::Object(id)
+        }
+    }
+}
+
+/// Model usage summed per span: `(model, input, output, cache_read,
+/// cache_write, reasoning)` rows in, one `temporary_projections` map out.
+#[derive(Default)]
+struct Usage {
+    /// Model turns recorded against the span.
+    calls: i64,
+    models: Vec<String>,
+    unnamed: bool,
+    input: i64,
+    output: i64,
+    cache_read: Option<i64>,
+    cache_write: Option<i64>,
+    reasoning: Option<i64>,
+    /// `None` once any turn's model has no price.
+    cost: Option<f64>,
+}
+
+struct UsageSum;
+impl Aggregate<Option<Usage>, Option<Vec<u8>>> for UsageSum {
+    fn init(&self, _: &mut Context<'_>) -> rusqlite::Result<Option<Usage>> {
+        Ok(None)
+    }
+    fn step(&self, ctx: &mut Context<'_>, acc: &mut Option<Usage>) -> rusqlite::Result<()> {
+        let model: Option<String> = ctx.get(0)?;
+        let input = opt_i64(ctx, 1)?.unwrap_or(0);
+        let output = opt_i64(ctx, 2)?.unwrap_or(0);
+        let (cache_read, cache_write, reasoning) =
+            (opt_i64(ctx, 3)?, opt_i64(ctx, 4)?, opt_i64(ctx, 5)?);
+        let usage = acc.get_or_insert_with(|| Usage {
+            cost: Some(0.0),
+            ..Usage::default()
+        });
+        let add = |sum: Option<i64>, n: Option<i64>| match (sum, n) {
+            (sum, None) => sum,
+            (sum, Some(n)) => Some(sum.unwrap_or(0).saturating_add(n)),
+        };
+        usage.cost = usage
+            .cost
+            .zip(crate::pricing::cost(
+                model.as_deref(),
+                input,
+                output,
+                cache_read,
+                cache_write,
+            ))
+            .map(|(a, b)| a + b);
+        match model {
+            Some(model) if !usage.models.contains(&model) => usage.models.push(model),
+            Some(_) => {}
+            None => usage.unnamed = true,
+        }
+        usage.calls += 1;
+        usage.input = usage.input.saturating_add(input);
+        usage.output = usage.output.saturating_add(output);
+        usage.cache_read = add(usage.cache_read, cache_read);
+        usage.cache_write = add(usage.cache_write, cache_write);
+        usage.reasoning = add(usage.reasoning, reasoning);
+        Ok(())
+    }
+    fn finalize(
+        &self,
+        _: &mut Context<'_>,
+        acc: Option<Option<Usage>>,
+    ) -> rusqlite::Result<Option<Vec<u8>>> {
+        let Some(usage) = acc.flatten() else {
+            return Ok(None);
+        };
+        let int = |n: Option<i64>| n.map_or(Inline::Null, Inline::Int);
+        let model = if usage.models.is_empty() {
+            Inline::Null
+        } else {
+            Inline::Text(usage.models.join(", "))
+        };
+        Ok(Some(inline_handle(&Inline::Map(vec![
+            ("model_name".into(), model),
+            ("model_calls".into(), Inline::Int(usage.calls)),
+            ("input_tokens".into(), Inline::Int(usage.input)),
+            ("output_tokens".into(), Inline::Int(usage.output)),
+            ("cache_read_tokens".into(), int(usage.cache_read)),
+            ("cache_write_tokens".into(), int(usage.cache_write)),
+            ("reasoning_tokens".into(), int(usage.reasoning)),
+            (
+                "cost".into(),
+                usage
+                    .cost
+                    .filter(|_| !usage.unnamed)
+                    .map_or(Inline::Null, Inline::Float),
+            ),
+        ]))))
+    }
+}
+
+fn utc_text(ns: Option<i64>) -> Option<String> {
+    ns.and_then(|ns| format_unix_ns(i128::from(ns)))
+}
+
+fn register_final_tables(conn: &Connection) -> rusqlite::Result<()> {
+    let pure = FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC;
+    // `(parent node, function name, edge)`: NULL until the name is known.
+    conn.create_scalar_function("__btel_node", 3, pure, |ctx| {
+        let Some(name) = ctx.get::<Option<String>>(1)? else {
+            return Ok(None);
+        };
+        Ok(Some(node_hash(
+            opt_i64(ctx, 0)?,
+            &name,
+            opt_i64(ctx, 2)?.unwrap_or(0),
+        )))
+    })?;
+    // A node's public ID: 16 hex digits.
+    conn.create_scalar_function("__btel_hex", 1, pure, |ctx| {
+        Ok(opt_i64(ctx, 0)?.map(|n| format!("{:016x}", n.cast_unsigned())))
+    })?;
+    // RFC 3339 from Unix nanoseconds.
+    conn.create_scalar_function("__btel_ns_utc", 1, pure, |ctx| {
+        Ok(utc_text(opt_i64(ctx, 0)?))
+    })?;
+    conn.create_scalar_function("__btel_empty_map", 0, pure, |_| {
+        Ok(inline_handle(&Inline::Map(Vec::new())))
+    })?;
+    // `(started_ns, final status or NULL, ended_ns)`: running, then the end.
+    conn.create_scalar_function("__btel_status_history", 3, pure, |ctx| {
+        let entry = |status: &str, ns: Option<i64>| {
+            Inline::Map(vec![
+                ("status".into(), Inline::Text(status.to_owned())),
+                (
+                    "timestamp".into(),
+                    utc_text(ns).map_or(Inline::Null, Inline::Text),
+                ),
+            ])
+        };
+        let mut history = vec![entry("running", opt_i64(ctx, 0)?)];
+        if let Some(status) = ctx.get::<Option<String>>(1)? {
+            history.push(entry(&status, opt_i64(ctx, 2)?));
+        }
+        Ok(inline_handle(&Inline::List(history)))
+    })?;
+    conn.create_aggregate_function("__btel_usage", 6, pure, UsageSum)
 }
 
 /// `<recording hex>:<prefix><id>` for an INTEGER id or an 8-byte BLOB id.
@@ -823,165 +1105,44 @@ fn scoped_id(ctx: &Context<'_>) -> rusqlite::Result<Option<String>> {
     Ok(Some(format!("{}:{prefix}{id}", hex(recording))))
 }
 
-/// One reduced aggregate node's tick totals; `None` once a total overflowed.
-#[derive(Clone, Copy)]
-struct NodeTicks {
-    duration: Option<i64>,
-    wait: Option<i64>,
-}
-
-/// Self time of a call path from its outermost (`normal`) and recursive
-/// (`reentry`) nodes, when present. Returns the nanoseconds and the state,
-/// or only the state when the value is unsupported.
-fn path_self(
-    defined: bool,
-    normal: Option<NodeTicks>,
-    reentry: Option<NodeTicks>,
-    child_ticks: Option<i64>,
-    thread_done: bool,
-    clock: Result<Clock, TimingState>,
-) -> (Option<u64>, &'static str) {
-    if !defined {
-        return (None, "unresolved");
-    }
-    let clock = match clock {
-        Ok(clock) => clock,
-        Err(state) => return (None, state.label()),
-    };
-    if let Err(state) = clock.total_ns(Some(0)) {
-        return (None, state.label());
-    }
-    let Some(NodeTicks {
-        duration,
-        wait: normal_await,
-    }) = normal
-    else {
-        // No completed outermost invocation in the indexed prefix.
-        return (None, "incomplete");
-    };
-    let reentry_await = reentry.map_or(Some(0), |node| node.wait);
-    let (Some(duration), Some(normal_await), Some(reentry_await), Some(children)) =
-        (duration, normal_await, reentry_await, child_ticks)
-    else {
-        return (None, "overflow");
-    };
-    let spent = [children, normal_await, reentry_await]
-        .into_iter()
-        .try_fold(0_i64, i64::checked_add);
-    let Some(ticks) = spent.and_then(|spent| duration.checked_sub(spent)) else {
-        return (None, "overflow");
-    };
-    let Ok(ticks) = u64::try_from(ticks) else {
-        // Children and waits exceed the parent: on an unfinished thread the
-        // parent's own completion is simply not indexed yet.
-        return (
-            None,
-            if thread_done {
-                "underflow"
-            } else {
-                "incomplete"
-            },
-        );
-    };
-    match clock.total_ns(Some(ticks)) {
-        Ok(ns) if i64::try_from(ns).is_ok() => {
-            (Some(ns), if thread_done { "valid" } else { "provisional" })
-        }
-        Ok(_) => (None, "overflow"),
-        Err(state) => (None, state.label()),
-    }
-}
-
-/// A named field of an encoded clock epoch definition, for `clocks`.
-fn epoch_field(definition: &[u8], field: &str) -> rusqlite::Result<SqlValue> {
-    use btel_recorder::proto;
-    use prost::Message as _;
-    let Ok(epoch) = proto::ClockEpochDefinition::decode(definition) else {
-        return Ok(SqlValue::Null);
-    };
-    let text = |v: u64| SqlValue::Text(v.to_string());
-    let label = |v: Option<&'static str>| v.map_or(SqlValue::Null, |l| SqlValue::Text(l.into()));
-    let calibration = epoch.calibration.as_ref();
-    let utc = epoch.utc.as_ref();
-    Ok(match field {
-        "source" => label(
-            proto::ClockSource::try_from(epoch.source)
-                .ok()
-                .and_then(|s| {
-                    Some(match s {
-                        proto::ClockSource::OsMonotonic => "os_monotonic",
-                        proto::ClockSource::WindowsQpc => "windows_qpc",
-                        proto::ClockSource::X86Tsc => "x86_tsc",
-                        proto::ClockSource::ArmSystemCounter => "arm_system_counter",
-                        proto::ClockSource::Mock => "mock",
-                        proto::ClockSource::Unspecified => return None,
-                    })
-                }),
-        ),
-        "reference_tick" => text(epoch.reference_tick),
-        "reference_monotonic_ns" => text(epoch.reference_monotonic_ns),
-        "multiplier" => text(epoch.multiplier),
-        "shift" => SqlValue::Integer(i64::from(epoch.shift)),
-        "origin_uncertainty_ns" => text(epoch.origin_uncertainty_ns),
-        "rate_error_ppb" => text(epoch.rate_error_ppb),
-        "calibration_status" => label(calibration.and_then(|c| {
-            Some(match proto::CalibrationStatus::try_from(c.status).ok()? {
-                proto::CalibrationStatus::NotRequired => "not_required",
-                proto::CalibrationStatus::Converged => "converged",
-                proto::CalibrationStatus::DeadlineReached => "deadline_reached",
-                proto::CalibrationStatus::Unspecified => return None,
-            })
-        })),
-        "calibration_samples" => calibration.map_or(SqlValue::Null, |c| text(c.samples)),
-        "calibration_elapsed_ns" => calibration.map_or(SqlValue::Null, |c| text(c.elapsed_ns)),
-        "calibration_mean_residual_ns" => {
-            calibration.map_or(SqlValue::Null, |c| SqlValue::Real(c.mean_residual_ns))
-        }
-        "calibration_mean_error_ns" => {
-            calibration.map_or(SqlValue::Null, |c| SqlValue::Real(c.mean_error_ns))
-        }
-        "fallback_reason" => label(
-            proto::FallbackReason::try_from(epoch.fallback)
-                .ok()
-                .map(|f| match f {
-                    proto::FallbackReason::None => "none",
-                    proto::FallbackReason::Requested => "requested",
-                    proto::FallbackReason::Unsupported => "unsupported",
-                    proto::FallbackReason::Calibration => "calibration",
-                    proto::FallbackReason::ScaleValidation => "scale_validation",
-                    proto::FallbackReason::Discontinuity => "discontinuity",
-                }),
-        ),
-        "utc_anchor_ticks" => utc.map_or(SqlValue::Null, |u| text(u.ticks)),
-        "utc_anchor_unix_ns" => utc
-            .and_then(UtcAnchor::from_wire)
-            .map_or(SqlValue::Null, |u| SqlValue::Text(u.unix_ns.to_string())),
-        "utc_anchor_at" => utc
-            .and_then(UtcAnchor::from_wire)
-            .and_then(|u| format_unix_ns(u.unix_ns))
-            .map_or(SqlValue::Null, SqlValue::Text),
-        "utc_uncertainty_ns" => utc.map_or(SqlValue::Null, |u| text(u.uncertainty_ns)),
-        _ => return Err(user_error("unknown clock field")),
-    })
-}
-
 /// Clock for timing columns: `(multiplier, shift, status, epoch)` at `at`,
 /// `epoch` as in [`interval`]. A defined epoch with an unrepresentable
 /// multiplier is overflow.
 fn clock_at(ctx: &Context<'_>, at: usize) -> rusqlite::Result<Result<Clock, TimingState>> {
-    let multiplier = opt_i64(ctx, at)?;
-    let epoch = opt_i64(ctx, at + 3)?.unwrap_or(0);
-    if epoch == 2 {
-        return Ok(Err(TimingState::Conflicted));
-    }
-    if epoch == 1 && multiplier.is_none() {
-        return Ok(Err(TimingState::Overflow));
-    }
-    Ok(Ok(clock(
-        multiplier,
+    Ok(epoch_clock(
+        opt_i64(ctx, at)?,
         opt_i64(ctx, at + 1)?,
         opt_i64(ctx, at + 2)?,
-    )))
+        opt_i64(ctx, at + 3)?.unwrap_or(0),
+    ))
+}
+
+/// The clock of an epoch's stored columns, where `epoch` is 0 for no usable
+/// definition, 1 for one definition, 2 for conflicting ones.
+pub(crate) fn epoch_clock(
+    multiplier: Option<i64>,
+    shift: Option<i64>,
+    status: Option<i64>,
+    epoch: i64,
+) -> Result<Clock, TimingState> {
+    if epoch == 2 {
+        return Err(TimingState::Conflicted);
+    }
+    if epoch == 1 && multiplier.is_none() {
+        return Err(TimingState::Overflow);
+    }
+    Ok(clock(multiplier, shift, status))
+}
+
+/// An accumulated tick total in nanoseconds, as `__btel_total_ns` computes
+/// it: `None` when the clock or total is unusable.
+pub(crate) fn total_ns(clock: Result<Clock, TimingState>, ticks: Option<i64>) -> Option<i64> {
+    let ticks = ticks.and_then(|v| u64::try_from(v).ok());
+    clock
+        .ok()?
+        .total_ns(ticks)
+        .ok()
+        .and_then(|ns| i64::try_from(ns).ok())
 }
 
 fn register_identity_and_time(conn: &Connection) -> rusqlite::Result<()> {
@@ -1034,52 +1195,6 @@ fn register_identity_and_time(conn: &Connection) -> rusqlite::Result<()> {
         Ok(anchor
             .unix_ns_at(conversion, ticks_u64(ticks))
             .and_then(|ns| i64::try_from(ns).ok()))
-    })?;
-    // `__btel_self(field, defined, n_present, n_duration, n_await,
-    //  r_present, r_await, child_ticks, thread_done, multiplier, shift,
-    //  status, has_epoch)`; field 0 is nanoseconds, 1 the state.
-    conn.create_scalar_function("__btel_self", 13, pure, |ctx| {
-        let field = opt_i64(ctx, 0)?.unwrap_or(0);
-        let flag = |i| -> rusqlite::Result<bool> { Ok(opt_i64(ctx, i)?.unwrap_or(0) != 0) };
-        let normal = if flag(2)? {
-            Some(NodeTicks {
-                duration: opt_i64(ctx, 3)?,
-                wait: opt_i64(ctx, 4)?,
-            })
-        } else {
-            None
-        };
-        // Only the recursive node's await time enters self time.
-        let reentry = if flag(5)? {
-            Some(NodeTicks {
-                duration: None,
-                wait: opt_i64(ctx, 6)?,
-            })
-        } else {
-            None
-        };
-        let (ns, state) = path_self(
-            flag(1)?,
-            normal,
-            reentry,
-            opt_i64(ctx, 7)?,
-            flag(8)?,
-            clock_at(ctx, 9)?,
-        );
-        Ok(if field == 0 {
-            ns.and_then(|ns| i64::try_from(ns).ok())
-                .map(SqlValue::Integer)
-        } else {
-            Some(SqlValue::Text(state.to_owned()))
-        }
-        .unwrap_or(SqlValue::Null))
-    })?;
-    conn.create_scalar_function("__btel_epoch_field", 2, pure, |ctx| {
-        let Some(definition) = opt_blob(ctx, 0)? else {
-            return Ok(SqlValue::Null);
-        };
-        let field = ctx.get::<String>(1)?;
-        epoch_field(definition, &field)
     })?;
     Ok(())
 }

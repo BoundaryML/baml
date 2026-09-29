@@ -810,6 +810,7 @@ mod tests {
                         TimingRecord::FunctionTimingCompletion { .. } => {
                             timings.push(timing_current.expect("timing context"));
                         }
+                        TimingRecord::SysOpTime { .. } => unreachable!(),
                     }
                 }
             },

@@ -6,3 +6,4 @@ prelude = true
 [dependencies]
 baml = { path = "../baml" }
 reflect = { path = "../reflect" }
+trace = { path = "../trace" }

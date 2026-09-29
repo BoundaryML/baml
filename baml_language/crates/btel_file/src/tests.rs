@@ -12,9 +12,10 @@ fn delta() -> AggregateDelta {
         node: CallPathNodeId::new(CallPathId::new_non_root(7).unwrap(), false),
         count: 1,
         total_duration: ClockDuration::from_ticks(3),
-        total_io_duration: AwaitDuration::ZERO,
+        total_self_await: AwaitDuration::ZERO,
         errored: 0,
         cancelled: 0,
+        ..Default::default()
     }
 }
 

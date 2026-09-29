@@ -16,7 +16,7 @@ pub(super) fn promotes(
     domain: ClockDomainId,
 ) -> bool {
     policy.span_from_entry
-        || policy.promote_errors && outcome == InvocationOutcome::Errored
+        || policy.promote_errors && outcome.is_error()
         || policy
             .promotion_duration_threshold
             .is_some_and(|threshold| threshold.reached(elapsed, domain))

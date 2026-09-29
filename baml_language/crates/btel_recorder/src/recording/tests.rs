@@ -177,6 +177,7 @@ fn metadata(
             spawn_call_path: CallPathId::ROOT,
             started_at: ClockInstant::from_ticks(1),
             clock,
+            name: None,
         },
     );
     publisher.span(
@@ -196,9 +197,10 @@ fn delta(path: CallPathId) -> AggregateDelta {
         node: CallPathNodeId::new(path, false),
         count: 2,
         total_duration: ClockDuration::from_ticks(9),
-        total_io_duration: AwaitDuration::ZERO,
+        total_self_await: AwaitDuration::ZERO,
         errored: 0,
         cancelled: 0,
+        ..Default::default()
     }
 }
 fn decode(file: &SealedFile) -> proto::RecordingFile {
@@ -330,6 +332,7 @@ fn size_boundary_recycles_the_input_chunk_before_handoff() {
         completed_at: ClockInstant::from_ticks(2),
         outcome: InvocationOutcome::Ok,
         clock: ClockRuntime::new(ClockMode::Monotonic).start_run(),
+        name: None,
     });
     producer.seal();
     processor.process_available();
@@ -403,6 +406,7 @@ fn idle_processor_seals_on_the_recording_deadline_without_more_input() {
         spawn_call_path: CallPathId::ROOT,
         started_at: ClockInstant::from_ticks(1),
         clock: Arc::clone(&clock),
+        name: None,
     });
     producer.seal();
     let (send, recv) = std::sync::mpsc::channel();
@@ -463,6 +467,7 @@ fn thread_lifecycle_and_clock_observations_are_forwarded_without_deduplication()
             spawn_call_path: CallPathId::ROOT,
             started_at: ClockInstant::from_ticks(1),
             clock: Arc::clone(&epoch),
+            name: None,
         },
     );
     runtime.reset_after_restore();
@@ -476,6 +481,7 @@ fn thread_lifecycle_and_clock_observations_are_forwarded_without_deduplication()
             completed_at: ClockInstant::from_ticks(2),
             outcome: InvocationOutcome::Ok,
             clock: Arc::clone(&epoch),
+            name: None,
         },
     );
     p.flush_recording().unwrap();
@@ -689,10 +695,11 @@ fn size_hint_tracks_encoded_bodies_including_merge_growth_and_overflow() {
                     node: CallPathNodeId::new(path, true),
                     count,
                     total_duration: ClockDuration::from_ticks(duration),
-                    total_io_duration: AwaitDuration::ZERO
+                    total_self_await: AwaitDuration::ZERO
                         .saturating_add(ClockDuration::from_ticks(io)),
                     errored,
                     cancelled,
+                    ..Default::default()
                 });
             }
         }
@@ -713,7 +720,8 @@ fn size_hint_tracks_encoded_bodies_including_merge_growth_and_overflow() {
                 entries[0].outcomes,
                 Some(proto::AggregateOutcomes {
                     errored: 128,
-                    cancelled: 2
+                    cancelled: 2,
+                    panicked: Some(0),
                 })
             );
             assert_eq!(entries[1].count, u64::MAX);
@@ -721,7 +729,8 @@ fn size_hint_tracks_encoded_bodies_including_merge_growth_and_overflow() {
                 entries[1].outcomes,
                 Some(proto::AggregateOutcomes {
                     errored: 0,
-                    cancelled: u64::MAX
+                    cancelled: u64::MAX,
+                    panicked: Some(0),
                 })
             );
         }
@@ -794,6 +803,7 @@ fn population_outcomes_include_timing_only_calls_and_count_forwarded_spans_once(
         completed_at: ClockInstant::from_ticks(3),
         outcome: InvocationOutcome::Cancelled,
         clock: ClockRuntime::new(ClockMode::Monotonic).start_run(),
+        name: None,
     });
     drop(producer);
     pool.close_admission();
@@ -864,6 +874,7 @@ fn thread_heavy_files_seal_near_the_encoded_target() {
                     spawn_call_path: CallPathId::ROOT,
                     started_at: ClockInstant::from_ticks(1),
                     clock: Arc::clone(&clock),
+                    name: None,
                 },
             );
         }
@@ -1091,6 +1102,7 @@ fn thread_record(
             completed_at: ClockInstant::from_ticks(2),
             outcome: InvocationOutcome::Ok,
             clock: Arc::clone(clock),
+            name: None,
         }
     } else {
         SpanRecord::ThreadSpanAnnouncement {
@@ -1099,6 +1111,7 @@ fn thread_record(
             spawn_call_path: CallPathId::ROOT,
             started_at: ClockInstant::from_ticks(1),
             clock: Arc::clone(clock),
+            name: None,
         }
     }
 }

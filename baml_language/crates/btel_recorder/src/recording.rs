@@ -76,6 +76,20 @@ impl SealedFile {
     }
 }
 
+/// What a host tells a recording about its process.
+pub struct ProcessRecording {
+    pub info: btel_types::ProcessInfo,
+    /// The project's sources, a `map<path, content>` snapshot.
+    pub sources: Option<Snapshot>,
+    pub exit: std::sync::Arc<btel_types::ProcessExitSlot>,
+}
+
+struct ProcessHeader {
+    info: btel_types::ProcessInfo,
+    source: Option<proto::SnapshotId>,
+    exit: std::sync::Arc<btel_types::ProcessExitSlot>,
+}
+
 /// Sink-independent encoding, capture deduplication and recording sequencing.
 /// Drain snapshots after input chunk recycling and before delivering sealed files.
 /// Size/time sealing and `flush_recording` never claim `RecordingEnd`; only
@@ -86,6 +100,7 @@ pub struct RecordingBuilder {
     id: RecordingId,
     config: RecordingConfig,
     source_snapshot_id: Option<[u8; 32]>,
+    process: Option<ProcessHeader>,
     buffer: ConversionBuffer,
     captures: btel_processor::CaptureProcessor,
     pending_captures: Vec<Snapshot>,
@@ -108,6 +123,7 @@ impl RecordingBuilder {
             id,
             config,
             source_snapshot_id: None,
+            process: None,
             buffer: ConversionBuffer::default(),
             captures: btel_processor::CaptureProcessor::default(),
             pending_captures: Vec::new(),
@@ -141,6 +157,23 @@ impl RecordingBuilder {
         functions: std::sync::Arc<btel_types::FunctionMetadataTable>,
     ) -> Self {
         self.buffer.functions.set_table(functions);
+        self
+    }
+
+    /// The process this engine runs in, written in every file header. The
+    /// sources snapshot goes to the CAS with the first drained captures. The
+    /// end marker reports `exit` when the host set it before shutdown.
+    #[must_use]
+    pub fn with_process(mut self, process: ProcessRecording) -> Self {
+        let source = process.sources.as_ref().map(crate::snapshot_id);
+        if let Some(sources) = process.sources {
+            self.pending_captures.push(sources);
+        }
+        self.process = Some(ProcessHeader {
+            info: process.info,
+            source,
+            exit: process.exit,
+        });
         self
     }
 
@@ -205,15 +238,42 @@ impl RecordingBuilder {
                 format_minor: encoding::FORMAT_MINOR,
                 recording_id: self.id.as_bytes().to_vec(),
                 source_snapshot_id: self.source_snapshot_id.map(|id| id.to_vec()),
+                process_id: self.process.as_ref().map(|p| p.info.process_id.to_vec()),
+                baml_version: self.process.as_ref().map(|p| p.info.baml_version.clone()),
+                host: self.process.as_ref().map(|p| p.info.host.clone()),
+                command: self
+                    .process
+                    .as_ref()
+                    .map(|p| p.info.command.clone())
+                    .unwrap_or_default(),
+                process_started_at_unix_ns: self
+                    .process
+                    .as_ref()
+                    .map(|p| p.info.started_at_unix_ns),
+                source_cas_id: self.process.as_ref().and_then(|p| p.source),
             }),
             sequence: sequence.get(),
             definitions: Some(ready.definitions),
             aggregates: Some(ready.aggregates),
             spans: self.buffer.spans.is_empty().then(proto::SpanBatch::default),
             clock_states: Some(ready.clock_states),
-            end: end.then_some(proto::RecordingEnd {}),
+            end: end.then(|| proto::RecordingEnd {
+                process_end: self
+                    .process
+                    .as_ref()
+                    .and_then(|p| p.exit.get())
+                    .map(|exit| proto::ProcessEnd {
+                        status: match exit.status {
+                            btel_types::ProcessStatus::Success => proto::ProcessStatus::Success,
+                            btel_types::ProcessStatus::Error => proto::ProcessStatus::Error,
+                            btel_types::ProcessStatus::Panicked => proto::ProcessStatus::Panicked,
+                        } as i32,
+                        at_unix_ns: exit.at_unix_ns,
+                    }),
+            }),
             // Appended below from its pre-encoded body.
             errors: None,
+            usage: (!ready.usage.entries.is_empty()).then_some(ready.usage),
         };
         // Absent without exceptions, so error-free files keep their bytes.
         let errors_len = if ready.errors.is_empty() {
@@ -315,6 +375,9 @@ impl RecordingBuilder {
     pub fn aggregate(&mut self, delta: AggregateDelta) {
         self.buffer.aggregate(delta);
     }
+    pub fn sysop_time(&mut self, path: btel_types::CallPathId, elapsed: btel_types::ClockDuration) {
+        self.buffer.sysop_time(path, elapsed);
+    }
     /// Encode references without retaining captures. The caller owns capture
     /// admission and must keep accepted owners until its sink consumes them.
     pub fn span_reference(&mut self, thread: TelemetryId, record: &SpanRecord<Snapshot, Snapshot>) {
@@ -413,6 +476,12 @@ impl<F: FnMut(SealedFile), C: FnMut(Snapshot)> RecordingPublisher<F, C> {
         self
     }
 
+    #[must_use]
+    pub fn with_process(mut self, process: ProcessRecording) -> Self {
+        self.builder = self.builder.with_process(process);
+        self
+    }
+
     /// Owned function definitions copied before execution, shared with the recording builder.
     #[must_use]
     pub fn with_function_metadata(
@@ -455,6 +524,9 @@ impl<F: FnMut(SealedFile), C: FnMut(Snapshot)> Publisher<Snapshot, Snapshot>
 
     fn aggregate(&mut self, delta: AggregateDelta) {
         self.builder.aggregate(delta);
+    }
+    fn sysop_time(&mut self, path: btel_types::CallPathId, elapsed: btel_types::ClockDuration) {
+        self.builder.sysop_time(path, elapsed);
     }
     fn span(&mut self, thread: TelemetryId, record: &mut SpanRecord<Snapshot, Snapshot>) {
         self.builder.span(thread, record);
