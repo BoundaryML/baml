@@ -1100,7 +1100,7 @@ impl ProjectDatabase {
 
     /// Seed per-file throw facts from a previous compile of identical file
     /// content (bytecode-cache per-file reuse); keys are full source-file path
-    /// strings.
+    /// strings, heads are located by edge path from the file's own package.
     ///
     /// This mutates the always-present `SeededThrowFacts` input (created in
     /// `new`) through its Salsa setter, so it bumps the revision and correctly
@@ -1110,7 +1110,7 @@ impl ProjectDatabase {
         &mut self,
         by_path: BTreeMap<
             String,
-            Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>,
+            Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::PathName>>,
         >,
     ) {
         let seeds = self.seeded_throw_facts.unwrap_or_else(|| {
@@ -1148,7 +1148,7 @@ impl ProjectDatabase {
     /// infers honestly.
     pub fn set_seeded_callable_throws(
         &mut self,
-        by_path: BTreeMap<String, BTreeMap<u32, baml_type::Ty<baml_type::TypeName>>>,
+        by_path: BTreeMap<String, BTreeMap<u32, baml_type::Ty<baml_type::PathName>>>,
     ) {
         let seeds = self.seeded_callable_throws.unwrap_or_else(|| {
             unreachable!("SeededCallableThrows input is created in ProjectDatabase::new")

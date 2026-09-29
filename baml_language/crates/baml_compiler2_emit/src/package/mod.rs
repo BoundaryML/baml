@@ -30,7 +30,7 @@ use baml_compiler2_hir::{
         file_lets, file_type_aliases, interface_data, let_data, type_alias_data,
     },
     loc::{FunctionLoc, LetLoc},
-    package::{spelling, visible_packages},
+    package::visible_packages,
 };
 use baml_compiler2_hir_ty::{layout, lower::qualify_def};
 use baml_compiler2_mir::RuntimeLowering;
@@ -129,17 +129,11 @@ fn emit(
     scope: Scope,
     opt: OptLevel,
 ) -> Result<(EmittedPackage, Vec<SessionInitializer>), LoweringError> {
-    let reach = visible_packages(db, root);
-    // Every wire name a lowered type carries is resolved back to its
-    // declaration through this table, so it must be injective over the
-    // package's reach: a shared spelling would make two packages'
-    // declarations one name.
-    if let Some(collision) = spelling(db).within(reach).collisions().first() {
-        return Err(LoweringError::Internal(format!(
-            "cannot emit a package against these packages: {collision}"
-        )));
-    }
-    let class_fields = class_field_snapshot(db, reach);
+    // Every head a lowered type carries is its declaration's identity, so a
+    // package emits against any packages whatever the program calls them: two
+    // that share a spelling, or one reached under several names, are distinct
+    // by construction. A spelling is display data only.
+    let class_fields = class_field_snapshot(db, visible_packages(db, root));
     let (types, refs) = type_pass(db, root, scope)?;
     let bodies = bodies::emit_bodies(db, &class_fields, &types, refs, opt)?;
     finish::finish(db, &class_fields, types, bodies, opt)

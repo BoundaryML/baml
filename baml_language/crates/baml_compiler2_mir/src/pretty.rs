@@ -24,9 +24,51 @@ use std::fmt::{self, Write};
 
 use crate::{
     AggregateKind, BasicBlock, BuiltinKind, Constant, IntrinsicOp, Local, LocalDecl, LogLevel,
-    MirFunction, MirFunctionBody, MirFunctionKind, Operand, Rvalue, Statement, StatementKind,
-    SwitchKey, Terminator,
+    MirFunction, MirFunctionBody, MirFunctionKind, Operand, RuntimeTy, Rvalue, Statement,
+    StatementKind, SwitchKey, Terminator, TyTemplate, TyTemplateInterface,
 };
+
+/// MIR's heads are identities; a dump names them as the program spells them.
+/// The one place a MIR type becomes text.
+struct Names<'a>(&'a baml_compiler2_hir::package::Spelling);
+
+impl<'a> Names<'a> {
+    fn of(db: &'a dyn crate::Db) -> Self {
+        Self(baml_compiler2_hir::package::spelling(db))
+    }
+
+    fn ty(&self, ty: &RuntimeTy) -> baml_type::RuntimeTy {
+        ty.map_heads(&mut |decl| self.0.wire(decl))
+    }
+
+    fn template(&self, template: &TyTemplate) -> baml_type::TyTemplate {
+        template.map_heads(&mut |decl| self.0.wire(decl))
+    }
+
+    fn templates(&self, templates: &[TyTemplate]) -> String {
+        templates
+            .iter()
+            .map(|template| self.template(template).to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    fn interface(&self, interface: &TyTemplateInterface) -> baml_type::TyTemplateInterface {
+        baml_type::TyTemplateInterface {
+            name: self.0.wire(&interface.name),
+            generics: interface
+                .generics
+                .iter()
+                .map(|generic| self.template(generic))
+                .collect(),
+            associated_types: interface
+                .associated_types
+                .iter()
+                .map(|(name, binding)| (name.clone(), self.template(binding)))
+                .collect(),
+        }
+    }
+}
 
 /// Pretty print a MIR function.
 pub fn display_function(db: &dyn crate::Db, func: &MirFunction<'_>) -> String {
@@ -77,7 +119,7 @@ fn write_bytecode_function(
         // Guard against missing locals in error recovery cases
         if i < body.locals.len() {
             let local = &body.locals[i];
-            write_local_decl_inline(f, Local(i), local)?;
+            write_local_decl_inline(f, db, Local(i), local)?;
         } else {
             write!(f, "_{i}: <missing>")?;
         }
@@ -87,7 +129,7 @@ fn write_bytecode_function(
     write!(f, ")")?;
     if !body.locals.is_empty() {
         let ret = &body.locals[0];
-        write!(f, " -> {}", ret.ty)?;
+        write!(f, " -> {}", Names::of(db).ty(&ret.ty))?;
     }
     writeln!(f, " {{")?;
     write_body(f, db, body, func.arity)?;
@@ -120,7 +162,7 @@ fn write_body(
 ) -> fmt::Result {
     writeln!(f, "    // Locals:")?;
     for (i, local) in body.locals.iter().enumerate() {
-        write!(f, "    let _{i}: {}", local.ty)?;
+        write!(f, "    let _{i}: {}", Names::of(db).ty(&local.ty))?;
         if let Some(name) = &local.name {
             write!(f, " // {name}")?;
         }
@@ -145,11 +187,17 @@ fn write_body(
     Ok(())
 }
 
-fn write_local_decl_inline(f: &mut impl Write, id: Local, decl: &LocalDecl) -> fmt::Result {
+fn write_local_decl_inline(
+    f: &mut impl Write,
+    db: &dyn crate::Db,
+    id: Local,
+    decl: &LocalDecl,
+) -> fmt::Result {
+    let ty = Names::of(db).ty(&decl.ty);
     if let Some(name) = &decl.name {
-        write!(f, "{name}: {}", decl.ty)
+        write!(f, "{name}: {ty}")
     } else {
-        write!(f, "{id}: {}", decl.ty)
+        write!(f, "{id}: {ty}")
     }
 }
 
@@ -189,7 +237,11 @@ fn write_statement(f: &mut impl Write, db: &dyn crate::Db, stmt: &Statement<'_>)
             value,
         } => {
             write_operand(f, db, receiver)?;
-            write!(f, ".{field}#{field_index} as {iface} = ")?;
+            write!(
+                f,
+                ".{field}#{field_index} as {} = ",
+                Names::of(db).interface(iface)
+            )?;
             write_operand(f, db, value)?;
             write!(f, ";")
         }
@@ -261,7 +313,11 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
         } => {
             write!(f, "{destination} = narrow_bind ")?;
             write_operand(f, db, source)?;
-            write!(f, " as {ty_template:?} -> [{then_block}, {else_block}];")
+            write!(
+                f,
+                " as {:?} -> [{then_block}, {else_block}];",
+                Names::of(db).template(ty_template)
+            )
         }
         Terminator::Switch {
             discriminant,
@@ -348,7 +404,11 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
             unwind,
             ..
         } => {
-            write!(f, "{destination} = virtual_call {method} as {iface}")?;
+            write!(
+                f,
+                "{destination} = virtual_call {method} as {}",
+                Names::of(db).interface(iface)
+            )?;
             if *ntypeargs > 0 {
                 write!(f, "<")?;
                 for (i, arg) in args.iter().take(*ntypeargs).enumerate() {
@@ -421,7 +481,8 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
             write!(
                 f,
                 "{future} = spawn<{}, {}> ",
-                future_ty.returns, future_ty.throws
+                Names::of(db).template(&future_ty.returns),
+                Names::of(db).template(&future_ty.throws)
             )?;
             write_operand(f, db, closure)?;
             write!(f, " name=")?;
@@ -518,7 +579,11 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
             field,
         } => {
             write_operand(f, db, receiver)?;
-            write!(f, ".{field}#{field_index} as {iface}")
+            write!(
+                f,
+                ".{field}#{field_index} as {}",
+                Names::of(db).interface(iface)
+            )
         }
         Rvalue::BinaryOp { op, left, right } => {
             write_operand(f, db, left)?;
@@ -539,7 +604,7 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
             }
             // Show the emitted element-type template so MIR snapshots can catch a
             // wrong array element type (not just the later bytecode `load_type`).
-            write!(f, "]: {element_template}[]")
+            write!(f, "]: {}[]", Names::of(db).template(element_template))
         }
         Rvalue::Uint8Array(bytes) => write!(f, "b\"<{} bytes>\"", bytes.len()),
         Rvalue::Map(key_template, value_template, entries) => {
@@ -552,7 +617,12 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
                 write!(f, ": ")?;
                 write_operand(f, db, value)?;
             }
-            write!(f, " }}: map<{key_template}, {value_template}>")
+            write!(
+                f,
+                " }}: map<{}, {}>",
+                Names::of(db).template(key_template),
+                Names::of(db).template(value_template)
+            )
         }
         Rvalue::Aggregate { kind, fields } => {
             match kind {
@@ -563,14 +633,7 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
                 } => {
                     write!(f, "{}", crate::lower::class_link_name(db, *class))?;
                     if !type_arg_templates.is_empty() {
-                        write!(f, "<")?;
-                        for (i, t) in type_arg_templates.iter().enumerate() {
-                            if i > 0 {
-                                write!(f, ", ")?;
-                            }
-                            write!(f, "{t}")?;
-                        }
-                        write!(f, ">")?;
+                        write!(f, "<{}>", Names::of(db).templates(type_arg_templates))?;
                     }
                 }
             }
@@ -598,7 +661,7 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
         } => {
             write!(f, "is_type(")?;
             write_operand(f, db, operand)?;
-            write!(f, ", {ty_template})")
+            write!(f, ", {})", Names::of(db).template(ty_template))
         }
         Rvalue::IsTypeTag { operand, tag } => {
             write!(f, "is_type_tag(")?;
@@ -652,7 +715,12 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
             method,
             type_args,
         } => {
-            write!(f, "make_virtual_function ({self_ty} as {iface:?}).{method}")?;
+            write!(
+                f,
+                "make_virtual_function ({} as {:?}).{method}",
+                Names::of(db).template(self_ty),
+                Names::of(db).interface(iface)
+            )?;
             if !type_args.is_empty() {
                 write!(f, "<")?;
                 for (index, arg) in type_args.iter().enumerate() {
@@ -666,7 +734,7 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
             Ok(())
         }
         Rvalue::LoadType(template) => {
-            write!(f, "load_type({template})")
+            write!(f, "load_type({})", Names::of(db).template(template))
         }
         Rvalue::CurrentPackage(package) => {
             write!(f, "current_package({package})")
@@ -675,12 +743,11 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
             func,
             type_arg_templates,
         } => {
-            let args: Vec<String> = type_arg_templates.iter().map(ToString::to_string).collect();
             write!(
                 f,
                 "make_generic_function {}<{}>",
                 crate::lower::function_link_name(db, *func),
-                args.join(", ")
+                Names::of(db).templates(type_arg_templates)
             )
         }
         Rvalue::MakeGenericFunctionFromValue {
@@ -689,8 +756,7 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
         } => {
             write!(f, "make_generic_function_from_value(")?;
             write_operand(f, db, value)?;
-            let args: Vec<String> = type_arg_templates.iter().map(ToString::to_string).collect();
-            write!(f, ")<{}>", args.join(", "))
+            write!(f, ")<{}>", Names::of(db).templates(type_arg_templates))
         }
     }
 }
@@ -754,7 +820,11 @@ fn write_constant(f: &mut impl Write, db: &dyn crate::Db, constant: &Constant<'_
             )
         }
         Constant::GenericFunction { func, type_args } => {
-            let args: Vec<String> = type_args.iter().map(ToString::to_string).collect();
+            let spelling = Names::of(db);
+            let args: Vec<String> = type_args
+                .iter()
+                .map(|ty| ty.map_heads(&mut |decl| spelling.0.wire(decl)).to_string())
+                .collect();
             write!(
                 f,
                 "const fn {}<{}>",
@@ -783,12 +853,14 @@ mod tests {
     use super::*;
     use crate::{BlockId, Place};
 
-    /// The smallest database the renderer's signature admits: nothing here
-    /// names a declaration, so no query ever runs against it.
+    /// The smallest database the renderer's signature admits: a workspace
+    /// root and a root named `baml`, so a head can name a declaration and
+    /// render as the program spells its package.
     #[salsa::db]
     struct TestDb {
         storage: salsa::Storage<TestDb>,
         roots: Option<SourceRootTable>,
+        baml: Option<SourceRoot>,
     }
 
     impl Default for TestDb {
@@ -796,7 +868,17 @@ mod tests {
             let mut db = Self {
                 storage: salsa::Storage::default(),
                 roots: None,
+                baml: None,
             };
+            let baml = SourceRoot::new(
+                &db,
+                std::path::PathBuf::from("<builtin>/baml"),
+                SourceRootKind::Stdlib,
+                Some(baml_base::Name::new("baml")),
+                Vec::new(),
+                None,
+                Vec::new(),
+            );
             let workspace = SourceRoot::new(
                 &db,
                 std::path::PathBuf::from("."),
@@ -806,7 +888,8 @@ mod tests {
                 None,
                 Vec::new(),
             );
-            db.roots = Some(SourceRootTable::new(&db, vec![workspace]));
+            db.roots = Some(SourceRootTable::new(&db, vec![baml, workspace]));
+            db.baml = Some(baml);
             db
         }
     }
@@ -824,10 +907,9 @@ mod tests {
     #[salsa::db]
     impl crate::Db for TestDb {}
 
-    fn render_terminator(terminator: &Terminator<'_>) -> String {
-        let db = TestDb::default();
+    fn render_terminator(db: &TestDb, terminator: &Terminator<'_>) -> String {
         let mut output = String::new();
-        write_terminator(&mut output, &db, terminator).expect("terminator renders");
+        write_terminator(&mut output, db, terminator).expect("terminator renders");
         output
     }
 
@@ -837,6 +919,7 @@ mod tests {
 
     #[test]
     fn call_runtime_id_without_visible_args_has_no_leading_comma() {
+        let db = TestDb::default();
         let terminator = Terminator::Call {
             callee: local_copy(1),
             args: Vec::new(),
@@ -849,20 +932,25 @@ mod tests {
         };
 
         assert_eq!(
-            render_terminator(&terminator),
+            render_terminator(&db, &terminator),
             "_0 = call copy _1($id = copy _9) -> [bb1];"
         );
     }
 
     #[test]
     fn virtual_call_runtime_id_without_visible_args_has_no_leading_comma() {
+        let db = TestDb::default();
         let terminator = Terminator::VirtualCall {
             argument_layout: None,
-            iface: baml_type::TyTemplateInterface::new(
-                baml_type::TypeName::from_dotted_path("baml.ops.Equals"),
-                Box::new([]),
-                Box::new([]),
-            ),
+            iface: TyTemplateInterface {
+                name: baml_type::DeclName::in_root(
+                    db.baml.expect("the test database installs `baml`"),
+                    vec![baml_base::Name::new("ops")],
+                    baml_base::Name::new("Equals"),
+                ),
+                generics: Box::new([]),
+                associated_types: Box::new([]),
+            },
             method: "eq".to_string(),
             args: Vec::new(),
             ntypeargs: 0,
@@ -874,13 +962,14 @@ mod tests {
         };
 
         assert_eq!(
-            render_terminator(&terminator),
+            render_terminator(&db, &terminator),
             "_0 = virtual_call eq as baml.ops.Equals($id = copy _9) -> [bb1];"
         );
     }
 
     #[test]
     fn sys_op_runtime_id_without_visible_args_has_no_leading_comma() {
+        let db = TestDb::default();
         let terminator = Terminator::SysOp {
             callee: local_copy(1),
             args: Vec::new(),
@@ -891,7 +980,7 @@ mod tests {
         };
 
         assert_eq!(
-            render_terminator(&terminator),
+            render_terminator(&db, &terminator),
             "_0 = sys_op copy _1($id = copy _9) -> bb1;"
         );
     }

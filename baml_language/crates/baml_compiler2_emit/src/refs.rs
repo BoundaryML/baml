@@ -5,11 +5,12 @@
 //!
 //! A declaration's import key is a pure function of its identity: which
 //! package root declares it and its item path there. A type head is a
-//! declaration operand like any other ([`Anchor`]): the one place a wire
-//! spelling is read is [`PackageRefs::head`], which resolves it at this
-//! package's viewpoint to the declaration and answers with that
-//! declaration's operand — so nothing in a unit carries a rendered name or a
-//! tag, and a head names nothing the import table does not list.
+//! declaration operand like any other: MIR hands every head over as the
+//! declaration's identity, and [`PackageRefs::head`] answers with that
+//! declaration's operand — so no head is ever resolved from a spelling, no
+//! operand carries a tag, and a head names nothing the import table does not
+//! list. What a unit carries of a name is display data: a declaration's own
+//! display name and operand metadata, spelled by the program's table.
 
 use std::collections::HashMap;
 
@@ -21,7 +22,7 @@ use baml_compiler2_hir::{
         MethodOwner, class_data, enum_data, function_data, interface_data, let_data, method_owner,
     },
     loc::{ClassLoc, DeclRef, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, TypeAliasLoc},
-    package::{DependencyTable, edge_table, spelling},
+    package::{DependencyTable, edge_spelling, spelling},
 };
 use baml_compiler2_hir_ty::{
     callable::ExternalCallTarget,
@@ -32,7 +33,7 @@ use baml_compiler2_hir_ty::{
 };
 use baml_compiler2_mir::RuntimeLowering;
 use baml_linker_types::{DeclKey, ImportEntry, Locator, import_operand};
-use baml_type::{DeclName, TypeName};
+use baml_type::DeclName;
 use bex_vm_types::{
     BodyKey, DeclPath, FnPath, GlobalIndex, ImplBodyKey, InterfaceKey, ObjectIndex, TypeHead,
     bytecode::SwitchKey, types::LocalName,
@@ -94,14 +95,6 @@ pub(crate) fn interface_head<'db>(
     }
 }
 
-/// The edge name `from` reaches `to` under, if it has a direct edge.
-fn edge_name(db: &dyn crate::Db, from: SourceRoot, to: SourceRoot) -> Option<Name> {
-    edge_table(db, from)
-        .into_iter()
-        .find(|(_, root)| *root == to)
-        .map(|(name, _)| name)
-}
-
 /// The path a source function is exported under: a free function, a class's
 /// inherent method, an interface's default body, or an `implements` block's
 /// provided body. The caller has already established that the function owns
@@ -135,21 +128,15 @@ pub(crate) fn function_path<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'
             let target = impl_rule_target(db, block, &lowering)
                 .unwrap_or_else(|| unreachable!("an accepted `implements` block bakes to a rule"));
             let interface = interface_head(db, target.interface);
-            let package = if interface.root() == body_root {
-                baml_type::Package::Local
-            } else {
-                // The block names its interface from its own package, so the
-                // interface's package is a direct edge of it.
-                baml_type::Package::Dep(edge_name(db, body_root, interface.root()).unwrap_or_else(
-                    || unreachable!("an implemented interface is reachable by a direct edge"),
-                ))
-            };
             DeclPath::InterfaceBody(BodyKey::ImplMethod(Box::new(ImplBodyKey {
+                // Located from the body's package by edge path: the interface
+                // may be one a dependency re-exports, whose own package no
+                // edge of the body's names directly.
                 interface: InterfaceKey {
-                    package,
+                    package: edge_spelling(db, body_root, interface.root()),
                     path: item_path(&interface),
                 },
-                coherence: target.coherence_key(),
+                coherence: target.coherence_key(db, body_root),
                 method: name,
             })))
         }
@@ -344,10 +331,9 @@ pub(crate) struct PackageRefs<'w, 'db> {
     pub(crate) own: Own<'w, 'db>,
     pub(crate) deps: DependencyTable,
     pub(crate) imports: ImportTables,
-    /// Wire spelling → the head it resolved to, at this package's viewpoint.
-    /// A memo, not a key: the table is injective over the package's reach,
-    /// so one spelling names one declaration here.
-    heads: HashMap<TypeName, TypeHead>,
+    /// Declaration → the unit-convention head it anchored to: a memo keyed
+    /// by identity.
+    heads: HashMap<DeclName, TypeHead>,
 }
 
 impl<'w, 'db> PackageRefs<'w, 'db> {
@@ -425,20 +411,6 @@ impl<'w, 'db> PackageRefs<'w, 'db> {
         self.import_object(head.root(), path)
     }
 
-    /// The declaration a wire spelling names at this package's viewpoint.
-    /// Every spelling reaching emit was resolved by the checker, so a miss
-    /// is a compiler bug.
-    fn decl(&self, tn: &TypeName) -> DeclName {
-        spelling(self.db)
-            .resolve(self.db, self.root, tn)
-            .unwrap_or_else(|| {
-                unreachable!(
-                    "`{tn}` names no package reachable from `{}`",
-                    self.root.path(self.db).display()
-                )
-            })
-    }
-
     /// The object of whichever type declaration `head` is: a class, enum,
     /// interface, or (recursive) alias.
     fn declaration_object(&mut self, head: &DeclName) -> ObjectIndex {
@@ -480,15 +452,14 @@ impl<'w, 'db> PackageRefs<'w, 'db> {
         })
     }
 
-    /// The unit-convention head of the declaration `tn` spells (the
-    /// [`Anchor`] this resolver is).
-    pub(crate) fn head(&mut self, tn: &TypeName) -> TypeHead {
-        if let Some(&head) = self.heads.get(tn) {
+    /// The unit-convention head of a declaration: the operand of its object,
+    /// local or imported.
+    pub(crate) fn head(&mut self, decl: &DeclName) -> TypeHead {
+        if let Some(&head) = self.heads.get(decl) {
             return head;
         }
-        let decl = self.decl(tn);
-        let head = TypeHead::unresolved_operand(self.declaration_object(&decl));
-        self.heads.insert(tn.clone(), head);
+        let head = TypeHead::unresolved_operand(self.declaration_object(decl));
+        self.heads.insert(decl.clone(), head);
         head
     }
 
@@ -591,17 +562,15 @@ impl<'db> PackageRefs<'_, 'db> {
         self.import_global(root, DeclPath::Let(item_path(&head)))
     }
 
-    /// The class declaration `tn` spells, for its layout facts; `None` when
-    /// `tn` names no class in this package's reach.
-    pub(crate) fn class_ref(&self, tn: &TypeName) -> Option<ClassRef<'db>> {
-        let head = spelling(self.db).resolve(self.db, self.root, tn)?;
-        layout::class_ref_of(self.db, &head)
+    /// The class `head` is, for its layout facts; `None` when `head` is no
+    /// class.
+    pub(crate) fn class_ref(&self, head: &DeclName) -> Option<ClassRef<'db>> {
+        layout::class_ref_of(self.db, head)
     }
 
-    /// The enum `tn` spells, resolved at this package's viewpoint.
-    pub(crate) fn enum_ref(&self, tn: &TypeName) -> Option<EnumRef<'db>> {
-        let head = spelling(self.db).resolve(self.db, self.root, tn)?;
-        layout::enum_ref_of(self.db, &head)
+    /// The enum `head` is; `None` when `head` is no enum.
+    pub(crate) fn enum_ref(&self, head: &DeclName) -> Option<EnumRef<'db>> {
+        layout::enum_ref_of(self.db, head)
     }
 
     /// A class arm's switch key: the declaration's operand, which the linker
@@ -613,35 +582,36 @@ impl<'db> PackageRefs<'_, 'db> {
         SwitchKey::Declaration(self.class(class))
     }
 
-    // The one place a compile-time type name becomes a runtime head: every
-    // runtime type emit produces goes through one of these, so no type
-    // carries a head the linker or grafter cannot bind.
+    // The one place a compile-time head becomes a runtime head: every
+    // runtime type emit produces goes through one of these, by the
+    // declaration's identity, so no type carries a head the linker or
+    // grafter cannot bind and none is ever resolved from a spelling.
 
     pub(crate) fn anchor_template(
         &mut self,
-        ty: &baml_type::TyTemplate,
+        ty: &baml_compiler2_mir::TyTemplate,
     ) -> bex_vm_types::TyTemplate {
-        ty.map_heads(&mut |tn: &TypeName| self.head(tn))
+        ty.map_heads(&mut |decl: &DeclName| self.head(decl))
     }
 
     pub(crate) fn anchor_runtime_ty(
         &mut self,
-        ty: &baml_type::RuntimeTy,
+        ty: &baml_compiler2_mir::RuntimeTy,
     ) -> bex_vm_types::RuntimeTy {
-        ty.map_heads(&mut |tn: &TypeName| self.head(tn))
+        ty.map_heads(&mut |decl: &DeclName| self.head(decl))
     }
 
     pub(crate) fn anchor_realized(
         &mut self,
-        ty: &baml_type::RealizedTy,
+        ty: &baml_compiler2_mir::RealizedTy,
     ) -> bex_vm_types::RealizedTy {
-        ty.map_heads(&mut |tn: &TypeName| self.head(tn))
+        ty.map_heads(&mut |decl: &DeclName| self.head(decl))
     }
 
     pub(crate) fn anchor_interface(
         &mut self,
-        interface: &baml_type::RuntimeInterface,
+        interface: &baml_type::RuntimeInterface<DeclName>,
     ) -> bex_vm_types::RuntimeInterface {
-        interface.map_heads(&mut |tn: &TypeName| self.head(tn))
+        interface.map_heads(&mut |decl: &DeclName| self.head(decl))
     }
 }

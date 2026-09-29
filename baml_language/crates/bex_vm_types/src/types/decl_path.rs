@@ -4,7 +4,7 @@
 //! one kind can never bind a declaration of another.
 
 use baml_base::Name;
-use baml_type::TypeName;
+use baml_type::{PathName, wire::EdgePath};
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::types::LocalName;
@@ -23,18 +23,19 @@ pub enum FnPath {
     Method { class: ItemPath, name: Name },
 }
 
-/// The interface an impl-provided body belongs to, spelled from the body's
-/// own package: [`baml_type::Package::Local`] for an interface of that
-/// package, [`baml_type::Package::Dep`] by manifest edge otherwise.
+/// The interface an impl-provided body belongs to, located from the body's
+/// own package by edge path: empty for an interface of that package, the
+/// edge names that reach its package otherwise.
 ///
 /// This is an identity COMPONENT of the body, not a reference the linker
 /// binds (a body is reached rule-relatively; the direct-call import resolves
 /// the body itself). Edges are manifest-fixed, so every submission of a
-/// session spells the same interface the same way — which a dependency-table
-/// slot, numbered per table in first-use order, would not.
+/// session locates the same interface the same way — which a dependency-table
+/// slot, numbered per table in first-use order, would not — and no name a
+/// program gives a package takes part.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub struct InterfaceKey {
-    pub package: baml_type::Package,
+    pub package: EdgePath,
     pub path: ItemPath,
 }
 
@@ -67,28 +68,29 @@ pub struct ImplBodyKey {
 /// An `implements` block's coherence identity as a wire key: its for-pattern,
 /// interface arguments, and constraint set — everything coherence's
 /// admissibility check discriminates on, the same discriminant as the
-/// runtime's [`ImplCoherenceKey`](crate::types::ImplCoherenceKey) — spelled
-/// from the body's own package like [`InterfaceKey`] is. A unit's type heads
-/// are that unit's operands, so a head-typed key would differ between the
-/// unit that declares the block and a later session submission that imports
-/// its body; edge spellings are manifest-fixed, so every unit of a package
-/// agrees on these.
+/// runtime's [`ImplCoherenceKey`](crate::types::ImplCoherenceKey) — with every
+/// head located from the body's own package by edge path, like
+/// [`InterfaceKey`] is. A unit's type heads are that unit's operands, so a
+/// head-typed key would differ between the unit that declares the block and a
+/// later session submission that imports its body; edge paths are
+/// manifest-fixed, so every unit of a package agrees on these, whatever the
+/// program calls the packages involved.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub struct ImplBodyCoherence {
-    pub for_ty_pattern: baml_type::TyTemplate,
-    pub interface_args: Vec<baml_type::TyTemplate>,
+    pub for_ty_pattern: baml_type::TyTemplate<PathName>,
+    pub interface_args: Vec<baml_type::TyTemplate<PathName>>,
     /// Per impl-frame param in frame order, that param's bounds canonically
     /// sorted.
     pub generic_param_bounds: Vec<Vec<SpelledBound>>,
 }
 
-/// One interface bound of an [`ImplBodyCoherence`], spelled from the body's
+/// One interface bound of an [`ImplBodyCoherence`], located from the body's
 /// package.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub struct SpelledBound {
-    pub interface: TypeName,
-    pub args: Vec<baml_type::TyTemplate>,
-    pub assoc: Vec<(Name, baml_type::TyTemplate)>,
+    pub interface: PathName,
+    pub args: Vec<baml_type::TyTemplate<PathName>>,
+    pub assoc: Vec<(Name, baml_type::TyTemplate<PathName>)>,
 }
 
 /// A declaration's coordinates within its package. The variant IS the kind,
@@ -153,9 +155,7 @@ impl std::fmt::Display for DeclPath {
             Self::InterfaceBody(BodyKey::ImplMethod(body)) => write!(
                 f,
                 "impl body <(_ as {}.{})>.{}",
-                body.interface.package.as_name(),
-                body.interface.path,
-                body.method
+                body.interface.package, body.interface.path, body.method
             ),
         }
     }

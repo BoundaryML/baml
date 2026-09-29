@@ -3,33 +3,31 @@
 //! These pin what the compiler guarantees once a type head carries its
 //! package as the root itself: same-named declarations in two packages are
 //! two types with two runtime identities; a package names only what its
-//! edges reach, under the names the edges give; and the boundary that
-//! spells roots for the wire refuses a program whose spelling table is not
-//! injective. Every scenario needs more than one package in one database,
+//! edges reach, under the names the edges give; and a program compiles
+//! whatever it calls its packages — two that share a spelling, or one
+//! reached under two names, are a rendering ambiguity the spelling table
+//! reports, never a reason emit or the link cannot tell two declarations
+//! apart. Every scenario needs more than one package in one database,
 //! which only the harness can build, so they live here rather than in the
 //! BAML corpus.
 
 use baml_base::{Dependency, Name, SourceRoot, SourceRootKind};
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, Severity};
-use baml_compiler2_emit::{LoweringError, OptLevel};
+use baml_compiler2_emit::OptLevel;
 use baml_compiler2_hir::package::{SpellingCollision, spelling, spelling_within};
-use baml_db::{
-    CompileProgramError, ProjectDatabase, SourceRootSpec, collect_compiler2_diagnostics,
-    compile_program,
-};
+use baml_db::{ProjectDatabase, SourceRootSpec, collect_compiler2_diagnostics, compile_program};
 use baml_tests::engine::TestDbExt;
 use bex_vm_types::Object;
 
-/// MIR reads a wire name from the package reading it, never by searching the
-/// database for something spelled that way.
+/// MIR carries a head as its declaration's identity, never as a spelling.
 ///
-/// The wire spells "my own package" the same way for every package, and an
-/// unnamed package spells as the default, so a reverse lookup keyed on the
-/// spelling answers with whichever unnamed root was created first. With two
-/// unnamed projects in one database that is silently the wrong one, and the
-/// head MIR gets back belongs to the other project.
+/// An unnamed package spells as the default, so two unnamed projects in one
+/// database spell the same and a lookup keyed on the spelling answers with
+/// whichever root was created first. The crossing MIR lowers through never
+/// makes that lookup: a head that enters as one package's declaration leaves
+/// as that package's declaration, whatever the two are called.
 #[test]
-fn mir_reads_a_local_wire_name_as_the_package_being_lowered() {
+fn mir_keeps_a_head_as_its_declaration_whatever_the_package_is_called() {
     let (mut db, first) = workspace_db();
     let second = db
         .add_source_root(SourceRootSpec::new(
@@ -50,24 +48,34 @@ fn mir_reads_a_local_wire_name_as_the_package_being_lowered() {
         "the spelling alone cannot tell them apart: it answers with the first"
     );
 
-    // The crossing MIR lowers through, built for each package in turn.
+    // The crossing MIR lowers through: the same for every package, because
+    // nothing in it depends on who reads a head.
     let aliases = baml_type::ResolvedAliases::default();
-    let crossing = |viewpoint| baml_compiler2_mir::RuntimeLowering {
+    let crossing = baml_compiler2_mir::RuntimeLowering {
         aliases: &aliases,
         spelling: table,
         db: &db,
-        viewpoint,
     };
-    let point = baml_type::TypeName::local(Name::new("Point"));
+    let point_of = |root| baml_type::DeclName::in_root(root, Vec::new(), Name::new("Point"));
+    let lowered_root =
+        |root| match crossing.convert(&baml_type::Ty::Class(point_of(root), Box::new([]))) {
+            baml_compiler2_mir::RuntimeTy::Class(head, _) => head.root(),
+            other => panic!("a class lowers to a class, got {other:?}"),
+        };
     assert_eq!(
-        crossing(second).decl(&point).map(|decl| decl.root()),
-        Some(second),
-        "the second package reads its own `Point`, not the first's"
+        lowered_root(second),
+        second,
+        "the second package's `Point` stays the second package's"
     );
     assert_eq!(
-        crossing(first).decl(&point).map(|decl| decl.root()),
-        Some(first),
-        "and the first still reads its own"
+        lowered_root(first),
+        first,
+        "and the first's stays the first's"
+    );
+    assert_eq!(
+        crossing.wire(&point_of(first)),
+        crossing.wire(&point_of(second)),
+        "while the two spell the same: a spelling is display, not identity"
     );
 }
 
@@ -211,12 +219,12 @@ fn unnamed_packages_collide_only_within_one_program() {
 }
 
 #[test]
-fn a_shared_spelling_within_one_program_is_refused() {
+fn packages_that_share_a_spelling_stay_distinct_through_emit_and_link() {
     let (mut db, workspace) = workspace_db();
     // Two unnamed packages in ONE world spelled by the same edge name: the
     // workspace reaches `x` as `lib`, and `x` reaches `y` as `lib`. Each
-    // dependent resolves its own edge, but on the wire both would be `lib`,
-    // so the program cannot be emitted.
+    // dependent resolves its own edge, and every head is its declaration's
+    // identity, so the program emits and links: a name lives on an edge.
     let x = db
         .add_source_root(SourceRootSpec::new(
             "<builtin>/x",
@@ -267,17 +275,38 @@ fn a_shared_spelling_within_one_program_is_refused() {
     assert_eq!(name.as_str(), "lib");
     assert_eq!(roots.len(), 2);
 
-    match compile_program(&db, workspace, OptLevel::Two) {
-        Err(CompileProgramError::Emit(LoweringError::Internal(message))) => assert!(
-            message.contains("spelled `lib`"),
-            "the refusal names the shared spelling: {message}"
-        ),
-        other => panic!("emit must refuse a non-injective spelling table, got {other:?}"),
-    }
+    // The table reports the rendering ambiguity; the program is unaffected.
+    let program = compile_program(&db, workspace, OptLevel::Two)
+        .expect("a shared spelling is no obstacle to emit or link");
+    let classes: Vec<_> = program
+        .objects
+        .iter()
+        .filter_map(|object| match object {
+            Object::Class(class) if matches!(class.name.item_name().as_str(), "X" | "Y") => {
+                Some((class.name.item_name().to_string(), class.type_tag))
+            }
+            _ => None,
+        })
+        .collect();
+    let [(first, first_tag), (second, second_tag)] = classes.as_slice() else {
+        panic!("expected exactly the classes `X` and `Y`, got {classes:?}");
+    };
+    assert_ne!(first, second, "both packages' classes are in the image");
+    assert_ne!(first_tag, second_tag, "two declarations, two identities");
+    // Each package reaches the next under ITS edge named `lib`.
+    let lib_edges = program
+        .packages
+        .iter()
+        .flat_map(|package| &package.edges)
+        .filter(|edge| edge.name.as_str() == "lib")
+        .map(|edge| edge.target)
+        .collect::<Vec<_>>();
+    assert_eq!(lib_edges.len(), 2, "two edges are named `lib`");
+    assert_ne!(lib_edges[0], lib_edges[1], "and they reach two packages");
 }
 
 #[test]
-fn an_unnamed_package_reached_under_two_names_is_a_collision() {
+fn an_unnamed_package_reached_under_two_names_is_one_package() {
     let (mut db, workspace) = workspace_db();
     let shared = db
         .add_source_root(SourceRootSpec::new(
@@ -325,13 +354,28 @@ fn an_unnamed_package_reached_under_two_names_is_a_collision() {
     let mut names: Vec<&str> = names.iter().map(Name::as_str).collect();
     names.sort_unstable();
     assert_eq!(names, ["first", "second"]);
-    assert!(
-        matches!(
-            compile_program(&db, workspace, OptLevel::Two),
-            Err(CompileProgramError::Emit(LoweringError::Internal(_)))
-        ),
-        "one root cannot be spelled two ways in one program"
-    );
+    // Two names for one package is a rendering ambiguity, not two packages:
+    // the program holds the one `S`, reached by both dependents.
+    let program = compile_program(&db, workspace, OptLevel::Two)
+        .expect("a package reached under two names compiles");
+    let shared_classes = program
+        .objects
+        .iter()
+        .filter(|object| {
+            matches!(object, Object::Class(class) if class.name.item_name().as_str() == "S")
+        })
+        .count();
+    assert_eq!(shared_classes, 1, "one declaration, however it is reached");
+    let targets = |edge_name: &str| {
+        program
+            .packages
+            .iter()
+            .flat_map(|package| &package.edges)
+            .filter(|edge| edge.name.as_str() == edge_name)
+            .map(|edge| edge.target)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(targets("first"), targets("second"), "both edges reach it");
 }
 
 #[test]
@@ -476,4 +520,199 @@ fn impls_are_visible_only_within_the_dependency_closure() {
     )
     .expect("edge other -> lib");
     assert_clean(&db);
+}
+
+/// The function of `file` declared as `name`.
+fn function_named<'db>(
+    db: &'db ProjectDatabase,
+    file: baml_base::SourceFile,
+    name: &str,
+) -> baml_compiler2_hir::loc::FunctionLoc<'db> {
+    baml_compiler2_hir::item_data::file_functions(db, file)
+        .iter()
+        .copied()
+        .find(|&function| {
+            baml_compiler2_hir::item_data::function_data(db, function)
+                .name
+                .as_str()
+                == name
+        })
+        .unwrap_or_else(|| panic!("no function `{name}` in the file"))
+}
+
+/// A cached throw seed locates every head by the edges that reach its
+/// package from the seeded file's own, so the compile that reads it back
+/// means the declarations the compile that wrote it meant — whatever the
+/// program calls its packages.
+///
+/// Both dependencies declare the name `errs` and both declare a `Boom`, so
+/// the two thrown types spell alike (`errs.Boom`) and neither package is
+/// reached under the name it declares. Only the path tells them apart.
+#[test]
+fn a_cached_throw_seed_locates_its_heads_by_edge_path() {
+    use std::collections::BTreeMap;
+
+    use baml_compiler2_hir_ty::{
+        callable::callable_throws,
+        package_interface::export_callable_throws_fragment,
+        throw_facts::{export_file_throw_facts, file_throw_facts},
+    };
+    use baml_type::{
+        DeclName, PathName, QualifiedTypeName, Ty, throw_facts::FunctionThrowFacts, wire::EdgePath,
+    };
+
+    let (mut db, workspace) = workspace_db();
+    let errs = |db: &mut ProjectDatabase, path: &str| {
+        db.add_source_root(
+            SourceRootSpec::new(path, SourceRootKind::Dependency).named(Name::new("errs")),
+        )
+        .expect("a dependency root named `errs`")
+    };
+    let far = errs(&mut db, "<builtin>/far");
+    let near = errs(&mut db, "<builtin>/near");
+    db.add_dependency(
+        workspace,
+        Dependency {
+            name: Name::new("near"),
+            root: near,
+        },
+    )
+    .expect("edge workspace -> near");
+    db.add_dependency(
+        near,
+        Dependency {
+            name: Name::new("inner"),
+            root: far,
+        },
+    )
+    .expect("edge near -> far as `inner`");
+    db.file("<builtin>/far/far.baml", "class Boom { code int }\n");
+    db.file(
+        "<builtin>/near/near.baml",
+        "class Boom { message string }\n\
+         function fail_far() -> int throws inner.Boom { throw inner.Boom { code: 1 } }\n\
+         function fail_near() -> int throws Boom { throw Boom { message: \"x\" } }\n",
+    );
+    let main = db.file(
+        "main.baml",
+        "class Local { v int }\n\
+         function f() -> int { near.fail_far() }\n\
+         function g() -> int { near.fail_near() }\n\
+         function declared() -> int throws near.Boom { near.fail_near() }\n\
+         function own() -> int { throw Local { v: 1 } }\n",
+    );
+    assert_clean(&db);
+
+    let table = spelling(&db);
+    assert_eq!(
+        table.of(far),
+        table.of(near),
+        "the two packages spell alike"
+    );
+
+    let boom_of = |root| {
+        Ty::Class(
+            DeclName::in_root(root, Vec::new(), Name::new("Boom")),
+            Box::new([]),
+        )
+    };
+    let boom_at = |path: &[&str]| {
+        Ty::Class(
+            PathName::qualified(
+                EdgePath(path.iter().copied().map(Name::new).collect()),
+                Vec::new(),
+                Name::new("Boom"),
+            ),
+            Box::new([]),
+        )
+    };
+    let id_of = |db: &ProjectDatabase, name: &str| function_named(db, main, name).id(db).as_u32();
+    let (f_id, g_id) = (id_of(&db, "f"), id_of(&db, "g"));
+    let throws_of =
+        |db: &ProjectDatabase, name: &str| callable_throws(db, function_named(db, main, name)).0;
+
+    // Honest inference: each function throws the `Boom` of the package its
+    // callee declared it in.
+    assert_eq!(throws_of(&db, "f"), boom_of(far));
+    assert_eq!(throws_of(&db, "g"), boom_of(near));
+
+    // The cached form names each by the edges that reach it.
+    let fragment = export_callable_throws_fragment(&db, main);
+    assert_eq!(fragment.by_id[&f_id], boom_at(&["near", "inner"]));
+    assert_eq!(fragment.by_id[&g_id], boom_at(&["near"]));
+
+    // Read back, a seed is the declaration its path reaches. Each function is
+    // seeded with the OTHER's throws, so the answer can only be the seed.
+    let path = main.path(&db).display().to_string();
+    db.set_seeded_callable_throws(BTreeMap::from([(
+        path.clone(),
+        BTreeMap::from([
+            (f_id, boom_at(&["near"])),
+            (g_id, boom_at(&["near", "inner"])),
+        ]),
+    )]));
+    assert_eq!(throws_of(&db, "f"), boom_of(near));
+    assert_eq!(throws_of(&db, "g"), boom_of(far));
+
+    // A path that leaves the package's edges is not this compile's fact: the
+    // function is inferred honestly.
+    db.set_seeded_callable_throws(BTreeMap::from([(
+        path.clone(),
+        BTreeMap::from([(f_id, boom_at(&["near", "gone"]))]),
+    )]));
+    assert_eq!(throws_of(&db, "f"), boom_of(far));
+    db.set_seeded_callable_throws(BTreeMap::new());
+
+    // The per-file facts hold what a function throws in its own words — a
+    // declared clause, a `throw` in its body — located the same way: a
+    // dependency's by the edge, the file's own package's by the empty path.
+    fn local<K>(key: K) -> QualifiedTypeName<K> {
+        QualifiedTypeName::qualified(key, Vec::new(), Name::new("Local"))
+    }
+    fn direct_of<N: Clone + Ord>(
+        facts: &[FunctionThrowFacts<N>],
+        name: &str,
+    ) -> std::collections::BTreeSet<Ty<N>> {
+        facts
+            .iter()
+            .find(|fact| fact.key.as_str() == name)
+            .unwrap_or_else(|| panic!("no throw fact for `{name}`"))
+            .direct
+            .clone()
+    }
+    let honest_facts = file_throw_facts(&db, main).0.clone();
+    let mut cached_facts = export_file_throw_facts(&db, main);
+    assert_eq!(
+        direct_of(&cached_facts, "declared"),
+        [boom_at(&["near"])].into()
+    );
+    assert_eq!(
+        direct_of(&cached_facts, "own"),
+        [Ty::Class(local(EdgePath::own()), Box::new([]))].into()
+    );
+
+    // Read back, the facts are the facts that were written.
+    db.set_seeded_throw_facts(BTreeMap::from([(path.clone(), cached_facts.clone())]));
+    assert_eq!(file_throw_facts(&db, main).0, honest_facts);
+
+    // And only the seed decides them: with the two functions' throws
+    // exchanged, each reads back as the other's declaration.
+    let (declared, own) = (
+        direct_of(&cached_facts, "declared"),
+        direct_of(&cached_facts, "own"),
+    );
+    for fact in &mut cached_facts {
+        match fact.key.as_str() {
+            "declared" => fact.direct.clone_from(&own),
+            "own" => fact.direct.clone_from(&declared),
+            _ => {}
+        }
+    }
+    db.set_seeded_throw_facts(BTreeMap::from([(path, cached_facts)]));
+    let seeded = file_throw_facts(&db, main).0.clone();
+    assert_eq!(
+        direct_of(&seeded, "declared"),
+        [Ty::Class(local(workspace), Box::new([]))].into()
+    );
+    assert_eq!(direct_of(&seeded, "own"), [boom_of(near)].into());
 }

@@ -12,8 +12,8 @@ use std::collections::{HashMap, VecDeque};
 use baml_base::{LangPackage, LangRoots, Name, SourceFile, SourceRoot, SourceRootKind, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase};
 use baml_type::{
-    DeclName, RESERVED_USER_PACKAGE, TypeName,
-    wire::{DepSlot, Digest, Locator},
+    DeclName, PathName, RESERVED_USER_PACKAGE, TypeName,
+    wire::{DepSlot, Digest, EdgePath, Locator},
 };
 use indexmap::IndexMap;
 
@@ -235,19 +235,21 @@ pub fn is_precompiled_stdlib(db: &dyn crate::Db, root: SourceRoot) -> bool {
 /// project with no manifest — the default [`RESERVED_USER_PACKAGE`].
 ///
 /// This is the rendering boundary's table. Compile-time heads carry the root
-/// itself ([`DeclName`]) and never a spelling; the spelling is consulted
-/// exactly where a head is rendered as a program-wide name — emit's runtime
-/// templates, describe/export output, canonical dumps, the throw-fact seed —
-/// and where such a name re-enters. A package interface blob does NOT use it:
-/// its heads are slots of its own dependency table ([`DependencyTable`]),
-/// bound by walking edges, so the blob means the same declarations in every
-/// database. Today every root in the database is compiled into one program,
-/// so the table is database-wide and viewpoint-free; when emit compiles a
-/// root's closure alone it becomes per-closure.
+/// itself ([`DeclName`]) and never a spelling, through MIR and into emit; the
+/// spelling is consulted exactly where a head is SHOWN as a program-wide name
+/// — a runtime declaration's display name, operand metadata and MIR dumps,
+/// describe/export output, canonical dumps. It is write-only: nothing reads a
+/// spelling back into a declaration. No artifact uses it for identity: a
+/// package interface blob's heads are slots of its own dependency table
+/// ([`DependencyTable`]), a unit's are declaration operands, and a cached
+/// seed's are located by edge path ([`located_head`]), so each means the same
+/// declarations whatever the program calls its packages.
 ///
 /// A spelling two roots share, or a root reached under two names, is a
-/// [`collision`](Self::collisions): a boundary that needs the table injective
-/// reports it; a renderer may still spell the root.
+/// [`collision`](Self::collisions): what is rendered is then ambiguous to a
+/// reader, and nothing more. The compiler needs no injective table — such a
+/// program compiles and links — so the report is for a surface that wants to
+/// warn about it (the package provider, the CLI).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Spelling {
     by_root: IndexMap<SourceRoot, Name>,
@@ -359,36 +361,6 @@ impl Spelling {
         )
     }
 
-    /// The compile-time head a wire name denotes as seen from `viewpoint`:
-    /// the artifact's own root is `viewpoint`; a dependency is the root
-    /// `viewpoint` spells that way ([`accessible_package`]), else the root
-    /// the program spells that way if it lies in `viewpoint`'s dependency
-    /// closure — an interface names its transitive dependencies' types too
-    /// (a field's type, a throw set), under the spelling the program gives
-    /// them. `None` is the explicit unreachable-from-here outcome.
-    pub fn resolve(
-        &self,
-        db: &dyn crate::Db,
-        viewpoint: SourceRoot,
-        name: &TypeName,
-    ) -> Option<DeclName> {
-        let root = if name.is_local() {
-            viewpoint
-        } else if let Some(root) = accessible_package(db, viewpoint, name.package()) {
-            root
-        } else {
-            let root = self.root(name.package())?;
-            package_dependency_closure(db, viewpoint)
-                .contains(&root)
-                .then_some(root)?
-        };
-        Some(DeclName::in_root(
-            root,
-            name.namespace().clone(),
-            name.name().clone(),
-        ))
-    }
-
     /// Why the table is not injective, if it is not.
     pub fn collisions(&self) -> &[SpellingCollision] {
         &self.collisions
@@ -421,7 +393,8 @@ impl Spelling {
 /// The [`Spelling`] of the program built for `root`: [`spelling`] restricted
 /// to [`world_roots`], so a shared default spelling between two workspace
 /// roots that never meet in one program is no collision for either program.
-/// Emit judges its wire table by this; rendering keeps the database-wide one.
+/// The table a surface reads to report that ONE program renders ambiguously;
+/// rendering itself keeps the database-wide one.
 #[salsa::tracked(returns(ref))]
 pub fn spelling_within(db: &dyn crate::Db, root: SourceRoot) -> Spelling {
     spelling(db).within(world_roots(db, root))
@@ -918,6 +891,63 @@ pub fn edge_path(
     }
     hops.reverse();
     Some(hops)
+}
+
+/// `target` as `owner` locates it: the edge names of the shortest edge path
+/// ([`edge_path`]), empty for `owner` itself. A function of the two packages'
+/// edge tables alone, so every artifact of `owner` spells `target` the same
+/// way.
+///
+/// # Panics
+///
+/// When no edge path from `owner` reaches `target` — the same internal
+/// invariant as [`DependencyTable::slot`].
+pub fn edge_spelling(db: &dyn crate::Db, owner: SourceRoot, target: SourceRoot) -> EdgePath {
+    EdgePath(
+        edge_path(db, owner, target)
+            .unwrap_or_else(|| {
+                unreachable!(
+                    "package `{}` names package `{}`, which no edge path from it reaches",
+                    owner.path(db).display(),
+                    target.path(db).display()
+                )
+            })
+            .into_iter()
+            .map(|(_, edge, _)| edge)
+            .collect(),
+    )
+}
+
+/// The package `path` locates from `owner`: each edge followed through the
+/// edge table of the package it leaves — the inverse of [`edge_spelling`].
+/// `None` when a hop names an edge the package it leaves does not have.
+pub fn edge_target(db: &dyn crate::Db, owner: SourceRoot, path: &EdgePath) -> Option<SourceRoot> {
+    path.0.iter().try_fold(owner, |current, edge| {
+        edge_table(db, current)
+            .into_iter()
+            .find_map(|(name, root)| (name == *edge).then_some(root))
+    })
+}
+
+/// A compile-time head as `owner` locates it: its declaring package by edge
+/// path ([`edge_spelling`]). The spelling of a head in anything several
+/// artifacts of `owner` must agree on, or that outlives the compile — an
+/// identity component, a cached seed.
+///
+/// # Panics
+///
+/// When no edge path from `owner` reaches the head's package (see
+/// [`edge_spelling`]).
+pub fn located_head(db: &dyn crate::Db, owner: SourceRoot, decl: &DeclName) -> PathName {
+    decl.map_key(|declaring| edge_spelling(db, owner, *declaring))
+}
+
+/// The compile-time head a located name denotes from `owner` — the inverse of
+/// [`located_head`]. `None` when its path leaves `owner`'s edges
+/// ([`edge_target`]).
+pub fn resolve_located(db: &dyn crate::Db, owner: SourceRoot, name: &PathName) -> Option<DeclName> {
+    name.try_map_key(|path| edge_target(db, owner, path).ok_or(()))
+        .ok()
 }
 
 /// An artifact's dependency table under construction: one slot per package

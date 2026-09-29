@@ -10,16 +10,18 @@
 
 use std::collections::HashSet;
 
-use baml_base::Name;
+use baml_base::{Name, SourceRoot};
 use baml_compiler2_hir::{
     body::{FunctionBody, function_body},
     contributions::Definition,
+    file_package::file_package,
     item_data::{
         AssociatedTypeBindingData, ClassData, FieldData, InterfaceFieldLinkData, class_data,
         enum_data, function_data, impl_block_data, impl_enclosing_class, interface_data,
         is_required_interface_method, type_alias_data,
     },
     loc::{ClassLoc, DeclRef, EnumLoc, FunctionLoc, ImplLoc, LetLoc, TypeAliasLoc},
+    package::located_head,
     type_ref::{TypeRefId, TypeRefStore},
 };
 use baml_compiler2_hir_ty::{extern_loc::InterfaceRef, layout, lower::qualify_def};
@@ -254,7 +256,7 @@ pub(crate) fn build_alias_object<'db>(
     );
     let wire = cache.wire(&head);
     let value = cache.convert(&cache.aliases.aliases[&head]);
-    let definition = baml_type::RealizedTy::try_from(&value).map_err(|e| {
+    let definition = baml_compiler2_mir::RealizedTy::try_from(&value).map_err(|e| {
         LoweringError::Internal(format!(
             "type alias `{}` lowered to a non-realized type (`{}`); aliases cannot be \
              generic, so this is a compiler bug",
@@ -290,7 +292,8 @@ pub(crate) fn build_interface_def(
     anchor: &mut PackageRefs<'_, '_>,
 ) -> bex_vm_types::types::InterfaceDef {
     use baml_compiler2_hir::item_data::FunctionParamData;
-    use baml_type::{RuntimeInterface, RuntimeTy};
+    use baml_compiler2_mir::RuntimeTy;
+    type RuntimeInterface = baml_type::RuntimeInterface<DeclName>;
     use bex_vm_types::types::{InterfaceDef, InterfaceFieldDef, InterfaceMethodDef};
 
     /// A method signature at the compiler's head, before anchoring.
@@ -328,11 +331,9 @@ pub(crate) fn build_interface_def(
                     id: TypeRefId|
      -> RuntimeTy {
         let ty = baml_compiler2_hir_ty::lower::reject_holes(&ctx.lower_type_ref(store, id));
-        baml_type::lower_to_runtime(&ty, resolved.aliases)
-            .unwrap_or_else(|e| {
-                unreachable!("interface `{iface_wire}` declares a non-runtime type: {e:?}")
-            })
-            .map_heads(&mut |decl| resolved.wire(decl))
+        baml_type::lower_to_runtime(&ty, resolved.aliases).unwrap_or_else(|e| {
+            unreachable!("interface `{iface_wire}` declares a non-runtime type: {e:?}")
+        })
     };
     // Lower an interface bound / `requires` target / associated-type bound.
     // These are constraint heads: hir keeps written pins only (no eager
@@ -355,24 +356,16 @@ pub(crate) fn build_interface_def(
             return None;
         };
         let to_runtime = |t: &baml_type::Ty| {
-            baml_type::lower_to_runtime(t, resolved.aliases)
-                .unwrap_or_else(|e| {
-                    unreachable!(
-                        "interface `{iface_wire}` declares a non-runtime constraint: {e:?}"
-                    )
-                })
-                .map_heads(&mut |decl| resolved.wire(decl))
+            baml_type::lower_to_runtime(t, resolved.aliases).unwrap_or_else(|e| {
+                unreachable!("interface `{iface_wire}` declares a non-runtime constraint: {e:?}")
+            })
         };
         let generics = args.iter().map(to_runtime).collect();
         let associated_types = assoc
             .iter()
             .map(|(n, t)| (n.clone(), to_runtime(t)))
             .collect();
-        Some(RuntimeInterface::new(
-            resolved.wire(&qtn),
-            generics,
-            associated_types,
-        ))
+        Some(RuntimeInterface::new(qtn, generics, associated_types))
     };
     // A method's runtime signature: Required params -> positional `args`,
     // optional (defaulted) params -> `kwargs`; the `self` receiver is
@@ -553,8 +546,8 @@ type ImplBoundsMap = rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>>;
 struct IfaceParts {
     head: DeclName,
     wire: TypeName,
-    args: Vec<baml_type::TyTemplate>,
-    assoc: Vec<(Name, baml_type::TyTemplate)>,
+    args: Vec<baml_compiler2_mir::TyTemplate>,
+    assoc: Vec<(Name, baml_compiler2_mir::TyTemplate)>,
 }
 
 /// `None` when `iface_ty` is not an interface type.
@@ -593,38 +586,86 @@ pub(crate) struct ImplRuleTarget<'db> {
     /// The full lowered target (`Ty::Interface`), for the bake's
     /// argument/associated-binding work.
     iface_ty: Ty,
-    interface_args: Vec<baml_type::TyTemplate>,
+    interface_args: Vec<baml_compiler2_mir::TyTemplate>,
     /// The target's WRITTEN associated pins only (block-level pins are folded
     /// in by the bake).
-    interface_assoc: Vec<(Name, baml_type::TyTemplate)>,
+    interface_assoc: Vec<(Name, baml_compiler2_mir::TyTemplate)>,
     for_ty: Ty,
-    for_ty_pattern: baml_type::TyTemplate,
+    for_ty_pattern: baml_compiler2_mir::TyTemplate,
     impl_params: Vec<ParamTy>,
     impl_bounds: ImplBoundsMap,
     /// Each declared param's bound conjunction, in frame order, each
     /// conjunction canonically sorted — the constraint-set third of the
     /// rule's coherence identity. The bake anchors exactly this, in this
     /// order, so a rule and its declaring block cannot disagree on it.
-    generic_param_bounds: Vec<Vec<SpelledBound>>,
+    generic_param_bounds: Vec<Vec<TargetBound>>,
 }
 
-impl ImplRuleTarget<'_> {
-    /// The block's identity as the wire spells it (see
-    /// [`ImplCoherenceKey`]'s invariant, which this carries at the compiler's
-    /// head).
-    pub(crate) fn coherence_key(&self) -> ImplBodyCoherence {
-        ImplBodyCoherence {
-            for_ty_pattern: self.for_ty_pattern.clone(),
-            interface_args: self.interface_args.clone(),
-            generic_param_bounds: self.generic_param_bounds.clone(),
+/// One interface bound of an impl's declared parameter, at the compiler's
+/// head.
+#[derive(Clone)]
+pub(crate) struct TargetBound {
+    interface: DeclName,
+    args: Vec<baml_compiler2_mir::TyTemplate>,
+    assoc: Vec<(Name, baml_compiler2_mir::TyTemplate)>,
+}
+
+impl TargetBound {
+    /// The bound located from `body_root`: its wire-key form.
+    fn located(&self, db: &dyn baml_compiler2_hir::Db, body_root: SourceRoot) -> SpelledBound {
+        let mut locate = |decl: &DeclName| located_head(db, body_root, decl);
+        SpelledBound {
+            interface: locate(&self.interface),
+            args: self
+                .args
+                .iter()
+                .map(|arg| arg.map_heads(&mut locate))
+                .collect(),
+            assoc: self
+                .assoc
+                .iter()
+                .map(|(name, ty)| (name.clone(), ty.map_heads(&mut locate)))
+                .collect(),
         }
     }
 }
 
-/// One spelled bound at a lane's head.
+impl ImplRuleTarget<'_> {
+    /// The block's identity as a wire key (see [`ImplCoherenceKey`]'s
+    /// invariant, which this carries): every head located from the block's
+    /// own package by edge path, so every artifact of the package states the
+    /// same key and no name a program gives a package takes part.
+    pub(crate) fn coherence_key(
+        &self,
+        db: &dyn baml_compiler2_hir::Db,
+        body_root: SourceRoot,
+    ) -> ImplBodyCoherence {
+        let mut locate = |decl: &DeclName| located_head(db, body_root, decl);
+        ImplBodyCoherence {
+            for_ty_pattern: self.for_ty_pattern.map_heads(&mut locate),
+            interface_args: self
+                .interface_args
+                .iter()
+                .map(|arg| arg.map_heads(&mut locate))
+                .collect(),
+            generic_param_bounds: self
+                .generic_param_bounds
+                .iter()
+                .map(|bounds| {
+                    bounds
+                        .iter()
+                        .map(|bound| bound.located(db, body_root))
+                        .collect()
+                })
+                .collect(),
+        }
+    }
+}
+
+/// One declared bound at a lane's head.
 pub(crate) fn anchor_bound(
     anchor: &mut PackageRefs<'_, '_>,
-    bound: &SpelledBound,
+    bound: &TargetBound,
 ) -> InterfaceBound {
     InterfaceBound {
         interface: anchor.head(&bound.interface),
@@ -702,24 +743,27 @@ pub(crate) fn impl_rule_target<'db>(
     // belt on the same law (a bound that does not split drops the rule);
     // with the arity gate above it should never fire. Each conjunction is
     // sorted canonically so a written reorder cannot fork the identity key.
-    let generic_param_bounds: Option<Vec<Vec<SpelledBound>>> = impl_params
+    let body_root = file_package(db, impl_loc.file(db)).root;
+    let generic_param_bounds: Option<Vec<Vec<TargetBound>>> = impl_params
         .iter()
         .map(|param| {
-            let mut bounds: Vec<SpelledBound> = impl_bounds
+            let mut bounds: Vec<TargetBound> = impl_bounds
                 .get(param)
                 .into_iter()
                 .flatten()
                 .map(|bound| {
                     split_interface(&bound.to_ty(), resolved, &impl_params).map(|parts| {
-                        SpelledBound {
-                            interface: parts.wire,
+                        TargetBound {
+                            interface: parts.head,
                             args: parts.args,
                             assoc: parts.assoc,
                         }
                     })
                 })
                 .collect::<Option<_>>()?;
-            bounds.sort_by_cached_key(|bound| format!("{bound:?}"));
+            // Ordered by the located form, which is the same in every
+            // database the package compiles in.
+            bounds.sort_by_cached_key(|bound| format!("{:?}", bound.located(db, body_root)));
             Some(bounds)
         })
         .collect();
@@ -874,7 +918,7 @@ fn block_associated_bindings<'db>(
     generics: &[ParamTy],
     bounds: &ImplBoundsMap,
     resolved: &RuntimeLowering<'_>,
-) -> Vec<(Name, baml_type::TyTemplate)> {
+) -> Vec<(Name, baml_compiler2_mir::TyTemplate)> {
     let canonical = baml_compiler2_hir_ty::interfaces::impl_data(db, impl_loc)
         .as_ref()
         .ok();
@@ -938,7 +982,7 @@ fn block_associated_bindings<'db>(
 fn complete_interface_assoc<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     interface: InterfaceRef<'db>,
-    interface_assoc: &mut Vec<(Name, baml_type::TyTemplate)>,
+    interface_assoc: &mut Vec<(Name, baml_compiler2_mir::TyTemplate)>,
     iface_arg_tys: &[Ty],
     for_ty: &Ty,
     generics: &[ParamTy],

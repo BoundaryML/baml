@@ -27,12 +27,11 @@
 //! ```
 
 use baml_base::{Name, Span};
-use baml_type::{RuntimeTy, TyTemplate};
 
 use crate::{
     BasicBlock, BlockId, CatchRegion, FunctionOwner, Local, LocalDecl, MirFunction,
-    MirFunctionBody, MirFunctionKind, Operand, Place, Rvalue, Statement, StatementKind, SwitchKey,
-    Terminator,
+    MirFunctionBody, MirFunctionKind, Operand, Place, RuntimeTy, Rvalue, Statement, StatementKind,
+    SwitchKey, Terminator, TyTemplate,
 };
 
 /// Builder for constructing MIR functions.
@@ -223,7 +222,7 @@ impl<'db> MirBuilder<'db> {
     /// Emit an open-world interface-field store.
     pub(crate) fn virtual_field_store(
         &mut self,
-        iface: baml_type::TyTemplateInterface,
+        iface: crate::TyTemplateInterface,
         receiver: Operand<'db>,
         field_index: u32,
         field: baml_base::Name,
@@ -433,7 +432,7 @@ impl<'db> MirBuilder<'db> {
     #[expect(clippy::too_many_arguments)]
     pub(crate) fn virtual_call_with_runtime_id(
         &mut self,
-        iface: baml_type::TyTemplateInterface,
+        iface: crate::TyTemplateInterface,
         method: String,
         args: Vec<Operand<'db>>,
         ntypeargs: usize,

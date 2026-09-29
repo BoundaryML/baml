@@ -22,7 +22,7 @@ use baml_compiler2_hir::{
     },
 };
 use baml_type::{
-    DeclName, FunctionParamMode, FunctionParamTy, Head, ParamTy, Ty, TypeName, WireName,
+    DeclName, FunctionParamMode, FunctionParamTy, Head, ParamTy, Ty, WireName,
     wire::{DepSlot, Digest, Locator},
 };
 use indexmap::IndexMap;
@@ -478,7 +478,7 @@ pub struct CallableThrowsFragment<N: Head = DeclName> {
 
 impl<N: Head> CallableThrowsFragment<N> {
     /// This fragment with every head replaced by what `f` resolves it to —
-    /// the persistence boundary's re-spelling.
+    /// the persistence boundary's conversion.
     pub fn map_heads<M: Head>(&self, f: &mut impl FnMut(&N) -> M) -> CallableThrowsFragment<M> {
         CallableThrowsFragment {
             by_id: self
@@ -1411,14 +1411,15 @@ pub fn interface_digest(db: &dyn baml_compiler2_hir::Db, root: baml_base::Source
     sha2::Sha256::digest(&bytes).into()
 }
 
-/// A file's callable-throws fragment spelled for the wire, as the
-/// incremental cache persists it (see [`export_interface`]).
+/// A file's callable-throws fragment as the incremental cache persists it:
+/// every head located by edge path from the file's own package.
 pub fn export_callable_throws_fragment(
     db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
-) -> CallableThrowsFragment<TypeName> {
-    let spelling = baml_compiler2_hir::package::spelling(db);
-    file_callable_throws_fragment(db, file).map_heads(&mut |decl| spelling.wire(decl))
+) -> CallableThrowsFragment<baml_type::PathName> {
+    let root = baml_compiler2_hir::file_package::file_package(db, file).root;
+    file_callable_throws_fragment(db, file)
+        .map_heads(&mut |decl| baml_compiler2_hir::package::located_head(db, root, decl))
 }
 
 /// The serialized compiler interface of a mounted (source-less) package.
@@ -2155,14 +2156,16 @@ fn exported_impls(
             methods,
         });
     }
-    // Order by the wire form: a root-headed row has no bytes of its own, and
-    // the wire spelling is the deterministic identity the order should follow.
-    let spelling = baml_compiler2_hir::package::spelling(db);
+    // Order by the located form: a root-headed row has no bytes of its own,
+    // and a head located by edge path from this package is fixed by the
+    // packages' manifests alone — never by what a program calls them.
     rows.sort_by_cached_key(|row| {
-        let wire = row
-            .try_map_heads::<_, std::convert::Infallible>(&mut |decl| Ok(spelling.wire(decl)))
+        let located = row
+            .try_map_heads::<_, std::convert::Infallible>(&mut |decl| {
+                Ok(baml_compiler2_hir::package::located_head(db, pkg_id, decl))
+            })
             .unwrap_or_else(|never| match never {});
-        borsh::to_vec(&wire).expect("ExportedImpl serializes")
+        borsh::to_vec(&located).expect("ExportedImpl serializes")
     });
     rows
 }

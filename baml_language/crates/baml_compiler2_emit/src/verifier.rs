@@ -82,10 +82,9 @@ pub(crate) fn verify_mir_emit_invariants(
 #[cfg(test)]
 mod tests {
     use baml_compiler2_mir::{
-        BasicBlock, Constant, Local, LocalDecl, MirFunctionBody, Operand, Place, Rvalue, Statement,
-        StatementKind,
+        BasicBlock, Constant, Local, LocalDecl, MirFunctionBody, Operand, Place, RuntimeTy, Rvalue,
+        Statement, StatementKind,
     };
-    use baml_type::RuntimeTy;
 
     use super::*;
     use crate::analysis::AnalysisResult;

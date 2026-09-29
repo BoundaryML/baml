@@ -117,9 +117,9 @@ pub fn callable_throws<'db>(
     // reuse plan proved unchanged). `by_path(db)` is a tracked read of the
     // `SeededCallableThrows` input, so a later seed invalidates this memo;
     // the lookup is skipped when no seeds were injected (LSP, cold CLI).
-    // Seeds are wire data: their heads are spelled, and resolve through the
-    // seeded function's own root. A seed naming a package that root cannot
-    // reach is not this compile's fact and is inferred honestly below.
+    // A seed's heads are located by edge path from the seeded function's own
+    // root. A seed whose path leaves that root's edges is not this compile's
+    // fact and is inferred honestly below.
     if let Some(seeds) = db.seeded_callable_throws() {
         let by_path = seeds.by_path(db);
         if !by_path.is_empty() {
@@ -130,9 +130,8 @@ pub fn callable_throws<'db>(
                 .and_then(|by_id| by_id.get(&function.id(db).as_u32()))
             {
                 let root = baml_compiler2_hir::file_package::file_package(db, file).root;
-                let spelling = baml_compiler2_hir::package::spelling(db);
                 if let Ok(ty) = ty.try_map_heads::<_, (), _>(&mut |name| {
-                    spelling.resolve(db, root, name).ok_or(())
+                    baml_compiler2_hir::package::resolve_located(db, root, name).ok_or(())
                 }) {
                     return CallableThrows(ty);
                 }

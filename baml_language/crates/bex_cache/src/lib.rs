@@ -158,8 +158,11 @@ use sha2::{Digest, Sha256};
 /// (`ImportEntry` lost `baked_tag`) and the linker assigns every declaration
 /// `CLASS_BASE +` its object index; `MatchHashTable` gained `keys`
 /// (`SwitchKey::{Kind, Declaration}`), solved by the linker; `ImplBodyKey`
-/// carries a name-headed `ImplBodyCoherence`; and the executable is laid out
-/// package-major in link-set order.
+/// carries an `ImplBodyCoherence` whose heads are located by edge path from
+/// the body's own package, as are the manifest's throw facts and
+/// `callable_throws` fragments from their file's; a dependency table is a
+/// list of `Locator`s; and the executable is laid out package-major in
+/// link-set order.
 pub const FORMAT_VERSION: u32 = 17;
 
 const MAGIC: [u8; 4] = *b"BEXC";
@@ -290,8 +293,9 @@ pub struct ManifestFile {
     /// `baml_compiler2_hir_ty::throw_facts::file_throw_facts` extracted
     /// them. Re-seeded into the next compile's database so unchanged files
     /// never re-walk their bodies just to answer "what does the package
-    /// throw" — the package-level solve then runs from facts alone.
-    pub throw_facts: Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>,
+    /// throw" — the package-level solve then runs from facts alone. Every
+    /// head is located by edge path from the file's own package.
+    pub throw_facts: Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::PathName>>,
     /// Opaque borsh blob of the diagnostics `check_file` produced for this
     /// file on the compile that wrote the manifest (`borsh(Vec<CachedDiagnostic>)`,
     /// the typed form living in the CLI). Kept opaque here so `bex_cache` does

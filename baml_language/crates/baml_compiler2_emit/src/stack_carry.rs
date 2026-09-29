@@ -2,10 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use baml_compiler2_hir_ty::extern_loc::ClassRef;
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, CellId, Constant, Local, MirFunctionBody, Operand, Place, Rvalue,
-    StatementKind, Terminator,
+    AggregateKind, BinOp, CellId, Constant, Local, MirFunctionBody, Operand, Place, RuntimeTy,
+    Rvalue, StatementKind, Terminator, TyTemplate,
 };
-use baml_type::{Literal, RuntimeTy, TyTemplate};
+use baml_type::Literal;
 
 use crate::{
     analysis::{LocalClassification, LocalDefUse, StatementRef, UseLocation},
@@ -1565,7 +1565,7 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         Ok(())
     }
 
-    fn is_type(&mut self, _ty: &baml_type::TyTemplate) -> Result<(), Self::Error> {
+    fn is_type(&mut self, _ty: &baml_compiler2_mir::TyTemplate) -> Result<(), Self::Error> {
         // Emitter consumes operand and pushes boolean result.
         if !self.sim.pop_n(1) {
             return Err(());
@@ -1583,7 +1583,7 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         Ok(())
     }
 
-    fn load_type(&mut self, _template: &baml_type::TyTemplate) -> Result<(), Self::Error> {
+    fn load_type(&mut self, _template: &baml_compiler2_mir::TyTemplate) -> Result<(), Self::Error> {
         // LoadType pushes one Object::Type value onto the stack. No operands consumed.
         self.sim.push();
         Ok(())
@@ -1692,8 +1692,9 @@ impl<'a> StackEffectSink<'a> for StackCarryPullSink<'a> {
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler2_mir::{AggregateKind, BasicBlock, LocalDecl, Statement};
-    use baml_type::{RealizedTy, TyTemplate};
+    use baml_compiler2_mir::{
+        AggregateKind, BasicBlock, LocalDecl, RealizedTy, Statement, TyTemplate,
+    };
 
     use super::*;
 
@@ -1955,7 +1956,9 @@ mod tests {
             &Rvalue::Aggregate {
                 kind: AggregateKind::Class {
                     class: crate::tests::class_ref(&db, file, "Box"),
-                    type_arg_templates: vec![TyTemplate::from(baml_type::RealizedTy::int())],
+                    type_arg_templates: vec![TyTemplate::from(
+                        baml_compiler2_mir::RealizedTy::int(),
+                    )],
                 },
                 fields: vec![Operand::copy_local(sibling), Operand::copy_local(carried)],
             },

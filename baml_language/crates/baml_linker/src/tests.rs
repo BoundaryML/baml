@@ -759,7 +759,7 @@ fn impl_body_import_from_a_dependency_is_refused() {
         .push(direct("app", fingerprint_of(&record)));
     let body = DeclPath::InterfaceBody(BodyKey::ImplMethod(Box::new(ImplBodyKey {
         interface: InterfaceKey {
-            package: baml_type::Package::Local,
+            package: baml_type::wire::EdgePath::own(),
             path: item("Greeter"),
         },
         coherence: bex_vm_types::ImplBodyCoherence {

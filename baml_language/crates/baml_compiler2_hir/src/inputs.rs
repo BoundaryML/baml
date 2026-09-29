@@ -10,15 +10,16 @@
 /// Input: per-file `FunctionThrowFacts` from a previous compile, keyed by
 /// the full source-file path string (`SourceFile::path` display form).
 ///
-/// Seeds are wire data (the cache manifest persists them), so their heads are
-/// spelled: the reader re-spells them into the file's root through the
-/// [`Spelling`](crate::package::Spelling) before use.
+/// Seeds outlive the compile that made them (the cache manifest persists
+/// them), so their heads are located by edge path from the file's own package
+/// ([`located_head`](crate::package::located_head)); the reader follows the
+/// paths back ([`resolve_located`](crate::package::resolve_located)).
 #[salsa::input]
 pub struct SeededThrowFacts {
     #[returns(ref)]
     pub by_path: std::collections::BTreeMap<
         String,
-        Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>,
+        Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::PathName>>,
     >,
 }
 
@@ -32,13 +33,14 @@ pub struct SeededThrowFacts {
 /// process-independent item-tree index, so a byte-identical file's functions map
 /// to the same keys across compiles. `callable_throws` reads it through a
 /// *tracked* dependency (present-from-construction, empty until seeded), so a
-/// later seed on a reused database invalidates the memo.
+/// later seed on a reused database invalidates the memo. Heads are located by
+/// edge path from the file's own package, as in [`SeededThrowFacts`].
 #[salsa::input]
 pub struct SeededCallableThrows {
     #[returns(ref)]
     pub by_path: std::collections::BTreeMap<
         String,
-        std::collections::BTreeMap<u32, baml_type::Ty<baml_type::TypeName>>,
+        std::collections::BTreeMap<u32, baml_type::Ty<baml_type::PathName>>,
     >,
 }
 

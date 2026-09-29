@@ -95,3 +95,49 @@ impl Locator {
         }
     }
 }
+
+/// A package located by the edges that reach it from an artifact's owning
+/// package: the edge names hop by hop, empty for the owning package itself.
+///
+/// Unlike a [`DepSlot`], which indexes ONE artifact's table, a path means the
+/// same package in every artifact of the owning package — its unit, its tail,
+/// every submission of a session — because an edge table is fixed by its
+/// package's manifest. An identity component that several artifacts must
+/// agree on (an impl-provided body's key), and a seed a later compile reads
+/// back (a cached throw fact), is therefore spelled by path, never by slot
+/// and never by a name the program happens to give the package.
+#[derive(
+    Clone, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize,
+)]
+pub struct EdgePath(pub Vec<Name>);
+
+impl EdgePath {
+    /// The owning package itself.
+    #[must_use]
+    pub const fn own() -> Self {
+        Self(Vec::new())
+    }
+
+    /// Whether this is the owning package itself.
+    #[must_use]
+    pub fn is_own(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl std::fmt::Display for EdgePath {
+    /// The path as source would write it from the owning package: `root` for
+    /// the package itself, the edge names dotted otherwise.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_own() {
+            return f.write_str("root");
+        }
+        for (index, edge) in self.0.iter().enumerate() {
+            if index > 0 {
+                f.write_str(".")?;
+            }
+            f.write_str(edge.as_str())?;
+        }
+        Ok(())
+    }
+}

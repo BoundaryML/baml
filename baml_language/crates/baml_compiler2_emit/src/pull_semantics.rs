@@ -10,9 +10,9 @@ use std::collections::{HashMap, HashSet};
 
 use baml_compiler2_hir_ty::extern_loc::ClassRef;
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, CellId, Constant, IndexKind, Local, Operand, Place, Rvalue, UnaryOp,
+    AggregateKind, BinOp, CellId, Constant, IndexKind, Local, Operand, Place, Rvalue, TyTemplate,
+    UnaryOp,
 };
-use baml_type::TyTemplate;
 
 use crate::analysis::{LocalClassification, LocalDefUse};
 
@@ -407,7 +407,7 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
                 // produced by the array-literal lowering (which emits the typed
                 // `Rvalue::Array`); this arm is a defensive fallback.
                 sink.alloc_array(
-                    &TyTemplate::from(baml_type::RealizedTy::unknown()),
+                    &TyTemplate::from(baml_compiler2_mir::RealizedTy::unknown()),
                     fields.len(),
                 )
             }

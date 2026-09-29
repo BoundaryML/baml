@@ -667,7 +667,10 @@ impl<N: crate::Head> TyTemplate<N> {
     }
 }
 
-impl TyTemplateInterface {
+/// Symbolic substitution needs no more of a head than cloning it, so it sits at
+/// the same bound as [`TyTemplate::substitute_symbolic`] rather than the
+/// stronger one reduction requires.
+impl<N: Clone> TyTemplateInterface<N> {
     /// The interface *existential* template ([`TyTemplate::Interface`]) denoted by
     /// this constraint, with default attributes — the template-level counterpart of
     /// [`Interface::to_ty`].
@@ -676,19 +679,16 @@ impl TyTemplateInterface {
     /// bytecode constant pool a `LoadType` reads from). Prefer holding the
     /// constraint itself wherever an interface is meant: a `TyTemplate` slot admits
     /// non-interface types, which an interface position can never legitimately hold.
-    pub fn to_template(&self) -> TyTemplate {
+    ///
+    /// Head-generic: the head is placed, never read.
+    pub fn to_template(&self) -> TyTemplate<N> {
         TyTemplate::interface(
             self.name.clone(),
             self.generics.clone(),
             self.associated_types.clone(),
         )
     }
-}
 
-/// Symbolic substitution needs no more of a head than cloning it, so it sits at
-/// the same bound as [`TyTemplate::substitute_symbolic`] rather than the
-/// stronger one reduction requires.
-impl<N: Clone> TyTemplateInterface<N> {
     /// [`TyTemplate::for_each_type_arg_ref`] over every template position of
     /// the constraint: the generic arguments, then the associated-type bindings.
     pub fn for_each_type_arg_ref(&self, f: &mut impl FnMut(u32)) {

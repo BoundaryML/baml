@@ -22,12 +22,12 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_type::{Literal, RuntimeTy};
+use baml_type::Literal;
 
 pub use crate::ir::CellId;
 use crate::{
-    AggregateKind, BinOp, Constant, IntrinsicOp, Local, MirFunctionBody, Operand, Place, Rvalue,
-    StatementKind, Terminator, UnaryOp,
+    AggregateKind, BinOp, Constant, IntrinsicOp, Local, MirFunctionBody, Operand, Place, RuntimeTy,
+    Rvalue, StatementKind, Terminator, UnaryOp,
 };
 
 /// A set of resources, read by an evaluation or written by an instruction.

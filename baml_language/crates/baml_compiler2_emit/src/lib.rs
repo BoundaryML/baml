@@ -29,11 +29,11 @@ use baml_compiler2_hir::{
     package::world_files,
 };
 use baml_compiler2_mir::{
-    BuiltinKind, MirFunctionBody, MirFunctionKind, Operand, Place, RuntimeLowering, Rvalue,
-    StatementKind, definition_link_name, lower_function,
+    BuiltinKind, MirFunctionBody, MirFunctionKind, Operand, Place, RuntimeLowering, RuntimeTy,
+    Rvalue, StatementKind, definition_link_name, lower_function,
     memory::{self, CellId},
 };
-use baml_type::{ParamTy, RuntimeTy};
+use baml_type::ParamTy;
 use bex_vm_types::{
     Bytecode, CaptureCategory, Function, FunctionCaptureProps, FunctionKind, FunctionMeta,
     FunctionOrigin, Object, ObjectPool,
@@ -93,8 +93,10 @@ fn emitted_function_origin(
 /// compiled, so codegen resolves field names/types without reading the object
 /// pool (a hard requirement for parallel emit, whose workers compile against
 /// fragment pools that don't contain the pre-existing objects).
-pub(crate) type ClassFieldSnapshot<'db> =
-    HashMap<baml_compiler2_hir_ty::extern_loc::ClassRef<'db>, Vec<(String, baml_type::RuntimeTy)>>;
+pub(crate) type ClassFieldSnapshot<'db> = HashMap<
+    baml_compiler2_hir_ty::extern_loc::ClassRef<'db>,
+    Vec<(String, baml_compiler2_mir::RuntimeTy)>,
+>;
 
 /// Context for MIR codegen.
 pub(crate) struct MirCodegenContext<'db, 'ctx, 'obj, 'w> {
@@ -215,9 +217,9 @@ fn compute_throws_type(
     func_name: &baml_base::Name,
     cache: &RuntimeLowering<'_>,
     frame_params: &[baml_type::ParamTy],
-) -> baml_type::TyTemplate {
+) -> baml_compiler2_mir::TyTemplate {
     // An empty throw set is `never` — the empty error set — not an absent one.
-    let never = || baml_type::TyTemplate::Never;
+    let never = || baml_compiler2_mir::TyTemplate::Never;
     let pkg_info = file_package(db, file);
     let pkg_id = pkg_info.root;
     let throw_sets = baml_compiler2_hir_ty::package_interface::function_throw_sets(db, pkg_id);
@@ -234,7 +236,7 @@ fn compute_throws_type(
         return never();
     }
 
-    let converted: Vec<baml_type::TyTemplate> = facts
+    let converted: Vec<baml_compiler2_mir::TyTemplate> = facts
         .iter()
         .map(|tir_ty| baml_compiler2_mir::tir2_to_template(tir_ty, cache, frame_params))
         .collect();
@@ -242,7 +244,7 @@ fn compute_throws_type(
     if converted.len() == 1 {
         converted.into_iter().next().unwrap()
     } else {
-        baml_type::TyTemplate::Union(converted.into())
+        baml_compiler2_mir::TyTemplate::Union(converted.into())
     }
 }
 
@@ -654,7 +656,7 @@ fn compute_function_metadata<'db>(
                 .into_iter()
                 .flatten()
                 .map(|bound| baml_compiler2_mir::RuntimeInterfaceBound {
-                    interface: cache.wire(&bound.name),
+                    interface: bound.name.clone(),
                     args: bound.generics.iter().map(to_template).collect(),
                     assoc: bound
                         .associated_types
@@ -665,7 +667,7 @@ fn compute_function_metadata<'db>(
                 .collect()
         })
         .collect();
-    let null_template = || baml_type::TyTemplate::Null;
+    let null_template = || baml_compiler2_mir::TyTemplate::Null;
 
     // Runtime parameter templates come from the ELABORATED signature — the one
     // the checker types calls against. Only the effect differs from the raw
@@ -1505,7 +1507,6 @@ mod tests {
             aliases: &aliases,
             spelling: baml_compiler2_hir::package::spelling(&db),
             db: &db,
-            viewpoint: file_package(&db, file).root,
         };
 
         let metadata = compute_function_metadata(&db, func_loc, &parameter_defaults, &cache);
@@ -1538,7 +1539,6 @@ mod tests {
             aliases: &aliases,
             spelling: baml_compiler2_hir::package::spelling(&db),
             db: &db,
-            viewpoint: file_package(&db, file).root,
         };
         let root = file_package(&db, file).root;
         let mut refs = refs::PackageRefs::new(&db, root, refs::Own::Tail);
@@ -1573,7 +1573,7 @@ mod tests {
         assert!(
             matches!(
                 next.returns,
-                baml_type::RuntimeTy::AssociatedTypeProjection { .. }
+                bex_vm_types::RuntimeTy::AssociatedTypeProjection { .. }
             ),
             "expected a projection return, got {:?}",
             next.returns
@@ -1604,7 +1604,7 @@ mod tests {
             "the `self` receiver drops, the other three stay: {:?}",
             put.args
         );
-        assert!(matches!(put.args[2], baml_type::RuntimeTy::Int));
+        assert!(matches!(put.args[2], bex_vm_types::RuntimeTy::Int));
     }
 
     /// A `requires` clause is recorded even when it projects through `Self`.

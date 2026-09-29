@@ -7,7 +7,21 @@ use std::fmt;
 
 use baml_base::{Name, Span};
 pub use baml_compiler2_ast::BuiltinKind;
-use baml_type::{RealizedTy, RuntimeTy, TyTemplate, TyTemplateInterface};
+use baml_type::DeclName;
+
+/// MIR's types are headed by the compiler's own identity: a declaration IS
+/// its [`DeclName`] (the declaring root plus its path), never a spelling. A
+/// head is rendered as a name only where MIR is displayed or emitted as
+/// display metadata, through the program's spelling table; emit anchors every
+/// head to its declaration's object by identity, so nothing between the
+/// checker and the unit re-derives a declaration from a name.
+pub type RuntimeTy = baml_type::RuntimeTy<DeclName>;
+/// See [`RuntimeTy`].
+pub type RealizedTy = baml_type::RealizedTy<DeclName>;
+/// See [`RuntimeTy`].
+pub type TyTemplate = baml_type::TyTemplate<DeclName>;
+/// See [`RuntimeTy`].
+pub type TyTemplateInterface = baml_type::TyTemplateInterface<DeclName>;
 use subenum::subenum;
 
 // ============================================================================
@@ -141,16 +155,16 @@ pub struct RuntimeSignature {
     pub param_names: Vec<String>,
     /// Parameter types, parallel to `param_names`, as templates over the
     /// callee frame's De Bruijn type-arg slots.
-    pub param_types: Vec<baml_type::TyTemplate>,
+    pub param_types: Vec<TyTemplate>,
     /// Whether each parameter has a default, parallel to `param_names`.
     pub param_has_default: Vec<bool>,
     /// The return type. A template over the callee frame's type-arg slots (see
     /// [`Self::param_types`]).
-    pub return_type: baml_type::TyTemplate,
+    pub return_type: TyTemplate,
     /// The throws type, as a template over the callee frame's type-arg slots.
     /// `never` == cannot throw (the same spelling a function type uses), so a
     /// reconstructed value signature and a written type agree.
-    pub throws_type: baml_type::TyTemplate,
+    pub throws_type: TyTemplate,
     /// The declaration's joined `///` doc-comment lines, if any.
     pub docstring: Option<String>,
     /// The name the declaration was written with; `None` for lambdas
@@ -174,9 +188,9 @@ pub struct RuntimeSignature {
 /// object types; emission converts it directly to `bex_vm_types::InterfaceBound`.
 #[derive(Debug, Clone)]
 pub struct RuntimeInterfaceBound {
-    pub interface: baml_type::TypeName,
-    pub args: Vec<baml_type::TyTemplate>,
-    pub assoc: Vec<(baml_type::Name, baml_type::TyTemplate)>,
+    pub interface: DeclName,
+    pub args: Vec<TyTemplate>,
+    pub assoc: Vec<(baml_type::Name, TyTemplate)>,
 }
 
 /// A point where lowering could not produce code for a CHECKED program: what
@@ -1198,7 +1212,7 @@ pub enum AggregateKind<'db> {
     /// resolved `Ty` values in `Instance::class_type_args`.
     Class {
         class: baml_compiler2_hir_ty::extern_loc::ClassRef<'db>,
-        type_arg_templates: Vec<baml_type::TyTemplate>,
+        type_arg_templates: Vec<TyTemplate>,
     },
 }
 

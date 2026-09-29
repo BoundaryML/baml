@@ -17,10 +17,11 @@ use baml_compiler2_hir_ty::{
 };
 use baml_compiler2_mir::{
     BasicBlock, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, Local, LogLevel, MirFunctionBody,
-    Operand, Place, Rvalue, StatementKind, SwitchKey as MirSwitchKey, Terminator, UnaryOp,
+    Operand, Place, RealizedTy, RuntimeTy, Rvalue, StatementKind, SwitchKey as MirSwitchKey,
+    Terminator, TyTemplate, UnaryOp,
     memory::{self, CellId},
 };
-use baml_type::{RealizedTy, RuntimeTy, TyTemplate, TypeName};
+use baml_type::DeclName;
 use bex_vm_types::{
     BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionCaptureProps, FunctionKind,
     FunctionOrigin, GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool,
@@ -439,7 +440,25 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             .map(|(name, _)| name.clone())
     }
 
-    fn class_object_index_for_type_name(&mut self, tn: &TypeName) -> Option<usize> {
+    /// A MIR template as the program spells it: what operand metadata
+    /// prints. Display only — nothing resolves a declaration from it.
+    fn spelled_template(&self, template: &TyTemplate) -> String {
+        let spelling = baml_compiler2_hir::package::spelling(self.db);
+        template
+            .map_heads(&mut |decl: &DeclName| spelling.wire(decl))
+            .to_string()
+    }
+
+    /// A declaration's display name as the program spells it: what operand
+    /// metadata prints for a class or enum head.
+    fn spelled_head(&self, head: &DeclName) -> String {
+        baml_compiler2_hir::package::spelling(self.db)
+            .wire(head)
+            .display_name()
+            .to_string()
+    }
+
+    fn class_object_index_for_type_name(&mut self, tn: &DeclName) -> Option<usize> {
         let class = self.refs.class_ref(tn)?;
         Some(self.refs.class(class).raw())
     }
@@ -467,7 +486,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
     /// [`Self::class_object_index_for_type_name`]. Used by `is <Enum>` to test
     /// enum identity (`ConstValue::Object`) rather than the shared `ENUM` tag,
     /// which cannot distinguish two enum types (`Color` vs `Status`).
-    fn enum_object_index_for_type_name(&mut self, tn: &TypeName) -> Option<usize> {
+    fn enum_object_index_for_type_name(&mut self, tn: &DeclName) -> Option<usize> {
         let enum_ref = self.refs.enum_ref(tn)?;
         Some(self.refs.enum_(enum_ref).raw())
     }
@@ -884,7 +903,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             local_names: self.slot_names,
             debug_locals,
             span: Span::fake(),
-            return_type: baml_type::TyTemplate::Null,
+            return_type: bex_vm_types::TyTemplate::Null,
             param_names: Vec::new(),
             param_types: Vec::new(),
             param_has_default: Vec::new(),
@@ -892,7 +911,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: "null".to_string(),
-            throws_type: baml_type::TyTemplate::Never,
+            throws_type: bex_vm_types::TyTemplate::Never,
             origin: FunctionOrigin::Internal,
             is_interface_body: false, // set from the item tree by attach_function_metadata
             native_key: None,
@@ -1295,7 +1314,10 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 let iface_template = self.refs.anchor_template(&iface.to_template());
                 let iface_const = self.add_constant(ConstValue::Type(iface_template));
                 let inst = self.emit(Instruction::LoadType(iface_const));
-                self.set_operand(inst, OperandMeta::Const(iface.to_string()));
+                self.set_operand(
+                    inst,
+                    OperandMeta::Const(self.spelled_template(&iface.to_template())),
+                );
                 let inst = self.emit(Instruction::VirtualStoreField(*field_index as usize));
                 self.set_operand(inst, OperandMeta::Field(field.to_string()));
             }
@@ -1706,12 +1728,15 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 let anchored = self.refs.anchor_template(template);
                 let const_idx = self.add_constant(ConstValue::Type(anchored));
                 let inst = self.emit(Instruction::LoadType(const_idx));
-                self.set_operand(inst, OperandMeta::Const(template.to_string()));
+                self.set_operand(inst, OperandMeta::Const(self.spelled_template(template)));
             }
             let iface_template = self.refs.anchor_template(&iface.to_template());
             let iface_const = self.add_constant(ConstValue::Type(iface_template));
             let inst = self.emit(Instruction::LoadType(iface_const));
-            self.set_operand(inst, OperandMeta::Const(iface.to_string()));
+            self.set_operand(
+                inst,
+                OperandMeta::Const(self.spelled_template(&iface.to_template())),
+            );
             self.emit_constant(&Constant::String(method.clone()));
             let inst = self.emit(Instruction::MakeVirtualBoundMethod {
                 ntypeargs: u16::try_from(type_args.len()).expect("ntypeargs fits in u16"),
@@ -1735,14 +1760,17 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             let self_template = self.refs.anchor_template(self_ty);
             let self_const = self.add_constant(ConstValue::Type(self_template));
             let inst = self.emit(Instruction::LoadType(self_const));
-            self.set_operand(inst, OperandMeta::Const(self_ty.to_string()));
+            self.set_operand(inst, OperandMeta::Const(self.spelled_template(self_ty)));
             for arg in type_args {
                 self.emit_operand_pull(arg);
             }
             let iface_template = self.refs.anchor_template(&iface.to_template());
             let iface_const = self.add_constant(ConstValue::Type(iface_template));
             let inst = self.emit(Instruction::LoadType(iface_const));
-            self.set_operand(inst, OperandMeta::Const(iface.to_string()));
+            self.set_operand(
+                inst,
+                OperandMeta::Const(self.spelled_template(&iface.to_template())),
+            );
             self.emit_constant(&Constant::String(method.clone()));
             let inst = self.emit(Instruction::MakeVirtualFunction {
                 ntypeargs: u16::try_from(type_args.len()).expect("ntypeargs fits in u16"),
@@ -1763,7 +1791,10 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             let iface_template = self.refs.anchor_template(&iface.to_template());
             let iface_const = self.add_constant(ConstValue::Type(iface_template));
             let inst = self.emit(Instruction::LoadType(iface_const));
-            self.set_operand(inst, OperandMeta::Const(iface.to_string()));
+            self.set_operand(
+                inst,
+                OperandMeta::Const(self.spelled_template(&iface.to_template())),
+            );
             let inst = self.emit(Instruction::VirtualLoadField(*field_index as usize));
             self.set_operand(inst, OperandMeta::Field(field.to_string()));
             return;
@@ -1835,7 +1866,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
     fn emit_pooled_function_value(
         &mut self,
         func: FunctionRef<'ctx>,
-        type_args: &[baml_type::RealizedTy],
+        type_args: &[baml_compiler2_mir::RealizedTy],
     ) {
         let name_str = baml_compiler2_mir::function_link_name(self.db, func);
         let global_idx = self.function_global_index(func, "undefined function");
@@ -2263,7 +2294,10 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 let iface_template = self.refs.anchor_template(&iface.to_template());
                 let iface_const = self.add_constant(ConstValue::Type(iface_template));
                 let inst = self.emit(Instruction::LoadType(iface_const));
-                self.set_operand(inst, OperandMeta::Const(iface.to_string()));
+                self.set_operand(
+                    inst,
+                    OperandMeta::Const(self.spelled_template(&iface.to_template())),
+                );
                 self.emit_constant(&Constant::String(method.clone()));
                 if let Some(runtime_id) = runtime_id {
                     unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
@@ -3340,12 +3374,6 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
     }
 
     fn is_type(&mut self, ty_template: &TyTemplate) -> Result<(), Self::Error> {
-        let emit_false = |this: &mut Self| {
-            this.emit(Instruction::Pop(1));
-            let idx = this.add_constant(ConstValue::Bool(false));
-            let inst = this.emit(Instruction::LoadConst(idx));
-            this.set_operand(inst, OperandMeta::Const("false".to_string()));
-        };
         let emit_true = |this: &mut Self| {
             this.emit(Instruction::Pop(1));
             let idx = this.add_constant(ConstValue::Bool(true));
@@ -3362,7 +3390,7 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
             let anchored = this.refs.anchor_template(template);
             let c = this.add_constant(ConstValue::Type(anchored));
             let inst = this.emit(Instruction::IsType(c));
-            this.set_operand(inst, OperandMeta::Const(template.to_string()));
+            this.set_operand(inst, OperandMeta::Const(this.spelled_template(template)));
         };
         match ty_template {
             // ── Class check ──────────────────────────────────────────────────
@@ -3371,16 +3399,20 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
             // so the VM compares each arg invariantly; empty args →
             // class-pointer identity.
             TyTemplate::Class(tn, type_args_templates) => {
-                let class_name_str = tn.display_name();
-                let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) else {
-                    emit_false(self);
-                    return Ok(());
-                };
+                let class_name_str = self.spelled_head(tn);
+                // A `Class` template's head is a class declaration by
+                // construction: the checker built the type from one, and the
+                // head is its identity.
+                let class_obj_idx =
+                    self.class_object_index_for_type_name(tn)
+                        .unwrap_or_else(|| {
+                            unreachable!("the class template `{class_name_str}` heads no class")
+                        });
                 if type_args_templates.is_empty() {
                     let c =
                         self.add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
                     let inst = self.emit(Instruction::IsType(c));
-                    self.set_operand(inst, OperandMeta::Const(class_name_str.to_string()));
+                    self.set_operand(inst, OperandMeta::Const(class_name_str));
                 } else {
                     let type_args_templates = type_args_templates
                         .iter()
@@ -3498,20 +3530,30 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
                 } else if let RealizedTy::Enum(tn) = realized {
                     // Enum-pointer identity: `is Color` tests the value's enum
                     // object, so it discriminates `Color` from `Status` - the
-                    // shared `ENUM` type tag cannot. Falls back to constant-false
-                    // if the enum object is absent (e.g. an unreferenced enum).
-                    if let Some(enum_obj_idx) = self.enum_object_index_for_type_name(tn) {
-                        let c = self
-                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(enum_obj_idx)));
-                        let inst = self.emit(Instruction::IsType(c));
-                        self.set_operand(inst, OperandMeta::Const(tn.display_name().to_string()));
-                    } else {
-                        emit_false(self);
-                    }
+                    // shared `ENUM` type tag cannot. An `Enum` type's head is
+                    // an enum declaration by construction, and every enum is
+                    // a local or an import of the unit.
+                    let enum_name = self.spelled_head(tn);
+                    let enum_obj_idx =
+                        self.enum_object_index_for_type_name(tn).unwrap_or_else(|| {
+                            unreachable!("the enum type `{enum_name}` heads no enum")
+                        });
+                    let c =
+                        self.add_constant(ConstValue::Object(ObjectIndex::from_raw(enum_obj_idx)));
+                    let inst = self.emit(Instruction::IsType(c));
+                    self.set_operand(inst, OperandMeta::Const(enum_name));
                 } else if let Some(tag) = realized_type_tag(realized) {
                     let c = self.add_constant(ConstValue::Int(tag));
                     let inst = self.emit(Instruction::IsType(c));
-                    self.set_operand(inst, OperandMeta::Const(realized.to_string()));
+                    let spelling = baml_compiler2_hir::package::spelling(self.db);
+                    self.set_operand(
+                        inst,
+                        OperandMeta::Const(
+                            realized
+                                .map_heads(&mut |decl: &DeclName| spelling.wire(decl))
+                                .to_string(),
+                        ),
+                    );
                 } else {
                     emit_structural(self, other);
                 }
@@ -3541,7 +3583,7 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
         let anchored = self.refs.anchor_template(template);
         let const_idx = self.add_constant(ConstValue::Type(anchored));
         let inst = self.emit(Instruction::LoadType(const_idx));
-        self.set_operand(inst, OperandMeta::Const(template.to_string()));
+        self.set_operand(inst, OperandMeta::Const(self.spelled_template(template)));
         Ok(())
     }
 
@@ -3737,10 +3779,9 @@ mod tests {
     use std::collections::{HashMap, HashSet};
 
     use baml_compiler2_mir::{
-        BasicBlock, BlockId, Constant, Local, LocalDecl, MirFunctionBody, Operand, Place, Rvalue,
-        Statement, StatementKind, Terminator,
+        BasicBlock, BlockId, Constant, Local, LocalDecl, MirFunctionBody, Operand, Place,
+        RuntimeTy, Rvalue, Statement, StatementKind, Terminator,
     };
-    use baml_type::RuntimeTy;
     use bex_vm_types::{Instruction, ObjectPool};
 
     use super::compile_mir_function;

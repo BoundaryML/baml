@@ -666,11 +666,11 @@ pub(crate) struct ServedChecks {
     /// Per-file throw facts (full path → facts), installed by
     /// [`Self::install_seeds`].
     throw_facts:
-        BTreeMap<String, Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>>,
+        BTreeMap<String, Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::PathName>>>,
     /// Per-function `callable_throws` seeds projected from `fragments`, keyed
     /// by full source path then by item-tree `LocalItemId::as_u32`. Empty
     /// under `BAML_NO_CALLABLE_THROWS_CACHE=1`.
-    callable_throws: BTreeMap<String, BTreeMap<u32, baml_type::Ty<baml_type::TypeName>>>,
+    callable_throws: BTreeMap<String, BTreeMap<u32, baml_type::Ty<baml_type::PathName>>>,
 }
 
 impl ServedChecks {
@@ -737,7 +737,7 @@ fn user_files_with_rel_paths(
 fn project_callable_throws_seeds(
     fragments: &BTreeMap<String, Vec<u8>>,
     root: &Path,
-) -> BTreeMap<String, BTreeMap<u32, baml_type::Ty<baml_type::TypeName>>> {
+) -> BTreeMap<String, BTreeMap<u32, baml_type::Ty<baml_type::PathName>>> {
     if CacheContext::callable_throws_cache_disabled() {
         return BTreeMap::new();
     }
@@ -747,7 +747,7 @@ fn project_callable_throws_seeds(
         if fragment_bytes.is_empty() {
             continue;
         }
-        let fragment: CallableThrowsFragment<baml_type::TypeName> =
+        let fragment: CallableThrowsFragment<baml_type::PathName> =
             match borsh::from_slice(fragment_bytes) {
                 Ok(f) => f,
                 Err(e) => {
@@ -868,9 +868,8 @@ impl CacheContext {
             files.push(ManifestFile {
                 // Free: seeded files return their seeds verbatim, freshly
                 // checked files were extracted (and memoized) during the
-                // compile. Spelled for the wire: every head by its root's
-                // spelling in this database, which is what the next compile
-                // seeds.
+                // compile. Every head is located by edge path from the file's
+                // own package, which is what the next compile seeds.
                 throw_facts: export_file_throw_facts(db, sf),
                 // Fresh blob if the gate re-checked this file, else the served
                 // blob, else empty. A re-checked file always wins so a
@@ -1809,11 +1808,13 @@ mod tests {
 
         // Seed f's key with g's throw `Ty`, keyed by (abs path, f's LocalItemId).
         let abs_path = file.path(&db).display().to_string();
-        let spelling = baml_db::baml_compiler2_hir::package::spelling(&db);
+        let root = baml_db::baml_compiler2_hir::file_package::file_package(&db, file).root;
         let mut by_id = BTreeMap::new();
         by_id.insert(
             f_id.as_u32(),
-            g_throws.map_heads(&mut |decl| spelling.wire(decl)),
+            g_throws.map_heads(&mut |decl| {
+                baml_db::baml_compiler2_hir::package::located_head(&db, root, decl)
+            }),
         );
         let mut by_path = BTreeMap::new();
         by_path.insert(abs_path, by_id);

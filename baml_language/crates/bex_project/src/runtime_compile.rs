@@ -1037,6 +1037,45 @@ struct SessionCompile {
     lease: bex_vm_types::SessionEvalLease,
 }
 
+/// The compile-time head an `eval<T>` contract's name denotes from the
+/// submission's package: that package for a local name, the package one of
+/// its edges names, else the package the compile world spells that way
+/// within its dependency closure (a contract may name a type the submission
+/// only reaches through a mount). `None` when the submission cannot reach it.
+// BUG: the contract crosses the compile seam by NAME (the engine spells it
+// with `TypeHead::to_name`), so it is read back by spelling. A session that
+// mounts a package under another name than the one its declarations display,
+// or a closure holding two packages that display alike, reads the contract
+// as a different declaration than the one `eval<T>` was given. Every mount
+// edge crosses this seam by identity (`RuntimeMountEdge`); the contract's
+// heads should name their packages the same way.
+#[deprecated = "the `eval<T>` contract should carry its heads' packages by identity \
+                (`RuntimePackageIdentity`), like every mount edge; this reads them back by \
+                name until it does"]
+fn session_contract_head(
+    db: &dyn baml_compiler2_hir::Db,
+    workspace: baml_base::SourceRoot,
+    name: &TypeName,
+) -> Option<baml_type::DeclName> {
+    use baml_compiler2_hir::package::{accessible_package, package_dependency_closure, spelling};
+
+    let root = if name.is_local() {
+        workspace
+    } else if let Some(root) = accessible_package(db, workspace, name.package()) {
+        root
+    } else {
+        let root = spelling(db).root(name.package())?;
+        package_dependency_closure(db, workspace)
+            .contains(&root)
+            .then_some(root)?
+    };
+    Some(baml_type::DeclName::in_root(
+        root,
+        name.namespace().clone(),
+        name.name().clone(),
+    ))
+}
+
 fn let_initializer_type(
     db: &ProjectDatabase,
     package: baml_base::SourceRoot,
@@ -1759,15 +1798,14 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                         .to_string(),
                 )]);
             };
-            // The contract arrives spelled for the wire; read it from the
-            // submission's package, whose edges decide what it can name.
-            let spelling = baml_compiler2_hir::package::spelling(&db);
+            // The contract arrives by name; read it from the submission's
+            // package, whose edges decide what it can name.
+            #[expect(
+                deprecated,
+                reason = "the contract crosses the compile seam by name until it carries identities"
+            )]
             let expected = match baml_type::Ty::<TypeName>::from(expected).try_map_heads(
-                &mut |name| {
-                    spelling
-                        .resolve(&db, workspace, name)
-                        .ok_or_else(|| name.clone())
-                },
+                &mut |name| session_contract_head(&db, workspace, name).ok_or_else(|| name.clone()),
             ) {
                 Ok(expected) => expected,
                 Err(unreachable_name) => {

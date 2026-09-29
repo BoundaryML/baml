@@ -2,7 +2,7 @@
 //!
 //! [`QualifiedTypeName`] identifies a class/enum/interface/type-alias by the
 //! package it is declared in, its namespace path, and its short name. It is
-//! generic over the *package key* `P`, because the two layers that name a
+//! generic over the *package key* `P`, because the layers that name a
 //! declaration identify its package differently:
 //!
 //! - The compiler keys by the package itself: [`DeclName`] carries the
@@ -18,6 +18,11 @@
 //!   the exporting package. The importing root binds the slots by walking its
 //!   own edges, so a blob resolves identically under every alias and in every
 //!   database (rustc's `crate_deps` + `CrateNum`).
+//! - An identity component and a cached seed key by PATH: [`PathName`]
+//!   carries an [`EdgePath`](crate::wire::EdgePath), the edge names hop by
+//!   hop from the package that owns it. A path needs no table, so it means
+//!   the same package in every artifact of that package and in every compile
+//!   of it.
 //! - The runtime and display lanes key by spelling: [`TypeName`](crate::TypeName)
 //!   carries a [`Package`], the artifact's own root (`Local`) or a dependency
 //!   by the name the artifact's edges give it (`Dep`). An artifact is its own
@@ -138,6 +143,13 @@ pub type DeclName = QualifiedTypeName<SourceRoot>;
 /// edges, never by a spelling.
 pub type WireName = QualifiedTypeName<crate::wire::DepSlot>;
 
+/// A qualified name whose declaring package is an
+/// [`EdgePath`](crate::wire::EdgePath) from the package that owns it: the
+/// table-free form an identity component and a cached seed carry. Resolved
+/// back to a [`DeclName`] by following the path through the owning root's
+/// edges, never by a spelling.
+pub type PathName = QualifiedTypeName<crate::wire::EdgePath>;
+
 impl WireName {
     /// A declaration of the exporting package itself.
     pub fn own(namespace: Vec<Name>, name: Name) -> Self {
@@ -174,8 +186,8 @@ impl<P> QualifiedTypeName<P> {
     }
 
     /// The same declaration under a different package key: the boundary
-    /// operation that re-spells a head (root → wire name, or wire name →
-    /// root).
+    /// operation that converts a head (root → slot, path or spelling; slot
+    /// or path → root).
     pub fn map_key<Q>(&self, f: impl FnOnce(&P) -> Q) -> QualifiedTypeName<Q>
     where
         Name: Clone,
@@ -187,7 +199,7 @@ impl<P> QualifiedTypeName<P> {
         }
     }
 
-    /// [`map_key`](Self::map_key) for a fallible re-spelling.
+    /// [`map_key`](Self::map_key) for a fallible conversion.
     pub fn try_map_key<Q, E>(
         &self,
         f: impl FnOnce(&P) -> Result<Q, E>,
