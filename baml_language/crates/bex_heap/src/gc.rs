@@ -507,6 +507,13 @@ impl BexHeap {
 
         // SAFETY: GC runs at safepoints.
         let live_count = unsafe { self.inactive_ref().len() };
+        // Bytes the collector copied along with the survivors, including those
+        // kept alive for finalizers and unobserved spawn errors.
+        // SAFETY: GC runs at safepoints.
+        let live_backing_bytes = unsafe { self.inactive_ref() }
+            .iter()
+            .map(crate::gc_policy::live_backing_bytes)
+            .fold(0usize, usize::saturating_add);
         let collected_count = old_count.saturating_sub(live_count);
 
         // Swap inactive ↔ Gen2; clear Gen0 and Gen1.
@@ -560,8 +567,11 @@ impl BexHeap {
         // Update the handle table so external handles point to new locations.
         self.update_handles(&forwarding);
 
-        self.gc_policy
-            .after_full(live_count.saturating_mul(size_of::<Object>()));
+        self.gc_policy.after_full(
+            live_count
+                .saturating_mul(size_of::<Object>())
+                .saturating_add(live_backing_bytes),
+        );
 
         // Reset the actual-object counter used by GC profiling.
         self.reset_gc_counter();

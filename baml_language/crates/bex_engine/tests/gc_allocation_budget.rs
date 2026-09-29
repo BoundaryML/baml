@@ -38,6 +38,13 @@ function SpawnTexts(texts: string[]) -> baml.future.Future<int, never> {
     spawn { texts.length() + texts[0].length() + texts[texts.length() - 1].length() }
 }
 function JoinText(job: baml.future.Future<int, never>) -> int { await job }
+function ConcatChunks(n: int) -> int {
+    let chunk = "x".repeat(65536).to_utf8();
+    let buffer = b"";
+    let i = 0;
+    while (i < n) { buffer = buffer.concat(chunk); i = i + 1; }
+    buffer.length()
+}
 function Async(n: int) -> int {
     let values = Empty();
     Grow(values, n);
@@ -179,6 +186,21 @@ async fn large_payloads_trigger_gc_with_few_objects() {
             Ext::Int(4 * 1024 * 1024)
         );
     }
+    engine.shutdown().await;
+}
+
+// Each `concat` copies the growing buffer into one new slot. The copies must
+// spend the budget, and collect during the loop, not only once it returns:
+// 64 iterations are far fewer control-flow checks than one poll interval.
+#[tokio::test(start_paused = true)]
+async fn uint8array_copies_spend_budget_and_collect_promptly() {
+    let engine = engine();
+    assert_eq!(
+        call(&engine, "ConcatChunks", vec![Ext::Int(64)], true).await,
+        Ext::Int(64 * 65536)
+    );
+    // 64 copies average 2 MB: ~134 MB allocated in ~200 slots.
+    assert!(engine.heap().gc_budget().full_collections > 1);
     engine.shutdown().await;
 }
 
