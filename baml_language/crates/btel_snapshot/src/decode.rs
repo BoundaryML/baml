@@ -826,7 +826,17 @@ fn validate_references(snapshot: &DecodedSnapshot) -> Result<(), BlobError> {
         DecodedValue::Enum { declaration: d, .. } if !declaration(*d) => Err(invalid(
             "enum value does not reference a declaration".into(),
         )),
-        _ => Ok(()),
+        DecodedValue::Enum { .. }
+        | DecodedValue::Null
+        | DecodedValue::OmittedArg
+        | DecodedValue::Bool(_)
+        | DecodedValue::Int(_)
+        | DecodedValue::Float(_)
+        | DecodedValue::String(_)
+        | DecodedValue::Bigint(_)
+        | DecodedValue::Object(_)
+        | DecodedValue::Type(_)
+        | DecodedValue::Truncated(_) => Ok(()),
     };
     match &snapshot.root {
         DecodedRoot::Value(value) => check_value(value)?,
@@ -849,7 +859,11 @@ fn validate_references(snapshot: &DecodedSnapshot) -> Result<(), BlobError> {
                 fields.iter().try_for_each(|(_, v)| check_value(v))?;
             }
             DecodedObject::Cell(value) => check_value(value)?,
-            _ => {}
+            DecodedObject::Bytes { .. }
+            | DecodedObject::Declaration { .. }
+            | DecodedObject::NonSnapshotable
+            | DecodedObject::Descriptive { .. }
+            | DecodedObject::Truncated(_) => {}
         }
     }
     Ok(())

@@ -4,7 +4,7 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, TelemetryRecording};
 use btel_reader::{
-    cas::{CasLimits, CasOutcome, CasStore},
+    cas::{CasLimits, CasStore},
     context::{ContextReference, reference},
 };
 use btel_recorder::{RecordingConfig, proto};
@@ -71,7 +71,7 @@ async fn baml_context_reaches_local_files_and_cas_at_entry_and_completion() {
         .flat_map(|file| file.spans.iter().flat_map(|spans| &spans.sections))
     {
         if let ContextReference::Snapshot(id) = reference(section) {
-            let CasOutcome::Available(snapshot) = cas.load(id).outcome else {
+            let Ok(snapshot) = cas.load(id).snapshot else {
                 panic!("context CAS reference must resolve after shutdown");
             };
             snapshots.insert(*id.as_bytes(), snapshot.as_ref().clone());

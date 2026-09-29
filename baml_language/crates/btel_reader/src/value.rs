@@ -82,9 +82,25 @@ fn through_cells<'a>(
         match value {
             DecodedValue::Object(id) => match snapshot.object(*id) {
                 DecodedObject::Cell(inner) => value = inner,
-                _ => return Some(value),
+                DecodedObject::Bytes { .. }
+                | DecodedObject::List { .. }
+                | DecodedObject::Map { .. }
+                | DecodedObject::Instance { .. }
+                | DecodedObject::Declaration { .. }
+                | DecodedObject::NonSnapshotable
+                | DecodedObject::Descriptive { .. }
+                | DecodedObject::Truncated(_) => return Some(value),
             },
-            _ => return Some(value),
+            DecodedValue::Null
+            | DecodedValue::OmittedArg
+            | DecodedValue::Bool(_)
+            | DecodedValue::Int(_)
+            | DecodedValue::Float(_)
+            | DecodedValue::String(_)
+            | DecodedValue::Bigint(_)
+            | DecodedValue::Type(_)
+            | DecodedValue::Enum { .. }
+            | DecodedValue::Truncated(_) => return Some(value),
         }
     }
     None
@@ -130,7 +146,10 @@ pub fn navigate<'a>(
             }
         }
         (Root::Value, btel_snapshot::DecodedRoot::Value(value)) => (value, path),
-        _ => return Nav::Unavailable(Unavailable::WrongRoot),
+        (Root::Arguments, btel_snapshot::DecodedRoot::Value(_))
+        | (Root::Value, btel_snapshot::DecodedRoot::FunctionArgs { .. }) => {
+            return Nav::Unavailable(Unavailable::WrongRoot);
+        }
     };
     for segment in rest {
         let Some(current) = through_cells(snapshot, value) else {
@@ -147,9 +166,25 @@ pub fn navigate<'a>(
         None => Nav::Unavailable(Unavailable::CellCycle),
         Some(DecodedValue::Object(id)) => match snapshot.object(*id) {
             DecodedObject::Truncated(limit) => Nav::Unavailable(Unavailable::Truncated(*limit)),
-            _ => Nav::Value(value_ref(snapshot, value)),
+            DecodedObject::Bytes { .. }
+            | DecodedObject::List { .. }
+            | DecodedObject::Map { .. }
+            | DecodedObject::Instance { .. }
+            | DecodedObject::Declaration { .. }
+            | DecodedObject::Cell(_)
+            | DecodedObject::NonSnapshotable
+            | DecodedObject::Descriptive { .. } => Nav::Value(value_ref(snapshot, value)),
         },
-        Some(value) => Nav::Value(value),
+        Some(
+            value @ (DecodedValue::Null
+            | DecodedValue::Bool(_)
+            | DecodedValue::Int(_)
+            | DecodedValue::Float(_)
+            | DecodedValue::String(_)
+            | DecodedValue::Bigint(_)
+            | DecodedValue::Type(_)
+            | DecodedValue::Enum { .. }),
+        ) => Nav::Value(value),
     }
 }
 
@@ -168,7 +203,15 @@ fn step<'a>(
         }
         DecodedValue::Object(id) => *id,
         // Scalars, null and enum values have no children.
-        _ => return Err(Nav::Missing),
+        DecodedValue::Null
+        | DecodedValue::OmittedArg
+        | DecodedValue::Bool(_)
+        | DecodedValue::Int(_)
+        | DecodedValue::Float(_)
+        | DecodedValue::String(_)
+        | DecodedValue::Bigint(_)
+        | DecodedValue::Type(_)
+        | DecodedValue::Enum { .. } => return Err(Nav::Missing),
     };
     let keyed = |entries: &'a [(Box<str>, DecodedValue)], original_len: u64, key: &str| {
         match entries.iter().find(|(k, _)| &**k == key) {
@@ -217,7 +260,16 @@ fn step<'a>(
         (DecodedObject::Truncated(limit), _) => {
             Err(Nav::Unavailable(Unavailable::Truncated(*limit)))
         }
-        _ => Err(Nav::Missing),
+        (DecodedObject::List { .. }, Segment::Key(_))
+        | (DecodedObject::Map { .. } | DecodedObject::Instance { .. }, Segment::Index(_))
+        | (
+            DecodedObject::Bytes { .. }
+            | DecodedObject::Declaration { .. }
+            | DecodedObject::Cell(_)
+            | DecodedObject::NonSnapshotable
+            | DecodedObject::Descriptive { .. },
+            _,
+        ) => Err(Nav::Missing),
     }
 }
 
@@ -353,7 +405,10 @@ pub fn to_scalar(
         DecodedValue::String(s) => (Scalar::Text(s.to_string()), Kind::String),
         DecodedValue::Bigint(n) => (Scalar::Text(n.to_string()), Kind::Bigint),
         DecodedValue::Enum { name, .. } => (Scalar::Text(name.to_string()), Kind::Enum),
-        other => (
+        other @ (DecodedValue::Object(_)
+        | DecodedValue::Type(_)
+        | DecodedValue::OmittedArg
+        | DecodedValue::Truncated(_)) => (
             Scalar::Text(render_value(snapshot, other, limits).to_string()),
             Kind::Json,
         ),
@@ -465,7 +520,10 @@ pub fn leaf_of(nav: Nav<'_>) -> Option<Leaf<'_>> {
             DecodedValue::Bigint(n) => Leaf::Bigint(n),
             DecodedValue::String(s) => Leaf::Text(s),
             DecodedValue::Enum { name, .. } => Leaf::Enum(name),
-            _ => Leaf::Structured,
+            DecodedValue::Object(_)
+            | DecodedValue::Type(_)
+            | DecodedValue::OmittedArg
+            | DecodedValue::Truncated(_) => Leaf::Structured,
         },
     })
 }
@@ -569,7 +627,7 @@ pub fn is_null(nav: Nav<'_>) -> Option<bool> {
     match nav {
         Nav::Missing | Nav::Value(DecodedValue::Null) => Some(true),
         Nav::Unavailable(_) => None,
-        _ => Some(false),
+        Nav::Arguments | Nav::Value(_) => Some(false),
     }
 }
 
@@ -709,7 +767,13 @@ impl<'a> Renderer<'a> {
                     }
                 }
                 DecodedObject::Cell(value) => visit(value, &mut counts, &mut stack),
-                _ => {}
+                // Declarations render by name, so references to them never
+                // make an object shared.
+                DecodedObject::Bytes { .. }
+                | DecodedObject::Declaration { .. }
+                | DecodedObject::NonSnapshotable
+                | DecodedObject::Descriptive { .. }
+                | DecodedObject::Truncated(_) => {}
             }
         }
         let shared = counts
@@ -730,7 +794,14 @@ impl<'a> Renderer<'a> {
             DecodedObject::Declaration { name, .. } => {
                 Json::from(name.0.display_name().to_string())
             }
-            _ => Json::Null,
+            DecodedObject::Bytes { .. }
+            | DecodedObject::List { .. }
+            | DecodedObject::Map { .. }
+            | DecodedObject::Instance { .. }
+            | DecodedObject::Cell(_)
+            | DecodedObject::NonSnapshotable
+            | DecodedObject::Descriptive { .. }
+            | DecodedObject::Truncated(_) => Json::Null,
         }
     }
 

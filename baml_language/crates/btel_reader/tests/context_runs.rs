@@ -5,7 +5,7 @@ use btel_clock::{ClockMode, ClockRuntime};
 use btel_file::{LocalDelivery, LocalDeliveryConfig, LocalPublisher};
 use btel_processor::Processor;
 use btel_reader::{
-    cas::{CasLimits, CasOutcome, CasStore},
+    cas::{CasLimits, CasStore, CasUnavailable},
     context::{ContextReference, reference},
 };
 use btel_recorder::{RecordingBuilder, RecordingConfig, RecordingId};
@@ -157,7 +157,7 @@ fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer(
     }));
 
     let cas = CasStore::new(root.path().join("cas"), CasLimits::default());
-    let CasOutcome::Available(snapshot) = cas.load(id).outcome else {
+    let Ok(snapshot) = cas.load(id).snapshot else {
         panic!("context must reach the existing CAS delivery path");
     };
     assert_eq!(snapshot.id, id);
@@ -182,7 +182,10 @@ fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer(
         &vec![("order_id".into(), DecodedValue::String("123".into()))]
     );
     std::fs::remove_file(cas.path(id)).unwrap();
-    assert!(matches!(cas.load(id).outcome, CasOutcome::Missing));
+    assert!(matches!(
+        cas.load(id).snapshot,
+        Err(CasUnavailable::Missing)
+    ));
     assert_eq!(reference(sections[0]), ContextReference::Snapshot(id));
 
     let mut invalid = read.files[0].clone();

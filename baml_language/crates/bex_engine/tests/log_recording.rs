@@ -12,7 +12,7 @@ use bex_engine::{
 };
 use btel_bcs::{CloudPublisherConfig, delivery::DeliveryConfig, proto::CloudUploadEnvelope};
 use btel_reader::{
-    cas::{CasLimits, CasOutcome, CasStore},
+    cas::{CasLimits, CasStore},
     context::{ContextReference, reference},
 };
 use btel_recorder::{RecordingConfig, proto};
@@ -269,7 +269,7 @@ async fn log_data_and_event_time_context_reach_local_cas() {
     assert!(read.issues.is_empty(), "{:?}", read.issues);
     let cas = CasStore::new(directory.path().join("cas"), CasLimits::default());
     assert_logs(&read.files, &name, |id| {
-        let CasOutcome::Available(snapshot) = cas.load(id).outcome else {
+        let Ok(snapshot) = cas.load(id).snapshot else {
             panic!("log CAS was not persisted")
         };
         snapshot.as_ref().clone()

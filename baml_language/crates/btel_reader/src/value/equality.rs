@@ -82,7 +82,17 @@ impl Value<'_> {
             }
             (Self::Map(a), Self::Map(b)) => fields_equal(a, b),
             (Self::Class(a, x), Self::Class(b, y)) => a == b && fields_equal(x, y),
-            _ => false,
+            (
+                Self::Unsigned(_)
+                | Self::Scalar(_)
+                | Self::Omitted
+                | Self::Bytes(_)
+                | Self::Enum(..)
+                | Self::List(_)
+                | Self::Map(_)
+                | Self::Class(..),
+                _,
+            ) => false,
         }
     }
 }
@@ -193,14 +203,17 @@ impl<'a> Builder<'a> {
                 Err(Error::Evidence(Unavailable::Truncated(*reason)))
             }
             DecodedValue::Type(_) => Err(Error::Unsupported),
-            _ => {
-                match v {
-                    DecodedValue::String(text) => self.bytes(text.len())?,
-                    DecodedValue::Bigint(n) => self
-                        .bytes(usize::try_from(n.bits().div_ceil(8)).map_err(|_| Error::Limit)?)?,
-                    _ => {}
-                }
-                Ok(Value::Scalar(leaf_of(Nav::Value(v)).expect("scalar value")))
+            DecodedValue::Null => Ok(Value::Scalar(Leaf::Null)),
+            DecodedValue::Bool(b) => Ok(Value::Scalar(Leaf::Bool(*b))),
+            DecodedValue::Int(n) => Ok(Value::Scalar(Leaf::Int(*n))),
+            DecodedValue::Float(f) => Ok(Value::Scalar(Leaf::Float(*f))),
+            DecodedValue::String(text) => {
+                self.bytes(text.len())?;
+                Ok(Value::Scalar(Leaf::Text(text)))
+            }
+            DecodedValue::Bigint(n) => {
+                self.bytes(usize::try_from(n.bits().div_ceil(8)).map_err(|_| Error::Limit)?)?;
+                Ok(Value::Scalar(Leaf::Bigint(n)))
             }
         }
     }
@@ -220,7 +233,14 @@ impl<'a> Builder<'a> {
             DecodedObject::Truncated(reason) => {
                 Err(Error::Evidence(Unavailable::Truncated(*reason)))
             }
-            _ => Err(Error::Unsupported),
+            DecodedObject::Declaration { .. }
+            | DecodedObject::Bytes { .. }
+            | DecodedObject::List { .. }
+            | DecodedObject::Map { .. }
+            | DecodedObject::Instance { .. }
+            | DecodedObject::Cell(_)
+            | DecodedObject::NonSnapshotable
+            | DecodedObject::Descriptive { .. } => Err(Error::Unsupported),
         }
     }
 
@@ -288,7 +308,9 @@ impl<'a> Builder<'a> {
             DecodedObject::Truncated(reason) => {
                 return Err(Error::Evidence(Unavailable::Truncated(*reason)));
             }
-            _ => return Err(Error::Unsupported),
+            DecodedObject::Declaration { .. }
+            | DecodedObject::NonSnapshotable
+            | DecodedObject::Descriptive { .. } => return Err(Error::Unsupported),
         })
     }
 

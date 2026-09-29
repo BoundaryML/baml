@@ -13,12 +13,12 @@ use std::{
 };
 
 use btel_reader::{
-    cas::{CasOutcome, CasStore},
+    cas::{CasStore, CasUnavailable},
     evidence::ArgumentNames,
     timing::{Clock, Conversion, EpochStatus, TimingState, UtcAnchor, format_unix_ns},
     value::{self, CmpOp, Kind, Nav, Operand, RenderLimits, Root, Scalar, Segment, equality},
 };
-use btel_snapshot::SnapshotId;
+use btel_snapshot::{DecodedSnapshot, SnapshotId};
 use rusqlite::{
     Connection, Error as SqlError,
     functions::{Aggregate, Context, FunctionFlags},
@@ -66,7 +66,7 @@ pub struct ValueMetrics {
 }
 
 struct CacheState {
-    blobs: HashMap<[u8; 16], CasOutcome>,
+    blobs: HashMap<[u8; 16], Result<Arc<DecodedSnapshot>, CasUnavailable>>,
     blob_bytes: u64,
     results: HashMap<Vec<u8>, (Scalar, Kind)>,
     unavailable_seen: HashSet<Vec<u8>>,
@@ -111,10 +111,14 @@ impl QueryContext {
         Ok(())
     }
 
-    fn load(&self, state: &mut CacheState, id: [u8; 16]) -> CasOutcome {
-        if let Some(outcome) = state.blobs.get(&id) {
+    fn load(
+        &self,
+        state: &mut CacheState,
+        id: [u8; 16],
+    ) -> Result<Arc<DecodedSnapshot>, CasUnavailable> {
+        if let Some(snapshot) = state.blobs.get(&id) {
             state.metrics.cas_cache_hits += 1;
-            return outcome.clone();
+            return snapshot.clone();
         }
         let load = self.cas.load(SnapshotId::from_bytes(id));
         state.metrics.cas_loads += 1;
@@ -123,18 +127,21 @@ impl QueryContext {
             && state.blob_bytes + load.bytes_read <= self.limits.max_cached_bytes
         {
             state.blob_bytes += load.bytes_read;
-            state.blobs.insert(id, load.outcome.clone());
+            state.blobs.insert(id, load.snapshot.clone());
         }
-        load.outcome
+        load.snapshot
     }
 
     /// The snapshot a handle reads: its CAS blob, or the inline one.
-    fn load_handle(&self, state: &mut CacheState, handle: &Handle) -> CasOutcome {
+    fn load_handle(
+        &self,
+        state: &mut CacheState,
+        handle: &Handle,
+    ) -> Result<Arc<DecodedSnapshot>, CasUnavailable> {
         match &handle.inline {
-            Some(blob) => match btel_snapshot::decode_blob(blob, &self.cas.limits().decode) {
-                Ok(snapshot) => CasOutcome::Available(Arc::new(snapshot)),
-                Err(error) => CasOutcome::Corrupt(error),
-            },
+            Some(blob) => btel_snapshot::decode_blob(blob, &self.cas.limits().decode)
+                .map(Arc::new)
+                .map_err(CasUnavailable::Corrupt),
             None => self.load(state, handle.cas),
         }
     }
@@ -173,7 +180,7 @@ impl QueryContext {
             return Ok((Scalar::Null, Kind::Unavailable));
         }
         let result = match self.load_handle(&mut state, &parsed) {
-            CasOutcome::Available(snapshot) => {
+            Ok(snapshot) => {
                 let nav = value::navigate(
                     &snapshot,
                     parsed.root(),
@@ -185,8 +192,8 @@ impl QueryContext {
                 }
                 value::to_scalar(&snapshot, nav, parsed.names.as_ref(), &self.limits.render)
             }
-            outcome => {
-                Self::unavailable(&mut state, handle, outcome.code());
+            Err(unavailable) => {
+                Self::unavailable(&mut state, handle, unavailable.code());
                 (Scalar::Null, Kind::Unavailable)
             }
         };
@@ -220,7 +227,7 @@ impl QueryContext {
             return Ok(None);
         }
         match self.load_handle(&mut state, &parsed) {
-            CasOutcome::Available(snapshot) => {
+            Ok(snapshot) => {
                 let nav = value::navigate(
                     &snapshot,
                     parsed.root(),
@@ -238,8 +245,8 @@ impl QueryContext {
                     names: parsed.names.as_ref(),
                 })))
             }
-            outcome => {
-                Self::unavailable(&mut state, handle, outcome.code());
+            Err(unavailable) => {
+                Self::unavailable(&mut state, handle, unavailable.code());
                 Ok(None)
             }
         }
@@ -257,14 +264,14 @@ impl QueryContext {
             return Ok(PENDING.to_owned());
         }
         Ok(match self.load_handle(&mut state, &parsed) {
-            CasOutcome::Available(snapshot) => value::state(
+            Ok(snapshot) => value::state(
                 &snapshot,
                 parsed.root(),
                 parsed.names.as_ref(),
                 &parsed.path,
             )
             .to_owned(),
-            outcome => outcome.code().to_owned(),
+            Err(unavailable) => unavailable.code().to_owned(),
         })
     }
 }
