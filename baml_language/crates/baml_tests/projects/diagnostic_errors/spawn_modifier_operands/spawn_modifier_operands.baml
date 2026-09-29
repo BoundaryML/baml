@@ -58,8 +58,9 @@ function unpinned_bound<M extends baml.spawn.Modifier<int, never>>(m: M) -> int 
     await x
 }
 
-// Implements is nominal: `never` has no impl, so it cannot instantiate a
-// bounded parameter, even though a `never` value could flow anywhere.
+// A bounded parameter takes only a concrete type, and `never` has no values
+// to dispatch on, so it cannot instantiate one, even though a `never` value
+// could flow anywhere.
 function bounded<M extends baml.spawn.Modifier<int, never>>(m: M) -> int throws never {
     0
 }

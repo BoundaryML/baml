@@ -141,3 +141,14 @@ function rejected_through_aliases(c: CombinableAlias, e: Either, t: Tree) -> voi
 function accepted_through_alias(a: Concrete) -> void {
     pair(a, a);
 }
+
+// `unknown` spans every type and `never` none, so neither is concrete either.
+function one<T extends Combinable>(a: T) -> string throws never {
+    "one"
+}
+
+function rejected_top_and_bottom(u: unknown, n: never) -> void {
+    one(u);
+    one<unknown>(u);
+    one(n);
+}

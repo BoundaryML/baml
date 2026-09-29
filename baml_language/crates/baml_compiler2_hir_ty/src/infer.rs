@@ -871,6 +871,7 @@ enum PendingDiag<'db> {
         expr: ExprId,
         arg: Ty,
         bound: baml_type::interned::InferInterface,
+        required_for: Vec<obligations::RequiredFor>,
     },
     /// A constructor entry naming an implemented interface's FIELD; the
     /// backing class field is the constructor's key.
@@ -893,6 +894,7 @@ enum PendingDiag<'db> {
         expr: ExprId,
         value: Ty,
         interface: Ty,
+        required_for: Vec<obligations::RequiredFor>,
     },
     /// An `Implements` goal on a known subject still pending at
     /// quiescence: more than one impl or bound could prove it, and nothing
@@ -901,6 +903,7 @@ enum PendingDiag<'db> {
         expr: ExprId,
         value: Ty,
         interface: Ty,
+        required_for: Vec<obligations::RequiredFor>,
     },
     /// Explicit turbofish count disagrees with the callee's declared
     /// (writable) generic params.
@@ -2480,6 +2483,7 @@ impl<'db> InferenceContext<'db> {
                             expr,
                             value: base_ty,
                             interface: target.clone(),
+                            required_for: Vec::new(),
                         });
                     }
                     target
@@ -4144,13 +4148,12 @@ impl<'db> InferenceContext<'db> {
                             _ => vec![actual],
                         };
                         for goal in goals {
-                            self.register_obligation(obligations::Obligation::Implements {
-                                ty: goal,
-                                interface: interface.clone(),
-                                at: anchor,
-                                purpose: obligations::GoalPurpose::Coercion,
-                                depth: 0,
-                            });
+                            self.register_obligation(obligations::Obligation::implements(
+                                goal,
+                                interface.clone(),
+                                anchor,
+                                obligations::GoalPurpose::Coercion,
+                            ));
                         }
                         return true;
                     }
@@ -7352,6 +7355,7 @@ impl<'db> InferenceContext<'db> {
                         expr,
                         value: qself,
                         interface,
+                        required_for: Vec::new(),
                     });
                 }
                 return Ty::error();
@@ -8281,13 +8285,12 @@ impl<'db> InferenceContext<'db> {
                 // Declared bounds are plain; the obligation machinery's
                 // vocabulary is interned — ingest once per bound.
                 let bound = InferInterface::from_constraint(bound);
-                self.register_obligation(obligations::Obligation::Implements {
-                    ty: arg.clone(),
-                    interface: substitute_interface_params(&bound, instantiation),
+                self.register_obligation(obligations::Obligation::implements(
+                    arg.clone(),
+                    substitute_interface_params(&bound, instantiation),
                     at,
-                    purpose: call_bound_purpose(param, frame.own_start),
-                    depth: 0,
-                });
+                    call_bound_purpose(param, frame.own_start),
+                ));
             }
         }
     }
@@ -8326,13 +8329,12 @@ impl<'db> InferenceContext<'db> {
                         .map(|(name, ty)| (name.clone(), substitute_params(ty, instantiation)))
                         .collect(),
                 );
-                self.register_obligation(obligations::Obligation::Implements {
-                    ty: arg.clone(),
+                self.register_obligation(obligations::Obligation::implements(
+                    arg.clone(),
                     interface,
                     at,
-                    purpose: obligations::GoalPurpose::Bound,
-                    depth: 0,
-                });
+                    obligations::GoalPurpose::Bound,
+                ));
             }
         }
     }
@@ -9027,13 +9029,12 @@ impl<'db> InferenceContext<'db> {
                         .map(|(name, ty)| (name.clone(), substitute_params(ty, &instantiation)))
                         .collect(),
                 );
-                self.register_obligation(obligations::Obligation::Implements {
-                    ty: arg.clone(),
+                self.register_obligation(obligations::Obligation::implements(
+                    arg.clone(),
                     interface,
-                    at: object,
-                    purpose: obligations::GoalPurpose::Bound,
-                    depth: 0,
-                });
+                    object,
+                    obligations::GoalPurpose::Bound,
+                ));
             }
         }
         let field_types: Vec<(baml_type::Name, Ty)> = exported_fields
@@ -11084,6 +11085,7 @@ impl<'db> InferenceContext<'db> {
             }
             for pending in std::mem::take(&mut self.pending_diags) {
                 let mut unreachable_is_warning = false;
+                let mut related = Vec::new();
                 let (error, expr) = match pending {
                     PendingDiag::NonExhaustiveMatch {
                         expr,
@@ -11269,13 +11271,21 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
-                    PendingDiag::BoundedArgNotConcrete { expr, arg, bound } => (
-                        TirTypeError::BoundedTypeArgNotConcrete {
-                            arg: self.plain_finalized(&arg),
-                            bound: Box::new([self.materialize_interface(&bound)]),
-                        },
+                    PendingDiag::BoundedArgNotConcrete {
                         expr,
-                    ),
+                        arg,
+                        bound,
+                        required_for,
+                    } => {
+                        related = self.required_for_notes(expr, &required_for);
+                        (
+                            TirTypeError::BoundedTypeArgNotConcrete {
+                                arg: self.plain_finalized(&arg),
+                                bound: Box::new([self.materialize_interface(&bound)]),
+                            },
+                            expr,
+                        )
+                    }
                     PendingDiag::InterfaceFieldInConstruction {
                         object,
                         name,
@@ -11297,7 +11307,9 @@ impl<'db> InferenceContext<'db> {
                         expr,
                         value,
                         interface,
+                        required_for,
                     } => {
+                        related = self.required_for_notes(expr, &required_for);
                         let interface = self.with_unsolved_pins_elided(&interface);
                         // A value that ALMOST implements the interface
                         // through a blanket `implements` rule - the
@@ -11338,7 +11350,9 @@ impl<'db> InferenceContext<'db> {
                         expr,
                         value,
                         interface,
+                        required_for,
                     } => {
+                        related = self.required_for_notes(expr, &required_for);
                         let interface = self.with_unsolved_pins_elided(&interface);
                         (
                             TirTypeError::AmbiguousImplementation {
@@ -12064,7 +12078,7 @@ impl<'db> InferenceContext<'db> {
                     error,
                     severity,
                     primary: DiagnosticLocation::Expr(expr),
-                    related: Vec::new(),
+                    related,
                 });
             }
             if let Some(body) = body {
@@ -12121,6 +12135,35 @@ impl<'db> InferenceContext<'db> {
     }
 
     /// `interface` (an existential) without the pins inference never solved.
+    /// A note for each goal whose confirmed impl required a reported goal,
+    /// the nearest first (rustc's "required for `X` to implement `I`"), all
+    /// at the reported expression: they tie a bound replayed from an impl
+    /// header back to the goal the program wrote. A self-satisfying impl
+    /// repeats one requirement down its chain, which is noted once.
+    fn required_for_notes(
+        &mut self,
+        at: ExprId,
+        required_for: &[obligations::RequiredFor],
+    ) -> Vec<crate::diagnostics::RelatedNote<'db>> {
+        let vp = self.viewpoint();
+        let mut notes: Vec<crate::diagnostics::RelatedNote<'db>> = Vec::new();
+        for goal in required_for.iter().rev() {
+            let interface = self.with_unsolved_pins_elided(&goal.interface.existential());
+            let message = format!(
+                "required for `{}` to implement `{}`",
+                self.plain_finalized(&goal.subject).render_with(&vp),
+                self.plain_finalized(&interface).render_with(&vp),
+            );
+            if notes.iter().all(|note| note.message != message) {
+                notes.push(crate::diagnostics::RelatedNote::new(
+                    crate::diagnostics::RelatedLocation::Expr(at),
+                    message,
+                ));
+            }
+        }
+        notes
+    }
+
     /// A failed goal leaves its pins open - only the impl that proved it
     /// would have bound them - so they say nothing about what the user has
     /// to fix, and the interface reads better named by the part that DID
@@ -12287,13 +12330,12 @@ impl<'db> InferenceContext<'db> {
         // the Item projection - resolved through the same structure
         // demand receivers use, deferred while vars remain like any
         // other projection.
-        self.register_obligation(obligations::Obligation::Implements {
-            ty: collection.clone(),
-            interface: iterable.clone(),
+        self.register_obligation(obligations::Obligation::implements(
+            collection.clone(),
+            iterable.clone(),
             at,
-            purpose: obligations::GoalPurpose::Coercion,
-            depth: 0,
-        });
+            obligations::GoalPurpose::Coercion,
+        ));
         let existential = iterable.existential();
         let projection = Ty::intern(InferTy::AssociatedTypeProjection {
             base: collection.clone(),

@@ -68,8 +68,9 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × type `never` does not implement interface `baml.spawn.Modifier<int, never>`
-    ╭─[spawn_modifier_operands.baml:68:5]
- 68 │     bounded<never>(baml.sys.panic("unreachable"))
+  × type argument `never` is not concrete; a type parameter bounded by `baml.spawn.Modifier<int, never>` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has
+  │ no single runtime type to dispatch on)
+    ╭─[spawn_modifier_operands.baml:69:5]
+ 69 │     bounded<never>(baml.sys.panic("unreachable"))
     ·     ─────────────────────────────────────────────
     ╰────

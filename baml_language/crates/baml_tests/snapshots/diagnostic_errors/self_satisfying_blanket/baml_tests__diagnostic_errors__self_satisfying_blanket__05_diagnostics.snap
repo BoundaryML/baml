@@ -9,3 +9,8 @@ source: crates/baml_tests/src/generated_tests.rs
  23 │     needs_cyc(f)
     ·     ────────────
     ╰────
+  ╰─▶   ☞ required for `Foo` to implement `Cyc<!error>`
+          ╭─[self_satisfying_blanket.baml:23:5]
+       23 │     needs_cyc(f)
+          ·     ────────────
+          ╰────

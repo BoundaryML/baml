@@ -2038,8 +2038,8 @@ impl TirTypeError {
                     write!(
                         f,
                         "type argument `{}` is not concrete; a type parameter bounded by `{bound}` \
-                     requires a concrete type that implements it (an abstract type like a union \
-                     or interface has no single runtime type to dispatch on)",
+                     requires a concrete type that implements it (a union, an interface, \
+                     `unknown` or `never` has no single runtime type to dispatch on)",
                         arg.spell(vp)
                     )
                 }
