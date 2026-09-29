@@ -15,6 +15,9 @@ pub(crate) struct EngineTelemetry {
     pub(super) recording_id: Option<btel_recorder::RecordingId>,
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) delivery: Option<super::telemetry::RecordingDelivery>,
+    /// Where the host records how the process ends; `None` without a recording.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) process_exit: Option<Arc<btel_types::ProcessExitSlot>>,
 }
 impl EngineTelemetry {
     #[cfg(not(target_arch = "wasm32"))]

@@ -444,14 +444,16 @@ impl Translator {
         self.frames.push(Frame::default());
         let result = (|| {
             if let Some(with) = &mut query.with {
-                if with.recursive {
-                    return err("recursive CTEs are not supported");
-                }
+                let recursive = with.recursive;
                 for cte in &mut with.cte_tables {
                     let name = ident_name(&cte.alias.name)?;
                     let columns: Vec<Ident> =
                         cte.alias.columns.iter().map(|c| c.name.clone()).collect();
-                    let shape = self.query(&mut cte.query, Mode::Keep)?.renamed(&columns)?;
+                    let shape = if recursive {
+                        self.recursive_cte(&name, &columns, &mut cte.query)?
+                    } else {
+                        self.query(&mut cte.query, Mode::Keep)?.renamed(&columns)?
+                    };
                     self.frames
                         .last_mut()
                         .expect("query frame")
@@ -503,6 +505,51 @@ impl Translator {
                 }
             }
             Ok(shape)
+        })();
+        self.frames.pop();
+        result
+    }
+
+    /// A CTE of a `WITH RECURSIVE` clause. `anchor UNION [ALL] step`: the
+    /// anchor fixes the columns and which are BAML values, then the step
+    /// reads the CTE itself with that shape. A CTE without a set operation
+    /// cannot refer to itself and translates as usual.
+    fn recursive_cte(
+        &mut self,
+        name: &str,
+        columns: &[Ident],
+        query: &mut Query,
+    ) -> Result<Shape, SqlError> {
+        let SetExpr::SetOperation { left, right, .. } = query.body.as_mut() else {
+            return self.query(query, Mode::Keep)?.renamed(columns);
+        };
+        if query.with.is_some() || query.order_by.is_some() || query.limit_clause.is_some() {
+            return err("a recursive CTE takes no WITH, ORDER BY or LIMIT of its own");
+        }
+        self.frames.push(Frame::default());
+        let result = (|| {
+            let anchor = self.set_expr(left, Mode::Keep)?.renamed(columns)?;
+            self.frames
+                .last_mut()
+                .expect("query frame")
+                .ctes
+                .push((name.to_owned(), anchor.clone()));
+            let step = self.set_expr(right, Mode::Keep)?;
+            if step.cols.len() != anchor.cols.len() {
+                return err("set operation branches return different column counts");
+            }
+            if let Some((col, _)) = anchor
+                .cols
+                .iter()
+                .zip(&step.cols)
+                .find(|(a, s)| a.value != s.value)
+            {
+                return err(format!(
+                    "set operation column `{}` is a BAML value in one branch but not the other",
+                    col.name
+                ));
+            }
+            Ok(anchor)
         })();
         self.frames.pop();
         result
@@ -705,11 +752,6 @@ impl Translator {
                     return err("qualified table names are not supported; use the relation name");
                 };
                 let Some(shape) = self.lookup_relation(table) else {
-                    if let Some(advice) = catalog::retired(table) {
-                        return err(format!(
-                            "`{table}` from the old tracer is not available: {advice}"
-                        ));
-                    }
                     let names: Vec<_> = catalog::RELATIONS.iter().map(|r| r.name).collect();
                     return err(format!(
                         "unknown relation `{table}`; available: {}",

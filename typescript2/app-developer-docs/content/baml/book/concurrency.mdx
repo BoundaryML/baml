@@ -142,19 +142,19 @@ To inspect the example in VS Code:
 2. Open the execution details.
 3. Select **Telemetry** to see the two named tasks on overlapping lanes.
 
-To inspect recent named threads from the CLI, run the example and query the local profile store:
+To inspect recent futures from the CLI, run the example and query its recording:
 
 ```shell
 baml run main
 baml query "
-SELECT name, end_status, started_at, ended_at
-FROM threads
-WHERE name IS NOT NULL
-ORDER BY started_at DESC
+SELECT span_name, status, start_time, end_time
+FROM spans
+WHERE span_type = 'future' AND parent_span_id IS NOT NULL
+ORDER BY start_time DESC
 LIMIT 10"
 ```
 
-The query filters out unnamed runtime work and shows the most recent user-named threads.
+The query skips root calls and shows the most recent futures; a named future shows its name.
 
 ## Read a list concurrently
 

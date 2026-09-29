@@ -1,10 +1,10 @@
-//! Threads, retained-call ancestry, recursion and value SQL on real engine
-//! recordings.
+//! Futures, span ancestry, recursion, the profiler and value SQL on real
+//! engine recordings.
 mod support;
 
 use baml_query_btel::Status;
 use bex_engine::BexExternalValue;
-use serde_json::{Value as Json, json};
+use serde_json::json;
 use support::*;
 
 const PROGRAM: &str = r"
@@ -33,7 +33,7 @@ function main(n: int) -> int {
 ";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn spawn_tree_call_ancestry_and_recursion_from_a_real_recording() {
+async fn spans_profiler_and_recursion_from_a_real_recording() {
     let project = tempfile::tempdir().unwrap();
     let results =
         record_program(project.path(), PROGRAM, &["Outer", "Inner"], &[("main", 4)]).await;
@@ -41,142 +41,130 @@ async fn spawn_tree_call_ancestry_and_recursion_from_a_real_recording() {
     assert_eq!(results[0], Ok(BexExternalValue::Int(18 + 8 + 11)));
     let mut index = index(project.path());
 
-    let execution = sql(
+    // The host's call is a root future.
+    let root = sql(
         &mut index,
-        "SELECT execution_id, entry_fqn, status, threads_total, calls_retained,
-           retained_ok_calls FROM executions WHERE entry_fqn = 'user.main'",
+        "SELECT span_id, span_name, status, future_id FROM spans
+         WHERE span_type = 'future' AND parent_span_id IS NULL",
     );
-    assert_eq!(execution.rows.len(), 1);
-    let row = &execution.rows[0];
-    let execution_id = row[0].as_str().unwrap().to_owned();
+    assert_eq!(root.rows.len(), 1);
+    let root_id = root.rows[0][0].as_str().unwrap().to_owned();
     assert_eq!(
-        &row[1..],
-        &[
-            json!("user.main"),
-            json!("ok"),
-            json!(2),
-            json!(3),
-            json!(3)
-        ]
+        &root.rows[0][1..],
+        &[json!("user.main"), json!("return"), json!(null)]
     );
+    let process = sql(&mut index, "SELECT process_id, status FROM processes");
+    assert_eq!(process.rows[0][1], json!("success"));
 
-    // The spawned thread's recorded parent is the retained Outer call.
+    // Outer ran on the root future; the future it spawned hangs off it.
     let outer = sql(
         &mut index,
-        "SELECT call_id, thread_id, parent_node_kind FROM calls WHERE fqn = 'user.Outer'",
+        "SELECT span_id, future_id, parent_span_id FROM spans WHERE span_name = 'user.Outer'",
     );
-    let (outer_id, root) = (
-        outer.rows[0][0].as_str().unwrap().to_owned(),
-        outer.rows[0][1].as_str().unwrap().to_owned(),
-    );
-    assert_eq!(root, execution_id, "Outer ran on the root thread");
-    assert_eq!(outer.rows[0][2], json!("thread"));
+    let outer_id = outer.rows[0][0].as_str().unwrap().to_owned();
+    assert_eq!(outer.rows[0][1], json!(root_id));
+    assert_eq!(outer.rows[0][2], json!(root_id));
     let spawned = sql(
         &mut index,
         &format!(
-            "SELECT kind, parent_node_kind, spawn_call_id, parent_thread_id, spawn_fqn, end_status
-             FROM threads WHERE execution_id = '{execution_id}' AND kind = 'spawn'"
+            "SELECT span_id, span_name, future_id, status FROM spans
+             WHERE span_type = 'future' AND parent_span_id = '{outer_id}'"
         ),
     );
+    assert_eq!(spawned.rows.len(), 1);
+    let spawned_id = spawned.rows[0][0].as_str().unwrap().to_owned();
     assert_eq!(
-        spawned.rows,
-        vec![vec![
-            json!("spawn"),
-            json!("call"),
-            json!(outer_id),
-            json!(root),
+        &spawned.rows[0][1..],
+        &[
             json!(".<lambda(Outer, 0)>"),
-            json!("ok")
-        ]]
+            json!(root_id),
+            json!("return")
+        ]
     );
 
-    // Inner: once nested directly in Outer, once on the spawned thread.
+    // Inner: once nested directly in Outer, once on the spawned future.
     let inner = sql(
         &mut index,
-        "SELECT c.parent_node_kind, c.parent_call_id, t.kind, c.args['n'], c.output
-         FROM calls c JOIN threads t ON t.thread_id = c.thread_id
-         WHERE c.fqn = 'user.Inner' ORDER BY t.kind",
+        "SELECT parent_span_id, future_id, input_args['n'], output_value FROM spans
+         WHERE span_name = 'user.Inner' ORDER BY input_args['n']",
     );
     assert_eq!(
         inner.rows,
         vec![
-            vec![
-                json!("call"),
-                json!(outer_id),
-                json!("root"),
-                json!(5),
-                json!(10)
-            ],
-            vec![
-                json!("thread"),
-                Json::Null,
-                json!("spawn"),
-                json!(4),
-                json!(8)
-            ],
+            vec![json!(spawned_id), json!(spawned_id), json!(4), json!(8)],
+            vec![json!(outer_id), json!(root_id), json!(5), json!(10)],
         ]
     );
+    // The whole tree under the root call, with depths and values.
+    let tree = sql(
+        &mut index,
+        &format!(
+            "WITH RECURSIVE tree(id, depth, n) AS (
+               SELECT span_id, 0, input_args FROM spans WHERE span_id = '{root_id}'
+               UNION ALL
+               SELECT s.span_id, t.depth + 1, s.input_args FROM spans s
+               JOIN tree t ON s.parent_span_id = t.id)
+             SELECT depth, COUNT(*), SUM(n['n']) FROM tree GROUP BY depth ORDER BY depth"
+        ),
+    );
+    assert_eq!(
+        tree.rows,
+        vec![
+            vec![json!(0), json!(1), json!(null)],
+            vec![json!(1), json!(1), json!(4)],
+            vec![json!(2), json!(2), json!(5)],
+            vec![json!(3), json!(1), json!(4)],
+        ],
+        "main, Outer(4), Inner(5) and the spawned future, then Inner(4)"
+    );
+    // Each span's profiler node is in the process's profiler.
+    let noded = sql(
+        &mut index,
+        "SELECT COUNT(*) FROM spans s JOIN profiler p ON p.profiler_node_id = s.profiler_node_id",
+    );
+    assert_eq!(noded.rows, vec![vec![json!(5)]]);
 
-    // Recursion: Fib(6) is 25 invocations on one context.
+    // Recursion: Fib(6) is 25 invocations of one node.
     let fib = sql(
         &mut index,
-        "SELECT normal_completed_calls, reentry_completed_calls, completed_calls,
-           invocation_duration_sum_ns >= inclusive_ns, self_ns = inclusive_ns, direct_child_ns,
-           self_time_state
-         FROM call_path_stats WHERE fqn = 'user.Fib'",
+        "SELECT invocation_count, return_count, error_count, self_time = total_time,
+           io_total_time
+         FROM profiler WHERE function_name = 'user.Fib'",
     );
     assert_eq!(
         fib.rows,
-        vec![vec![
-            json!(1),
-            json!(24),
-            json!(25),
-            json!(1),
-            json!(1),
-            json!(0),
-            json!("valid")
-        ]]
+        vec![vec![json!(25), json!(25), json!(0), json!(1), json!(0)]]
     );
-    // One callee at two call sites: two contexts under main.
+    // One callee from two call sites of main: one node.
     let leaf = sql(
         &mut index,
-        "SELECT s.depth, s.completed_calls, p.caller_fqn FROM call_path_stats s
-         JOIN call_paths p ON p.call_path_id = s.call_path_id
-         WHERE s.fqn = 'user.Leaf' ORDER BY s.completed_calls",
+        "SELECT l.invocation_count, m.function_name FROM profiler l
+         JOIN profiler m ON m.profiler_node_id = l.parent_profiler_node_id
+         WHERE l.function_name = 'user.Leaf'",
+    );
+    assert_eq!(leaf.rows, vec![vec![json!(4), json!("user.main")]]);
+    // Inner runs under two nodes: in Outer, and in the spawned lambda.
+    let inner = sql(
+        &mut index,
+        "SELECT p.function_name, i.invocation_count FROM profiler i
+         JOIN profiler p ON p.profiler_node_id = i.parent_profiler_node_id
+         WHERE i.function_name = 'user.Inner' ORDER BY 1",
     );
     assert_eq!(
-        leaf.rows,
+        inner.rows,
         vec![
-            vec![json!(1), json!(1), json!("user.main")],
-            vec![json!(1), json!(3), json!("user.main")],
+            vec![json!(".<lambda(Outer, 0)>"), json!(1)],
+            vec![json!("user.Outer"), json!(1)],
         ]
     );
-    // Population counts agree across relations and never include retained
-    // calls twice.
-    let totals = sql(
-        &mut index,
-        &format!(
-            "SELECT (SELECT completed_calls FROM executions WHERE execution_id = '{execution_id}'),
-               (SELECT SUM(completed_calls) FROM function_stats WHERE execution_id = '{execution_id}'),
-               (SELECT SUM(completed_calls) FROM call_path_stats WHERE execution_id = '{execution_id}'),
-               (SELECT completed_calls FROM function_stats WHERE fqn = 'user.Inner')"
-        ),
-    );
-    let total = totals.rows[0][0].clone();
-    assert_eq!(totals.rows[0][1], total);
-    assert_eq!(totals.rows[0][2], total);
-    assert_eq!(
-        totals.rows[0][3],
-        json!(2),
-        "retained Inner counted once each"
-    );
-    // main's self time excludes its synchronous children's inclusive time.
+    // main's self time is its total without its synchronous callees'.
     let main = sql(
         &mut index,
-        "SELECT inclusive_ns >= direct_child_ns + await_ns + self_ns, self_time_state
-         FROM call_path_stats WHERE fqn = 'user.main'",
+        "SELECT m.self_time = m.total_time - SUM(c.total_time), m.error_count
+         FROM profiler m JOIN profiler c ON c.parent_profiler_node_id = m.profiler_node_id
+         WHERE m.function_name = 'user.main'",
     );
-    assert_eq!(main.rows, vec![vec![json!(1), json!("valid")]]);
+    assert_eq!(main.rows, vec![vec![json!(1), json!(0)]]);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -188,10 +176,10 @@ async fn value_sql_through_unions_states_and_unsupported_comparisons() {
     // UNION keeps BAML values typed to the output.
     let union = sql(
         &mut index,
-        "SELECT fqn, output FROM calls
-           WHERE fqn = 'user.Extract' AND args['customer']['name'] = 'bob'
-         UNION ALL SELECT fqn, output FROM calls
-           WHERE fqn = 'user.Classify' AND args['customer']['name'] = 'bob'
+        "SELECT span_name, output_value FROM spans
+           WHERE span_name = 'user.Extract' AND input_args['customer']['name'] = 'bob'
+         UNION ALL SELECT span_name, output_value FROM spans
+           WHERE span_name = 'user.Classify' AND input_args['customer']['name'] = 'bob'
          ORDER BY 1",
     );
     assert_eq!(union.columns[1].column_type, "baml_value");
@@ -203,10 +191,11 @@ async fn value_sql_through_unions_states_and_unsupported_comparisons() {
     // Distinct states, one call each.
     let states = sql(
         &mut index,
-        "SELECT baml_value_state(args['threshold']), baml_value_state(args['customer']['age']),
-           baml_value_state(args['customer']['nope']), baml_value_state(error), baml_kind(output),
-           args_state, output_state, error_state
-         FROM calls WHERE fqn = 'user.Classify' AND args['customer']['name'] = 'bob'",
+        "SELECT baml_value_state(input_args['threshold']),
+           baml_value_state(input_args['customer']['age']),
+           baml_value_state(input_args['customer']['nope']), baml_value_state(error_value),
+           baml_kind(output_value), baml_kind(context_metadata), temporary_projections IS NULL
+         FROM spans WHERE span_name = 'user.Classify' AND input_args['customer']['name'] = 'bob'",
     );
     assert_eq!(
         states.rows,
@@ -216,9 +205,8 @@ async fn value_sql_through_unions_states_and_unsupported_comparisons() {
             json!("missing"),
             json!("no_value"),
             json!("enum"),
-            json!("reference"),
-            json!("reference"),
-            json!("not_applicable")
+            json!("json"),
+            json!(1)
         ]]
     );
     assert_eq!(states.outcome.status, Status::Complete);
@@ -226,13 +214,15 @@ async fn value_sql_through_unions_states_and_unsupported_comparisons() {
     // Different class types compare unequal, even with shared nested content.
     let compared = sql(
         &mut index,
-        "SELECT COUNT(*) FROM calls WHERE fqn = 'user.Extract' AND output = args['customer']",
+        "SELECT COUNT(*) FROM spans WHERE span_name = 'user.Extract'
+           AND output_value = input_args['customer']",
     );
     assert_eq!(compared.rows, vec![vec![json!(0)]]);
     assert_eq!(compared.outcome.status, Status::Complete);
     let ordered = sql(
         &mut index,
-        "SELECT COUNT(*) FROM calls WHERE fqn = 'user.Extract' AND output < args['customer']",
+        "SELECT COUNT(*) FROM spans WHERE span_name = 'user.Extract'
+           AND output_value < input_args['customer']",
     );
     assert_eq!(ordered.outcome.status, Status::Incomplete);
     assert_eq!(
@@ -242,23 +232,35 @@ async fn value_sql_through_unions_states_and_unsupported_comparisons() {
     // A structured value is unequal to a scalar: a defined answer.
     let scalar = sql(
         &mut index,
-        "SELECT COUNT(*) FROM calls WHERE fqn = 'user.Extract' AND output = 'x'",
+        "SELECT COUNT(*) FROM spans WHERE span_name = 'user.Extract' AND output_value = 'x'",
     );
     assert_eq!(scalar.outcome.status, Status::Complete);
 
-    // Errored calls, including one caught inside main.
+    // Failed calls, including one caught inside main: the error value is the
+    // context a handler would see, and the root call's status tells them apart.
     let errors = sql(
         &mut index,
-        "SELECT e.fqn, e.error['code'], x.status FROM calls e
-         JOIN executions x ON x.execution_id = e.execution_id
-         WHERE e.status = 'errored' ORDER BY x.status",
+        "SELECT e.span_name, e.error_value['error']['code'], baml_kind(e.error_value['stack_trace']),
+           x.status
+         FROM spans e JOIN spans x ON x.span_id = e.parent_span_id
+         WHERE e.status = 'user_error' ORDER BY x.status",
     );
     assert_eq!(
         errors.rows,
         vec![
-            vec![json!("user.Validate"), json!(42), json!("errored")],
-            vec![json!("user.Validate"), json!(42), json!("ok")],
+            vec![
+                json!("user.Validate"),
+                json!(42),
+                json!("json"),
+                json!("return")
+            ],
+            vec![
+                json!("user.Validate"),
+                json!(42),
+                json!("json"),
+                json!("user_error")
+            ],
         ],
-        "a caught error leaves its execution ok"
+        "a caught error leaves its root call returning"
     );
 }

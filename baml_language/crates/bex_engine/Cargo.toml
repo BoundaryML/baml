@@ -39,6 +39,8 @@ web-time = { workspace = true }
 btel_bcs = { workspace = true }
 btel_recorder = { workspace = true }
 btel_file = { workspace = true }
+btel_snapshot = { workspace = true }
+baml_version = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "rt", "macros", "time" ] }
 
 # WASM-only: wasm-bindgen-futures for spawning async tasks

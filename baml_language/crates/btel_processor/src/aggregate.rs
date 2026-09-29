@@ -6,16 +6,19 @@ use btel_types::{AwaitDuration, CallPathNodeId, ClockDuration};
 /// not a zero duration. Counts remain usable if the epoch is later invalidated.
 ///
 /// `errored` and `cancelled` count completions by outcome within `count`; the
-/// rest succeeded. Their sum never exceeds `count`.
+/// rest succeeded. Their sum never exceeds `count`. `panicked` counts the
+/// errored completions a panic ended.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[repr(C)]
 pub struct AggregateDelta {
     pub node: CallPathNodeId,
     pub count: u64,
     pub total_duration: ClockDuration,
-    pub total_io_duration: AwaitDuration,
+    /// Time the nodes' own frames spent awaiting.
+    pub total_self_await: AwaitDuration,
     pub errored: u64,
     pub cancelled: u64,
+    pub panicked: u64,
 }
 
 const _: () =
@@ -43,14 +46,15 @@ impl AggregateDelta {
                     .get()
                     .checked_add(other.total_duration.get())?,
             ),
-            total_io_duration: AwaitDuration::ZERO.saturating_add(ClockDuration::from_ticks(
-                self.total_io_duration
+            total_self_await: AwaitDuration::ZERO.saturating_add(ClockDuration::from_ticks(
+                self.total_self_await
                     .get()
                     .get()
-                    .checked_add(other.total_io_duration.get().get())?,
+                    .checked_add(other.total_self_await.get().get())?,
             )),
             errored: self.errored.checked_add(other.errored)?,
             cancelled: self.cancelled.checked_add(other.cancelled)?,
+            panicked: self.panicked.checked_add(other.panicked)?,
         })
     }
 }

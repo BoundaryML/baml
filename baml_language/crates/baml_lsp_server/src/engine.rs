@@ -552,7 +552,8 @@ pub fn construct_engine_candidate(
             bex_engine::TelemetryRecording::local_files(
                 root,
                 btel_settings::publisher::RecordingConfig::default(),
-            ),
+            )
+            .with_host("lsp"),
         ),
         None => BexEngine::new_with_runtime_compiler(
             program,

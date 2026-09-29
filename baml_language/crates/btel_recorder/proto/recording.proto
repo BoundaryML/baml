@@ -21,14 +21,27 @@ message RecordingFile {
   // Minor 2. Exception evidence. One unwind's raise, links and end can be
   // in different files; readers join them by raise ID.
   ErrorBatch errors = 8;
+  // Minor 3. Tokens each model turn used.
+  UsageBatch usage = 9;
 }
 
 message RecordingHeader {
   uint32 format_major = 1;       // Exactly 2.
   uint32 format_minor = 2;       // Additive optional fields only. 1 adds argument layouts;
-                                 // 2 adds source maps and error evidence; 3 adds context runs.
+                                 // 2 adds source maps and error evidence; 3 adds process
+                                 // identity, panics, future names, sysop time and usage.
+                                 // 4 adds execution-context runs.
   bytes recording_id = 3;       // Exactly 16 random bytes, not all zero.
   optional bytes source_snapshot_id = 4; // Exactly 32 bytes when supplied; not identity.
+  // Minor 3. The OS process that ran this engine. Every engine of one
+  // process writes the same process_id; other fields describe the process.
+  optional bytes process_id = 5; // Exactly 16 bytes (UUID) when supplied.
+  optional string baml_version = 6;
+  optional string host = 7;     // cli, lsp, pack, python, ...
+  repeated string command = 8;  // The process's arguments; debugging only.
+  optional sfixed64 process_started_at_unix_ns = 9;
+  // The project's BAML sources, as a CAS map<path, content> snapshot.
+  optional SnapshotId source_cas_id = 10;
 }
 
 message Definitions {
@@ -151,6 +164,7 @@ message ThreadDefinition {
   uint32 spawn_call_path_id = 3; // Zero allowed.
   fixed64 started_at_ticks = 4;
   uint64 clock_epoch_id = 5;   // Nonzero.
+  optional string name = 6;    // Minor 3. The future's name, when it has one.
 }
 
 message ClockEpochDefinition {
@@ -235,6 +249,7 @@ enum TimingStatus {
 
 message AggregateBatch {
   repeated AggregateDelta entries = 1;
+  repeated SysOpTime sysop_times = 2; // Minor 3.
 }
 
 message AggregateDelta {
@@ -253,6 +268,18 @@ message AggregateDelta {
 message AggregateOutcomes {
   uint64 errored = 1;
   uint64 cancelled = 2;
+  // Minor 3. The errored completions a panic ended; panicked <= errored.
+  // Absent from older producers: the split is unknown.
+  optional uint64 panicked = 3;
+}
+
+// Minor 3. Time spent in sysops, charged to the innermost observed call path
+// when each sysop finished. Counted apart from AggregateDelta, whose count
+// is completions: a sysop can finish while its caller is still running.
+message SysOpTime {
+  uint64 node = 1;              // (uint64(call_path_id) << 1); never reentry.
+  uint64 sysops = 2;            // Positive.
+  fixed64 total_ticks = 3;
 }
 
 message SpanBatch {
@@ -262,7 +289,7 @@ message SpanBatch {
 message ThreadSection {
   uint64 thread_id = 1;        // Nonzero; context applies only within this section.
   repeated SpanEvent events = 2;
-  // Minor 3. Execution context for this consecutive run of events. Absence
+  // Minor 4. Execution context for this consecutive run of events. Absence
   // means unavailable, never empty. Every section is independently interpretable;
   // nothing inherits from an earlier section or file.
   oneof context {
@@ -287,6 +314,7 @@ message ThreadAnnouncement {}
 message ThreadCompletion {
   fixed64 completed_at_ticks = 1;
   InvocationOutcome outcome = 2;
+  bool panicked = 3;            // Minor 3. Only with ERRORED: a panic ended it.
 }
 
 message FunctionAnnouncement {
@@ -311,6 +339,9 @@ message FunctionCompletion {
   // unrelated to the Rust enum's discriminants or memory layout.
   uint32 completion_flags = 7;
   SnapshotId value_cas_id = 8; // Output/error identity; absence means no captured value.
+  // Minor 3. Only with an ERRORED outcome: a panic ended it. Since minor 3
+  // an errored value is the baml.errors.Context a handler would bind.
+  bool panicked = 9;
 }
 
 enum InvocationOutcome {
@@ -457,7 +488,40 @@ enum UnwindResult {
 
 // Present only in the last file; its containing sequence declares the file count.
 // Emitted only after input, metadata attempts and final epoch states settle.
-message RecordingEnd {}
+message RecordingEnd {
+  // Minor 3. Set when the host shut this engine down because its process is
+  // exiting: how the process ended.
+  ProcessEnd process_end = 1;
+}
+
+message ProcessEnd {
+  ProcessStatus status = 1;
+  sfixed64 at_unix_ns = 2;
+}
+
+enum ProcessStatus {
+  PROCESS_STATUS_UNSPECIFIED = 0;
+  PROCESS_STATUS_SUCCESS = 1;
+  PROCESS_STATUS_ERROR = 2;
+  PROCESS_STATUS_PANICKED = 3;
+}
+
+// Minor 3. Model usage, outside span sections: a model name has no bound.
+message UsageBatch {
+  repeated ModelUsage entries = 1;
+}
+
+// Tokens one model turn reported. Several entries can name one node.
+message ModelUsage {
+  uint64 node_id = 1;           // The span or thread that made the call.
+  uint64 thread_id = 2;         // The thread that recorded it.
+  optional string model = 3;
+  uint64 input_tokens = 4;      // Full-rate input: cache reads and writes excluded.
+  uint64 output_tokens = 5;
+  optional uint64 cache_read_tokens = 6;
+  optional uint64 cache_write_tokens = 7;
+  optional uint64 reasoning_tokens = 8;
+}
 
 // BCS control plane only. Telemetry bytes go directly to S3 using the returned PUT URL.
 // HTTP routing/authentication and response representation are outside this schema.

@@ -204,9 +204,24 @@ fn typed(rendered: Json, kind: Option<&str>) -> Json {
 
 pub(crate) fn read_extents(conn: &Connection) -> Result<Vec<Extent>, Error> {
     let mut statement = conn.prepare(
-        "SELECT recording_id, state, seal_state, prefix_state, indexed_sequence,
-           observed_sequence, terminal_sequence, blocked_sequence
-         FROM temp.recordings ORDER BY recording_id",
+        "SELECT lower(hex(r.recording_id)),
+           CASE
+             WHEN r.blocked_reason = 'invalid' THEN 'invalid_file'
+             WHEN r.blocked_reason = 'missing' THEN 'gap'
+             WHEN r.files_after_end > 0 THEN 'files_after_end'
+             WHEN r.terminal_sequence IS NOT NULL AND r.terminal_sequence = r.indexed_sequence
+               THEN 'sealed'
+             ELSE 'unsealed'
+           END,
+           IIF(r.terminal_sequence IS NOT NULL, 'sealed', 'unsealed'),
+           CASE
+             WHEN r.blocked_reason = 'invalid' THEN 'invalid_file'
+             WHEN r.blocked_reason = 'missing' THEN 'gap'
+             WHEN r.files_after_end > 0 THEN 'files_after_end'
+             ELSE 'complete_prefix'
+           END,
+           r.indexed_sequence, r.observed_sequence, r.terminal_sequence, r.blocked_sequence
+         FROM main.recording r ORDER BY r.recording_id",
     )?;
     let rows = statement.query_map([], |r| {
         Ok(Extent {
@@ -422,7 +437,7 @@ pub(crate) fn run(
                 },
                 count: 1,
                 message: format!(
-                    "recording {} is indexed through file {}; file {blocked} stops indexing (see the issues relation)",
+                    "recording {} is indexed through file {}; file {blocked} stops indexing",
                     extent.recording_id, extent.indexed_sequence
                 ),
             });

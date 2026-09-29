@@ -29,6 +29,7 @@ rustc-hash = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
 sqlparser = { workspace = true }
+xxhash-rust = { workspace = true }
 
 [dev-dependencies]
 baml_db = { workspace = true }

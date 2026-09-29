@@ -277,8 +277,12 @@ impl RunCtx<'_> {
     }
 }
 
-fn finish_engine(ctx: &RunCtx<'_>, reporter: &Reporter) -> usize {
-    crate::shutdown::shutdown_engine(ctx.rt, ctx.engine, reporter);
+fn finish_engine(
+    ctx: &RunCtx<'_>,
+    reporter: &Reporter,
+    status: bex_engine::ProcessStatus,
+) -> usize {
+    crate::shutdown::shutdown_engine(ctx.rt, ctx.engine, reporter, status);
     ctx.unhandled_spawn_failures.load(Ordering::SeqCst)
 }
 
@@ -322,7 +326,12 @@ impl TestArgs {
         let cached_engine = cached_program.and_then(|program| {
             // Bytecode-cache hit: the Program carries the in-VM test registry,
             // so the database (typecheck, HIR discovery, emit) is skipped.
-            match crate::runtime_telemetry::create_engine(program, Vec::new(), session.root()) {
+            match crate::runtime_telemetry::create_engine(
+                program,
+                Vec::new(),
+                session.root(),
+                crate::runtime_telemetry::session_sources(&session),
+            ) {
                 Ok(engine) => Some(Arc::new(engine)),
                 Err(error) => {
                     crate::bytecode_cache::cache_debug(format_args!(
@@ -410,6 +419,7 @@ impl TestArgs {
                     compiled.program,
                     Vec::new(),
                     session.root(),
+                    crate::runtime_telemetry::session_sources(&session),
                 )
                 .map_err(|e| anyhow!("failed to create engine: {e:?}"))?,
             )
@@ -461,11 +471,14 @@ impl TestArgs {
                     // continue as if there were no testset tests.
                     reporter.abandon();
                     crate::reporter::print_error(format_args!("testset discovery failed: {e}"));
-                    return Ok(if finish_engine(&run_ctx, &reporter) != 0 {
-                        crate::ExitCode::TestFailure
-                    } else {
-                        crate::ExitCode::Other
-                    });
+                    return Ok(
+                        if finish_engine(&run_ctx, &reporter, bex_engine::ProcessStatus::Error) != 0
+                        {
+                            crate::ExitCode::TestFailure
+                        } else {
+                            crate::ExitCode::Other
+                        },
+                    );
                 }
             };
 
@@ -487,17 +500,21 @@ impl TestArgs {
                     Err(e) => {
                         reporter.abandon();
                         crate::reporter::print_error(format_args!("failed to list tests: {e}"));
-                        return Ok(if finish_engine(&run_ctx, &reporter) != 0 {
-                            crate::ExitCode::TestFailure
-                        } else {
-                            crate::ExitCode::Other
-                        });
+                        return Ok(
+                            if finish_engine(&run_ctx, &reporter, bex_engine::ProcessStatus::Error)
+                                != 0
+                            {
+                                crate::ExitCode::TestFailure
+                            } else {
+                                crate::ExitCode::Other
+                            },
+                        );
                     }
                 },
                 None => Vec::new(),
             };
 
-            if finish_engine(&run_ctx, &reporter) != 0 {
+            if finish_engine(&run_ctx, &reporter, bex_engine::ProcessStatus::Success) != 0 {
                 return Ok(crate::ExitCode::TestFailure);
             }
 
@@ -570,7 +587,12 @@ impl TestArgs {
             }
         }
 
-        let unhandled_spawn_failure_count = finish_engine(&run_ctx, &reporter);
+        let status = if failed == 0 {
+            bex_engine::ProcessStatus::Success
+        } else {
+            bex_engine::ProcessStatus::Error
+        };
+        let unhandled_spawn_failure_count = finish_engine(&run_ctx, &reporter, status);
         if unhandled_spawn_failure_count != 0 {
             failed += unhandled_spawn_failure_count;
             total += unhandled_spawn_failure_count;

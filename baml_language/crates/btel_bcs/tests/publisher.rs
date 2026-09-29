@@ -263,6 +263,7 @@ async fn lost_recording_replays_metadata_and_reoffers_cas_without_replaying_even
             spawn_call_path: CallPathId::ROOT,
             started_at: ClockInstant::from_ticks(1),
             clock: clock.clone(),
+            name: None,
         },
     );
     publisher.span(

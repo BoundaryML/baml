@@ -16,7 +16,7 @@ use indexmap::IndexMap;
 
 use crate::{
     BexVm,
-    errors::VmInternalError,
+    errors::{VmBamlError, VmInternalError},
     package_baml::{NativeCallResult, NativeFunction, NativeFunctionResult},
 };
 
@@ -28,6 +28,7 @@ use crate::{
     non_snake_case,
     clippy::wildcard_imports,
     clippy::pub_underscore_fields,
+    clippy::too_many_arguments,
     clippy::used_underscore_binding,
     clippy::elidable_lifetime_names,
     clippy::get_first,
@@ -309,6 +310,33 @@ impl BamlPackageTrace for PackageTraceImpl {
 
     fn current_span_id(vm: &mut BexVm) -> Option<Value> {
         vm.current_span_id().map(|id| alloc_id(vm, id))
+    }
+
+    fn _usage_target(vm: &mut BexVm) -> i64 {
+        vm.usage_target().map_or(0, |id| id.get().cast_signed())
+    }
+
+    #[allow(clippy::too_many_arguments, reason = "mirrors ai.events.Usage")]
+    fn _record_usage(
+        vm: &mut BexVm,
+        target: i64,
+        model: Option<&bex_str::BexStr>,
+        input_tokens: i64,
+        output_tokens: i64,
+        cache_read_tokens: Option<i64>,
+        cache_write_tokens: Option<i64>,
+        reasoning_tokens: Option<i64>,
+    ) -> bool {
+        let tokens = |count: i64| u64::try_from(count).unwrap_or(0);
+        vm.record_model_usage(
+            target.cast_unsigned(),
+            model.map(|model| Box::from(model.as_str())),
+            tokens(input_tokens),
+            tokens(output_tokens),
+            cache_read_tokens.map(tokens),
+            cache_write_tokens.map(tokens),
+            reasoning_tokens.map(tokens),
+        )
     }
 }
 

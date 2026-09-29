@@ -134,15 +134,14 @@ async fn trace_capture_reaches_cas_with_exact_values() {
                 input
             );
             let outcome = done.completion_flags & 3;
-            let suffix = match outcome {
-                1 => ":output",
-                2 => ":error",
+            let captured = match outcome {
+                1 => read_string_capture(root.path(), value, false),
+                // A failure captures the context a handler would bind.
+                2 => read_error_capture(root.path(), value),
                 other => panic!("unexpected completion outcome {other}"),
             };
-            assert_eq!(
-                read_string_capture(root.path(), value, false),
-                format!("{input}{suffix}")
-            );
+            let suffix = if outcome == 1 { ":output" } else { ":error" };
+            assert_eq!(captured, format!("{input}{suffix}"));
             outcomes.push(outcome);
         } else {
             noncaptured += 1;
@@ -155,6 +154,32 @@ async fn trace_capture_reaches_cas_with_exact_values() {
     assert_eq!(outcomes, [1, 2]);
     assert_eq!(noncaptured, 2);
     assert!(announcements.is_empty());
+}
+
+/// The `error` of a captured `baml.errors.Context`, which must be a string.
+fn read_error_capture(root: &std::path::Path, id: proto::SnapshotId) -> String {
+    use btel_snapshot::{DecodeLimits, DecodedObject, DecodedRoot, DecodedValue, decode_blob};
+
+    let mut digest = [0; 16];
+    digest[..8].copy_from_slice(&id.low.to_le_bytes());
+    digest[8..].copy_from_slice(&id.high.to_le_bytes());
+    let path = btel_file::cas_path(
+        &root.join("cas"),
+        btel_snapshot::SnapshotId::from_bytes(digest),
+    );
+    let snapshot = decode_blob(&std::fs::read(path).unwrap(), &DecodeLimits::default()).unwrap();
+    let DecodedRoot::Value(DecodedValue::Object(context)) = snapshot.root else {
+        panic!("expected a captured context object");
+    };
+    let DecodedObject::Instance { fields, .. } = snapshot.object(context) else {
+        panic!("expected a baml.errors.Context instance");
+    };
+    let names: Vec<&str> = fields.iter().map(|(name, _)| &**name).collect();
+    assert_eq!(names, ["error", "stack_trace", "cause"]);
+    let DecodedValue::String(error) = &fields[0].1 else {
+        panic!("expected a string error");
+    };
+    error.to_string()
 }
 
 fn read_string_capture(root: &std::path::Path, id: proto::SnapshotId, args: bool) -> String {

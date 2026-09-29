@@ -69,6 +69,10 @@ impl Publisher<Snapshot, Snapshot> for LocalPublisher {
         self.builder.aggregate(delta);
     }
 
+    fn sysop_time(&mut self, path: btel_types::CallPathId, elapsed: btel_types::ClockDuration) {
+        self.builder.sysop_time(path, elapsed);
+    }
+
     fn span(&mut self, thread: TelemetryId, record: &mut SpanRecord<Snapshot, Snapshot>) {
         self.builder.span(thread, record);
     }

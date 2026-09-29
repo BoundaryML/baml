@@ -25,14 +25,13 @@ use btel_reader::{
 };
 use btel_recorder::proto::{self, function_definition::Resolution, span_event::Event};
 use prost::Message as _;
-use rusqlite::{Connection, OptionalExtension as _, Transaction, params};
+use rusqlite::{Connection, OptionalExtension as _, Transaction, params, types::ValueRef};
 use serde::Serialize;
 
 use crate::{Error, store};
 
 mod bulk;
-mod errors;
-mod sites;
+mod profile;
 
 #[derive(Clone, Debug)]
 pub struct RefreshOptions {
@@ -199,6 +198,7 @@ fn refresh_locked(
         if !present.contains(recording_id) {
             // The whole directory is gone: its remaining valid prefix is empty.
             let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+            mark_profile_pending(&tx, known.rec)?;
             delete_facts(&tx, known.rec)?;
             tx.execute("DELETE FROM recording WHERE rec = ?1", [known.rec])?;
             tx.commit()?;
@@ -215,6 +215,19 @@ fn refresh_locked(
             metrics,
         )?;
     }
+    profile::rebuild_pending(conn)?;
+    Ok(())
+}
+
+/// Queue the profiler of the process `rec` belongs to (the one its header
+/// names, or the recording itself) for a rebuild, inside the transaction
+/// that changes the recording.
+fn mark_profile_pending(tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
+    tx.prepare_cached(
+        "INSERT OR IGNORE INTO profile_pending (process_id)
+         SELECT COALESCE(process_id, recording_id) FROM recording WHERE rec = ?1",
+    )?
+    .execute([rec])?;
     Ok(())
 }
 
@@ -271,6 +284,44 @@ fn load_ledger(conn: &Connection, rec: i64) -> Result<Vec<LedgerRow>, Error> {
         })
     })?;
     Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// A file's process fields (the first header that names them wins) and,
+/// in the end marker, how the process ended.
+pub(super) fn record_process(
+    tx: &Transaction<'_>,
+    rec: i64,
+    file: &proto::RecordingFile,
+) -> Result<(), Error> {
+    let header = file.header.as_ref().expect("validated header");
+    if let Some(process_id) = &header.process_id {
+        let command = (!header.command.is_empty())
+            .then(|| serde_json::to_string(&header.command).expect("strings serialize"));
+        tx.prepare_cached(
+            "UPDATE recording SET process_id = COALESCE(process_id, ?2),
+               baml_version = COALESCE(baml_version, ?3), host = COALESCE(host, ?4),
+               command = COALESCE(command, ?5),
+               process_started_ns = COALESCE(process_started_ns, ?6),
+               source_cas = COALESCE(source_cas, ?7)
+             WHERE rec = ?1",
+        )?
+        .execute(params![
+            rec,
+            process_id,
+            header.baml_version,
+            header.host,
+            command,
+            header.process_started_at_unix_ns,
+            header.source_cas_id.as_ref().map(snapshot_id)
+        ])?;
+    }
+    if let Some(end) = file.end.as_ref().and_then(|end| end.process_end.as_ref()) {
+        tx.prepare_cached(
+            "UPDATE recording SET process_end_status = ?2, process_end_ns = ?3 WHERE rec = ?1",
+        )?
+        .execute(params![rec, end.status, end.at_unix_ns])?;
+    }
+    Ok(())
 }
 
 fn delete_facts(tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
@@ -494,11 +545,13 @@ fn reconcile(
         };
         rec = Some(rec_key);
         if first_transaction && rebuild {
+            // The reset can change the process the recording names.
+            mark_profile_pending(&tx, rec_key)?;
             delete_facts(&tx, rec_key)?;
             tx.execute(
                 "UPDATE recording SET indexed_sequence = 0, terminal_sequence = NULL,
                    source_snapshot_id = NULL, indexed_bytes = 0, format_minor = 0,
-                   generation = generation + 1
+                   generation = generation + 1, process_id = NULL, baml_version = NULL, host = NULL, command = NULL, process_started_ns = NULL, source_cas = NULL, process_end_status = NULL, process_end_ns = NULL
                  WHERE rec = ?1",
                 [rec_key],
             )?;
@@ -522,6 +575,7 @@ fn reconcile(
             match candidate {
                 Candidate::Read(found, read) => {
                     applier.apply(found.sequence, &read.file)?;
+                    record_process(&tx, rec_key, &read.file)?;
                     let header = read.file.header.as_ref().expect("validated header");
                     tx.execute(
                         "INSERT INTO ledger (rec, sequence, size, modified_ns, device, inode, content_hash)
@@ -545,7 +599,8 @@ fn reconcile(
                            indexed_bytes = indexed_bytes + ?3,
                            format_minor = MAX(format_minor, ?4),
                            source_snapshot_id = COALESCE(source_snapshot_id, ?5),
-                           terminal_sequence = CASE WHEN ?6 THEN ?2 ELSE terminal_sequence END
+                           terminal_sequence = CASE WHEN ?6 THEN ?2 ELSE terminal_sequence END,
+                           updated_ns = MAX(COALESCE(updated_ns, ?7), ?7)
                          WHERE rec = ?1",
                         params![
                             rec_key,
@@ -553,7 +608,8 @@ fn reconcile(
                             saturating(read.len),
                             i64::from(header.format_minor),
                             header.source_snapshot_id.as_deref(),
-                            read.file.end.is_some()
+                            read.file.end.is_some(),
+                            i64::try_from(found.stamp.modified_ns).ok()
                         ],
                     )?;
                     if source_snapshot.is_none() {
@@ -584,6 +640,10 @@ fn reconcile(
             }
         }
         applier.finish()?;
+        if (first_transaction && rebuild) || group.iter().any(|c| matches!(c, Candidate::Read(..)))
+        {
+            mark_profile_pending(&tx, rec_key)?;
+        }
         // Frontier state from this discovery snapshot.
         let state = frontier(&blocked_invalid, terminal);
         tx.execute(
@@ -719,11 +779,12 @@ fn apply_fresh<'p>(
         }
     };
     if rebuild {
+        mark_profile_pending(&tx, rec)?;
         delete_facts(&tx, rec)?;
         tx.execute(
             "UPDATE recording SET indexed_sequence = 0, terminal_sequence = NULL,
                source_snapshot_id = NULL, indexed_bytes = 0, format_minor = 0,
-               generation = generation + 1
+               generation = generation + 1, process_id = NULL, baml_version = NULL, host = NULL, command = NULL, process_started_ns = NULL, source_cas = NULL, process_end_status = NULL, process_end_ns = NULL
              WHERE rec = ?1",
             [rec],
         )?;
@@ -755,7 +816,8 @@ fn apply_fresh<'p>(
                indexed_bytes = indexed_bytes + ?3,
                format_minor = MAX(format_minor, ?4),
                source_snapshot_id = COALESCE(source_snapshot_id, ?5),
-               terminal_sequence = CASE WHEN ?6 THEN ?2 ELSE terminal_sequence END
+               terminal_sequence = CASE WHEN ?6 THEN ?2 ELSE terminal_sequence END,
+               updated_ns = MAX(COALESCE(updated_ns, ?7), ?7)
              WHERE rec = ?1",
             params![
                 rec,
@@ -763,7 +825,8 @@ fn apply_fresh<'p>(
                 saturating(file.len),
                 i64::from(file.format_minor),
                 file.source_snapshot.as_deref(),
-                file.end
+                file.end,
+                i64::try_from(file.found.stamp.modified_ns).ok()
             ],
         )?;
         if source_snapshot.is_none() {
@@ -773,6 +836,9 @@ fn apply_fresh<'p>(
             terminal = Some(file.found.sequence);
         }
         metrics.files_applied += 1;
+    }
+    if rebuild || !applied.is_empty() {
+        mark_profile_pending(&tx, rec)?;
     }
     let mut blocked_invalid = None;
     if let Some((found, reason)) = &invalid {
@@ -900,12 +966,11 @@ struct Applier<'t> {
     /// parent: each adds its whole normal-node total to its parent's child
     /// time once, and its later deltas after that.
     defined_children: HashMap<u32, u32>,
-    /// Rows whose recorded PCs need (re)resolving after this batch: newly
-    /// defined paths and raises, and everything that names a function whose
-    /// definition arrived in this batch.
-    sites: sites::Pending,
-    /// Call paths new raises name as their stacks.
-    raise_paths: HashSet<u32>,
+    /// Sysop count and ticks per call path in this transaction.
+    sysops: HashMap<u32, (u128, u128)>,
+    /// Functions whose metadata replaced an "unavailable" observation: the
+    /// profiler nodes named after them change.
+    renamed_functions: HashSet<u64>,
 }
 
 impl<'t> Applier<'t> {
@@ -919,8 +984,8 @@ impl<'t> Applier<'t> {
             touched_threads: false,
             touched_paths: false,
             defined_children: HashMap::new(),
-            sites: sites::Pending::default(),
-            raise_paths: HashSet::new(),
+            sysops: HashMap::new(),
+            renamed_functions: HashSet::new(),
         }
     }
 
@@ -997,9 +1062,34 @@ impl<'t> Applier<'t> {
                 let entry = self.aggregates.entry(delta.node).or_default();
                 *entry = entry.add(totals);
             }
+            for time in &batch.sysop_times {
+                let (path, _) = evidence::split_node(time.node);
+                self.references.paths.insert(path);
+                let entry = self.sysops.entry(path).or_default();
+                entry.0 = entry.0.saturating_add(u128::from(time.sysops));
+                entry.1 = entry.1.saturating_add(u128::from(time.total_ticks));
+            }
         }
-        if let Some(batch) = &file.errors {
-            self.errors(sequence, batch, &mut tick)?;
+        if let Some(usage) = &file.usage {
+            let mut insert = self.tx.prepare_cached(
+                "INSERT INTO model_usage (rec, sequence, position, node_id, model, input_tokens,
+                   output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            )?;
+            for (position, entry) in usage.entries.iter().enumerate() {
+                insert.execute(params![
+                    self.rec,
+                    sequence_i64(sequence)?,
+                    saturating(position as u64),
+                    id(entry.node_id),
+                    entry.model,
+                    saturating(entry.input_tokens),
+                    saturating(entry.output_tokens),
+                    entry.cache_read_tokens.map(saturating),
+                    entry.cache_write_tokens.map(saturating),
+                    entry.reasoning_tokens.map(saturating)
+                ])?;
+            }
         }
         if let Some(spans) = &file.spans {
             for section in &spans.sections {
@@ -1027,14 +1117,15 @@ impl<'t> Applier<'t> {
                             let changed = self
                                 .tx
                                 .prepare_cached(
-                                    "UPDATE thread SET completed_ticks = ?3, outcome = ?4
+                                    "UPDATE thread SET completed_ticks = ?3, outcome = ?4, panicked = ?5
                                      WHERE rec = ?1 AND thread_id = ?2 AND outcome IS NULL",
                                 )?
                                 .execute(params![
                                     self.rec,
                                     id(section.thread_id),
                                     completed,
-                                    done.outcome
+                                    done.outcome,
+                                    done.panicked
                                 ])?;
                             if changed == 0 {
                                 let existing: Option<(Option<i64>, Option<i64>)> = self
@@ -1134,8 +1225,8 @@ impl<'t> Applier<'t> {
             .prepare_cached(
                 "INSERT INTO call (rec, call_id, thread_id, parent_id, call_path_id, reentry,
                    completed_sequence, late, entered_ticks, exited_ticks, self_await_ticks,
-                   outcome, needs_announcement, value_cas)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+                   outcome, needs_announcement, value_cas, panicked)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
                  ON CONFLICT (rec, call_id) DO UPDATE SET
                    conflict = CASE WHEN conflict > 0 THEN conflict
                      WHEN completed_sequence IS NOT NULL
@@ -1152,7 +1243,8 @@ impl<'t> Applier<'t> {
                    self_await_ticks = excluded.self_await_ticks,
                    outcome = excluded.outcome,
                    needs_announcement = excluded.needs_announcement,
-                   value_cas = excluded.value_cas",
+                   value_cas = excluded.value_cas,
+                   panicked = excluded.panicked",
             )?
             .execute(params![
                 self.rec,
@@ -1168,7 +1260,8 @@ impl<'t> Applier<'t> {
                 tick(done.self_await_ticks),
                 outcome.code(),
                 needs_announcement,
-                done.value_cas_id.as_ref().map(snapshot_id)
+                done.value_cas_id.as_ref().map(snapshot_id),
+                done.panicked
             ])?;
         Ok(())
     }
@@ -1196,8 +1289,6 @@ impl<'t> Applier<'t> {
                                 "UPDATE function_def SET conflict = 1 WHERE rec = ?1 AND function_id = ?2",
                             )?
                             .execute(params![self.rec, function_id])?;
-                        // Sites already resolved in it are no longer trustworthy.
-                        self.sites.conflicted.insert(function.function_id);
                         self.issue(
                             sequence,
                             "function_metadata_conflict",
@@ -1228,7 +1319,9 @@ impl<'t> Applier<'t> {
                     Some(Ok(map)) => (Some(map.encode()), Some(1_i64)),
                     Some(Err(_)) => (None, Some(2_i64)),
                 };
-                self.sites.functions.insert(function.function_id);
+                if matches!(existing, Some((1, _))) {
+                    self.renamed_functions.insert(function.function_id);
+                }
                 let namespace =
                     (!metadata.namespace.is_empty()).then(|| metadata.namespace.join("."));
                 let namespace_json = (!metadata.namespace.is_empty()).then(|| {
@@ -1317,7 +1410,6 @@ impl<'t> Applier<'t> {
 
     fn call_path(&mut self, sequence: u64, path: &proto::CallPathDefinition) -> Result<(), Error> {
         self.touched_paths = true;
-        self.sites.paths.insert(path.call_path_id);
         self.references.threads.insert(path.thread_id);
         self.references.functions.insert(path.callee_function_id);
         self.references
@@ -1403,6 +1495,15 @@ impl<'t> Applier<'t> {
         self.references.epochs.insert(thread.clock_epoch_id);
         if thread.spawn_call_path_id != 0 {
             self.references.paths.insert(thread.spawn_call_path_id);
+        }
+        if let Some(name) = &thread.name {
+            // First name wins; a thread is named once, before it starts.
+            self.tx
+                .prepare_cached(
+                    "INSERT INTO thread (rec, thread_id, defined, name) VALUES (?1, ?2, 0, ?3)
+                     ON CONFLICT (rec, thread_id) DO UPDATE SET name = COALESCE(name, excluded.name)",
+                )?
+                .execute(params![self.rec, id(thread.thread_id), name])?;
         }
         let values = params![
             self.rec,
@@ -1534,7 +1635,7 @@ impl<'t> Applier<'t> {
                 .tx
                 .prepare_cached(
                     "SELECT count_exact, duration_exact, self_await_exact,
-                       outcome_evidence, errored_exact, cancelled_exact FROM aggregate
+                       outcome_evidence, errored_exact, cancelled_exact, panicked_exact FROM aggregate
                      WHERE rec = ?1 AND node = ?2",
                 )?
                 .query_row(params![self.rec, node], |r| {
@@ -1549,6 +1650,7 @@ impl<'t> Applier<'t> {
                             evidence: r.get(3)?,
                             errored: exact(4)?,
                             cancelled: exact(5)?,
+                            panicked: exact(6)?,
                         },
                     })
                 })
@@ -1561,8 +1663,9 @@ impl<'t> Applier<'t> {
                 .prepare_cached(
                     "INSERT INTO aggregate (rec, node, call_count, duration_ticks, self_await_ticks,
                        count_exact, duration_exact, self_await_exact, outcome_evidence,
-                       ok_calls, errored_calls, cancelled_calls, errored_exact, cancelled_exact)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+                       ok_calls, errored_calls, cancelled_calls, errored_exact, cancelled_exact,
+                       panicked_calls, panicked_exact)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
                      ON CONFLICT (rec, node) DO UPDATE SET call_count = excluded.call_count,
                        duration_ticks = excluded.duration_ticks,
                        self_await_ticks = excluded.self_await_ticks,
@@ -1572,7 +1675,9 @@ impl<'t> Applier<'t> {
                        outcome_evidence = excluded.outcome_evidence,
                        ok_calls = excluded.ok_calls, errored_calls = excluded.errored_calls,
                        cancelled_calls = excluded.cancelled_calls,
-                       errored_exact = excluded.errored_exact, cancelled_exact = excluded.cancelled_exact",
+                       errored_exact = excluded.errored_exact, cancelled_exact = excluded.cancelled_exact,
+                       panicked_calls = excluded.panicked_calls,
+                       panicked_exact = excluded.panicked_exact",
                 )?
                 .execute(params![
                     self.rec,
@@ -1584,7 +1689,42 @@ impl<'t> Applier<'t> {
                     total.duration.to_string(),
                     total.self_await.to_string(),
                     total.outcomes.evidence, ok_calls, errored_calls, cancelled_calls,
-                    total.outcomes.errored.to_string(), total.outcomes.cancelled.to_string()
+                    total.outcomes.errored.to_string(), total.outcomes.cancelled.to_string(),
+                    total.outcomes.panicked(), total.outcomes.panicked.to_string()
+                ])?;
+        }
+        for (path, (sysops, ticks)) in &self.sysops {
+            let existing: Option<(i64, Option<i64>)> = self
+                .tx
+                .prepare_cached(
+                    "SELECT sysops, total_ticks FROM sysop WHERE rec = ?1 AND call_path_id = ?2",
+                )?
+                .query_row(params![self.rec, i64::from(*path)], |r| {
+                    Ok((r.get(0)?, r.get(1)?))
+                })
+                .optional()?;
+            let (count, total) = match existing {
+                None => (Some(*sysops), Some(*ticks)),
+                Some((count, total)) => (
+                    u128::try_from(count)
+                        .ok()
+                        .map(|c| c.saturating_add(*sysops)),
+                    total
+                        .and_then(|t| u128::try_from(t).ok())
+                        .map(|t| t.saturating_add(*ticks)),
+                ),
+            };
+            self.tx
+                .prepare_cached(
+                    "INSERT INTO sysop (rec, call_path_id, sysops, total_ticks) VALUES (?1, ?2, ?3, ?4)
+                     ON CONFLICT (rec, call_path_id) DO UPDATE SET sysops = excluded.sysops,
+                       total_ticks = excluded.total_ticks",
+                )?
+                .execute(params![
+                    self.rec,
+                    i64::from(*path),
+                    count.and_then(|c| i64::try_from(c).ok()).unwrap_or(i64::MAX),
+                    total.and_then(|t| i64::try_from(t).ok())
                 ])?;
         }
         let mut placeholder = self.tx.prepare_cached(
@@ -1643,8 +1783,8 @@ impl<'t> Applier<'t> {
             resolve_depths(self.tx, self.rec)?;
         }
         self.add_child_time()?;
-        errors::build_raise_paths(self.tx, self.rec, &self.raise_paths, self.touched_paths)?;
-        sites::resolve(self.tx, self.rec, &self.sites)?;
+        forget_nodes(self.tx, self.rec, &self.renamed_functions)?;
+        resolve_nodes(self.tx, self.rec)?;
         Ok(())
     }
 
@@ -1734,12 +1874,82 @@ fn resolve_depths(tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
     }
 }
 
+/// Give each defined path its profiler node once its function and every
+/// ancestor's are known. A function known only as unavailable is named by
+/// its ID until its metadata arrives (`forget_nodes`).
+pub(super) fn resolve_nodes(tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
+    loop {
+        let changed = tx
+            .prepare_cached(
+                "UPDATE call_path INDEXED BY call_path_unnoded SET node_id = __btel_node(
+                   (SELECT p.node_id FROM call_path p
+                    WHERE p.rec = call_path.rec AND p.call_path_id = call_path.parent_call_path_id),
+                   (SELECT IIF(f.state = 2, f.fqn, '#' || hex(f.function_id)) FROM function_def f
+                    WHERE f.rec = call_path.rec AND f.function_id = call_path.callee_function_id),
+                   call_path.edge)
+                 WHERE rec = ?1 AND node_id IS NULL AND defined = 1
+                   AND (parent_call_path_id = 0 OR EXISTS (SELECT 1 FROM call_path p
+                     WHERE p.rec = call_path.rec AND p.call_path_id = call_path.parent_call_path_id
+                       AND p.node_id IS NOT NULL))
+                   AND EXISTS (SELECT 1 FROM function_def f WHERE f.rec = call_path.rec
+                     AND f.function_id = call_path.callee_function_id AND f.state >= 1)",
+            )?
+            .execute([rec])?;
+        if changed == 0 {
+            return Ok(());
+        }
+    }
+}
+
+/// Functions whose metadata replaced an ID placeholder: the nodes of their
+/// paths and everything below them are named anew. Rare, so this scans the
+/// recording's paths instead of keeping an index by callee.
+fn forget_nodes(tx: &Transaction<'_>, rec: i64, functions: &HashSet<u64>) -> Result<(), Error> {
+    if functions.is_empty() {
+        return Ok(());
+    }
+    let callees: HashSet<[u8; 8]> = functions.iter().map(|function| id(*function)).collect();
+    let mut paths = Vec::new();
+    let mut scan = tx.prepare_cached(
+        "SELECT call_path_id, callee_function_id FROM call_path
+         WHERE rec = ?1 AND node_id IS NOT NULL",
+    )?;
+    let mut rows = scan.query([rec])?;
+    while let Some(row) = rows.next()? {
+        if let ValueRef::Blob(callee) = row.get_ref(1)?
+            && <[u8; 8]>::try_from(callee).is_ok_and(|callee| callees.contains(&callee))
+        {
+            paths.push(row.get::<_, i64>(0)?);
+        }
+    }
+    drop(rows);
+    let mut clear = tx.prepare_cached(
+        "UPDATE call_path SET node_id = NULL WHERE rec = ?1 AND call_path_id = ?2",
+    )?;
+    for path in paths {
+        clear.execute(params![rec, path])?;
+    }
+    loop {
+        let changed = tx
+            .prepare_cached(
+                "UPDATE call_path SET node_id = NULL
+                 WHERE rec = ?1 AND node_id IS NOT NULL AND parent_call_path_id != 0
+                   AND EXISTS (SELECT 1 FROM call_path p WHERE p.rec = call_path.rec
+                     AND p.call_path_id = call_path.parent_call_path_id AND p.node_id IS NULL)",
+            )?
+            .execute([rec])?;
+        if changed == 0 {
+            return Ok(());
+        }
+    }
+}
+
 /// Attach threads to their execution: roots are defined threads without a parent;
 /// a spawned thread's parent is a thread or a retained call on a thread.
 /// Repairs threads whose parents arrived in later files. `INDEXED BY` keeps
 /// each pass to unresolved threads; preparing fails if the index cannot serve.
 /// Store the start of each root written or re-clocked since the last pass,
-/// computed as `executions.started_at_ms` computes it from the clock.
+/// in Unix milliseconds from its clock.
 pub(super) fn resolve_starts(tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
     tx.prepare_cached(
         "UPDATE thread INDEXED BY thread_start_pending SET start_pending = 0,

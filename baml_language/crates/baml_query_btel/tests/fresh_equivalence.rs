@@ -15,7 +15,13 @@ use support::*;
 /// Fact tables (with the compared columns), and the columns that identify
 /// a row. The copies' file stamps differ; their contents do not.
 const TABLES: &[(&str, &str)] = &[
-    ("recording", "rec"),
+    (
+        "recording (rec, recording_id, source_snapshot_id, format_minor, indexed_sequence,
+           observed_sequence, terminal_sequence, blocked_sequence, blocked_reason, partial_files,
+           files_after_end, indexed_bytes, generation, process_id, baml_version, host, command,
+           process_started_ns, source_cas, process_end_status, process_end_ns)",
+        "rec",
+    ),
     (
         "ledger (rec, sequence, size, content_hash)",
         "rec, sequence",
@@ -28,12 +34,10 @@ const TABLES: &[(&str, &str)] = &[
     ("epoch", "rec, epoch_id"),
     ("epoch_state", "rec, epoch_id"),
     ("aggregate", "rec, node"),
+    ("sysop", "rec, call_path_id"),
+    ("model_usage", "rec, sequence, position"),
     ("call", "rec, call_id"),
-    ("error_raise", "rec, raise_id"),
-    ("error_frame", "rec, raise_id, position"),
-    ("error_link", "rec, raise_id, call_id, role"),
-    ("raise_path", "rec, call_path_id"),
-    ("raise_path_frame", "rec, call_path_id, position"),
+    ("profile_node", "process_id, node_id"),
 ];
 
 const ERRORS: &str = r#"
@@ -119,7 +123,10 @@ fn dump(index: &Index) -> Dump {
                 None => (*table, "*"),
             };
             let mut statement = conn
-                .prepare(&format!("SELECT {columns} FROM {table} ORDER BY {key}"))
+                .prepare(&format!(
+                    "SELECT {} FROM {table} ORDER BY {key}",
+                    columns.split_whitespace().collect::<Vec<_>>().join(" ")
+                ))
                 .unwrap();
             let width = statement.column_count();
             let rows = statement
@@ -202,9 +209,15 @@ mod crafted {
             let sequence = index as u64 + 1;
             file.header = Some(proto::RecordingHeader {
                 format_major: 2,
-                format_minor: 2,
+                format_minor: 3,
                 recording_id: id.to_vec(),
                 source_snapshot_id: None,
+                process_id: Some(vec![9; 16]),
+                baml_version: Some("0.20.1".into()),
+                host: Some("baml".into()),
+                command: vec!["baml".into(), "run".into(), "main".into()],
+                process_started_at_unix_ns: Some(1_000),
+                source_cas_id: None,
             });
             file.sequence = sequence;
             std::fs::write(
@@ -268,6 +281,7 @@ mod crafted {
             spawn_call_path_id: spawn,
             started_at_ticks: started,
             clock_epoch_id: EPOCH,
+            ..Default::default()
         }
     }
 
@@ -313,40 +327,21 @@ mod crafted {
             outcomes: Some(proto::AggregateOutcomes {
                 errored,
                 cancelled: 0,
+                ..Default::default()
             }),
         }
     }
 
-    fn raise(id: u64, path: Option<u32>, pc: u32) -> proto::ErrorRaise {
-        proto::ErrorRaise {
-            raise_id: id,
+    fn usage(node: u64, model: &str, input: u64) -> proto::ModelUsage {
+        proto::ModelUsage {
+            node_id: node,
             thread_id: T2,
-            raised_at_ticks: 25,
-            kind: proto::RaiseKind::Throw as i32,
-            function_id: Some(CALLEE),
-            pc: Some(pc),
-            origin_state: proto::OriginState::Fresh as i32,
-            frame_count: 3,
-            call_path_id: path,
-            ..Default::default()
-        }
-    }
-
-    fn end(raise: u64, pc: u32) -> proto::ErrorUnwindEnd {
-        proto::ErrorUnwindEnd {
-            raise_id: raise,
-            result: proto::UnwindResult::Caught as i32,
-            handler_function_id: Some(CALLER),
-            handler_pc: Some(pc),
-            unwound_frames: 1,
-        }
-    }
-
-    fn link(raise: u64, call: u64) -> proto::ErrorCallLink {
-        proto::ErrorCallLink {
-            raise_id: raise,
-            call_id: call,
-            role: proto::ErrorLinkRole::Unwound as i32,
+            model: Some(model.into()),
+            input_tokens: input,
+            output_tokens: 10,
+            cache_read_tokens: Some(5),
+            cache_write_tokens: None,
+            reasoning_tokens: None,
         }
     }
 
@@ -369,11 +364,14 @@ mod crafted {
             }),
             aggregates: Some(proto::AggregateBatch {
                 entries: vec![aggregate(2, 3, 30, 1), aggregate(4, 1, 7, 0)],
+                sysop_times: vec![proto::SysOpTime {
+                    node: 2 << 1,
+                    sysops: 2,
+                    total_ticks: 6,
+                }],
             }),
-            errors: Some(proto::ErrorBatch {
-                raises: vec![raise(301, Some(2), 2)],
-                call_links: vec![link(301, 100)],
-                unwind_ends: vec![end(300, 20)],
+            usage: Some(proto::UsageBatch {
+                entries: vec![usage(100, "claude-opus-5-5", 1000)],
             }),
             ..Default::default()
         };
@@ -398,6 +396,7 @@ mod crafted {
                             Event::ThreadCompletion(proto::ThreadCompletion {
                                 completed_at_ticks: 90,
                                 outcome: 1,
+                                ..Default::default()
                             }),
                             Event::FunctionAnnouncement(proto::FunctionAnnouncement {
                                 id: 100,
@@ -416,15 +415,14 @@ mod crafted {
             }),
             aggregates: Some(proto::AggregateBatch {
                 entries: vec![aggregate(2, 2, 20, 0), aggregate(4, 1, 5, 3)],
+                sysop_times: vec![proto::SysOpTime {
+                    node: 2 << 1,
+                    sysops: 1,
+                    total_ticks: 4,
+                }],
             }),
-            errors: Some(proto::ErrorBatch {
-                raises: vec![
-                    raise(300, None, 10),
-                    raise(301, Some(2), 10),
-                    raise(0, None, 2),
-                ],
-                call_links: vec![link(302, 100), link(301, 100)],
-                unwind_ends: vec![end(301, 20), end(301, 30)],
+            usage: Some(proto::UsageBatch {
+                entries: vec![usage(100, "jev-1.13.0", 50), usage(T2, "unpriced-model", 7)],
             }),
             ..Default::default()
         };
@@ -435,7 +433,13 @@ mod crafted {
                     path(1, 0, None, 0, CALLER, 1),
                     path(4, 1, Some(CALLER), 2, CALLEE, 1),
                 ],
-                threads: vec![thread(T1, None, 0, 10)],
+                threads: vec![
+                    thread(T1, None, 0, 10),
+                    proto::ThreadDefinition {
+                        name: Some("worker".into()),
+                        ..thread(T3, Some(T1), 4, 28)
+                    },
+                ],
                 clock_epochs: vec![],
             }),
             spans: Some(proto::SpanBatch {
@@ -444,8 +448,15 @@ mod crafted {
                     vec![Event::ThreadCompletion(proto::ThreadCompletion {
                         completed_at_ticks: 95,
                         outcome: 2,
+                        panicked: true,
                     })],
                 )],
+            }),
+            end: Some(proto::RecordingEnd {
+                process_end: Some(proto::ProcessEnd {
+                    status: proto::ProcessStatus::Panicked as i32,
+                    at_unix_ns: 5_000,
+                }),
             }),
             clock_states: Some(proto::ClockStateBatch {
                 states: vec![proto::ClockEpochState {
@@ -495,10 +506,6 @@ fn late_and_conflicting_evidence_indexes_identically() {
         "clock_epoch_conflict",
         "thread_completion_conflict",
         "call_evidence_conflict",
-        "error_raise_conflict",
-        "error_end_conflict",
-        "error_link_conflict",
-        "error_evidence_invalid",
         "aggregate_outcome_invalid",
     ] {
         assert!(
@@ -506,5 +513,18 @@ fn late_and_conflicting_evidence_indexes_identically() {
             "{code}: {issues:?}"
         );
     }
+    // The process ended, so both indexes built its profiler, with the
+    // callee's name only known from the last file.
+    let profile = &fresh
+        .iter()
+        .find(|(table, _)| table == "profile_node")
+        .unwrap()
+        .1;
+    assert!(
+        profile
+            .iter()
+            .any(|row| row[3] == Value::Text("user.Callee".into())),
+        "{profile:?}"
+    );
     assert_same(&fresh, &incremental);
 }

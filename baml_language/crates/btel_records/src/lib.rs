@@ -12,8 +12,8 @@ use std::sync::Arc;
 
 use btel_clock::ClockEpoch;
 use btel_types::{
-    AwaitDuration, CallPathEdge, CallPathId, ClockInstant, FunctionId, InvocationOutcome,
-    TelemetryId,
+    AwaitDuration, CallPathEdge, CallPathId, ClockDuration, ClockInstant, FunctionId,
+    InvocationOutcome, TelemetryId,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -54,7 +54,17 @@ pub enum TimingRecord {
         outcome: InvocationOutcome,
         reentry: bool,
     },
+    /// Time one sysop took, charged to the innermost observed call path:
+    /// the whole call for a synchronous sysop, the wait for an async one.
+    SysOpTime {
+        call_path: CallPathId,
+        elapsed: ClockDuration,
+    },
 }
+
+/// A future's name, behind one thin pointer so thread records keep the
+/// span slot size.
+pub type ThreadName = Arc<Box<str>>;
 
 /// Less frequent identified spans, capture handles, and supporting definitions.
 ///
@@ -92,6 +102,7 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         spawn_call_path: CallPathId,
         started_at: ClockInstant,
         clock: Arc<ClockEpoch>,
+        name: Option<ThreadName>,
     },
     /// Completes an identified thread node; clock ownership keeps it here.
     ThreadSpanCompletion {
@@ -102,7 +113,11 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         completed_at: ClockInstant,
         outcome: InvocationOutcome,
         clock: Arc<ClockEpoch>,
+        name: Option<ThreadName>,
     },
+    /// Rare: tokens one model turn used, charged to an explicit span or
+    /// thread node. Boxed so the model name never widens the slot.
+    ModelUsage(Box<ModelUsage>),
     /// Entry identity and owned inputs exceed the Timing slot budget.
     FunctionSpanAnnouncement {
         id: TelemetryId,
@@ -195,7 +210,27 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         await_time: AwaitDuration,
         captured_value: Option<ValueCapture>,
     },
+
+    FunctionSpanCompletionPanicked {
+        id: TelemetryId,
+        parent_id: TelemetryId,
+        call_path: CallPathId,
+        entered_at: ClockInstant,
+        exited_at: ClockInstant,
+        await_time: AwaitDuration,
+        captured_value: Option<ValueCapture>,
+    },
     FunctionSpanCompletionCancelledNeedsAnnouncement {
+        id: TelemetryId,
+        parent_id: TelemetryId,
+        call_path: CallPathId,
+        entered_at: ClockInstant,
+        exited_at: ClockInstant,
+        await_time: AwaitDuration,
+        captured_value: Option<ValueCapture>,
+    },
+
+    FunctionSpanCompletionPanickedNeedsAnnouncement {
         id: TelemetryId,
         parent_id: TelemetryId,
         call_path: CallPathId,
@@ -213,7 +248,27 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         await_time: AwaitDuration,
         captured_value: Option<ValueCapture>,
     },
+
+    FunctionSpanCompletionPanickedReentry {
+        id: TelemetryId,
+        parent_id: TelemetryId,
+        call_path: CallPathId,
+        entered_at: ClockInstant,
+        exited_at: ClockInstant,
+        await_time: AwaitDuration,
+        captured_value: Option<ValueCapture>,
+    },
     FunctionSpanCompletionCancelledReentryNeedsAnnouncement {
+        id: TelemetryId,
+        parent_id: TelemetryId,
+        call_path: CallPathId,
+        entered_at: ClockInstant,
+        exited_at: ClockInstant,
+        await_time: AwaitDuration,
+        captured_value: Option<ValueCapture>,
+    },
+
+    FunctionSpanCompletionPanickedReentryNeedsAnnouncement {
         id: TelemetryId,
         parent_id: TelemetryId,
         call_path: CallPathId,
@@ -268,7 +323,27 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         await_time: AwaitDuration,
         captured_value: Option<ValueCapture>,
     },
+
+    LateFunctionSpanCompletionPanicked {
+        id: TelemetryId,
+        parent_id: TelemetryId,
+        call_path: CallPathId,
+        entered_at: ClockInstant,
+        exited_at: ClockInstant,
+        await_time: AwaitDuration,
+        captured_value: Option<ValueCapture>,
+    },
     LateFunctionSpanCompletionCancelledReentry {
+        id: TelemetryId,
+        parent_id: TelemetryId,
+        call_path: CallPathId,
+        entered_at: ClockInstant,
+        exited_at: ClockInstant,
+        await_time: AwaitDuration,
+        captured_value: Option<ValueCapture>,
+    },
+
+    LateFunctionSpanCompletionPanickedReentry {
         id: TelemetryId,
         parent_id: TelemetryId,
         call_path: CallPathId,
@@ -347,6 +422,20 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         handler_pc: Option<u32>,
         unwound_frames: u32,
     },
+}
+
+/// Tokens one model turn reported, as its provider counted them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelUsage {
+    /// The span or thread node that made the call.
+    pub node: TelemetryId,
+    pub model: Option<Box<str>>,
+    /// Input tokens billed at the full rate: cache reads and writes excluded.
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub cache_read_tokens: Option<u64>,
+    pub cache_write_tokens: Option<u64>,
+    pub reasoning_tokens: Option<u64>,
 }
 
 /// An absent PC in `SpanRecord::ErrorRaisedAndEnded`. Compact code never
@@ -498,6 +587,7 @@ mod layout_tests {
         assert_eq!(align_of::<Span>(), 8);
         assert_eq!(size_of::<TimingRecord>(), 32);
         assert_eq!(size_of::<Box<RaiseStack>>(), 8);
+        assert_eq!(size_of::<Option<ThreadName>>(), 8);
     }
 }
 
@@ -716,6 +806,28 @@ impl<I, V> SpanRecord<I, V> {
                 requires_announcement: false,
                 late: false,
             }),
+
+            Self::FunctionSpanCompletionPanicked {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => Some(FunctionCompletionRef {
+                id: *id,
+                parent_id: *parent_id,
+                call_path: *call_path,
+                entered_at: *entered_at,
+                exited_at: *exited_at,
+                await_time: *await_time,
+                captured_value: captured_value.as_ref(),
+                outcome: InvocationOutcome::Panicked,
+                reentry: false,
+                requires_announcement: false,
+                late: false,
+            }),
             Self::FunctionSpanCompletionCancelledNeedsAnnouncement {
                 id,
                 parent_id,
@@ -733,6 +845,28 @@ impl<I, V> SpanRecord<I, V> {
                 await_time: *await_time,
                 captured_value: captured_value.as_ref(),
                 outcome: InvocationOutcome::Cancelled,
+                reentry: false,
+                requires_announcement: true,
+                late: false,
+            }),
+
+            Self::FunctionSpanCompletionPanickedNeedsAnnouncement {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => Some(FunctionCompletionRef {
+                id: *id,
+                parent_id: *parent_id,
+                call_path: *call_path,
+                entered_at: *entered_at,
+                exited_at: *exited_at,
+                await_time: *await_time,
+                captured_value: captured_value.as_ref(),
+                outcome: InvocationOutcome::Panicked,
                 reentry: false,
                 requires_announcement: true,
                 late: false,
@@ -758,6 +892,28 @@ impl<I, V> SpanRecord<I, V> {
                 requires_announcement: false,
                 late: false,
             }),
+
+            Self::FunctionSpanCompletionPanickedReentry {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => Some(FunctionCompletionRef {
+                id: *id,
+                parent_id: *parent_id,
+                call_path: *call_path,
+                entered_at: *entered_at,
+                exited_at: *exited_at,
+                await_time: *await_time,
+                captured_value: captured_value.as_ref(),
+                outcome: InvocationOutcome::Panicked,
+                reentry: true,
+                requires_announcement: false,
+                late: false,
+            }),
             Self::FunctionSpanCompletionCancelledReentryNeedsAnnouncement {
                 id,
                 parent_id,
@@ -775,6 +931,28 @@ impl<I, V> SpanRecord<I, V> {
                 await_time: *await_time,
                 captured_value: captured_value.as_ref(),
                 outcome: InvocationOutcome::Cancelled,
+                reentry: true,
+                requires_announcement: true,
+                late: false,
+            }),
+
+            Self::FunctionSpanCompletionPanickedReentryNeedsAnnouncement {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => Some(FunctionCompletionRef {
+                id: *id,
+                parent_id: *parent_id,
+                call_path: *call_path,
+                entered_at: *entered_at,
+                exited_at: *exited_at,
+                await_time: *await_time,
+                captured_value: captured_value.as_ref(),
+                outcome: InvocationOutcome::Panicked,
                 reentry: true,
                 requires_announcement: true,
                 late: false,
@@ -884,6 +1062,28 @@ impl<I, V> SpanRecord<I, V> {
                 requires_announcement: false,
                 late: true,
             }),
+
+            Self::LateFunctionSpanCompletionPanicked {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => Some(FunctionCompletionRef {
+                id: *id,
+                parent_id: *parent_id,
+                call_path: *call_path,
+                entered_at: *entered_at,
+                exited_at: *exited_at,
+                await_time: *await_time,
+                captured_value: captured_value.as_ref(),
+                outcome: InvocationOutcome::Panicked,
+                reentry: false,
+                requires_announcement: false,
+                late: true,
+            }),
             Self::LateFunctionSpanCompletionCancelledReentry {
                 id,
                 parent_id,
@@ -901,6 +1101,28 @@ impl<I, V> SpanRecord<I, V> {
                 await_time: *await_time,
                 captured_value: captured_value.as_ref(),
                 outcome: InvocationOutcome::Cancelled,
+                reentry: true,
+                requires_announcement: false,
+                late: true,
+            }),
+
+            Self::LateFunctionSpanCompletionPanickedReentry {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => Some(FunctionCompletionRef {
+                id: *id,
+                parent_id: *parent_id,
+                call_path: *call_path,
+                entered_at: *entered_at,
+                exited_at: *exited_at,
+                await_time: *await_time,
+                captured_value: captured_value.as_ref(),
+                outcome: InvocationOutcome::Panicked,
                 reentry: true,
                 requires_announcement: false,
                 late: true,
@@ -940,7 +1162,15 @@ impl<C> SpanRecord<C, C> {
             | Self::LateFunctionSpanCompletionErrored { captured_value, .. }
             | Self::LateFunctionSpanCompletionErroredReentry { captured_value, .. }
             | Self::LateFunctionSpanCompletionCancelled { captured_value, .. }
-            | Self::LateFunctionSpanCompletionCancelledReentry { captured_value, .. } => {
+            | Self::LateFunctionSpanCompletionCancelledReentry { captured_value, .. }
+            | Self::FunctionSpanCompletionPanicked { captured_value, .. }
+            | Self::FunctionSpanCompletionPanickedNeedsAnnouncement { captured_value, .. }
+            | Self::FunctionSpanCompletionPanickedReentry { captured_value, .. }
+            | Self::FunctionSpanCompletionPanickedReentryNeedsAnnouncement {
+                captured_value, ..
+            }
+            | Self::LateFunctionSpanCompletionPanicked { captured_value, .. }
+            | Self::LateFunctionSpanCompletionPanickedReentry { captured_value, .. } => {
                 captured_value.take()
             }
             Self::ThreadSelected { .. }
@@ -948,6 +1178,7 @@ impl<C> SpanRecord<C, C> {
             | Self::ContextReferenced { .. }
             | Self::ThreadSpanAnnouncement { .. }
             | Self::ThreadSpanCompletion { .. }
+            | Self::ModelUsage(_)
             | Self::CallPathDefined { .. }
             | Self::ErrorRaiseOrigin { .. }
             | Self::ErrorRaiseStack(_)

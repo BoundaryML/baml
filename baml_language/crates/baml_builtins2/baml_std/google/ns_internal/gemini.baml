@@ -832,6 +832,8 @@ function _gm_usage(usage: GmUsageMetadata?) -> ai.events.Usage? {
             output_tokens: um.candidatesTokenCount ?? 0,
             cached_input_tokens: um.cachedContentTokenCount,
             reasoning_tokens: um.thoughtsTokenCount,
+            // promptTokenCount counts the cached share too.
+            uncached_input_tokens: ai.internal.uncached_input_tokens(um.promptTokenCount, um.cachedContentTokenCount),
         }
     } else {
         null
@@ -1148,7 +1150,7 @@ function gemini_invoke(c: root.GeminiClient, input: ai.ModelTurnInput) -> ai.Mod
     let req = render(c, input);
     let sent = ai.wire.send_as_with_wire<GmResponse>(req, "google", c.id(), capture_wire = c.capture_wire);
     let turn = parse(sent.value, seq);
-    ai.ModelTurn { ...turn, calls: [sent.call] }
+    ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
 }
 
 function _decode_batch(batch: string) -> ai.stream.Event[] {
@@ -1174,6 +1176,7 @@ function gemini_invoke_stream(
             }
         },
         require_terminal = "google",
+        model = c.model,
     );
     let call = ai.events.LLMCall {
         client_name: c.id(),

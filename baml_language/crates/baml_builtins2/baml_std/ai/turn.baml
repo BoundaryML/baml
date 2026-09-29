@@ -23,6 +23,8 @@ class ModelTurn {
     content: root.content.ModelBlock[],
     stop_reason: root.content.StopReason,
     usage: root.events.Usage?,
+    // The model that answered, as the client named it; null when unknown.
+    model: string?,
     // Every HTTP exchange behind this turn, oldest first: failed legs from
     // retry/fallback wrappers, then the selected call (selected: true).
     calls: root.events.LLMCall[],

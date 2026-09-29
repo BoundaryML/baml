@@ -67,6 +67,7 @@ fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer(
         spawn_call_path: CallPathId::ROOT,
         started_at: ClockInstant::from_ticks(0),
         clock: ClockRuntime::new(ClockMode::Monotonic).start_run(),
+        name: None,
     });
     producer.write_span(SpanRecord::CallPathDefined {
         call_path,
@@ -139,11 +140,11 @@ fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer(
     assert_eq!(reference(sections[1]), ContextReference::Snapshot(id));
     assert_eq!(reference(sections[2]), ContextReference::Unavailable);
     assert_eq!(reference(sections[3]), ContextReference::Empty);
-    assert!(
-        read.files
-            .iter()
-            .all(|file| file.header.as_ref().unwrap().format_minor == 3)
-    );
+    assert!(read.files.iter().all(|file| {
+        file.header.as_ref().unwrap().format_minor
+            == btel_settings::encoding::FORMAT_MINOR
+                .max(btel_settings::encoding::CONTEXT_FORMAT_MINOR)
+    }));
 
     let cas = CasStore::new(root.path().join("cas"), CasLimits::default());
     let CasOutcome::Available(snapshot) = cas.load(id).outcome else {

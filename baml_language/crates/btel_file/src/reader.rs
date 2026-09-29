@@ -155,6 +155,9 @@ pub fn validate_file(
     {
         return Err("invalid source snapshot ID".into());
     }
+    if header.process_id.as_ref().is_some_and(|id| id.len() != 16) {
+        return Err("invalid process ID".into());
+    }
     if file.sequence != sequence {
         return Err("file sequence does not match filename".into());
     }
@@ -163,6 +166,11 @@ pub fn validate_file(
         for row in &batch.entries {
             if !valid_node(row.node) || row.count == 0 {
                 return Err("invalid aggregate identity/count".into());
+            }
+        }
+        for row in &batch.sysop_times {
+            if !valid_node(row.node) || row.node & 1 != 0 || row.sysops == 0 {
+                return Err("invalid sysop time".into());
             }
         }
     }
@@ -182,7 +190,12 @@ pub fn validate_file(
                         if done.id == 0
                             || done.parent_id == 0
                             || !valid_node(done.node)
-                            || CompletionFlags::from_wire(done.completion_flags, late).is_none()
+                            || CompletionFlags::from_wire(done.completion_flags, late).is_none_or(
+                                |flags| {
+                                    done.panicked
+                                        && flags.outcome() != btel_types::InvocationOutcome::Errored
+                                },
+                            )
                         {
                             return Err("invalid function completion".into());
                         }
@@ -192,7 +205,11 @@ pub fn validate_file(
                     {
                         return Err("invalid function announcement".into());
                     }
-                    Some(Event::ThreadCompletion(done)) if !(1..=3).contains(&done.outcome) => {
+                    Some(Event::ThreadCompletion(done))
+                        if !(1..=3).contains(&done.outcome)
+                            || (done.panicked
+                                && done.outcome != proto::InvocationOutcome::Errored as i32) =>
+                    {
                         return Err("invalid thread outcome".into());
                     }
                     None => return Err("missing span event".into()),
@@ -200,6 +217,19 @@ pub fn validate_file(
                 }
             }
         }
+    }
+    if let Some(usage) = &file.usage
+        && usage
+            .entries
+            .iter()
+            .any(|entry| entry.node_id == 0 || entry.thread_id == 0)
+    {
+        return Err("invalid model usage".into());
+    }
+    if let Some(end) = file.end.as_ref().and_then(|end| end.process_end.as_ref())
+        && !(1..=3).contains(&end.status)
+    {
+        return Err("invalid process end".into());
     }
     Ok(file)
 }

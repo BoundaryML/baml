@@ -50,7 +50,7 @@ impl EncodedSpans {
 
     pub(crate) fn format_minor(&self) -> u32 {
         if self.context_format {
-            btel_settings::encoding::CONTEXT_FORMAT_MINOR
+            btel_settings::encoding::FORMAT_MINOR.max(btel_settings::encoding::CONTEXT_FORMAT_MINOR)
         } else {
             btel_settings::encoding::FORMAT_MINOR
         }
@@ -104,7 +104,8 @@ impl EncodedSpans {
     fn completion(&mut self, tag: u8, message: &crate::proto::FunctionCompletion) {
         // Maximum protobuf body: 3*(tag+10-byte varint), 3*(tag+fixed64),
         // one tag+5-byte uint32 = 66 bytes, plus two tag/length pairs = 70.
-        // Optional CAS message adds tag+length+2*(tag+fixed64) = 20 bytes.
+        // Optional CAS message adds tag+length+2*(tag+fixed64) = 20 bytes, and
+        // the panic flag tag+1 = 2 bytes.
         // Indexing stays checked; only publishing initialized bytes is unsafe.
         let start = self.bytes.len();
         let region = &mut self.bytes.spare_capacity_mut()[..MAX_COMPLETION_BYTES];
@@ -128,6 +129,7 @@ impl EncodedSpans {
             writer.fixed64(0x11, id.high);
             writer.region[prefix].write(u8::try_from(writer.len - prefix - 1).unwrap());
         }
+        writer.varint(0x48, u64::from(message.panicked));
         let length = writer.len;
         writer.region[1].write(u8::try_from(length - 2).expect("bounded completion"));
         writer.region[3].write(u8::try_from(length - 4).expect("bounded completion"));
@@ -286,12 +288,14 @@ mod tests {
                 low: u64::MAX,
                 high: u64::MAX,
             }),
+            panicked: true,
         };
         let events = vec![
             Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
             Event::ThreadCompletion(proto::ThreadCompletion {
                 completed_at_ticks: u64::MAX,
-                outcome: proto::InvocationOutcome::Cancelled as i32,
+                outcome: proto::InvocationOutcome::Errored as i32,
+                panicked: true,
             }),
             Event::FunctionAnnouncement(proto::FunctionAnnouncement {
                 id: u64::MAX,
@@ -354,7 +358,7 @@ mod equivalence_tests {
             .into_iter()
             .chain((1..64).flat_map(|bit| [(1_u64 << bit) - 1, 1_u64 << bit]));
         for value in values {
-            for field in 0..10 {
+            for field in 0..11 {
                 let mut message = proto::FunctionCompletion::default();
                 match field {
                     0 => message.id = value,
@@ -376,6 +380,7 @@ mod equivalence_tests {
                             high: value,
                         });
                     }
+                    9 => message.panicked = value != 0,
                     _ => {
                         message.value_cas_id = Some(proto::SnapshotId {
                             low: value,

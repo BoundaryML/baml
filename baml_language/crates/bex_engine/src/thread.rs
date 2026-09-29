@@ -20,6 +20,8 @@ pub struct BexThread {
     pub name: Option<String>,
     pub cancel: CancellationToken,
     pub settles_future: Option<FutureId>,
+    /// How the error that escaped this root thread ends it, for telemetry.
+    pub escaped_outcome: Option<bex_vm::telemetry::InvocationOutcome>,
 }
 
 impl BexThread {
@@ -30,6 +32,7 @@ impl BexThread {
             name: None,
             cancel,
             settles_future: None,
+            escaped_outcome: None,
         }
     }
 
@@ -45,6 +48,7 @@ impl BexThread {
             name,
             cancel,
             settles_future: Some(settles_future),
+            escaped_outcome: None,
         }
     }
 

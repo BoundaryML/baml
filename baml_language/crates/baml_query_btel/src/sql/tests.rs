@@ -10,19 +10,21 @@ fn fails(sql: &str) -> String {
 
 #[test]
 fn bracket_paths_become_constant_navigation_on_value_columns() {
-    let t = ok("SELECT call_id, output['items'][0]['name'] AS name FROM calls WHERE status = 'ok'");
+    let t = ok(
+        "SELECT span_id, output_value['items'][0]['name'] AS name FROM spans WHERE status = 'return'",
+    );
     assert!(
         t.sql
-            .contains("__btel_render(__btel_nav(output, 'items', 0, 'name')) AS \"name\""),
+            .contains("__btel_render(__btel_nav(output_value, 'items', 0, 'name')) AS \"name\""),
         "{}",
         t.sql
     );
     assert!(
         t.sql
-            .contains("__btel_kind(__btel_nav(output, 'items', 0, 'name'))")
+            .contains("__btel_kind(__btel_nav(output_value, 'items', 0, 'name'))")
     );
     assert!(
-        t.sql.contains("WHERE status = 'ok'"),
+        t.sql.contains("WHERE status = 'return'"),
         "plain comparisons stay SQL: {}",
         t.sql
     );
@@ -30,7 +32,7 @@ fn bracket_paths_become_constant_navigation_on_value_columns() {
         t.columns,
         vec![
             OutputColumn {
-                name: "call_id".into(),
+                name: "span_id".into(),
                 value: false
             },
             OutputColumn {
@@ -43,54 +45,57 @@ fn bracket_paths_become_constant_navigation_on_value_columns() {
 
 #[test]
 fn qualified_value_columns_and_comparisons_use_baml_semantics() {
-    let t = ok("SELECT c.call_id FROM calls c WHERE c.args['customer']['age'] >= 30");
+    let t = ok("SELECT c.span_id FROM spans c WHERE c.input_args['customer']['age'] >= 30");
     assert!(
         t.sql
-            .contains("__btel_cmp(__btel_nav(c.args, 'customer', 'age'), '>=', 30, 'sql')"),
+            .contains("__btel_cmp(__btel_nav(c.input_args, 'customer', 'age'), '>=', 30, 'sql')"),
         "{}",
         t.sql
     );
     // Constant on the left: the operator flips.
-    let t = ok("SELECT call_id FROM calls WHERE 30 < args['customer']['age']");
+    let t = ok("SELECT span_id FROM spans WHERE 30 < input_args['customer']['age']");
     assert!(t.sql.contains("'>', 30, 'sql')"), "{}", t.sql);
-    let t = ok("SELECT call_id FROM calls WHERE output['ok'] = true");
+    let t = ok("SELECT span_id FROM spans WHERE output_value['ok'] = true");
     assert!(t.sql.contains("'=', true, 'bool')"), "{}", t.sql);
-    let t = ok("SELECT call_id FROM calls WHERE output['n'] IN (1, 2) AND args['x'] IS NOT NULL");
+    let t = ok(
+        "SELECT span_id FROM spans WHERE output_value['n'] IN (1, 2) AND input_args['x'] IS NOT NULL",
+    );
     assert!(
         t.sql
-            .contains("__btel_cmp(__btel_nav(output, 'n'), '=', 1, 'sql') OR"),
+            .contains("__btel_cmp(__btel_nav(output_value, 'n'), '=', 1, 'sql') OR"),
         "{}",
         t.sql
     );
     assert!(
-        t.sql.contains("NOT __btel_is_null(__btel_nav(args, 'x'))"),
+        t.sql
+            .contains("NOT __btel_is_null(__btel_nav(input_args, 'x'))"),
         "{}",
         t.sql
     );
-    let t = ok("SELECT call_id FROM calls WHERE output['a'] = args['b']");
+    let t = ok("SELECT span_id FROM spans WHERE output_value['a'] = input_args['b']");
     assert!(t.sql.contains("__btel_cmp_values("), "{}", t.sql);
 }
 
 #[test]
 fn json_literals_are_validated_constant_comparison_operands() {
     for query in [
-        "SELECT call_id FROM calls WHERE args['tags'] = baml_value_json('[1,2]')",
-        "SELECT call_id FROM calls WHERE (BAML_VALUE_JSON('[1,2]')) <> (output)",
-        "WITH x AS (SELECT output AS v FROM calls) SELECT v = baml_value_json('null') FROM x",
+        "SELECT span_id FROM spans WHERE input_args['tags'] = baml_value_json('[1,2]')",
+        "SELECT span_id FROM spans WHERE (BAML_VALUE_JSON('[1,2]')) <> (output_value)",
+        "WITH x AS (SELECT output_value AS v FROM spans) SELECT v = baml_value_json('null') FROM x",
     ] {
         assert!(ok(query).sql.contains("__btel_cmp_json("));
     }
     for query in [
-        "SELECT baml_value_json('{}') FROM calls",
-        "SELECT output = baml_value_json('{') FROM calls",
-        "SELECT output = baml_value_json(fqn) FROM calls",
-        "SELECT output = baml_value_json('{}', '{}') FROM calls",
-        "SELECT output = baml_value_json(DISTINCT '{}') FROM calls",
-        "SELECT output = baml_value_json('{}') OVER () FROM calls",
-        "SELECT output < baml_value_json('{}') FROM calls",
-        "SELECT baml_value_json('{}') = baml_value_json('{}') FROM calls",
-        "SELECT fqn = baml_value_json('{}') FROM calls",
-        "SELECT output IN (baml_value_json('{}')) FROM calls",
+        "SELECT baml_value_json('{}') FROM spans",
+        "SELECT output_value = baml_value_json('{') FROM spans",
+        "SELECT output_value = baml_value_json(span_name) FROM spans",
+        "SELECT output_value = baml_value_json('{}', '{}') FROM spans",
+        "SELECT output_value = baml_value_json(DISTINCT '{}') FROM spans",
+        "SELECT output_value = baml_value_json('{}') OVER () FROM spans",
+        "SELECT output_value < baml_value_json('{}') FROM spans",
+        "SELECT baml_value_json('{}') = baml_value_json('{}') FROM spans",
+        "SELECT span_name = baml_value_json('{}') FROM spans",
+        "SELECT output_value IN (baml_value_json('{}')) FROM spans",
     ] {
         assert!(fails(query).contains("baml_value_json"), "{query}");
     }
@@ -99,19 +104,19 @@ fn json_literals_are_validated_constant_comparison_operands() {
 #[test]
 fn explicit_materialized_ctes_keep_value_handles_and_statement_policy() {
     let query = ok(
-        "WITH x AS MATERIALIZED (SELECT output FROM calls WHERE fqn = 'user.Extract') SELECT a.output = b.output FROM x a JOIN x b ON a.output['total'] = b.output['total']",
+        "WITH x AS MATERIALIZED (SELECT output_value FROM spans WHERE span_name = 'user.Extract') SELECT a.output_value = b.output_value FROM x a JOIN x b ON a.output_value['total'] = b.output_value['total']",
     );
     assert!(query.sql.contains("AS MATERIALIZED"));
     assert!(
         query
             .sql
-            .contains("__btel_cmp_values(a.output, '=', b.output)")
+            .contains("__btel_cmp_values(a.output_value, '=', b.output_value)")
     );
     for invalid in [
-        "WITH x AS MATERIALIZED (SELECT output FROM calls) DELETE FROM calls",
-        "WITH x AS MATERIALIZED (DELETE FROM calls RETURNING output) SELECT * FROM x",
+        "WITH x AS MATERIALIZED (SELECT output_value FROM spans) DELETE FROM spans",
+        "WITH x AS MATERIALIZED (DELETE FROM spans RETURNING output_value) SELECT * FROM x",
         "WITH x AS MATERIALIZED (SELECT * FROM sqlite_master) SELECT * FROM x",
-        "SELECT 1; WITH x AS MATERIALIZED (SELECT * FROM calls) SELECT * FROM x",
+        "SELECT 1; WITH x AS MATERIALIZED (SELECT * FROM spans) SELECT * FROM x",
     ] {
         assert!(translate(invalid).is_err(), "{invalid}");
     }
@@ -119,10 +124,12 @@ fn explicit_materialized_ctes_keep_value_handles_and_statement_policy() {
 
 #[test]
 fn handles_flow_through_ctes_subqueries_and_aliases() {
-    let t = ok("WITH x AS (SELECT call_id AS id, args AS a FROM calls)
-                SELECT id, a['customer']['name'] FROM x WHERE a['customer']['age'] > 1");
+    let t = ok(
+        "WITH x AS (SELECT span_id AS id, input_args AS a FROM spans)
+                SELECT id, a['customer']['name'] FROM x WHERE a['customer']['age'] > 1",
+    );
     // The CTE keeps the handle; the outer query navigates and renders it.
-    assert!(t.sql.contains("args AS \"a\""), "{}", t.sql);
+    assert!(t.sql.contains("input_args AS \"a\""), "{}", t.sql);
     assert!(
         t.sql
             .contains("__btel_render(__btel_nav(a, 'customer', 'name'))"),
@@ -134,15 +141,15 @@ fn handles_flow_through_ctes_subqueries_and_aliases() {
             .contains("__btel_cmp(__btel_nav(a, 'customer', 'age'), '>', 1, 'sql')")
     );
     assert_eq!(t.columns[1].name, "a['customer']['name']");
-    let t = ok("SELECT s.o['total'] FROM (SELECT output AS o FROM calls) s");
+    let t = ok("SELECT s.o['total'] FROM (SELECT output_value AS o FROM spans) s");
     assert!(t.sql.contains("__btel_nav(s.o, 'total')"), "{}", t.sql);
     // A navigated projection inside a CTE stays navigable.
     let t = ok(
-        "WITH c AS (SELECT args['customer'] AS customer FROM calls) SELECT customer['age'] FROM c",
+        "WITH c AS (SELECT input_args['customer'] AS customer FROM spans) SELECT customer['age'] FROM c",
     );
     assert!(
         t.sql
-            .contains("__btel_nav(__btel_nav(args, 'customer'), 'age')")
+            .contains("__btel_nav(__btel_nav(input_args, 'customer'), 'age')")
             || t.sql.contains("__btel_nav(customer, 'age')"),
         "{}",
         t.sql
@@ -151,27 +158,27 @@ fn handles_flow_through_ctes_subqueries_and_aliases() {
 
 #[test]
 fn a_name_reused_in_separate_scopes_binds_to_its_own_relation() {
-    // `output` is a value in `calls` but a plain text column of the CTE, and
+    // `output_value` is a value in `spans` but a plain text column of the CTE, and
     // the alias `c` means different relations inside and outside EXISTS.
-    let t = ok("WITH c AS (SELECT 'x' AS output, call_id FROM calls)
-                SELECT c.output FROM c
-                WHERE EXISTS (SELECT 1 FROM calls c WHERE c.output['n'] = 1)");
-    assert!(t.sql.contains("SELECT c.output FROM c"), "{}", t.sql);
+    let t = ok("WITH c AS (SELECT 'x' AS output_value, span_id FROM spans)
+                SELECT c.output_value FROM c
+                WHERE EXISTS (SELECT 1 FROM spans c WHERE c.output_value['n'] = 1)");
+    assert!(t.sql.contains("SELECT c.output_value FROM c"), "{}", t.sql);
     assert!(
         t.sql
-            .contains("__btel_cmp(__btel_nav(c.output, 'n'), '=', 1, 'sql')"),
+            .contains("__btel_cmp(__btel_nav(c.output_value, 'n'), '=', 1, 'sql')"),
         "{}",
         t.sql
     );
     assert!(!t.columns[0].value);
     assert!(
-        fails("WITH c AS (SELECT 'x' AS output FROM calls) SELECT output['n'] FROM c")
+        fails("WITH c AS (SELECT 'x' AS output_value FROM spans) SELECT output_value['n'] FROM c")
             .contains("not a BAML value")
     );
     // Inner scope shadows the outer column of the same name.
-    let t = ok("SELECT (SELECT COUNT(*) FROM calls WHERE output['n'] = 1) FROM executions");
+    let t = ok("SELECT (SELECT COUNT(*) FROM spans WHERE output_value['n'] = 1) FROM processes");
     assert!(
-        t.sql.contains("__btel_cmp(__btel_nav(output, 'n')"),
+        t.sql.contains("__btel_cmp(__btel_nav(output_value, 'n')"),
         "{}",
         t.sql
     );
@@ -179,48 +186,48 @@ fn a_name_reused_in_separate_scopes_binds_to_its_own_relation() {
 
 #[test]
 fn wildcards_expand_so_values_render() {
-    let t = ok("SELECT * FROM calls");
+    let t = ok("SELECT * FROM spans");
     assert!(
         t.sql
-            .contains("__btel_render(\"calls\".\"args\") AS \"args\""),
+            .contains("__btel_render(\"spans\".\"input_args\") AS \"input_args\""),
         "{}",
         t.sql
     );
-    assert_eq!(t.columns.iter().filter(|c| c.value).count(), 3);
+    assert_eq!(t.columns.iter().filter(|c| c.value).count(), 5);
     let t = ok(
-        "SELECT e.*, c.output FROM executions e JOIN calls c ON c.execution_id = e.execution_id",
+        "SELECT p.*, c.output_value FROM processes p JOIN spans c ON c.process_id = p.process_id",
     );
-    assert!(t.sql.contains("\"e\".\"execution_id\""), "{}", t.sql);
+    assert!(t.sql.contains("\"p\".\"process_id\""), "{}", t.sql);
 }
 
 #[test]
 fn values_in_scalar_positions_are_rendered() {
     let t = ok(
-        "SELECT fqn, COUNT(output), MAX(output['score']) FROM calls GROUP BY args['kind'] ORDER BY output['score']",
+        "SELECT span_name, COUNT(output_value), MAX(output_value['score']) FROM spans GROUP BY input_args['kind'] ORDER BY output_value['score']",
     );
-    assert!(t.sql.contains("COUNT(output)"), "{}", t.sql);
+    assert!(t.sql.contains("COUNT(output_value)"), "{}", t.sql);
     assert!(
         t.sql
-            .contains("MAX(__btel_render(__btel_nav(output, 'score')))"),
+            .contains("MAX(__btel_render(__btel_nav(output_value, 'score')))"),
         "{}",
         t.sql
     );
     assert!(
         t.sql
-            .contains("GROUP BY __btel_render(__btel_nav(args, 'kind'))"),
+            .contains("GROUP BY __btel_render(__btel_nav(input_args, 'kind'))"),
         "{}",
         t.sql
     );
     assert!(
         t.sql
-            .contains("ORDER BY __btel_render(__btel_nav(output, 'score'))"),
+            .contains("ORDER BY __btel_render(__btel_nav(output_value, 'score'))"),
         "{}",
         t.sql
     );
-    let t = ok("SELECT call_id FROM calls WHERE output['flag']");
+    let t = ok("SELECT span_id FROM spans WHERE output_value['flag']");
     assert!(
         t.sql
-            .contains("WHERE __btel_truthy(__btel_nav(output, 'flag'))"),
+            .contains("WHERE __btel_truthy(__btel_nav(output_value, 'flag'))"),
         "{}",
         t.sql
     );
@@ -228,24 +235,24 @@ fn values_in_scalar_positions_are_rendered() {
 
 #[test]
 fn policy_rejects_writes_internals_and_unsupported_paths() {
-    assert!(fails("DELETE FROM calls").contains("read-only"));
+    assert!(fails("DELETE FROM spans").contains("read-only"));
     assert!(fails("SELECT 1; SELECT 2").contains("exactly one"));
     assert!(fails("SELECT * FROM call").contains("unknown relation"));
-    assert!(fails("SELECT * FROM main.calls").contains("qualified"));
-    assert!(fails("SELECT __btel_u64(x) FROM calls").contains("reserved"));
+    assert!(fails("SELECT * FROM calls").contains("unknown relation"));
+    assert!(fails("SELECT * FROM main.spans").contains("qualified"));
+    assert!(fails("SELECT __btel_u64(x) FROM spans").contains("reserved"));
     assert!(fails("SELECT * FROM sqlite_schema").contains("reserved"));
-    assert!(fails("SELECT output[call_id] FROM calls").contains("computed paths"));
-    assert!(fails("SELECT output['a'].b FROM calls").contains("['field']"));
-    assert!(fails("SELECT status['a'] FROM calls").contains("not a BAML value"));
-    assert!(fails("WITH RECURSIVE r AS (SELECT 1) SELECT * FROM r").contains("recursive"));
-    assert!(fails("SELECT recording_id FROM calls c JOIN executions e ON 1").contains("ambiguous"));
+    assert!(fails("SELECT output_value[span_id] FROM spans").contains("computed paths"));
+    assert!(fails("SELECT output_value['a'].b FROM spans").contains("['field']"));
+    assert!(fails("SELECT status['a'] FROM spans").contains("not a BAML value"));
+    assert!(fails("SELECT process_id FROM spans c JOIN processes p ON 1").contains("ambiguous"));
 }
 
 #[test]
 fn negative_indices_and_escaped_keys_are_constants() {
-    let t = ok("SELECT output['it''s'][-1] FROM calls");
+    let t = ok("SELECT output_value['it''s'][-1] FROM spans");
     assert!(
-        t.sql.contains("__btel_nav(output, 'it''s', -1)"),
+        t.sql.contains("__btel_nav(output_value, 'it''s', -1)"),
         "{}",
         t.sql
     );
@@ -253,18 +260,20 @@ fn negative_indices_and_escaped_keys_are_constants() {
 
 #[test]
 fn set_operations_keep_handles_until_the_output_boundary() {
-    let t = ok("SELECT fqn, output FROM calls WHERE status = 'ok'
-                UNION ALL SELECT fqn, error FROM calls WHERE status = 'errored'
-                ORDER BY 2 LIMIT 5");
+    let t = ok(
+        "SELECT span_name, output_value FROM spans WHERE status = 'return'
+                UNION ALL SELECT span_name, error_value FROM spans WHERE status = 'user_error'
+                ORDER BY 2 LIMIT 5",
+    );
     assert!(
         t.sql
-            .starts_with("WITH \"__set\"(\"__c0\", \"__c1\") AS (SELECT fqn, output"),
+            .starts_with("WITH \"__set\"(\"__c0\", \"__c1\") AS (SELECT span_name, output_value"),
         "branches keep handles: {}",
         t.sql
     );
     assert!(
         t.sql
-            .contains("__btel_render(\"__c1\") AS \"output\", __btel_kind(\"__c1\")"),
+            .contains("__btel_render(\"__c1\") AS \"output_value\", __btel_kind(\"__c1\")"),
         "{}",
         t.sql
     );
@@ -277,30 +286,30 @@ fn set_operations_keep_handles_until_the_output_boundary() {
         t.columns,
         vec![
             OutputColumn {
-                name: "fqn".into(),
+                name: "span_name".into(),
                 value: false
             },
             OutputColumn {
-                name: "output".into(),
+                name: "output_value".into(),
                 value: true
             }
         ]
     );
     // User CTEs stay first and visible to the branches.
     let t = ok(
-        "WITH errs AS (SELECT error FROM calls WHERE status = 'errored')
-                SELECT error FROM errs UNION SELECT output FROM calls",
+        "WITH errs AS (SELECT error_value FROM spans WHERE status = 'user_error')
+                SELECT error_value FROM errs UNION SELECT output_value FROM spans",
     );
     assert!(t.sql.starts_with("WITH errs AS ("), "{}", t.sql);
     assert!(t.sql.contains(", \"__set\"(\"__c0\") AS ("), "{}", t.sql);
     // Inside a CTE a set operation keeps handles for the outer query.
     let t = ok(
-        "WITH v AS (SELECT output FROM calls UNION ALL SELECT error FROM calls)
-                SELECT v.output['name'] FROM v",
+        "WITH v AS (SELECT output_value FROM spans UNION ALL SELECT error_value FROM spans)
+                SELECT v.output_value['name'] FROM v",
     );
     assert!(
         t.sql
-            .contains("__btel_render(__btel_nav(v.output, 'name'))"),
+            .contains("__btel_render(__btel_nav(v.output_value, 'name'))"),
         "{}",
         t.sql
     );
@@ -309,9 +318,9 @@ fn set_operations_keep_handles_until_the_output_boundary() {
 #[test]
 fn set_operation_branches_agree_on_value_columns() {
     for sql in [
-        "SELECT fqn FROM calls UNION ALL SELECT output FROM calls",
-        "SELECT output FROM calls UNION SELECT fqn FROM calls",
-        "WITH v AS (SELECT fqn FROM calls UNION ALL SELECT error FROM calls) SELECT * FROM v",
+        "SELECT span_name FROM spans UNION ALL SELECT output_value FROM spans",
+        "SELECT output_value FROM spans UNION SELECT span_name FROM spans",
+        "WITH v AS (SELECT span_name FROM spans UNION ALL SELECT error_value FROM spans) SELECT * FROM v",
     ] {
         assert!(
             fails(sql).contains("is a BAML value in one branch but not the other"),
@@ -319,44 +328,39 @@ fn set_operation_branches_agree_on_value_columns() {
         );
     }
     // Expression subqueries render values in each branch, so kinds may differ.
-    ok("SELECT fqn FROM calls WHERE fqn IN (SELECT fqn FROM calls UNION SELECT output FROM calls)");
+    ok(
+        "SELECT span_name FROM spans WHERE span_name IN (SELECT span_name FROM spans UNION SELECT output_value FROM spans)",
+    );
 }
 
 #[test]
 fn positions_skip_hidden_kind_columns() {
-    let t = ok("SELECT output, fqn, COUNT(*) FROM calls GROUP BY 1, 2 ORDER BY 2, 3 DESC");
-    // Physical columns: output, output kind, fqn, count.
+    let t =
+        ok("SELECT output_value, span_name, COUNT(*) FROM spans GROUP BY 1, 2 ORDER BY 2, 3 DESC");
+    // Physical columns: output_value, output_value kind, span_name, count.
     assert!(t.sql.contains("GROUP BY 1, 3"), "{}", t.sql);
     assert!(t.sql.contains("ORDER BY 3, 4 DESC"), "{}", t.sql);
-    assert!(fails("SELECT fqn FROM calls ORDER BY 2").contains("outside the 1 result columns"));
+    assert!(
+        fails("SELECT span_name FROM spans ORDER BY 2").contains("outside the 1 result columns")
+    );
 }
 
 #[test]
 fn value_inspection_functions_take_values() {
-    let t = ok("SELECT baml_value_state(args['customer']), baml_kind(output) FROM calls");
+    let t =
+        ok("SELECT baml_value_state(input_args['customer']), baml_kind(output_value) FROM spans");
     assert!(
         t.sql
-            .contains("__btel_value_state(__btel_nav(args, 'customer'))"),
+            .contains("__btel_value_state(__btel_nav(input_args, 'customer'))"),
         "{}",
         t.sql
     );
-    assert!(t.sql.contains("__btel_kind(output)"), "{}", t.sql);
-    assert!(fails("SELECT baml_kind(fqn) FROM calls").contains("takes a BAML value"));
-    assert!(fails("SELECT baml_value_state(args, output) FROM calls").contains("one BAML value"));
-}
-
-#[test]
-fn old_relations_explain_what_replaced_them() {
-    let message = fails("SELECT * FROM errors");
-    assert!(message.contains("status = 'errored'"), "{message}");
-    assert!(fails("SELECT * FROM store_files").contains("recording_files"));
-    // New relations are catalog relations with value columns where due.
-    let t = ok("SELECT error['code'] FROM calls WHERE status = 'errored'");
-    assert!(t.columns[0].value);
-    let t = ok(
-        "SELECT fqn, self_ns FROM call_path_stats WHERE execution_id IN (SELECT execution_id FROM executions)",
+    assert!(t.sql.contains("__btel_kind(output_value)"), "{}", t.sql);
+    assert!(fails("SELECT baml_kind(span_name) FROM spans").contains("takes a BAML value"));
+    assert!(
+        fails("SELECT baml_value_state(input_args, output_value) FROM spans")
+            .contains("one BAML value")
     );
-    assert_eq!(t.columns.len(), 2);
 }
 
 /// SQLite's plan for the translation, on an empty index with every view.
@@ -384,38 +388,37 @@ fn plan(sql: &str) -> String {
 
 #[test]
 fn id_filters_keep_the_test_and_add_the_stored_parts() {
-    let t = ok("SELECT thread_id FROM threads WHERE execution_id = ?1");
+    let t = ok("SELECT span_name FROM spans WHERE parent_span_id = ?1");
     assert!(
         t.sql.contains(
-            "execution_id = ?1 AND \"__execution_id_rec\" = (SELECT rec FROM main.recording"
+            "parent_span_id = ?1 AND \"__parent_span_id_rec\" = (SELECT rec FROM main.recording"
         ) && t
             .sql
-            .contains("\"__execution_id_key\" = __btel_key(?1, '')"),
+            .contains("\"__parent_span_id_key\" = __btel_key(?1, '')"),
         "{}",
         t.sql
     );
-    let t = ok("SELECT 1 FROM calls c JOIN call_paths p ON p.call_path_id = c.call_path_id");
+    let t = ok("SELECT 1 FROM spans c JOIN span_announcements a ON a.span_id = c.parent_span_id");
     assert!(
         t.sql
-            .contains("\"p\".\"__call_path_id_key\" = \"c\".\"__call_path_id_key\""),
+            .contains("\"a\".\"__span_id_key\" = \"c\".\"__parent_span_id_key\""),
         "{}",
         t.sql
     );
-    let t = ok("SELECT 1 FROM error_frames WHERE raise_id IN ('a:1', ?2)");
+    let t = ok("SELECT 1 FROM spans WHERE span_id IN ('a:1', ?2)");
     assert!(
         t.sql
-            .contains("\"__raise_id_key\" IN (__btel_key('a:1', ''), __btel_key(?2, ''))"),
+            .contains("\"__span_id_key\" IN (__btel_key('a:1', ''), __btel_key(?2, ''))"),
         "{}",
         t.sql
     );
     // Left alone: a bare `?` (repeating it renumbers parameters), negation,
-    // other operators, ids of different kinds, and columns of a CTE.
+    // other operators, and columns of a CTE.
     for sql in [
-        "SELECT 1 FROM threads WHERE execution_id = ?",
-        "SELECT 1 FROM threads WHERE execution_id NOT IN ('a:1')",
-        "SELECT 1 FROM threads WHERE execution_id > 'a:1'",
-        "SELECT 1 FROM calls c JOIN call_paths p ON p.call_path_id = c.call_id",
-        "WITH x AS (SELECT execution_id FROM threads) SELECT 1 FROM x WHERE execution_id = 'a:1'",
+        "SELECT 1 FROM spans WHERE span_id = ?",
+        "SELECT 1 FROM spans WHERE span_id NOT IN ('a:1')",
+        "SELECT 1 FROM spans WHERE span_id > 'a:1'",
+        "WITH x AS (SELECT span_id FROM spans) SELECT 1 FROM x WHERE span_id = 'a:1'",
     ] {
         assert!(!ok(sql).sql.contains("__btel_key"), "{sql}");
     }
@@ -425,38 +428,25 @@ fn id_filters_keep_the_test_and_add_the_stored_parts() {
 fn id_filters_are_index_lookups() {
     for (sql, lookups) in [
         (
-            "SELECT status FROM executions WHERE execution_id = ?1",
-            &["SEARCH t USING PRIMARY KEY (rec=? AND thread_id=?)"][..],
-        ),
-        (
-            "SELECT thread_id FROM threads WHERE execution_id = ?1",
-            &["SEARCH t USING INDEX thread_by_root (rec=? AND root_id=?)"],
-        ),
-        (
-            "SELECT call_id FROM calls WHERE execution_id = ?1",
+            "SELECT status FROM spans WHERE span_id = ?1",
             &[
-                "thread_by_root (rec=? AND root_id=?)",
-                "call_by_thread (rec=? AND thread_id=?)",
+                "SEARCH c USING PRIMARY KEY (rec=? AND call_id=?)",
+                "SEARCH t USING PRIMARY KEY (rec=? AND thread_id=?)",
+            ][..],
+        ),
+        (
+            "SELECT span_id FROM spans WHERE parent_span_id = ?1",
+            &[
+                "call_by_parent (rec=? AND parent_id=?)",
+                "thread_by_parent (rec=? AND parent_id=?)",
             ],
         ),
         (
-            "SELECT raise_id FROM error_raises WHERE execution_id = ?1",
+            "SELECT span_id FROM span_announcements WHERE span_id IN (?1, ?2)",
             &[
-                "thread_by_root (rec=? AND root_id=?)",
-                "error_raise_by_thread (rec=? AND thread_id=?)",
+                "SEARCH c USING PRIMARY KEY (rec=? AND call_id=?)",
+                "SEARCH t USING PRIMARY KEY (rec=? AND thread_id=?)",
             ],
-        ),
-        (
-            "SELECT s.depth, p.call_site_line FROM call_path_stats s
-             JOIN call_paths p ON p.call_path_id = s.call_path_id WHERE s.execution_id = ?1",
-            &[
-                "call_path_by_thread (rec=? AND thread_id=?)",
-                "SEARCH p USING PRIMARY KEY (rec=? AND call_path_id=?)",
-            ],
-        ),
-        (
-            "SELECT position FROM error_frames WHERE raise_id IN (?1, ?2)",
-            &["main.error_frame USING PRIMARY KEY (rec=? AND raise_id=?)"],
         ),
     ] {
         let plan = plan(sql);
@@ -478,18 +468,26 @@ fn id_filters_are_index_lookups() {
 }
 
 #[test]
-fn the_newest_executions_are_an_index_read() {
-    for sql in [
-        "SELECT execution_id FROM executions ORDER BY started_at_ms DESC LIMIT 200",
-        "SELECT e.execution_id, r.prefix_state FROM executions e
-         JOIN recordings r ON r.recording_id = e.recording_id
-         ORDER BY e.started_at_ms DESC LIMIT 200",
-    ] {
-        let plan = plan(sql);
-        assert!(
-            plan.contains("USING INDEX execution_by_start"),
-            "{sql}\n{plan}"
-        );
-        assert!(!plan.contains("TEMP B-TREE FOR ORDER BY"), "{sql}\n{plan}");
-    }
+fn recursive_ctes_walk_span_trees_with_values() {
+    let t = ok("WITH RECURSIVE tree(id, depth, args) AS (
+                  SELECT span_id, 0, input_args FROM spans WHERE parent_span_id IS NULL
+                  UNION ALL
+                  SELECT s.span_id, t.depth + 1, s.input_args FROM spans s
+                  JOIN tree t ON s.parent_span_id = t.id)
+                SELECT id, depth, args['n'] FROM tree");
+    assert!(t.sql.contains("WITH RECURSIVE"), "{}", t.sql);
+    assert!(
+        t.sql.contains("__btel_render(__btel_nav(args, 'n'))"),
+        "the step keeps the anchor's value column: {}",
+        t.sql
+    );
+    assert!(
+        fails(
+            "WITH RECURSIVE r(v) AS (SELECT input_args FROM spans UNION ALL SELECT span_id FROM r)
+               SELECT * FROM r"
+        )
+        .contains("BAML value in one branch")
+    );
+    // A non-recursive CTE in a WITH RECURSIVE clause translates as usual.
+    ok("WITH RECURSIVE x AS (SELECT span_id FROM spans) SELECT * FROM x");
 }

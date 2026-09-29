@@ -68,9 +68,19 @@ fn detector_accounts_for_sampling_scale_error_and_the_accuracy_target() {
         epoch.assess(sample(30_000_000_000, 300_000, 100), origin),
         TimingStatus::Valid
     );
-    // But an uncertainty budget growing with time must not hide >1 ms drift.
+    // NTP slews the reference, so 2 ms over five minutes (7 ppm) is drift,
+    // not a fault: a run that long used to lose every duration.
     assert_eq!(
         epoch.assess(sample(300_000_000_000, 2_000_000, 100), origin),
+        TimingStatus::Valid
+    );
+    // But drift beyond MAX_DRIFT_PPB is: 60 ms over five minutes (200 ppm).
+    assert_eq!(
+        epoch.assess(sample(300_000_000_000, 60_000_000, 100), origin),
+        TimingStatus::Discontinuity
+    );
+    assert_eq!(
+        epoch.assess(sample(300_000_000_000, -60_000_000, 100), origin),
         TimingStatus::Discontinuity
     );
     assert_eq!(

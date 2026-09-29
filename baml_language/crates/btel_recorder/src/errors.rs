@@ -537,6 +537,7 @@ mod tests {
                 completed_at: ClockInstant::from_ticks(9),
                 outcome: btel_types::InvocationOutcome::Errored,
                 clock,
+                name: None,
             },
         );
         builder.span_reference(thread, &failed(calls[2], thread, false));

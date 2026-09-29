@@ -29,6 +29,14 @@ pub trait Publisher<I, V> {
     const ERROR_EVIDENCE: bool = false;
 
     fn aggregate(&mut self, delta: AggregateDelta);
+    /// One sysop's time, charged to the innermost observed call path. Not
+    /// combined here: sysops are rare next to completions.
+    fn sysop_time(
+        &mut self,
+        _call_path: btel_types::CallPathId,
+        _elapsed: btel_types::ClockDuration,
+    ) {
+    }
     /// Called after each aggregate only on the detached path, without input
     /// allocations held, including cache evictions and final cache flushing.
     fn after_detached_aggregate(&mut self) {}

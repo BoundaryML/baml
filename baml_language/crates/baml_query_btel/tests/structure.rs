@@ -1,5 +1,5 @@
-//! Thread, calling-context and statistics semantics on hand-built recording
-//! files, where every tick and count is known.
+//! Profiler, span and process semantics on hand-built recording files,
+//! where every tick and count is known. One tick is one nanosecond.
 use std::path::{Path, PathBuf};
 
 use baml_query_btel::{Index, IndexOptions, QueryRequest, QueryResult};
@@ -9,32 +9,40 @@ use serde_json::{Value as Json, json};
 
 const EPOCH: u64 = 5;
 const ROOT: u64 = 1;
+const CHILD: u64 = 2;
+const A: u64 = 10;
+const B: u64 = 11;
 /// `btel_settings::encoding::FORMAT_MAJOR`.
 const FORMAT_MAJOR: u32 = 2;
 
 struct Recording {
     dir: PathBuf,
     id: [u8; 16],
+    /// `None` writes a recording from before process identities.
+    process: Option<[u8; 16]>,
 }
 
 impl Recording {
-    fn new(project: &Path, tag: u8) -> Self {
+    fn new(project: &Path, tag: u8, process: Option<[u8; 16]>) -> Self {
         let id = [tag; 16];
         let dir = project
             .join(".baml/btel/recordings")
             .join(btel_reader::discovery::hex(&id));
         std::fs::create_dir_all(&dir).unwrap();
-        Self { dir, id }
-    }
-    fn hex(&self) -> String {
-        btel_reader::discovery::hex(&self.id)
+        Self { dir, id, process }
     }
     fn write(&self, sequence: u64, mut file: proto::RecordingFile) {
         file.header = Some(proto::RecordingHeader {
             format_major: FORMAT_MAJOR,
-            format_minor: 1,
+            format_minor: if self.process.is_some() { 3 } else { 2 },
             recording_id: self.id.to_vec(),
             source_snapshot_id: None,
+            process_id: self.process.map(|p| p.to_vec()),
+            baml_version: self.process.map(|_| "0.20.1".into()),
+            host: self.process.map(|_| "baml".into()),
+            command: vec![],
+            process_started_at_unix_ns: self.process.map(|_| 1_790_000_000_000_000_000),
+            source_cas_id: None,
         });
         file.sequence = sequence;
         let part = self.dir.join(format!("{sequence:020}.btel.part"));
@@ -43,7 +51,6 @@ impl Recording {
     }
 }
 
-/// One tick is one nanosecond.
 fn epoch() -> proto::ClockEpochDefinition {
     proto::ClockEpochDefinition {
         epoch_id: EPOCH,
@@ -63,7 +70,7 @@ fn epoch() -> proto::ClockEpochDefinition {
     }
 }
 
-fn function(id: u64, fqn: &str, params: &[&str]) -> proto::FunctionDefinition {
+fn function(id: u64, fqn: &str) -> proto::FunctionDefinition {
     proto::FunctionDefinition {
         function_id: id,
         resolution: Some(proto::function_definition::Resolution::Metadata(
@@ -71,27 +78,17 @@ fn function(id: u64, fqn: &str, params: &[&str]) -> proto::FunctionDefinition {
                 fqn: fqn.into(),
                 display_name: fqn.rsplit('.').next().unwrap().into(),
                 kind: proto::FunctionKind::Bytecode as i32,
-                origin: proto::FunctionOrigin::UserDefined as i32,
-                namespace: vec!["user".into()],
-                argument_layout: Some(proto::ArgumentLayout {
-                    slots: params
-                        .iter()
-                        .map(|name| proto::ArgumentSlot {
-                            name: Some((*name).into()),
-                            receiver: false,
-                        })
-                        .collect(),
-                }),
+                argument_layout: Some(proto::ArgumentLayout { slots: vec![] }),
                 ..Default::default()
             },
         )),
     }
 }
 
-fn path(id: u32, thread: u64, parent: u32, callee: u64, spawn: bool) -> proto::CallPathDefinition {
+fn path(id: u32, parent: u32, callee: u64, spawn: bool) -> proto::CallPathDefinition {
     proto::CallPathDefinition {
         call_path_id: id,
-        thread_id: thread,
+        thread_id: ROOT,
         parent_call_path_id: parent,
         visible_caller_function_id: None,
         caller_pc: id * 4,
@@ -111,6 +108,7 @@ fn thread(id: u64, parent: Option<u64>, spawn_path: u32, started: u64) -> proto:
         spawn_call_path_id: spawn_path,
         started_at_ticks: started,
         clock_epoch_id: EPOCH,
+        ..Default::default()
     }
 }
 
@@ -128,358 +126,37 @@ fn state(status: proto::TimingStatus) -> proto::ClockStateBatch {
     }
 }
 
-fn delta(path: u32, reentry: bool, count: u64, duration: u64, wait: u64) -> proto::AggregateDelta {
+/// `(path, reentry, count, duration, errored, cancelled, panicked)`.
+fn delta(
+    path: u32,
+    reentry: bool,
+    count: u64,
+    duration: u64,
+    (errored, cancelled, panicked): (u64, u64, Option<u64>),
+) -> proto::AggregateDelta {
     proto::AggregateDelta {
         node: (u64::from(path) << 1) | u64::from(reentry),
         count,
         total_duration_ticks: duration,
-        total_self_await_ticks: wait,
-        outcomes: None,
-    }
-}
-
-fn outcomes(
-    path: u32,
-    reentry: bool,
-    count: u64,
-    errored: u64,
-    cancelled: u64,
-) -> proto::AggregateDelta {
-    proto::AggregateDelta {
-        outcomes: Some(proto::AggregateOutcomes { errored, cancelled }),
-        ..delta(path, reentry, count, 10, 0)
-    }
-}
-
-fn outcome_file(entries: Vec<proto::AggregateDelta>) -> proto::RecordingFile {
-    proto::RecordingFile {
-        definitions: Some(proto::Definitions {
-            functions: vec![function(10, "user.A", &[]), function(11, "user.B", &[])],
-            call_paths: vec![
-                path(1, ROOT, 0, 10, false),
-                path(2, ROOT, 1, 10, false),
-                path(3, ROOT, 1, 11, false),
-                path(4, ROOT, 1, 11, false),
-            ],
-            threads: vec![thread(ROOT, None, 0, 0)],
-            clock_epochs: vec![epoch()],
+        total_self_await_ticks: 0,
+        outcomes: Some(proto::AggregateOutcomes {
+            errored,
+            cancelled,
+            panicked,
         }),
-        clock_states: Some(valid()),
-        aggregates: Some(proto::AggregateBatch { entries }),
-        ..Default::default()
     }
 }
 
-const OUTCOMES: &str = "SELECT call_path_id, completed_calls, ok_calls, errored_calls,
-    cancelled_calls, outcome_state FROM call_path_stats ORDER BY call_path_id";
-const FUNCTION_OUTCOMES: &str = "SELECT fqn, completed_calls, ok_calls, errored_calls,
-    cancelled_calls, outcome_state FROM function_stats ORDER BY fqn";
-
-#[test]
-fn outcomes_cover_recursive_completions_and_ignore_unobserved_contexts() {
-    let project = tempfile::tempdir().unwrap();
-    let recording = Recording::new(project.path(), 1);
-    let id = |n| json!(format!("{}:p{n}", recording.hex()));
-    recording.write(
-        1,
-        outcome_file(vec![
-            outcomes(1, false, 10, 2, 1),
-            outcomes(1, true, 5, 1, 2),
-            outcomes(2, false, 3, 0, 0),
-            outcomes(3, false, 1, 1, 0),
-        ]),
-    );
-    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
-    assert_eq!(
-        rows(&mut index, OUTCOMES),
-        vec![
-            vec![
-                id(1),
-                json!(15),
-                json!(9),
-                json!(3),
-                json!(3),
-                json!("recorded")
-            ],
-            vec![
-                id(2),
-                json!(3),
-                json!(3),
-                json!(0),
-                json!(0),
-                json!("recorded")
-            ],
-            vec![
-                id(3),
-                json!(1),
-                json!(0),
-                json!(1),
-                json!(0),
-                json!("recorded")
-            ],
-            vec![
-                id(4),
-                json!(0),
-                json!(0),
-                json!(0),
-                json!(0),
-                json!("none_observed")
-            ],
-        ]
-    );
-    assert_eq!(
-        rows(&mut index, FUNCTION_OUTCOMES),
-        vec![
-            vec![
-                json!("user.A"),
-                json!(18),
-                json!(12),
-                json!(3),
-                json!(3),
-                json!("recorded")
-            ],
-            vec![
-                json!("user.B"),
-                json!(1),
-                json!(0),
-                json!(1),
-                json!(0),
-                json!("recorded")
-            ],
-        ]
-    );
-    assert_eq!(
-        rows(&mut index, "SELECT COUNT(*) FROM calls"),
-        vec![vec![json!(0)]]
-    );
-    // Invalid clock evidence only invalidates timing, never population counts.
-    recording.write(
-        2,
-        proto::RecordingFile {
-            clock_states: Some(state(proto::TimingStatus::Discontinuity)),
-            ..Default::default()
-        },
-    );
-    let result = run(&mut index, FUNCTION_OUTCOMES);
-    assert_eq!(
-        result.rows[0][2..],
-        [json!(12), json!(3), json!(3), json!("recorded")]
-    );
-    assert_eq!(result.outcome.query.values.cas_loads, 0);
+fn ok() -> (u64, u64, Option<u64>) {
+    (0, 0, Some(0))
 }
 
-#[test]
-fn old_and_mixed_outcomes_remain_unknown_across_refresh_and_rebuild() {
-    let project = tempfile::tempdir().unwrap();
-    let recording = Recording::new(project.path(), 1);
-    let id = |n| json!(format!("{}:p{n}", recording.hex()));
-    // No outcome message means old evidence, not successful completion.
-    recording.write(1, outcome_file(vec![delta(1, false, 4, 10, 0)]));
-    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
-    assert_eq!(
-        rows(&mut index, OUTCOMES)[0],
-        vec![
-            id(1),
-            json!(4),
-            Json::Null,
-            Json::Null,
-            Json::Null,
-            json!("not_recorded")
-        ]
-    );
-    recording.write(
-        2,
-        proto::RecordingFile {
-            aggregates: Some(proto::AggregateBatch {
-                entries: vec![
-                    outcomes(1, false, 2, 1, 0),
-                    outcomes(2, false, 3, 0, 1),
-                    // A completion whose context definition arrives in the next file.
-                    outcomes(5, false, 2, 0, 1),
-                ],
-            }),
-            ..Default::default()
-        },
-    );
-    assert_eq!(
-        rows(&mut index, OUTCOMES)[0],
-        vec![
-            id(1),
-            json!(6),
-            Json::Null,
-            Json::Null,
-            Json::Null,
-            json!("partial")
-        ]
-    );
-    recording.write(
-        3,
-        proto::RecordingFile {
-            definitions: Some(proto::Definitions {
-                call_paths: vec![path(5, ROOT, 1, 11, false)],
-                ..Default::default()
-            }),
-            ..Default::default()
-        },
-    );
-    let expected = vec![
-        vec![
-            json!("user.A"),
-            json!(9),
-            Json::Null,
-            Json::Null,
-            Json::Null,
-            json!("partial"),
-        ],
-        vec![
-            json!("user.B"),
-            json!(2),
-            json!(1),
-            json!(0),
-            json!(1),
-            json!("recorded"),
-        ],
-    ];
-    assert_eq!(rows(&mut index, FUNCTION_OUTCOMES), expected);
-    let repeated = run(&mut index, FUNCTION_OUTCOMES);
-    assert_eq!(repeated.rows, expected);
-    assert_eq!(repeated.outcome.refresh.as_ref().unwrap().files_applied, 0);
-
-    // A v4 cache has no outcome evidence and must be rebuilt from BTEL.
-    let db = baml_query_btel::store::database_path(index.layout());
-    let conn = rusqlite::Connection::open(db).unwrap();
-    conn.pragma_update(None, "user_version", 4).unwrap();
-    drop(conn);
-    let mut rebuilt = Index::for_project(project.path(), IndexOptions::default()).unwrap();
-    let rebuilt_result = run(&mut rebuilt, FUNCTION_OUTCOMES);
-    assert!(
-        rebuilt_result
-            .outcome
-            .refresh
-            .as_ref()
-            .unwrap()
-            .schema_rebuilt
-    );
-    assert_eq!(rebuilt_result.rows, expected);
-    // Removing the newest definition rebuilds only the trustworthy prefix.
-    std::fs::remove_file(recording.dir.join("00000000000000000003.btel")).unwrap();
-    assert_eq!(rows(&mut rebuilt, OUTCOMES)[0][5], json!("partial"));
-}
-
-#[test]
-fn missing_outcomes_poison_rollups_across_contexts_and_reentry_nodes() {
-    let project = tempfile::tempdir().unwrap();
-    let recording = Recording::new(project.path(), 1);
-    recording.write(
-        1,
-        outcome_file(vec![
-            outcomes(1, false, 4, 1, 1),
-            delta(1, true, 2, 10, 0),
-            outcomes(3, false, 2, 0, 0),
-            delta(4, false, 1, 10, 0),
-        ]),
-    );
-    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
-    assert_eq!(
-        rows(&mut index, FUNCTION_OUTCOMES),
-        vec![
-            vec![
-                json!("user.A"),
-                json!(6),
-                Json::Null,
-                Json::Null,
-                Json::Null,
-                json!("partial")
-            ],
-            vec![
-                json!("user.B"),
-                json!(3),
-                Json::Null,
-                Json::Null,
-                Json::Null,
-                json!("partial")
-            ],
-        ]
-    );
-}
-
-#[test]
-fn invalid_outcome_counts_preserve_other_facts_and_report_an_issue() {
-    let project = tempfile::tempdir().unwrap();
-    let recording = Recording::new(project.path(), 1);
-    let id = |n| json!(format!("{}:p{n}", recording.hex()));
-    recording.write(
-        1,
-        outcome_file(vec![
-            outcomes(1, false, 2, 2, 1),
-            // The validation addition itself must not wrap at u64::MAX.
-            outcomes(2, false, u64::MAX, u64::MAX, 1),
-        ]),
-    );
-    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
-    assert_eq!(
-        rows(&mut index, OUTCOMES)[0],
-        vec![
-            id(1),
-            json!(2),
-            Json::Null,
-            Json::Null,
-            Json::Null,
-            json!("invalid")
-        ]
-    );
-    assert_eq!(
-        rows(
-            &mut index,
-            "SELECT completed_calls, inclusive_ns FROM call_path_stats WHERE call_path_id LIKE '%:p1'"
-        ),
-        vec![vec![json!(2), json!(10)]]
-    );
-    assert_eq!(
-        rows(
-            &mut index,
-            "SELECT code, subject_kind FROM issues WHERE code = 'aggregate_outcome_invalid'"
-        ),
-        vec![vec![json!("aggregate_outcome_invalid"), json!("call_path_node")]; 2]
-    );
-}
-
-#[test]
-fn outcome_counts_do_not_wrap_when_nodes_or_function_rollups_overflow() {
-    let project = tempfile::tempdir().unwrap();
-    let recording = Recording::new(project.path(), 1);
-    let big = 3 << 61;
-    recording.write(
-        1,
-        outcome_file(vec![
-            outcomes(1, false, big, big, 0),
-            outcomes(1, false, big, big, 0),
-            outcomes(3, false, big, 0, big),
-            outcomes(4, false, big, 0, big),
-        ]),
-    );
-    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
-    assert_eq!(
-        rows(&mut index, FUNCTION_OUTCOMES),
-        vec![
-            vec![
-                json!("user.A"),
-                Json::Null,
-                json!(0),
-                Json::Null,
-                json!(0),
-                json!("overflow")
-            ],
-            vec![
-                json!("user.B"),
-                Json::Null,
-                json!(0),
-                json!(0),
-                Json::Null,
-                json!("overflow")
-            ],
-        ]
-    );
+fn sysop(path: u32, ticks: u64) -> proto::SysOpTime {
+    proto::SysOpTime {
+        node: u64::from(path) << 1,
+        sysops: 1,
+        total_ticks: ticks,
+    }
 }
 
 fn section(thread: u64, events: Vec<Event>) -> proto::ThreadSection {
@@ -493,11 +170,50 @@ fn section(thread: u64, events: Vec<Event>) -> proto::ThreadSection {
     }
 }
 
-fn thread_done(ticks: u64, outcome: proto::InvocationOutcome) -> Event {
+fn thread_done(ticks: u64, outcome: proto::InvocationOutcome, panicked: bool) -> Event {
     Event::ThreadCompletion(proto::ThreadCompletion {
         completed_at_ticks: ticks,
         outcome: outcome as i32,
+        panicked,
     })
+}
+
+fn process_end(status: proto::ProcessStatus) -> proto::RecordingEnd {
+    proto::RecordingEnd {
+        process_end: Some(proto::ProcessEnd {
+            status: status as i32,
+            at_unix_ns: 1_790_000_000_000_001_000,
+        }),
+    }
+}
+
+/// A calls itself at one site, A at a second site, and B at two sites; A
+/// also spawns B on a child thread. Paths: 1 root→A, 2 A→A, 3 and 4 A→B,
+/// 5 A spawns B.
+fn tree(
+    aggregates: Vec<proto::AggregateDelta>,
+    sysops: Vec<proto::SysOpTime>,
+) -> proto::RecordingFile {
+    proto::RecordingFile {
+        definitions: Some(proto::Definitions {
+            functions: vec![function(A, "user.A"), function(B, "user.B")],
+            call_paths: vec![
+                path(1, 0, A, false),
+                path(2, 1, A, false),
+                path(3, 1, B, false),
+                path(4, 1, B, false),
+                path(5, 1, B, true),
+            ],
+            threads: vec![thread(ROOT, None, 0, 0), thread(CHILD, Some(ROOT), 5, 20)],
+            clock_epochs: vec![epoch()],
+        }),
+        clock_states: Some(valid()),
+        aggregates: Some(proto::AggregateBatch {
+            entries: aggregates,
+            sysop_times: sysops,
+        }),
+        ..Default::default()
+    }
 }
 
 fn run(index: &mut Index, sql: &str) -> QueryResult {
@@ -513,391 +229,161 @@ fn rows(index: &mut Index, sql: &str) -> Vec<Vec<Json>> {
     run(index, sql).rows
 }
 
-/// A calling-context tree with known aggregates: A (root, recursive) calls B
-/// synchronously and spawns C; ticks are nanoseconds.
-fn stats_recording(recording: &Recording, b_duration: u64, finished: bool) {
-    let mut events = Vec::new();
-    if finished {
-        events.push(thread_done(1_000, proto::InvocationOutcome::Ok));
-    }
-    recording.write(
-        1,
-        proto::RecordingFile {
-            definitions: Some(proto::Definitions {
-                functions: vec![
-                    function(10, "user.A", &["n"]),
-                    function(11, "user.B", &[]),
-                    function(12, "user.C", &["x", "y"]),
-                ],
-                call_paths: vec![
-                    path(1, ROOT, 0, 10, false),
-                    path(2, ROOT, 1, 11, false),
-                    path(3, ROOT, 1, 12, true),
-                    // Defined, never completed.
-                    path(4, ROOT, 2, 11, false),
-                ],
-                threads: vec![thread(ROOT, None, 0, 0)],
-                clock_epochs: vec![epoch()],
-            }),
-            clock_states: Some(valid()),
-            aggregates: Some(proto::AggregateBatch {
-                entries: vec![
-                    // A: one outermost call (100) and two recursive
-                    // re-entries (60 in total, inside the 100).
-                    delta(1, false, 1, 100, 10),
-                    delta(1, true, 2, 60, 5),
-                    delta(2, false, 3, b_duration, 0),
-                    // Spawned work is not A's child time.
-                    delta(3, false, 1, 500, 0),
-                ],
-            }),
-            spans: Some(proto::SpanBatch {
-                sections: vec![section(ROOT, events)],
-            }),
-            ..Default::default()
-        },
-    );
-}
-
-const STATS: &str = "SELECT fqn, normal_completed_calls, reentry_completed_calls, completed_calls,
-  inclusive_ns, reentry_duration_ns, invocation_duration_sum_ns, direct_child_ns, await_ns,
-  self_ns, self_time_state, aggregate_state
-  FROM call_path_stats ORDER BY call_path_id";
+/// Each node by its path of function names and edges, for readable rows.
+const PROFILE: &str = "SELECT n.function_name, p.function_name, n.invocation_count,
+    n.return_count, n.error_count, n.panic_error_count, n.user_error_count,
+    n.cancel_error_count, n.missing_count, n.total_time, n.self_time, n.io_self_time,
+    n.io_total_time
+  FROM profiler n LEFT JOIN profiler p ON p.profiler_node_id = n.parent_profiler_node_id
+  ORDER BY n.total_time DESC, n.invocation_count DESC";
 
 #[test]
-fn child_time_tracks_late_definitions_deltas_invalidations_and_rebuilds() {
+fn the_profiler_merges_call_sites_and_counts_every_outcome() {
     let project = tempfile::tempdir().unwrap();
-    let recording = Recording::new(project.path(), 1);
-    stats_recording(&recording, 30, true);
+    let recording = Recording::new(project.path(), 1, Some([9; 16]));
+    recording.write(
+        1,
+        tree(
+            vec![
+                delta(1, false, 10, 100, (2, 1, Some(1))),
+                // Direct recursion: time is inside the outer invocation's.
+                delta(1, true, 5, 40, (1, 2, Some(0))),
+                delta(2, false, 3, 10, ok()),
+                delta(3, false, 1, 12, (1, 0, Some(1))),
+                delta(4, false, 2, 18, ok()),
+                delta(5, false, 1, 50, ok()),
+            ],
+            vec![sysop(1, 7), sysop(3, 5)],
+        ),
+    );
     let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
-    let sql = "SELECT direct_child_ns, self_ns FROM call_path_stats WHERE fqn = 'user.A'";
-    assert_eq!(rows(&mut index, sql), vec![vec![json!(30), json!(55)]]);
+    assert!(
+        rows(&mut index, PROFILE).is_empty(),
+        "no profiler while the process runs"
+    );
+    let status = rows(&mut index, "SELECT status FROM processes");
+    assert_eq!(status, vec![vec![json!("running")]]);
 
-    // A completed child arrives before the definition linking it to A.
     recording.write(
         2,
         proto::RecordingFile {
-            aggregates: Some(proto::AggregateBatch {
-                entries: vec![delta(5, false, 1, 7, 0)],
-            }),
+            end: Some(process_end(proto::ProcessStatus::Success)),
             ..Default::default()
         },
     );
-    assert_eq!(rows(&mut index, sql), vec![vec![json!(30), json!(55)]]);
-    recording.write(
-        3,
-        proto::RecordingFile {
-            definitions: Some(proto::Definitions {
-                call_paths: vec![path(5, ROOT, 1, 11, false)],
-                ..Default::default()
-            }),
-            ..Default::default()
-        },
-    );
-    assert_eq!(rows(&mut index, sql), vec![vec![json!(37), json!(48)]]);
-    recording.write(
-        4,
-        proto::RecordingFile {
-            aggregates: Some(proto::AggregateBatch {
-                entries: vec![
-                    delta(5, false, 1, 5, 0),
-                    // Recursion and spawned work must not be subtracted again.
-                    delta(5, true, 1, 9_000, 0),
-                    delta(3, false, 1, 9_000, 0),
-                ],
-            }),
-            ..Default::default()
-        },
-    );
-    assert_eq!(rows(&mut index, sql), vec![vec![json!(42), json!(43)]]);
-
-    recording.write(
-        5,
-        proto::RecordingFile {
-            clock_states: Some(state(proto::TimingStatus::Discontinuity)),
-            ..Default::default()
-        },
-    );
-    assert_eq!(rows(&mut index, sql), vec![vec![Json::Null, Json::Null]]);
-    std::fs::remove_file(recording.dir.join(format!("{:020}.btel", 5))).unwrap();
-    assert_eq!(rows(&mut index, sql), vec![vec![json!(42), json!(43)]]);
-    std::fs::remove_file(recording.dir.join(format!("{:020}.btel", 4))).unwrap();
-    assert_eq!(rows(&mut index, sql), vec![vec![json!(37), json!(48)]]);
-
-    // Overflowed evidence makes the derived time unavailable, not zero.
-    recording.write(
-        4,
-        proto::RecordingFile {
-            aggregates: Some(proto::AggregateBatch {
-                entries: vec![delta(5, false, 1, u64::MAX, 0)],
-            }),
-            ..Default::default()
-        },
-    );
-    assert_eq!(rows(&mut index, sql), vec![vec![Json::Null, Json::Null]]);
-}
-
-#[test]
-fn recursion_aware_path_statistics_have_exact_values() {
-    let project = tempfile::tempdir().unwrap();
-    let recording = Recording::new(project.path(), 1);
-    stats_recording(&recording, 30, true);
-    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
-    assert_eq!(
-        rows(&mut index, STATS),
+    let a = |name, parent: Json, n, ok, err, panic, user, cancel, total, own, io, io_all| {
         vec![
-            // 100 - 30 (B) - 15 (await, outer and recursive) = 55.
-            vec![
-                json!("user.A"),
-                json!(1),
-                json!(2),
-                json!(3),
-                json!(100),
-                json!(60),
-                json!(160),
-                json!(30),
-                json!(15),
-                json!(55),
-                json!("valid"),
-                json!("observed_prefix")
-            ],
-            vec![
-                json!("user.B"),
-                json!(3),
-                json!(0),
-                json!(3),
-                json!(30),
-                json!(0),
-                json!(30),
-                json!(0),
-                json!(0),
-                json!(30),
-                json!("valid"),
-                json!("observed_prefix")
-            ],
-            vec![
-                json!("user.C"),
-                json!(1),
-                json!(0),
-                json!(1),
-                json!(500),
-                json!(0),
-                json!(500),
-                json!(0),
-                json!(0),
-                json!(500),
-                json!("valid"),
-                json!("observed_prefix")
-            ],
-            // Defined but not completed: zero observed, not a verified zero
-            // time.
-            vec![
-                json!("user.B"),
-                json!(0),
-                json!(0),
-                json!(0),
-                Json::Null,
-                json!(0),
-                json!(0),
-                json!(0),
-                json!(0),
-                Json::Null,
-                json!("incomplete"),
-                json!("none_observed")
-            ],
+            json!(name),
+            parent,
+            json!(n),
+            json!(ok),
+            json!(err),
+            json!(panic),
+            json!(user),
+            json!(cancel),
+            json!(0),
+            json!(total),
+            json!(own),
+            json!(io),
+            json!(io_all),
+        ]
+    };
+    assert_eq!(
+        rows(&mut index, PROFILE),
+        vec![
+            // 100 minus its synchronous callees (10 + 30); the spawned B's 50
+            // runs beside it.
+            a("user.A", Json::Null, 15, 9, 6, 1, 2, 3, 100, 60, 7, 12),
+            a("user.B", json!("user.A"), 1, 1, 0, 0, 0, 0, 50, 50, 0, 0),
+            // Two call sites, one node.
+            a("user.B", json!("user.A"), 3, 2, 1, 1, 0, 0, 30, 30, 5, 5),
+            a("user.A", json!("user.A"), 3, 3, 0, 0, 0, 0, 10, 10, 0, 0),
         ]
     );
-    // Structure: depths, edges, the spawn edge excluded from child time.
-    assert_eq!(
-        rows(
-            &mut index,
-            "SELECT fqn, depth, edge_kind, recorded_edge, caller_pc, structure_state
-             FROM call_paths ORDER BY call_path_id"
-        ),
-        vec![
-            vec![
-                json!("user.A"),
-                json!(0),
-                json!("root"),
-                json!("synchronous"),
-                json!(4),
-                json!("resolved")
-            ],
-            vec![
-                json!("user.B"),
-                json!(1),
-                json!("call"),
-                json!("synchronous"),
-                json!(8),
-                json!("resolved")
-            ],
-            vec![
-                json!("user.C"),
-                json!(1),
-                json!("spawn"),
-                json!("spawn"),
-                json!(12),
-                json!("resolved")
-            ],
-            vec![
-                json!("user.B"),
-                json!(2),
-                json!("call"),
-                json!("synchronous"),
-                json!(16),
-                json!("resolved")
-            ],
-        ]
-    );
-    // Function totals sum contexts; B's never-completed context has no
-    // supported self time, so B's total is unavailable rather than partial.
-    assert_eq!(
-        rows(
-            &mut index,
-            "SELECT fqn, completed_calls, invocation_duration_sum_ns, await_ns, self_ns,
-               self_time_state
-             FROM function_stats ORDER BY fqn"
-        ),
-        vec![
-            vec![
-                json!("user.A"),
-                json!(3),
-                json!(160),
-                json!(15),
-                json!(55),
-                json!("valid")
-            ],
-            vec![
-                json!("user.B"),
-                json!(3),
-                json!(30),
-                json!(0),
-                Json::Null,
-                json!("incomplete")
-            ],
-            vec![
-                json!("user.C"),
-                json!(1),
-                json!(500),
-                json!(0),
-                json!(500),
-                json!("valid")
-            ],
-        ]
-    );
-    // The outermost and recursive invocations, as recorded, stay split.
-    assert_eq!(
-        rows(
-            &mut index,
-            "SELECT fqn, normal_completed_calls, reentry_completed_calls, inclusive_ns,
-               reentry_duration_ns
-             FROM call_path_stats WHERE fqn = 'user.A'"
-        ),
-        vec![vec![
-            json!("user.A"),
-            json!(1),
-            json!(2),
-            json!(100),
-            json!(60)
-        ]]
-    );
-    let hot = rows(
+    let process = rows(
         &mut index,
-        "SELECT fqn, self_ns FROM call_path_stats WHERE self_ns IS NOT NULL
-         ORDER BY self_ns DESC",
+        "SELECT process_id, status, host, status_history[1]['status'] FROM processes",
     );
     assert_eq!(
-        hot,
-        vec![
-            vec![json!("user.C"), json!(500)],
-            vec![json!("user.A"), json!(55)],
-            vec![json!("user.B"), json!(30)],
-        ]
-    );
-    // Execution totals come from the same aggregates.
-    assert_eq!(
-        rows(
-            &mut index,
-            "SELECT entry_fqn, entry_state, status, completed_calls, calls_retained, threads_total
-             FROM executions"
-        ),
+        process,
         vec![vec![
-            json!("user.A"),
-            json!("resolved"),
-            json!("ok"),
-            json!(7),
-            json!(0),
-            json!(1)
+            json!("09".repeat(16)),
+            json!("success"),
+            json!("baml"),
+            json!("success")
         ]]
-    );
-    // Recorded metadata and parameter slots.
-    assert_eq!(
-        rows(
-            &mut index,
-            "SELECT fqn, definition_state, kind, origin, namespace, namespace_components,
-               parameter_count, argument_layout_state
-             FROM function_definitions WHERE fqn = 'user.C'"
-        ),
-        vec![vec![
-            json!("user.C"),
-            json!("resolved"),
-            json!("bytecode"),
-            json!("user"),
-            json!("user"),
-            json!("[\"user\"]"),
-            json!(2),
-            json!("known")
-        ]]
-    );
-    assert_eq!(
-        rows(
-            &mut index,
-            "SELECT parameters FROM function_definitions WHERE fqn = 'user.C'"
-        ),
-        vec![vec![json!("[\"x\",\"y\"]")]]
     );
 }
 
 #[test]
-fn self_time_is_never_clamped() {
-    // B's completed time exceeds A's: while the thread is unfinished, A's
-    // own completion is simply not indexed yet.
+fn processes_merge_engines_and_rebuild_on_new_evidence() {
     let project = tempfile::tempdir().unwrap();
-    stats_recording(&Recording::new(project.path(), 1), 120, false);
+    let first = Recording::new(project.path(), 1, Some([9; 16]));
+    first.write(1, tree(vec![delta(1, false, 2, 20, ok())], vec![]));
+    first.write(
+        2,
+        proto::RecordingFile {
+            end: Some(proto::RecordingEnd::default()),
+            ..Default::default()
+        },
+    );
     let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
-    let a = "SELECT self_ns, self_time_state FROM call_path_stats WHERE fqn = 'user.A'";
+    // An engine ended without saying how the process did.
     assert_eq!(
-        rows(&mut index, a),
-        vec![vec![Json::Null, json!("incomplete")]]
+        rows(&mut index, "SELECT status FROM processes"),
+        vec![vec![json!("unknown")]]
+    );
+    let second = Recording::new(project.path(), 2, Some([9; 16]));
+    second.write(1, tree(vec![delta(1, false, 3, 30, ok())], vec![]));
+    second.write(
+        2,
+        proto::RecordingFile {
+            end: Some(process_end(proto::ProcessStatus::Panicked)),
+            ..Default::default()
+        },
+    );
+    // Two engines, one process: the node sums both.
+    let merged = "SELECT function_name, invocation_count, total_time FROM profiler
+        WHERE function_name = 'user.A' AND parent_profiler_node_id IS NULL";
+    assert_eq!(
+        rows(&mut index, merged),
+        vec![vec![json!("user.A"), json!(5), json!(50)]]
+    );
+    assert_eq!(
+        rows(&mut index, "SELECT COUNT(*), MAX(status) FROM processes"),
+        vec![vec![json!(1), json!("panicked")]]
+    );
+    // A recording without a process ID is its own process, and without a
+    // process end it has no profiler.
+    let old = Recording::new(project.path(), 3, None);
+    old.write(1, tree(vec![delta(1, false, 1, 10, (0, 0, None))], vec![]));
+    assert_eq!(
+        rows(&mut index, "SELECT status FROM processes ORDER BY status"),
+        vec![vec![json!("panicked")], vec![json!("running")]]
     );
     assert_eq!(
         rows(
             &mut index,
-            "SELECT self_time_state FROM call_path_stats WHERE fqn = 'user.C'"
+            "SELECT COUNT(DISTINCT process_id) FROM profiler"
         ),
-        vec![vec![json!("provisional")]],
-        "an unfinished thread's supported self time is provisional"
-    );
-
-    // On a finished thread the same numbers are inconsistent evidence.
-    let project = tempfile::tempdir().unwrap();
-    stats_recording(&Recording::new(project.path(), 1), 120, true);
-    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
-    assert_eq!(
-        rows(&mut index, a),
-        vec![vec![Json::Null, json!("underflow")]]
+        vec![vec![json!(1)]]
     );
 }
 
 #[test]
-fn clock_invalidation_keeps_counts_and_explains_missing_time() {
+fn unknown_counts_and_times_are_null_never_guessed() {
     let project = tempfile::tempdir().unwrap();
-    let recording = Recording::new(project.path(), 1);
-    stats_recording(&recording, 30, true);
+    let recording = Recording::new(project.path(), 1, Some([9; 16]));
+    let mut old = delta(1, false, 4, 40, (1, 0, None));
+    let mut missing = delta(3, false, 2, 20, ok());
+    missing.outcomes = None;
+    old.total_self_await_ticks = 0;
+    recording.write(1, tree(vec![old, missing], vec![]));
     recording.write(
         2,
         proto::RecordingFile {
             clock_states: Some(state(proto::TimingStatus::Discontinuity)),
+            end: Some(process_end(proto::ProcessStatus::Error)),
             ..Default::default()
         },
     );
@@ -905,450 +391,288 @@ fn clock_invalidation_keeps_counts_and_explains_missing_time() {
     assert_eq!(
         rows(
             &mut index,
-            "SELECT completed_calls, inclusive_ns, self_ns, timing_state, self_time_state
-             FROM call_path_stats WHERE fqn = 'user.A'"
-        ),
-        vec![vec![
-            json!(3),
-            Json::Null,
-            Json::Null,
-            json!("invalidated_discontinuity"),
-            json!("invalidated_discontinuity")
-        ]]
-    );
-    assert_eq!(
-        rows(
-            &mut index,
-            "SELECT observed_status, is_final, timing_state, source, multiplier, utc_anchor_at
-             FROM clocks"
-        ),
-        vec![vec![
-            json!("discontinuity"),
-            json!(0),
-            json!("invalidated_discontinuity"),
-            json!("os_monotonic"),
-            json!("1"),
-            json!("2026-09-21T14:13:20.000000Z")
-        ]]
-    );
-    assert_eq!(
-        rows(
-            &mut index,
-            "SELECT DISTINCT completed_calls IS NOT NULL, self_ns, timing_state FROM function_stats"
-        ),
-        vec![vec![
-            json!(1),
-            Json::Null,
-            json!("invalidated_discontinuity")
-        ]],
-        "a function's timing is never reported valid over an invalid clock"
-    );
-    let issues = rows(&mut index, "SELECT code, subject_kind FROM issues");
-    assert_eq!(
-        issues,
-        vec![vec![json!("clock_invalidated"), json!("clock")]]
-    );
-}
-
-#[test]
-fn end_markers_and_final_clocks_are_evidence_and_older_recordings_stay_unsealed() {
-    const RECORDINGS: &str = "SELECT state, seal_state, prefix_state, indexed_sequence,
-      terminal_sequence FROM recordings ORDER BY recording_id";
-    let project = tempfile::tempdir().unwrap();
-    // The terminal file carries the settled clock and the end marker.
-    let terminal = || proto::RecordingFile {
-        clock_states: Some(proto::ClockStateBatch {
-            states: vec![proto::ClockEpochState {
-                epoch_id: EPOCH,
-                status: proto::TimingStatus::Valid as i32,
-                r#final: true,
-            }],
-        }),
-        end: Some(proto::RecordingEnd {}),
-        ..Default::default()
-    };
-    // Current producer after a normal shutdown: data, then the terminal file.
-    let ended = Recording::new(project.path(), 1);
-    stats_recording(&ended, 30, true);
-    ended.write(2, terminal());
-    // An older producer's recording of the same run: no end, no final state.
-    let legacy = Recording::new(project.path(), 2);
-    stats_recording(&legacy, 30, true);
-    // An end marker beyond a missing file is not applied; the gap stays visible.
-    let gapped = Recording::new(project.path(), 3);
-    stats_recording(&gapped, 30, true);
-    gapped.write(3, terminal());
-
-    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
-    assert_eq!(
-        rows(&mut index, RECORDINGS),
-        vec![
-            vec![
-                json!("sealed"),
-                json!("sealed"),
-                json!("complete_prefix"),
-                json!(2),
-                json!(2)
-            ],
-            vec![
-                json!("unsealed"),
-                json!("unsealed"),
-                json!("complete_prefix"),
-                json!(1),
-                Json::Null
-            ],
-            vec![
-                json!("gap"),
-                json!("unsealed"),
-                json!("gap"),
-                json!(1),
-                Json::Null
-            ],
-        ]
-    );
-    assert_eq!(
-        rows(
-            &mut index,
-            "SELECT observed_status, is_final, timing_state FROM clocks ORDER BY recording_id"
+            "SELECT function_name, invocation_count, return_count, error_count,
+               panic_error_count, user_error_count, total_time
+             FROM profiler ORDER BY function_name"
         ),
         vec![
-            vec![json!("valid"), json!(1), json!("valid")],
-            vec![json!("valid"), json!(0), json!("valid")],
-            vec![json!("valid"), json!(0), json!("valid")],
-        ]
-    );
-    assert_eq!(
-        rows(
-            &mut index,
-            "SELECT recording_id, code FROM issues WHERE code = 'sequence_gap'"
-        ),
-        vec![vec![json!(gapped.hex()), json!("sequence_gap")]]
-    );
-    // Run completion is separate: the same executions answer in every recording.
-    assert_eq!(
-        rows(&mut index, "SELECT DISTINCT status FROM executions"),
-        vec![vec![json!("ok")]]
-    );
-    // The lost file arrives: the end now applies and the recording is sealed.
-    gapped.write(2, proto::RecordingFile::default());
-    assert_eq!(
-        rows(&mut index, RECORDINGS)[2],
-        vec![
-            json!("sealed"),
-            json!("sealed"),
-            json!("complete_prefix"),
-            json!(3),
-            json!(3)
-        ]
-    );
-    assert!(
-        run(&mut index, "SELECT 1").outcome.unsealed,
-        "the older recording still has no end"
-    );
-}
-
-#[test]
-fn unresolved_structure_stays_unresolved_until_evidence_arrives() {
-    let project = tempfile::tempdir().unwrap();
-    let recording = Recording::new(project.path(), 1);
-    // File 1: thread 2 is spawned by node 99, which nothing defines yet;
-    // path 5's parent path 4 and path 6 are only referenced; thread 3 is
-    // only referenced by its span section; the root is not defined yet.
-    recording.write(
-        1,
-        proto::RecordingFile {
-            definitions: Some(proto::Definitions {
-                functions: vec![function(10, "user.A", &[])],
-                call_paths: vec![path(5, ROOT, 4, 10, false)],
-                threads: vec![thread(2, Some(99), 0, 50)],
-                clock_epochs: vec![epoch()],
-            }),
-            clock_states: Some(valid()),
-            aggregates: Some(proto::AggregateBatch {
-                entries: vec![delta(5, false, 2, 20, 0), delta(6, false, 1, 5, 0)],
-            }),
-            spans: Some(proto::SpanBatch {
-                sections: vec![section(
-                    3,
-                    vec![Event::FunctionAnnouncement(proto::FunctionAnnouncement {
-                        id: 200,
-                        parent_id: 3,
-                        call_path_id: 5,
-                        entered_at_ticks: 60,
-                        inputs_cas_id: None,
-                    })],
-                )],
-            }),
-            ..Default::default()
-        },
-    );
-    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
-    assert!(
-        rows(&mut index, "SELECT * FROM executions").is_empty(),
-        "no thread is known to be a root"
-    );
-    let threads = "SELECT thread_id, definition_state, structure_state, kind, parent_node_kind,
-      execution_id FROM threads ORDER BY thread_id";
-    let r = recording.hex();
-    assert_eq!(
-        rows(&mut index, threads),
-        vec![
+            // Panics were not counted: the split is unknown, the errors are not.
             vec![
-                json!(format!("{r}:1")),
-                json!("unresolved"),
-                json!("unresolved"),
-                Json::Null,
-                Json::Null,
-                Json::Null
-            ],
-            vec![
-                json!(format!("{r}:2")),
-                json!("resolved"),
-                json!("unresolved"),
-                json!("spawn"),
-                Json::Null,
-                Json::Null
-            ],
-            vec![
-                json!(format!("{r}:3")),
-                json!("unresolved"),
-                json!("unresolved"),
-                Json::Null,
-                Json::Null,
-                Json::Null
-            ],
-        ]
-    );
-    let paths = "SELECT local_call_path_id, definition_state, depth, structure_state
-      FROM call_paths ORDER BY local_call_path_id";
-    assert_eq!(
-        rows(&mut index, paths),
-        vec![
-            vec![
-                json!(4),
-                json!("unresolved"),
-                Json::Null,
-                json!("unresolved")
-            ],
-            vec![json!(5), json!("resolved"), Json::Null, json!("unresolved")],
-            vec![
-                json!(6),
-                json!("unresolved"),
-                Json::Null,
-                json!("unresolved")
-            ],
-        ]
-    );
-    let issues = "SELECT code, subject FROM issues ORDER BY code, subject";
-    assert_eq!(
-        rows(&mut index, issues),
-        vec![
-            vec![json!("call_path_undefined"), json!(format!("{r}:p4"))],
-            vec![json!("call_path_undefined"), json!(format!("{r}:p6"))],
-            vec![json!("thread_parent_unresolved"), json!(format!("{r}:2"))],
-            vec![json!("thread_undefined"), json!(format!("{r}:1"))],
-            vec![json!("thread_undefined"), json!(format!("{r}:3"))],
-        ]
-    );
-    assert_eq!(
-        rows(
-            &mut index,
-            "SELECT execution_id, parent_node_kind, structure_state FROM calls"
-        ),
-        vec![vec![Json::Null, json!("thread"), json!("unresolved")]],
-        "thread 3 is known only as a thread id; its execution is unknown"
-    );
-
-    // File 2: the root, node 99 (a thread spawned by the root) and the
-    // missing paths arrive; everything but thread 3 resolves.
-    recording.write(
-        2,
-        proto::RecordingFile {
-            definitions: Some(proto::Definitions {
-                functions: vec![],
-                call_paths: vec![
-                    path(4, ROOT, 0, 10, false),
-                    path(6, ROOT, 5, 10, false),
-                    path(7, ROOT, 4, 10, true),
-                ],
-                threads: vec![thread(ROOT, None, 0, 0), thread(99, Some(ROOT), 7, 40)],
-                clock_epochs: vec![epoch()],
-            }),
-            ..Default::default()
-        },
-    );
-    assert_eq!(
-        rows(&mut index, "SELECT execution_id FROM executions"),
-        vec![vec![json!(format!("{r}:1"))]]
-    );
-    assert_eq!(
-        rows(
-            &mut index,
-            "SELECT thread_id, kind, parent_node_kind, parent_thread_id, execution_id,
-               spawn_fqn, start_offset_ns
-             FROM threads WHERE definition_state = 'resolved' ORDER BY start_offset_ns"
-        ),
-        vec![
-            vec![
-                json!(format!("{r}:1")),
-                json!("root"),
-                Json::Null,
-                Json::Null,
-                json!(format!("{r}:1")),
-                Json::Null,
-                json!(0)
-            ],
-            vec![
-                json!(format!("{r}:99")),
-                json!("spawn"),
-                json!("thread"),
-                json!(format!("{r}:1")),
-                json!(format!("{r}:1")),
                 json!("user.A"),
-                json!(40)
+                json!(4),
+                json!(3),
+                json!(1),
+                Json::Null,
+                Json::Null,
+                Json::Null
+            ],
+            // No outcomes at all: only the count is known.
+            vec![
+                json!("user.B"),
+                json!(2),
+                Json::Null,
+                Json::Null,
+                Json::Null,
+                Json::Null,
+                Json::Null
+            ],
+        ],
+        "an invalidated clock leaves the counts"
+    );
+}
+
+#[test]
+fn nodes_wait_for_function_names_and_follow_late_metadata() {
+    let project = tempfile::tempdir().unwrap();
+    let recording = Recording::new(project.path(), 1, Some([9; 16]));
+    // B's name is unavailable at first; its node takes its ID.
+    let mut file = tree(vec![delta(3, false, 1, 5, ok())], vec![]);
+    let definitions = file.definitions.as_mut().unwrap();
+    definitions.functions[1] = proto::FunctionDefinition {
+        function_id: B,
+        resolution: Some(proto::function_definition::Resolution::Unavailable(
+            proto::MetadataUnavailable {},
+        )),
+    };
+    // A path whose callee is only referenced, never described: no node.
+    definitions.call_paths.push(path(6, 1, 99, false));
+    file.aggregates
+        .as_mut()
+        .unwrap()
+        .entries
+        .push(delta(6, false, 1, 1, ok()));
+    file.end = Some(process_end(proto::ProcessStatus::Success));
+    recording.write(1, file);
+    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
+    let names = "SELECT function_name FROM profiler ORDER BY 1";
+    assert_eq!(
+        rows(&mut index, names),
+        vec![vec![Json::Null], vec![json!("user.A")]],
+        "an unavailable name is unknown; an undescribed callee has no node"
+    );
+    let before = rows(
+        &mut index,
+        "SELECT profiler_node_id FROM profiler ORDER BY 1",
+    );
+    // Changed evidence rebuilds the recording: with B's name, a new node ID.
+    std::fs::remove_file(recording.dir.join(format!("{:020}.btel", 1))).unwrap();
+    let mut file = tree(vec![delta(3, false, 1, 5, ok())], vec![]);
+    file.end = Some(process_end(proto::ProcessStatus::Success));
+    recording.write(1, file);
+    assert_eq!(
+        rows(&mut index, names),
+        vec![vec![json!("user.A")], vec![json!("user.B")]]
+    );
+    let after = rows(
+        &mut index,
+        "SELECT profiler_node_id FROM profiler ORDER BY 1",
+    );
+    assert_eq!(before.len(), after.len());
+    assert_ne!(before, after);
+}
+
+#[test]
+fn totals_beyond_i64_are_null_not_wrapped() {
+    let project = tempfile::tempdir().unwrap();
+    let recording = Recording::new(project.path(), 1, Some([9; 16]));
+    let huge = u64::MAX / 2;
+    recording.write(
+        1,
+        tree(
+            vec![
+                delta(1, false, 1, huge, ok()),
+                delta(1, false, 1, huge, ok()),
+            ],
+            vec![],
+        ),
+    );
+    recording.write(
+        2,
+        proto::RecordingFile {
+            end: Some(process_end(proto::ProcessStatus::Success)),
+            ..Default::default()
+        },
+    );
+    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
+    assert_eq!(
+        rows(
+            &mut index,
+            "SELECT invocation_count, total_time, self_time FROM profiler"
+        ),
+        vec![vec![json!(2), Json::Null, Json::Null]]
+    );
+}
+
+#[test]
+fn futures_are_spans_named_by_their_spawn() {
+    let project = tempfile::tempdir().unwrap();
+    let recording = Recording::new(project.path(), 1, Some([9; 16]));
+    let mut file = tree(vec![], vec![]);
+    let threads = &mut file.definitions.as_mut().unwrap().threads;
+    threads.push(proto::ThreadDefinition {
+        name: Some("fetcher".into()),
+        ..thread(3, Some(ROOT), 5, 25)
+    });
+    file.spans = Some(proto::SpanBatch {
+        sections: vec![
+            section(
+                CHILD,
+                vec![thread_done(70, proto::InvocationOutcome::Ok, false)],
+            ),
+            section(
+                3,
+                vec![thread_done(90, proto::InvocationOutcome::Errored, true)],
+            ),
+            section(
+                ROOT,
+                vec![
+                    thread_done(100, proto::InvocationOutcome::Ok, false),
+                    // A second, different completion is a conflict: the first stays.
+                    thread_done(120, proto::InvocationOutcome::Cancelled, false),
+                ],
+            ),
+        ],
+    });
+    recording.write(1, file);
+    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
+    let hex = btel_reader::discovery::hex(&recording.id);
+    assert_eq!(
+        rows(
+            &mut index,
+            "SELECT span_id, span_name, parent_span_id, future_id, status, duration, span_reason
+             FROM spans ORDER BY span_id"
+        ),
+        vec![
+            vec![
+                json!(format!("{hex}:1")),
+                json!("user.A"),
+                Json::Null,
+                Json::Null,
+                json!("return"),
+                json!(100),
+                json!("other")
             ],
             vec![
-                json!(format!("{r}:2")),
-                json!("spawn"),
-                json!("thread"),
-                json!(format!("{r}:99")),
-                json!(format!("{r}:1")),
-                Json::Null,
-                json!(50)
+                json!(format!("{hex}:2")),
+                json!("user.B"),
+                json!(format!("{hex}:1")),
+                json!(format!("{hex}:1")),
+                json!("return"),
+                json!(50),
+                json!("other")
+            ],
+            vec![
+                json!(format!("{hex}:3")),
+                json!("fetcher"),
+                json!(format!("{hex}:1")),
+                json!(format!("{hex}:1")),
+                json!("panic_error"),
+                json!(65),
+                json!("other")
             ],
         ]
     );
+    // Spawned futures share the spawn's node; the root call takes its entry's.
     assert_eq!(
-        rows(&mut index, paths),
-        vec![
-            vec![json!(4), json!("resolved"), json!(0), json!("resolved")],
-            vec![json!(5), json!("resolved"), json!(1), json!("resolved")],
-            vec![json!(6), json!("resolved"), json!(2), json!("resolved")],
-            vec![json!(7), json!("resolved"), json!(1), json!("resolved")],
-        ]
-    );
-    assert_eq!(
-        rows(&mut index, issues),
-        vec![vec![json!("thread_undefined"), json!(format!("{r}:3"))]]
+        rows(
+            &mut index,
+            "SELECT COUNT(DISTINCT profiler_node_id), COUNT(profiler_node_id) FROM spans"
+        ),
+        vec![vec![json!(2), json!(3)]]
     );
 }
 
 #[test]
-fn totals_beyond_i64_stay_exact_and_are_never_wrapped() {
+fn model_usage_is_priced_on_the_span_that_made_the_call() {
     let project = tempfile::tempdir().unwrap();
-    let recording = Recording::new(project.path(), 1);
-    let big = 3 << 61;
-    recording.write(
-        1,
-        proto::RecordingFile {
-            definitions: Some(proto::Definitions {
-                functions: vec![function(10, "user.A", &[])],
-                call_paths: vec![path(1, ROOT, 0, 10, false)],
-                threads: vec![thread(ROOT, None, 0, 0)],
-                clock_epochs: vec![epoch()],
-            }),
-            clock_states: Some(valid()),
-            aggregates: Some(proto::AggregateBatch {
-                entries: vec![delta(1, false, big, 1, 0), delta(1, false, big, 1, 0)],
-            }),
-            ..Default::default()
-        },
-    );
-    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
-    assert_eq!(
-        rows(
-            &mut index,
-            "SELECT completed_calls, aggregate_state FROM call_path_stats"
-        ),
-        vec![vec![Json::Null, json!("overflow")]]
-    );
-    assert_eq!(
-        rows(
-            &mut index,
-            "SELECT completed_calls, aggregate_state FROM executions"
-        ),
-        vec![vec![Json::Null, json!("overflow")]]
-    );
-}
-
-#[test]
-fn conflicting_thread_completions_are_conflicted_not_chosen() {
-    let project = tempfile::tempdir().unwrap();
-    let recording = Recording::new(project.path(), 1);
-    stats_recording(&recording, 30, true);
-    recording.write(
-        2,
-        proto::RecordingFile {
-            spans: Some(proto::SpanBatch {
-                sections: vec![section(
-                    ROOT,
-                    vec![thread_done(1_000, proto::InvocationOutcome::Errored)],
-                )],
-            }),
-            ..Default::default()
-        },
-    );
-    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
-    assert_eq!(
-        rows(
-            &mut index,
-            "SELECT status, completion_state FROM executions"
-        ),
-        vec![vec![json!("conflicted"), json!("conflicted")]]
-    );
-    assert_eq!(
-        rows(&mut index, "SELECT code, subject_kind FROM issues"),
-        vec![vec![json!("thread_completion_conflict"), json!("thread")]]
-    );
-}
-
-#[test]
-fn stored_execution_starts_follow_their_clock() {
-    let project = tempfile::tempdir().unwrap();
-    let recording = Recording::new(project.path(), 1);
-    let definitions = |definitions: proto::Definitions| proto::RecordingFile {
-        definitions: Some(definitions),
-        ..Default::default()
+    let recording = Recording::new(project.path(), 1, Some([9; 16]));
+    let call = 50;
+    let usage = |node: u64, model: Option<&str>, input: u64, read, write| proto::ModelUsage {
+        node_id: node,
+        thread_id: ROOT,
+        model: model.map(Into::into),
+        input_tokens: input,
+        output_tokens: 1_000,
+        cache_read_tokens: read,
+        cache_write_tokens: write,
+        reasoning_tokens: None,
     };
-    // The root and a spawned thread arrive before their clock.
-    recording.write(
-        1,
-        definitions(proto::Definitions {
-            threads: vec![
-                thread(ROOT, None, 0, 2_000_000),
-                thread(2, Some(ROOT), 0, 3_000_000),
+    let mut file = tree(vec![], vec![]);
+    file.spans = Some(proto::SpanBatch {
+        sections: vec![section(
+            ROOT,
+            vec![
+                Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+                    id: call,
+                    parent_id: ROOT,
+                    call_path_id: 3,
+                    entered_at_ticks: 10,
+                    inputs_cas_id: None,
+                }),
+                Event::FunctionCompletion(proto::FunctionCompletion {
+                    id: call,
+                    parent_id: ROOT,
+                    node: 3 << 1,
+                    entered_at_ticks: 10,
+                    exited_at_ticks: 40,
+                    completion_flags: 1,
+                    ..Default::default()
+                }),
+                thread_done(100, proto::InvocationOutcome::Ok, false),
             ],
-            ..Default::default()
-        }),
-    );
-    let starts = "SELECT started_at_ms, started_unix_ns / 1000000 FROM executions";
+        )],
+    });
+    file.usage = Some(proto::UsageBatch {
+        entries: vec![
+            // Two turns of one call: summed and priced turn by turn.
+            usage(
+                call,
+                Some("claude-opus-5-5-20260915"),
+                1_000_000,
+                Some(1_000_000),
+                Some(1_000_000),
+            ),
+            usage(call, Some("jev-1.13.0"), 1_000_000, None, None),
+            // No function span open: the thread's future pays.
+            usage(ROOT, Some("some-new-model"), 10, None, None),
+        ],
+    });
+    recording.write(1, file);
     let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
-    assert_eq!(rows(&mut index, starts), vec![vec![Json::Null, Json::Null]]);
-    // The clock arrives: the stored start is what its conversion gives.
-    recording.write(
-        2,
-        definitions(proto::Definitions {
-            clock_epochs: vec![epoch()],
-            ..Default::default()
-        }),
+    let result = run(
+        &mut index,
+        "SELECT span_type, temporary_projections['model_name'], temporary_projections['model_calls'],
+           temporary_projections['input_tokens'], temporary_projections['output_tokens'],
+           temporary_projections['cache_read_tokens'], temporary_projections['cache_write_tokens'],
+           round(temporary_projections['cost'], 6)
+         FROM spans ORDER BY span_type",
     );
-    let start = json!(1_790_000_000_002_i64);
-    assert_eq!(rows(&mut index, starts), vec![vec![start.clone(), start]]);
-    // A second, different conversion: the clock's times are unavailable.
-    recording.write(
-        3,
-        definitions(proto::Definitions {
-            clock_epochs: vec![proto::ClockEpochDefinition {
-                multiplier: 2,
-                ..epoch()
-            }],
-            ..Default::default()
-        }),
+    // Opus 5.5: 1M input $4, 1k output $0.02, 1M cache reads $0.20, 1M cache
+    // writes $5; Jev: 1M input $0.042, output free.
+    assert_eq!(
+        result.rows,
+        vec![
+            vec![
+                json!("function"),
+                json!("claude-opus-5-5-20260915, jev-1.13.0"),
+                json!(2),
+                json!(2_000_000),
+                json!(2_000),
+                json!(1_000_000),
+                json!(1_000_000),
+                json!(9.262)
+            ],
+            vec![
+                json!("future"),
+                json!("some-new-model"),
+                json!(1),
+                json!(10),
+                json!(1_000),
+                Json::Null,
+                Json::Null,
+                Json::Null
+            ],
+        ],
+        "an unpriced model has no cost, not a zero one"
     );
-    assert_eq!(rows(&mut index, starts), vec![vec![Json::Null, Json::Null]]);
-    // A first index of the same files stores the same.
-    drop(index);
-    std::fs::remove_file(project.path().join(".baml/btel/query.sqlite")).unwrap();
-    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
-    assert_eq!(rows(&mut index, starts), vec![vec![Json::Null, Json::Null]]);
 }

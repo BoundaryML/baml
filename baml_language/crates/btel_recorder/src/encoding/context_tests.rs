@@ -139,6 +139,7 @@ fn largest_completion_and_context_fit_admitted_capacity() {
             exited_at_ticks: u64::MAX,
             self_await_ticks: u64::MAX,
             completion_flags: u32::MAX,
+            panicked: true,
             value_cas_id: Some(proto::SnapshotId {
                 low: u64::MAX,
                 high: u64::MAX,
