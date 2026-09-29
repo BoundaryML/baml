@@ -131,6 +131,7 @@ impl Tlab {
     /// If the current chunk is exhausted, refill from the heap.
     #[inline]
     pub fn alloc(&mut self, obj: Object) -> HeapPtr {
+        self.heap.charge_backing_bytes(&obj);
         if self.alloc_ptr >= self.alloc_limit {
             self.refill();
         }
@@ -180,9 +181,7 @@ impl Tlab {
     /// Allocate a string object.
     #[inline]
     pub fn alloc_string(&mut self, s: impl Into<bex_str::BexStr>) -> HeapPtr {
-        let s = s.into();
-        self.heap.charge_backing_bytes(s.unshared_heap_bytes());
-        self.alloc(Object::String(s))
+        self.alloc(Object::String(s.into()))
     }
 
     /// Allocate an array object whose elements have static type `element_ty`.
@@ -234,7 +233,6 @@ impl Tlab {
     /// Allocate a uint8 array object.
     #[inline]
     pub fn alloc_uint8array(&mut self, data: Vec<u8>) -> HeapPtr {
-        self.heap.charge_backing_bytes(data.capacity());
         self.alloc(Object::Uint8Array(data.into()))
     }
 

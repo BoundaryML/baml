@@ -10,6 +10,8 @@ use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
+use bex_vm_types::Object;
+
 use crate::BexHeap;
 
 pub(crate) const MIN_FULL_BUDGET: usize = 32 * 1024 * 1024;
@@ -91,10 +93,16 @@ impl BexHeap {
         }
     }
 
-    /// Spend budget on a backing buffer owned by an object being allocated.
-    /// Object slots are charged separately when a TLAB reserves them.
+    /// Spend budget on the backing buffer owned by an object being allocated:
+    /// an unshared flat string's bytes or a byte array's length. Object slots
+    /// are charged separately when a TLAB reserves them.
     #[inline]
-    pub(crate) fn charge_backing_bytes(&self, bytes: usize) {
+    pub(crate) fn charge_backing_bytes(&self, obj: &Object) {
+        let bytes = match obj {
+            Object::String(s) => s.unshared_heap_bytes(),
+            Object::Uint8Array(bytes) => bytes.len(),
+            _ => return,
+        };
         self.gc_policy.charge(bytes);
     }
 
@@ -105,8 +113,6 @@ impl BexHeap {
 
 #[cfg(test)]
 mod tests {
-    use bex_vm_types::Object;
-
     use super::*;
     use crate::{CollectionLevel, Tlab};
 
@@ -221,8 +227,11 @@ mod tests {
         let slots = FIRST_TLAB_SLOTS * size_of::<Object>();
         tlab.alloc_string("x".repeat(1000));
         assert_eq!(heap.gc_budget().bytes_since_full_gc, slots + 1000);
-        tlab.alloc_uint8array(Vec::with_capacity(2000));
+        tlab.alloc_uint8array(vec![0; 2000]);
         assert_eq!(heap.gc_budget().bytes_since_full_gc, slots + 3000);
+        // Objects built directly, as `baml.deep_copy` does, are charged too.
+        tlab.alloc(Object::Uint8Array(vec![0; 500].into()));
+        assert_eq!(heap.gc_budget().bytes_since_full_gc, slots + 3500);
         assert!(!heap.should_gc());
 
         // Short-lived large strings request a collection once their bytes
