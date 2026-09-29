@@ -311,18 +311,17 @@ pub(super) fn eliminate_dead_stores(body: &mut MirFunctionBody<'_>, arity: usize
     }
 }
 
-/// Whether a slot of this type can hold a heap object. Unlisted variants stay
-/// on the conservative side.
+/// Whether a slot of this type can hold a heap object (floats are boxed).
+/// Unlisted variants stay on the conservative side.
 fn may_reference_heap(ty: &baml_type::RuntimeTy) -> bool {
-    use baml_type::RuntimeTy;
+    use baml_type::{Literal, RuntimeTy};
     !matches!(
         ty,
         RuntimeTy::Int
-            | RuntimeTy::Float
             | RuntimeTy::Bool
             | RuntimeTy::Null
             | RuntimeTy::Void
-            | RuntimeTy::Literal(..)
+            | RuntimeTy::Literal(Literal::Int(_) | Literal::Bool(_), ..)
     )
 }
 
@@ -672,10 +671,16 @@ mod tests {
     fn dead_overwrite_of_heap_typed_named_local_is_kept() {
         // `xs = a; ...; xs = b` with `xs` dead after the second store: the
         // store releases the first value, so it must survive DSE for a type
-        // that can hold a heap object. An `int` local is still optimized.
+        // that can hold a heap object (floats are boxed). An `int` local is still
+        // optimized.
         let string = |value: &str| Constant::String(value.into());
         for (ty, values, kept) in [
             (RuntimeTy::string(), [string("a"), string("b")], true),
+            (
+                RuntimeTy::Float,
+                [Constant::Float(1.0), Constant::Float(2.0)],
+                true,
+            ),
             (
                 RuntimeTy::int(),
                 [Constant::Int(1), Constant::Int(2)],
