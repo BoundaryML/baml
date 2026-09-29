@@ -1,0 +1,31 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// E0176 (invariant container pattern) yields to the dead-pattern E0001: a
+// pattern that can never match reports once, as the error, not also as the
+// weaker warning.
+
+// A plain arm: E0001 only.
+function dead_arm(v: int[]) -> string {
+    match (v) {
+        let a: unknown[] => "a",
+        _ => "o",
+    }
+}
+
+// An or-pattern whose chain is dead: E0001 on the chain, no E0176 from the
+// `unknown[]` alternative.
+function dead_or_chain(v: int[]) -> string {
+    match (v) {
+        let a: unknown[] | string => "a",
+        _ => "o",
+    }
+}
+
+// A live or-pattern keeps the warning on its `unknown[]` alternative.
+function live_or_chain(v: unknown) -> string {
+    match (v) {
+        let a: unknown[] | string => "a",
+        _ => "o",
+    }
+}

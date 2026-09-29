@@ -508,6 +508,7 @@ impl<'db> InferenceContext<'db> {
             }
             Pattern::Or(alts) => {
                 let alts = alts.clone();
+                let pending_before = self.pending_diags.len();
                 self.or_probe_depth += 1;
                 let outcomes: Vec<PatternOutcome> = alts
                     .iter()
@@ -527,7 +528,19 @@ impl<'db> InferenceContext<'db> {
                     })
                     .collect();
                 let whole = self.union_of(&whole);
-                self.check_pattern_type_overlap(pat, scrut, &whole);
+                if self.check_pattern_type_overlap(pat, scrut, &whole) {
+                    // The dead chain is the report; an alternative's
+                    // weaker E0176 is noise on top of it.
+                    let mut index = 0;
+                    self.pending_diags.retain(|pending| {
+                        index += 1;
+                        index <= pending_before
+                            || !matches!(
+                                pending,
+                                super::PendingDiag::InvariantContainerPattern { .. }
+                            )
+                    });
+                }
                 // Alternatives bind the SAME names (HIR enforces); their
                 // NARROW types must agree - a name bound `int` in one alt
                 // and `string` in another has no one type at the join.
@@ -777,10 +790,119 @@ impl<'db> InferenceContext<'db> {
         if !pat_ty.has_error() {
             outcome.recorded_ty = Some(pat_ty.clone());
         }
-        if !outcome.covers_type {
-            self.check_pattern_type_overlap(pat, scrut, pat_ty);
+        let reported = !outcome.covers_type && self.check_pattern_type_overlap(pat, scrut, pat_ty);
+        if !reported {
+            self.check_invariant_container_pattern(pat, scrut, pat_ty);
         }
         outcome
+    }
+
+    /// The invariant-container trap (E0176, a warning): a type pattern
+    /// naming a container whose type argument mentions `unknown`
+    /// (`unknown[]`, `map<string, unknown>`, `Box<unknown>`, a `Future` at
+    /// `unknown`) reads as "any
+    /// array" / "any map", but generics are invariant, so the runtime test
+    /// matches only containers built at exactly those arguments - an `int[]`
+    /// value misses an `unknown[]` arm and falls through silently.
+    ///
+    /// Fires only when some scrutinee member can actually hold the same
+    /// container at another argument: `unknown` itself, a type variable, or
+    /// the same container kind at non-equivalent arguments (`int[]`, or
+    /// `json[]` inside the `json` alias). A scrutinee with the pattern type
+    /// itself as a member (`unknown[] | null`, `unknown[] | int[]`) makes the
+    /// test exact or deliberate, and stays quiet.
+    fn check_invariant_container_pattern(&mut self, pat: PatId, scrut: &Ty, pat_ty: &Ty) {
+        if self.rest_reject_depth > 0 || pat_ty.has_error() || scrut.has_error() {
+            return;
+        }
+        let (Ok(pat_closed), Ok(scrut_closed)) = (
+            baml_type::interned::ClosedTy::try_from(pat_ty),
+            baml_type::interned::ClosedTy::try_from(scrut),
+        ) else {
+            return;
+        };
+        let scrut_members = self.flatten_union_members(&scrut_closed.to_plain());
+        for member in self.flatten_union_members(&pat_closed.to_plain()) {
+            let Some(kind) = self.unknown_arg_container_kind(&member) else {
+                continue;
+            };
+            // A scrutinee that lists the pattern type itself as a member
+            // (`unknown[] | int[]`) already spells the distinction the arm
+            // draws: the author is choosing between instantiations.
+            let exact_member = scrut_members.iter().any(|scrut_member| {
+                baml_type::normalize::equivalent(&member, scrut_member, &self.facts)
+            });
+            if !exact_member
+                && scrut_members
+                    .iter()
+                    .any(|scrut_member| self.holds_other_instantiation(&member, scrut_member))
+            {
+                self.pending_diags
+                    .push(super::PendingDiag::InvariantContainerPattern {
+                        pat,
+                        pattern: member,
+                        kind,
+                    });
+                return;
+            }
+        }
+    }
+
+    /// The container kind of `ty` when one of its (invariant) type arguments
+    /// mentions `unknown`; `None` for any other type.
+    fn unknown_arg_container_kind(
+        &self,
+        ty: &baml_type::Ty,
+    ) -> Option<crate::diagnostics::InvariantContainerKind> {
+        use crate::diagnostics::InvariantContainerKind as K;
+        let (kind, args): (K, Vec<&baml_type::Ty>) = match ty {
+            baml_type::Ty::List(element) => (K::List, vec![element]),
+            baml_type::Ty::Map { key, value, .. } => (K::Map, vec![key, value]),
+            baml_type::Ty::Class(_, args) => (K::Class, args.iter().collect()),
+            baml_type::Ty::Future(value, error) => (K::Future, vec![value, error]),
+            _ => return None,
+        };
+        args.into_iter()
+            .any(|arg| self.mentions_unknown(arg, 8))
+            .then_some(kind)
+    }
+
+    /// Whether `ty` mentions `unknown` anywhere in its structure (aliases
+    /// expanded, bounded by `fuel` so a recursive alias terminates).
+    fn mentions_unknown(&self, ty: &baml_type::Ty, fuel: u32) -> bool {
+        if fuel == 0 {
+            return false;
+        }
+        match self.expand_alias_chain(ty) {
+            baml_type::Ty::Unknown => true,
+            baml_type::Ty::List(element) => self.mentions_unknown(&element, fuel - 1),
+            baml_type::Ty::Map { key, value, .. } => {
+                self.mentions_unknown(&key, fuel - 1) || self.mentions_unknown(&value, fuel - 1)
+            }
+            baml_type::Ty::Class(_, args) | baml_type::Ty::Union(args) => {
+                args.iter().any(|arg| self.mentions_unknown(arg, fuel - 1))
+            }
+            baml_type::Ty::Future(value, error) => {
+                self.mentions_unknown(&value, fuel - 1) || self.mentions_unknown(&error, fuel - 1)
+            }
+            _ => false,
+        }
+    }
+
+    /// Whether a scrutinee member can hold a value of `pattern`'s container
+    /// kind at type arguments other than `pattern`'s own.
+    fn holds_other_instantiation(&self, pattern: &baml_type::Ty, member: &baml_type::Ty) -> bool {
+        use baml_type::Ty as P;
+        let member = self.expand_alias_chain(member);
+        let same_kind = match (pattern, &member) {
+            (_, P::Unknown | P::TypeVar(_)) => return true,
+            (P::List(_), P::List(_))
+            | (P::Map { .. }, P::Map { .. })
+            | (P::Future(..), P::Future(..)) => true,
+            (P::Class(pattern_name, _), P::Class(member_name, _)) => pattern_name == member_name,
+            _ => false,
+        };
+        same_kind && !baml_type::normalize::equivalent(pattern, &member, &self.facts)
     }
 
     /// The dead-pattern rule: a pattern TYPE provably sharing no value
@@ -788,12 +910,16 @@ impl<'db> InferenceContext<'db> {
     /// pairs the oracle decides by unification; rigid/projection pairs
     /// ask the reachability oracle, whose `No` is trusted only when it
     /// can see every variable (the `all_typevars_within` obligation).
-    fn check_pattern_type_overlap(&mut self, pat: PatId, scrut: &Ty, pat_ty: &Ty) {
+    ///
+    /// Returns whether the mismatch was reported, so a caller can skip
+    /// weaker lints on the same pattern. A probed `is` pattern is legal
+    /// when dead (it just answers `false`) and reports nothing here.
+    fn check_pattern_type_overlap(&mut self, pat: PatId, scrut: &Ty, pat_ty: &Ty) -> bool {
         if self.or_probe_depth > 0 || self.rest_reject_depth > 0 {
-            return;
+            return false;
         }
         if pat_ty.has_error() || scrut.has_error() {
-            return;
+            return false;
         }
         let (Ok(pat_closed), Ok(scrut_closed)) = (
             baml_type::interned::ClosedTy::try_from(pat_ty),
@@ -801,7 +927,7 @@ impl<'db> InferenceContext<'db> {
         ) else {
             // Open pair: undecidable, defer (the pre-existing has_infer
             // disposition).
-            return;
+            return false;
         };
         let pat_plain = pat_closed.to_plain();
         let scrut_plain = scrut_closed.to_plain();
@@ -834,6 +960,7 @@ impl<'db> InferenceContext<'db> {
                     found: pat_ty.clone(),
                 });
         }
+        mismatch
     }
 
     /// Whether an arm with natural type `pat` is *plausible* against a
@@ -1323,7 +1450,9 @@ impl<'db> InferenceContext<'db> {
                 // A written ascription that provably shares no value with
                 // the scrutinee (a non-list, or a disjoint list) is the
                 // same dead-pattern mismatch a type pattern gets.
-                self.check_pattern_type_overlap(pat, scrut, ascribed);
+                if !self.check_pattern_type_overlap(pat, scrut, ascribed) {
+                    self.check_invariant_container_pattern(pat, scrut, ascribed);
+                }
                 self.narrow_to(scrut, ascribed)
             }
             _ => scrut.clone(),

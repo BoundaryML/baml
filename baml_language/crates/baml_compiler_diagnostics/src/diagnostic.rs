@@ -415,6 +415,12 @@ pub enum DiagnosticId {
     InvalidRegexPattern,
     /// An unparenthesized function/union boundary has two syntactic owners (E0175).
     AmbiguousUnion,
+    /// A type pattern names a container whose type argument mentions
+    /// `unknown` (`unknown[]`, `map<string, unknown>`) against a scrutinee
+    /// that can hold a differently-instantiated container (E0176). Generics
+    /// are invariant, so the test matches only containers built with exactly
+    /// that type argument: an `int[]` value never matches `unknown[]`.
+    InvariantContainerPattern,
 }
 
 impl DiagnosticId {
@@ -624,6 +630,7 @@ impl DiagnosticId {
             DiagnosticId::InterfaceMethodMissingThrows => "E0170",
             DiagnosticId::InvalidRegexPattern => "E0174",
             DiagnosticId::AmbiguousUnion => "E0175",
+            DiagnosticId::InvariantContainerPattern => "E0176",
             DiagnosticId::TypeMustBeKnown => "E0155",
             DiagnosticId::InvalidBuiltinTypeArguments => "E0171",
             DiagnosticId::ScopedTypeEscapesBlock => "E0172",

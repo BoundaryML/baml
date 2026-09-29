@@ -1936,6 +1936,7 @@ fn tir_type_error_to_diagnostic_id(
             DiagnosticId::NonExhaustiveMatch
         }
         TirTypeError::UnreachableArm => DiagnosticId::UnreachableArm,
+        TirTypeError::InvariantContainerPattern { .. } => DiagnosticId::InvariantContainerPattern,
         TirTypeError::OrPatternBindingTypeMismatch { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::GenericClassDestructureRequiresTypeArgs { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::RestSubPatternNotBinding => DiagnosticId::TypeMismatch,
