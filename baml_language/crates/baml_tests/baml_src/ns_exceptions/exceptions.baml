@@ -1419,7 +1419,8 @@ test "inline_throw_catch" {
 // throw_in_match_arm_propagates: no semicolon after match so the throw from the
 // wildcard arm becomes the block's expression value and propagates to the catch.
 // A trailing semicolon would discard the result (and the throw), so the
-// sentinel panic would fire instead.
+// sentinel panic would fire instead. The `;` after the `catch` is the test
+// body's own: a test body must be `void` (E0176).
 test "throw_in_match_arm_propagates" {
     {
         let x = 2;
@@ -1431,7 +1432,7 @@ test "throw_in_match_arm_propagates" {
         }
     } catch (e) {
         string => null
-    }
+    };
 }
 
 function s14_oob_fields() -> int {

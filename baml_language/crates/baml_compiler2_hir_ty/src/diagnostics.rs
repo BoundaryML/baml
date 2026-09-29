@@ -164,6 +164,10 @@ pub enum TirTypeError {
     /// A mounted callable whose implementation is compiler-owned and has no
     /// location-free link ABI was invoked from a source-less consumer.
     MountedPackageCallUnsupported { path: Name },
+    /// A `test` body evaluates to a value of this non-`void` type. The value
+    /// would be thrown away, so `test "x" { 1 == 2 }` would pass without
+    /// checking anything.
+    TestBodyNotVoid { got: Ty },
     /// A constant pattern argument to `baml.regex.new` does not compile.
     /// Checked here so a typo in a literal pattern is a source error rather
     /// than a throw the program has to reach to discover.
@@ -1145,6 +1149,15 @@ impl TirTypeError {
                             path.as_str(),
                         );
                     f.write_str(diagnostic.message.as_str())
+                }
+                TirTypeError::TestBodyNotVoid { got } => {
+                    write!(
+                        f,
+                        "a test body must not evaluate to a value, but this one is `{}`; \
+                     use `assert.is_true(...)` to check a condition, or end the body \
+                     with `;` to discard the value",
+                        got.spell(vp)
+                    )
                 }
                 TirTypeError::InvalidRegexPattern {
                     kind,

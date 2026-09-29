@@ -26,8 +26,8 @@ pub mod unify;
 use std::{cell::RefCell, path::PathBuf, sync::Arc};
 
 use baml_compiler2_ast::{
-    Expr, ExprBody, ExprId, ObjectExprField, PatId, Pattern, PropertySyntax, Stmt, StmtId,
-    TypeBindingValue, traverse::BodyNode,
+    Expr, ExprBody, ExprId, LambdaKind, ObjectExprField, PatId, Pattern, PropertySyntax, Stmt,
+    StmtId, TypeBindingValue, traverse::BodyNode,
 };
 use baml_compiler2_hir::{
     body::BodyOwnerId,
@@ -75,6 +75,17 @@ use crate::{
 /// and `null` both denote the single-value unit.
 fn is_unit(ty: &Ty) -> bool {
     matches!(ty.kind(), InferTy::Void | InferTy::Null)
+}
+
+/// Whether every value of this type is the unit (`void`/`null`), or there
+/// is no value at all (`never`), e.g. `void | null` from a body whose
+/// branches end in a `void` call and a bare `null`.
+fn all_unit(ty: &Ty) -> bool {
+    match ty.kind() {
+        InferTy::Void | InferTy::Null | InferTy::Never => true,
+        InferTy::Union(members) => members.iter().all(all_unit),
+        _ => false,
+    }
 }
 
 /// Whether an object slot initialized to `null` satisfies this type. Weak
@@ -944,6 +955,11 @@ enum PendingDiag<'db> {
         name: baml_type::Name,
     },
     /// A constant pattern argument that does not compile.
+    /// A `test` body whose value is not `void`.
+    TestBodyNotVoid {
+        expr: ExprId,
+        got: Ty,
+    },
     InvalidRegexPattern {
         expr: ExprId,
         kind: sys_regex::ErrorKind,
@@ -2141,6 +2157,35 @@ impl<'db> InferenceContext<'db> {
             }
         }
         ty
+    }
+
+    /// Check a `test` body against its `void` return, reporting a non-unit
+    /// value at the body's tail as a test-specific diagnostic.
+    ///
+    /// The body is inferred without a `void` hint: the hint would push into
+    /// the tail's branches and report each valued arm as its own mismatch,
+    /// when the problem is the one value the whole body produces.
+    fn check_test_body(&mut self, body: &ExprBody, root: ExprId, void: &Ty) -> Ty {
+        let ty = self.infer_expr(body, root, &Expectation::None);
+        let resolved = self.structurally_resolve(&ty);
+        if resolved.has_error() || all_unit(&resolved) {
+            return void.clone();
+        }
+        let saved_anchor = self.obligation_anchor.replace(root);
+        let fits = self.sub(&ty, void);
+        self.obligation_anchor = saved_anchor;
+        if !fits {
+            let at = match &body.exprs[root] {
+                Expr::Block {
+                    tail_expr: Some(tail),
+                    ..
+                } => *tail,
+                _ => root,
+            };
+            self.pending_diags
+                .push(PendingDiag::TestBodyNotVoid { expr: at, got: ty });
+        }
+        void.clone()
     }
 
     /// Supply value context without checking the outer relation. Return values
@@ -8207,9 +8252,14 @@ impl<'db> InferenceContext<'db> {
                     scoped_bindings_floor: self.scoped_type_bindings.len(),
                 });
                 let body_ty = match &ret_expectation {
+                    // A `test` body must itself be void: discarding its tail
+                    // would let `test "x" { 1 == 2 }` pass without checking
+                    // anything, so a non-void tail is a type error.
+                    Some(ret) if is_unit(ret) && def.kind == LambdaKind::Test => {
+                        self.check_test_body(body, lambda_body, ret)
+                    }
                     // A void lambda DISCARDS its body's tail value, the
-                    // same statement semantics void functions get (test
-                    // bodies are synthesized `() -> void` lambdas).
+                    // same statement semantics void functions get.
                     Some(ret) if is_unit(ret) => {
                         self.infer_expr(body, lambda_body, &Expectation::Discarded)
                     }
@@ -11509,6 +11559,12 @@ impl<'db> InferenceContext<'db> {
                     PendingDiag::MountedPackageCallUnsupported { expr, path } => {
                         (TirTypeError::MountedPackageCallUnsupported { path }, expr)
                     }
+                    PendingDiag::TestBodyNotVoid { expr, got } => (
+                        TirTypeError::TestBodyNotVoid {
+                            got: self.plain_finalized(&got),
+                        },
+                        expr,
+                    ),
                     PendingDiag::InvalidRegexPattern {
                         expr,
                         kind,

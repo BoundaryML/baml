@@ -2039,7 +2039,7 @@ fn synthesize_register_call(
             let lambda_body = ctx.lower_test_body(body_node, span);
 
             let lambda_def = LambdaDef {
-                kind: LambdaKind::Anonymous,
+                kind: LambdaKind::Test,
                 params: vec![],
                 defaults: FunctionDefaults::empty(),
                 return_type: Some(crate::ast::TypeExprKind::Void.at(span)),
