@@ -378,6 +378,27 @@ enum Addition {
     Alias(RealizedTy),
 }
 
+/// Where a name stands when a `with_types` call states an export under it.
+enum Standing {
+    /// Nothing exports the name.
+    New,
+    /// The name already exports exactly this, where stating it again is
+    /// allowed.
+    Restated,
+    /// The name is taken.
+    Taken,
+}
+
+/// How a `with_types` call comes to export a name.
+#[derive(Clone, Copy)]
+enum Stated {
+    /// By a key of the call's map.
+    ByKey,
+    /// By a type the call mounts reaching the declaration, under the
+    /// declaration's own name.
+    ByReach,
+}
+
 impl Additions {
     fn exported(&self, name: &LocalName) -> Option<Export> {
         self.classes
@@ -394,39 +415,57 @@ impl Additions {
             })
     }
 
-    /// Add `addition` under `name`. A name already exported — along the
-    /// base's chain (`chain`) or among the additions — is a collision, except
-    /// that a declaration REACHED through a mounted type (`explicit` false)
-    /// may already be exported as exactly that declaration: the base's own
-    /// class named by a field, or one declaration reached through two types.
+    /// Add `addition` under `name`, stated as `stated`.
+    ///
+    /// Among one call's additions, an export stated twice is stated once: a
+    /// key naming the declaration a sibling entry reached, or one declaration
+    /// reached through two types, is one export whichever the call met
+    /// first. A name the additions give to anything else is a collision.
+    ///
+    /// Against the base's chain (`chain`), a key is refused for every name
+    /// the base already exports, and a reached declaration only for a name
+    /// the base exports as something else — the base's own class named by a
+    /// field adds nothing. No addition is ever made under a name the chain
+    /// exports, so the two tables never disagree.
     fn add(
         &mut self,
         vm: &mut BexVm,
         chain: &[HeapPtr],
         name: LocalName,
         addition: Addition,
-        explicit: bool,
+        stated: Stated,
     ) -> Result<(), VmRustFnError> {
-        let existing = self.exported(&name).or_else(|| {
+        let same_declaration = |export: Export| match (&addition, export) {
+            (Addition::Declaration(declaration), Export::Declaration(exported)) => {
+                *declaration == exported
+            }
+            (Addition::Declaration(_), Export::Cell) | (Addition::Alias(_), _) => false,
+        };
+        let based = || {
             chain.iter().find_map(|&ptr| match vm.get_object(ptr) {
                 Object::Package(package) => exported_under(package, &name),
                 _ => None,
             })
-        });
-        match (&addition, existing) {
-            (Addition::Declaration(declaration), Some(Export::Declaration(exported)))
-                if !explicit && *declaration == exported =>
-            {
-                return Ok(());
-            }
-            (_, Some(_)) => {
+        };
+        let standing = match self.exported(&name) {
+            Some(added) if same_declaration(added) => Standing::Restated,
+            Some(_) => Standing::Taken,
+            None => match (based(), stated) {
+                (None, Stated::ByKey | Stated::ByReach) => Standing::New,
+                (Some(based), Stated::ByReach) if same_declaration(based) => Standing::Restated,
+                (Some(_), Stated::ByKey | Stated::ByReach) => Standing::Taken,
+            },
+        };
+        match standing {
+            Standing::New => {}
+            Standing::Restated => return Ok(()),
+            Standing::Taken => {
                 return Err(compilation_error(
                     vm,
                     DiagnosticId::DuplicateName,
                     format!("duplicate exported type name `{name}`"),
                 ));
             }
-            (_, None) => {}
         }
         match addition {
             Addition::Declaration(declaration) => {
@@ -1138,7 +1177,7 @@ impl BamlClassPackage for PackageReflectImpl {
                 Some(declaration) => Addition::Declaration(declaration),
                 None => Addition::Alias(ty.clone()),
             };
-            additions.add(vm, &chain, local, addition, true)?;
+            additions.add(vm, &chain, local, addition, Stated::ByKey)?;
             for declaration in crate::reachable::runtime_definitions(vm, &ty) {
                 let item = match vm.get_object(declaration) {
                     Object::Class(class) => class.name.item_name().clone(),
@@ -1155,7 +1194,7 @@ impl BamlClassPackage for PackageReflectImpl {
                         name: item,
                     },
                     Addition::Declaration(declaration),
-                    false,
+                    Stated::ByReach,
                 )?;
             }
             for where_ in crate::reachable::reached(vm, &ty) {
