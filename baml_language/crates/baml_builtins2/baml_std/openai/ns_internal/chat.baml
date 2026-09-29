@@ -1354,7 +1354,10 @@ function chat_parse(
                 cached_input_tokens: u.prompt_tokens_details?.cached_tokens,
                 reasoning_tokens: u.completion_tokens_details?.reasoning_tokens,
                 // prompt_tokens counts the cached share too.
-                uncached_input_tokens: ai.internal.uncached_input_tokens(u.prompt_tokens, u.prompt_tokens_details?.cached_tokens),
+                uncached_input_tokens: ai.internal.uncached_input_tokens(
+                    u.prompt_tokens,
+                    u.prompt_tokens_details?.cached_tokens,
+                ),
             }
         },
         null => null,
