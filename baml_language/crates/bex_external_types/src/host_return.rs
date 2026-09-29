@@ -234,6 +234,19 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
             _ => false,
         },
 
+        // A host sends a tuple as a sequence (hosts without a tuple type send
+        // a list); either way the arity must match and each slot must fit.
+        RuntimeTy::Tuple(elements) => match value {
+            BexExternalValue::Tuple { items } | BexExternalValue::Array { items, .. } => {
+                items.len() == elements.len()
+                    && items
+                        .iter()
+                        .zip(elements.iter())
+                        .all(|(item, element)| value_satisfies_ty(item, element))
+            }
+            _ => false,
+        },
+
         RuntimeTy::Map { value: v_ty, .. } => match value {
             BexExternalValue::Map { entries, .. } => {
                 entries.values().all(|v| value_satisfies_ty(v, v_ty))

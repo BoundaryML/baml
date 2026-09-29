@@ -146,6 +146,22 @@ impl Scratch {
                         original_len: data.len(),
                     }
                 }
+                Object::Tuple(data) => {
+                    let start = b.value_start();
+                    let count = data.len().min(b.remaining_values());
+                    b.reserve_values(count);
+                    for value in data.iter().take(count) {
+                        let value = self.add(&mut b, *value, depth + 1);
+                        b.push_value(value);
+                    }
+                    if count < data.len() {
+                        b.limited(Limit::Values);
+                    }
+                    SnapshotObject::Tuple {
+                        items: b.value_range(start),
+                        original_len: data.len(),
+                    }
+                }
                 Object::Map(data) => {
                     let key_type = b.push_type(owned_type(&data.key_ty));
                     let value_type = b.push_type(owned_type(&data.value_ty));

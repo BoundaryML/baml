@@ -785,6 +785,14 @@ impl<'a> AstGraphBuilder<'a> {
                     field_strs.join(", ")
                 )
             }
+            ast::Pattern::Tuple(elements) => {
+                let parts: Vec<String> = elements.iter().map(|p| self.format_pattern(*p)).collect();
+                if parts.len() == 1 {
+                    format!("({},)", parts[0])
+                } else {
+                    format!("({})", parts.join(", "))
+                }
+            }
             ast::Pattern::Array {
                 prefix,
                 rest,
@@ -966,7 +974,7 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
                 collect_callee_names_expr(body, spread.expr, names);
             }
         }
-        ast::Expr::Array { elements } => {
+        ast::Expr::Array { elements } | ast::Expr::Tuple { elements } => {
             for element in elements {
                 collect_callee_names_expr(body, *element, names);
             }
@@ -986,6 +994,7 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
             }
         }
         ast::Expr::MemberAccess { base, .. }
+        | ast::Expr::TupleIndex { base, .. }
         | ast::Expr::OptionalMemberAccess { base, .. }
         | ast::Expr::Upcast { base, .. } => collect_callee_names_expr(body, *base, names),
         ast::Expr::Index { base, index } | ast::Expr::OptionalIndex { base, index } => {

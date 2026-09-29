@@ -196,6 +196,7 @@ enum Node {
     Map(StateId, StateId),
     Future(StateId, StateId),
     Union(Vec<StateId>),
+    Tuple(Vec<StateId>),
     Function {
         params: Vec<(Option<StrId>, FunctionParamMode, StateId)>,
         ret: StateId,
@@ -361,7 +362,7 @@ fn children(node: &Node) -> Vec<StateId> {
             .collect(),
         Node::List(inner) => vec![*inner],
         Node::Map(k, v) | Node::Future(k, v) => vec![*k, *v],
-        Node::Union(members) => members.clone(),
+        Node::Union(members) | Node::Tuple(members) => members.clone(),
         Node::Function {
             params,
             ret,
@@ -472,6 +473,10 @@ impl Builder {
                 let members = members.iter().map(|m| self.intern_term(auto, m)).collect();
                 auto.alloc(Node::Union(members))
             }
+            NormalTy::Tuple(elements) => {
+                let elements = elements.iter().map(|e| self.intern_term(auto, e)).collect();
+                auto.alloc(Node::Tuple(elements))
+            }
             NormalTy::Function {
                 params,
                 ret,
@@ -509,7 +514,25 @@ impl Builder {
                     member,
                 })
             }
-            leaf => {
+            leaf @ (NormalTy::Int
+            | NormalTy::Bigint
+            | NormalTy::Float
+            | NormalTy::String
+            | NormalTy::Bool
+            | NormalTy::Null
+            | NormalTy::Uint8Array
+            | NormalTy::Media(_)
+            | NormalTy::Void
+            | NormalTy::RustType
+            | NormalTy::Type
+            | NormalTy::Resource
+            | NormalTy::PromptAst
+            | NormalTy::Literal(_)
+            | NormalTy::TypeVar(_)
+            | NormalTy::OpaqueAlias(_)
+            | NormalTy::Never
+            | NormalTy::Unknown
+            | NormalTy::Error) => {
                 let id = LeafId(auto.leaves.intern(leaf));
                 auto.alloc(Node::Leaf(id))
             }
@@ -816,6 +839,7 @@ enum LocalKey {
     Map,
     Future,
     Union,
+    Tuple(usize),
     Function(Vec<(Option<StrId>, FunctionParamMode)>),
     Projection(StrId),
 }
@@ -833,6 +857,7 @@ fn local_key<H: Head>(auto: &Automaton<'_, H>, s: StateId) -> LocalKey {
         Node::Map(..) => LocalKey::Map,
         Node::Future(..) => LocalKey::Future,
         Node::Union(_) => LocalKey::Union,
+        Node::Tuple(elements) => LocalKey::Tuple(elements.len()),
         Node::Function { params, .. } => LocalKey::Function(
             params
                 .iter()
@@ -1054,6 +1079,7 @@ enum RbShape {
     Map(Box<Rb>, Box<Rb>),
     Future(Box<Rb>, Box<Rb>),
     Union(Vec<Rb>),
+    Tuple(Vec<Rb>),
     Function {
         params: Vec<(Option<StrId>, FunctionParamMode, Rb)>,
         ret: Box<Rb>,
@@ -1189,6 +1215,13 @@ fn expand<H: Head>(
                 .map(|m| child(auto, m, path, &mut refs))
                 .collect(),
         ),
+        Node::Tuple(elements) => RbShape::Tuple(
+            elements
+                .clone()
+                .into_iter()
+                .map(|e| child(auto, e, path, &mut refs))
+                .collect(),
+        ),
         Node::Function {
             params,
             ret,
@@ -1313,6 +1346,12 @@ fn convert<H: Head>(
                 RbShape::Future(v, e) => NormalTy::Future(
                     Box::new(convert(auto, v, binders, displays, rec)),
                     Box::new(convert(auto, e, binders, displays, rec)),
+                ),
+                RbShape::Tuple(elements) => NormalTy::Tuple(
+                    elements
+                        .iter()
+                        .map(|e| convert(auto, e, binders, displays, rec))
+                        .collect(),
                 ),
                 RbShape::Union(members) => {
                     let mut converted: Vec<(NormalTy<H>, StateId)> = members
@@ -1666,6 +1705,14 @@ impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
                     Box::new(self.render(v, path)?),
                     Box::new(self.render(e, path)?),
                 )
+            }
+            Node::Tuple(elements) => {
+                let elements = elements.clone();
+                let mut out = Vec::with_capacity(elements.len());
+                for e in elements {
+                    out.push(self.render(e, path)?);
+                }
+                Ty::Tuple(out.into())
             }
             Node::Union(_) => {
                 // Cyclic unnamed unions fold their covered members to alias

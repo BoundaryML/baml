@@ -1082,6 +1082,12 @@ pub fn match_ty_pattern_into(
         (Ty::List(p), Ty::List(c)) => {
             match_ty_pattern_into(p, c, generic_params, aliases, bindings)
         }
+        (Ty::Tuple(p), Ty::Tuple(c)) if p.len() == c.len() => {
+            for (p, c) in p.iter().zip(c.iter()) {
+                match_ty_pattern_into(p, c, generic_params, aliases, bindings)?;
+            }
+            Some(())
+        }
         (
             Ty::Map {
                 key: pk, value: pv, ..
@@ -1686,7 +1692,7 @@ fn collect_type_generic_bound_errors<'db>(
             collect_type_generic_bound_errors(db, facts, key, seen_aliases, errors);
             collect_type_generic_bound_errors(db, facts, value, seen_aliases, errors);
         }
-        baml_type::LoweringTy::Union(members) => {
+        baml_type::LoweringTy::Union(members) | baml_type::LoweringTy::Tuple(members) => {
             for member in members {
                 collect_type_generic_bound_errors(db, facts, member, seen_aliases, errors);
             }

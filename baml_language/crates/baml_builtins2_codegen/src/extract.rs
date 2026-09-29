@@ -948,6 +948,7 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
         }
         TypeExprKind::Literal { .. } => BamlType::Named("literal".to_string()),
         TypeExprKind::Function { .. } => BamlType::Named("function".to_string()),
+        TypeExprKind::Tuple { .. } => BamlType::Named("tuple".to_string()),
         TypeExprKind::AssociatedTypeProjection { .. }
         | TypeExprKind::Unknown
         | TypeExprKind::Missing

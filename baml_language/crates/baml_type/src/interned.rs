@@ -337,7 +337,7 @@ pub fn for_each_child(kind: &InferTy, mut visit: impl FnMut(&Ty)) {
             visit(key);
             visit(value);
         }
-        InferTy::Union(members) => members.iter().for_each(visit),
+        InferTy::Union(members) | InferTy::Tuple(members) => members.iter().for_each(visit),
         InferTy::Function {
             params,
             ret,
@@ -412,6 +412,7 @@ impl InferTy {
                 value: f(value),
             },
             InferTy::Union(members) => InferTy::Union(members.iter().map(&mut f).collect()),
+            InferTy::Tuple(elements) => InferTy::Tuple(elements.iter().map(&mut f).collect()),
             InferTy::Function {
                 params,
                 ret,
@@ -501,6 +502,7 @@ impl Ty {
                 value: Ty::from_plain(value),
             },
             crate::Ty::Union(members) => InferTy::Union(interned_all(members)),
+            crate::Ty::Tuple(elements) => InferTy::Tuple(interned_all(elements)),
             crate::Ty::Function {
                 params,
                 ret,
@@ -594,6 +596,7 @@ impl Ty {
                 value: Box::new(value.to_plain_closed()),
             },
             InferTy::Union(members) => crate::Ty::Union(plain_all(members)),
+            InferTy::Tuple(elements) => crate::Ty::Tuple(plain_all(elements)),
             InferTy::Function {
                 params,
                 ret,
@@ -1025,6 +1028,10 @@ impl Ty {
         Ty::intern(InferTy::Union(members.into_iter().collect()))
     }
 
+    pub fn tuple(elements: impl IntoIterator<Item = Ty>) -> Ty {
+        Ty::intern(InferTy::Tuple(elements.into_iter().collect()))
+    }
+
     /// `T?` is a flat `T | null` union.
     pub fn optional(inner: Ty) -> Ty {
         match inner.kind() {
@@ -1104,6 +1111,7 @@ mod tests {
             P::Unknown,
             P::Never,
             P::Error,
+            P::Tuple(Box::new([int(), P::String])),
         ]
     }
 

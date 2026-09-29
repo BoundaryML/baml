@@ -118,6 +118,7 @@ impl TryFrom<BexExternalValue> for CffiHandleTableEntry {
             | BexExternalValue::Bool(_)
             | BexExternalValue::String(_)
             | BexExternalValue::Array { .. }
+            | BexExternalValue::Tuple { .. }
             | BexExternalValue::Map { .. }
             | BexExternalValue::Instance { .. }
             | BexExternalValue::Variant { .. }

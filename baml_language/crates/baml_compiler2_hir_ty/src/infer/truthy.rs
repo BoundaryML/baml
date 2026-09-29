@@ -66,7 +66,9 @@ pub(crate) fn truthiness(ty: &Ty) -> Truthiness {
         | InferTy::Type
         | InferTy::Resource
         | InferTy::PromptAst
-        | InferTy::RustType => Truthiness::AlwaysTruthy,
+        | InferTy::RustType
+        // A tuple has at least one element, so it is never empty.
+        | InferTy::Tuple(..) => Truthiness::AlwaysTruthy,
         InferTy::Union(members) => {
             let mut all_truthy = true;
             let mut all_falsy = true;

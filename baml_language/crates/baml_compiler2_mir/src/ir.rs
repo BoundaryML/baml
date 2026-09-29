@@ -1173,6 +1173,9 @@ pub enum AggregateKind {
     },
     /// An enum variant.
     EnumVariant { enum_name: String, variant: String },
+    /// A tuple `(_1, _2)`. Immutable and carrying no type metadata: a tuple
+    /// value's runtime type is derived from its elements.
+    Tuple,
 }
 
 // ============================================================================

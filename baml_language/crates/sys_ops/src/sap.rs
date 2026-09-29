@@ -123,7 +123,112 @@ pub fn execute_sap_parse_partial(
 
 #[cfg(test)]
 mod tests {
-    use super::LlmOpError;
+    use std::{collections::HashMap, sync::Arc};
+
+    use bex_external_types::BexExternalValue;
+    use sys_types::{SapTy, SysOpContext};
+
+    use super::{LlmOpError, SapParseCache, execute_sap_parse_final, execute_sap_parse_partial};
+
+    fn cache_for(target: SapTy) -> SapParseCache {
+        let type_ctx = ::bex_sap::sap_model::TypeCtx::new(
+            &indexmap::IndexMap::new(),
+            Arc::new(indexmap::IndexMap::new()),
+            &HashMap::new(),
+        );
+        SapParseCache::new(
+            ::bex_sap::CompiledSapModel::from_type_ctx(type_ctx, target)
+                .expect("tuple targets are SAP-parseable"),
+        )
+    }
+
+    fn pair() -> SapTy {
+        SapTy::Tuple(Box::new([SapTy::int(), SapTy::string()]))
+    }
+
+    #[test]
+    fn tuple_parses_to_external_tuple() {
+        let cache = cache_for(pair());
+        let parsed =
+            execute_sap_parse_final(r#"[1, "a", "extra"]"#, &cache, &SysOpContext::empty())
+                .expect("parses");
+        assert_eq!(
+            parsed,
+            BexExternalValue::Tuple {
+                items: vec![
+                    BexExternalValue::Int(1),
+                    BexExternalValue::String("a".into())
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn list_of_tuples_carries_tuple_element_type() {
+        let cache = cache_for(SapTy::list(pair()));
+        let parsed =
+            execute_sap_parse_final(r#"[[1, "a"], [2, "b"]]"#, &cache, &SysOpContext::empty())
+                .expect("parses");
+        let BexExternalValue::Array {
+            element_type,
+            items,
+        } = parsed
+        else {
+            panic!("expected an array, got {parsed:?}");
+        };
+        assert_eq!(
+            element_type,
+            baml_type::RuntimeTy::Tuple(Box::new([
+                baml_type::RuntimeTy::int(),
+                baml_type::RuntimeTy::string(),
+            ]))
+        );
+        assert_eq!(
+            items,
+            vec![
+                BexExternalValue::Tuple {
+                    items: vec![
+                        BexExternalValue::Int(1),
+                        BexExternalValue::String("a".into())
+                    ],
+                },
+                BexExternalValue::Tuple {
+                    items: vec![
+                        BexExternalValue::Int(2),
+                        BexExternalValue::String("b".into())
+                    ],
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn partial_tuple_waits_for_elements_without_defaults() {
+        // `(string, int)`: the int slot has no default, so nothing shows until it arrives.
+        let cache = cache_for(SapTy::Tuple(Box::new([SapTy::string(), SapTy::int()])));
+        let ctx = SysOpContext::empty();
+        assert_eq!(
+            execute_sap_parse_partial(r#"["a", "#, &cache, &ctx).expect("parses"),
+            None
+        );
+        assert_eq!(
+            execute_sap_parse_partial(r#"["a", 1, "#, &cache, &ctx).expect("parses"),
+            Some(BexExternalValue::Tuple {
+                items: vec![
+                    BexExternalValue::String("a".into()),
+                    BexExternalValue::Int(1)
+                ],
+            })
+        );
+    }
+
+    #[test]
+    fn missing_required_tuple_element_is_a_parse_error() {
+        let cache = cache_for(pair());
+        let err = execute_sap_parse_final("[1]", &cache, &SysOpContext::empty())
+            .expect_err("the string element is required");
+        assert!(matches!(err, LlmOpError::SapError(_)), "{err}");
+    }
 
     /// A parse failure must reach BAML as `LlmClient`, which is what
     /// `ai.errors.normalize` classifies into `ai.errors.ParseFailed`. Mapping

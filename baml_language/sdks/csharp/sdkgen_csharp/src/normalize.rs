@@ -133,6 +133,8 @@ fn normalize_canonical(ty: Ty) -> Ty {
                 .collect(),
         ),
         Ty::List(inner) => Ty::List(Box::new(normalize_ty(&inner))),
+        // Positional: elements normalize in place, never reorder.
+        Ty::Tuple(items) => Ty::Tuple(items.iter().map(normalize_ty).collect()),
         Ty::Map { key, value } => Ty::Map {
             key: Box::new(normalize_ty(&key)),
             value: Box::new(normalize_ty(&value)),

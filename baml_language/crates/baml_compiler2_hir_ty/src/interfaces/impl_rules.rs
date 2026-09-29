@@ -1736,7 +1736,7 @@ fn collect_ty_packages(ty: &Ty, out: &mut Vec<baml_base::SourceRoot>) {
             collect_ty_packages(key, out);
             collect_ty_packages(value, out);
         }
-        Ty::Union(members) => {
+        Ty::Union(members) | Ty::Tuple(members) => {
             for m in members {
                 collect_ty_packages(m, out);
             }

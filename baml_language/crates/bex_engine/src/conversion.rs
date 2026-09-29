@@ -640,6 +640,25 @@ impl BexEngine {
                 })
             }
 
+            Object::Tuple(elements) => {
+                // Each element converts at its declared slot type, so a union
+                // slot selects and wraps its arm; without a same-arity tuple
+                // declaration (`unknown`, `json`, …) elements convert at
+                // `unknown`.
+                let slots: Vec<RuntimeTy> = match effective_type {
+                    RuntimeTy::Tuple(slots) if slots.len() == elements.len() => slots.to_vec(),
+                    _ => vec![RuntimeTy::Unknown; elements.len()],
+                };
+                let items = elements
+                    .iter()
+                    .zip(slots.iter())
+                    .map(|(v, slot)| {
+                        self.convert_vm_value_to_external_with_type(*v, slot, vm, permit)
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(BexExternalValue::Tuple { items })
+            }
+
             Object::Map(map) => {
                 // Get key and value types from declared type, falling back to
                 // Null when the declared type doesn't resolve
@@ -961,6 +980,18 @@ impl BexEngine {
                 let elem =
                     synth_collection_element(self, items.iter()).unwrap_or(RuntimeTy::RustType);
                 SynthTy::Known(RuntimeTy::List(Box::new(elem)))
+            }
+            // A tuple inhabits the tuple of its elements' types. An element
+            // with no readable type makes the tuple host-only as a whole.
+            BexExternalValue::Tuple { items } => {
+                let mut elements = Vec::with_capacity(items.len());
+                for item in items {
+                    match self.synth_ty_from_value(item) {
+                        SynthTy::Known(ty) => elements.push(ty),
+                        SynthTy::HostOnly => return SynthTy::HostOnly,
+                    }
+                }
+                SynthTy::Known(RuntimeTy::Tuple(elements.into()))
             }
             BexExternalValue::Map { entries, .. } => {
                 // A map always inhabits `map<string, _>`: every wire entry is
@@ -1354,6 +1385,44 @@ impl BexEngine {
         )
     }
 
+    /// Materialize tuple elements (each coerced and converted at its declared
+    /// slot type when one is known) and allocate the tuple whole.
+    fn convert_external_tuple_to_vm_value(
+        &self,
+        holder: &mut impl HeapPermit<BexThread>,
+        items: Vec<BexExternalValue>,
+        slots: Option<&[RuntimeTy]>,
+        dynamic_classes: &indexmap::IndexMap<String, bex_external_types::Handle>,
+        dynamic_enums: &indexmap::IndexMap<String, bex_external_types::Handle>,
+        runtime_named_objects: Option<&indexmap::IndexMap<String, HeapPtr>>,
+    ) -> Result<Value, EngineError> {
+        // Callers peel slots by arity (`peel_tuple_slots`), so a mismatch is
+        // a caller bug; never index past the slots.
+        debug_assert!(slots.is_none_or(|slots| slots.len() == items.len()));
+        let values = items
+            .into_iter()
+            .enumerate()
+            .map(|(i, v)| {
+                let slot = slots.and_then(|slots| slots.get(i));
+                let v = match slot {
+                    Some(ty) => self.coerce_inbound_arg(v, ty)?,
+                    None => v,
+                };
+                self.convert_external_to_vm_value_with_ty_and_runtime(
+                    holder,
+                    v,
+                    slot,
+                    dynamic_classes,
+                    dynamic_enums,
+                    runtime_named_objects,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Value::object(
+            holder.holder_mut().tlab_mut().alloc_tuple(values),
+        ))
+    }
+
     fn convert_external_to_vm_value_with_ty_and_runtime(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
@@ -1453,6 +1522,40 @@ impl BexEngine {
             BexExternalValue::Bool(b) => Value::bool(b),
             BexExternalValue::String(s) => {
                 Value::object(holder.holder_mut().tlab_mut().alloc_string(s))
+            }
+            // A host without a tuple type sends one as a list: when the slot
+            // declares exactly one tuple of this arity and no list, the list
+            // materializes as that tuple.
+            BexExternalValue::Array { items, .. }
+                if expected_ty.and_then(peel_list_element_ty).is_none()
+                    && expected_ty
+                        .and_then(|ty| peel_tuple_slots(ty, items.len()))
+                        .is_some() =>
+            {
+                let slots = expected_ty
+                    .and_then(|ty| peel_tuple_slots(ty, items.len()))
+                    .map(<[RuntimeTy]>::to_vec);
+                self.convert_external_tuple_to_vm_value(
+                    holder,
+                    items,
+                    slots.as_deref(),
+                    dynamic_classes,
+                    dynamic_enums,
+                    runtime_named_objects,
+                )?
+            }
+            BexExternalValue::Tuple { items } => {
+                let slots = expected_ty
+                    .and_then(|ty| peel_tuple_slots(ty, items.len()))
+                    .map(<[RuntimeTy]>::to_vec);
+                self.convert_external_tuple_to_vm_value(
+                    holder,
+                    items,
+                    slots.as_deref(),
+                    dynamic_classes,
+                    dynamic_enums,
+                    runtime_named_objects,
+                )?
             }
             BexExternalValue::Array {
                 element_type,
@@ -2285,6 +2388,11 @@ pub(crate) fn collect_type_var_bindings<N: Clone>(
             }
         }
         (RuntimeTy::List(d), RuntimeTy::List(c)) => collect_type_var_bindings(d, c, out),
+        (RuntimeTy::Tuple(d), RuntimeTy::Tuple(c)) if d.len() == c.len() => {
+            for (d, c) in d.iter().zip(c.iter()) {
+                collect_type_var_bindings(d, c, out);
+            }
+        }
         (
             RuntimeTy::Map {
                 key: dk, value: dv, ..
@@ -2331,6 +2439,13 @@ pub(crate) fn collect_live_type_var_bindings<DeclaredHead: Clone, ConcreteHead: 
         }
         (RuntimeTy::List(declared), RuntimeTy::List(concrete)) => {
             collect_live_type_var_bindings(declared, concrete, out);
+        }
+        (RuntimeTy::Tuple(declared), RuntimeTy::Tuple(concrete))
+            if declared.len() == concrete.len() =>
+        {
+            for (declared, concrete) in declared.iter().zip(concrete.iter()) {
+                collect_live_type_var_bindings(declared, concrete, out);
+            }
         }
         (
             RuntimeTy::Map {
@@ -2403,6 +2518,12 @@ pub(crate) fn substitute_type_vars<N: Clone>(
                 .map(|m| substitute_type_vars(m, bindings))
                 .collect(),
         ),
+        RuntimeTy::Tuple(elements) => RuntimeTy::Tuple(
+            elements
+                .iter()
+                .map(|e| substitute_type_vars(e, bindings))
+                .collect(),
+        ),
         RuntimeTy::Future(value, error) => RuntimeTy::Future(
             Box::new(substitute_type_vars(value, bindings)),
             Box::new(substitute_type_vars(error, bindings)),
@@ -2446,7 +2567,9 @@ pub(crate) fn first_unbound_type_var(ty: &RuntimeTy) -> Option<String> {
         RuntimeTy::Map { key, value, .. } => {
             first_unbound_type_var(key).or_else(|| first_unbound_type_var(value))
         }
-        RuntimeTy::Union(members) => members.iter().find_map(first_unbound_type_var),
+        RuntimeTy::Union(members) | RuntimeTy::Tuple(members) => {
+            members.iter().find_map(first_unbound_type_var)
+        }
         RuntimeTy::Future(value, error) => {
             first_unbound_type_var(value).or_else(|| first_unbound_type_var(error))
         }
@@ -2607,7 +2730,9 @@ fn template_max_type_arg_ref<N: Clone>(t: &baml_type::TyTemplate<N>) -> Option<u
             .into_iter()
             .chain(template_max_type_arg_ref(value))
             .max(),
-        T::Union(members) => members.iter().filter_map(template_max_type_arg_ref).max(),
+        T::Union(members) | T::Tuple(members) => {
+            members.iter().filter_map(template_max_type_arg_ref).max()
+        }
         T::Class(_, args) => args.iter().filter_map(template_max_type_arg_ref).max(),
         T::Interface(_, args, assoc) => args
             .iter()
@@ -2655,6 +2780,7 @@ fn is_structural_host_only(value: &BexExternalValue) -> bool {
         BexExternalValue::Instance { .. }
             | BexExternalValue::Map { .. }
             | BexExternalValue::Array { .. }
+            | BexExternalValue::Tuple { .. }
             | BexExternalValue::Variant { .. }
             | BexExternalValue::Uint8Array(_)
     )
@@ -2728,6 +2854,11 @@ fn walk_var_positions(ty: &RuntimeTy, in_closure: bool, out: &mut ParamVarPositi
         RuntimeTy::Future(value, error) => {
             walk_var_positions(value, in_closure, out);
             walk_var_positions(error, in_closure, out);
+        }
+        RuntimeTy::Tuple(elements) => {
+            for e in elements {
+                walk_var_positions(e, in_closure, out);
+            }
         }
         _ => {}
     }
@@ -2851,6 +2982,27 @@ fn peel_map_value_ty(ty: &RuntimeTy) -> Option<&RuntimeTy> {
     })
 }
 
+/// Find the single tuple member of `arity` behind optional/union wrappers and
+/// return its slot types. Ambiguous unions deliberately return `None`.
+fn peel_tuple_slots(ty: &RuntimeTy, arity: usize) -> Option<&[RuntimeTy]> {
+    if let RuntimeTy::Tuple(slots) = ty {
+        return (slots.len() == arity).then_some(&**slots);
+    }
+    let RuntimeTy::Union(members) = ty else {
+        return None;
+    };
+    let mut found = None;
+    for member in members {
+        if let Some(candidate) = peel_tuple_slots(member, arity) {
+            if found.is_some() {
+                return None;
+            }
+            found = Some(candidate);
+        }
+    }
+    found
+}
+
 fn peel_single_container_member<'a>(
     ty: &'a RuntimeTy,
     select: impl Copy + Fn(&'a RuntimeTy) -> Option<&'a RuntimeTy>,
@@ -2901,7 +3053,9 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
         // unvalidatable position (`(T)[]`, `Box<T>`, `int | T`) is caught too.
         RuntimeTy::List(elem) => ret_ty_has_unvalidatable_position(elem),
         RuntimeTy::Map { value, .. } => ret_ty_has_unvalidatable_position(value),
-        RuntimeTy::Union(members) => members.iter().any(ret_ty_has_unvalidatable_position),
+        RuntimeTy::Union(members) | RuntimeTy::Tuple(members) => {
+            members.iter().any(ret_ty_has_unvalidatable_position)
+        }
         RuntimeTy::Class(_, generic_args) => {
             generic_args.iter().any(ret_ty_has_unvalidatable_position)
         }
@@ -3299,6 +3453,17 @@ fn value_matches_type_with_definitions(
                 value_matches_type_with_definitions(item, expected_element, aliases, classes)
             })
         }
+        // A tuple slot accepts a tuple of its arity, or the list form a host
+        // without a tuple type sends, when every element fits its slot.
+        (
+            BexExternalValue::Tuple { items } | BexExternalValue::Array { items, .. },
+            RuntimeTy::Tuple(expected_slots),
+        ) => {
+            items.len() == expected_slots.len()
+                && items.iter().zip(expected_slots.iter()).all(|(item, slot)| {
+                    value_matches_type_with_definitions(item, slot, aliases, classes)
+                })
+        }
         (
             BexExternalValue::Map { entries, .. },
             RuntimeTy::Map {
@@ -3488,6 +3653,12 @@ fn runtime_ty_compatible(wire: &RuntimeTy, expected: &RuntimeTy) -> bool {
             T::Int | T::String | T::Bool | T::Float | T::Null | T::Bigint | T::Uint8Array,
         ) => false,
         (T::List(w), T::List(e)) => runtime_ty_compatible(w, e),
+        (T::Tuple(w), T::Tuple(e)) => {
+            w.len() == e.len()
+                && w.iter()
+                    .zip(e.iter())
+                    .all(|(w, e)| runtime_ty_compatible(w, e))
+        }
         (
             T::Map {
                 key: wk, value: wv, ..
@@ -3586,6 +3757,7 @@ pub(crate) fn check_generic_arg(
         | BexExternalValue::String(_)
         | BexExternalValue::Uint8Array(_)
         | BexExternalValue::Array { .. }
+        | BexExternalValue::Tuple { .. }
         | BexExternalValue::Map { .. }
         | BexExternalValue::Variant { .. } => {
             bex_external_types::validate_host_return(value, expected).map_err(|_| {
@@ -3719,6 +3891,22 @@ impl BexEngine {
                 other => Err(format!(
                     "host callable returned `{}` where a list was declared",
                     other.type_name(),
+                )),
+            },
+
+            RuntimeTy::Tuple(slots) => match value {
+                BexExternalValue::Tuple { items } | BexExternalValue::Array { items, .. }
+                    if items.len() == slots.len() =>
+                {
+                    for (item, slot) in items.iter().zip(slots.iter()) {
+                        self.validate_host_return_schema(item, slot)?;
+                    }
+                    Ok(())
+                }
+                other => Err(format!(
+                    "host callable returned `{}` where a {}-tuple was declared",
+                    other.type_name(),
+                    slots.len(),
                 )),
             },
 
@@ -4064,6 +4252,16 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                                 && runtime_ty_structurally_equal(&actual_value, value))
                     })
                 }
+                // A tuple carries no descriptor: the first same-arity tuple
+                // member whose every slot admits the matching element.
+                // Covariant, so a member may be broader than the elements.
+                Object::Tuple(elements) => members.iter().find(|member| {
+                    matches!(member, RuntimeTy::Tuple(slots)
+                        if slots.len() == elements.len()
+                            && elements.iter().zip(slots.iter()).all(|(element, slot)| {
+                                vm_value_inhabits(*element, slot)
+                            }))
+                }),
                 Object::Uint8Array(_) => members
                     .iter()
                     .find(|m| matches!(m, RuntimeTy::Uint8Array)),
@@ -4106,6 +4304,17 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                 if find_matching_union_member(value, nested).is_some())
         })
     })
+}
+
+/// Whether a VM value inhabits `ty` as far as union-arm selection can tell:
+/// `unknown` and type variables admit anything; otherwise the value must
+/// select a member of `ty` (viewed as a one-member union when it is not one).
+fn vm_value_inhabits(value: Value, ty: &RuntimeTy) -> bool {
+    match ty {
+        RuntimeTy::Unknown | RuntimeTy::TypeVar(..) => true,
+        RuntimeTy::Union(members) => find_matching_union_member(value, members).is_some(),
+        other => find_matching_union_member(value, std::slice::from_ref(other)).is_some(),
+    }
 }
 
 /// Coerce a host-encoded **incoming** value to match the declared param type.
@@ -4623,6 +4832,27 @@ fn coerce_arg_to_declared_type_with_aliases(
                     .collect::<Result<_, _>>()?,
             })
         }
+        // A tuple slot: a host tuple, or the list form a host without a tuple
+        // type sends, coerces element by element at the slot types and becomes
+        // a tuple. A wrong arity is left for the standard validation to reject.
+        (
+            BexExternalValue::Tuple { items } | BexExternalValue::Array { items, .. },
+            RuntimeTy::Tuple(slots),
+        ) if items.len() == slots.len() => Ok(BexExternalValue::Tuple {
+            items: items
+                .into_iter()
+                .zip(slots.iter())
+                .map(|(item, slot)| {
+                    coerce_arg_to_declared_type_with_aliases(
+                        item,
+                        slot,
+                        aliases,
+                        classes,
+                        ambiguity_policy,
+                    )
+                })
+                .collect::<Result<_, _>>()?,
+        }),
         (
             BexExternalValue::Map { entries, .. },
             RuntimeTy::Map {

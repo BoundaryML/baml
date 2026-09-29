@@ -86,7 +86,7 @@ const MAX_UNIFY_DEPTH: usize = 256;
 fn contains_bound_typevar(ty: &Ty, generic_params: &[ParamTy]) -> bool {
     match ty {
         Ty::TypeVar(name) => generic_params.contains(name),
-        Ty::Class(_, args) | Ty::Union(args) => args
+        Ty::Class(_, args) | Ty::Union(args) | Ty::Tuple(args) => args
             .iter()
             .any(|arg| contains_bound_typevar(arg, generic_params)),
         Ty::Interface(_, args, associated_bindings) => {
@@ -128,7 +128,7 @@ fn var_under_union(param: &ParamTy, ty: &Ty) -> bool {
         match ty {
             Ty::TypeVar(candidate) => in_union && candidate == param,
             Ty::Union(members) => members.iter().any(|m| occurs(param, m, true)),
-            Ty::Class(_, args) => args.iter().any(|a| occurs(param, a, in_union)),
+            Ty::Class(_, args) | Ty::Tuple(args) => args.iter().any(|a| occurs(param, a, in_union)),
             Ty::Interface(_, args, assoc) => {
                 args.iter().any(|a| occurs(param, a, in_union))
                     || assoc.iter().any(|(_, t)| occurs(param, t, in_union))
@@ -255,6 +255,13 @@ fn unify_into_at(
             ))
         }
         (Ty::List(xi), Ty::List(yi)) => unify_into_at(xi, yi, vars, aliases, bindings, depth + 1),
+        (Ty::Tuple(xs), Ty::Tuple(ys)) if xs.len() == ys.len() => {
+            let mut result = Overlap::Yes;
+            for (x, y) in xs.iter().zip(ys.iter()) {
+                result = result.and(unify_into_at(x, y, vars, aliases, bindings, depth + 1));
+            }
+            result
+        }
         (
             Ty::Map {
                 key: xk, value: xv, ..
@@ -678,7 +685,7 @@ fn occurs_in(n: &ParamTy, t: &Ty, vars: &[ParamTy], bindings: &TypeBindings) -> 
     let t = chase_var(t, vars, bindings);
     match &t {
         Ty::TypeVar(m) => m == n,
-        Ty::Class(_, args) | Ty::Union(args) => {
+        Ty::Class(_, args) | Ty::Union(args) | Ty::Tuple(args) => {
             args.iter().any(|a| occurs_in(n, a, vars, bindings))
         }
         Ty::Interface(_, args, assoc) => {
@@ -720,6 +727,12 @@ fn substitute_plain(ty: &Ty, bindings: &TypeBindings) -> Ty {
             members
                 .iter()
                 .map(|m| substitute_plain(m, bindings))
+                .collect(),
+        ),
+        Ty::Tuple(elements) => Ty::Tuple(
+            elements
+                .iter()
+                .map(|e| substitute_plain(e, bindings))
                 .collect(),
         ),
         Ty::Class(name, args) => Ty::Class(

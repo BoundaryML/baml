@@ -261,6 +261,12 @@ impl<'a> Builder<'a> {
                 items,
                 original_len,
                 ..
+            }
+            // Equality queries compare structure; a tuple compares like the
+            // fixed-length sequence it is.
+            | DecodedObject::Tuple {
+                items,
+                original_len,
             } => {
                 complete(items.len(), *original_len)?;
                 Value::List(

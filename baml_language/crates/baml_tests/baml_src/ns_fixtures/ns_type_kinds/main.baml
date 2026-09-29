@@ -21,7 +21,8 @@ function classify(t: reflect.Type) -> string {
     reflect.map.Type => "map",
     reflect.interface.Type => "interface",
     reflect.primitive.Type => "primitive",
-    reflect.function.Type => "function"
+    reflect.function.Type => "function",
+    reflect.tuple.Type => "tuple"
   }
 }
 
@@ -39,4 +40,5 @@ function exercise_all_kinds() -> bool {
     && classify(reflect.Type.of<Marker>()) == "interface"
     && classify(reflect.Type.of<int>()) == "primitive"
     && classify(reflect.Type.of<Callback>()) == "function"
+    && classify(reflect.Type.of<(int, string)>()) == "tuple"
 }

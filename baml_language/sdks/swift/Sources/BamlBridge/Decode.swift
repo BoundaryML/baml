@@ -128,6 +128,7 @@ func wireArmName(_ v: BamlBridge_Cffi_V1_BamlOutboundValue) -> String {
     case .enumValue(let e): return "enum \(e.name)"
     case .literalValue: return "literal"
     case .listValue: return "list"
+    case .tupleValue: return "tuple"
     case .mapValue: return "map"
     case .unionVariantValue: return "union variant"
     case .handleValue: return "handle"

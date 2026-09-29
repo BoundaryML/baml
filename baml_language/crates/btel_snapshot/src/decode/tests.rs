@@ -548,3 +548,43 @@ fn measure_type_decode_stack_per_level() {
         }
     }
 }
+
+#[test]
+fn a_tuple_object_round_trips() {
+    let pool = SnapshotPool::new(1, Limits::default());
+    let mut b = pool.try_acquire().unwrap();
+    let tuple = b.reserve_object().unwrap();
+    let start = b.value_start();
+    b.push_value(V::Int(1));
+    b.push_value(V::Bool(true));
+    let items = b.value_range(start);
+    b.set_object(
+        tuple,
+        O::Tuple {
+            items,
+            original_len: 2,
+        },
+    );
+    let start = b.value_start();
+    b.push_value(V::Object(tuple));
+    let slots = b.value_range(start);
+    let snapshot = b.finish_args(1, slots);
+
+    let decoded = decode(&encode(&snapshot)).unwrap();
+    assert_eq!(decoded.id, snapshot.id(), "identity verifies over a tuple");
+    let DecodedRoot::FunctionArgs { slots, .. } = &decoded.root else {
+        panic!("argument root")
+    };
+    let DecodedValue::Object(id) = &slots[0] else {
+        panic!("object slot")
+    };
+    let DecodedObject::Tuple {
+        items,
+        original_len,
+    } = decoded.object(*id)
+    else {
+        panic!("tuple")
+    };
+    assert_eq!(*original_len, 2);
+    assert_eq!(items, &vec![DecodedValue::Int(1), DecodedValue::Bool(true)]);
+}

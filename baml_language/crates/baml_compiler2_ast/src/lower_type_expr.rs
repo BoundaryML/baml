@@ -128,6 +128,11 @@ fn lower_base_terminal(
         .at(span);
     }
 
+    // Tuple types `(A, B)`; postfix modifiers are applied by the caller.
+    if let Some(elements) = type_expr.tuple_type_elements() {
+        return lower_tuple_type(&elements, span, diags, owner);
+    }
+
     // Handle function types like `(x: int, y: int) -> bool`. A function type
     // cannot declare its own generic parameters (rejected by the parser); any
     // leading `<...>` is left in the CST for recovery and ignored here.
@@ -181,6 +186,21 @@ fn lower_base_terminal(
     }
 
     lower_base_type(type_expr, diags, owner)
+}
+
+fn lower_tuple_type(
+    elements: &[CstTypeExpr],
+    span: TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+    owner: TypeExprOwner,
+) -> TypeExpr {
+    TypeExprKind::Tuple {
+        elements: elements
+            .iter()
+            .map(|e| lower_type_expr_node(e, diags, owner))
+            .collect(),
+    }
+    .at(span)
 }
 
 fn lower_base_type(
@@ -287,6 +307,10 @@ fn lower_union_member_base(
             member: Name::new(member.text()),
         }
         .at(span);
+    }
+
+    if let Some(elements) = parts.tuple_type_elements() {
+        return lower_tuple_type(&elements, span, diags, owner);
     }
 
     // Check for parenthesized type first (e.g., `(int | string)` in `A | (int | string)`)
@@ -550,8 +574,30 @@ pub(crate) fn check_void_type(
                 check_void_type(throws, "a throws type".to_string(), span, false, diags);
             }
         }
-        // All other variants (primitives, path, etc.) cannot contain void.
-        _ => {}
+        TypeExprKind::Tuple { elements } => {
+            for e in elements {
+                check_void_type(e, "a tuple element".to_string(), span, false, diags);
+            }
+        }
+        // Leaves cannot contain void. Generic arguments and projections are
+        // not checked here (pre-existing: `Box<void>` is caught later).
+        TypeExprKind::Path { .. } | TypeExprKind::AssociatedTypeProjection { .. } => {}
+        TypeExprKind::Int
+        | TypeExprKind::Bigint
+        | TypeExprKind::Float
+        | TypeExprKind::String
+        | TypeExprKind::Bool
+        | TypeExprKind::Null
+        | TypeExprKind::Never
+        | TypeExprKind::Uint8Array
+        | TypeExprKind::Media { .. }
+        | TypeExprKind::Literal { .. }
+        | TypeExprKind::Unknown
+        | TypeExprKind::Type
+        | TypeExprKind::Rust
+        | TypeExprKind::Error
+        | TypeExprKind::Missing
+        | TypeExprKind::Infer => {}
     }
 }
 
@@ -667,7 +713,27 @@ pub(crate) fn check_wildcard_type(
                 check_wildcard_type(iface, context, span, diags);
             }
         }
-        // Primitives and other leaves cannot contain a wildcard.
-        _ => {}
+        TypeExprKind::Tuple { elements } => {
+            for e in elements {
+                check_wildcard_type(e, context, span, diags);
+            }
+        }
+        // Leaves cannot contain a wildcard.
+        TypeExprKind::Int
+        | TypeExprKind::Bigint
+        | TypeExprKind::Float
+        | TypeExprKind::String
+        | TypeExprKind::Bool
+        | TypeExprKind::Null
+        | TypeExprKind::Never
+        | TypeExprKind::Uint8Array
+        | TypeExprKind::Media { .. }
+        | TypeExprKind::Literal { .. }
+        | TypeExprKind::Unknown
+        | TypeExprKind::Type
+        | TypeExprKind::Rust
+        | TypeExprKind::Error
+        | TypeExprKind::Missing
+        | TypeExprKind::Void => {}
     }
 }

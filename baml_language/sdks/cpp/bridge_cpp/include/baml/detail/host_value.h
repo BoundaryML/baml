@@ -232,6 +232,15 @@ inline void transcode_outbound_to_inbound(pb::InboundValue& out,
       }
       return;
     }
+    case pb::BamlOutboundValue::kTupleValue: {
+      // Tuples travel inbound as lists; the engine rebuilds the tuple
+      // against the declared type.
+      pb::InboundListValue* list = out.mutable_list_value();
+      for (const pb::BamlOutboundValue& item : v.tuple_value().items()) {
+        transcode_outbound_to_inbound(*list->add_values(), item);
+      }
+      return;
+    }
     case pb::BamlOutboundValue::kMapValue: {
       pb::InboundMapValue* map = out.mutable_map_value();
       for (const pb::BamlOutboundMapEntry& e : v.map_value().entries()) {

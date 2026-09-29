@@ -368,6 +368,13 @@ pub fn display_type_ref(store: &TypeRefStore, id: TypeRefId) -> String {
             .map(|&v| display_type_ref(store, v))
             .collect::<Vec<_>>()
             .join(" | "),
+        K::Tuple { elements } => {
+            let parts: Vec<String> = elements
+                .iter()
+                .map(|&e| display_type_ref(store, e))
+                .collect();
+            baml_type::render_tuple(&parts)
+        }
         K::Literal { value } => value.to_string(),
         K::Function {
             params,

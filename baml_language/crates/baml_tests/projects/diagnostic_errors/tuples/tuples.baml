@@ -1,0 +1,59 @@
+// Diagnostics for tuples. Each function isolates one error.
+
+// Tuples are immutable: assigning to an element is rejected.
+function assign_element() -> int {
+    let t = (1, 2);
+    t.0 = 5;
+    t.0
+}
+
+// An index past the tuple's arity is an unresolved member.
+function index_out_of_range(t: (int, string)) -> int {
+    t.2
+}
+
+// Element access on a non-tuple.
+function index_non_tuple(x: int) -> int {
+    x.0
+}
+
+// Tuples are not lists and do not index with `[]`.
+function bracket_index(t: (int, int)) -> int {
+    t[0]
+}
+
+// Arity is part of the type.
+function wrong_arity() -> (int, int) {
+    (1, 2, 3)
+}
+
+// Elementwise mismatch.
+function wrong_element() -> (int, string) {
+    (1, 2)
+}
+
+// Tuples and lists are disjoint.
+function tuple_is_not_list() -> int[] {
+    (1, 2)
+}
+
+// A tuple match missing a case is non-exhaustive.
+function non_exhaustive(a: bool, b: bool) -> int {
+    match (a, b) {
+        (true, true) => 1,
+        (false, _) => 2,
+    }
+}
+
+// A tuple pattern of the wrong arity can never match.
+function wrong_arity_pattern(t: (int, int)) -> int {
+    match (t) {
+        (let a, let b, let c) => a,
+        _ => 0,
+    }
+}
+
+// `void` is not a tuple element.
+function void_element(t: (int, void)) -> int {
+    0
+}

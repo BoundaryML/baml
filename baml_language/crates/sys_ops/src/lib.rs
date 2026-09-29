@@ -303,6 +303,20 @@ mod schema {
                     "type": "array",
                     "items": self.ty_schema(inner)?,
                 })),
+                // A tuple is a fixed-length array: one schema per position, nothing after.
+                SapTy::Tuple(items) => {
+                    let prefix_items = items
+                        .iter()
+                        .map(|item| self.ty_schema(item))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    Ok(json!({
+                        "type": "array",
+                        "prefixItems": prefix_items,
+                        "items": false,
+                        "minItems": items.len(),
+                        "maxItems": items.len(),
+                    }))
+                }
                 SapTy::Map { value, .. } => Ok(json!({
                     "type": "object",
                     "additionalProperties": self.ty_schema(value)?,
@@ -601,6 +615,59 @@ mod schema {
             )
             .expect("schema should lower");
             assert_eq!(schema, json!({ "type": ["string", "null"] }));
+        }
+
+        #[test]
+        fn tuple_is_a_fixed_length_array() {
+            let schema = json_schema(
+                &RuntimeTy::Tuple(Box::new([RuntimeTy::int(), RuntimeTy::string()])),
+                &SysOpContext::empty(),
+            )
+            .expect("schema should lower");
+            assert_eq!(
+                schema,
+                json!({
+                    "type": "array",
+                    "prefixItems": [{ "type": "integer" }, { "type": "string" }],
+                    "items": false,
+                    "minItems": 2,
+                    "maxItems": 2,
+                })
+            );
+        }
+
+        #[test]
+        fn tuple_elements_reference_classes_and_nest() {
+            let point = type_name("pkg.Point");
+            let mut classes = indexmap::IndexMap::new();
+            classes.insert(
+                key(&point),
+                class_definition(&point, vec![field("x", RuntimeTy::int())]),
+            );
+            let mut ctx = SysOpContext::empty();
+            ctx.class_definitions = Arc::new(classes);
+
+            let target = RuntimeTy::list(RuntimeTy::Tuple(Box::new([
+                class_ty(&point),
+                RuntimeTy::optional(RuntimeTy::Tuple(Box::new([RuntimeTy::bool()]))),
+            ])));
+            let schema = json_schema(&target, &ctx).expect("schema should lower");
+            let tuple = &schema["items"];
+            assert_eq!(tuple["minItems"], 2);
+            assert_eq!(tuple["maxItems"], 2);
+            assert_eq!(tuple["items"], false);
+            assert_eq!(tuple["prefixItems"][0]["$ref"], "#/$defs/pkg.Point");
+            assert_eq!(
+                tuple["prefixItems"][1],
+                json!({
+                    "type": ["array", "null"],
+                    "prefixItems": [{ "type": "boolean" }],
+                    "items": false,
+                    "minItems": 1,
+                    "maxItems": 1,
+                })
+            );
+            assert_eq!(schema["$defs"]["pkg.Point"]["type"], "object");
         }
 
         #[test]

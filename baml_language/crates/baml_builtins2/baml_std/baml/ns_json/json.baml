@@ -455,7 +455,9 @@ function path_or<T>(j: json, selector: string, default: T) -> T throws never {
 /// of `t` would take.
 ///
 /// Optional fields are omitted from `required`, maps use schema-valued
-/// `additionalProperties`, and unions use `anyOf`. Enums lower to a string
+/// `additionalProperties`, unions use `anyOf`, and a tuple `(A, B)` is a
+/// fixed-length array (`prefixItems` with `items: false` and matching
+/// `minItems` / `maxItems`). Enums lower to a string
 /// `enum` of their variant names, `uint8array` to `string`, and `unknown` to
 /// the empty schema `{}`. A nullable type becomes a `["T", "null"]` type list
 /// where it can, and `anyOf` otherwise.

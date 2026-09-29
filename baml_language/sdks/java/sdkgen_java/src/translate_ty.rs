@@ -179,6 +179,7 @@ pub(crate) fn translate_ty(
             )
         ),
         Ty::Union(items) => translate_union(items, ctx, sink),
+        Ty::Tuple(..) => unsupported_tuple(ty, None),
         Ty::Unknown => "java.lang.Object".to_string(),
         Ty::Function { params, ret, .. } => translate_callable(params, ret, ctx, sink),
         Ty::Void => match pos {
@@ -473,6 +474,7 @@ pub(crate) fn descriptor_expr(ty: &Ty, aliases: &AliasTable) -> String {
         }
         Ty::Literal(lit, ..) => literal_expr(lit),
         Ty::Union(items) => descriptor_union_expr(items, aliases),
+        Ty::Tuple(..) => unsupported_tuple(ty, None),
         _ => BAMLTYPE_UNKNOWN.to_string(),
     }
 }
@@ -570,7 +572,21 @@ pub(crate) fn registry_arm_expr(ty: &Ty, aliases: &AliasTable) -> String {
             format!("baml_bridge.BamlType.typeVar({:?})", name.as_str())
         }
         Ty::Literal(lit, ..) => literal_expr(lit),
+        Ty::Tuple(..) => unsupported_tuple(ty, None),
         _ => BAMLTYPE_UNKNOWN.to_string(),
+    }
+}
+
+/// Fail closed on a tuple type. [`crate::reject_tuple_types`] rejects every
+/// tuple in the pool before emission, so the per-translator arms that call
+/// this are defensive.
+pub(crate) fn unsupported_tuple(ty: &Ty, owner: Option<&baml_sdkgen_types::Name>) -> ! {
+    match owner {
+        Some(owner) => panic!(
+            "tuple types are not yet supported by the Java generator \
+             (`{owner}` uses `{ty}`)"
+        ),
+        None => panic!("tuple types are not yet supported by the Java generator (`{ty}`)"),
     }
 }
 
@@ -675,6 +691,7 @@ pub(crate) fn union_arm_token(ty: &Ty) -> String {
         Ty::Future(..) => "Future".to_string(),
         // validate() bans nested unions; unreachable in valid pools.
         Ty::Union(..) => "Union".to_string(),
+        Ty::Tuple(..) => unsupported_tuple(ty, None),
     }
 }
 

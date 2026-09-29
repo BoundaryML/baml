@@ -129,6 +129,7 @@ macro_rules! visit_bytecode_index_operands {
             | I::CmpBigintOp(..)
             | I::UnaryOp(..)
             | I::AllocArray(..)
+            | I::AllocTuple(..)
             | I::AllocMap(..)
             | I::LoadArrayElement
             | I::ContainerLen
@@ -258,6 +259,7 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
         | Object::Cell(..)
         | Object::Array(..)
         | Object::Map(..)
+        | Object::Tuple(..)
         | Object::Float(..)
         | Object::Future(..)
         | Object::UnscheduledFuture(..)

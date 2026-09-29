@@ -186,6 +186,14 @@ pub(super) fn object(object: &SnapshotObject, s: &Storage) -> Digest {
             h.size(*original_len);
             range(&mut h, *items);
         }
+        SnapshotObject::Tuple {
+            items,
+            original_len,
+        } => {
+            h.byte(ObjectTag::Tuple as u8);
+            h.size(*original_len);
+            range(&mut h, *items);
+        }
         SnapshotObject::Map {
             key_type,
             value_type,

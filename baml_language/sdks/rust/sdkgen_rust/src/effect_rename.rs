@@ -161,6 +161,7 @@ fn rename_typevars(ty: &Ty, renames: &HashMap<String, String>) -> Ty {
             value: Box::new(rename_typevars(value, renames)),
         },
         Ty::Union(items) => Ty::Union(items.iter().map(|t| rename_typevars(t, renames)).collect()),
+        Ty::Tuple(items) => Ty::Tuple(items.iter().map(|t| rename_typevars(t, renames)).collect()),
         Ty::Class(name, args) => Ty::Class(
             name.clone(),
             args.iter().map(|t| rename_typevars(t, renames)).collect(),

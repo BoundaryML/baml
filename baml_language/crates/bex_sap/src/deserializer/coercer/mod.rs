@@ -6,6 +6,7 @@ mod coerce_literal;
 mod coerce_map;
 mod coerce_primitive;
 mod coerce_stream_state;
+mod coerce_tuple;
 mod coerce_ty;
 mod coerce_union;
 mod match_string;
@@ -28,6 +29,9 @@ pub(crate) enum VisitedType {
     Class(String),
     /// Anonymous array types are identified by the address of the model node.
     Array(*const ()),
+    /// Anonymous tuple types are identified by the address of the model node. Only the
+    /// single-value-to-1-tuple path re-enters with the same value.
+    Tuple(*const ()),
 }
 
 pub struct ParsingContext<'s, 'v, 't, N: TypeIdent> {

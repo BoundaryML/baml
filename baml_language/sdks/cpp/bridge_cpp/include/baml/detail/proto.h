@@ -42,6 +42,8 @@ inline const char* arm_name(pb::BamlOutboundValue::ValueCase c) {
       return "literal";
     case pb::BamlOutboundValue::kListValue:
       return "list";
+    case pb::BamlOutboundValue::kTupleValue:
+      return "tuple";
     case pb::BamlOutboundValue::kMapValue:
       return "map";
     case pb::BamlOutboundValue::kUnionVariantValue:

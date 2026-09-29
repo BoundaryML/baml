@@ -77,6 +77,7 @@ pub fn runtime_ty_structurally_equal(left: &RuntimeTy, right: &RuntimeTy) -> boo
                 && runtime_ty_structurally_equal(left_throws, right_throws)
         }
         (T::Union(left), T::Union(right)) => structurally_equal_unordered_slices(left, right),
+        (T::Tuple(left), T::Tuple(right)) => structurally_equal_slices(left, right),
         _ => false,
     }
 }

@@ -136,6 +136,11 @@ pub enum DecodedObject {
         items: Vec<DecodedValue>,
         original_len: u64,
     },
+    /// A tuple: no element type (a tuple's type is its elements' types).
+    Tuple {
+        items: Vec<DecodedValue>,
+        original_len: u64,
+    },
     Map {
         key_type: TypeDescription,
         value_type: TypeDescription,
@@ -648,6 +653,17 @@ impl<'a> Reader<'a, '_> {
                     original_len,
                 }
             }
+            9 => {
+                // Mirrors the encoder: tag, original length, then the items.
+                let original_len = self.u64()?;
+                let (items, digest) = self.values()?;
+                h.number(original_len);
+                range(&mut h, items.len(), digest);
+                DecodedObject::Tuple {
+                    items,
+                    original_len,
+                }
+            }
             2 => {
                 let (key_type, key_digest) = self.ty()?;
                 let (value_type, value_digest) = self.ty()?;
@@ -834,7 +850,9 @@ fn validate_references(snapshot: &DecodedSnapshot) -> Result<(), BlobError> {
     }
     for object in &snapshot.objects {
         match object {
-            DecodedObject::List { items, .. } => items.iter().try_for_each(check_value)?,
+            DecodedObject::List { items, .. } | DecodedObject::Tuple { items, .. } => {
+                items.iter().try_for_each(check_value)?;
+            }
             DecodedObject::Map { entries, .. } => {
                 entries.iter().try_for_each(|(_, v)| check_value(v))?;
             }

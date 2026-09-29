@@ -433,6 +433,17 @@ impl EqualsDriver {
             }
             (Object::Array(_), _) => Cmp::NotEqual,
 
+            // Tuples are immutable, so no lock: elementwise at equal arity. A
+            // tuple never equals a list (`(1, 2) != [1, 2]`).
+            (Object::Tuple(x), Object::Tuple(y)) => {
+                if x.len() != y.len() {
+                    return Cmp::NotEqual;
+                }
+                self.stack.extend(x.iter().copied().zip(y.iter().copied()));
+                Cmp::Continue
+            }
+            (Object::Tuple(_), _) => Cmp::NotEqual,
+
             (Object::Map(x), Object::Map(y)) => {
                 let (xs, ys) = lock_pair_ordered(pa, &x.data, pb, &y.data);
                 if xs.len() != ys.len() {

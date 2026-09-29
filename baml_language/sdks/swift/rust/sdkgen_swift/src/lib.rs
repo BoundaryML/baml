@@ -307,6 +307,14 @@ fn direct_class_targets(ty: &Ty, pool: &SymbolPool, out: &mut Vec<String>) {
                 direct_class_targets(&non_null[0], pool, out);
             }
         }
+        // Tuple elements are stored inline (no heap indirection), so each
+        // element's direct class targets are the tuple's. Latent until the
+        // Swift generator supports tuples.
+        Ty::Tuple(items) => {
+            for item in items {
+                direct_class_targets(item, pool, out);
+            }
+        }
         Ty::TypeAlias(name) => {
             if let Some(Symbol::TypeAlias(alias)) = pool.get(name) {
                 if !alias.recursive {
@@ -846,5 +854,38 @@ mod tests {
         );
         // map with non-string key — not yet
         assert_eq!(t(&map(int(), int())), None);
+        // Tuples fail closed (symbol skipped), including when nested.
+        let tuple = Ty::Tuple(Box::new([int(), string()]));
+        assert_eq!(t(&tuple), None);
+        assert_eq!(t(&list(tuple)), None);
+    }
+
+    #[test]
+    fn tuple_signatures_skip_with_a_tuple_reason() {
+        let fqn = Name::new(
+            baml_base::Name::new("user"),
+            Vec::new(),
+            baml_base::Name::new("pair"),
+        );
+        let function = baml_sdkgen_types::Function {
+            name: fqn.name().clone(),
+            generic_params: Vec::new(),
+            docstring: None,
+            arguments: Vec::new(),
+            return_type: Ty::Tuple(Box::new([int(), string()])),
+            throws: None,
+            watchers: Vec::new(),
+            origin: baml_sdkgen_types::Origin {
+                source_file_path: "main.baml".to_string(),
+                span_start: 0,
+            },
+        };
+        let pool = SymbolPool::from([(fqn, Symbol::Function(function))]);
+        let files = to_source_code_with_bytecode(&pool, &[], NamingConvention::PreserveCase);
+        let manifest = &files[&PathBuf::from("_BamlSkipped.swift")];
+        assert!(
+            manifest.contains("tuple types are not yet supported by the Swift generator"),
+            "{manifest}"
+        );
     }
 }

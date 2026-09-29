@@ -356,6 +356,15 @@ ty_family! {
         InferVar {
             var: crate::interned::InferVar,
         } = 37,
+        /// Tuple type `(T1, T2, ...)`: an immutable, fixed-arity product. At
+        /// least one element. Covariant elementwise (sound because tuples are
+        /// immutable) and disjoint from `List`. A tuple value's concrete type
+        /// is derived from its elements, so it carries no type metadata.
+        ///
+        /// Declared last: `InferTy` orders by declaration position while the
+        /// plain members order by discriminant, and the two must agree.
+        #[axis(concrete)]
+        Tuple(Box<[Ty<N>]>) = 38,
     }
 }
 

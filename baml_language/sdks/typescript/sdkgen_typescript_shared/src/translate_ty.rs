@@ -80,7 +80,12 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
         Ty::Media(MediaKind::Generic) => TranslatedType::bare("unknown"),
 
         Ty::List(inner) => {
-            let needs_parentheses = matches!(inner.as_ref(), Ty::Union(..) | Ty::Function { .. });
+            // `readonly [A, B][]` would parse as a readonly array of mutable
+            // tuples, so parenthesize tuple elements too.
+            let needs_parentheses = matches!(
+                inner.as_ref(),
+                Ty::Union(..) | Ty::Function { .. } | Ty::Tuple(..)
+            );
             let inner = translate_ty(inner, ctx);
             // Postfix `[]` binds tighter than unions and function arrows.
             let elem = if needs_parentheses {
@@ -110,6 +115,24 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
                 format!("{{ [key in {}]?: {} }}", key.expr, value.expr)
             };
             TranslatedType { expr, imports }
+        }
+        // BAML tuples are immutable, so project them as readonly TS tuples.
+        // Mutable `[A, B]` values remain assignable to `readonly [A, B]`
+        // parameters. Arity is always >= 1, so `readonly [A]` is the 1-tuple.
+        Ty::Tuple(items) => {
+            let mut imports = BTreeSet::new();
+            let parts: Vec<String> = items
+                .iter()
+                .map(|item| {
+                    let t = translate_ty(item, ctx);
+                    imports.extend(t.imports);
+                    t.expr
+                })
+                .collect();
+            TranslatedType {
+                expr: format!("readonly [{}]", parts.join(", ")),
+                imports,
+            }
         }
         Ty::Union(items) => {
             let mut imports = BTreeSet::new();
@@ -236,6 +259,7 @@ fn is_reflect_kind_type(name: &Name) -> bool {
         "literal",
         "map",
         "primitive",
+        "tuple",
         "union",
     ];
     name.package().as_str() == "reflect"
@@ -398,6 +422,7 @@ mod tests {
             | Ty::List(..)
             | Ty::Map { .. }
             | Ty::Union(..)
+            | Ty::Tuple(..)
             | Ty::Unknown
             | Ty::Function { .. }
             | Ty::Future(..)
@@ -638,6 +663,36 @@ mod tests {
                 ty: list(boxed(callable(Vec::new(), boxed(Ty::Bool)))),
                 ctx: ctx(&[]),
                 expected_expr: "(() => boolean)[]",
+                expected_imports: &[],
+            },
+            Case {
+                label: "tuple_int_string",
+                ty: Ty::Tuple(vec![Ty::Int, Ty::String].into()),
+                ctx: ctx(&[]),
+                expected_expr: "readonly [number, string]",
+                expected_imports: &[],
+            },
+            Case {
+                label: "one_tuple",
+                ty: Ty::Tuple(vec![Ty::Bool].into()),
+                ctx: ctx(&[]),
+                expected_expr: "readonly [boolean]",
+                expected_imports: &[],
+            },
+            Case {
+                label: "list_of_tuple",
+                ty: list(boxed(Ty::Tuple(
+                    vec![union(vec![Ty::String, Ty::Null]), media(MediaKind::Image)].into(),
+                ))),
+                ctx: ctx(&["lorem"]),
+                expected_expr: "(readonly [string | null, baml.media.Image])[]",
+                expected_imports: &[&["baml", "media"]],
+            },
+            Case {
+                label: "optional_tuple",
+                ty: union(vec![Ty::Tuple(vec![Ty::Int].into()), Ty::Null]),
+                ctx: ctx(&[]),
+                expected_expr: "readonly [number] | null",
                 expected_imports: &[],
             },
             Case {

@@ -234,6 +234,12 @@ pub enum BexExternalValue {
         entries: IndexMap<String, BexExternalValue>,
     },
 
+    /// Owned tuple. No type metadata: a tuple's type is its elements' types.
+    Tuple {
+        /// The tuple elements, in order (at least one).
+        items: Vec<BexExternalValue>,
+    },
+
     /// Class instance with class name and field values.
     Instance {
         class_name: String,
@@ -330,6 +336,7 @@ impl std::fmt::Debug for BexExternalValue {
                 .field("element_type", element_type)
                 .field("items", items)
                 .finish(),
+            Self::Tuple { items } => f.debug_struct("Tuple").field("items", items).finish(),
             Self::Map {
                 key_type,
                 value_type,
@@ -400,6 +407,7 @@ impl PartialEq for BexExternalValue {
                     items: i2,
                 },
             ) => et1 == et2 && i1 == i2,
+            (Self::Tuple { items: i1 }, Self::Tuple { items: i2 }) => i1 == i2,
             (
                 Self::Map {
                     key_type: k1,
@@ -575,6 +583,7 @@ impl BexExternalValue {
             BexExternalValue::String(_) => "string",
             BexExternalValue::Array { .. } => "array",
             BexExternalValue::Map { .. } => "map",
+            BexExternalValue::Tuple { .. } => "tuple",
             BexExternalValue::Instance { .. } => "instance",
             BexExternalValue::Variant { .. } => "variant",
             BexExternalValue::Union { .. } => "union",
@@ -647,6 +656,14 @@ impl BexExternalValue {
             BexExternalValue::Array { items, .. } => {
                 let inner: Vec<String> = items.iter().map(Self::render_readable).collect();
                 format!("[{}]", inner.join(", "))
+            }
+            BexExternalValue::Tuple { items } => {
+                let inner: Vec<String> = items.iter().map(Self::render_readable).collect();
+                if inner.len() == 1 {
+                    format!("({},)", inner[0])
+                } else {
+                    format!("({})", inner.join(", "))
+                }
             }
             BexExternalValue::Map { entries, .. } => {
                 let inner: Vec<String> = entries

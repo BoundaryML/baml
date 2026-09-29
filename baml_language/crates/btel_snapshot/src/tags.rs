@@ -35,6 +35,7 @@ pub(super) enum ObjectTag {
     NonSnapshotableValue = 6,
     Descriptive = 7,
     Truncated = 8,
+    Tuple = 9,
 }
 
 #[repr(u8)]

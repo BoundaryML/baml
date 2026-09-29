@@ -107,7 +107,8 @@ type TypeKind = reflect.class.Type
     | reflect.map.Type
     | reflect.interface.Type
     | reflect.primitive.Type
-    | reflect.function.Type;
+    | reflect.function.Type
+    | reflect.tuple.Type;
 
 /// Implemented automatically by every function value, with its parameter
 /// list erased. `Returns` pins the held function's return type and `Throws`

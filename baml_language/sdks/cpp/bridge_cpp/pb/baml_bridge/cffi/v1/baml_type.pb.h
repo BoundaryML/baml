@@ -167,6 +167,10 @@ class BamlTyRustType;
 struct BamlTyRustTypeDefaultTypeInternal;
 extern BamlTyRustTypeDefaultTypeInternal _BamlTyRustType_default_instance_;
 extern const ::google::protobuf::internal::ClassDataLite<35> BamlTyRustType_class_data_;
+class BamlTyTuple;
+struct BamlTyTupleDefaultTypeInternal;
+extern BamlTyTupleDefaultTypeInternal _BamlTyTuple_default_instance_;
+extern const ::google::protobuf::internal::ClassDataLite<32> BamlTyTuple_class_data_;
 class BamlTyTypeAlias;
 struct BamlTyTypeAliasDefaultTypeInternal;
 extern BamlTyTypeAliasDefaultTypeInternal _BamlTyTypeAlias_default_instance_;
@@ -563,7 +567,7 @@ class BamlTyVoid final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyVoid*>(
         &_BamlTyVoid_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 31;
+  static constexpr int kIndexInFileMessages = 32;
   friend void swap(BamlTyVoid& a, BamlTyVoid& b) { a.Swap(&b); }
   inline void Swap(BamlTyVoid* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -727,7 +731,7 @@ class BamlTyUnknown final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyUnknown*>(
         &_BamlTyUnknown_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(BamlTyUnknown& a, BamlTyUnknown& b) { a.Swap(&b); }
   inline void Swap(BamlTyUnknown* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -891,7 +895,7 @@ class BamlTyTypeVar final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyTypeVar*>(
         &_BamlTyTypeVar_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 32;
+  static constexpr int kIndexInFileMessages = 33;
   friend void swap(BamlTyTypeVar& a, BamlTyTypeVar& b) { a.Swap(&b); }
   inline void Swap(BamlTyTypeVar* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1087,7 +1091,7 @@ class BamlTyRustType final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyRustType*>(
         &_BamlTyRustType_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 27;
+  static constexpr int kIndexInFileMessages = 28;
   friend void swap(BamlTyRustType& a, BamlTyRustType& b) { a.Swap(&b); }
   inline void Swap(BamlTyRustType* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1251,7 +1255,7 @@ class BamlTyResource final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyResource*>(
         &_BamlTyResource_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 29;
+  static constexpr int kIndexInFileMessages = 30;
   friend void swap(BamlTyResource& a, BamlTyResource& b) { a.Swap(&b); }
   inline void Swap(BamlTyResource* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1415,7 +1419,7 @@ class BamlTyPromptAst final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyPromptAst*>(
         &_BamlTyPromptAst_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 30;
+  static constexpr int kIndexInFileMessages = 31;
   friend void swap(BamlTyPromptAst& a, BamlTyPromptAst& b) { a.Swap(&b); }
   inline void Swap(BamlTyPromptAst* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1758,7 +1762,7 @@ class BamlTyNever final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyNever*>(
         &_BamlTyNever_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 34;
+  static constexpr int kIndexInFileMessages = 35;
   friend void swap(BamlTyNever& a, BamlTyNever& b) { a.Swap(&b); }
   inline void Swap(BamlTyNever* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1924,7 +1928,7 @@ class BamlTyMetaType final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyMetaType*>(
         &_BamlTyMetaType_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 28;
+  static constexpr int kIndexInFileMessages = 29;
   friend void swap(BamlTyMetaType& a, BamlTyMetaType& b) { a.Swap(&b); }
   inline void Swap(BamlTyMetaType* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2088,7 +2092,7 @@ class BamlTyMedia final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyMedia*>(
         &_BamlTyMedia_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 21;
   friend void swap(BamlTyMedia& a, BamlTyMedia& b) { a.Swap(&b); }
   inline void Swap(BamlTyMedia* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2275,7 +2279,7 @@ class BamlTyLiteral final : public ::google::protobuf::MessageLite
     kFloatValue = 5,
     LITERAL_NOT_SET = 0,
   };
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(BamlTyLiteral& a, BamlTyLiteral& b) { a.Swap(&b); }
   inline void Swap(BamlTyLiteral* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2535,7 +2539,7 @@ class BamlTyEnumVariant final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyEnumVariant*>(
         &_BamlTyEnumVariant_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 23;
+  static constexpr int kIndexInFileMessages = 24;
   friend void swap(BamlTyEnumVariant& a, BamlTyEnumVariant& b) { a.Swap(&b); }
   inline void Swap(BamlTyEnumVariant* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3182,6 +3186,7 @@ class BamlTy final : public ::google::protobuf::MessageLite
     kTypeVar = 22,
     kAssociatedTypeProjection = 23,
     kNever = 24,
+    kTuple = 25,
     TY_NOT_SET = 0,
   };
   static constexpr int kIndexInFileMessages = 0;
@@ -3292,6 +3297,7 @@ class BamlTy final : public ::google::protobuf::MessageLite
     kTypeVarFieldNumber = 22,
     kAssociatedTypeProjectionFieldNumber = 23,
     kNeverFieldNumber = 24,
+    kTupleFieldNumber = 25,
   };
   // .baml_bridge.cffi.v1.BamlTyPrimitive primitive = 1;
   bool has_primitive() const;
@@ -3730,6 +3736,25 @@ class BamlTy final : public ::google::protobuf::MessageLite
   ::baml_bridge::cffi::v1::BamlTyNever* PROTOBUF_NONNULL _internal_mutable_never();
 
   public:
+  // .baml_bridge.cffi.v1.BamlTyTuple tuple = 25;
+  bool has_tuple() const;
+  private:
+  bool _internal_has_tuple() const;
+
+  public:
+  void clear_tuple() ;
+  const ::baml_bridge::cffi::v1::BamlTyTuple& tuple() const;
+  [[nodiscard]] ::baml_bridge::cffi::v1::BamlTyTuple* PROTOBUF_NULLABLE release_tuple();
+  ::baml_bridge::cffi::v1::BamlTyTuple* PROTOBUF_NONNULL mutable_tuple();
+  void set_allocated_tuple(::baml_bridge::cffi::v1::BamlTyTuple* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_tuple(::baml_bridge::cffi::v1::BamlTyTuple* PROTOBUF_NULLABLE value);
+  ::baml_bridge::cffi::v1::BamlTyTuple* PROTOBUF_NULLABLE unsafe_arena_release_tuple();
+
+  private:
+  const ::baml_bridge::cffi::v1::BamlTyTuple& _internal_tuple() const;
+  ::baml_bridge::cffi::v1::BamlTyTuple* PROTOBUF_NONNULL _internal_mutable_tuple();
+
+  public:
   void clear_ty();
   TyCase ty_case() const;
   // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlTy)
@@ -3758,11 +3783,12 @@ class BamlTy final : public ::google::protobuf::MessageLite
   void set_has_type_var();
   void set_has_associated_type_projection();
   void set_has_never();
+  void set_has_tuple();
   inline bool has_ty() const;
   inline void clear_has_ty();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<0, 23,
-                                   23, 0,
+  static const ::google::protobuf::internal::TcParseTable<0, 24,
+                                   24, 0,
                                    2>
       _table_;
 
@@ -3807,6 +3833,7 @@ class BamlTy final : public ::google::protobuf::MessageLite
       ::google::protobuf::MessageLite* PROTOBUF_NULLABLE type_var_;
       ::google::protobuf::MessageLite* PROTOBUF_NULLABLE associated_type_projection_;
       ::google::protobuf::MessageLite* PROTOBUF_NULLABLE never_;
+      ::google::protobuf::MessageLite* PROTOBUF_NULLABLE tuple_;
     } ty_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint32_t _oneof_case_[1];
@@ -3865,7 +3892,7 @@ class BamlTyAssociatedBinding final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyAssociatedBinding*>(
         &_BamlTyAssociatedBinding_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 22;
+  static constexpr int kIndexInFileMessages = 23;
   friend void swap(BamlTyAssociatedBinding& a, BamlTyAssociatedBinding& b) { a.Swap(&b); }
   inline void Swap(BamlTyAssociatedBinding* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4066,7 +4093,7 @@ class BamlTyAssociatedTypeProjection final : public ::google::protobuf::MessageL
     return *reinterpret_cast<const BamlTyAssociatedTypeProjection*>(
         &_BamlTyAssociatedTypeProjection_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 33;
+  static constexpr int kIndexInFileMessages = 34;
   friend void swap(BamlTyAssociatedTypeProjection& a, BamlTyAssociatedTypeProjection& b) { a.Swap(&b); }
   inline void Swap(BamlTyAssociatedTypeProjection* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4487,7 +4514,7 @@ class BamlTyFunction final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyFunction*>(
         &_BamlTyFunction_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 25;
+  static constexpr int kIndexInFileMessages = 26;
   friend void swap(BamlTyFunction& a, BamlTyFunction& b) { a.Swap(&b); }
   inline void Swap(BamlTyFunction* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4731,7 +4758,7 @@ class BamlTyFunctionParam final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyFunctionParam*>(
         &_BamlTyFunctionParam_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 24;
+  static constexpr int kIndexInFileMessages = 25;
   friend void swap(BamlTyFunctionParam& a, BamlTyFunctionParam& b) { a.Swap(&b); }
   inline void Swap(BamlTyFunctionParam* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4945,7 +4972,7 @@ class BamlTyFuture final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyFuture*>(
         &_BamlTyFuture_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 26;
+  static constexpr int kIndexInFileMessages = 27;
   friend void swap(BamlTyFuture& a, BamlTyFuture& b) { a.Swap(&b); }
   inline void Swap(BamlTyFuture* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5146,7 +5173,7 @@ class BamlTyInterface final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyInterface*>(
         &_BamlTyInterface_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  static constexpr int kIndexInFileMessages = 22;
   friend void swap(BamlTyInterface& a, BamlTyInterface& b) { a.Swap(&b); }
   inline void Swap(BamlTyInterface* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5889,6 +5916,191 @@ class BamlTyOptional final : public ::google::protobuf::MessageLite
 };
 
 extern const ::google::protobuf::internal::ClassDataLite<35> BamlTyOptional_class_data_;
+// -------------------------------------------------------------------
+
+class BamlTyTuple final : public ::google::protobuf::MessageLite
+/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.BamlTyTuple) */ {
+ public:
+  inline BamlTyTuple() : BamlTyTuple(nullptr) {}
+  ~BamlTyTuple() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BamlTyTuple* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BamlTyTuple));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR BamlTyTuple(::google::protobuf::internal::ConstantInitialized);
+
+  inline BamlTyTuple(const BamlTyTuple& from) : BamlTyTuple(nullptr, from) {}
+  inline BamlTyTuple(BamlTyTuple&& from) noexcept
+      : BamlTyTuple(nullptr, ::std::move(from)) {}
+  inline BamlTyTuple& operator=(const BamlTyTuple& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BamlTyTuple& operator=(BamlTyTuple&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const std::string& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
+  }
+  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<std::string>();
+  }
+
+  static const BamlTyTuple& default_instance() {
+    return *reinterpret_cast<const BamlTyTuple*>(
+        &_BamlTyTuple_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 18;
+  friend void swap(BamlTyTuple& a, BamlTyTuple& b) { a.Swap(&b); }
+  inline void Swap(BamlTyTuple* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BamlTyTuple* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  BamlTyTuple* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::MessageLite::DefaultConstruct<BamlTyTuple>(arena);
+  }
+  void CopyFrom(const BamlTyTuple& from);
+  void MergeFrom(const BamlTyTuple& from) { BamlTyTuple::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BamlTyTuple* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.BamlTyTuple"; }
+
+ protected:
+  explicit BamlTyTuple(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BamlTyTuple(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BamlTyTuple& from);
+  BamlTyTuple(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BamlTyTuple&& from) noexcept
+      : BamlTyTuple(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kItemsFieldNumber = 1,
+  };
+  // repeated .baml_bridge.cffi.v1.BamlTy items = 1;
+  int items_size() const;
+  private:
+  int _internal_items_size() const;
+
+  public:
+  void clear_items() ;
+  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL mutable_items(int index);
+  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTy>* PROTOBUF_NONNULL mutable_items();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTy>& _internal_items() const;
+  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTy>* PROTOBUF_NONNULL _internal_mutable_items();
+  public:
+  const ::baml_bridge::cffi::v1::BamlTy& items(int index) const;
+  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL add_items();
+  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTy>& items() const;
+  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlTyTuple)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<0, 1,
+                                   1, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BamlTyTuple& from_msg);
+    ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlTy > items_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5ftype_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataLite<32> BamlTyTuple_class_data_;
 // -------------------------------------------------------------------
 
 class BamlTyTypeAlias final : public ::google::protobuf::MessageLite
@@ -9580,6 +9792,89 @@ inline ::baml_bridge::cffi::v1::BamlTyNever* PROTOBUF_NONNULL BamlTy::mutable_ne
   return _msg;
 }
 
+// .baml_bridge.cffi.v1.BamlTyTuple tuple = 25;
+inline bool BamlTy::has_tuple() const {
+  return ty_case() == kTuple;
+}
+inline bool BamlTy::_internal_has_tuple() const {
+  return ty_case() == kTuple;
+}
+inline void BamlTy::set_has_tuple() {
+  _impl_._oneof_case_[0] = kTuple;
+}
+inline void BamlTy::clear_tuple() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (ty_case() == kTuple) {
+    if (GetArena() == nullptr) {
+      delete _impl_.ty_.tuple_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      if (_impl_.ty_.tuple_ != nullptr) {
+        _impl_.ty_.tuple_->Clear();
+      }
+    }
+    clear_has_ty();
+  }
+}
+inline ::baml_bridge::cffi::v1::BamlTyTuple* PROTOBUF_NULLABLE BamlTy::release_tuple() {
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlTy.tuple)
+  if (ty_case() == kTuple) {
+    clear_has_ty();
+    auto* temp = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyTuple*>(_impl_.ty_.tuple_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.ty_.tuple_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::baml_bridge::cffi::v1::BamlTyTuple& BamlTy::_internal_tuple() const {
+  return ty_case() == kTuple ? *reinterpret_cast<::baml_bridge::cffi::v1::BamlTyTuple*>(_impl_.ty_.tuple_) : reinterpret_cast<::baml_bridge::cffi::v1::BamlTyTuple&>(::baml_bridge::cffi::v1::_BamlTyTuple_default_instance_);
+}
+inline const ::baml_bridge::cffi::v1::BamlTyTuple& BamlTy::tuple() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTy.tuple)
+  return _internal_tuple();
+}
+inline ::baml_bridge::cffi::v1::BamlTyTuple* PROTOBUF_NULLABLE BamlTy::unsafe_arena_release_tuple() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:baml_bridge.cffi.v1.BamlTy.tuple)
+  if (ty_case() == kTuple) {
+    clear_has_ty();
+    auto* temp = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyTuple*>(_impl_.ty_.tuple_);
+    _impl_.ty_.tuple_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void BamlTy::unsafe_arena_set_allocated_tuple(
+    ::baml_bridge::cffi::v1::BamlTyTuple* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_ty();
+  if (value) {
+    set_has_tuple();
+    _impl_.ty_.tuple_ = reinterpret_cast<::google::protobuf::MessageLite*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.BamlTy.tuple)
+}
+inline ::baml_bridge::cffi::v1::BamlTyTuple* PROTOBUF_NONNULL BamlTy::_internal_mutable_tuple() {
+  if (ty_case() != kTuple) {
+    clear_ty();
+    set_has_tuple();
+    _impl_.ty_.tuple_ = reinterpret_cast<::google::protobuf::MessageLite*>(
+        ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlTyTuple>(GetArena()));
+  }
+  return reinterpret_cast<::baml_bridge::cffi::v1::BamlTyTuple*>(_impl_.ty_.tuple_);
+}
+inline ::baml_bridge::cffi::v1::BamlTyTuple* PROTOBUF_NONNULL BamlTy::mutable_tuple()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::baml_bridge::cffi::v1::BamlTyTuple* _msg = _internal_mutable_tuple();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlTy.tuple)
+  return _msg;
+}
+
 inline bool BamlTy::has_ty() const {
   return ty_case() != TY_NOT_SET;
 }
@@ -12165,6 +12460,60 @@ inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTy>* PR
 BamlTyUnion::_internal_mutable_options() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.options_;
+}
+
+// -------------------------------------------------------------------
+
+// BamlTyTuple
+
+// repeated .baml_bridge.cffi.v1.BamlTy items = 1;
+inline int BamlTyTuple::_internal_items_size() const {
+  return _internal_items().size();
+}
+inline int BamlTyTuple::items_size() const {
+  return _internal_items_size();
+}
+inline void BamlTyTuple::clear_items() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.items_.Clear();
+}
+inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL BamlTyTuple::mutable_items(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlTyTuple.items)
+  return _internal_mutable_items()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTy>* PROTOBUF_NONNULL BamlTyTuple::mutable_items()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:baml_bridge.cffi.v1.BamlTyTuple.items)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_items();
+}
+inline const ::baml_bridge::cffi::v1::BamlTy& BamlTyTuple::items(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyTuple.items)
+  return _internal_items().Get(index);
+}
+inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL BamlTyTuple::add_items()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::baml_bridge::cffi::v1::BamlTy* _add = _internal_mutable_items()->Add();
+  // @@protoc_insertion_point(field_add:baml_bridge.cffi.v1.BamlTyTuple.items)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTy>& BamlTyTuple::items() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:baml_bridge.cffi.v1.BamlTyTuple.items)
+  return _internal_items();
+}
+inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTy>&
+BamlTyTuple::_internal_items() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.items_;
+}
+inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTy>* PROTOBUF_NONNULL
+BamlTyTuple::_internal_mutable_items() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.items_;
 }
 
 // -------------------------------------------------------------------

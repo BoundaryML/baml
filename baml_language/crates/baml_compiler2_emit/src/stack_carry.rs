@@ -1462,6 +1462,14 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         Ok(())
     }
 
+    fn alloc_tuple(&mut self, len: usize) -> Result<(), Self::Error> {
+        if !self.sim.pop_n(len) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
+    }
+
     fn alloc_uint8array(&mut self, _bytes: &[u8]) -> Result<(), Self::Error> {
         // LoadConst pushes 1, Call(deep_copy) pops 1 + pushes 1 → net push 1.
         self.sim.push();

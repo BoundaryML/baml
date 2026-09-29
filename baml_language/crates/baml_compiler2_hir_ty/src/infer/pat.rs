@@ -506,6 +506,10 @@ impl<'db> InferenceContext<'db> {
                 let suffix = suffix.clone();
                 self.lower_array_pattern(body, pat, &prefix, rest.as_ref(), &suffix, scrut)
             }
+            Pattern::Tuple(elements) => {
+                let elements = elements.clone();
+                self.lower_tuple_pattern(body, pat, &elements, scrut)
+            }
             Pattern::Or(alts) => {
                 let alts = alts.clone();
                 self.or_probe_depth += 1;
@@ -850,6 +854,15 @@ impl<'db> InferenceContext<'db> {
         match (&pat, &scrut) {
             (P::Never, _) => true,
             (P::List(a), P::List(b)) => self.pattern_matchable(a, b),
+            // Covariant: two tuple types share a value iff every element
+            // pair does - neither need be a subtype of the other
+            // (`(int, string?)` vs `(int?, string)` share `(1, "a")`).
+            (P::Tuple(a), P::Tuple(b)) => {
+                a.len() == b.len()
+                    && a.iter().zip(b.iter()).all(|(x, y)| {
+                        self.pattern_matchable(x, y) || self.pattern_overlaps_scrut_member(x, y)
+                    })
+            }
             (
                 P::Map {
                     key: ka, value: va, ..
@@ -1070,6 +1083,22 @@ impl<'db> InferenceContext<'db> {
                     pat_plain,
                 )
             }
+            // A tuple type test decomposes elementwise against a same-arity
+            // tuple column, so `(int, s)` and `(string, s)` together cover
+            // `(int | string, s)`.
+            InferTy::Tuple(elements) => match col.kind() {
+                InferTy::Tuple(col_elements) if col_elements.len() == elements.len() => {
+                    DPat::tuple(
+                        elements
+                            .iter()
+                            .zip(col_elements.iter())
+                            .map(|(element, col_element)| self.dpat_for_type(element, col_element))
+                            .collect(),
+                        col_plain,
+                    )
+                }
+                _ => DPat::single(pat_plain, col_plain),
+            },
             InferTy::TypeVar(..) => {
                 // Rigid: covers only a column of the SAME variable;
                 // otherwise possible-but-not-covering (never a blanket
@@ -1303,6 +1332,168 @@ impl<'db> InferenceContext<'db> {
     /// Array destructure: elements lower against the scrutinee's element
     /// type (ascription intersects when written); a rest binding takes the
     /// list type. A length-constrained shape never covers by type alone.
+    /// Tuple destructure `(p1, p2, ...)`. Against a same-arity tuple the
+    /// sub-patterns lower against the element types. Against a union, the
+    /// pattern claims EVERY same-arity tuple member it could fit (unlike
+    /// class/array patterns' unique claim: tuples are structural, so
+    /// `(let a, let b)` over `(int, string) | (string, int)` really matches
+    /// both); each claimed member contributes one `UnionMember` alternative
+    /// to the matrix, probed silently, and the bindings are typed once at the
+    /// elementwise join of the claimed members.
+    fn lower_tuple_pattern(
+        &mut self,
+        body: &ExprBody,
+        pat: PatId,
+        elements: &[PatId],
+        scrut: &Ty,
+    ) -> PatternOutcome {
+        let arity = elements.len();
+        let structure = self.structurally_resolve(scrut);
+        let tuple_slots = |ty: &Ty| match ty.kind() {
+            InferTy::Tuple(slots) if slots.len() == arity => Some(slots.to_vec()),
+            _ => None,
+        };
+        if let Some(slots) = tuple_slots(&structure) {
+            return self.lower_tuple_elements(body, elements, &slots, &structure);
+        }
+        match structure.kind() {
+            // A top-typed scrutinee may hold a tuple: the pattern is a
+            // runtime arity test that narrows to a tuple of unknowns.
+            InferTy::Unknown => {
+                let slots = vec![Ty::intern(InferTy::Unknown); arity];
+                let mut outcome = self.lower_tuple_elements(body, elements, &slots, &structure);
+                outcome.covers_type = false;
+                outcome.dpat = DPat::single(dpat_ty(&outcome.matched_ty), dpat_ty(scrut));
+                return outcome;
+            }
+            InferTy::Union(members) => {
+                let members: Vec<Ty> = members
+                    .iter()
+                    .map(|member| self.structurally_resolve(member))
+                    .collect();
+                let mut claimed: Vec<(Ty, Vec<Ty>)> = Vec::new();
+                for member in &members {
+                    if let Some(slots) = tuple_slots(member)
+                        && self.pattern_fits(body, pat, member)
+                    {
+                        claimed.push((member.clone(), slots));
+                    }
+                }
+                if !claimed.is_empty() {
+                    let scrut_plain = dpat_ty(scrut);
+                    let mut alts = Vec::new();
+                    let mut matched = Vec::new();
+                    let mut consumes = true;
+                    let single = claimed.len() == 1;
+                    for (member, slots) in &claimed {
+                        // With one claim the member lowering IS the
+                        // recording pass; with several, each is a probe.
+                        if !single {
+                            self.or_probe_depth += 1;
+                        }
+                        let outcome = self.lower_tuple_elements(body, elements, slots, member);
+                        if !single {
+                            self.or_probe_depth -= 1;
+                        }
+                        consumes &= outcome.consumes_matched;
+                        matched.push(outcome.matched_ty);
+                        alts.push(DPat::union_member(
+                            dpat_ty(member),
+                            outcome.dpat,
+                            scrut_plain.clone(),
+                        ));
+                    }
+                    if !single {
+                        // Record the bindings once, at the elementwise join.
+                        let joined: Vec<Ty> = (0..arity)
+                            .map(|i| {
+                                let at_i: Vec<Ty> =
+                                    claimed.iter().map(|(_, slots)| slots[i].clone()).collect();
+                                self.union_of(&at_i)
+                            })
+                            .collect();
+                        let joined_ty = Ty::tuple(joined.clone());
+                        self.lower_tuple_elements(body, elements, &joined, &joined_ty);
+                    }
+                    let dpat = if single {
+                        alts.pop().expect("one claim")
+                    } else {
+                        DPat::or(alts, scrut_plain)
+                    };
+                    return PatternOutcome {
+                        dpat,
+                        matched_ty: self.union_of(&matched),
+                        recorded_ty: None,
+                        covers_type: false,
+                        consumes_matched: consumes,
+                    };
+                }
+            }
+            _ => {}
+        }
+        // No tuple of this arity can reach this pattern. Lower the elements
+        // against the error sentinel so their bindings record without
+        // cascading, and report the dead pattern once.
+        let error_slots = vec![Ty::error(); arity];
+        self.or_probe_depth += 1;
+        self.lower_tuple_elements(body, elements, &error_slots, &Ty::error());
+        self.or_probe_depth -= 1;
+        if self.or_probe_depth == 0
+            && self.rest_reject_depth == 0
+            && !structure.has_error()
+            && !structure.has_infer()
+        {
+            self.pending_diags
+                .push(super::PendingDiag::PatternScrutMismatch {
+                    pat,
+                    expected: scrut.clone(),
+                    found: Ty::tuple(vec![Ty::intern(InferTy::Unknown); arity]),
+                });
+        }
+        PatternOutcome {
+            dpat: DPat::wildcard(dpat_ty(scrut)),
+            matched_ty: Ty::error(),
+            recorded_ty: None,
+            covers_type: false,
+            consumes_matched: false,
+        }
+    }
+
+    /// Lower each tuple sub-pattern against its slot of `tuple_ty`.
+    fn lower_tuple_elements(
+        &mut self,
+        body: &ExprBody,
+        elements: &[PatId],
+        slots: &[Ty],
+        tuple_ty: &Ty,
+    ) -> PatternOutcome {
+        let outcomes: Vec<PatternOutcome> = elements
+            .iter()
+            .zip(slots)
+            .map(|(&sub, slot)| self.lower_pattern(body, sub, slot))
+            .collect();
+        let covers = outcomes.iter().all(|outcome| outcome.covers_type);
+        let consumes = outcomes.iter().all(|outcome| outcome.consumes_matched);
+        let matched: Vec<Ty> = outcomes
+            .iter()
+            .map(|outcome| outcome.matched_ty.clone())
+            .collect();
+        PatternOutcome {
+            dpat: DPat::tuple(
+                outcomes.into_iter().map(|outcome| outcome.dpat).collect(),
+                dpat_ty(tuple_ty),
+            ),
+            matched_ty: if covers {
+                tuple_ty.clone()
+            } else {
+                Ty::tuple(matched)
+            },
+            recorded_ty: None,
+            covers_type: covers,
+            consumes_matched: consumes,
+        }
+    }
+
     fn lower_array_pattern(
         &mut self,
         body: &ExprBody,
@@ -1504,6 +1695,22 @@ impl<'db> InferenceContext<'db> {
                 InferTy::Interface(..) | InferTy::TypeVar(..) => true,
                 _ => false,
             },
+            // A tuple pattern demands a tuple of its arity whose elements
+            // each fit; an open or top-typed value could still be one.
+            Pattern::Tuple(elements) => match expanded.kind() {
+                InferTy::Tuple(element_tys) if element_tys.len() == elements.len() => {
+                    let pairs: Vec<(PatId, Ty)> = elements
+                        .iter()
+                        .copied()
+                        .zip(element_tys.iter().cloned())
+                        .collect();
+                    pairs
+                        .into_iter()
+                        .all(|(sub, element_ty)| self.pattern_fits(body, sub, &element_ty))
+                }
+                InferTy::Unknown | InferTy::TypeVar(..) => true,
+                _ => false,
+            },
             // Type patterns carry their own runtime test; the lowering
             // settles their claim - no discrimination here.
             Pattern::Type(_) => true,
@@ -1699,6 +1906,8 @@ impl PatCtx for HirPatCtx<'_, '_> {
             P::Interface(..) => vec![Ctor::Interface(ty.clone())],
             // Slice splitting owns list columns; empty defers to it.
             P::List(..) => vec![],
+            // A tuple column has exactly one constructor: its arity.
+            P::Tuple(elements) => vec![Ctor::Tuple(elements.len())],
             // Everything else is an infinite or open alphabet.
             _ => vec![Ctor::NonExhaustive],
         }
@@ -1852,11 +2061,11 @@ fn collect_bind_types(
                 collect_bind_types(ctx, body, rest_pat, out);
             }
         }
-        Pattern::Or(alts) => {
+        Pattern::Or(alts) | Pattern::Tuple(alts) => {
             for &alt in alts {
                 collect_bind_types(ctx, body, alt, out);
             }
         }
-        _ => {}
+        Pattern::Wildcard | Pattern::Type(_) => {}
     }
 }

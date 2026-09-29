@@ -734,6 +734,164 @@ mod tests {
     }
 
     #[test]
+    fn recursion_through_a_tuple_boxes_the_inline_element() {
+        // Tuple elements are stored inline, so `(Node, int)?` is still a
+        // containment cycle and the class element boxes; a list inside the
+        // tuple is heap-indirected and does not.
+        let node = name("user", &[], "Node");
+        let node_ty = Ty::Class(node.clone(), Box::new([]));
+        let next = Ty::Union(Box::new([
+            Ty::Tuple(Box::new([node_ty.clone(), Ty::Int])),
+            Ty::Null,
+        ]));
+        let kids = Ty::Tuple(Box::new([Ty::List(Box::new(node_ty))]));
+        let pool = SymbolPool::from([(
+            node.clone(),
+            class_symbol(
+                &node,
+                vec![
+                    baml_sdkgen_types::ClassProperty {
+                        name: baml_base::Name::new("next"),
+                        docstring: None,
+                        ty: next,
+                    },
+                    baml_sdkgen_types::ClassProperty {
+                        name: baml_base::Name::new("kids"),
+                        docstring: None,
+                        ty: kids,
+                    },
+                ],
+                Vec::new(),
+                Vec::new(),
+            ),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        let flat = flat(lib);
+        assert!(
+            flat.contains(
+                "pubnext:::std::option::Option<(::std::boxed::Box<crate::Node>,::core::primitive::i64),>"
+            ),
+            "{lib}"
+        );
+        assert!(
+            lib.contains("pub kids: (::std::vec::Vec<crate::Node>,)"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn recursion_through_a_tuple_union_arm_boxes_the_enum_reference() {
+        let a = name("user", &[], "A");
+        let union_field = Ty::Union(Box::new([
+            Ty::Tuple(Box::new([Ty::Class(a.clone(), Box::new([])), Ty::String])),
+            Ty::Int,
+        ]));
+        let pool = SymbolPool::from([(
+            a.clone(),
+            class_symbol(
+                &a,
+                vec![baml_sdkgen_types::ClassProperty {
+                    name: baml_base::Name::new("x"),
+                    docstring: None,
+                    ty: union_field,
+                }],
+                Vec::new(),
+                Vec::new(),
+            ),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        assert!(
+            lib.contains("pub x: ::std::boxed::Box<crate::AStringTupleOrInt>"),
+            "{lib}"
+        );
+        assert!(
+            lib.contains("AStringTuple((crate::A, ::std::string::String))"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn recursion_through_a_nullable_tuple_element_boxes_the_enum_reference() {
+        let a = name("user", &[], "A");
+        let union_field = Ty::Union(Box::new([
+            Ty::Tuple(Box::new([
+                Ty::Union(Box::new([Ty::Class(a.clone(), Box::new([])), Ty::Null])),
+                Ty::Int,
+            ])),
+            Ty::Bool,
+        ]));
+        let pool = SymbolPool::from([(
+            a.clone(),
+            class_symbol(
+                &a,
+                vec![baml_sdkgen_types::ClassProperty {
+                    name: baml_base::Name::new("x"),
+                    docstring: None,
+                    ty: union_field,
+                }],
+                Vec::new(),
+                Vec::new(),
+            ),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        assert!(
+            flat(lib).contains("pubx:::std::boxed::Box<crate::AIntTupleOrBool>"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn a_null_tuple_element_in_a_union_arm_is_unit() {
+        let n = name("user", &[], "f");
+        let arg = Ty::Union(Box::new([Ty::Tuple(Box::new([Ty::Null])), Ty::Int]));
+        let pool = SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, arg, Ty::String)))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        assert!(flat(lib).contains("NullTuple(((),))"), "{lib}");
+    }
+
+    #[test]
+    fn tuples_wider_than_the_bridge_supports_are_skipped() {
+        let n = name("user", &[], "f");
+        let arg = Ty::Tuple(vec![Ty::Int; 13].into_boxed_slice());
+        let pool = SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, arg, Ty::String)))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(
+            generated
+                .warnings
+                .iter()
+                .any(|w| format!("{w:?}").contains("13 elements")),
+            "{:?}",
+            generated.warnings
+        );
+    }
+
+    #[test]
+    fn unions_inside_tuples_register_in_the_leaf() {
+        let n = name("user", &[], "f");
+        let arg = Ty::Tuple(Box::new([
+            Ty::Union(Box::new([Ty::Int, Ty::String])),
+            Ty::Bool,
+        ]));
+        let pool = SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, arg, Ty::String)))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        assert!(lib.contains("pub enum IntOrString"), "{lib}");
+        assert!(
+            lib.contains("(crate::IntOrString, ::core::primitive::bool)"),
+            "{lib}"
+        );
+    }
+
+    #[test]
     fn empty_pool_emits_crate_skeleton_with_stdlib_module() {
         let generated = to_source_code_with_bytecode(&SymbolPool::default(), &[], &options());
         assert!(generated.warnings.is_empty());

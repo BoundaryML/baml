@@ -466,6 +466,12 @@ impl<'db> LowerCtx<'db> {
                     .iter()
                     .map(|variant| self.lower_type_ref(store, *variant)),
             ),
+            TypeRefKind::Tuple { elements } => LoweringTy::Tuple(
+                elements
+                    .iter()
+                    .map(|element| self.lower_type_ref(store, *element))
+                    .collect(),
+            ),
             TypeRefKind::Literal { value } => {
                 LoweringTy::Literal(value.clone(), Freshness::Regular)
             }
@@ -1963,6 +1969,7 @@ fn fill_holes_as_errors(ty: &LoweringTy) -> baml_type::Ty {
             value: Box::new(fill_holes_as_errors(value)),
         },
         LoweringTy::Union(members) => baml_type::Ty::Union(fill_all(members)),
+        LoweringTy::Tuple(elements) => baml_type::Ty::Tuple(fill_all(elements)),
         LoweringTy::Class(name, args) => baml_type::Ty::Class(name.clone(), fill_all(args)),
         LoweringTy::Interface(name, args, assoc) => baml_type::Ty::Interface(
             name.clone(),

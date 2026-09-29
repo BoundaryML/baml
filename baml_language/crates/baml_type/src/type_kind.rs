@@ -7,7 +7,7 @@ use crate::{
     compiler_aliases::{self, CompilerAlias, Construction},
 };
 
-/// The nine sealed runtime views of a reflected `type` value.
+/// The ten sealed runtime views of a reflected `type` value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TypeKind {
     Class,
@@ -19,10 +19,11 @@ pub enum TypeKind {
     Interface,
     Primitive,
     Function,
+    Tuple,
 }
 
 impl TypeKind {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Class,
         Self::Enum,
         Self::Union,
@@ -32,6 +33,7 @@ impl TypeKind {
         Self::Interface,
         Self::Primitive,
         Self::Function,
+        Self::Tuple,
     ];
 
     pub const fn namespace(self) -> &'static str {
@@ -45,6 +47,7 @@ impl TypeKind {
             Self::Interface => "interface",
             Self::Primitive => "primitive",
             Self::Function => "function",
+            Self::Tuple => "tuple",
         }
     }
 
@@ -80,11 +83,28 @@ pub fn classify_type<N: Clone>(ty: &RealizedTy<N>) -> TypeKind {
         RealizedTy::Map { .. } => TypeKind::Map,
         RealizedTy::Interface(..) => TypeKind::Interface,
         RealizedTy::Function { .. } => TypeKind::Function,
-        _ => TypeKind::Primitive,
+        RealizedTy::Tuple(..) => TypeKind::Tuple,
+        RealizedTy::Int
+        | RealizedTy::Bigint
+        | RealizedTy::Float
+        | RealizedTy::String
+        | RealizedTy::Bool
+        | RealizedTy::Null
+        | RealizedTy::Uint8Array
+        | RealizedTy::Media(..)
+        | RealizedTy::Future(..)
+        | RealizedTy::RustType
+        | RealizedTy::Type
+        | RealizedTy::Resource
+        | RealizedTy::PromptAst
+        | RealizedTy::Void
+        | RealizedTy::TypeAlias(..)
+        | RealizedTy::Unknown
+        | RealizedTy::Never => TypeKind::Primitive,
     }
 }
 
-/// Whether a nominal class is one of the nine sealed reflection-kind classes,
+/// Whether a nominal class is one of the ten sealed reflection-kind classes,
 /// by wire name.
 pub fn is_type_kind_class(name: &QualifiedTypeName) -> bool {
     name.package().as_str() == "reflect" && is_type_kind_class_path(name.namespace(), name.name())

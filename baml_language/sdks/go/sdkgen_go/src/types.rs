@@ -378,6 +378,11 @@ impl<'a> GoTypeProjection<'a> {
                     })
                 }
             }
+            // Tuple types are not yet supported by the Go generator: Go has
+            // no native tuple type, and a runtime `baml_go.TupleN[...]` family
+            // plus wire codecs do not exist yet. Symbols mentioning a tuple
+            // are skipped (fail closed) like every other unsupported type.
+            Ty::Tuple(_) => GoTy::Unsupported,
             _ => GoTy::Unsupported,
         }
     }
@@ -534,6 +539,7 @@ fn is_reflect_kind_type(name: &Name) -> bool {
                         | "literal"
                         | "map"
                         | "primitive"
+                        | "tuple"
                         | "union"
                 )
     ) && name.package().as_str() == "baml"
@@ -787,6 +793,17 @@ mod tests {
         let projection = GoTypeProjection::new(&pool, 3);
         assert_eq!(projection.project(&Ty::RustType), GoTy::RustType);
         assert_eq!(projection.project(&Ty::Resource), GoTy::Unsupported);
+    }
+
+    #[test]
+    fn tuples_fail_closed_even_inside_supported_containers() {
+        let pool = SymbolPool::default();
+        let projection = GoTypeProjection::new(&pool, 3);
+        let tuple = Ty::Tuple(Box::new([Ty::Int, Ty::String]));
+        assert_eq!(projection.project(&tuple), GoTy::Unsupported);
+        assert!(contains_unsupported(
+            &projection.project(&Ty::List(Box::new(tuple)))
+        ));
     }
 
     #[test]

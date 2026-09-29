@@ -285,7 +285,7 @@ impl WalkAllUnions for Ty {
             }
             // Codegen types are canonical at the compiler boundary, but keep
             // this public symbol traversal total for manually assembled pools.
-            Ty::Union(members) => {
+            Ty::Union(members) | Ty::Tuple(members) => {
                 for member in members {
                     unions.extend(member.walk_all_unions());
                 }
@@ -320,7 +320,7 @@ fn validate_map_keys_ty(
                 .try_for_each(|(_, ty)| validate_map_keys_ty(ty, pool, resolving_aliases))
         }
         Ty::List(inner) => validate_map_keys_ty(inner, pool, resolving_aliases),
-        Ty::Union(members) => members
+        Ty::Union(members) | Ty::Tuple(members) => members
             .iter()
             .try_for_each(|member| validate_map_keys_ty(member, pool, resolving_aliases)),
         Ty::Function {

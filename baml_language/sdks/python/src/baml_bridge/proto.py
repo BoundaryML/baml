@@ -687,6 +687,17 @@ def _fill_wire_ty(ty: "baml_type_pb2.BamlTy", py_type: Any) -> None:
         if origin in (list, typing.List):
             _fill_inner(ty.list.item, targs[0] if targs else None)
             return
+        # `tuple[A, B]` is a fixed-arity BAML tuple; the variadic
+        # `tuple[A, ...]` has no BAML counterpart and is rejected.
+        if origin in (tuple, typing.Tuple):
+            if not targs or Ellipsis in targs:
+                raise TypeError(
+                    "BAML tuple types need fixed element types, e.g. tuple[int, str]"
+                )
+            ty.tuple.SetInParent()
+            for arg in targs:
+                _fill_inner(ty.tuple.items.add(), arg)
+            return
         if origin in (dict, typing.Dict):
             _fill_inner(ty.map.key, targs[0] if targs else None)
             _fill_inner(ty.map.value, targs[1] if len(targs) > 1 else None)
@@ -877,6 +888,11 @@ def _ty_to_python_type(ty: "baml_type_pb2.BamlTy", type_map: BamlTypeMap) -> Any
         return _parameterize_tys(alias, ty.type_alias.type_args, type_map)
     if which == "list":
         return List[_ty_to_python_type(ty.list.item, type_map)]  # type: ignore[valid-type]
+    if which == "tuple":
+        elements = tuple(_ty_to_python_type(item, type_map) for item in ty.tuple.items)
+        if not elements:
+            return typing.Any
+        return typing.Tuple[elements]  # type: ignore[valid-type]
     if which == "map":
         return Dict[  # type: ignore[valid-type]
             _ty_to_python_type(ty.map.key, type_map),
@@ -1237,6 +1253,8 @@ def decode_value(holder, type_map: BamlTypeMap) -> Any:
         return _decode_literal(holder.literal_value)
     if which == "list_value":
         return [decode_value(item, type_map) for item in holder.list_value.items]
+    if which == "tuple_value":
+        return tuple(decode_value(item, type_map) for item in holder.tuple_value.items)
     if which == "map_value":
         return {
             entry.key: decode_value(entry.value, type_map)

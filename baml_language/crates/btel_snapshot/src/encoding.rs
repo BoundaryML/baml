@@ -76,6 +76,14 @@ impl Snapshot {
                     original_len(w, *n)?;
                     self.write_values(w, self.values(*items))?;
                 }
+                SnapshotObject::Tuple {
+                    items,
+                    original_len: n,
+                } => {
+                    (ObjectTag::Tuple as u8).serialize(w)?;
+                    original_len(w, *n)?;
+                    self.write_values(w, self.values(*items))?;
+                }
                 SnapshotObject::Map {
                     key_type,
                     value_type,

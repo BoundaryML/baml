@@ -830,6 +830,9 @@ impl InferenceTable {
             (InferTy::List(li), InferTy::List(ri)) => {
                 vec![(li.clone(), ri.clone())]
             }
+            (InferTy::Tuple(le), InferTy::Tuple(re)) if le.len() == re.len() => {
+                le.iter().cloned().zip(re.iter().cloned()).collect()
+            }
             (InferTy::Map { key: lk, value: lv }, InferTy::Map { key: rk, value: rv }) => {
                 vec![(lk.clone(), rk.clone()), (lv.clone(), rv.clone())]
             }
