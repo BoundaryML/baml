@@ -103,6 +103,20 @@ impl BexStr {
         }
     }
 
+    /// Backing bytes this string owns exclusively: the buffer of a `Flat`
+    /// string whose `Arc` is not shared. Zero for inline strings, slices,
+    /// shared buffers, and deferred concatenations, whose bytes are either
+    /// already owned by another string or not yet materialized.
+    ///
+    /// Allocation accounting uses this to charge a new string's buffer once,
+    /// without charging clones or views of an existing buffer again.
+    pub fn unshared_heap_bytes(&self) -> usize {
+        match self {
+            Self::Flat(flat) if Arc::strong_count(flat) == 1 => flat.data.len(),
+            _ => 0,
+        }
+    }
+
     /// Byte length. O(1) for all variants.
     pub fn len(&self) -> usize {
         match self {

@@ -1,8 +1,10 @@
 //! Allocation spending requests a full collection at the next VM safe point.
 //!
 //! This is headroom between collections, not a hard heap or RSS limit. Charges
-//! count reserved object slots only, including unused TLAB capacity. Indirect
-//! backing storage (strings, containers, images, etc.) does not spend this budget.
+//! count reserved object slots, including unused TLAB capacity, plus the backing
+//! buffers of newly allocated strings and byte arrays that the new object owns
+//! exclusively. Shared buffers (clones, slices), deferred concatenations,
+//! container growth and other indirect storage do not spend this budget.
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -20,7 +22,8 @@ pub const POLL_INTERVAL: u64 = 4096;
 /// Diagnostic snapshot. Concurrent allocation may advance spending while read.
 #[derive(Debug, Clone, Copy)]
 pub struct GcBudgetSnapshot {
-    /// Bytes of object slots reserved since the last full GC; excludes payloads.
+    /// Bytes of object slots reserved plus fresh string/byte-array buffers
+    /// allocated since the last full GC.
     pub bytes_since_full_gc: usize,
     pub full_budget_bytes: usize,
     pub full_collections: usize,
@@ -86,6 +89,13 @@ impl BexHeap {
             full_budget_bytes: self.gc_policy.budget.load(Ordering::Relaxed),
             full_collections: self.gc_policy.full_collections.load(Ordering::Relaxed),
         }
+    }
+
+    /// Spend budget on a backing buffer owned by an object being allocated.
+    /// Object slots are charged separately when a TLAB reserves them.
+    #[inline]
+    pub(crate) fn charge_backing_bytes(&self, bytes: usize) {
+        self.gc_policy.charge(bytes);
     }
 
     pub fn gc_pressure(&self) -> Arc<AtomicBool> {
@@ -188,21 +198,45 @@ mod tests {
     }
 
     #[test]
-    fn large_and_shared_backing_storage_only_spends_object_slots() {
+    fn shared_backing_storage_only_spends_object_slots() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new_empty(heap.clone());
         let text = bex_str::BexStr::from("x".repeat(MIN_FULL_BUDGET));
-        tlab.alloc_string(text.clone());
         for _ in 0..1000 {
             tlab.alloc_string(text.clone());
             tlab.alloc_string(text.substring(1, 128));
         }
-        tlab.alloc_uint8array(vec![0; MIN_FULL_BUDGET]);
-        // These 2002 objects reserve 2048 slots, regardless of backing size or sharing.
+        // These 2000 objects reserve 2048 slots; none owns its backing buffer.
         assert_eq!(
             heap.gc_budget().bytes_since_full_gc,
             2048 * size_of::<Object>()
         );
+        assert!(!heap.should_gc());
+    }
+
+    #[test]
+    fn fresh_backing_storage_spends_the_budget() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new_empty(heap.clone());
+        let slots = FIRST_TLAB_SLOTS * size_of::<Object>();
+        tlab.alloc_string("x".repeat(1000));
+        assert_eq!(heap.gc_budget().bytes_since_full_gc, slots + 1000);
+        tlab.alloc_uint8array(Vec::with_capacity(2000));
+        assert_eq!(heap.gc_budget().bytes_since_full_gc, slots + 3000);
+        assert!(!heap.should_gc());
+
+        // Short-lived large strings request a collection once their bytes
+        // exceed the allowance, even though they reserve few object slots.
+        let chunk = 64 * 1024;
+        for _ in 0..MIN_FULL_BUDGET / chunk {
+            tlab.alloc_string("x".repeat(chunk));
+        }
+        assert!(heap.should_gc());
+        assert!(heap.gc_pressure().load(Ordering::Relaxed));
+        // SAFETY: standalone heap, no concurrent users or retained pointers.
+        unsafe {
+            heap.collect_garbage(&[]);
+        }
         assert!(!heap.should_gc());
     }
 }
