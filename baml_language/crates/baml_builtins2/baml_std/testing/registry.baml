@@ -599,8 +599,19 @@ function _run_test(body: TestBody, runner: TestRunner?) -> TestReport {
         };
         let work: baml.future.Future<RunReport, never> = spawn {
             {
-                body();
-                RunReport { outcome: "pass", duration_ms: 0, message: null }
+                // A bare boolean tail is an assertion: `false` fails the test.
+                match (body()) {
+                    false => {
+                        RunReport {
+                            outcome: "fail",
+                            duration_ms: 0,
+                            message: "test body evaluated to false",
+                        }
+                    },
+                    _ => {
+                        RunReport { outcome: "pass", duration_ms: 0, message: null }
+                    },
+                }
             } catch_all (e, ctx) {
                 let p: baml.panics.UserPanic => {
                     RunReport { outcome: "fail", duration_ms: 0, message: p.message }

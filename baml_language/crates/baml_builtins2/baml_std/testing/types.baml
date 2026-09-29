@@ -47,7 +47,11 @@ class _NamedChildReport {
 
 /// Runner type aliases — lambda transformers.
 /// TestRunner wraps "run test once" into a new execution lambda.
-type TestBody = () -> void throws unknown;
+///
+/// A test body's value is kept, not discarded: a body that evaluates to
+/// `false` (e.g. `test "x" { 1 == 2 }`) is a failed test. Any other value,
+/// including `null` from a body with no tail expression, passes.
+type TestBody = () -> unknown throws unknown;
 
 type TestSetBody = (TestCollector) -> void throws unknown;
 
