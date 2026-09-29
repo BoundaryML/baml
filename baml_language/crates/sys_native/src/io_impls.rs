@@ -1285,9 +1285,97 @@ struct LiveProcessHandle {
 }
 
 struct ReadPipeHandle {
-    reader: tokio::sync::Mutex<Option<Box<dyn tokio::io::AsyncRead + Send + Unpin>>>,
+    reader: tokio::sync::Mutex<Option<PipeReader>>,
     close_tx: tokio::sync::watch::Sender<bool>,
     label: String,
+}
+
+/// A pipe's reader plus the bytes `_read_line` has read past the current line.
+///
+/// `read` drains those buffered bytes before reading the pipe again, so mixing
+/// `read` with `lines()` loses nothing.
+struct PipeReader {
+    inner: Box<dyn tokio::io::AsyncRead + Send + Unpin>,
+    buffer: Vec<u8>,
+    /// Start of the bytes in `buffer` not yet returned.
+    start: usize,
+    /// End of the prefix of `buffer` known to hold no unreturned newline, so
+    /// a long line is scanned once rather than once per read.
+    scanned: usize,
+}
+
+impl PipeReader {
+    fn new(inner: Box<dyn tokio::io::AsyncRead + Send + Unpin>) -> Self {
+        Self {
+            inner,
+            buffer: Vec::new(),
+            start: 0,
+            scanned: 0,
+        }
+    }
+
+    /// Removes and returns up to `limit` buffered bytes, if any are buffered.
+    fn take_buffered(&mut self, limit: usize) -> Option<Vec<u8>> {
+        if self.start == self.buffer.len() {
+            return None;
+        }
+        let end = self.buffer.len().min(self.start + limit);
+        let bytes = self.buffer[self.start..end].to_vec();
+        self.consume_to(end);
+        Some(bytes)
+    }
+
+    /// Removes and returns the next complete buffered line, if there is one.
+    fn take_line(&mut self) -> Option<String> {
+        let scan_from = self.scanned.max(self.start);
+        let Some(offset) = self.buffer[scan_from..].iter().position(|&b| b == b'\n') else {
+            self.scanned = self.buffer.len();
+            return None;
+        };
+        let newline = scan_from + offset;
+        let line = decode_line(&self.buffer[self.start..newline]);
+        self.consume_to(newline + 1);
+        Some(line)
+    }
+
+    /// Removes and returns the unterminated tail left at EOF, if any.
+    fn take_rest(&mut self) -> Option<String> {
+        if self.start == self.buffer.len() {
+            return None;
+        }
+        let line = decode_line(&self.buffer[self.start..]);
+        self.consume_to(self.buffer.len());
+        Some(line)
+    }
+
+    fn consume_to(&mut self, end: usize) {
+        self.start = end;
+        if self.start == self.buffer.len() {
+            self.buffer.clear();
+            self.start = 0;
+            self.scanned = 0;
+        }
+    }
+
+    /// Reads more of the pipe onto the end of `buffer`. Returns 0 at EOF.
+    async fn fill(&mut self) -> std::io::Result<usize> {
+        use tokio::io::AsyncReadExt as _;
+
+        if self.start > 0 {
+            self.buffer.drain(..self.start);
+            self.scanned -= self.start.min(self.scanned);
+            self.start = 0;
+        }
+        self.buffer.reserve(MAX_READ_CHUNK);
+        self.inner.read_buf(&mut self.buffer).await
+    }
+}
+
+/// Decodes one line's bytes, dropping a trailing carriage return so CRLF input
+/// produces clean lines. Invalid UTF-8 becomes U+FFFD.
+fn decode_line(line: &[u8]) -> String {
+    let line = line.strip_suffix(b"\r").unwrap_or(line);
+    String::from_utf8_lossy(line).into_owned()
 }
 
 struct WritePipeHandle {
@@ -1356,7 +1444,7 @@ fn read_pipe(
     let (close_tx, _close_rx) = tokio::sync::watch::channel(false);
     owned::sys::ReadPipe {
         _pipe: Arc::new(ReadPipeHandle {
-            reader: tokio::sync::Mutex::new(Some(Box::new(reader))),
+            reader: tokio::sync::Mutex::new(Some(PipeReader::new(Box::new(reader)))),
             close_tx,
             label,
         }),
@@ -1465,13 +1553,16 @@ impl io::IoClassSysReadPipe for NativeSysOps {
             let reader = guard
                 .as_mut()
                 .ok_or_else(|| read_pipe_closed_error(&handle.label))?;
+            if let Some(buffered) = reader.take_buffered(limit) {
+                return Ok(Some(buffered));
+            }
             let mut buffer = vec![0u8; limit];
             let read = tokio::select! {
                 biased;
                 _ = close_rx.changed() => {
                     return Err(read_pipe_closed_error(&handle.label).into());
                 }
-                result = reader.read(&mut buffer) => result.map_err(|error| VmBamlError::Io {
+                result = reader.inner.read(&mut buffer) => result.map_err(|error| VmBamlError::Io {
                     message: format!("Failed to read from '{}': {error}", handle.label),
                 })?,
             };
@@ -1480,6 +1571,55 @@ impl io::IoClassSysReadPipe for NativeSysOps {
             }
             buffer.truncate(read);
             Ok(Some(buffer))
+        })
+    }
+
+    fn _read_line(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        readpipe: owned::sys::ReadPipe,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        // Most lines are already buffered by an earlier read; return those
+        // without a round trip through the async executor.
+        if let Ok(handle) = downcast_read_pipe(&readpipe)
+            && !*handle.close_tx.borrow()
+            && let Ok(mut guard) = handle.reader.try_lock()
+            && let Some(line) = guard.as_mut().and_then(PipeReader::take_line)
+        {
+            return SysOpOutput::ok(Some(line));
+        }
+        SysOpOutput::async_op(async move {
+            let handle = downcast_read_pipe(&readpipe)?;
+            let mut close_rx = handle.close_tx.subscribe();
+            if *close_rx.borrow() {
+                return Err(read_pipe_closed_error(&handle.label).into());
+            }
+            let mut guard = handle.reader.lock().await;
+            if *close_rx.borrow() {
+                return Err(read_pipe_closed_error(&handle.label).into());
+            }
+            let reader = guard
+                .as_mut()
+                .ok_or_else(|| read_pipe_closed_error(&handle.label))?;
+            loop {
+                if let Some(line) = reader.take_line() {
+                    return Ok(Some(line));
+                }
+                let read = tokio::select! {
+                    biased;
+                    _ = close_rx.changed() => {
+                        return Err(read_pipe_closed_error(&handle.label).into());
+                    }
+                    result = reader.fill() => result.map_err(|error| VmBamlError::Io {
+                        message: format!("Failed to read from '{}': {error}", handle.label),
+                    })?,
+                };
+                if read == 0 {
+                    return Ok(reader.take_rest());
+                }
+            }
         })
     }
 

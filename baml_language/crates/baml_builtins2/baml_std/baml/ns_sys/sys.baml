@@ -52,12 +52,12 @@ class ProcessExit {
 
 /// A line-oriented view over a `ReadPipe`.
 ///
-/// It reads through to the pipe on demand and holds only bytes past the last
-/// newline. The final unterminated line is yielded at EOF. Invalid UTF-8 is
-/// replaced with U+FFFD.
+/// It reads through to the pipe on demand. Bytes read past the end of the
+/// current line stay buffered in the pipe, so `ReadPipe.read` still sees them.
+/// The final unterminated line is yielded at EOF. Invalid UTF-8 is replaced
+/// with U+FFFD, and one trailing carriage return is dropped from each line.
 class ReadPipeLines {
     pipe: ReadPipe,
-    _pending: uint8array,
 
     implements root.iter.Iterable {
         type Item = string;
@@ -76,42 +76,11 @@ class ReadPipeLines {
 
         /// Wait for and return the next line, or `Done` at EOF.
         function next(self) -> string | root.iter.Done throws root.errors.Io {
-            let line: string | root.iter.Done = root.iter.Done {  };
-            let framing = true;
-            while (framing) {
-                match (self._pending.index_of(10)) {
-                    let index: int => {
-                        let bytes = self._pending.slice(0, index);
-                        self._pending = self._pending.slice(index + 1, self._pending.length());
-                        line = _strip_carriage_return(bytes).to_string();
-                        framing = false;
-                    },
-                    null => {
-                        match (self.pipe.read(65536)) {
-                            let chunk: uint8array => {
-                                self._pending = self._pending.concat(chunk);
-                            },
-                            null => {
-                                if (self._pending.length() > 0) {
-                                    line = _strip_carriage_return(self._pending).to_string();
-                                    self._pending = b"";
-                                }
-                                framing = false;
-                            },
-                        }
-                    },
-                }
+            match (self.pipe._read_line()) {
+                let line: string => line,
+                null => root.iter.Done {  },
             }
-            line
         }
-    }
-}
-
-/// (internal) Drop one trailing carriage return so CRLF input produces clean lines.
-function _strip_carriage_return(line: uint8array) -> uint8array throws never {
-    match (line.at(line.length() - 1)) {
-        13 => line.slice(0, line.length() - 1),
-        _ => line,
     }
 }
 
@@ -154,7 +123,13 @@ class ReadPipe {
 
     /// Return a line-oriented view over this pipe.
     function lines(self) -> ReadPipeLines throws never {
-        ReadPipeLines { pipe: self, _pending: b"" }
+        ReadPipeLines { pipe: self }
+    }
+
+    /// (internal) Wait for and return the next line, or `null` at EOF. See
+    /// `ReadPipeLines` for how lines are framed and decoded.
+    function _read_line(self) -> string? throws root.errors.Io {
+        $rust_io_function
     }
 
     implements root.io.Read {
