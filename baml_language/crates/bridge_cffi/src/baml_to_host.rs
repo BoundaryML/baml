@@ -340,9 +340,11 @@ pub fn prepare_call(bytes: &[u8]) -> Result<PreparedCall, BridgeError> {
         return Err(BridgeError::FunctionHandleTypeArgs);
     }
     let type_args = bridge_ctypes::proto_ty_args_to_named(&call.type_args)?;
+    let spawn_local_storage = kwargs_to_bex_values(call.spawn_local_storage, &HANDLE_TABLE)?;
     let context = crate::function_call_context_builder(bex_project::CallId(call.call_id))
         .with_type_args(type_args.type_args)
         .with_type_defs(type_args.type_defs)
+        .with_spawn_local_storage(spawn_local_storage.into_iter().collect())
         .build();
     let kwargs = kwargs_to_bex_values(call.kwargs, &HANDLE_TABLE)?;
 

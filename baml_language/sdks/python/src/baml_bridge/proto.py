@@ -771,8 +771,12 @@ def encode_call_args(
     *,
     function_name: Optional[str] = None,
     function_handle: Optional[int] = None,
+    spawn_local_storage: Optional[Dict[str, Any]] = None,
 ) -> bytes:
     """Encode function keyword arguments as `CallFunctionArgs` protobuf.
+
+    `spawn_local_storage` seeds the call's `baml.SpawnLocalStorage` values,
+    keyed by storage name: the call and every thread it spawns can read them.
 
     Encoding can create two kinds of owned key: host-callable registry entries
     and HANDLE_TABLE clones of Python capability handles. A successful encode
@@ -809,6 +813,19 @@ def encode_call_args(
                     entry.type_definition.CopyFrom(wire_ty._definition)
                 else:
                     entry.type_value.CopyFrom(wire_ty)
+        for key, value in (spawn_local_storage or {}).items():
+            if not isinstance(key, str):
+                raise TypeError(
+                    f"spawn_local_storage keys must be storage names (str), got {key!r}"
+                )
+            _set_inbound_map_entry(
+                args.spawn_local_storage.add(),
+                key,
+                value,
+                kwarg_name=key,
+                registered=registered,
+                cloned_handles=cloned_handles,
+            )
         return args.SerializeToString()
     except BaseException:
         # Roll back any host callables registered before the failure.

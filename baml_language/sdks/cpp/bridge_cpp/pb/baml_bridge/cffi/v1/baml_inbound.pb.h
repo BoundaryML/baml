@@ -2207,6 +2207,7 @@ class CallFunctionArgs final : public ::google::protobuf::MessageLite
   enum : int {
     kKwargsFieldNumber = 1,
     kTypeArgsFieldNumber = 3,
+    kSpawnLocalStorageFieldNumber = 6,
     kCallIdFieldNumber = 2,
     kFunctionNameFieldNumber = 4,
     kFunctionHandleFieldNumber = 5,
@@ -2245,6 +2246,23 @@ class CallFunctionArgs final : public ::google::protobuf::MessageLite
   const ::baml_bridge::cffi::v1::BamlTyArg& type_args(int index) const;
   ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NONNULL add_type_args();
   const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>& type_args() const;
+  // repeated .baml_bridge.cffi.v1.InboundMapEntry spawn_local_storage = 6;
+  int spawn_local_storage_size() const;
+  private:
+  int _internal_spawn_local_storage_size() const;
+
+  public:
+  void clear_spawn_local_storage() ;
+  ::baml_bridge::cffi::v1::InboundMapEntry* PROTOBUF_NONNULL mutable_spawn_local_storage(int index);
+  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::InboundMapEntry>* PROTOBUF_NONNULL mutable_spawn_local_storage();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::InboundMapEntry>& _internal_spawn_local_storage() const;
+  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::InboundMapEntry>* PROTOBUF_NONNULL _internal_mutable_spawn_local_storage();
+  public:
+  const ::baml_bridge::cffi::v1::InboundMapEntry& spawn_local_storage(int index) const;
+  ::baml_bridge::cffi::v1::InboundMapEntry* PROTOBUF_NONNULL add_spawn_local_storage();
+  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::InboundMapEntry>& spawn_local_storage() const;
   // uint64 call_id = 2;
   void clear_call_id() ;
   ::uint64_t call_id() const;
@@ -2292,8 +2310,8 @@ class CallFunctionArgs final : public ::google::protobuf::MessageLite
   inline bool has_call_target() const;
   inline void clear_has_call_target();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 5,
-                                   2, 58,
+  static const ::google::protobuf::internal::TcParseTable<3, 6,
+                                   3, 58,
                                    2>
       _table_;
 
@@ -2316,6 +2334,7 @@ class CallFunctionArgs final : public ::google::protobuf::MessageLite
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::InboundMapEntry > kwargs_;
     ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlTyArg > type_args_;
+    ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::InboundMapEntry > spawn_local_storage_;
     ::uint64_t call_id_;
     union CallTargetUnion {
       constexpr CallTargetUnion() : _constinit_{} {}
@@ -4659,6 +4678,56 @@ inline ::uint64_t CallFunctionArgs::_internal_function_handle() const {
     return _impl_.call_target_.function_handle_;
   }
   return ::uint64_t{0u};
+}
+
+// repeated .baml_bridge.cffi.v1.InboundMapEntry spawn_local_storage = 6;
+inline int CallFunctionArgs::_internal_spawn_local_storage_size() const {
+  return _internal_spawn_local_storage().size();
+}
+inline int CallFunctionArgs::spawn_local_storage_size() const {
+  return _internal_spawn_local_storage_size();
+}
+inline void CallFunctionArgs::clear_spawn_local_storage() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spawn_local_storage_.Clear();
+}
+inline ::baml_bridge::cffi::v1::InboundMapEntry* PROTOBUF_NONNULL CallFunctionArgs::mutable_spawn_local_storage(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.CallFunctionArgs.spawn_local_storage)
+  return _internal_mutable_spawn_local_storage()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::InboundMapEntry>* PROTOBUF_NONNULL CallFunctionArgs::mutable_spawn_local_storage()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:baml_bridge.cffi.v1.CallFunctionArgs.spawn_local_storage)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_spawn_local_storage();
+}
+inline const ::baml_bridge::cffi::v1::InboundMapEntry& CallFunctionArgs::spawn_local_storage(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.CallFunctionArgs.spawn_local_storage)
+  return _internal_spawn_local_storage().Get(index);
+}
+inline ::baml_bridge::cffi::v1::InboundMapEntry* PROTOBUF_NONNULL CallFunctionArgs::add_spawn_local_storage()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::baml_bridge::cffi::v1::InboundMapEntry* _add = _internal_mutable_spawn_local_storage()->Add();
+  // @@protoc_insertion_point(field_add:baml_bridge.cffi.v1.CallFunctionArgs.spawn_local_storage)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::InboundMapEntry>& CallFunctionArgs::spawn_local_storage() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:baml_bridge.cffi.v1.CallFunctionArgs.spawn_local_storage)
+  return _internal_spawn_local_storage();
+}
+inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::InboundMapEntry>&
+CallFunctionArgs::_internal_spawn_local_storage() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.spawn_local_storage_;
+}
+inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::InboundMapEntry>* PROTOBUF_NONNULL
+CallFunctionArgs::_internal_mutable_spawn_local_storage() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.spawn_local_storage_;
 }
 
 inline bool CallFunctionArgs::has_call_target() const {

@@ -129,6 +129,7 @@ pub const ALL: &[BuiltinFile] = &[
     // --- Root namespace (no ns_* prefix) ---
     builtin!("baml", "containers.baml"),
     builtin!("baml", "sortable.baml"),
+    builtin!("baml", "spawn_local_storage.baml"),
     builtin!("baml", "conversions.baml"),
     builtin!("baml", "core.baml"),
     builtin!("baml", "int.baml"),

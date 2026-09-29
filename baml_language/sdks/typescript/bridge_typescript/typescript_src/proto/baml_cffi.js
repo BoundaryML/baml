@@ -2488,6 +2488,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @property {Array.<baml_bridge.cffi.v1.IBamlTyArg>|null} [typeArgs] CallFunctionArgs typeArgs
                  * @property {string|null} [functionName] CallFunctionArgs functionName
                  * @property {number|Long|null} [functionHandle] CallFunctionArgs functionHandle
+                 * @property {Array.<baml_bridge.cffi.v1.IInboundMapEntry>|null} [spawnLocalStorage] CallFunctionArgs spawnLocalStorage
                  */
 
                 /**
@@ -2501,6 +2502,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 function CallFunctionArgs(properties) {
                     this.kwargs = [];
                     this.typeArgs = [];
+                    this.spawnLocalStorage = [];
                     if (properties)
                         for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                             if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -2546,6 +2548,14 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @instance
                  */
                 CallFunctionArgs.prototype.functionHandle = null;
+
+                /**
+                 * CallFunctionArgs spawnLocalStorage.
+                 * @member {Array.<baml_bridge.cffi.v1.IInboundMapEntry>} spawnLocalStorage
+                 * @memberof baml_bridge.cffi.v1.CallFunctionArgs
+                 * @instance
+                 */
+                CallFunctionArgs.prototype.spawnLocalStorage = $util.emptyArray;
 
                 // OneOf field names bound to virtual getters and setters
                 let $oneOfFields;
@@ -2601,6 +2611,9 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         writer.uint32(/* id 4, wireType 2 =*/34).string(message.functionName);
                     if (message.functionHandle != null && Object.hasOwnProperty.call(message, "functionHandle"))
                         writer.uint32(/* id 5, wireType 0 =*/40).uint64(message.functionHandle);
+                    if (message.spawnLocalStorage != null && message.spawnLocalStorage.length)
+                        for (let i = 0; i < message.spawnLocalStorage.length; ++i)
+                            $root.baml_bridge.cffi.v1.InboundMapEntry.encode(message.spawnLocalStorage[i], writer.uint32(/* id 6, wireType 2 =*/50).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -2663,6 +2676,12 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             }
                         case 5: {
                                 message.functionHandle = reader.uint64();
+                                break;
+                            }
+                        case 6: {
+                                if (!(message.spawnLocalStorage && message.spawnLocalStorage.length))
+                                    message.spawnLocalStorage = [];
+                                message.spawnLocalStorage.push($root.baml_bridge.cffi.v1.InboundMapEntry.decode(reader, reader.uint32(), undefined, long + 1));
                                 break;
                             }
                         default:
@@ -2738,6 +2757,15 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         if (!$util.isInteger(message.functionHandle) && !(message.functionHandle && $util.isInteger(message.functionHandle.low) && $util.isInteger(message.functionHandle.high)))
                             return "functionHandle: integer|Long expected";
                     }
+                    if (message.spawnLocalStorage != null && message.hasOwnProperty("spawnLocalStorage")) {
+                        if (!Array.isArray(message.spawnLocalStorage))
+                            return "spawnLocalStorage: array expected";
+                        for (let i = 0; i < message.spawnLocalStorage.length; ++i) {
+                            let error = $root.baml_bridge.cffi.v1.InboundMapEntry.verify(message.spawnLocalStorage[i], long + 1);
+                            if (error)
+                                return "spawnLocalStorage." + error;
+                        }
+                    }
                     return null;
                 };
 
@@ -2799,6 +2827,16 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             message.functionHandle = object.functionHandle;
                         else if (typeof object.functionHandle === "object")
                             message.functionHandle = new $util.LongBits(object.functionHandle.low >>> 0, object.functionHandle.high >>> 0).toNumber(true);
+                    if (object.spawnLocalStorage) {
+                        if (!Array.isArray(object.spawnLocalStorage))
+                            throw TypeError(".baml_bridge.cffi.v1.CallFunctionArgs.spawnLocalStorage: array expected");
+                        message.spawnLocalStorage = [];
+                        for (let i = 0; i < object.spawnLocalStorage.length; ++i) {
+                            if (!$util.isObject(object.spawnLocalStorage[i]))
+                                throw TypeError(".baml_bridge.cffi.v1.CallFunctionArgs.spawnLocalStorage: object expected");
+                            message.spawnLocalStorage[i] = $root.baml_bridge.cffi.v1.InboundMapEntry.fromObject(object.spawnLocalStorage[i], long + 1);
+                        }
+                    }
                     return message;
                 };
 
@@ -2822,6 +2860,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     if (options.arrays || options.defaults) {
                         object.kwargs = [];
                         object.typeArgs = [];
+                        object.spawnLocalStorage = [];
                     }
                     if (options.defaults)
                         if ($util.Long) {
@@ -2860,6 +2899,11 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             object.functionHandle = options.longs === String ? $util.Long.prototype.toString.call(message.functionHandle) : options.longs === Number ? new $util.LongBits(message.functionHandle.low >>> 0, message.functionHandle.high >>> 0).toNumber(true) : message.functionHandle;
                         if (options.oneofs)
                             object.callTarget = "functionHandle";
+                    }
+                    if (message.spawnLocalStorage && message.spawnLocalStorage.length) {
+                        object.spawnLocalStorage = [];
+                        for (let j = 0; j < message.spawnLocalStorage.length; ++j)
+                            object.spawnLocalStorage[j] = $root.baml_bridge.cffi.v1.InboundMapEntry.toObject(message.spawnLocalStorage[j], options, q + 1);
                     }
                     return object;
                 };

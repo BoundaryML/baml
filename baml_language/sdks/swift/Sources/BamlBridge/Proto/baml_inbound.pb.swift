@@ -420,6 +420,12 @@ nonisolated struct BamlBridge_Cffi_V1_CallFunctionArgs: Sendable {
     set {callTarget = .functionHandle(newValue)}
   }
 
+  /// Initial `baml.SpawnLocalStorage` values, keyed by storage name. The call
+  /// starts with them as its context and every thread it spawns inherits them.
+  /// Values carry no declared type: one that fits JSON arrives as `json`, and
+  /// `SpawnLocalStorage.get` decodes it into the storage's type.
+  var spawnLocalStorage: [BamlBridge_Cffi_V1_InboundMapEntry] = []
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   nonisolated enum OneOf_CallTarget: Equatable, Sendable {
@@ -1000,7 +1006,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyArg: SwiftProtobuf.Message, Swift
 
 nonisolated extension BamlBridge_Cffi_V1_CallFunctionArgs: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".CallFunctionArgs"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kwargs\0\u{3}call_id\0\u{3}type_args\0\u{3}function_name\0\u{3}function_handle\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kwargs\0\u{3}call_id\0\u{3}type_args\0\u{3}function_name\0\u{3}function_handle\0\u{3}spawn_local_storage\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1027,6 +1033,7 @@ nonisolated extension BamlBridge_Cffi_V1_CallFunctionArgs: SwiftProtobuf.Message
           self.callTarget = .functionHandle(v)
         }
       }()
+      case 6: try { try decoder.decodeRepeatedMessageField(value: &self.spawnLocalStorage) }()
       default: break
       }
     }
@@ -1057,6 +1064,9 @@ nonisolated extension BamlBridge_Cffi_V1_CallFunctionArgs: SwiftProtobuf.Message
     }()
     case nil: break
     }
+    if !self.spawnLocalStorage.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.spawnLocalStorage, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1065,6 +1075,7 @@ nonisolated extension BamlBridge_Cffi_V1_CallFunctionArgs: SwiftProtobuf.Message
     if lhs.callID != rhs.callID {return false}
     if lhs.typeArgs != rhs.typeArgs {return false}
     if lhs.callTarget != rhs.callTarget {return false}
+    if lhs.spawnLocalStorage != rhs.spawnLocalStorage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -151,6 +151,19 @@ impl BamlPackageBaml for PackageBamlImpl {
         }
     }
 
+    /// `baml._spawn_local_frame_raw()` — the current thread's
+    /// `SpawnLocalStorage` context map, or null when none is installed.
+    fn _spawn_local_frame_raw(vm: &BexVm) -> Value {
+        vm.spawn_local_frame
+    }
+
+    /// `baml._set_spawn_local_frame_raw(frame)` — install `frame` as the
+    /// current thread's `SpawnLocalStorage` context. The BAML caller never
+    /// mutates a frame after installing it, so spawned threads can share it.
+    fn _set_spawn_local_frame_raw(vm: &mut BexVm, frame: &Value) {
+        vm.spawn_local_frame = *frame;
+    }
+
     // ── Numeric-array reductions (formerly `baml.math.*`) ──────────────────────
     //
     // Private native backings for the `Summable` / `FloatStats` methods declared
