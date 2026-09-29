@@ -5971,10 +5971,10 @@ impl LoweringContext {
         };
 
         let lambda_def = LambdaDef {
-            kind: LambdaKind::Anonymous,
+            kind: LambdaKind::Test,
             params: vec![],
             defaults: FunctionDefaults::empty(),
-            return_type: None,
+            return_type: Some(TypeExprKind::Void.at(span)),
             throws: None,
             body: Some(lambda_body),
             span,

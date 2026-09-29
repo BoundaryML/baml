@@ -1649,9 +1649,13 @@ pub struct FunctionDef {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LambdaKind {
     /// Written in source as `(x) -> { … }`, or synthesized to behave exactly
-    /// like one — the wrappers `lower_cst` builds around `test` / `testset`
-    /// bodies so they can be passed to a registration call.
+    /// like one — the wrappers `lower_cst` builds around `testset` bodies so
+    /// they can be passed to a registration call.
     Anonymous,
+    /// The `() -> void` wrapper synthesized around a `test` body. Unlike other
+    /// void bodies, its tail value is not discarded: it must itself be `void`,
+    /// so `test "x" { 1 == 2 }` is a type error instead of a silent pass.
+    Test,
     /// The body wrapper `lower_spawn_expr` synthesizes for `spawn { … }`.
     /// Its throws surface is left open rather than defaulting to `never`,
     /// because the spawned body's errors surface through the `Future`.

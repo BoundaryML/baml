@@ -415,6 +415,9 @@ pub enum DiagnosticId {
     InvalidRegexPattern,
     /// An unparenthesized function/union boundary has two syntactic owners (E0175).
     AmbiguousUnion,
+    /// A `test` body evaluates to a non-`void` value (E0176), e.g.
+    /// `test "x" { 1 == 2 }`, which would otherwise pass without checking it.
+    TestBodyNotVoid,
 }
 
 impl DiagnosticId {
@@ -624,6 +627,7 @@ impl DiagnosticId {
             DiagnosticId::InterfaceMethodMissingThrows => "E0170",
             DiagnosticId::InvalidRegexPattern => "E0174",
             DiagnosticId::AmbiguousUnion => "E0175",
+            DiagnosticId::TestBodyNotVoid => "E0176",
             DiagnosticId::TypeMustBeKnown => "E0155",
             DiagnosticId::InvalidBuiltinTypeArguments => "E0171",
             DiagnosticId::ScopedTypeEscapesBlock => "E0172",

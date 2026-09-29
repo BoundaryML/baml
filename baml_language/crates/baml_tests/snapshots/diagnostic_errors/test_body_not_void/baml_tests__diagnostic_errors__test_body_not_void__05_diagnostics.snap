@@ -1,0 +1,43 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0176
+
+  × a test body must not evaluate to a value, but this one is `false`; use `assert.is_true(...)` to check a condition, or end the body with `;` to discard the value
+    ╭─[test_body_not_void.baml:18:5]
+ 18 │     1 == 2
+    ·     ──────
+    ╰────
+
+  [type] E0176
+
+  × a test body must not evaluate to a value, but this one is `bool`; use `assert.is_true(...)` to check a condition, or end the body with `;` to discard the value
+    ╭─[test_body_not_void.baml:22:5]
+ 22 │     is_even(3)
+    ·     ──────────
+    ╰────
+
+  [type] E0176
+
+  × a test body must not evaluate to a value, but this one is `int`; use `assert.is_true(...)` to check a condition, or end the body with `;` to discard the value
+    ╭─[test_body_not_void.baml:26:5]
+ 26 │     answer()
+    ·     ────────
+    ╰────
+
+  [type] E0176
+
+  × a test body must not evaluate to a value, but this one is `bool`; use `assert.is_true(...)` to check a condition, or end the body with `;` to discard the value
+    ╭─[test_body_not_void.baml:31:5]
+ 31 │     xs.length() == 4
+    ·     ────────────────
+    ╰────
+
+  [type] E0176
+
+  × a test body must not evaluate to a value, but this one is `false`; use `assert.is_true(...)` to check a condition, or end the body with `;` to discard the value
+    ╭─[test_body_not_void.baml:36:9]
+ 36 │         false
+    ·         ─────
+    ╰────

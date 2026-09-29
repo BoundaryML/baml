@@ -5080,7 +5080,6 @@ impl<'db> LoweringContext<'db> {
             self.builder.goto(self.exit_block);
         }
         self.builder.set_current_block(self.exit_block);
-        self.null_void_return_place(ret);
         self.builder.return_();
 
         if cfg!(debug_assertions) {
@@ -5150,21 +5149,6 @@ impl<'db> LoweringContext<'db> {
             self.builder.set_current_block(next_block);
         }
         Ok(())
-    }
-
-    /// A `void` function returns `null`, whatever its body evaluated to.
-    ///
-    /// The body's tail (and any `return <void call>`) is still lowered into
-    /// `_0` for its effects, so without this a `-> void` function whose tail
-    /// is `1 == 2` would hand `false` to its caller. Called in the exit block,
-    /// which every normal return path goes through.
-    fn null_void_return_place(&mut self, ret: Local) {
-        if matches!(self.builder.local_ty(ret), RuntimeTy::Void) {
-            self.builder.assign(
-                Place::local(ret),
-                Rvalue::Use(Operand::Constant(Constant::Null)),
-            );
-        }
     }
 
     fn lower_default_expr(
@@ -5442,7 +5426,6 @@ impl<'db> LoweringContext<'db> {
             self.builder.goto(self.exit_block);
         }
         self.builder.set_current_block(self.exit_block);
-        self.null_void_return_place(ret);
         self.builder.return_();
 
         if cfg!(debug_assertions) {

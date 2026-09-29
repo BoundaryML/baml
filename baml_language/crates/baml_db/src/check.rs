@@ -1893,6 +1893,7 @@ fn tir_type_error_to_diagnostic_id(
             runtime_type::mounted_package_call_unsupported(path.as_str()).id
         }
         TirTypeError::InvalidRegexPattern { .. } => DiagnosticId::InvalidRegexPattern,
+        TirTypeError::TestBodyNotVoid { .. } => DiagnosticId::TestBodyNotVoid,
         TirTypeError::CannotConstructReflectionKind { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::CannotConstructAlias { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::CannotConstructBuiltinCompanion { .. } => {
