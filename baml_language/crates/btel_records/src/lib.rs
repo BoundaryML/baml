@@ -56,6 +56,17 @@ pub enum TimingRecord {
 pub enum SpanRecord<InputCapture, ValueCapture> {
     /// This ring needs its own thread context; the Timing ring's is independent.
     ThreadSelected { thread_id: TelemetryId },
+    /// Execution context for subsequent observations in this chunk and thread.
+    /// None means unavailable. Producers must repeat selection in every chunk
+    /// and after a thread switch; the publisher never inherits across chunks.
+    ContextSelected {
+        captured_context: Option<InputCapture>,
+    },
+    /// Reselect an already handed-off snapshot without recapturing its values.
+    /// The reference does not imply that delivery of the blob succeeded.
+    ContextReferenced { id: btel_snapshot::SnapshotId },
+    /// An explicitly empty execution context, distinct from an unavailable one.
+    ContextCleared,
     /// Optional early thread identity; its retained clock exceeds a Timing slot.
     ThreadSpanAnnouncement {
         id: TelemetryId,
@@ -885,6 +896,7 @@ impl<C> SpanRecord<C, C> {
     /// Transfer the exclusive capture owner; record destruction handles everything else.
     pub fn take_capture(&mut self) -> Option<C> {
         match self {
+            Self::ContextSelected { captured_context } => captured_context.take(),
             Self::FunctionSpanAnnouncement {
                 captured_inputs, ..
             } => captured_inputs.take(),
@@ -914,6 +926,8 @@ impl<C> SpanRecord<C, C> {
                 captured_value.take()
             }
             Self::ThreadSelected { .. }
+            | Self::ContextCleared
+            | Self::ContextReferenced { .. }
             | Self::ThreadSpanAnnouncement { .. }
             | Self::ThreadSpanCompletion { .. }
             | Self::CallPathDefined { .. }

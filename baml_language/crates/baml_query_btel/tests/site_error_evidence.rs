@@ -110,6 +110,7 @@ fn failed_call(id: u64, path: u32) -> proto::SpanBatch {
     proto::SpanBatch {
         sections: vec![proto::ThreadSection {
             thread_id: THREAD,
+            context: None,
             events: vec![proto::SpanEvent {
                 event: Some(Event::FunctionCompletion(proto::FunctionCompletion {
                     id,

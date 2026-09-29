@@ -171,6 +171,9 @@ pub fn validate_file(
             if section.thread_id == 0 {
                 return Err("zero thread identity".into());
             }
+            if section.context == Some(proto::thread_section::Context::EmptyContext(false)) {
+                return Err("invalid empty context marker".into());
+            }
             for record in &section.events {
                 use proto::span_event::Event;
                 match &record.event {

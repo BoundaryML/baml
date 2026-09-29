@@ -129,6 +129,7 @@ fn spans(events: Vec<Event>) -> proto::SpanBatch {
     proto::SpanBatch {
         sections: vec![proto::ThreadSection {
             thread_id: THREAD,
+            context: None,
             events: events
                 .into_iter()
                 .map(|event| proto::SpanEvent { event: Some(event) })

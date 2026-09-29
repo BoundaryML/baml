@@ -202,7 +202,7 @@ impl RecordingBuilder {
         let mut file = proto::RecordingFile {
             header: Some(proto::RecordingHeader {
                 format_major: encoding::FORMAT_MAJOR,
-                format_minor: encoding::FORMAT_MINOR,
+                format_minor: self.buffer.spans.format_minor(),
                 recording_id: self.id.as_bytes().to_vec(),
                 source_snapshot_id: self.source_snapshot_id.map(|id| id.to_vec()),
             }),
@@ -352,6 +352,7 @@ impl RecordingBuilder {
         self.pending_span_reservation = records;
     }
     pub fn before_span_chunk(&mut self, records: usize) {
+        self.buffer.spans.begin_chunk();
         self.span_credit = 0;
         self.pending_span_reservation = self.pending_span_reservation.min(records);
     }

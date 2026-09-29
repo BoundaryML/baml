@@ -2,7 +2,9 @@
 //! Field numbers and enum values remain defined by the recording .proto schema.
 /// **Fixed bound.** Must cover containers, selector and the largest scalar event. Shrinking
 /// this does not shrink records; validate worst-case encodings first.
-pub const MAX_EVENT_BYTES: usize = 128;
+/// Worst case: two six-byte containers, an eleven-byte thread selector,
+/// a twenty-byte context reference, and a ninety-byte completion.
+pub const MAX_EVENT_BYTES: usize = 133;
 /// **Correctness bound.** The specialized writer relies on this reserved region. Update only
 /// with encoder changes and worst-case/equivalence tests.
 pub const MAX_COMPLETION_BYTES: usize = 90;
@@ -19,3 +21,6 @@ pub const FORMAT_MAJOR: u32 = 2;
 /// knob. 1 adds `FunctionMetadata.argument_layout`; 2 adds
 /// `FunctionMetadata.source_map` and `RecordingFile.errors`. Readers accept any minor.
 pub const FORMAT_MINOR: u32 = 2;
+/// Files that use execution-context sections opt into this additive version.
+/// Recordings without context retain their existing bytes and minor version.
+pub const CONTEXT_FORMAT_MINOR: u32 = 3;

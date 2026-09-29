@@ -14,6 +14,9 @@ use prost::{Message, encoding::uint64};
 
 use crate::proto::span_event::Event;
 
+#[cfg(test)]
+mod context_tests;
+
 const VARINT_PAYLOAD_BITS: u32 = 7;
 const VARINT_CONTINUATION_BIT: u8 = 1 << VARINT_PAYLOAD_BITS;
 const VARINT_PAYLOAD_MASK: u8 = VARINT_CONTINUATION_BIT - 1;
@@ -23,8 +26,31 @@ pub(crate) struct EncodedSpans {
     bytes: Vec<u8>,
     thread: Option<TelemetryId>,
     section_length: usize,
+    context: Option<crate::proto::thread_section::Context>,
+    selected_context: Option<(TelemetryId, Option<crate::proto::thread_section::Context>)>,
+    context_format: bool,
 }
 impl EncodedSpans {
+    pub(crate) fn select_context(
+        &mut self,
+        thread: TelemetryId,
+        context: Option<crate::proto::thread_section::Context>,
+    ) {
+        self.selected_context = Some((thread, context));
+    }
+
+    pub(crate) fn begin_chunk(&mut self) {
+        self.selected_context = None;
+    }
+
+    pub(crate) fn format_minor(&self) -> u32 {
+        if self.context_format {
+            btel_settings::encoding::CONTEXT_FORMAT_MINOR
+        } else {
+            btel_settings::encoding::FORMAT_MINOR
+        }
+    }
+
     pub(crate) fn len(&self) -> usize {
         self.bytes.len()
     }
@@ -42,8 +68,15 @@ impl EncodedSpans {
 
     #[inline]
     pub(crate) fn event(&mut self, thread: TelemetryId, event: Event) {
-        if self.thread != Some(thread) {
-            self.select(thread);
+        if self
+            .selected_context
+            .is_some_and(|(selected, _)| selected != thread)
+        {
+            self.selected_context = None;
+        }
+        let context = self.selected_context.and_then(|(_, context)| context);
+        if self.thread != Some(thread) || self.context != context {
+            self.select(thread, context);
         }
         match event {
             Event::FunctionCompletion(m) => self.completion(4, &m),
@@ -100,7 +133,11 @@ impl EncodedSpans {
         }
     }
 
-    fn select(&mut self, thread: TelemetryId) {
+    fn select(
+        &mut self,
+        thread: TelemetryId,
+        context: Option<crate::proto::thread_section::Context>,
+    ) {
         if self.thread.is_some() {
             end_container(&mut self.bytes, self.section_length);
         } else {
@@ -109,7 +146,20 @@ impl EncodedSpans {
         }
         self.section_length = begin(&mut self.bytes, 1, LENGTH_BYTES);
         uint64::encode(1, &thread.get(), &mut self.bytes);
+        if let Some(context) = context {
+            use crate::proto::thread_section::Context;
+            match context {
+                Context::ContextCasId(id) => {
+                    prost::encoding::message::encode(3, &id, &mut self.bytes);
+                }
+                Context::EmptyContext(empty) => {
+                    prost::encoding::bool::encode(4, &empty, &mut self.bytes);
+                }
+            }
+            self.context_format = true;
+        }
         self.thread = Some(thread);
+        self.context = context;
     }
 
     pub(crate) fn finish(&mut self) -> Vec<u8> {
@@ -277,6 +327,7 @@ mod tests {
             file.spans.unwrap().sections,
             vec![proto::ThreadSection {
                 thread_id: thread.get(),
+                context: None,
                 events: events
                     .into_iter()
                     .map(|event| proto::SpanEvent { event: Some(event) })
@@ -333,6 +384,7 @@ mod equivalence_tests {
                 ] {
                     let expected = crate::proto::ThreadSection {
                         thread_id: thread.get(),
+                        context: None,
                         events: vec![crate::proto::SpanEvent { event: Some(event) }],
                     }
                     .encode_to_vec();

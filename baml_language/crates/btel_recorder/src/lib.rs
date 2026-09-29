@@ -173,6 +173,28 @@ impl ConversionBuffer {
         }
         match record {
             SpanRecord::ThreadSelected { .. } => panic!("processor must consume selectors"),
+            SpanRecord::ContextSelected { captured_context } => {
+                self.spans.select_context(
+                    thread,
+                    captured_context.as_ref().map(|snapshot| {
+                        proto::thread_section::Context::ContextCasId(snapshot_id(snapshot))
+                    }),
+                );
+            }
+            SpanRecord::ContextCleared => {
+                self.spans.select_context(
+                    thread,
+                    Some(proto::thread_section::Context::EmptyContext(true)),
+                );
+            }
+            SpanRecord::ContextReferenced { id } => {
+                self.spans.select_context(
+                    thread,
+                    Some(proto::thread_section::Context::ContextCasId(
+                        snapshot_reference(*id),
+                    )),
+                );
+            }
             SpanRecord::ThreadSpanAnnouncement {
                 id,
                 parent_id,
@@ -730,7 +752,10 @@ impl ConversionBuffer {
 mod tests;
 
 fn snapshot_id(snapshot: &Snapshot) -> proto::SnapshotId {
-    let bytes = snapshot.id();
+    snapshot_reference(snapshot.id())
+}
+
+fn snapshot_reference(bytes: btel_snapshot::SnapshotId) -> proto::SnapshotId {
     proto::SnapshotId {
         low: u64::from_le_bytes(bytes.as_bytes()[..8].try_into().unwrap()),
         high: u64::from_le_bytes(bytes.as_bytes()[8..].try_into().unwrap()),

@@ -22,6 +22,11 @@ serde_json = { workspace = true }
 xxhash-rust = { workspace = true }
 
 [dev-dependencies]
+bex_chunkedringbuffer = { workspace = true }
+btel_clock = { workspace = true }
+btel_processor = { workspace = true }
+btel_records = { workspace = true }
+btel_types = { workspace = true }
 prost = { workspace = true }
 tempfile = { workspace = true }
 
