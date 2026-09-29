@@ -16,8 +16,6 @@ use sys_types::sse::SseEvent;
 use tokio::sync::Mutex as TokioMutex;
 #[cfg(feature = "bundle-http")]
 use tokio::{sync::Notify, task::AbortHandle};
-#[cfg(feature = "bundle-http")]
-use tokio_tungstenite::tungstenite::{Error as WsError, Message as WsMessage};
 
 /// Buffer for SSE events accumulated by a background task.
 pub struct SseBuffer {
@@ -41,16 +39,15 @@ type SseStreamParts = (Arc<TokioMutex<SseBuffer>>, Arc<Notify>, Arc<AtomicBool>)
 
 /// The write half of a connected WebSocket.
 ///
-/// Type-erased rather than tied to one transport: a client socket
-/// (`baml.ws.connect`) splits a plain-or-TLS TCP stream, while a server socket
-/// (an HTTP upgrade inside `baml.http.Server.serve`) splits hyper's upgraded
-/// IO. Both reach the registry — and therefore the whole `baml.ws.WebSocket`
-/// surface — through this one type.
+/// Message-level, from the network transport (`baml_http`): a client socket
+/// (`baml.ws.connect`) and a server socket (an upgrade inside
+/// `baml.http.Server.serve`) reach the registry — and therefore the whole
+/// `baml.ws.WebSocket` surface — through this one type.
 #[cfg(feature = "bundle-http")]
-pub type WsSink = Box<dyn futures::Sink<WsMessage, Error = WsError> + Send + Unpin>;
+pub type WsSink = baml_http::WsSink;
 /// The read half of a connected WebSocket. See [`WsSink`].
 #[cfg(feature = "bundle-http")]
-pub type WsSource = Box<dyn futures::Stream<Item = Result<WsMessage, WsError>> + Send + Unpin>;
+pub type WsSource = baml_http::WsSource;
 
 /// How a WebSocket connection ended, as reported to BAML by
 /// `baml.ws.WebSocket.next` (a `baml.ws.CloseEvent`).
@@ -84,8 +81,8 @@ impl WsStreamResource {
     /// End the connection: complete the closing handshake, release the socket,
     /// and publish `close`.
     ///
-    /// Closing the sink flushes the close frame tungstenite queues in reply to
-    /// the peer's, which `read` alone leaves pending — without it the peer sees
+    /// Closing the sink flushes the close frame the transport queues in reply
+    /// to the peer's, which `read` alone leaves pending — without it the peer sees
     /// the connection vanish mid-handshake.
     ///
     /// The read half calls this the moment the connection ends, handing over

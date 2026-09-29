@@ -10,6 +10,7 @@
 
 use std::time::Duration;
 
+use baml_http::outbound::{self, Destination};
 use serde_json::{Value, json};
 
 use super::{anonymous_meta, events::TelemetryEvent, project_id, storage::Telemetry};
@@ -19,12 +20,6 @@ use super::{anonymous_meta, events::TelemetryEvent, project_id, storage::Telemet
 /// build time (`api_key_configured` returns `false`).
 const POSTHOG_API_KEY: &str = "phc_zgLi9FbzjkLLX6vDsUUixBnDsW6GbN93ohcdboSXSpGy";
 
-/// PostHog ingestion host. If we ever front this with a Boundary-owned
-/// domain (`telemetry.boundaryml.com` → PostHog reverse proxy) — the
-/// architecture doc recommends this — this constant is the one place to
-/// swap it.
-const POSTHOG_HOST: &str = "https://us.i.posthog.com";
-
 /// Per-request network timeout for the telemetry POST.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -33,29 +28,26 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
 /// it back for retry. Only ever runs in the detached child, so blocking
 /// on the network here is fine.
 pub(super) fn send_body(body: &Value) -> bool {
-    if baml_tls::ensure_crypto_provider().is_err() {
-        return false;
-    }
-    let Ok(client) = reqwest::blocking::Client::builder()
-        .timeout(REQUEST_TIMEOUT)
-        .build()
-    else {
+    let Some(host) = host() else {
         return false;
     };
-
-    client
-        .post(format!("{}/capture/", host()))
-        .json(body)
-        .send()
-        .map(|resp| resp.status().is_success())
-        .unwrap_or(false)
+    let Ok(payload) = serde_json::to_vec(body) else {
+        return false;
+    };
+    let request = baml_http::Request::post(format!("{host}/capture/"))
+        .header("content-type", "application/json")
+        .body(payload)
+        .timeout(REQUEST_TIMEOUT);
+    outbound::send_blocking(Destination::AnonymousTelemetry, request, 64 * 1024)
+        .is_ok_and(|response| response.is_success())
 }
 
-/// `true` if a PostHog key was compiled in. When empty (typically in a
-/// fork or a debug build with the constant blanked out), the whole
+/// `true` if a PostHog key was compiled in and this build may send
+/// telemetry at all. When empty (typically in a fork or a debug build with
+/// the constant blanked out) or in a `no-phone-home` build, the whole
 /// pipeline treats telemetry as fully disabled.
 pub(crate) fn api_key_configured() -> bool {
-    !POSTHOG_API_KEY.trim().is_empty()
+    !POSTHOG_API_KEY.trim().is_empty() && Destination::AnonymousTelemetry.enabled()
 }
 
 /// Compose the PostHog `capture` body. Field organization mirrors Next.js's
@@ -66,10 +58,10 @@ pub(crate) fn api_key_configured() -> bool {
 /// Concretely: `context` and `meta` fields live at the top of `properties`,
 /// then the event-specific `fields` are merged in on top.
 pub(super) fn build_body(telemetry: &Telemetry, event: &TelemetryEvent) -> Option<Value> {
-    let api_key = POSTHOG_API_KEY.trim();
-    if api_key.is_empty() {
+    if !api_key_configured() {
         return None;
     }
+    let api_key = POSTHOG_API_KEY.trim();
     let anonymous_id = telemetry.anonymous_id();
     if anonymous_id.is_empty() {
         return None;
@@ -116,18 +108,16 @@ pub(super) fn build_body(telemetry: &Telemetry, event: &TelemetryEvent) -> Optio
     }))
 }
 
-fn host() -> &'static str {
-    POSTHOG_HOST.trim_end_matches('/')
+/// The PostHog ingestion host, from the outbound registry (`baml_http`).
+fn host() -> Option<&'static str> {
+    Destination::AnonymousTelemetry
+        .default_url()
+        .map(|host| host.trim_end_matches('/'))
 }
 
 /// Crate-visible accessor for the PostHog key (used by `baml feedback`).
 pub(crate) fn posthog_api_key() -> &'static str {
     POSTHOG_API_KEY
-}
-
-/// Crate-visible accessor for the PostHog host (used by `baml feedback`).
-pub(crate) fn posthog_host() -> &'static str {
-    POSTHOG_HOST
 }
 
 #[cfg(test)]

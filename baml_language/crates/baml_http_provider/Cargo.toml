@@ -1,0 +1,48 @@
+# The network transport BAML uses (see `baml_http_types`). This default is
+# BAML's native transport: reqwest for HTTP requests, hyper for servers,
+# rustls for TLS and tungstenite for
+# WebSocket connections. To supply your own, point the workspace's
+# `baml_http_provider` dependency at a crate with the same `provider()`
+# function; see VENDOR.md.
+[package]
+name = "baml_http_provider"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+# The platform TLS stack (OpenSSL/SChannel/Security.framework) for client
+# requests, instead of rustls.
+native-tls = [ "reqwest/native-tls" ]
+
+[dependencies]
+baml_http_types = { workspace = true }
+bytes = { workspace = true }
+futures = { workspace = true }
+http-body-util = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+reqwest = { workspace = true, features = [ "rustls-no-provider" ] }
+rustls = { workspace = true, features = [ "std" ] }
+tokio = { workspace = true, features = [ "net", "rt", "sync", "time", "macros" ] }
+tokio-rustls = { workspace = true }
+tokio-tungstenite = { workspace = true, features = [ "connect", "rustls-tls-native-roots" ] }
+tracing = { workspace = true }
+
+[target.'cfg(not(target_os = "ios"))'.dependencies]
+rustls = { workspace = true, features = [ "aws_lc_rs" ] }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+rustls = { workspace = true, features = [ "ring" ] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = [ "rt-multi-thread", "macros" ] }
+
+[lints]
+workspace = true
+
+[package.metadata.ci]
+wasm_support = false

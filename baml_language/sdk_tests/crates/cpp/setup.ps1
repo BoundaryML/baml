@@ -14,7 +14,7 @@ try {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     Write-Output "==> cargo build -p bridge_cffi (dev cdylib for cpp sdk tests)"
-    cargo build -p bridge_cffi --no-default-features --features ring-crypto,bundle-http
+    cargo build -p bridge_cffi
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 finally {

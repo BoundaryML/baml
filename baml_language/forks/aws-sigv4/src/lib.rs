@@ -122,11 +122,11 @@ pub enum SigningError {
     /// The request URL could not be parsed into scheme/authority/path.
     InvalidUri(String),
     /// The crypto provider could not hash or sign.
-    Crypto(baml_tls::CryptoError),
+    Crypto(baml_crypto::CryptoError),
 }
 
-impl From<baml_tls::CryptoError> for SigningError {
-    fn from(e: baml_tls::CryptoError) -> Self {
+impl From<baml_crypto::CryptoError> for SigningError {
+    fn from(e: baml_crypto::CryptoError) -> Self {
         SigningError::Crypto(e)
     }
 }
@@ -245,15 +245,15 @@ pub fn sign_request(
 // HMAC / SHA helpers
 // ---------------------------------------------------------------------------
 
-// Both run on the process's rustls crypto provider (see `baml_tls`), so a
+// Both run on the selected BAML crypto provider (see `baml_crypto`), so a
 // build that brings its own provider signs with it.
 
-fn hmac(key: &[u8], data: &[u8]) -> Result<[u8; 32], baml_tls::CryptoError> {
-    baml_tls::hmac_sha256(key, data)
+fn hmac(key: &[u8], data: &[u8]) -> Result<[u8; 32], baml_crypto::CryptoError> {
+    baml_crypto::hmac_sha256(key, data)
 }
 
-fn sha256_hex(bytes: &[u8]) -> Result<String, baml_tls::CryptoError> {
-    Ok(hex::encode(baml_tls::sha256(bytes)?))
+fn sha256_hex(bytes: &[u8]) -> Result<String, baml_crypto::CryptoError> {
+    Ok(hex::encode(baml_crypto::sha256(bytes)?))
 }
 
 /// Derive the SigV4 signing key:
@@ -263,7 +263,7 @@ fn generate_signing_key(
     date_stamp: &str,
     region: &str,
     service: &str,
-) -> Result<[u8; 32], baml_tls::CryptoError> {
+) -> Result<[u8; 32], baml_crypto::CryptoError> {
     let k_date = hmac(format!("AWS4{secret}").as_bytes(), date_stamp.as_bytes())?;
     let k_region = hmac(&k_date, region.as_bytes())?;
     let k_service = hmac(&k_region, service.as_bytes())?;

@@ -212,26 +212,10 @@ impl io::IoNamespaceTime for NativeSysOps {
 // Random (cryptographically secure)
 // ============================================================================
 
-/// Fills `buf` from the TLS crypto provider's secure random source, so a build
+/// Fills `buf` from the selected crypto provider's secure random source, so a build
 /// that brings its own provider (a FIPS module) draws randomness from it.
-#[cfg(any(
-    feature = "aws-crypto",
-    feature = "ring-crypto",
-    feature = "external-crypto"
-))]
 fn fill_secure_random(buf: &mut [u8]) -> Result<(), String> {
-    baml_tls::fill_random(buf).map_err(|e| e.to_string())
-}
-
-/// Fills `buf` from operating-system entropy: this build has no TLS crypto
-/// provider to draw from.
-#[cfg(not(any(
-    feature = "aws-crypto",
-    feature = "ring-crypto",
-    feature = "external-crypto"
-)))]
-fn fill_secure_random(buf: &mut [u8]) -> Result<(), String> {
-    getrandom::fill(buf).map_err(|e| e.to_string())
+    baml_crypto::fill_random(buf).map_err(|e| e.to_string())
 }
 
 impl io::IoClassRandomSystemRandom for NativeSysOps {
@@ -2609,17 +2593,17 @@ impl io::IoClassHttpResponse for NativeSysOps {
     }
 }
 
-/// Map a `reqwest` transport error to a category the HTTP ops declare they can
-/// throw (`baml.errors.Io | baml.errors.Timeout`), so BAML `catch` clauses can
+/// Map a transport error to a category the HTTP ops declare they can throw
+/// (`baml.errors.Io | baml.errors.Timeout`), so BAML `catch` clauses can
 /// handle network failures instead of them surfacing as an uncatchable host
 /// error.
 #[cfg(feature = "bundle-http")]
-pub(crate) fn http_transport_error(context: &str, e: &reqwest::Error) -> VmBamlError {
+pub(crate) fn http_transport_error(context: &str, e: &baml_http::Error) -> VmBamlError {
     if e.is_timeout() {
         VmBamlError::Timeout {
             message: format!("{context}: {e}"),
-            // reqwest doesn't expose the configured timeout on the error, so
-            // the elapsed duration is unknown.
+            // The transport doesn't report the configured timeout on the
+            // error, so the elapsed duration is unknown.
             duration_ms: None,
         }
     } else {
@@ -2629,35 +2613,42 @@ pub(crate) fn http_transport_error(context: &str, e: &reqwest::Error) -> VmBamlE
     }
 }
 
-/// Applies the optional total-request timeout (carried as bigint nanos across
-/// the sys-op boundary) to a `reqwest` request builder. `0n`/negative means no
-/// deadline (`timeout_from_nanos` returns `None`); a configured deadline that
-/// elapses surfaces as `reqwest::Error::is_timeout`, which `http_transport_error`
-/// maps to `baml.errors.Timeout`.
+/// Build a transport request from a `baml.http.Request`. The optional
+/// total-request timeout arrives as bigint nanos across the sys-op boundary;
+/// `0n`/negative means no deadline (`timeout_from_nanos` returns `None`).
 #[cfg(feature = "bundle-http")]
-fn apply_http_timeout(
-    builder: reqwest::RequestBuilder,
+fn http_request(
+    request: owned::http::Request,
     timeout_nanos: &num_bigint::BigInt,
-) -> reqwest::RequestBuilder {
-    match timeout_from_nanos(timeout_nanos) {
-        Some(dur) => builder.timeout(dur),
-        None => builder,
+) -> Result<baml_http::Request, VmBamlError> {
+    check_http_method(&request.method)?;
+    let mut out = baml_http::Request::new(request.method, request.url);
+    out.headers = request.headers.into_iter().collect();
+    out.body = baml_http::Bytes::from(request.body);
+    out.timeout = timeout_from_nanos(timeout_nanos);
+    Ok(out)
+}
+
+/// An HTTP method is a token (RFC 9110 §9.1): one or more of `tchar`.
+#[cfg(feature = "bundle-http")]
+fn check_http_method(method: &str) -> Result<(), VmBamlError> {
+    let tchar = |b: u8| b.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&b);
+    if !method.is_empty() && method.bytes().all(tchar) {
+        Ok(())
+    } else {
+        Err(VmBamlError::InvalidArgument {
+            message: format!("Invalid HTTP method '{method}': invalid HTTP method"),
+        })
     }
 }
 
 #[cfg(feature = "bundle-http")]
-fn build_io_http_response(response: reqwest::Response, url: String) -> owned::http::Response {
-    let status = i64::from(response.status().as_u16());
-    let headers: indexmap::IndexMap<String, String> = response
-        .headers()
-        .iter()
-        .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
-        .collect();
+fn build_io_http_response(response: baml_http::Response) -> owned::http::Response {
     owned::http::Response {
-        status_code: status,
-        headers,
-        url,
-        _body: crate::http_server::HttpBody::client(response),
+        status_code: i64::from(response.status),
+        headers: response.headers.into_iter().collect(),
+        url: response.url,
+        _body: crate::http_server::HttpBody::client(response.body),
     }
 }
 
@@ -2879,14 +2870,13 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         SysOpOutput::async_op(async move {
-            crate::ensure_rustls_crypto_provider()?;
-            let client = reqwest::Client::new();
-            let response = apply_http_timeout(client.get(&url), &timeout_nanos)
-                .send()
+            let mut request = baml_http::Request::get(url);
+            request.timeout = timeout_from_nanos(&timeout_nanos);
+            let response = baml_http::provider()
+                .send(request)
                 .await
                 .map_err(|e| http_transport_error("HTTP fetch failed", &e))?;
-            let final_url = response.url().to_string();
-            Ok(build_io_http_response(response, final_url))
+            Ok(build_io_http_response(response))
         })
     }
 
@@ -2915,30 +2905,12 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         SysOpOutput::async_op(async move {
-            let method = reqwest::Method::from_bytes(request.method.as_bytes()).map_err(|e| {
-                VmBamlError::InvalidArgument {
-                    message: format!("Invalid HTTP method '{}': {e}", request.method),
-                }
-            })?;
-
-            crate::ensure_rustls_crypto_provider()?;
-            let client = reqwest::Client::new();
-            let mut builder = client.request(method, &request.url);
-
-            for (k, v) in &request.headers {
-                builder = builder.header(k.as_str(), v.as_str());
-            }
-
-            if !request.body.is_empty() {
-                builder = builder.body(request.body);
-            }
-
-            let response = apply_http_timeout(builder, &timeout_nanos)
-                .send()
+            let request = http_request(request, &timeout_nanos)?;
+            let response = baml_http::provider()
+                .send(request)
                 .await
                 .map_err(|e| http_transport_error("HTTP send failed", &e))?;
-            let final_url = response.url().to_string();
-            Ok(build_io_http_response(response, final_url))
+            Ok(build_io_http_response(response))
         })
     }
 
@@ -2976,33 +2948,16 @@ impl io::IoNamespaceHttp for NativeSysOps {
         use crate::registry::{REGISTRY, SseBuffer};
 
         SysOpOutput::async_op(async move {
-            let method = reqwest::Method::from_bytes(request.method.as_bytes()).map_err(|e| {
-                VmBamlError::InvalidArgument {
-                    message: format!("Invalid HTTP method '{}': {e}", request.method),
-                }
-            })?;
-
-            crate::ensure_rustls_crypto_provider()?;
-            let client = reqwest::Client::new();
-            let mut builder = client.request(method, &request.url);
-
-            for (key, value) in &request.headers {
-                builder = builder.header(key.as_str(), value.as_str());
-            }
-
-            if !request.body.is_empty() {
-                builder = builder.body(request.body.clone());
-            }
-
-            let response = apply_http_timeout(builder, &timeout_nanos)
-                .send()
+            let request = http_request(request, &timeout_nanos)?;
+            let response = baml_http::provider()
+                .send(request)
                 .await
                 .map_err(|e| http_transport_error("SSE connection failed", &e))?;
 
-            if !response.status().is_success() {
-                let status = response.status().as_u16();
-                let body = match response.text().await {
-                    Ok(body) => body,
+            if !(200..300).contains(&response.status) {
+                let status = response.status;
+                let body = match response.bytes().await {
+                    Ok(body) => String::from_utf8_lossy(&body).into_owned(),
                     Err(error) if error.is_timeout() => {
                         return Err(VmRustFnError::from(http_transport_error(
                             "SSE error response body failed",
@@ -3016,13 +2971,10 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 }));
             }
 
-            let url = response.url().to_string();
-            let status_code = i64::from(response.status().as_u16());
-            let headers: indexmap::IndexMap<String, String> = response
-                .headers()
-                .iter()
-                .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
-                .collect();
+            let url = response.url.clone();
+            let status_code = i64::from(response.status);
+            let headers: indexmap::IndexMap<String, String> =
+                response.headers.iter().cloned().collect();
             // Legacy TTFT semantics start after the SSE response opens and end
             // on the first parsed event; connection/headers are governed only
             // by the total request timeout.
@@ -3075,7 +3027,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 };
 
                 let mut parser = SseParser::new();
-                let mut byte_stream = response.bytes_stream();
+                let mut byte_stream = response.body;
                 let mut first_event_deadline = first_event_deadline;
 
                 loop {
@@ -3305,15 +3257,15 @@ impl io::IoClassWsWebSocket for NativeSysOps {
         data: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
+        use baml_http::Message;
         use futures::SinkExt;
-        use tokio_tungstenite::tungstenite::Message;
 
         // `data: string | uint8array` is enforced by the compiler, so any other
         // shape here is a VM/codegen fault rather than a caller error. `Type`
         // has no union form, so `expected` names the string arm.
         let frame = match data {
-            BexExternalValue::String(text) => Message::text(text.to_string()),
-            BexExternalValue::Uint8Array(bytes) => Message::binary(bytes),
+            BexExternalValue::String(text) => Message::Text(text.to_string()),
+            BexExternalValue::Uint8Array(bytes) => Message::Binary(bytes),
             other => {
                 return SysOpOutput::err(VmInternalError::TypeError {
                     expected: Type::Object(ObjectType::String),
@@ -3358,8 +3310,8 @@ impl io::IoClassWsWebSocket for NativeSysOps {
         websocket: owned::ws::WebSocket,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
+        use baml_http::Message;
         use futures::StreamExt;
-        use tokio_tungstenite::tungstenite::Message;
 
         use crate::registry::WsClose;
 
@@ -3369,64 +3321,55 @@ impl io::IoClassWsWebSocket for NativeSysOps {
                 return Ok(ws_close_event(close));
             }
             let mut source = ws.source.lock().await;
-            loop {
-                // Re-checked under the lock: a concurrent `next` may have ended
-                // the connection, which publishes the close event and drops the
-                // transport in one step.
-                let Some(stream) = source.as_mut() else {
-                    break Ok(ws_close_event(ws.close.get().unwrap_or_else(|| {
-                        unreachable!("WebSocket transport released without a close event")
-                    })));
-                };
-                let frame = match stream.next().await {
-                    Some(Ok(frame)) => frame,
-                    // End of stream with no closing handshake.
-                    None => {
-                        let close = WsClose {
-                            code: 1006,
+            // Re-checked under the lock: a concurrent `next` may have ended
+            // the connection, which publishes the close event and drops the
+            // transport in one step.
+            let Some(stream) = source.as_mut() else {
+                return Ok(ws_close_event(ws.close.get().unwrap_or_else(|| {
+                    unreachable!("WebSocket transport released without a close event")
+                })));
+            };
+            let frame = match stream.next().await {
+                Some(Ok(frame)) => frame,
+                // End of stream with no closing handshake.
+                None => {
+                    let close = WsClose {
+                        code: 1006,
+                        reason: String::new(),
+                    };
+                    return Ok(ws_close_event(ws.finish(&mut source, close).await));
+                }
+                // A read error ends the connection (the transport fuses
+                // the stream), so the connection is over as of this
+                // frame. Publish that now, so `send` and
+                // `hangup` answer from `close`, then report what ended it.
+                Some(Err(error)) => {
+                    let close = WsClose {
+                        code: 1006,
+                        reason: String::new(),
+                    };
+                    ws.finish(&mut source, close).await;
+                    return Err(VmBamlError::Io {
+                        message: format!("WebSocket receive failed: {error}"),
+                    }
+                    .into());
+                }
+            };
+            match frame {
+                Message::Text(text) => Ok(BexExternalValue::String(text.as_str().into())),
+                Message::Binary(bytes) => Ok(BexExternalValue::Uint8Array(bytes)),
+                Message::Close(frame) => {
+                    let close = frame.map_or(
+                        WsClose {
+                            code: 1005,
                             reason: String::new(),
-                        };
-                        break Ok(ws_close_event(ws.finish(&mut source, close).await));
-                    }
-                    // tokio-tungstenite fuses the stream on any read error —
-                    // every later poll is `None` — so the connection is over
-                    // as of this frame. Publish that now, so `send` and
-                    // `hangup` answer from `close`, then report what ended it.
-                    Some(Err(error)) => {
-                        let close = WsClose {
-                            code: 1006,
-                            reason: String::new(),
-                        };
-                        ws.finish(&mut source, close).await;
-                        return Err(VmBamlError::Io {
-                            message: format!("WebSocket receive failed: {error}"),
-                        }
-                        .into());
-                    }
-                };
-                match frame {
-                    Message::Text(text) => {
-                        break Ok(BexExternalValue::String(text.as_str().into()));
-                    }
-                    Message::Binary(bytes) => {
-                        break Ok(BexExternalValue::Uint8Array(bytes.to_vec()));
-                    }
-                    Message::Close(frame) => {
-                        let close = frame.map_or(
-                            WsClose {
-                                code: 1005,
-                                reason: String::new(),
-                            },
-                            |frame| WsClose {
-                                code: u16::from(frame.code),
-                                reason: frame.reason.as_str().to_string(),
-                            },
-                        );
-                        break Ok(ws_close_event(ws.finish(&mut source, close).await));
-                    }
-                    // Tungstenite answers pings itself while reading; neither
-                    // control frame is part of the BAML surface.
-                    Message::Ping(_) | Message::Pong(_) | Message::Frame(_) => {}
+                        },
+                        |frame| WsClose {
+                            code: frame.code,
+                            reason: frame.reason,
+                        },
+                    );
+                    Ok(ws_close_event(ws.finish(&mut source, close).await))
                 }
             }
         })
@@ -3456,30 +3399,23 @@ impl io::IoClassWsWebSocket for NativeSysOps {
         reason: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
+        use baml_http::{CloseFrame, Message};
         use futures::SinkExt;
-        use tokio_tungstenite::tungstenite::{
-            Message,
-            protocol::{CloseFrame, frame::coding::CloseCode},
-        };
 
         // RFC 6455 §7.4: an endpoint may send 1000-1003, 1007-1013, and the
         // registered (3000-3999) and private (4000-4999) ranges. The undefined
         // codes and the four a peer may only ever infer (1004/1005/1006/1015)
-        // are caller errors — `is_allowed` draws exactly that line.
-        let close_code = match u16::try_from(code).map(CloseCode::from) {
-            Ok(close_code) if close_code.is_allowed() => close_code,
-            Ok(_) | Err(_) => {
-                return SysOpOutput::err(VmBamlError::InvalidArgument {
-                    message: format!("{code} is not a valid WebSocket close code"),
-                });
-            }
+        // are caller errors.
+        let Ok(close_code @ (1000..=1003 | 1007..=1013 | 3000..=4999)) = u16::try_from(code) else {
+            return SysOpOutput::err(VmBamlError::InvalidArgument {
+                message: format!("{code} is not a valid WebSocket close code"),
+            });
         };
 
         // RFC 6455 §5.5: a control frame carries at most 125 payload bytes,
-        // and a close frame spends two on the status code. Tungstenite checks
-        // this only when reading — `Frame::close` neither checks nor
-        // truncates — so an oversized reason would reach the wire as a
-        // protocol violation for the peer to fail the connection over.
+        // and a close frame spends two on the status code. An oversized reason
+        // would reach the wire as a protocol violation for the peer to fail the
+        // connection over.
         if reason.len() > 123 {
             return SysOpOutput::err(VmBamlError::InvalidArgument {
                 message: format!(
@@ -3499,7 +3435,7 @@ impl io::IoClassWsWebSocket for NativeSysOps {
                 let _ = sink
                     .send(Message::Close(Some(CloseFrame {
                         code: close_code,
-                        reason: reason.into(),
+                        reason,
                     })))
                     .await;
             }
@@ -3535,34 +3471,12 @@ impl io::IoNamespaceWs for NativeSysOps {
         timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::ws::WebSocket> {
-        use futures::StreamExt;
-        use tokio_tungstenite::tungstenite::{
-            client::IntoClientRequest,
-            http::{HeaderName, HeaderValue},
-        };
-
         let timeout = timeout_from_nanos(&timeout_nanos);
         SysOpOutput::async_op(async move {
-            crate::ensure_rustls_crypto_provider()?;
-
-            let mut request =
-                url.as_str()
-                    .into_client_request()
-                    .map_err(|error| VmBamlError::Io {
-                        message: format!("invalid WebSocket URL '{url}': {error}"),
-                    })?;
-            for (name, value) in &headers {
-                let name =
-                    HeaderName::from_bytes(name.as_bytes()).map_err(|error| VmBamlError::Io {
-                        message: format!("invalid WebSocket header name '{name}': {error}"),
-                    })?;
-                let value = HeaderValue::from_str(value).map_err(|error| VmBamlError::Io {
-                    message: format!("invalid WebSocket header value for '{name}': {error}"),
-                })?;
-                request.headers_mut().insert(name, value);
-            }
-
-            let connect = tokio_tungstenite::connect_async(request);
+            let connect = baml_http::provider().connect_websocket(baml_http::WsConnectRequest {
+                url: url.clone(),
+                headers: headers.into_iter().collect(),
+            });
             let connected = match timeout {
                 Some(duration) => match tokio::time::timeout(duration, connect).await {
                     Ok(result) => result,
@@ -3576,12 +3490,17 @@ impl io::IoNamespaceWs for NativeSysOps {
                 },
                 None => connect.await,
             };
-            let (transport, _) = connected.map_err(|error| VmBamlError::Io {
-                message: format!("WebSocket connect failed: {error}"),
+            let socket = connected.map_err(|error| VmBamlError::Io {
+                // A malformed URL or header is reported as is; a failed
+                // connection says what failed.
+                message: if error.kind == baml_http::ErrorKind::InvalidRequest {
+                    error.message
+                } else {
+                    format!("WebSocket connect failed: {error}")
+                },
             })?;
-            let (sink, source) = transport.split();
             let handle =
-                crate::registry::REGISTRY.register_ws_stream(Box::new(sink), Box::new(source), url);
+                crate::registry::REGISTRY.register_ws_stream(socket.sink, socket.source, url);
             Ok(owned::ws::WebSocket {
                 _handle: Arc::new(handle),
             })

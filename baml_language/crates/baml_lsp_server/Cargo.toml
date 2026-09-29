@@ -7,40 +7,13 @@ description = "Native stdio host for the BAML language server: transport, admiss
 [lints]
 workspace = true
 
-# The playground engine runs in-process, so the host picks the TLS/crypto
-# provider for the runtime's HTTP stack (same shape as baml_cli's features).
-[features]
-default = [ "aws-crypto" ]
-aws-crypto = [
-  "reqwest/rustls",
-  "baml_tls/aws-crypto",
-  "bex_engine/aws-crypto",
-  "bridge_ctypes/aws-crypto",
-  "sys_native/aws-crypto",
-]
-ring-crypto = [
-  "reqwest/rustls-no-provider",
-  "baml_tls/ring-crypto",
-  "bex_engine/ring-crypto",
-  "bridge_ctypes/ring-crypto",
-  "sys_native/ring-crypto",
-]
-external-crypto = [
-  "reqwest/rustls-no-provider",
-  "baml_tls/external-crypto",
-  "bex_engine/external-crypto",
-  "bridge_ctypes/external-crypto",
-  "sys_native/external-crypto",
-]
-native-tls = [ "reqwest/native-tls", "sys_native/native-tls" ]
-
 [dependencies]
 baml_builtins2 = { workspace = true }
 baml_compiler2_visualization = { workspace = true }
 baml_db = { workspace = true }
+baml_http = { workspace = true }
 baml_ide = { workspace = true }
 baml_lsp = { workspace = true }
-baml_tls = { workspace = true }
 baml_version = { workspace = true }
 bex_engine = { workspace = true }
 bex_events = { workspace = true }
@@ -62,12 +35,10 @@ lsp-types = { workspace = true }
 notify = { workspace = true }
 num-bigint = { workspace = true }
 parking_lot = { workspace = true, features = [ "deadlock_detection" ] }
-reqwest = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "rt-multi-thread", "net", "time", "macros" ] }
-tokio-tungstenite = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

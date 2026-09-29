@@ -24,6 +24,7 @@
 #![allow(clippy::print_stdout)]
 
 use anyhow::{Context, Result};
+use baml_http::outbound::{self, Destination};
 use clap::{Args, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -38,11 +39,11 @@ const FEEDBACK_EVENT: &str = "baml_feedback";
 const MAX_SYNC_PER_RUN: usize = 25;
 
 /// PostHog ingestion host, overridable for tests and self-hosted setups.
-fn posthog_host() -> String {
+fn posthog_host() -> Option<String> {
     std::env::var("BAML_POSTHOG_HOST")
         .ok()
         .filter(|v| !v.trim().is_empty())
-        .unwrap_or_else(|| crate::telemetry::posthog_host().to_string())
+        .or_else(|| Destination::Feedback.default_url().map(str::to_string))
 }
 
 /// Wrapper existing only to fix clap's derived `update_from_arg_matches`,
@@ -910,14 +911,15 @@ fn post_event(body: &Value) -> Result<()> {
     if api_key.trim().is_empty() {
         anyhow::bail!("This build has no PostHog key configured.");
     }
-    let resp = auth::http_client()?
-        .post(format!("{}/capture/", posthog_host().trim_end_matches('/')))
-        .json(body)
-        .send()
+    let host = posthog_host().context("Feedback is unavailable in this build.")?;
+    let request = baml_http::Request::post(format!("{}/capture/", host.trim_end_matches('/')))
+        .header("content-type", "application/json")
+        .body(serde_json::to_vec(body)?)
+        .timeout(auth::REQUEST_TIMEOUT);
+    let resp = outbound::send_blocking(Destination::Feedback, request, 64 * 1024)
         .context("Failed to reach PostHog")?;
-    let status = resp.status();
-    if !status.is_success() {
-        anyhow::bail!("PostHog returned {status}");
+    if !resp.is_success() {
+        anyhow::bail!("PostHog returned {}", resp.status);
     }
     Ok(())
 }

@@ -52,7 +52,7 @@ btel_file = { workspace = true, features = [ "test-support" ] }
 baml_db = { workspace = true }
 bex_resource_types = { workspace = true }
 bridge_ctypes = { workspace = true }
-sys_native = { workspace = true, features = [ "bundle-http", "aws-crypto" ] }
+sys_native = { workspace = true, features = [ "bundle-http" ] }
 anyhow = { workspace = true }
 borsh = { workspace = true }
 clap = { workspace = true }
@@ -67,18 +67,7 @@ wiremock = { workspace = true }
 workspace = true
 
 [features]
-default = [ "aws-crypto" ]
 gc_profiling = [ "bex_heap/gc_profiling" ]
-# `sys_native` is a dev-dependency only, so feature propagation here would
-# be a no-op for downstream consumers; its crypto feature is set directly
-# on the `[dev-dependencies]` entry above.
-aws-crypto = [ "sys_ops/aws-crypto", "btel_bcs/aws-crypto", "bex_vm/aws-crypto" ]
-ring-crypto = [ "sys_ops/ring-crypto", "btel_bcs/ring-crypto", "bex_vm/ring-crypto" ]
-external-crypto = [
-  "sys_ops/external-crypto",
-  "btel_bcs/external-crypto",
-  "bex_vm/external-crypto",
-]
 heap_debug = [
   "bex_vm/heap_debug",
   "bex_heap/heap_debug",

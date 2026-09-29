@@ -43,15 +43,8 @@ lib_for_target() {
 }
 
 build_target() {
-    # iOS targets use ring + rustls-platform-verifier: the default
-    # aws-lc-sys backend emits C objects that don't link for iOS
-    # (min-version mismatch + ___chkstk_darwin). Validated on-device
-    # by the iOS feasibility spike; macOS keeps the default backend.
-    local features=""
-    case "$1" in
-    *-apple-ios*) features="--no-default-features --features ring-crypto" ;;
-    esac
-    (cd "$WORKSPACE_ROOT" && cargo build -p bridge_swift --target "$1" $PROFILE_FLAG $features)
+    # The default baml_crypto_provider selects ring for iOS and AWS-LC elsewhere.
+    (cd "$WORKSPACE_ROOT" && cargo build -p bridge_swift --target "$1" $PROFILE_FLAG)
 }
 
 STAGE="$(mktemp -d)"

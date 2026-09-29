@@ -1,9 +1,6 @@
 use std::collections::HashSet;
 
-use reqwest::{
-    Url,
-    header::{HeaderName, HeaderValue},
-};
+use url::Url;
 
 use crate::{
     delivery::DeliveryError,
@@ -111,9 +108,11 @@ pub(crate) fn validate_response(
         checked_url(&upload.presigned_put_url, allow_http)?;
         let mut headers = HashSet::new();
         for (name, value) in &upload.required_headers {
-            let name =
-                HeaderName::from_bytes(name.as_bytes()).map_err(|_| DeliveryError::InvalidPlan)?;
-            HeaderValue::from_str(value).map_err(|_| DeliveryError::InvalidPlan)?;
+            if !crate::http::valid_header_name(name) || !crate::http::valid_header_value(value) {
+                return Err(DeliveryError::InvalidPlan);
+            }
+            // Header names compare case-insensitively.
+            let name = name.to_ascii_lowercase();
             if !headers.insert(name.clone())
                 || matches!(
                     name.as_str(),

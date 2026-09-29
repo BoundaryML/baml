@@ -21,7 +21,7 @@ num-bigint = { workspace = true }
 web-time = { workspace = true }
 
 [dev-dependencies]
-baml_tls = { workspace = true, features = [ "aws-crypto" ] }
+baml_crypto = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "macros" ] }
 

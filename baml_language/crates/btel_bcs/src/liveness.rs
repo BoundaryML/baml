@@ -163,13 +163,12 @@ impl Heartbeat {
         })
     }
 
-    /// The supplied client must disable redirects and have no default auth
-    /// headers. The endpoint must be the authorized BCS heartbeat URL; only
-    /// this POST receives the BCS bearer token. No URL or token enters errors.
+    /// The endpoint must be the authorized BCS heartbeat URL; only this POST
+    /// receives the BCS bearer token, and it never follows a redirect. No URL
+    /// or token enters errors.
     pub async fn run(
         &self,
-        client: reqwest::Client,
-        endpoint: reqwest::Url,
+        endpoint: url::Url,
         bearer_token: Option<String>,
         request_timeout: Duration,
     ) {
@@ -208,7 +207,7 @@ impl Heartbeat {
                 _ = stopped.changed() => return,
                 result = tokio::time::timeout(
                     request_timeout,
-                    post(&client, &endpoint, bearer_token.as_deref(), liveness),
+                    post(&endpoint, bearer_token.as_deref(), liveness),
                 ) => result.unwrap_or(Err(HeartbeatError::Timeout)),
             };
             if let Err(error) = result {
@@ -225,38 +224,34 @@ impl Heartbeat {
 }
 
 async fn post(
-    client: &reqwest::Client,
-    endpoint: &reqwest::Url,
+    endpoint: &url::Url,
     bearer_token: Option<&str>,
     body: Liveness,
 ) -> Result<(), HeartbeatError> {
     const MAX_RESPONSE_BYTES: usize = 4096;
-    let mut request = client
-        .post(endpoint.clone())
-        .header(reqwest::header::CONTENT_TYPE, "application/json")
+    let mut request = baml_http::Request::post(endpoint.as_str())
+        .header("content-type", "application/json")
         .body(serde_json::to_vec(&body).map_err(|_| HeartbeatError::Http)?);
     if let Some(token) = bearer_token {
-        request = request.bearer_auth(token);
+        request = request.header("authorization", format!("Bearer {token}"));
     }
-    let mut response = request.send().await.map_err(|_| HeartbeatError::Http)?;
-    if !response.status().is_success() {
-        return Err(HeartbeatError::Status(response.status().as_u16()));
+    let response = crate::http::send(request)
+        .await
+        .map_err(|_| HeartbeatError::Http)?;
+    if !crate::http::is_success(response.status) {
+        return Err(HeartbeatError::Status(response.status));
     }
-    if response
-        .content_length()
-        .is_some_and(|n| n > MAX_RESPONSE_BYTES as u64)
-    {
+    if crate::http::content_length(&response).is_some_and(|n| n > MAX_RESPONSE_BYTES as u64) {
         return Err(HeartbeatError::ResponseTooLarge);
     }
-    let mut received = 0;
-    while let Some(chunk) = response.chunk().await.map_err(|_| HeartbeatError::Http)? {
-        if chunk.len() > MAX_RESPONSE_BYTES - received {
-            return Err(HeartbeatError::ResponseTooLarge);
-        }
-        received += chunk.len();
-    }
     // The minimal contract has no response payload or upload acknowledgement.
-    Ok(())
+    crate::http::read_limited(response.body, MAX_RESPONSE_BYTES)
+        .await
+        .map(|_| ())
+        .map_err(|e| match e {
+            baml_http::CollectError::TooLarge => HeartbeatError::ResponseTooLarge,
+            baml_http::CollectError::Body(_) => HeartbeatError::Http,
+        })
 }
 
 #[cfg(test)]
@@ -374,13 +369,8 @@ mod tests {
 
     #[tokio::test]
     async fn response_is_bounded_and_errors_are_sanitized() {
-        baml_tls::ensure_crypto_provider().unwrap();
         let server = MockServer::start().await;
-        let client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .unwrap();
-        let endpoint = server.uri().parse().unwrap();
+        let endpoint: url::Url = server.uri().parse().unwrap();
         for (response, expected) in [
             (
                 ResponseTemplate::new(503).set_body_string("secret"),
@@ -398,7 +388,6 @@ mod tests {
                 .mount(&server)
                 .await;
             let result = post(
-                &client,
                 &endpoint,
                 Some("private"),
                 Heartbeat::new().liveness().unwrap(),
@@ -412,12 +401,10 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn failures_are_advisory_rate_limited_and_worker_is_cancellable() {
-        baml_tls::ensure_crypto_provider().unwrap();
         let heartbeat = Heartbeat::new();
         heartbeat.configure(Some(policy())).unwrap();
         let start = Instant::now();
         let worker = heartbeat.run(
-            reqwest::Client::new(),
             "http://127.0.0.1:1/heartbeat".parse().unwrap(),
             None,
             Duration::from_millis(100),
@@ -441,14 +428,12 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn stopped_worker_does_not_wait_for_interval() {
-        baml_tls::ensure_crypto_provider().unwrap();
         let heartbeat = Heartbeat::new();
         heartbeat.configure(Some(policy())).unwrap();
         let start = Instant::now();
         heartbeat.stop();
         heartbeat
             .run(
-                reqwest::Client::new(),
                 "http://127.0.0.1:1/heartbeat".parse().unwrap(),
                 None,
                 Duration::from_secs(30),

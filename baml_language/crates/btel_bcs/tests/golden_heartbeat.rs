@@ -22,17 +22,10 @@ const OBSERVATIONS: &str = include_str!("fixtures/cloud-v1/heartbeat/reordered-o
 
 #[tokio::test]
 async fn actual_sender_matches_fixed_heartbeat_wire_examples() {
-    baml_tls::ensure_crypto_provider().unwrap();
     let fixture: Value = serde_json::from_str(SENDER).unwrap();
     assert_eq!(fixture["fixture_version"], 1);
-    let url: reqwest::Url = fixture["url"].as_str().unwrap().parse().unwrap();
+    let url: url::Url = fixture["url"].as_str().unwrap().parse().unwrap();
     let policy: HeartbeatPolicy = serde_json::from_value(fixture["policy"].clone()).unwrap();
-    let client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .retry(reqwest::retry::never())
-        .no_proxy()
-        .build()
-        .unwrap();
     let mut process_session = None;
     let mut previous_sequence = 0;
     for request in fixture["requests"].as_array().unwrap() {
@@ -58,17 +51,16 @@ async fn actual_sender_matches_fixed_heartbeat_wire_examples() {
         heartbeat.configure(Some(policy)).unwrap();
         heartbeat.set_state(expected.state);
         let worker = heartbeat.clone();
-        let endpoint = format!("{}{}", server.uri(), url.path()).parse().unwrap();
+        let endpoint: url::Url = format!("{}{}", server.uri(), url.path()).parse().unwrap();
         let token = fixture["headers"]["authorization"]
             .as_str()
             .unwrap()
             .strip_prefix("Bearer ")
             .unwrap()
             .to_owned();
-        let client = client.clone();
         let task = tokio::spawn(async move {
             worker
-                .run(client, endpoint, Some(token), Duration::from_secs(2))
+                .run(endpoint, Some(token), Duration::from_secs(2))
                 .await;
         });
         let observed = tokio::time::timeout(Duration::from_secs(5), received.notified()).await;

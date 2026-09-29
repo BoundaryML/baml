@@ -3,7 +3,7 @@
 //! Replaces `google-cloud-auth` for BAML's use case: minting Google Cloud
 //! access tokens for Vertex AI. All IO (env, file, HTTP) is routed through the
 //! [`TokenIo`] trait so the host can sandbox it. JWT signing and hashing run on
-//! the process's rustls crypto provider (`baml_tls`), so a build that brings
+//! the selected BAML crypto provider (`baml_crypto`), so a build that brings
 //! its own provider signs with it.
 //!
 //! Mirrors `google-auth` (Python/Node) Application Default Credentials as
@@ -148,9 +148,9 @@ fn now_unix() -> u64 {
 
 /// Cache keys are SHA-256 over the credential material + scope so the map
 /// never holds raw credentials and distinct identities can never collide.
-/// Hashed on the process's rustls crypto provider (see `baml_tls`).
+/// Hashed on the selected BAML crypto provider (see `baml_crypto`).
 fn cache_key(credential_material: &str, scope: &str) -> Result<[u8; 32], AuthError> {
-    let mut hasher = baml_tls::Sha256::new().map_err(|e| AuthError::Signing(e.to_string()))?;
+    let mut hasher = baml_crypto::Sha256::new().map_err(|e| AuthError::Signing(e.to_string()))?;
     hasher.update(credential_material.as_bytes());
     hasher.update(&[0]);
     hasher.update(scope.as_bytes());
@@ -413,7 +413,7 @@ async fn mint_service_account(
 }
 
 /// Sign a service-account JWT using RSASSA-PKCS1-v1_5 with SHA-256, on the
-/// process's rustls crypto provider (see `baml_tls`).
+/// selected BAML crypto provider (see `baml_crypto`).
 fn sign_service_account_jwt(sa: &ServiceAccount, scope: &str) -> Result<String, AuthError> {
     #[allow(clippy::cast_possible_wrap)]
     let now = now_unix() as i64;
@@ -432,7 +432,7 @@ fn sign_service_account_jwt(sa: &ServiceAccount, scope: &str) -> Result<String, 
     let claims_b64 = URL_SAFE_NO_PAD.encode(claims.to_string());
     let signing_input = format!("{header_b64}.{claims_b64}");
 
-    let signature = baml_tls::sign_rs256(&sa.private_key, signing_input.as_bytes())
+    let signature = baml_crypto::sign_rs256(&sa.private_key, signing_input.as_bytes())
         .map_err(|e| AuthError::Signing(e.to_string()))?;
     let sig_b64 = URL_SAFE_NO_PAD.encode(signature);
 

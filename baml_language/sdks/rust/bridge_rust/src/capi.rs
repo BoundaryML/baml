@@ -387,6 +387,7 @@ mod tests {
             cache_dir_override: None,
             user_cache_dir: None,
             disable_download: true,
+            #[cfg(feature = "download")]
             download_base: None,
             system_paths: Vec::new(),
             version: crate::get_version().to_string(),

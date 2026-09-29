@@ -82,96 +82,128 @@ regular_deps_only = true
 reason = "Use thiserror for proper error types in library crates."
 
 # ---------------------------------------------------------------------------
-# Crypto: everything that protects something runs on the one rustls
-# CryptoProvider `baml_tls` picks, so an `external-crypto` build (e.g. FIPS)
-# runs it all in the host's module. These rules keep new code from reaching
-# around it. Which provider a build links is feature-level and checked by
-# `scripts/check-crypto-backends.sh`, not here.
+# Network and crypto
+#
+# External networking and crypto crates. The transport lives in
+# `baml_http_provider`; crypto implementations live in `baml_crypto_provider`.
+# These rules keep runtime consumers on those replaceable interfaces.
+# Each rule lists the allowed consumers; additions require review.
 # ---------------------------------------------------------------------------
 
+# --- The transport (only in baml_http_provider) -----------------------------
+
 [[dependency_rules]]
-pattern = "rustls"
-# `sys_native` builds the HTTPS server's `ServerConfig`; `baml_bridge` is
-# published to crates.io and can't depend on the unpublished `baml_tls`.
-allowed_crates = ["baml_tls", "baml_crypto_provider", "sys_native", "baml_bridge"]
+pattern = "reqwest"
+# `bridge_wasm` uses reqwest's browser `fetch` backend, which has no TLS stack.
+allowed_crates = ["baml_http_provider", "bridge_wasm"]
 regular_deps_only = true
-reason = "Get crypto from baml_tls (ensure_crypto_provider, sha256, hmac_sha256, sign_rs256, fill_random), not rustls directly."
+reason = "HTTP requests go through baml_http."
+
+[[dependency_rules]]
+pattern = "hyper"
+allowed_crates = ["baml_http_provider"]
+regular_deps_only = true
+reason = "HTTP servers run on the transport: baml_http::provider().bind()."
+
+[[dependency_rules]]
+pattern = "hyper-util"
+allowed_crates = ["baml_http_provider"]
+regular_deps_only = true
+reason = "HTTP servers run on the transport: baml_http::provider().bind()."
+
+[[dependency_rules]]
+pattern = "http-body-util"
+allowed_crates = ["baml_http_provider"]
+regular_deps_only = true
+reason = "HTTP servers run on the transport: baml_http::provider().bind()."
 
 [[dependency_rules]]
 pattern = "tokio-rustls"
-allowed_crates = ["sys_native"]
+allowed_crates = ["baml_http_provider"]
 regular_deps_only = true
-reason = "TLS server/client configs are built in sys_native after baml_tls::ensure_crypto_provider."
-
-# Every TLS client panics without a provider in an `external-crypto` build,
-# so each user must call `baml_tls::ensure_crypto_provider()` before building
-# one. Adding a crate here means adding that call.
-[[dependency_rules]]
-pattern = "reqwest"
-allowed_crates = ["baml", "baml_cli", "baml_lsp_server", "baml_release", "bex_cache", "bridge_wasm", "btel_bcs", "sys_native"]
-regular_deps_only = true
-reason = "HTTP clients need baml_tls::ensure_crypto_provider() first; route new HTTP through sys_native or add the call and list the crate here."
+reason = "TLS connections run on the transport (baml_http)."
 
 [[dependency_rules]]
 pattern = "tokio-tungstenite"
-allowed_crates = ["baml_lsp_server", "sys_native"]
+allowed_crates = ["baml_http_provider"]
 regular_deps_only = true
-reason = "WebSocket clients need baml_tls::ensure_crypto_provider() first."
+reason = "WebSocket connections run on the transport: baml_http::provider().connect_websocket()."
 
 [[dependency_rules]]
 pattern = "ureq"
+# The Rust SDK loader downloads the engine library before BAML is loaded.
 allowed_crates = ["baml_bridge"]
 regular_deps_only = true
-reason = "HTTP clients need a crypto provider first; use reqwest after baml_tls::ensure_crypto_provider()."
+reason = "HTTP requests go through baml_http."
 
-# Crypto implementations that would bypass the provider.
+# --- TLS and crypto implementations ------------------------------------------
+
+[[dependency_rules]]
+pattern = "rustls"
+# The published Rust SDK has its own optional download transport.
+allowed_crates = ["baml_bridge", "baml_http_provider"]
+regular_deps_only = true
+reason = "Crypto goes through baml_crypto (sha256, hmac_sha256, sign_rs256, fill_random); TLS through baml_http."
+
+[[dependency_rules]]
+pattern = "rustls-pemfile"
+allowed_crates = []
+reason = "Parse PEM with rustls::pki_types::pem::PemObject."
+
 [[dependency_rules]]
 pattern = "ring"
-allowed_crates = []
-reason = "Use baml_tls: ring is selected only through the ring-crypto feature."
+allowed_crates = ["baml_crypto_provider"]
+reason = "Native runtime backends are selected by baml_crypto_provider."
 
 [[dependency_rules]]
-pattern = "aws-lc-*"
-allowed_crates = []
-reason = "Use baml_tls: AWS-LC is selected only through the aws-crypto feature."
+pattern = "aws-lc-rs"
+allowed_crates = ["baml_crypto_provider"]
+reason = "Native runtime backends are selected by baml_crypto_provider."
 
 [[dependency_rules]]
-pattern = "hmac"
+pattern = "aws-lc-sys"
 allowed_crates = []
-reason = "Use baml_tls::hmac_sha256 so HMAC runs on the crypto provider."
+reason = "Native runtime backends are selected by baml_crypto_provider."
 
 [[dependency_rules]]
-pattern = "rsa"
+pattern = "openssl"
 allowed_crates = []
-reason = "Use baml_tls::sign_rs256 so signing runs on the crypto provider."
+reason = "Bring OpenSSL in through a replacement baml_crypto_provider or baml_http_provider crate."
 
 [[dependency_rules]]
-pattern = "openssl*"
+pattern = "openssl-sys"
 allowed_crates = []
-reason = "Crypto comes from the rustls provider (baml_tls); bring OpenSSL in through a baml_crypto_provider crate."
+reason = "Bring OpenSSL in through a replacement baml_crypto_provider or baml_http_provider crate."
 
 [[dependency_rules]]
 pattern = "native-tls"
 allowed_crates = []
-reason = "TLS goes through rustls and the baml_tls provider."
+reason = "TLS goes through baml_http; baml_http_provider's native-tls feature selects the platform stack."
+
+[[dependency_rules]]
+pattern = "hmac"
+allowed_crates = []
+reason = "Use baml_crypto::hmac_sha256 so HMAC runs on the crypto provider."
+
+[[dependency_rules]]
+pattern = "rsa"
+allowed_crates = []
+reason = "Use baml_crypto::sign_rs256 so signing runs on the crypto provider."
 
 [[dependency_rules]]
 pattern = "getrandom"
-# `bex_vm` seeds non-cryptographic PRNGs; `sys_native` falls back to OS
-# entropy only in builds with no provider; `bridge_wasm` has no provider.
-allowed_crates = ["bex_vm", "sys_native", "bridge_wasm"]
+# Browser entropy is supplied by the browser runtime.
+allowed_crates = ["bridge_wasm"]
 regular_deps_only = true
-reason = "Secure randomness comes from baml_tls::fill_random (the provider's secure random source)."
+reason = "Secure randomness comes from baml_crypto::fill_random."
 
-# Fingerprint hashing: SHA-256 that protects nothing (cache keys, program
-# identity, file signatures) stays on `sha2` because these crates also build
-# for wasm. A security use (checksums, signing, anything an attacker could
-# exploit) must use baml_tls::sha256 instead.
 [[dependency_rules]]
 pattern = "sha2"
+# Fingerprints that protect nothing (cache keys, program identity, file
+# signatures); these crates also build for wasm, where there is no provider.
 allowed_crates = ["baml_artifact", "baml_cli", "baml_codegen_types", "bex_cache", "bex_events", "bex_project", "bex_vm", "bex_vm_types", "sdkgen_csharp"]
 regular_deps_only = true
-reason = "Security-relevant hashing must use baml_tls::sha256 (the crypto provider); sha2 is only for non-security fingerprints."
+reason = "Security-relevant hashing uses baml_crypto::sha256; sha2 is only for non-security fingerprints."
 
 [[dependency_rules]]
 pattern = "sha1"
@@ -180,27 +212,28 @@ allowed_crates = ["forked_aws_config"]
 regular_deps_only = true
 reason = "SHA-1 is only for matching external file-naming conventions."
 
-# `baml.crypto`'s ciphers; an `external-crypto` build refuses to create them.
-[[dependency_rules]]
-pattern.select = "*poly1305"
-allowed_crates = ["bex_vm"]
-regular_deps_only = true
-reason = "Only baml.crypto's ciphers (bex_vm) may use these; they're unavailable in external-crypto builds."
-
 [[dependency_rules]]
 pattern = "aes-gcm-siv"
-allowed_crates = ["bex_vm"]
+# AEAD implementations are replaced with the provider crate.
+allowed_crates = ["baml_crypto_provider"]
 regular_deps_only = true
-reason = "Only baml.crypto's ciphers (bex_vm) may use these; they're unavailable in external-crypto builds."
+reason = "AEAD implementations belong in baml_crypto_provider, not the VM."
+
+[[dependency_rules]]
+pattern = "chacha20poly1305"
+# AEAD implementations are replaced with the provider crate.
+allowed_crates = ["baml_crypto_provider"]
+regular_deps_only = true
+reason = "AEAD implementations belong in baml_crypto_provider, not the VM."
 
 # baml namespace configuration
 [[namespaces]]
 name = "baml"
 # `fmt` is the formatter, `baml_fmt`, and its browser build, `baml_fmt_wasm`.
-approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "type", "query", "fmt"]
+approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "type", "query", "fmt", "http", "crypto"]
 # The type provider crate: `hir_ty` is one name (rust-analyzer's crate of
-# the same shape), not a prefix + word. `crypto_provider` is the crate an
-# `external-crypto` build swaps out to supply its TLS crypto.
+# the same shape), not a prefix + word. The crypto provider and interface
+# crates form the replaceable TLS and AEAD integration.
 approved_suffixes = ["artifact", "compiler2_hir_ty", "crypto_provider"]
 test_crate_exceptions = ["baml_tests"]
 embed_crates = ["bex_project"]

@@ -13,6 +13,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use baml_http::outbound::{self, Destination};
 pub use manifest::{Artifact, Channel, ToolchainManifest, WrapperManifest};
 
 /// Resolve the BAML home directory (`~/.baml`), the root under which the
@@ -38,7 +39,11 @@ fn baml_home_from(baml_home: Option<OsString>, home_dir: Option<PathBuf>) -> Pat
 }
 
 pub const MANIFEST_SCHEMA: u32 = 1;
-pub const DEFAULT_MANIFEST_BASE_URL: &str = "https://pkg.boundaryml.com/manifest/v1";
+/// The release manifest's built-in base URL, from the outbound registry
+/// (`baml_http`); `None` in a build that may not contact it.
+pub fn default_manifest_base_url() -> Option<&'static str> {
+    Destination::ReleaseManifest.default_url()
+}
 pub const DEFAULT_RELEASE_REPO: &str = "BoundaryML/baml";
 
 pub const SUPPORTED_RELEASE_TARGETS: &[&str] = &[
@@ -76,14 +81,14 @@ impl Product {
 #[derive(Debug, thiserror::Error)]
 pub enum FetchError {
     #[error("network error fetching {url}: {source}")]
-    Network { url: String, source: reqwest::Error },
-    #[error(transparent)]
-    Crypto(#[from] baml_tls::CryptoError),
-    #[error("HTTP {status} fetching {url}")]
-    HttpStatus {
+    Network {
         url: String,
-        status: reqwest::StatusCode,
+        source: baml_http::Error,
     },
+    #[error(transparent)]
+    Crypto(#[from] baml_crypto::CryptoError),
+    #[error("HTTP {status} fetching {url}")]
+    HttpStatus { url: String, status: u16 },
     #[error("manifest 404 for version {version} (not released yet?)")]
     ManifestNotFound { version: String },
     #[error("manifest schema {got} not supported (max {max}); run `baml self-update`")]
@@ -270,7 +275,8 @@ pub fn manifest_base_url() -> String {
     std::env::var("BAML_MANIFEST_BASE_URL")
         .ok()
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| DEFAULT_MANIFEST_BASE_URL.to_string())
+        .or_else(|| default_manifest_base_url().map(str::to_string))
+        .unwrap_or_default()
         .trim_end_matches('/')
         .to_string()
 }
@@ -330,8 +336,13 @@ pub fn release_archive_url_for_repo(
     target: &str,
     repo: &str,
 ) -> String {
+    // Empty in a build that may not download releases; fetching it then
+    // fails on the destination check before any request is made.
+    let host = Destination::ReleaseDownload
+        .default_url()
+        .unwrap_or_default();
     format!(
-        "https://github.com/{repo}/releases/download/{}-{version}/{}",
+        "{host}/{repo}/releases/download/{}-{version}/{}",
         product.tag_prefix(),
         release_archive_filename(product, version, target)
     )
@@ -374,12 +385,12 @@ pub fn verify_sha256(
     compare_sha256(archive_url, &expected, &got)
 }
 
-/// Lowercase hex SHA-256, hashed on the process's rustls crypto provider (see
-/// `baml_tls`) so a build that brings its own provider verifies downloads with
+/// Lowercase hex SHA-256, hashed on the selected BAML crypto provider (see
+/// `baml_crypto`) so a build that brings its own provider verifies downloads with
 /// it.
 fn sha256_hex(bytes: &[u8]) -> Result<String, FetchError> {
     use std::fmt::Write as _;
-    Ok(baml_tls::sha256(bytes)?
+    Ok(baml_crypto::sha256(bytes)?
         .iter()
         .fold(String::new(), |mut out, b| {
             let _ = write!(out, "{b:02x}");
@@ -414,74 +425,63 @@ pub fn parse_release_checksum(checksum_text: &str, archive_name: &str) -> Result
     anyhow::bail!("Checksum file did not contain an entry for {archive_name}")
 }
 
+/// The largest release download read into memory.
+const MAX_DOWNLOAD_BYTES: usize = 1024 * 1024 * 1024;
+
 fn download_bytes(url: &str) -> Result<Vec<u8>, FetchError> {
-    baml_tls::ensure_crypto_provider().map_err(baml_tls::CryptoError::from)?;
-    let client = reqwest::blocking::Client::builder()
-        .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_mins(10))
-        .user_agent("baml-release/1")
-        .build()
-        .map_err(|source| FetchError::Network {
-            url: url.to_string(),
-            source,
-        })?;
+    let request = || {
+        baml_http::Request::get(url)
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_mins(10))
+            .header("user-agent", "baml-release/1")
+    };
 
     let mut last_error = None;
     for attempt in 1..=3 {
-        match client.get(url).send() {
-            Ok(response) if response.status() == reqwest::StatusCode::NOT_FOUND => {
+        match outbound::send_blocking(Destination::ReleaseDownload, request(), MAX_DOWNLOAD_BYTES) {
+            Ok(response) if response.status == 404 => {
                 return Err(FetchError::ManifestNotFound {
                     version: url.to_string(),
                 });
             }
-            Ok(response) if response.status().is_success() => {
-                return response
-                    .bytes()
-                    .map(|bytes| bytes.to_vec())
-                    .map_err(|source| FetchError::Network {
-                        url: url.to_string(),
-                        source,
-                    });
-            }
-            Ok(response)
-                if response.status().is_server_error() || response.status().is_redirection() =>
-            {
-                if response.status().is_redirection() {
-                    return Err(FetchError::HttpStatus {
-                        url: url.to_string(),
-                        status: response.status(),
-                    });
-                }
-                last_error = response.error_for_status().err();
+            Ok(response) if response.is_success() => return Ok(response.body.to_vec()),
+            // Server errors are worth retrying; a redirect left unfollowed or
+            // a client error is not.
+            Ok(response) if response.status >= 500 => {
+                last_error = Some(FetchError::HttpStatus {
+                    url: url.to_string(),
+                    status: response.status,
+                });
             }
             Ok(response) => {
-                return response
-                    .error_for_status()
-                    .map(|_| Vec::new())
-                    .map_err(|source| FetchError::Network {
-                        url: url.to_string(),
-                        source,
-                    });
+                return Err(FetchError::HttpStatus {
+                    url: url.to_string(),
+                    status: response.status,
+                });
+            }
+            // A build that may not download releases fails the same way
+            // every time.
+            Err(source) if source.kind == baml_http::ErrorKind::Unsupported => {
+                return Err(FetchError::Network {
+                    url: url.to_string(),
+                    source,
+                });
             }
             Err(source) => {
-                last_error = Some(source);
+                last_error = Some(FetchError::Network {
+                    url: url.to_string(),
+                    source,
+                });
             }
         }
         if attempt < 3 {
             thread::sleep(Duration::from_secs(2));
         }
     }
-    if let Some(source) = last_error {
-        Err(FetchError::Network {
-            url: url.to_string(),
-            source,
-        })
-    } else {
-        Err(FetchError::HttpStatus {
-            url: url.to_string(),
-            status: reqwest::StatusCode::INTERNAL_SERVER_ERROR,
-        })
-    }
+    Err(last_error.unwrap_or_else(|| FetchError::HttpStatus {
+        url: url.to_string(),
+        status: 500,
+    }))
 }
 
 pub fn extract_binary_from_archive(

@@ -584,10 +584,9 @@ name = "baml"
 version = "0.2.5"
 dependencies = [
  "anyhow",
+ "baml_http",
  "baml_release",
- "baml_tls",
  "console",
- "reqwest",
  "serde",
  "serde_json",
  "tempfile",
@@ -669,15 +668,16 @@ dependencies = [
  "baml_artifact",
  "baml_builtins2",
  "baml_codegen_types",
+ "baml_crypto",
  "baml_db",
  "baml_exec",
  "baml_fmt",
+ "baml_http",
  "baml_ide",
  "baml_lsp_server",
  "baml_query",
  "baml_release",
  "baml_tests",
- "baml_tls",
  "baml_type",
  "baml_version",
  "base64",
@@ -699,7 +699,6 @@ dependencies = [
  "mimalloc",
  "mime_guess",
  "rayon",
- "reqwest",
  "sdkgen_cpp",
  "sdkgen_csharp",
  "sdkgen_go",
@@ -890,11 +889,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_crypto"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_crypto_provider",
+ "baml_crypto_types",
+]
+
+[[package]]
 name = "baml_crypto_provider"
 version = "0.0.0-beta"
 dependencies = [
- "rustls",
+ "aes-gcm-siv",
+ "aws-lc-rs",
+ "baml_crypto_types",
+ "chacha20poly1305",
+ "pem-rfc7468",
+ "ring",
+ "zeroize",
 ]
+
+[[package]]
+name = "baml_crypto_types"
+version = "0.0.0-beta"
 
 [[package]]
 name = "baml_db"
@@ -964,6 +981,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_http"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_http_provider",
+ "baml_http_types",
+ "tokio",
+]
+
+[[package]]
+name = "baml_http_provider"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_http_types",
+ "bytes",
+ "futures",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "reqwest",
+ "rustls",
+ "tokio",
+ "tokio-rustls",
+ "tokio-tungstenite",
+ "tracing",
+]
+
+[[package]]
+name = "baml_http_types"
+version = "0.0.0-beta"
+dependencies = [
+ "bytes",
+ "futures",
+]
+
+[[package]]
 name = "baml_ide"
 version = "0.0.0-beta"
 dependencies = [
@@ -1025,9 +1077,9 @@ dependencies = [
  "baml_builtins2",
  "baml_compiler2_visualization",
  "baml_db",
+ "baml_http",
  "baml_ide",
  "baml_lsp",
- "baml_tls",
  "baml_version",
  "base64",
  "bex_engine",
@@ -1044,7 +1096,6 @@ dependencies = [
  "notify",
  "num-bigint",
  "parking_lot",
- "reqwest",
  "serde",
  "serde_json",
  "sys_native",
@@ -1053,7 +1104,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
- "tokio-tungstenite",
  "tower-http",
  "tracing",
  "tracing-subscriber",
@@ -1103,10 +1153,10 @@ name = "baml_release"
 version = "0.0.0-beta"
 dependencies = [
  "anyhow",
- "baml_tls",
+ "baml_crypto",
+ "baml_http",
  "dirs",
  "flate2",
- "reqwest",
  "serde",
  "serde_json",
  "tar",
@@ -1167,14 +1217,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml_tls"
-version = "0.0.0-beta"
-dependencies = [
- "baml_crypto_provider",
- "rustls",
-]
-
-[[package]]
 name = "baml_type"
 version = "0.0.0-beta"
 dependencies = [
@@ -1214,6 +1256,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "base64ct"
+version = "1.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
+
+[[package]]
 name = "basic-toml"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1232,14 +1280,15 @@ checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
 name = "bex_cache"
 version = "0.0.0-beta"
 dependencies = [
- "baml_tls",
+ "baml_crypto",
+ "baml_http",
  "baml_type",
  "baml_version",
  "bex_vm_types",
  "borsh",
- "reqwest",
  "sha2 0.11.0",
  "tempfile",
+ "url",
 ]
 
 [[package]]
@@ -1438,12 +1487,12 @@ dependencies = [
 name = "bex_vm"
 version = "0.0.0-beta"
 dependencies = [
- "aes-gcm-siv",
  "baml_builtins2",
  "baml_builtins2_codegen",
  "baml_compiler_diagnostics",
+ "baml_crypto",
+ "baml_crypto_types",
  "baml_db",
- "baml_tls",
  "baml_type",
  "base64",
  "bex_heap",
@@ -1455,7 +1504,6 @@ dependencies = [
  "btel_settings",
  "btel_snapshot",
  "btel_types",
- "chacha20poly1305",
  "console",
  "indexmap",
  "log",
@@ -1774,7 +1822,8 @@ dependencies = [
 name = "btel_bcs"
 version = "0.0.0-beta"
 dependencies = [
- "baml_tls",
+ "baml_crypto",
+ "baml_http",
  "btel_clock",
  "btel_processor",
  "btel_recorder",
@@ -1788,11 +1837,11 @@ dependencies = [
  "prost",
  "prost-build",
  "protoc-bin-vendored",
- "reqwest",
  "serde",
  "serde_json",
  "sha2 0.11.0",
  "tokio",
+ "url",
  "uuid",
  "wiremock",
 ]
@@ -3515,7 +3564,7 @@ dependencies = [
 name = "forked_aws_sigv4"
 version = "0.1.0"
 dependencies = [
- "baml_tls",
+ "baml_crypto",
  "hex",
  "percent-encoding",
  "web-time",
@@ -3526,7 +3575,7 @@ name = "forked_google_cloud_auth"
 version = "0.2.0"
 dependencies = [
  "async-trait",
- "baml_tls",
+ "baml_crypto",
  "base64",
  "percent-encoding",
  "serde",
@@ -3698,10 +3747,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff2abc00be7fca6ebc474524697ae276ad847ad0a6b3faa4bcb027e9a4614ad0"
 dependencies = [
  "cfg-if",
- "js-sys",
  "libc",
  "wasi",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -3711,11 +3758,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "899def5c37c4fd7b2664648c28120ecec138e4d395b459e5ca34f9cce2dd77fd"
 dependencies = [
  "cfg-if",
- "js-sys",
  "libc",
  "r-efi 5.3.0",
  "wasip2",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -4754,12 +4799,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lru-slab"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
-
-[[package]]
 name = "lsp-server"
 version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5291,6 +5330,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
+name = "pem-rfc7468"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88b39c9bfcfc231068454382784bb460aae594343fb030d46e9f50a645418412"
+dependencies = [
+ "base64ct",
+]
+
+[[package]]
 name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5805,62 +5853,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "quinn"
-version = "0.11.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9e20a958963c291dc322d98411f541009df2ced7b5a4f2bd52337638cfccf20"
-dependencies = [
- "bytes",
- "cfg_aliases",
- "pin-project-lite",
- "quinn-proto",
- "quinn-udp",
- "rustc-hash 2.1.2",
- "rustls",
- "socket2",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "web-time",
-]
-
-[[package]]
-name = "quinn-proto"
-version = "0.11.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "434b42fec591c96ef50e21e886936e66d3cc3f737104fdb9b737c40ffb94c098"
-dependencies = [
- "aws-lc-rs",
- "bytes",
- "getrandom 0.3.4",
- "lru-slab",
- "rand 0.9.4",
- "ring",
- "rustc-hash 2.1.2",
- "rustls",
- "rustls-pki-types",
- "slab",
- "thiserror 2.0.18",
- "tinyvec",
- "tracing",
- "web-time",
-]
-
-[[package]]
-name = "quinn-udp"
-version = "0.5.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "addec6a0dcad8a8d96a771f815f0eaf55f9d1805756410b39f5fa81332574cbd"
-dependencies = [
- "cfg_aliases",
- "libc",
- "once_cell",
- "socket2",
- "tracing",
- "windows-sys 0.60.2",
-]
-
-[[package]]
 name = "quote"
 version = "1.0.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6062,7 +6054,6 @@ checksum = "219c5811de6525e5416c7d5d53bb656d3afdbc6c5af816e0802bcfa42dbdc1c3"
 dependencies = [
  "base64",
  "bytes",
- "futures-channel",
  "futures-core",
  "futures-util",
  "http",
@@ -6077,12 +6068,9 @@ dependencies = [
  "native-tls",
  "percent-encoding",
  "pin-project-lite",
- "quinn",
  "rustls",
  "rustls-pki-types",
  "rustls-platform-verifier",
- "serde",
- "serde_json",
  "sync_wrapper",
  "tokio",
  "tokio-native-tls",
@@ -6206,21 +6194,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "rustls-pemfile"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dce314e5fee3f39953d46bb63bb8a46d40c2f8fb7cc5a3b6cab2bde9721d6e50"
-dependencies = [
- "rustls-pki-types",
-]
-
-[[package]]
 name = "rustls-pki-types"
 version = "1.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "30a7197ae7eb376e574fe940d068c30fe0462554a3ddbe4eca7838e049c937a9"
 dependencies = [
- "web-time",
  "zeroize",
 ]
 
@@ -7052,7 +7030,7 @@ name = "sys_auth"
 version = "0.0.0-beta"
 dependencies = [
  "async-trait",
- "baml_tls",
+ "baml_crypto",
  "forked_aws_config",
  "forked_aws_sigv4",
  "forked_google_cloud_auth",
@@ -7075,34 +7053,25 @@ dependencies = [
 name = "sys_native"
 version = "0.0.0-beta"
 dependencies = [
- "baml_tls",
+ "baml_crypto",
+ "baml_http",
  "baml_type",
  "bex_external_types",
  "bex_heap",
  "bex_resource_types",
  "bridge_ctypes",
- "bytes",
  "futures",
- "getrandom 0.4.2",
- "http-body-util",
- "hyper",
- "hyper-util",
  "indexmap",
  "jiff",
  "num-bigint",
  "once_cell",
  "prost",
- "reqwest",
- "rustls",
- "rustls-pemfile",
  "serde_json",
  "sys_auth",
  "sys_glob",
  "sys_ops",
  "sys_types",
  "tokio",
- "tokio-rustls",
- "tokio-tungstenite",
  "tracing",
  "walkdir",
 ]

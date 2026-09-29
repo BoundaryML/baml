@@ -23,6 +23,7 @@ use std::{
     time::SystemTime,
 };
 
+use baml_http::outbound::{self, Destination};
 use bex_vm_types::{CompilationUnit, Program};
 use sha2::{Digest, Sha256};
 
@@ -1140,12 +1141,11 @@ mod tests {
 pub struct RemoteCache {
     base_url: String,
     token: Option<String>,
-    client: reqwest::blocking::Client,
 }
 
 /// HTTPS authenticates a configured remote origin. Plain HTTP is accepted only
 /// for an in-process or same-machine cache server.
-fn remote_url_allowed(url: &reqwest::Url) -> bool {
+fn remote_url_allowed(url: &url::Url) -> bool {
     url.scheme() == "https"
         || (url.scheme() == "http"
             && matches!(
@@ -1156,13 +1156,13 @@ fn remote_url_allowed(url: &reqwest::Url) -> bool {
 
 impl RemoteCache {
     /// Build from `BAML_CACHE_REMOTE` / `BAML_CACHE_REMOTE_TOKEN`; `None`
-    /// when unset or the HTTP client cannot be constructed.
+    /// when unset, not an allowed URL, or this build may not contact it.
     pub fn from_env() -> Option<RemoteCache> {
         let base_url = std::env::var("BAML_CACHE_REMOTE").ok()?;
         if base_url.is_empty() {
             return None;
         }
-        let parsed = reqwest::Url::parse(&base_url).ok()?;
+        let parsed = url::Url::parse(&base_url).ok()?;
         if !remote_url_allowed(&parsed) {
             #[allow(clippy::print_stderr)]
             {
@@ -1170,28 +1170,31 @@ impl RemoteCache {
             }
             return None;
         }
-        if let Err(e) = baml_tls::ensure_crypto_provider() {
+        if let Err(e) = Destination::RemoteCache.check() {
             #[allow(clippy::print_stderr)]
             {
                 eprintln!("warning: BAML_CACHE_REMOTE ignored — {e}");
             }
             return None;
         }
-        let client = reqwest::blocking::Client::builder()
-            .connect_timeout(std::time::Duration::from_millis(500))
-            .timeout(std::time::Duration::from_secs(2))
-            // Do not forward executable cache requests or bearer credentials
-            // across redirects to a different origin or weaker scheme.
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .ok()?;
         let base_url = base_url.trim_end_matches('/').to_string();
         let token = std::env::var("BAML_CACHE_REMOTE_TOKEN").ok();
-        Some(RemoteCache {
-            base_url,
-            token,
-            client,
-        })
+        Some(RemoteCache { base_url, token })
+    }
+
+    /// A request to the remote: a short deadline (sharing is an
+    /// optimization, never worth stalling a compile over), and no redirects,
+    /// so executable cache entries and the bearer token never follow one to
+    /// another origin or a weaker scheme.
+    fn request(&self, request: baml_http::Request) -> baml_http::Request {
+        let request = request
+            .connect_timeout(std::time::Duration::from_millis(500))
+            .timeout(std::time::Duration::from_secs(2))
+            .redirects(baml_http::Redirects::None);
+        match &self.token {
+            Some(token) => request.header("authorization", format!("Bearer {token}")),
+            None => request,
+        }
     }
 
     fn entry_url(&self, key: &CacheKey) -> String {
@@ -1204,49 +1207,23 @@ impl RemoteCache {
     const REMOTE_MAX_BYTES: u64 = 256 * 1024 * 1024;
 
     fn get(&self, key: &CacheKey) -> Option<Vec<u8>> {
-        let mut request = self.client.get(self.entry_url(key));
-        if let Some(token) = &self.token {
-            request = request.bearer_auth(token);
-        }
-        let response = request.send().ok()?;
-        if !response.status().is_success() {
-            return None;
-        }
-        // Reject early if the advertised length already exceeds the cap.
-        if response
-            .content_length()
-            .is_some_and(|n| n > Self::REMOTE_MAX_BYTES)
-        {
-            return None;
-        }
-        // Then bound the actual read: `Content-Length` is advisory, so a lying
-        // or chunked response is still capped here. Read one byte past the cap
-        // so an over-limit body is rejected rather than silently truncated.
-        let mut body = Vec::new();
-        if response
-            .take(Self::REMOTE_MAX_BYTES + 1)
-            .read_to_end(&mut body)
-            .is_err()
-        {
-            return None;
-        }
-        if body.len() as u64 > Self::REMOTE_MAX_BYTES {
-            return None;
-        }
-        Some(body)
+        let request = self.request(baml_http::Request::get(self.entry_url(key)));
+        // The read is bounded whatever `Content-Length` says, so a lying or
+        // chunked response is capped too; an over-limit body is rejected
+        // rather than truncated.
+        let max = usize::try_from(Self::REMOTE_MAX_BYTES).unwrap_or(usize::MAX);
+        let response = outbound::send_blocking(Destination::RemoteCache, request, max).ok()?;
+        response.is_success().then(|| response.body.to_vec())
     }
 
     fn put(&self, key: &CacheKey, entry: Vec<u8>) {
-        let mut request = self
-            .client
-            .put(self.entry_url(key))
-            .header("content-type", "application/octet-stream")
-            .body(entry);
-        if let Some(token) = &self.token {
-            request = request.bearer_auth(token);
-        }
+        let request = self.request(
+            baml_http::Request::put(self.entry_url(key))
+                .header("content-type", "application/octet-stream")
+                .body(entry),
+        );
         // Best-effort: sharing is an optimization, never a failure mode.
-        let _ = request.send();
+        let _ = outbound::send_blocking(Destination::RemoteCache, request, 64 * 1024);
     }
 }
 
@@ -1400,7 +1377,6 @@ mod remote_tests {
         RemoteCache {
             base_url: base_url.trim_end_matches('/').to_string(),
             token: None,
-            client: reqwest::blocking::Client::new(),
         }
     }
 
@@ -1472,7 +1448,7 @@ mod remote_tests {
 
     #[test]
     fn remote_requires_https_or_loopback() {
-        let allowed = |url: &str| remote_url_allowed(&reqwest::Url::parse(url).expect("valid URL"));
+        let allowed = |url: &str| remote_url_allowed(&url::Url::parse(url).expect("valid URL"));
         assert!(allowed("https://cache.example.com"));
         assert!(!allowed("http://cache.example.com"));
         assert!(allowed("http://localhost:8080"));

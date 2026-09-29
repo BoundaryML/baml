@@ -15,13 +15,13 @@ license.workspace = true
 name = "aws_sigv4"
 
 [dependencies]
-baml_tls = { workspace = true }
+baml_crypto = { workspace = true }
 hex = { workspace = true }
 percent-encoding = { workspace = true }
 web-time = { workspace = true }
 
 [dev-dependencies]
-baml_tls = { workspace = true, features = [ "aws-crypto" ] }
+baml_crypto = { workspace = true }
 
 [lints]
 workspace = true

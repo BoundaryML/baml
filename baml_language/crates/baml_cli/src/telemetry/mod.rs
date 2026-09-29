@@ -100,8 +100,3 @@ pub(crate) fn run_flush_child() {
 pub(crate) fn posthog_api_key() -> &'static str {
     post::posthog_api_key()
 }
-
-/// The PostHog ingestion host, shared with `baml feedback`.
-pub(crate) fn posthog_host() -> &'static str {
-    post::posthog_host()
-}

@@ -10,8 +10,8 @@
 //!    semantics),
 //! 3. the versioned cache directory (`BAML_CACHE_DIR` override, else the
 //!    platform user cache dir + `baml/libs/<version>/`),
-//! 4. unless `BAML_LIBRARY_DISABLE_DOWNLOAD=true`: download from the
-//!    GitHub release into the cache (see [`download`]),
+//! 4. with the `download` feature and unless `BAML_LIBRARY_DISABLE_DOWNLOAD=true`:
+//!    download from the GitHub release into the cache,
 //! 5. legacy system paths (with a warning),
 //! 6. an error listing every attempt.
 //!
@@ -23,6 +23,7 @@
 //! re-download. Manifest-resolved URLs with pinned checksums remain
 //! available as a later hardening.
 
+#[cfg(feature = "download")]
 mod download;
 pub(crate) mod log;
 
@@ -31,6 +32,7 @@ use std::{
     sync::Mutex,
 };
 
+#[cfg(feature = "download")]
 const GITHUB_REPO: &str = "boundaryml/baml";
 const CACHE_DIR_ENV: &str = "BAML_CACHE_DIR";
 const LIBRARY_PATH_ENV: &str = "BAML_LIBRARY_PATH";
@@ -38,6 +40,7 @@ const DISABLE_DOWNLOAD_ENV: &str = "BAML_LIBRARY_DISABLE_DOWNLOAD";
 /// Overrides the release-asset base URL (final URL = `<base>/<filename>`).
 /// For hermetic verification against a local server; not a user-facing
 /// knob.
+#[cfg(feature = "download")]
 const DOWNLOAD_BASE_ENV: &str = "BAML_LIBRARY_DOWNLOAD_BASE";
 
 /// Why the engine library could not be acquired or loaded. Mirrors the Go
@@ -141,6 +144,7 @@ pub(crate) struct LoaderEnv {
     /// `None` when undeterminable.
     pub(crate) user_cache_dir: Option<PathBuf>,
     pub(crate) disable_download: bool,
+    #[cfg(feature = "download")]
     pub(crate) download_base: Option<String>,
     pub(crate) system_paths: Vec<PathBuf>,
     pub(crate) version: String,
@@ -159,6 +163,7 @@ impl LoaderEnv {
             user_cache_dir: platform_user_cache_dir(),
             disable_download: std::env::var(DISABLE_DOWNLOAD_ENV)
                 .is_ok_and(|v| v.eq_ignore_ascii_case("true")),
+            #[cfg(feature = "download")]
             download_base: non_empty_env(DOWNLOAD_BASE_ENV)
                 .map(|v| v.to_string_lossy().into_owned()),
             system_paths: default_system_paths(&version),
@@ -166,6 +171,7 @@ impl LoaderEnv {
         }
     }
 
+    #[cfg(feature = "download")]
     fn download_base_url(&self) -> String {
         self.download_base.clone().unwrap_or_else(|| {
             format!(
@@ -237,24 +243,29 @@ pub(crate) fn resolve_library_path(env: &LoaderEnv) -> Result<PathBuf, LoaderErr
     }
     log::debug("Library not found in cache");
 
-    let mut download_status = "Attempted but failed";
-    if env.disable_download {
+    let download_status = if !cfg!(feature = "download") {
+        "Disabled at build time (download feature not enabled)"
+    } else if env.disable_download {
         log::warn(&format!(
             "Automatic download disabled via {DISABLE_DOWNLOAD_ENV}"
         ));
-        download_status = "Disabled";
+        "Disabled"
     } else {
-        log::debug(&format!(
-            "Attempting to download BAML library v{} for {}/{}",
-            env.version,
-            std::env::consts::OS,
-            std::env::consts::ARCH
-        ));
-        match download::download_library(env, &cache_dir, &filename) {
-            Ok(()) => return Ok(cached_path),
-            Err(e) => log::warn(&format!("BAML library download failed: {e}")),
+        #[cfg(feature = "download")]
+        {
+            log::debug(&format!(
+                "Attempting to download BAML library v{} for {}/{}",
+                env.version,
+                std::env::consts::OS,
+                std::env::consts::ARCH
+            ));
+            match download::download_library(env, &cache_dir, &filename) {
+                Ok(()) => return Ok(cached_path),
+                Err(e) => log::warn(&format!("BAML library download failed: {e}")),
+            }
         }
-    }
+        "Attempted but failed"
+    };
 
     log::debug("Checking default system library paths");
     for path in &env.system_paths {
@@ -396,6 +407,7 @@ fn default_system_paths(version: &str) -> Vec<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "download")]
     use std::io::{Read, Write};
 
     use super::*;
@@ -433,6 +445,7 @@ mod tests {
             cache_dir_override: Some(cache_dir.to_path_buf()),
             user_cache_dir: None,
             disable_download: true,
+            #[cfg(feature = "download")]
             download_base: None,
             system_paths: Vec::new(),
             version: "0.0.0-test".to_string(),
@@ -592,6 +605,7 @@ mod tests {
     /// Serve canned responses on an ephemeral local port. Each response is
     /// `Connection: close`, so every request arrives on a new connection;
     /// the server thread exits after `expected_requests`.
+    #[cfg(feature = "download")]
     fn serve(
         routes: Vec<(String, u16, Vec<u8>)>,
         expected_requests: usize,
@@ -636,12 +650,14 @@ mod tests {
         (base, handle)
     }
 
+    #[cfg(feature = "download")]
     fn sha256_hex(data: &[u8]) -> String {
         use sha2::Digest as _;
         hex::encode(sha2::Sha256::digest(data))
     }
 
     #[test]
+    #[cfg(feature = "download")]
     fn download_installs_a_checksum_verified_library() {
         let dir = TempDir::new();
         let filename = target_lib_filename().unwrap();
@@ -679,6 +695,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "download")]
     fn checksum_mismatch_rejects_the_download() {
         let dir = TempDir::new();
         let filename = target_lib_filename().unwrap();
@@ -708,6 +725,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "download")]
     fn missing_sidecar_downloads_unverified() {
         let dir = TempDir::new();
         let filename = target_lib_filename().unwrap();
@@ -723,6 +741,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "download")]
     fn missing_artifact_fails_the_download_step() {
         let dir = TempDir::new();
         let filename = target_lib_filename().unwrap();
@@ -736,5 +755,18 @@ mod tests {
         let err = resolve_library_path(&env).unwrap_err();
         assert!(matches!(err, LoaderError::LoadLibrary(_)));
         assert!(!dir.path().join(&filename).exists());
+    }
+
+    #[test]
+    #[cfg(not(feature = "download"))]
+    fn missing_library_reports_download_not_compiled() {
+        let dir = TempDir::new();
+        let mut env = test_env(dir.path());
+        env.disable_download = false;
+        let error = resolve_library_path(&env).unwrap_err().to_string();
+        assert!(
+            error.contains("Disabled at build time (download feature not enabled)"),
+            "{error}"
+        );
     }
 }
