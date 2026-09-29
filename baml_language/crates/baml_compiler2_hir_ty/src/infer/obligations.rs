@@ -85,14 +85,34 @@ impl<'db> InferenceContext<'db> {
         let InferTy::InferVar { var, .. } = resolved.kind() else {
             return resolved;
         };
-        let var = *var;
+        let var = self
+            .table
+            .unsolved_root_var(*var)
+            .expect("resolve_completely leaves only unsolved variables");
         if !visiting.insert(var) {
             return resolved;
         }
         let bounds = self.table.var_bounds(var);
-        if self.try_solve_bounded_var(var, &bounds) {
-            return self.resolve_structure_operand(&resolved, visiting);
+        // Generic passthrough calls may put one or more bounded variables
+        // between the receiver and its producer. Demand those dependencies
+        // before committing their aliases; the root guard breaks cycles
+        // such as a reduce accumulator bounded by its own callback output.
+        for bound in bounds.lowers.iter().chain(&bounds.uppers) {
+            self.resolve_structure_operand(&bound.ty, visiting);
         }
+        let bounds = self.table.var_bounds(var);
+        self.try_solve_bounded_var(var, &bounds);
+        let resolved = self.table.resolve_completely(&resolved);
+        let InferTy::InferVar { var, .. } = resolved.kind() else {
+            return resolved;
+        };
+        // Solving can alias the demanded variable to an operator output
+        // without grounding either. Compare union-find roots, not the
+        // original InferVar spellings, and keep following the producer.
+        let root = self
+            .table
+            .unsolved_root_var(*var)
+            .expect("resolve_completely leaves only unsolved variables");
         let operator = self.obligations.iter().find_map(|obligation| {
             let Obligation::Operator {
                 interface,
@@ -104,7 +124,11 @@ impl<'db> InferenceContext<'db> {
             else {
                 return None;
             };
-            (self.table.resolve_completely(out) == resolved)
+            let out = self.table.resolve_completely(out);
+            let InferTy::InferVar { var, .. } = out.kind() else {
+                return None;
+            };
+            (self.table.unsolved_root_var(*var) == Some(root))
                 .then(|| (*interface, lhs.clone(), rhs.clone()))
         });
         if let Some((interface, lhs, rhs)) = operator {

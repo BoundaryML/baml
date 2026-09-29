@@ -15,3 +15,12 @@ function negated_sum(values: int[]) -> float {
      // ^^^^^^^ float
     rounded
 }
+
+function identity<T>(value: T) -> T { value }
+
+function aliased_receiver(values: int[]) -> float {
+    let total = values.reduce((sum, n) -> { sum + n }, 0);
+    let rounded = identity(identity(total * 1.0)).round();
+     // ^^^^^^^ float
+    rounded
+}

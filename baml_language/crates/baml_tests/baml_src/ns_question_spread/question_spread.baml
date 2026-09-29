@@ -113,3 +113,21 @@ test "spread spanning" {
     assert.equal(result.topShare, 0.36);
     assert.equal(result.shape, "spanning");
 }
+
+function identity<T>(value: T) -> T {
+    value
+}
+
+test "deferred arithmetic method receiver through generic aliases" {
+    let later = [];
+    let total = [1, 2].reduce(
+        (sum, n) -> {
+            sum + n
+        },
+        0,
+    );
+    assert.equal(identity(identity(total * 1.0)).round(), 3.0);
+    // Demanding the receiver must not finalize unrelated inference variables.
+    later.push("hello");
+    assert.equal(later[0], "hello");
+}
