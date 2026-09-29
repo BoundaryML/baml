@@ -10107,4 +10107,15 @@ impl TlabHolder for BexVm {
     fn tlab_mut(&mut self) -> &mut Tlab {
         &mut self.tlab
     }
+
+    fn alloc_uint8array(&mut self, data: Vec<u8>) -> HeapPtr {
+        let ptr = self.tlab.alloc_uint8array(data);
+        // A byte buffer can spend the whole GC budget at once (a `concat` loop
+        // copies the growing buffer every iteration), so collect at the next
+        // control-flow check rather than up to `POLL_INTERVAL` checks later.
+        if self.heap.should_gc() {
+            self.early_yield.poll_next();
+        }
+        ptr
+    }
 }

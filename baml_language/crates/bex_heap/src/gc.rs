@@ -433,6 +433,8 @@ impl BexHeap {
 
         // BFS from roots — copy every reachable object into inactive.
         let mut worklist: Vec<HeapPtr> = roots.to_vec();
+        // Surviving bytes the collector copies (see `gc_policy::live_backing_bytes`).
+        let mut live_backing_bytes_total: usize = 0;
 
         profile.finish_phase(crate::gc_profile::HeapPhase::Prepare);
 
@@ -471,6 +473,8 @@ impl BexHeap {
             // Enqueue this object's outgoing heap references.
             // SAFETY: We just wrote the object into inactive, pointer is valid.
             let obj = unsafe { new_ptr.get() };
+            live_backing_bytes_total =
+                live_backing_bytes_total.saturating_add(crate::gc_policy::live_backing_bytes(obj));
             self.add_references_to_worklist(obj, &mut worklist);
         }
 
@@ -560,8 +564,11 @@ impl BexHeap {
         // Update the handle table so external handles point to new locations.
         self.update_handles(&forwarding);
 
-        self.gc_policy
-            .after_full(live_count.saturating_mul(size_of::<Object>()));
+        self.gc_policy.after_full(
+            live_count
+                .saturating_mul(size_of::<Object>())
+                .saturating_add(live_backing_bytes_total),
+        );
 
         // Reset the actual-object counter used by GC profiling.
         self.reset_gc_counter();

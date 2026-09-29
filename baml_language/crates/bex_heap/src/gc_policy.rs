@@ -5,6 +5,10 @@
 //! buffers of newly allocated strings and byte arrays that the new object owns
 //! exclusively. Shared buffers (clones, slices), deferred concatenations,
 //! container growth and other indirect storage do not spend this budget.
+//!
+//! After a full collection the allowance is `LIVE_HEADROOM` times the live size:
+//! surviving slots plus the byte-array buffers the collector copied (see
+//! [`live_backing_bytes`]), and at least `MIN_FULL_BUDGET`.
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -29,6 +33,20 @@ pub struct GcBudgetSnapshot {
     pub bytes_since_full_gc: usize,
     pub full_budget_bytes: usize,
     pub full_collections: usize,
+}
+
+/// Bytes a surviving object owns outside its slot that a full collection copies.
+///
+/// Counted into the live size that sets the next allowance, so the headroom
+/// scales with live byte buffers: the collector clones a `uint8array`'s bytes
+/// when it moves the object, so without this, keeping a buffer larger than the
+/// allowance would make every allocation of its size copy it again. Strings
+/// share their buffer on clone and are not counted.
+pub(crate) fn live_backing_bytes(obj: &Object) -> usize {
+    match obj {
+        Object::Uint8Array(bytes) => bytes.len(),
+        _ => 0,
+    }
 }
 
 pub(crate) struct AllocationBudget {
@@ -71,10 +89,11 @@ impl AllocationBudget {
 
     /// Called with all mutators parked, after full collection has moved survivors.
     /// Collector copies are not allocation spending. Minor GC never resets this.
-    pub(crate) fn after_full(&self, live_slot_bytes: usize) {
+    /// `live_bytes` is survivors' slots plus their [`live_backing_bytes`].
+    pub(crate) fn after_full(&self, live_bytes: usize) {
         self.spent.store(0, Ordering::Relaxed);
         self.budget.store(
-            live_slot_bytes
+            live_bytes
                 .saturating_mul(LIVE_HEADROOM)
                 .max(MIN_FULL_BUDGET),
             Ordering::Relaxed,
@@ -157,6 +176,34 @@ mod tests {
         assert_eq!(heap.gc_budget().bytes_since_full_gc, 0);
         assert_eq!(heap.gc_budget().full_collections, 1);
         assert_eq!(heap.should_collect(), None);
+    }
+
+    #[test]
+    fn live_uint8array_bytes_size_the_budget() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new_empty(heap.clone());
+        tlab.alloc_uint8array(vec![0; MIN_FULL_BUDGET]);
+        assert_eq!(heap.should_collect(), Some(CollectionLevel::Major));
+
+        // A dead buffer leaves the budget at its minimum.
+        // SAFETY: standalone heap, no concurrent users or retained pointers.
+        unsafe {
+            heap.collect_garbage(&[]);
+        }
+        assert_eq!(heap.gc_budget().full_budget_bytes, MIN_FULL_BUDGET);
+
+        // A live buffer counts toward the headroom, so keeping it does not
+        // make every later allocation of its size collect again.
+        let mut tlab = Tlab::new_empty(heap.clone());
+        let live = tlab.alloc_uint8array(vec![0; MIN_FULL_BUDGET]);
+        // SAFETY: standalone heap; `live` is the only retained pointer and is a root.
+        unsafe {
+            heap.collect_garbage(&[live]);
+        }
+        assert_eq!(
+            heap.gc_budget().full_budget_bytes,
+            4 * (size_of::<Object>() + MIN_FULL_BUDGET)
+        );
     }
 
     #[test]

@@ -299,6 +299,13 @@ impl EarlyYieldCheck {
     pub const fn reset(&mut self) {
         self.counter = self.interval;
     }
+    /// Make the next check poll the flags instead of waiting out the interval.
+    ///
+    /// For allocations large enough that one interval's worth of them could
+    /// overshoot the GC budget many times over.
+    pub const fn poll_next(&mut self) {
+        self.counter = 1;
+    }
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
