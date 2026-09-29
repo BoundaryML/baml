@@ -117,18 +117,15 @@ fn literal_truthiness(lit: &Literal) -> Truthiness {
 }
 
 impl<'db> InferenceContext<'db> {
-    pub(super) fn uncalled_function_diagnostic(
+    /// The written spelling of an uncalled function value, and the
+    /// `name()` replacement when one is exact: only for expressions we can
+    /// render as a callee, and functions that need no arguments.
+    pub(super) fn uncalled_name_and_suggestion(
         body: &ExprBody,
         expr: ExprId,
         accepts_no_args: bool,
-    ) -> crate::diagnostics::TirDiagnostic<'db> {
-        use crate::diagnostics::{
-            DiagnosticLocation, DiagnosticSeverity, TirDiagnostic, TirTypeError,
-        };
-
+    ) -> (String, Option<String>) {
         let name = body.display_expr(expr);
-        // Only propose an exact replacement for expressions we can render as
-        // a callee, and functions that need no arguments.
         let suggestion = (accepts_no_args
             && matches!(
                 body.exprs[expr],
@@ -140,6 +137,19 @@ impl<'db> InferenceContext<'db> {
                     | Expr::Call { .. }
             ))
         .then(|| format!("{name}()"));
+        (name, suggestion)
+    }
+
+    pub(super) fn uncalled_function_diagnostic(
+        body: &ExprBody,
+        expr: ExprId,
+        accepts_no_args: bool,
+    ) -> crate::diagnostics::TirDiagnostic<'db> {
+        use crate::diagnostics::{
+            DiagnosticLocation, DiagnosticSeverity, TirDiagnostic, TirTypeError,
+        };
+
+        let (name, suggestion) = Self::uncalled_name_and_suggestion(body, expr, accepts_no_args);
         TirDiagnostic {
             error: TirTypeError::UncalledFunctionInCondition { name, suggestion },
             severity: DiagnosticSeverity::Warning,

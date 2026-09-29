@@ -235,6 +235,21 @@ impl<'db> Reachability<'_, 'db> {
                 } => self
                     .condition_warning(lhs, diagnostics)
                     .or_else(|| self.condition_warning(rhs, diagnostics)),
+                // `s.length == 3` warns on the uncalled operand instead of
+                // the comparison.
+                Expr::Binary {
+                    op: BinaryOp::Eq | BinaryOp::Ne,
+                    lhs,
+                    rhs,
+                } => {
+                    let operands = [lhs, rhs].map(|operand| {
+                        DiagnosticLocation::Expr(super::block_value(self.body, operand))
+                    });
+                    diagnostics.iter().position(|diagnostic| {
+                        matches!(diagnostic.error, TirTypeError::UncalledMethodValue { .. })
+                            && operands.contains(&diagnostic.primary)
+                    })
+                }
                 _ => None,
             })
     }
