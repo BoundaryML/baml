@@ -63,3 +63,19 @@ source: crates/baml_tests/src/generated_tests.rs
     ·         ┬
     ·         ╰── expected `1`, found `2`
     ╰────
+
+  [type] E0010
+
+  × invalid assignment target; `mk` is not a variable, so it cannot be assigned to
+    ╭─[main.baml:55:5]
+ 55 │     mk = mk;
+    ·     ──
+    ╰────
+
+  [type] E0010
+
+  × invalid assignment target; `Shape.Circle` is not a variable, so it cannot be assigned to
+    ╭─[main.baml:60:5]
+ 60 │     Shape.Circle = Shape.Circle;
+    ·     ────────────
+    ╰────

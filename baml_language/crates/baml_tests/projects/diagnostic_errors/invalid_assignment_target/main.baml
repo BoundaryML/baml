@@ -43,6 +43,24 @@ function assign_to_literal() -> int {
     0
 }
 
+// A path is only a place when its root is a local binding. A function or an
+// enum variant has no storage (`mk = mk` previously crashed MIR lowering with
+// an internal error; `Shape.Circle = Shape.Circle` silently did nothing).
+enum Shape {
+    Circle
+    Square
+}
+
+function assign_to_function() -> int {
+    mk = mk;
+    0
+}
+
+function assign_to_enum_variant() -> Shape {
+    Shape.Circle = Shape.Circle;
+    Shape.Circle
+}
+
 // Places remain assignable, including through `?.` and parentheses.
 function valid_targets(p: P, xs: int[], q: P?) -> int {
     let n = 0;
