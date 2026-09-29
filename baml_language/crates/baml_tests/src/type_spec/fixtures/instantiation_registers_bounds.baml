@@ -19,12 +19,12 @@ class RbHolder {
 }
 function rb_static(p: RbPlain) -> int throws never {
     let r = RbBox.make(p)
-         // ^^^^^^^^^^^^^ unimplemented: user.RbPlain does not implement user.RbShow
+         // ^^^^^^^^^^^^^ implements: user.RbPlain does not implement user.RbShow
     r
 }
 function rb_method_value(h: RbHolder, p: RbPlain) -> int throws never {
     let g = h.pick
-    //      ^^^^^^ unimplemented: user.RbPlain does not implement user.RbShow
+    //      ^^^^^^ implements: user.RbPlain does not implement user.RbShow
     let r = g(p)
     r
 }

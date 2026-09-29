@@ -90,7 +90,7 @@ fn s15_sweep_baml_src() {
                 ));
             }
         }
-        for (&(start, end), rendered) in &channel.unimplemented {
+        for (&(start, end), rendered) in &channel.implements {
             for entry in rendered {
                 channel_entries.push(format!(
                     "{rel}:{start}..{end} `{}`: {entry}",
