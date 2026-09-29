@@ -582,3 +582,84 @@ fn blob_vs_blob_overlap_is_not_expressible_for_valid_artifacts() {
         Some(ExportedType::Interface { .. })
     ));
 }
+
+/// `app`'s interface with one free function the consumers below never name
+/// removed: a different interface, hence a different fingerprint.
+fn mutated_interface(artifacts: &LibraryArtifacts) -> PackageInterface<baml_type::TypeName> {
+    let mut interface = artifacts.interface.clone();
+    let root_functions = interface
+        .functions
+        .get_mut(&Vec::new())
+        .expect("the library exports root-level functions");
+    root_functions
+        .shift_remove(&Name::new("parse_positive"))
+        .expect("the library exports `parse_positive`");
+    interface
+}
+
+fn encode_interface(interface: &PackageInterface<baml_type::TypeName>) -> Vec<u8> {
+    baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
+        .expect("serialize app package interface")
+}
+
+const WIDGET_CONSUMER: &str = r#"
+function main() -> int throws never {
+    app.Widget { name: "widget", value: 7 }.measure()
+}
+"#;
+
+fn assert_interface_mismatch(error: baml_db::CompileProgramError) {
+    match error {
+        baml_db::CompileProgramError::Link(baml_linker::LinkError::InterfaceMismatch {
+            package,
+            edge,
+            expected,
+            found,
+        }) => {
+            assert_eq!(package.as_str(), "user");
+            assert_eq!(edge.as_str(), "app");
+            assert_ne!(expected, found);
+        }
+        other => panic!("expected an interface mismatch, got {other:?}"),
+    }
+}
+
+/// The consumer compiled against a mutated `app` interface; the store serves
+/// `app`'s real output. The unit records the digest of what it read, so the
+/// link refuses to bind it to the package it did not compile against — the
+/// edge locates, the fingerprint binds.
+#[test]
+fn a_consumer_compiled_against_a_mutated_interface_is_refused() {
+    let artifacts = library_artifacts();
+    let mutated = encode_interface(&mutated_interface(&artifacts));
+    assert_ne!(mutated, artifacts.blob);
+    let db = blob_db(WIDGET_CONSUMER, mutated);
+    assert_no_diagnostic_errors(&db);
+    let served = ServedLibrary {
+        app: &artifacts.emitted,
+    };
+    let error = compile_program_with(&db, package(&db), OPT, &served)
+        .expect_err("a consumer of another interface must not link");
+    assert_interface_mismatch(error);
+}
+
+/// The consumer compiled against the real interface; the store serves an
+/// `app` output whose record carries a mutated interface — a stale or forged
+/// artifact. Refused the same way.
+#[test]
+fn a_served_output_carrying_another_interface_is_refused() {
+    let artifacts = library_artifacts();
+    let mut stale = artifacts.emitted.clone();
+    stale.record.interface_blob = encode_interface(&mutated_interface(&artifacts));
+    let db = blob_db(WIDGET_CONSUMER, artifacts.blob.clone());
+    assert_no_diagnostic_errors(&db);
+    let served = ServedLibrary { app: &stale };
+    let error = compile_program_with(&db, package(&db), OPT, &served)
+        .expect_err("a stale served output must not link");
+    assert_interface_mismatch(error);
+    // The honest pairing links.
+    let served = ServedLibrary {
+        app: &artifacts.emitted,
+    };
+    compile_program_with(&db, package(&db), OPT, &served).expect("the real output links");
+}

@@ -28,6 +28,7 @@ use baml_compiler2_hir_ty::{
     extern_loc::{ClassRef, EnumRef, ExternFunctionLoc, ExternRowAddr, FunctionRef, InterfaceRef},
     layout,
     lower::qualify_def,
+    package_interface::interface_digest,
 };
 use baml_compiler2_mir::RuntimeLowering;
 use baml_linker_types::{DeclKey, DepSlot, DependencyEntry, ImportEntry, import_operand};
@@ -228,6 +229,7 @@ impl DependencyTable {
                 self.existing(parent)
                     .unwrap_or_else(|| unreachable!("a path's parent is interned before its child"))
             };
+            // Fingerprinted when the table is sealed (`into_entries`).
             self.entries.push((
                 hop,
                 DependencyEntry {
@@ -294,8 +296,23 @@ impl DependencyTable {
         hops
     }
 
-    pub(crate) fn into_entries(self) -> Vec<DependencyEntry> {
-        self.entries.into_iter().map(|(_, entry)| entry).collect()
+    /// The table as the unit carries it, each entry fingerprinted with the
+    /// interface its owner compiled against: a direct dependency's payload
+    /// digest ([`interface_digest`]), the value the linker checks the bound
+    /// package's record against. `None` exactly where the link has no
+    /// payload to check — a prelude package (a `Stdlib` root; no blob by
+    /// design, the toolchain pairing is the build fingerprint's) and a
+    /// transitive root (the owner read no interface of it).
+    pub(crate) fn into_entries(self, db: &dyn crate::Db) -> Vec<DependencyEntry> {
+        self.entries
+            .into_iter()
+            .map(|(root, mut entry)| {
+                if entry.via.is_self() && root.kind(db) != baml_base::SourceRootKind::Stdlib {
+                    entry.fingerprint = Some(interface_digest(db, root));
+                }
+                entry
+            })
+            .collect()
     }
 }
 

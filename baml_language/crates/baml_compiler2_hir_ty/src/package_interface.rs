@@ -686,12 +686,15 @@ pub fn reexport_paths(
 }
 
 /// The wire spelling of `decl` from `viewpoint`: `viewpoint`'s own
-/// declaration by its own spelling, a dependency's by the edge that reaches
-/// it, a declaration a dependency re-exports by that dependency's edge and
-/// the re-export's path — every spelling `viewpoint`'s importer resolves
-/// through `viewpoint`'s edges alone — else by the program's spelling of its
-/// root (a transitive dependency's declaration reaching `viewpoint` through
-/// a signature).
+/// declaration as `Local` — never by the name the program happens to reach
+/// `viewpoint` under, so the interface it exports is the same bytes whether
+/// it compiled as a program's root or as one of its dependencies, and mounts
+/// under any alias — a dependency's by the edge that reaches it, a
+/// declaration a dependency re-exports by that dependency's edge and the
+/// re-export's path — every spelling `viewpoint`'s importer resolves through
+/// `viewpoint`'s edges alone — else by the program's spelling of its root (a
+/// transitive dependency's declaration reaching `viewpoint` through a
+/// signature).
 pub fn wire_from(
     db: &dyn baml_compiler2_hir::Db,
     viewpoint: baml_base::SourceRoot,
@@ -699,7 +702,11 @@ pub fn wire_from(
 ) -> TypeName {
     let spelling = baml_compiler2_hir::package::spelling(db);
     if decl.root() == viewpoint {
-        return spelling.wire(decl);
+        return TypeName::qualified(
+            baml_type::Package::Local,
+            decl.namespace().clone(),
+            decl.name().clone(),
+        );
     }
     let edges = viewpoint.dependencies(db);
     if let Some(edge) = edges.iter().find(|edge| edge.root == decl.root()) {
@@ -1261,13 +1268,23 @@ pub fn export_interface(
         .unwrap_or_else(|never| match never {})
 }
 
-/// The digest of `root`'s exported interface: sha256 over the serialized
-/// [`PackageInterface`] a dependent compiles against, spelled as
-/// [`export_interface`] spells it. What a compiled output's dependency on
-/// `root` is a function of — a change to `root` that leaves this digest
-/// alone cannot change what its dependents compile to.
+/// The digest of the interface a dependent of `root` compiles against: sha256
+/// over the serialized [`PackageInterface`] payload — the blob's own payload
+/// when `root` is served from one (a mount, a precompiled stdlib package),
+/// else the interface as [`export_interface`] spells it, which is exactly the
+/// payload the emitter writes into `root`'s package record. Consumer, linker,
+/// and grafter therefore hash the same bytes: what a compiled output's
+/// dependency on `root` is a function of — a change to `root` that leaves
+/// this digest alone cannot change what its dependents compile to.
 pub fn interface_digest(db: &dyn baml_compiler2_hir::Db, root: baml_base::SourceRoot) -> [u8; 32] {
     use sha2::Digest as _;
+    if let Some(blob) = root.interface(db) {
+        // The database validated the envelope when it added the root.
+        return baml_artifact::payload_digest(baml_artifact::ArtifactKind::PackageInterface, blob)
+            .unwrap_or_else(|error| {
+                unreachable!("a served root's interface is a valid artifact: {error}")
+            });
+    }
     let bytes = borsh::to_vec(&export_interface(db, root))
         .unwrap_or_else(|_| unreachable!("a PackageInterface serializes"));
     sha2::Sha256::digest(&bytes).into()

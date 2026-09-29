@@ -125,6 +125,28 @@ fn direct(edge: &str, fingerprint: Option<Digest>) -> DependencyEntry {
     }
 }
 
+/// A record carrying a valid interface artifact around `payload`: the linker
+/// checks the envelope and hashes the payload, never decoding an interface,
+/// so any payload stands for one.
+fn interface_record(payload: &[u8]) -> PackageRecord {
+    PackageRecord {
+        interface_blob: baml_artifact::encode_payload(
+            baml_artifact::ArtifactKind::PackageInterface,
+            payload,
+        )
+        .expect("an interface artifact encodes"),
+    }
+}
+
+/// The fingerprint a unit compiled against `record`'s interface records.
+fn fingerprint_of(record: &PackageRecord) -> Digest {
+    baml_artifact::payload_digest(
+        baml_artifact::ArtifactKind::PackageInterface,
+        &record.interface_blob,
+    )
+    .expect("a test record carries an interface payload")
+}
+
 fn package_named<'p>(program: &'p Program, name: &str) -> &'p ProgramPackage {
     program
         .packages
@@ -214,12 +236,14 @@ fn load_import(ordinal: usize) -> Instruction {
 
 #[test]
 fn import_of_one_kind_never_binds_an_export_of_another() {
-    let record = PackageRecord::default();
+    let record = interface_record(b"iface");
     let provider = unit_with_class("Foo", "Foo");
     // The consumer asks for a FUNCTION named Foo: the class must not
     // satisfy it.
     let mut consumer = unit_with_fn("user.g", vec![load_import(0), Instruction::Return]);
-    consumer.dependencies.push(direct("app", None));
+    consumer
+        .dependencies
+        .push(direct("app", Some(fingerprint_of(&record))));
     consumer.global_imports.push(import(1, free_fn("Foo")));
     let set = LinkSet {
         root: LinkPackageId(1),
@@ -239,7 +263,7 @@ fn import_of_one_kind_never_binds_an_export_of_another() {
 
 #[test]
 fn duplicate_export_is_refused() {
-    let record = PackageRecord::default();
+    let record = interface_record(b"iface");
     let mut unit = unit_with_fn("user.f", vec![Instruction::Return]);
     unit.code.push(func("user.f", vec![Instruction::Return]));
     unit.exports.objects.push((free_fn("f"), LocalRef::Code(1)));
@@ -258,7 +282,7 @@ fn duplicate_export_is_refused() {
 
 #[test]
 fn the_root_and_every_edge_table_are_recorded_by_ordinal() {
-    let record = PackageRecord::default();
+    let record = interface_record(b"iface");
     let unit = CompilationUnit::default();
     let packages = || {
         vec![
@@ -287,7 +311,7 @@ fn the_root_and_every_edge_table_are_recorded_by_ordinal() {
 fn a_packages_slot_map_is_relative_to_its_own_base() {
     // Two packages, each with one function and one `let`: every package's
     // cells are ordinals from its own base, and the bases follow set order.
-    let record = PackageRecord::default();
+    let record = interface_record(b"iface");
     let mut first = unit_with_fn("a.f", vec![Instruction::Return]);
     first.exports.globals.push((DeclPath::Let(item("x")), 1));
     let mut second = unit_with_fn("user.g", vec![Instruction::Return]);
@@ -324,7 +348,7 @@ fn a_packages_slot_map_is_relative_to_its_own_base() {
 fn two_packages_may_share_a_spelling() {
     // Names live on edges: the root reaches each `lib` under its own edge
     // name, and the spelling identifies nothing program-wide.
-    let record = PackageRecord::default();
+    let record = interface_record(b"iface");
     let unit = CompilationUnit::default();
     let program = link(&LinkSet {
         packages: vec![
@@ -344,7 +368,7 @@ fn two_packages_may_share_a_spelling() {
 
 #[test]
 fn a_package_reaching_two_packages_under_one_name_is_refused() {
-    let record = PackageRecord::default();
+    let record = interface_record(b"iface");
     let unit = CompilationUnit::default();
     let set = LinkSet {
         packages: vec![
@@ -365,7 +389,7 @@ fn a_package_reaching_two_packages_under_one_name_is_refused() {
 
 #[test]
 fn a_static_unit_importing_its_own_package_is_malformed() {
-    let record = PackageRecord::default();
+    let record = interface_record(b"iface");
     let mut unit = unit_with_fn("user.f", vec![load_import(0), Instruction::Return]);
     unit.global_imports.push(import(0, free_fn("f")));
     let set = LinkSet {
@@ -380,14 +404,14 @@ fn a_static_unit_importing_its_own_package_is_malformed() {
 
 #[test]
 fn generic_values_are_interned_by_base_slot_across_packages_and_tails() {
-    let record = PackageRecord::default();
+    let record = interface_record(b"iface");
     // `lib` defines `f` (slot 0) and its own `f<int>` value (code 1).
     let mut lib = unit_with_fn("lib.f", vec![Instruction::Return]);
     lib.code.push(generic_value(0, vec![RealizedTy::Int]));
     // `user` imports `f`'s slot and carries its own copy of `f<int>`
     // (code 0) and a distinct `f<string>` (code 1); `g` references both.
     let mut user = CompilationUnit {
-        dependencies: vec![direct("lib", None)],
+        dependencies: vec![direct("lib", Some(fingerprint_of(&record)))],
         global_imports: vec![import(1, free_fn("f"))],
         code: vec![
             generic_value(import_operand(0), vec![RealizedTy::Int]),
@@ -401,7 +425,7 @@ fn generic_values_are_interned_by_base_slot_across_packages_and_tails() {
     // The user tail carries a third copy of `f<int>` and one of `f<string>`
     // in its init part, plus an `$init` that references them.
     let tail = InitTail {
-        dependencies: vec![direct("lib", None)],
+        dependencies: vec![direct("lib", Some(fingerprint_of(&record)))],
         objects: vec![
             generic_value(import_operand(0), vec![RealizedTy::Int]),
             generic_value(import_operand(0), vec![RealizedTy::String]),
@@ -448,11 +472,13 @@ fn generic_values_are_interned_by_base_slot_across_packages_and_tails() {
 
 #[test]
 fn dependency_slots_bind_through_edge_tables() {
-    let record = PackageRecord::default();
+    let record = interface_record(b"iface");
     let widget = unit_with_class("Widget", "Widget");
     let mut consumer = unit_with_fn("user.make", vec![alloc_import(0), Instruction::Return]);
     // The consumer reaches `app` under its own edge name.
-    consumer.dependencies.push(direct("gadgets", None));
+    consumer
+        .dependencies
+        .push(direct("gadgets", Some(fingerprint_of(&record))));
     consumer
         .object_imports
         .push(import(1, DeclPath::Class(item("Widget"))));
@@ -490,12 +516,12 @@ fn dependency_slots_bind_through_edge_tables() {
 
 #[test]
 fn transitive_dependencies_bind_through_the_parent_edge_table() {
-    let record = PackageRecord::default();
+    let record = interface_record(b"iface");
     let leaf = unit_with_class("Leaf", "Leaf");
     let middle = CompilationUnit::default();
     let mut consumer = unit_with_fn("user.make", vec![alloc_import(0), Instruction::Return]);
     consumer.dependencies = vec![
-        direct("b", None),
+        direct("b", Some(fingerprint_of(&record))),
         DependencyEntry {
             edge: Name::new("inner"),
             via: DepSlot(1),
@@ -598,7 +624,7 @@ fn layout_is_package_major_in_set_order() {
 fn init_order_is_topological_with_alphabetical_ties() {
     // `a` depends on `c`; `b` is independent. In-degree-zero packages sort
     // by name (b, c), then `a` is released.
-    let record = PackageRecord::default();
+    let record = interface_record(b"iface");
     let empty = CompilationUnit::default();
     let tails: Vec<InitTail> = ["a", "b", "c"]
         .into_iter()
@@ -638,7 +664,7 @@ fn heads_and_switch_keys_relocate_to_the_assigned_tags() {
     // a declaration key of a type switch, and an `AllocInstance` operand — all by
     // the same import. After the link every one of them is `Foo`'s image
     // index, and the switch is solved over that tag.
-    let record = PackageRecord::default();
+    let record = interface_record(b"iface");
     let provider = unit_with_class("Foo", "Foo");
     let mut consumer = unit_with_fn(
         "user.f",
@@ -660,7 +686,9 @@ fn heads_and_switch_keys_relocate_to_the_assigned_tags() {
         ],
         vec!["int".to_string(), "Foo".to_string()],
     )];
-    consumer.dependencies.push(direct("app", None));
+    consumer
+        .dependencies
+        .push(direct("app", Some(fingerprint_of(&record))));
     consumer
         .object_imports
         .push(import(1, DeclPath::Class(item("Foo"))));
@@ -708,7 +736,7 @@ fn heads_and_switch_keys_relocate_to_the_assigned_tags() {
 
 #[test]
 fn impl_body_import_from_a_dependency_is_refused() {
-    let record = PackageRecord::default();
+    let record = interface_record(b"iface");
     let provider = CompilationUnit::default();
     let mut unit = unit_with_fn(
         "user.f",
@@ -720,7 +748,8 @@ fn impl_body_import_from_a_dependency_is_refused() {
             Instruction::Return,
         ],
     );
-    unit.dependencies.push(direct("app", None));
+    unit.dependencies
+        .push(direct("app", Some(fingerprint_of(&record))));
     let body = DeclPath::InterfaceBody(BodyKey::ImplMethod(Box::new(ImplBodyKey {
         interface: InterfaceKey {
             package: baml_type::Package::Local,
@@ -751,7 +780,7 @@ fn impl_body_import_from_a_dependency_is_refused() {
 fn a_tail_reaches_its_own_packages_declarations_as_imports() {
     // A `$init` helper constructing one of its package's own classes: the
     // tail is its own table, so the class is an import at `SELF`.
-    let record = PackageRecord::default();
+    let record = interface_record(b"iface");
     let unit = unit_with_class("Widget", "Widget");
     let tail = InitTail {
         objects: vec![func("$init", vec![alloc_import(0), Instruction::Return])],
@@ -787,7 +816,7 @@ fn a_rule_body_aimed_at_a_named_function_is_an_invalid_unit() {
     use baml_linker_types::{ProgramImplRuleFrag, ProgramMethodImplFrag};
     use bex_vm_types::types::InterfaceDef;
 
-    let record = PackageRecord::default();
+    let record = interface_record(b"iface");
     let mut unit = unit_with_fn("user.named", vec![Instruction::Return]);
     unit.interfaces
         .push(Object::Interface(Box::new(InterfaceDef {
@@ -829,4 +858,121 @@ fn a_rule_body_aimed_at_a_named_function_is_an_invalid_unit() {
         link(&set),
         Err(LinkError::InvalidUnit(message)) if message.contains("not an interface body")
     ));
+}
+
+#[test]
+fn a_unit_compiled_against_another_interface_is_refused() {
+    // `user` recorded the digest of interface `v2`; the set binds `app` to a
+    // package carrying `v1`. The edge locates, the fingerprint binds.
+    let record = interface_record(b"v1");
+    let other = interface_record(b"v2");
+    let provider = unit_with_class("Widget", "Widget");
+    let mut consumer = unit_with_fn("user.make", vec![alloc_import(0), Instruction::Return]);
+    consumer
+        .dependencies
+        .push(direct("app", Some(fingerprint_of(&other))));
+    consumer
+        .object_imports
+        .push(import(1, DeclPath::Class(item("Widget"))));
+    let set = LinkSet {
+        root: LinkPackageId(1),
+        packages: vec![
+            package("app", vec![], &provider, &record),
+            package("user", vec![("app", 0)], &consumer, &record),
+        ],
+    };
+    assert_eq!(
+        link(&set).err(),
+        Some(LinkError::InterfaceMismatch {
+            package: Name::new("user"),
+            edge: Name::new("app"),
+            expected: fingerprint_of(&other),
+            found: fingerprint_of(&record),
+        })
+    );
+}
+
+#[test]
+fn a_direct_dependency_without_a_fingerprint_is_malformed() {
+    let record = interface_record(b"iface");
+    let provider = unit_with_class("Widget", "Widget");
+    let mut consumer = unit_with_fn("user.make", vec![alloc_import(0), Instruction::Return]);
+    consumer.dependencies.push(direct("app", None));
+    consumer
+        .object_imports
+        .push(import(1, DeclPath::Class(item("Widget"))));
+    let set = LinkSet {
+        root: LinkPackageId(1),
+        packages: vec![
+            package("app", vec![], &provider, &record),
+            package("user", vec![("app", 0)], &consumer, &record),
+        ],
+    };
+    assert!(matches!(
+        link(&set),
+        Err(LinkError::InvalidUnit(message)) if message.contains("no interface fingerprint")
+    ));
+}
+
+#[test]
+fn a_prelude_dependency_carries_no_fingerprint() {
+    // The prelude is bound by its fixed name and carries no blob; a unit
+    // recording a fingerprint for it is malformed, one recording none links.
+    let stdlib = unit_with_class("S", "S");
+    let make_consumer = |fingerprint: Option<Digest>| {
+        let mut consumer = unit_with_fn("user.make", vec![alloc_import(0), Instruction::Return]);
+        consumer.dependencies.push(direct("baml", fingerprint));
+        consumer
+            .object_imports
+            .push(import(1, DeclPath::Class(item("S"))));
+        consumer
+    };
+    let empty = PackageRecord {
+        interface_blob: Vec::new(),
+    };
+    let set = |consumer| {
+        let mut set = LinkSet {
+            root: LinkPackageId(1),
+            packages: vec![
+                package("baml", vec![], &stdlib, &empty),
+                package("user", vec![("baml", 0)], consumer, &empty),
+            ],
+        };
+        set.packages[1].edges[0].kind = EdgeKind::Prelude;
+        set
+    };
+    let unfingerprinted = make_consumer(None);
+    link(&set(&unfingerprinted)).unwrap();
+    let fingerprinted = make_consumer(Some([7; 32]));
+    assert!(matches!(
+        link(&set(&fingerprinted)),
+        Err(LinkError::InvalidUnit(message)) if message.contains("prelude")
+    ));
+}
+
+#[test]
+fn a_declared_dependency_without_an_interface_payload_is_refused() {
+    let empty = PackageRecord {
+        interface_blob: Vec::new(),
+    };
+    let provider = unit_with_class("Widget", "Widget");
+    let mut consumer = unit_with_fn("user.make", vec![alloc_import(0), Instruction::Return]);
+    consumer.dependencies.push(direct("app", Some([7; 32])));
+    consumer
+        .object_imports
+        .push(import(1, DeclPath::Class(item("Widget"))));
+    let set = LinkSet {
+        root: LinkPackageId(1),
+        packages: vec![
+            package("app", vec![], &provider, &empty),
+            package("user", vec![("app", 0)], &consumer, &empty),
+        ],
+    };
+    assert_eq!(
+        link(&set).err(),
+        Some(LinkError::MissingInterface {
+            package: Name::new("user"),
+            edge: Name::new("app"),
+        })
+    );
 }

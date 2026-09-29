@@ -278,3 +278,174 @@ fn stdlib_packages_are_independent_of_the_user_package() {
         "stdlib packages emit differently under different user packages"
     );
 }
+
+// ── Interface-only fingerprints ──────────────────────────────────────────────
+//
+// A dependent's unit is a function of its dependencies' INTERFACES, never
+// their bodies: the fingerprint it records is the interface payload's digest,
+// so a body-only change in a dependency leaves every dependent's bytes and
+// fingerprint alone (relink, never recompile), while a body change that alters
+// what the interface says — an inferred `throws` clause — changes the digest,
+// and a unit compiled against the old interface no longer links.
+
+const FINGERPRINT_ROOT: &str = "/package-emit-oracle-fingerprint";
+
+const LIBRARY_V1: &str = r#"
+class Overflow {
+    message string
+}
+
+function compute(x: int) -> int {
+    x + 1
+}
+"#;
+
+/// `compute` with another body: the same signature, the same inferred
+/// `throws never`.
+const LIBRARY_BODY_CHANGED: &str = r#"
+class Overflow {
+    message string
+}
+
+function compute(x: int) -> int {
+    x + 2
+}
+"#;
+
+/// `compute` with a body that throws: the declaration is untouched, but the
+/// inferred `throws` clause — part of the exported interface — is now
+/// `Overflow`.
+const LIBRARY_THROWS_CHANGED: &str = r#"
+class Overflow {
+    message string
+}
+
+function compute(x: int) -> int {
+    if (x > 100) {
+        throw Overflow { message: "too big" }
+    }
+    x + 1
+}
+"#;
+
+const FINGERPRINT_CONSUMER: &str = r#"
+function main() -> int {
+    app.compute(1)
+}
+"#;
+
+/// A world of the consumer beside `library` as its `app` dependency.
+fn fingerprint_world(library: &str) -> (ProjectDatabase, baml_db::SourceRoot) {
+    let mut db = ProjectDatabase::new();
+    db.workspace(Path::new(FINGERPRINT_ROOT));
+    let app = db.dependency("app");
+    db.file("<builtin>/app/lib.baml", library);
+    db.file(
+        Path::new(FINGERPRINT_ROOT).join("main.baml"),
+        FINGERPRINT_CONSUMER,
+    );
+    baml_db::testing::assert_no_diagnostic_errors(&db);
+    (db, app)
+}
+
+/// The consumer's fingerprint of `app`: the one entry its unit records.
+fn app_fingerprint(consumer: &baml_linker_types::EmittedPackage) -> [u8; 32] {
+    consumer
+        .unit
+        .dependencies
+        .iter()
+        .find(|entry| entry.edge.as_str() == "app")
+        .expect("the consumer reaches `app`")
+        .fingerprint
+        .expect("a direct dependency is fingerprinted")
+}
+
+#[test]
+fn a_dependency_body_change_leaves_its_dependents_unit_and_fingerprint_unchanged() {
+    let (before, app_before) = fingerprint_world(LIBRARY_V1);
+    let (after, app_after) = fingerprint_world(LIBRARY_BODY_CHANGED);
+    let digest = baml_compiler2_hir_ty::package_interface::interface_digest;
+    assert_eq!(digest(&before, app_before), digest(&after, app_after));
+
+    let consumer_before = emit_package(&before, package(&before), OptLevel::Two).expect("emit");
+    let consumer_after = emit_package(&after, package(&after), OptLevel::Two).expect("emit");
+    assert_eq!(
+        app_fingerprint(&consumer_before),
+        digest(&before, app_before)
+    );
+    assert_eq!(
+        borsh::to_vec(&consumer_before).expect("serialize"),
+        borsh::to_vec(&consumer_after).expect("serialize"),
+        "a body-only change in `app` must leave the consumer's output untouched"
+    );
+    // The change was real: `app`'s own output moved.
+    let app_unit = |db: &ProjectDatabase, app| {
+        borsh::to_vec(&emit_package(db, app, OptLevel::Two).expect("emit").unit).expect("serialize")
+    };
+    assert_ne!(app_unit(&before, app_before), app_unit(&after, app_after));
+}
+
+/// The old consumer output, served for the new world's `user` root: what a
+/// cache holding a unit compiled against the previous interface does.
+struct ServedConsumer<'a>(&'a baml_linker_types::EmittedPackage);
+
+impl baml_db::PackageCache for ServedConsumer<'_> {
+    fn load(
+        &self,
+        db: &dyn baml_compiler2_hir::Db,
+        root: baml_db::SourceRoot,
+        _opt: OptLevel,
+    ) -> Option<baml_linker_types::EmittedPackage> {
+        (root.kind(db) == baml_base::SourceRootKind::Workspace).then(|| self.0.clone())
+    }
+
+    fn store(
+        &self,
+        _db: &dyn baml_compiler2_hir::Db,
+        _root: baml_db::SourceRoot,
+        _opt: OptLevel,
+        _emitted: &baml_linker_types::EmittedPackage,
+    ) {
+    }
+}
+
+#[test]
+fn a_dependency_body_change_that_alters_inferred_throws_changes_the_fingerprint() {
+    let (before, app_before) = fingerprint_world(LIBRARY_V1);
+    let (after, app_after) = fingerprint_world(LIBRARY_THROWS_CHANGED);
+    let digest = baml_compiler2_hir_ty::package_interface::interface_digest;
+    assert_ne!(digest(&before, app_before), digest(&after, app_after));
+
+    let consumer_before = emit_package(&before, package(&before), OptLevel::Two).expect("emit");
+    let consumer_after = emit_package(&after, package(&after), OptLevel::Two).expect("emit");
+    assert_eq!(
+        app_fingerprint(&consumer_before),
+        digest(&before, app_before)
+    );
+    assert_eq!(app_fingerprint(&consumer_after), digest(&after, app_after));
+
+    // Each world links on its own; the old consumer does not link into the
+    // new world — the edge still locates `app`, the fingerprint refuses it.
+    compile_program(&after, package(&after), OptLevel::Two).expect("the new world links");
+    let error = baml_db::compile_program_with(
+        &after,
+        package(&after),
+        OptLevel::Two,
+        &ServedConsumer(&consumer_before),
+    )
+    .expect_err("a consumer of the old interface must not link");
+    match error {
+        baml_db::CompileProgramError::Link(baml_linker::LinkError::InterfaceMismatch {
+            package,
+            edge,
+            expected,
+            found,
+        }) => {
+            assert_eq!(package.as_str(), "user");
+            assert_eq!(edge.as_str(), "app");
+            assert_eq!(expected, digest(&before, app_before));
+            assert_eq!(found, digest(&after, app_after));
+        }
+        other => panic!("expected an interface mismatch, got {other:?}"),
+    }
+}

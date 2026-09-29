@@ -614,9 +614,37 @@ pub(crate) fn compile_program(
             cache_debug(format_args!(
                 "served packages failed to link; recompiling honestly: {error}"
             ));
-            baml_db::compile_program(db, package, CLI_OPT_LEVEL)
+            // Every package is emitted afresh and stored under its own key,
+            // so the entry that failed to bind is overwritten rather than
+            // served — and refused — again on the next compile.
+            baml_db::compile_program_with(db, package, CLI_OPT_LEVEL, &StoreOnly(ctx))
         }
         Err(error) => Err(error),
+    }
+}
+
+/// A cache that serves nothing and keeps everything: the honest recompile
+/// after a link failure runs against it, refreshing every served entry.
+struct StoreOnly<'a>(&'a CacheContext);
+
+impl PackageCache for StoreOnly<'_> {
+    fn load(
+        &self,
+        _db: &dyn baml_db::baml_compiler2_hir::Db,
+        _root: SourceRoot,
+        _opt: OptLevel,
+    ) -> Option<EmittedPackage> {
+        None
+    }
+
+    fn store(
+        &self,
+        db: &dyn baml_db::baml_compiler2_hir::Db,
+        root: SourceRoot,
+        opt: OptLevel,
+        emitted: &EmittedPackage,
+    ) {
+        <CacheContext as PackageCache>::store(self.0, db, root, opt, emitted);
     }
 }
 
@@ -1591,6 +1619,63 @@ mod tests {
         );
         assert_eq!(ctx2.packages_served(), linked_package_count(&db2, pkg2) - 1);
         assert_eq!(program_bytes(&program), honest_bytes(&r2));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A served entry that decodes but does not LINK (here: a dependency
+    /// entry the linker's fingerprint law refuses) must never fail the user
+    /// and must not survive: the honest recompile re-emits every package and
+    /// stores it under its own key, so the next compile is served again.
+    #[test]
+    fn unlinkable_package_entry_is_re_emitted_and_the_cache_refreshed() {
+        if cache_disabled() {
+            return;
+        }
+        let root = bc_root();
+        let files = [("a.baml", A_V1), ("b.baml", B)];
+        let (db1, ctx1) = compile_and_store_v1(&root, &files);
+        let pkg1 = db1.workspace_root().expect("workspace root");
+        let key = ctx1.package_key(&db1, pkg1, CLI_OPT_LEVEL);
+        let mut forged = ctx1
+            .cache
+            .load_package_shared(&key)
+            .expect("the user package's entry is present");
+        forged
+            .unit
+            .dependencies
+            .push(baml_linker_types::DependencyEntry {
+                edge: baml_db::Name::new("baml"),
+                via: baml_linker_types::DepSlot::SELF,
+                fingerprint: Some([7; 32]),
+            });
+        ctx1.cache
+            .store_package_shared(&key, &forged)
+            .expect("rewrite the package entry");
+
+        let r2 = resolved(&root, &files);
+        let (db2, pkg2) = crate::project_load::build_db_from_sources(&r2, |_| {});
+        let ctx2 = CacheContext::open(&r2).expect("cache reopens");
+        let program = compile_program(&db2, pkg2, Some(&ctx2)).expect("warm compile");
+        let packages = linked_package_count(&db2, pkg2);
+        assert_eq!(
+            ctx2.packages_served(),
+            packages,
+            "every entry was served first"
+        );
+        assert_eq!(
+            ctx2.packages_emitted(),
+            packages,
+            "the honest recompile re-emits every package"
+        );
+        assert_eq!(program_bytes(&program), honest_bytes(&r2));
+
+        let r3 = resolved(&root, &files);
+        let (db3, pkg3) = crate::project_load::build_db_from_sources(&r3, |_| {});
+        let ctx3 = CacheContext::open(&r3).expect("cache reopens");
+        let program = compile_program(&db3, pkg3, Some(&ctx3)).expect("warm compile");
+        assert_eq!(ctx3.packages_emitted(), 0, "the forged entry was refreshed");
+        assert_eq!(ctx3.packages_served(), packages);
+        assert_eq!(program_bytes(&program), honest_bytes(&r3));
         let _ = std::fs::remove_dir_all(&root);
     }
 

@@ -47,12 +47,13 @@ use baml_type::typetag::TypeTag;
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     AtomicValueSlot, BodyKey, ConstValue, DeclPath, FnPath, GlobalIndex, HeapPtr, Object,
-    ObjectIndex, TyTemplate, TypeHead,
+    ObjectIndex, ObjectType, TyTemplate, TypeHead,
     bytecode::SwitchKey,
     head_walk::visit_object_heads_mut,
     relink::{IndexOperand, visit_object_operands},
     types::{
-        EdgeKind, LocalName, MethodImpl, Objects, Owner, Package, RuntimeImplRule, Slots, Value,
+        EdgeKind, ExportSurface, LocalName, MethodImpl, Objects, Owner, Package, RuntimeImplRule,
+        Slots, Value,
     },
 };
 use indexmap::IndexMap;
@@ -618,6 +619,7 @@ fn bind_slots(
                 entry.edge
             ))
         })?;
+        verify_fingerprint(vm, entry, edge.kind, edge.target)?;
         bound.push(match edge.kind {
             EdgeKind::Anonymous => Bound::Declaration(edge.target),
             EdgeKind::Declared | EdgeKind::ReExported | EdgeKind::Prelude => {
@@ -626,6 +628,69 @@ fn bind_slots(
         });
     }
     Ok(bound)
+}
+
+/// The static linker's fingerprint law, as a consistency assertion over the
+/// package objects the artifact's pins already bound by identity: a direct
+/// dependency's entry carries the digest of the interface payload the compile
+/// read, and a package served from a compiled blob must still carry those
+/// bytes. A projected surface (a `with_types` view, an anonymous declaration)
+/// has no payload — the compile read the seam's projection of it — so the
+/// pin is its whole identity. The prelude and transitive roots carry no
+/// fingerprint, as in the static lane.
+fn verify_fingerprint(
+    vm: &BexVm,
+    entry: &DependencyEntry,
+    kind: EdgeKind,
+    target: HeapPtr,
+) -> Result<(), VmRustFnError> {
+    let expected = match (kind, entry.fingerprint) {
+        (EdgeKind::Prelude, None) => return Ok(()),
+        (EdgeKind::Prelude, Some(_)) => {
+            return Err(link_error(format!(
+                "dependency `{}` is a prelude package but carries an interface fingerprint",
+                entry.edge
+            )));
+        }
+        (EdgeKind::Declared | EdgeKind::ReExported | EdgeKind::Anonymous, None) => {
+            if entry.via.is_self() {
+                return Err(link_error(format!(
+                    "dependency `{}` carries no interface fingerprint",
+                    entry.edge
+                )));
+            }
+            return Ok(());
+        }
+        (EdgeKind::Declared | EdgeKind::ReExported | EdgeKind::Anonymous, Some(expected)) => {
+            expected
+        }
+    };
+    let blob = match vm.get_object(target) {
+        Object::Package(target) => match &target.surface {
+            ExportSurface::Compiled(blob) => blob,
+            ExportSurface::Projected => return Ok(()),
+        },
+        // An anonymous declaration is mounted as a projected root of one row.
+        Object::Class(_) | Object::Enum(_) => return Ok(()),
+        other => unreachable!(
+            "a dependency edge targets a package or an anonymous declaration, found {:?}",
+            ObjectType::of(other)
+        ),
+    };
+    let found = baml_artifact::payload_digest(baml_artifact::ArtifactKind::PackageInterface, blob)
+        .map_err(|error| {
+            link_error(format!(
+                "dependency `{}` carries an interface payload that does not decode: {error}",
+                entry.edge
+            ))
+        })?;
+    if found != expected {
+        return Err(link_error(format!(
+            "dependency `{}` is not the interface the artifact was compiled against",
+            entry.edge
+        )));
+    }
+    Ok(())
 }
 
 fn slot_binding(package_ptr: HeapPtr, slots: &[Bound], dep: DepSlot) -> Bound {

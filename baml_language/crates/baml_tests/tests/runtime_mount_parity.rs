@@ -179,16 +179,23 @@ fn assert_bytes_identical(label: &str, left: &[u8], right: &[u8]) {
 }
 
 /// The wire contract a consumer unit writes: the packages it reaches, by
-/// slot; what it imports, by slot and path; what it exports; its impl rules.
-/// Rendered one fact per line so the golden reads as a table.
+/// slot, and whether the entry carries the fingerprint of the interface the
+/// compile read (a direct dependency does; the prelude and a transitive root
+/// do not); what it imports, by slot and path; what it exports; its impl
+/// rules. Rendered one fact per line so the golden reads as a table.
 fn wire_contract(unit: &CompilationUnit) -> String {
     let mut lines = Vec::new();
     for (index, entry) in unit.dependencies.iter().enumerate() {
         lines.push(format!(
-            "dep @{} {} via @{}",
+            "dep @{} {} via @{}{}",
             index + 1,
             entry.edge,
-            entry.via.0
+            entry.via.0,
+            if entry.fingerprint.is_some() {
+                " fingerprinted"
+            } else {
+                ""
+            }
         ));
     }
     for entry in &unit.object_imports {

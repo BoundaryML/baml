@@ -76,7 +76,7 @@ pub(super) fn finish<'db>(
     let record = package_record(db, root);
     let (tail, initializers) = match emit_tail(db, class_fields, root, &files, &lets, opt, scope)? {
         Some(parts) => (
-            Some(seal_tail((parts.tail, parts.refs))),
+            Some(seal_tail(db, (parts.tail, parts.refs))),
             parts.initializers,
         ),
         None => (None, Vec::new()),
@@ -85,7 +85,7 @@ pub(super) fn finish<'db>(
     Ok((
         EmittedPackage {
             unit: CompilationUnit {
-                dependencies: refs.deps.into_entries(),
+                dependencies: refs.deps.into_entries(db),
                 classes,
                 enums,
                 interfaces,
@@ -248,8 +248,8 @@ fn bake_rules<'db>(
 }
 
 /// Give a tail its tables: the resolver's dependency and import tables.
-fn seal_tail((mut tail, tail_refs): (InitTail, RefTables)) -> InitTail {
-    tail.dependencies = tail_refs.deps.into_entries();
+fn seal_tail(db: &dyn crate::Db, (mut tail, tail_refs): (InitTail, RefTables)) -> InitTail {
+    tail.dependencies = tail_refs.deps.into_entries(db);
     tail.object_imports = tail_refs.imports.objects.into_entries();
     tail.global_imports = tail_refs.imports.globals.into_entries();
     tail

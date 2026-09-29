@@ -1,6 +1,7 @@
 //! What a link refuses, and why.
 
 use baml_base::Name;
+use baml_linker_types::Digest;
 use bex_vm_types::DeclPath;
 
 /// An error raised while linking.
@@ -10,6 +11,18 @@ pub enum LinkError {
     UnresolvedImport { package: Name, path: DeclPath },
     /// A dependency entry named an edge its parent's edge table lacks.
     UnknownDependency { package: Name, edge: Name },
+    /// A unit was compiled against one interface of a dependency and linked
+    /// against a package carrying another: the entry's recorded fingerprint
+    /// is not the digest of the bound package's interface payload.
+    InterfaceMismatch {
+        package: Name,
+        edge: Name,
+        expected: Digest,
+        found: Digest,
+    },
+    /// A dependency entry carries a fingerprint but the package bound to it
+    /// has no interface payload to check it against.
+    MissingInterface { package: Name, edge: Name },
     /// A package exports the same declaration twice.
     DuplicateExport { package: Name, path: DeclPath },
     /// A package's edge table reaches two packages under one name, so the
@@ -41,6 +54,23 @@ impl std::fmt::Display for LinkError {
             Self::UnknownDependency { package, edge } => {
                 write!(f, "package `{package}` depends on unknown edge `{edge}`")
             }
+            Self::InterfaceMismatch {
+                package,
+                edge,
+                expected,
+                found,
+            } => write!(
+                f,
+                "package `{package}` was compiled against an interface of `{edge}` with digest \
+                 {} but is linked against one with digest {}",
+                hex(expected),
+                hex(found)
+            ),
+            Self::MissingInterface { package, edge } => write!(
+                f,
+                "package `{package}` depends on `{edge}`, whose package carries no interface \
+                 payload to verify against"
+            ),
             Self::DuplicateExport { package, path } => {
                 write!(f, "package `{package}` exports {path} twice")
             }
@@ -57,3 +87,13 @@ impl std::fmt::Display for LinkError {
 }
 
 impl std::error::Error for LinkError {}
+
+fn hex(digest: &Digest) -> String {
+    use std::fmt::Write as _;
+    digest
+        .iter()
+        .fold(String::with_capacity(64), |mut out, byte| {
+            let _ = write!(out, "{byte:02x}");
+            out
+        })
+}

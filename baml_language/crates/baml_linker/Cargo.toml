@@ -18,6 +18,7 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_artifact = { workspace = true }
 baml_base = { workspace = true }
 baml_linker_types = { workspace = true }
 baml_type = { workspace = true }

@@ -2,7 +2,7 @@
 source: crates/baml_tests/tests/runtime_mount_parity.rs
 expression: wire_contract(mounted_unit)
 ---
-dep @1 app via @0
+dep @1 app via @0 fingerprinted
 dep @2 baml via @0
 import object @1 enum Level
 import object @1 class Widget
