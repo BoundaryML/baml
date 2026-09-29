@@ -243,6 +243,7 @@ reqwest = { version = "0.13.1", default-features = false, features = [
   "stream",
 ] }
 mimalloc = { version = "0.1.52" }
+libmimalloc-sys = { version = "0.1.49", features = [ "extended" ] }
 rowan = { version = "0.16" }
 rustls = { version = "0.23.37", default-features = false }
 rustls-pemfile = "2"

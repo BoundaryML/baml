@@ -87,7 +87,7 @@ use std::{
     collections::{HashMap, VecDeque},
     panic::{AssertUnwindSafe, catch_unwind},
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, OnceLock,
         atomic::{AtomicU64, Ordering},
     },
 };
@@ -657,6 +657,18 @@ fn format_unhandled_throw(value: &BexExternalValue, trace: &[bex_vm::StackFrame]
     }));
     write!(out, "uncaught throw: {}", value.render_readable()).unwrap();
     out
+}
+
+static AFTER_MAJOR_GC_HOOK: OnceLock<fn()> = OnceLock::new();
+
+/// Register a process-wide callback that runs after every major collection.
+///
+/// The engine frees the old heap space through the global allocator, which
+/// may keep the pages. A host that installs its own allocator uses this hook
+/// to return them to the OS (e.g. `mi_collect`). Only the first registration
+/// takes effect; returns whether this one did.
+pub fn set_after_major_gc_hook(hook: fn()) -> bool {
+    AFTER_MAJOR_GC_HOOK.set(hook).is_ok()
 }
 
 /// Fully-qualified name of the cancellation panic class.
@@ -2805,6 +2817,15 @@ impl BexEngine {
         }
         drop(heap_guard);
         cycle.released();
+
+        // A major collection frees the whole old space; let the host hand the
+        // freed pages back to the OS. Runs after the permits are released so
+        // it does not lengthen the stop-the-world window.
+        if level == bex_heap::CollectionLevel::Major
+            && let Some(hook) = AFTER_MAJOR_GC_HOOK.get()
+        {
+            hook();
+        }
 
         // Flush deferred host-value releases now that the stop-the-world window
         // has closed. Collecting a dead `Object::HostClosure` runs

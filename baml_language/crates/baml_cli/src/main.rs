@@ -14,9 +14,21 @@ use std::io::Write as _;
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
+/// mimalloc keeps freed pages in its thread-local heaps and arenas. After a
+/// major GC has released the old heap space, hand them back to the OS so
+/// dropping a large structure shrinks the process.
+#[allow(unsafe_code, reason = "FFI call into the global allocator")]
+fn release_freed_memory() {
+    // SAFETY: `mi_collect` has no preconditions; mimalloc is the global
+    // allocator of this binary.
+    unsafe { libmimalloc_sys::mi_collect(true) }
+}
+
 fn main() {
     // TODO: baml_log is disabled for now
     // baml_log::init()?;
+
+    bex_engine::set_after_major_gc_hook(release_freed_memory);
 
     warn_if_direct_invocation();
 

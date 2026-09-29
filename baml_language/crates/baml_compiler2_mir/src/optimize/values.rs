@@ -255,8 +255,17 @@ fn simplify_boolean_diamonds(body: &mut MirFunctionBody<'_>) {
 
 /// Backwards liveness removes individual overwritten definitions, rather than
 /// requiring the entire local to be unused. Potentially failing RHSs stay put.
+///
+/// A dead store that *overwrites* a named, heap-typed local is kept: the VM
+/// roots every frame slot, so the store is what releases the old value. Without
+/// it `xs = []; collect_garbage()` keeps the old `xs` alive until return.
 pub(super) fn eliminate_dead_stores(body: &mut MirFunctionBody<'_>, arity: usize, opt: OptLevel) {
     let effects = super::effects::Analysis::new(body);
+    let defs = super::count_local_defs(body);
+    let releases_reference = |local: crate::Local| {
+        let decl = &body.locals[local.0];
+        decl.name.is_some() && defs[local.0] > 1 && may_reference_heap(&decl.ty)
+    };
     let n = body.locals.len();
     let mut live_in = vec![vec![false; n]; body.blocks.len()];
     loop {
@@ -288,6 +297,7 @@ pub(super) fn eliminate_dead_stores(body: &mut MirFunctionBody<'_>, arity: usize
                 && (opt != OptLevel::Zero || body.locals[local.0].name.is_none())
                 && !live[local.0]
                 && effects.discardable[index][statement_index]
+                && !releases_reference(*local)
             {
                 debug_assert!(
                     !body.locals[local.0].is_captured,
@@ -299,6 +309,20 @@ pub(super) fn eliminate_dead_stores(body: &mut MirFunctionBody<'_>, arity: usize
         }
         statements.retain(|statement| !matches!(statement.kind, StatementKind::Nop));
     }
+}
+
+/// Whether a slot of this type can hold a heap object (floats are boxed).
+/// Unlisted variants stay on the conservative side.
+fn may_reference_heap(ty: &baml_type::RuntimeTy) -> bool {
+    use baml_type::{Literal, RuntimeTy};
+    !matches!(
+        ty,
+        RuntimeTy::Int
+            | RuntimeTy::Bool
+            | RuntimeTy::Null
+            | RuntimeTy::Void
+            | RuntimeTy::Literal(Literal::Int(_) | Literal::Bool(_), ..)
+    )
 }
 
 fn live_out(
@@ -640,6 +664,61 @@ mod tests {
                     .position(|local| local.name.is_some())
                     .unwrap();
                 assert_eq!(super::super::count_local_defs(&body)[named], 2);
+            }
+        }
+    }
+    #[test]
+    fn dead_overwrite_of_heap_typed_named_local_is_kept() {
+        // `xs = a; ...; xs = b` with `xs` dead after the second store: the
+        // store releases the first value, so it must survive DSE for a type
+        // that can hold a heap object (floats are boxed). An `int` local is still
+        // optimized.
+        let string = |value: &str| Constant::String(value.into());
+        for (ty, values, kept) in [
+            (RuntimeTy::string(), [string("a"), string("b")], true),
+            (
+                RuntimeTy::Float,
+                [Constant::Float(1.0), Constant::Float(2.0)],
+                true,
+            ),
+            (
+                RuntimeTy::int(),
+                [Constant::Int(1), Constant::Int(2)],
+                false,
+            ),
+        ] {
+            let mut block = BasicBlock::new(BlockId(0));
+            for value in values {
+                let value = Rvalue::Use(Operand::Constant(value));
+                block.statements.push(Statement {
+                    kind: StatementKind::Assign {
+                        destination: Place::Local(Local(1)),
+                        value,
+                    },
+                    span: None,
+                });
+            }
+            block.terminator = Some(Terminator::Return);
+            let original = MirFunctionBody {
+                blocks: vec![block],
+                entry: BlockId(0),
+                locals: [(None, RuntimeTy::int()), (Some("xs"), ty.clone())]
+                    .into_iter()
+                    .map(|(name, ty)| LocalDecl {
+                        name: name.map(baml_base::Name::new),
+                        ty,
+                        span: None,
+                        scope_span: None,
+                        is_captured: false,
+                    })
+                    .collect(),
+                catch_regions: vec![],
+            };
+            for opt in [OptLevel::One, OptLevel::Two] {
+                let mut body = original.clone();
+                eliminate_dead_stores(&mut body, 0, opt);
+                let defs = super::super::count_local_defs(&body);
+                assert_eq!(defs[1], if kept { 2 } else { 0 }, "{ty:?} at {opt:?}");
             }
         }
     }
