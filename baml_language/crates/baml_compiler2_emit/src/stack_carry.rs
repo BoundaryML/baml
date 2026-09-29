@@ -1565,7 +1565,7 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         Ok(())
     }
 
-    fn is_type(&mut self, _ty: &baml_compiler2_mir::TyTemplate) -> Result<(), Self::Error> {
+    fn is_type(&mut self, _test: &baml_compiler2_mir::TypeTest<'a>) -> Result<(), Self::Error> {
         // Emitter consumes operand and pushes boolean result.
         if !self.sim.pop_n(1) {
             return Err(());

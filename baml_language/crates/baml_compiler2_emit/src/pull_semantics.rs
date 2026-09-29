@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 use baml_compiler2_hir_ty::extern_loc::ClassRef;
 use baml_compiler2_mir::{
     AggregateKind, BinOp, CellId, Constant, IndexKind, Local, Operand, Place, Rvalue, TyTemplate,
-    UnaryOp,
+    TypeTest, UnaryOp,
 };
 
 use crate::analysis::{LocalClassification, LocalDefUse};
@@ -66,7 +66,7 @@ pub(crate) trait PullSink<'db> {
     fn type_tag(&mut self) -> Result<(), Self::Error>;
 
     fn len_of_place(&mut self, place: &Place) -> Result<(), Self::Error>;
-    fn is_type(&mut self, ty_template: &TyTemplate) -> Result<(), Self::Error>;
+    fn is_type(&mut self, test: &TypeTest<'db>) -> Result<(), Self::Error>;
     /// Coarse runtime type-tag test (`Rvalue::IsTypeTag`): the MIR lowering
     /// proved the `baml_type::typetag` constant `tag` a sound substitute for
     /// the structural check, so the test is the tag comparison itself.
@@ -444,12 +444,9 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
             sink.type_tag()
         }
         Rvalue::Len(place) => sink.len_of_place(place),
-        Rvalue::IsType {
-            operand,
-            ty_template,
-        } => {
+        Rvalue::IsType { operand, test } => {
             walk_operand_pull(sink, operand)?;
-            sink.is_type(ty_template)
+            sink.is_type(test)
         }
         Rvalue::IsTypeTag { operand, tag } => {
             walk_operand_pull(sink, operand)?;

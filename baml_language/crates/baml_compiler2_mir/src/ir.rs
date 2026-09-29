@@ -462,6 +462,56 @@ pub enum SwitchKey<'db> {
     Class(baml_compiler2_hir_ty::extern_loc::ClassRef<'db>),
 }
 
+/// What a type test decides membership in, as lowering determined it.
+///
+/// A nominal test names its declaration: lowering resolved the head once, and
+/// the emitter tests identity against the declaration it is handed, never
+/// resolving the head again.
+#[derive(Debug, Clone)]
+pub enum TypeTest<'db> {
+    /// An instance of `class` at `args`; with none, any instance of it (a
+    /// class without parameters has none).
+    Class {
+        class: baml_compiler2_hir_ty::extern_loc::ClassRef<'db>,
+        args: Vec<TyTemplate>,
+    },
+    /// A value of this enum.
+    Enum(baml_compiler2_hir_ty::extern_loc::EnumRef<'db>),
+    /// Any other type, decided against the template — never a class or an
+    /// enum, which lowering states by declaration.
+    Template(TyTemplate),
+}
+
+impl TypeTest<'_> {
+    /// Every frame type-argument slot the test reads.
+    pub fn for_each_type_arg_ref(&self, f: &mut impl FnMut(u32)) {
+        match self {
+            Self::Class { args, .. } => {
+                for arg in args {
+                    arg.for_each_type_arg_ref(f);
+                }
+            }
+            Self::Enum(_) => {}
+            Self::Template(template) => template.for_each_type_arg_ref(f),
+        }
+    }
+
+    /// The type the test decides membership in, as a template: what a
+    /// display shows.
+    pub fn template(&self, db: &dyn baml_compiler2_hir::Db) -> TyTemplate {
+        match self {
+            Self::Class { class, args } => TyTemplate::Class(
+                baml_compiler2_hir_ty::layout::class_head(db, *class),
+                args.clone().into_boxed_slice(),
+            ),
+            Self::Enum(enum_ref) => {
+                TyTemplate::Enum(baml_compiler2_hir_ty::layout::enum_head(db, *enum_ref))
+            }
+            Self::Template(template) => template.clone(),
+        }
+    }
+}
+
 /// How a basic block transfers control.
 ///
 /// Every basic block must end with exactly one terminator. Terminators are
@@ -481,7 +531,7 @@ pub enum Terminator<'db> {
     /// Test one value and bind that same value to `destination` on success.
     NarrowBind {
         source: Operand<'db>,
-        ty_template: TyTemplate,
+        test: TypeTest<'db>,
         destination: Local,
         then_block: BlockId,
         else_block: BlockId,
@@ -961,7 +1011,7 @@ pub enum Rvalue<'db> {
     /// ([`Rvalue::IsTypeTag`], a proven-sufficient tag).
     IsType {
         operand: Operand<'db>,
-        ty_template: TyTemplate,
+        test: TypeTest<'db>,
     },
 
     /// Coarse runtime type-tag test: `is_type_tag(_1, LIST)`.

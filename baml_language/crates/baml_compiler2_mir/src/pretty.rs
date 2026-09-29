@@ -306,7 +306,7 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
         }
         Terminator::NarrowBind {
             source,
-            ty_template,
+            test,
             destination,
             then_block,
             else_block,
@@ -316,7 +316,7 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
             write!(
                 f,
                 " as {:?} -> [{then_block}, {else_block}];",
-                Names::of(db).template(ty_template)
+                Names::of(db).template(&test.template(db))
             )
         }
         Terminator::Switch {
@@ -655,13 +655,10 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
         Rvalue::Len(place) => {
             write!(f, "len({place})")
         }
-        Rvalue::IsType {
-            operand,
-            ty_template,
-        } => {
+        Rvalue::IsType { operand, test } => {
             write!(f, "is_type(")?;
             write_operand(f, db, operand)?;
-            write!(f, ", {})", Names::of(db).template(ty_template))
+            write!(f, ", {})", Names::of(db).template(&test.template(db)))
         }
         Rvalue::IsTypeTag { operand, tag } => {
             write!(f, "is_type_tag(")?;

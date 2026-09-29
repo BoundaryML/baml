@@ -568,11 +568,6 @@ impl<'db> PackageRefs<'_, 'db> {
         layout::class_ref_of(self.db, head)
     }
 
-    /// The enum `head` is; `None` when `head` is no enum.
-    pub(crate) fn enum_ref(&self, head: &DeclName) -> Option<EnumRef<'db>> {
-        layout::enum_ref_of(self.db, head)
-    }
-
     /// A class arm's switch key: the declaration's operand, which the linker
     /// or grafter solves against the tag it assigns.
     pub(crate) fn switch_key<'a>(&mut self, class: ClassRef<'a>) -> SwitchKey

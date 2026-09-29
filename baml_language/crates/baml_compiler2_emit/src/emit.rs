@@ -18,7 +18,7 @@ use baml_compiler2_hir_ty::{
 use baml_compiler2_mir::{
     BasicBlock, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, Local, LogLevel, MirFunctionBody,
     Operand, Place, RealizedTy, RuntimeTy, Rvalue, StatementKind, SwitchKey as MirSwitchKey,
-    Terminator, TyTemplate, UnaryOp,
+    Terminator, TyTemplate, TypeTest, UnaryOp,
     memory::{self, CellId},
 };
 use baml_type::DeclName;
@@ -432,11 +432,6 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             .to_string()
     }
 
-    fn class_object_index_for_type_name(&mut self, tn: &DeclName) -> Option<usize> {
-        let class = self.refs.class_ref(tn)?;
-        Some(self.refs.class(class).raw())
-    }
-
     /// A MIR switch key as this lane's bytecode states it.
     fn resolve_switch_key(&mut self, key: MirSwitchKey<'ctx>) -> SwitchKey {
         match key {
@@ -454,15 +449,6 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         // The snapshot outlives the body; read it at the body's lifetime.
         let fields: &'s HashMap<ClassRef<'a>, Vec<(String, RuntimeTy)>> = self.class_fields;
         fields.get(&class).map(Vec::as_slice)
-    }
-
-    /// Enum-object index for an enum type name, mirroring
-    /// [`Self::class_object_index_for_type_name`]. Used by `is <Enum>` to test
-    /// enum identity (`ConstValue::Object`) rather than the shared `ENUM` tag,
-    /// which cannot distinguish two enum types (`Color` vs `Status`).
-    fn enum_object_index_for_type_name(&mut self, tn: &DeclName) -> Option<usize> {
-        let enum_ref = self.refs.enum_ref(tn)?;
-        Some(self.refs.enum_(enum_ref).raw())
     }
 
     /// Resolve the type of a MIR Place by walking from the root local through projections.
@@ -2031,12 +2017,163 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         }
     }
 
+    /// A type test of a template that names no class and no enum: a tag
+    /// where one exactly represents the test, else the value matcher.
+    fn is_type_template(&mut self, ty_template: &TyTemplate) {
+        let emit_true = |this: &mut Self| {
+            this.emit(Instruction::Pop(1));
+            let idx = this.add_constant(ConstValue::Bool(true));
+            let inst = this.emit(Instruction::LoadConst(idx));
+            this.set_operand(inst, OperandMeta::Const("true".to_string()));
+        };
+        // Hand the whole template to the VM's value matcher
+        // (`type_match::value_matches_template`) via a raw `ConstValue::Type`:
+        // it resolves the template's frame refs against `frame.type_args` and
+        // relates *invariantly* at generic-argument positions — the element- and
+        // arg-discriminating check a coarse type tag cannot express (`int[]` ≠
+        // `string[]`, `map<string,int>` ≠ `map<string,string>`, a realized `T[]`).
+        let emit_structural = |this: &mut Self, template: &TyTemplate| {
+            let anchored = this.refs.anchor_template(template);
+            let c = this.add_constant(ConstValue::Type(anchored));
+            let inst = this.emit(Instruction::IsType(c));
+            this.set_operand(inst, OperandMeta::Const(this.spelled_template(template)));
+        };
+        match ty_template {
+            // Lowering states a class test by declaration
+            // (`TypeTest::Class`).
+            TyTemplate::Class(..) => {
+                unreachable!("a class test reaches the emitter as `TypeTest::Class`")
+            }
+
+            // ── Structural (value matcher) ───────────────────────────────────
+            // A container (element/key/value may discriminate — a coarse tag
+            // would conflate `int[]` with `string[]`; the proven-sufficient
+            // coarse test is its own `is_type_tag` sink), a bare frame
+            // reference (`T`), an interface existential (membership resolved at
+            // runtime against the impl registry — never a compile-time
+            // implementor enumeration), an associated projection over a frame
+            // base (`(#0 as Holder).Item` — `substitute` reduces it through
+            // the registry at test time, which is total: every baked rule
+            // carries a binding for every declared member, pinned or
+            // defaulted), or a union that may carry any of these: the VM
+            // value matcher.
+            //
+            // Media (`image` / `audio` / `video` / `pdf`) belongs here rather
+            // than with the tagless leaves below: there is no type tag for
+            // media, but `value_concrete_ty` reports the *primitive*
+            // `ConcreteRealizedTy::Media(kind)`, so the value matcher
+            // discriminates `image` from `audio` exactly. Routing it to the
+            // tagless-leaf fallback instead compiles to constant-FALSE — `v is
+            // image` false for every value, and a `match`'s media arm never
+            // firing (the last arm swallows the value).
+            TyTemplate::List(..)
+            | TyTemplate::Map { .. }
+            | TyTemplate::Future(..)
+            | TyTemplate::Media(..)
+            | TyTemplate::TypeArgRef(_)
+            | TyTemplate::Interface(..)
+            | TyTemplate::AssociatedTypeProjection { .. }
+            | TyTemplate::Union(..) => emit_structural(self, ty_template),
+
+            // ── Function signatures ──────────────────────────────────────────
+            // Signature-precise, via the same value matcher every other
+            // structural template uses: it applies the canonical function
+            // relation (contravariant parameters, covariant return and
+            // throws), and every callable value now reconstructs a faithful
+            // function type to compare against — a closure, generic function,
+            // or bound method materializes its stored signature templates
+            // against the frame it carries. A coarse "is it callable" tag test
+            // would answer `true` for a callable of the wrong signature.
+            TyTemplate::Function { .. } => emit_structural(self, ty_template),
+
+            // `unknown` is the top type: every value inhabits it, so the test is
+            // constant-true. It is a realized *leaf* with no type tag, so without
+            // this arm it falls into the tagless-leaf fallback below and compiles
+            // to constant-FALSE — silently misrouting every value, not just the
+            // valueless ones. (Only refutable positions reach here at all: an
+            // exhaustive final `let v: unknown` arm has its test elided.)
+            TyTemplate::Unknown => emit_true(self),
+
+            // ── Singleton (literal) ──────────────────────────────────────────
+            // A literal type is a set of one, so membership is decided against
+            // the value itself, not against a type tag: every tag a literal
+            // could name is its *base* type's, which answers `true` for every
+            // other inhabitant of that base (`x is One` matching every int when
+            // `type One = 1`). `ConstValue::Literal` is the exact test — the
+            // specialization of the `ConstValue::Type(Literal)` structural form
+            // the algebra would otherwise decide, minus the reconstruction.
+            TyTemplate::Literal(literal, _) => {
+                let c = self.add_constant(ConstValue::Literal(literal.clone()));
+                let inst = self.emit(Instruction::IsType(c));
+                self.set_operand(inst, OperandMeta::Const(literal.to_string()));
+            }
+
+            // Fully realized leaves keep their exact identity/tag fast path,
+            // then use structural matching when no exact fast path exists.
+            // This list is exhaustive on purpose: a new template variant must
+            // choose its type-test strategy here.
+            other @ (TyTemplate::Int
+            | TyTemplate::Bigint
+            | TyTemplate::Float
+            | TyTemplate::String
+            | TyTemplate::Bool
+            | TyTemplate::Null
+            | TyTemplate::Uint8Array
+            | TyTemplate::Enum(..)
+            | TyTemplate::EnumVariant(..)
+            | TyTemplate::RustType
+            | TyTemplate::Type
+            | TyTemplate::Resource
+            | TyTemplate::PromptAst
+            | TyTemplate::Void
+            | TyTemplate::TypeAlias(..)
+            | TyTemplate::Never) => {
+                // A fully-realized leaf (primitive, enum, alias, literal, ...):
+                // enum-pointer identity for an `Enum`, otherwise its type tag
+                // when one exactly represents the test. Tagless leaves use
+                // the canonical structural matcher instead of silently
+                // compiling to false.
+                let realized = <&RealizedTy>::try_from(other)
+                    .expect("exhaustive realized-leaf template classification");
+                if let RealizedTy::TypeAlias(_) = realized {
+                    // Only a RECURSIVE alias survives lowering as a head (a
+                    // non-recursive one was expanded); membership in it is
+                    // the equirecursive set its definition unfolds to, which
+                    // the VM's matcher decides by unfolding the pooled
+                    // `Object::TypeAlias` the head binds to at load. An alias
+                    // is not a class: the class-object identity test this
+                    // arm used to attempt could never find one, so `v is
+                    // Tree` compiled to constant false.
+                    emit_structural(self, other);
+                } else if let RealizedTy::Enum(_) = realized {
+                    // Lowering states an enum test by declaration
+                    // (`TypeTest::Enum`).
+                    unreachable!("an enum test reaches the emitter as `TypeTest::Enum`")
+                } else if let Some(tag) = realized_type_tag(realized) {
+                    let c = self.add_constant(ConstValue::Int(tag));
+                    let inst = self.emit(Instruction::IsType(c));
+                    let spelling = baml_compiler2_hir::package::spelling(self.db);
+                    self.set_operand(
+                        inst,
+                        OperandMeta::Const(
+                            realized
+                                .map_heads(&mut |decl: &DeclName| spelling.wire(decl))
+                                .to_string(),
+                        ),
+                    );
+                } else {
+                    emit_structural(self, other);
+                }
+            }
+        }
+    }
+
     // ========================================================================
     // Terminator Emission
     // ========================================================================
 
-    fn emit_narrow_bind(&mut self, ty_template: &TyTemplate, destination: Local) {
-        unwrap_infallible(PullSink::is_type(self, ty_template));
+    fn emit_narrow_bind(&mut self, test: &TypeTest<'ctx>, destination: Local) {
+        unwrap_infallible(PullSink::is_type(self, test));
         let last = self
             .bytecode
             .instructions
@@ -2070,13 +2207,13 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
 
             Terminator::NarrowBind {
                 source,
-                ty_template,
+                test,
                 destination,
                 then_block,
                 else_block,
             } => {
                 self.emit_operand_pull(source);
-                self.emit_narrow_bind(ty_template, *destination);
+                self.emit_narrow_bind(test, *destination);
                 self.emit_branch(*then_block, *else_block);
             }
 
@@ -3207,191 +3344,44 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
         Ok(())
     }
 
-    fn is_type(&mut self, ty_template: &TyTemplate) -> Result<(), Self::Error> {
-        let emit_true = |this: &mut Self| {
-            this.emit(Instruction::Pop(1));
-            let idx = this.add_constant(ConstValue::Bool(true));
-            let inst = this.emit(Instruction::LoadConst(idx));
-            this.set_operand(inst, OperandMeta::Const("true".to_string()));
-        };
-        // Hand the whole template to the VM's value matcher
-        // (`type_match::value_matches_template`) via a raw `ConstValue::Type`:
-        // it resolves the template's frame refs against `frame.type_args` and
-        // relates *invariantly* at generic-argument positions — the element- and
-        // arg-discriminating check a coarse type tag cannot express (`int[]` ≠
-        // `string[]`, `map<string,int>` ≠ `map<string,string>`, a realized `T[]`).
-        let emit_structural = |this: &mut Self, template: &TyTemplate| {
-            let anchored = this.refs.anchor_template(template);
-            let c = this.add_constant(ConstValue::Type(anchored));
-            let inst = this.emit(Instruction::IsType(c));
-            this.set_operand(inst, OperandMeta::Const(this.spelled_template(template)));
-        };
-        match ty_template {
+    fn is_type(&mut self, test: &TypeTest<'ctx>) -> Result<(), Self::Error> {
+        match test {
             // ── Class check ──────────────────────────────────────────────────
             // Every class (monomorphic `Foo`, concrete `Foo<int>`, or generic
-            // `Foo<T>`) is a `Class` template. Non-empty args → `ClassWithTypeArgs`
-            // so the VM compares each arg invariantly; empty args →
-            // class-pointer identity.
-            TyTemplate::Class(tn, type_args_templates) => {
-                let class_name_str = self.spelled_head(tn);
-                // A `Class` template's head is a class declaration by
-                // construction: the checker built the type from one, and the
-                // head is its identity.
-                let class_obj_idx =
-                    self.class_object_index_for_type_name(tn)
-                        .unwrap_or_else(|| {
-                            unreachable!("the class template `{class_name_str}` heads no class")
-                        });
-                if type_args_templates.is_empty() {
-                    let c =
-                        self.add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
+            // `Foo<T>`) is tested against the declaration lowering resolved.
+            // Non-empty args → `ClassWithTypeArgs` so the VM compares each arg
+            // invariantly; empty args → class-pointer identity.
+            TypeTest::Class { class, args } => {
+                let class_name = self.spelled_head(&layout::class_head(self.db, *class));
+                let class_obj = self.refs.class(*class);
+                if args.is_empty() {
+                    let c = self.add_constant(ConstValue::Object(class_obj));
                     let inst = self.emit(Instruction::IsType(c));
-                    self.set_operand(inst, OperandMeta::Const(class_name_str));
+                    self.set_operand(inst, OperandMeta::Const(class_name));
                 } else {
-                    let type_args_templates = type_args_templates
+                    let type_args_templates = args
                         .iter()
                         .map(|template| self.refs.anchor_template(template))
                         .collect();
                     let c = self.add_constant(ConstValue::ClassWithTypeArgs {
-                        class_obj: ObjectIndex::from_raw(class_obj_idx),
+                        class_obj,
                         type_args_templates,
                     });
                     let inst = self.emit(Instruction::IsType(c));
-                    self.set_operand(inst, OperandMeta::Const(format!("{class_name_str}<...>")));
+                    self.set_operand(inst, OperandMeta::Const(format!("{class_name}<...>")));
                 }
             }
-
-            // ── Structural (value matcher) ───────────────────────────────────
-            // A container (element/key/value may discriminate — a coarse tag
-            // would conflate `int[]` with `string[]`; the proven-sufficient
-            // coarse test is its own `is_type_tag` sink), a bare frame
-            // reference (`T`), an interface existential (membership resolved at
-            // runtime against the impl registry — never a compile-time
-            // implementor enumeration), an associated projection over a frame
-            // base (`(#0 as Holder).Item` — `substitute` reduces it through
-            // the registry at test time, which is total: every baked rule
-            // carries a binding for every declared member, pinned or
-            // defaulted), or a union that may carry any of these: the VM
-            // value matcher.
-            //
-            // Media (`image` / `audio` / `video` / `pdf`) belongs here rather
-            // than with the tagless leaves below: there is no type tag for
-            // media, but `value_concrete_ty` reports the *primitive*
-            // `ConcreteRealizedTy::Media(kind)`, so the value matcher
-            // discriminates `image` from `audio` exactly. Routing it to the
-            // tagless-leaf fallback instead compiles to constant-FALSE — `v is
-            // image` false for every value, and a `match`'s media arm never
-            // firing (the last arm swallows the value).
-            TyTemplate::List(..)
-            | TyTemplate::Map { .. }
-            | TyTemplate::Future(..)
-            | TyTemplate::Media(..)
-            | TyTemplate::TypeArgRef(_)
-            | TyTemplate::Interface(..)
-            | TyTemplate::AssociatedTypeProjection { .. }
-            | TyTemplate::Union(..) => emit_structural(self, ty_template),
-
-            // ── Function signatures ──────────────────────────────────────────
-            // Signature-precise, via the same value matcher every other
-            // structural template uses: it applies the canonical function
-            // relation (contravariant parameters, covariant return and
-            // throws), and every callable value now reconstructs a faithful
-            // function type to compare against — a closure, generic function,
-            // or bound method materializes its stored signature templates
-            // against the frame it carries. A coarse "is it callable" tag test
-            // would answer `true` for a callable of the wrong signature.
-            TyTemplate::Function { .. } => emit_structural(self, ty_template),
-
-            // `unknown` is the top type: every value inhabits it, so the test is
-            // constant-true. It is a realized *leaf* with no type tag, so without
-            // this arm it falls into the tagless-leaf fallback below and compiles
-            // to constant-FALSE — silently misrouting every value, not just the
-            // valueless ones. (Only refutable positions reach here at all: an
-            // exhaustive final `let v: unknown` arm has its test elided.)
-            TyTemplate::Unknown => emit_true(self),
-
-            // ── Singleton (literal) ──────────────────────────────────────────
-            // A literal type is a set of one, so membership is decided against
-            // the value itself, not against a type tag: every tag a literal
-            // could name is its *base* type's, which answers `true` for every
-            // other inhabitant of that base (`x is One` matching every int when
-            // `type One = 1`). `ConstValue::Literal` is the exact test — the
-            // specialization of the `ConstValue::Type(Literal)` structural form
-            // the algebra would otherwise decide, minus the reconstruction.
-            TyTemplate::Literal(literal, _) => {
-                let c = self.add_constant(ConstValue::Literal(literal.clone()));
+            // Enum-pointer identity: `is Color` tests the value's enum object,
+            // so it discriminates `Color` from `Status` — the shared `ENUM`
+            // type tag cannot.
+            TypeTest::Enum(enum_ref) => {
+                let enum_name = self.spelled_head(&layout::enum_head(self.db, *enum_ref));
+                let enum_obj = self.refs.enum_(*enum_ref);
+                let c = self.add_constant(ConstValue::Object(enum_obj));
                 let inst = self.emit(Instruction::IsType(c));
-                self.set_operand(inst, OperandMeta::Const(literal.to_string()));
+                self.set_operand(inst, OperandMeta::Const(enum_name));
             }
-
-            // Fully realized leaves keep their exact identity/tag fast path,
-            // then use structural matching when no exact fast path exists.
-            // This list is exhaustive on purpose: a new template variant must
-            // choose its type-test strategy here.
-            other @ (TyTemplate::Int
-            | TyTemplate::Bigint
-            | TyTemplate::Float
-            | TyTemplate::String
-            | TyTemplate::Bool
-            | TyTemplate::Null
-            | TyTemplate::Uint8Array
-            | TyTemplate::Enum(..)
-            | TyTemplate::EnumVariant(..)
-            | TyTemplate::RustType
-            | TyTemplate::Type
-            | TyTemplate::Resource
-            | TyTemplate::PromptAst
-            | TyTemplate::Void
-            | TyTemplate::TypeAlias(..)
-            | TyTemplate::Never) => {
-                // A fully-realized leaf (primitive, enum, alias, literal, ...):
-                // enum-pointer identity for an `Enum`, otherwise its type tag
-                // when one exactly represents the test. Tagless leaves use
-                // the canonical structural matcher instead of silently
-                // compiling to false.
-                let realized = <&RealizedTy>::try_from(other)
-                    .expect("exhaustive realized-leaf template classification");
-                if let RealizedTy::TypeAlias(_) = realized {
-                    // Only a RECURSIVE alias survives lowering as a head (a
-                    // non-recursive one was expanded); membership in it is
-                    // the equirecursive set its definition unfolds to, which
-                    // the VM's matcher decides by unfolding the pooled
-                    // `Object::TypeAlias` the head binds to at load. An alias
-                    // is not a class: the class-object identity test this
-                    // arm used to attempt could never find one, so `v is
-                    // Tree` compiled to constant false.
-                    emit_structural(self, other);
-                } else if let RealizedTy::Enum(tn) = realized {
-                    // Enum-pointer identity: `is Color` tests the value's enum
-                    // object, so it discriminates `Color` from `Status` - the
-                    // shared `ENUM` type tag cannot. An `Enum` type's head is
-                    // an enum declaration by construction, and every enum is
-                    // a local or an import of the unit.
-                    let enum_name = self.spelled_head(tn);
-                    let enum_obj_idx =
-                        self.enum_object_index_for_type_name(tn).unwrap_or_else(|| {
-                            unreachable!("the enum type `{enum_name}` heads no enum")
-                        });
-                    let c =
-                        self.add_constant(ConstValue::Object(ObjectIndex::from_raw(enum_obj_idx)));
-                    let inst = self.emit(Instruction::IsType(c));
-                    self.set_operand(inst, OperandMeta::Const(enum_name));
-                } else if let Some(tag) = realized_type_tag(realized) {
-                    let c = self.add_constant(ConstValue::Int(tag));
-                    let inst = self.emit(Instruction::IsType(c));
-                    let spelling = baml_compiler2_hir::package::spelling(self.db);
-                    self.set_operand(
-                        inst,
-                        OperandMeta::Const(
-                            realized
-                                .map_heads(&mut |decl: &DeclName| spelling.wire(decl))
-                                .to_string(),
-                        ),
-                    );
-                } else {
-                    emit_structural(self, other);
-                }
-            }
+            TypeTest::Template(template) => self.is_type_template(template),
         }
         Ok(())
     }

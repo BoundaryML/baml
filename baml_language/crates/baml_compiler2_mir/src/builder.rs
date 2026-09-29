@@ -31,7 +31,7 @@ use baml_base::{Name, Span};
 use crate::{
     BasicBlock, BlockId, CatchRegion, FunctionOwner, Local, LocalDecl, MirFunction,
     MirFunctionBody, MirFunctionKind, Operand, Place, RuntimeTy, Rvalue, Statement, StatementKind,
-    SwitchKey, Terminator, TyTemplate,
+    SwitchKey, Terminator, TypeTest,
 };
 
 /// Builder for constructing MIR functions.
@@ -290,14 +290,14 @@ impl<'db> MirBuilder<'db> {
     pub(crate) fn narrow_bind(
         &mut self,
         source: Operand<'db>,
-        ty_template: TyTemplate,
+        test: TypeTest<'db>,
         destination: Local,
         then_block: BlockId,
         else_block: BlockId,
     ) {
         self.set_terminator(Terminator::NarrowBind {
             source,
-            ty_template,
+            test,
             destination,
             then_block,
             else_block,

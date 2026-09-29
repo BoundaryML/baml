@@ -27,6 +27,7 @@ use crate::{
         IntrinsicOp, Local, LocalDecl, LogLevel, MirFunction, MirFunctionBody, MirFunctionId,
         MirFunctionKind, MirInternalError, Operand, Place, RealizedTy, RuntimeTy, Rvalue,
         StatementKind, SwitchKey, SyntheticKind, Terminator, TyTemplate, TyTemplateInterface,
+        TypeTest,
     },
     optimize,
 };
@@ -1915,10 +1916,29 @@ impl<'db> LoweringContext<'db> {
         })
     }
 
-    /// The class a head names, wherever it is declared; `None` when the head
-    /// names no class (an interface head, say).
-    fn class_ref_of_type_name(&self, name: &DeclName) -> Option<ClassRef<'db>> {
-        layout::class_ref_of(self.db, name)
+    /// The declaration a class head names, wherever it lives. TIR admits a
+    /// class type only by resolving its declaration, so a head that names
+    /// none here is an internal inconsistency, never a state to fall open on.
+    fn class_ref_of(&self, head: &DeclName) -> Lowered<ClassRef<'db>> {
+        layout::class_ref_of(self.db, head).ok_or_else(|| {
+            self.internal_error_here(&format!(
+                "TIR admitted the class `{}`, which no declaration in this compilation names",
+                head.name()
+            ))
+        })
+    }
+
+    /// A type test of `template`, stated by declaration where it is nominal:
+    /// a class or an enum is tested by the declaration its head names.
+    fn type_test(&self, template: TyTemplate) -> Lowered<TypeTest<'db>> {
+        Ok(match template {
+            TyTemplate::Class(head, args) => TypeTest::Class {
+                class: self.class_ref_of(&head)?,
+                args: args.into_vec(),
+            },
+            TyTemplate::Enum(head) => TypeTest::Enum(self.enum_ref_of(&head)?),
+            template => TypeTest::Template(template),
+        })
     }
 
     /// Where `field` sits in `class`'s layout and the type it holds there, with
@@ -2217,7 +2237,7 @@ impl<'db> LoweringContext<'db> {
             None,
             &Place::local(next_local),
         )?;
-        self.emit_is_type_branch(next_local, self.baml_iter_done_ty(), bb_exit, bb_body);
+        self.emit_is_type_branch(next_local, self.baml_iter_done_ty(), bb_exit, bb_body)?;
 
         self.builder.set_current_block(bb_body);
         let elem_local = self.builder.declare_local(None, elem_ty, None);
@@ -6710,8 +6730,8 @@ impl<'db> LoweringContext<'db> {
                 self.interface_receiver_for_path_prefix(expr_id, seg_idx - 1, seg);
             if let Some((tn, class_type_args)) =
                 self.class_receiver_for_path_prefix(expr_id, seg_idx - 1, &current_ty)
-                && let Some(class) = self.class_ref_of_type_name(&tn)
             {
+                let class = self.class_ref_of(&tn)?;
                 // The slot carries the receiver's class type-args substituted
                 // into the declared field type, so chained access through
                 // generic positions (`b.value.name` where `b: Box<User>`)
@@ -10620,16 +10640,13 @@ impl<'db> LoweringContext<'db> {
         // lowering — so a literal with no class behind its type is a compiler
         // bug, never a source-order guess.
         let ty = self.expr_ty(expr_id);
-        let class = match &ty {
-            RuntimeTy::Class(tn, _) => self.class_ref_of_type_name(tn),
-            _ => None,
-        };
-        let Some(class) = class else {
+        let RuntimeTy::Class(head, _) = &ty else {
             return Err(self.internal_error_here(&format!(
-                "object literal typed `{}` names no class this compilation declares",
+                "object literal typed `{}`, which is not a class",
                 self.spelled(&ty)
             )));
         };
+        let class = self.class_ref_of(head)?;
         // TIR admitted every written field against this declaration, so a
         // field the layout does not know is a compiler bug, never a value
         // silently dropped on the floor.
@@ -10893,10 +10910,10 @@ impl<'db> LoweringContext<'db> {
         // class that declares it (an interface-typed receiver takes the
         // virtual road below).
         let field_idx = match &unwrapped_ty {
-            RuntimeTy::Class(tn, _) => self
-                .class_ref_of_type_name(tn)
-                .and_then(|class| layout::class_field_index(self.db, class, field))
-                .map(|index| usize::try_from(index).expect("u32 fits usize")),
+            RuntimeTy::Class(tn, _) => {
+                layout::class_field_index(self.db, self.class_ref_of(tn)?, field)
+                    .map(|index| usize::try_from(index).expect("u32 fits usize"))
+            }
             _ => None,
         };
 
@@ -12572,8 +12589,8 @@ impl LoweringContext<'_> {
                     let seg_idx = offset + 1;
                     if let Some((tn, class_type_args)) =
                         self.class_receiver_for_path_prefix(expr_id, seg_idx - 1, &current_ty)
-                        && let Some(class) = self.class_ref_of_type_name(&tn)
                     {
+                        let class = self.class_ref_of(&tn)?;
                         if let Some((idx, next_ty)) =
                             self.class_field_slot(class, seg, &class_type_args)
                         {
@@ -12614,9 +12631,8 @@ impl LoweringContext<'_> {
                 let base_place = self.lower_lvalue(base_id)?;
                 let base_ty = self.expr_ty(base_id);
                 if let RuntimeTy::Class(ref tn, _) = base_ty {
-                    if let Some(idx) = self
-                        .class_ref_of_type_name(tn)
-                        .and_then(|class| layout::class_field_index(self.db, class, &member_name))
+                    if let Some(idx) =
+                        layout::class_field_index(self.db, self.class_ref_of(tn)?, &member_name)
                     {
                         return Ok(Place::Field {
                             base: Box::new(base_place),
@@ -12703,9 +12719,8 @@ impl LoweringContext<'_> {
                 // Unwrap Optional — we've already null-checked, so use the inner type.
                 let unwrapped_ty = base_ty.strip_null();
                 if let RuntimeTy::Class(tn, _) = &unwrapped_ty {
-                    if let Some(idx) = self
-                        .class_ref_of_type_name(tn)
-                        .and_then(|class| layout::class_field_index(self.db, class, &member_name))
+                    if let Some(idx) =
+                        layout::class_field_index(self.db, self.class_ref_of(tn)?, &member_name)
                     {
                         return Ok(Place::Field {
                             base: Box::new(base_place),
@@ -13486,7 +13501,7 @@ impl<'db> LoweringContext<'db> {
         ty: RuntimeTy,
         success: BlockId,
         failure: BlockId,
-    ) {
+    ) -> Lowered<()> {
         // BEP-044/BEP-057: testing a value against an *interface* type means "is
         // its concrete runtime type an implementor" — emitted as a single `IsType` on the
         // interface existential itself, which the VM resolves through the canonical
@@ -13509,15 +13524,16 @@ impl<'db> LoweringContext<'db> {
             while let Some(member) = remaining.next() {
                 if remaining.peek().is_none() {
                     // Last member: branch directly to success/failure.
-                    self.emit_is_type_branch(scrutinee, member, success, failure);
+                    self.emit_is_type_branch(scrutinee, member, success, failure)?;
                 } else {
                     // Not last: if this member matches, jump to success;
                     // otherwise try the next member.
                     let next_check = self.builder.create_block();
-                    self.emit_is_type_branch(scrutinee, member, success, next_check);
+                    self.emit_is_type_branch(scrutinee, member, success, next_check)?;
                     self.builder.set_current_block(next_check);
                 }
             }
+            Ok(())
         } else {
             // If this is a parametric arm whose type arguments the emitter would
             // otherwise check structurally, but the enclosing match's scrutinee
@@ -13542,7 +13558,7 @@ impl<'db> LoweringContext<'db> {
                     }
                 };
                 self.emit_is_type_tag_branch(scrutinee, tag, success, failure);
-                return;
+                return Ok(());
             }
             // Convert RuntimeTy → template so generic class checks (a
             // `RuntimeTy::Class` with concrete args) become an arg-precise
@@ -13550,7 +13566,7 @@ impl<'db> LoweringContext<'db> {
             // leaf — the emitter's tag / class-identity fast path. A residual
             // symbolic position becomes a guard hole the pattern test refuses.
             let guard = ty_to_pattern_template_from_resolved_ty(&ty);
-            self.emit_pattern_template_test(scrutinee, guard, success, failure);
+            self.emit_pattern_template_test(scrutinee, guard, success, failure)
         }
     }
 
@@ -13589,12 +13605,15 @@ impl<'db> LoweringContext<'db> {
         template: Option<TyTemplate>,
         success: BlockId,
         failure: BlockId,
-    ) {
+    ) -> Lowered<()> {
         match template {
             Some(ty_template) => {
-                self.emit_is_type_template_branch(scrutinee, ty_template, success, failure);
+                self.emit_is_type_template_branch(scrutinee, ty_template, success, failure)
             }
-            None => self.builder.goto(failure),
+            None => {
+                self.builder.goto(failure);
+                Ok(())
+            }
         }
     }
 
@@ -13611,11 +13630,12 @@ impl<'db> LoweringContext<'db> {
         ty_template: TyTemplate,
         success: BlockId,
         failure: BlockId,
-    ) {
+    ) -> Lowered<()> {
+        let test = self.type_test(ty_template)?;
         if self.atomic_pattern_test {
             self.builder.narrow_bind(
                 Operand::Copy(Place::Local(scrutinee)),
-                ty_template,
+                test,
                 scrutinee,
                 success,
                 failure,
@@ -13623,13 +13643,14 @@ impl<'db> LoweringContext<'db> {
         } else {
             let test = Rvalue::IsType {
                 operand: Operand::Copy(Place::Local(scrutinee)),
-                ty_template,
+                test,
             };
             let test_local = self.builder.temp(RuntimeTy::Bool);
             self.builder.assign(Place::local(test_local), test);
             self.builder
                 .branch(Operand::Copy(Place::Local(test_local)), success, failure);
         }
+        Ok(())
     }
 
     /// The members of a union receiver, transparently unwrapping `Optional`
@@ -13663,16 +13684,16 @@ impl<'db> LoweringContext<'db> {
         ty: &Tir2Ty,
         success: BlockId,
         failure: BlockId,
-    ) {
+    ) -> Lowered<()> {
         match ty {
             Tir2Ty::Union(members) => {
                 let mut remaining = members.iter().peekable();
                 while let Some(member) = remaining.next() {
                     if remaining.peek().is_none() {
-                        self.emit_is_tir_type_branch(scrutinee, member, success, failure);
+                        self.emit_is_tir_type_branch(scrutinee, member, success, failure)?;
                     } else {
                         let next_check = self.builder.create_block();
-                        self.emit_is_tir_type_branch(scrutinee, member, success, next_check);
+                        self.emit_is_tir_type_branch(scrutinee, member, success, next_check)?;
                         self.builder.set_current_block(next_check);
                     }
                 }
@@ -13696,7 +13717,7 @@ impl<'db> LoweringContext<'db> {
                 // a walk fails every such pattern closed.
                 let generic_params = self.enclosing_generic_params();
                 let header = tir2_to_pattern_template(ty, &self.runtime(), &generic_params);
-                self.emit_pattern_template_test(scrutinee, header, success, failure);
+                self.emit_pattern_template_test(scrutinee, header, success, failure)?;
             }
             // An interface pattern (`Slot<int>`, `Source<Item = int>`, or a bare
             // `Named`) is a single membership test against the interface
@@ -13711,7 +13732,7 @@ impl<'db> LoweringContext<'db> {
             Tir2Ty::Interface(..) => {
                 let generic_params = self.enclosing_generic_params();
                 let guard = tir2_to_pattern_template(ty, &self.runtime(), &generic_params);
-                self.emit_pattern_template_test(scrutinee, guard, success, failure);
+                self.emit_pattern_template_test(scrutinee, guard, success, failure)?;
             }
             // Singleton-valued types pin a specific runtime value, so emit
             // equality checks rather than type-tag tests. `is_type` on a
@@ -13732,9 +13753,10 @@ impl<'db> LoweringContext<'db> {
             }
             _ => {
                 let resolved = self.runtime().convert(ty);
-                self.emit_is_type_branch(scrutinee, resolved, success, failure);
+                self.emit_is_type_branch(scrutinee, resolved, success, failure)?;
             }
         }
+        Ok(())
     }
 
     /// Branch on `scrutinee == rhs` (value equality). Used for singleton-typed
@@ -13832,13 +13854,17 @@ impl<'db> LoweringContext<'db> {
         )
     }
 
+    /// The local holding `field` of the value a class pattern matched. TIR
+    /// admitted every field of the pattern against its class or interface, so
+    /// a field that cannot be projected is a compiler bug — never a pattern
+    /// that silently fails, or a binding silently left unset.
     fn project_class_pattern_field(
         &mut self,
         scrutinee: Local,
         class_pat_id: AstPatId,
         field_pat_id: AstPatId,
         field: &Name,
-    ) -> Option<Local> {
+    ) -> Lowered<Local> {
         // BEP-044: an interface head (`Animal { name } => ...`) has no
         // positional field layout. Branch on the raw TIR type so interface
         // patterns project through field-view dispatch instead of class slots.
@@ -13853,10 +13879,17 @@ impl<'db> LoweringContext<'db> {
                 field,
             );
         }
-        let class_tn = self.class_pattern_type_name(class_pat_id)?;
-        let class = self.class_ref_of_type_name(&class_tn)?;
-        let field_idx = usize::try_from(layout::class_field_index(self.db, class, field)?)
-            .expect("u32 fits usize");
+        let class_tn = self.class_pattern_type_name(class_pat_id).ok_or_else(|| {
+            self.internal_error_here("a class pattern's type is neither a class nor an interface")
+        })?;
+        let class = self.class_ref_of(&class_tn)?;
+        let field_idx = layout::class_field_index(self.db, class, field).ok_or_else(|| {
+            self.internal_error_here(&format!(
+                "TIR admitted the pattern field `{field}`, which the class `{}` does not declare",
+                class_tn.name()
+            ))
+        })?;
+        let field_idx = usize::try_from(field_idx).expect("u32 fits usize");
         let field_ty = self
             .class_pattern_field_ty(class_pat_id, field)
             .unwrap_or_else(|| self.pat_ty(field_pat_id));
@@ -13868,7 +13901,7 @@ impl<'db> LoweringContext<'db> {
                 field: field_idx,
             })),
         );
-        Some(field_local)
+        Ok(field_local)
     }
 
     /// BEP-044: project a field bound by an *interface* destructure pattern
@@ -13883,22 +13916,36 @@ impl<'db> LoweringContext<'db> {
         class_pat_id: AstPatId,
         field_pat_id: AstPatId,
         field: &Name,
-    ) -> Option<Local> {
-        let tir_ty = self
-            .tir_pat_type(self.pat_metadata_key(class_pat_id))?
-            .clone();
-        let (iface_tn, iface_args, iface_assoc) =
-            self.interface_dispatch_target_for_member(&tir_ty, field)?;
+    ) -> Lowered<Local> {
+        let unresolved = |this: &Self| {
+            this.internal_error_here(&format!(
+                "TIR admitted the interface pattern field `{field}`, which no field view serves"
+            ))
+        };
+        let Some(tir_ty) = self
+            .tir_pat_type(self.pat_metadata_key(class_pat_id))
+            .cloned()
+        else {
+            return Err(unresolved(self));
+        };
+        let Some((iface_tn, iface_args, iface_assoc)) =
+            self.interface_dispatch_target_for_member(&tir_ty, field)
+        else {
+            return Err(unresolved(self));
+        };
         let field_local = self.builder.temp(self.pat_ty(field_pat_id));
-        self.try_lower_interface_field_access(
+        if self.try_lower_interface_field_access(
             scrutinee,
             &iface_tn,
             &iface_args,
             &iface_assoc,
             field,
             &Place::local(field_local),
-        )
-        .then_some(field_local)
+        ) {
+            Ok(field_local)
+        } else {
+            Err(unresolved(self))
+        }
     }
 
     fn const_int_local(&mut self, value: i64) -> Local {
@@ -14089,10 +14136,10 @@ impl<'db> LoweringContext<'db> {
                 .filter(|ty| !matches!(ty, Tir2Ty::Never))
                 .cloned()
             {
-                self.emit_is_tir_type_branch(scrutinee, &tir_ty, after_ascription, failure);
+                self.emit_is_tir_type_branch(scrutinee, &tir_ty, after_ascription, failure)?;
             } else {
                 let annotation_ty = self.resolve_type_annotation(ty_expr);
-                self.emit_is_type_branch(scrutinee, annotation_ty, after_ascription, failure);
+                self.emit_is_type_branch(scrutinee, annotation_ty, after_ascription, failure)?;
             }
             self.builder.set_current_block(after_ascription);
             // Fall through to the array shape test below.
@@ -14139,7 +14186,7 @@ impl<'db> LoweringContext<'db> {
                         RuntimeTy::Literal(lit.clone(), baml_type::Freshness::Regular),
                         success,
                         failure,
-                    );
+                    )?;
                 }
                 AstTypeExprKind::Null => {
                     let test = Rvalue::BinaryOp {
@@ -14190,7 +14237,7 @@ impl<'db> LoweringContext<'db> {
                     // otherwise the erased path matches every implementor and a
                     // `Slot<string>` value falls into a `Slot<int>` arm.
                     if Self::tir_ty_needs_interface_shape_test(&pat_tir_ty) {
-                        self.emit_is_tir_type_branch(scrutinee, &pat_tir_ty, success, failure);
+                        self.emit_is_tir_type_branch(scrutinee, &pat_tir_ty, success, failure)?;
                         return Ok(());
                     }
                     // A pattern type still carrying the enclosing function's
@@ -14235,12 +14282,12 @@ impl<'db> LoweringContext<'db> {
                         let generic_params = self.enclosing_generic_params();
                         let guard =
                             tir2_to_pattern_template(&pat_tir_ty, &self.runtime(), &generic_params);
-                        self.emit_pattern_template_test(scrutinee, guard, success, failure);
+                        self.emit_pattern_template_test(scrutinee, guard, success, failure)?;
                         return Ok(());
                     }
                     // Other patterns keep the erased fast path (unchanged codegen).
                     let annotation_ty = self.runtime().convert(&pat_tir_ty);
-                    self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
+                    self.emit_is_type_branch(scrutinee, annotation_ty, success, failure)?;
                 }
             },
             AstPattern::Or(sub_pats) => {
@@ -14269,7 +14316,7 @@ impl<'db> LoweringContext<'db> {
                 };
 
                 if let Some(tir_ty) = self.tir_pat_type(self.pat_metadata_key(pat_id)).cloned() {
-                    self.emit_is_tir_type_branch(scrutinee, &tir_ty, class_success, failure);
+                    self.emit_is_tir_type_branch(scrutinee, &tir_ty, class_success, failure)?;
                 } else if class_success == success {
                     self.builder.goto(success);
                 } else {
@@ -14285,16 +14332,13 @@ impl<'db> LoweringContext<'db> {
                         } else {
                             self.builder.create_block()
                         };
-                        if let Some(field_local) = self.project_class_pattern_field(
+                        let field_local = self.project_class_pattern_field(
                             scrutinee,
                             pat_id,
                             field.pat,
                             &field.field,
-                        ) {
-                            self.lower_pattern_test(field_local, field.pat, next, failure)?;
-                        } else {
-                            self.builder.goto(failure);
-                        }
+                        )?;
+                        self.lower_pattern_test(field_local, field.pat, next, failure)?;
                         if idx + 1 < fields.len() {
                             self.builder.set_current_block(next);
                         }
@@ -14310,7 +14354,7 @@ impl<'db> LoweringContext<'db> {
                 let array_success = self.builder.create_block();
 
                 if let Some(tir_ty) = self.tir_pat_type(self.pat_metadata_key(pat_id)).cloned() {
-                    self.emit_is_tir_type_branch(scrutinee, &tir_ty, array_success, failure);
+                    self.emit_is_tir_type_branch(scrutinee, &tir_ty, array_success, failure)?;
                 } else {
                     self.builder.goto(array_success);
                 }
@@ -14514,11 +14558,9 @@ impl<'db> LoweringContext<'db> {
             }
             AstPattern::Class { fields, .. } => {
                 for f in fields {
-                    if let Some(field_local) =
-                        self.project_class_pattern_field(scrutinee, pat_id, f.pat, &f.field)
-                    {
-                        self.bind_pattern_inner(field_local, f.pat, root, f.pat, site)?;
-                    }
+                    let field_local =
+                        self.project_class_pattern_field(scrutinee, pat_id, f.pat, &f.field)?;
+                    self.bind_pattern_inner(field_local, f.pat, root, f.pat, site)?;
                 }
             }
             AstPattern::Array {
@@ -14686,17 +14728,13 @@ impl<'db> LoweringContext<'db> {
             }
             AstPattern::Class { fields, .. } => {
                 for field in fields {
-                    if let Some(field_local) =
-                        self.project_class_pattern_field(scrutinee, pat_id, field.pat, &field.field)
-                    {
-                        self.assign_pattern_to_existing(
-                            field_local,
-                            field.pat,
-                            root,
-                            field.pat,
-                            site,
-                        )?;
-                    }
+                    let field_local = self.project_class_pattern_field(
+                        scrutinee,
+                        pat_id,
+                        field.pat,
+                        &field.field,
+                    )?;
+                    self.assign_pattern_to_existing(field_local, field.pat, root, field.pat, site)?;
                 }
             }
             AstPattern::Array {
