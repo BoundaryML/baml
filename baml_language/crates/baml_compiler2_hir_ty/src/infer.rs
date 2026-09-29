@@ -77,6 +77,17 @@ fn is_unit(ty: &Ty) -> bool {
     matches!(ty.kind(), InferTy::Void | InferTy::Null)
 }
 
+/// Whether every value of this type is the unit (`void`/`null`), or there
+/// is no value at all (`never`), e.g. `void | null` from a body whose
+/// branches end in a `void` call and a bare `null`.
+fn all_unit(ty: &Ty) -> bool {
+    match ty.kind() {
+        InferTy::Void | InferTy::Null | InferTy::Never => true,
+        InferTy::Union(members) => members.iter().all(all_unit),
+        _ => false,
+    }
+}
+
 /// Whether an object slot initialized to `null` satisfies this type. Weak
 /// aliases and solved inference variables must be resolved by the caller
 /// before asking; an unconstrained type parameter is deliberately false
@@ -944,6 +955,11 @@ enum PendingDiag<'db> {
         name: baml_type::Name,
     },
     /// A constant pattern argument that does not compile.
+    /// The tail of a `-> void` body evaluates to a value.
+    VoidBodyReturnsValue {
+        expr: ExprId,
+        got: Ty,
+    },
     InvalidRegexPattern {
         expr: ExprId,
         kind: sys_regex::ErrorKind,
@@ -2037,12 +2053,10 @@ impl<'db> InferenceContext<'db> {
                 .last()
                 .and_then(|frame| frame.expected.clone())
             {
-                // A void function DISCARDS its body's tail value (TIR's
-                // statement semantics; `defer { .. }; log.push(..)` as
-                // the last line of a `-> void` fn is fine) - the body
-                // still walks fully, it just isn't checked against unit.
+                // A void function's body must not evaluate to a value:
+                // its tail is checked, not silently discarded.
                 Some(return_ty) if is_unit(&return_ty) => {
-                    self.infer_expr(body, root, &Expectation::Discarded);
+                    self.check_void_tail(body, root);
                 }
                 Some(return_ty) if !return_ty.has_error() => {
                     self.check_expr(body, root, &return_ty);
@@ -2140,6 +2154,37 @@ impl<'db> InferenceContext<'db> {
                     .push((expr, expected.clone(), ty.clone()));
             }
         }
+        ty
+    }
+
+    /// Infer the body of a `-> void` function or lambda and reject a tail
+    /// that evaluates to a value (E0176). Returns the inferred type.
+    ///
+    /// The body is inferred as a discarded value, as before, so nothing about
+    /// how its interior types changes; only the tail's own type is checked. A
+    /// type made only of `void`, `null` and `never` is fine, as is an
+    /// unsolved inference variable, which a later constraint may still make
+    /// `void` and which this check must not pin.
+    fn check_void_tail(&mut self, body: &ExprBody, root: ExprId) -> Ty {
+        let ty = self.infer_expr(body, root, &Expectation::Discarded);
+        let resolved = self.structurally_resolve(&ty);
+        if resolved.has_error()
+            || all_unit(&resolved)
+            || matches!(resolved.kind(), InferTy::InferVar { .. })
+        {
+            return ty;
+        }
+        let at = match &body.exprs[root] {
+            Expr::Block {
+                tail_expr: Some(tail),
+                ..
+            } => *tail,
+            _ => root,
+        };
+        self.pending_diags.push(PendingDiag::VoidBodyReturnsValue {
+            expr: at,
+            got: ty.clone(),
+        });
         ty
     }
 
@@ -8207,12 +8252,11 @@ impl<'db> InferenceContext<'db> {
                     scoped_bindings_floor: self.scoped_type_bindings.len(),
                 });
                 let body_ty = match &ret_expectation {
-                    // A void lambda DISCARDS its body's tail value, the
-                    // same statement semantics void functions get (test
-                    // bodies are synthesized `() -> void` lambdas).
-                    Some(ret) if is_unit(ret) => {
-                        self.infer_expr(body, lambda_body, &Expectation::Discarded)
-                    }
+                    // A void lambda's body must not evaluate to a value, as
+                    // for void functions. Test bodies are synthesized
+                    // `() -> void` lambdas, so this also rejects
+                    // `test "x" { 1 == 2 }`, which would otherwise pass.
+                    Some(ret) if is_unit(ret) => self.check_void_tail(body, lambda_body),
                     Some(ret) if !ret.has_error() => self.check_expr(body, lambda_body, ret),
                     Some(_) => self.infer_expr(body, lambda_body, &Expectation::Erroneous),
                     None => self.infer_expr(body, lambda_body, &Expectation::None),
@@ -11509,6 +11553,12 @@ impl<'db> InferenceContext<'db> {
                     PendingDiag::MountedPackageCallUnsupported { expr, path } => {
                         (TirTypeError::MountedPackageCallUnsupported { path }, expr)
                     }
+                    PendingDiag::VoidBodyReturnsValue { expr, got } => (
+                        TirTypeError::VoidBodyReturnsValue {
+                            got: self.plain_finalized(&got),
+                        },
+                        expr,
+                    ),
                     PendingDiag::InvalidRegexPattern {
                         expr,
                         kind,

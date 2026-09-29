@@ -773,7 +773,7 @@ class GictIntStack {
     items: int[]
     implements GictContainer<int> {
         function add(self, item: int) -> void {
-            self.items.push(item)
+            self.items.push(item);
         }
         function get(self, index: int) -> int? {
             return self.items[index]

@@ -1,7 +1,7 @@
 // Void tail discard + literal-typed impl goals
 //
-// A `-> void` function DISCARDS its body's tail value (statement
-// semantics; explicit `return v` still checks). And a literal-typed
+// A `-> void` function's tail must itself be void (E0176), so a value is
+// discarded with `;` (explicit `return v` is checked too). And a literal-typed
 // value implements what its base primitive does: `1` proves
 // `LiGoal<int>` through `implements LiGoal<int> for int`.
 interface LiGoal<T> {
@@ -15,7 +15,7 @@ implements LiGoal<int> for int {
 }
 
 function vd_log(log: string[]) -> void throws never {
-    log.push("body")
+    log.push("body");
 }
 
 function li_child() -> string throws never {

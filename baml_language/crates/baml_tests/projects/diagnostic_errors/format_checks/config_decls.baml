@@ -445,7 +445,7 @@ function TestTarget() -> string {
 }
 
 test "BasicTest" {
-    TestTarget()
+    TestTarget();
 }
 
 // ===== Trivia on test declaration (line comments) =====
@@ -456,7 +456,7 @@ test // 2 test keyword trailing
 // 5 open brace leading
 { // 6 open brace trailing
     // 7 body leading
-    TestTarget() // 8 body trailing
+    TestTarget(); // 8 body trailing
 // 9 close brace leading
 } // 10 close brace trailing
 
@@ -468,7 +468,7 @@ test /* 2 test keyword trailing */
 /* 5 open brace leading */
 { /* 6 open brace trailing */
     /* 7 body leading */
-    TestTarget() /* 8 body trailing */
+    TestTarget(); /* 8 body trailing */
 /* 9 close brace leading */
 } /* 10 close brace trailing */
 
