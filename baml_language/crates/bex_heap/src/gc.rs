@@ -412,14 +412,8 @@ impl BexHeap {
     ) -> (GcStats, Vec<HeapPtr>, bex_vm_types::ForwardingMap) {
         // SAFETY: collection caller guarantees exclusive heap access.
         let mut profile = unsafe { crate::gc_profile::GcProfiler::start(self, roots.len()) };
-        // Track old -> new pointer mappings (forwarding pointers). The previous
-        // collection's survivors are the best estimate of this one's; sizing
-        // up front avoids rehashing a multi-million-entry table mid-trace.
-        // SAFETY: GC runs at safepoints, no VMs are executing.
-        let mut forwarding = bex_vm_types::ForwardingMap::with_capacity_and_hasher(
-            unsafe { self.gen2_ref().len() },
-            Default::default(),
-        );
+        // Track old -> new pointer mappings (forwarding pointers)
+        let mut forwarding = bex_vm_types::ForwardingMap::default();
 
         self.debug_verify_tlab_canaries();
 
