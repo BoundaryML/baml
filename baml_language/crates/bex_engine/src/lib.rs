@@ -2400,6 +2400,23 @@ impl BexEngine {
         }
     }
 
+    /// Fire the cancellation token of every call in flight, returning how
+    /// many. A reserved cancellation (`pending`) never started, so it is left
+    /// alone.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn cancel_active_calls(&self) -> usize {
+        let calls = self
+            .active_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut cancelled = 0;
+        for call in calls.values().filter(|call| !call.pending) {
+            call.cancel.cancel();
+            cancelled += 1;
+        }
+        cancelled
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     fn active_call_count(&self) -> usize {
         self.active_calls
@@ -2431,13 +2448,17 @@ impl BexEngine {
     /// Wait for spawned work to settle, then run the final GC sweep that
     /// surfaces unreachable unobserved errors.
     pub async fn shutdown(self: &Arc<Self>) {
-        self.shutdown_with_progress(|count| {
-            tracing::warn!(
-                count,
-                "BAML is still waiting for active futures to finish (press Ctrl+C to cancel now)"
-            );
-        })
-        .await;
+        self.shutdown_with_progress(Self::report_shutdown_wait)
+            .await;
+    }
+
+    /// The default report while shutdown waits: `count` calls or futures are
+    /// still running.
+    pub fn report_shutdown_wait(count: usize) {
+        tracing::warn!(
+            count,
+            "BAML is still waiting for active futures to finish (press Ctrl+C to cancel now)"
+        );
     }
 
     /// Shut down the engine, reporting the number of active BAML futures every
@@ -2451,12 +2472,17 @@ impl BexEngine {
     }
 
     /// Shut down the engine like [`Self::shutdown_with_progress`], but bound
-    /// the wait for *orphaned background futures* — spawned work still pending
-    /// after every active call has finished (a fire-and-forget server task
-    /// whose owning test died before cleanup, for example).
+    /// the whole wait by `grace`, measured from the start of shutdown: first
+    /// for in-flight calls, then for *orphaned background futures* — spawned
+    /// work still pending after every call has finished (a fire-and-forget
+    /// server task whose owning test died before cleanup, for example).
     ///
-    /// The deadline covers only that orphan phase; in-flight calls are always
-    /// waited for (they carry their own timeouts). When `grace` elapses:
+    /// A call runs until it finishes or observes its cancellation, and one
+    /// that catches `Cancelled` or cleans up slowly may never finish. So when
+    /// `grace` elapses with calls in flight, every call's cancellation token
+    /// fires, the calls get one bounded window to unwind, and shutdown stops
+    /// waiting for any still running: they die with the process. Then, for
+    /// the orphans:
     ///
     /// 1. every pending future's cancellation token fires (cooperative:
     ///    producers observing their token unwind and settle on their own),
@@ -2495,33 +2521,65 @@ impl BexEngine {
         let Some(shutdown) = self.begin_shutdown().await else {
             return;
         };
+        // tokio's `Instant`, not std's: the periodic-report and deadline tests
+        // drive these loops under tokio's paused clock, where std time stands
+        // still while tokio time advances.
+        #[cfg(not(target_arch = "wasm32"))]
+        let deadline = grace.map(|grace| tokio::time::Instant::now() + grace);
+        // One wait slice: the report interval, cut short at the deadline.
+        #[cfg(not(target_arch = "wasm32"))]
+        let wait_step = || match deadline {
+            Some(deadline) => WAIT_LOG_INTERVAL
+                .min(deadline.saturating_duration_since(tokio::time::Instant::now()))
+                .max(std::time::Duration::from_millis(10)),
+            None => WAIT_LOG_INTERVAL,
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        let past_deadline =
+            || deadline.is_some_and(|deadline| tokio::time::Instant::now() >= deadline);
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut abandoned = false;
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut last_wait_report = tokio::time::Instant::now();
         #[cfg(not(target_arch = "wasm32"))]
         loop {
-            if tokio::time::timeout(WAIT_LOG_INTERVAL, self.wait_for_active_calls())
+            if tokio::time::timeout(wait_step(), self.wait_for_active_calls())
                 .await
                 .is_ok()
             {
                 break;
             }
+            if past_deadline() {
+                let cancelled = self.cancel_active_calls();
+                if tokio::time::timeout(CANCEL_SETTLE_GRACE, self.wait_for_active_calls())
+                    .await
+                    .is_err()
+                {
+                    tracing::warn!(
+                        cancelled,
+                        abandoned = self.active_call_count(),
+                        "shutdown deadline reached; abandoned in-flight calls that did not \
+                         finish after cancellation"
+                    );
+                    abandoned = true;
+                }
+                break;
+            }
             let count = self.active_call_count();
-            if count != 0 {
+            if count != 0 && last_wait_report.elapsed() >= WAIT_LOG_INTERVAL {
+                last_wait_report = tokio::time::Instant::now();
                 on_wait(count);
             }
         }
         #[cfg(target_arch = "wasm32")]
         self.wait_for_active_calls().await;
 
-        // tokio's `Instant`, not std's: the periodic-report and deadline tests
-        // drive this loop under tokio's paused clock, where std time stands
-        // still while tokio time advances.
         #[cfg(not(target_arch = "wasm32"))]
-        let orphan_wait_started = tokio::time::Instant::now();
-        #[cfg(not(target_arch = "wasm32"))]
-        let mut last_wait_report = tokio::time::Instant::now();
+        {
+            last_wait_report = tokio::time::Instant::now();
+        }
         #[cfg(not(target_arch = "wasm32"))]
         let mut on_leaks = Some(on_leaks);
-        #[cfg(not(target_arch = "wasm32"))]
-        let mut abandoned = false;
         loop {
             let handles = self
                 .futures
@@ -2537,9 +2595,7 @@ impl BexEngine {
             };
             #[cfg(not(target_arch = "wasm32"))]
             {
-                if let Some(grace) = grace
-                    && orphan_wait_started.elapsed() >= grace
-                {
+                if past_deadline() {
                     // Deadline reached: cancel cooperatively, give producers
                     // one bounded window to settle, then force-settle the
                     // rest so the drain below empties and shutdown completes.
@@ -2563,13 +2619,7 @@ impl BexEngine {
                     abandoned = true;
                     continue;
                 }
-                let step = match grace {
-                    Some(grace) => WAIT_LOG_INTERVAL
-                        .min(grace.saturating_sub(orphan_wait_started.elapsed()))
-                        .max(std::time::Duration::from_millis(10)),
-                    None => WAIT_LOG_INTERVAL,
-                };
-                if tokio::time::timeout(step, wait).await.is_err() {
+                if tokio::time::timeout(wait_step(), wait).await.is_err() {
                     let count = self.active_future_count().await;
                     if count != 0 && last_wait_report.elapsed() >= WAIT_LOG_INTERVAL {
                         last_wait_report = tokio::time::Instant::now();

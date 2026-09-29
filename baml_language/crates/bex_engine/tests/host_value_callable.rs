@@ -2421,6 +2421,69 @@ async fn shutdown_deadline_abandons_leaked_spawn_and_reports_origin() {
     );
 }
 
+/// Shutdown-deadline regression: an in-flight call may not finish in time
+/// once cancelled, because cancellation unwinds a call and its cleanup can
+/// take as long as it likes (a `defer` body runs shielded; a call can also
+/// catch its own `Cancelled` and keep going). The deadline bounds the wait for
+/// in-flight calls too: once it passes, the call's token fires, it gets one
+/// settle window, and shutdown stops waiting for it. Before, shutdown waited
+/// for in-flight calls with no bound, whatever the deadline.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn shutdown_deadline_abandons_a_call_whose_cleanup_outlasts_it() {
+    let source = r#"
+        function slow_cleanup() -> int {
+            defer {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+            }
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+            0
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let call_engine = Arc::clone(&engine);
+    let call = tokio::spawn(async move {
+        call_engine
+            .call_function(
+                "slow_cleanup",
+                Vec::new(),
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await
+    });
+    // Let the call reach its first sleep.
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    assert!(!call.is_finished(), "the call should still be running");
+
+    let started = std::time::Instant::now();
+    let shutdown = engine.shutdown_with_deadline(
+        Some(std::time::Duration::from_millis(300)),
+        |_count| {},
+        |_leaks| {},
+    );
+    tokio::time::timeout(std::time::Duration::from_secs(30), shutdown)
+        .await
+        .expect("shutdown wedged: the deadline did not bound the in-flight call");
+    // The deadline (0.3s) plus the bounded settle window decide the wall
+    // clock, not the cleanup's 60s sleep.
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(15),
+        "shutdown took {:?}",
+        started.elapsed()
+    );
+    assert!(
+        !call.is_finished(),
+        "the call's cleanup should still be running"
+    );
+    call.abort();
+}
+
 /// `throws never` is a declared contract, not an absent one: a callback that
 /// promises it cannot throw must not have a native exception laundered into
 /// an accepted `unknown` throw.

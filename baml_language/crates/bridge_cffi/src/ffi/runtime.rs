@@ -289,7 +289,7 @@ fn shutdown_runtime_on_fresh_thread() -> Result<(), String> {
     std::thread::spawn(|| {
         crate::get_tokio_runtime()
             .map_err(|error| error.to_string())?
-            .block_on(crate::shutdown_runtime())
+            .block_on(crate::shutdown_runtime(None))
             .map_err(|error| error.to_string())
     })
     .join()

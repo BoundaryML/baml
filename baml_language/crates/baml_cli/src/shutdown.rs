@@ -4,8 +4,8 @@ use bex_engine::BexEngine;
 
 use crate::reporter::Reporter;
 
-/// Default grace for the end-of-run wait on orphaned background futures
-/// before they are cancelled and abandoned. Override with
+/// Default grace for the end-of-run wait on in-flight calls and orphaned
+/// background futures before they are cancelled and abandoned. Override with
 /// `BAML_SHUTDOWN_GRACE_MS`; `0` waits forever (the pre-deadline behavior).
 const DEFAULT_SHUTDOWN_GRACE: Duration = Duration::from_secs(15);
 
