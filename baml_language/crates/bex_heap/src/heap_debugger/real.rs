@@ -305,6 +305,11 @@ impl BexHeap {
                     self.debug_assert_valid_value(value);
                 }
             }
+            Object::Tuple(elements) => {
+                for value in elements.iter() {
+                    self.debug_assert_valid_value(value);
+                }
+            }
             Object::Instance(instance) => {
                 let class_idx = instance.class;
                 self.debug_assert_valid_index(class_idx);
