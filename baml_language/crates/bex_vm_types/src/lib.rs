@@ -19,6 +19,8 @@ pub mod identity;
 pub mod indexable;
 pub mod lazy_biased_mutex;
 pub mod limit;
+pub mod media;
+pub mod prompt;
 pub mod relink;
 mod roots;
 pub mod runtime_compile;
@@ -34,6 +36,8 @@ pub use indexable::{
     GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
 };
 pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet};
+pub use media::{MediaContent, MediaValue};
+pub use prompt::{PromptAst, PromptAstSimple, StructuredMessage};
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use runtime_compile::{
     RuntimeCompileDiagnostic, RuntimeCompileMode, RuntimeCompileRequest,
@@ -135,8 +139,8 @@ pub use types::{
     EnumVariant, FnPath, Function, FunctionKind, FunctionMeta, FunctionOrigin, Future, FutureRead,
     GenericFunction, HostClosure, ImplBodyCoherence, ImplBodyKey, ImplCoherenceKey, Instance,
     InterfaceBound, InterfaceKey, ItemPath, LockedContainer, LockedReadGuard, LockedWriteGuard,
-    MapContainer, MapReadGuard, MapWriteGuard, MediaValue, Object, ObjectType, PanicClass, Program,
-    PromptAst, RenderedCallable, SpelledBound, SysOp, SysOpErrorCategory, SysOpPanicCategory,
+    MapContainer, MapReadGuard, MapWriteGuard, Object, ObjectType, PanicClass, Program,
+    RenderedCallable, SpelledBound, SysOp, SysOpErrorCategory, SysOpPanicCategory,
     Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard, Value, ValueKind, Variant,
     format_float, sys_op_for_path, type_tags,
 };

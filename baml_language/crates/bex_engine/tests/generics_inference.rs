@@ -617,7 +617,7 @@ async fn infer_identity_media_binds_concrete_media_type() {
     // identity<T>(image) must bind T = image (not the host-only rust_type that
     // the Adt(_) catch-all previously synthesized).
     use bex_external_types::{BexExternalAdt, MediaKind};
-    let media = baml_builtins2::MediaValue::from_url(
+    let media = bex_vm_types::MediaValue::from_url(
         MediaKind::Image,
         "http://example.com/y.png",
         Some("image/png"),

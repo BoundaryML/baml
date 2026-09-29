@@ -359,7 +359,7 @@ mod tests {
         ));
         let big = vm.tlab.alloc_bigint(num_bigint::BigInt::from(123));
         let float = vm.tlab.alloc_float(2.5);
-        let opaque: Arc<dyn std::any::Any + Send + Sync> = baml_builtins2::MediaValue::from_file(
+        let opaque: Arc<dyn std::any::Any + Send + Sync> = bex_vm_types::MediaValue::from_file(
             baml_type::MediaKind::Image,
             "/nonexistent/telemetry-must-not-read.png",
             None,

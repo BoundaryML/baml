@@ -5030,14 +5030,13 @@ fn member_admits_numeric_arm(
 mod union_container_selection_tests {
     use std::sync::Arc;
 
-    use baml_builtins2::{MediaContent, MediaValue};
     use baml_type::{
         Freshness, FunctionParamMode, MediaKind, Name, RuntimeFunctionParamTy, TypeName,
     };
     use bex_external_types::{HostValueArc, HostValueKind};
     use bex_heap::{BexHeap, Tlab};
     use bex_vm_types::{
-        DeclarationName, EnumVariant, Object, Value,
+        DeclarationName, EnumVariant, MediaContent, MediaValue, Object, Value,
         types::{Class, Enum},
     };
 

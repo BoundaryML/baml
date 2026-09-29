@@ -21,11 +21,10 @@
 
 use std::{io::Write, sync::Arc};
 
-use baml_builtins2::{PromptAst as BuiltinPromptAst, PromptAstSimple};
 use baml_db::testing::compile_source;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_external_types::BexExternalAdt;
-use bex_vm_types::Program;
+use bex_vm_types::{Program, PromptAst as BuiltinPromptAst, PromptAstSimple};
 use indexmap::IndexMap;
 use sys_native::SysOpsExt;
 use tempfile::TempDir;

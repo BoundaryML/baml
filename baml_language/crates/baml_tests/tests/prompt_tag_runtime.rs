@@ -9,10 +9,10 @@
 
 use std::sync::Arc;
 
-use baml_builtins2::{PromptAst, PromptAstSimple};
 use baml_tests::{baml_test, engine::TestOutput};
 use bex_engine::BexExternalValue;
 use bex_external_types::BexExternalAdt;
+use bex_vm_types::{PromptAst, PromptAstSimple};
 
 fn test_result(output: TestOutput) -> BexExternalValue {
     output.result.expect("BAML execution should succeed")

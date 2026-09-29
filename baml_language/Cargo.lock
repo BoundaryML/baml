@@ -647,7 +647,6 @@ dependencies = [
  "baml_base",
  "baml_type",
  "serde",
- "serde_json",
  "yaml_serde",
 ]
 
@@ -1315,7 +1314,6 @@ version = "0.0.0-beta"
 dependencies = [
  "anyhow",
  "async-trait",
- "baml_builtins2",
  "baml_db",
  "baml_type",
  "baml_type_runtime",
@@ -1381,7 +1379,6 @@ dependencies = [
 name = "bex_external_types"
 version = "0.0.0-beta"
 dependencies = [
- "baml_builtins2",
  "baml_type",
  "bex_resource_types",
  "bex_str",
@@ -1557,6 +1554,7 @@ dependencies = [
  "hex",
  "indexmap",
  "num-bigint",
+ "serde_json",
  "sha2",
  "thiserror 2.0.18",
  "tokio",

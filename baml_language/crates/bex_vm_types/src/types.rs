@@ -736,15 +736,6 @@ include!(concat!(env!("OUT_DIR"), "/errors_generated.rs"));
 // PanicClass (tag enum), PanicInstance (with Value fields), associated methods.
 include!(concat!(env!("OUT_DIR"), "/panics_generated.rs"));
 
-/// Media value.
-///
-/// Kept as a type alias for compatibility with downstream crates that still use it.
-/// Within `bex_vm`, media is now stored as `Object::Instance` with a `$rust_type` `_data` field.
-pub type MediaValue = std::sync::Arc<baml_builtins2::MediaValue>;
-
-/// Prompt AST tree node.
-pub type PromptAst = std::sync::Arc<baml_builtins2::PromptAst>;
-
 /// A mutable cell wrapping a single captured value.
 ///
 /// Variables that are closed over are heap-allocated as `Cell` objects so that
