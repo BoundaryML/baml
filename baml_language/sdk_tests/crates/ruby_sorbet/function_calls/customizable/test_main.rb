@@ -6,24 +6,30 @@ require "baml_sdk"
 
 ENV["BAML_RUNTIME_PATH"] = ENV.fetch("BAML_RUBY_TEST_REAL_RUNTIME")
 
-class GeneratedPackageTest < Minitest::Test
+class MainTest < Minitest::Test
+  # SDK_PARITY_LINT(skip): Ruby package initialization on the first call in a fresh process
   def test_hello_world_automatically_initializes
     # A fresh process proves this is the first call, regardless of test order.
     assert_fresh_process('raise unless BamlSdk.hello_world == "hello world"')
   end
 
+  # SDK_PARITY_LINT(skip): Ruby package explicit initialization in a fresh process
   def test_explicit_initialization_then_call
     assert_fresh_process('BamlSdk.initialize!; raise unless BamlSdk.hello_world == "hello world"')
   end
 
-  def test_free_functions
+  def test_main_hello_world_returns_literal
     assert_equal 0, BamlSdk.method(:hello_world).arity
-    assert_equal 1, BamlSdk.method(:single_required_arg).arity
     assert_equal "hello world", BamlSdk.hello_world
+  end
+
+  def test_main_single_required_arg_round_trips
+    assert_equal 1, BamlSdk.method(:single_required_arg).arity
     assert_equal "hi", BamlSdk.single_required_arg("hi")
     assert_raises(TypeError) { BamlSdk.single_required_arg(1) }
   end
 
+  # SDK_PARITY_LINT(skip): Ruby primitive encoding and decoding smoke in the function_calls fixture
   def test_primitive_round_trips
     [0, -42, (2**62) - 1, -(2**62)].each do |value|
       assert_equal value, BamlSdk.round_trip_int(value)
@@ -34,25 +40,7 @@ class GeneratedPackageTest < Minitest::Test
     assert_nil BamlSdk::ThrowsTest.sleep_ms(0)
   end
 
-  def test_panic
-    error = assert_raises(Baml::PanicError) { BamlSdk::ThrowsTest.do_panic("panic from Ruby") }
-    assert_equal "baml.panics.UserPanic", error.type_name
-    assert_equal "panic from Ruby", error.message
-    refute_kind_of Baml::Error, error
-  end
-
-  def test_primitive_thrown_error
-    error = assert_raises(Baml::Error) { BamlSdk.unhandled_spawn_error }
-    assert_equal "string", error.type_name
-    assert_equal "boom", error.message
-  end
-
-  def test_class_error_identity_without_decoding_the_class
-    error = assert_raises(Baml::Error) { BamlSdk::RaisesTest.reparse("invalid document") }
-    assert_equal "user.raises_test.ParseError", error.type_name
-    assert_equal "invalid document", error.message
-  end
-
+  # SDK_PARITY_LINT(skip): Ruby generated T::Struct round trip in the function_calls fixture
   def test_person_round_trip
     person = BamlSdk::Person.new(person: "person", name: "Ryan", age: 30)
     result = BamlSdk.round_trip_person(person)

@@ -49,6 +49,7 @@ test "ast-grep rules find framework tests and ignore ordinary helpers" {
     let go = scan_source(repo_root, fixture_config(repo_root, "go"));
     let java = scan_source(repo_root, fixture_config(repo_root, "java"));
     let swift = scan_source(repo_root, fixture_config(repo_root, "swift"));
+    let ruby = scan_source(repo_root, fixture_config(repo_root, "ruby_sorbet"));
     validate_audit_coverage(python);
     validate_audit_coverage(typescript);
     validate_audit_coverage(cpp);
@@ -57,6 +58,7 @@ test "ast-grep rules find framework tests and ignore ordinary helpers" {
     validate_audit_coverage(go);
     validate_audit_coverage(java);
     validate_audit_coverage(swift);
+    validate_audit_coverage(ruby);
     assert.equal(declaration_count(python), 2);
     assert.equal(declaration_count(typescript), 8);
     assert.equal(declaration_count(cpp), 1);
@@ -64,7 +66,8 @@ test "ast-grep rules find framework tests and ignore ordinary helpers" {
     assert.equal(declaration_count(rust), 3);
     assert.equal(declaration_count(go), 1);
     assert.equal(declaration_count(java), 2);
-    assert.equal(declaration_count(swift), 1)
+    assert.equal(declaration_count(swift), 1);
+    assert.equal(declaration_count(ruby), 2)
 }
 
 test "audit coverage rejects unsupported TypeScript declaration forms" {
@@ -130,6 +133,36 @@ test "normalization derives category IDs and associates an annotation" {
     assert.equal(annotations.length(), 1);
     assert.equal(annotations[0].sdk_test_id, "fixture/sync_case");
     assert.equal(annotations[0].reason, "fixture-only behavior")
+}
+
+test "Ruby normalization derives category IDs and associates a hash comment annotation" {
+    let repo_root = ".";
+    let scan = scan_source(repo_root, fixture_config(repo_root, "ruby_sorbet"));
+    let tests = discover_tests([scan]);
+    let annotations = build_annotation_configs(repo_root, [scan], tests);
+    let ids = tests.map((test_case) -> {
+        test_case.sdk_test_id
+    });
+    ids.sort_by_key((sdk_test_id) -> {
+        sdk_test_id
+    });
+    assert.equal(ids, ["fixture/sync_case", "fixture/with_parameters_case"]);
+    assert.equal(annotations.length(), 1);
+    assert.equal(annotations[0].sdk_test_id, "fixture/sync_case");
+    assert.equal(annotations[0].reason, "fixture-only behavior");
+    assert.equal(line_is_annotation_layout("ruby", "  # comment"), true);
+    assert.equal(line_is_annotation_layout("ruby", "  @instance_variable = 1"), false)
+}
+
+test "audit coverage rejects Ruby methods without canonical test IDs" {
+    let config = fixture_config(".", "ruby_sorbet");
+    let scan = SourceScan { config: config, matches: [fixture_ast_match("ruby-audit-test", 0, 24)] };
+    {
+        validate_audit_coverage(scan);
+        baml.sys.panic("expected noncanonical Ruby test declaration rejection")
+    } catch (e) {
+        baml.errors.ParseError => null
+    }
 }
 
 test "dynamic TypeScript titles are rejected instead of undercounted" {
@@ -328,7 +361,7 @@ test "baseline report round trips escaped Markdown cells" {
     let row = fixture_parity_row(
         "type_shapes/round_trip",
         sdk_envs,
-        [true, false, true, false, true, false, true, false, true, false],
+        [true, false, true, false, true, false, true, false, true, false, true],
         ["python_pydantic2", "typescript_node"],
         "reason with a | pipe and \\ slash",
     );
@@ -416,5 +449,6 @@ test "TypeScript runtime membership narrows only TypeScript requirements" {
     assert.equal(array_contains(required, "typescript_node"), false);
     assert.equal(array_contains(required, "typescript_web_chromium"), true);
     assert.equal(array_contains(required, "typescript_web_cloudflare_workers"), true);
-    assert.equal(array_contains(required, "python_pydantic2"), true)
+    assert.equal(array_contains(required, "python_pydantic2"), true);
+    assert.equal(array_contains(required, "ruby_sorbet"), true)
 }

@@ -10,6 +10,7 @@ function sdk_environments() -> string[] {
         "go",
         "java",
         "swift",
+        "ruby_sorbet",
     ]
 }
 
@@ -141,6 +142,17 @@ function source_configs(repo_root: string) -> SourceConfig[] {
             "**/customizable/**/*.swift",
             ".swift",
             ["swift-test"],
+            "NAME",
+            "test_",
+        ),
+        make_source_config(
+            "ruby",
+            "ruby_sorbet",
+            "baml_language/sdk_tests/crates/ruby_sorbet",
+            `${rules_root}/ruby.yml`,
+            "**/customizable/**/*.rb",
+            ".rb",
+            ["ruby-test"],
             "NAME",
             "test_",
         ),
