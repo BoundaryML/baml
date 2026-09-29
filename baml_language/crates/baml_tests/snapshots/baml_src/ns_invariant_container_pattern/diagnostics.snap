@@ -5,7 +5,7 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0176
 
   ⚠ `map<string, unknown>` only matches maps whose value type is exactly `unknown`: generic types are invariant, so a `map<string, int>` value never matches it; to test for any map, use
-  │ `reflect.Type.of_value(v).as_map()` and re-match with `unreflect`
+  │ `reflect.Type.of_value(v).as_map()` and re-match on its value type with `unreflect`
     ╭─[invariant_container_pattern.baml:21:16]
  21 │         let m: map<string, unknown> => "map"
     ·                ────────────────────
@@ -14,7 +14,7 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0176
 
   ⚠ `unknown[]` only matches arrays whose element type is exactly `unknown`: generic types are invariant, so an `int[]` value never matches it; to test for any array, use
-  │ `reflect.Type.of_value(v).as_array()` and re-match with `unreflect`
+  │ `reflect.Type.of_value(v).as_array()` and re-match on its element type with `unreflect`
     ╭─[invariant_container_pattern.baml:22:16]
  22 │         let a: unknown[] => "array"
     ·                ─────────
@@ -23,7 +23,7 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0176
 
   ⚠ `unknown[]` only matches arrays whose element type is exactly `unknown`: generic types are invariant, so an `int[]` value never matches it; to test for any array, use
-  │ `reflect.Type.of_value(v).as_array()` and re-match with `unreflect`
+  │ `reflect.Type.of_value(v).as_array()` and re-match on its element type with `unreflect`
     ╭─[invariant_container_pattern.baml:79:10]
  79 │     v is unknown[]
     ·          ─────────
@@ -32,7 +32,7 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0176
 
   ⚠ `unknown[]` only matches arrays whose element type is exactly `unknown`: generic types are invariant, so an `int[]` value never matches it; to test for any array, use
-  │ `reflect.Type.of_value(v).as_array()` and re-match with `unreflect`
+  │ `reflect.Type.of_value(v).as_array()` and re-match on its element type with `unreflect`
     ╭─[invariant_container_pattern.baml:90:10]
  90 │     v is unknown[]
     ·          ─────────
@@ -41,7 +41,7 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0176
 
   ⚠ `map<string, unknown[]>` only matches maps whose value type is exactly `unknown[]`: generic types are invariant, so a `map<string, int>` value never matches it; to test for any map, use
-  │ `reflect.Type.of_value(v).as_map()` and re-match with `unreflect`
+  │ `reflect.Type.of_value(v).as_map()` and re-match on its value type with `unreflect`
     ╭─[invariant_container_pattern.baml:99:10]
  99 │     v is map<string, unknown[]>
     ·          ──────────────────────
@@ -50,7 +50,7 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0176
 
   ⚠ `unknown[]` only matches arrays whose element type is exactly `unknown`: generic types are invariant, so an `int[]` value never matches it; to test for any array, use
-  │ `reflect.Type.of_value(v).as_array()` and re-match with `unreflect`
+  │ `reflect.Type.of_value(v).as_array()` and re-match on its element type with `unreflect`
      ╭─[invariant_container_pattern.baml:109:10]
  109 │     v is unknown[]
      ·          ─────────
@@ -59,7 +59,7 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0176
 
   ⚠ `unknown[]` only matches arrays whose element type is exactly `unknown`: generic types are invariant, so an `int[]` value never matches it; to test for any array, use
-  │ `reflect.Type.of_value(v).as_array()` and re-match with `unreflect`
+  │ `reflect.Type.of_value(v).as_array()` and re-match on its element type with `unreflect`
      ╭─[invariant_container_pattern.baml:119:10]
  119 │     v is unknown[]
      ·          ─────────
@@ -67,8 +67,8 @@ source: crates/baml_tests/src/corpus.rs
 
   [type] E0176
 
-  ⚠ `baml.future.Future<unknown, never>` only matches futures whose type arguments are exactly those written: generic types are invariant, so a `Future<int, never>` value never matches it; to test
-  │ for any future, use `reflect.Type.of_value(v)` and re-match with `unreflect`
+  ⚠ `baml.future.Future<unknown, never>` only matches futures whose type arguments are exactly those written: generic types are invariant, so a `Future<int, never>` value never matches it; match
+  │ each concrete instantiation you expect instead
      ╭─[invariant_container_pattern.baml:131:10]
  131 │     v is baml.future.Future<unknown, never>
      ·          ──────────────────────────────────

@@ -5,7 +5,7 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0176
 
   ⚠ `unknown[]` only matches arrays whose element type is exactly `unknown`: generic types are invariant, so an `int[]` value never matches it; to test for any array, use
-  │ `reflect.Type.of_value(v).as_array()` and re-match with `unreflect`
+  │ `reflect.Type.of_value(v).as_array()` and re-match on its element type with `unreflect`
      ╭─[match_container_types.baml:211:10]
  211 │     u is unknown[]
      ·          ─────────

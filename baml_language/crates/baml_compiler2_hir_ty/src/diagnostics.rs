@@ -1808,40 +1808,41 @@ impl TirTypeError {
                     write!(f, "function `{name}` is always truthy")
                 }
                 TirTypeError::InvariantContainerPattern { pattern, kind } => {
-                    let (only, example, any, workaround) = match (kind, pattern) {
+                    // Arrays and maps have a reflection route to their
+                    // element type (`as_array` / `as_map`, then `unreflect`
+                    // and re-match); futures and classes have none, so the
+                    // advice there is to match each instantiation expected.
+                    let (only, example, remedy) = match (kind, pattern) {
                         (InvariantContainerKind::List, Ty::List(element)) => (
                             format!(
                                 "arrays whose element type is exactly `{}`",
                                 element.spell(vp)
                             ),
                             "an `int[]`",
-                            "array",
-                            "`reflect.Type.of_value(v).as_array()`",
+                            "to test for any array, use `reflect.Type.of_value(v).as_array()` \
+                             and re-match on its element type with `unreflect`",
                         ),
                         (InvariantContainerKind::Map, Ty::Map { value, .. }) => (
                             format!("maps whose value type is exactly `{}`", value.spell(vp)),
                             "a `map<string, int>`",
-                            "map",
-                            "`reflect.Type.of_value(v).as_map()`",
+                            "to test for any map, use `reflect.Type.of_value(v).as_map()` \
+                             and re-match on its value type with `unreflect`",
                         ),
                         (InvariantContainerKind::Future, _) => (
                             "futures whose type arguments are exactly those written".to_string(),
                             "a `Future<int, never>`",
-                            "future",
-                            "`reflect.Type.of_value(v)`",
+                            "match each concrete instantiation you expect instead",
                         ),
                         _ => (
                             "instances whose type arguments are exactly those written".to_string(),
                             "one built at other type arguments",
-                            "instance",
-                            "`reflect.Type.of_value(v)`",
+                            "match each concrete instantiation you expect instead",
                         ),
                     };
                     write!(
                         f,
                         "`{}` only matches {only}: generic types are invariant, so {example} value \
-                         never matches it; to test for any {any}, use {workaround} and re-match \
-                         with `unreflect`",
+                         never matches it; {remedy}",
                         pattern.spell(vp)
                     )
                 }
