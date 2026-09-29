@@ -2345,6 +2345,11 @@ impl LoweringContext {
                 let fields = fields
                     .iter()
                     .map(|field| {
+                        // A dotted key (`P { nested.value: x }`) writes a
+                        // nested field; field patterns have no such form.
+                        if field.name.contains('.') {
+                            return None;
+                        }
                         let is_same_name = matches!(
                             &self.exprs[field.value],
                             Expr::Path(segments)

@@ -44,6 +44,12 @@ function assign_to_nested_literal() -> int {
     n + r
 }
 
+function assign_to_literal_with_dotted_key() -> int {
+    let n = 0;
+    Pair { left.a: n } = Pair { left: mk(), right: 1 };
+    n
+}
+
 function assign_to_literal_with_field_leaf(p: P) -> int {
     let y = 0;
     [p.a, y] = [1, 2];
