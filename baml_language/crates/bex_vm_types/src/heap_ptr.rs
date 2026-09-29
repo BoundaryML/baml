@@ -35,6 +35,13 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::Object;
 
+/// Old → new location of every object a collection moved or kept.
+///
+/// A full collection probes this map several times per live object, so it
+/// hashes the pointer with Fx rather than `SipHash`; keys are heap addresses,
+/// not attacker-controlled input.
+pub type ForwardingMap = std::collections::HashMap<HeapPtr, HeapPtr, rustc_hash::FxBuildHasher>;
+
 /// A pointer to an object in the heap.
 ///
 /// # Safety

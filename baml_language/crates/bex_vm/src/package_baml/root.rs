@@ -385,7 +385,7 @@ impl Continuation for ToStringWalkContinuation {
         roots
     }
 
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    fn apply_forwarding(&mut self, forwarding: &bex_vm_types::ForwardingMap) {
         if let Some(ptr) = self.root.as_object_ptr() {
             if let Some(&new_ptr) = forwarding.get(&ptr) {
                 self.root = Value::object(new_ptr);

@@ -11,7 +11,6 @@
 )]
 
 use std::{
-    collections::HashMap,
     mem::size_of,
     sync::{
         Arc,
@@ -1022,7 +1021,7 @@ impl TelemetryState {
         }
     }
 
-    pub(crate) fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+    pub(crate) fn forward_roots(&mut self, roots: &bex_vm_types::ForwardingMap) {
         let old_paths = std::mem::take(&mut self.call_paths);
         self.call_path_keys.clear();
         for (mut key, id) in old_paths {

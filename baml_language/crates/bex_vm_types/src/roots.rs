@@ -1,4 +1,4 @@
-use ::std::{collections::HashMap, marker::PhantomData};
+use ::std::marker::PhantomData;
 
 use crate::{HeapPtr, Value};
 
@@ -13,12 +13,12 @@ pub trait RootHaver: Send {
     /// Collect all heap roots in this object.
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>);
     /// Forward the heap pointers of all roots in this object.
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>);
+    fn forward_roots(&mut self, roots: &crate::ForwardingMap);
 }
 
 impl RootHaver for () {
     fn collect_roots(&self, _roots: &mut Vec<HeapPtr>) {}
-    fn forward_roots(&mut self, _roots: &HashMap<HeapPtr, HeapPtr>) {}
+    fn forward_roots(&mut self, _roots: &crate::ForwardingMap) {}
 }
 
 /// Generational write-barrier hook for heap mutations that touch a [`Value`].

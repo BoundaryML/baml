@@ -270,7 +270,7 @@ impl RootHaver for BytecodeFrame {
             });
         }
     }
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+    fn forward_roots(&mut self, roots: &bex_vm_types::ForwardingMap) {
         self.function = roots.get(&self.function).copied().unwrap_or(self.function);
         for ty in &mut self.type_args {
             ty.visit_heads_mut(&mut |head| {
@@ -314,7 +314,7 @@ impl RootHaver for NativeFrame {
         roots.push(self.function);
         roots.extend_from_slice(&self.continuation.gc_roots());
     }
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+    fn forward_roots(&mut self, roots: &bex_vm_types::ForwardingMap) {
         self.function = roots.get(&self.function).copied().unwrap_or(self.function);
         self.continuation.apply_forwarding(roots);
     }
@@ -580,7 +580,7 @@ pub(crate) mod tests {
             fn gc_roots(&self) -> Vec<HeapPtr> {
                 vec![self.0]
             }
-            fn apply_forwarding(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+            fn apply_forwarding(&mut self, roots: &bex_vm_types::ForwardingMap) {
                 self.0 = roots.get(&self.0).copied().unwrap_or(self.0);
             }
         }
@@ -1281,7 +1281,7 @@ impl RootHaver for Frame {
             Frame::Native(f) => f.collect_roots(roots),
         }
     }
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+    fn forward_roots(&mut self, roots: &bex_vm_types::ForwardingMap) {
         match self {
             Frame::Bytecode(f) => f.forward_roots(roots),
             Frame::Native(f) => f.forward_roots(roots),
@@ -9994,7 +9994,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
         // so they're already included in the stack iteration above.
     }
 
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+    fn forward_roots(&mut self, roots: &bex_vm_types::ForwardingMap) {
         // The GC has reset the heap's TLAB cursor (`gen0_next_chunk`) and
         // swapped semispaces, so this VM's cached `alloc_ptr`/`alloc_limit`
         // now point into a region the heap will hand out to other VMs as a
