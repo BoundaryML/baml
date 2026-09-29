@@ -156,8 +156,9 @@ use sha2::{Digest, Sha256};
 /// display metadata — so every serialized `Program` changed shape. Type tags
 /// became the linker's: a head in a unit is its declaration's object operand
 /// (`ImportEntry` lost `baked_tag`) and the linker assigns every declaration
-/// `CLASS_BASE +` its object index; `MatchHashTable` gained `keys`
-/// (`SwitchKey::{Kind, Declaration}`), solved by the linker; `ImplBodyKey`
+/// `CLASS_BASE +` its object index; `MatchHashTable` became `SwitchTable`,
+/// which a unit states by its keys (`SwitchKey::{Kind, Declaration}`) and the
+/// linker solves to a perfect hash or the sorted keys; `ImplBodyKey`
 /// carries an `ImplBodyCoherence` whose heads are located by edge path from
 /// the body's own package, as are the manifest's throw facts and
 /// `callable_throws` fragments from their file's; a dependency table is a

@@ -49,13 +49,6 @@ enum SwitchKind {
     TypeTag,
 }
 
-/// The most arms a type-tag switch may have: a class arm dispatches only
-/// through the perfect-hash table, whose bounded search separates this many
-/// keys with certainty for every practical purpose and wider sets essentially
-/// never (`MatchHashTable::MAX_KEYS` in `bex_vm_types`, asserted equal by
-/// emit). A wider match takes the sequential `is_type` chain.
-pub const MAX_SWITCH_KEYS: usize = 64;
-
 /// What happens in the otherwise block of a switch.
 #[derive(Clone, Copy)]
 enum SwitchOtherwise {
@@ -13094,12 +13087,8 @@ impl<'db> LoweringContext<'db> {
 
         // TypeTag switches only pay off at 4+ arms (JumpTable). For fewer arms
         // the sequential `is_type` chain is more compact because the if-else
-        // chain adds copy/pop stack management overhead per arm. Past
-        // `MAX_SWITCH_KEYS` the one table a class arm can dispatch through
-        // has no room, so the chain is the only road there too.
-        if matches!(switch_kind, Some(SwitchKind::TypeTag))
-            && !(4..=MAX_SWITCH_KEYS).contains(&int_arms.len())
-        {
+        // chain adds copy/pop stack management overhead per arm.
+        if matches!(switch_kind, Some(SwitchKind::TypeTag)) && int_arms.len() < 4 {
             return Ok(false);
         }
 

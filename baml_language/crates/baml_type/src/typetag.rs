@@ -32,8 +32,8 @@
 //!
 //! The `TypeTag` instruction extracts a type identifier from any value,
 //! enabling efficient dispatch on union types: a switch over declaration arms
-//! dispatches through a perfect-hash table the image's producer solved over
-//! the tags it assigned.
+//! dispatches through a table the image's producer solved over the tags it
+//! assigned.
 
 use borsh::{BorshDeserialize, BorshSerialize};
 

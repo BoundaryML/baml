@@ -48,7 +48,7 @@ use bex_heap::TlabHolder;
 use bex_vm_types::{
     AtomicValueSlot, BodyKey, ConstValue, DeclPath, FnPath, GlobalIndex, HeapPtr, Object,
     ObjectIndex, ObjectType, TyTemplate, TypeHead,
-    bytecode::SwitchKey,
+    bytecode::{SwitchDispatch, SwitchKey},
     head_walk::visit_object_heads_mut,
     relink::{IndexOperand, visit_object_operands},
     types::{
@@ -990,8 +990,14 @@ fn relocate(
     let mut floats = Vec::new();
     match object {
         Object::Function(function) => {
-            for switch in &mut function.bytecode.match_hash_tables {
-                if let Some(index) = switch.keys.iter().find_map(|key| match key {
+            for switch in &mut function.bytecode.switch_tables {
+                let SwitchDispatch::Keys(keys) = &switch.dispatch else {
+                    return Err(link_error(format!(
+                        "function `{}` states a switch by values instead of keys",
+                        function.name
+                    )));
+                };
+                if let Some(index) = keys.iter().find_map(|key| match key {
                     SwitchKey::Declaration(declaration)
                         if image.tag(declaration.raw()).is_none() =>
                     {
@@ -1003,18 +1009,11 @@ fn relocate(
                         "a type switch keys on object {index}, which is not a declaration"
                     )));
                 }
-                switch
-                    .solve(|declaration| {
-                        image
-                            .tag(declaration.raw())
-                            .unwrap_or_else(|| unreachable!("every declaration key was checked"))
-                    })
-                    .map_err(|unsolvable| {
-                        link_error(format!(
-                            "no hash separates a type switch's {} keys",
-                            unsolvable.keys
-                        ))
-                    })?;
+                switch.dispatch = SwitchDispatch::solved(keys, |declaration| {
+                    image
+                        .tag(declaration.raw())
+                        .unwrap_or_else(|| unreachable!("every declaration key was checked"))
+                });
             }
             let constants = function.bytecode.constants.clone();
             let mut resolved = Vec::with_capacity(constants.len());

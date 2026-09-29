@@ -541,6 +541,45 @@ impl BexHeap {
         );
     }
 
+    /// Refuse a compile-time image holding a switch table that cannot
+    /// dispatch: one that still states its keys (whoever laid the image out
+    /// solves every table), or a solved one that lacks the shape its kind
+    /// states.
+    ///
+    /// Total and active in release builds, like [`Self::bind_type_heads`]:
+    /// the interpreter dispatches through these tables without looking at
+    /// them first, so an image with one it cannot answer must not run.
+    pub fn assert_switch_tables_dispatch(&self) {
+        let undispatchable: Vec<String> = self
+            .compile_time
+            .iter()
+            .filter_map(|object| match object {
+                Object::Function(function) => Some(function),
+                _ => None,
+            })
+            .flat_map(|function| {
+                function
+                    .bytecode
+                    .switch_tables
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, table)| !table.dispatch.is_dispatchable())
+                    .map(|(index, table)| {
+                        format!(
+                            "  function {}: switch table {index} over [{}]",
+                            function.name,
+                            table.key_names.join(", ")
+                        )
+                    })
+            })
+            .collect();
+        assert!(
+            undispatchable.is_empty(),
+            "compile-time image contains switch tables that cannot dispatch:\n{}",
+            undispatchable.join("\n"),
+        );
+    }
+
     /// The tag under which `object` can head a nominal type, or `None` when it
     /// is not a declaration.
     pub fn declaration_tag(object: &Object) -> Option<baml_type::typetag::TypeTag> {
@@ -1257,6 +1296,85 @@ const _: () = {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A bytecode function dispatching through `table`.
+    fn function_switching_through(table: bex_vm_types::bytecode::SwitchTable) -> Object {
+        use bex_vm_types::{
+            Bytecode, Function, FunctionKind,
+            bytecode::Instruction,
+            types::{FunctionCaptureProps, FunctionOrigin},
+        };
+        Object::Function(Box::new(Function {
+            name: "user.pick".to_string(),
+            source_file: "user.baml".to_string(),
+            docstring: None,
+            declared_name: None,
+            arity: 0,
+            real_local_count: 0,
+            bytecode: Bytecode {
+                instructions: vec![Instruction::DenseTag(0), Instruction::Return],
+                switch_tables: vec![table],
+                ..Bytecode::default()
+            },
+            kind: FunctionKind::Bytecode,
+            local_names: Vec::new(),
+            debug_locals: Vec::new(),
+            span: baml_type::Span::fake(),
+            return_type: bex_vm_types::TyTemplate::Unknown,
+            param_names: Vec::new(),
+            param_types: Vec::new(),
+            param_has_default: Vec::new(),
+            display_type_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
+            display_param_types: Vec::new(),
+            display_return_type: String::new(),
+            throws_type: bex_vm_types::TyTemplate::Never,
+            origin: FunctionOrigin::Internal,
+            is_interface_body: false,
+            native_key: None,
+            body_meta: None,
+            capture: FunctionCaptureProps::disabled(),
+            function_id: 0,
+            runtime_package: HeapPtr::null(),
+        }))
+    }
+
+    fn keys_of(values: &[i64]) -> Vec<bex_vm_types::bytecode::SwitchKey> {
+        values
+            .iter()
+            .copied()
+            .map(bex_vm_types::bytecode::SwitchKey::Kind)
+            .collect()
+    }
+
+    #[test]
+    fn an_image_whose_switches_are_solved_loads() {
+        use bex_vm_types::bytecode::{SwitchDispatch, SwitchTable};
+        let keys = keys_of(&[1, 100, 5_000, 70_000]);
+        let heap = BexHeap::build_unsealed_default(vec![function_switching_through(SwitchTable {
+            dispatch: SwitchDispatch::solved(&keys, |_| {
+                unreachable!("a switch of kind keys names no declaration")
+            }),
+            key_names: vec!["one".to_string()],
+        })]);
+        heap.assert_switch_tables_dispatch();
+    }
+
+    /// Nothing dispatches through a table that only states its keys, so an
+    /// image that holds one is refused where it is loaded rather than where
+    /// a value first reaches the switch.
+    #[test]
+    #[should_panic(expected = "function user.pick: switch table 0 over [one, hundred]")]
+    fn an_image_with_an_unsolved_switch_is_refused() {
+        use bex_vm_types::bytecode::SwitchTable;
+        let heap = BexHeap::build_unsealed_default(vec![function_switching_through(
+            SwitchTable::of_keys(
+                keys_of(&[1, 100]),
+                vec!["one".to_string(), "hundred".to_string()],
+            ),
+        )]);
+        heap.assert_switch_tables_dispatch();
+    }
 
     /// One object, one key — so a host comparing two references to the same
     /// declaration sees one identity.

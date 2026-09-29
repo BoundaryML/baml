@@ -8,6 +8,7 @@ use baml_linker_types::{CompilationUnit, InitTail, import_ordinal};
 use baml_type::typetag::TypeTag;
 use bex_vm_types::{
     GlobalIndex, Object, ObjectIndex, TypeHead,
+    bytecode::SwitchDispatch,
     head_walk::visit_object_heads_mut,
     relink::{IndexOperand, visit_object_operands},
 };
@@ -210,14 +211,18 @@ pub(super) fn relocate(object: &mut Object, space: &impl OperandSpace) -> Result
                 *ordinal = space.ordinal();
             }
         }
-        for table in &mut function.bytecode.match_hash_tables {
+        for table in &mut function.bytecode.switch_tables {
+            let SwitchDispatch::Keys(keys) = &table.dispatch else {
+                return Err(LinkError::invalid(format!(
+                    "package `{}`: function `{}` states a switch by values instead of keys",
+                    space.name(),
+                    function.name
+                )));
+            };
             // The keys are image indices now; the tag of each is its index.
-            table
-                .solve(|declaration| TypeTag::of_static_index(declaration.raw()))
-                .map_err(|unsolvable| LinkError::UnsolvableSwitch {
-                    package: space.name().clone(),
-                    keys: unsolvable.keys,
-                })?;
+            table.dispatch = SwitchDispatch::solved(keys, |declaration| {
+                TypeTag::of_static_index(declaration.raw())
+            });
         }
     }
     Ok(())

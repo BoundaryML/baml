@@ -5,7 +5,7 @@ use baml_type::typetag::TypeTag;
 use bex_vm_types::{
     BodyKey, ConstValue, DeclPath, FnPath, GlobalIndex, ImplBodyKey, Instruction, InterfaceKey,
     Object, ObjectIndex, RealizedTy, TypeHead,
-    bytecode::{Bytecode, MatchHashTable, SwitchKey},
+    bytecode::{Bytecode, SwitchDispatch, SwitchEntry, SwitchKey, SwitchTable},
     types::{
         Class, EdgeKind, Function, FunctionCaptureProps, FunctionKind, FunctionOrigin,
         GenericFunction, LocalName, ProgramEdge, ProgramPackage,
@@ -686,7 +686,7 @@ fn heads_and_switch_keys_relocate_to_the_assigned_tags() {
     };
     let head = TypeHead::unresolved_operand(ObjectIndex::from_raw(import_operand(0)));
     consumer_fn.param_types = vec![bex_vm_types::TyTemplate::Class(head, Box::new([]))];
-    consumer_fn.bytecode.match_hash_tables = vec![MatchHashTable::unsolved(
+    consumer_fn.bytecode.switch_tables = vec![SwitchTable::of_keys(
         vec![
             SwitchKey::Kind(baml_type::typetag::INT),
             SwitchKey::Declaration(ObjectIndex::from_raw(import_operand(0))),
@@ -724,21 +724,146 @@ fn heads_and_switch_keys_relocate_to_the_assigned_tags() {
             ntypeargs: 0,
         }
     );
-    let table = &f.bytecode.match_hash_tables[0];
-    assert!(table.is_solved());
+    let table = &f.bytecode.switch_tables[0];
+    assert!(table.dispatch.is_dispatchable());
+    assert_eq!(table.arm_of(baml_type::typetag::INT), Some(0));
     assert_eq!(
-        table.keys[1],
-        SwitchKey::Declaration(ObjectIndex::from_raw(0)),
-        "the key operand relocated like every other object operand"
+        table.arm_of(foo.as_i64()),
+        Some(1),
+        "the key operand relocated like every other object operand, and the \
+         table is solved over the tag its declaration was assigned"
     );
-    let dispatch = |tag: i64| {
-        let h = (tag.cast_unsigned().wrapping_mul(table.multiply) >> table.shift)
-            & u64::from(table.mask);
-        let entry = &table.entries[usize::try_from(h).expect("slot fits usize")];
-        (entry.expected_tag == tag).then_some(entry.dense_index)
+    assert_eq!(table.arm_of(baml_type::typetag::STRING), None);
+}
+
+/// `count` distinct indices below `range` with no structure to them, drawn
+/// in order from a fixed sequence (`SplitMix64` from state zero).
+fn scattered(count: usize, range: u64) -> Vec<usize> {
+    let mut state = 0u64;
+    let mut indices = Vec::with_capacity(count);
+    while indices.len() < count {
+        state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut mixed = state;
+        mixed = (mixed ^ (mixed >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        mixed = (mixed ^ (mixed >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        mixed ^= mixed >> 31;
+        let index = usize::try_from(mixed % range).expect("the range fits usize");
+        if !indices.contains(&index) {
+            indices.push(index);
+        }
+    }
+    indices
+}
+
+/// A switch links wherever its declarations land. Sixty-four class arms
+/// scattered over a few thousand objects have tags that no multiply-shift
+/// hash separates within 128 slots, so a search that stops there finds
+/// nothing; the table is solved regardless.
+#[test]
+fn a_switch_over_many_sparse_declarations_links() {
+    const CLASSES: usize = 3000;
+    const ARMS: usize = 64;
+    let record = interface_record(b"iface");
+    let provider = CompilationUnit {
+        classes: (0..CLASSES)
+            .map(|index| {
+                let mut object = class(&format!("C{index}"));
+                let Object::Class(declared) = &mut object else {
+                    unreachable!()
+                };
+                // Its own tag field is its operand: its class-bucket offset.
+                declared.type_tag =
+                    TypeHead::unresolved_operand(ObjectIndex::from_raw(index)).tag();
+                object
+            })
+            .collect(),
+        exports: ExportTable {
+            objects: (0..CLASSES)
+                .map(|index| {
+                    (
+                        DeclPath::Class(item(&format!("C{index}"))),
+                        LocalRef::Class(u32::try_from(index).expect("few classes")),
+                    )
+                })
+                .collect(),
+            globals: Vec::new(),
+        },
+        ..CompilationUnit::default()
     };
-    assert_eq!(dispatch(baml_type::typetag::INT), Some(0));
-    assert_eq!(dispatch(foo.as_i64()), Some(1));
+    // Arms over classes far apart in the image, in no order.
+    let armed = scattered(ARMS, CLASSES as u64);
+    let mut consumer = unit_with_fn(
+        "user.f",
+        vec![Instruction::DenseTag(0), Instruction::Return],
+    );
+    consumer
+        .dependencies
+        .push(direct("app", fingerprint_of(&record)));
+    for &class in &armed {
+        consumer
+            .object_imports
+            .push(import(1, DeclPath::Class(item(&format!("C{class}")))));
+    }
+    let Object::Function(consumer_fn) = &mut consumer.code[0] else {
+        unreachable!()
+    };
+    consumer_fn.bytecode.switch_tables = vec![SwitchTable::of_keys(
+        (0..ARMS)
+            .map(|arm| SwitchKey::Declaration(ObjectIndex::from_raw(import_operand(arm))))
+            .collect(),
+        armed.iter().map(|class| format!("C{class}")).collect(),
+    )];
+    let set = LinkSet {
+        root: LinkPackageId(1),
+        packages: vec![
+            package("app", vec![], &provider, &record),
+            package("user", vec![("app", 0)], &consumer, &record),
+        ],
+    };
+    let program = link(&set).expect("a switch links whatever tags its keys were assigned");
+    let table = &function(&program, CLASSES).bytecode.switch_tables[0];
+    assert!(table.dispatch.is_dispatchable());
+    for (arm, &class) in armed.iter().enumerate() {
+        assert_eq!(
+            table.arm_of(TypeTag::of_static_index(class).as_i64()),
+            Some(u32::try_from(arm).expect("few arms")),
+            "class C{class} selects arm {arm}"
+        );
+    }
+    let unarmed = (0..CLASSES)
+        .find(|class| !armed.contains(class))
+        .expect("most classes have no arm");
+    assert_eq!(
+        table.arm_of(TypeTag::of_static_index(unarmed).as_i64()),
+        None
+    );
+}
+
+/// A unit states a switch by its keys. One that arrives with values was
+/// solved over tags of some other layout, and is refused rather than trusted.
+#[test]
+fn a_unit_that_states_a_switch_by_values_is_refused() {
+    let record = interface_record(b"iface");
+    let mut unit = unit_with_fn(
+        "user.f",
+        vec![Instruction::DenseTag(0), Instruction::Return],
+    );
+    let Object::Function(function) = &mut unit.code[0] else {
+        unreachable!()
+    };
+    function.bytecode.switch_tables = vec![SwitchTable {
+        dispatch: SwitchDispatch::Sorted(vec![SwitchEntry { value: 7, arm: 0 }]),
+        key_names: vec!["seven".to_string()],
+    }];
+    let set = LinkSet {
+        root: LinkPackageId(0),
+        packages: vec![package("user", vec![], &unit, &record)],
+    };
+    let error = link(&set).expect_err("a solved table in a unit is not a unit's table");
+    assert!(
+        matches!(&error, LinkError::InvalidUnit(message) if message.contains("instead of keys")),
+        "{error}"
+    );
 }
 
 #[test]

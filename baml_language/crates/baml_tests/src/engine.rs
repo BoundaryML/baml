@@ -169,6 +169,7 @@ pub fn bound_pool(program: &Program) -> bex_heap::BexHeap {
     }
     let mut heap = bex_heap::BexHeap::build_unsealed_default(objects);
     heap.bind_type_heads();
+    heap.assert_switch_tables_dispatch();
     heap
 }
 

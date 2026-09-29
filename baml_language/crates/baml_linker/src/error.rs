@@ -28,9 +28,6 @@ pub enum LinkError {
     /// A package's edge table reaches two packages under one name, so the
     /// name would resolve to neither.
     DuplicateEdge { package: Name, edge: Name },
-    /// A type switch's hash table could not be solved over the tags the link
-    /// assigned its keys (see `MatchHashTable::solve` in `bex_vm_types`).
-    UnsolvableSwitch { package: Name, keys: usize },
     /// A unit is malformed: an index outside its declared space, a table that
     /// contradicts its buckets, an entry that violates the format's laws.
     InvalidUnit(String),
@@ -77,10 +74,6 @@ impl std::fmt::Display for LinkError {
             Self::DuplicateEdge { package, edge } => {
                 write!(f, "package `{package}` reaches two packages as `{edge}`")
             }
-            Self::UnsolvableSwitch { package, keys } => write!(
-                f,
-                "package `{package}`: no perfect hash separates the {keys} keys of a type switch"
-            ),
             Self::InvalidUnit(message) => write!(f, "invalid unit: {message}"),
         }
     }

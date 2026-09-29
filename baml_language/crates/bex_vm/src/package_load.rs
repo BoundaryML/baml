@@ -706,6 +706,7 @@ pub fn build_heap_with_packages(
     // this is the one point where the whole image can bind — and prove it
     // bound — before anything can dereference a head.
     heap.bind_type_heads();
+    heap.assert_switch_tables_dispatch();
     (heap.seal(), index)
 }
 

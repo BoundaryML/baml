@@ -23,7 +23,7 @@
 
 use crate::{
     GlobalIndex, ObjectIndex,
-    bytecode::{ClassInitPlan, Instruction, SwitchKey},
+    bytecode::{ClassInitPlan, Instruction, SwitchDispatch, SwitchKey, SwitchTable},
     types::{ConstValue, Function},
 };
 
@@ -47,7 +47,7 @@ pub enum IndexOperandRef<'a> {
 // operand-carrying opcode or `ConstValue` variant fails compilation instead of
 // silently escaping the walk.
 macro_rules! visit_bytecode_index_operands {
-    ($instructions:expr, $constants:expr, $plans:expr, $tables:expr, $keys:ident, $visit:ident, $operand:ident) => {{
+    ($instructions:expr, $constants:expr, $plans:expr, $tables:expr, $visit:ident, $operand:ident) => {{
         use Instruction as I;
         let mut bakes_type_layout = false;
         for instruction in $instructions {
@@ -182,16 +182,23 @@ macro_rules! visit_bytecode_index_operands {
             let ClassInitPlan { class_obj, .. } = plan;
             $visit($operand::Object(class_obj));
         }
-        // A type switch's declaration keys name their declarations by object
-        // operand; the kind keys are constants.
+        // A switch's declaration keys name their declarations by object
+        // operand; the kind keys are constants. A solved table holds values,
+        // which name nothing.
         for table in $tables {
-            for key in table.keys.$keys() {
-                match key {
-                    SwitchKey::Declaration(declaration) => {
-                        $visit($operand::Object(declaration));
+            let SwitchTable { dispatch, .. } = table;
+            match dispatch {
+                SwitchDispatch::Keys(keys) => {
+                    for key in keys {
+                        match key {
+                            SwitchKey::Declaration(declaration) => {
+                                $visit($operand::Object(declaration));
+                            }
+                            SwitchKey::Kind(_) => {}
+                        }
                     }
-                    SwitchKey::Kind(_) => {}
                 }
+                SwitchDispatch::Hash { .. } | SwitchDispatch::Sorted(_) => {}
             }
         }
         bakes_type_layout
@@ -204,8 +211,7 @@ pub fn visit_index_operands(function: &mut Function, mut visit: impl FnMut(Index
         &mut function.bytecode.instructions,
         &mut function.bytecode.constants,
         &mut function.bytecode.class_init_plans,
-        &mut function.bytecode.match_hash_tables,
-        iter_mut,
+        &mut function.bytecode.switch_tables,
         visit,
         IndexOperand
     );
@@ -221,8 +227,7 @@ pub fn visit_index_operands_ref(
         &function.bytecode.instructions,
         &function.bytecode.constants,
         &function.bytecode.class_init_plans,
-        &function.bytecode.match_hash_tables,
-        iter,
+        &function.bytecode.switch_tables,
         visit,
         IndexOperandRef
     )
@@ -335,7 +340,7 @@ mod tests {
                 ntypeargs: 0,
                 fields: Vec::new(),
             }],
-            match_hash_tables: vec![crate::bytecode::MatchHashTable::unsolved(
+            switch_tables: vec![SwitchTable::of_keys(
                 vec![
                     SwitchKey::Kind(0),
                     SwitchKey::Declaration(ObjectIndex::from_raw(11)),

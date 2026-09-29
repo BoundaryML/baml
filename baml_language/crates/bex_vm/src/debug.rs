@@ -213,10 +213,10 @@ pub(crate) fn display_instruction(
             format!("(table {table_idx})")
         }
         Instruction::DenseTag(table_idx) => {
-            if let Some(table) = function.bytecode.match_hash_tables.get(*table_idx) {
+            if let Some(table) = function.bytecode.switch_tables.get(*table_idx) {
                 format!("({})", table.key_names.join(", "))
             } else {
-                format!("(hash table {table_idx})")
+                format!("(switch table {table_idx})")
             }
         }
         Instruction::Pop(_)
@@ -1005,7 +1005,7 @@ fn display_instruction_textual(
         Instruction::DenseTag(table_idx) => {
             let names = function
                 .bytecode
-                .match_hash_tables
+                .switch_tables
                 .get(*table_idx)
                 .map(|t| t.key_names.join(", "))
                 .unwrap_or_default();

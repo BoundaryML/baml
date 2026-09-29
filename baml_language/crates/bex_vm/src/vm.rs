@@ -9169,30 +9169,18 @@ impl BexVm {
                 }
 
                 // ── DenseTag ──────────────────────────────────────────────────
-                #[allow(
-                    clippy::cast_sign_loss,
-                    clippy::cast_lossless,
-                    clippy::cast_possible_truncation
-                )]
                 OpCode::DenseTag => {
-                    let table_idx = { read_u32_unchecked(code, pc) as usize };
+                    let table_idx = read_u32_unchecked(code, pc) as usize;
                     let popped = self.stack.ensure_pop();
-                    let Some(tag) = popped.as_int() else {
+                    let Some(value) = popped.as_int() else {
                         return Err(VmInternalError::TypeError {
                             expected: bex_vm_types::types::Type::Int,
                             got: self.type_of(&popped),
                         }
                         .into());
                     };
-                    let table = &function.bytecode.match_hash_tables[table_idx];
-                    let h = ((tag as u64).wrapping_mul(table.multiply) >> table.shift)
-                        & table.mask as u64;
-                    let entry = &table.entries[h as usize];
-                    if entry.expected_tag == tag {
-                        self.stack.push(Value::int(i64::from(entry.dense_index)));
-                    } else {
-                        self.stack.push(Value::int(-1));
-                    }
+                    let arm = function.bytecode.switch_tables[table_idx].arm_of(value);
+                    self.stack.push(Value::int(arm.map_or(-1, i64::from)));
                 }
 
                 // ── ThrowIfPanic ──────────────────────────────────────────────

@@ -28,14 +28,9 @@ use bex_vm_types::{
     UnaryOp as VmUnaryOp,
     bytecode::{
         ClassInitPlan, DebugLocalScope, FieldCopy, FieldCopySet, InstructionMeta, JumpTableData,
-        LineTableEntry, MatchHashTable, OperandMeta, SwitchKey,
+        LineTableEntry, OperandMeta, SwitchKey, SwitchTable,
     },
 };
-
-// A declaration-keyed arm of a type switch has exactly one legal shape, the
-// relocatable hash table; MIR refuses the switch road past the table's
-// capacity, so the two limits are one number.
-const _: () = assert!(baml_compiler2_mir::MAX_SWITCH_KEYS == MatchHashTable::MAX_KEYS);
 
 /// Coarse arithmetic-type classification used by [`try_specialize_binary_op`].
 ///
@@ -58,17 +53,13 @@ enum ArithTyClass {
 enum SwitchStrategy {
     /// Use jump table (O(1) lookup) for dense integer ranges.
     JumpTable { min: i64, max: i64 },
-    /// Use binary search tree (O(log n) comparisons) for sparse integers.
-    BinarySearch,
-    /// Use perfect hash + dense jump table (O(1) dispatch) for sparse ≥4-arm
-    /// switches over known keys. Replaces `BinarySearch` when a perfect hash
-    /// is found; carries the solved table.
-    PerfectHash(MatchHashTable),
-    /// The hash table, unsolved: at least one key is a declaration whose tag
-    /// only the linker or grafter knows. The one legal shape for such a
-    /// switch — every other strategy bakes key VALUES as constants nothing
-    /// can relocate.
-    DeferredHash,
+    /// Use a switch table + dense jump table for a sparse switch of 4+ arms,
+    /// and for every switch with a declaration key: a declaration's tag is
+    /// known only to whoever lays it into an image, and every other strategy
+    /// bakes key VALUES as constants nothing can relocate. The table states
+    /// the keys; the linker or grafter solves it
+    /// ([`SwitchDispatch::solved`](bex_vm_types::bytecode::SwitchDispatch::solved)).
+    Table,
     /// Use linear if-else chain (O(n) comparisons).
     IfElseChain,
 }
@@ -77,7 +68,7 @@ enum SwitchStrategy {
 const JUMP_TABLE_MIN_ARMS: usize = 4; // Minimum arms to consider jump table
 const JUMP_TABLE_MIN_DENSITY: f64 = 0.5; // Minimum density for jump table
 const JUMP_TABLE_MAX_SIZE: usize = 256; // Maximum jump table size
-const BINARY_SEARCH_MIN_ARMS: usize = 4; // Minimum arms for binary search
+const SWITCH_TABLE_MIN_ARMS: usize = 4; // Minimum arms for a switch table
 
 /// Unwrap a `Result` whose error type is `Infallible`.
 #[inline]
@@ -107,7 +98,7 @@ fn analyze_switch(arms: &[(SwitchKey, BlockId)]) -> SwitchStrategy {
         .iter()
         .any(|(key, _)| matches!(key, SwitchKey::Declaration(_)))
     {
-        return SwitchStrategy::DeferredHash;
+        return SwitchStrategy::Table;
     }
     let values: Vec<i64> = arms.iter().map(|(key, _)| kind_value(*key)).collect();
 
@@ -128,24 +119,11 @@ fn analyze_switch(arms: &[(SwitchKey, BlockId)]) -> SwitchStrategy {
     {
         SwitchStrategy::JumpTable { min, max }
     }
-    // Use binary search for sparse but large switch, with perfect hash
-    // preferred when a compile-time hash is found (O(1) vs O(log K)).
-    //
-    // Perfect hashing is always attempted here. It's only reached when
-    // density is too low for JumpTable, so it won't interfere with dense
-    // enum discriminant switches. See `find_perfect_hash` for algorithm
-    // details and references.
-    else if arms.len() >= BINARY_SEARCH_MIN_ARMS {
-        let mut table =
-            MatchHashTable::unsolved(arms.iter().map(|(key, _)| *key).collect(), Vec::new());
-        if table
-            .solve(|_| unreachable!("a table of kind keys names no declaration"))
-            .is_ok()
-        {
-            SwitchStrategy::PerfectHash(table)
-        } else {
-            SwitchStrategy::BinarySearch
-        }
+    // Use a switch table for a sparse but large switch. Only reached when
+    // density is too low for JumpTable, so it won't interfere with dense enum
+    // discriminant switches.
+    else if arms.len() >= SWITCH_TABLE_MIN_ARMS {
+        SwitchStrategy::Table
     }
     // Default to if-else chain for small switches
     else {
@@ -158,8 +136,7 @@ fn analyze_switch(arms: &[(SwitchKey, BlockId)]) -> SwitchStrategy {
 /// emitter dispatches on, so the stack-carry simulation (`stack_carry`) and
 /// the emitters cannot disagree about pull counts:
 ///
-/// - `JumpTable` / `PerfectHash` / `BinarySearch` pull exactly once
-///   (`BinarySearch` keeps the value on the stack via `Copy` thereafter);
+/// - `JumpTable` / `Table` pull exactly once;
 /// - `IfElseChain` re-loads the discriminant once per emitted comparison —
 ///   `arms.len()` minus the exhaustive-final elision — including ZERO pulls
 ///   for its no-comparison forms (no arms; a single exhaustive arm).
@@ -172,7 +149,7 @@ pub(crate) fn switch_discriminant_pulls(
     arms: &[(MirSwitchKey<'_>, BlockId)],
     exhaustive: bool,
 ) -> usize {
-    // A class arm dispatches through the hash table in every lane (a value
+    // A class arm dispatches through the switch table in every lane (a value
     // for it exists in no lane's analysis), which pulls exactly once.
     let mut kinds = Vec::with_capacity(arms.len());
     for (key, block) in arms {
@@ -182,16 +159,13 @@ pub(crate) fn switch_discriminant_pulls(
         }
     }
     match analyze_switch(&kinds) {
-        SwitchStrategy::JumpTable { .. }
-        | SwitchStrategy::PerfectHash(_)
-        | SwitchStrategy::DeferredHash
-        | SwitchStrategy::BinarySearch => 1,
+        SwitchStrategy::JumpTable { .. } | SwitchStrategy::Table => 1,
         SwitchStrategy::IfElseChain => arms.len().saturating_sub(usize::from(exhaustive)),
     }
 }
 
 /// The value of a kind key. A declaration key never reaches a value-keyed
-/// strategy ([`analyze_switch`] routes it to the hash table).
+/// strategy ([`analyze_switch`] routes it to the switch table).
 fn kind_value(key: SwitchKey) -> i64 {
     match key {
         SwitchKey::Kind(value) => value,
@@ -2125,29 +2099,10 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                     .collect();
 
                 match analyze_switch(&resolved) {
-                    SwitchStrategy::DeferredHash => {
-                        let keys = resolved.iter().map(|(key, _)| *key).collect();
-                        let table = MatchHashTable::unsolved(keys, Vec::new());
-                        self.emit_switch_hash_table(
-                            discriminant,
-                            &resolved,
-                            *otherwise,
-                            table,
-                            &name_map,
-                        );
+                    SwitchStrategy::Table => {
+                        self.emit_switch_table(discriminant, &resolved, *otherwise, &name_map);
                     }
-                    SwitchStrategy::PerfectHash(table) => {
-                        self.emit_switch_hash_table(
-                            discriminant,
-                            &resolved,
-                            *otherwise,
-                            table,
-                            &name_map,
-                        );
-                    }
-                    strategy @ (SwitchStrategy::JumpTable { .. }
-                    | SwitchStrategy::BinarySearch
-                    | SwitchStrategy::IfElseChain) => {
+                    strategy @ (SwitchStrategy::JumpTable { .. } | SwitchStrategy::IfElseChain) => {
                         // Value-keyed strategies: every key is a kind.
                         let int_arms: Vec<(i64, BlockId)> = resolved
                             .iter()
@@ -2166,13 +2121,6 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                                 max,
                                 &int_names,
                             ),
-                            SwitchStrategy::BinarySearch => self.emit_switch_binary_search(
-                                discriminant,
-                                &int_arms,
-                                *otherwise,
-                                *exhaustive,
-                                &int_names,
-                            ),
                             SwitchStrategy::IfElseChain => self.emit_switch_if_else(
                                 discriminant,
                                 &int_arms,
@@ -2180,9 +2128,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                                 *exhaustive,
                                 &int_names,
                             ),
-                            SwitchStrategy::PerfectHash(_) | SwitchStrategy::DeferredHash => {
-                                unreachable!("matched above")
-                            }
+                            SwitchStrategy::Table => unreachable!("matched above"),
                         }
                     }
                 }
@@ -2838,122 +2784,26 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         });
     }
 
-    /// Emit switch using binary search (O(log n) comparisons).
+    /// Emit switch through a switch table + dense jump table.
     ///
-    /// Creates a balanced binary search tree of comparisons.
+    /// `DenseTag` remaps the sparse value to the dense `[0, K-1]` index of
+    /// its arm through the table; a subsequent `JumpTable` dispatches on the
+    /// dense index. `DenseTag` pushes `-1` for a value no key matches, which
+    /// falls to the jump table's default arm.
     ///
-    /// Note: The exhaustive optimization is not applied to binary search because
-    /// the savings are minimal (O(1) instruction in O(log n) total) and the
-    /// implementation would be complex (need to track rightmost leaf of tree).
-    fn emit_switch_binary_search(
-        &mut self,
-        discriminant: &Operand<'ctx>,
-        arms: &[(i64, BlockId)],
-        otherwise: BlockId,
-        _exhaustive: bool,
-        name_map: &std::collections::HashMap<i64, &str>,
-    ) {
-        // Push discriminant onto stack (will be popped by comparisons)
-        self.emit_operand_pull(discriminant);
-
-        // Sort arms by value for binary search
-        let mut sorted_arms: Vec<_> = arms.to_vec();
-        sorted_arms.sort_by_key(|(v, _)| *v);
-
-        // Emit binary search tree
-        self.emit_binary_search_node(&sorted_arms, otherwise, name_map);
-
-        // Pop the discriminant if we fall through (shouldn't happen with well-formed switches)
-        self.emit(Instruction::Pop(1));
-        self.emit_jump_unless_fallthrough(otherwise);
-    }
-
-    /// Recursively emit a binary search node.
-    ///
-    /// The discriminant is already on the stack. We emit comparisons to split
-    /// the search space in half at each level.
-    #[allow(clippy::only_used_in_recursion)]
-    fn emit_binary_search_node(
-        &mut self,
-        arms: &[(i64, BlockId)],
-        otherwise: BlockId,
-        name_map: &std::collections::HashMap<i64, &str>,
-    ) {
-        match arms.len() {
-            0 => {
-                // No arms left - just fall through to otherwise
-                // (already handled by caller)
-            }
-            1 | 2 => {
-                // One or two arms - emit direct comparisons sequentially
-                for (value, target) in arms {
-                    let label = Self::switch_label(*value, name_map);
-                    self.emit_compare_and_branch(*value, *target, label);
-                }
-            }
-            _ => {
-                // Multiple arms - split in half and recurse
-                let mid = arms.len() / 2;
-                let (value, target) = &arms[mid];
-                let left = &arms[..mid];
-                let right = &arms[mid + 1..];
-
-                // Compare with pivot — if equal, pop discriminant and jump
-                let label = Self::switch_label(*value, name_map);
-                self.emit_compare_and_branch(*value, *target, label.clone());
-
-                // Compare < pivot for left subtree
-                self.emit(Instruction::Copy(0));
-                let idx = self.add_constant(ConstValue::Int(*value));
-                let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const(label));
-                self.emit(Instruction::CmpIntOp(CmpOp::Lt));
-                let lt_jump = self.emit(Instruction::PopJumpIfFalse(0));
-
-                // Left subtree (values < pivot)
-                self.emit_binary_search_node(left, otherwise, name_map);
-
-                let after_left = self.current_pc();
-                self.patch_jump_to(lt_jump, after_left);
-
-                // Right subtree (values > pivot)
-                self.emit_binary_search_node(right, otherwise, name_map);
-            }
-        }
-    }
-
-    /// Emit switch through a hash table + dense jump table (O(1) dispatch).
-    ///
-    /// `DenseTag` remaps the sparse type tag to a dense `[0, K-1]` index via a
-    /// minimal perfect hash over the keys' tags; a subsequent `JumpTable`
-    /// dispatches on the dense index. `DenseTag` pushes `-1` for unknown tags,
-    /// which falls to the jump table's default arm.
-    ///
-    /// `table` states the keys in arm order. It arrives solved when every key
-    /// is a kind (the values are known here), and unsolved when a key is a
-    /// declaration: its tag is assigned by whoever lays the declaration into
-    /// an image, and that producer solves the table
-    /// ([`MatchHashTable::solve`]) after relocating the keys.
-    ///
-    /// This replaces O(log K) `BinarySearch` (which emits ~4K instructions for
-    /// K=8) with just 3 instructions: `type_tag` + `dense_tag` + `jump_table`.
+    /// The table states the keys in arm order and nothing else: whoever lays
+    /// the unit into an image solves it
+    /// ([`SwitchDispatch::solved`](bex_vm_types::bytecode::SwitchDispatch::solved))
+    /// after relocating the keys, so a kind key and a declaration key take
+    /// one road.
     #[allow(clippy::cast_possible_wrap)]
-    fn emit_switch_hash_table(
+    fn emit_switch_table(
         &mut self,
         discriminant: &Operand<'ctx>,
         arms: &[(SwitchKey, BlockId)],
         otherwise: BlockId,
-        mut table: MatchHashTable,
         name_map: &std::collections::HashMap<SwitchKey, &str>,
     ) {
-        debug_assert!(
-            table
-                .keys
-                .iter()
-                .copied()
-                .eq(arms.iter().map(|(key, _)| *key)),
-            "a switch's hash table states its arms' keys in arm order"
-        );
         // 1. Push discriminant (type tag) onto stack — consumed by DenseTag.
         self.emit_operand_pull(discriminant);
 
@@ -2967,10 +2817,13 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                     SwitchKey::Declaration(declaration) => format!("class @{}", declaration.raw()),
                 })
         };
-        table.key_names = arms.iter().map(|(key, _)| label(key)).collect();
-        let hash_table_idx = self.bytecode.match_hash_tables.len();
-        self.bytecode.match_hash_tables.push(table);
-        self.emit(Instruction::DenseTag(hash_table_idx));
+        let table = SwitchTable::of_keys(
+            arms.iter().map(|(key, _)| *key).collect(),
+            arms.iter().map(|(key, _)| label(key)).collect(),
+        );
+        let switch_table_idx = self.bytecode.switch_tables.len();
+        self.bytecode.switch_tables.push(table);
+        self.emit(Instruction::DenseTag(switch_table_idx));
 
         // 3. Emit a dense JumpTable over [0, K-1].
         //    The DenseTag output is dense by construction, so this is always
@@ -3024,25 +2877,6 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             .get(&value)
             .map(|n| (*n).to_string())
             .unwrap_or_else(|| value.to_string())
-    }
-
-    /// Emit: copy TOS, compare with `value` for equality; if equal, pop
-    /// discriminant and jump to `target`. On mismatch, fall through.
-    ///
-    /// Used by binary search where the discriminant stays on the stack across
-    /// the tree traversal. The if-else chain uses a different strategy
-    /// (re-loading the discriminant per arm) to avoid copy/pop overhead.
-    fn emit_compare_and_branch(&mut self, value: i64, target: BlockId, label: String) {
-        self.emit(Instruction::Copy(0));
-        let idx = self.add_constant(ConstValue::Int(value));
-        let inst = self.emit(Instruction::LoadConst(idx));
-        self.set_operand(inst, OperandMeta::Const(label));
-        self.emit(Instruction::CmpIntOp(CmpOp::Eq));
-        let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
-        self.emit(Instruction::Pop(1));
-        self.emit_jump_always(target);
-        let skip_to = self.current_pc();
-        self.patch_jump_to(jump_idx, skip_to);
     }
 
     // ========================================================================
@@ -3899,7 +3733,7 @@ mod tests {
 
         // Dense 4+ arms: jump table, single pull.
         assert_eq!(switch_discriminant_pulls(&arms(&[0, 1, 2, 3]), false), 1);
-        // Sparse 4+ arms: perfect hash (or binary search), single pull either way.
+        // Sparse 4+ arms: switch table, single pull.
         assert_eq!(
             switch_discriminant_pulls(&arms(&[10, 2000, 300_000, 40_000_000]), false),
             1
