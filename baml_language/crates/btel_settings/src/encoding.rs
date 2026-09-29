@@ -2,6 +2,7 @@
 //! Field numbers and enum values remain defined by the recording .proto schema.
 /// **Fixed bound.** Must cover containers, selector and the largest scalar event. Shrinking
 /// this does not shrink records; validate worst-case encodings first.
+/// Variable-length log names require additional reservation beyond this bound.
 /// Worst case: two six-byte containers, an eleven-byte thread selector,
 /// a twenty-byte context reference, and a ninety-two-byte completion.
 pub const MAX_EVENT_BYTES: usize = 135;
@@ -26,3 +27,5 @@ pub const FORMAT_MINOR: u32 = 3;
 /// Files that use execution-context sections opt into this additive version.
 /// Recordings without context retain their existing bytes and minor version.
 pub const CONTEXT_FORMAT_MINOR: u32 = 4;
+/// Structured logs share span sections and the existing CAS encoding.
+pub const LOG_FORMAT_MINOR: u32 = 5;

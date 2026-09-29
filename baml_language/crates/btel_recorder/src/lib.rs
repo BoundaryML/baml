@@ -31,6 +31,15 @@ pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/baml.btel.recording.v2.rs"));
 }
 
+impl From<proto::SnapshotId> for btel_snapshot::SnapshotId {
+    fn from(id: proto::SnapshotId) -> Self {
+        let mut bytes = [0; 16];
+        bytes[..8].copy_from_slice(&id.low.to_le_bytes());
+        bytes[8..].copy_from_slice(&id.high.to_le_bytes());
+        Self::from_bytes(bytes)
+    }
+}
+
 /// Cold sections retained until sealing; spans are already encoded.
 #[derive(Default)]
 struct PendingMessages {
@@ -207,6 +216,35 @@ impl ConversionBuffer {
         }
         match record {
             SpanRecord::ThreadSelected { .. } => panic!("processor must consume selectors"),
+            SpanRecord::Log {
+                parent_id,
+                function,
+                pc,
+                at,
+                level,
+                event_name,
+                captured_data,
+            } => {
+                self.define_function(*function);
+                let level = match level {
+                    btel_records::LogLevel::Info => proto::LogLevel::Info,
+                    btel_records::LogLevel::Debug => proto::LogLevel::Debug,
+                    btel_records::LogLevel::Warn => proto::LogLevel::Warn,
+                    btel_records::LogLevel::Error => proto::LogLevel::Error,
+                };
+                self.event(
+                    thread,
+                    Event::Log(proto::LogEvent {
+                        parent_id: parent_id.get(),
+                        function_id: function.get(),
+                        pc: *pc,
+                        at_ticks: at.get(),
+                        level: level as i32,
+                        event_name: event_name.as_deref().map(str::to_owned),
+                        data_cas_id: captured_data.as_ref().map(snapshot_id),
+                    }),
+                );
+            }
             SpanRecord::ContextSelected { captured_context } => {
                 self.spans.select_context(
                     thread,

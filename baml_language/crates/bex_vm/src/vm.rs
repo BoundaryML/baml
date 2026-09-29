@@ -1680,6 +1680,15 @@ pub enum VmExecState {
         source_location: Option<VmEventSourceLocation>,
     },
 
+    /// A decoded structured log. The VM has already handed its recording
+    /// snapshot to Btel; the engine can still deliver existing live output.
+    Log {
+        level: btel_records::LogLevel,
+        event_name: Option<Arc<str>>,
+        data: Value,
+        source_location: Option<VmEventSourceLocation>,
+    },
+
     /// We are still executing, but we should yield to allow other threads or the GC to run.
     EarlyYield,
 }
@@ -2184,6 +2193,67 @@ impl BexVm {
             "root context must precede invocation entry"
         );
         self.root_context = context;
+    }
+
+    fn decode_log_event(
+        &self,
+        payload: Value,
+    ) -> Result<(btel_records::LogLevel, Option<Arc<str>>, Value), VmInternalError> {
+        use btel_records::LogLevel;
+        let map = self.as_map(&payload)?;
+        let level = map
+            .get("level")
+            .ok_or(VmInternalError::InvalidLogEvent("missing level"))?;
+        let level = match self.as_string(level)?.as_str() {
+            "info" => LogLevel::Info,
+            "debug" => LogLevel::Debug,
+            "warn" => LogLevel::Warn,
+            "error" => LogLevel::Error,
+            _ => return Err(VmInternalError::InvalidLogEvent("unknown level")),
+        };
+        let name = map
+            .get("event_name")
+            .filter(|value| !value.is_null() && !value.is_omitted())
+            .map(|value| {
+                self.as_string(value)
+                    .map(|name| Arc::<str>::from(name.as_str()))
+            })
+            .transpose()?;
+        let data = *map
+            .get("data")
+            .ok_or(VmInternalError::InvalidLogEvent("missing data"))?;
+        Ok((level, name, data))
+    }
+
+    fn record_log(
+        &mut self,
+        frame_idx: usize,
+        level: btel_records::LogLevel,
+        name: Option<Arc<str>>,
+        data: Value,
+    ) {
+        if self.telemetry.is_none() {
+            return;
+        }
+        let Some(function) = self.frame_function_identity(frame_idx) else {
+            return;
+        };
+        // SAFETY: SendEvent executes under the heap permit and roots its frame.
+        let (_, function) =
+            unsafe { Self::register_call_path_functions(&self.heap, None, function) };
+        let context = self.current_context().clone();
+        let state = self.telemetry.as_mut().unwrap();
+        state.set_context(context);
+        // SAFETY: neither capture nor publication releases the VM heap permit.
+        unsafe {
+            state.record_log(
+                function,
+                u32::try_from(self.cur_pc).unwrap_or(u32::MAX),
+                level,
+                name,
+                data,
+            );
+        }
     }
 
     fn restore_caller_context(&mut self, frame_idx: usize) {
@@ -10143,6 +10213,16 @@ impl BexVm {
                         } else {
                             None
                         };
+                        if event_name == "$baml_log" {
+                            let (level, name, body) = self.decode_log_event(data)?;
+                            self.record_log(*frame_idx, level, name.clone(), body);
+                            return Ok(Some(VmExecState::Log {
+                                level,
+                                event_name: name,
+                                data: body,
+                                source_location,
+                            }));
+                        }
                         return Ok(Some(VmExecState::Event {
                             event_name,
                             data,

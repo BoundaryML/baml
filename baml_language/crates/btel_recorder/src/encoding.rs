@@ -2,8 +2,8 @@
 //!
 //! Containers reserve five bytes for their protobuf length and backpatch by
 //! index, so Vec relocation is safe. Non-minimal varints preserve the protobuf
-//! schema; no whole-buffer shift or nested sizing pass is required. Current
-//! event bodies contain only bounded scalars, so their lengths fit one byte.
+//! schema; no whole-buffer shift or nested sizing pass is required. Span
+//! bodies have one-byte lengths; variable-length logs use a full container prefix.
 use std::mem::MaybeUninit;
 
 #[cfg(test)]
@@ -28,7 +28,7 @@ pub(crate) struct EncodedSpans {
     section_length: usize,
     context: Option<crate::proto::thread_section::Context>,
     selected_context: Option<(TelemetryId, Option<crate::proto::thread_section::Context>)>,
-    context_format: bool,
+    required_minor: u32,
 }
 impl EncodedSpans {
     pub(crate) fn select_context(
@@ -49,11 +49,7 @@ impl EncodedSpans {
     }
 
     pub(crate) fn format_minor(&self) -> u32 {
-        if self.context_format {
-            btel_settings::encoding::FORMAT_MINOR.max(btel_settings::encoding::CONTEXT_FORMAT_MINOR)
-        } else {
-            btel_settings::encoding::FORMAT_MINOR
-        }
+        btel_settings::encoding::FORMAT_MINOR.max(self.required_minor)
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -86,6 +82,14 @@ impl EncodedSpans {
         match event {
             Event::FunctionCompletion(m) => self.completion(4, &m),
             Event::LateFunctionCompletion(m) => self.completion(5, &m),
+            Event::Log(message) => {
+                self.required_minor = self
+                    .required_minor
+                    .max(btel_settings::encoding::LOG_FORMAT_MINOR);
+                let length = begin(&mut self.bytes, 2, LENGTH_BYTES);
+                prost::encoding::message::encode(6, &message, &mut self.bytes);
+                end_container(&mut self.bytes, length);
+            }
             other => {
                 let length = begin(&mut self.bytes, 2, 1);
                 match other {
@@ -163,7 +167,9 @@ impl EncodedSpans {
                     prost::encoding::bool::encode(4, &empty, &mut self.bytes);
                 }
             }
-            self.context_format = true;
+            self.required_minor = self
+                .required_minor
+                .max(btel_settings::encoding::CONTEXT_FORMAT_MINOR);
         }
         self.thread = Some(thread);
         self.context = context;
@@ -317,7 +323,7 @@ mod tests {
         for event in &events {
             encoded.reserve(encoded.len() + MAX_EVENT_BYTES);
             let capacity = encoded.capacity();
-            encoded.event(thread, *event);
+            encoded.event(thread, event.clone());
             assert_eq!(
                 encoded.capacity(),
                 capacity,
@@ -395,7 +401,9 @@ mod equivalence_tests {
                     let expected = crate::proto::ThreadSection {
                         thread_id: thread.get(),
                         context: None,
-                        events: vec![crate::proto::SpanEvent { event: Some(event) }],
+                        events: vec![crate::proto::SpanEvent {
+                            event: Some(event.clone()),
+                        }],
                     }
                     .encode_to_vec();
                     let mut writer = EncodedSpans::default();

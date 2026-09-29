@@ -21,6 +21,7 @@ use crate::{
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TraceLogMetadata {
     pub level: Option<String>,
+    pub event_name: Option<String>,
     pub source: Option<SourceLocation>,
     pub timestamp_ms: u64,
     pub message_preview: Option<String>,
@@ -332,6 +333,7 @@ mod tests {
                 (
                     TraceLogMetadata {
                         level: Some("info".to_string()),
+                        event_name: None,
                         source: None,
                         timestamp_ms: 1,
                         message_preview: Some(body.to_string()),

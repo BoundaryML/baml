@@ -198,6 +198,9 @@ pub enum VmInternalError {
     #[error("invalid argument count: expected {expected}, got {got}")]
     InvalidArgumentCount { expected: usize, got: usize },
 
+    #[error("invalid structured log envelope: {0}")]
+    InvalidLogEvent(&'static str),
+
     #[error("unexpected empty eval stack")]
     UnexpectedEmptyStack,
 

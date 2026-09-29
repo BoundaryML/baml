@@ -137,7 +137,7 @@ impl FrameTelemetry {
     }
 }
 
-pub use btel_records::{SpanRecord, TimingRecord};
+pub use btel_records::{LogLevel, SpanRecord, TimingRecord};
 
 mod snapshot;
 type VmSpanRecord = SpanRecord<btel_snapshot::Snapshot, btel_snapshot::Snapshot>;
@@ -316,6 +316,34 @@ impl TelemetryState {
     #[cold]
     pub fn record_model_usage(&mut self, usage: btel_records::ModelUsage) {
         self.write_span(SpanRecord::ModelUsage(Box::new(usage)));
+    }
+
+    /// Capture a point event without promoting its invocation to a span.
+    ///
+    /// # Safety
+    /// `data` and its reachable objects must remain live under the heap permit.
+    pub unsafe fn record_log(
+        &mut self,
+        function: FunctionId,
+        pc: u32,
+        level: btel_records::LogLevel,
+        event_name: Option<Arc<str>>,
+        data: Value,
+    ) {
+        self.start_thread();
+        let at = self.clock.read();
+        #[cfg(all(not(test), not(target_arch = "wasm32")))]
+        self.prepare_context();
+        let captured_data = self.capture(snapshot::Input::Value(data));
+        self.write_span(SpanRecord::Log {
+            parent_id: self.thread.active_id,
+            function,
+            pc,
+            at,
+            level,
+            event_name,
+            captured_data,
+        });
     }
 
     #[inline(always)]

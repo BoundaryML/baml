@@ -1193,6 +1193,10 @@ impl<'t> Applier<'t> {
                         Some(Event::LateFunctionCompletion(done)) => {
                             self.completion(sequence, section.thread_id, done, true, &mut tick)?;
                         }
+                        Some(Event::Log(log)) => {
+                            // Log query projections are separate from call indexing.
+                            let _ = tick(log.at_ticks);
+                        }
                         None => {}
                     }
                 }

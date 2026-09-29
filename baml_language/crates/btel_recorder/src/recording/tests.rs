@@ -961,7 +961,8 @@ fn captures_move_after_chunk_recycle_and_duplicates_release_before_file_flush() 
     processor.process_available();
     let file = decode(&files.borrow()[0]);
     for event in &file.spans.unwrap().sections[0].events {
-        let proto::span_event::Event::FunctionAnnouncement(entry) = event.event.unwrap() else {
+        let proto::span_event::Event::FunctionAnnouncement(entry) = event.event.as_ref().unwrap()
+        else {
             panic!()
         };
         assert_eq!(entry.inputs_cas_id, Some(expected));

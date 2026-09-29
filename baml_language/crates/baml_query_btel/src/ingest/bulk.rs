@@ -708,6 +708,10 @@ impl Bulk {
                         Some(Event::LateFunctionCompletion(done)) => {
                             self.completion(sequence, section.thread_id, done, true, &mut tick);
                         }
+                        Some(Event::Log(log)) => {
+                            // Preserve file time coverage without inventing a call row.
+                            let _ = tick(log.at_ticks);
+                        }
                         None => {}
                     }
                 }

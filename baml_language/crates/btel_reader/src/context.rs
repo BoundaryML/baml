@@ -20,12 +20,7 @@ pub fn reference(section: &ThreadSection) -> ContextReference {
         None => ContextReference::Unavailable,
         Some(Context::EmptyContext(true)) => ContextReference::Empty,
         Some(Context::EmptyContext(false)) => ContextReference::Invalid,
-        Some(Context::ContextCasId(id)) => {
-            let mut bytes = [0; 16];
-            bytes[..8].copy_from_slice(&id.low.to_le_bytes());
-            bytes[8..].copy_from_slice(&id.high.to_le_bytes());
-            ContextReference::Snapshot(SnapshotId::from_bytes(bytes))
-        }
+        Some(Context::ContextCasId(id)) => ContextReference::Snapshot(id.into()),
     }
 }
 

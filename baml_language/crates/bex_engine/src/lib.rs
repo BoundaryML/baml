@@ -1710,10 +1710,9 @@ impl BexEngine {
                             };
                             break;
                         }
-                        Ok(VmExecState::Event { .. }) => {
-                            // Handle events during $init: push null and continue.
-                            // No span context exists during init, so the event is dropped,
-                            // but we must push a return value to keep the stack balanced.
+                        Ok(VmExecState::Event { .. } | VmExecState::Log { .. }) => {
+                            // There is no live-output subscriber during $init.
+                            // Any configured Btel recording was handled by the VM.
                             vm.stack.push(Value::NULL);
                             continue;
                         }
@@ -4435,6 +4434,8 @@ impl BexEngine {
         &self,
         thread: &ActiveHeapPermit<BexThread>,
         capture: Option<&LogCaptureContext>,
+        level: bex_vm::telemetry::LogLevel,
+        event_name: Option<&str>,
         data: Value,
         source_location: Option<VmEventSourceLocation>,
     ) {
@@ -4449,42 +4450,17 @@ impl BexEngine {
         capture
             .logger
             .capture_with(capture.boundary_id, call, |trace_heap| {
-                let (level, body) = Self::extract_baml_log_payload(data);
                 let metadata = TraceLogMetadata {
-                    level,
+                    level: Some(level.as_str().to_owned()),
+                    event_name: event_name.map(str::to_owned),
                     source: Self::source_location_from_event(source_location),
                     timestamp_ms: epoch_ms(),
-                    message_preview: Self::log_message_preview(body),
+                    message_preview: Self::log_message_preview(data),
                 };
                 let snapshot =
-                    trace_heap.copy_value_from_bex_heap(&self.heap, thread.proof(), body);
+                    trace_heap.copy_value_from_bex_heap(&self.heap, thread.proof(), data);
                 (metadata, snapshot)
             });
-    }
-
-    fn extract_baml_log_payload(data: Value) -> (Option<String>, Value) {
-        let Some(ptr) = data.as_object_ptr() else {
-            return (None, data);
-        };
-        let Object::Map(map) = (unsafe { ptr.get() }) else {
-            return (None, data);
-        };
-        let mut level = None;
-        let mut body = None;
-        for (key, value) in map.to_index_map() {
-            match key.to_string().as_str() {
-                "level" => {
-                    if let Some(ptr) = value.as_object_ptr()
-                        && let Object::String(level_value) = unsafe { ptr.get() }
-                    {
-                        level = Some(level_value.to_string());
-                    }
-                }
-                "data" => body = Some(value),
-                _ => {}
-            }
-        }
-        (level, body.unwrap_or(data))
     }
 
     fn source_location_from_event(
@@ -5840,23 +5816,23 @@ impl BexEngine {
                         }
                     }
 
-                    VmExecState::Event {
+                    VmExecState::Log {
+                        level,
                         event_name,
                         data,
                         source_location,
                     } => {
-                        if event_name == "$baml_log" {
-                            self.capture_baml_log_event(
-                                thread,
-                                log_capture.as_ref(),
-                                data,
-                                source_location,
-                            );
-                        }
-                        // Only reserved `$baml_log` events are currently produced
-                        // by the standard library. `SendEvent` pops its two
-                        // arguments but does not push a return value, so push null
-                        // before the VM resumes at the next instruction.
+                        self.capture_baml_log_event(
+                            thread,
+                            log_capture.as_ref(),
+                            level,
+                            event_name.as_deref(),
+                            data,
+                            source_location,
+                        );
+                        thread.vm.stack.push(Value::NULL);
+                    }
+                    VmExecState::Event { .. } => {
                         thread.vm.stack.push(Value::NULL);
                     }
 
