@@ -54,8 +54,6 @@ mod uint8array;
 mod unknown_error;
 mod yaml;
 
-use std::collections::HashMap;
-
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     ArrayReadGuard, HeapPtr, MapReadGuard,
@@ -121,7 +119,7 @@ pub trait Continuation: Send {
     fn gc_roots(&self) -> Vec<HeapPtr>;
 
     /// Update all `HeapPtr` values after GC moves objects (forwarding).
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>);
+    fn apply_forwarding(&mut self, forwarding: &bex_vm_types::ForwardingMap);
 }
 
 /// Returns the dispatched callee's result unchanged. Shared by the single-call
@@ -136,7 +134,7 @@ impl Continuation for PassThroughContinuation {
     fn gc_roots(&self) -> Vec<HeapPtr> {
         Vec::new()
     }
-    fn apply_forwarding(&mut self, _forwarding: &HashMap<HeapPtr, HeapPtr>) {}
+    fn apply_forwarding(&mut self, _forwarding: &bex_vm_types::ForwardingMap) {}
 }
 
 /// A typed view of an array receiver: its declared element type alongside the

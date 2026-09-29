@@ -21,10 +21,7 @@
 //! sorts above every number) — see [`bex_vm_types::float_order`], the single
 //! definition this and the VM's comparison opcodes share.
 
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 
 use baml_type::{Name, TypeName, normalize::TypeContext};
 use bex_str::BexStr;
@@ -607,7 +604,7 @@ impl Continuation for EqualsDriver {
         roots
     }
 
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    fn apply_forwarding(&mut self, forwarding: &bex_vm_types::ForwardingMap) {
         let fwd = |p: HeapPtr| forwarding.get(&p).copied().unwrap_or(p);
         for (a, b) in &mut self.stack {
             if let Some(p) = a.as_object_ptr() {

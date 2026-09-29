@@ -130,7 +130,7 @@ impl DynDispatchTables {
     /// pointers the collection left in place.
     pub fn sweep_and_forward(
         &self,
-        forwarding: &HashMap<HeapPtr, HeapPtr>,
+        forwarding: &bex_vm_types::ForwardingMap,
         survived: impl Fn(HeapPtr) -> bool,
     ) {
         // Forward a weak pointer, or report it dead.
@@ -199,7 +199,7 @@ impl DynDispatchRoot {
 impl bex_vm_types::RootHaver for DynDispatchRoot {
     fn collect_roots(&self, _roots: &mut Vec<HeapPtr>) {}
 
-    fn forward_roots(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    fn forward_roots(&mut self, forwarding: &bex_vm_types::ForwardingMap) {
         // A pointer the collection left in place is one that still lives in
         // Gen2 (a minor collection never moves or frees Gen2; a major moves
         // every survivor to a fresh buffer, so no stale address lands there)

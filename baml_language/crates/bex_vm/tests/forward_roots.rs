@@ -8,14 +8,11 @@
 //! hand out as a fresh chunk to the next allocator. Skipping invalidation
 //! either panics on out-of-bounds writes or corrupts another VM's chunk.
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, atomic::AtomicBool},
-};
+use std::sync::{Arc, atomic::AtomicBool};
 
 use baml_db::testing::compile_source;
 use bex_vm::BexVm;
-use bex_vm_types::{HeapPtr, RootHaver, Value};
+use bex_vm_types::{RootHaver, Value};
 
 fn make_vm() -> BexVm {
     // The program contents don't matter — we only need a VM whose TLAB
@@ -38,7 +35,7 @@ fn forward_roots_invalidates_tlab() {
         "TLAB should hold a chunk after the first allocation"
     );
 
-    vm.forward_roots(&HashMap::new());
+    vm.forward_roots(&bex_vm_types::ForwardingMap::default());
     assert!(
         !vm.tlab.is_valid(),
         "TLAB must be invalidated by forward_roots so the next alloc refills"
@@ -57,7 +54,7 @@ fn forward_roots_remaps_stack_object_pointers() {
     vm.stack.0.push(Value::int(42));
     vm.stack.0.push(Value::object(untouched_ptr));
 
-    let mut forwarding: HashMap<HeapPtr, HeapPtr> = HashMap::new();
+    let mut forwarding = bex_vm_types::ForwardingMap::default();
     forwarding.insert(old_ptr, new_ptr);
 
     vm.forward_roots(&forwarding);

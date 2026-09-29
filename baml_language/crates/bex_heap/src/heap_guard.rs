@@ -17,10 +17,7 @@ use ::core::{
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
-use ::std::{
-    collections::HashMap,
-    sync::{Arc, Weak},
-};
+use ::std::sync::{Arc, Weak};
 
 /// The lesser of [`u32::MAX`] and [`tokio::sync::Semaphore::MAX_PERMITS`] (depends on compilation target pointer width).
 const MAX_PERMITS: u32 = {
@@ -265,7 +262,7 @@ impl RootHaver for HeapGuard<'_> {
             }
         }
     }
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+    fn forward_roots(&mut self, roots: &bex_vm_types::ForwardingMap) {
         for permit_holder in self.guard.iter() {
             if let Some(permit_holder) = permit_holder.upgrade() {
                 let ptr = permit_holder.get();

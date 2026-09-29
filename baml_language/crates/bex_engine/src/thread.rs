@@ -6,8 +6,6 @@
 //! B adds child threads and routes child completions through
 //! `settles_future`.
 
-use std::collections::HashMap;
-
 use ::bex_heap::{Tlab, TlabHolder};
 use ::bex_vm_types::{HeapPtr, RootHaver, types::FutureId};
 use bex_vm::BexVm;
@@ -66,7 +64,7 @@ impl RootHaver for BexThread {
         self.vm.collect_roots(roots);
     }
 
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+    fn forward_roots(&mut self, roots: &bex_vm_types::ForwardingMap) {
         self.vm.forward_roots(roots);
     }
 }

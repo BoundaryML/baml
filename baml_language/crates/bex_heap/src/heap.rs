@@ -1108,7 +1108,7 @@ impl BexHeap {
     /// relocated or identity-mapped). A missing entry means the caller broke
     /// the contract; we panic rather than silently invalidate and expose the
     /// caller to dangling pointers.
-    pub fn update_handles(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    pub fn update_handles(&self, forwarding: &bex_vm_types::ForwardingMap) {
         // Validate every handle under a read lock first. A panic while the
         // write guard is held would poison the `RwLock` and then cascade into
         // a double-panic when the panicking `Handle`'s destructor tries to

@@ -56,8 +56,6 @@ where
     r
 }
 
-use std::collections::HashMap;
-
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     HeapPtr, ValueKind,
@@ -424,7 +422,7 @@ impl Continuation for ToJsonWalkContinuation {
         roots
     }
 
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    fn apply_forwarding(&mut self, forwarding: &bex_vm_types::ForwardingMap) {
         if let Some(ptr) = self.root.as_object_ptr()
             && let Some(&new_ptr) = forwarding.get(&ptr)
         {
@@ -1615,7 +1613,7 @@ impl Continuation for IdentityFromJsonCont {
     fn gc_roots(&self) -> Vec<HeapPtr> {
         Vec::new()
     }
-    fn apply_forwarding(&mut self, _: &HashMap<HeapPtr, HeapPtr>) {}
+    fn apply_forwarding(&mut self, _: &bex_vm_types::ForwardingMap) {}
 }
 
 // ── baml.json.to<T> / baml.FromJson dispatch ───────────────────────────────────
@@ -1824,7 +1822,7 @@ impl Continuation for ClassFromJsonCont {
         }
         roots
     }
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    fn apply_forwarding(&mut self, forwarding: &bex_vm_types::ForwardingMap) {
         if let Some(&new) = forwarding.get(&self.class_ptr) {
             self.class_ptr = new;
         }
@@ -2023,7 +2021,7 @@ impl Continuation for ListFromJsonCont {
         }
         roots
     }
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    fn apply_forwarding(&mut self, forwarding: &bex_vm_types::ForwardingMap) {
         for v in self.array.iter_mut().chain(self.results.iter_mut()) {
             if let Some(p) = v.as_object_ptr() {
                 if let Some(&new) = forwarding.get(&p) {
@@ -2128,7 +2126,7 @@ impl Continuation for MapFromJsonCont {
         }
         roots
     }
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    fn apply_forwarding(&mut self, forwarding: &bex_vm_types::ForwardingMap) {
         for (_, v) in &mut self.entries {
             if let Some(p) = v.as_object_ptr() {
                 if let Some(&new) = forwarding.get(&p) {

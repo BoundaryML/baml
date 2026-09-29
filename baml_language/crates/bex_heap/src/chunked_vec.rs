@@ -459,6 +459,39 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
 }
 
 impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
+    /// [`Self::push_with`] for a caller with exclusive access, returning the
+    /// new element's stable pointer rather than its index.
+    ///
+    /// `&mut self` excludes every concurrent reader, so this skips the
+    /// `chunks_lock` write (and the read a follow-up `get_ptr` would take).
+    /// The collector moves each survivor with this, which makes the saving
+    /// per live object.
+    pub fn push_exclusive_with<F2: FnMut() -> T>(&mut self, value: T, mut factory: F2) -> *mut T {
+        let index = self.len.load(Ordering::Acquire);
+
+        // SAFETY: `&mut self` gives exclusive access to the outer Vec.
+        let elem_ptr = unsafe {
+            let chunks_ptr = self.chunks.get();
+            if index >= (*chunks_ptr).len() * CHUNK_SIZE {
+                let chunk: Box<[UnsafeCell<T>]> = (0..CHUNK_SIZE)
+                    .map(|_| UnsafeCell::new(factory()))
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice();
+                (*chunks_ptr).push(chunk);
+            }
+            let (chunk_idx, offset) = self.chunk_location(index);
+            // SAFETY: index is within allocated range; no other access exists.
+            let elem_ptr = self.element_ptr_locked(chunk_idx, offset);
+            // Drop the factory-created placeholder before writing the actual value
+            std::ptr::drop_in_place(elem_ptr);
+            std::ptr::write(elem_ptr, value);
+            elem_ptr
+        };
+
+        self.len.store(index + 1, Ordering::Release);
+        elem_ptr
+    }
+
     /// Get a reference to an element.
     ///
     /// # Panics
@@ -705,6 +738,22 @@ mod tests {
         assert_eq!(*vec.get(0), 10);
         assert_eq!(*vec.get(1), 20);
         assert_eq!(*vec.get(2), 30);
+    }
+
+    #[test]
+    fn test_push_exclusive_returns_stable_element_pointers() {
+        let mut vec: ChunkedVec<i32, 2> = ChunkedVec::new();
+        let ptrs: Vec<*mut i32> = (0..5)
+            .map(|i| vec.push_exclusive_with(i * 10, || -1))
+            .collect();
+
+        assert_eq!(vec.len(), 5);
+        assert_eq!(vec.capacity(), 6);
+        for (i, ptr) in ptrs.iter().enumerate() {
+            assert_eq!(*ptr, vec.get_ptr(i));
+            // SAFETY: the pointer came from this vec, which is still alive.
+            assert_eq!(unsafe { **ptr }, (i * 10) as i32);
+        }
     }
 
     #[test]

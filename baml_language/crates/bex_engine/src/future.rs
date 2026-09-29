@@ -601,7 +601,7 @@ impl RootHaver for FutureManagerInner {
             future.collect_roots(roots);
         }
     }
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+    fn forward_roots(&mut self, roots: &bex_vm_types::ForwardingMap) {
         // Drop the cached TLAB cursor — GC has swapped semispaces and our
         // `alloc_ptr`/`alloc_limit` now point into a region the heap will
         // hand out as a fresh chunk. The next `alloc_future` must refill
@@ -681,7 +681,7 @@ impl RootHaver for FutureWork {
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
         roots.push(self.future);
     }
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+    fn forward_roots(&mut self, roots: &bex_vm_types::ForwardingMap) {
         if let Some(new_result) = roots.get(&self.future) {
             self.future = *new_result;
         }
