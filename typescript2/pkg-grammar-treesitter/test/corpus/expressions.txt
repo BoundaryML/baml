@@ -698,3 +698,51 @@ function f() -> float {
         (binary_expression
           (number)
           (number))))))
+
+==================
+specialized function value
+==================
+
+function f() -> int {
+  let g = same<int>;
+  let h = UseBody<string> { body: pick<int> };
+  0
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (specialized_expression
+          (identifier)
+          (type_arguments
+            (type_path
+              (identifier)))))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (constructor_expression
+          (identifier)
+          (type_arguments
+            (type_path
+              (identifier)))
+          (constructor_body
+            (constructor_field
+              (property_identifier)
+              (specialized_expression
+                (identifier)
+                (type_arguments
+                  (type_path
+                    (identifier))))))))
+      (expression_statement
+        (number)))))

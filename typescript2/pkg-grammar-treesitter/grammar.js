@@ -119,10 +119,14 @@ module.exports = grammar({
     // `(int` in type position — function-type params vs parenthesized type.
     [$.function_type_parameter, $.parenthesized_type],
     [$.function_type_parameter, $.parenthesized_type, $.type_pattern],
-    // `f <` — explicit call type arguments vs. less-than comparison.
-    [$.call_expression, $.binary_expression, $.unary_expression],
-    [$.call_expression, $.binary_expression],
-    [$.call_expression, $.binary_expression, $.await_expression],
+    // `f <` — explicit type arguments (a call, or a specialized function
+    // value) vs. less-than comparison.
+    [$.call_expression, $.specialized_expression, $.binary_expression, $.unary_expression],
+    [$.call_expression, $.specialized_expression, $.binary_expression],
+    [$.call_expression, $.specialized_expression, $.binary_expression, $.await_expression],
+    // `f<int>(` — a call with type arguments vs. a call of a specialized
+    // value; the call wins by dynamic precedence.
+    [$.call_expression, $.specialized_expression],
     // Pattern space: `Foo` may open a destructure, a type path, or a plain
     // binding-ish name; `(` may open a paren pattern or a parenthesized type.
     [$.binding_pattern, $.destructure_pattern],
@@ -776,6 +780,7 @@ module.exports = grammar({
         $.index_expression,
         $.call_expression,
         $.optional_call_expression,
+        $.specialized_expression,
         $.constructor_expression,
         $.parenthesized_expression,
         $.array_expression,
@@ -845,6 +850,22 @@ module.exports = grammar({
           field('function', $._expression),
           optional(field('type_arguments', $.type_arguments)),
           field('arguments', $.arguments),
+        ),
+      ),
+
+    // `same<int>`: a generic function specialized as a value, with no call
+    // (`let g = same<int>;`). A `(` after the type arguments makes it a call
+    // instead, and a comparison (`a < b`) reads as one, as the real parser
+    // decides both.
+    specialized_expression: ($) =>
+      prec.dynamic(
+        -1,
+        prec(
+          PREC.CALL,
+          seq(
+            field('function', $._expression),
+            field('type_arguments', $.type_arguments),
+          ),
         ),
       ),
 

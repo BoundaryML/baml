@@ -109,6 +109,64 @@ test "successful parent completion leaves its child running" {
     assert.equal(await child, 42);
 }
 
+test "a wrapper runs around the task and passes its value through" {
+    let traced = Traced {};
+    let f = spawn "traced read" with traced { simulate_read("notes.md", 1) };
+    assert.equal(await f, "contents of notes.md");
+}
+
+test "a fallback replaces an error with its value" {
+    assert.equal(read_or_empty("no/such/file.md"), "");
+}
+
+test "a fallback does not catch cancellation" {
+    let started: bool[] = [];
+    let empty = Fallback { value: "" };
+    let f = spawn with empty {
+        started.push(true);
+        baml.sys.sleep(baml.time.Duration.from_seconds(60n));
+        "finished"
+    };
+    // Cancel once the body is running inside the fallback's wrapper.
+    while (started.length() == 0) { baml.sys.sleep(baml.time.Duration.from_milliseconds(1)); }
+    f.cancel();
+    let value = (await f) catch (e) {
+        baml.panics.Cancelled => "cancelled",
+    };
+    assert.equal(value, "cancelled");
+}
+
+test "cancelling a pool's token cancels its running and waiting tasks" {
+    let pool = ProviderPool {
+        limit: baml.spawn.Limit.new(1),
+        token: baml.spawn.CancelToken.new(),
+    };
+    let running = spawn with pool {
+        baml.sys.sleep(baml.time.Duration.from_seconds(60n));
+        "finished"
+    };
+    let waiting = spawn with pool { "not started" };
+    assert.equal(pool.limit.queued_count(), 1);
+    pool.token.cancel();
+    let outcomes = [running, waiting].map((f) -> {
+        (await f) catch (e) {
+            baml.panics.Cancelled => "cancelled",
+            baml.errors.Io => "sleep failed",
+        }
+    });
+    assert.equal(outcomes, ["cancelled", "cancelled"]);
+}
+
+test "a retry loop that rethrows cancellation stops when cancelled" {
+    let f = spawn { read_when_available("no/such/file.md") };
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(120));
+    f.cancel();
+    let outcome = (await f) catch (e) {
+        baml.panics.Cancelled => "cancelled",
+    };
+    assert.equal(outcome, "cancelled");
+}
+
 test "all cancels remaining inputs before rethrowing" {
     let g = gate();
     defer { g.holder.cancel(); }
@@ -119,5 +177,10 @@ test "all cancels remaining inputs before rethrowing" {
         "unexpected success"
     } catch (e) { LookupFailed => e.key };
     assert.equal(message, "-1");
+    // The task settles its own future, so its state is readable once it has.
+    let _ = (await later) catch (e) {
+        baml.panics.Cancelled => 0,
+        LookupFailed => 0,
+    };
     assert.equal(later.is_cancelled(), true);
 }

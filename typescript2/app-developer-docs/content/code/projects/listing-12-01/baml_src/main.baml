@@ -181,6 +181,98 @@ function cancel_task() -> string {
 
 
 
+// docs:start excerpt-57
+class Traced {}
+
+implements<T, E> baml.spawn.Modifier<T, E> for Traced {
+    function apply(self, plan: baml.spawn.Plan<T, E>) -> baml.spawn.Plan<T, E> throws never {
+        let name = plan.name ?? "unnamed task";
+        plan.wrap((body: () -> T throws E) -> T throws E {
+            log.info(`${name} started`);
+            defer { log.info(`${name} finished`); }
+            body()
+        })
+    }
+}
+
+function read_all_traced(paths: string[]) -> string[] {
+    let traced = Traced {};
+    let futures = paths.map((path) -> {
+        spawn `read ${path}` with traced { baml.fs.read(path) }
+    });
+    await baml.future.all(futures)
+}
+// docs:end excerpt-57
+
+
+
+// docs:start excerpt-58
+class Fallback<T> {
+    value: T,
+}
+
+implements<T, E> baml.spawn.Modifier<T, E> for Fallback<T> {
+    type Error = never
+
+    function apply(self, plan: baml.spawn.Plan<T, E>) -> baml.spawn.Plan<T, never> throws never {
+        plan.wrap((body: () -> T throws E) -> T throws never {
+            body() catch (e) {
+                _ => self.value,
+            }
+        })
+    }
+}
+
+function read_or_empty(path: string) -> string {
+    let empty = Fallback { value: "" };
+    let read_future: baml.future.Future<string, never> = spawn with empty { baml.fs.read(path) };
+    await read_future
+}
+// docs:end excerpt-58
+
+
+
+// docs:start excerpt-59
+class ProviderPool {
+    limit: baml.spawn.Limit,
+    token: baml.spawn.CancelToken,
+}
+
+implements<T, E> baml.spawn.Modifier<T, E> for ProviderPool {
+    function apply(self, plan: baml.spawn.Plan<T, E>) -> baml.spawn.Plan<T, E> throws never {
+        plan.with(self.limit).with(self.token)
+    }
+}
+
+function read_all_pooled(pool: ProviderPool, paths: string[]) -> string[] {
+    let futures = paths.map((path) -> {
+        spawn `read ${path}` with pool { baml.fs.read(path) }
+    });
+    await baml.future.all(futures)
+}
+// docs:end excerpt-59
+
+
+
+// docs:start excerpt-60
+function read_when_available(path: string) -> string {
+    while (true) {
+        let contents = {
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(50));
+            baml.fs.read(path)
+        } catch (e) {
+            baml.panics.Cancelled => throw e,
+            unknown => null,
+        };
+        if (contents != null) {
+            return contents;
+        }
+    }
+}
+// docs:end excerpt-60
+
+
+
 function limited_tasks() -> int[] {
     let limit = baml.spawn.Limit.new(1) catch (e) {
         baml.errors.InvalidArgument => baml.sys.panic("one is positive"),

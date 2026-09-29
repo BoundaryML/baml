@@ -392,6 +392,45 @@ test "a bound method is a task's body" {
     assert.equal(bound_method_body(), 42)
 }
 
+// A body may also be a function whose parameters all have defaults: the task
+// starts it with those defaults, as a call through the `() -> T` value would.
+// (Every LLM function has such parameters.) Each kind below enters the task
+// differently: a function, a specialized generic function, a static method,
+// and a stdlib method.
+function with_default(x: int = 3) -> int throws never { x }
+
+function generic_with_default<T>(x: T? = null) -> string throws never {
+    if (x == null) { "default" } else { "given" }
+}
+
+class Defaults {
+    function fixed(x: int = 5) -> int throws never { x }
+}
+
+class UseBody<T> { body: () -> T throws never }
+
+implements<T> baml.spawn.Modifier<T, never> for UseBody<T> {
+    function apply(self, plan: baml.spawn.Plan<T, never>) -> baml.spawn.Plan<T, never> throws never {
+        baml.spawn.Plan { ...plan, body: self.body }
+    }
+}
+
+function defaulted_bodies() -> string {
+    let plain = UseBody<int> { body: with_default };
+    let generic = UseBody<string> { body: generic_with_default<int> };
+    let fixed = UseBody<int> { body: Defaults.fixed };
+    let random = UseBody<bool> { body: bool.random };
+    let a = await spawn with plain { 0 };
+    let b = await spawn with generic { "" };
+    let c = await spawn with fixed { 0 };
+    let d = await spawn with random { true };
+    `${a}:${b}:${c}:${d || !d}`
+}
+
+test "a function with defaulted parameters is a task's body" {
+    assert.equal(defaulted_bodies(), "3:default:5:true")
+}
+
 // ─── Limit ───────────────────────────────────────────────────────────────────
 
 function limit_rejects_zero() -> string {
@@ -558,23 +597,36 @@ test "a token's queued task is cancelled, not admitted" {
 }
 
 // Cancelling the spawner cancels its ordinary child; a `Root` child runs on.
+// The spawner is cancelled only once it has spawned both, and both are awaited.
+class Spawned { set: bool }
+
 function root_survives_its_spawner() -> string {
     let log = Log { entries: [] };
+    let children: baml.future.Future<int, baml.errors.Io>[] = [];
+    let spawned = Spawned { set: false };
     let outer = spawn {
-        let rooted = spawn with baml.spawn.Root.new() { sleep_ms(80n); log.entries.push("rooted done"); 1 };
-        let child = spawn { sleep_ms(80n); log.entries.push("child done"); 1 };
+        children.push(spawn with baml.spawn.Root.new() { sleep_ms(80n); log.entries.push("rooted done"); 1 });
+        children.push(spawn { sleep_ms(80n); log.entries.push("child done"); 1 });
+        spawned.set = true;
         sleep_ms(5000n);
         0
     };
-    sleep_ms(30n);
+    while (!spawned.set) {
+        sleep_ms(1n);
+    }
     let _ = outer.cancel();
     let _ = (await outer) catch (e) {
         baml.panics.Cancelled => -1,
     };
-    sleep_ms(150n);
-    log.entries.join(",")
+    let rooted = (await children[0]) catch (e) {
+        baml.panics.Cancelled => -1,
+    };
+    let child = (await children[1]) catch (e) {
+        baml.panics.Cancelled => -1,
+    };
+    `${log.entries.join(",")}:${rooted}:${child}`
 }
 
 test "a root task is not cancelled with its spawner" {
-    assert.equal(root_survives_its_spawner(), "rooted done")
+    assert.equal(root_survives_its_spawner(), "rooted done:1:-1")
 }
