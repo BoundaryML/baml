@@ -21,6 +21,8 @@ These controls do not provide a process-wide network sandbox or establish FIPS v
 
 Pin the upstream commit and retain the source tree, `Cargo.lock`, `rust-toolchain.toml`, and Cargo configuration with the downstream import. Keep local patches and provider implementations identifiable alongside that revision. Some build inputs live outside `baml_language`, including release metadata and the CLI's embedded agent skill; preserve the repository layout when importing the source. See [development setup](../README-DEV.md) for build prerequisites.
 
+The [build-script integration audit](BUILD_SCRIPTS.md) inventories BAML-owned generation steps, tools, inputs, outputs, and linker settings for build systems that replace Cargo scripts. It also identifies current integration gaps: protobuf scripts force the bundled compiler, and the bridge schema build writes generated SDK files into the source tree. Reduced runtime features do not yet remove those build-time requirements.
+
 When importing without Git metadata, set `BAML_GIT_SHA` to the full lowercase commit ID identifying the imported source. BAML uses this value in its artifact fingerprint; development builds require it when a commit cannot be read from Git. Retain downstream patches separately so that the commit ID and patch set together identify the build inputs.
 
 Run the following commands from `baml_language/`. After replacing the provider dependencies described below, build the Python native bridge with outbound restrictions enabled:

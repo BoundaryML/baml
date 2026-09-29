@@ -68,3 +68,4 @@ tools/type_quiz/COMPILER_DIVERGENCE.md
 
 # Building BAML with your own crypto/network stack, without phoning home
 VENDOR.md
+BUILD_SCRIPTS.md
