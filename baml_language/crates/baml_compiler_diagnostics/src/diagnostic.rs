@@ -412,17 +412,20 @@ pub enum DiagnosticId {
     /// could only copy a handle out of another value, which relabels what the
     /// handle means (its type arguments, or its class).
     CannotConstructOpaqueClass,
-    /// Reserved (E0175): a value path into a package served from its
+    /// Reserved (E0178): a value path into a package served from its
     /// compiled interface that names a declaration the interface does not
     /// carry. Not produced today — the interface cannot yet tell such a
     /// declaration from a misspelling, so the path reports as an unresolved
     /// name, as in source. Returns once the interface carries the names of
     /// its unexported declarations. (Landed as E0173, which
-    /// `CannotConstructOpaqueClass` now uses: a reserved code nothing produces
-    /// is the one safe to move.)
+    /// `CannotConstructOpaqueClass` now uses, then held E0175, which
+    /// `AmbiguousUnion` now uses: a reserved code nothing produces is the one
+    /// safe to move.)
     ServedInterfaceExportsFunctionsOnly,
     /// A constant pattern passed to `baml.regex.new` does not compile (E0174).
     InvalidRegexPattern,
+    /// An unparenthesized function/union boundary has two syntactic owners (E0175).
+    AmbiguousUnion,
     /// A builtin the compiler lowers where it is called (`log.info`,
     /// `baml.spawn.__spawn`, ...) was referenced as a value: it has no
     /// function value, so it may only be called directly.
@@ -635,12 +638,13 @@ impl DiagnosticId {
             DiagnosticId::ReflectSpecializationFailed => "E0169",
             DiagnosticId::InterfaceMethodMissingThrows => "E0170",
             DiagnosticId::InvalidRegexPattern => "E0174",
+            DiagnosticId::AmbiguousUnion => "E0175",
             DiagnosticId::TypeMustBeKnown => "E0155",
             DiagnosticId::InvalidBuiltinTypeArguments => "E0171",
             DiagnosticId::ScopedTypeEscapesBlock => "E0172",
             DiagnosticId::CannotConstructOpaqueClass => "E0173",
             DiagnosticId::ReservedBindingName => "E0176",
-            DiagnosticId::ServedInterfaceExportsFunctionsOnly => "E0175",
+            DiagnosticId::ServedInterfaceExportsFunctionsOnly => "E0178",
             DiagnosticId::CallSiteBuiltinValue => "E0177",
         }
     }

@@ -2734,7 +2734,9 @@ impl<'db> InferenceContext<'db> {
                 self.diverges = Diverges::Always;
                 Ty::never()
             }
-            Expr::Binary { op, lhs, rhs } => self.infer_binary(body, expr, *op, *lhs, *rhs),
+            Expr::Binary { op, lhs, rhs } => {
+                self.infer_binary(body, expr, expected, *op, *lhs, *rhs)
+            }
             Expr::Unary { op, expr: operand } => self.infer_unary(body, *op, *operand),
             Expr::Call { callee, args, .. } => self.infer_call(body, expr, *callee, args),
             Expr::Object {
@@ -2742,7 +2744,7 @@ impl<'db> InferenceContext<'db> {
                 fields,
                 spreads,
                 ..
-            } => self.infer_object(body, expr, type_name, fields, spreads),
+            } => self.infer_object(body, expr, expected, type_name, fields, spreads),
             Expr::MemberAccess { base, member } => {
                 let base_ty = self.infer_expr(body, *base, &Expectation::None);
                 self.field_access(expr, &base_ty, member)
@@ -4466,6 +4468,7 @@ impl<'db> InferenceContext<'db> {
         &mut self,
         body: &ExprBody,
         expr: ExprId,
+        expected: &Expectation,
         op: baml_compiler2_ast::BinaryOp,
         lhs: ExprId,
         rhs: ExprId,
@@ -4607,8 +4610,24 @@ impl<'db> InferenceContext<'db> {
                 // does not CONSTRAIN it - `v ?? "fallback"` is a join, not
                 // a mismatch - which is exactly Expectation's inform/
                 // constrain split (same as if-branches).
+                //
+                // The ENCLOSING expectation informs it first: the fallback
+                // flows to the same place as the whole expression, so
+                // `null ?? [1]` returned as `(int | string)[]` builds the
+                // literal at that type (the if-branch rule). The unwrapped
+                // lhs is the context when the enclosing one is absent or
+                // gives the fallback no shape: `cb ?? (x) -> { x }`
+                // returned as `unknown` still types `x` from `cb`.
                 let inner = self.remove_null(&lhs_ty);
-                let rhs_ty = self.infer_expr(body, rhs, &Expectation::has_type(inner.clone()));
+                let rhs_expectation = match expected.adjust_for_branches(&mut self.table) {
+                    enclosing @ Expectation::HasType(_)
+                        if self.expectation_shapes(body, rhs, &enclosing) =>
+                    {
+                        enclosing
+                    }
+                    _ => Expectation::has_type(inner.clone()),
+                };
+                let rhs_ty = self.infer_expr(body, rhs, &rhs_expectation);
                 self.null_coalesce(inner, &rhs_ty)
             }
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
@@ -8572,6 +8591,7 @@ impl<'db> InferenceContext<'db> {
         &mut self,
         body: &ExprBody,
         object: ExprId,
+        expected: &Expectation,
         type_name: &baml_base::TypePath,
         fields: &[ObjectExprField],
         spreads: &[baml_compiler2_ast::SpreadField],
@@ -8611,11 +8631,11 @@ impl<'db> InferenceContext<'db> {
             }
         };
         match class {
-            DeclRef::Source(class) => {
-                self.infer_source_object(body, object, type_name, class, pinned, fields, spreads)
-            }
+            DeclRef::Source(class) => self.infer_source_object(
+                body, object, expected, type_name, class, pinned, fields, spreads,
+            ),
             DeclRef::External(class) => {
-                self.infer_exported_object(body, object, class, pinned, fields, spreads)
+                self.infer_exported_object(body, object, expected, class, pinned, fields, spreads)
             }
         }
     }
@@ -8733,6 +8753,7 @@ impl<'db> InferenceContext<'db> {
         &mut self,
         body: &ExprBody,
         object: ExprId,
+        expected: &Expectation,
         type_name: &baml_base::TypePath,
         class: baml_compiler2_hir::loc::ClassLoc<'db>,
         pinned: Option<Vec<Ty>>,
@@ -8824,14 +8845,32 @@ impl<'db> InferenceContext<'db> {
                 });
             }
         }
+        // The object's head: the written spelling (a `$stream` companion
+        // re-qualifies under its own name), or through an alias the class
+        // the alias denotes.
+        let object_head = if through_alias {
+            class_name.clone()
+        } else {
+            let short = type_name.0.last().expect("type paths are never empty");
+            self.lower.qualify_definition(
+                baml_compiler2_hir::contributions::Definition::Class(class),
+                short,
+            )
+        };
+        let hints = self.constructor_arg_hints(expected, &object_head, &instantiation);
         for field in fields {
             let name = &field.name;
             let value = field.value;
             match field_types.iter().find(|(field, _)| field == name) {
                 Some((_, field_ty)) => {
-                    let field_ty =
-                        substitute_params(&crate::impls::interned_ty(field_ty), &instantiation);
-                    self.check_expr(body, value, &field_ty);
+                    let field_ty = crate::impls::interned_ty(field_ty);
+                    self.check_object_field(
+                        body,
+                        value,
+                        &field_ty,
+                        &instantiation,
+                        hints.as_deref(),
+                    );
                 }
                 None => {
                     // An INTERFACE field of an implemented interface is not
@@ -8849,11 +8888,14 @@ impl<'db> InferenceContext<'db> {
                             });
                         match field_types.iter().find(|(field, _)| *field == class_field) {
                             Some((_, field_ty)) => {
-                                let field_ty = substitute_params(
-                                    &crate::impls::interned_ty(field_ty),
+                                let field_ty = crate::impls::interned_ty(field_ty);
+                                self.check_object_field(
+                                    body,
+                                    value,
+                                    &field_ty,
                                     &instantiation,
+                                    hints.as_deref(),
                                 );
-                                self.check_expr(body, value, &field_ty);
                             }
                             None => {
                                 self.infer_expr(body, value, &Expectation::None);
@@ -8887,18 +8929,6 @@ impl<'db> InferenceContext<'db> {
             fields,
             !spreads.is_empty(),
         );
-        // The object's head: the written spelling (a `$stream` companion
-        // re-qualifies under its own name), or through an alias the class
-        // the alias denotes.
-        let object_head = if through_alias {
-            class_name.clone()
-        } else {
-            let short = type_name.0.last().expect("type paths are never empty");
-            self.lower.qualify_definition(
-                baml_compiler2_hir::contributions::Definition::Class(class),
-                short,
-            )
-        };
         let object_ty = Ty::intern(InferTy::Class(object_head, instantiation.into()));
         // A spread source must BE the constructed class at the same
         // arguments (fields are invariant slots): checking against the
@@ -8944,10 +8974,12 @@ impl<'db> InferenceContext<'db> {
     /// A served class under construction: at `pinned` arguments when the
     /// head was an alias, else at the object's own written or inferred
     /// ones.
+    #[expect(clippy::too_many_arguments)]
     fn infer_exported_object(
         &mut self,
         body: &ExprBody,
         object: ExprId,
+        expected: &Expectation,
         class: crate::extern_loc::ExternClassLoc<'db>,
         pinned: Option<Vec<Ty>>,
         fields: &[ObjectExprField],
@@ -9064,11 +9096,12 @@ impl<'db> InferenceContext<'db> {
                 });
             }
         }
+        let hints = self.constructor_arg_hints(expected, &class_name, &instantiation);
         for field in fields {
             let name = &field.name;
             let value = field.value;
             if let Some((_, field_ty)) = field_types.iter().find(|(field, _)| field == name) {
-                self.check_expr(body, value, &substitute_params(field_ty, &instantiation));
+                self.check_object_field(body, value, field_ty, &instantiation, hints.as_deref());
             } else {
                 self.infer_expr(body, value, &Expectation::None);
                 let shorthand = field.syntax == PropertySyntax::Shorthand;
@@ -9839,35 +9872,167 @@ impl<'db> InferenceContext<'db> {
     /// multi-list union adopts nothing and the literal synthesizes.
     fn expected_list_element(&mut self, expected: &Expectation) -> Option<Ty> {
         let shape = self.expectation_shape(expected)?;
-        match shape.kind() {
+        self.unique_expected_arm(&shape, |arm| match arm.kind() {
             InferTy::List(element) => Some(element.clone()),
-            InferTy::Union(members) => {
-                let mut lists = members.iter().filter_map(|member| match member.kind() {
-                    InferTy::List(element) => Some(element.clone()),
-                    _ => None,
-                });
-                let first = lists.next()?;
-                lists.next().is_none().then_some(first)
-            }
             _ => None,
-        }
+        })
     }
 
     /// The MAP literal's counterpart of `expected_list_element`.
     fn expected_map_entry(&mut self, expected: &Expectation) -> Option<(Ty, Ty)> {
         let shape = self.expectation_shape(expected)?;
-        match shape.kind() {
+        self.unique_expected_arm(&shape, |arm| match arm.kind() {
             InferTy::Map { key, value, .. } => Some((key.clone(), value.clone())),
-            InferTy::Union(members) => {
-                let mut maps = members.iter().filter_map(|member| match member.kind() {
-                    InferTy::Map { key, value, .. } => Some((key.clone(), value.clone())),
-                    _ => None,
-                });
-                let first = maps.next()?;
-                maps.next().is_none().then_some(first)
-            }
             _ => None,
+        })
+    }
+
+    /// Whether `expected` gives `expr` a shape to build at: an aggregate
+    /// literal needs a unique list/map arm, a lambda a callback arm. Any
+    /// other expression takes the expectation as-is.
+    fn expectation_shapes(
+        &mut self,
+        body: &ExprBody,
+        expr: ExprId,
+        expected: &Expectation,
+    ) -> bool {
+        match &body.exprs[expr] {
+            Expr::Array { .. } => self.expected_list_element(expected).is_some(),
+            Expr::Map { .. } => self.expected_map_entry(expected).is_some(),
+            Expr::Lambda(_) => expected
+                .only_has_type()
+                .cloned()
+                .map(|ty| self.structurally_resolve(&ty))
+                .and_then(|ty| self.callback_root_fn(&ty))
+                .is_some(),
+            _ => true,
         }
+    }
+
+    /// The arguments a generic constructor's EXPECTED type gives its class:
+    /// the unique arm naming the same class, found like the aggregate
+    /// literals' arms. Class arguments are invariant, so that arm is the
+    /// only instantiation the object can take there.
+    fn expected_class_args(
+        &mut self,
+        expected: &Expectation,
+        head: &baml_type::DeclName,
+    ) -> Option<Vec<Ty>> {
+        let shape = self.expectation_shape(expected)?;
+        self.unique_expected_arm(&shape, |arm| match arm.kind() {
+            InferTy::Class(name, args) if name == head => Some(args.to_vec()),
+            _ => None,
+        })
+    }
+
+    /// The instantiation that INFORMS a generic constructor's field values:
+    /// each still-open slot takes the argument the expected type gives the
+    /// same class. `Box {value: [1]}` returned as `Box<(int | string)[]>`
+    /// then builds `[1]` at `(int | string)[]`, instead of committing it
+    /// to `int[]` before the return relates `?T`. `None` when every slot
+    /// is already determined or the expectation names no unique arm.
+    fn constructor_arg_hints(
+        &mut self,
+        expected: &Expectation,
+        head: &baml_type::DeclName,
+        instantiation: &[Ty],
+    ) -> Option<Vec<Ty>> {
+        let open: Vec<bool> = instantiation
+            .iter()
+            .map(|arg| self.table.resolve_completely(arg).has_infer())
+            .collect();
+        if !open.contains(&true) {
+            return None;
+        }
+        let expected_args = self.expected_class_args(expected, head)?;
+        (expected_args.len() == instantiation.len()).then(|| {
+            instantiation
+                .iter()
+                .zip(expected_args)
+                .zip(open)
+                .map(|((arg, hint), open)| if open { hint } else { arg.clone() })
+                .collect()
+        })
+    }
+
+    /// Checks a constructor field value against its declared type at the
+    /// object's `instantiation`. With `hints`, the value is first inferred
+    /// against the declared type at the hinted arguments; this only
+    /// INFORMS the value (its literals take their shape from it), while
+    /// the check that constrains the open slots remains against the
+    /// object's own instantiation.
+    fn check_object_field(
+        &mut self,
+        body: &ExprBody,
+        value: ExprId,
+        field_ty: &Ty,
+        instantiation: &[Ty],
+        hints: Option<&[Ty]>,
+    ) {
+        let declared = substitute_params(field_ty, instantiation);
+        match hints {
+            Some(hints) => {
+                let hint = substitute_params(field_ty, hints);
+                let ty = self.infer_expr_with_hint(body, value, Some(&hint));
+                self.check_inferred(value, ty, &declared);
+            }
+            None => {
+                self.check_expr(body, value, &declared);
+            }
+        }
+    }
+
+    /// The single arm of `ty` that `pick` accepts, looking through nested
+    /// unions and type aliases. An optional `json` expectation is
+    /// `baml.json.json | null`, so resolving only the outer union would
+    /// leave the recursive JSON alias hiding its list and map arms. Two
+    /// accepted arms are ambiguous and give no context.
+    ///
+    /// Each alias expands at most once per search, so recursive aliases
+    /// terminate without a depth limit; a depth limit would make the answer
+    /// depend on how many aliases spell the same type.
+    fn unique_expected_arm<T>(&mut self, ty: &Ty, pick: impl Fn(&Ty) -> Option<T>) -> Option<T> {
+        fn search<T>(
+            this: &mut InferenceContext<'_>,
+            ty: &Ty,
+            pick: &impl Fn(&Ty) -> Option<T>,
+            expanded: &mut Vec<baml_type::DeclName>,
+            found: &mut Option<T>,
+        ) -> bool {
+            match ty.kind() {
+                InferTy::TypeAlias(name) => {
+                    if expanded.contains(name) {
+                        return true;
+                    }
+                    expanded.push(name.clone());
+                    match baml_type::normalize::TypeContext::alias_def(&this.facts, name) {
+                        Some(expansion) => {
+                            search(this, &Ty::from_plain(&expansion), pick, expanded, found)
+                        }
+                        None => true,
+                    }
+                }
+                InferTy::Union(members) => {
+                    let members = members.to_vec();
+                    members
+                        .iter()
+                        .all(|member| search(this, member, pick, expanded, found))
+                }
+                _ => match pick(ty) {
+                    Some(_) if found.is_some() => false,
+                    Some(arm) => {
+                        *found = Some(arm);
+                        true
+                    }
+                    None => true,
+                },
+            }
+        }
+
+        let mut found = None;
+        search(self, ty, &pick, &mut Vec::new(), &mut found)
+            .then_some(found)
+            .flatten()
     }
 
     /// The type of a tagged-template body param in scope, innermost frame
