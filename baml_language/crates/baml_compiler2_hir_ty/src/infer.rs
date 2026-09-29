@@ -1169,6 +1169,12 @@ enum PendingDiag<'db> {
     BareOutputFormatReference {
         expr: ExprId,
     },
+    /// A receiver-bound method value (`recv.m`, no call) in a position
+    /// where a function can't be what the author meant.
+    UncalledMethodValue {
+        expr: ExprId,
+        usage: crate::diagnostics::UncalledMethodUse,
+    },
     /// B-1563 truthiness: a NON-literal condition whose static type
     /// decides the branch (`if (some_fn)`, `if (instance)`) - a likely
     /// bug, warned like TS 5.6's 2872/2873.
@@ -2116,12 +2122,12 @@ impl<'db> InferenceContext<'db> {
     /// recorded against the checked expression, never dropped.
     fn check_expr(&mut self, body: &ExprBody, expr: ExprId, expected: &Ty) -> Ty {
         let ty = self.infer_expr_with_hint(body, expr, Some(expected));
-        self.check_inferred(expr, ty, expected)
+        self.check_inferred(body, expr, ty, expected)
     }
 
     /// The checking half of [`Self::check_expr`]: relate an already inferred
     /// `ty` to `expected` at `expr`, recording the mismatch or the adapter.
-    fn check_inferred(&mut self, expr: ExprId, ty: Ty, expected: &Ty) -> Ty {
+    fn check_inferred(&mut self, body: &ExprBody, expr: ExprId, ty: Ty, expected: &Ty) -> Ty {
         let saved_anchor = self.obligation_anchor.replace(expr);
         let fits = self.sub(&ty, expected);
         self.obligation_anchor = saved_anchor;
@@ -2130,6 +2136,18 @@ impl<'db> InferenceContext<'db> {
                 .type_mismatches
                 .insert(expr, (expected.clone(), ty.clone()));
         } else {
+            // `take(p.get)` into `unknown` fits, but a bound method is
+            // almost never the value meant there - the `()` was dropped.
+            if matches!(
+                self.table.resolve_completely(expected).kind(),
+                InferTy::Unknown
+            ) {
+                self.report_uncalled_method_value(
+                    body,
+                    expr,
+                    crate::diagnostics::UncalledMethodUse::Unknown,
+                );
+            }
             // A GROUND value checked against a still-open expectation
             // passed by DEPOSITING a bound; whether it actually fits is
             // only known once the var solves. Stash for the finalize
@@ -2198,7 +2216,7 @@ impl<'db> InferenceContext<'db> {
                         self.publish_scoped_value(value, &escaped, &ty, context)
                     }
                     None => match context {
-                        Some(context) => self.check_inferred(value, ty, context),
+                        Some(context) => self.check_inferred(body, value, ty, context),
                         None => ty,
                     },
                 }
@@ -2523,7 +2541,7 @@ impl<'db> InferenceContext<'db> {
                     // errors at check time (the structured segments exist
                     // exactly for these per-`${...}` diagnostics on the
                     // original spans).
-                    self.check_template_interps_strict(&segments);
+                    self.check_template_interps_strict(body, &segments);
                     result
                 }
                 baml_compiler2_ast::TemplateTag::Custom { tag, body: flatten } => {
@@ -4444,6 +4462,18 @@ impl<'db> InferenceContext<'db> {
             BinaryOp::Eq | BinaryOp::Ne => {
                 let lhs_ty = self.infer_expr(body, lhs, &Expectation::None);
                 let rhs_ty = self.infer_expr(body, rhs, &Expectation::None);
+                // `s.length == 3`: the operand's own diagnostic names the
+                // missing call, and replaces the always-disjoint warning.
+                let lhs_uncalled = self.report_uncalled_method_value(
+                    body,
+                    lhs,
+                    crate::diagnostics::UncalledMethodUse::Compared,
+                );
+                let rhs_uncalled = self.report_uncalled_method_value(
+                    body,
+                    rhs,
+                    crate::diagnostics::UncalledMethodUse::Compared,
+                );
                 let lhs_ty = self.table.resolve_completely(&lhs_ty);
                 let rhs_ty = self.table.resolve_completely(&rhs_ty);
                 // Equality folds whenever compile time can DECIDE it
@@ -4468,7 +4498,7 @@ impl<'db> InferenceContext<'db> {
                         &rhs_closed.to_plain(),
                     )
                 {
-                    if !equal {
+                    if !equal && !lhs_uncalled && !rhs_uncalled {
                         // Disjoint operands: the comparison is pointless.
                         self.pending_diags
                             .push(PendingDiag::ComparisonAlwaysDisjoint {
@@ -5410,7 +5440,7 @@ impl<'db> InferenceContext<'db> {
         ])));
         // The ordinary checking road: a ground mismatch is recorded here, an
         // open operand is re-judged at finish once its variable solves.
-        self.check_inferred(operand, got, &expected);
+        self.check_inferred(body, operand, got, &expected);
     }
 
     /// Seed the otherwise-unconstrained schema parameter of the three legacy
@@ -9136,6 +9166,43 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
+    /// Warns when `expr` - or the tail a block around it yields - is a
+    /// receiver-bound method read as a value (`recv.m`, no call) and
+    /// returns whether it was. Only the bound spelling qualifies: `Type.m`
+    /// and plain function names are deliberate references far more often
+    /// than a dropped `()`.
+    fn report_uncalled_method_value(
+        &mut self,
+        body: &ExprBody,
+        mut expr: ExprId,
+        usage: crate::diagnostics::UncalledMethodUse,
+    ) -> bool {
+        // `${p.get}` and a function body are blocks around their value.
+        while let Expr::Block {
+            tail_expr: Some(tail),
+            ..
+        } = &body.exprs[expr]
+        {
+            expr = *tail;
+        }
+        let bound = matches!(
+            self.result.member_resolutions.get(&expr),
+            Some(MemberResolution::Method {
+                receiver: Receiver::Bound,
+                ..
+            })
+        );
+        // A re-checked expression (lambda-argument passes) reports once.
+        let seen = self.pending_diags.iter().any(|pending| {
+            matches!(pending, PendingDiag::UncalledMethodValue { expr: seen, .. } if *seen == expr)
+        });
+        if bound && !seen {
+            self.pending_diags
+                .push(PendingDiag::UncalledMethodValue { expr, usage });
+        }
+        bound
+    }
+
     fn is_opaque_trace_type(&self, name: &baml_type::DeclName) -> bool {
         self.lang().is(baml_base::LangPackage::Trace, name.root())
             && name.namespace().is_empty()
@@ -9954,7 +10021,7 @@ impl<'db> InferenceContext<'db> {
             Some(hints) => {
                 let hint = substitute_params(field_ty, hints);
                 let ty = self.infer_expr_with_hint(body, value, Some(&hint));
-                self.check_inferred(value, ty, &declared);
+                self.check_inferred(body, value, ty, &declared);
             }
             None => {
                 self.check_expr(body, value, &declared);
@@ -10555,7 +10622,11 @@ impl<'db> InferenceContext<'db> {
     /// BEP-049 §11: every `${expr}` in an UNTAGGED template must be
     /// non-nullable (implicit `.to_string()` on null has no sound
     /// rendering). Nested `${for}`/`${if}` segments walk recursively.
-    fn check_template_interps_strict(&mut self, segments: &[baml_compiler2_ast::TemplateSegment]) {
+    fn check_template_interps_strict(
+        &mut self,
+        body: &ExprBody,
+        segments: &[baml_compiler2_ast::TemplateSegment],
+    ) {
         use baml_compiler2_ast::TemplateSegment;
         for segment in segments {
             match segment {
@@ -10563,6 +10634,13 @@ impl<'db> InferenceContext<'db> {
                     let Some(ty) = self.result.type_of_expr.get(expr).cloned() else {
                         continue;
                     };
+                    if self.report_uncalled_method_value(
+                        body,
+                        *expr,
+                        crate::diagnostics::UncalledMethodUse::Interpolated,
+                    ) {
+                        continue;
+                    }
                     let resolved = self.table.resolve_completely(&ty);
                     if resolved.has_error() || resolved.has_infer() {
                         continue;
@@ -10581,18 +10659,25 @@ impl<'db> InferenceContext<'db> {
                         });
                     }
                 }
-                TemplateSegment::For { body, .. } | TemplateSegment::CStyleFor { body, .. } => {
-                    self.check_template_interps_strict(body);
+                TemplateSegment::For {
+                    body: template_body,
+                    ..
+                }
+                | TemplateSegment::CStyleFor {
+                    body: template_body,
+                    ..
+                } => {
+                    self.check_template_interps_strict(body, template_body);
                 }
                 TemplateSegment::If {
                     branches,
                     else_body,
                 } => {
                     for branch in branches {
-                        self.check_template_interps_strict(&branch.body);
+                        self.check_template_interps_strict(body, &branch.body);
                     }
                     if let Some(else_body) = else_body {
-                        self.check_template_interps_strict(else_body);
+                        self.check_template_interps_strict(body, else_body);
                     }
                 }
                 TemplateSegment::Text(_) => {}
@@ -11633,6 +11718,33 @@ impl<'db> InferenceContext<'db> {
                     ),
                     PendingDiag::BareOutputFormatReference { expr } => {
                         (TirTypeError::OutputFormatNotCalled, expr)
+                    }
+                    PendingDiag::UncalledMethodValue { expr, usage } => {
+                        let Some(body) = body else {
+                            continue;
+                        };
+                        let accepts_no_args = match result.type_of_expr.get(&expr) {
+                            Some(ty) => match self.plain_finalized(ty) {
+                                baml_type::Ty::Function { params, .. } => {
+                                    params.iter().all(baml_type::FunctionParamTy::is_optional)
+                                }
+                                _ => false,
+                            },
+                            None => false,
+                        };
+                        let (name, suggestion) =
+                            Self::uncalled_name_and_suggestion(body, expr, accepts_no_args);
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::UncalledMethodValue {
+                                name,
+                                suggestion,
+                                usage,
+                            },
+                            severity: DiagnosticSeverity::Warning,
+                            primary: DiagnosticLocation::Expr(expr),
+                            related: Vec::new(),
+                        });
+                        continue;
                     }
                     PendingDiag::ConditionAlwaysConst {
                         expr,

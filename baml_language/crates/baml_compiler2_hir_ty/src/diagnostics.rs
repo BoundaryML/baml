@@ -135,6 +135,19 @@ impl fmt::Display for ShadowedParamOwner {
     }
 }
 
+/// Where a receiver-bound method value was used without being called - see
+/// [`TirTypeError::UncalledMethodValue`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UncalledMethodUse {
+    /// `${recv.m}` in an untagged template.
+    Interpolated,
+    /// An operand of `==` / `!=`.
+    Compared,
+    /// Checked against `unknown` (an argument, return value, binding, or
+    /// element), where it type-checks but is never what the author meant.
+    Unknown,
+}
+
 /// What went wrong — no location info, just the semantic error.
 ///
 /// `TirTypeError` is intentionally span-free for Salsa cacheability.
@@ -566,6 +579,14 @@ pub enum TirTypeError {
     UncalledFunctionInCondition {
         name: String,
         suggestion: Option<String>,
+    },
+    /// A receiver-bound method (`recv.m`, no call) used where a function
+    /// value can't be meaningful: interpolated, compared, or passed as
+    /// `unknown`. Usually a forgotten `()`.
+    UncalledMethodValue {
+        name: String,
+        suggestion: Option<String>,
+        usage: UncalledMethodUse,
     },
 
     /// BEP-044 §"Method Disambiguation": an unqualified call resolves to
@@ -1786,6 +1807,18 @@ impl TirTypeError {
                 TirTypeError::UncalledFunctionInCondition { name, .. } => {
                     write!(f, "function `{name}` is always truthy")
                 }
+                TirTypeError::UncalledMethodValue { name, usage, .. } => match usage {
+                    UncalledMethodUse::Interpolated => {
+                        write!(f, "method `{name}` is interpolated without being called")
+                    }
+                    UncalledMethodUse::Compared => {
+                        write!(f, "method `{name}` is compared without being called")
+                    }
+                    UncalledMethodUse::Unknown => write!(
+                        f,
+                        "method `{name}` is used as a value where `unknown` is expected"
+                    ),
+                },
                 TirTypeError::ConditionAlwaysConstant { ty, always_true } => {
                     let (always, never) = if *always_true {
                         ("truthy", "falsy")

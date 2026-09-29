@@ -1551,6 +1551,7 @@ fn tir_rendered_to_diagnostic_with_message(
         if matches!(
             rendered.error,
             TirTypeError::UncalledFunctionInCondition { .. }
+                | TirTypeError::UncalledMethodValue { .. }
                 | TirTypeError::ConditionAlwaysConstant { .. }
                 | TirTypeError::ComparisonAlwaysDisjoint { .. }
         ) {
@@ -1578,6 +1579,18 @@ fn tir_rendered_to_diagnostic_for_file(
     tir_rendered_to_diagnostic_with_message(&vp, rendered, file.file_id(db), message)
 }
 
+/// The primary label on an uncalled-function warning: the question, plus the
+/// exact replacement when one exists.
+fn call_hint(kind: &str, suggestion: Option<&str>) -> String {
+    let mut label = format!("did you mean to call this {kind}?");
+    if let Some(suggestion) = suggestion {
+        label.push_str(" Replace with `");
+        label.push_str(suggestion);
+        label.push('`');
+    }
+    label
+}
+
 fn new_tir_diagnostic(
     vp: &baml_compiler2_hir_ty::render::Viewpoint<'_>,
     error: &TirTypeError,
@@ -1586,14 +1599,13 @@ fn new_tir_diagnostic(
     warning: bool,
 ) -> Diagnostic {
     if let TirTypeError::UncalledFunctionInCondition { suggestion, .. } = error {
-        let mut label = "did you mean to call this function?".to_string();
-        if let Some(suggestion) = suggestion {
-            label.push_str(" Replace with `");
-            label.push_str(suggestion);
-            label.push('`');
-        }
         return Diagnostic::warning(DiagnosticId::ConditionAlwaysConstant, message)
-            .with_primary(span, label)
+            .with_primary(span, call_hint("function", suggestion.as_deref()))
+            .with_phase(DiagnosticPhase::Type);
+    }
+    if let TirTypeError::UncalledMethodValue { suggestion, .. } = error {
+        return Diagnostic::warning(DiagnosticId::UncalledMethodValue, message)
+            .with_primary(span, call_hint("method", suggestion.as_deref()))
             .with_phase(DiagnosticPhase::Type);
     }
     if let TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } = error {
@@ -1901,6 +1913,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::DeadCode { .. } => DiagnosticId::UnreachableCode,
         TirTypeError::ConditionAlwaysConstant { .. }
         | TirTypeError::UncalledFunctionInCondition { .. } => DiagnosticId::ConditionAlwaysConstant,
+        TirTypeError::UncalledMethodValue { .. } => DiagnosticId::UncalledMethodValue,
         TirTypeError::VoidUsedAsValue => DiagnosticId::TypeMismatch,
         TirTypeError::VoidFunctionResultUsed => DiagnosticId::TypeMismatch,
         TirTypeError::TraceOpaqueValue => DiagnosticId::TypeMismatch,
