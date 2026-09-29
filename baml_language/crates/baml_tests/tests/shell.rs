@@ -380,7 +380,7 @@ async fn start_process_lines_span_read_chunks() {
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn start_process_read_after_lines_sees_buffered_bytes() {
+async fn start_process_read_after_lines_sees_partial_line() {
     let output = baml_test!(
         r#"
             function main() -> string throws baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout {
@@ -405,7 +405,7 @@ async fn start_process_read_after_lines_sees_buffered_bytes() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "first|second\nthird".to_string().into()
+            "first|third".to_string().into()
         ))
     );
 }

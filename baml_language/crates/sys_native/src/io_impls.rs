@@ -1290,7 +1290,7 @@ struct ReadPipeHandle {
     label: String,
 }
 
-/// A pipe's reader plus the bytes `_read_line` has read past the current line.
+/// A pipe's reader plus the bytes `_read_lines` has read past the last newline.
 ///
 /// `read` drains those buffered bytes before reading the pipe again, so mixing
 /// `read` with `lines()` loses nothing.
@@ -1325,17 +1325,20 @@ impl PipeReader {
         Some(bytes)
     }
 
-    /// Removes and returns the next complete buffered line, if there is one.
-    fn take_line(&mut self) -> Option<String> {
+    /// Removes and returns every complete buffered line, if there is one.
+    fn take_lines(&mut self) -> Option<Vec<String>> {
         let scan_from = self.scanned.max(self.start);
-        let Some(offset) = self.buffer[scan_from..].iter().position(|&b| b == b'\n') else {
+        let Some(offset) = self.buffer[scan_from..].iter().rposition(|&b| b == b'\n') else {
             self.scanned = self.buffer.len();
             return None;
         };
-        let newline = scan_from + offset;
-        let line = decode_line(&self.buffer[self.start..newline]);
-        self.consume_to(newline + 1);
-        Some(line)
+        let last_newline = scan_from + offset;
+        let lines = self.buffer[self.start..last_newline]
+            .split(|&b| b == b'\n')
+            .map(decode_line)
+            .collect();
+        self.consume_to(last_newline + 1);
+        Some(lines)
     }
 
     /// Removes and returns the unterminated tail left at EOF, if any.
@@ -1574,22 +1577,13 @@ impl io::IoClassSysReadPipe for NativeSysOps {
         })
     }
 
-    fn _read_line(
+    fn _read_lines(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         readpipe: owned::sys::ReadPipe,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
-        // Most lines are already buffered by an earlier read; return those
-        // without a round trip through the async executor.
-        if let Ok(handle) = downcast_read_pipe(&readpipe)
-            && !*handle.close_tx.borrow()
-            && let Ok(mut guard) = handle.reader.try_lock()
-            && let Some(line) = guard.as_mut().and_then(PipeReader::take_line)
-        {
-            return SysOpOutput::ok(Some(line));
-        }
+    ) -> SysOpOutput<Option<Vec<String>>> {
         SysOpOutput::async_op(async move {
             let handle = downcast_read_pipe(&readpipe)?;
             let mut close_rx = handle.close_tx.subscribe();
@@ -1604,8 +1598,8 @@ impl io::IoClassSysReadPipe for NativeSysOps {
                 .as_mut()
                 .ok_or_else(|| read_pipe_closed_error(&handle.label))?;
             loop {
-                if let Some(line) = reader.take_line() {
-                    return Ok(Some(line));
+                if let Some(lines) = reader.take_lines() {
+                    return Ok(Some(lines));
                 }
                 let read = tokio::select! {
                     biased;
@@ -1617,7 +1611,7 @@ impl io::IoClassSysReadPipe for NativeSysOps {
                     })?,
                 };
                 if read == 0 {
-                    return Ok(reader.take_rest());
+                    return Ok(reader.take_rest().map(|line| vec![line]));
                 }
             }
         })

@@ -1825,13 +1825,13 @@ impl io::IoClassSysReadPipe for DefaultIoOps {
         })
     }
 
-    fn _read_line(
+    fn _read_lines(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         _readpipe: io::owned::sys::ReadPipe,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
+    ) -> SysOpOutput<Option<Vec<String>>> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),

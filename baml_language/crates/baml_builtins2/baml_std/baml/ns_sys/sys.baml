@@ -52,12 +52,15 @@ class ProcessExit {
 
 /// A line-oriented view over a `ReadPipe`.
 ///
-/// It reads through to the pipe on demand. Bytes read past the end of the
-/// current line stay buffered in the pipe, so `ReadPipe.read` still sees them.
-/// The final unterminated line is yielded at EOF. Invalid UTF-8 is replaced
-/// with U+FFFD, and one trailing carriage return is dropped from each line.
+/// It reads through to the pipe on demand and holds the complete lines of the
+/// latest read until they are yielded; a trailing partial line stays buffered
+/// in the pipe. The final unterminated line is yielded at EOF. Invalid UTF-8
+/// is replaced with U+FFFD, and one trailing carriage return is dropped from
+/// each line.
 class ReadPipeLines {
     pipe: ReadPipe,
+    _lines: string[],
+    _next: int,
 
     implements root.iter.Iterable {
         type Item = string;
@@ -76,10 +79,20 @@ class ReadPipeLines {
 
         /// Wait for and return the next line, or `Done` at EOF.
         function next(self) -> string | root.iter.Done throws root.errors.Io {
-            match (self.pipe._read_line()) {
-                let line: string => line,
-                null => root.iter.Done {  },
+            while (self._next >= self._lines.length()) {
+                match (self.pipe._read_lines()) {
+                    let lines: string[] => {
+                        self._lines = lines;
+                        self._next = 0;
+                    },
+                    null => {
+                        return root.iter.Done {  };
+                    },
+                }
             }
+            let line = self._lines[self._next];
+            self._next += 1;
+            line
         }
     }
 }
@@ -123,12 +136,13 @@ class ReadPipe {
 
     /// Return a line-oriented view over this pipe.
     function lines(self) -> ReadPipeLines throws never {
-        ReadPipeLines { pipe: self }
+        ReadPipeLines { pipe: self, _lines: [], _next: 0 }
     }
 
-    /// (internal) Wait for and return the next line, or `null` at EOF. See
-    /// `ReadPipeLines` for how lines are framed and decoded.
-    function _read_line(self) -> string? throws root.errors.Io {
+    /// (internal) Wait for at least one line and return every complete line
+    /// read so far, or `null` at EOF. See `ReadPipeLines` for how lines are
+    /// framed and decoded.
+    function _read_lines(self) -> string[]? throws root.errors.Io {
         $rust_io_function
     }
 
