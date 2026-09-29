@@ -94,13 +94,13 @@ impl BexHeap {
     }
 
     /// Spend budget on the backing buffer owned by an object being allocated:
-    /// an unshared flat string's bytes or a byte array's length. Object slots
+    /// an unshared flat string's bytes or a byte array's capacity. Object slots
     /// are charged separately when a TLAB reserves them.
     #[inline]
     pub(crate) fn charge_backing_bytes(&self, obj: &Object) {
         let bytes = match obj {
             Object::String(s) => s.unshared_heap_bytes(),
-            Object::Uint8Array(bytes) => bytes.len(),
+            Object::Uint8Array(bytes) => bytes.lock().capacity(),
             _ => return,
         };
         self.gc_policy.charge(bytes);
@@ -227,7 +227,7 @@ mod tests {
         let slots = FIRST_TLAB_SLOTS * size_of::<Object>();
         tlab.alloc_string("x".repeat(1000));
         assert_eq!(heap.gc_budget().bytes_since_full_gc, slots + 1000);
-        tlab.alloc_uint8array(vec![0; 2000]);
+        tlab.alloc_uint8array(Vec::with_capacity(2000));
         assert_eq!(heap.gc_budget().bytes_since_full_gc, slots + 3000);
         // Objects built directly, as `baml.deep_copy` does, are charged too.
         tlab.alloc(Object::Uint8Array(vec![0; 500].into()));
