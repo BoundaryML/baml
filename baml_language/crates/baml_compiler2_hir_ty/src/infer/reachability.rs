@@ -241,11 +241,15 @@ impl<'db> Reachability<'_, 'db> {
                     op: BinaryOp::Eq | BinaryOp::Ne,
                     lhs,
                     rhs,
-                } => diagnostics.iter().position(|diagnostic| {
-                    matches!(diagnostic.error, TirTypeError::UncalledMethodValue { .. })
-                        && (diagnostic.primary == DiagnosticLocation::Expr(lhs)
-                            || diagnostic.primary == DiagnosticLocation::Expr(rhs))
-                }),
+                } => {
+                    let operands = [lhs, rhs].map(|operand| {
+                        DiagnosticLocation::Expr(super::block_value(self.body, operand))
+                    });
+                    diagnostics.iter().position(|diagnostic| {
+                        matches!(diagnostic.error, TirTypeError::UncalledMethodValue { .. })
+                            && operands.contains(&diagnostic.primary)
+                    })
+                }
                 _ => None,
             })
     }

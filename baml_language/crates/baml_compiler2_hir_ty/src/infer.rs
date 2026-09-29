@@ -2138,10 +2138,8 @@ impl<'db> InferenceContext<'db> {
         } else {
             // `take(p.get)` into `unknown` fits, but a bound method is
             // almost never the value meant there - the `()` was dropped.
-            if matches!(
-                self.table.resolve_completely(expected).kind(),
-                InferTy::Unknown
-            ) {
+            let expected = self.table.resolve_completely(expected);
+            if matches!(self.expand_alias_ty(&expected).kind(), InferTy::Unknown) {
                 self.report_uncalled_method_value(
                     body,
                     expr,
@@ -9174,17 +9172,10 @@ impl<'db> InferenceContext<'db> {
     fn report_uncalled_method_value(
         &mut self,
         body: &ExprBody,
-        mut expr: ExprId,
+        expr: ExprId,
         usage: crate::diagnostics::UncalledMethodUse,
     ) -> bool {
-        // `${p.get}` and a function body are blocks around their value.
-        while let Expr::Block {
-            tail_expr: Some(tail),
-            ..
-        } = &body.exprs[expr]
-        {
-            expr = *tail;
-        }
+        let expr = block_value(body, expr);
         let bound = matches!(
             self.result.member_resolutions.get(&expr),
             Some(MemberResolution::Method {
@@ -13170,6 +13161,19 @@ fn same_head_constructor(source: &Ty, target: &Ty) -> bool {
         ) => a_params.len() == b_params.len(),
         _ => false,
     }
+}
+
+/// The expression that yields `expr`'s value through any blocks around it:
+/// `${p.get}` and a function body are blocks whose tail is the value.
+pub(crate) fn block_value(body: &ExprBody, mut expr: ExprId) -> ExprId {
+    while let Expr::Block {
+        tail_expr: Some(tail),
+        ..
+    } = &body.exprs[expr]
+    {
+        expr = *tail;
+    }
+    expr
 }
 
 /// An instance-accessed METHOD as a value is receiver-BOUND: the access

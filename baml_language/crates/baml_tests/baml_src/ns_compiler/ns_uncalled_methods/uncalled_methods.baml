@@ -85,6 +85,16 @@ test "compared method in a condition labels the unreachable branch" {
     assert.equal(secondary.message, "this branch is unreachable")
 }
 
+test "compared method inside a block still labels the unreachable branch" {
+    let warning = method_warning(
+        "function main(s: string) -> int { if (({ s.length }) == 3) { 1 } else { 2 } }",
+        "s.length",
+        "is compared without being called",
+        "s.length()",
+    );
+    assert.equal(warning.annotations.length(), 2)
+}
+
 test "method flowing into unknown warns in every value position" {
     for (
         let body in [
@@ -93,6 +103,7 @@ test "method flowing into unknown warns in every value position" {
             "function main(p: Point) -> unknown { return p.get; }",
             "function main(p: Point) -> int { let v: unknown = p.get; 1 }",
             "function main(p: Point) -> unknown[] { [p.get] }",
+            "type Any = unknown;\nfunction main(p: Point) -> Any { p.get }",
         ]
     ) {
         method_warning(body, "p.get", "is used as a value where `unknown` is expected", "p.get()");
