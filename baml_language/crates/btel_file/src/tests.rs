@@ -442,14 +442,7 @@ fn cas_is_shared_across_recordings_and_atomic_under_concurrent_writers() {
     assert_eq!(fs::read(&path).unwrap(), expected);
     let filename = path.file_name().unwrap().to_str().unwrap();
     assert_eq!(filename.len(), 32);
-    assert_eq!(
-        path,
-        cas.join("v3")
-            .join(&filename[..2])
-            .join(&filename[2..4])
-            .join(&filename[4..6])
-            .join(filename)
-    );
+    assert_eq!(path, cas.join("v3").join(&filename[..2]).join(filename));
     assert_eq!(
         fs::read_dir(path.parent().unwrap()).unwrap().count(),
         1,

@@ -315,8 +315,6 @@ fn assert_cas_blob(project: &std::path::Path, id: proto::CasId) {
     let path = project
         .join(".baml/btel/cas/v3")
         .join(&name[..2])
-        .join(&name[2..4])
-        .join(&name[4..6])
         .join(name);
     let blob =
         std::fs::read(path).expect("every published CAS reference must have a completed blob");
