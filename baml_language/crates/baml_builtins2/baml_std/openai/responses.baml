@@ -15,13 +15,9 @@
 /// `text.format` is deliberately never set. A caller who
 /// wants native JSON-schema output sets it through `request_body`.
 ///
-/// Deliberately not provided: the engine's `finish_reason_allow_list` and
-/// `finish_reason_deny_list`. There is no config surface for them here and
-/// none is planned — the typed
-/// `ai.content.StopReason` plus the runner's Refused / MaxTokens enforcement
-/// covers what the lists were used for, and a caller who wants a stricter policy
-/// writes it over the returned turn (or wraps the client) rather than
-/// configuring a string list of provider finish reasons.
+/// Finish-reason policies run after selection: configure typed allow/deny lists
+/// on `ai.Agent.new` or `ai.stream.from_spec`. Both default to allowing all
+/// finish reasons, so budget exhaustion does not implicitly select a backup.
 class ResponsesClient {
     model: string,
     // A literal string, `env.NAME` (a late-bound `baml.env.Ref`, read at

@@ -29,18 +29,22 @@ class RunResult<Out> {
 class Agent {
     max_steps: int,
     // Total model invocations allowed for one schema candidate. The default
-    // preserves the existing initial attempt plus one correction re-ask.
+    // is one invocation, matching v0. Correction re-asks are opt-in.
     schema_attempts: int,
     client: Client?,
+    finish_reason_allow_list: root.content.StopReason[]?,
+    finish_reason_deny_list: root.content.StopReason[]?,
     tool_errors: root.tools.ErrorMode,
     on_event: ((root.events.Event) -> void throws never)?,
 
     function new(
         max_steps: int = 12,
-        schema_attempts: int = 2,
+        schema_attempts: int = 1,
         client: Client? = null,
         tool_errors: root.tools.ErrorMode = root.tools.ErrorMode.Report,
         on_event: ((root.events.Event) -> void)? = null,
+        finish_reason_allow_list: root.content.StopReason[]? = null,
+        finish_reason_deny_list: root.content.StopReason[]? = null,
     ) -> Agent {
         if (schema_attempts < 1) {
             throw baml.errors.InvalidArgument {
@@ -51,6 +55,8 @@ class Agent {
             max_steps: max_steps,
             schema_attempts: schema_attempts,
             client: client,
+            finish_reason_allow_list: finish_reason_allow_list,
+            finish_reason_deny_list: finish_reason_deny_list,
             tool_errors: tool_errors,
             on_event: root.events.guard(on_event),
         }
@@ -292,15 +298,14 @@ class Agent {
             || self._parses<Out>(turn, candidate);
         if (accepted) {
             j.append_all(batch);
+            root.wire.check_finish_reason(
+                turn,
+                c.id(),
+                allow_list = self.finish_reason_allow_list,
+                deny_list = self.finish_reason_deny_list,
+            );
             // terminal wire outcomes are thrown here, with the turn on the record
             match (turn.stop_reason) {
-                root.content.StopReason.MaxTokens => {
-                    throw root.errors.FinishReasonError {
-                        provider: c.id(),
-                        finish_reason: turn.stop_reason,
-                        raw_output: candidate,
-                    }
-                },
                 root.content.StopReason.Refused => {
                     throw root.errors.Refused { provider: c.id(), reason: "the model declined to answer", raw_body: null }
                 },

@@ -1193,8 +1193,15 @@ function _decode_batch(batch: string, state: OaStreamState) -> ai.stream.Event[]
     let out: ai.stream.Event[] = [];
     for (let raw in ai.stream.decode_sse_batch(batch)) {
         if let data: string = raw.data {
-            let decoded: OaStreamEvent? = baml.json.from_string<OaStreamEvent>(data) catch_all (e) {
-                _ => null,
+            let decoded = baml.json.from_string<OaStreamEvent>(data) catch_all (e) {
+                _ => {
+                    throw ai.errors.NetworkFailure {
+                    provider: "openai",
+                    status_code: null,
+                    detail: "malformed Responses SSE event",
+                    raw_body: data,
+                }
+                },
             };
             if let event: OaStreamEvent = decoded {
                 for (let e in _stream_events(event, raw.event, state)) {
@@ -1269,12 +1276,7 @@ function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.
         _ => _stream_open_failure(e),
     };
     let state = OaStreamState.new();
-    // The Responses protocol always ends a live turn with an explicit terminal
-    // event (`response.completed` / `response.incomplete` / `response.failed`),
-    // so a connection that closes without one is a TRUNCATED turn, never a
-    // complete one — opt into ai.stream's strict termination contract so the
-    // partial text is reported as ai.errors.NetworkFailure instead of being
-    // handed back as a successful answer.
+    // Empty streams fail; clean EOF after decoded output returns the partial turn.
     let stream = ai.stream.TurnStream.from_sse(
         sse,
         (batch: string) -> {

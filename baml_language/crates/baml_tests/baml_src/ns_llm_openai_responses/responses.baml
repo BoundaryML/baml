@@ -742,11 +742,8 @@ test "oai_stream_failed_event_permanent" {
     assert.equal(oai_stream_failed_event_permanent(), "invalid_request:bad prompt")
 }
 
-// A stream that dies mid-turn — one delta, then the socket closes with no
-// terminal event — is a TRUNCATED turn. The Responses protocol always ends a
-// live turn with response.completed/incomplete/failed, so the decoder opts into
-// ai.stream's strict termination contract and the partial text is reported as
-// the transport failure it is instead of being handed back as a good answer.
+// Clean EOF after a text delta returns the partial answer, matching v0.
+// Explicit provider, transport and decoding errors remain failures.
 function oai_stream_truncated() -> string {
     root.llm_mock.mock_sse_serve(
         [
@@ -767,11 +764,8 @@ function oai_stream_truncated() -> string {
     )
 }
 
-test "oai_stream_truncated" {
-    assert.contains(
-        oai_stream_truncated(),
-        "network:stream ended before the provider's terminal event",
-    )
+test "oai_stream_clean_eof_returns_partial" {
+    assert.equal(oai_stream_truncated(), "par")
 }
 
 // The stop reason the decoder computes on the terminal event reaches the

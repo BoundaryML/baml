@@ -622,3 +622,29 @@ function sanitize_for_client(j: root.Journal, client_id: string) -> root.Journal
     root.internal._flush_orphaned_calls(out, pending);
     root.Journal { log: out }
 }
+
+/// Validate a successful turn after client selection, so a rejected finish
+/// reason does not invoke a fallback or replay the provider request. With
+/// neither list configured, all reasons are allowed (the v0 default).
+function check_finish_reason(
+    turn: root.ModelTurn,
+    provider: string,
+    allow_list: root.content.StopReason[]? = null,
+    deny_list: root.content.StopReason[]? = null,
+) -> void {
+    let allowed = match (allow_list) {
+        let reasons: root.content.StopReason[] => reasons.includes(turn.stop_reason),
+        null => true,
+    };
+    let denied = match (deny_list) {
+        let reasons: root.content.StopReason[] => reasons.includes(turn.stop_reason),
+        null => false,
+    };
+    if (!allowed || denied) {
+        throw root.errors.FinishReasonError {
+            provider: provider,
+            finish_reason: turn.stop_reason,
+            raw_output: turn.terminal_text() ?? "",
+        }
+    }
+}

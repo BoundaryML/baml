@@ -7,41 +7,11 @@
 //! Phase 1 scope: one model turn, no tool loop. A spec whose toolbox is not
 //! empty is rejected with baml.errors.InvalidArgument.
 //!
-//! ─── Stream termination contract ─────────────────────────────────────────────
-//!
-//! A TurnStream can end two ways, and they are NOT the same event:
-//!
-//!   1. TERMINAL EVENT. The decoder yields `TurnDone` because the provider sent
-//!      its explicit end-of-turn marker — OpenAI `[DONE]` / `response.completed`,
-//!      Anthropic `message_stop`, Gemini a chunk carrying `finishReason`.
-//!      The turn is complete and everything the model produced was received.
-//!   2. SOCKET CLOSE. `SseStream.next()` returns null: the connection ended.
-//!      With no terminal event before it, that is a TRUNCATED turn — a proxy
-//!      timing out, a dropped connection, a provider killing the response
-//!      mid-generation. The text received so far is a PREFIX of the answer.
-//!
-//! By default a TurnStream treats (2) as (1): the stream completes and
-//! `final_turn()` reports `StopReason.Complete`. That default exists for
-//! protocols with no terminal sentinel at all, and it is unsafe for every
-//! protocol that HAS one — a mid-stream disconnect is silently reported to the
-//! caller as a successful, complete turn carrying truncated text.
-//!
-//! A decoder whose protocol has a terminal event therefore opts in to strict
-//! termination by passing its provider id as `from_sse`'s `require_terminal`:
-//!
-//!     ai.stream.TurnStream.from_sse(sse, decode, require_terminal = "anthropic")
-//!
-//! A strict stream that reaches end-of-connection without ever having decoded a
-//! `TurnDone` throws `ai.errors.NetworkFailure` ("stream ended before the
-//! provider's terminal event") from `next()` / `final_turn()` instead of
-//! fabricating a completed turn. `NetworkFailure.retry_safety()` is `Safe`, and
-//! that is honest here: the streaming path runs one turn with no tool loop, and
-//! a turn that never finished is never committed to the journal, so nothing
-//! local advanced and re-issuing the request replays no effects.
-//!
-//! Opting in is per call site and additive: a `from_sse` call that omits
-//! `require_terminal` keeps the historical close-completes-the-turn behavior,
-//! and `from_chunks` (scripted, no wire) is never strict.
+//! A clean EOF after assistant text completes the partial turn, matching v0.
+//! A provider stream that ends without decoded output or a terminal event fails. An
+//! explicit transport/provider/decoder error always fails, even after text;
+//! reliability policies can replace that attempt by emitting TurnReset. Reset
+//! clears accumulated text, metadata and typed parser state before new deltas.
 
 /// A client that can render the same request as `invoke` but streamed.
 /// Implementors must also implement Client (`requires`).
@@ -97,10 +67,14 @@ class TurnMeta {
 class TurnDone {
 }
 
-/// One provider-agnostic event decoded from an SSE batch: a piece of
-/// assistant text, the turn metadata that arrived alongside it, or the
-/// provider's end-of-turn marker.
-type Event = TextDelta | TurnMeta | TurnDone;
+/// Discard the current attempt's text, metadata and parser state. Earlier
+/// partials may have been observed, but the selected attempt alone owns the
+/// final value. Reliability relays emit this before opening a replacement.
+class TurnReset {
+}
+
+/// A normalized stream event, including replacement of a failed attempt.
+type Event = TextDelta | TurnMeta | TurnDone | TurnReset;
 
 /// The single end-of-stream marker returned by both raw turn streams and typed
 /// function streams. A nominal sentinel is required because null may itself be
@@ -149,6 +123,8 @@ class TurnStream {
     _require_terminal: string?,
     // whether a TurnDone was actually decoded before the stream ended.
     _saw_terminal: bool,
+    // Whether this attempt decoded any successful text or metadata event.
+    _saw_output: bool,
     // Wire telemetry (LLMCall records), surfaced by final_turn().calls.
     // _calls is the full oldest-first list; composite relays share it by
     // reference to prepend failed legs. _wire_call is THIS stream's own
@@ -173,13 +149,10 @@ class TurnStream {
     /// batch string from `sse.next()` (a JSON array of SseEvent objects; see
     /// decode_sse_batch) and yields the events it contains.
     ///
-    /// `require_terminal` opts into the strict termination contract: pass the
-    /// provider id (`"anthropic"`, `"openai"`, …) when the protocol has an
-    /// explicit end-of-turn event that the decoder yields as `TurnDone`. The
-    /// stream then throws `ai.errors.NetworkFailure` if the connection ends
-    /// before that event arrives, rather than reporting the truncated text as a
-    /// completed turn. Leave it null (the default) only for a protocol whose
-    /// sole end-of-turn signal IS the socket closing.
+    /// `require_terminal` names the provider for an empty-stream failure. A
+    /// terminal marker proves completion even without text. Clean EOF after
+    /// decoded text or metadata returns the partial turn, matching v0; explicit
+    /// transport/provider/decoder failures still propagate.
     ///
     /// `model` is the model the request names; the stream's token usage is
     /// recorded under it.
@@ -204,6 +177,7 @@ class TurnStream {
             _done: false,
             _require_terminal: require_terminal,
             _saw_terminal: false,
+            _saw_output: false,
             _calls: [],
             _wire_call: null,
             _call_started: null,
@@ -234,6 +208,7 @@ class TurnStream {
             _done: false,
             _require_terminal: null,
             _saw_terminal: false,
+            _saw_output: false,
             _calls: [],
             _wire_call: null,
             _call_started: null,
@@ -265,6 +240,7 @@ class TurnStream {
             _done: false,
             _require_terminal: null,
             _saw_terminal: false,
+            _saw_output: false,
             _calls: [],
             _wire_call: null,
             _call_started: null,
@@ -333,28 +309,23 @@ class TurnStream {
         }
     }
 
-    /// (internal) The strict-termination check: a no-op unless this stream required an
-    /// explicit terminal event and the stream ended without one, in which case
-    /// the truncated turn is reported as the transport failure it is instead of
-    /// being passed off as complete. Called on every end-of-stream path.
+    /// (internal) An empty provider stream fails. v0 accepts clean EOF after
+    /// any successful text/metadata event; explicit failures never take this path.
     function _check_terminal(self) -> void {
         if let provider: string = self._require_terminal {
-            if (!self._saw_terminal) {
-                let partial: string? = if (self._text == "") {
-                    null
-                } else {
-                    self._text
-                };
-                throw root.errors.NetworkFailure { status_code: null,
+            if (!self._saw_terminal && !self._saw_output) {
+                throw root.errors.NetworkFailure {
+                    status_code: null,
                     provider: provider,
-                    detail: `stream ended before the provider's terminal event: the connection closed after ${self._text.length()} characters of assistant text with no end-of-turn event, so the turn is truncated`,
-                    raw_body: partial,
+                    detail: "stream ended before the provider's terminal event without decoded output",
+                    raw_body: null,
                 }
             }
         }
     }
 
-    /// All READY text deltas, or Done when the turn is over. Metadata events
+    /// All READY text deltas, TurnReset when an attempt is replaced, or Done.
+    /// Raw consumers must discard their accumulated text on TurnReset. Metadata events
     /// are folded silently; calling next() after Done keeps returning Done.
     ///
     /// Drain-ready-then-deliver: every event already decoded (the wire layer
@@ -367,7 +338,7 @@ class TurnStream {
     /// parse slower than the token interval) gets the whole backlog in one
     /// return instead of replaying it delta by delta — the pull-model
     /// equivalent of the legacy engine's latest-snapshot watch channel.
-    function next(self) -> string[] | Done {
+    function next(self) -> string[] | Done | TurnReset {
         let ready: string[] = [];
         while (true) {
             if (self._done) {
@@ -379,12 +350,23 @@ class TurnStream {
                 self._pcursor += 1;
                 match (e) {
                     let d: TextDelta => {
+                        self._saw_output = true;
                         self._stamp_first_delta();
                         self._text = `${self._text}${d.text}`;
                         ready.push(d.text);
                         null
                     },
+                    let reset: TurnReset => {
+                        self._text = "";
+                        self._stop_reason = null;
+                        self._input_tokens = null;
+                        self._output_tokens = null;
+                        self._saw_terminal = false;
+                        self._saw_output = false;
+                        return reset;
+                    },
                     let m: TurnMeta => {
+                        self._saw_output = true;
                         if let s: root.content.StopReason = m.stop_reason {
                             self._stop_reason = s;
                         }
@@ -430,9 +412,8 @@ class TurnStream {
                 let sse: baml.http.SseStream => {
                     match (sse.next()) {
                         null => {
-                            // end of connection. On a strict stream with no
-                            // TurnDone decoded this is a truncated turn, and
-                            // _check_terminal throws rather than completing it.
+                            // Graceful EOF succeeds after decoded output. An
+                            // empty provider stream fails in _check_terminal.
                             self._finish();
                             self._check_terminal();
                             return Done {};
@@ -475,10 +456,8 @@ class TurnStream {
     /// Drain the stream and return the completed turn. Safe to call at any
     /// point (including after Done); calling twice returns an equal turn.
     ///
-    /// On a strict stream (from_sse's `require_terminal`) that ended without the
-    /// provider's terminal event this throws ai.errors.NetworkFailure instead of
-    /// returning a turn — the stop_reason default below must never turn a
-    /// truncated stream into a `StopReason.Complete` answer.
+    /// Empty provider streams fail; clean EOF after decoded output returns the
+    /// partial turn. Failed attempts are discarded by reliability resets.
     function final_turn(self) -> root.ModelTurn {
         while (true) {
             match (self.next()) {
@@ -528,7 +507,7 @@ class TurnStream {
 /// Partial and final values share one type: a partial is the declared type parsed
 /// from the text received so far.
 class Stream<T> {
-    _next_text: () -> string? throws root.errors.InvokeError,
+    _next_text: () -> string | TurnReset | null throws root.errors.InvokeError,
     _cache: baml.sap._ParseCache<T>,
     _text: string,
     _finished: bool,
@@ -540,6 +519,11 @@ class Stream<T> {
                 return Done {};
             }
             match (self._next_text()) {
+                let reset: TurnReset => {
+                    self._text = "";
+                    self._cache = baml.sap._new_parse_cache<T>();
+                    null
+                },
                 null => {
                     self._finished = true;
                     return Done {};
@@ -563,6 +547,11 @@ class Stream<T> {
     function final(self) -> T {
         while (!self._finished) {
             match (self._next_text()) {
+                let reset: TurnReset => {
+                    self._text = "";
+                    self._cache = baml.sap._new_parse_cache<T>();
+                    null
+                },
                 null => {
                     self._finished = true
                 },
@@ -590,6 +579,8 @@ function from_spec<T>(
     spec: root.FunctionSpec<T>,
     client: StreamingClient? = null,
     on_event: ((root.events.Event) -> void)? = null,
+    finish_reason_allow_list: root.content.StopReason[]? = null,
+    finish_reason_deny_list: root.content.StopReason[]? = null,
 ) -> Stream<T> {
     if (!spec.tools().is_empty()) {
         throw baml.errors.InvalidArgument {
@@ -638,9 +629,15 @@ function from_spec<T>(
                     // guards re-entry: a listener that pulls this same stream
                     // (e.g. calls final() mid-callback) must not re-settle.
                     if (!settled) {
+                        let turn = turns.final_turn();
+                        root.wire.check_finish_reason(
+                            turn,
+                            provider,
+                            allow_list = finish_reason_allow_list,
+                            deny_list = finish_reason_deny_list,
+                        );
                         settled = true;
                         if let cb: (root.events.Event) -> void throws never = emit {
-                            let turn = turns.final_turn();
                             cb(
                                 root.events.AssistantMessage {
                                     content: turn.content,
@@ -658,6 +655,7 @@ function from_spec<T>(
                     null
                 },
                 let batch: string[] => batch.join(""),
+                let reset: TurnReset => reset,
             } catch_all (e) {
                 _ => throw root.errors.normalize(e),
             }

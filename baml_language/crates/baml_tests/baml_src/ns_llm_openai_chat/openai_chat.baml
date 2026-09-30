@@ -978,6 +978,7 @@ function chat_sse_decodes_text_and_usage() -> string {
             let deltas: string[] = [];
             while (true) {
                 match (stream.next()) {
+                    let reset: ai.stream.TurnReset => baml.sys.panic("leaf stream emitted reset"),
                     let done: ai.stream.Done => {
                         break;
                     },
@@ -1029,6 +1030,7 @@ function chat_stream_total_timeout_after_delta() -> string {
             );
             let stream = cl.invoke_stream(_chat_input("hi"));
             let first = match (stream.next()) {
+                    let reset: ai.stream.TurnReset => baml.sys.panic("leaf stream emitted reset"),
                 let batch: string[] => batch.join(""),
                 let done: ai.stream.Done => "Done",
             };
@@ -1415,8 +1417,8 @@ function chat_truncated_stream_throws() -> string {
     )
 }
 
-test "chat_truncated_stream_throws" {
-    assert.equal(chat_truncated_stream_throws(), "NetworkFailure/Safe")
+test "chat_stream_clean_eof_returns_partial" {
+    assert.equal(chat_truncated_stream_throws(), "no-error/par")
 }
 
 // A stream that DOES reach `[DONE]` still completes normally — the strict check
