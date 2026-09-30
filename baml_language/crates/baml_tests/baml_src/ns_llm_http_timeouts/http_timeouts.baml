@@ -5,7 +5,7 @@ function TimeoutSpec() -> string {
 
 // Duration options preserve v0's four HTTP budgets without changing the wire body.
 function duration_options() -> bool {
-    let duration = baml.time.Duration.from_ms(1500);
+    let duration = baml.time.Duration.from_milliseconds(1500);
     let clients = [
         openai.ResponsesClient.new(
             connect_timeout = duration,
@@ -94,8 +94,8 @@ function responses_duration_request_timeout() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
                 request_timeout_ms = 5000,
-                request_timeout = baml.time.Duration.from_ms(100),
-                connect_timeout = baml.time.Duration.from_ms(1000),
+                request_timeout = baml.time.Duration.from_milliseconds(100),
+                connect_timeout = baml.time.Duration.from_milliseconds(1000),
             );
             let spec = TimeoutSpec@spec();
             cl.invoke(
@@ -127,8 +127,8 @@ function shared_chat_duration_deadlines() -> bool {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok("{}")],
         (mock: root.llm_mock.MockJsonServer) -> {
-            let deadline = baml.time.Duration.from_ms(100);
-            let connect = baml.time.Duration.from_ms(1000);
+            let deadline = baml.time.Duration.from_milliseconds(100);
+            let connect = baml.time.Duration.from_milliseconds(1000);
             let clients: ai.Client[] = [
                 openai.ChatClient.new(
                     api_key = "test-key",

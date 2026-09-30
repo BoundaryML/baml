@@ -336,7 +336,7 @@ async fn http_connect_timeout_includes_tls_handshake() {
     let output = baml_test!(&format!(
         r#"
         function main() -> string {{
-            baml.http.fetch("https://{addr}", connect_timeout = baml.time.Duration.from_ms(100)) catch_all (e) {{
+            baml.http.fetch("https://{addr}", connect_timeout = baml.time.Duration.from_milliseconds(100)) catch_all (e) {{
                 let t: baml.errors.Timeout => {{ return "timeout"; }},
                 _ => {{ return "wrong error"; }},
             }};
@@ -369,8 +369,8 @@ async fn http_sse_idle_deadline_after_first_event() {
         function main() -> string {{
             let stream = baml.http.fetch_sse(
                 baml.http.Request {{ method: "GET", url: "http://{addr}", headers: {{}}, body: "" }},
-                connect_timeout = baml.time.Duration.from_ms(1000),
-                idle_timeout = baml.time.Duration.from_ms(100),
+                connect_timeout = baml.time.Duration.from_milliseconds(1000),
+                idle_timeout = baml.time.Duration.from_milliseconds(100),
             );
             let first = stream.next();
             if (first == null) {{ return "missing first event"; }}
