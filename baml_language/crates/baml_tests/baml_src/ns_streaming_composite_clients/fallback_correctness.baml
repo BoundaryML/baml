@@ -819,3 +819,28 @@ function reset_metadata_case() -> string {
 test "stream_reset_discards_failed_attempt_metadata" {
     assert.equal(reset_metadata_case(), "winner|Complete|true")
 }
+
+// A selected successful turn is filtered before schema repair can replay it.
+test "denied_finish_reason_precedes_schema_repair" {
+    root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(fallback_body(text = "invalid integer"))], (
+        primary: root.llm_mock.MockJsonServer,
+    ) -> {
+        root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(fallback_body(text = "42"))], (
+            backup: root.llm_mock.MockJsonServer,
+        ) -> {
+            let chain = ai.clients.Fallback {
+                members: [fallback_leaf(primary.base_url()), fallback_leaf(backup.base_url())],
+            };
+            let denied: ai.content.StopReason[] = [ai.content.StopReason.Complete];
+            let result = ai.Agent
+                .new(client = chain, schema_attempts = 3, finish_reason_deny_list = denied)
+                .run(FallbackInteger@spec())
+                .value.to_string() catch_all (e) {
+                _ => fallback_error(e)
+            };
+            assert.equal(result, "FinishReasonError");
+            assert.equal(primary.request_count(), 1);
+            assert.equal(backup.request_count(), 0);
+        })
+    })
+}
