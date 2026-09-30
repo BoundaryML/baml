@@ -111,8 +111,8 @@ class            baml.http.Request                <builtin>/baml/ns_http/http.ba
 class            baml.http.Response               <builtin>/baml/ns_http/http.baml:16
 class            baml.http.SseStream              <builtin>/baml/ns_http/http.baml:103
 function         baml.http.fetch                  <builtin>/baml/ns_http/http.baml:140
-function         baml.http.send                   <builtin>/baml/ns_http/http.baml:166
-function         baml.http.fetch_sse              <builtin>/baml/ns_http/http.baml:191
+function         baml.http.send                   <builtin>/baml/ns_http/http.baml:171
+function         baml.http.fetch_sse              <builtin>/baml/ns_http/http.baml:202
 class            baml.http.Server                 <builtin>/baml/ns_http/server.baml:10
 type             baml.http.WsAccept               <builtin>/baml/ns_http/server.baml:148
 function         baml.http.reject_websocket       <builtin>/baml/ns_http/server.baml:156

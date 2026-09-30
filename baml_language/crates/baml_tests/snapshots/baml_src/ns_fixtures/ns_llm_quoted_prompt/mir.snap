@@ -349,15 +349,15 @@ fn .<lambda(QuotedPrompt@spec, 1)>(prefix: string, model: string) -> null | ai.C
     }
 
     bb21: {
-        _0 = call const fn openai.OpenRouterClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn openai.OpenRouterClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
     }
 
     bb22: {
-        _0 = call const fn openai.OllamaClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn openai.OllamaClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
     }
 
     bb23: {
-        _0 = call const fn openai.AzureClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn openai.AzureClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
     }
 
     bb24: {
@@ -822,15 +822,15 @@ fn .<lambda(BacktickPrompt@spec, 1)>(prefix: string, model: string) -> null | ai
     }
 
     bb21: {
-        _0 = call const fn openai.OpenRouterClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn openai.OpenRouterClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
     }
 
     bb22: {
-        _0 = call const fn openai.OllamaClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn openai.OllamaClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
     }
 
     bb23: {
-        _0 = call const fn openai.AzureClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn openai.AzureClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
     }
 
     bb24: {
