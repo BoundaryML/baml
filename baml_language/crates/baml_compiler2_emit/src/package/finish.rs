@@ -213,10 +213,13 @@ fn bake_rules<'db>(
             let Some(target) = impl_rule_target(db, block, &lowering) else {
                 continue;
             };
-            let interface_head = refs.interface(target.interface);
+            // Intern the interface only once the rule is known to bake: a
+            // rule dropped here must not leave an orphan import behind it.
+            let interface = target.interface;
             let Some(rule) = bake_impl_rule(db, block, target, &lowering, refs) else {
                 continue;
             };
+            let interface_head = refs.interface(interface);
             let methods = rule
                 .methods
                 .iter()

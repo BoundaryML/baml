@@ -114,10 +114,10 @@ fn has_cleanup(db: &dyn baml_compiler2_mir::Db, class: &ClassData<'_>) -> bool {
 
 /// One class's pooled `Object::Class` from its declaration: the runtime
 /// field layout (typed both erased, for codegen, and as templates, for the
-/// typed runtime walk), the BEP-042 `cleanup` shape, and the head under
-/// `type_tag` — minted by the caller through its one collision detector.
-/// The inherent method table is the caller's to fill once the bodies are
-/// pooled.
+/// typed runtime walk), the BEP-042 `cleanup` shape, and under `type_tag`
+/// the declaration's own operand, which the linker or grafter replaces with
+/// the tag it assigns. The inherent method table is the caller's to fill
+/// once the bodies are pooled.
 pub(crate) fn build_class_object<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     class_loc: ClassLoc<'db>,
@@ -687,10 +687,10 @@ pub(crate) fn anchor_bound(
 /// E0145 / unresolved-name diagnostics own the rest — so a declared/lowered
 /// count mismatch means the declared rule is NARROWER than anything bakeable.
 /// Baking without the bound WIDENS the rule; declining here drops the whole
-/// rule from BOTH the bake and the decompose attribution (the two callers),
-/// which loses a dispatch — recoverable — and can never over-match or
-/// mis-attribute. Fires only on programs that already carry diagnostics and
-/// never reach a runnable artifact.
+/// rule from BOTH callers (the bake and the coherence key), which loses a
+/// dispatch and can never over-match or mis-attribute. Fires only on
+/// programs that already carry diagnostics and never reach a runnable
+/// artifact.
 pub(crate) fn impl_rule_target<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     impl_loc: ImplLoc<'db>,
@@ -816,7 +816,7 @@ pub(crate) struct ImplRuleParts<'db> {
 ///
 /// `None` drops the rule whole, never a partial one: a field table whose
 /// positions no longer line up with the interface would silently read the
-/// wrong field, while a lost dispatch is recoverable — and every such case
+/// wrong field, while a lost dispatch is an absence — and every such case
 /// is already a diagnosed program that never reaches a runnable artifact.
 pub(crate) fn bake_impl_rule<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
@@ -860,8 +860,8 @@ pub(crate) fn bake_impl_rule<'db>(
         resolved,
     );
     // The constraint set was lowered (and fail-closed gated) inside
-    // `impl_rule_target`, so the bake, the decompose attribution, and the
-    // rule's `ImplCoherenceKey` all carry the identical canonicalized bounds.
+    // `impl_rule_target`, so the bake and the rule's `ImplCoherenceKey`
+    // carry the identical canonicalized bounds.
     let frame = (0..u32::try_from(impl_params.len()).expect("generic arity fits u32"))
         .map(TyTemplate::TypeArgRef)
         .collect();

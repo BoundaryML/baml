@@ -1374,8 +1374,8 @@ impl<'db> LowerCtx<'db> {
                     return Some(ResolvedTypeDefinition::Source(def));
                 }
             } else if let Some(package) = self.accessible_package(&segments[0]) {
-                // A served dependency answers from its interface ONLY: its
-                // files, when present, are link-only stubs (`definition_of`).
+                // A served dependency answers from its interface ONLY: it
+                // has no files (`definition_of`).
                 if is_served_from_interface(self.db, package) {
                     if let Some(exported) = crate::package_interface::exported_type_row(
                         self.db, package, prefix_ns, item,
@@ -1422,9 +1422,9 @@ impl<'db> LowerCtx<'db> {
     /// TIR's value-path ladder, mirrored, with ONE answer per lane: a
     /// source-served package's definition, or a served package's exported
     /// function by its identity. A served dependency answers from its
-    /// interface ONLY — its files, when present, are link-only stubs
-    /// (`definition_of`) — which is also why a served package's non-function
-    /// value resolves to nothing: the interface exports functions and types.
+    /// interface ONLY — it has no files (`definition_of`) — which is also
+    /// why a served package's non-function value resolves to nothing: the
+    /// interface exports functions and types.
     pub fn resolve_value(
         &self,
         segments: &[Name],

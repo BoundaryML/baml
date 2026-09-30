@@ -127,9 +127,6 @@ use telemetry_state::EngineTelemetry;
 use thiserror::Error;
 pub use tokio_util::sync::CancellationToken;
 
-/// Compiler implementation injected by an assembly crate above the runtime.
-/// Every call receives only owned data and returns an owned, compiler-neutral
-/// artifact, so no compiler database can leak into the engine or heap.
 /// A runtime compile request beside the dependency packages it pins (see
 /// [`bex_vm::PinnedArtifact`]): minted under the heap permit, carried across
 /// the compile task, and stored with the artifact.
@@ -138,6 +135,9 @@ struct PendingRuntimeCompile {
     pins: IndexMap<String, bex_external_types::Handle>,
 }
 
+/// Compiler implementation injected by an assembly crate above the runtime.
+/// Every call receives only owned data and returns an owned, compiler-neutral
+/// artifact, so no compiler database can leak into the engine or heap.
 pub trait RuntimeCompiler: Send + Sync + 'static {
     fn compile(
         &self,
@@ -6243,9 +6243,10 @@ impl BexEngine {
             });
         }
         for &rule in &witnesses {
-            if let Object::ImplRule(rule) = vm.get_object(rule) {
-                heads.push(rule.interface_head);
-            }
+            let Object::ImplRule(rule) = vm.get_object(rule) else {
+                unreachable!("an anonymous declaration's witnesses are impl rules")
+            };
+            heads.push(rule.interface_head);
         }
         let mut edges = IndexMap::new();
         for reached in bex_vm::reachable::defined_in(vm, heads) {

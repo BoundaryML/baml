@@ -11,7 +11,8 @@
 //!
 //! 1. normalized diagnostic bytes (code, message, and user-source range),
 //! 2. runtime values and caught throws,
-//! 3. emitted-program and relocatable-unit invariants,
+//! 3. the emitted program: a consumer linked against the served dependency
+//!    is byte-identical to one compiled beside its source,
 //! 4. primary-only E0132 attribution for a user impl conflicting with a
 //!    span-less mounted impl.
 //!
@@ -32,7 +33,7 @@ use baml_db::{
 };
 use baml_tests::engine::{TestDbExt, run_compiled};
 use bex_engine::BexExternalValue;
-use bex_vm_types::Program;
+use bex_vm_types::{Object, Program};
 use indexmap::IndexMap;
 
 const ROOT: &str = "/mounted-parity";
@@ -248,6 +249,57 @@ fn compile_blob(user: &str, artifacts: &LibraryArtifacts) -> Program {
         app: &artifacts.emitted,
     };
     compile_program_with(&db, package(&db), OPT, &served).expect("blob-path compile and link")
+}
+
+/// A program's bytes with every database-local debug `FileId` normalized:
+/// the two lanes number `main.baml` differently, and nothing else about
+/// the program may differ.
+fn normalized_bytes(mut program: Program) -> Vec<u8> {
+    let normalized = baml_base::FileId::new(0);
+    for object in program.objects.iter_mut() {
+        let Object::Function(function) = object else {
+            continue;
+        };
+        function.span.file_id = normalized;
+        for entry in &mut function.bytecode.line_table {
+            entry.span.file_id = normalized;
+        }
+        for local in &mut function.debug_locals {
+            local.scope_span.file_id = normalized;
+        }
+    }
+    borsh::to_vec(&program).expect("serialize program")
+}
+
+/// The static cache lane's oracle: a consumer compiled against `app`
+/// MOUNTED from its interface and linked against `app`'s SERVED unit is,
+/// byte for byte, the consumer compiled beside `app`'s source — every
+/// import key, slot, operand, and tag the served lane produces is what the
+/// source lane produces.
+#[test]
+fn a_consumer_linked_against_the_served_dependency_is_byte_identical_to_the_source_compile() {
+    let artifacts = library_artifacts();
+    let user = r#"
+function main() -> int throws never {
+    let widget = app.Widget { name: "widget", value: 7 }
+    let boxed = app.Box<app.Widget> { value: widget }
+    let score: app.Score = 3
+    widget.measure() + app.measure_twice(widget) + score + boxed.value.value
+}
+"#;
+    let source = normalized_bytes(compile_source(user));
+    let served = normalized_bytes(compile_blob(user, &artifacts));
+    let first_difference = source
+        .iter()
+        .zip(&served)
+        .position(|(left, right)| left != right)
+        .unwrap_or_else(|| source.len().min(served.len()));
+    assert!(
+        source == served,
+        "programs differ first at byte {first_difference} (source {} bytes, served {} bytes)",
+        source.len(),
+        served.len()
+    );
 }
 
 async fn run(program: Program, entry: &str) -> Result<BexExternalValue, String> {

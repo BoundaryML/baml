@@ -7,8 +7,14 @@ use bex_vm_types::DeclPath;
 /// An error raised while linking.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LinkError {
-    /// An import named a declaration the bound package does not export.
-    UnresolvedImport { package: Name, path: DeclPath },
+    /// An import of `importer` named a declaration the bound `package` does
+    /// not export. (A path is boxed here and below: a link error is rare,
+    /// and the `Result`s carrying it are on every path.)
+    UnresolvedImport {
+        importer: Name,
+        package: Name,
+        path: Box<DeclPath>,
+    },
     /// A dependency entry named an edge its parent's edge table lacks.
     UnknownDependency { package: Name, edge: Name },
     /// A unit was compiled against one interface of a dependency and linked
@@ -24,7 +30,7 @@ pub enum LinkError {
     /// has no interface payload to check it against.
     MissingInterface { package: Name, edge: Name },
     /// A package exports the same declaration twice.
-    DuplicateExport { package: Name, path: DeclPath },
+    DuplicateExport { package: Name, path: Box<DeclPath> },
     /// A package's edge table reaches two packages under one name, so the
     /// name would resolve to neither.
     DuplicateEdge { package: Name, edge: Name },
@@ -45,10 +51,15 @@ impl LinkError {
 impl std::fmt::Display for LinkError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::UnresolvedImport { package, path } => {
+            Self::UnresolvedImport {
+                importer,
+                package,
+                path,
+            } => {
                 write!(
                     f,
-                    "unresolved import: package `{package}` exports no {path}"
+                    "unresolved import: package `{importer}` imports {path}, which package \
+                     `{package}` does not export"
                 )
             }
             Self::UnknownDependency { package, edge } => {

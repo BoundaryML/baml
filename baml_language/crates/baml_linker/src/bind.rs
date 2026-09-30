@@ -63,8 +63,11 @@ impl Linker<'_, '_> {
                 .iter()
                 .find(|edge| edge.name == *locator.edge())
             else {
+                // The edge is read in the PARENT's table: the owner's own for
+                // a direct entry, an earlier slot's package for a transitive
+                // one — so the package named is the one whose table lacks it.
                 return Err(LinkError::UnknownDependency {
-                    package: owner_name.clone(),
+                    package: self.set.name(parent).clone(),
                     edge: locator.edge().clone(),
                 });
             };

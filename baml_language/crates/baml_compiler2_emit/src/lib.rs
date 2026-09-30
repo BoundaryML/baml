@@ -67,15 +67,14 @@ fn emitted_function_origin(
     }
 }
 
-/// Read-only snapshot of pooled class field metadata: every name registered in
-/// A class's fields (name + type, in field order), keyed by the class's own
-/// [`TypeTag`](baml_type::typetag::TypeTag) — the identity its `TypeHead`
-/// carries, so a lookup is an integer compare and needs no name spelling.
+/// Read-only snapshot of class field metadata: a class's fields (name +
+/// type, in field order) by the class's identity.
 ///
-/// Built once from the `Object::Class` entries before function bodies are
-/// compiled, so codegen resolves field names/types without reading the object
-/// pool (a hard requirement for parallel emit, whose workers compile against
-/// fragment pools that don't contain the pre-existing objects).
+/// Built once from the declarations (`layout::class_fields`) before function
+/// bodies are compiled, so codegen resolves field names and types without
+/// reading the object pool (a hard requirement for parallel emit, whose
+/// workers compile against fragment pools that don't contain the
+/// pre-existing objects).
 pub(crate) type ClassFieldSnapshot<'db> = HashMap<
     baml_compiler2_hir_ty::extern_loc::ClassRef<'db>,
     Vec<(String, baml_compiler2_mir::RuntimeTy)>,

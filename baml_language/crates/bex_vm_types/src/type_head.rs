@@ -421,9 +421,10 @@ impl std::hash::Hash for TypeHead {
 // reading it back would be unsound. Decoding therefore yields an unresolved
 // head: an image's carries the tag the loader binds, a unit's carries the
 // declaration operand the linker or grafter relocates. The decoder cannot
-// tell the two apart and does not try; the bind is where a head that names
-// nothing is refused. Hand-written rather than derived so `ptr` cannot be
-// folded in by someone adding a `#[derive]`.
+// tell the two apart and does not try: a head that names nothing is refused
+// where the image or unit is checked (`Program::validate`, the linker's and
+// grafter's operand checks), before any bind. Hand-written rather than
+// derived so `ptr` cannot be folded in by someone adding a `#[derive]`.
 
 impl borsh::BorshSerialize for TypeHead {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {

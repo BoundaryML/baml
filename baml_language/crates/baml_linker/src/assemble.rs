@@ -324,24 +324,22 @@ impl Assembler<'_, '_> {
         }
         program.init_order = self.order.init_order().iter().map(|id| id.0).collect();
         debug_assert!(
-            self.order
-                .test_order()
-                .iter()
-                .all(|id| packages[id.0 as usize].test_init.is_some()),
-            "every ordered test part was placed"
+            self.set.ids().all(|id| {
+                let has_test_part = self
+                    .set
+                    .package(id)
+                    .tail
+                    .is_some_and(|tail| tail.init_test.is_some());
+                has_test_part == packages[id.0 as usize].test_init.is_some()
+            }),
+            "every test part was placed, and nothing else got one"
         );
         Ok(())
     }
 }
 
 /// A declaration's tag is its image index — the identity the linker owns.
+/// Anything else is placed as it came.
 fn assign_tag(object: &mut Object, abs: usize) {
-    let tag = TypeTag::of_static_index(abs);
-    match object {
-        Object::Class(class) => class.type_tag = tag,
-        Object::Enum(enm) => enm.type_tag = tag,
-        Object::Interface(interface) => interface.type_tag = tag,
-        Object::TypeAlias(alias) => alias.type_tag = tag,
-        _ => {}
-    }
+    object.assign_declaration_tag(TypeTag::of_static_index(abs));
 }

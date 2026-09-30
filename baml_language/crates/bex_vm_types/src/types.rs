@@ -86,8 +86,10 @@ pub struct Program {
     /// Per-package program structure (global-index-keyed), by package
     /// ordinal. A package's identity in the executable is its position here;
     /// its `name` is display metadata (and the spelling the prelude is bound
-    /// by at load). Ordered by name for deterministic output — an order, not
-    /// a key. Holds each package's classes, enums, interfaces, impl rules, and
+    /// by at load). In program order — the language packages first, then the
+    /// root and every package it reaches breadth-first by edge name: a
+    /// function of the world graph, an order and not a key. Holds each
+    /// package's classes, enums, interfaces, impl rules, and
     /// recursive type aliases. The loader allocates the heap `Object::Package`
     /// / `Object::Interface` / `Object::ImplRule` objects and the `vm.packages`
     /// index from this, resolving each `ObjectIndex` to a compile-time
@@ -121,39 +123,6 @@ pub struct Program {
     /// validated); a host that cannot leaves `None`.
     #[borsh(skip)]
     pub source_content_hash: Option<[u8; 32]>,
-}
-
-/// Metadata for building a client tree at runtime.
-///
-/// Stored on `Program` during compilation, transferred to `SysOpContext` during engine construction.
-#[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
-pub struct ClientBuildMeta {
-    /// Provider type mapped to client type enum.
-    pub client_type: ClientBuildType,
-    /// Sub-client names (for composite clients).
-    pub sub_client_names: Vec<String>,
-    /// Retry policy metadata, if specified.
-    pub retry_policy: Option<RetryPolicyMeta>,
-    /// Optional round-robin start index (`options { start ... }`).
-    pub round_robin_start: Option<i32>,
-}
-
-/// Client type for build metadata (mirrors runtime `LlmClientType`).
-#[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
-pub enum ClientBuildType {
-    #[default]
-    Primitive,
-    Fallback,
-    RoundRobin,
-}
-
-/// Retry policy metadata stored at compile time.
-#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
-pub struct RetryPolicyMeta {
-    pub max_retries: i64,
-    pub initial_delay_ms: i64,
-    pub multiplier: f64,
-    pub max_delay_ms: i64,
 }
 
 /// An executable that breaks the format's laws: an index outside its pool, a

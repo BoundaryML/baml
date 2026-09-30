@@ -82,21 +82,22 @@ fn mount_diagnostic(code: &str, message: String) -> RuntimeCompileDiagnostic {
 
 /// Mount creation order: every package after the packages its edges reach
 /// (Kahn's algorithm over the request's identity edges, request order among
-/// the ready). `Err` names a package inside an edge cycle, or one an edge
-/// reaches that the request omits.
+/// the ready). `Err` names the offending edge: one reaching a package the
+/// request omits, or the edges of a package inside a cycle.
 fn mount_order(
     packages: &IndexMap<bex_vm_types::RuntimePackageIdentity, RuntimePackageMount>,
 ) -> Result<Vec<bex_vm_types::RuntimePackageIdentity>, String> {
     let references: Vec<Vec<usize>> = packages
-        .values()
-        .map(|mount| {
+        .iter()
+        .enumerate()
+        .map(|(index, (_, mount))| {
             mount
                 .edges
-                .values()
-                .map(|edge| {
-                    packages
-                        .get_index_of(&edge.target)
-                        .ok_or_else(|| "a package reaches one the request omits".to_string())
+                .iter()
+                .map(|(name, edge)| {
+                    packages.get_index_of(&edge.target).ok_or_else(|| {
+                        format!("package {index}'s edge `{name}` reaches one the request omits")
+                    })
                 })
                 .collect::<Result<Vec<_>, _>>()
         })
@@ -116,7 +117,21 @@ fn mount_order(
                         .unwrap_or_else(|| unreachable!("the index came from the map")),
                 );
             }
-            None => return Err("packages reach each other in a cycle".to_string()),
+            None => {
+                let stuck = (0..packages.len())
+                    .filter(|&i| !placed[i])
+                    .map(|i| {
+                        let edges = packages
+                            .get_index(i)
+                            .map(|(_, mount)| mount.edges.keys().cloned().collect::<Vec<_>>())
+                            .unwrap_or_default()
+                            .join(", ");
+                        format!("package {i} (edges: {edges})")
+                    })
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                return Err(format!("packages reach each other in a cycle: {stuck}"));
+            }
         }
     }
     Ok(order)

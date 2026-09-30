@@ -204,9 +204,9 @@ fn emit_bodies_serial<'db>(
     })
 }
 
-/// Pool a compiled function at the next code offset. Pass 4 visits the
-/// slot-owning functions in Pass 1's order, so the function's code ordinal
-/// equals its slot — the invariant the export tables rely on.
+/// Pool a compiled function at the next code offset, recording the offset
+/// by declaration: the export tables carry it, so lambdas and literals may
+/// interleave with the slot-owning functions in the code bucket.
 fn place_function<'db>(
     tables: &LocalTables<'db>,
     code: &mut ObjectPool,

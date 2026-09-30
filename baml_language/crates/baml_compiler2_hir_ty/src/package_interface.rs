@@ -2426,8 +2426,8 @@ impl<'db> PackageResolutionContext<'db> {
         if package == self.own {
             return Some(&self.own_items);
         }
-        // A served dependency has no semantic items for a consumer: its
-        // files, when present, are link-only stubs; its rows are the answer.
+        // A served dependency has no semantic items for a consumer: it has
+        // no files; its rows are the answer.
         (!is_served_from_interface(db, package))
             .then(|| baml_compiler2_hir::package::package_items(db, package))
     }

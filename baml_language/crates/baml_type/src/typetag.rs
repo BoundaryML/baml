@@ -171,8 +171,9 @@ impl TypeTag {
     #[must_use]
     pub fn fresh_dynamic() -> Self {
         use std::sync::atomic::{AtomicI64, Ordering};
-        // One counter per process rather than per VM, so a tag is unambiguous
-        // even if a head is ever observed from another VM in the same process.
+        // One counter per process rather than per VM, so two runtime heads
+        // never share a tag whichever VM minted them. (Static tags are per
+        // image and do repeat across engines; only dynamic ones are global.)
         static NEXT: AtomicI64 = AtomicI64::new(DYNAMIC_BASE);
         let tag = NEXT.fetch_add(1, Ordering::Relaxed);
         // Exhaustion is not a practical concern, so if you are reading this

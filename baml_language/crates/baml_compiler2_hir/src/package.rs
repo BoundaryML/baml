@@ -213,8 +213,8 @@ pub fn package_dependency_closure(db: &dyn crate::Db, root: SourceRoot) -> Vec<S
 
 /// Whether `root` is served from its serialized compiler interface rather
 /// than from source (a runtime mount, or a precompiled stdlib package in a
-/// runtime compile). Such a package has no source rows: its `files`, if any,
-/// are link-only stubs, and its interface is the semantic authority.
+/// runtime compile). Such a package has no files: its interface is the
+/// semantic authority, and its rows are its declarations.
 pub fn is_served_from_interface(db: &dyn crate::Db, root: SourceRoot) -> bool {
     root.interface(db).is_some()
 }

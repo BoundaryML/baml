@@ -20,8 +20,6 @@ pub(super) struct LayoutOrder {
     members: Vec<LinkPackageId>,
     /// The packages with an init part, in initialization order.
     init: Vec<LinkPackageId>,
-    /// The packages with a test part, by name, then by position.
-    tests: Vec<LinkPackageId>,
 }
 
 impl LayoutOrder {
@@ -44,13 +42,7 @@ impl LayoutOrder {
                 .collect()
         };
         let init = init_order(set, &with_part(TailPart::Init))?;
-        let mut tests = with_part(TailPart::Test);
-        tests.sort_by_key(|&id| (set.name(id).as_str(), id));
-        Ok(Self {
-            members,
-            init,
-            tests,
-        })
+        Ok(Self { members, init })
     }
 
     fn validate_tail(name: &Name, tail: &InitTail) -> Result<(), LinkError> {
@@ -101,11 +93,6 @@ impl LayoutOrder {
     /// The order init parts execute in.
     pub(super) fn init_order(&self) -> &[LinkPackageId] {
         &self.init
-    }
-
-    /// The packages with a test part, by name, then by position.
-    pub(super) fn test_order(&self) -> &[LinkPackageId] {
-        &self.tests
     }
 
     /// The tail parts of `id` in placement order: its init part, then its
@@ -306,7 +293,7 @@ impl Objects {
                         slots.tails[id].local(tail, local)
                     })
                 };
-                let keys = HeadKeys::of_tail(id, tail, &tables[id].tail);
+                let keys = HeadKeys::of_tail(tail, &tables[id].tail);
                 let (placed, count) = interner.place(
                     &package.name,
                     &tail.objects[range.clone()],

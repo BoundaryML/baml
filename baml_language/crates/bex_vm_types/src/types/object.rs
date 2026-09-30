@@ -144,8 +144,61 @@ impl Object {
             Object::Enum(enm) => Some(enm.type_tag),
             Object::Interface(interface) => Some(interface.type_tag),
             Object::TypeAlias(alias) => Some(alias.type_tag),
-            _ => None,
+            Object::Function(_)
+            | Object::GenericFunction(_)
+            | Object::String(_)
+            | Object::Bigint(_)
+            | Object::Uint8Array(_)
+            | Object::Type(_)
+            | Object::Package(_)
+            | Object::ImplRule(_)
+            | Object::Instance(_)
+            | Object::Variant(_)
+            | Object::Closure(_)
+            | Object::BoundMethod(_)
+            | Object::HostClosure(_)
+            | Object::Cell(_)
+            | Object::Array(_)
+            | Object::Map(_)
+            | Object::Float(_)
+            | Object::Future(_)
+            | Object::RustData(_) => None,
+            #[cfg(feature = "heap_debug")]
+            Object::Sentinel(_) => None,
         }
+    }
+
+    /// Give a declaration the tag it heads types by; `false` when this
+    /// object is not a declaration and nothing was assigned.
+    pub fn assign_declaration_tag(&mut self, tag: baml_type::typetag::TypeTag) -> bool {
+        match self {
+            Object::Class(class) => class.type_tag = tag,
+            Object::Enum(enm) => enm.type_tag = tag,
+            Object::Interface(interface) => interface.type_tag = tag,
+            Object::TypeAlias(alias) => alias.type_tag = tag,
+            Object::Function(_)
+            | Object::GenericFunction(_)
+            | Object::String(_)
+            | Object::Bigint(_)
+            | Object::Uint8Array(_)
+            | Object::Type(_)
+            | Object::Package(_)
+            | Object::ImplRule(_)
+            | Object::Instance(_)
+            | Object::Variant(_)
+            | Object::Closure(_)
+            | Object::BoundMethod(_)
+            | Object::HostClosure(_)
+            | Object::Cell(_)
+            | Object::Array(_)
+            | Object::Map(_)
+            | Object::Float(_)
+            | Object::Future(_)
+            | Object::RustData(_) => return false,
+            #[cfg(feature = "heap_debug")]
+            Object::Sentinel(_) => return false,
+        }
+        true
     }
 
     /// The inner [`Package`] if this is an [`Object::Package`].

@@ -304,8 +304,9 @@ pub fn canonicalize_lossy(path: &Path) -> PathBuf {
 /// rebuilding it from components would rejoin them with the platform
 /// separator, and on Windows that rewrites the virtual `<builtin>/pkg/…`
 /// paths to `<builtin>\pkg\…` — breaking every consumer of the `<builtin>/`
-/// prefix contract (the compiler's builtin-syntax gate), which must see the
-/// same spelling on every platform.
+/// prefix contract (the compiler's builtin-syntax gate, emit's builtin-file
+/// test, the project content hash, the CLI's relative user paths), which
+/// must see the same spelling on every platform.
 fn lexically_normalize(path: &Path) -> PathBuf {
     let needs_normalization = path.components().any(|component| {
         matches!(

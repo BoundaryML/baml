@@ -317,10 +317,10 @@ pub struct PackageRecord {
 /// test part), with tables of its own in the unit convention.
 ///
 /// A tail is kept apart from the unit because it is placed apart: the linker
-/// places every package's init part after its group's regular code in
-/// package initialization order, then every package's test part in
-/// package-name order — a group-wide `$init` cannot reach another package's
-/// `let`s through a slot its own package has no edge for.
+/// lays the image out package-major, each package's buckets then its init
+/// part then its test part, and records the order init parts EXECUTE in
+/// separately (`Program::init_order`) — an `$init` cannot reach another
+/// package's `let`s through a slot its own package has no edge for.
 ///
 /// # Operand convention
 ///

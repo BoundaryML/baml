@@ -149,9 +149,50 @@ pub fn compile_program_with(
             }))
         })
         .collect::<Result<Vec<_>, LoweringError>>()?;
+    let packages = program_order(db, root, packages);
     let mut program = link(&link_set(db, &packages, root))?;
     program.source_content_hash = Some(project_source_content_hash(db, root));
     Ok(program)
+}
+
+/// The program's package order — a function of the world graph alone, so
+/// one world links to one executable however its packages were installed
+/// (a dependency from source and the same dependency mounted from its
+/// interface sit in different source-root tables): the language packages
+/// first, in table order (the stdlib's user-independent prefix of every
+/// index space), then the root and every package it reaches, breadth-first,
+/// a package's edges in name order. A package the walk does not reach (one
+/// behind a dependency that emitted no output) follows in table order.
+fn program_order(
+    db: &dyn baml_compiler2_hir::Db,
+    root: SourceRoot,
+    packages: Vec<LinkedPackage>,
+) -> Vec<LinkedPackage> {
+    let is_stdlib =
+        |package: &LinkedPackage| package.root.kind(db) == baml_base::SourceRootKind::Stdlib;
+    let (mut ordered, mut rest): (Vec<_>, Vec<_>) = packages.into_iter().partition(is_stdlib);
+    let mut queue = std::collections::VecDeque::from([root]);
+    let mut seen = std::collections::HashSet::from([root]);
+    while let Some(next) = queue.pop_front() {
+        let Some(position) = rest.iter().position(|package| package.root == next) else {
+            continue;
+        };
+        let package = rest.remove(position);
+        let mut edges: Vec<&(Name, SourceRoot)> = package
+            .edges
+            .iter()
+            .filter(|(_, target)| target.kind(db) != baml_base::SourceRootKind::Stdlib)
+            .collect();
+        edges.sort_by(|(left, _), (right, _)| left.cmp(right));
+        for (_, target) in edges {
+            if seen.insert(*target) {
+                queue.push_back(*target);
+            }
+        }
+        ordered.push(package);
+    }
+    ordered.extend(rest);
+    ordered
 }
 
 /// One package of the program, ready to link: its output beside the identity
@@ -165,9 +206,10 @@ struct LinkedPackage {
     emitted: EmittedPackage,
 }
 
-/// The link set of the program's packages: each in program order under the
-/// program's spelling of it, its edges resolved to set positions (an edge to
-/// a package that emitted no output is dropped — nothing imports from it).
+/// The link set of the program's packages: each in program order
+/// ([`program_order`]) under the program's spelling of it, its edges
+/// resolved to set positions (an edge to a package that emitted no output
+/// is dropped — nothing imports from it).
 fn link_set<'a>(
     db: &dyn baml_compiler2_hir::Db,
     packages: &'a [LinkedPackage],

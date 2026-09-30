@@ -118,7 +118,6 @@ pub struct LinkPackage<'a> {
     pub tail: Option<&'a InitTail>,
 }
 
-/// Everything one link consumes: the packages of the world, in world order.
 /// One entry of a [`LinkPackage`]'s edge table.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LinkEdge {
@@ -127,6 +126,7 @@ pub struct LinkEdge {
     pub kind: bex_vm_types::types::EdgeKind,
 }
 
+/// Everything one link consumes: the packages of the world, in world order.
 #[derive(Clone, Debug)]
 pub struct LinkSet<'a> {
     pub packages: Vec<LinkPackage<'a>>,

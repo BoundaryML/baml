@@ -447,3 +447,95 @@ fn mounted_enum_variants_interface_fields_and_required_methods_render_from_rows(
         tag.detail
     );
 }
+
+/// The `with_types` shape mounted statically: a view that re-exports the
+/// library's class under its own name. A consumer reaching the class only
+/// as `view.Twin` resolves, hovers, and navigates it as the DEFINING row —
+/// the library's — never as a declaration of the view.
+#[test]
+fn a_class_reached_through_a_re_exporting_view_reads_as_the_defining_row() {
+    use baml_base::Name;
+    use baml_compiler2_hir_ty::package_interface::{
+        FunctionThrowSets, PackageInterface, ReExport, WireInterface, interface_digest,
+    };
+    use baml_type::{
+        WireName,
+        wire::{DepSlot, Locator},
+    };
+
+    let mut db = ProjectDatabase::new();
+    let workspace = db.workspace(Path::new("/ide-view"));
+    let lib = db.mount("app", export_blob("app", LIBRARY));
+    // The view's one edge, `app`, is its one direct entry: `Twin` names
+    // `app.Widget` by that slot.
+    let twin = ReExport::Type(WireName::qualified(
+        DepSlot::of_dependency_index(0),
+        Vec::new(),
+        Name::new("Widget"),
+    ));
+    let rows = PackageInterface::<WireName> {
+        types: std::iter::empty().collect(),
+        functions: std::iter::empty().collect(),
+        throw_sets: FunctionThrowSets::default(),
+        namespaces: [Vec::new()].into_iter().collect(),
+        impls: Vec::new(),
+        reexports: [(
+            Vec::new(),
+            [(Name::new("Twin"), twin)].into_iter().collect(),
+        )]
+        .into_iter()
+        .collect(),
+    };
+    let blob = baml_artifact::encode(
+        baml_artifact::ArtifactKind::PackageInterface,
+        &WireInterface {
+            dependencies: vec![Locator::Direct {
+                edge: Name::new("app"),
+                digest: interface_digest(&db, lib),
+            }],
+            rows,
+        },
+    )
+    .expect("the view's interface serializes");
+    let view = db
+        .add_source_root(
+            baml_db::SourceRootSpec::new("<builtin>/view", baml_base::SourceRootKind::Dynamic)
+                .named(Name::new("view"))
+                .depending_on(vec![baml_base::Dependency {
+                    name: Name::new("app"),
+                    root: lib,
+                }])
+                .served_from(blob),
+        )
+        .expect("the view mounts");
+    db.add_dependency(
+        workspace,
+        baml_base::Dependency {
+            name: Name::new("view"),
+            root: view,
+        },
+    )
+    .expect("the workspace reaches the view");
+
+    let source = "function f(w: view.Twin) -> int throws never {\n    w.size\n}\n";
+    let file = db.file(Path::new("/ide-view/main.baml"), source);
+    let twin = inside(source, "Twin");
+    let size = inside(source, "size");
+
+    assert!(matches!(
+        symbol_at(&db, file, twin),
+        Some(SymbolTarget::Item(DeclRef::External(
+            ExternDefinition::Class(_)
+        )))
+    ));
+    let Some(TypeInfo::Class { name, fields, .. }) = type_at(&db, file, twin) else {
+        panic!("a re-exported class hovers as a class");
+    };
+    assert_eq!(name, "Widget", "the defining row, not the view's spelling");
+    assert_eq!(fields, vec![("size".to_string(), "int".to_string())]);
+    assert!(definition_at(&db, file, twin).is_none());
+    assert!(
+        type_at(&db, file, size).is_some(),
+        "a field read through the view resolves to the row's field"
+    );
+}

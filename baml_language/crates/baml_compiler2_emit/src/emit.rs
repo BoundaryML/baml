@@ -228,13 +228,12 @@ struct StackifyCodegen<'db: 'ctx, 'ctx, 'obj, 'w> {
     /// pool, so codegen never reads pool contents (parallel emit compiles
     /// against fragment pools that don't contain the pre-existing objects).
     class_fields: &'ctx crate::ClassFieldSnapshot<'db>,
-    /// Object pool this function's codegen mints into. Serial emit passes the
-    /// whole program pool; parallel emit passes a worker-local fragment pool.
+    /// Object pool this function's codegen mints into: the package's code
+    /// bucket, or a worker-local fragment of it under parallel emit.
     objects: &'obj mut ObjectPool,
-    /// Program-absolute index of `objects[0]`. Serial emit mints into the
-    /// program pool directly (base 0); parallel workers mint into a fresh
-    /// fragment pool based at the shared watermark, so every index this
-    /// codegen embeds is program-absolute either way.
+    /// Unit-convention index of `objects[0]`: the code bucket's base for a
+    /// serial pass, a fragment's base under parallel emit — so every index
+    /// this codegen embeds is in the unit convention either way.
     objects_base: usize,
     /// String objects this function has minted, by content: a string
     /// constant is minted once per function however many sites load it
@@ -1789,8 +1788,8 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
     /// nothing for it — [`Self::slots`] is the one registry, keyed by
     /// declaration identity on both lanes. A `None` is a callee the program
     /// cannot direct-call: a required interface method (no body), an
-    /// intrinsic (never a `Call`), or a served row the linked prefix does not
-    /// slot; callers fall back or panic per their own law. An interface body
+    /// intrinsic (never a `Call`), or a served row nothing slots; callers
+    /// fall back or panic per their own law. An interface body
     /// reaching codegen unslotted is a loud panic, never a fallback.
     fn try_function_global_index(&mut self, func: FunctionRef<'ctx>) -> Option<usize> {
         let slot = self.refs.function_slot(func).map(GlobalIndex::raw);
@@ -1838,11 +1837,11 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
     /// references share ONE pooled object → pointer-stable identity
     /// (`greet === greet`, `foo<int> === foo<int>`).
     ///
-    /// Serial emit scans the whole program pool here, so wrappers minted by
-    /// EARLIER functions are reused too. Parallel emit scans only this
-    /// worker's fragment; the serial merge replays the cross-function dedup
-    /// in original function order (see `merge_function_fragment`),
-    /// reproducing the exact serial candidate set and pool layout.
+    /// A serial pass scans the package's whole code bucket here, so wrappers
+    /// minted by EARLIER functions are reused too. Parallel emit scans only
+    /// this worker's fragment; the merge (`merge_item`) replays the
+    /// cross-function dedup in original function order, reproducing the
+    /// exact serial candidate set and bucket layout.
     fn emit_pooled_function_value(
         &mut self,
         func: FunctionRef<'ctx>,

@@ -30,7 +30,7 @@ pub(super) fn export_globals(
             if map.insert((id, path.clone()), slot).is_some() {
                 return Err(LinkError::DuplicateExport {
                     package: package.name.clone(),
-                    path: path.clone(),
+                    path: Box::new(path.clone()),
                 });
             }
         }
@@ -83,7 +83,7 @@ pub(super) fn export_objects(
             if map.insert((id, path.clone()), abs).is_some() {
                 return Err(LinkError::DuplicateExport {
                     package: package.name.clone(),
-                    path: path.clone(),
+                    path: Box::new(path.clone()),
                 });
             }
         }
@@ -161,7 +161,7 @@ impl Linker<'_, '_> {
                 .entries(package.unit)
                 .iter()
                 .map(|entry| {
-                    self.resolve_import(Importer::Unit, &tables[id].unit, exports, space, entry)
+                    self.resolve_import(id, Importer::Unit, &tables[id].unit, exports, space, entry)
                 })
                 .collect()
         })?;
@@ -171,7 +171,14 @@ impl Linker<'_, '_> {
                     .tail_entries(tail)
                     .iter()
                     .map(|entry| {
-                        self.resolve_import(Importer::Tail, &tables[id].tail, exports, space, entry)
+                        self.resolve_import(
+                            id,
+                            Importer::Tail,
+                            &tables[id].tail,
+                            exports,
+                            space,
+                            entry,
+                        )
                     })
                     .collect()
             })
@@ -179,9 +186,11 @@ impl Linker<'_, '_> {
         Ok(Resolved { units, tails })
     }
 
-    /// Resolve one import through a bound dependency table against `exports`.
+    /// Resolve one import of `owner` through a bound dependency table against
+    /// `exports`.
     fn resolve_import(
         &self,
+        owner: LinkPackageId,
         importer: Importer,
         table: &[LinkPackageId],
         exports: &HashMap<PathKey, usize>,
@@ -190,25 +199,26 @@ impl Linker<'_, '_> {
     ) -> Result<usize, LinkError> {
         space.check_shape(entry)?;
         let path = &entry.key.path;
+        let owner_name = self.set.name(owner);
         let Some(&id) = table.get(entry.key.dep.0 as usize) else {
             return Err(LinkError::invalid(format!(
-                "import of {path} names dependency slot {} of {}",
+                "package `{owner_name}` imports {path} from dependency slot {} of {}",
                 entry.key.dep.0,
                 table.len()
             )));
         };
         if importer == Importer::Unit && entry.key.dep.is_self() {
             return Err(LinkError::invalid(format!(
-                "package `{}` imports its own {path}; its own declarations are locals",
-                self.set.name(id)
+                "package `{owner_name}` imports its own {path}; its own declarations are locals"
             )));
         }
         exports
             .get(&(id, path.clone()))
             .copied()
             .ok_or_else(|| LinkError::UnresolvedImport {
+                importer: owner_name.clone(),
                 package: self.set.name(id).clone(),
-                path: path.clone(),
+                path: Box::new(path.clone()),
             })
     }
 }

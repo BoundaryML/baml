@@ -359,10 +359,12 @@ pub struct PackageKeyInputs<'a> {
     /// `(package-root-relative path, content)` for every source file of the
     /// package, **sorted by path**.
     pub files: &'a [(String, &'a str)],
-    /// `(edge name, interface digest)` for every package this one reaches,
-    /// **sorted by edge name**. The edge name is part of the output — the
-    /// unit's dependency table binds by it — so the same package reached
-    /// under another name is another output.
+    /// `(edge name, interface digest)` for every DIRECT dependency edge,
+    /// **sorted by edge name**; a transitive root is covered by the direct
+    /// dependency's digest, which embeds its own dependencies' (Merkle). The
+    /// edge name is part of the output — the unit's dependency table binds
+    /// by it — so the same package reached under another name is another
+    /// output.
     pub dependencies: &'a [(String, [u8; 32])],
 }
 

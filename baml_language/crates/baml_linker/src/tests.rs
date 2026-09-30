@@ -264,8 +264,9 @@ fn import_of_one_kind_never_binds_an_export_of_another() {
     assert_eq!(
         link(&set).err(),
         Some(LinkError::UnresolvedImport {
+            importer: Name::new("user"),
             package: Name::new("app"),
-            path: free_fn("Foo"),
+            path: Box::new(free_fn("Foo")),
         })
     );
 }
@@ -284,7 +285,7 @@ fn duplicate_export_is_refused() {
         link(&set).err(),
         Some(LinkError::DuplicateExport {
             package: Name::new("user"),
-            path: free_fn("f"),
+            path: Box::new(free_fn("f")),
         })
     );
 }
@@ -1401,4 +1402,134 @@ fn a_tail_part_nothing_names_is_refused() {
     assert!(program.packages[0].init.is_some());
     let program = lone(&unit, Some(&InitTail::default()), &record);
     assert!(program.packages[0].init.is_none());
+}
+
+#[test]
+fn a_transitive_entry_reached_via_itself_or_a_later_slot_is_refused() {
+    let record = interface_record(b"iface");
+    let leaf = unit_with_class("Leaf", "Leaf");
+    let mut consumer = unit_with_fn("user.f", vec![Instruction::Return]);
+    for via in [1, 2] {
+        // Slot 1 reached via slot 1 (itself), then via slot 2 (later).
+        consumer.dependencies = vec![Locator::Transitive {
+            via: DepSlot(via),
+            edge: Name::new("app"),
+        }];
+        let set = LinkSet {
+            root: LinkPackageId(1),
+            packages: vec![
+                package("app", vec![], &leaf, &record),
+                package("user", vec![("app", 0)], &consumer, &record),
+            ],
+        };
+        assert!(matches!(
+            link(&set),
+            Err(LinkError::InvalidUnit(message)) if message.contains("not earlier")
+        ));
+    }
+}
+
+#[test]
+fn an_unknown_transitive_edge_names_the_package_whose_table_lacks_it() {
+    let record = interface_record(b"iface");
+    let leaf = unit_with_class("Leaf", "Leaf");
+    let middle = CompilationUnit::default();
+    let mut consumer = unit_with_fn("user.f", vec![Instruction::Return]);
+    consumer.dependencies = vec![
+        direct("b", fingerprint_of(&record)),
+        // `b` has no edge named `nothing`.
+        Locator::Transitive {
+            via: DepSlot(1),
+            edge: Name::new("nothing"),
+        },
+    ];
+    let set = LinkSet {
+        root: LinkPackageId(2),
+        packages: vec![
+            package("c", vec![], &leaf, &record),
+            package("b", vec![("inner", 0)], &middle, &record),
+            package("user", vec![("b", 1)], &consumer, &record),
+        ],
+    };
+    assert_eq!(
+        link(&set).err(),
+        Some(LinkError::UnknownDependency {
+            package: Name::new("b"),
+            edge: Name::new("nothing"),
+        })
+    );
+}
+
+#[test]
+fn a_runtime_only_edge_kind_is_refused() {
+    let record = interface_record(b"iface");
+    let provider = unit_with_class("Foo", "Foo");
+    let mut consumer = unit_with_fn("user.f", vec![Instruction::Return]);
+    consumer
+        .dependencies
+        .push(direct("app", fingerprint_of(&record)));
+    for kind in [EdgeKind::ReExported, EdgeKind::Anonymous] {
+        let mut set = LinkSet {
+            root: LinkPackageId(1),
+            packages: vec![
+                package("app", vec![], &provider, &record),
+                package("user", vec![("app", 0)], &consumer, &record),
+            ],
+        };
+        set.packages[1].edges[0].kind = kind;
+        assert!(matches!(
+            link(&set),
+            Err(LinkError::InvalidUnit(message)) if message.contains("runtime-only")
+        ));
+    }
+}
+
+#[test]
+fn a_duplicate_global_export_is_refused() {
+    let record = interface_record(b"iface");
+    let mut unit = unit_with_fn("user.f", vec![Instruction::Return]);
+    unit.code.push(func("user.f", vec![Instruction::Return]));
+    // Two slots for one path: the slot table, not the object table.
+    unit.exports.globals.push((free_fn("f"), 1));
+    let set = LinkSet {
+        root: LinkPackageId(0),
+        packages: vec![package("user", vec![], &unit, &record)],
+    };
+    assert_eq!(
+        link(&set).err(),
+        Some(LinkError::DuplicateExport {
+            package: Name::new("user"),
+            path: Box::new(free_fn("f")),
+        })
+    );
+}
+
+#[test]
+fn load_current_package_is_rewritten_to_the_packages_ordinal() {
+    let record = interface_record(b"iface");
+    let first = unit_with_fn(
+        "app.a",
+        vec![Instruction::LoadCurrentPackage(0), Instruction::Return],
+    );
+    let second = unit_with_fn(
+        "user.b",
+        vec![Instruction::LoadCurrentPackage(0), Instruction::Return],
+    );
+    let set = LinkSet {
+        root: LinkPackageId(1),
+        packages: vec![
+            package("app", vec![], &first, &record),
+            package("user", vec![], &second, &record),
+        ],
+    };
+    let program = linked(&set);
+    assert_eq!(
+        function(&program, 0).bytecode.instructions[0],
+        Instruction::LoadCurrentPackage(0)
+    );
+    assert_eq!(
+        function(&program, 1).bytecode.instructions[0],
+        Instruction::LoadCurrentPackage(1),
+        "a unit says `this package`; the link says which"
+    );
 }

@@ -133,7 +133,15 @@ impl DeclPath {
     /// Does this declaration own a pool object?
     #[must_use]
     pub fn owns_object(&self) -> bool {
-        !matches!(self, Self::Let(_))
+        match self {
+            Self::Class(_)
+            | Self::Enum(_)
+            | Self::Interface(_)
+            | Self::TypeAlias(_)
+            | Self::Function(_)
+            | Self::InterfaceBody(_) => true,
+            Self::Let(_) => false,
+        }
     }
 }
 

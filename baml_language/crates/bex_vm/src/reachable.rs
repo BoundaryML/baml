@@ -49,7 +49,7 @@ pub fn runtime_definitions(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Vec<Hea
 }
 
 /// [`runtime_definitions`] for a caller that holds the heap permit without
-/// holding a [`BexVm`] — the engine's host-conversion layer.
+/// holding a [`BexVm`].
 ///
 /// This is the primitive: the walk is a heap operation, and `&BexVm` is just a
 /// place the permit is already implied.

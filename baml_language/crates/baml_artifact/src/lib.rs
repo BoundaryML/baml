@@ -70,7 +70,7 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// and `name`, and `Program::packages` became a `Vec` (a package's identity in
 /// the executable is its position; its name is display metadata), so every
 /// serialized program changed shape. The identity-keyed unit format that
-/// produces them (`bex_vm_types::unit`) rides the same version.
+/// produces them (`baml_linker_types`) rides the same version.
 pub const FORMAT_VERSION: u32 = 12;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's

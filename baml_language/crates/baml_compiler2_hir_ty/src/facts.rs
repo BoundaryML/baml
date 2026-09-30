@@ -71,14 +71,10 @@ impl<'db> Facts<'db> {
 /// The source definition a qualified type name points at, if its package is
 /// served from source and declares the item.
 ///
-/// A root served from its interface answers `None` outright: its files are
-/// link-only STUBS the runtime compile generates from the rows (bodies are
-/// `$rust_function`, signatures spell `unknown`, interfaces carry no bounds
-/// or defaults), never declarations. Its declarations are its ROWS, read
-/// through the `extern_loc` row reads — so every consumer sees one lane,
-/// whether or not stubs happen to be present. A stub file lowering its OWN
-/// bare names never comes through here: `lower_ctx_for_file` binds the
-/// file's package items directly (the mount as its own viewer).
+/// A root served from its interface answers `None` outright: it has no
+/// files, so it has no declarations of this kind. Its declarations are its
+/// ROWS, read through the `extern_loc` row reads — one lane for every
+/// consumer.
 pub fn definition_of<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     name: &DeclName,

@@ -631,9 +631,11 @@ impl<'db> MirBuilder<'db> {
             "VirtualCall destination must be a local place"
         );
         debug_assert!(
-            self_arg < args.len() - ntypeargs,
-            "VirtualCall dispatches on value argument {self_arg} of {}",
-            args.len() - ntypeargs
+            args.len()
+                .checked_sub(ntypeargs)
+                .is_some_and(|values| self_arg < values),
+            "VirtualCall dispatches on value argument {self_arg} of {} ({ntypeargs} type args)",
+            args.len()
         );
         self.set_terminator(Terminator::VirtualCall {
             has_trace: false,

@@ -1010,8 +1010,9 @@ enum GlobalBinding {
     /// The package's own existing slot — a session cell, or a function the
     /// package already holds.
     Slot(usize),
-    /// A dependency's slot value, copied: a runtime package only ever reads
-    /// a dependency's immutable slots.
+    /// A dependency's slot value, copied at load. A compiled package's cells
+    /// are immutable after its `$init`; a session reached as a dependency
+    /// has mutable cells, and a value it stores after the load is not seen.
     Value(Value),
 }
 
@@ -1082,7 +1083,26 @@ fn adopt(object: &mut Object, package_ptr: HeapPtr) {
         }
         Object::Function(function) => function.runtime_package = package_ptr,
         Object::GenericFunction(function) => function.runtime_package = package_ptr,
-        _ => {}
+        // Neither a declaration nor a body: nothing to mint or own.
+        Object::String(_)
+        | Object::Bigint(_)
+        | Object::Uint8Array(_)
+        | Object::Type(_)
+        | Object::Package(_)
+        | Object::ImplRule(_)
+        | Object::Instance(_)
+        | Object::Variant(_)
+        | Object::Closure(_)
+        | Object::BoundMethod(_)
+        | Object::HostClosure(_)
+        | Object::Cell(_)
+        | Object::Array(_)
+        | Object::Map(_)
+        | Object::Float(_)
+        | Object::Future(_)
+        | Object::RustData(_) => {}
+        #[cfg(feature = "heap_debug")]
+        Object::Sentinel(_) => {}
     }
 }
 
@@ -1217,7 +1237,29 @@ fn relocate(
                 method.function_ptr = image.objects[method.function.raw()];
             }
         }
-        _ => {}
+        // No pointers to bind beyond the operand and head walks above.
+        Object::Enum(_)
+        | Object::TypeAlias(_)
+        | Object::GenericFunction(_)
+        | Object::String(_)
+        | Object::Bigint(_)
+        | Object::Uint8Array(_)
+        | Object::Type(_)
+        | Object::Package(_)
+        | Object::ImplRule(_)
+        | Object::Instance(_)
+        | Object::Variant(_)
+        | Object::Closure(_)
+        | Object::BoundMethod(_)
+        | Object::HostClosure(_)
+        | Object::Cell(_)
+        | Object::Array(_)
+        | Object::Map(_)
+        | Object::Float(_)
+        | Object::Future(_)
+        | Object::RustData(_) => {}
+        #[cfg(feature = "heap_debug")]
+        Object::Sentinel(_) => {}
     }
     Ok(floats)
 }

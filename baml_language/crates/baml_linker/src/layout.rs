@@ -147,7 +147,7 @@ impl HeadKeys {
         }
     }
 
-    pub(super) fn of_tail(_id: LinkPackageId, tail: &InitTail, table: &[LinkPackageId]) -> Self {
+    pub(super) fn of_tail(tail: &InitTail, table: &[LinkPackageId]) -> Self {
         Self {
             objects: Vec::new(),
             imports: Self::import_keys(&tail.object_imports, table),

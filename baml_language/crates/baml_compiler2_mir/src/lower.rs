@@ -127,15 +127,15 @@ impl std::ops::Deref for PackageAliases {
 
 // Safety: contains `Ty` (which has `Name`, a Salsa interned type). Manual
 // `Update` impl uses `PartialEq` for early-cutoff.
-#[allow(unsafe_code)]
+#[expect(unsafe_code)]
 unsafe impl salsa::Update for PackageAliases {
     unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
+        #[expect(unsafe_code)]
         let old_ref = unsafe { &*old_pointer };
         if *old_ref == new_value {
             false
         } else {
-            #[allow(unsafe_code)]
+            #[expect(unsafe_code)]
             unsafe {
                 std::ptr::drop_in_place(old_pointer);
                 std::ptr::write(old_pointer, new_value);
@@ -1569,16 +1569,16 @@ struct PackageLoweringData {
 /// Mirrors [`baml_compiler2_hir::package::PackageItems`]'s impl. The contained
 /// maps hold no Salsa-interned (`'db`) data, so storing them by value is sound;
 /// `maybe_update` uses `PartialEq` for proper Salsa early-cutoff.
-#[allow(unsafe_code)]
+#[expect(unsafe_code)]
 unsafe impl salsa::Update for PackageLoweringData {
     unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
         // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
-        #[allow(unsafe_code)]
+        #[expect(unsafe_code)]
         let old = unsafe { &*old_pointer };
         if old == &new_value {
             false
         } else {
-            #[allow(unsafe_code)]
+            #[expect(unsafe_code)]
             unsafe {
                 std::ptr::drop_in_place(old_pointer);
                 std::ptr::write(old_pointer, new_value);
