@@ -910,7 +910,7 @@ function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
         request_timeout_ms = c.request_timeout_ms,
     );
     let turn = parse(sent.value);
-    ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
+    ai.ModelTurn { ...turn, calls: [sent.call], _usage_target: sent.usage_target, model: c.model }
 }
 
 // ---------------------------------------------------------------------------
@@ -1253,10 +1253,12 @@ function _stream_open_failure(error: baml.errors.Io | baml.errors.Timeout) -> ne
 function invoke_stream(c: root.Client, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
     let req = _request(c, input, true, preview = false);
     let started = baml.time.Instant.now();
+    let span = ai.wire.request_span();
     let sse = baml.http.fetch_sse(
         req,
         timeout = baml.time.Duration.from_milliseconds(c.request_timeout_ms ?? 0),
         first_event_timeout = baml.time.Duration.from_milliseconds(c.time_to_first_token_timeout_ms ?? 0),
+        $trace = span,
     ) catch (e) {
         baml.errors.Io => _stream_open_failure(e),
         baml.errors.Timeout => _stream_open_failure(e),
@@ -1276,6 +1278,7 @@ function invoke_stream(c: root.Client, input: ai.ModelTurnInput) -> ai.stream.Tu
         },
         require_terminal = "anthropic",
         model = c.model,
+        usage_target = trace._usage_target_of(span.id()),
     );
     let call = ai.events.LLMCall {
         client_name: c.id(),

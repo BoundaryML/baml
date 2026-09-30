@@ -13,6 +13,11 @@ impl SpanId {
     pub fn new(scope: RecordingId, local: TelemetryId) -> Self {
         Self { scope, local }
     }
+
+    /// Its ID within `scope`'s recording; `None` for another runtime's span.
+    pub fn local_in(&self, scope: RecordingId) -> Option<TelemetryId> {
+        (self.scope == scope).then_some(self.local)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -123,6 +128,8 @@ mod tests {
         assert_eq!(id, SpanId::new(scope, local));
         assert_ne!(id, SpanId::new(other_scope, local));
         assert_ne!(id, SpanId::new(scope, allocate_telemetry_id()));
+        assert_eq!(id.local_in(scope), Some(local));
+        assert_eq!(id.local_in(other_scope), None);
     }
 
     #[test]

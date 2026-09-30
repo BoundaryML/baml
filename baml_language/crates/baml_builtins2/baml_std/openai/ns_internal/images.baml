@@ -413,5 +413,5 @@ function images_invoke(c: root.ImageClient, input: ai.ModelTurnInput) -> ai.Mode
         capture_wire = c.capture_wire,
     );
     let turn = images_parse(c, sent.value);
-    ai.ModelTurn { ...turn, calls: [sent.call] }
+    ai.ModelTurn { ...turn, calls: [sent.call], _usage_target: sent.usage_target }
 }

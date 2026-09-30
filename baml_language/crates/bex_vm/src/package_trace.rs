@@ -50,6 +50,12 @@ fn reservation_data(vm: &BexVm, value: Value) -> &ReservedSpanData {
         .expect("trace.ReservedSpan handle")
 }
 
+fn span_id_data(vm: &BexVm, value: Value) -> SpanId {
+    let instance = vm.as_instance(&value).expect("trace.SpanId value");
+    *vm.as_rust_data::<SpanId>(&instance.load_field(0))
+        .expect("trace.SpanId handle")
+}
+
 fn mode_from_value(vm: &BexVm, value: Option<&Value>) -> Option<InvocationMode> {
     let value = value?;
     let Object::Variant(variant) =
@@ -164,6 +170,12 @@ impl BamlPackageTrace for PackageTraceImpl {
 
     fn _usage_target(vm: &mut BexVm) -> i64 {
         vm.usage_target().map_or(0, |id| id.get().cast_signed())
+    }
+
+    fn _usage_target_of(vm: &mut BexVm, span: &Value) -> i64 {
+        span_id_data(vm, *span)
+            .local_in(vm.trace_scope)
+            .map_or(0, |id| id.get().cast_signed())
     }
 
     #[allow(clippy::too_many_arguments, reason = "mirrors ai.events.Usage")]

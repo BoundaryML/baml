@@ -191,12 +191,14 @@ class TurnStream {
     /// sole end-of-turn signal IS the socket closing.
     ///
     /// `model` is the model the request names; the stream's token usage is
-    /// recorded under it.
+    /// recorded under it, against `usage_target` (the request's span, from
+    /// `trace._usage_target_of`), else against the caller's span.
     function from_sse(
         sse: baml.http.SseStream,
         decode: (string) -> Event[] throws root.errors.InvokeError,
         require_terminal: string? = null,
         model: string? = null,
+        usage_target: int? = null,
     ) -> TurnStream {
         TurnStream {
             _event_source: null,
@@ -222,7 +224,7 @@ class TurnStream {
             _call_started: null,
             _ttft_from: null,
             _capture_sse: false,
-            _usage_target: trace._usage_target(),
+            _usage_target: usage_target ?? trace._usage_target(),
             _usage_model: model,
         }
     }

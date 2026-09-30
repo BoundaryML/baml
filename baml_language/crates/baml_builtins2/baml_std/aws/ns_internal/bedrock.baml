@@ -1384,5 +1384,5 @@ function invoke(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.Mode
         capture_wire = client.capture_wire,
     );
     let turn = parse_response(sent.value);
-    ai.ModelTurn { ...turn, calls: [sent.call], model: client.model }
+    ai.ModelTurn { ...turn, calls: [sent.call], _usage_target: sent.usage_target, model: client.model }
 }

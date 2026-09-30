@@ -7,4 +7,5 @@ prelude = true
 baml = { path = "../baml" }
 log = { path = "../log" }
 ai = { path = "../ai" }
+trace = { path = "../trace" }
 anthropic = { path = "../anthropic" }
