@@ -1451,7 +1451,12 @@ function _chat_send(
         selected: true,
         sse_responses: null,
     };
-    ai.ModelTurn { ...turn, calls: [call], _usage_target: trace._usage_target_of(span.id()), model: decoded.model }
+    ai.ModelTurn {
+        ...turn,
+        calls: [call],
+        _usage_target: trace._usage_target_of(span.id()),
+        model: decoded.model,
+    }
 }
 
 /// The one internal entry point: render, send, normalize — one model turn.

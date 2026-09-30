@@ -374,7 +374,12 @@ function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.Mod
             request_timeout_ms = c.request_timeout_ms,
         );
         let turn = anthropic.internal.parse(sent.value);
-        return ai.ModelTurn { ...turn, calls: [sent.call], _usage_target: sent.usage_target, model: c.model };
+        return ai.ModelTurn {
+            ...turn,
+            calls: [sent.call],
+            _usage_target: sent.usage_target,
+            model: c.model,
+        };
     }
     let seq = input.journal.entries().length();
     let sent = ai.wire.send_as_with_wire<root.internal.GmResponse>(
