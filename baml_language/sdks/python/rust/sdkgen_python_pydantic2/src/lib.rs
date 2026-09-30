@@ -24,6 +24,7 @@ use std::{
 
 use baml_sdkgen_types::{
     Name, Symbol, SymbolPool, public_interface_tokens, without_builtin_functions,
+    without_unreachable_builtin_types,
 };
 pub use baml_sdkgen_types::{NamingConvention, OutputType};
 pub use names::{IdentifierRename, IdentifierRenameReason};
@@ -252,7 +253,7 @@ fn to_source_code_internal(
         "sdkgen_python_pydantic2 only supports naming_convention = PreserveCase \
          (got {naming_convention})",
     );
-    let filtered_pool = without_builtin_functions(pool);
+    let filtered_pool = without_unreachable_builtin_types(&without_builtin_functions(pool));
     let pool = &filtered_pool;
     let mut out: HashMap<PathBuf, String> = HashMap::new();
     let names = Rc::new(PythonNames::build(pool));
@@ -897,8 +898,13 @@ mod tests {
     }
 
     #[test]
-    fn builtin_functions_are_omitted_but_types_and_user_functions_remain() {
+    fn builtin_functions_and_unreachable_types_are_omitted() {
         let mut pool = SymbolPool::new();
+        let holder_name = cg_name("user", &["sample"], "Holder");
+        let mut holder = class_at(holder_name.clone(), "user.baml", 1);
+        let Symbol::Class(holder_class) = &mut holder else {
+            unreachable!();
+        };
         for package in ["baml", "ai", "reflect", "openai"] {
             let builtin_source = format!("<builtin>/{package}/sample.baml");
             let class_name = cg_name(package, &["sample"], "KeptType");
@@ -912,12 +918,25 @@ mod tests {
             class
                 .instance_methods
                 .push(bare_func("suppressed_method", &builtin_source, 2));
+            holder_class
+                .properties
+                .push(baml_sdkgen_types::ClassProperty {
+                    name: BaseName::new(format!("{package}_kept")),
+                    docstring: None,
+                    ty: Ty::Class(class_name.clone(), Box::new([])),
+                });
             pool.insert(class_name, builtin_class);
+            let pruned_name = cg_name(package, &["sample"], "PrunedType");
+            pool.insert(
+                pruned_name.clone(),
+                class_at(pruned_name, &builtin_source, 4),
+            );
             pool.insert(
                 cg_name(package, &["sample"], "suppressed_function"),
                 func_sym("suppressed_function", &builtin_source, 3),
             );
         }
+        pool.insert(holder_name, holder);
         pool.insert(
             cg_name("user", &["sample"], "kept_function"),
             func_sym("kept_function", "user.baml", 0),
@@ -933,6 +952,7 @@ mod tests {
             for extension in ["py", "pyi"] {
                 let leaf = &out[&PathBuf::from(format!("{leaf_path}/__init__.{extension}"))];
                 assert!(leaf.contains("class KeptType"));
+                assert!(!leaf.contains("PrunedType"));
                 assert!(!leaf.contains("suppressed_function"));
                 assert!(!leaf.contains("suppressed_static"));
                 assert!(!leaf.contains("suppressed_method"));
@@ -961,6 +981,16 @@ mod tests {
         assert!(root.contains("from ._typemap import _TYPE_MAP"));
         assert!(root.contains("set_type_map(_TYPE_MAP)"));
         assert!(root.contains("from . import reflect as reflect"));
+        // The error wrappers stay importable from `baml` with no built-in
+        // types generated there.
+        for file in ["baml/__init__.py", "baml/__init__.pyi"] {
+            assert!(
+                out[&PathBuf::from(file)].contains(
+                    "from baml_bridge import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET"
+                ),
+                "{file}"
+            );
+        }
         // PEP 562 lazy re-export: root lists `baml` in `_LAZY_CHILDREN`
         // and exposes it through `__getattr__`. `to_source_code` always
         // synthesizes the `baml` leaf even when no stdlib symbols route
@@ -983,11 +1013,11 @@ mod tests {
 
         // `baml/__init__.py` has no children in the empty-pool fixture,
         // so neither the lazy `__getattr__` block nor any cascade lines
-        // appear — just the bare `from __future__` header.
+        // appear — just the header and the error-wrapper re-exports.
         let baml_init = &out[&PathBuf::from("baml/__init__.py")];
         assert!(!baml_init.contains("_inlinedbaml"));
         assert!(!baml_init.contains("__getattr__"));
-        assert_eq!(baml_init, HEADER);
+        assert_eq!(*baml_init, format!("{HEADER}{}", leaf::BAML_ROOT_REEXPORTS));
 
         assert_eq!(out[&PathBuf::from("py.typed")], "");
     }
@@ -2947,8 +2977,12 @@ mod tests {
             if !path.to_string_lossy().ends_with(".pyi") {
                 continue;
             }
+            // The `baml` package's error-wrapper re-exports are the only
+            // allowed `baml_bridge` import.
             assert!(
-                !content.contains("baml_bridge"),
+                !content
+                    .replace(leaf::BAML_ROOT_REEXPORTS, "")
+                    .contains("baml_bridge"),
                 "{} must not import baml_bridge",
                 path.display()
             );

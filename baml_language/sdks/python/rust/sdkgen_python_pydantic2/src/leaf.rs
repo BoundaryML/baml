@@ -1613,9 +1613,23 @@ fn required_positional_count(
 ///     ...
 /// ]
 /// ```
+/// Re-exported on the top-level `baml` builtins package so user code can
+/// `from baml_sdk.baml import BamlError, BamlPanic, UNSET`, even when no
+/// built-in type is generated there.
+pub(crate) const BAML_ROOT_REEXPORTS: &str =
+    "\nfrom baml_bridge import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n";
+
+fn baml_root_reexports(body: &LeafBody) -> &'static str {
+    if body.leaf.segments == ["baml"] {
+        BAML_ROOT_REEXPORTS
+    } else {
+        ""
+    }
+}
+
 pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<String>) -> String {
     if body.is_empty() {
-        return String::new();
+        return baml_root_reexports(body).to_string();
     }
 
     let mut out = String::new();
@@ -1723,17 +1737,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
         }
     }
 
-    // The `BamlError` / `BamlPanic` wrappers and optional-argument sentinel
-    // are defined in `baml_bridge` and
-    // re-exported on the top-level `baml` builtins package so user code can
-    // `from baml_sdk.baml import BamlError, BamlPanic, UNSET`.
-    let is_baml_builtins_root = body.leaf.segments == ["baml"];
-    if is_baml_builtins_root {
-        out.push('\n');
-        out.push_str(
-            "from baml_bridge import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n",
-        );
-    }
+    out.push_str(baml_root_reexports(body));
 
     // Runtime-backed public classes are imports, not declaration bodies. Hoist
     // them with the import block so sibling modules and earlier annotations can
@@ -1820,7 +1824,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
 
     let mut names = body.all_names();
     // Surface the re-exported wrappers in `__all__` on the `baml` root too.
-    if is_baml_builtins_root {
+    if !baml_root_reexports(body).is_empty() {
         names.push("BamlError");
         names.push("BamlPanic");
         names.push("UNSET");
@@ -2496,7 +2500,7 @@ pub(crate) fn render_leaf_body_pyi(
     callable_child_bodies: &BTreeMap<String, &LeafBody>,
 ) -> String {
     if body.is_empty() {
-        return String::new();
+        return baml_root_reexports(body).to_string();
     }
 
     let mut out = String::new();
@@ -2568,15 +2572,7 @@ pub(crate) fn render_leaf_body_pyi(
         out.push_str("from baml_bridge import BamlPyHandle as _BamlPyHandle\n");
     }
 
-    // Mirror the `.py` re-export so `from baml_sdk.baml import BamlError,
-    // BamlPanic, UNSET` type-checks.
-    let is_baml_builtins_root = body.leaf.segments == ["baml"];
-    if is_baml_builtins_root {
-        out.push('\n');
-        out.push_str(
-            "from baml_bridge import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n",
-        );
-    }
+    out.push_str(baml_root_reexports(body));
 
     // The `.pyi` re-declares TypeVars because stubs don't import from
     // sibling `.py` files.
@@ -2689,7 +2685,7 @@ pub(crate) fn render_leaf_body_pyi(
     }
 
     let mut names = body.all_names();
-    if is_baml_builtins_root {
+    if !baml_root_reexports(body).is_empty() {
         names.push("BamlError");
         names.push("BamlPanic");
         names.push("UNSET");
