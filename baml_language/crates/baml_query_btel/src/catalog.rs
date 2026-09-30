@@ -303,13 +303,11 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
   'future' AS span_type,
   COALESCE(t.name, sf.fqn, (SELECT ef.fqn FROM main.call_path ep
      JOIN main.function_def ef ON ef.rec = ep.rec AND ef.function_id = ep.callee_function_id
-     WHERE ep.rec = t.rec AND ep.thread_id = t.thread_id AND ep.parent_call_path_id = 0
-       AND ep.edge = 1 LIMIT 1)) AS span_name,
+     WHERE ep.rec = t.rec AND ep.call_path_id = t.entry_call_path_id)) AS span_name,
   lower(hex(COALESCE(r.process_id, r.recording_id))) AS process_id,
   __btel_pubid(r.recording_id, COALESCE(pt.thread_id, pc.thread_id)) AS future_id,
   __btel_hex(COALESCE(sp.node_id, (SELECT ep.node_id FROM main.call_path ep
-     WHERE ep.rec = t.rec AND ep.thread_id = t.thread_id AND ep.parent_call_path_id = 0
-       AND ep.edge = 1 LIMIT 1))) AS profiler_node_id,
+     WHERE ep.rec = t.rec AND ep.call_path_id = t.entry_call_path_id))) AS profiler_node_id,
   __btel_pubid(r.recording_id, t.parent_id) AS parent_span_id,
   CASE t.outcome WHEN 1 THEN 'return' WHEN 2 THEN IIF(t.panicked, 'panic_error', 'user_error')
     WHEN 3 THEN 'cancel_error' END AS status,
@@ -397,13 +395,11 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
   'future' AS span_type,
   COALESCE(t.name, sf.fqn, (SELECT ef.fqn FROM main.call_path ep
      JOIN main.function_def ef ON ef.rec = ep.rec AND ef.function_id = ep.callee_function_id
-     WHERE ep.rec = t.rec AND ep.thread_id = t.thread_id AND ep.parent_call_path_id = 0
-       AND ep.edge = 1 LIMIT 1)) AS span_name,
+     WHERE ep.rec = t.rec AND ep.call_path_id = t.entry_call_path_id)) AS span_name,
   lower(hex(COALESCE(r.process_id, r.recording_id))) AS process_id,
   __btel_pubid(r.recording_id, COALESCE(pt.thread_id, pc.thread_id)) AS future_id,
   __btel_hex(COALESCE(sp.node_id, (SELECT ep.node_id FROM main.call_path ep
-     WHERE ep.rec = t.rec AND ep.thread_id = t.thread_id AND ep.parent_call_path_id = 0
-       AND ep.edge = 1 LIMIT 1))) AS profiler_node_id,
+     WHERE ep.rec = t.rec AND ep.call_path_id = t.entry_call_path_id))) AS profiler_node_id,
   __btel_pubid(r.recording_id, t.parent_id) AS parent_span_id,
   __btel_utc(t.started_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
     e.multiplier, e.shift) AS start_time,

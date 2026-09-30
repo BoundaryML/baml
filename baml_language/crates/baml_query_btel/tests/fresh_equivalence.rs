@@ -19,7 +19,7 @@ const TABLES: &[(&str, &str)] = &[
         "recording (rec, recording_id, source_snapshot_id, format_minor, indexed_sequence,
            observed_sequence, terminal_sequence, blocked_sequence, blocked_reason, partial_files,
            files_after_end, indexed_bytes, generation, process_id, baml_version, host, command,
-           process_started_ns, source_cas, process_end_status, process_end_ns)",
+           process_started_ns, source_cas, process_end_status, process_end_ns, folded)",
         "rec",
     ),
     (
@@ -37,6 +37,7 @@ const TABLES: &[(&str, &str)] = &[
     ("sysop", "rec, call_path_id"),
     ("model_usage", "rec, sequence, position"),
     ("call", "rec, call_id"),
+    ("profile_part", "rec, node_id"),
     ("profile_node", "process_id, node_id"),
 ];
 
