@@ -152,12 +152,14 @@ anyhow = { version = "1" }
 async-trait = "0.1"
 askama = { version = "0.14.0" }
 # Slim, reqwest/serde-based replacements for the AWS SDK + Google Cloud auth
-# crates, living in `forks/`. They cover only what BAML needs (Bedrock Converse,
-# AWS credential sources, and Google Cloud OAuth2 tokens for Vertex AI) without
+# crates, living in `forks/`. They cover only what BAML needs (Bedrock Converse
+# and ConverseStream, AWS credential sources, and Google Cloud OAuth2 tokens
+# for Vertex AI) without
 # the Smithy runtime or the google-cloud-rust client stack. See
 # `forks/*/Cargo.toml`. The dependency keys keep the upstream crate names so
 # call sites import them unchanged; the `package` is the `forked_*` crate.
 aws-config = { path = "forks/aws-config", package = "forked_aws_config" }
+aws-eventstream = { path = "forks/aws-eventstream", package = "forked_aws_eventstream" }
 aws-sigv4 = { path = "forks/aws-sigv4", package = "forked_aws_sigv4" }
 google-cloud-auth = { path = "forks/google-cloud-auth", package = "forked_google_cloud_auth" }
 axum = { version = "0.8.4", default-features = false, features = [ "http1", "matched-path", "original-uri", "query", "tokio", "ws" ] }

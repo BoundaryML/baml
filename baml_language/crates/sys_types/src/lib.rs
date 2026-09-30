@@ -21,7 +21,6 @@ pub use bex_heap::BexHeap;
 pub use bex_vm_types::SysOp;
 pub use tokio_util::sync::CancellationToken;
 
-pub mod aws_eventstream;
 pub mod sse;
 
 /// Outcome of [`resolve_name`].

@@ -173,12 +173,36 @@ impl Default for SseParser {
 /// The content type of a binary AWS event stream (Bedrock `ConverseStream`).
 pub const AWS_EVENTSTREAM_CONTENT_TYPE: &str = "application/vnd.amazon.eventstream";
 
+/// A streaming body that could not be decoded. Only an AWS event stream can
+/// be malformed: text SSE has no invalid input.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamDecodeError(pub String);
+
+impl std::fmt::Display for StreamDecodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "malformed AWS event stream: {}", self.0)
+    }
+}
+
+impl std::error::Error for StreamDecodeError {}
+
 /// Decodes a streaming response body into events, chosen by the response's
-/// `content-type`: an AWS event stream is decoded frame by frame (see
-/// [`crate::aws_eventstream`]), anything else as text SSE.
+/// `content-type`: an AWS event stream is decoded frame by frame (the
+/// `aws-eventstream` fork), anything else as text SSE.
+///
+/// An event-stream message becomes one [`SseEvent`], so it flows through the
+/// same buffer, handle and `SseStream.next()` batches as text SSE:
+///
+/// * `:message-type` `event` → `event` is the `:event-type` header
+///   (`contentBlockDelta`, `messageStop`, …), `data` the payload.
+/// * `:message-type` `exception` → `event` is `exception:` plus the
+///   `:exception-type` header (`exception:throttlingException`), `data` the
+///   payload (a JSON `{"message": …}` object).
+/// * `:message-type` `error` → `event` is `error:` plus the `:error-code`
+///   header, `data` the `:error-message` header.
 pub enum StreamDecoder {
     Sse(SseParser),
-    AwsEventStream(crate::aws_eventstream::EventStreamDecoder),
+    AwsEventStream(aws_eventstream::frame::MessageFrameDecoder),
 }
 
 impl StreamDecoder {
@@ -190,31 +214,63 @@ impl StreamDecoder {
             })
         });
         if is_eventstream {
-            Self::AwsEventStream(crate::aws_eventstream::EventStreamDecoder::new())
+            Self::AwsEventStream(aws_eventstream::frame::MessageFrameDecoder::new())
         } else {
             Self::Sse(SseParser::new())
         }
     }
 
-    /// Feed raw bytes and return any complete events. Only an event stream can
-    /// fail: text SSE has no invalid input.
-    pub fn feed(
-        &mut self,
-        chunk: &[u8],
-    ) -> Result<Vec<SseEvent>, crate::aws_eventstream::EventStreamError> {
+    /// Feed raw bytes and return any complete events.
+    pub fn feed(&mut self, chunk: &[u8]) -> Result<Vec<SseEvent>, StreamDecodeError> {
         match self {
             Self::Sse(parser) => Ok(parser.feed(chunk)),
-            Self::AwsEventStream(decoder) => decoder.feed(chunk),
+            Self::AwsEventStream(decoder) => decoder
+                .feed(chunk)
+                .map_err(|e| StreamDecodeError(e.to_string()))?
+                .iter()
+                .map(eventstream_message_to_sse)
+                .collect(),
         }
     }
 
     /// Flush at end of stream.
-    pub fn finish(&mut self) -> Result<Vec<SseEvent>, crate::aws_eventstream::EventStreamError> {
+    pub fn finish(&mut self) -> Result<Vec<SseEvent>, StreamDecodeError> {
         match self {
             Self::Sse(parser) => Ok(parser.finish()),
-            Self::AwsEventStream(decoder) => decoder.finish(),
+            Self::AwsEventStream(decoder) => decoder
+                .finish()
+                .map(|()| Vec::new())
+                .map_err(|e| StreamDecodeError(e.to_string())),
         }
     }
+}
+
+fn eventstream_message_to_sse(
+    message: &aws_eventstream::frame::Message,
+) -> Result<SseEvent, StreamDecodeError> {
+    let header = |name: &str| message.string_header(name).unwrap_or_default().to_owned();
+    let payload = || String::from_utf8_lossy(&message.payload).into_owned();
+    let (event, data) = match message.string_header(":message-type").unwrap_or("event") {
+        "event" => (header(":event-type"), payload()),
+        "exception" => (
+            format!("exception:{}", header(":exception-type")),
+            payload(),
+        ),
+        "error" => (
+            format!("error:{}", header(":error-code")),
+            header(":error-message"),
+        ),
+        other => {
+            return Err(StreamDecodeError(format!(
+                "unrecognized :message-type {other:?}"
+            )));
+        }
+    };
+    Ok(SseEvent {
+        event,
+        data,
+        id: None,
+    })
 }
 
 #[cfg(test)]
@@ -594,9 +650,21 @@ mod tests {
         assert_eq!(events[0].data, "line1\nline2");
     }
 
+    fn eventstream_frame(headers: &[(&str, &str)], payload: &[u8]) -> Vec<u8> {
+        use aws_eventstream::frame::{Header, HeaderValue, Message, write_message};
+        write_message(&Message {
+            headers: headers
+                .iter()
+                .map(|(name, value)| Header::new(*name, HeaderValue::String((*value).into())))
+                .collect(),
+            payload: payload.to_vec(),
+        })
+        .unwrap()
+    }
+
     #[test]
     fn stream_decoder_picks_the_framing_from_the_content_type() {
-        let frame = crate::aws_eventstream::tests::frame(
+        let frame = eventstream_frame(
             &[(":event-type", "messageStop"), (":message-type", "event")],
             b"{}",
         );
@@ -607,11 +675,53 @@ mod tests {
             let mut decoder = StreamDecoder::for_content_type(Some(ct));
             let events = decoder.feed(&frame).unwrap();
             assert_eq!(events[0].event, "messageStop", "{ct}");
+            assert_eq!(events[0].data, "{}", "{ct}");
         }
         for ct in [None, Some("text/event-stream")] {
             let mut decoder = StreamDecoder::for_content_type(ct);
             let events = decoder.feed(b"event: ping\ndata: 1\n\n").unwrap();
             assert_eq!(events[0].event, "ping", "{ct:?}");
         }
+    }
+
+    #[test]
+    fn eventstream_exceptions_and_errors_become_named_events() {
+        let mut bytes = eventstream_frame(
+            &[
+                (":exception-type", "throttlingException"),
+                (":message-type", "exception"),
+            ],
+            br#"{"message":"slow down"}"#,
+        );
+        bytes.extend(eventstream_frame(
+            &[
+                (":message-type", "error"),
+                (":error-code", "InternalFailure"),
+                (":error-message", "boom"),
+            ],
+            b"",
+        ));
+        let mut decoder = StreamDecoder::for_content_type(Some(AWS_EVENTSTREAM_CONTENT_TYPE));
+        let events = decoder.feed(&bytes).unwrap();
+        assert_eq!(events[0].event, "exception:throttlingException");
+        assert_eq!(events[0].data, r#"{"message":"slow down"}"#);
+        assert_eq!(events[1].event, "error:InternalFailure");
+        assert_eq!(events[1].data, "boom");
+    }
+
+    #[test]
+    fn malformed_eventstreams_are_errors() {
+        let mut decoder = StreamDecoder::for_content_type(Some(AWS_EVENTSTREAM_CONTENT_TYPE));
+        let err = decoder.feed(b"data: {\"a\":1}\n\n").unwrap_err();
+        assert!(err.0.contains("prelude checksum"), "{err}");
+
+        let frame = eventstream_frame(&[(":event-type", "metadata")], b"{}");
+        let mut decoder = StreamDecoder::for_content_type(Some(AWS_EVENTSTREAM_CONTENT_TYPE));
+        assert!(decoder.feed(&frame[..frame.len() - 1]).unwrap().is_empty());
+        assert!(decoder.finish().is_err());
+
+        let odd = eventstream_frame(&[(":message-type", "weird")], b"");
+        let mut decoder = StreamDecoder::for_content_type(Some(AWS_EVENTSTREAM_CONTENT_TYPE));
+        assert!(decoder.feed(&odd).is_err());
     }
 }

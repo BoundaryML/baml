@@ -3554,6 +3554,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "forked_aws_eventstream"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "crc32fast",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "forked_aws_sigv4"
 version = "0.1.0"
 dependencies = [
@@ -7376,7 +7386,7 @@ dependencies = [
  "bex_heap",
  "bex_str",
  "bex_vm_types",
- "crc32fast",
+ "forked_aws_eventstream",
  "indexmap",
  "num-bigint",
  "tokio",

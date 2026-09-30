@@ -1402,7 +1402,8 @@ function invoke(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.Mode
 // `baml.http.fetch_sse` decodes the binary event stream and hands over one SSE
 // event per frame: `event` is the `:event-type` header and `data` the JSON
 // payload. A modeled exception frame arrives as `exception:<type>` and an
-// unmodeled error as `error:<code>` (see sys_types/src/aws_eventstream.rs).
+// unmodeled error as `error:<code>` (see `StreamDecoder` in sys_types/src/sse.rs;
+// the frame codec is the `aws-eventstream` fork, forks/aws-eventstream).
 //
 // Event order: messageStart, then per content block contentBlockStart? /
 // contentBlockDelta* / contentBlockStop, then messageStop (stopReason), then
