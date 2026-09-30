@@ -842,6 +842,9 @@ navigation:
           - page: "Tinfoil (openai-generic)"
             slug: tinfoil
             path: 03-reference/baml/clients/providers/tinfoil.mdx
+          - page: "Heabsy (openai-generic)"
+            slug: heabsy
+            path: 03-reference/baml/clients/providers/heabsy.mdx
           - page: "TogetherAI (openai-generic)"
             slug: together
             path: 03-reference/baml/clients/providers/together.mdx
