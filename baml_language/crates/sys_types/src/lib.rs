@@ -607,10 +607,6 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
     /// Used by LLM ops that need to look up function prompt templates, client names, etc.
     pub llm_functions: Arc<std::collections::HashMap<String, LlmFunctionInfo>>,
 
-    /// Maps function names to their global indices in the VM.
-    /// Used by `resolve_client` to return `FunctionRef` values.
-    pub function_global_indices: Arc<std::collections::HashMap<String, usize>>,
-
     /// Per-call cancellation token.
     ///
     /// Defaults to a never-cancelled token for the shared engine context.
@@ -642,7 +638,6 @@ impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
     fn clone(&self) -> Self {
         Self {
             llm_functions: self.llm_functions.clone(),
-            function_global_indices: self.function_global_indices.clone(),
             cancel: self.cancel.clone(),
             class_definitions: self.class_definitions.clone(),
             enum_definitions: self.enum_definitions.clone(),
@@ -660,10 +655,6 @@ pub struct EngineSysOpContext {
     /// Pre-extracted LLM function metadata, keyed by function name.
     /// Used by LLM ops that need to look up function prompt templates, client names, etc.
     pub llm_functions: Arc<std::collections::HashMap<String, LlmFunctionInfo>>,
-
-    /// Maps function names to their global indices in the VM.
-    /// Used by `resolve_client` to return `FunctionRef` values.
-    pub function_global_indices: Arc<std::collections::HashMap<String, usize>>,
 
     /// Pre-extracted class definitions for output format rendering.
     /// Keyed by declaration identity.
@@ -799,7 +790,6 @@ impl SysOpContext {
         }
         Self {
             llm_functions: Arc::new(std::collections::HashMap::new()),
-            function_global_indices: Arc::new(std::collections::HashMap::new()),
             cancel: CancellationToken::new(),
             class_definitions: Arc::new(indexmap::IndexMap::<DefKey, ClassDefinition>::new()),
             enum_definitions: Arc::new(indexmap::IndexMap::<DefKey, EnumDefinition>::new()),
@@ -819,7 +809,6 @@ impl EngineSysOpContext {
     ) -> SysOpContext {
         SysOpContext {
             llm_functions: self.llm_functions.clone(),
-            function_global_indices: self.function_global_indices.clone(),
             cancel,
             class_definitions: self.class_definitions.clone(),
             enum_definitions: self.enum_definitions.clone(),

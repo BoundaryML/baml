@@ -3,7 +3,7 @@ use std::sync::{Arc, atomic::AtomicBool};
 use baml_db::testing::compile_source;
 use baml_type::{CallLayout, Name};
 use bex_vm::{BexVm, BytecodeProgram, VmExecState, convert_program};
-use bex_vm_types::{GlobalIndex, Instruction, Object, bytecode::OpCode, types::Function};
+use bex_vm_types::{Instruction, Object, bytecode::OpCode, types::Function};
 
 fn function<'a>(program: &'a BytecodeProgram, name: &str) -> &'a Function {
     program
@@ -30,7 +30,7 @@ fn ops(function: &Function) -> Vec<(usize, OpCode)> {
 
 fn run(source: &str) -> i64 {
     let program = compile_source(source);
-    let entry = program.function_index("user.main").unwrap();
+    let entry = program.rendered_callables()["user.main"].object.raw();
     let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
     vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
     loop {
@@ -73,7 +73,7 @@ fn exact_calls_preserve_operands_and_source_positions() {
 #[test]
 fn nonmatching_argument_layout_stays_general() {
     let mut program = compile_source(SIMPLE);
-    let index = program.function_indices["user.main"];
+    let index = program.rendered_callables()["user.main"].object.raw();
     let Object::Function(main) = &mut (*program.objects)[index] else {
         unreachable!()
     };
@@ -100,8 +100,9 @@ fn nonmatching_argument_layout_stays_general() {
 #[test]
 fn writable_callee_globals_are_not_specialized() {
     let mut program = compile_source(SIMPLE);
-    let global = GlobalIndex::from_raw(program.function_global_indices["user.leaf"]);
-    let index = program.function_indices["user.leaf"];
+    let leaf = program.rendered_callables()["user.leaf"];
+    let global = leaf.slot;
+    let index = leaf.object.raw();
     let Object::Function(leaf) = &mut (*program.objects)[index] else {
         unreachable!()
     };
@@ -168,7 +169,7 @@ fn exact_recursion_preserves_overflow_catching_and_caller_state() {
 #[test]
 fn exact_calls_poll_and_resume_inside_the_callee() {
     let program = compile_source(SIMPLE);
-    let entry = program.function_index("user.main").unwrap();
+    let entry = program.rendered_callables()["user.main"].object.raw();
     let flag = Arc::new(AtomicBool::new(true));
     let mut vm = BexVm::from_program(program, Arc::clone(&flag)).unwrap();
     vm.early_yield = bex_vm_types::EarlyYieldCheck::with_interval(Arc::clone(&flag), 1);
@@ -200,7 +201,7 @@ fn exact_transitions_preserve_resume_pc_across_callbacks_and_reused_depths() {
     // Native callbacks and indirect calls also reuse earlier frame depths.
     for interval in [1, 2, 3, 5, 11] {
         let program = compile_source(source);
-        let entry = program.function_index("user.main").unwrap();
+        let entry = program.rendered_callables()["user.main"].object.raw();
         let flag = Arc::new(AtomicBool::new(true));
         let mut vm = BexVm::from_program(program, Arc::clone(&flag)).unwrap();
         vm.early_yield = bex_vm_types::EarlyYieldCheck::with_interval(flag, interval);

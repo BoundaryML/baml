@@ -317,7 +317,7 @@ impl DescribeArgs {
         )?;
         // Warm seeds (no-delta only) + parallel index prime: describe queries
         // the whole-package aggregates, which otherwise derive serially.
-        let _ = session.warm_prep_seeds_only();
+        let _ = session.warm_prep();
         session.prime();
         let (db, package, from) = (session.db, session.package, session.resolved.root);
 

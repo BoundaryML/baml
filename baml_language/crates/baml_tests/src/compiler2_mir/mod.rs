@@ -61,6 +61,7 @@ function untrusted_await_any<T, E>(futures: baml.future.Future<T, E>[]) -> int t
             .unwrap(),
     );
     let exported = interface
+        .rows
         .functions
         .values_mut()
         .flat_map(|namespace| namespace.values_mut())
@@ -140,6 +141,7 @@ function forged_type_of<T>() -> reflect.Type {
     // own key; see `hir_ty_package_interface`.)
     let mut configured = 0;
     for exported in interface
+        .rows
         .functions
         .values_mut()
         .flat_map(|namespace| namespace.values_mut())

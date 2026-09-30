@@ -2491,7 +2491,7 @@ mod tests {
                     .into_iter()
                     .map(|name| LocalDecl {
                         name: name.map(baml_base::Name::new),
-                        ty: baml_type::RuntimeTy::int(),
+                        ty: crate::RuntimeTy::int(),
                         span: None,
                         scope_span: None,
                         is_captured: false,

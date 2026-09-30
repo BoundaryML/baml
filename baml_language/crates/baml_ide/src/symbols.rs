@@ -95,7 +95,10 @@ pub(crate) fn surface_of(
             // Companions and auto-derives carry the docstring of the
             // declaration they shadow, so listing them turns every original
             // into several near-duplicate rows.
-            FunctionOrigin::Companion | FunctionOrigin::Internal | FunctionOrigin::AutoDerive => {
+            FunctionOrigin::Companion
+            | FunctionOrigin::Internal
+            | FunctionOrigin::AutoDerive
+            | FunctionOrigin::TestInitializer => {
                 return Surface::Companion;
             }
         }
@@ -278,7 +281,8 @@ impl From<baml_compiler2_ast::ast::FunctionOrigin> for FunctionOrigin {
         match origin {
             baml_compiler2_ast::ast::FunctionOrigin::UserDefined => Self::UserDefined,
             baml_compiler2_ast::ast::FunctionOrigin::Companion => Self::Companion,
-            baml_compiler2_ast::ast::FunctionOrigin::Internal => Self::Internal,
+            baml_compiler2_ast::ast::FunctionOrigin::Internal
+            | baml_compiler2_ast::ast::FunctionOrigin::TestInitializer => Self::Internal,
             baml_compiler2_ast::ast::FunctionOrigin::AutoDerive => Self::AutoDerive,
         }
     }

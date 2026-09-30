@@ -308,7 +308,7 @@ impl GenerateArgs {
             ));
             return Ok(crate::ExitCode::Other);
         }
-        let _ = session.warm_prep_seeds_only();
+        let _ = session.warm_prep();
         session.prime();
         let (db, package, from) = (session.db, session.package, session.resolved.root);
         // `SourceFile` paths are canonicalized by `ProjectDatabase`. Canonicalize

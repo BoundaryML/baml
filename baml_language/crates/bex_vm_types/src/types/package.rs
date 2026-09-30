@@ -5,8 +5,8 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 
 use crate::{
-    AtomicValueSlot, HeapPtr, ObjectIndex, RuntimeCompileDiagnostic, TyTemplate, Value,
-    types::interface::InterfaceBound,
+    AtomicValueSlot, GlobalIndex, HeapPtr, ObjectIndex, RuntimeCompileDiagnostic, TyTemplate,
+    types::{DeclPath, interface::InterfaceBound},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, BorshSerialize, BorshDeserialize)]
@@ -15,13 +15,48 @@ pub struct LocalName {
     pub name: Name,
 }
 
-/// A package object on the heap.
-/// Contains lookups for named items defined in the package.
-#[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
+impl LocalName {
+    pub fn new(namespace: Vec<Name>, name: Name) -> Self {
+        Self { namespace, name }
+    }
+}
+
+/// Dotted, package-relative: `ns.sub.Item`.
+impl std::fmt::Display for LocalName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for segment in &self.namespace {
+            write!(f, "{}.", segment.as_str())?;
+        }
+        f.write_str(self.name.as_str())
+    }
+}
+
+/// A package object on the heap: what every package has, whatever compiled
+/// it — its tables, its edges, its objects and cells, its initializers. No
+/// field's meaning depends on how the package was compiled; a static package
+/// finds its objects and cells in the program's pools, a runtime package in
+/// tables of its own ([`Objects`], [`Slots`]).
+///
+/// A package has no wire form: [`ProgramPackage`] is the executable's record
+/// of a static package, and the loader allocates this from it.
+#[derive(Debug, Clone)]
 pub struct Package {
-    /// Every source-visible exported declaration name, including aliases that
-    /// have no heap object of their own.
-    pub exported_names: Vec<LocalName>,
+    /// The package's display spelling: what traces and the reflection surface
+    /// print it under, and the name it spells itself by from its own
+    /// viewpoint ([`Self::accessible`]) — the reserved `user` for an unnamed
+    /// root, which is how a host addresses it. Display data: a package's
+    /// identity is its pointer.
+    pub name: Name,
+    /// The package's edge table: every package it reaches, by the name it
+    /// reaches it under — its declared dependencies, then the language
+    /// packages under their fixed names ([`EdgeKind`]). The runtime mirror of
+    /// the compiler's edge table, and the only way a name becomes a package
+    /// at run time: a host names a package as the world's root reaches it,
+    /// and a runtime package's wire names resolve through its own edges.
+    /// Names live on edges, so two packages may share a spelling. An edge
+    /// of kind [`EdgeKind::ReExported`] makes every export of its target an
+    /// export of this package too (a `with_types` view of its base).
+    pub edges: IndexMap<Name, Edge>,
     /// Classes defined in the package.
     pub classes: IndexMap<LocalName, HeapPtr>,
     /// Enums defined in the package.
@@ -32,71 +67,181 @@ pub struct Package {
     /// May include implementations for interfaces in the package's dependencies.
     /// key references an `Object::Interface` and each value is an `Object::ImplRule`
     pub impl_rules: IndexMap<HeapPtr, Vec<HeapPtr>>,
-    /// Exported free functions, keyed by their package-local name. This is the
-    /// runtime projection of the package surface, shared by static and dynamic
-    /// packages so reflection never has to deserialize compiler IR.
-    pub functions: IndexMap<LocalName, HeapPtr>,
     /// Recursive type aliases defined in the package, each an
     /// `Object::TypeAlias`. Non-recursive aliases are expanded at lowering and
     /// never reach here.
     pub type_aliases: IndexMap<LocalName, HeapPtr>,
-    /// Versioned artifact containing the enriched, source-less compiler
-    /// interface for mounting this package under an alias in a later
-    /// `Package.compile` call.
-    pub interface_blob: Vec<u8>,
+    /// The package's own cells by declaration path, as ordinals into
+    /// [`Self::slots`]: every named function (free or method), every `let`,
+    /// and every interface body under its structural key. A function's or
+    /// body's cell holds its object, so this is also how a consumer reaches
+    /// one without a rendered spelling; an intrinsic owns no cell. A body's
+    /// entry is package-private: the package's tail and a later session
+    /// submission reach a body through it, while across packages a default
+    /// body is reached through its interface's bound default, and a provided
+    /// body is dispatched through its rule, never addressed.
+    pub globals: IndexMap<DeclPath, u32>,
+    /// Where the package's cells live.
+    pub slots: Slots,
+    /// Where the package's code finds its objects.
+    pub objects: Objects,
+    /// How a dependent's compiler learns what this package exports.
+    pub surface: ExportSurface,
+    /// The package's `$init`, when it has `let`s to run.
+    pub init: Option<HeapPtr>,
     /// Compiler-synthesized test registrar for this package, when it has tests.
     pub test_init: Option<HeapPtr>,
-    /// Exact runtime type values attached by `Package.with_types`.
-    #[borsh(skip)]
-    pub mounted_types: IndexMap<String, HeapPtr>,
-    /// Runtime-only state, discriminated so a package cannot be both an
-    /// ordinary runtime package and a Session (or a Session without an image).
-    #[borsh(skip)]
-    pub kind: PackageKind,
+    /// Compiler warnings retained on the package. A static package's were
+    /// reported at compile time; it retains none.
+    pub diagnostics: Vec<RuntimeCompileDiagnostic>,
+    /// The persistent state of a Session, for the package a Session owns.
+    pub session: Option<Box<SessionState>>,
 }
 
-/// The three legal runtime shapes of a [`Package`].
-#[derive(Clone, Debug, Default)]
-pub enum PackageKind {
-    /// A package loaded from the serialized program image.
-    #[default]
-    Static,
-    /// A package produced by `reflect.Package.compile`.
-    Runtime(Box<RuntimePackage>),
-    /// The package-shaped runtime image and persistent state owned by a Session.
-    Session {
-        runtime: Box<RuntimePackage>,
-        state: Box<SessionState>,
+/// How a package reaches what an edge points at: a package it declared (a
+/// manifest edge or a `Package.compile` mount); a package it re-exports
+/// wholesale (a `with_types` view reaches its base this way: every export of
+/// the target is an export of the package — Rust's `pub use base::*`); a
+/// declaration belonging to no package that it exports (a `with_types` view
+/// reaches a minted class this way — the edge's target is the declaration
+/// itself, which the compile seam treats as a root of one row and the loader
+/// binds a dependency slot to); or the language's prelude, which every
+/// package reaches under fixed names without declaring.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub enum EdgeKind {
+    Declared,
+    ReExported,
+    Anonymous,
+    Prelude,
+}
+
+/// How a dependent's compiler learns what a package exports.
+#[derive(Debug, Clone)]
+pub enum ExportSurface {
+    /// The versioned `PackageInterface` artifact the package's compile
+    /// exported: what a dependent compiles against when the package is
+    /// mounted.
+    Compiled(Vec<u8>),
+    /// The package had no compile — it is a `with_types` view, or the owner
+    /// of runtime-minted declarations — and its exports are projected from
+    /// its tables when a dependent compiles against it: its own classes,
+    /// enums and aliases, the declarations it re-exports, its impl rules, and
+    /// every export of a [`EdgeKind::ReExported`] edge's target.
+    Projected,
+}
+
+/// An entry of a package's edge table on the heap: a package, or — for
+/// [`EdgeKind::Anonymous`] — a class or enum declaration.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Edge {
+    pub target: HeapPtr,
+    pub kind: EdgeKind,
+}
+
+/// An entry of the executable's package record's edge table: the package it
+/// reaches, as an ordinal into [`Program::packages`](crate::Program::packages).
+#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct ProgramEdge {
+    pub name: Name,
+    pub target: u32,
+    pub kind: EdgeKind,
+}
+
+/// Where a package's code finds its objects — one meaning for every kind of
+/// package.
+#[derive(Debug, Clone)]
+pub enum Objects {
+    /// The program's compile-time pool, which static bytecode addresses
+    /// absolutely.
+    Program,
+    /// The package's own table, grown by each graft: what its bytecode's
+    /// image-local operands index.
+    Own(Box<[HeapPtr]>),
+}
+
+impl Objects {
+    /// The package's own table, if it owns one.
+    pub fn own(&self) -> Option<&[HeapPtr]> {
+        match self {
+            Self::Own(objects) => Some(objects),
+            Self::Program => None,
+        }
+    }
+}
+
+/// Where a package's cells live — one meaning for every kind of package,
+/// addressed by the ordinals in [`Package::globals`].
+#[derive(Debug, Clone)]
+pub enum Slots {
+    /// Cells in the program's global pool from `base`: the linker lays a
+    /// static package's cells out contiguously, functions then `let`s. The
+    /// pool guards its own initialization window.
+    Program { base: GlobalIndex },
+    /// The package's own table, grown by each graft.
+    Own {
+        cells: Box<[AtomicValueSlot]>,
+        /// False while the package's `$init` may write the cells; true after
+        /// it commits. A Session keeps this false because its cells stay
+        /// mutable across evals.
+        initialized: bool,
     },
 }
 
-impl Package {
-    pub fn runtime(&self) -> Option<&RuntimePackage> {
-        match &self.kind {
-            PackageKind::Static => None,
-            PackageKind::Runtime(runtime) | PackageKind::Session { runtime, .. } => Some(runtime),
+impl Slots {
+    /// The package's own table, if it owns one.
+    pub fn own(&self) -> Option<&[AtomicValueSlot]> {
+        match self {
+            Self::Own { cells, .. } => Some(cells),
+            Self::Program { .. } => None,
         }
     }
+}
 
-    pub fn runtime_mut(&mut self) -> Option<&mut RuntimePackage> {
-        match &mut self.kind {
-            PackageKind::Static => None,
-            PackageKind::Runtime(runtime) | PackageKind::Session { runtime, .. } => Some(runtime),
+impl Package {
+    /// The package `own` — this package, by its own pointer — spells as
+    /// `name`: itself by its own name, else the package its edge `name`
+    /// reaches. Anything else is invisible from here; the runtime mirror of
+    /// the compiler's `accessible_package`.
+    pub fn accessible(&self, own: HeapPtr, name: &Name) -> Option<HeapPtr> {
+        if self.name == *name {
+            return Some(own);
         }
+        self.edges.get(name).map(|edge| edge.target)
+    }
+
+    /// The packages this one declared as dependencies, in declaration order
+    /// — its package edges minus the prelude, a re-exported base included.
+    pub fn declared(&self) -> impl Iterator<Item = HeapPtr> + '_ {
+        self.edges
+            .values()
+            .filter(|edge| matches!(edge.kind, EdgeKind::Declared | EdgeKind::ReExported))
+            .map(|edge| edge.target)
+    }
+
+    /// The declarations belonging to no package this one exports, in edge
+    /// order: the targets of its [`EdgeKind::Anonymous`] edges.
+    pub fn anonymous(&self) -> impl Iterator<Item = HeapPtr> + '_ {
+        self.edges
+            .values()
+            .filter(|edge| edge.kind == EdgeKind::Anonymous)
+            .map(|edge| edge.target)
+    }
+
+    /// The packages every export of which is also an export of this one, in
+    /// edge order: the targets of its [`EdgeKind::ReExported`] edges.
+    pub fn reexported(&self) -> impl Iterator<Item = HeapPtr> + '_ {
+        self.edges
+            .values()
+            .filter(|edge| edge.kind == EdgeKind::ReExported)
+            .map(|edge| edge.target)
     }
 
     pub fn session(&self) -> Option<&SessionState> {
-        match &self.kind {
-            PackageKind::Session { state, .. } => Some(state),
-            PackageKind::Static | PackageKind::Runtime(_) => None,
-        }
+        self.session.as_deref()
     }
 
     pub fn session_mut(&mut self) -> Option<&mut SessionState> {
-        match &mut self.kind {
-            PackageKind::Session { state, .. } => Some(state),
-            PackageKind::Static | PackageKind::Runtime(_) => None,
-        }
+        self.session.as_deref_mut()
     }
 }
 
@@ -112,51 +257,6 @@ pub struct SessionState {
     pub submission_counter: u64,
 }
 
-/// Runtime-only package image grafted into the moving heap.
-#[derive(Clone, Debug, Default)]
-pub struct RuntimePackage {
-    /// Linked local object table. Imported entries point into static or other
-    /// runtime packages; owned entries point back into this package's graph.
-    pub objects: Box<[HeapPtr]>,
-    /// Newest-wins dynamic object link table. Old objects stay in `objects`,
-    /// while later submissions resolve a repeated source name to this entry.
-    pub object_names: IndexMap<String, HeapPtr>,
-    /// Package-local global slots, mutable only while `$init` is running.
-    pub globals: Box<[AtomicValueSlot]>,
-    /// Fully-qualified function/let name to this image's local global slot.
-    pub global_names: IndexMap<String, usize>,
-    /// Created-once reflected class, enum, and interface type values, keyed by
-    /// the declaration each one names.
-    ///
-    /// A runtime declaration is not in the program image, so a `LoadType` that
-    /// names one must reach the value allocated at package load rather than
-    /// build a fresh equal-looking one — same declaration, same `type` object.
-    /// The declaration pointer is that identity, and it is exactly what the
-    /// type's head already carries, so the lookup is the head itself. (Keying
-    /// by rendered FQN made two declarations that merely printed alike
-    /// indistinguishable.)
-    pub type_values: IndexMap<HeapPtr, HeapPtr>,
-    /// Compiler warnings retained on a successful package.
-    pub diagnostics: Vec<RuntimeCompileDiagnostic>,
-    /// Runtime package objects imported by this image.
-    pub dependencies: Box<[HeapPtr]>,
-    /// Direct import alias to runtime package. Kept alongside the dense list so
-    /// runtime type names such as `dep.models.Base` resolve by their compiler
-    /// package identity.
-    pub dependency_names: IndexMap<String, HeapPtr>,
-    /// The candidate `$init`, if one exists.
-    pub init: Option<HeapPtr>,
-    /// False while `$init` may write package globals; true after commit. A
-    /// Session keeps this false because its globals remain mutable across evals.
-    pub initialized: bool,
-}
-
-impl RuntimePackage {
-    pub fn load_global(&self, index: usize) -> Option<Value> {
-        self.globals.get(index).map(AtomicValueSlot::load)
-    }
-}
-
 /// The serialized, global-index-keyed twin of [`Package`]. The `Program` must be
 /// `HeapPtr`-free (pointers are runtime-only and there is no heap at emit time),
 /// so the emit produces this; the loader allocates the [`Package`] +
@@ -166,12 +266,22 @@ impl RuntimePackage {
 /// functions are carried as pooled objects referenced by index.
 #[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
 pub struct ProgramPackage {
-    pub exported_names: Vec<LocalName>,
+    /// The package's display spelling, and the name it spells itself by from
+    /// its own viewpoint. Display data: the package's identity in the
+    /// executable is its position in
+    /// [`Program::packages`](crate::Program::packages), and nothing resolves
+    /// a spelling program-wide — two packages may share one.
+    pub name: Name,
+    /// The package's edge table: every package it reaches, by the name it
+    /// reaches it under, as ordinals into
+    /// [`Program::packages`](crate::Program::packages) — its declared
+    /// dependencies, then the language packages under their fixed names.
+    /// A name resolves only from some package's viewpoint; a host's names
+    /// resolve from the root's ([`Program::root`](crate::Program::root)).
+    pub edges: Vec<ProgramEdge>,
     pub classes: IndexMap<LocalName, ObjectIndex>,
     pub enums: IndexMap<LocalName, ObjectIndex>,
     pub interfaces: IndexMap<LocalName, ObjectIndex>,
-    /// Exported free functions only (methods and compiler helpers are excluded).
-    pub functions: IndexMap<LocalName, ObjectIndex>,
     /// Implemented-interface `ObjectIndex` → the impl rules of it declared in
     /// this package (may target an interface from a dependency).
     pub impl_rules: IndexMap<ObjectIndex, Vec<ProgramImplRule>>,
@@ -182,9 +292,29 @@ pub struct ProgramPackage {
     pub interface_blob: Vec<u8>,
     /// The package's synthesized `$init_test`, if present.
     pub test_init: Option<ObjectIndex>,
+    /// The package's synthesized `$init`, if it has `let`s.
+    pub init: Option<ObjectIndex>,
+    /// The package's own cells by declaration — every named function (free
+    /// or method), every `let`, and every interface body under its
+    /// structural key — as ordinals from [`Self::slot_base`]. A function's
+    /// or body's cell holds its object. This is how a consumer binds a
+    /// function VALUE (`GenericFunction { function: GlobalIndex }`) without a
+    /// rendered spelling.
+    pub globals: IndexMap<DeclPath, u32>,
+    /// The first of the package's cells in the program's global pool: the
+    /// linker lays them out contiguously, functions then `let`s.
+    pub slot_base: GlobalIndex,
 }
 
 impl ProgramPackage {
+    /// The program-pool slot of the cell `path` owns, if it owns one.
+    #[must_use]
+    pub fn global_slot(&self, path: &DeclPath) -> Option<GlobalIndex> {
+        self.globals
+            .get(path)
+            .map(|&ordinal| GlobalIndex::from_raw(self.slot_base.raw() + ordinal as usize))
+    }
+
     /// Canonicalize implementation rules, whose source tables do not carry a
     /// user-observable declaration order. Declaration maps deliberately keep
     /// the deterministic source order established by the compiler pipeline.
@@ -256,7 +386,7 @@ pub struct ProgramImplRule {
 /// pins are inputs and ride inside each [`InterfaceBound`]. The interface
 /// itself is not a field because every consumer already groups per
 /// interface; this struct is the per-interface discriminant.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub struct ImplCoherenceKey {
     pub for_ty_pattern: TyTemplate,
     pub interface_args: Vec<TyTemplate>,

@@ -27,11 +27,11 @@
 //! ```
 
 use baml_base::{Name, Span};
-use baml_type::{RuntimeTy, TyTemplate};
 
 use crate::{
     BasicBlock, BlockId, FunctionOwner, Landing, Local, LocalDecl, MirFunction, MirFunctionBody,
-    MirFunctionKind, Operand, Place, Rvalue, Statement, StatementKind, Terminator,
+    MirFunctionKind, Operand, Place, RuntimeTy, Rvalue, Statement, StatementKind, SwitchKey,
+    Terminator, TypeTest,
 };
 
 /// Builder for constructing MIR functions.
@@ -421,7 +421,7 @@ impl<'db> MirBuilder<'db> {
     /// Emit an open-world interface-field store.
     pub(crate) fn virtual_field_store(
         &mut self,
-        iface: baml_type::TyTemplateInterface,
+        iface: crate::TyTemplateInterface,
         receiver: Operand<'db>,
         field_index: u32,
         field: baml_base::Name,
@@ -489,14 +489,14 @@ impl<'db> MirBuilder<'db> {
     pub(crate) fn narrow_bind(
         &mut self,
         source: Operand<'db>,
-        ty_template: TyTemplate,
+        test: TypeTest<'db>,
         destination: Local,
         then_block: BlockId,
         else_block: BlockId,
     ) {
         self.set_terminator(Terminator::NarrowBind {
             source,
-            ty_template,
+            test,
             destination,
             then_block,
             else_block,
@@ -528,10 +528,10 @@ impl<'db> MirBuilder<'db> {
     pub(crate) fn switch(
         &mut self,
         discriminant: Operand<'db>,
-        arms: Vec<(i64, BlockId)>,
+        arms: Vec<(SwitchKey<'db>, BlockId)>,
         otherwise: BlockId,
         exhaustive: bool,
-        arm_names: Vec<(i64, String)>,
+        arm_names: Vec<(SwitchKey<'db>, String)>,
     ) {
         self.set_terminator(Terminator::Switch {
             discriminant,
@@ -615,12 +615,14 @@ impl<'db> MirBuilder<'db> {
     }
 
     /// Resolve an interface method from the receiver's concrete type at runtime.
+    #[expect(clippy::too_many_arguments)]
     pub(crate) fn virtual_call(
         &mut self,
-        iface: baml_type::TyTemplateInterface,
+        iface: crate::TyTemplateInterface,
         method: String,
         args: Vec<Operand<'db>>,
         ntypeargs: usize,
+        self_arg: usize,
         destination: Place,
         target: BlockId,
     ) {
@@ -629,8 +631,11 @@ impl<'db> MirBuilder<'db> {
             "VirtualCall destination must be a local place"
         );
         debug_assert!(
-            args.len() > ntypeargs,
-            "VirtualCall must carry at least the receiver value argument"
+            args.len()
+                .checked_sub(ntypeargs)
+                .is_some_and(|values| self_arg < values),
+            "VirtualCall dispatches on value argument {self_arg} of {} ({ntypeargs} type args)",
+            args.len()
         );
         self.set_terminator(Terminator::VirtualCall {
             has_trace: false,
@@ -639,6 +644,7 @@ impl<'db> MirBuilder<'db> {
             method,
             args,
             ntypeargs,
+            self_arg,
             destination,
             target,
             unwind: self.current_unwind,

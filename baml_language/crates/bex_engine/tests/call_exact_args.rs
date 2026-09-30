@@ -18,7 +18,7 @@ async fn engine_retains_exact_calls_after_boxing_float_constants() {
         }
     "#,
     );
-    let main_index = snapshot.function_indices["user.main"];
+    let main_index = snapshot.rendered_callables()["user.main"].object.raw();
     let engine = Arc::new(
         BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new()).unwrap(),
     );

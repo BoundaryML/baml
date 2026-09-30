@@ -63,7 +63,15 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// every variant declared after it, and `Rethrow`/`ThrowIfPanic` popping the
 /// caught error's context under its value, with every exception-table entry
 /// naming a context slot.
-pub const FORMAT_VERSION: u32 = 11;
+///
+/// Version 12: `Object::Class` gained `methods` (its inherent methods by name,
+/// each an `ObjectIndex` bound to a pointer at load), `ProgramPackage` gained
+/// `globals` (its own function and `let` slots by declaration path), `init`,
+/// and `name`, and `Program::packages` became a `Vec` (a package's identity in
+/// the executable is its position; its name is display metadata), so every
+/// serialized program changed shape. The identity-keyed unit format that
+/// produces them (`baml_linker_types`) rides the same version.
+pub const FORMAT_VERSION: u32 = 12;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.
@@ -339,6 +347,16 @@ pub fn decode<T: BorshDeserialize>(kind: ArtifactKind, bytes: &[u8]) -> Result<T
     })
 }
 
+/// The sha256 of an artifact's validated payload — the identity of WHAT the
+/// artifact carries, independent of the envelope (whose own hash is bound to
+/// the build fingerprint). Two artifacts of one payload written by two builds
+/// share it; a consumer that read the payload and a linker that holds the
+/// artifact compute the same value.
+pub fn payload_digest(kind: ArtifactKind, bytes: &[u8]) -> Result<[u8; 32], Error> {
+    let payload = decode_payload(kind, bytes)?;
+    Ok(Sha256::digest(payload).into())
+}
+
 /// Validate an artifact and borrow its raw payload.
 pub fn decode_payload(kind: ArtifactKind, bytes: &[u8]) -> Result<&[u8], Error> {
     if bytes.len() < PREFIX_LEN {
@@ -429,6 +447,18 @@ pub fn decode_payload(kind: ArtifactKind, bytes: &[u8]) -> Result<&[u8], Error> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn payload_digest_is_the_payload_hash_alone() {
+        let payload = borsh::to_vec(&vec![1_u32, 2, 3]).unwrap();
+        let artifact = encode(ArtifactKind::Program, &vec![1_u32, 2, 3]).unwrap();
+        let expected: [u8; 32] = Sha256::digest(&payload).into();
+        assert_eq!(
+            payload_digest(ArtifactKind::Program, &artifact).unwrap(),
+            expected
+        );
+        assert!(payload_digest(ArtifactKind::Program, &[]).is_err());
+    }
 
     #[test]
     fn embedded_encoding_round_trips() {

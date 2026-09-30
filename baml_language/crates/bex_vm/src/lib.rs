@@ -12,6 +12,7 @@
 
 pub(crate) mod array_index;
 mod call_specialize;
+pub mod compile_artifact;
 pub mod debug;
 pub mod errors;
 pub mod indexable;
@@ -29,6 +30,10 @@ pub mod types;
 mod vec_ext;
 pub mod vm;
 
+pub use compile_artifact::{
+    ArtifactKind, PinnedArtifact, RuntimeCompileArtifact, RuntimeCompileArtifactSlot,
+    RuntimeSessionCompileArtifact, RuntimeSessionStep, RuntimeSessionStepKind,
+};
 pub use errors::{StackFrame, VmPanic, format_traceback};
 pub use indexable::EvalStack;
 pub use package_baml::NativeFunction;

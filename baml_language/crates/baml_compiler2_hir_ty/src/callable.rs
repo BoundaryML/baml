@@ -117,9 +117,9 @@ pub fn callable_throws<'db>(
     // reuse plan proved unchanged). `by_path(db)` is a tracked read of the
     // `SeededCallableThrows` input, so a later seed invalidates this memo;
     // the lookup is skipped when no seeds were injected (LSP, cold CLI).
-    // Seeds are wire data: their heads are spelled, and resolve through the
-    // seeded function's own root. A seed naming a package that root cannot
-    // reach is not this compile's fact and is inferred honestly below.
+    // A seed's heads are located by edge path from the seeded function's own
+    // root. A seed whose path leaves that root's edges is not this compile's
+    // fact and is inferred honestly below.
     if let Some(seeds) = db.seeded_callable_throws() {
         let by_path = seeds.by_path(db);
         if !by_path.is_empty() {
@@ -130,9 +130,8 @@ pub fn callable_throws<'db>(
                 .and_then(|by_id| by_id.get(&function.id(db).as_u32()))
             {
                 let root = baml_compiler2_hir::file_package::file_package(db, file).root;
-                let spelling = baml_compiler2_hir::package::spelling(db);
                 if let Ok(ty) = ty.try_map_heads::<_, (), _>(&mut |name| {
-                    spelling.resolve(db, root, name).ok_or(())
+                    baml_compiler2_hir::package::resolve_located(db, root, name).ok_or(())
                 }) {
                     return CallableThrows(ty);
                 }
@@ -548,12 +547,15 @@ pub fn instantiate_callable_signature<'db>(
 /// dispatched from — the one-`Self` rule (spec, `Self`: "exactly one
 /// `Self`-typed parameter (including the `self` receiver)"), with the
 /// receiver treated as what it is: a parameter named `self` whose type is
-/// `Self`. A method is object-safe when exactly one parameter is typed
-/// bare `Self` and `Self` occurs nowhere else — not in a second parameter,
-/// not nested in any parameter, not nested inside an invariant constructor
-/// in the return/throws type (a bare top-level `-> Self` collapses
-/// covariantly and stays legal). `Self.Assoc` projections are exempt: the
-/// existential's pins make them one concrete type.
+/// `Self`. A method is object-safe when exactly one REQUIRED parameter is
+/// typed bare `Self`, wherever it is declared, and `Self` occurs nowhere
+/// else — not in a second parameter, not nested in any parameter, not
+/// nested inside an invariant constructor in the return/throws type (a bare
+/// top-level `-> Self` collapses covariantly and stays legal). The
+/// parameter must be required because a call may omit a defaulted one, and
+/// an omitted argument carries no value to derive `Self` from. `Self.Assoc`
+/// projections are exempt: the existential's pins make them one concrete
+/// type.
 ///
 /// A union is NOT a relaxation in argument position: `other: Self?` and
 /// `other: Self | int` each name the implementor, so a caller holding two
@@ -563,8 +565,10 @@ pub fn instantiate_callable_signature<'db>(
 /// those two are the only positions tested permissively.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelfDispatch {
-    /// Object-safe: the one bare-`Self` parameter is at this index, and an
-    /// erased `Self` is dispatched from that argument's runtime type.
+    /// Object-safe: the one required bare-`Self` parameter is at this
+    /// declared index, and an erased `Self` is dispatched from that
+    /// argument's runtime type. Arguments are pushed in declared order, so
+    /// the index is also the value slot the VM reads (`VirtualCall.self_arg`).
     OnParam(usize),
     /// No parameter is typed `Self` (and `Self` occurs nowhere the rule
     /// forbids): there is no value to consult, so a caller must name a
@@ -615,6 +619,16 @@ pub fn callable_self_dispatch(
         .any(|(index, param)| Some(index) != first && self_occurs(&param.ty, false));
     if second.is_some() || other_param_mentions_self {
         return SelfDispatch::Breaks(SelfCallPosition::Parameter);
+    }
+    // A call may omit a defaulted parameter, and an omitted argument is no
+    // value to read `Self` off — the dispatch source must be required.
+    if let Some(index) = first
+        && matches!(
+            signature.params[index].mode,
+            baml_type::FunctionParamMode::Optional
+        )
+    {
+        return SelfDispatch::Breaks(SelfCallPosition::OptionalParameter);
     }
     if self_occurs(&signature.return_type, true)
         || self_occurs(callable_throws_of(db, callable), true)

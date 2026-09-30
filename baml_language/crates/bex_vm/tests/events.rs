@@ -15,8 +15,11 @@ fn log_event_source_uses_unknown_column_and_real_offsets() {
 
     let program = compile_source(source);
     let entry_index = program
-        .function_index("user.main")
-        .expect("user.main function emitted");
+        .rendered_callables()
+        .get("user.main")
+        .expect("user.main function emitted")
+        .object
+        .raw();
     let mut vm =
         BexVm::from_program(program, Arc::new(AtomicBool::new(false))).expect("from_program");
     let entry_ptr = vm.heap.compile_time_ptr(entry_index);

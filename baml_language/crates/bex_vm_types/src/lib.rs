@@ -19,14 +19,12 @@ pub mod identity;
 pub mod indexable;
 pub mod lazy_biased_mutex;
 pub mod limit;
-pub mod link;
 pub mod relink;
 mod roots;
 pub mod runtime_compile;
 pub mod trace;
 pub mod type_head;
 pub mod types;
-pub mod unit;
 
 pub use bex_str::BexStr;
 pub use btel_types::{FunctionRegistration, TelemetryPolicyId};
@@ -36,18 +34,16 @@ pub use indexable::{
     GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
 };
 pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet};
-pub use link::LinkError;
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use runtime_compile::{
-    ArtifactKind, RuntimeCompileArtifact, RuntimeCompileArtifactSlot, RuntimeCompileDiagnostic,
-    RuntimeCompileMode, RuntimeCompileRequest, RuntimeDiagnosticAnnotation,
-    RuntimeDiagnosticDetails, RuntimeDiagnosticHighlight, RuntimeDiagnosticHighlightKind,
-    RuntimeDiagnosticPhase, RuntimeDiagnosticRelatedInfo, RuntimeDiagnosticSeverity,
-    RuntimeMountedClass, RuntimeMountedEnum, RuntimeMountedFieldAttrs, RuntimeMountedVariantAttrs,
-    RuntimePackageIdentity, RuntimePackageMount, RuntimeSessionCompileArtifact,
-    RuntimeSessionCompileRequest, RuntimeSessionInitializer, RuntimeSessionStep,
-    RuntimeSessionStepKind, RuntimeSourceSpan, RuntimeTypeMount, SessionContract, SessionEvalLease,
-    SessionVisibleKind, SessionVisibleSymbol,
+    RuntimeCompileDiagnostic, RuntimeCompileMode, RuntimeCompileRequest,
+    RuntimeDiagnosticAnnotation, RuntimeDiagnosticDetails, RuntimeDiagnosticHighlight,
+    RuntimeDiagnosticHighlightKind, RuntimeDiagnosticPhase, RuntimeDiagnosticRelatedInfo,
+    RuntimeDiagnosticSeverity, RuntimeMountEdge, RuntimeMountSurface, RuntimeMountedAlias,
+    RuntimeMountedClass, RuntimeMountedEnum, RuntimeMountedFieldAttrs, RuntimeMountedImpl,
+    RuntimeMountedVariantAttrs, RuntimePackageIdentity, RuntimePackageMount,
+    RuntimeProjectedSurface, RuntimeReExport, RuntimeReExportKind, RuntimeSessionCompileRequest,
+    RuntimeSourceSpan, SessionContract, SessionEvalLease, SessionVisibleKind, SessionVisibleSymbol,
 };
 pub use type_head::TypeHead;
 
@@ -95,34 +91,10 @@ pub type RealizedFunctionParamTy = baml_type::RealizedFunctionParamTy<TypeHead>;
 
 // ── Crossing between the two heads ───────────────────────────────────────────
 //
-// Emit is the one legitimate producer of runtime types without a heap: it mints
-// each head's *identity* from the declaration's name and leaves the pointer
-// unfilled, for the loader to bind. The reverse direction is
-// [`TypeHead::to_name`], which needs a live heap and so can fail.
-
-/// Mint unresolved runtime heads for a compiled signature type.
-#[must_use]
-pub fn anchor_template(ty: &baml_type::TyTemplate) -> TyTemplate {
-    ty.map_heads(&mut TypeHead::of_name)
-}
-
-/// Mint unresolved runtime heads for a compiled declaration-facing type.
-#[must_use]
-pub fn anchor_runtime_ty(ty: &baml_type::RuntimeTy) -> RuntimeTy {
-    ty.map_heads(&mut TypeHead::of_name)
-}
-
-/// Mint unresolved runtime heads for a compiled value-facing type.
-#[must_use]
-pub fn anchor_realized(ty: &baml_type::RealizedTy) -> RealizedTy {
-    ty.map_heads(&mut TypeHead::of_name)
-}
-
-/// Mint unresolved runtime heads for a compiled interface bound.
-#[must_use]
-pub fn anchor_interface(interface: &baml_type::RuntimeInterface) -> RuntimeInterface {
-    interface.map_heads(&mut TypeHead::of_name)
-}
+// Emit is the one legitimate producer of runtime types without a heap: it
+// writes each head as the declaration's object operand and leaves the pointer
+// unfilled, for the linker to tag and the loader to bind. The reverse
+// direction is [`TypeHead::to_name`], which needs a live heap and so can fail.
 
 /// A head that could not be named when converting a type out of the VM.
 ///
@@ -158,18 +130,15 @@ pub fn name_headed_realized(ty: &RealizedTy) -> Result<baml_type::RealizedTy, Un
     ty.try_map_heads(&mut |head| head.declared_name().ok_or(UnnameableHead(head.tag())))
 }
 pub use types::{
-    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BoundMethod, Class,
-    ClassField, CleanupLatch, ClientBuildMeta, ClientBuildType, ConstValue, DeclarationName, Enum,
-    EnumVariant, Function, FunctionKind, FunctionMeta, FunctionOrigin, Future, FutureRead,
-    GenericFunction, HostClosure, ImplCoherenceKey, Instance, InterfaceBound, LockedContainer,
-    LockedReadGuard, LockedWriteGuard, MapContainer, MapReadGuard, MapWriteGuard, MediaValue,
-    Object, ObjectType, PanicClass, Program, PromptAst, RetryPolicyMeta, SysOp, SysOpErrorCategory,
-    SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard, Value,
-    ValueKind, Variant, format_float, sys_op_for_path, type_tags,
-};
-pub use unit::{
-    CompilationUnit, ExportTable, GenericFnKey, InitTail, LocalRef, ProgramImplRuleFrag,
-    ProgramMethodImplFrag, ProgramPackageFrag, Symbol, SymbolKind,
+    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BodyKey, BoundMethod, Class,
+    ClassField, ClassMethodDef, CleanupLatch, ConstValue, DeclPath, DeclarationName, Enum,
+    EnumVariant, FnPath, Function, FunctionKind, FunctionMeta, FunctionOrigin, Future, FutureRead,
+    GenericFunction, HostClosure, ImplBodyCoherence, ImplBodyKey, ImplCoherenceKey, Instance,
+    InterfaceBound, InterfaceKey, ItemPath, LockedContainer, LockedReadGuard, LockedWriteGuard,
+    MapContainer, MapReadGuard, MapWriteGuard, MediaValue, Object, ObjectType, PanicClass, Program,
+    PromptAst, RenderedCallable, SpelledBound, SysOp, SysOpErrorCategory, SysOpPanicCategory,
+    Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard, Value, ValueKind, Variant,
+    format_float, sys_op_for_path, type_tags,
 };
 
 /// Used to check if the VM should yield early.

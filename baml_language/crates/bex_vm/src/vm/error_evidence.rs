@@ -688,10 +688,11 @@ mod tests {
     ) -> Vec<String> {
         FORCE_ERROR_EVIDENCE.with(|force| force.set(evidence));
         let program = baml_db::testing::compile_source(source);
-        let entry = program.function_index("user.Main").unwrap();
+        let callables = program.rendered_callables();
+        let entry = callables["user.Main"].object.raw();
         let targets: Vec<_> = policies
             .iter()
-            .map(|(name, policy)| (program.function_index(name).unwrap(), *policy))
+            .map(|(name, policy)| (callables[*name].object.raw(), *policy))
             .collect();
         let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
         vm.telemetry = Some(TelemetryState::new_root(

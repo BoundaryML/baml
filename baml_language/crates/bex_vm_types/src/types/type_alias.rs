@@ -26,8 +26,10 @@ pub struct TypeAliasDef {
     /// Type identity: carries short name, module path, and display name.
     pub name: baml_type::TypeName,
 
-    /// This alias's head identity, content-addressed from its fully-qualified
-    /// name at emit time, in the same space as every other declared head.
+    /// This alias's head identity — assigned by the linker (`CLASS_BASE +` its
+    /// object index in the image) or minted fresh by the grafter; in a unit,
+    /// its own object operand — in the same space as every other declared
+    /// head.
     pub type_tag: baml_type::typetag::TypeTag,
 
     /// The aliased type.
@@ -39,11 +41,11 @@ pub struct TypeAliasDef {
     /// `projection` axes structurally instead of by convention.
     pub definition: crate::RealizedTy,
 
-    /// Runtime package that declared this alias; null for a static (or
-    /// standalone) declaration. A member back-edge: reaching the alias keeps
-    /// its package — globals, dependencies, sibling declarations — alive, the
-    /// same ownership shape ``Class::owner`` gives classes and
-    /// enums. This is a GC edge, never serialized.
+    /// The package that owns this declaration (a static package's is
+    /// assigned at load; a `with_types` view's for the aliases it declares).
+    /// A member back-edge: reaching the alias keeps its package — globals,
+    /// dependencies, sibling declarations — alive. This is a GC edge, never
+    /// serialized.
     #[borsh(skip)]
     pub owner: crate::HeapPtr,
 }

@@ -5,7 +5,7 @@ use bex_vm::{BexVm, VmExecState};
 
 fn run(source: &str) -> i64 {
     let program = compile_source(source);
-    let entry = program.function_index("user.main").expect("main");
+    let entry = program.rendered_callables()["user.main"].object.raw();
     let mut vm =
         BexVm::from_program(program, Arc::new(AtomicBool::new(false))).expect("valid program");
     let entry = vm.heap.compile_time_ptr(entry);

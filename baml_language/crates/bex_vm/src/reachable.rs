@@ -13,10 +13,10 @@ use crate::BexVm;
 
 /// Whether every declaration `ty` names was compiled into the program.
 ///
-/// Decided by tag range: a declared head is content-addressed from its
-/// fully-qualified name, and every runtime-created one — a typebuilder
-/// declaration, *and* a runtime-compiled package member, which is reminted at
-/// graft — comes from the counter range above `DYNAMIC_BASE`. So this is an
+/// Decided by tag range: a compiled declaration's tag is its object index
+/// above `CLASS_BASE`, and every runtime-created one — a typebuilder declaration,
+/// *and* a runtime-compiled package member, which is reminted at graft —
+/// comes from the counter range above `DYNAMIC_BASE`. So this is an
 /// integer compare that touches neither the heap nor a pointer, which is what
 /// makes it stable: tags never change, addresses move under the collector, and
 /// an unresolved head still answers correctly.
@@ -49,7 +49,7 @@ pub fn runtime_definitions(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Vec<Hea
 }
 
 /// [`runtime_definitions`] for a caller that holds the heap permit without
-/// holding a [`BexVm`] — the engine's host-conversion layer.
+/// holding a [`BexVm`].
 ///
 /// This is the primitive: the walk is a heap operation, and `&BexVm` is just a
 /// place the permit is already implied.
@@ -162,4 +162,76 @@ pub fn all_nominals(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> (Vec<HeapPtr>,
         }
     }
     (classes, enums)
+}
+
+/// Where a declaration a type reaches is defined: in a package, or nowhere —
+/// an anonymous declaration, standing for itself.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Reached {
+    Package(HeapPtr),
+    Anonymous(HeapPtr),
+}
+
+/// Where the declaration at `declaration` (whose object is `object`) is
+/// defined, if it is one.
+#[must_use]
+pub fn declared_in(object: &Object, declaration: HeapPtr) -> Option<Reached> {
+    let in_package = |package: HeapPtr| {
+        debug_assert!(
+            !package.is_null(),
+            "a loaded declaration's package is assigned"
+        );
+        Reached::Package(package)
+    };
+    match object {
+        Object::Class(class) => Some(match class.owner.package() {
+            Some(package) => in_package(package),
+            None => Reached::Anonymous(declaration),
+        }),
+        Object::Enum(enm) => Some(match enm.owner.package() {
+            Some(package) => in_package(package),
+            None => Reached::Anonymous(declaration),
+        }),
+        Object::Interface(interface) => Some(in_package(interface.owner)),
+        Object::TypeAlias(alias) => Some(in_package(alias.owner)),
+        _ => None,
+    }
+}
+
+/// Where the declarations at `declarations` are defined, deduplicated in
+/// first-visit order. A resolved head points at a declaration; anything else
+/// is an internal error.
+#[must_use]
+pub fn defined_in(vm: &BexVm, declarations: impl IntoIterator<Item = HeapPtr>) -> Vec<Reached> {
+    let mut reached = Vec::new();
+    for declaration in declarations {
+        let where_ = declared_in(vm.get_object(declaration), declaration)
+            .unwrap_or_else(|| unreachable!("a resolved head points at a declaration"));
+        if !reached.contains(&where_) {
+            reached.push(where_);
+        }
+    }
+    reached
+}
+
+/// Where the declarations `ty` names are defined: its own heads', and every
+/// head each runtime declaration it reaches names in turn — a compiled
+/// declaration's references are its own package's business, recorded in that
+/// package's interface. First-visit order, deduplicated.
+#[must_use]
+pub fn reached(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Vec<Reached> {
+    let mut heads = Vec::new();
+    ty.visit_heads(&mut |head| {
+        if head.is_resolved() {
+            heads.push(head.ptr());
+        }
+    });
+    for declaration in runtime_definitions(vm, ty) {
+        bex_vm_types::head_walk::visit_object_heads(vm.get_object(declaration), &mut |head| {
+            if head.is_resolved() {
+                heads.push(head.ptr());
+            }
+        });
+    }
+    defined_in(vm, heads)
 }

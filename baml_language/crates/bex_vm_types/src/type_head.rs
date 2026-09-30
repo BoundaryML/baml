@@ -8,7 +8,7 @@
 
 use baml_type::typetag::TypeTag;
 
-use crate::HeapPtr;
+use crate::{HeapPtr, ObjectIndex};
 
 /// A nominal type reference: a [`TypeTag`] identity, plus a pointer to reach the
 /// declaration it names.
@@ -21,10 +21,10 @@ use crate::HeapPtr;
 /// **[`TypeTag`] answers "which head is this?"** Every relation — `Eq`, `Ord`,
 /// `Hash` — keys on it and nothing else, so identity is a plain integer compare
 /// that never touches the heap or depends on collector state. Tags are unique
-/// per declaration by construction: named heads are content-addressed and their
-/// collisions are rejected at emit time, and runtime-created heads come from a
-/// monotonic counter that never repeats. Two heads bearing the same tag *are*
-/// the same head.
+/// per declaration by construction: the linker gives every declaration of a
+/// static image its own tag (its object index), and the runtime mints every
+/// other one from a monotonic counter that never repeats. Two heads bearing
+/// the same tag *are* the same head.
 ///
 /// **[`HeapPtr`] answers "where is its declaration?"** It is how a field list,
 /// variant set, or method table is reached — a dereference instead of a
@@ -54,8 +54,8 @@ use crate::HeapPtr;
 /// tag→declaration lookup rather than part of the value. A head is therefore
 /// meaningful before that cache is filled: [`unresolved`](Self::unresolved)
 /// builds one that compares, orders, and hashes correctly but cannot yet be
-/// dereferenced. Emit produces those — there is no heap at compile time — and
-/// the loader fills each pointer in via [`resolve`](Self::resolve).
+/// dereferenced, and the loader fills each pointer in via
+/// [`resolve`](Self::resolve).
 ///
 /// Serialization follows from the same fact: only the tag is written, and
 /// decoding yields an unresolved head. That is not lossy, because the pointer
@@ -63,6 +63,21 @@ use crate::HeapPtr;
 /// just with a cold cache. It is why a compiled `Program` can hold
 /// `RealizedTy<TypeHead>` at all despite `Object`'s Borsh impl being
 /// context-free: there is nothing to resolve *at decode time*, only at load.
+///
+/// # The unit convention: a head is an operand
+///
+/// The compiler never assigns a tag. In a compilation unit
+/// (`baml_linker_types`), a head stands for "the tag of *this* declaration":
+/// the value written where the tag will be is the declaration's OBJECT
+/// OPERAND in the unit's convention — a local bucket offset, or an import
+/// ordinal above `IMPORT_BASE` — exactly as an `AllocInstance` operand names
+/// its class. [`unresolved_operand`](Self::unresolved_operand) builds one and
+/// [`operand`](Self::operand) reads it back. Whoever lays the declaration
+/// into an image assigns the tag and rewrites every head through the same
+/// relocation walk as every other operand: the linker with the declaration's
+/// image index, the grafter with a fresh runtime tag. Within one unit the
+/// relations still hold — one declaration has one operand — so a unit's
+/// types compare and hash consistently before any tag exists.
 ///
 /// The cost is that "unresolved" is not distinguishable in the type system, so
 /// a head the loader misses fails on its first dereference. Loading therefore
@@ -104,9 +119,10 @@ impl TypeHead {
     }
 
     /// A head that knows *which* declaration it names but not yet *where* it
-    /// lives — the form emit produces, since there is no heap at compile time
-    /// and the tag alone is the identity. Dereferencing one before
-    /// [`resolve`](Self::resolve) is a null dereference.
+    /// lives — the form an image carries before the loader binds it, since
+    /// there is no heap at link time and the tag alone is the identity.
+    /// Dereferencing one before [`resolve`](Self::resolve) is a null
+    /// dereference.
     #[must_use]
     pub fn unresolved(tag: TypeTag) -> Self {
         debug_assert!(
@@ -119,24 +135,41 @@ impl TypeHead {
         }
     }
 
-    /// The unresolved head a fully-qualified name denotes.
-    ///
-    /// Tags for *compiled* declarations are content-addressed from the name, so
-    /// this is a pure function — no registry, no heap, nothing to look up. It
-    /// is the one place a name becomes a head, so the rendering that feeds the
-    /// hash cannot drift between the emitter that mints a declaration's
-    /// `type_tag` and the references pointing at it. Both use
-    /// `render_dotted(false)`.
-    ///
-    /// **Compiled declarations only.** A runtime-created declaration's tag
-    /// comes from [`TypeTag::fresh_dynamic`], never from its (synthesized,
-    /// display-only) name — so a head for one must be built as
-    /// `TypeHead::new(just_allocated_ptr, object.type_tag)`, reading the tag
-    /// off the declaration. Calling `of_name` with a runtime declaration's
-    /// name yields a head that matches nothing.
+    /// A head in the unit convention: the declaration's object operand stands
+    /// where the tag will (see the type-level doc). The linker or grafter that
+    /// lays the declaration into an image replaces it with the tag it assigns.
     #[must_use]
-    pub fn of_name(name: &baml_type::TypeName) -> Self {
-        Self::unresolved(TypeTag::of_head(&name.render_dotted(false)))
+    pub fn unresolved_operand(operand: ObjectIndex) -> Self {
+        Self {
+            ptr: HeapPtr::null(),
+            tag: TypeTag::from_i64(
+                i64::try_from(operand.raw()).expect("an object operand fits a type tag"),
+            ),
+        }
+    }
+
+    /// The declaration operand of a head in the unit convention — the inverse
+    /// of [`unresolved_operand`](Self::unresolved_operand), for the emitter
+    /// reading back a head it minted itself. A consumer of a decoded unit
+    /// reads [`try_operand`](Self::try_operand) instead.
+    #[must_use]
+    pub fn operand(self) -> ObjectIndex {
+        self.try_operand()
+            .expect("a unit head carries an object operand")
+    }
+
+    /// The declaration operand of a head in the unit convention, or `None`
+    /// for a head that is not in it — a resolved head, or a tag no object
+    /// operand encodes. What a linker or grafter reads off a decoded unit,
+    /// where a malformed head is a link error rather than an invariant.
+    #[must_use]
+    pub fn try_operand(self) -> Option<ObjectIndex> {
+        if self.is_resolved() {
+            return None;
+        }
+        usize::try_from(self.tag.as_i64())
+            .ok()
+            .map(ObjectIndex::from_raw)
     }
 
     /// The fully-qualified name of the declaration this head points at, or
@@ -144,8 +177,8 @@ impl TypeHead {
     /// points at an anonymous (runtime-created) declaration — which has no
     /// qualified name for any name-keyed consumer to use.
     ///
-    /// The inverse of [`of_name`](Self::of_name), and the boundary conversion: a
-    /// head is a live pointer into this process's heap, so anything leaving the
+    /// The boundary conversion: a head is a live pointer into this process's
+    /// heap, so anything leaving the
     /// VM — an FFI payload, a serialized artifact, a host-facing value —
     /// converts back to names first. Pair it with `try_map_heads` to carry a
     /// whole type across.
@@ -383,11 +416,15 @@ impl std::hash::Hash for TypeHead {
     }
 }
 
-// Only the tag crosses a boundary — the pointer is a per-process cache of the
-// tag→declaration lookup, so writing it would be meaningless and reading it back
-// would be unsound. Decoding therefore yields an unresolved head, which the
-// loader binds. Hand-written rather than derived so `ptr` cannot be folded in by
-// someone adding a `#[derive]`.
+// Only the tag field crosses a boundary — the pointer is a per-process cache
+// of the tag→declaration lookup, so writing it would be meaningless and
+// reading it back would be unsound. Decoding therefore yields an unresolved
+// head: an image's carries the tag the loader binds, a unit's carries the
+// declaration operand the linker or grafter relocates. The decoder cannot
+// tell the two apart and does not try: a head that names nothing is refused
+// where the image or unit is checked (`Program::validate`, the linker's and
+// grafter's operand checks), before any bind. Hand-written rather than
+// derived so `ptr` cannot be folded in by someone adding a `#[derive]`.
 
 impl borsh::BorshSerialize for TypeHead {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
@@ -397,16 +434,9 @@ impl borsh::BorshSerialize for TypeHead {
 
 impl borsh::BorshDeserialize for TypeHead {
     fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
-        let tag = TypeTag::deserialize_reader(reader)?;
-        if !tag.is_head() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("type head carries a non-head tag ({})", tag.as_i64()),
-            ));
-        }
         Ok(Self {
             ptr: HeapPtr::null(),
-            tag,
+            tag: TypeTag::deserialize_reader(reader)?,
         })
     }
 }
@@ -519,7 +549,8 @@ mod tests {
         use borsh::BorshDeserialize;
 
         let mut definition = slot();
-        let resolved = TypeHead::new(ptr_to(&mut definition), TypeTag::of_head("demo.Person"));
+        let tag = TypeTag::of_static_index(7);
+        let resolved = TypeHead::new(ptr_to(&mut definition), tag);
         assert!(resolved.is_resolved());
 
         let decoded = TypeHead::try_from_slice(&borsh::to_vec(&resolved).expect("serialize"))
@@ -527,26 +558,44 @@ mod tests {
         assert_eq!(decoded, resolved, "a decoded head is the same head");
         assert!(!decoded.is_resolved(), "the pointer cache does not travel");
 
-        // Emit builds heads this way, with no heap in sight: the tag is
-        // content-addressed from the name, so it needs nothing to look up.
-        let name = baml_type::TypeName::new(
-            baml_base::Name::new("demo"),
-            vec![],
-            baml_base::Name::new("Person"),
-        );
-        assert_eq!(TypeHead::of_name(&name), resolved);
-        assert!(!TypeHead::of_name(&name).is_resolved());
-
-        // And the loader binds it without disturbing identity.
-        let mut loaded = TypeHead::of_name(&name);
+        // An image carries the tag the linker assigned, and the loader binds
+        // it without disturbing identity.
+        let mut loaded = TypeHead::unresolved(tag);
+        assert_eq!(loaded, resolved);
         loaded.resolve(ptr_to(&mut definition));
         assert_eq!(loaded, resolved);
         assert!(loaded.is_resolved());
+    }
 
-        // A non-head tag on the wire is rejected rather than producing a head
-        // that names a primitive.
-        let primitive = borsh::to_vec(&TypeTag::from_i64(baml_type::typetag::INT)).expect("encode");
-        assert!(TypeHead::try_from_slice(&primitive).is_err());
+    /// In a unit a head is an operand: the declaration's object index stands
+    /// where the tag will, round-trips as itself, and reads back for the
+    /// relocation that replaces it with an assigned tag.
+    #[test]
+    fn a_unit_head_is_a_declaration_operand() {
+        use borsh::BorshDeserialize;
+
+        let operand = ObjectIndex::from_raw(3);
+        let head = TypeHead::unresolved_operand(operand);
+        assert!(!head.is_resolved());
+        assert_eq!(head.operand(), operand);
+
+        let decoded =
+            TypeHead::try_from_slice(&borsh::to_vec(&head).expect("serialize")).expect("decode");
+        assert_eq!(decoded.operand(), operand, "the operand travels as itself");
+
+        // One declaration, one operand: the relations hold within a unit
+        // before any tag exists.
+        assert_eq!(head, TypeHead::unresolved_operand(operand));
+        assert_ne!(head, TypeHead::unresolved_operand(ObjectIndex::from_raw(4)));
+
+        // A consumer reads the operand fallibly: a head outside the unit
+        // convention — a negative tag on the wire, a bound head — is `None`.
+        assert_eq!(head.try_operand(), Some(operand));
+        // A head decodes from its tag alone, so the wire can carry any tag.
+        let negative =
+            TypeHead::try_from_slice(&borsh::to_vec(&TypeTag::from_i64(-7)).expect("serialize"))
+                .expect("decode");
+        assert_eq!(negative.try_operand(), None);
     }
 
     /// A heap-headed type renders by reaching its declaration, so the runtime
@@ -562,20 +611,21 @@ mod tests {
             baml_base::Name::new("Person"),
         );
         let mut declaration = crate::Object::Class(Box::new(crate::types::Class {
-            name: crate::DeclarationName::Declared(name.clone()),
+            name: crate::DeclarationName::Declared(name),
             fields: vec![],
             description: None,
             alias: None,
             docstring: None,
             other: indexmap::IndexMap::default(),
             stream_done: false,
-            type_tag: TypeTag::of_head(&name.render_dotted(false)),
+            type_tag: TypeTag::of_static_index(0),
             has_cleanup: false,
+            methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
-            owner: crate::HeapPtr::null(),
+            owner: crate::types::Owner::anonymous(),
         }));
 
-        let mut head = TypeHead::of_name(&name);
+        let mut head = TypeHead::unresolved(TypeTag::of_static_index(0));
         let unresolved: RealizedTy<TypeHead> = RealizedTy::Class(head, Box::new([]));
         assert_eq!(
             unresolved.to_string(),
@@ -609,8 +659,9 @@ mod tests {
             stream_done: false,
             type_tag,
             has_cleanup: false,
+            methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
-            owner: crate::HeapPtr::null(),
+            owner: crate::types::Owner::anonymous(),
         }));
         let head = TypeHead::new(ptr_to(&mut declaration), type_tag);
 
@@ -628,15 +679,18 @@ mod tests {
         assert_eq!(ty.to_string(), "Widget");
     }
 
-    /// Dynamic tags are disjoint from every content-addressed one, so a
+    /// Dynamic tags are disjoint from every link-assigned one, so a
     /// runtime-created head can never be confused with a compiled declaration.
     /// Primitives sit below both, and are not heads at all.
     #[test]
-    fn dynamic_tags_never_collide_with_named_ones() {
+    fn dynamic_tags_never_collide_with_static_ones() {
         let dynamic = TypeTag::fresh_dynamic();
         assert!(dynamic.is_dynamic() && dynamic.is_head());
-        assert!(!TypeTag::of_head("baml.llm.PromptAst").is_dynamic());
-        assert!(dynamic.as_i64() > TypeTag::of_head("x").as_i64());
+        let last_static = TypeTag::of_static_index((1 << 47) - 1);
+        assert!(!last_static.is_dynamic() && last_static.is_head());
+        assert_eq!(last_static.static_index(), Some((1 << 47) - 1));
+        assert_eq!(dynamic.static_index(), None);
+        assert!(dynamic.as_i64() > last_static.as_i64());
         assert_ne!(TypeTag::fresh_dynamic(), dynamic, "tags are never reused");
 
         // The primitives share the space but are not declared heads.
@@ -662,7 +716,7 @@ mod tests {
         use baml_type::RealizedTy;
 
         let mut definition = slot();
-        let head = TypeHead::new(ptr_to(&mut definition), TypeTag::of_head("demo.Person"));
+        let head = TypeHead::new(ptr_to(&mut definition), TypeTag::of_static_index(11));
 
         let ty: RealizedTy<TypeHead> =
             RealizedTy::List(Box::new(RealizedTy::Class(head, Box::new([]))));

@@ -458,8 +458,8 @@ fn prefix_operands<'a, 'db>(
     }
 }
 
-fn constant_type(constant: &Constant<'_>) -> Option<baml_type::RuntimeTy> {
-    use baml_type::RuntimeTy;
+fn constant_type(constant: &Constant<'_>) -> Option<crate::RuntimeTy> {
+    use crate::RuntimeTy;
     Some(match constant {
         Constant::Int(_) => RuntimeTy::Int,
         Constant::Float(_) => RuntimeTy::Float,
@@ -472,10 +472,8 @@ fn constant_type(constant: &Constant<'_>) -> Option<baml_type::RuntimeTy> {
 
 #[cfg(test)]
 mod tests {
-    use baml_type::RuntimeTy;
-
     use super::*;
-    use crate::{BasicBlock, BlockId, Local, LocalDecl};
+    use crate::{BasicBlock, BlockId, Local, LocalDecl, RuntimeTy};
 
     fn binary(op: BinOp, left: Constant<'static>, right: Constant<'static>) -> Rvalue<'static> {
         Rvalue::BinaryOp {

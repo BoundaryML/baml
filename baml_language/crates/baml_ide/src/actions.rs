@@ -83,7 +83,8 @@ pub fn file_actions(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Fi
                     FunctionOrigin::UserDefined => {}
                     FunctionOrigin::Companion
                     | FunctionOrigin::Internal
-                    | FunctionOrigin::AutoDerive => continue,
+                    | FunctionOrigin::AutoDerive
+                    | FunctionOrigin::TestInitializer => continue,
                 }
                 if func.metadata.is_language_internal {
                     continue;

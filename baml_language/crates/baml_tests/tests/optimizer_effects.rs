@@ -234,7 +234,9 @@ fn dead_allocations_and_guarded_patterns_keep_their_old_instruction_budgets() {
         ("gc_map_survives_pressure", 17),
         ("parameter_default", 10),
     ] {
-        let index = program.function_index(&format!("user.{name}")).unwrap();
+        let index = program.rendered_callables()[&format!("user.{name}")]
+            .object
+            .raw();
         let Some(Object::Function(function)) = program.objects.get(index) else {
             panic!("expected function");
         };
@@ -251,7 +253,9 @@ fn dead_allocations_and_guarded_patterns_keep_their_old_instruction_budgets() {
         "projected_bounds",
         "bounded_arithmetic",
     ] {
-        let index = program.function_index(&format!("user.{name}")).unwrap();
+        let index = program.rendered_callables()[&format!("user.{name}")]
+            .object
+            .raw();
         let Some(Object::Function(function)) = program.objects.get(index) else {
             panic!("expected function");
         };

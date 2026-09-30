@@ -62,11 +62,25 @@ async fn package_functions(
     let Object::Package(package) = (unsafe { pointer.get() }) else {
         panic!("not a package")
     };
-    package
-        .runtime()
-        .unwrap()
+    let owned = package
         .objects
+        .own()
+        .expect("a runtime package owns its objects")
         .iter()
+        .copied();
+    // A function import binds a cell of the importing package to the
+    // dependency's function: the object table holds only what the package
+    // placed, so its cells are where an imported function shows.
+    let bound = package
+        .slots
+        .own()
+        .expect("a runtime package owns its cells")
+        .iter()
+        .filter_map(|cell| cell.load().as_object_ptr());
+    let mut seen = HashSet::new();
+    owned
+        .chain(bound)
+        .filter(|pointer| seen.insert(*pointer))
         .filter_map(|pointer| {
             // SAFETY: the owning package roots its objects under the same permit.
             match unsafe { pointer.get() } {
@@ -334,7 +348,7 @@ function run() -> int {
 async fn initial_ids_match_metadata_and_runtime_identity_is_not_serialized() {
     let source = "function leaf() -> int { 1 } function main() -> int { leaf() }";
     let program = baml_tests::stdlib_prefix::compile_source(source);
-    let index = program.function_index("user.main").unwrap();
+    let index = baml_tests::engine::function_index(&program, "user.main").unwrap();
     assert!(
         program.objects.iter().all(
             |object| !matches!(object, Object::Function(f) if f.telemetry_function_id.is_some())

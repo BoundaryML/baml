@@ -2346,7 +2346,7 @@ function target() -> int { 1 }
 mod item_layer {
     use baml_artifact::ArtifactKind;
     use baml_base::Name;
-    use baml_compiler2_hir_ty::package_interface::PackageInterface;
+    use baml_compiler2_hir_ty::package_interface::WireInterface;
     use baml_db::ProjectDatabase;
 
     use crate::engine::TestDbExt;
@@ -2424,10 +2424,10 @@ mod item_layer {
         let interface = baml_compiler2_hir_ty::package_interface::export_interface(&db, package_id);
         let artifact = baml_artifact::encode(ArtifactKind::PackageInterface, &interface)
             .expect("package interface encodes");
-        let decoded: PackageInterface<baml_type::TypeName> =
+        let decoded: WireInterface =
             baml_artifact::decode(ArtifactKind::PackageInterface, &artifact)
                 .expect("current package interface decodes");
-        let declaration_order: Vec<_> = decoded.types[&Vec::<Name>::new()]
+        let declaration_order: Vec<_> = decoded.rows.types[&Vec::<Name>::new()]
             .keys()
             .map(Name::as_str)
             .collect();
@@ -2440,10 +2440,7 @@ mod item_layer {
         )
         .expect("legacy package interface envelope encodes");
         assert!(matches!(
-            baml_artifact::decode::<PackageInterface<baml_type::TypeName>>(
-                ArtifactKind::PackageInterface,
-                &legacy
-            ),
+            baml_artifact::decode::<WireInterface>(ArtifactKind::PackageInterface, &legacy),
             Err(baml_artifact::Error::Incompatible {
                 artifact_format: 1,
                 runtime_format: baml_artifact::FORMAT_VERSION,

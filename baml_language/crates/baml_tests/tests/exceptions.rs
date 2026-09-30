@@ -52,9 +52,8 @@ async fn catch_stale_field_slot_invalid_field_access() {
         })
         .expect("Short class should exist");
 
-    let oob_idx = program
-        .function_index("user.oob")
-        .expect("user.oob should exist");
+    let oob_idx =
+        baml_tests::engine::function_index(&program, "user.oob").expect("user.oob should exist");
     let Object::Function(func) = program
         .objects
         .get_mut(oob_idx)

@@ -285,23 +285,21 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
 /// Decode a wire `BamlTy` into a `type`-valued external value (for
 /// `InboundValue.ty_value`).
 ///
-/// The wire carries names, and the engine's lane carries identities — but for
-/// a *compiled* declaration the identity is content-addressed from exactly
-/// that name, so this recovers the tag emit assigned rather than inventing
-/// one. A name no declaration bears yields a tag nothing matches, which fails
-/// at the lookup instead of binding to the wrong declaration.
+/// The wire carries names, and the engine's lane carries identities. A host
+/// cannot know a declaration's tag (the linker or the runtime assigns it),
+/// so each head crosses as a spelling with no identity
+/// ([`TaggedTypeName::spelled`](baml_type::TaggedTypeName::spelled)) and the
+/// engine resolves it against its loaded declarations on landing. A name no
+/// declaration bears fails there instead of binding to the wrong one.
 ///
-/// A runtime-created declaration cannot arrive this way at all: its identity
-/// is a counter mint that no name reproduces. It has to cross as a handle, and
-/// that is the gap `BamlTypeHead` closes.
+/// A runtime-created declaration cannot arrive this way at all: it has no
+/// name a host could spell. It has to cross as a handle, and that is the gap
+/// `BamlTypeHead` closes.
 pub fn proto_ty_to_external(ty: &BamlTy) -> Result<BexExternalValue, CtypesError> {
     let named = proto_ty_to_runtime_ty(ty)?;
     let lane = named
         .try_map_heads(&mut |name: &baml_type::TypeName| {
-            Ok::<_, std::convert::Infallible>(baml_type::TaggedTypeName::new(
-                baml_type::typetag::TypeTag::of_head(&name.render_dotted(false)),
-                baml_type::DeclarationName::Declared(name.clone()),
-            ))
+            Ok::<_, std::convert::Infallible>(baml_type::TaggedTypeName::spelled(name.clone()))
         })
         .unwrap_or_else(|never| match never {});
     Ok(BexExternalValue::Adt(BexExternalAdt::Type(lane)))

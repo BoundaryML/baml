@@ -35,7 +35,11 @@
 
 use baml_base::{Name, SourceFile, SourceRoot};
 use baml_compiler_syntax::{SyntaxKind, SyntaxToken};
-use baml_compiler2_hir::{contributions::Definition, item_data, loc::FunctionLoc};
+use baml_compiler2_hir::{
+    contributions::Definition,
+    item_data,
+    loc::{DeclRef, FunctionLoc},
+};
 use baml_compiler2_hir_ty::package_interface::ExportedFunction;
 use baml_type::BuiltinTypeName;
 use serde::Serialize;
@@ -424,7 +428,7 @@ pub fn type_at(
             crate::resolve::TemplatePosition::Driver(func) => Some(type_info_for_definition(
                 db,
                 viewer,
-                Definition::Function(func),
+                DeclRef::Source(Definition::Function(func)),
             )),
             crate::resolve::TemplatePosition::DefaultText => Some(TypeInfo::Documentation {
                 label: "template string".to_string(),
@@ -1134,6 +1138,17 @@ fn generic_type_parameter_info_at(
 pub fn type_info_for_definition(
     db: &dyn baml_compiler2_hir::Db,
     viewer: SourceRoot,
+    def: baml_compiler2_hir_ty::extern_loc::DefinitionRef<'_>,
+) -> TypeInfo {
+    match def {
+        DeclRef::Source(def) => type_info_for_source_definition(db, viewer, def),
+        DeclRef::External(def) => type_info_for_served_definition(db, viewer, def),
+    }
+}
+
+fn type_info_for_source_definition(
+    db: &dyn baml_compiler2_hir::Db,
+    viewer: SourceRoot,
     def: Definition<'_>,
 ) -> TypeInfo {
     match def {
@@ -1330,6 +1345,183 @@ fn display_surface_ty(
     ty: &baml_type::Ty,
 ) -> String {
     render::display_ty_for_file(db, file, ty)
+}
+
+/// Hover for a served package's row: the shapes a source definition renders
+/// into, read off the exported row. There is no defining file to render
+/// from, so every type is spelled addressably from the viewer's package
+/// (`app.Widget`), and the owner is the defining package's spelling plus
+/// the row's namespace. Rows carry no docstrings. A served enum's or class's
+/// impl-provided methods are describe's business; hover lists the class's
+/// own methods.
+fn type_info_for_served_definition(
+    db: &dyn baml_compiler2_hir::Db,
+    viewer: SourceRoot,
+    def: baml_compiler2_hir_ty::extern_loc::ExternDefinition<'_>,
+) -> TypeInfo {
+    use baml_compiler2_hir_ty::extern_loc::{
+        ExternDefinition, extern_class_row, extern_enum_row, extern_function_row,
+        extern_interface_row,
+    };
+
+    let declared = def.declared_at(db);
+    let owner = Some(served_owning_path(db, &declared));
+    let display = |ty: &baml_type::Ty| render::display_addressable_ty(db, viewer, ty);
+    match def {
+        ExternDefinition::Function(loc) => {
+            let row = extern_function_row(db, loc);
+            TypeInfo::Function {
+                name: row.name.as_str().to_string(),
+                params: row
+                    .params
+                    .iter()
+                    .map(|param| FunctionParamInfo {
+                        name: param
+                            .name
+                            .as_ref()
+                            .map_or_else(|| "_".to_string(), |name| name.as_str().to_string()),
+                        ty: display(&param.ty),
+                        optional: param.is_optional(),
+                    })
+                    .collect(),
+                return_type: Some(display(&row.return_type)),
+                throws: Some(display(&row.callable_throws)),
+                note: callback_forwarding_note(row),
+                owner,
+                docstring: None,
+            }
+        }
+        ExternDefinition::Class(loc) => {
+            let row = extern_class_row(db, loc);
+            TypeInfo::Class {
+                name: declared.name().as_str().to_string(),
+                generic_params: row
+                    .generic_params
+                    .iter()
+                    .map(|param| param.name().to_string())
+                    .collect(),
+                fields: row
+                    .fields
+                    .iter()
+                    .map(|(name, ty, _attrs)| (name.as_str().to_string(), display(ty)))
+                    .collect(),
+                methods: row
+                    .methods
+                    .iter()
+                    .map(|method| served_method_sig(db, viewer, method, None))
+                    .collect(),
+                docstring: None,
+                canonical_fqn: render::addressable_path(db, viewer, &declared),
+                owner,
+            }
+        }
+        ExternDefinition::Enum(loc) => TypeInfo::Enum {
+            name: declared.name().as_str().to_string(),
+            variants: extern_enum_row(db, loc)
+                .variants
+                .iter()
+                .map(|variant| variant.as_str().to_string())
+                .collect(),
+            methods: Vec::new(),
+            canonical_fqn: render::addressable_path(db, viewer, &declared),
+            owner,
+        },
+        ExternDefinition::Interface(loc) => {
+            let row = extern_interface_row(db, loc);
+            let sigs =
+                |methods: &[baml_compiler2_hir_ty::package_interface::ExportedFunction]| {
+                    methods
+                        .iter()
+                        .map(|method| served_method_sig(db, viewer, method, None))
+                        .collect::<Vec<_>>()
+                };
+            TypeInfo::Interface {
+                name: declared.name().as_str().to_string(),
+                generic_params: row
+                    .generic_params
+                    .iter()
+                    .map(|param| param.name().to_string())
+                    .collect(),
+                requires: row
+                    .requires
+                    .iter()
+                    .map(|required| display(&required.to_ty()))
+                    .collect(),
+                associated_types: row
+                    .associated_types
+                    .iter()
+                    .map(|assoc| {
+                        let mut line = format!("type {}", assoc.name.as_str());
+                        if let Some(bound) = &assoc.bound {
+                            line.push_str(" extends ");
+                            line.push_str(&display(&bound.to_ty()));
+                        }
+                        if let Some(default) = &assoc.default {
+                            line.push_str(" = ");
+                            line.push_str(&display(default));
+                        }
+                        line
+                    })
+                    .collect(),
+                fields: row
+                    .fields
+                    .iter()
+                    .map(|(name, ty, _attrs)| (name.as_str().to_string(), display(ty)))
+                    .collect(),
+                required_methods: sigs(row.required_methods),
+                default_methods: sigs(row.default_methods),
+                docstring: None,
+                owner,
+                canonical_fqn: render::addressable_path(db, viewer, &declared),
+            }
+        }
+        ExternDefinition::TypeAlias(loc) => TypeInfo::TypeAlias {
+            name: declared.name().as_str().to_string(),
+            expansion: display(&baml_compiler2_hir_ty::layout::alias_value(
+                db,
+                DeclRef::External(loc),
+            )),
+            owner,
+        },
+    }
+}
+
+/// The owner line of a served row: the defining package's spelling, then
+/// the row's namespace — what [`owning_path`] renders for a source file.
+fn served_owning_path(db: &dyn baml_compiler2_hir::Db, declared: &baml_type::DeclName) -> String {
+    let mut path = baml_compiler2_hir::package::spelling(db)
+        .of(declared.root())
+        .to_string();
+    for segment in declared.namespace() {
+        path.push('.');
+        path.push_str(segment.as_str());
+    }
+    path
+}
+
+/// A [`MethodSig`] for a served row's method, its signature spelled from
+/// the viewer's package.
+fn served_method_sig(
+    db: &dyn baml_compiler2_hir::Db,
+    viewer: SourceRoot,
+    method: &ExportedFunction,
+    implements: Option<String>,
+) -> MethodSig {
+    MethodSig {
+        name: method.name.as_str().to_string(),
+        signature: FnSigParts::of_exported(method).render_for_viewer(
+            db,
+            viewer,
+            method_sig_style(),
+        ),
+        is_instance: method.params.first().is_some_and(|param| {
+            param
+                .name
+                .as_ref()
+                .is_some_and(|name| name.as_str() == "self")
+        }),
+        implements,
+    }
 }
 
 fn function_param_matches_effect_slot(

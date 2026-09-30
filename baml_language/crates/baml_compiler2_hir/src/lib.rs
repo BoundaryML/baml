@@ -118,7 +118,7 @@ pub trait Db: salsa::Database {
 /// `Stdlib` roots come FIRST and `Dynamic` roots LAST (the table's order
 /// invariant): everything
 /// assigned by whole-program iteration order downstream (emit's
-/// `GlobalIndex`/`ObjectIndex` slots, MIR's `class_type_tags`) then gives the
+/// `GlobalIndex`/`ObjectIndex` slots) then gives the
 /// stdlib a stable prefix of every index space, independent of user code.
 /// That stability is what lets a precompiled stdlib `Program` slice (keyed
 /// only by compiler build) be spliced into any project's compile. User edits

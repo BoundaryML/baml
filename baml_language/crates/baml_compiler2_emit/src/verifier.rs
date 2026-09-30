@@ -82,10 +82,9 @@ pub(crate) fn verify_mir_emit_invariants(
 #[cfg(test)]
 mod tests {
     use baml_compiler2_mir::{
-        BasicBlock, Constant, Local, LocalDecl, MirFunctionBody, Operand, Place, Rvalue, Statement,
-        StatementKind,
+        BasicBlock, Constant, Local, LocalDecl, MirFunctionBody, Operand, Place, RuntimeTy, Rvalue,
+        Statement, StatementKind,
     };
-    use baml_type::RuntimeTy;
 
     use super::*;
     use crate::analysis::AnalysisResult;
@@ -119,7 +118,7 @@ mod tests {
                     statements: vec![],
                     terminator: Some(Terminator::Switch {
                         discriminant: Operand::Constant(Constant::Int(0)),
-                        arms: vec![(0, BlockId(1))],
+                        arms: vec![(baml_compiler2_mir::SwitchKey::Int(0), BlockId(1))],
                         otherwise: BlockId(2),
                         exhaustive: true,
                         arm_names: vec![],
@@ -176,7 +175,7 @@ mod tests {
                     statements: vec![],
                     terminator: Some(Terminator::Switch {
                         discriminant: Operand::Constant(Constant::Int(0)),
-                        arms: vec![(0, BlockId(1))],
+                        arms: vec![(baml_compiler2_mir::SwitchKey::Int(0), BlockId(1))],
                         otherwise: BlockId(2),
                         exhaustive: true,
                         arm_names: vec![],

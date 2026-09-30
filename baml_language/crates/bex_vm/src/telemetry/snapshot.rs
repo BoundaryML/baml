@@ -490,8 +490,9 @@ mod tests {
             type_tag: baml_type::typetag::TypeTag::from_i64(100),
             stream_done: false,
             has_cleanup: false,
+            methods: indexmap::IndexMap::new(),
             generic_param_count: 1,
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let enum_ptr = vm.tlab.alloc(Object::Enum(Box::new(bex_vm_types::Enum {
             type_tag: baml_type::typetag::TypeTag::from_i64(200),
@@ -528,7 +529,7 @@ mod tests {
             alias: None,
             docstring: None,
             other: indexmap::IndexMap::default(),
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let instance = vm.tlab.alloc_instance_with_type_args(
             class_ptr,

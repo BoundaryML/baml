@@ -28,7 +28,7 @@ fn optimized_instruction_and_local_counts() {
         ("constants", 2, 0),
         ("overwritten", 6, 0),
     ] {
-        let index = program.function_index(&format!("user.{name}")).unwrap();
+        let index = baml_tests::engine::function_index(&program, &format!("user.{name}")).unwrap();
         let Some(Object::Function(function)) = program.objects.get(index) else {
             panic!("expected function")
         };
@@ -40,7 +40,7 @@ fn optimized_instruction_and_local_counts() {
         );
         assert_eq!(function.real_local_count, locals, "{name}");
     }
-    let index = program.function_index("user.and_value").unwrap();
+    let index = baml_tests::engine::function_index(&program, "user.and_value").unwrap();
     let Some(Object::Function(function)) = program.objects.get(index) else {
         panic!("expected function")
     };

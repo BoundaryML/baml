@@ -2012,7 +2012,7 @@ fn synthesize_init_test_function(
         body: Some(FunctionBodyDef::Expr(body, source_map)),
         declarative_meta: None,
         metadata: crate::ast::FunctionMetadata::language_internal(
-            crate::ast::FunctionOrigin::Internal,
+            crate::ast::FunctionOrigin::TestInitializer,
         ),
         attributes: vec![],
         docstring: None,

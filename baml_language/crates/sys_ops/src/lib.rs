@@ -508,10 +508,21 @@ mod schema {
             RuntimeTy::Class(key(name), Box::new([]))
         }
 
+        /// A distinct static-image tag per test declaration name: the name's
+        /// hash as an image index, so the same name keys the same declaration.
+        fn tag_for(name: &TypeName) -> baml_type::typetag::TypeTag {
+            use std::hash::{Hash, Hasher};
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            name.render_dotted(false).hash(&mut hasher);
+            baml_type::typetag::TypeTag::of_static_index(
+                (hasher.finish() & ((1 << 40) - 1)) as usize,
+            )
+        }
+
         /// A lane key for a compiled test declaration.
         fn key(name: &TypeName) -> DefKey {
             DefKey::new(
-                baml_type::typetag::TypeTag::of_head(&name.render_dotted(false)),
+                tag_for(name),
                 baml_type::DeclarationName::Declared(name.clone()),
             )
         }

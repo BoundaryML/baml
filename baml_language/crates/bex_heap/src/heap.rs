@@ -417,6 +417,17 @@ impl BexHeap {
         self.compile_time[index] = object;
     }
 
+    /// A compile-time object, mutably, before the heap is [sealed](Self::seal):
+    /// what the loader fills in once every pointer is known (a declaration's
+    /// owner edge to its package).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out of bounds.
+    pub fn compile_time_object_mut(&mut self, index: usize) -> &mut Object {
+        &mut self.compile_time[index]
+    }
+
     /// Resolve every pooled `ObjectIndex` operand into a `HeapPtr` before the
     /// heap is sealed: bytecode constants of every `Function`, and each
     /// interface's default-method bodies.
@@ -469,6 +480,12 @@ impl BexHeap {
                         method.default_fn = resolve_idx(default);
                     }
                 }
+            } else if let Object::Class(class) = obj {
+                // Likewise the one place a static class's inherent methods
+                // become pointers.
+                for method in class.methods.values_mut() {
+                    method.function_ptr = resolve_idx(method.function);
+                }
             }
         }
     }
@@ -476,10 +493,11 @@ impl BexHeap {
     /// Bind every [`bex_vm_types::TypeHead`] in the compile-time image to the
     /// declaration it names.
     ///
-    /// This is the loader's one-time serialization boundary: emit mints heads
-    /// tag-only (`TypeHead::of_name`), and this pass fills each head's pointer
-    /// off the declaration carrying that tag. The tag→pointer index is built
-    /// here and dropped here — pointer-first lookup means no tag index survives
+    /// This is the loader's one-time serialization boundary: the linker
+    /// assigned every declaration of the image the tag `CLASS_BASE + its
+    /// object index`, and every head carries that tag, so binding is
+    /// arithmetic — the tag names the pool slot — checked against the
+    /// declaration's own tag field. No index is built and nothing survives
     /// into the VM.
     ///
     /// Must run after every placeholder slot is filled (impl rules carry heads
@@ -489,29 +507,24 @@ impl BexHeap {
     /// dispatch that cannot resolve, so a program image that cannot bind
     /// completely must not run at all.
     pub fn bind_type_heads(&mut self) {
-        let mut by_tag: HashMap<baml_type::typetag::TypeTag, HeapPtr> =
-            HashMap::with_capacity(self.compile_time.len() / 4);
-        for index in 0..self.compile_time.len() {
-            let Some(tag) = Self::declaration_tag(&self.compile_time[index]) else {
-                continue;
-            };
-            let previous = by_tag.insert(tag, self.compile_time_ptr(index));
-            // A release build must fail closed here: with two claimants the
-            // insert silently keeps the last one, and every head carrying this
-            // tag would bind to it — cross-wired dispatch, not an error state
-            // anything downstream can detect.
-            assert!(
-                previous.is_none(),
-                "two compile-time declarations carry the tag {tag:?}: the pool must \
-                 hold each declaration exactly once for heads to have one referent",
-            );
-        }
+        let tags: Vec<Option<baml_type::typetag::TypeTag>> = self
+            .compile_time
+            .iter()
+            .map(Self::declaration_tag)
+            .collect();
+        let ptrs: Vec<HeapPtr> = (0..self.compile_time.len())
+            .map(|index| self.compile_time_ptr(index))
+            .collect();
         for object in &mut self.compile_time {
             bex_vm_types::head_walk::visit_object_heads_mut(object, &mut |head| {
-                if !head.is_resolved()
-                    && let Some(&declaration) = by_tag.get(&head.tag())
+                if head.is_resolved() {
+                    return;
+                }
+                let tag = head.tag();
+                if let Some(index) = tag.static_index()
+                    && tags.get(index).copied().flatten() == Some(tag)
                 {
-                    head.resolve(declaration);
+                    head.resolve(ptrs[index]);
                 }
             });
         }
@@ -544,30 +557,49 @@ impl BexHeap {
         );
     }
 
+    /// Refuse a compile-time image holding a switch table that cannot
+    /// dispatch: one that still states its keys (whoever laid the image out
+    /// solves every table), or a solved one that lacks the shape its kind
+    /// states.
+    ///
+    /// Total and active in release builds, like [`Self::bind_type_heads`]:
+    /// the interpreter dispatches through these tables without looking at
+    /// them first, so an image with one it cannot answer must not run.
+    pub fn assert_switch_tables_dispatch(&self) {
+        let undispatchable: Vec<String> = self
+            .compile_time
+            .iter()
+            .filter_map(|object| match object {
+                Object::Function(function) => Some(function),
+                _ => None,
+            })
+            .flat_map(|function| {
+                function
+                    .bytecode
+                    .switch_tables
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, table)| !table.dispatch.is_dispatchable())
+                    .map(|(index, table)| {
+                        format!(
+                            "  function {}: switch table {index} over [{}]",
+                            function.name,
+                            table.key_names.join(", ")
+                        )
+                    })
+            })
+            .collect();
+        assert!(
+            undispatchable.is_empty(),
+            "compile-time image contains switch tables that cannot dispatch:\n{}",
+            undispatchable.join("\n"),
+        );
+    }
+
     /// The tag under which `object` can head a nominal type, or `None` when it
     /// is not a declaration.
     pub fn declaration_tag(object: &Object) -> Option<baml_type::typetag::TypeTag> {
-        match object {
-            Object::Class(class) => Some(class.type_tag),
-            Object::Enum(enm) => Some(enm.type_tag),
-            Object::Interface(interface) => Some(interface.type_tag),
-            Object::TypeAlias(alias) => Some(alias.type_tag),
-            _ => None,
-        }
-    }
-
-    /// A transient tag → declaration index over the compile-time pool, for a
-    /// caller running its own bind over freshly grafted objects (the runtime
-    /// twin of [`Self::bind_type_heads`]). Built per call and dropped by the
-    /// caller: pointer-first lookup means no tag index survives into the VM.
-    pub fn compile_time_declaration_index(&self) -> HashMap<baml_type::typetag::TypeTag, HeapPtr> {
-        let mut by_tag = HashMap::with_capacity(self.compile_time.len() / 4);
-        for index in 0..self.compile_time.len() {
-            if let Some(tag) = Self::declaration_tag(&self.compile_time[index]) {
-                by_tag.insert(tag, self.compile_time_ptr(index));
-            }
-        }
-        by_tag
+        object.declaration_tag()
     }
 
     /// Get the number of compile-time objects.
@@ -1280,6 +1312,84 @@ const _: () = {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A bytecode function dispatching through `table`.
+    fn function_switching_through(table: bex_vm_types::bytecode::SwitchTable) -> Object {
+        use bex_vm_types::{
+            Bytecode, Function, FunctionKind, bytecode::Instruction, types::FunctionOrigin,
+        };
+        Object::Function(Box::new(Function {
+            name: "user.pick".to_string(),
+            source_file: "user.baml".to_string(),
+            docstring: None,
+            declared_name: None,
+            arity: 0,
+            real_local_count: 0,
+            bytecode: Bytecode {
+                instructions: vec![Instruction::DenseTag(0), Instruction::Return],
+                switch_tables: vec![table],
+                ..Bytecode::default()
+            },
+            kind: FunctionKind::Bytecode,
+            telemetry_function_id: None,
+            telemetry_registration: bex_vm_types::FunctionRegistration::default(),
+            telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
+            local_names: Vec::new(),
+            debug_locals: Vec::new(),
+            span: baml_type::Span::fake(),
+            return_type: bex_vm_types::TyTemplate::Unknown,
+            param_names: Vec::new(),
+            param_types: Vec::new(),
+            param_has_default: Vec::new(),
+            display_type_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
+            display_param_types: Vec::new(),
+            display_return_type: String::new(),
+            throws_type: bex_vm_types::TyTemplate::Never,
+            origin: FunctionOrigin::Internal,
+            is_interface_body: false,
+            native_key: None,
+            body_meta: None,
+            runtime_package: HeapPtr::null(),
+        }))
+    }
+
+    fn keys_of(values: &[i64]) -> Vec<bex_vm_types::bytecode::SwitchKey> {
+        values
+            .iter()
+            .copied()
+            .map(bex_vm_types::bytecode::SwitchKey::Kind)
+            .collect()
+    }
+
+    #[test]
+    fn an_image_whose_switches_are_solved_loads() {
+        use bex_vm_types::bytecode::{SwitchDispatch, SwitchTable};
+        let keys = keys_of(&[1, 100, 5_000, 70_000]);
+        let heap = BexHeap::build_unsealed_default(vec![function_switching_through(SwitchTable {
+            dispatch: SwitchDispatch::solved(&keys, |_| {
+                unreachable!("a switch of kind keys names no declaration")
+            }),
+            key_names: vec!["one".to_string()],
+        })]);
+        heap.assert_switch_tables_dispatch();
+    }
+
+    /// Nothing dispatches through a table that only states its keys, so an
+    /// image that holds one is refused where it is loaded rather than where
+    /// a value first reaches the switch.
+    #[test]
+    #[should_panic(expected = "function user.pick: switch table 0 over [one, hundred]")]
+    fn an_image_with_an_unsolved_switch_is_refused() {
+        use bex_vm_types::bytecode::SwitchTable;
+        let heap = BexHeap::build_unsealed_default(vec![function_switching_through(
+            SwitchTable::of_keys(
+                keys_of(&[1, 100]),
+                vec!["one".to_string(), "hundred".to_string()],
+            ),
+        )]);
+        heap.assert_switch_tables_dispatch();
+    }
 
     /// One object, one key — so a host comparing two references to the same
     /// declaration sees one identity.

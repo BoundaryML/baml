@@ -133,16 +133,20 @@ pattern.exclude = ["bex_vm_types"]
 allowed_crates = ["bridge_cffi", "baml_cli", "baml_exec", "baml_pack_host", "baml_query_btel"]
 reason = "baml_* crates should not depend on bex_* crates (baml_query_btel: non-production dev/build dependencies only)."
 
+# `baml_linker_types` carries the compilation-unit wire format over the
+# runtime's object types, and `baml_linker` folds units into a `Program`:
+# both sit on the compiler's output side, beside emit. Keep both
+# `bex_vm_types` allowlists in sync.
 [[namespaces.dependency_rules]]
 pattern.select = "bex_vm_types"
-allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_db", "baml_cli", "baml_exec", "baml_pack_host"]
+allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_linker", "baml_linker_types", "baml_db", "baml_cli", "baml_exec", "baml_pack_host"]
 regular_deps_only = true
-reason = "Only compiler_emit and baml_db crates should depend on bex_vm_types (pure data layer)."
+reason = "Only the compiler's output side (emit, the linker crates, baml_db) should depend on bex_vm_types (pure data layer)."
 
 [[namespaces.dependency_rules]]
 pattern.select = "bex_vm_types"
-allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_db", "baml_cli", "baml_exec", "baml_pack_host", "baml_query_btel"]
-reason = "Only compiler_emit and baml_db crates should depend on bex_vm_types (pure data layer; baml_query_btel: non-production dev/build dependencies only)."
+allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_linker", "baml_linker_types", "baml_db", "baml_cli", "baml_exec", "baml_pack_host", "baml_query_btel"]
+reason = "Only the compiler's output side (emit, the linker crates, baml_db) should depend on bex_vm_types (pure data layer; baml_query_btel: non-production dev/build dependencies only)."
 
 
 # tools namespace configuration

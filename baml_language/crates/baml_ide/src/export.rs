@@ -965,7 +965,9 @@ fn source_export(db: &Db, file: SourceFile, span: TextRange) -> SourceExport {
 fn is_synthetic_origin(origin: FunctionOrigin) -> bool {
     match origin {
         FunctionOrigin::Companion | FunctionOrigin::AutoDerive => true,
-        FunctionOrigin::UserDefined | FunctionOrigin::Internal => false,
+        FunctionOrigin::UserDefined
+        | FunctionOrigin::Internal
+        | FunctionOrigin::TestInitializer => false,
     }
 }
 

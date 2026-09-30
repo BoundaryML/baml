@@ -9,13 +9,10 @@
 
 use std::path::{Path, PathBuf};
 
-use baml_compiler2_emit::{
-    OptLevel, emit_units, generate_project_bytecode, generate_project_bytecode_with_stdlib,
-    generate_stdlib_program,
-};
-use baml_db::{ProjectDatabase, discover_baml_files};
+use baml_compiler2_emit::OptLevel;
+use baml_db::{ProjectDatabase, compile_program, discover_baml_files};
 use baml_tests::engine::TestDbExt;
-use bex_vm_types::{CompilationUnit, RuntimeCompileRequest};
+use bex_vm_types::RuntimeCompileRequest;
 
 /// Read every `.baml` file under `root` into memory, in discovery order.
 fn read_project(root: &Path) -> Vec<(PathBuf, String)> {
@@ -37,7 +34,7 @@ fn compile_to_bytes(root: &Path, sources: &[(PathBuf, String)]) -> Vec<u8> {
     for (path, content) in sources {
         db.file(path, content);
     }
-    let program = generate_project_bytecode(&db, package)
+    let program = compile_program(&db, package, OptLevel::Two)
         .unwrap_or_else(|e| panic!("compilation of {} failed: {e:?}", root.display()));
     borsh::to_vec(&program).expect("borsh serialization failed")
 }
@@ -89,10 +86,10 @@ fn baml_src_project_emit_is_deterministic() {
 }
 
 /// The default (parallel) emit must produce byte-identical output to the
-/// serial reference pass: parallel emit compiles each function into a
-/// watermark-based fragment pool and the serial merge replays the exact
-/// serial pool layout (including cross-function `GenericFunction` interning,
-/// which the `ns_instantiation_expr` fixtures in this corpus exercise).
+/// serial reference pass: parallel emit compiles each body into a fragment
+/// pool with item-local import tables and the merge replays the exact serial
+/// layout (including cross-function `GenericFunction` interning, which the
+/// `ns_instantiation_expr` fixtures in this corpus exercise).
 /// The serial path is selected the same way a user would get it — a
 /// single-threaded rayon pool (`RAYON_NUM_THREADS=1`).
 #[test]
@@ -133,82 +130,14 @@ fn parallel_emit_is_byte_identical_to_serial() {
     }
 }
 
-/// The workspace root the fixture builder added: the package whose program
-/// the test compiles.
-fn package(db: &ProjectDatabase) -> baml_db::SourceRoot {
-    db.workspace_root()
-        .unwrap_or_else(|| unreachable!("the fixture builder adds one workspace root"))
-}
-
-fn build_db(root: &Path, sources: &[(PathBuf, String)]) -> ProjectDatabase {
-    let mut db = ProjectDatabase::new();
-    db.workspace(root);
-    for (path, content) in sources {
-        db.file(path, content);
-    }
-    db
-}
-
-/// The precompiled-stdlib splice oracle: compiling on top of a stdlib
-/// `Program` slice must be byte-identical to a full compile.
-///
-/// The base is built from the *empty* project's database and spliced into the
-/// *full baml_src* compile — proving the stdlib slice is genuinely
-/// user-independent (same bytes regardless of which project's db produced
-/// it), not merely reusable within one project.
-#[test]
-fn stdlib_splice_is_byte_identical_to_full_compile() {
-    let empty_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("projects/empty");
-    let empty_sources = read_project(&empty_root);
-    let base = generate_stdlib_program(&build_db(&empty_root, &empty_sources), OptLevel::Two)
-        .expect("stdlib compile failed");
-    let base_bytes = borsh::to_vec(&base).expect("serialize stdlib base");
-
-    for root in [
-        empty_root.clone(),
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src"),
-    ] {
-        let sources = read_project(&root);
-        let full = compile_to_bytes(&root, &sources);
-
-        let db = build_db(&root, &sources);
-        let spliced =
-            generate_project_bytecode_with_stdlib(&db, package(&db), OptLevel::Two, &base)
-                .unwrap_or_else(|e| panic!("splice compile of {} failed: {e:?}", root.display()));
-        let spliced = borsh::to_vec(&spliced).expect("serialize spliced program");
-
-        assert_eq!(
-            full.len(),
-            spliced.len(),
-            "splice output length differs from full compile for {}",
-            root.display()
-        );
-        assert!(
-            full == spliced,
-            "splice output differs from full compile for {} (first diff at byte {})",
-            root.display(),
-            full.iter()
-                .zip(spliced.iter())
-                .position(|(a, b)| a != b)
-                .unwrap_or(0),
-        );
-
-        // The stdlib slice must also be reproducible from THIS project's db.
-        let rebuilt = generate_stdlib_program(&build_db(&root, &sources), OptLevel::Two)
-            .expect("stdlib recompile failed");
-        let rebuilt = borsh::to_vec(&rebuilt).expect("serialize rebuilt base");
-        assert!(
-            rebuilt == base_bytes,
-            "stdlib slice is not user-independent: differs when built from {}",
-            root.display()
-        );
-    }
-}
-
-fn normalize_unit_file_ids(mut unit: CompilationUnit) -> CompilationUnit {
-    let normalize_object = |object: &mut bex_vm_types::Object| {
+/// A package unit with every database-local debug `FileId` normalized: the
+/// two lanes number `main.baml` differently, and nothing else may differ.
+fn normalize_package_unit(
+    mut unit: baml_linker_types::CompilationUnit,
+) -> baml_linker_types::CompilationUnit {
+    for object in &mut unit.code {
         let bex_vm_types::Object::Function(function) = object else {
-            return;
+            continue;
         };
         let normalized = baml_base::FileId::new(0);
         function.span.file_id = normalized;
@@ -218,20 +147,13 @@ fn normalize_unit_file_ids(mut unit: CompilationUnit) -> CompilationUnit {
         for local in &mut function.debug_locals {
             local.scope_span.file_id = normalized;
         }
-    };
-    for object in &mut unit.code {
-        normalize_object(object);
-    }
-    if let Some(tail) = &mut unit.init_tail {
-        for object in &mut tail.objects {
-            normalize_object(object);
-        }
     }
     unit
 }
 
-/// Exercise the actual source-less-stdlib runtime compiler branch and compare
-/// its Package.compile artifact with the legacy full-source compile oracle.
+/// The runtime compiler — its stdlib served from the embedded interface
+/// blobs — emits the same package unit as a full-source compile of the same
+/// package.
 #[test]
 fn package_compile_prefix_artifact_is_byte_identical_to_full_compile() {
     let source = r#"
@@ -256,27 +178,14 @@ function count(value: RuntimeValue) -> int throws never {
     let mut full_db = ProjectDatabase::new();
     let full_package = full_db.workspace(root);
     full_db.file(root.join("main.baml"), source);
-    let full_user_units = emit_units(&full_db, full_package, OptLevel::One)
-        .expect("compile Package artifact from full stdlib sources")
-        .into_iter()
-        .filter(|unit| unit.package.as_str() == "user")
-        .collect::<Vec<_>>();
+    let full = baml_compiler2_emit::emit_package(&full_db, full_package, OptLevel::One)
+        .expect("compile Package artifact from full stdlib sources");
 
     assert_eq!(
-        prefix_artifact.units.len(),
-        1,
-        "expected one prefix user unit"
-    );
-    assert_eq!(
-        full_user_units.len(),
-        1,
-        "expected one full-compile user unit"
-    );
-    assert_eq!(
-        borsh::to_vec(&normalize_unit_file_ids(prefix_artifact.units[0].clone()))
+        borsh::to_vec(&normalize_package_unit(prefix_artifact.emitted.unit))
             .expect("serialize normalized prefix unit"),
-        borsh::to_vec(&normalize_unit_file_ids(full_user_units[0].clone()))
+        borsh::to_vec(&normalize_package_unit(full.unit))
             .expect("serialize normalized full-compile unit"),
-        "Package.compile prefix artifact differs from the old full-source path",
+        "Package.compile artifact differs from the full-source compile",
     );
 }

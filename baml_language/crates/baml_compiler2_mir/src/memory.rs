@@ -22,12 +22,12 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_type::{Literal, RuntimeTy};
+use baml_type::Literal;
 
 pub use crate::ir::CellId;
 use crate::{
-    AggregateKind, BinOp, Constant, IntrinsicOp, Local, MirFunctionBody, Operand, Place, Rvalue,
-    StatementKind, Terminator, UnaryOp,
+    AggregateKind, BinOp, Constant, IntrinsicOp, Local, MirFunctionBody, Operand, Place, RuntimeTy,
+    Rvalue, StatementKind, Terminator, UnaryOp,
 };
 
 /// A set of resources, read by an evaluation or written by an instruction.
@@ -204,9 +204,9 @@ pub fn walk_rvalue_type_slots(rvalue: &Rvalue<'_>, f: &mut impl FnMut(u32)) {
                     template.for_each_type_arg_ref(f);
                 }
             }
-            AggregateKind::Array | AggregateKind::EnumVariant { .. } => {}
+            AggregateKind::Array => {}
         },
-        Rvalue::IsType { ty_template, .. } => ty_template.for_each_type_arg_ref(f),
+        Rvalue::IsType { test, .. } => test.for_each_type_arg_ref(f),
         Rvalue::MakeClosure {
             type_arg_templates, ..
         }
@@ -263,7 +263,7 @@ pub fn walk_statement_type_slots(kind: &StatementKind<'_>, f: &mut impl FnMut(u3
 /// Walk every frame type-arg slot a terminator reads, calling `f` for each.
 pub fn walk_terminator_type_slots(terminator: &Terminator<'_>, f: &mut impl FnMut(u32)) {
     match terminator {
-        Terminator::NarrowBind { ty_template, .. } => ty_template.for_each_type_arg_ref(f),
+        Terminator::NarrowBind { test, .. } => test.for_each_type_arg_ref(f),
         Terminator::VirtualCall { iface, .. } => iface.for_each_type_arg_ref(f),
         // Call type arguments are `LoadType` temps, read where they are defined.
         Terminator::Goto { .. }

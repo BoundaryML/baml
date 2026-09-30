@@ -73,12 +73,12 @@ pub fn file_throw_facts(
     // the seed map and a later `set_seeded_throw_facts` reliably invalidates it.
     // An absent/empty map yields no hit and falls through to honest extraction.
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    // Seeds are wire data: their heads are spelled, and resolve through the
-    // seeded file's own root. A seed naming a package this root cannot reach
-    // is not this compile's fact and is re-derived honestly below.
+    // A seed's heads are located by edge path from the seeded file's own
+    // root. A seed whose path leaves that root's edges is not this compile's
+    // fact and is re-derived honestly below.
     if let Some(seeds) = db.seeded_throw_facts()
         && let Some(facts) = seeds.by_path(db).get(&file.path(db).display().to_string())
-        && let Some(facts) = respell_seeded_facts(db, pkg_info.root, facts)
+        && let Some(facts) = resolve_seeded_facts(db, pkg_info.root, facts)
     {
         return FileThrowFacts(facts);
     }
@@ -574,35 +574,40 @@ fn collect_widened_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
     }
 }
 
-/// Seeded facts re-spelled into `root`'s compile-time heads; `None` when a
-/// head names a package `root` cannot reach.
-fn respell_seeded_facts(
+/// Seeded facts as `root`'s compile-time heads; `None` when a head's path
+/// leaves `root`'s edges.
+fn resolve_seeded_facts(
     db: &dyn baml_compiler2_hir::Db,
     root: baml_base::SourceRoot,
-    facts: &[baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>],
+    facts: &[baml_type::throw_facts::FunctionThrowFacts<baml_type::PathName>],
 ) -> Option<Vec<baml_type::throw_facts::FunctionThrowFacts>> {
-    let spelling = baml_compiler2_hir::package::spelling(db);
     facts
         .iter()
-        .map(|fact| fact.try_map_heads(&mut |name| spelling.resolve(db, root, name).ok_or(())))
+        .map(|fact| {
+            fact.try_map_heads(&mut |name| {
+                baml_compiler2_hir::package::resolve_located(db, root, name).ok_or(())
+            })
+        })
         .collect::<Result<Vec<_>, ()>>()
         .ok()
 }
 
-/// A file's throw facts spelled for the wire: every head by its root's
-/// spelling in this database. The dual of the seed re-spelling above, and
-/// what the incremental cache persists and compares.
+/// A file's throw facts as the incremental cache persists and compares them:
+/// every head located by edge path from the file's own package. The dual of
+/// the seed resolution above.
 pub fn export_file_throw_facts(
     db: &dyn baml_compiler2_hir::Db,
     file: baml_base::SourceFile,
-) -> Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>> {
-    let spelling = baml_compiler2_hir::package::spelling(db);
+) -> Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::PathName>> {
+    let root = baml_compiler2_hir::file_package::file_package(db, file).root;
     file_throw_facts(db, file)
         .0
         .iter()
         .map(|fact| {
-            fact.try_map_heads::<_, std::convert::Infallible>(&mut |decl| Ok(spelling.wire(decl)))
-                .unwrap_or_else(|never| match never {})
+            fact.try_map_heads::<_, std::convert::Infallible>(&mut |decl| {
+                Ok(baml_compiler2_hir::package::located_head(db, root, decl))
+            })
+            .unwrap_or_else(|never| match never {})
         })
         .collect()
 }

@@ -2138,9 +2138,8 @@ fn is_call_like_result_local(local: Local, du: &LocalDefUse, body: &MirFunctionB
 mod tests {
     use baml_compiler2_mir::{
         BasicBlock, CellId, Constant, Landing, LocalDecl, MirFunctionBody, Operand, Place,
-        Statement, Terminator,
+        RuntimeTy, Statement, Terminator,
     };
-    use baml_type::RuntimeTy;
 
     use super::*;
 
@@ -2201,7 +2200,9 @@ mod tests {
                         kind: StatementKind::Assign {
                             destination: Place::Local(Local(0)),
                             value: Rvalue::Array(
-                                baml_type::TyTemplate::from(baml_type::RealizedTy::unknown()),
+                                baml_compiler2_mir::TyTemplate::from(
+                                    baml_compiler2_mir::RealizedTy::unknown(),
+                                ),
                                 vec![
                                     Operand::copy_local(target),
                                     Operand::Constant(Constant::Int(1)),
@@ -2245,6 +2246,8 @@ mod tests {
     fn call_result_immediate_rejects_incremental_class_spread_init() {
         let result = Local(1);
         let spread_base = Local(2);
+        let mut db = crate::tests::TestDb::default();
+        let file = db.add_file("t.baml", crate::tests::CLASSES_FOR_TESTS);
         let body = MirFunctionBody {
             blocks: vec![
                 BasicBlock {
@@ -2274,7 +2277,7 @@ mod tests {
                             destination: Place::Local(Local(0)),
                             value: Rvalue::Aggregate {
                                 kind: baml_compiler2_mir::AggregateKind::Class {
-                                    name: "GuideHooks".to_string(),
+                                    class: crate::tests::class_ref(&db, file, "GuideHooks"),
                                     type_arg_templates: vec![],
                                 },
                                 fields: vec![
@@ -2518,7 +2521,7 @@ mod tests {
         Statement {
             kind: StatementKind::Assign {
                 destination: Place::Local(destination),
-                value: Rvalue::LoadType(baml_type::TyTemplate::TypeArgRef(slot)),
+                value: Rvalue::LoadType(baml_compiler2_mir::TyTemplate::TypeArgRef(slot)),
             },
             span: None,
         }
@@ -3221,18 +3224,32 @@ mod tests {
         }
     }
 
+    /// An interface constraint for a test terminator. The analysis never
+    /// reads a head, so any root identifies the declaration.
+    fn equals_interface() -> baml_compiler2_mir::TyTemplateInterface {
+        use baml_compiler2_hir::Db as _;
+        let db = crate::tests::TestDb::default();
+        let root = db.source_roots().roots(&db)[0];
+        baml_compiler2_mir::TyTemplateInterface {
+            name: baml_type::DeclName::in_root(
+                root,
+                vec![baml_base::Name::new("ops")],
+                baml_base::Name::new("Equals"),
+            ),
+            generics: Box::new([]),
+            associated_types: Box::new([]),
+        }
+    }
+
     fn virtual_call_into(target: BlockId) -> Terminator<'static> {
         Terminator::VirtualCall {
             has_trace: false,
             argument_layout: None,
-            iface: baml_type::TyTemplateInterface::new(
-                baml_type::TypeName::from_dotted_path("baml.ops.Equals"),
-                Box::new([]),
-                Box::new([]),
-            ),
+            iface: equals_interface(),
             method: "eq".to_string(),
             args: vec![],
             ntypeargs: 0,
+            self_arg: 0,
             destination: Place::Local(Local(1)),
             target,
             unwind: None,
@@ -3480,7 +3497,9 @@ mod tests {
                         kind: StatementKind::Assign {
                             destination: Place::Local(array),
                             value: Rvalue::Array(
-                                baml_type::TyTemplate::from(baml_type::RealizedTy::int()),
+                                baml_compiler2_mir::TyTemplate::from(
+                                    baml_compiler2_mir::RealizedTy::int(),
+                                ),
                                 vec![],
                             ),
                         },
@@ -3554,7 +3573,9 @@ mod tests {
                         kind: StatementKind::Assign {
                             destination: Place::Local(array),
                             value: Rvalue::Array(
-                                baml_type::TyTemplate::from(baml_type::RealizedTy::int()),
+                                baml_compiler2_mir::TyTemplate::from(
+                                    baml_compiler2_mir::RealizedTy::int(),
+                                ),
                                 vec![],
                             ),
                         },

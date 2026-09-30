@@ -40,7 +40,7 @@ fn compiled_function_metadata(source: &str, display_name_suffix: &str) -> (Vec<S
             .collect::<Vec<_>>()
     );
 
-    let (name, idx) = matches[0];
+    let (name, idx) = matches[0].clone();
     let heap = baml_tests::engine::bound_pool(&program);
     let ptr = heap.compile_time_ptr(idx);
     // SAFETY: `ptr` indexes the pool the heap was just built from, and the
@@ -81,7 +81,7 @@ fn compiled_function_display_metadata(
             .collect::<Vec<_>>()
     );
 
-    let (name, idx) = matches[0];
+    let (name, idx) = matches[0].clone();
     let Some(Object::Function(function)) = program.objects.get(idx) else {
         panic!("`{name}` did not point at a function object");
     };

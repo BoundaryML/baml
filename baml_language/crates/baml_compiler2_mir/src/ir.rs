@@ -7,7 +7,21 @@ use std::fmt;
 
 use baml_base::{Name, Span};
 pub use baml_compiler2_ast::BuiltinKind;
-use baml_type::{RealizedTy, RuntimeTy, TyTemplate, TyTemplateInterface};
+use baml_type::DeclName;
+
+/// MIR's types are headed by the compiler's own identity: a declaration IS
+/// its [`DeclName`] (the declaring root plus its path), never a spelling. A
+/// head is rendered as a name only where MIR is displayed or emitted as
+/// display metadata, through the program's spelling table; emit anchors every
+/// head to its declaration's object by identity, so nothing between the
+/// checker and the unit re-derives a declaration from a name.
+pub type RuntimeTy = baml_type::RuntimeTy<DeclName>;
+/// See [`RuntimeTy`].
+pub type RealizedTy = baml_type::RealizedTy<DeclName>;
+/// See [`RuntimeTy`].
+pub type TyTemplate = baml_type::TyTemplate<DeclName>;
+/// See [`RuntimeTy`].
+pub type TyTemplateInterface = baml_type::TyTemplateInterface<DeclName>;
 use subenum::subenum;
 
 // ============================================================================
@@ -119,16 +133,16 @@ pub struct RuntimeSignature {
     pub param_names: Vec<String>,
     /// Parameter types, parallel to `param_names`, as templates over the
     /// callee frame's De Bruijn type-arg slots.
-    pub param_types: Vec<baml_type::TyTemplate>,
+    pub param_types: Vec<TyTemplate>,
     /// Whether each parameter has a default, parallel to `param_names`.
     pub param_has_default: Vec<bool>,
     /// The return type. A template over the callee frame's type-arg slots (see
     /// [`Self::param_types`]).
-    pub return_type: baml_type::TyTemplate,
+    pub return_type: TyTemplate,
     /// The throws type, as a template over the callee frame's type-arg slots.
     /// `never` == cannot throw (the same spelling a function type uses), so a
     /// reconstructed value signature and a written type agree.
-    pub throws_type: baml_type::TyTemplate,
+    pub throws_type: TyTemplate,
     /// The declaration's joined `///` doc-comment lines, if any.
     pub docstring: Option<String>,
     /// The name the declaration was written with; `None` for lambdas
@@ -152,9 +166,9 @@ pub struct RuntimeSignature {
 /// object types; emission converts it directly to `bex_vm_types::InterfaceBound`.
 #[derive(Debug, Clone)]
 pub struct RuntimeInterfaceBound {
-    pub interface: baml_type::TypeName,
-    pub args: Vec<baml_type::TyTemplate>,
-    pub assoc: Vec<(baml_type::Name, baml_type::TyTemplate)>,
+    pub interface: DeclName,
+    pub args: Vec<TyTemplate>,
+    pub assoc: Vec<(baml_type::Name, TyTemplate)>,
 }
 
 /// A point where lowering could not produce code for a CHECKED program: what
@@ -436,6 +450,70 @@ pub enum StatementKind<'db> {
 // Terminator
 // ============================================================================
 
+/// One arm key of a [`Terminator::Switch`].
+///
+/// The compiler never knows a declared head's tag: a class arm names its
+/// DECLARATION, and whoever lays that declaration into an image assigns the
+/// tag the switch dispatches on. A primitive kind's tag is a fixed constant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SwitchKey<'db> {
+    /// A fixed integer: an int literal, an enum discriminant, or a primitive
+    /// kind's tag.
+    Int(i64),
+    /// The tag of this class declaration.
+    Class(baml_compiler2_hir_ty::extern_loc::ClassRef<'db>),
+}
+
+/// What a type test decides membership in, as lowering determined it.
+///
+/// A nominal test names its declaration: lowering resolved the head once, and
+/// the emitter tests identity against the declaration it is handed, never
+/// resolving the head again.
+#[derive(Debug, Clone)]
+pub enum TypeTest<'db> {
+    /// An instance of `class` at `args`; with none, any instance of it (a
+    /// class without parameters has none).
+    Class {
+        class: baml_compiler2_hir_ty::extern_loc::ClassRef<'db>,
+        args: Vec<TyTemplate>,
+    },
+    /// A value of this enum.
+    Enum(baml_compiler2_hir_ty::extern_loc::EnumRef<'db>),
+    /// Any other type, decided against the template — never a class or an
+    /// enum, which lowering states by declaration.
+    Template(TyTemplate),
+}
+
+impl TypeTest<'_> {
+    /// Every frame type-argument slot the test reads.
+    pub fn for_each_type_arg_ref(&self, f: &mut impl FnMut(u32)) {
+        match self {
+            Self::Class { args, .. } => {
+                for arg in args {
+                    arg.for_each_type_arg_ref(f);
+                }
+            }
+            Self::Enum(_) => {}
+            Self::Template(template) => template.for_each_type_arg_ref(f),
+        }
+    }
+
+    /// The type the test decides membership in, as a template: what a
+    /// display shows.
+    pub fn template(&self, db: &dyn baml_compiler2_hir::Db) -> TyTemplate {
+        match self {
+            Self::Class { class, args } => TyTemplate::Class(
+                baml_compiler2_hir_ty::layout::class_head(db, *class),
+                args.clone().into_boxed_slice(),
+            ),
+            Self::Enum(enum_ref) => {
+                TyTemplate::Enum(baml_compiler2_hir_ty::layout::enum_head(db, *enum_ref))
+            }
+            Self::Template(template) => template.clone(),
+        }
+    }
+}
+
 /// How a basic block transfers control.
 ///
 /// Every basic block must end with exactly one terminator. Terminators are
@@ -455,27 +533,26 @@ pub enum Terminator<'db> {
     /// Test one value and bind that same value to `destination` on success.
     NarrowBind {
         source: Operand<'db>,
-        ty_template: TyTemplate,
+        test: TypeTest<'db>,
         destination: Local,
         then_block: BlockId,
         else_block: BlockId,
     },
 
-    /// Multi-way branch based on integer discriminant.
+    /// Multi-way branch on an integer discriminant or a value's type tag.
     Switch {
         discriminant: Operand<'db>,
-        /// Arms: (value, target block)
-        arms: Vec<(i64, BlockId)>,
+        /// Arms: (key, target block).
+        arms: Vec<(SwitchKey<'db>, BlockId)>,
         /// Default target if no arm matches.
         otherwise: BlockId,
         /// Whether this switch is exhaustive (all possible values covered).
         /// When true, the last arm's comparison can be skipped since if all
         /// other arms failed, the discriminant must match the last one.
         exhaustive: bool,
-        /// Symbolic names for arm values (debug metadata only).
-        /// Maps integer discriminant values to human-readable names like
-        /// `"DispatchState.Alpha"` or `"int"`.
-        arm_names: Vec<(i64, String)>,
+        /// Symbolic names for arm keys (debug metadata only): human-readable
+        /// names like `"DispatchState.Alpha"`, `"int"`, or a class's name.
+        arm_names: Vec<(SwitchKey<'db>, String)>,
     },
 
     /// Return from function.
@@ -516,13 +593,14 @@ pub enum Terminator<'db> {
 
     /// Open-world virtual interface-method dispatch.
     ///
-    /// Used when the receiver's concrete type is not statically known — a
-    /// bounded type-var `T extends I`, an interface-existential `I`, a union,
-    /// or `Self` inside an interface default body. The implementation is
-    /// resolved **at runtime** from the receiver's concrete `Self` type against
-    /// `iface` (coherence makes `(Self, iface)` pick at most one impl), then
-    /// invoked exactly like a direct [`Terminator::Call`] — no value is
-    /// materialized. This is the open-world replacement for the old
+    /// Used when `Self`'s concrete type is not statically known — a bounded
+    /// type-var `T extends I`, an interface-existential `I`, a union, or
+    /// `Self` inside an interface default body. The implementation is
+    /// resolved **at runtime** from the concrete type of the dispatch argument
+    /// (`args[ntypeargs + self_arg]`, the method's one `Self`-typed parameter)
+    /// against `iface` (coherence makes `(Self, iface)` pick at most one
+    /// impl), then invoked exactly like a direct [`Terminator::Call`] — no
+    /// value is materialized. This is the open-world replacement for the old
     /// compile-time type-tag switch.
     VirtualCall {
         /// Whether the final `args` operand is an invocation trace attachment.
@@ -538,14 +616,19 @@ pub enum Terminator<'db> {
         method: String,
         /// `args[..ntypeargs]` are the method-level type-argument values
         /// (`Object::Type`, for a generic interface method like
-        /// `Iterator.map<R, E2>`); `args[ntypeargs..]` are the value args,
-        /// **receiver first**. The receiver's runtime concrete type is the `Self`
-        /// the method resolves on; the type args are appended to the resolved
-        /// frame.
+        /// `Iterator.map<R, E2>`); `args[ntypeargs..]` are the value args in
+        /// the method's **declared parameter order** (`self` first when the
+        /// method takes a receiver). The type args are appended to the
+        /// resolved frame.
         args: Vec<Operand<'db>>,
         /// Number of leading `args` entries that are method-level type arguments.
         /// Zero for a non-generic method.
         ntypeargs: usize,
+        /// Index among the value args (`0..args.len() - ntypeargs`) of the one
+        /// whose runtime concrete type is `Self`: the method's single required
+        /// `Self`-typed parameter, `0` for a `self` receiver.
+        self_arg: usize,
+        /// Where to store the result.
         destination: Place,
         /// Block to jump to after the call returns normally.
         target: BlockId,
@@ -865,9 +948,10 @@ pub enum Rvalue<'db> {
     /// key/value types.
     Map(TyTemplate, TyTemplate, Vec<(Operand<'db>, Operand<'db>)>),
 
-    /// Create an aggregate (class instance, enum variant): `ClassName { _1, _2 }`
+    /// Create an aggregate (array, class instance): `ClassName { _1, _2 }`. An
+    /// enum variant is a [`Constant::EnumVariant`], never an aggregate.
     Aggregate {
-        kind: AggregateKind,
+        kind: AggregateKind<'db>,
         fields: Vec<Operand<'db>>,
     },
 
@@ -899,7 +983,7 @@ pub enum Rvalue<'db> {
     /// ([`Rvalue::IsTypeTag`], a proven-sufficient tag).
     IsType {
         operand: Operand<'db>,
-        ty_template: TyTemplate,
+        test: TypeTest<'db>,
     },
 
     /// Coarse runtime type-tag test: `is_type_tag(_1, LIST)`.
@@ -1135,22 +1219,23 @@ impl Rvalue<'_> {
 
 /// The kind of aggregate being constructed.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AggregateKind {
+pub enum AggregateKind<'db> {
     /// An array.
     Array,
     /// A class instance with optional type-arg templates.
     ///
-    /// `type_arg_templates` is non-empty only for generic class instantiations:
-    /// each element corresponds to one class-level type parameter in De Bruijn
-    /// order (matching `enclosing_generic_params()`).  These templates are
-    /// emitted as `LoadType` instructions before `AllocInstance` so the VM can
-    /// store resolved `Ty` values in `Instance::class_type_args`.
+    /// `class` is the declaration the literal constructs, wherever it lives;
+    /// its wire spelling is rendered only at emit's boundary
+    /// ([`crate::class_link_name`]). `type_arg_templates` is non-empty only
+    /// for generic class instantiations: each element corresponds to one
+    /// class-level type parameter in De Bruijn order (matching
+    /// `enclosing_generic_params()`). These templates are emitted as
+    /// `LoadType` instructions before `AllocInstance` so the VM can store
+    /// resolved `Ty` values in `Instance::class_type_args`.
     Class {
-        name: String,
-        type_arg_templates: Vec<baml_type::TyTemplate>,
+        class: baml_compiler2_hir_ty::extern_loc::ClassRef<'db>,
+        type_arg_templates: Vec<TyTemplate>,
     },
-    /// An enum variant.
-    EnumVariant { enum_name: String, variant: String },
 }
 
 // ============================================================================
@@ -1230,8 +1315,11 @@ pub enum Constant<'db> {
     EnumVariant {
         /// The enum's declaration, wherever it lives.
         enum_ref: baml_compiler2_hir_ty::extern_loc::EnumRef<'db>,
-        /// The variant name within the enum.
-        variant: Name,
+        /// The variant's discriminant: its index in the enum's declared
+        /// variant order (`layout::enum_variant_index`), the value the
+        /// runtime `AllocVariant` carries. The name is rendered from it only
+        /// for display.
+        index: u32,
     },
 }
 

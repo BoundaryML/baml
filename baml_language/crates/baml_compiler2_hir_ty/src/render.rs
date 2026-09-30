@@ -16,8 +16,9 @@ use baml_type::{DeclName, Interface, LoweringTy, Name, Ty, TyRenderStrategy};
 ///
 /// Rendering *user-facing* (a viewer is set) spells the viewer's own
 /// package bare, every dependency by the viewer's edge name for it — what
-/// source in that package writes — and a package the viewer has no edge to
-/// by its provenance spelling ([`Spelling::of`]); synthetic effect
+/// source in that package writes, a declaration a dependency re-exports by
+/// the path the re-export gives it — and a package the viewer has no edge
+/// to by its provenance spelling ([`Spelling::of`]); synthetic effect
 /// parameters show as `callback`. Rendering *canonically* (no viewer)
 /// spells every package by its provenance spelling and every parameter
 /// verbatim, which is what dumps and identity-bearing text expect.
@@ -27,6 +28,9 @@ pub struct Viewpoint<'a> {
     viewer: Option<SourceRoot>,
     /// The viewer's dependency edges; empty without a viewer or a database.
     edges: &'a [Dependency],
+    /// The database the viewer's dependencies are read from, for the
+    /// re-exports they carry; none without a database.
+    db: Option<&'a dyn baml_compiler2_hir::Db>,
 }
 
 /// A declaration that source in the viewer's package cannot write: its
@@ -44,6 +48,7 @@ impl<'a> Viewpoint<'a> {
             spelling: spelling(db),
             viewer: Some(viewer),
             edges: viewer.dependencies(db),
+            db: Some(db),
         }
     }
 
@@ -53,6 +58,7 @@ impl<'a> Viewpoint<'a> {
             spelling: spelling(db),
             viewer: None,
             edges: &[],
+            db: None,
         }
     }
 
@@ -64,6 +70,7 @@ impl<'a> Viewpoint<'a> {
             spelling,
             viewer,
             edges: &[],
+            db: None,
         }
     }
 
@@ -96,13 +103,33 @@ impl<'a> Viewpoint<'a> {
 
     /// The dotted path of `decl` as source in the viewer's package writes
     /// it: bare or `ns.Name` inside the viewer's package, `edge.ns.Name` for
-    /// a dependency. [`Unspellable`] when the viewer has no edge to the
-    /// declaring package.
+    /// a dependency, `edge.ns.Name` by the re-export's path for a
+    /// declaration a dependency re-exports. [`Unspellable`] when the viewer
+    /// reaches the declaration no such way.
     pub fn source_path(&self, decl: &DeclName) -> Result<String, Unspellable> {
-        let package = self
-            .package_segment(decl.root())
-            .map_err(|_| Unspellable(decl.clone()))?;
-        Ok(join_path(package, decl))
+        match self.package_segment(decl.root()) {
+            Ok(package) => Ok(join_path(package, decl)),
+            Err(_) => self
+                .reexport_path(decl)
+                .ok_or_else(|| Unspellable(decl.clone())),
+        }
+    }
+
+    /// The path a re-export reachable through one of the viewer's edges
+    /// gives `decl`, if any: `edge.ns.Name` as the re-export spells it.
+    fn reexport_path(&self, decl: &DeclName) -> Option<String> {
+        let db = self.db?;
+        self.edges.iter().find_map(|edge| {
+            let (namespace, name) =
+                crate::package_interface::reexport_paths(db, edge.root).get(decl)?;
+            Some(
+                std::iter::once(edge.name.as_str())
+                    .chain(namespace.iter().map(Name::as_str))
+                    .chain(std::iter::once(name.as_str()))
+                    .collect::<Vec<_>>()
+                    .join("."),
+            )
+        })
     }
 
     /// `ty` as source in the viewer's package writes it, or the first
@@ -142,11 +169,17 @@ impl<'a> Viewpoint<'a> {
     }
 
     /// The dotted path of a declaration for display: `ns.Name` inside the
-    /// viewer's own package, `edge.ns.Name` for a dependency, and the
-    /// provenance spelling for a package the viewer has no edge to (a
-    /// diagnostic must still name it).
+    /// viewer's own package, `edge.ns.Name` for a dependency or for a
+    /// declaration a dependency re-exports (by the re-export's path), and
+    /// the provenance spelling for a package the viewer reaches no other way
+    /// (a diagnostic must still name it).
     pub fn path(&self, decl: &DeclName) -> String {
-        join_path(self.package_prefix(decl.root()), decl)
+        match self.package_segment(decl.root()) {
+            Ok(package) => join_path(package, decl),
+            Err(_) => self
+                .reexport_path(decl)
+                .unwrap_or_else(|| join_path(Some(self.spelling.of(decl.root()).as_str()), decl)),
+        }
     }
 }
 

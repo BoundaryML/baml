@@ -36,6 +36,12 @@ pub struct ObjectKind;
 #[derive(Clone, Copy)]
 pub struct Index<K>(pub(crate) usize, PhantomData<K>);
 
+impl<K> Default for Index<K> {
+    fn default() -> Self {
+        Self(0, PhantomData)
+    }
+}
+
 impl<K> BorshSerialize for Index<K> {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         BorshSerialize::serialize(&self.0, writer)

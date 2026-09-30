@@ -462,14 +462,11 @@ impl BamlWasmRuntime {
         if !self.serves(project) {
             return;
         }
-        let Some((project, package)) = playground::workspace_root(&self.state.borrow()) else {
+        let Some(project) = playground::workspace_root(&self.state.borrow()) else {
             return;
         };
         let revision = self.state.borrow().revision();
-        let ticket = self
-            .playground
-            .borrow_mut()
-            .begin_test_collection(revision, package);
+        let ticket = self.playground.borrow_mut().begin_test_collection(revision);
         let Some(ticket) = ticket else {
             log::debug!("collect_tests: no engine current with the sources");
             return;
@@ -541,7 +538,7 @@ impl BamlWasmRuntime {
     /// bug, and answering it with this workspace's data would be worse than
     /// answering nothing.
     fn serves(&self, project: &str) -> bool {
-        let Some((root, _)) = playground::workspace_root(&self.state.borrow()) else {
+        let Some(root) = playground::workspace_root(&self.state.borrow()) else {
             return false;
         };
         if root == project {
@@ -622,11 +619,7 @@ async fn collect_tests(
 
     let registry = match ticket
         .engine
-        .collect_tests(
-            &ticket.package,
-            call_id,
-            sys_types::CancellationToken::new(),
-        )
+        .collect_tests(call_id, sys_types::CancellationToken::new())
         .await
     {
         Ok(registry) => registry,
