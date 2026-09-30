@@ -60,8 +60,8 @@ with st.sidebar:
         help="Concurrent looks nicer; sequential keeps CPU and loop-lag numbers independent.",
     )
 
-pr_text = (DATA / f"{seed}.txt").read_text()
-truth = json.loads((DATA / f"{seed}.json").read_text())
+pr_text = (DATA / f"{seed}.txt").read_text(encoding="utf-8")
+truth = json.loads((DATA / f"{seed}.json").read_text(encoding="utf-8"))
 
 
 def make_configs() -> list[runners.RunConfig]:

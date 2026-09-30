@@ -36,8 +36,8 @@ async def main() -> None:
     parser.add_argument("--out", type=Path, help="write summaries as JSON lines")
     args = parser.parse_args()
 
-    pr_text = (DATA / f"pr_{args.pr}.txt").read_text()
-    truth = json.loads((DATA / f"pr_{args.pr}.json").read_text())
+    pr_text = (DATA / f"pr_{args.pr}.txt").read_text(encoding="utf-8")
+    truth = json.loads((DATA / f"pr_{args.pr}.json").read_text(encoding="utf-8"))
     render = (lambda plain, _final: json.dumps(plain)) if args.render == "json" else None
 
     rows = []

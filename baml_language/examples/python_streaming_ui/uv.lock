@@ -1453,13 +1453,13 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "anthropic", specifier = ">=0.60" },
+    { name = "anthropic", specifier = ">=1.10" },
     { name = "baml-bridge", directory = "../../sdks/python" },
     { name = "jiter", specifier = ">=0.8" },
-    { name = "openai", specifier = ">=1.60" },
+    { name = "openai", specifier = ">=3.22" },
     { name = "pandas", specifier = ">=2" },
     { name = "pydantic", specifier = ">=2" },
-    { name = "streamlit", specifier = ">=1.40" },
+    { name = "streamlit", specifier = ">=1.64" },
 ]
 
 [[package]]

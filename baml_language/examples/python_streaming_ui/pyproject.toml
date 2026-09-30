@@ -5,9 +5,9 @@ description = "Streamlit app comparing streamed LLM output through baml_sdk, ope
 requires-python = ">=3.10"
 dependencies = [
     "baml_bridge",
-    "streamlit>=1.40",
-    "openai>=1.60",
-    "anthropic>=0.60",
+    "streamlit>=1.64",
+    "openai>=3.22",
+    "anthropic>=1.10",
     "pydantic>=2",
     "jiter>=0.8",
     "pandas>=2",

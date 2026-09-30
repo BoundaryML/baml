@@ -56,6 +56,7 @@ def dump_pr(number: int, repo: str) -> dict:
         check=True,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     ).stdout
     return strip(json.loads(out))
 
@@ -140,8 +141,8 @@ def main() -> None:
     repo = sys.argv[2] if len(sys.argv) > 2 else "BoundaryML/baml"
     pr = dump_pr(number, repo)
     DATA_DIR.mkdir(exist_ok=True)
-    (DATA_DIR / f"pr_{number}.json").write_text(json.dumps(pr, indent=2, ensure_ascii=False) + "\n")
-    (DATA_DIR / f"pr_{number}.txt").write_text(to_plaintext(pr))
+    (DATA_DIR / f"pr_{number}.json").write_text(json.dumps(pr, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    (DATA_DIR / f"pr_{number}.txt").write_text(to_plaintext(pr), encoding="utf-8")
     print(f"wrote data/pr_{number}.json and data/pr_{number}.txt")
 
 

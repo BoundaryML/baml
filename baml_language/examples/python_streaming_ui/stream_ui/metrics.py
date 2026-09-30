@@ -65,14 +65,15 @@ class RunMetrics:
     def summary(self) -> dict[str, Any]:
         gaps = self.gaps_ms
         stream_s = (self.samples[-1].t - self.samples[0].t) if len(self.samples) > 1 else 0.0
-        final_size = self.samples[-1].size if self.samples else 0
+        last_partial_size = self.samples[-1].size if self.samples else 0
+        final_size = rendered_size(to_plain(self.final)) if self.final is not None else last_partial_size
         return {
             "run": self.label,
             "first partial (s)": _r(self.first_partial_s),
             "total (s)": _r(self.total_s),
             "partials": self.partials,
             "partials/s": _r(self.partials / stream_s if stream_s else None, 1),
-            "chars/s": _r(final_size / stream_s if stream_s else None, 0),
+            "chars/s": _r(last_partial_size / stream_s if stream_s else None, 0),
             "gap p50 (ms)": _r(statistics.median(gaps) if gaps else None, 1),
             "gap p95 (ms)": _r(_pct(gaps, 95), 1),
             "gap max (ms)": _r(max(gaps) if gaps else None, 1),
@@ -114,12 +115,14 @@ class LoopLagMonitor:
             await asyncio.sleep(self.interval_s)
             self.lags_ms.append(max(0.0, (time.perf_counter() - t0 - self.interval_s) * 1000))
 
-    def __enter__(self) -> "LoopLagMonitor":
+    async def __aenter__(self) -> "LoopLagMonitor":
         self._task = asyncio.get_running_loop().create_task(self._run())
         return self
 
-    def __exit__(self, *exc: Any) -> None:
+    async def __aexit__(self, *exc: Any) -> None:
         assert self._task is not None
+        # Yield once more so a wake-up delayed by the final render gets recorded.
+        await asyncio.sleep(self.interval_s)
         self._task.cancel()
 
 
@@ -157,20 +160,18 @@ async def measure(
     prev_size = 0
     cpu0 = time.process_time()
     t0 = time.perf_counter()
-    with LoopLagMonitor() as lag:
+    async with LoopLagMonitor() as lag:
         try:
-            pending: Any = None
-            async for value in runners.stream(cfg):
-                # Hold one back so the last yielded value (the final) is reported separately.
-                if pending is not None:
-                    m, prev, prev_size = _on_partial(m, pending, t0, prev, prev_size, render)
-                pending = value
-            m.total_s = time.perf_counter() - t0
-            m.final = pending
-            if render is not None and pending is not None:
-                r0 = time.perf_counter()
-                render(to_plain(pending), True)
-                m.render_s += time.perf_counter() - r0
+            async for item in runners.stream(cfg):
+                if isinstance(item, runners.Partial):
+                    m, prev, prev_size = _on_partial(m, item.value, t0, prev, prev_size, render)
+                    continue
+                m.total_s = time.perf_counter() - t0
+                m.final = item.value
+                if render is not None:
+                    r0 = time.perf_counter()
+                    render(to_plain(item.value), True)
+                    m.render_s += time.perf_counter() - r0
         except Exception as e:  # surfaced in the UI table
             m.total_s = time.perf_counter() - t0
             m.error = f"{type(e).__name__}: {e}"

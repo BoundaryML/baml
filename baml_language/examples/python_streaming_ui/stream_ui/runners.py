@@ -44,6 +44,16 @@ what it adds, why, how it is tested, the gaps it found, and what follows up. Pla
 
 
 @dataclass(frozen=True)
+class Partial:
+    value: Any
+
+
+@dataclass(frozen=True)
+class Final:
+    value: Any
+
+
+@dataclass(frozen=True)
 class RunConfig:
     backend: Backend
     shape: Shape
@@ -96,7 +106,7 @@ def baml_prompt(shape: Shape, pr_text: str) -> str:
     return spec_fn(pr_text).prompt().text()
 
 
-async def _stream_baml(cfg: RunConfig) -> AsyncIterator[Any]:
+async def _stream_baml(cfg: RunConfig) -> AsyncIterator[Partial | Final]:
     import baml_sdk
     from baml_sdk.ai.stream import Done
 
@@ -110,14 +120,14 @@ async def _stream_baml(cfg: RunConfig) -> AsyncIterator[Any]:
         v = await stream.next_async()
         if isinstance(v, Done):
             break
-        yield v
-    yield await stream.final_async()
+        yield Partial(v)
+    yield Final(await stream.final_async())
 
 
 # --------------------------------------------------------------------------- openai
 
 
-async def _stream_openai(cfg: RunConfig) -> AsyncIterator[Any]:
+async def _stream_openai(cfg: RunConfig) -> AsyncIterator[Partial | Final]:
     from openai import AsyncOpenAI
 
     client = AsyncOpenAI()
@@ -136,15 +146,15 @@ async def _stream_openai(cfg: RunConfig) -> AsyncIterator[Any]:
             buf += event.delta
             partial = buf if output_model is None else _partial_json(buf)
             if partial is not None:
-                yield partial
+                yield Partial(partial)
         final = await stream.get_final_response()
-    yield final.output_parsed if output_model is not None else final.output_text
+    yield Final(final.output_parsed if output_model is not None else final.output_text)
 
 
 # --------------------------------------------------------------------------- anthropic
 
 
-async def _stream_anthropic(cfg: RunConfig) -> AsyncIterator[Any]:
+async def _stream_anthropic(cfg: RunConfig) -> AsyncIterator[Partial | Final]:
     from anthropic import AsyncAnthropic
 
     client = AsyncAnthropic()
@@ -163,14 +173,14 @@ async def _stream_anthropic(cfg: RunConfig) -> AsyncIterator[Any]:
             buf += text
             partial = buf if output_model is None else _partial_json(buf)
             if partial is not None:
-                yield partial
+                yield Partial(partial)
         final = await stream.get_final_message()
     if output_model is None:
-        yield "".join(b.text for b in final.content if b.type == "text")
+        yield Final("".join(b.text for b in final.content if b.type == "text"))
     else:
-        yield output_model.model_validate_json(buf)
+        yield Final(output_model.model_validate_json(buf))
 
 
-def stream(cfg: RunConfig) -> AsyncIterator[Any]:
-    """Yields each partial, then the final value last."""
+def stream(cfg: RunConfig) -> AsyncIterator[Partial | Final]:
+    """Yields a `Partial` as each one arrives, then one `Final`."""
     return {"baml": _stream_baml, "openai": _stream_openai, "anthropic": _stream_anthropic}[cfg.backend](cfg)
