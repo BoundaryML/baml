@@ -81,11 +81,6 @@ CLIENTS: dict[str, tuple[str, ...]] = {
     "VertexQwen3NextRouter": (_GCP_SA, "VERTEX_QWEN_OPENAI_BASE_URL"),
 }
 
-# `aws.BedrockClient` does not implement `ai.stream.StreamingClient` yet, so a
-# streamed call raises `StreamingUnsupported`. Strict, so the xfail flips to a
-# failure the day Bedrock streaming lands and this list needs trimming.
-_NO_STREAMING = {name for name, env in CLIENTS.items() if env is _BEDROCK}
-
 # The test Azure subscription has no quota for these models yet, so they have
 # no deployment; AzureGpt5Mini* covers the same client path in the meantime.
 _AWAITING_AZURE_QUOTA = {
@@ -97,7 +92,7 @@ _AWAITING_AZURE_QUOTA = {
 }
 
 
-def _params(streaming: bool) -> list:
+def _params() -> list:
     params = []
     for name in CLIENTS:
         marks = []
@@ -105,10 +100,6 @@ def _params(streaming: bool) -> list:
             marks.append(pytest.mark.skip(reason="set BAML_LIVE_PROVIDER_TESTS=1"))
         elif name in _AWAITING_AZURE_QUOTA:
             marks.append(pytest.mark.skip(reason="no Azure deployment: awaiting quota"))
-        if streaming and name in _NO_STREAMING:
-            marks.append(
-                pytest.mark.xfail(reason="aws.BedrockClient cannot stream", strict=True)
-            )
         params.append(pytest.param(name, id=name, marks=marks))
     return params
 
@@ -136,7 +127,7 @@ def _assert_paris(result) -> None:
 
 
 # SDK_PARITY_LINT(skip): live provider matrix is Python-only
-@pytest.mark.parametrize("name", _params(streaming=False))
+@pytest.mark.parametrize("name", _params())
 def test_provider_call(name: str):
     from baml_sdk.providers import provider_answer
 
@@ -145,7 +136,7 @@ def test_provider_call(name: str):
 
 
 # SDK_PARITY_LINT(skip): live provider matrix is Python-only
-@pytest.mark.parametrize("name", _params(streaming=True))
+@pytest.mark.parametrize("name", _params())
 def test_provider_stream(name: str):
     from baml_sdk.providers import provider_stream_answer
 
