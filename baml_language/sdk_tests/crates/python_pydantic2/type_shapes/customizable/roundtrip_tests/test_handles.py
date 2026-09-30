@@ -1,10 +1,11 @@
 """Coverage for handle-backed stdlib types returned from BAML to Python.
 
-The non-media cases are encode-back tests: Python receives a generated
-class instance with an embedded handle, calls generated stdlib methods
-with that same instance, and the engine must see the original handle
-state. No external dependency: the HTTP test binds an ephemeral localhost
-server and the FS test uses a temp file.
+The non-media cases are encode-back tests through user types that wrap
+stdlib handles (`stdlib_wrappers.baml`): Python receives a user class with
+an embedded stdlib handle, passes that same instance back to user
+functions, and the engine must see the original handle state. No external
+dependency: the HTTP test binds an ephemeral localhost server and the FS
+test uses a temp file.
 """
 
 import os
@@ -15,8 +16,17 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import pytest
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
-from baml_sdk.baml.fs import open as baml_open
-from baml_sdk.baml.http import fetch
+from baml_sdk import (
+    HttpExchange,
+    OpenFile,
+    close_open_file,
+    fetch_http_exchange,
+    http_exchange_text,
+    make_http_exchange,
+    open_read_only,
+    read_open_file,
+    seek_open_file,
+)
 from baml_sdk.baml.media import Image
 
 # 1x1 transparent PNG.
@@ -35,7 +45,18 @@ def test_handles_image_from_base64_roundtrips_payload():
     assert img.base64() == PNG_B64
 
 
-# --- baml.http.Response ---------------------------------------------------
+# --- baml.http.Response wrapped in a user type ----------------------------
+
+
+# SDK_PARITY_LINT(skip): stdlib handles reach the host only through user types in SDKs that omit stdlib functions
+def test_handles_user_type_wraps_http_response():
+    exchange = make_http_exchange("wrapped", "hello from BAML")
+    assert isinstance(exchange, HttpExchange)
+    assert exchange.label == "wrapped"
+    assert exchange.response.status_code == 200
+    assert exchange.response.headers["x-label"] == "wrapped"
+    assert http_exchange_text(exchange) == "hello from BAML"
+
 
 _HTTP_BODY = b"hello from localhost"
 
@@ -65,14 +86,15 @@ def http_server():
         srv.server_close()
 
 
-def test_handles_http_get_response_fields_and_methods(http_server):
-    resp = fetch(http_server)
-    assert resp.status_code == 200
-    assert resp.ok() is True
-    assert resp.text() == _HTTP_BODY.decode()
+# SDK_PARITY_LINT(skip): stdlib handles reach the host only through user types in SDKs that omit stdlib functions
+def test_handles_user_type_wraps_fetched_http_response(http_server):
+    exchange = fetch_http_exchange(http_server)
+    assert exchange.label == http_server
+    assert exchange.response.status_code == 200
+    assert http_exchange_text(exchange) == _HTTP_BODY.decode()
 
 
-# --- baml.fs.File: cursor state preserved across calls --------------------
+# --- baml.fs.File wrapped in a user type: cursor state across calls ------
 
 
 @pytest.fixture
@@ -88,24 +110,27 @@ def temp_file():
         os.rmdir(d)
 
 
-def test_handles_open_file_returns_file_handle(temp_file):
-    f = baml_open(temp_file, "r")
-    assert type(f).__name__ == "File"
-    assert f.close() is None
+# SDK_PARITY_LINT(skip): stdlib handles reach the host only through user types in SDKs that omit stdlib functions
+def test_handles_user_type_wraps_file_handle(temp_file):
+    opened = open_read_only(temp_file)
+    assert isinstance(opened, OpenFile)
+    assert opened.path == temp_file
+    assert type(opened.file).__name__ == "File"
+    assert close_open_file(opened) is None
 
 
 def test_handles_file_cursor_state_persists_across_calls(temp_file):
-    f = baml_open(temp_file, "r")
+    opened = open_read_only(temp_file)
 
     # Relative seeks verify that separate calls share one engine-side handle.
-    assert f.seek_from("current", 3) == 3
-    assert f.seek_from("current", 3) == 6
+    assert seek_open_file(opened, "current", 3) == 3
+    assert seek_open_file(opened, "current", 3) == 6
 
     # Seek back to the start and confirm the cursor actually moved.
-    assert f.seek_from("start", 0) == 0
-    assert f.seek_from("current", 2) == 2
+    assert seek_open_file(opened, "start", 0) == 0
+    assert seek_open_file(opened, "current", 2) == 2
 
-    # text() reads from the current cursor (now at 2) to EOF.
-    assert f.text() == "23456789"
+    # Reading picks up from the current cursor (now at 2) to EOF.
+    assert read_open_file(opened) == "23456789"
 
-    assert f.close() is None
+    assert close_open_file(opened) is None

@@ -19,6 +19,7 @@ sdk_test_harness_runner::swift::test_suite! {
         "TestUnhandledSpawnErrors/test_unhandled_spawn_error_uses_host_default hangs: \
          it re-execs itself via `xctest` and calls waitUntilExit() before draining \
          the child's stderr pipe, and the child never exits";
+    fixture hello_world;
     fixture llm_functions later
         "sdkgen_swift does not emit the stream_e2e_* streaming projections \
          TestStreamingE2E.swift calls — see _BamlSkipped.swift in the generated tree";

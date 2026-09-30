@@ -1,7 +1,7 @@
 import json
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
-from baml_sdk import lorem
+from baml_sdk import lorem, prompt_messages, prompt_text
 from baml_sdk.baml.media import Image
 
 
@@ -22,14 +22,17 @@ def _walk_dicts(value):
 def test_prompt_is_reusable_and_media_survives_request_preview():
     image = Image.from_base64(PNG_B64, "image/png")
     spec = lorem.InspectMedia_spec(photo=image)
+
     prompt = spec.prompt()
 
-    first_text = prompt.text()
-    assert prompt.text() == first_text
+    # Prompts are read through user functions (`stdlib_wrappers.baml`), which
+    # pass the same Prompt handle back to BAML on every call.
+    first_text = prompt_text(prompt)
+    assert prompt_text(prompt) == first_text
 
-    first_messages = prompt.messages()
-    assert prompt.text() == first_text
-    second_messages = prompt.messages()
+    first_messages = prompt_messages(prompt)
+    assert prompt_text(prompt) == first_text
+    second_messages = prompt_messages(prompt)
     assert len(first_messages) == len(second_messages) == 1
     assert first_messages[0].role == second_messages[0].role == "user"
     assert first_messages[0].parts[0] == second_messages[0].parts[0]
@@ -45,8 +48,8 @@ def test_prompt_is_reusable_and_media_survives_request_preview():
     # Rendering another portable Prompt from the same live spec must not
     # consume either the spec or the first Prompt's owned AST.
     second_prompt = spec.prompt()
-    assert second_prompt.text() == first_text
-    assert second_prompt.messages()[0].parts[1].base64() == PNG_B64
+    assert prompt_text(second_prompt) == first_text
+    assert prompt_messages(second_prompt)[0].parts[1].base64() == PNG_B64
 
     request = spec.build_request()
     body = json.loads(request.body)

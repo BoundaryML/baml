@@ -1,8 +1,21 @@
 // Coverage for handle-backed stdlib types returned from BAML. The non-media
-// cases are intentionally encode-back tests: the host receives a generated
-// class instance with an embedded BamlHandle, calls generated stdlib methods
-// with that same instance, and the engine must see the original handle state.
-import { baml } from "./baml_sdk/index.js";
+// cases are intentionally encode-back tests through user types that wrap
+// stdlib handles (`stdlib_wrappers.baml`): the host receives a user class with
+// an embedded BamlHandle, passes that same instance back to user functions,
+// and the engine must see the original handle state.
+import {
+  HttpExchange,
+  OpenFile,
+  baml,
+  close_open_file,
+  fetch_http_exchange_async,
+  http_exchange_text,
+  http_exchange_text_async,
+  make_http_exchange,
+  open_read_only,
+  read_open_file,
+  seek_open_file,
+} from "./baml_sdk/index.js";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { isTestRuntime } from "./test_runtime.js";
 
@@ -30,9 +43,22 @@ describe("roundtrip handles — media Image.fromBase64", () => {
   });
 });
 
+// Constructing a `baml.http.Response` is a host capability that browsers and Workers do not provide.
+describe.runIf(isTestRuntime("node"))("roundtrip handles — user type wrapping baml.http.Response", () => {
+  // SDK_PARITY_LINT(skip): stdlib handles reach the host only through user types in SDKs that omit stdlib functions
+  it("handles_user_type_wraps_http_response", () => {
+    const exchange = make_http_exchange("wrapped", "hello from BAML");
+    expect(exchange).toBeInstanceOf(HttpExchange);
+    expect(exchange.label).toBe("wrapped");
+    expect(exchange.response.status_code).toBe(200);
+    expect(exchange.response.headers["x-label"]).toBe("wrapped");
+    expect(http_exchange_text(exchange)).toBe("hello from BAML");
+  });
+});
+
 // This fixture owns a local node:http listener, which is not a browser or Workers capability.
 describe.runIf(isTestRuntime("node"))(
-  "roundtrip handles — baml.http.Response",
+  "roundtrip handles — user type wrapping a fetched baml.http.Response",
   () => {
     const HTTP_BODY = "hello from localhost";
     let server: import("node:http").Server;
@@ -58,19 +84,21 @@ describe.runIf(isTestRuntime("node"))(
       await new Promise<void>((resolve) => server.close(() => resolve()));
     });
 
-    it("handles_http_get_response_fields_and_methods", async () => {
+    // SDK_PARITY_LINT(skip): stdlib handles reach the host only through user types in SDKs that omit stdlib functions
+    it("handles_user_type_wraps_fetched_http_response", async () => {
       // Must be async: the sync path blocks the Node main thread, starving the
       // libuv loop the localhost server runs on (Python runs it in a thread).
-      const resp = await baml.http.fetch_async(url);
-      expect(resp.status_code).toBe(200);
-      expect(resp.text()).toBe(HTTP_BODY);
+      const exchange = await fetch_http_exchange_async(url);
+      expect(exchange.label).toBe(url);
+      expect(exchange.response.status_code).toBe(200);
+      expect(await http_exchange_text_async(exchange)).toBe(HTTP_BODY);
     });
   },
 );
 
 // These cases create and mutate temporary host files through Node filesystem APIs.
 describe.runIf(isTestRuntime("node"))(
-  "roundtrip handles — baml.fs.File",
+  "roundtrip handles — user type wrapping baml.fs.File",
   () => {
     let dir: string;
     let filePath: string;
@@ -85,23 +113,25 @@ describe.runIf(isTestRuntime("node"))(
       fs.rmSync(dir, { recursive: true, force: true });
     });
 
-    it("handles_baml_fs_open_returns_a_typed_file_handle", () => {
-      const f = baml.fs.open(filePath, "r");
-      expect(f).toBeDefined();
-      expect(f.constructor.name).toBe("File");
-      expect(f.close()).toBeNull();
+    // SDK_PARITY_LINT(skip): stdlib handles reach the host only through user types in SDKs that omit stdlib functions
+    it("handles_user_type_wraps_file_handle", () => {
+      const opened = open_read_only(filePath);
+      expect(opened).toBeInstanceOf(OpenFile);
+      expect(opened.path).toBe(filePath);
+      expect(opened.file.constructor.name).toBe("File");
+      expect(close_open_file(opened)).toBeNull();
     });
 
     it("handles_file_cursor_state_persists_across_calls", () => {
-      const f = baml.fs.open(filePath, "r");
+      const opened = open_read_only(filePath);
 
       // Relative seeks verify that separate calls share one engine-side handle.
-      expect(f.seek_from("current", 3)).toBe(3);
-      expect(f.seek_from("current", 3)).toBe(6);
-      expect(f.seek_from("start", 0)).toBe(0);
-      expect(f.seek_from("current", 2)).toBe(2);
-      expect(f.text()).toBe("23456789");
-      expect(f.close()).toBeNull();
+      expect(seek_open_file(opened, "current", 3)).toBe(3);
+      expect(seek_open_file(opened, "current", 3)).toBe(6);
+      expect(seek_open_file(opened, "start", 0)).toBe(0);
+      expect(seek_open_file(opened, "current", 2)).toBe(2);
+      expect(read_open_file(opened)).toBe("23456789");
+      expect(close_open_file(opened)).toBeNull();
     });
   },
 );
