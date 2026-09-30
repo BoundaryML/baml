@@ -51,6 +51,8 @@ CLIENTS: dict[str, tuple[str, ...]] = {
     "BedrockNovaMicro": _BEDROCK,
     "BedrockNova2Lite": _BEDROCK,
     "BedrockGlm5": _BEDROCK,
+    # Not in the user's config.
+    "BedrockGptOss20b": _BEDROCK,
     # Bedrock Mantle
     "BedrockGpt55Medium": _MANTLE,
     "BedrockGpt56LunaLow": _MANTLE,
@@ -191,6 +193,7 @@ _EXPECTED_REQUESTS: dict[str, tuple[str, tuple[str, ...]]] = {
     "BedrockSonnet5": (_BEDROCK_URL, ('"type":"adaptive"', '"effort":"medium"', '"maxTokens":30000')),
     "BedrockSonnet5Low": (_BEDROCK_URL, ('"type":"adaptive"', '"effort":"low"')),
     "BedrockGlm5": (_BEDROCK_URL, ('"maxTokens":30000', '"temperature":0.0')),
+    "BedrockGptOss20b": (_BEDROCK_URL, ('"maxTokens":4096', '"temperature":0.0')),
     "BedrockOpus5": (_BEDROCK_URL, ('"type":"adaptive"', '"effort":"medium"', '"maxTokens":4096')),
     "BedrockSonnet46": (_BEDROCK_URL, ('"type":"adaptive"', '"effort":"medium"')),
     "BedrockSonnet46Low": (_BEDROCK_URL, ('"type":"adaptive"', '"effort":"low"')),

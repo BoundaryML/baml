@@ -174,7 +174,7 @@ function vertex_maas(model: string, base_url: baml.env.Ref, max_tokens: int?) ->
 // Every leaf client. Keep the names in sync with CLIENTS in
 // test_llm_providers.py.
 function leaf_client(name: string) -> ai.Client {
-  // AWS Bedrock (11)
+  // AWS Bedrock (11, plus BedrockGptOss20b)
   if (name == "BedrockSonnet5") {
     return bedrock("global.anthropic.claude-sonnet-5", 30000, 1.0, claude_adaptive("medium"));
   }
@@ -183,6 +183,12 @@ function leaf_client(name: string) -> ai.Client {
   }
   if (name == "BedrockGlm5") {
     return bedrock("zai.glm-5", 30000, 0.0, null);
+  }
+  // Not in the user's config: an OpenAI open-weight reasoning model on the
+  // Converse API (Mantle's Responses API does not serve gpt-oss). It answers
+  // with a reasoningContent block ahead of the text.
+  if (name == "BedrockGptOss20b") {
+    return bedrock("openai.gpt-oss-20b-1:0", 4096, 0.0, null);
   }
   if (name == "BedrockOpus5") {
     return bedrock("global.anthropic.claude-opus-5", 4096, 1.0, claude_adaptive("medium"));
