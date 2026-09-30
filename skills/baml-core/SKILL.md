@@ -69,7 +69,7 @@ Mostly it behaves like JavaScript/TypeScript, with very similar syntax — but B
 
 1. For a multi-step LLM workflow, you can mirror its steps in the tree: numbered folders (`1_extract/`, `2_classify/`) and a top function that only calls the steps in order.
 2. Group related files into directories once a folder gets crowded (past about 8 files); folders without an `ns_` prefix don't create namespaces, so nest freely.
-3. AI functions and their output classes go in `<name>.prompt.baml` with no logic; the code around them in `<name>.baml`; tests in `<name>.test.baml`, or at the bottom of the source file, as in Rust.
+3. AI functions and their output classes go in `<name>_prompt.baml` with no logic; the code around them in `<name>.baml`; tests in `<name>_test.baml`, or at the bottom of the source file, as in Rust.
 4. Files stay under 400 lines; a function with phases calls one named function per `//#` phase.
 5. Each file gets a one-line header saying what it holds; other comments say why, in at most 10 words.
 6. On output types, `///` comments, `@description`, and enum names all render into `ctx.output_format()`, so editing them edits the prompt; put notes in `//` comments.
