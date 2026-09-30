@@ -159,12 +159,13 @@ function vertex_access_token() -> string {
   )
 }
 
-function vertex_maas(model: string, base_url: baml.env.Ref) -> ai.Client {
+function vertex_maas(model: string, base_url: baml.env.Ref, max_tokens: int?) -> ai.Client {
   openai.GenericClient.new(
     model = model,
     base_url = base_url,
     api_key = vertex_access_token(),
     temperature = 0.0,
+    max_tokens = max_tokens,
   )
 }
 
@@ -293,10 +294,20 @@ function leaf_client(name: string) -> ai.Client {
     );
   }
   if (name == "VertexLlama4ScoutRouter") {
-    return vertex_maas("meta/llama-4-scout-17b-16e-instruct-maas", env.VERTEX_LLAMA_OPENAI_BASE_URL);
+    // FOLLOWUP: the v0 client sets no max_tokens, and neither v0's nor v1's
+    // openai-generic adds a default. Vertex's Llama 4 Scout MaaS endpoint
+    // (us-east5) rejects requests without max_tokens: a 500 for a plain call,
+    // a 400 for a streamed one; it accepts up to 8192. So the v0 client likely
+    // fails today and falls through its fallback chain. 4096 is our choice, not
+    // the user's; confirm with them and fix their config.
+    return vertex_maas(
+      "meta/llama-4-scout-17b-16e-instruct-maas",
+      env.VERTEX_LLAMA_OPENAI_BASE_URL,
+      4096,
+    );
   }
   if (name == "VertexQwen3NextRouter") {
-    return vertex_maas("qwen/qwen3-next-80b-a3b-instruct-maas", env.VERTEX_QWEN_OPENAI_BASE_URL);
+    return vertex_maas("qwen/qwen3-next-80b-a3b-instruct-maas", env.VERTEX_QWEN_OPENAI_BASE_URL, null);
   }
 
   throw baml.errors.InvalidArgument { message: `unknown provider client: ${name}` }

@@ -206,7 +206,8 @@ _EXPECTED_REQUESTS: dict[str, tuple[str, tuple[str, ...]]] = {
     "VertexGeminiFlashLiteLow": ("https://aiplatform.googleapis.com/", ('"thinkingLevel":"low"',)),
     "VertexLlama4ScoutRouter": (
         "https://vertex.example.test/llama/chat/completions",
-        ('"model":"meta/llama-4-scout-17b-16e-instruct-maas"', '"temperature":0.0'),
+        # FOLLOWUP: max_tokens is not in the v0 config; see providers.baml.
+        ('"model":"meta/llama-4-scout-17b-16e-instruct-maas"', '"temperature":0.0', '"max_tokens":4096'),
     ),
     "VertexQwen3NextRouter": (
         "https://vertex.example.test/qwen/chat/completions",
