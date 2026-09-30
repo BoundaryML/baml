@@ -82,7 +82,7 @@ Mostly it behaves like JavaScript/TypeScript, with very similar syntax — but B
 - `.parse(reply)` parses a saved reply.
 - `.prompt()` and `.output_type()` inspect it.
 
-`ai.Agent.new(max_steps = 12, schema_attempts = 2, client, on_event)` is the default loop. It runs the model's tool calls in parallel, and re-asks with a correction when a reply won't parse (that retry doesn't count as a step). It returns `ai.RunResult { value, journal, usage }`.
+`ai.Agent.new(max_steps = 12, schema_attempts = 2, client = null, on_event = null)` is the default loop. It runs the model's tool calls in parallel, and re-asks with a correction when a reply won't parse (that retry doesn't count as a step). It returns `ai.RunResult { value, journal, usage }`.
 
 `on_event` (on `Agent.new` or `.call`) receives each `ai.events.Event` as it happens:
 - `RunStarted`
