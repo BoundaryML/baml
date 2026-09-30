@@ -301,10 +301,13 @@ WHERE c.outcome IS NOT NULL
 UNION ALL
 SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
   'future' AS span_type,
-  COALESCE(t.name, sf.fqn, ef.fqn) AS span_name,
+  COALESCE(t.name, sf.fqn, (SELECT ef.fqn FROM main.call_path ep
+     JOIN main.function_def ef ON ef.rec = ep.rec AND ef.function_id = ep.callee_function_id
+     WHERE ep.rec = t.rec AND ep.call_path_id = t.entry_call_path_id)) AS span_name,
   lower(hex(COALESCE(r.process_id, r.recording_id))) AS process_id,
   __btel_pubid(r.recording_id, COALESCE(pt.thread_id, pc.thread_id)) AS future_id,
-  __btel_hex(COALESCE(sp.node_id, ep.node_id)) AS profiler_node_id,
+  __btel_hex(COALESCE(sp.node_id, (SELECT ep.node_id FROM main.call_path ep
+     WHERE ep.rec = t.rec AND ep.call_path_id = t.entry_call_path_id))) AS profiler_node_id,
   __btel_pubid(r.recording_id, t.parent_id) AS parent_span_id,
   CASE t.outcome WHEN 1 THEN 'return' WHEN 2 THEN IIF(t.panicked, 'panic_error', 'user_error')
     WHEN 3 THEN 'cancel_error' END AS status,
@@ -330,8 +333,6 @@ FROM main.thread t
 JOIN main.recording r ON r.rec = t.rec
 LEFT JOIN main.call_path sp ON sp.rec = t.rec AND sp.call_path_id = t.spawn_call_path_id
 LEFT JOIN main.function_def sf ON sf.rec = t.rec AND sf.function_id = sp.callee_function_id
-LEFT JOIN main.call_path ep ON ep.rec = t.rec AND ep.call_path_id = t.entry_call_path_id
-LEFT JOIN main.function_def ef ON ef.rec = t.rec AND ef.function_id = ep.callee_function_id
 LEFT JOIN main.thread pt ON pt.rec = t.rec AND pt.thread_id = t.parent_id
 LEFT JOIN main.call pc ON pc.rec = t.rec AND pc.call_id = t.parent_id
 LEFT JOIN main.epoch e ON e.rec = t.rec AND e.epoch_id = t.epoch_id AND e.defined = 1
@@ -392,10 +393,13 @@ LEFT JOIN main.epoch e ON e.rec = c.rec AND e.epoch_id = t.epoch_id AND e.define
 UNION ALL
 SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
   'future' AS span_type,
-  COALESCE(t.name, sf.fqn, ef.fqn) AS span_name,
+  COALESCE(t.name, sf.fqn, (SELECT ef.fqn FROM main.call_path ep
+     JOIN main.function_def ef ON ef.rec = ep.rec AND ef.function_id = ep.callee_function_id
+     WHERE ep.rec = t.rec AND ep.call_path_id = t.entry_call_path_id)) AS span_name,
   lower(hex(COALESCE(r.process_id, r.recording_id))) AS process_id,
   __btel_pubid(r.recording_id, COALESCE(pt.thread_id, pc.thread_id)) AS future_id,
-  __btel_hex(COALESCE(sp.node_id, ep.node_id)) AS profiler_node_id,
+  __btel_hex(COALESCE(sp.node_id, (SELECT ep.node_id FROM main.call_path ep
+     WHERE ep.rec = t.rec AND ep.call_path_id = t.entry_call_path_id))) AS profiler_node_id,
   __btel_pubid(r.recording_id, t.parent_id) AS parent_span_id,
   __btel_utc(t.started_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
     e.multiplier, e.shift) AS start_time,
@@ -410,8 +414,6 @@ FROM main.thread t
 JOIN main.recording r ON r.rec = t.rec
 LEFT JOIN main.call_path sp ON sp.rec = t.rec AND sp.call_path_id = t.spawn_call_path_id
 LEFT JOIN main.function_def sf ON sf.rec = t.rec AND sf.function_id = sp.callee_function_id
-LEFT JOIN main.call_path ep ON ep.rec = t.rec AND ep.call_path_id = t.entry_call_path_id
-LEFT JOIN main.function_def ef ON ef.rec = t.rec AND ef.function_id = ep.callee_function_id
 LEFT JOIN main.thread pt ON pt.rec = t.rec AND pt.thread_id = t.parent_id
 LEFT JOIN main.call pc ON pc.rec = t.rec AND pc.call_id = t.parent_id
 LEFT JOIN main.epoch e ON e.rec = t.rec AND e.epoch_id = t.epoch_id AND e.defined = 1
