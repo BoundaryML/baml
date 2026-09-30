@@ -141,9 +141,19 @@ fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer(
     assert_eq!(reference(sections[2]), ContextReference::Unavailable);
     assert_eq!(reference(sections[3]), ContextReference::Empty);
     assert!(read.files.iter().all(|file| {
+        let has_context = file.spans.as_ref().is_some_and(|spans| {
+            spans
+                .sections
+                .iter()
+                .any(|section| section.context.is_some())
+        });
+        let required = if has_context {
+            btel_settings::encoding::CONTEXT_FORMAT_MINOR
+        } else {
+            0
+        };
         file.header.as_ref().unwrap().format_minor
-            == btel_settings::encoding::FORMAT_MINOR
-                .max(btel_settings::encoding::CONTEXT_FORMAT_MINOR)
+            == btel_settings::encoding::FORMAT_MINOR.max(required)
     }));
 
     let cas = CasStore::new(root.path().join("cas"), CasLimits::default());

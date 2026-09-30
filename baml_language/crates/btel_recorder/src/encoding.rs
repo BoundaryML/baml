@@ -180,6 +180,7 @@ impl EncodedSpans {
             end_container(&mut self.bytes, self.section_length);
             end_container(&mut self.bytes, 1);
         }
+        self.required_minor = 0;
         std::mem::take(&mut self.bytes)
     }
 }

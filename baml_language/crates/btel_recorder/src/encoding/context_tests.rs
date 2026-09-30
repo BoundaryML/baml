@@ -82,6 +82,40 @@ fn every_file_repeats_the_run_context_without_a_dictionary() {
 }
 
 #[test]
+fn finishing_resets_file_features_without_losing_context_selection() {
+    let mut writer = EncodedSpans::default();
+    let thread = allocate_telemetry_id();
+    writer.select_context(thread, Some(context(7)));
+    writer.event(
+        thread,
+        Event::Log(proto::LogEvent {
+            parent_id: thread.get(),
+            function_id: 1,
+            level: proto::LogLevel::Info as i32,
+            ..Default::default()
+        }),
+    );
+    assert_eq!(
+        writer.format_minor(),
+        btel_settings::encoding::LOG_FORMAT_MINOR
+    );
+    assert_eq!(sections(&mut writer)[0].context, Some(context(7)));
+    assert_eq!(writer.format_minor(), btel_settings::encoding::FORMAT_MINOR);
+
+    event(&mut writer, thread);
+    assert_eq!(
+        writer.format_minor(),
+        btel_settings::encoding::CONTEXT_FORMAT_MINOR
+    );
+    assert_eq!(sections(&mut writer)[0].context, Some(context(7)));
+
+    writer.begin_chunk();
+    event(&mut writer, thread);
+    assert_eq!(writer.format_minor(), btel_settings::encoding::FORMAT_MINOR);
+    assert_eq!(sections(&mut writer)[0].context, None);
+}
+
+#[test]
 fn repeated_chunk_selection_can_coalesce_but_empty_and_unavailable_cannot() {
     let mut writer = EncodedSpans::default();
     let thread = allocate_telemetry_id();

@@ -95,8 +95,8 @@ async fn recorded_argument_layouts_align_with_captured_input_slots() {
     let mut unavailable = 0;
     let mut paths = HashMap::new();
     let mut inputs = Vec::new();
-    let mut expected_minor = btel_settings::encoding::FORMAT_MINOR;
     for file in &read.files {
+        let mut expected_minor = btel_settings::encoding::FORMAT_MINOR;
         if file.spans.as_ref().is_some_and(|spans| {
             spans
                 .sections
