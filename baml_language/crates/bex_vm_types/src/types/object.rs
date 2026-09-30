@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 
 use crate::{
     ArrayContainer, BoundMethod, Class, Enum, Function, GenericFunction, HostClosure, Instance,
-    MapContainer, Uint8ArrayContainer, UnscheduledFuture, Value, Variant,
+    MapContainer, Uint8ArrayContainer, Value, Variant,
     types::{
         Array, Cell, Closure, FunctionType, FutureType, InterfaceDef, Map, Package,
         RuntimeImplRule, TypeAliasDef,
@@ -114,11 +114,6 @@ pub enum Object {
     Float(f64),
 
     Future(crate::Future),
-    /// Only used for requesting scheduling of a future, passed from VM to engine.
-    /// Boxed: under `heap_debug` the instrumented `HeapPtr` makes the inline
-    /// payload (closure + name + config pointers) push `Object` past its
-    /// 64-byte interpreter-hot-loop budget.
-    UnscheduledFuture(Box<UnscheduledFuture>),
 
     /// Opaque Rust-managed data, accessed via `Arc<dyn Any>` downcast.
     /// Used for `$rust_type` fields in builtin classes (including media classes Pdf, Audio, Video, Image).
@@ -205,12 +200,6 @@ enum ObjectWire {
     ),
     Float(f64),
     Future(crate::Future),
-    // Boxed like the other large variants (and like `Object`'s own
-    // `UnscheduledFuture`): the struct carries the spawn's `Future<T, E>` type
-    // arguments, which are `RealizedTy`s, so inline it would set the whole
-    // enum's size. Borsh treats `Box<T>` transparently, so the wire form is
-    // unchanged.
-    UnscheduledFuture(Box<UnscheduledFuture>),
     /// Carries the described type, which is the whole of a `type` value: two
     /// `type` values are the same type exactly when their payloads are
     /// equivalent, so a round trip through this form is lossless. No compiled
@@ -255,7 +244,6 @@ impl BorshSerialize for Object {
             ),
             Self::Float(v) => ObjectWire::Float(*v),
             Self::Future(v) => ObjectWire::Future(v.clone()),
-            Self::UnscheduledFuture(v) => ObjectWire::UnscheduledFuture(v.clone()),
             Self::Type(v) => ObjectWire::Type(Box::new(v.ty.clone())),
             Self::RustData(_) => {
                 return Err(std::io::Error::new(
@@ -316,7 +304,6 @@ impl BorshDeserialize for Object {
             }),
             ObjectWire::Float(v) => Self::Float(v),
             ObjectWire::Future(v) => Self::Future(v),
-            ObjectWire::UnscheduledFuture(v) => Self::UnscheduledFuture(v),
             ObjectWire::Type(v) => Self::Type(Box::new(crate::types::TypeValue::new(*v))),
         })
     }
@@ -363,7 +350,6 @@ impl std::fmt::Display for Object {
             Object::RustData(_) => write!(f, "<rust_data>"),
             Object::Type(tv) => write!(f, "<type: {}>", tv.ty),
             Object::Future(future) => write!(f, "{}", future.read()),
-            Object::UnscheduledFuture(_) => write!(f, "<unscheduled: spawn>"),
             Object::Float(v) => write!(f, "{v}"),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(kind) => write!(f, "<sentinel {kind:?}>"),
@@ -394,7 +380,6 @@ pub enum ObjectType {
     TypeAlias,
     Variant,
     Future(FutureType),
-    UnscheduledFuture,
     Type,
     RustData,
     Float,
@@ -426,7 +411,6 @@ impl ObjectType {
             Object::RustData(_) => Self::RustData,
             Object::Type(_) => Self::Type,
             Object::Future(fut) => Self::Future(fut.into()),
-            Object::UnscheduledFuture(_) => Self::UnscheduledFuture,
             Object::Float(_) => Self::Float,
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
@@ -465,7 +449,6 @@ impl std::fmt::Display for ObjectType {
             ObjectType::TypeAlias => write!(f, "type_alias"),
             ObjectType::Variant => write!(f, "variant"),
             ObjectType::Future(future_type) => write!(f, "{future_type}"),
-            ObjectType::UnscheduledFuture => write!(f, "unscheduled_future"),
             ObjectType::String => write!(f, "string"),
             ObjectType::Bigint => write!(f, "bigint"),
             ObjectType::Uint8Array => write!(f, "uint8array"),

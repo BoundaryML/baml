@@ -426,19 +426,12 @@ Require(
 _ = writer.Flush();
 _ = writer.Close();
 
-using Baml.Spawn.TaskGroup group = Baml.Spawn.TaskGroup.New(2, "stdlib-resources");
-Require(group.Limit() == 2 && group.Name() == "stdlib-resources", "TaskGroup construction changed");
-_ = group.SetLimit(1);
+using Baml.Spawn.Limit limit = Baml.Spawn.Limit.New(2);
+Require(limit.Capacity() == 2, "Limit construction changed");
+_ = Expect<Baml.BamlErrorException>(() => Baml.Spawn.Limit.New(0));
 Require(
-    group.Limit() == 1
-        && group.ActiveCount() == 0
-        && group.QueuedCount() == 0
-        && group.Cancel() == 0,
-    "TaskGroup state methods changed");
-
-using Boundary.LocalId localId = Boundary.Functions.Id();
-using Boundary.LocalId capturedId = localId.Capture(inputs: true, output: false, error: true);
-Require(!capturedId.IsClosed, "boundary.LocalId.capture returned a closed resource");
+    limit.ActiveCount() == 0 && limit.QueuedCount() == 0,
+    "Limit state methods changed");
 
 _ = csvReader.Close();
 

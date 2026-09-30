@@ -18,19 +18,22 @@ pub mod heap_ptr;
 pub mod identity;
 pub mod indexable;
 pub mod lazy_biased_mutex;
+pub mod limit;
 pub mod relink;
 mod roots;
 pub mod runtime_compile;
-pub mod task_group;
+pub mod trace;
 pub mod type_head;
 pub mod types;
 
 pub use bex_str::BexStr;
+pub use btel_types::{FunctionRegistration, TelemetryPolicyId};
 pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp};
 pub use heap_ptr::HeapPtr;
 pub use indexable::{
     GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
 };
+pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet};
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use runtime_compile::{
     RuntimeCompileDiagnostic, RuntimeCompileMode, RuntimeCompileRequest,
@@ -42,7 +45,6 @@ pub use runtime_compile::{
     RuntimeProjectedSurface, RuntimeReExport, RuntimeReExportKind, RuntimeSessionCompileRequest,
     RuntimeSourceSpan, SessionContract, SessionEvalLease, SessionVisibleKind, SessionVisibleSymbol,
 };
-pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};
 pub use type_head::TypeHead;
 
 // ── The runtime's instantiation of the `baml_type` family ────────────────────
@@ -128,17 +130,16 @@ pub fn name_headed_realized(ty: &RealizedTy) -> Result<baml_type::RealizedTy, Un
     ty.try_map_heads(&mut |head| head.declared_name().ok_or(UnnameableHead(head.tag())))
 }
 pub use types::{
-    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BodyKey, BoundMethod,
-    CaptureCategory, CaptureOption, Class, ClassField, ClassMethodDef, CleanupLatch,
-    ClientBuildMeta, ClientBuildType, ConstValue, DeclPath, DeclarationName, Enum, EnumVariant,
-    FnPath, Function, FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, Future,
-    FutureRead, GenericFunction, HostClosure, ImplBodyCoherence, ImplBodyKey, ImplCoherenceKey,
-    Instance, InterfaceBound, InterfaceKey, ItemPath, LockedContainer, LockedReadGuard,
-    LockedWriteGuard, MapContainer, MapReadGuard, MapWriteGuard, MediaValue, Object, ObjectType,
-    PanicClass, Program, PromptAst, RenderedCallable, RetryPolicyMeta, SpelledBound, SysOp,
-    SysOpErrorCategory, SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard,
-    Uint8ArrayWriteGuard, UnscheduledFuture, Value, ValueKind, Variant, format_float,
-    sys_op_for_path, type_tags,
+    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BodyKey, BoundMethod, Class,
+    ClassField, ClassMethodDef, CleanupLatch, ClientBuildMeta, ClientBuildType, ConstValue,
+    DeclPath, DeclarationName, Enum, EnumVariant, FnPath, Function, FunctionKind, FunctionMeta,
+    FunctionOrigin, Future, FutureRead, GenericFunction, HostClosure, ImplBodyCoherence,
+    ImplBodyKey, ImplCoherenceKey, Instance, InterfaceBound, InterfaceKey, ItemPath,
+    LockedContainer, LockedReadGuard, LockedWriteGuard, MapContainer, MapReadGuard, MapWriteGuard,
+    MediaValue, Object, ObjectType, PanicClass, Program, PromptAst, RenderedCallable,
+    RetryPolicyMeta, SpelledBound, SysOp, SysOpErrorCategory, SysOpPanicCategory,
+    Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard, Value, ValueKind, Variant,
+    format_float, sys_op_for_path, type_tags,
 };
 
 /// Used to check if the VM should yield early.

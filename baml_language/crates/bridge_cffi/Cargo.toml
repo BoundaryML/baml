@@ -21,6 +21,7 @@ rustls = [ "sys_native/rustls" ]
 bundle-http = [ "sys_native/bundle-http" ]
 
 [dependencies]
+baml_artifact = { workspace = true }
 baml_version = { workspace = true }
 bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }
@@ -49,10 +50,10 @@ wasm-bindgen-futures = { workspace = true }
 cbindgen = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dev-dependencies]
-find-msvc-tools = { workspace = true }
 
 [dev-dependencies]
 baml_artifact = { workspace = true, features = [ "test-support" ] }
+cc = { workspace = true }
 
 [package.metadata.ci]
 wasm_support = true

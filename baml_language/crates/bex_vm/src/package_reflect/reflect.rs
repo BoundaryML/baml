@@ -1063,6 +1063,8 @@ impl BamlClassPackage for PackageReflectImpl {
         package.test_init = loaded.test_init;
         package.init = loaded.init;
 
+        // Linking is complete. First telemetry observation may now register
+        // owned definitions; imported functions keep their IDs and registration.
         let wrapper = copy::Package {
             _inner: Value::object(package_ptr),
         }

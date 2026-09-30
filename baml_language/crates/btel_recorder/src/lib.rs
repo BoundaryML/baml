@@ -1,0 +1,956 @@
+//! Synchronous borrowed-record to Protobuf encoding and aggregate merging.
+//!
+//! `RecordingBuilder` is shared by local and cloud publishers. `RecordingPublisher`
+//! adapts it to completed-file callbacks. The `Publisher` interface is defined by
+//! `btel_processor`; no storage or networking is implemented here.
+
+use std::{collections::BTreeMap, sync::Arc};
+
+use btel_processor::AggregateDelta;
+use btel_records::SpanRecord;
+use btel_snapshot::Snapshot;
+use btel_types::{CallPathNodeId, TelemetryId};
+
+mod clock;
+mod encoding;
+mod errors;
+mod flags;
+mod functions;
+mod merge;
+mod recording;
+pub use flags::CompletionFlags;
+pub use recording::{
+    ProcessRecording, RecordingBuilder, RecordingConfig, RecordingError, RecordingId,
+    RecordingPublisher, SealedFile,
+};
+
+/// Generated wire messages, never the VM's in-memory layout. Scalar span
+/// messages encode while borrowed; no input references escape the callback.
+#[allow(clippy::all, clippy::pedantic, clippy::empty_structs_with_brackets)]
+pub mod proto {
+    include!(concat!(env!("OUT_DIR"), "/baml.btel.recording.v2.rs"));
+}
+
+/// Cold sections retained until sealing; spans are already encoded.
+#[derive(Default)]
+struct PendingMessages {
+    definitions: proto::Definitions,
+    aggregates: proto::AggregateBatch,
+    clock_states: proto::ClockStateBatch,
+    usage: proto::UsageBatch,
+    /// `ErrorBatch` body, encoded as each message arrives: a throw-heavy
+    /// program sends one raise and one end per throw, and prost would
+    /// otherwise recompute every nested length several times per file.
+    errors: Vec<u8>,
+}
+
+/// Worker-local conversion state. The recording publisher drains this after
+/// chunk release; no input references escape conversion.
+#[derive(Default)]
+struct ConversionBuffer {
+    pending: PendingMessages,
+    spans: encoding::EncodedSpans,
+    aggregates: merge::PendingAggregates,
+    sysops: merge::PendingSysOps,
+    functions: functions::FunctionDefinitions,
+    // Referenced epochs not yet observed settled, released once final. Bounded
+    // by live runs plus runs settled since the last sealed file.
+    unsettled_clocks: BTreeMap<u64, Arc<btel_clock::ClockEpoch>>,
+    // Cached repeated-message bytes. Span bytes are already materialized.
+    pending_encoded_bytes: usize,
+    // Unwinds in progress, at most one per telemetry thread. Empty unless an
+    // exception is being unwound, so ordinary completions pay one length check.
+    unwinds: errors::ActiveUnwinds,
+}
+// Count each newly constructed metadata message once; never rescan the file.
+fn push_message<M: prost::Message>(output: &mut Vec<M>, bytes: &mut usize, tag: u32, value: M) {
+    *bytes = bytes.saturating_add(prost::encoding::message::encoded_len(tag, &value));
+    output.push(value);
+}
+impl ConversionBuffer {
+    fn event(&mut self, thread: TelemetryId, event: proto::span_event::Event) {
+        self.spans.event(thread, event);
+    }
+
+    fn thread_definition(
+        &mut self,
+        id: TelemetryId,
+        parent: Option<TelemetryId>,
+        path: btel_types::CallPathId,
+        started: btel_types::ClockInstant,
+        clock: &Arc<btel_clock::ClockEpoch>,
+        name: Option<&str>,
+    ) {
+        push_message(
+            &mut self.pending.definitions.threads,
+            &mut self.pending_encoded_bytes,
+            3,
+            proto::ThreadDefinition {
+                thread_id: id.get(),
+                parent_id: parent.map(TelemetryId::get),
+                spawn_call_path_id: path.get(),
+                started_at_ticks: started.get(),
+                clock_epoch_id: clock.metadata().epoch.get(),
+                name: name.map(str::to_owned),
+            },
+        );
+        push_message(
+            &mut self.pending.definitions.clock_epochs,
+            &mut self.pending_encoded_bytes,
+            4,
+            clock::definition(clock.metadata()),
+        );
+        let state = clock::state(clock);
+        if state.r#final {
+            self.unsettled_clocks.remove(&state.epoch_id);
+        } else {
+            self.unsettled_clocks
+                .entry(state.epoch_id)
+                .or_insert_with(|| Arc::clone(clock));
+        }
+        push_message(
+            &mut self.pending.clock_states.states,
+            &mut self.pending_encoded_bytes,
+            1,
+            state,
+        );
+    }
+
+    /// Report and release epochs that settled since their last observation.
+    /// `latest` also reports each still-unsettled epoch's current, non-final
+    /// status. True when every observed epoch has been reported final.
+    fn observe_unsettled_clocks(&mut self, latest: bool) -> bool {
+        let states = &mut self.pending.clock_states.states;
+        let bytes = &mut self.pending_encoded_bytes;
+        self.unsettled_clocks.retain(|_, epoch| {
+            let state = clock::state(epoch);
+            let settled = state.r#final;
+            if settled || latest {
+                push_message(states, bytes, 1, state);
+            }
+            !settled
+        });
+        self.unsettled_clocks.is_empty()
+    }
+}
+
+impl ConversionBuffer {
+    fn define_function(&mut self, function: btel_types::FunctionId) {
+        if let Some(resolution) = self.functions.resolve(function) {
+            push_message(
+                &mut self.pending.definitions.functions,
+                &mut self.pending_encoded_bytes,
+                1,
+                proto::FunctionDefinition {
+                    function_id: function.get(),
+                    resolution: Some(resolution),
+                },
+            );
+        }
+    }
+
+    /// Usage entries are cold and unbounded in size (a model name), so they
+    /// stay out of the span encoder.
+    fn model_usage(&mut self, thread: TelemetryId, usage: &btel_records::ModelUsage) {
+        push_message(
+            &mut self.pending.usage.entries,
+            &mut self.pending_encoded_bytes,
+            1,
+            proto::ModelUsage {
+                node_id: usage.node.get(),
+                thread_id: thread.get(),
+                model: usage.model.as_deref().map(str::to_owned),
+                input_tokens: usage.input_tokens,
+                output_tokens: usage.output_tokens,
+                cache_read_tokens: usage.cache_read_tokens,
+                cache_write_tokens: usage.cache_write_tokens,
+                reasoning_tokens: usage.reasoning_tokens,
+            },
+        );
+    }
+
+    fn aggregate(&mut self, delta: AggregateDelta) {
+        // One recording window before serialization and delivery to its sink.
+        // Span callbacks do not enter this map: the processor already counted them.
+        self.pending_encoded_bytes = self
+            .pending_encoded_bytes
+            .saturating_add(self.aggregates.observe(delta, &mut self.pending.aggregates));
+    }
+
+    fn sysop_time(&mut self, path: btel_types::CallPathId, elapsed: btel_types::ClockDuration) {
+        self.pending_encoded_bytes =
+            self.pending_encoded_bytes
+                .saturating_add(
+                    self.sysops
+                        .observe(path, elapsed, &mut self.pending.aggregates),
+                );
+    }
+
+    fn is_empty(&self) -> bool {
+        self.pending_encoded_bytes == 0 && self.spans.is_empty()
+    }
+
+    fn encoded_size_hint(&self) -> usize {
+        if self.is_empty() {
+            return 0;
+        }
+        self.spans
+            .len()
+            .saturating_add(self.pending_encoded_bytes)
+            .saturating_add(btel_settings::publisher::FILE_ENVELOPE_BYTES)
+    }
+
+    fn span(&mut self, thread: TelemetryId, record: &SpanRecord<Snapshot, Snapshot>) {
+        use proto::span_event::Event;
+        if !self.unwinds.is_empty() {
+            self.link_unwound(thread, record);
+        }
+        match record {
+            SpanRecord::ThreadSelected { .. } => panic!("processor must consume selectors"),
+            SpanRecord::ThreadSpanAnnouncement {
+                id,
+                parent_id,
+                spawn_call_path,
+                started_at,
+                clock,
+                name,
+            } => {
+                assert_eq!(thread, *id, "thread definition disagrees with selector");
+                self.thread_definition(
+                    *id,
+                    *parent_id,
+                    *spawn_call_path,
+                    *started_at,
+                    clock,
+                    name.as_ref().map(|name| &***name),
+                );
+                self.event(
+                    thread,
+                    Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
+                );
+            }
+            SpanRecord::ThreadSpanCompletion {
+                id,
+                parent_id,
+                spawn_call_path,
+                started_at,
+                completed_at,
+                outcome,
+                clock,
+                name,
+            } => {
+                assert_eq!(thread, *id, "thread definition disagrees with selector");
+                self.thread_definition(
+                    *id,
+                    *parent_id,
+                    *spawn_call_path,
+                    *started_at,
+                    clock,
+                    name.as_ref().map(|name| &***name),
+                );
+                self.event(
+                    thread,
+                    Event::ThreadCompletion(proto::ThreadCompletion {
+                        completed_at_ticks: completed_at.get(),
+                        outcome: flags::outcome(*outcome) as i32,
+                        panicked: *outcome == btel_types::InvocationOutcome::Panicked,
+                    }),
+                );
+                // A raise that never ended cannot claim anything after its thread.
+                self.unwinds.clear_thread(thread);
+            }
+            SpanRecord::ModelUsage(usage) => self.model_usage(thread, usage),
+            SpanRecord::ErrorRaiseOrigin { raise_id, origin } => {
+                self.error_raise_origin(thread, *raise_id, *origin);
+            }
+            SpanRecord::ErrorRaiseStack(stack) => self.error_raise_stack(thread, stack),
+            SpanRecord::ErrorRaised { .. } => self.error_raised(thread, record),
+            SpanRecord::ErrorRaisedAndEnded {
+                raise_id,
+                result,
+                handler_function,
+                handler_pc,
+                unwound_frames,
+                ..
+            } => {
+                self.error_raised(thread, record);
+                self.error_unwind_ended(
+                    thread,
+                    *raise_id,
+                    *result,
+                    *handler_function,
+                    (*handler_pc != btel_records::NO_PC).then_some(*handler_pc),
+                    *unwound_frames,
+                );
+            }
+            SpanRecord::ErrorRaiseFrameCompleted { raise_id } => {
+                self.error_raise_frame_completed(thread, *raise_id);
+            }
+            SpanRecord::ErrorUnwindEnded {
+                raise_id,
+                result,
+                handler_function,
+                handler_pc,
+                unwound_frames,
+            } => self.error_unwind_ended(
+                thread,
+                *raise_id,
+                *result,
+                *handler_function,
+                *handler_pc,
+                *unwound_frames,
+            ),
+            SpanRecord::FunctionSpanAnnouncement {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                captured_inputs,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        call_path_id: call_path.get(),
+                        entered_at_ticks: entered_at.get(),
+                        inputs_cas_id: captured_inputs.as_ref().map(snapshot_id),
+                    }),
+                );
+            }
+            SpanRecord::CallPathDefined {
+                call_path,
+                parent_call_path,
+                visible_caller,
+                caller_pc,
+                callee,
+                edge,
+            } => {
+                push_message(
+                    &mut self.pending.definitions.call_paths,
+                    &mut self.pending_encoded_bytes,
+                    2,
+                    proto::CallPathDefinition {
+                        call_path_id: call_path.get(),
+                        thread_id: thread.get(),
+                        parent_call_path_id: parent_call_path.get(),
+                        visible_caller_function_id: visible_caller.map(btel_types::FunctionId::get),
+                        caller_pc: *caller_pc,
+                        callee_function_id: callee.get(),
+                        edge: match edge {
+                            btel_types::CallPathEdge::Synchronous => {
+                                proto::CallPathEdge::Synchronous
+                            }
+                            btel_types::CallPathEdge::Spawn => proto::CallPathEdge::Spawn,
+                        } as i32,
+                    },
+                );
+                // No heap access here. Metadata comes from the owned table supplied
+                // at startup, once per recording; functions outside it (runtime
+                // definitions, GC-collected ones) keep the explicit placeholder.
+                for function in [Some(*callee), *visible_caller].into_iter().flatten() {
+                    self.define_function(function);
+                }
+            }
+            SpanRecord::FunctionSpanCompletionOk {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, false).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(1).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+            SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, false).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(9).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+            SpanRecord::FunctionSpanCompletionOkReentry {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, true).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(1).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+            SpanRecord::FunctionSpanCompletionOkReentryNeedsAnnouncement {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, true).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(9).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+            SpanRecord::FunctionSpanCompletionErrored {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, false).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(2).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+            SpanRecord::FunctionSpanCompletionErroredNeedsAnnouncement {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, false).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(10).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+            SpanRecord::FunctionSpanCompletionErroredReentry {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, true).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(2).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+            SpanRecord::FunctionSpanCompletionErroredReentryNeedsAnnouncement {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, true).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(10).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+            SpanRecord::FunctionSpanCompletionCancelled {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, false).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(3).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+
+            SpanRecord::FunctionSpanCompletionPanicked {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, false).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(2).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: true,
+                    }),
+                );
+            }
+            SpanRecord::FunctionSpanCompletionCancelledNeedsAnnouncement {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, false).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(11).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+            SpanRecord::FunctionSpanCompletionPanickedNeedsAnnouncement {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, false).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(10).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: true,
+                    }),
+                );
+            }
+            SpanRecord::FunctionSpanCompletionCancelledReentry {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, true).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(3).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+
+            SpanRecord::FunctionSpanCompletionPanickedReentry {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, true).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(2).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: true,
+                    }),
+                );
+            }
+            SpanRecord::FunctionSpanCompletionCancelledReentryNeedsAnnouncement {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, true).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(11).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+            SpanRecord::FunctionSpanCompletionPanickedReentryNeedsAnnouncement {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, true).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(10).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: true,
+                    }),
+                );
+            }
+            SpanRecord::LateFunctionSpanCompletionOk {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::LateFunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, false).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(1).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+            SpanRecord::LateFunctionSpanCompletionOkReentry {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::LateFunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, true).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(1).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+            SpanRecord::LateFunctionSpanCompletionErrored {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::LateFunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, false).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(2).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+            SpanRecord::LateFunctionSpanCompletionErroredReentry {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::LateFunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, true).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(2).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+            SpanRecord::LateFunctionSpanCompletionCancelled {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::LateFunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, false).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(3).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+
+            SpanRecord::LateFunctionSpanCompletionPanicked {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::LateFunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, false).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(2).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: true,
+                    }),
+                );
+            }
+            SpanRecord::LateFunctionSpanCompletionCancelledReentry {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::LateFunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, true).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(3).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+            SpanRecord::LateFunctionSpanCompletionPanickedReentry {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::LateFunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, true).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(2).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: true,
+                    }),
+                );
+            }
+        }
+    }
+
+    fn take(&mut self) -> PendingMessages {
+        self.aggregates.drain_into(&mut self.pending.aggregates);
+        self.sysops.drain_into(&mut self.pending.aggregates);
+        // Reuse warm map capacity, trimming oversized allocations after bursts.
+        self.aggregates.trim();
+        self.pending_encoded_bytes = 0;
+        std::mem::take(&mut self.pending)
+    }
+}
+
+#[cfg(test)]
+mod tests;
+
+pub(crate) fn snapshot_id(snapshot: &Snapshot) -> proto::SnapshotId {
+    let bytes = snapshot.id();
+    proto::SnapshotId {
+        low: u64::from_le_bytes(bytes.as_bytes()[..8].try_into().unwrap()),
+        high: u64::from_le_bytes(bytes.as_bytes()[8..].try_into().unwrap()),
+    }
+}

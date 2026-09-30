@@ -62,11 +62,22 @@ const NEEDLES: &[&str] = &[
     "obj_by_name",
 ];
 
+/// A source file's production text: everything before its first
+/// `#[cfg(test)]` — a test module is not a production path.
+fn production(source: &str) -> &str {
+    source
+        .find("#[cfg(test)]")
+        .map_or(source, |at| &source[..at])
+}
+
 #[test]
 fn the_emitter_resolves_nothing_by_rendered_name() {
     for (file, source) in EMIT {
         for needle in NEEDLES {
-            assert!(!source.contains(needle), "emit {file} mentions `{needle}`");
+            assert!(
+                !production(source).contains(needle),
+                "emit {file} mentions `{needle}`"
+            );
         }
     }
 }
@@ -76,7 +87,7 @@ fn the_linker_resolves_nothing_by_rendered_name() {
     for (file, source) in LINKER {
         for needle in NEEDLES {
             assert!(
-                !source.contains(needle),
+                !production(source).contains(needle),
                 "linker {file} mentions `{needle}`"
             );
         }

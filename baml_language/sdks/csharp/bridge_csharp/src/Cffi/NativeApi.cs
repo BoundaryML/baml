@@ -65,8 +65,8 @@ internal sealed unsafe partial class NativeApi
             fixed (byte* manifestPointer = manifest)
             {
                 status = embeddedBamlToml is null
-                    ? table->InitializeRuntimeFromBytecode(pointer, (nuint)bytecode.Length)
-                    : table->InitializeRuntimeFromBytecodeWithMetadata(
+                    ? table->InitializeRuntimeFromBlob(pointer, (nuint)bytecode.Length)
+                    : table->InitializeRuntimeFromBlobWithMetadata(
                         pointer,
                         (nuint)bytecode.Length,
                         manifestPointer);
@@ -263,8 +263,8 @@ internal sealed unsafe partial class NativeApi
         }
 
         Require(api->Version is not null, "version");
-        Require(api->InitializeRuntimeFromBytecode is not null, "initialize_runtime_from_bytecode");
-        Require(api->InitializeRuntimeFromBytecodeWithMetadata is not null, "initialize_runtime_from_bytecode_with_metadata");
+        Require(api->InitializeRuntimeFromBlob is not null, "initialize_runtime_from_blob");
+        Require(api->InitializeRuntimeFromBlobWithMetadata is not null, "initialize_runtime_from_blob_with_metadata");
         Require(api->FreeBuffer is not null, "free_buffer");
         Require(api->RegisterCallback is not null, "register_callback");
         Require(api->CallFunction is not null, "call_function");

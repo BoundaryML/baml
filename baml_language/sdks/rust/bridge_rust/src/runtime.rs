@@ -37,12 +37,12 @@ pub fn initialize_from_bytecode_with_metadata(
     #[expect(unsafe_code)]
     let status = unsafe {
         match manifest.as_ref() {
-            Some(manifest) => (api.initialize_runtime_from_bytecode_with_metadata)(
+            Some(manifest) => (api.initialize_runtime_from_blob_with_metadata)(
                 bytecode.as_ptr(),
                 bytecode.len(),
                 manifest.as_ptr(),
             ),
-            None => (api.initialize_runtime_from_bytecode)(bytecode.as_ptr(), bytecode.len()),
+            None => (api.initialize_runtime_from_blob)(bytecode.as_ptr(), bytecode.len()),
         }
     };
     api.take_status(status).map_err(SdkError::new)

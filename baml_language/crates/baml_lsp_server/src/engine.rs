@@ -44,20 +44,12 @@ pub struct InstalledEngine {
     pub engine: Arc<BexEngine>,
 }
 
-/// An engine built from a compiled program, not yet installed. `$init` has
-/// already run (candidate-locally); the profiling lifecycle stays inactive
-/// until the candidate wins a commit.
 pub struct EngineCandidate {
     pub source_revision: SourceRevision,
     engine: BexEngine,
 }
 
 impl EngineCandidate {
-    /// Take the engine out without committing it. For hosts that want a
-    /// throwaway engine (tests probing the platform), never the rebuild
-    /// path — a committed engine must go through
-    /// [`ProjectRuntime::commit_if_current`], which is what activates
-    /// profiling and fences the revision.
     pub fn into_engine(self) -> BexEngine {
         self.engine
     }
@@ -257,9 +249,6 @@ impl ProjectRuntime {
             return CommitOutcome::Superseded { current_revision };
         }
 
-        // The revision comparison won: activate the candidate's profiling
-        // lifecycle now — before the engine becomes reachable.
-        candidate.engine.activate_profiling();
         let engine = Arc::new(candidate.engine);
 
         let (receipt, retired) = {
@@ -472,6 +461,16 @@ impl ProjectRuntime {
         self.run_cfgs.lock().graph(generation, function_name)
     }
 
+    /// Source identity of the program this root currently has installed:
+    /// what the playground last built, not necessarily unsaved edits.
+    pub fn installed_source_snapshot(&self) -> Option<[u8; 32]> {
+        self.state
+            .lock()
+            .installed
+            .as_ref()
+            .and_then(|installed| installed.engine.source_snapshot_id())
+    }
+
     /// The installed engine's identity, for status displays.
     pub fn installed(&self) -> Option<CommitReceipt> {
         self.state
@@ -534,21 +533,35 @@ impl RuntimeRegistry {
     }
 }
 
-/// Construct an engine candidate from a compiled program. Runs `$init`
-/// synchronously and candidate-locally (call from a blocking-capable
-/// context); the profiling lifecycle stays inactive until the candidate wins
-/// a commit. The construction incantation mirrors `bex_project::new`.
+/// `recording_root` is the project root whose `.baml/btel` receives this
+/// engine's telemetry recording (`BAML_TELEMETRY=off` disables it); `None`
+/// records nothing.
 pub fn construct_engine_candidate(
     program: bex_vm_types::Program,
     sys_ops: Arc<sys_ops::SysOps>,
     source_revision: SourceRevision,
+    recording_root: Option<&std::path::Path>,
 ) -> Result<EngineCandidate, RuntimeError> {
-    let engine = BexEngine::new_with_deferred_profiling_and_runtime_compiler(
-        program,
-        sys_ops,
-        Vec::new(),
-        Some(bex_project::runtime_compiler()),
-    )
+    let engine = match recording_root {
+        Some(root) => BexEngine::new_with_telemetry_recording(
+            program,
+            sys_ops,
+            Vec::new(),
+            Some(bex_project::runtime_compiler()),
+            btel_settings::clock::DEFAULT_MODE,
+            bex_engine::TelemetryRecording::local_files(
+                root,
+                btel_settings::publisher::RecordingConfig::default(),
+            )
+            .with_host("lsp"),
+        ),
+        None => BexEngine::new_with_runtime_compiler(
+            program,
+            sys_ops,
+            Vec::new(),
+            bex_project::runtime_compiler(),
+        ),
+    }
     .map_err(RuntimeError::Engine)?;
     engine.set_unhandled_spawn_error_handler(Some(Arc::new(|error| {
         let cancelled = error.cancelled;
@@ -600,8 +613,13 @@ mod tests {
         let program = db
             .get_bytecode_unchecked(package)
             .unwrap_or_else(|e| unreachable!("empty workspace emits: {e}"));
-        construct_engine_candidate(program, Arc::new(sys_native::SysOps::native()), revision)
-            .unwrap_or_else(|e| unreachable!("empty program constructs an engine: {e}"))
+        construct_engine_candidate(
+            program,
+            Arc::new(sys_native::SysOps::native()),
+            revision,
+            None,
+        )
+        .unwrap_or_else(|e| unreachable!("empty program constructs an engine: {e}"))
     }
 
     #[test]

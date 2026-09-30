@@ -44,7 +44,7 @@ function missing_trailing_conjunct() -> string {
 
 // The leading conjunct is unsatisfied, so `Named` is enforced too.
 function missing_leading_conjunct() -> string {
-    describe<OnlySized>(OnlySized {  })
+    describe<OnlySized>(OnlySized {})
 }
 
 // Referencing the generic as a *value* enforces the conjunction as well.

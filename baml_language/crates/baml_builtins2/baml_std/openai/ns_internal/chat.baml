@@ -1353,6 +1353,11 @@ function chat_parse(
                 output_tokens: u.completion_tokens ?? 0,
                 cached_input_tokens: u.prompt_tokens_details?.cached_tokens,
                 reasoning_tokens: u.completion_tokens_details?.reasoning_tokens,
+                // prompt_tokens counts the cached share too.
+                uncached_input_tokens: ai.internal.uncached_input_tokens(
+                    u.prompt_tokens,
+                    u.prompt_tokens_details?.cached_tokens,
+                ),
             }
         },
         null => null,
@@ -1441,7 +1446,7 @@ function _chat_send(
         selected: true,
         sse_responses: null,
     };
-    ai.ModelTurn { ...turn, calls: [call] }
+    ai.ModelTurn { ...turn, calls: [call], model: decoded.model }
 }
 
 /// The one internal entry point: render, send, normalize — one model turn.
@@ -1552,7 +1557,7 @@ class ChatStreamDecoder {
         for (let raw in ai.stream.decode_sse_batch(batch)) {
             if let data: string = raw.data {
                 if (data.trim() == "[DONE]") {
-                    out.push(ai.stream.TurnDone {  });
+                    out.push(ai.stream.TurnDone {});
                 } else {
                     let parsed: CcStreamChunk? = baml.json.to<CcStreamChunk>(baml.json.parse(data)) catch_all (e) {
                         _ => null,
@@ -1693,6 +1698,7 @@ function chat_invoke_stream(
             }
         },
         require_terminal = compat.provider,
+        model = params.model,
     );
     let call = ai.events.LLMCall {
         client_name: chat_client_id(compat, params),

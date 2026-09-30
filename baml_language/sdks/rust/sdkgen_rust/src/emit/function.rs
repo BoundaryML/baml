@@ -2,7 +2,7 @@
 //! `_async` binding per BAML callable, both thin wrappers over
 //! `baml_bridge::runtime`.
 
-use baml_codegen_types::{Function, Name};
+use baml_sdkgen_types::{Function, Name};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
@@ -183,7 +183,7 @@ fn emit_binding(
         // union/optional or behind a default falls through to `translate_ty`
         // and skips (fail closed) — "callables only in direct parameter
         // position".
-        if arg.default.is_none() && matches!(&arg.ty, baml_codegen_types::Ty::Function { .. }) {
+        if arg.default.is_none() && matches!(&arg.ty, baml_sdkgen_types::Ty::Function { .. }) {
             let CallableParts {
                 args_tuple,
                 ret,
@@ -445,9 +445,9 @@ fn collect_effect_params(
     for arg in &function.arguments {
         if !arg.injected
             && arg.default.is_none()
-            && let Some(baml_codegen_types::Ty::Function { throws, .. }) =
+            && let Some(baml_sdkgen_types::Ty::Function { throws, .. }) =
                 crate::effect_rename::callback_root(&arg.ty)
-            && let baml_codegen_types::Ty::TypeVar(name) = throws.as_ref()
+            && let baml_sdkgen_types::Ty::TypeVar(name) = throws.as_ref()
         {
             let name = name.as_str();
             let already = class_params.iter().any(|p| p == name)
@@ -466,11 +466,11 @@ fn collect_effect_params(
 /// anything else is an ordinary type (a synthetic/user throws generic, a BAML
 /// error class, or the opaque `baml.errors.HostCallable`).
 fn translate_throws(
-    ty: &baml_codegen_types::Ty,
+    ty: &baml_sdkgen_types::Ty,
     ctx: &TyCtx<'_>,
 ) -> Result<TokenStream, translate_ty::Unsupported> {
     match ty {
-        baml_codegen_types::Ty::Never => Ok(quote! { ::core::convert::Infallible }),
+        baml_sdkgen_types::Ty::Never => Ok(quote! { ::core::convert::Infallible }),
         _ => translate_ty::translate(ty, ctx),
     }
 }
@@ -482,10 +482,10 @@ fn translate_throws(
 /// any error family is accepted and the BAML-declared contract governs only
 /// the wire at runtime.
 fn translate_callable(
-    func: &baml_codegen_types::Ty,
+    func: &baml_sdkgen_types::Ty,
     ctx: &TyCtx<'_>,
 ) -> Result<CallableParts, translate_ty::Unsupported> {
-    let baml_codegen_types::Ty::Function {
+    let baml_sdkgen_types::Ty::Function {
         params,
         ret,
         throws,
@@ -503,7 +503,7 @@ fn translate_callable(
         // the dispatcher's null-fill; a required one as `T`.
         let optional = matches!(
             param.mode,
-            baml_codegen_types::CodegenFunctionParamMode::Optional
+            baml_sdkgen_types::CodegenFunctionParamMode::Optional
         );
         arg_types.push(if optional {
             quote! { ::std::option::Option<#inner> }
@@ -525,9 +525,9 @@ fn translate_callable(
         [one] => quote! { (#one,) },
         many => quote! { (#(#many),*) },
     };
-    let ret_ty: &baml_codegen_types::Ty = ret;
+    let ret_ty: &baml_sdkgen_types::Ty = ret;
     let ret = translate_ty::translate(ret_ty, ctx)?;
-    let throws_ty: &baml_codegen_types::Ty = throws;
+    let throws_ty: &baml_sdkgen_types::Ty = throws;
     let throws = translate_throws(throws_ty, ctx)?;
     Ok(CallableParts {
         args_tuple,
@@ -540,9 +540,9 @@ fn translate_callable(
 /// Whether a parameter type is a multi-arm union after null-stripping —
 /// i.e. its translation is (an `Option` of) a synthesized union enum,
 /// which parameters accept via `impl Into<_>`.
-fn is_multi_arm_union(ty: &baml_codegen_types::Ty) -> bool {
+fn is_multi_arm_union(ty: &baml_sdkgen_types::Ty) -> bool {
     match ty {
-        baml_codegen_types::Ty::Union(items) => crate::unions::strip_null(items).0.len() >= 2,
+        baml_sdkgen_types::Ty::Union(items) => crate::unions::strip_null(items).0.len() >= 2,
         _ => false,
     }
 }
@@ -593,8 +593,8 @@ fn append_by_value_note(attrs: &mut Vec<TokenStream>, subject: ByValueSubject) {
 /// member's; anything else (primitives) contributes nothing. Mirrors the
 /// python emitter's `collect_raises_names` so both SDKs document the same
 /// name set.
-fn raises_names(throws: Option<&baml_codegen_types::Ty>) -> Vec<String> {
-    use baml_codegen_types::Ty;
+fn raises_names(throws: Option<&baml_sdkgen_types::Ty>) -> Vec<String> {
+    use baml_sdkgen_types::Ty;
 
     fn walk(ty: &Ty, out: &mut Vec<String>) {
         match ty {

@@ -20,3 +20,33 @@ function jm() -> baml.json.json throws never {
      // ^ baml.json.json
     m
 }
+
+// `json?` is `json | null`: the list/map arms sit behind the alias nested
+// in the union, and literals still adopt them.
+function accept_optional_json(j: baml.json.json?) -> baml.json.json? throws never {
+    j
+}
+
+function jm_optional() -> baml.json.json? throws never {
+    accept_optional_json({"key": {"nested": [1, true, null]}})
+}
+
+class JalOptionalJsonField {
+    data baml.json.json?
+}
+
+function jm_optional_field() -> baml.json.json? throws never {
+    JalOptionalJsonField { data: {"key": {"nested": [1, true, null]}} }.data
+}
+
+function ja_optional() -> baml.json.json? throws never {
+    accept_optional_json([1, true, null])
+}
+
+// A VARIABLE does not adopt: only literals are built at the expected
+// type. The map literal adopts `map<string, json>`, but `a` is already
+// `int[]`, and invariance keeps `int[]` out of `json[]` (spec: Variance).
+function wrap_int_array_in_json(a: int[]) -> baml.json.json throws never {
+    {int_array: a}
+//              ^ mismatch: expected baml.json.json, got int[]
+}

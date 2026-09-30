@@ -169,6 +169,12 @@ impl BexWork {
         }
     }
 
+    /// Whether any root call, task or unsettled future still holds a guard.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn has_work(&self) -> bool {
+        self.lock().work != 0
+    }
+
     pub(crate) fn cleanup_version(&self) -> CleanupVersion {
         self.version(&self.lock())
     }
@@ -387,7 +393,7 @@ mod tests {
                     class Node { value int }
                     function Tiny() -> Node { Node { value: 7 } }
                     function Detached() -> int {
-                        spawn with baml.spawn.options(detach = true) {
+                        spawn with baml.spawn.Root.new() {
                             baml.sys.sleep(baml.time.Duration.from_milliseconds(1000n));
                             Tiny()
                         };
@@ -407,9 +413,7 @@ mod tests {
             .call_function(
                 "Tiny",
                 vec![],
-                FunctionCallContextBuilder::new(sys_types::CallId::next())
-                    .suppress_internal_profile()
-                    .build(),
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
                 false,
             )
             .await
@@ -774,9 +778,7 @@ mod tests {
             .call_function(
                 "Detached",
                 vec![],
-                FunctionCallContextBuilder::new(sys_types::CallId::next())
-                    .suppress_internal_profile()
-                    .build(),
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
                 true,
             )
             .await

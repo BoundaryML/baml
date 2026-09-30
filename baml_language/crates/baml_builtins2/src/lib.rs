@@ -49,9 +49,6 @@ impl BuiltinFile {
 
 /// Package name for the main std package (baml types and namespaces).
 pub const PACKAGE_BAML: &str = "baml";
-/// Package name for boundary identity and capture helpers.
-pub const PACKAGE_BOUNDARY: &str = "boundary";
-
 /// Absolute path to the `baml_std/` source tree, captured at compile time via
 /// `CARGO_MANIFEST_DIR`. Used by `baml_builtins2_codegen` to produce clickable
 /// file paths in build-script diagnostic messages (stderr only, never in
@@ -112,10 +109,10 @@ macro_rules! manifest {
 pub const MANIFESTS: &[BuiltinManifest] = &[
     manifest!("baml"),
     manifest!("log"),
-    manifest!("boundary"),
     manifest!("reflect"),
     manifest!("testing"),
     manifest!("assert"),
+    manifest!("trace"),
     manifest!("ai"),
     manifest!("openai"),
     manifest!("anthropic"),
@@ -154,12 +151,12 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_http/http.baml"),
     builtin!("baml", "ns_http/server.baml"),
     builtin!("baml", "ns_events/events.baml"),
-    builtin!("baml", "ns_id/id.baml"),
     builtin!("baml", "ns_sys/sys.baml"),
     builtin!("baml", "ns_fs/fs.baml"),
     builtin!("baml", "ns_glob/glob.baml"),
     builtin!("baml", "ns_net/net.baml"),
     builtin!("baml", "ns_media/media.baml"),
+    builtin!("baml", "ns_regex/regex.baml"),
     builtin!("baml", "ns_json/json.baml"),
     builtin!("baml", "ns_yaml/yaml.baml"),
     builtin!("baml", "ns_toml/toml.baml"),
@@ -200,9 +197,8 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("reflect", "ns_primitive/primitive.baml"),
     builtin!("reflect", "ns_function/function.baml"),
     builtin!("reflect", "ns_errors/errors.baml"),
-    // --- boundary package ---
-    builtin!("boundary", "core.baml"),
-    builtin!("boundary", "ns_id/id.baml"),
+    // --- trace package ---
+    builtin!("trace", "trace.baml"),
     // --- testing package ---
     builtin!("testing", "types.baml"),
     builtin!("testing", "registry.baml"),
@@ -341,6 +337,41 @@ pub fn reserved_edge_names() -> &'static [&'static str] {
 /// reservation is dead weight and both it and the codec's `user` carve-out
 /// must go. The test below fails loudly if the carve-out disappears first.
 pub const RESERVED_USER_EDGE_UNTIL_WIRE_CARRIES_IDENTITY: &str = "user";
+
+#[cfg(test)]
+mod package_inventory_tests {
+    use super::*;
+
+    #[test]
+    fn manifests_match_registered_packages() {
+        let mut packages = stdlib_package_names().to_vec();
+        let mut manifests: Vec<_> = MANIFESTS.iter().map(|manifest| manifest.package).collect();
+        packages.sort_unstable();
+        manifests.sort_unstable();
+        assert_eq!(manifests, packages);
+    }
+
+    #[test]
+    fn developer_docs_cover_every_stdlib_package() {
+        #[derive(serde::Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct DocsPackages {
+            packages: Vec<String>,
+        }
+
+        let mut docs: DocsPackages = serde_yaml::from_str(include_str!(
+            "../../../../typescript2/app-developer-docs/content-data/reference/stdlib-packages.yaml"
+        ))
+        .expect("valid developer docs package inventory");
+        let mut packages = stdlib_package_names().to_vec();
+        docs.packages.sort_unstable();
+        packages.sort_unstable();
+        assert_eq!(
+            docs.packages, packages,
+            "update the developer docs package inventory when builtin packages change"
+        );
+    }
+}
 
 #[cfg(test)]
 mod reserved_edge_name_tests {

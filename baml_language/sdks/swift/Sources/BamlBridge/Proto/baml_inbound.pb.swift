@@ -178,6 +178,18 @@ nonisolated struct BamlBridge_Cffi_V1_InboundValue: Sendable {
     set {value = .promptAstValue(newValue)}
   }
 
+  /// A JavaScript `number`. Unlike `int_value` and `float_value`, this does
+  /// not choose a BAML numeric representation: an integral value may inhabit
+  /// either `int` or `float`, and the declared contextual type selects one.
+  /// Non-integral values can inhabit only `float`.
+  var jsNumberValue: Double {
+    get {
+      if case .jsNumberValue(let v)? = value {return v}
+      return 0
+    }
+    set {value = .jsNumberValue(newValue)}
+  }
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   nonisolated enum OneOf_Value: Equatable, Sendable {
@@ -205,6 +217,11 @@ nonisolated struct BamlBridge_Cffi_V1_InboundValue: Sendable {
     /// and engine-created values have one canonical representation.
     case mediaValue(BamlBridge_Cffi_V1_BamlValueMedia)
     case promptAstValue(BamlBridge_Cffi_V1_BamlValuePromptAst)
+    /// A JavaScript `number`. Unlike `int_value` and `float_value`, this does
+    /// not choose a BAML numeric representation: an integral value may inhabit
+    /// either `int` or `float`, and the declared contextual type selects one.
+    /// Non-integral values can inhabit only `float`.
+    case jsNumberValue(Double)
 
   }
 
@@ -448,7 +465,7 @@ fileprivate nonisolated let _protobuf_package = "baml_bridge.cffi.v1"
 
 nonisolated extension BamlBridge_Cffi_V1_InboundValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".InboundValue"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}value_type\0\u{3}string_value\0\u{3}int_value\0\u{3}float_value\0\u{3}bool_value\0\u{3}list_value\0\u{3}map_value\0\u{3}class_value\0\u{3}enum_value\0\u{1}handle\0\u{3}uint8array_value\0\u{3}bigint_value\0\u{3}ty_value\0\u{3}ty_def_value\0\u{3}media_value\0\u{3}prompt_ast_value\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}value_type\0\u{3}string_value\0\u{3}int_value\0\u{3}float_value\0\u{3}bool_value\0\u{3}list_value\0\u{3}map_value\0\u{3}class_value\0\u{3}enum_value\0\u{1}handle\0\u{3}uint8array_value\0\u{3}bigint_value\0\u{3}ty_value\0\u{3}ty_def_value\0\u{3}media_value\0\u{3}prompt_ast_value\0\u{3}js_number_value\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -622,6 +639,14 @@ nonisolated extension BamlBridge_Cffi_V1_InboundValue: SwiftProtobuf.Message, Sw
           self.value = .promptAstValue(v)
         }
       }()
+      case 17: try {
+        var v: Double?
+        try decoder.decodeSingularDoubleField(value: &v)
+        if let v = v {
+          if self.value != nil {try decoder.handleConflictingOneOf()}
+          self.value = .jsNumberValue(v)
+        }
+      }()
       default: break
       }
     }
@@ -695,6 +720,10 @@ nonisolated extension BamlBridge_Cffi_V1_InboundValue: SwiftProtobuf.Message, Sw
     case .promptAstValue?: try {
       guard case .promptAstValue(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 16)
+    }()
+    case .jsNumberValue?: try {
+      guard case .jsNumberValue(let v)? = self.value else { preconditionFailure() }
+      try visitor.visitSingularDoubleField(value: v, fieldNumber: 17)
     }()
     case nil: break
     }

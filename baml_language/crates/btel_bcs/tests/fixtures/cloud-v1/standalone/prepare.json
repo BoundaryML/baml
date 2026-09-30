@@ -1,0 +1,18 @@
+{
+  "recording": {
+    "recording_id": "07070707070707070707070707070707",
+    "recording_file_sequence": 1,
+    "encoded_length": 104,
+    "sha256": "d355cb5ba9ac30010ff8c059ca97141d00d899f600acad0604b8635b762c383c"
+  },
+  "candidates": [
+    {"snapshot_id": "74c24ff59c71091f052cdcfb3fb0112f", "snapshot_format_version": 2, "size_class": "LARGE"}
+  ],
+  "proposed_uploads": [
+    {"client_target_id": 0, "kind": "recording", "candidate_indices": []},
+    {"client_target_id": 1, "kind": "cas_object", "candidate_indices": [0]}
+  ],
+  "producer_session_id": "11111111-2222-4333-8444-555555555555",
+  "liveness_sequence": 1,
+  "state": "RUNNING"
+}

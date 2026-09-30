@@ -1,4 +1,4 @@
-//! `baml_codegen_types::Ty` → Rust type expression.
+//! `baml_sdkgen_types::Ty` → Rust type expression.
 //!
 //! Emitted types are fully qualified (`::std::string::String`, never bare
 //! `String`; nominal types as absolute `crate::…` paths) so user-declared
@@ -8,7 +8,7 @@
 //! caller skips the enclosing symbol and reports it — never erasing to a
 //! catch-all type.
 
-use baml_codegen_types::{CodegenFunctionParamMode, Name, Ty};
+use baml_sdkgen_types::{CodegenFunctionParamMode, Name, Ty};
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -315,7 +315,7 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
 mod tests {
     use std::sync::LazyLock;
 
-    use baml_codegen_types::{Class, ClassProperty, Origin, Symbol, SymbolPool};
+    use baml_sdkgen_types::{Class, ClassProperty, Origin, Symbol, SymbolPool};
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -432,7 +432,7 @@ mod tests {
             &envelope,
             vec![(
                 "value",
-                Ty::TypeVar(baml_codegen_types::ParamTy::new(
+                Ty::TypeVar(baml_sdkgen_types::ParamTy::new(
                     0,
                     baml_base::Name::new("T"),
                 )),
@@ -469,14 +469,14 @@ mod tests {
         assert_eq!(
             rendered(&Ty::Literal(
                 baml_base::Literal::String("hello world".into()),
-                baml_codegen_types::Freshness::Regular,
+                baml_sdkgen_types::Freshness::Regular,
             )),
             ":: std :: string :: String"
         );
         assert_eq!(
             rendered(&Ty::Literal(
                 baml_base::Literal::Int(42),
-                baml_codegen_types::Freshness::Regular,
+                baml_sdkgen_types::Freshness::Regular,
             )),
             ":: core :: primitive :: i64"
         );
@@ -674,7 +674,7 @@ mod tests {
     }
 
     fn alias(n: &Name, resolves_to: Ty, recursive: bool) -> Symbol {
-        Symbol::TypeAlias(baml_codegen_types::TypeAlias {
+        Symbol::TypeAlias(baml_sdkgen_types::TypeAlias {
             name: n.clone(),
             resolves_to,
             recursive,

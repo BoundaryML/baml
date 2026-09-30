@@ -18,8 +18,8 @@ create_baml_runtime
 destroy_baml_runtime
 flush_events
 free_buffer
-initialize_runtime_from_bytecode
-initialize_runtime_from_bytecode_with_metadata
+initialize_runtime_from_blob
+initialize_runtime_from_blob_with_metadata
 invoke_runtime_cli
 new_function_call
 register_callback

@@ -49,44 +49,15 @@ pub enum OptLevel {
 // Function
 // ============================================================================
 
-/// A catch region recorded during MIR lowering.
-///
-/// Describes the try-body entry block and the handler block for a `catch`
-/// expression. The emitter uses this to build the bytecode exception table.
-#[derive(Debug, Clone)]
-pub struct CatchRegion {
-    /// First block of the try body.
-    pub body_entry: BlockId,
-    /// Handler block that receives the exception.
-    pub handler: BlockId,
-    /// Every block the protected body lowers into: `body_entry` plus the
-    /// blocks created while lowering the protected code (which includes any
-    /// nested construct's blocks — a throw in a nested handler's arm correctly
-    /// routes to THIS region's handler when no closer one covers it).
-    ///
-    /// The emitter builds the exception table from these blocks' exact PC
-    /// ranges. Coverage therefore does not depend on block layout: a
-    /// `[body_entry_pc, handler_pc)` span only works if every protected block
-    /// is laid out before the handler, and reverse-postorder layout does not
-    /// guarantee that — a direct `throw` block is a CFG leaf that sinks to the
-    /// end of the function, and a call-free block that can panic (division,
-    /// indexing) has no unwind edge to anchor it either. Both escaped their
-    /// handler when a throwing call elsewhere in the block pulled the handler
-    /// to a mid-function PC.
-    pub body_blocks: Vec<BlockId>,
-    /// All blocks making up the handler body (the arms). BEP-042 cause-chain: a
-    /// throw whose PC lies in any of these blocks is "during handling of"
-    /// `error_local`, so that error's `baml.errors.Context` becomes the new error's
-    /// cause. Captured as the blocks created while lowering the arms (plus the
-    /// handler block itself); empty means "never chains" (e.g. a defer pad).
-    /// Layout can fragment these across non-contiguous PCs, so the emitter must
-    /// take their union rather than a single `[handler, join)` span.
-    pub handler_body: Vec<BlockId>,
-    /// Frame-local slot for the caught error value.
+/// What the VM lands in a handler block with: the frame slots it writes the
+/// caught error and its `baml.errors.Context` into before jumping to the
+/// block. The context is the error's identity while it is in flight: a
+/// rethrow from the handler carries it, and a throw during the handler's body
+/// takes it as its cause.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Landing {
     pub error_local: Local,
-    /// Frame-local slot for the stack trace value, if the catch clause
-    /// has a second binding: `catch (e, st) { ... }`
-    pub stack_trace_local: Option<Local>,
+    pub context_local: Local,
 }
 
 /// The bytecode body of a MIR function — blocks, locals, and associated data.
@@ -102,9 +73,6 @@ pub struct MirFunctionBody<'db> {
     pub entry: BlockId,
     /// Local variable declarations.
     pub locals: Vec<LocalDecl>,
-    /// Catch regions mapping try-body extents to handler blocks.
-    /// Populated during catch lowering; used by the emitter to build exception tables.
-    pub catch_regions: Vec<CatchRegion>,
 }
 
 impl<'db> MirFunctionBody<'db> {
@@ -118,13 +86,23 @@ impl<'db> MirFunctionBody<'db> {
         &self.locals[id.0]
     }
 
-    /// Iterate `(handler_block, error_local)` pairs derived from catch regions.
-    ///
-    /// Yields one entry per handler.
-    pub fn unwind_error_locals(&self) -> impl Iterator<Item = (BlockId, Local)> + '_ {
-        self.catch_regions
+    /// The handler blocks — those some block unwinds to — with what the VM
+    /// lands in each with.
+    pub fn handlers(&self) -> impl Iterator<Item = (BlockId, Landing)> + '_ {
+        self.blocks
             .iter()
-            .map(|r| (r.handler, r.error_local))
+            .filter_map(|block| block.landing.map(|landing| (block.id, landing)))
+    }
+
+    /// Whether `block` is a handler block.
+    pub fn is_handler(&self, block: BlockId) -> bool {
+        self.blocks[block.0].landing.is_some()
+    }
+
+    /// Iterate `(handler_block, error_local)` pairs, one per handler.
+    pub fn unwind_error_locals(&self) -> impl Iterator<Item = (BlockId, Local)> + '_ {
+        self.handlers()
+            .map(|(handler, landing)| (handler, landing.error_local))
     }
 }
 
@@ -332,6 +310,26 @@ pub struct BasicBlock<'db> {
     pub span: Option<Span>,
     /// Source span for the terminator.
     pub terminator_span: Option<Span>,
+    /// The handler a throw or panic raised anywhere in this block unwinds to
+    /// — the lexically enclosing `catch` handler or `defer` landing pad — or
+    /// `None` to leave the frame. Fixed when the block is created, so a block
+    /// is always a maximal run of code under one handler, and the emitter
+    /// derives the exception table from it. A terminator that carries its own
+    /// `unwind` edge agrees with it by construction.
+    pub unwind: Option<BlockId>,
+    /// The innermost handler whose body this block is lexically part of: a
+    /// throw here is "during handling of" that handler's error and chains
+    /// onto its context (BEP-042 cause chain). A handler block is part of its
+    /// own body.
+    pub handling: Option<BlockId>,
+    /// Set on a handler block: what the VM lands here with.
+    pub landing: Option<Landing>,
+    /// Whether this block is part of a `defer` body, which runs shielded from
+    /// cancellation: a thread executing here (or in a callee called from
+    /// here) is not delivered `Cancelled` at its yield points, so cleanup may
+    /// suspend. Fixed at creation, like `unwind`; the emitter derives the
+    /// bytecode's shield table from it.
+    pub shielded: bool,
 }
 
 impl BasicBlock<'_> {
@@ -343,6 +341,10 @@ impl BasicBlock<'_> {
             terminator: None,
             span: None,
             terminator_span: None,
+            unwind: None,
+            handling: None,
+            landing: None,
+            shielded: false,
         }
     }
 
@@ -560,6 +562,9 @@ pub enum Terminator<'db> {
 
     /// Call a function.
     Call {
+        /// Whether the final `args` operand is an invocation trace attachment,
+        /// rather than a callee parameter.
+        has_trace: bool,
         /// The value slots this site was checked against, leading type
         /// arguments excluded. `None` only for compiler-synthesized calls,
         /// whose operands are already in the callee's own layout.
@@ -579,12 +584,6 @@ pub enum Terminator<'db> {
         /// calls to generic functions where at least one type argument is
         /// threaded at the call site (explicit `<T>` or type-arg forwarding).
         ntypeargs: usize,
-        /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
-        ///
-        /// This is not part of ordinary call arity. Emitters push it above the
-        /// normal call payload and use an ID-aware bytecode call form.
-        runtime_id: Option<Operand<'db>>,
-        /// Where to store the result.
         destination: Place,
         /// Block to jump to after call returns normally.
         target: BlockId,
@@ -604,6 +603,8 @@ pub enum Terminator<'db> {
     /// value is materialized. This is the open-world replacement for the old
     /// compile-time type-tag switch.
     VirtualCall {
+        /// Whether the final `args` operand is an invocation trace attachment.
+        has_trace: bool,
         /// The value slots this site was checked against (receiver included,
         /// type arguments excluded); see [`Terminator::Call::argument_layout`].
         argument_layout: Option<baml_type::CallLayout>,
@@ -627,8 +628,6 @@ pub enum Terminator<'db> {
         /// whose runtime concrete type is `Self`: the method's single required
         /// `Self`-typed parameter, `0` for a `self` receiver.
         self_arg: usize,
-        /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
-        runtime_id: Option<Operand<'db>>,
         /// Where to store the result.
         destination: Place,
         /// Block to jump to after the call returns normally.
@@ -654,9 +653,6 @@ pub enum Terminator<'db> {
         callee: Operand<'db>,
         /// Arguments to the sys-op.
         args: Vec<Operand<'db>>,
-        /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
-        runtime_id: Option<Operand<'db>>,
-        /// Where to store the sys-op's return value.
         destination: Place,
         /// Block to resume at after the sys-op returns.
         target: BlockId,
@@ -664,30 +660,17 @@ pub enum Terminator<'db> {
         unwind: Option<BlockId>,
     },
 
-    /// BEP-034 `spawn name? { body }` — schedules a fresh BAML thread to
-    /// run `closure`'s body and yields a `Future<T, E>` handle.
-    ///
-    /// `closure` carries the body packaged via `MakeClosure` (a 0-arg
-    /// lambda that captures the surrounding bindings); `name` is an
-    /// optional human-readable label.
+    /// Launch a `baml.spawn.Plan<T, E>` as a new task and bind its
+    /// `Future<T, E>` into `future`. The plan carries everything the engine
+    /// needs — the body, its limits and cancel tokens, its cancellation
+    /// parent, and the future's types — so it is the only operand. Launching
+    /// never throws.
     Spawn {
-        /// Closure object representing the spawn body.
-        closure: Operand<'db>,
-        /// Optional name expression (string or null).
-        name: Operand<'db>,
-        /// Optional `baml.spawn.options(...)` config value from a `with`
-        /// clause (BEP-034 spawn options). `None` when there is no `with`
-        /// clause; the engine reads the config's `cancel` (and later
-        /// `group`/`detach`) to derive the spawn's effective cancel token.
-        /// Boxed to keep `Terminator`'s footprint down (clippy
-        /// `large_enum_variant`): `Spawn` is rare relative to `Call`/`Goto`.
-        config: Option<Box<Operand<'db>>>,
-        /// The `T`/`E` of the `Future<T, E>` this spawn yields. Boxed for the
-        /// same footprint reason as `config`.
-        future_ty: Box<SpawnFutureTy>,
-        /// Where to store the resulting Future handle.
+        /// The `baml.spawn.Plan` value.
+        plan: Operand<'db>,
+        /// Where the future handle is stored.
         future: Place,
-        /// Block to resume after the spawn schedules.
+        /// Block to continue at once the task is launched.
         resume: BlockId,
     },
 
@@ -733,10 +716,13 @@ pub enum Terminator<'db> {
         value: Operand<'db>,
     },
 
-    /// Re-throw a caught error value, preserving its original trace origin.
+    /// Re-throw a caught error value with the context it was caught with, so
+    /// it keeps its original trace and cause.
     Rethrow {
         /// The caught error value to rethrow.
         value: Operand<'db>,
+        /// Its `baml.errors.Context`: the landing's context local.
+        context: Operand<'db>,
     },
 
     /// If the value is a panic instance (`baml.panics.*`), throw it.
@@ -746,6 +732,8 @@ pub enum Terminator<'db> {
     /// panics the programmer didn't explicitly name.
     ThrowIfPanic {
         value: Operand<'db>,
+        /// The value's `baml.errors.Context`, carried by the rethrow.
+        context: Operand<'db>,
         otherwise: BlockId,
     },
 
@@ -772,22 +760,6 @@ pub enum ShortCircuitKind {
     And,
     Or,
     Coalesce,
-}
-
-/// The type arguments of the `Future<T, E>` a [`Terminator::Spawn`] yields.
-///
-/// Held as [`TyTemplate`]s rather than resolved types so a spawn inside a
-/// generic function (`fn f<T>(x: T) { spawn { x } }`) resolves against the
-/// frame's type arguments at runtime, exactly as an array literal's element
-/// type does. The runtime stores the resolved pair on the heap `Future` so
-/// reflection and `is`/`match` can see the future's generic parameters.
-#[derive(Debug, Clone, PartialEq)]
-pub struct SpawnFutureTy {
-    /// The `T` of `Future<T, E>` — the value the spawned body returns.
-    pub returns: TyTemplate,
-    /// The `E` of `Future<T, E>` — what the spawned body may throw. A body that
-    /// statically cannot throw spells this `never`.
-    pub throws: TyTemplate,
 }
 
 impl Terminator<'_> {

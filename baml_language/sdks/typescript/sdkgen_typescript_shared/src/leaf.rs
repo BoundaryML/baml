@@ -21,7 +21,7 @@ use std::{
 };
 
 use baml_base::qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_STREAM};
-use baml_codegen_types::FunctionArgumentDefault;
+use baml_sdkgen_types::FunctionArgumentDefault;
 
 use crate::{
     emit::{
@@ -599,16 +599,14 @@ fn write_preamble_ts(
     if is_root {
         out.push_str(&runtime_import_line(
             state,
-            &["initializeRuntimeFromBytecode", "setTypeMap"],
+            &["initializeRuntimeFromBlob", "setTypeMap"],
             runtime_package,
         ));
         out.push_str("import * as _inlinedbaml from \"./_inlinedbaml.js\";\n");
         out.push_str("import { _TYPE_MAP } from \"./_typemap.js\";\n");
         out.push_str(&cross_leaf_imports(state, &body.leaf));
         out.push('\n');
-        out.push_str(
-            "initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);\n",
-        );
+        out.push_str("initializeRuntimeFromBlob(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);\n");
         out.push_str("setTypeMap(_TYPE_MAP);\n");
         if !kids.is_empty() {
             out.push('\n');
@@ -1026,7 +1024,7 @@ fn split_param_names(
 #[cfg(test)]
 mod tests {
     use baml_base::{Literal, Name as BaseName};
-    use baml_codegen_types::{DefaultLiteral, FunctionArgumentDefault, Name, Ty};
+    use baml_sdkgen_types::{DefaultLiteral, FunctionArgumentDefault, Name, Ty};
 
     use super::*;
 
@@ -1324,23 +1322,23 @@ mod tests {
     #[test]
     fn callable_child_collision_composes_function_with_namespace() {
         let b = body(
-            &["vendor", "boundary"],
+            &["vendor", "factory"],
             vec![
                 func_sym(
                     "id",
-                    "boundary.id",
+                    "factory.id",
                     SyncAsync::Sync,
                     vec![],
-                    Ty::Class(name("boundary", &[], "LocalId"), Box::new([])),
+                    Ty::Class(name("factory", &[], "Resource"), Box::new([])),
                 ),
                 func_sym(
                     "id_async",
-                    "boundary.id",
+                    "factory.id",
                     SyncAsync::Async,
                     vec![],
-                    Ty::Class(name("boundary", &[], "LocalId"), Box::new([])),
+                    Ty::Class(name("factory", &[], "Resource"), Box::new([])),
                 ),
-                class_sym("LocalId", name("boundary", &[], "LocalId"), vec![]),
+                class_sym("Resource", name("factory", &[], "Resource"), vec![]),
             ],
         );
         let mut kids = BTreeSet::new();
@@ -1349,11 +1347,11 @@ mod tests {
         assert!(ts.contains("import * as __ns_id from \"./id/index.js\";"));
         assert!(!ts.contains("export * as id from \"./id/index.js\";"));
         assert!(ts.contains(
-            "export const id = Object.assign(defineFunction(\"boundary.id\", \"sync\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => LocalId, __ns_id);"
+            "export const id = Object.assign(defineFunction(\"factory.id\", \"sync\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Resource, __ns_id);"
         ));
         assert!(
             ts.contains(
-                "export const id_async = defineFunction(\"boundary.id\", \"async\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Promise<LocalId>;"
+                "export const id_async = defineFunction(\"factory.id\", \"async\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Promise<Resource>;"
             )
         );
     }
@@ -1373,12 +1371,14 @@ mod tests {
         let mut kids = BTreeSet::new();
         kids.insert("lorem".to_string());
         let ts = render_index_ts(&b, &kids, true, TEST_RUNTIME_PACKAGE);
-        assert!(ts.contains(
-            "initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);"
-        ));
+        assert!(
+            ts.contains(
+                "initializeRuntimeFromBlob(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);"
+            )
+        );
         assert!(ts.contains("setTypeMap(_TYPE_MAP);"));
         assert!(ts.contains("export * as lorem from \"./lorem/index.js\";"));
         assert!(ts.contains("export const make_foo = defineFunction("));
-        assert!(ts.contains("import { defineFunction, initializeRuntimeFromBytecode, setTypeMap, type BamlCallContext } from \"@boundaryml/baml-bridge\";"));
+        assert!(ts.contains("import { defineFunction, initializeRuntimeFromBlob, setTypeMap, type BamlCallContext } from \"@boundaryml/baml-bridge\";"));
     }
 }

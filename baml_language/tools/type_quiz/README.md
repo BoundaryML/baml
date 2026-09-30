@@ -496,10 +496,9 @@ keeps its number once it has one.
    as a map literal (`expected ':'`), and an `if let … { `…` } else …` whose
    then-block is a bare template literal fails with `expected expression, found
    else`. Binding the value to a local first (`{ let s = …; s }`) avoids both.
-4. **`baml fmt` renders empty class literals as `Foo {  }`** (two spaces) and
-   empty class declarations as `class Foo {\n}`. Cosmetic, but it is the
-   formatter's canonical output, so the package keeps it rather than fighting
-   the hook.
+4. **`baml fmt` renders empty class declarations as `class Foo {\n}`.**
+   Cosmetic, but it is the formatter's canonical output, so the package keeps
+   it rather than fighting the hook.
 5. **`baml fmt` breaks `?? return` across lines regardless of width.**
    `let s = span ?? return null;` becomes two lines with the `??` dangling, and
    `let bytes = (files.get(name) ?? return null).to_utf8();` becomes five,

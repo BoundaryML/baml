@@ -16,6 +16,7 @@ use crate::{
     package_ai::{
         BamlClassPrompt, BamlNamespaceInternal, BamlPackageAi, PackageAiImpl, view as ai_view,
     },
+    vec_ext::VecExt,
 };
 
 #[derive(Default)]
@@ -121,7 +122,11 @@ fn trim_message_edges(sink: &mut PromptContentSink) {
             PromptAstSimple::String(text) => {
                 let trimmed = text.trim_end();
                 if trimmed.is_empty() {
-                    sink.parts.pop();
+                    // SAFETY: the loop matched the last part and has not removed it.
+                    #[allow(unsafe_code)]
+                    unsafe {
+                        sink.parts.no_return_pop();
+                    };
                 } else {
                     if trimmed.len() != text.len() {
                         let index = sink.parts.len() - 1;

@@ -22,8 +22,8 @@ use std::{
     rc::Rc,
 };
 
-use baml_codegen_types::{Name, Symbol, SymbolPool, Ty};
-pub use baml_codegen_types::{NamingConvention, OutputType};
+use baml_sdkgen_types::{Name, Symbol, SymbolPool, public_interface_tokens};
+pub use baml_sdkgen_types::{NamingConvention, OutputType};
 pub use names::{IdentifierRename, IdentifierRenameReason};
 
 use crate::{
@@ -35,100 +35,6 @@ use crate::{
     names::{BindingRole, PythonNames},
     routing::LeafPath,
 };
-
-fn collect_interface_tys(ty: &Ty, out: &mut BTreeSet<Name>) {
-    match ty {
-        Ty::Interface(name, generics, associated) => {
-            out.insert(name.clone());
-            for ty in generics.iter().chain(associated.iter().map(|(_, ty)| ty)) {
-                collect_interface_tys(ty, out);
-            }
-        }
-        Ty::Class(_, args) => {
-            for ty in args {
-                collect_interface_tys(ty, out);
-            }
-        }
-        Ty::List(inner) => collect_interface_tys(inner, out),
-        Ty::Map { key, value, .. } => {
-            collect_interface_tys(key, out);
-            collect_interface_tys(value, out);
-        }
-        Ty::Union(items) => {
-            for ty in items {
-                collect_interface_tys(ty, out);
-            }
-        }
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            for param in params {
-                collect_interface_tys(&param.ty, out);
-            }
-            collect_interface_tys(ret, out);
-            collect_interface_tys(throws, out);
-        }
-        Ty::Future(value, error) => {
-            collect_interface_tys(value, out);
-            collect_interface_tys(error, out);
-        }
-        Ty::Enum(..)
-        | Ty::EnumVariant(..)
-        | Ty::TypeAlias(..)
-        | Ty::Literal(..)
-        | Ty::Int
-        | Ty::Bigint
-        | Ty::Float
-        | Ty::String
-        | Ty::Bool
-        | Ty::Null
-        | Ty::Uint8Array
-        | Ty::Media(..)
-        | Ty::TypeVar(..)
-        | Ty::RustType
-        | Ty::Type
-        | Ty::Resource
-        | Ty::PromptAst
-        | Ty::Void
-        | Ty::Unknown
-        | Ty::Never => {}
-    }
-}
-
-fn public_interface_tokens(pool: &SymbolPool) -> BTreeSet<Name> {
-    fn function(function: &baml_codegen_types::Function, out: &mut BTreeSet<Name>) {
-        for arg in &function.arguments {
-            collect_interface_tys(&arg.ty, out);
-        }
-        collect_interface_tys(&function.return_type, out);
-        if let Some(throws) = &function.throws {
-            collect_interface_tys(throws, out);
-        }
-        for (_, watcher) in &function.watchers {
-            collect_interface_tys(watcher, out);
-        }
-    }
-    let mut out = BTreeSet::new();
-    for symbol in pool.values() {
-        match symbol {
-            Symbol::Function(value) => function(value, &mut out),
-            Symbol::Class(value) => {
-                for property in &value.properties {
-                    collect_interface_tys(&property.ty, &mut out);
-                }
-                for method in value.static_methods.iter().chain(&value.instance_methods) {
-                    function(method, &mut out);
-                }
-            }
-            Symbol::TypeAlias(value) => collect_interface_tys(&value.resolves_to, &mut out),
-            Symbol::Enum(_) => {}
-        }
-    }
-    out
-}
 
 fn render_interface_tokens(
     tokens: impl Iterator<Item = Name>,
@@ -707,7 +613,7 @@ fn render_root_init(top_children: &BTreeSet<String>, use_bytecode: bool) -> Stri
     out.push_str("from . import _inlinedbaml\n");
     out.push_str("from ._typemap import _TYPE_MAP\n\n");
     if use_bytecode {
-        out.push_str("BamlRuntime.initialize_runtime_from_bytecode(_inlinedbaml.BYTECODE, _inlinedbaml.EMBEDDED_BAML_TOML)\n\n");
+        out.push_str("BamlRuntime.initialize_runtime_from_blob(_inlinedbaml.BYTECODE, _inlinedbaml.EMBEDDED_BAML_TOML)\n\n");
     } else {
         out.push_str("BamlRuntime.initialize_runtime(\n");
         out.push_str("    \"baml_src\", _inlinedbaml.FILES\n");
@@ -830,9 +736,11 @@ fn render_baml_source_files(files: &[UserBamlFile]) -> String {
 }
 
 fn render_inlinedbaml_bytecode(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> String {
-    let mut out = String::from("from __future__ import annotations\n\nBYTECODE: bytes = ");
-    out.push_str(&py_bytes(bytecode));
-    out.push_str("\nEMBEDDED_BAML_TOML: str | None = ");
+    // One line of encoded bytecode (ASCII), passed to the bridge as bytes; the
+    // bridge decodes it natively.
+    let mut out = String::from("from __future__ import annotations\n\nBYTECODE: bytes = b\"");
+    out.push_str(&baml_sdkgen_types::embedded_bytecode_base64(bytecode));
+    out.push_str("\"\nEMBEDDED_BAML_TOML: str | None = ");
     out.push_str(
         &embedded_baml_toml
             .map(py_string)
@@ -845,51 +753,7 @@ fn render_inlinedbaml_bytecode(bytecode: &[u8], embedded_baml_toml: Option<&str>
 /// Render `s` as a Python string literal. Uses a regular double-quoted
 /// form with the usual `\\`, `\"`, `\n`, `\r`, `\t` escapes so the result
 /// round-trips through `ast.literal_eval` and is byte-identical.
-pub(crate) fn py_string(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
-    for ch in s.chars() {
-        match ch {
-            '\\' => out.push_str("\\\\"),
-            '"' => out.push_str("\\\""),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => {
-                write!(out, "\\x{:02x}", c as u32).unwrap();
-            }
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
-}
-
-/// Render bytes as adjacent Python bytes literals. Chunking keeps generated
-/// lines manageable without adding any runtime decode step.
-pub(crate) fn py_bytes(bytes: &[u8]) -> String {
-    const CHUNK_SIZE: usize = 80;
-
-    if bytes.is_empty() {
-        return "b\"\"".to_string();
-    }
-
-    let mut out = String::from("(\n");
-    for chunk in bytes.chunks(CHUNK_SIZE) {
-        out.push_str("    b\"");
-        for &byte in chunk {
-            match byte {
-                b'\\' => out.push_str("\\\\"),
-                b'"' => out.push_str("\\\""),
-                0x20..=0x7e => out.push(byte as char),
-                _ => write!(out, "\\x{byte:02x}").unwrap(),
-            }
-        }
-        out.push_str("\"\n");
-    }
-    out.push(')');
-    out
-}
+pub(crate) use baml_sdkgen_types::quoted_string as py_string;
 
 /// Return the `cg::Name` that keys a given symbol in the pool. Not
 /// load-bearing today (we iterate `pool.keys()` directly), but kept
@@ -909,7 +773,7 @@ fn symbol_name(sym: &Symbol) -> Option<&Name> {
 #[cfg(test)]
 mod tests {
     use baml_base::Name as BaseName;
-    use baml_codegen_types::{
+    use baml_sdkgen_types::{
         Class, ClassProperty, DefaultLiteral, Enum, EnumVariant, Function, FunctionArgument,
         FunctionArgumentDefault, Origin, Ty, TypeAlias,
     };
@@ -938,7 +802,7 @@ mod tests {
     }
 
     fn type_var(name: BaseName) -> Ty {
-        Ty::TypeVar(baml_codegen_types::ParamTy::new(0, name))
+        Ty::TypeVar(baml_sdkgen_types::ParamTy::new(0, name))
     }
 
     fn list(inner: Box<Ty>) -> Ty {
@@ -1214,16 +1078,16 @@ mod tests {
         let mut pool: SymbolPool = HashMap::new();
         let stream_name = cg_name("ai", &["stream"], "Stream");
         let done_name = cg_name("ai", &["stream"], "Done");
-        let value_name = cg_name("boundary", &["id"], "Value");
+        let value_name = cg_name("factory", &["id"], "Value");
         pool.insert(stream_name.clone(), class(stream_name.clone()));
         pool.insert(done_name.clone(), class(done_name));
         pool.insert(value_name.clone(), class(value_name.clone()));
         pool.insert(
-            cg_name("boundary", &[], "id"),
+            cg_name("factory", &[], "id"),
             zero_arg_func("id", Ty::String, "core.baml", 0),
         );
         pool.insert(
-            cg_name("boundary", &["id"], "current"),
+            cg_name("factory", &["id"], "current"),
             zero_arg_func(
                 "current",
                 class_ty(stream_name, vec![class_ty(value_name, vec![])]),
@@ -1233,14 +1097,14 @@ mod tests {
         );
 
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        let leaf = &out[&PathBuf::from("vendor/boundary/__init__.py")];
+        let leaf = &out[&PathBuf::from("vendor/factory/__init__.py")];
         assert!(leaf.contains("import importlib\n"));
         assert!(leaf.contains("_id_namespace = importlib.import_module(\".id\", __name__)"));
         assert!(leaf.contains(
             "    setattr(id, _baml_child_name, getattr(_id_namespace, _baml_child_name))"
         ));
 
-        let pyi = &out[&PathBuf::from("vendor/boundary/__init__.pyi")];
+        let pyi = &out[&PathBuf::from("vendor/factory/__init__.pyi")];
         assert!(!pyi.contains("from . import id\n"));
         assert!(pyi.contains("class _BamlCallableNamespace_id(typing.Protocol):\n"));
         assert!(pyi.contains("    def __call__(self) -> str: ...\n"));
@@ -1248,7 +1112,7 @@ mod tests {
             "from ...ai.stream import Done as _BamlStreamDone\nfrom baml_bridge import BamlStream as _BamlStream\n"
         ));
         assert!(pyi.contains(
-            "    def current(self) -> _BamlStream[typing.Union[vendor.boundary.id.Value, _BamlStreamDone], vendor.boundary.id.Value, vendor.boundary.id.Value]: ...\n"
+            "    def current(self) -> _BamlStream[typing.Union[vendor.factory.id.Value, _BamlStreamDone], vendor.factory.id.Value, vendor.factory.id.Value]: ...\n"
         ));
         assert!(pyi.contains("    from ... import vendor\n"));
         assert!(pyi.contains("\nid: _BamlCallableNamespace_id\n"));
@@ -1885,15 +1749,17 @@ mod tests {
 
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(
-            root.contains("BamlRuntime.initialize_runtime_from_bytecode(_inlinedbaml.BYTECODE, _inlinedbaml.EMBEDDED_BAML_TOML)")
+            root.contains("BamlRuntime.initialize_runtime_from_blob(_inlinedbaml.BYTECODE, _inlinedbaml.EMBEDDED_BAML_TOML)")
         );
         assert!(!root.contains("BamlRuntime.initialize_runtime("));
         assert!(root.contains("def get_baml_source_files() -> dict[str, str]:"));
 
         let inl = &out[&PathBuf::from("_inlinedbaml.py")];
         assert!(inl.starts_with(HEADER));
-        assert!(inl.contains("BYTECODE: bytes = ("));
-        assert!(inl.contains("b\"\\x00BAML\\\"\\x0a\\xff\""));
+        assert!(inl.contains(&format!(
+            "BYTECODE: bytes = b\"{}\"\n",
+            baml_sdkgen_types::embedded_bytecode_base64(bytecode)
+        )));
         assert!(!inl.contains("FILES: dict[str, str]"));
 
         let sources = &out[&PathBuf::from("_baml_sources.py")];
@@ -1922,7 +1788,7 @@ mod tests {
         );
 
         let inlined = &out[&PathBuf::from("_inlinedbaml.py")];
-        assert!(inlined.contains("BYTECODE: bytes = ("));
+        assert!(inlined.contains("BYTECODE: bytes = b\""));
         assert!(inlined.contains("EMBEDDED_BAML_TOML: str | None = "));
         assert!(!inlined.contains("function a()"));
 
@@ -3677,7 +3543,7 @@ mod tests {
                         name: BaseName::new("callback"),
                         docstring: None,
                         ty: Ty::Function {
-                            params: Box::new([baml_codegen_types::CallableParam::required(
+                            params: Box::new([baml_sdkgen_types::CallableParam::required(
                                 None,
                                 type_var(BaseName::new("T")),
                             )]),

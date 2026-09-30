@@ -28,6 +28,7 @@ pub mod engine;
 pub mod lsp_ingress;
 pub mod lsp_runtime;
 pub mod native_lsp_sender;
+pub mod playground_btel;
 pub mod playground_env;
 pub mod playground_http;
 pub mod playground_io;
@@ -37,7 +38,6 @@ pub mod playground_seam;
 pub mod playground_sender;
 pub mod playground_server;
 pub mod playground_session;
-pub mod playground_telemetry;
 pub mod playground_ws;
 
 use std::{
@@ -998,7 +998,7 @@ mod tests {
             .unwrap_or_else(|e| unreachable!("the fixture compiles: {e}"));
 
         let engine = Arc::new(
-            engine::construct_engine_candidate(program, sys_ops, baml_lsp::SourceRevision(1))
+            engine::construct_engine_candidate(program, sys_ops, baml_lsp::SourceRevision(1), None)
                 .unwrap_or_else(|e| unreachable!("the engine constructs: {e}"))
                 .into_engine(),
         );
@@ -1009,7 +1009,7 @@ mod tests {
             .await
             .expect("a timed function runs on the playground platform");
         assert_eq!(value, bex_project::BexExternalValue::Bool(true));
-        bex_project::Bex::shutdown(engine).await;
+        bex_project::Bex::shutdown(engine, None).await;
     }
 
     fn framed(body: &str) -> Vec<u8> {
@@ -1215,6 +1215,7 @@ mod tests {
                 program,
                 Arc::new(platform.for_root(&root)),
                 baml_lsp::SourceRevision(1),
+                None,
             )
             .unwrap_or_else(|e| unreachable!("the engine constructs: {e}"))
             .into_engine();

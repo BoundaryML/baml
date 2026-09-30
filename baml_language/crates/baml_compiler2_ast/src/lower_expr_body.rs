@@ -1842,27 +1842,36 @@ impl LoweringContext {
         }
     }
 
-    /// Lower `spawn name_expr? { body }`. The CST shape is
-    /// `SPAWN_EXPR [ KW_SPAWN [expr] BLOCK_EXPR ]`.
+    /// Lower `spawn name_expr? (with expr (, expr)*)? { body }` (BEP-040). The
+    /// CST shape is `SPAWN_EXPR [ KW_SPAWN [expr] [KW_WITH expr (COMMA expr)*]
+    /// BLOCK_EXPR ]`.
     ///
-    /// To reuse the existing lambda machinery, the body is lowered as a
-    /// fresh 0-arg lambda (its own `ExprBody` + source map). The
-    /// `Expr::Spawn { body }` ID points at an `Expr::Lambda(func_def)`,
-    /// which the MIR lowering then handles via `lower_lambda` to emit
-    /// the proper `MakeClosure`. The name expression is parsed in the
-    /// outer context (where it can reference outer bindings).
+    /// `spawn` is sugar for an expression the user could have written:
     ///
-    /// That body-is-a-lambda invariant is upheld here rather than assumed
-    /// downstream: with no `BLOCK_EXPR` there is no lambda to build, so the
-    /// whole `spawn` lowers to [`Expr::Missing`] instead of a `Spawn` wrapping
-    /// a non-lambda body. Inference projects the body's return type and reads
-    /// its effective throws out of the lambda side table, neither of which
-    /// exists for a non-lambda.
+    /// ```baml
+    /// baml.spawn.__spawn(
+    ///     baml.spawn.Plan.new(body = () -> { body }, name = name_expr)
+    ///         .with(m1)
+    ///         .with(m2)
+    /// )
+    /// ```
+    ///
+    /// so typing, modifier application order, and `ApplyError` all fall out of
+    /// ordinary calls: nothing downstream knows about `spawn`. The body is a
+    /// fresh 0-arg lambda (its own `ExprBody` + source map); the name and the
+    /// modifiers are lowered in the outer context, where they can reference
+    /// outer bindings, and evaluate left to right, each applied before the next
+    /// is evaluated.
+    ///
+    /// With no `BLOCK_EXPR` there is no lambda to build, so the whole `spawn`
+    /// lowers to [`Expr::Missing`].
     fn lower_spawn_expr(&mut self, node: &SyntaxNode) -> ExprId {
         use baml_compiler_syntax::ast as cst_ast;
 
+        use crate::ast::CallArg;
+
         let mut name: Option<ExprId> = None;
-        let mut with_exprs: Vec<ExprId> = Vec::new();
+        let mut with_exprs: Vec<(ExprId, TextRange)> = Vec::new();
         let mut body_lambda: Option<ExprId> = None;
         // The CST is flat: `KW_SPAWN [name expr] [KW_WITH expr (COMMA expr)*]
         // BLOCK_EXPR`. We walk children-with-tokens so the `KW_WITH` token is
@@ -1909,7 +1918,7 @@ impl LoweringContext {
                     if let Some(expr) = expr {
                         let id = self.alloc_expr(expr, span);
                         if seen_with {
-                            with_exprs.push(id);
+                            with_exprs.push((id, span));
                         } else if name.is_none() {
                             name = Some(id);
                         }
@@ -1940,7 +1949,7 @@ impl LoweringContext {
                         Some(self.alloc_expr(Expr::Lambda(Box::new(fd)), child.span_range()));
                 }
             } else if seen_with {
-                with_exprs.push(self.lower_expr(child));
+                with_exprs.push((self.lower_expr(child), child.span_range()));
             } else if name.is_none() {
                 name = Some(self.lower_expr(child));
             }
@@ -1953,13 +1962,52 @@ impl LoweringContext {
         let Some(body) = body_lambda else {
             return self.alloc_expr(Expr::Missing, node.span_range());
         };
-        self.alloc_expr(
-            Expr::Spawn {
-                name,
-                with_exprs,
-                body,
+        let span = node.span_range();
+        let spawn_path = |member: &[&str]| {
+            Expr::Path(
+                ["baml", "spawn"]
+                    .iter()
+                    .chain(member)
+                    .map(|segment| Name::new(*segment))
+                    .collect(),
+            )
+        };
+        let plan_new = self.alloc_expr(spawn_path(&["Plan", "new"]), span);
+        let mut plan_args = vec![CallArg::named("body", body)];
+        plan_args.extend(name.map(|name| CallArg::named("name", name)));
+        let mut plan = self.alloc_expr(
+            Expr::Call {
+                callee: plan_new,
+                type_args: Vec::new(),
+                args: plan_args,
             },
-            node.span_range(),
+            span,
+        );
+        for (modifier, modifier_span) in with_exprs {
+            let with = self.alloc_expr(
+                Expr::MemberAccess {
+                    base: plan,
+                    member: Name::new("with"),
+                },
+                modifier_span,
+            );
+            plan = self.alloc_expr(
+                Expr::Call {
+                    callee: with,
+                    type_args: Vec::new(),
+                    args: vec![CallArg::positional(modifier)],
+                },
+                modifier_span,
+            );
+        }
+        let launch = self.alloc_expr(spawn_path(&["__spawn"]), span);
+        self.alloc_expr(
+            Expr::Call {
+                callee: launch,
+                type_args: Vec::new(),
+                args: vec![CallArg::positional(plan)],
+            },
+            span,
         )
     }
 
@@ -2821,14 +2869,6 @@ impl LoweringContext {
                     span: token.text_range(),
                 });
         }
-        if let Some(token) = &name_token
-            && token.text() == "$id"
-        {
-            self.diags
-                .push(LoweringDiagnostic::ReservedRuntimeIdBindingName {
-                    span: token.text_range(),
-                });
-        }
 
         let name_span = name_token.as_ref().map(rowan::SyntaxToken::text_range);
         let name = name_token.map(|t| Name::new(t.text()));
@@ -3007,17 +3047,6 @@ impl LoweringContext {
         let pat = match value_pattern {
             Some(child) => self.lower_pattern(&child),
             None => {
-                // Shorthand `{ f }` → bind to a local of the same name. `_`
-                // canonicalises to `Wildcard`, same rule as elsewhere.
-                // A shorthand binding named `$id` would be silently dead
-                // (reads hit the runtime-identity special form first) —
-                // reject it like every other `$id` binding site.
-                if field_name.as_str() == "$id" {
-                    self.diags
-                        .push(LoweringDiagnostic::ReservedRuntimeIdBindingName {
-                            span: field_span,
-                        });
-                }
                 let synth = if field_name.as_str() == "_" {
                     Pattern::Wildcard
                 } else {
@@ -3642,13 +3671,6 @@ impl LoweringContext {
             return self.alloc_expr(Expr::Missing, node.span_range());
         }
 
-        // Check if single segment is a literal keyword.
-        //
-        // Note `$id` is deliberately NOT desugared here: a lone `$id` reaches
-        // the AST as a bare WORD token (the parser only builds PATH_EXPR for
-        // dotted paths), so the special form is owned downstream — TIR types
-        // the read as `string` (builder.rs `infer_path`) and MIR lowers reads
-        // to `baml.id.current()` / writes to `baml.id.set(...)` (lower.rs).
         if segments.len() == 1 {
             match segments[0].0.as_str() {
                 "true" => {
@@ -5580,10 +5602,12 @@ impl LoweringContext {
     /// type, which takes the ordinary type road (where a nested `unreflect`
     /// is rejected like every other inline occurrence).
     fn lower_type_binding_stmt(&mut self, node: &SyntaxNode) -> StmtId {
-        let name = node
+        let name_token = node
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| token.kind() == SyntaxKind::WORD)
+            .find(|token| token.kind() == SyntaxKind::WORD);
+        let name = name_token
+            .as_ref()
             .map(|token| Name::new(token.text()))
             .unwrap_or_else(|| Name::new("<missing>"));
         let value = match node
@@ -5625,7 +5649,13 @@ impl LoweringContext {
             }
             None => TypeBindingValue::Static(TypeExprKind::Error.at(node.span_range())),
         };
-        self.alloc_stmt(Stmt::TypeBinding { name, value }, node.span_range())
+        let stmt = self.alloc_stmt(Stmt::TypeBinding { name, value }, node.span_range());
+        if let Some(token) = name_token {
+            self.source_map
+                .type_binding_name_spans
+                .insert(stmt, token.text_range());
+        }
+        stmt
     }
 
     /// The `UNREFLECT_TYPE` node when `type_expr` is exactly `unreflect(expr)`:

@@ -48,7 +48,7 @@ Selection options:
 
 Test output options:
       --log <LEVEL>
-          Set the BAML log level; overrides BAML_LOG [default: off] [possible values: off, error,
+          Set the BAML log level; overrides BAML_LOG [default: info] [possible values: off, error,
           warn, info, debug, trace]
 
 Global options:

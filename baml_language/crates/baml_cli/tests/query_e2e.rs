@@ -1,166 +1,190 @@
-//! End-to-end `baml query` (TASK/baml-query-scope.md §6): a real
-//! `baml run` writes the profile store, then SQL reads it back with the
-//! documented output contract and exit codes.
+//! `baml query` in fresh processes over recordings made by `baml run`.
+use std::{io::Write as _, path::Path, process::Command};
 
-mod common;
+use serde_json::Value;
 
-use std::{
-    path::Path,
-    process::{Command, Output},
-};
-
-fn run_baml_cli(built: &Path, dir: &Path, args: &[&str]) -> Output {
-    let home = dir.join(".baml-home");
-    std::fs::create_dir_all(&home).unwrap();
-    std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
-    let mut cmd = Command::new(built);
-    for arg in args {
-        cmd.arg(arg);
+const PROGRAM: &str = r"
+function Leaf(n: int) -> int { n + 1 }
+function Work(n: int) -> int {
+    let i = 0;
+    let sum = 0;
+    while (i < n) {
+        sum = sum + Leaf(i);
+        i = i + 1;
     }
-    cmd.current_dir(dir);
-    cmd.env("BAML_CLI_ALLOW_DIRECT", "1");
-    // This suite IS profiling-dependent: CI keeps BAML_PROFILE=0 for the
-    // general matrix (Windows disk hygiene) and profiling tests opt back
-    // in explicitly. The store lands in this test's tempdir, so nothing
-    // outlives the test.
-    cmd.env("BAML_PROFILE", "1");
-    cmd.env("BAML_OUTPUT_PRESET", "human");
-    cmd.env("BAML_AGENT_SKILL_CHECK", "off");
-    cmd.env("BAML_HOME", &home);
-    cmd.env_remove("BAML_LOG");
-    cmd.env("BAML_CACHE_DIR", common::shared_cache_dir());
-    cmd.output().expect("spawn baml-cli")
+    sum
 }
-
-fn project(dir: &Path) {
-    std::fs::create_dir_all(dir.join("baml_src")).unwrap();
-    std::fs::write(
-        dir.join("baml_src/main.baml"),
-        r#"function helper(x: int) -> int {
-  x * 2
-}
-
 function main() -> int {
-  helper(21)
+    let child = spawn { Work(5) };
+    Work(20) + (await child)
 }
-"#,
-    )
-    .unwrap();
+";
+
+fn cli(project: &Path, args: &[&str], envs: &[(&str, &str)]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_baml-cli"))
+        .args(args)
+        .current_dir(project)
+        .env("BAML_AGENT_SKILL_CHECK", "off")
+        .env_remove("BAML_TELEMETRY")
+        .envs(envs.iter().copied())
+        .output()
+        .expect("run CLI")
 }
+
+fn query(project: &Path, sql: &str) -> (i32, Value) {
+    let output = cli(project, &["query", "--format", "json", sql], &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let json = serde_json::from_str(&stdout).unwrap_or_else(|e| {
+        panic!(
+            "{sql}: {e}\nstdout: {stdout}\nstderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+    });
+    (output.status.code().unwrap_or(-1), json)
+}
+
+fn leaf_calls(json: &Value) -> i64 {
+    json["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row[0] == "user.Leaf")
+        .map_or(0, |row| row[1].as_i64().unwrap())
+}
+
+/// Every completed invocation per function, over each ended `baml run`.
+const STATS: &str =
+    "SELECT function_name, SUM(invocation_count) FROM profiler GROUP BY function_name";
 
 #[test]
-fn query_reads_back_a_run_with_the_documented_contract() {
-    let cli = common::baml_cli();
-    let temp = tempfile::tempdir().unwrap();
-    let dir = temp.path();
-    project(dir);
+fn fresh_query_processes_index_once_and_then_only_new_files() {
+    let project = tempfile::tempdir().unwrap();
+    std::fs::create_dir(project.path().join("baml_src")).unwrap();
+    std::fs::write(project.path().join("baml_src/main.baml"), PROGRAM).unwrap();
 
-    // `-v` surfaces the profiler's setup diagnostic on stderr: when the
-    // store is missing, the failure message below carries the reason
-    // instead of just the symptom.
-    let run = run_baml_cli(&cli, dir, &["run", "main", "-v"]);
-    assert!(
-        run.status.success(),
-        "baml run: {}",
-        String::from_utf8_lossy(&run.stderr)
-    );
-    assert!(
-        dir.join(".baml/profiles-v1/streams").is_dir(),
-        "the run writes the profile store; stderr: {}",
-        String::from_utf8_lossy(&run.stderr)
-    );
+    // Before anything ran: an empty answer, and nothing is created.
+    let (code, empty) = query(project.path(), "SELECT COUNT(*) FROM spans");
+    assert_eq!(code, 0);
+    assert_eq!(empty["rows"], serde_json::json!([[0]]));
+    assert_eq!(empty["outcome"]["source_missing"], true);
+    assert!(!project.path().join(".baml/btel/query.sqlite").exists());
 
-    // Executions idiom, table output, complete outcome, exit 0.
-    let query = run_baml_cli(
-        &cli,
-        dir,
-        &[
-            "query",
-            "SELECT status, entry_fqn, total_calls FROM threads \
-             WHERE parent_thread_id IS NULL",
-        ],
-    );
-    let stdout = String::from_utf8_lossy(&query.stdout);
-    let stderr = String::from_utf8_lossy(&query.stderr);
-    assert_eq!(query.status.code(), Some(0), "stderr: {stderr}");
-    assert!(stdout.contains("succeeded"), "rows on stdout: {stdout}");
-    assert!(stdout.contains("user.main"), "entry fqn resolves: {stdout}");
-    assert!(
-        stderr.contains("result=complete"),
-        "outcome on stderr: {stderr}"
-    );
-
-    // jsonl: one row object per line plus the terminal outcome frame.
-    let query = run_baml_cli(
-        &cli,
-        dir,
-        &[
-            "query",
-            "SELECT fqn FROM call_path_stats ORDER BY fqn",
-            "--format",
-            "jsonl",
-        ],
-    );
-    assert_eq!(query.status.code(), Some(0));
-    let stdout = String::from_utf8_lossy(&query.stdout);
-    let lines: Vec<&str> = stdout.lines().collect();
-    assert_eq!(lines.len(), 3, "two rows + outcome frame: {stdout}");
-    assert!(lines[0].contains("user.helper"));
-    assert!(lines[1].contains("user.main"));
-    assert!(
-        lines[2].contains("\"queryOutcome\"") && lines[2].contains("\"resultState\":\"complete\""),
-        "terminal frame: {}",
-        lines[2]
-    );
-
-    // Unknown table: exit 2 with a did-you-mean remedy.
-    let query = run_baml_cli(&cli, dir, &["query", "SELECT * FROM thread"]);
-    assert_eq!(query.status.code(), Some(2));
-    assert!(
-        String::from_utf8_lossy(&query.stderr).contains("did you mean `threads`?"),
-        "remedy: {}",
-        String::from_utf8_lossy(&query.stderr)
-    );
-
-    // DML is rejected as invalid SQL.
-    let query = run_baml_cli(&cli, dir, &["query", "DROP TABLE calls"]);
-    assert_eq!(query.status.code(), Some(2));
-
-    // --schema renders the profile.
-    let query = run_baml_cli(
-        &cli,
-        dir,
-        &["query", "--schema", "--table", "calls", "--format", "json"],
-    );
-    assert_eq!(query.status.code(), Some(0));
-    let stdout = String::from_utf8_lossy(&query.stdout);
-    assert!(stdout.contains("\"catalogVersion\":\"v1\""));
-    assert!(stdout.contains("\"name\":\"calls_v1\""));
-
-    // Budget exhaustion is terminal and typed (exit 3).
-    let query = run_baml_cli(
-        &cli,
-        dir,
-        &["query", "SELECT metric FROM health", "--max-rows", "1"],
-    );
+    for mode in ["medium", "high"] {
+        let run = cli(
+            project.path(),
+            &["run", "main"],
+            &[("BAML_TELEMETRY", mode)],
+        );
+        assert!(
+            run.status.success(),
+            "{}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+    }
+    let (code, first) = query(project.path(), STATS);
+    assert_eq!(code, 0, "{first}");
+    let refresh = &first["outcome"]["refresh"];
     assert_eq!(
-        query.status.code(),
-        Some(3),
-        "stderr: {}",
-        String::from_utf8_lossy(&query.stderr)
+        refresh["schema_rebuilt"], true,
+        "the first query creates the index"
     );
+    let files = refresh["files_decoded"].as_u64().unwrap();
+    assert!(files >= 2);
+    assert_eq!(leaf_calls(&first), 2 * 25);
+    assert_eq!(first["outcome"]["unsealed"], false);
+
+    // Each `baml run` is its own process, which said how it ended and which
+    // sources it ran.
+    let (code, ended) = query(
+        project.path(),
+        "SELECT COUNT(*), SUM(status = 'success'), SUM(host = 'baml'),
+           SUM(baml_source_code_content_id IS NOT NULL), SUM(command LIKE '% run main')
+         FROM processes",
+    );
+    assert_eq!(code, 0, "{ended}");
+    assert_eq!(ended["rows"], serde_json::json!([[2, 2, 2, 2, 2]]));
+
+    for _ in 0..2 {
+        let (_, again) = query(project.path(), STATS);
+        let refresh = &again["outcome"]["refresh"];
+        assert_eq!(refresh["files_decoded"], 0, "{refresh}");
+        assert_eq!(refresh["files_unchanged"].as_u64(), Some(files));
+        assert_eq!(leaf_calls(&again), 2 * 25);
+    }
+
+    let run = cli(project.path(), &["run", "main"], &[]);
+    assert!(run.status.success());
+    let (_, grown) = query(project.path(), STATS);
+    let refresh = &grown["outcome"]["refresh"];
+    assert_eq!(refresh["files_unchanged"].as_u64(), Some(files));
+    assert_eq!(refresh["files_applied"], refresh["files_decoded"]);
+    assert_eq!(
+        leaf_calls(&grown),
+        3 * 25,
+        "new evidence counted exactly once"
+    );
+
+    // The profiler counts timing-only and retained calls once each.
+    let (code, outcomes) = query(
+        project.path(),
+        "SELECT SUM(invocation_count), SUM(return_count), SUM(error_count),
+           SUM(panic_error_count), SUM(cancel_error_count), SUM(missing_count)
+         FROM profiler WHERE function_name = 'user.Leaf'",
+    );
+    assert_eq!(code, 0);
+    assert_eq!(outcomes["rows"], serde_json::json!([[75, 75, 0, 0, 0, 0]]));
+    assert_eq!(outcomes["outcome"]["query"]["cas_loads"], 0);
+
+    // Retained calls exist only for the high-mode run; values render as NULL
+    // because nothing captured them, and that is not unavailability.
+    let (code, calls) = query(
+        project.path(),
+        "SELECT span_name, output_value['x'] FROM spans WHERE span_name = 'user.Work'",
+    );
+    assert_eq!(code, 0);
+    assert_eq!(calls["rows"].as_array().unwrap().len(), 2);
+    assert_eq!(calls["outcome"]["status"], "complete");
 }
 
 #[test]
-fn query_without_a_store_fails_with_a_remedy() {
-    let cli = common::baml_cli();
-    let temp = tempfile::tempdir().unwrap();
-    project(temp.path());
-    let query = run_baml_cli(&cli, temp.path(), &["query", "SHOW TABLES"]);
-    assert_eq!(query.status.code(), Some(5));
-    assert!(
-        String::from_utf8_lossy(&query.stderr).contains("run a BAML program first"),
-        "remedy: {}",
-        String::from_utf8_lossy(&query.stderr)
+fn schema_invalid_sql_and_stdin() {
+    let project = tempfile::tempdir().unwrap();
+    let schema = cli(
+        project.path(),
+        &["query", "--schema", "--table", "spans"],
+        &[],
     );
+    assert!(schema.status.success());
+    let text = String::from_utf8_lossy(&schema.stdout);
+    assert!(
+        text.contains("input_args") && text.contains("baml_value"),
+        "{text}"
+    );
+
+    let invalid = cli(project.path(), &["query", "DELETE FROM spans"], &[]);
+    assert_eq!(invalid.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&invalid.stderr).contains("read-only"));
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_baml-cli"))
+        .args(["query", "--format", "jsonl", "-"])
+        .current_dir(project.path())
+        .env("BAML_AGENT_SKILL_CHECK", "off")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"SELECT COUNT(*) AS n FROM spans")
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    let lines: Vec<&str> = std::str::from_utf8(&output.stdout)
+        .unwrap()
+        .lines()
+        .collect();
+    assert_eq!(lines.len(), 2, "{lines:?}");
+    assert_eq!(serde_json::from_str::<Value>(lines[0]).unwrap()["n"], 0);
+    assert!(serde_json::from_str::<Value>(lines[1]).unwrap()["outcome"].is_object());
 }

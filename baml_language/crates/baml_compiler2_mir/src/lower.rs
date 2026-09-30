@@ -23,8 +23,8 @@ use crate::{
     builder::MirBuilder,
     inference_provider::{MethodCallee, Receiver},
     ir::{
-        AggregateKind, BasicBlock, BinOp, BlockId, CatchRegion, Constant, FunctionOwner, IndexKind,
-        IntrinsicOp, Local, LocalDecl, LogLevel, MirFunction, MirFunctionBody, MirFunctionId,
+        AggregateKind, BasicBlock, BinOp, BlockId, Constant, FunctionOwner, IndexKind, IntrinsicOp,
+        Landing, Local, LocalDecl, LogLevel, MirFunction, MirFunctionBody, MirFunctionId,
         MirFunctionKind, MirInternalError, Operand, Place, RealizedTy, RuntimeTy, Rvalue,
         StatementKind, SwitchKey, SyntheticKind, Terminator, TyTemplate, TyTemplateInterface,
         TypeTest,
@@ -55,10 +55,12 @@ enum SwitchKind {
 enum SwitchOtherwise {
     /// Match expression: goto join (non-exhaustive) or unreachable (exhaustive).
     Match { is_exhaustive: bool },
-    /// Catch expression: rethrow unmatched errors.
-    /// If `needs_throw_if_panic` is true, insert a `throw_if_panic` guard before wildcard body.
+    /// Catch expression: rethrow unmatched errors with their landing's
+    /// context. If `needs_throw_if_panic` is true, insert a `throw_if_panic`
+    /// guard before wildcard body.
     Catch {
         error_local: Local,
+        context_local: Local,
         needs_throw_if_panic: bool,
     },
 }
@@ -72,10 +74,17 @@ struct LoopContext {
     defer_depth: usize,
 }
 
+/// A `defer` body armed in the scope being lowered (BEP-042), with the
+/// handler in force where it was armed. Every copy of the body — the inline
+/// replays at the non-throwing exits and the landing pad — unwinds to that
+/// handler: the pad of the defer armed before it, or the enclosing `catch`.
+/// Never to its own pad, and never to the pad of a defer armed after it.
 #[derive(Clone, Copy)]
-struct CatchContext {
-    unwind_target: BlockId,
-    error_local: Local,
+struct ArmedDefer {
+    /// The body, an inline `Expr::Block`.
+    body: AstExprId,
+    /// `MirBuilder::unwind()` at arming.
+    unwind: Option<BlockId>,
 }
 
 // ─── Type conversion: TIR RuntimeTy → baml_type::RuntimeTy ────────────────────────────────
@@ -407,7 +416,7 @@ fn lower_tir_template(
         } => {
             // Always a projection template, never a frame slot: associated
             // types are not frame slots, so a `Self.X` here has no slot to
-            // reference. (A name-based `slot_by_name(member)` shortcut lived
+            // reference. (A name-based slot shortcut for `member` lived
             // here from the slotted era; after de-slotting it could only ever
             // match a GENERIC that happens to share the member's name —
             // `function pick<Item>(...) -> Self.Item` — silently substituting
@@ -600,6 +609,15 @@ impl<'a> RuntimeLowering<'a> {
     }
 }
 
+/// Whether `param` is a synthetic effect parameter, which has no frame slot
+/// by ABI and is erased wherever a template needs a slot. Synthetic effect
+/// parameters are still told apart by their name, so a block-scoped
+/// `type __effect_param_0 = …` — a user binding that always has a slot — is
+/// excluded by its identity, not its spelling.
+fn is_slotless_effect_param(param: &ParamTy) -> bool {
+    !param.is_scoped() && baml_type::is_synthetic_effect_param(param.name())
+}
+
 /// Convert a `Tir2Ty` to `TyTemplate`, mapping each type variable to its
 /// canonical runtime frame index.
 pub fn tir2_to_template(
@@ -607,9 +625,7 @@ pub fn tir2_to_template(
     resolved: &RuntimeLowering<'_>,
     generic_params: &[ParamTy],
 ) -> TyTemplate {
-    let ty = baml_type_runtime::erase_typevars_matching(ty, &|param| {
-        baml_type::is_synthetic_effect_param(param.name())
-    });
+    let ty = baml_type_runtime::erase_typevars_matching(ty, &is_slotless_effect_param);
     let generic_layout = RuntimeGenericLayout::new(generic_params);
     lower_tir_template(&ty, resolved, &generic_layout, TemplateMode::Value)
         .unwrap_or_else(|| unreachable!("value template lowering is infallible"))
@@ -1400,7 +1416,7 @@ fn resolution_external_function<'db>(
 
 // Re-use ExprId from baml_compiler2_ast (already imported above via ExprId)
 use baml_compiler2_ast::{
-    AssignOp as AstAssignOp, AstSourceMap, BinaryOp as AstBinaryOp, CallArg, Expr as AstExpr,
+    AssignOp as AstAssignOp, AstSourceMap, BinaryOp as AstBinaryOp, Expr as AstExpr,
     ExprBody as AstExprBody, ExprId as AstExprId, Literal as AstLiteral, LoopOrigin,
     PatId as AstPatId, Pattern as AstPattern, Stmt as AstStmt, StmtId as AstStmtId,
     TypeExpr as AstTypeExpr, TypeExprKind as AstTypeExprKind, UnaryOp as AstUnaryOp,
@@ -1643,8 +1659,12 @@ struct LoweringContext<'db> {
     /// roots, which HIR does not resolve.
     self_binding: Option<BindingId>,
     loop_context: Option<LoopContext>,
-    catch_context: Option<CatchContext>,
-    catch_rethrow_locals: Vec<Local>,
+    /// The locals of the handler arms being lowered that hold a caught error
+    /// (the landing's error local, or a captured binding's own copy), each
+    /// with its landing's context local: `throw` of one is a rethrow that
+    /// carries that context. A lambda body starts with none, since its locals
+    /// are its own.
+    catch_rethrow_locals: Vec<(Local, Local)>,
     exit_block: BlockId,
 
     // THE inference tables: `hir_ty`'s results for this body and, for a
@@ -1726,13 +1746,12 @@ struct LoweringContext<'db> {
     /// `dispatch_target_for_concrete`.
     interface_method_names: &'db FxHashSet<Name>,
 
-    /// Stack of pending `defer` block bodies (BEP-042), parallel to
-    /// lexical scopes. Each entry is the `AstExprId` of a defer body
-    /// (an inline `Expr::Block`). Pushed by `lower_stmt`; replayed (LIFO,
-    /// re-lowered inline) at every scope exit by `replay_defers_to_depth`.
-    /// Swapped at lambda boundaries so a lambda body never replays the parent's
-    /// defers.
-    defer_stack: Vec<AstExprId>,
+    /// Stack of armed `defer` bodies (BEP-042), parallel to lexical scopes.
+    /// Pushed by `lower_scoped_block` as each `defer` statement is reached;
+    /// replayed (LIFO, re-lowered inline) at every non-throwing scope exit by
+    /// `replay_defers_to_depth`. Swapped at lambda boundaries so a lambda body
+    /// never replays the parent's defers.
+    defer_stack: Vec<ArmedDefer>,
 
     /// Ordinals of the synthetic functions lowered so far under the
     /// top-level body — see [`SyntheticOrdinals`].
@@ -2202,7 +2221,6 @@ impl<'db> LoweringContext<'db> {
             &iter_method,
             body,
             &[],
-            None,
             &Place::local(iter_local),
         )?;
 
@@ -2234,7 +2252,6 @@ impl<'db> LoweringContext<'db> {
             &next_method,
             body,
             &[],
-            None,
             &Place::local(next_local),
         )?;
         self.emit_is_type_branch(next_local, self.baml_iter_done_ty(), bb_exit, bb_body)?;
@@ -2316,7 +2333,6 @@ impl<'db> LoweringContext<'db> {
             binding_locals: HashMap::new(),
             self_binding: None,
             loop_context: None,
-            catch_context: None,
             catch_rethrow_locals: Vec::new(),
             exit_block: BlockId(0), // placeholder; overwritten in lower_function_body
             tables,
@@ -2384,7 +2400,6 @@ impl<'db> LoweringContext<'db> {
             binding_locals: HashMap::new(),
             self_binding: None,
             loop_context: None,
-            catch_context: None,
             catch_rethrow_locals: Vec::new(),
             exit_block: BlockId(0), // placeholder; overwritten in lower_let_body_inner
             tables,
@@ -2724,35 +2739,62 @@ impl<'db> LoweringContext<'db> {
         idx
     }
 
-    /// Re-lower the `defer` block bodies registered at `[defer_depth..]` of
+    /// Re-lower the `defer` bodies armed at `[defer_depth..]` of
     /// `defer_stack`, in reverse declaration order (LIFO) — BEP-042.
     ///
     /// Each body is re-lowered INLINE (block-duplication) into a throwaway Void
     /// temp so it reads the live enclosing locals at THIS exit point, per the
-    /// BEP's "final value" rule. Called at every scope exit. It does not truncate
-    /// the stack; the owning `lower_scoped_block` truncates, while divergent callers leave it
-    /// (a dead block follows). If a replayed body diverges (e.g. `throw`), the
-    /// remaining defers are emitted on the resulting dead block and eliminated.
+    /// BEP's "final value" rule. Called at every non-throwing scope exit
+    /// (fall-through, `return`, `break`, `continue`). It does not truncate the
+    /// stack; the owning `lower_scoped_block` truncates, while divergent
+    /// callers leave it (a dead block follows). If a replayed body diverges
+    /// (e.g. `throw`), the remaining defers are emitted on the resulting dead
+    /// block and eliminated.
+    ///
+    /// A body is lowered unwinding to the handler in force where its defer was
+    /// armed (`ArmedDefer`): the pad of the defer armed before it, or the
+    /// enclosing `catch` — never its own pad, nor those of the defers armed
+    /// after it, which have already run here. So a throw out of a replayed
+    /// body runs the remaining (earlier-armed) defers once each, through
+    /// their pads, and never re-runs the body itself.
     fn replay_defers_to_depth(&mut self, defer_depth: usize) -> Lowered<()> {
-        let defers: Vec<AstExprId> = self.defer_stack[defer_depth..].to_vec();
+        let defers: Vec<ArmedDefer> = self.defer_stack[defer_depth..].to_vec();
         if defers.is_empty() {
             return Ok(());
         }
-        // Inline replay (the non-throwing exits) runs the defers OUTSIDE their
-        // own scope's unwind pads: a defer that throws here must not be routed
-        // back into the pad that would replay it again (double-run / loop).
-        // Clearing the catch context makes such a throw propagate outward
-        // (replace-semantics; no cause chain in this pass). Restored after.
-        let saved_catch = self.catch_context.take();
-        for body in defers.into_iter().rev() {
+        let exit_unwind = self.builder.unwind();
+        for armed in defers.into_iter().rev() {
             if self.builder.is_current_terminated() {
                 break;
             }
-            let tmp = self.builder.temp(RuntimeTy::Void);
-            self.lower_expr(body, Place::local(tmp))?;
+            self.builder.transition_unwind(armed.unwind);
+            self.lower_shielded_defer_body(armed.body)?;
         }
-        self.catch_context = saved_catch;
+        self.builder.transition_unwind(exit_unwind);
         Ok(())
+    }
+
+    /// Lower one copy of a `defer` body shielded from cancellation: its
+    /// blocks are stamped `shielded`, and the engine does not deliver
+    /// `Cancelled` to a thread executing inside them (or in a callee called
+    /// from them), so cleanup may suspend (BEP-034's shield, implicit for
+    /// `defer`). A throw out of the body simply leaves the shielded blocks.
+    fn lower_shielded_defer_body(&mut self, body: AstExprId) -> Lowered<()> {
+        self.shielded(|this| {
+            let tmp = this.builder.temp(RuntimeTy::Void);
+            this.lower_expr(body, Place::local(tmp))
+        })
+    }
+
+    /// Lower with `f` shielded from cancellation: the blocks it creates are
+    /// stamped `shielded`, and the shield closes when it returns, so a shield
+    /// is never opened without being closed, and nested ones close innermost
+    /// first.
+    fn shielded<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        let shield = self.builder.enter_shield();
+        let result = f(self);
+        self.builder.leave_shield(shield);
+        result
     }
 
     /// Every binding HIR registered in the scopes this body lowers has a
@@ -2999,9 +3041,7 @@ impl<'db> LoweringContext<'db> {
             // diagnostic; delete this arm once lowering of diagnosed bodies
             // is guarded upstream, so the guard can do its job.
             Tir2Ty::Error => Tir2Ty::Unknown,
-            Tir2Ty::TypeVar(param) if baml_type::is_synthetic_effect_param(param.name()) => {
-                Tir2Ty::Unknown
-            }
+            Tir2Ty::TypeVar(param) if is_slotless_effect_param(&param) => Tir2Ty::Unknown,
             Tir2Ty::Literal(lit, _freshness) => Tir2Ty::Literal(lit, baml_type::Freshness::Regular),
             Tir2Ty::Class(name, args) => Tir2Ty::Class(
                 name,
@@ -3378,7 +3418,6 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         callee: AstExprId,
         args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> Lowered<bool> {
         use crate::inference_provider::MemberResolution;
@@ -3441,7 +3480,6 @@ impl<'db> LoweringContext<'db> {
                     return self.emit_item_call_dispatched(
                         expr_id,
                         args,
-                        runtime_id,
                         dest,
                         &iface_tn,
                         &iface_args,
@@ -3458,7 +3496,7 @@ impl<'db> LoweringContext<'db> {
                         expr_id,
                     ));
                 };
-                self.emit_item_call_type_keyed(expr_id, args, runtime_id, dest, rvalue)?;
+                self.emit_item_call_type_keyed(expr_id, args, dest, rvalue)?;
                 Ok(true)
             }
             MethodCallee::Concrete {
@@ -3472,11 +3510,11 @@ impl<'db> LoweringContext<'db> {
                     // A `self`-taking method dispatches on its receiver, the
                     // written first argument.
                     return self.emit_item_call_dispatched(
-                        expr_id, args, runtime_id, dest, &view.0, &view.1, &method, 0,
+                        expr_id, args, dest, &view.0, &view.1, &method, 0,
                     );
                 }
                 let rvalue = self.type_keyed_function_rvalue(expr_id, &self_ty, &view, &method);
-                self.emit_item_call_type_keyed(expr_id, args, runtime_id, dest, rvalue)?;
+                self.emit_item_call_type_keyed(expr_id, args, dest, rvalue)?;
                 Ok(true)
             }
             MethodCallee::Inherent(_) => Ok(false),
@@ -3523,7 +3561,6 @@ impl<'db> LoweringContext<'db> {
         &mut self,
         expr_id: AstExprId,
         args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
         dest: &Place,
         iface_tn: &DeclName,
         iface_args: &[Tir2Ty],
@@ -3556,7 +3593,6 @@ impl<'db> LoweringContext<'db> {
             &[],
             method,
             expr_id,
-            runtime_id,
             dest,
         )
     }
@@ -3567,7 +3603,6 @@ impl<'db> LoweringContext<'db> {
         &mut self,
         expr_id: AstExprId,
         args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
         dest: &Place,
         rvalue: Rvalue<'db>,
     ) -> Lowered<()> {
@@ -3578,7 +3613,6 @@ impl<'db> LoweringContext<'db> {
             Operand::Copy(Place::local(callable)),
             arg_operands,
             expr_id,
-            runtime_id,
             dest,
         )?;
         Ok(())
@@ -3807,6 +3841,7 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         value_count: usize,
     ) -> Lowered<Option<baml_type::CallLayout>> {
+        let value_count = value_count - usize::from(self.call_trace_arg(expr_id).is_some());
         let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)) else {
             return Ok(None);
         };
@@ -3842,38 +3877,26 @@ impl<'db> LoweringContext<'db> {
         callee_op: Operand<'db>,
         arg_operands: Vec<Operand<'db>>,
         expr_id: AstExprId,
-        runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> Lowered<()> {
         let argument_layout = self.call_argument_layout(expr_id, arg_operands.len())?;
         let target = self.builder.create_block();
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        let runtime_id_operand = self.lower_runtime_id_operand(runtime_id)?;
         match dest {
             Place::Local(_) => {
-                self.builder.call_with_type_args_and_runtime_id(
-                    callee_op,
-                    arg_operands,
-                    0,
-                    runtime_id_operand,
-                    dest.clone(),
-                    target,
-                    unwind,
-                );
+                self.builder
+                    .call_with_type_args(callee_op, arg_operands, 0, dest.clone(), target);
                 self.builder.set_call_layout(argument_layout);
                 self.builder.set_current_block(target);
             }
             _ => {
                 let call_ty = self.expr_ty(expr_id);
                 let tmp = self.builder.temp(call_ty);
-                self.builder.call_with_type_args_and_runtime_id(
+                self.builder.call_with_type_args(
                     callee_op,
                     arg_operands,
                     0,
-                    runtime_id_operand,
                     Place::local(tmp),
                     target,
-                    unwind,
                 );
                 self.builder.set_call_layout(argument_layout);
                 self.builder.set_current_block(target);
@@ -4285,31 +4308,11 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// The `T`/`E` templates for a `spawn` expression — the arguments of its
-    /// `Future<T, E>` static type — for [`Terminator::Spawn`]. TIR has already
-    /// folded any `with` transformers into that type, so this is the future the
-    /// spawn actually hands back. Falls back to `unknown` when the recorded type
-    /// is not a future (error recovery).
-    fn spawn_future_ty(&self, expr_id: AstExprId) -> Box<crate::ir::SpawnFutureTy> {
-        let generic_params = self.enclosing_generic_params();
-        let (returns, throws) = match self.tir_expr_type(self.expr_metadata_key(expr_id)) {
-            Some(Tir2Ty::Future(value, error)) => (
-                self.ty_to_template(value, &generic_params),
-                self.ty_to_template(error, &generic_params),
-            ),
-            _ => (
-                TyTemplate::from(RealizedTy::unknown()),
-                TyTemplate::from(RealizedTy::unknown()),
-            ),
-        };
-        Box::new(crate::ir::SpawnFutureTy { returns, throws })
-    }
-
-    fn object_class_type_arg_templates(
-        &mut self,
-        expr_id: AstExprId,
-        explicit_type_args: &[AstTypeExpr],
-    ) -> Vec<TyTemplate> {
+    /// The type-argument templates of an object literal: its written type
+    /// args as TIR resolved them (the call plan keyed at the expression), or,
+    /// for `Box { … }`, the class type TIR inferred for it. Never re-lowered
+    /// from syntax — see `check_type_of_intrinsic`.
+    fn object_class_type_arg_templates(&mut self, expr_id: AstExprId) -> Vec<TyTemplate> {
         if let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned()
             && !plan.slots.is_empty()
         {
@@ -4320,31 +4323,7 @@ impl<'db> LoweringContext<'db> {
                 .map(|slot| self.ty_to_template(&slot.emission_ty, &generic_params))
                 .collect();
         }
-        // Empty (`Box { … }`) or unlowerable (`Box<_> { … }` — a compile error
-        // whose arg lowers to an error sentinel) type args: use the class type
-        // TIR inferred/solved for this expression rather than re-lowering the
-        // raw args, which cannot cross the runtime boundary.
-        let generic_params = self.enclosing_generic_params();
-        let has_hole = explicit_type_args
-            .iter()
-            .any(|arg| self.type_arg_is_infer_hole(arg, &generic_params));
-        if explicit_type_args.is_empty() || has_hole {
-            self.class_type_arg_templates(expr_id)
-        } else {
-            self.generic_apply_type_arg_templates(explicit_type_args)
-        }
-    }
-
-    /// Whether a written type argument lowers to a type that cannot cross the
-    /// runtime boundary — a `_` wildcard (a hard error lowering to `Ty::Error`)
-    /// or any other error-recovery sentinel, at any depth. A bare frame
-    /// type-arg reference (`T`) and any concrete type return `false`.
-    fn type_arg_is_infer_hole(&self, type_arg: &AstTypeExpr, generic_params: &[ParamTy]) -> bool {
-        if Self::direct_frame_type_arg_template(type_arg, generic_params).is_some() {
-            return false;
-        }
-        let tir_ty = self.lower_type_arg_to_tir(type_arg, generic_params);
-        baml_type::lower_to_runtime(&tir_ty, self.resolved_aliases).is_err()
+        self.class_type_arg_templates(expr_id)
     }
 
     /// Get the `baml_type::RuntimeTy` for a pattern binding
@@ -4785,6 +4764,7 @@ impl<'db> LoweringContext<'db> {
             kind: SyntheticKind::Lambda,
             ordinal: self.synthetic_ordinals.next(SyntheticKind::Lambda),
         };
+        let lambda_definition_span = self.span_for_expr(expr_id);
 
         // Find the lambda's FileScopeId from the HIR index.
         // The HIR builder registered a ScopeKind::Lambda at the lambda expression's span.
@@ -4842,9 +4822,9 @@ impl<'db> LoweringContext<'db> {
             ),
         );
         let saved_binding_locals = std::mem::take(&mut self.binding_locals);
+        let saved_catch_rethrow_locals = std::mem::take(&mut self.catch_rethrow_locals);
         let saved_exit_block = self.exit_block;
         let saved_loop_context = self.loop_context.take();
-        let saved_catch_context = self.catch_context.take();
         // BEP-042: a lambda body is its own cleanup region — reset the defer
         // stack so it never replays the parent's defers, restore it after.
         let saved_defer_stack = std::mem::take(&mut self.defer_stack);
@@ -4880,6 +4860,11 @@ impl<'db> LoweringContext<'db> {
             FunctionOwner::Synthetic(Box::new(lambda_identity.clone())),
             arity,
         );
+        // The lambda's definition span is its expression, so its metadata
+        // names the file its body's line table points into.
+        if let Some(span) = lambda_definition_span {
+            self.builder.set_span(span);
+        }
 
         // Keep the checked parameter types for interface dispatch inside the
         // lambda, including inferred parameters and enclosing generic bounds.
@@ -5018,9 +5003,9 @@ impl<'db> LoweringContext<'db> {
         self.lambda_param_tir_types = saved_lambda_param_tir_types;
         self.builder = saved_builder;
         self.binding_locals = saved_binding_locals;
+        self.catch_rethrow_locals = saved_catch_rethrow_locals;
         self.exit_block = saved_exit_block;
         self.loop_context = saved_loop_context;
-        self.catch_context = saved_catch_context;
         self.defer_stack = saved_defer_stack;
         self.current_scope = saved_current_scope;
         self.current_metadata_scope = saved_metadata_scope;
@@ -5273,19 +5258,17 @@ impl<'db> LoweringContext<'db> {
 
         // ── Emit `tag(closure)` → dest. The result is the template's value. ──
         let callee = Operand::Constant(Constant::Function(tag_callee));
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let target = self.builder.create_block();
         match &dest {
             Place::Local(_) => {
-                self.builder
-                    .call(callee, vec![closure_op], dest, target, unwind);
+                self.builder.call(callee, vec![closure_op], dest, target);
                 self.builder.set_current_block(target);
             }
             _ => {
                 let ty = self.expr_ty(expr_id);
                 let tmp = self.builder.temp(ty);
                 self.builder
-                    .call(callee, vec![closure_op], Place::local(tmp), target, unwind);
+                    .call(callee, vec![closure_op], Place::local(tmp), target);
                 self.builder.set_current_block(target);
                 self.builder
                     .assign(dest, Rvalue::Use(Operand::Copy(Place::local(tmp))));
@@ -5392,9 +5375,9 @@ impl<'db> LoweringContext<'db> {
             ),
         );
         let saved_binding_locals = std::mem::take(&mut self.binding_locals);
+        let saved_catch_rethrow_locals = std::mem::take(&mut self.catch_rethrow_locals);
         let saved_exit_block = self.exit_block;
         let saved_loop_context = self.loop_context.take();
-        let saved_catch_context = self.catch_context.take();
         let saved_current_scope = self.current_scope;
         let saved_metadata_scope = self.current_metadata_scope;
         let saved_pending_lambdas = std::mem::take(&mut self.pending_lambdas);
@@ -5555,9 +5538,9 @@ impl<'db> LoweringContext<'db> {
         // Restore parent state.
         self.builder = saved_builder;
         self.binding_locals = saved_binding_locals;
+        self.catch_rethrow_locals = saved_catch_rethrow_locals;
         self.exit_block = saved_exit_block;
         self.loop_context = saved_loop_context;
-        self.catch_context = saved_catch_context;
         self.current_scope = saved_current_scope;
         self.current_metadata_scope = saved_metadata_scope;
         self.capture_indices = saved_capture_indices;
@@ -5634,21 +5617,18 @@ impl<'db> LoweringContext<'db> {
     ) -> Lowered<()> {
         let type_binding_scope_start = self.scoped_type_binding_params.len();
         let defer_depth = self.defer_stack.len();
+        let incoming_unwind = self.builder.unwind();
 
         // BEP-042 Stage 2: a defer must also run when an exception propagates
-        // out of a *call* inside the block. Each defer splits the block and
-        // opens a catch-all unwind region whose landing pad replays that defer
-        // then cascades to the next-outer pad / enclosing handler. The
-        // exception table routes a throw to the innermost region reached so far
-        // (see `try_unwind_exception`), so only the defers armed before the
-        // throw run. (Non-throwing exits — normal fall-through, return,
-        // break/continue — run defers via the inline `replay_defers_to_depth`
-        // path instead.)
-        let block_incoming_catch = self.catch_context;
-        // (landing-pad block, defer body, context to cascade to after replay,
-        // catch-region index — to fill in the pad's handler_body once its body
-        // is lowered below)
-        let mut defer_pads: Vec<(BlockId, AstExprId, Option<CatchContext>, usize)> = Vec::new();
+        // out of a *call* inside the block. Each defer makes the rest of the
+        // block unwind to a landing pad that replays that defer, then
+        // cascades to the next-outer pad / enclosing handler; a throw thus
+        // runs exactly the defers armed before it. The non-throwing exits —
+        // fall-through, return, break/continue — run the defers inline via
+        // `replay_defers_to_depth`, each unwinding to the handler in force
+        // where it was armed, so those copies never reach their own pad.
+        // (landing-pad block, the defer)
+        let mut defer_pads: Vec<(BlockId, ArmedDefer)> = Vec::new();
         let mut shared_error: Option<Local> = None;
         // BEP-042 cause chain: a throw inside a defer pad — a sibling defer that
         // throws while the scope is already unwinding — is "during handling of"
@@ -5665,43 +5645,31 @@ impl<'db> LoweringContext<'db> {
             };
             match defer_body {
                 Some(body) => {
-                    // Register for inline replay on the non-throwing exits.
-                    self.defer_stack.push(body);
-                    // Open the unwind region protecting the rest of the block.
                     let error_local = *shared_error.get_or_insert_with(|| {
                         self.builder.declare_local(None, RuntimeTy::Unknown, None)
                     });
                     let ctx_local = *shared_ctx.get_or_insert_with(|| {
                         self.builder.declare_local(None, RuntimeTy::Unknown, None)
                     });
-                    let pad = self.builder.create_block();
-                    // Split into a fresh block so the region covers only the
-                    // code AFTER this defer (a throw before it must not run it).
-                    let region_start = self.builder.create_block();
-                    if !self.builder.is_current_terminated() {
-                        self.builder.goto(region_start);
-                    }
-                    self.builder.set_current_block(region_start);
-                    let region_idx = self.builder.catch_regions.len();
-                    self.builder.catch_regions.push(CatchRegion {
-                        body_entry: region_start,
-                        handler: pad,
-                        // handler_body and body_blocks are filled in once the
-                        // pad bodies are lowered (below). `stack_trace_local`
-                        // holds the in-flight error's baml.errors.Context so a sibling
-                        // defer that throws while unwinding chains onto it
-                        // (BEP-042 cause chain).
-                        handler_body: Vec::new(),
-                        body_blocks: Vec::new(),
+                    // The pad unwinds to the handler in force here — the
+                    // previous pad or the enclosing catch — never to itself.
+                    // `ctx_local` receives the in-flight error's
+                    // baml.errors.Context so a sibling defer that throws while
+                    // unwinding chains onto it (BEP-042 cause chain).
+                    let pad = self.builder.create_handler_block(Landing {
                         error_local,
-                        stack_trace_local: Some(ctx_local),
+                        context_local: ctx_local,
                     });
-                    let route_ctx = self.catch_context;
-                    defer_pads.push((pad, body, route_ctx, region_idx));
-                    self.catch_context = Some(CatchContext {
-                        unwind_target: pad,
-                        error_local,
-                    });
+                    let armed = ArmedDefer {
+                        body,
+                        unwind: self.builder.unwind(),
+                    };
+                    // Only the code AFTER this defer unwinds to its pad: a
+                    // throw before it must not run it.
+                    self.builder.transition_unwind(Some(pad));
+                    // Registered for inline replay on the non-throwing exits.
+                    self.defer_stack.push(armed);
+                    defer_pads.push((pad, armed));
                 }
                 None => {
                     self.lower_stmt(stmt_id)?;
@@ -5728,113 +5696,47 @@ impl<'db> LoweringContext<'db> {
             self.replay_defers_to_depth(defer_depth)?;
         }
 
+        // What follows the block unwinds past its defers again.
+        self.builder.transition_unwind(incoming_unwind);
+
         // Emit the landing pads out of line (reached via the exception table).
-        // Reverse order so the innermost (last-declared) pad is laid out first.
-        if !defer_pads.is_empty() {
-            // Each defer region protects the block-index window from its
-            // `region_start` up to here — the statements after the defer, the
-            // tail expr, and the inline defer replay, plus everything nested
-            // within them. The pad bodies lowered below are appended to the
-            // OUTER siblings' regions afterwards.
-            let pads_lo = self.builder.num_blocks();
-            let continuation = self.builder.current_block();
-            for &(pad, body, route_ctx, region_idx) in defer_pads.iter().rev() {
-                self.builder.set_current_block(pad);
-                // Lower the defer body under the ENCLOSING context, not this
-                // pad's `route_ctx`. A throw/call inside the body is routed to
-                // the next-outer pad by the exception table (its region covers
-                // the body). Using `route_ctx` here would instead give the
-                // body's calls an unwind edge to the sibling pad, pulling that
-                // pad early in RPO so its region no longer covers the body's
-                // (later-laid-out) throw block — and the throw would escape,
-                // skipping the remaining defers. The explicit cascade below
-                // handles a defer body that completes normally.
-                self.catch_context = block_incoming_catch;
-                let tmp = self.builder.temp(RuntimeTy::Void);
-                // The pad body IS this defer's handler body: a throw inside it
-                // is "during handling of" the in-flight error. Capture every
-                // block the body lowers into (the pad plus any it creates) so
-                // the cause pre-walk covers them all.
-                let pad_body_lo = self.builder.num_blocks();
-                self.lower_expr(body, Place::local(tmp))?;
-                if !self.builder.is_current_terminated() {
-                    let error =
-                        shared_error.expect("a defer pad implies a shared error local exists");
-                    match route_ctx {
-                        Some(outer) => {
-                            if outer.error_local != error {
-                                self.builder.assign(
-                                    Place::local(outer.error_local),
-                                    Rvalue::Use(Operand::Copy(Place::Local(error))),
-                                );
-                            }
-                            self.builder.goto(outer.unwind_target);
-                        }
-                        None => {
-                            // Re-raise the in-flight error unchanged: a rethrow,
-                            // not a fresh throw, so the cause pre-walk does not
-                            // chain it onto its own context (a self-link).
-                            self.builder.rethrow(Operand::Copy(Place::Local(error)));
-                        }
-                    }
-                }
-                self.builder.catch_regions[region_idx].handler_body = std::iter::once(pad)
-                    .chain((pad_body_lo..self.builder.num_blocks()).map(BlockId))
-                    .collect();
+        // Reverse order so the innermost (last-armed) pad is laid out first.
+        for &(pad, armed) in defer_pads.iter().rev() {
+            // The pad body unwinds to the handler in force where its defer
+            // was armed (see `replay_defers_to_depth`) and is its own handler
+            // body: a throw inside it is "during handling of" the in-flight
+            // error.
+            let out_of_line = self.builder.begin_out_of_line(pad, armed.unwind, Some(pad));
+            self.lower_shielded_defer_body(armed.body)?;
+            // A body that completes normally re-raises the in-flight error.
+            // This block unwinds to the handler in force where the defer was
+            // armed — an enclosing pad or `catch` in this function, or the
+            // caller — and landing there fills that handler's error AND
+            // context slots, as any throw does. Jumping to an enclosing
+            // handler directly would have to write both by hand; leaving the
+            // context unwritten made a same-function `catch (e, ctx)` read an
+            // uninitialized `ctx`, and an enclosing pad lose the error's cause
+            // chain. A rethrow, not a fresh throw, so the cause pre-walk does
+            // not chain the error onto its own context (a self-link).
+            if !self.builder.is_current_terminated() {
+                let error = shared_error.expect("a defer pad implies a shared error local exists");
+                let context =
+                    shared_ctx.expect("a defer pad implies a shared context local exists");
+                debug_assert_eq!(
+                    self.builder.unwind(),
+                    armed.unwind,
+                    "a pad's cascade unwinds to the handler its defer was armed under"
+                );
+                self.builder
+                    .rethrow(Operand::Copy(Place::Local(error)), context);
             }
-            // Each region protects its window of the block body, plus the pad
-            // bodies of the LATER-armed (inner) defers: an error unwinding
-            // through pad N whose defer body itself throws must cascade to pad
-            // N-1, so pad N's blocks belong to every outer sibling's region
-            // (the innermost covering region wins at runtime). A pad is never
-            // protected by its own region.
-            for (pos, &(_, _, _, region_idx)) in defer_pads.iter().enumerate() {
-                let window_lo = self.builder.catch_regions[region_idx].body_entry.0;
-                let mut protected: Vec<BlockId> = (window_lo..pads_lo).map(BlockId).collect();
-                for &(_, _, _, inner_region_idx) in &defer_pads[pos + 1..] {
-                    protected.extend_from_slice(
-                        &self.builder.catch_regions[inner_region_idx].handler_body,
-                    );
-                }
-                self.builder.catch_regions[region_idx].body_blocks = protected;
-            }
-            self.builder.set_current_block(continuation);
+            self.builder.end_out_of_line(out_of_line);
         }
 
-        self.catch_context = block_incoming_catch;
         self.defer_stack.truncate(defer_depth);
         self.scoped_type_binding_params
             .truncate(type_binding_scope_start);
         Ok(())
-    }
-
-    fn planned_call_args(
-        &self,
-        expr_id: AstExprId,
-        args: &[CallArg],
-    ) -> (Vec<AstExprId>, Option<AstExprId>) {
-        let runtime_id = self
-            .tir_call_plan(self.expr_metadata_key(expr_id))
-            .and_then(|plan| plan.runtime_id);
-        let ordinary_args = args
-            .iter()
-            .filter_map(|arg| (Some(arg.expr) != runtime_id).then_some(arg.expr))
-            .collect();
-        (ordinary_args, runtime_id)
-    }
-
-    fn lower_runtime_id_operand(
-        &mut self,
-        runtime_id: Option<AstExprId>,
-    ) -> Lowered<Option<Operand<'db>>> {
-        let Some(expr_id) = runtime_id else {
-            return Ok(None);
-        };
-        let operand = self.lower_to_operand(expr_id)?;
-        let ty = self.expr_ty(expr_id);
-        Ok(Some(Operand::Copy(Place::Local(
-            self.operand_to_local(operand, ty),
-        ))))
     }
 
     fn lower_expr(&mut self, expr_id: AstExprId, dest: Place) -> Lowered<()> {
@@ -5891,8 +5793,8 @@ impl<'db> LoweringContext<'db> {
             }
 
             AstExpr::Call { callee, args, .. } => {
-                let (arg_exprs, runtime_id) = self.planned_call_args(expr_id, &args);
-                self.lower_call(expr_id, callee, &arg_exprs, runtime_id, dest)?;
+                let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
+                self.lower_call(expr_id, callee, &arg_exprs, dest)?;
             }
 
             AstExpr::Array { elements } => {
@@ -5921,12 +5823,9 @@ impl<'db> LoweringContext<'db> {
             }
 
             AstExpr::Object {
-                type_args,
-                fields,
-                spreads,
-                ..
+                fields, spreads, ..
             } => {
-                self.lower_object(expr_id, &type_args, &fields, &spreads, dest)?;
+                self.lower_object(expr_id, &fields, &spreads, dest)?;
             }
 
             AstExpr::MemberAccess { base, member } => {
@@ -5967,8 +5866,8 @@ impl<'db> LoweringContext<'db> {
                 }
             }
 
-            AstExpr::GenericApply { base, type_args } => {
-                self.lower_generic_apply(expr_id, base, &type_args, dest)?;
+            AstExpr::GenericApply { base, .. } => {
+                self.lower_generic_apply(expr_id, base, dest)?;
             }
 
             AstExpr::OptionalMemberAccess { base, member } => {
@@ -5980,8 +5879,8 @@ impl<'db> LoweringContext<'db> {
             }
 
             AstExpr::OptionalCall { callee, args } => {
-                let (arg_exprs, runtime_id) = self.planned_call_args(expr_id, &args);
-                self.lower_optional_call(expr_id, callee, &arg_exprs, runtime_id, dest)?;
+                let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
+                self.lower_optional_call(expr_id, callee, &arg_exprs, dest)?;
             }
 
             AstExpr::Index { base, index } => {
@@ -6043,21 +5942,16 @@ impl<'db> LoweringContext<'db> {
             AstExpr::Throw { value } => {
                 let val_op = self.lower_throw_operand(value)?;
                 // Route every throw through the exception funnel (like
-                // `AstStmt::Throw`) rather than a static jump to
-                // `catch_context.unwind_target`. The funnel computes the
-                // BEP-042 cause chain (`find_cause_context`) and materializes
-                // the destination handler's `baml.errors.Context`; a static goto
-                // bypasses both, so a `throw` in expression position inside a
-                // `defer` region (or a `catch` arm/base) would drop its cause
-                // and leave a bound `ctx` unmaterialized (B-611). The exception
-                // table routes the throw to the same innermost handler the
-                // static jump targeted — its region covers this PC — so control
-                // flow is unchanged.
-                if self.operand_is_marked_rethrow(&val_op) {
-                    self.builder.rethrow(val_op);
-                } else {
-                    self.builder.throw(val_op);
-                }
+                // `AstStmt::Throw`) rather than a static jump to the block's
+                // handler. The funnel computes the BEP-042 cause chain
+                // (`find_cause_context`) and materializes the destination
+                // handler's `baml.errors.Context`; a static goto bypasses
+                // both, so a `throw` in expression position under a `defer`
+                // (or in a `catch` arm/base) would drop its cause and leave a
+                // bound `ctx` unmaterialized (B-611). The exception table
+                // routes the throw to the same handler the static jump would
+                // target — the block's `unwind` — so control flow is unchanged.
+                self.emit_throw(val_op);
                 // Start a dead block for any code after this (unreachable)
                 let dead = self.builder.create_block();
                 self.builder.set_current_block(dead);
@@ -6065,9 +5959,9 @@ impl<'db> LoweringContext<'db> {
 
             AstExpr::Return { value } => {
                 // A `return` expression (e.g. a braceless `catch`/`match` arm
-                // value, `_ => return 0` transfers control to the enclosing
-                // function's exit. Unlike `throw`, it is NOT routed through
-                // `catch_context` — it returns from the function rather than
+                // value, `_ => return 0`) transfers control to the enclosing
+                // function's exit. Unlike `throw`, it does NOT unwind to the
+                // block's handler — it returns from the function rather than
                 // being handled by the surrounding `catch`. This mirrors
                 // `AstStmt::Return`); `dest` is never written because we diverge.
                 let ret = Local(0); // _0 is always the return place
@@ -6113,14 +6007,6 @@ impl<'db> LoweringContext<'db> {
                 }
             },
 
-            AstExpr::Spawn {
-                name,
-                with_exprs,
-                body,
-            } => {
-                self.lower_spawn(expr_id, name, &with_exprs, body, dest)?;
-            }
-
             AstExpr::Await { future } => {
                 self.lower_await(expr_id, future, dest)?;
             }
@@ -6130,117 +6016,31 @@ impl<'db> LoweringContext<'db> {
         Ok(())
     }
 
-    fn operand_is_marked_rethrow(&self, operand: &Operand<'db>) -> bool {
-        match operand {
-            Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
-                self.catch_rethrow_locals.contains(local)
-            }
-            Operand::Copy(_) | Operand::Move(_) | Operand::Constant(_) => false,
+    /// Throw `value`: a rethrow carrying its landing's context when it reads
+    /// a caught error's local (see `catch_rethrow_locals`), a new throw
+    /// otherwise.
+    fn emit_throw(&mut self, value: Operand<'db>) {
+        match self.caught_error_context(&value) {
+            Some(context) => self.builder.rethrow(value, context),
+            None => self.builder.throw(value),
         }
     }
 
-    /// Lower `spawn name? with? { body }` into:
-    ///   1. A `MakeClosure` for the body wrapped as a 0-arg lambda.
-    ///   2. A name temp (string operand or null constant).
-    ///   3. An optional config operand from the `with baml.spawn.options(...)`
-    ///      clause (BEP-034 spawn options).
-    ///   4. A `Terminator::Spawn` writing the resulting Future handle.
-    fn lower_spawn(
-        &mut self,
-        expr_id: AstExprId,
-        name: Option<AstExprId>,
-        with_exprs: &[AstExprId],
-        body: AstExprId,
-        dest: Place,
-    ) -> Lowered<()> {
-        // The AST-lower step has already wrapped the spawn body in a
-        // synthetic 0-arg `Expr::Lambda`. Lowering it through the
-        // standard expression path emits a `MakeClosure` rvalue, which
-        // is exactly what we want as the closure operand to `Spawn`.
-        let closure_local = self.builder.temp(RuntimeTy::Null);
-        let closure_place = Place::Local(closure_local);
-        self.lower_expr(body, closure_place.clone())?;
-        let closure_op = Operand::Copy(closure_place);
-
-        // Lower the optional name into an operand.
-        let name_op = match name {
-            Some(name_id) => self.lower_to_operand(name_id),
-            None => Ok(Operand::Constant(Constant::Null)),
-        }?;
-
-        // BEP-034 middleware: with transformers present, package the body
-        // closure + name into a `baml.spawn.Params` instance, apply each
-        // `with` expression to it left-to-right (each is a function
-        // `(Params<T, E>) -> Params<U, F>`), and hand the FINAL
-        // params to the spawn as the config operand. The engine reads
-        // body/name/group/cancel/detach from its fields — a transformer may
-        // have replaced any of them, including the body. Fields are built in
-        // declaration order (the engine reads them BY INDEX; see
-        // ns_spawn/spawn.baml).
-        let config_op = if with_exprs.is_empty() {
-            None
-        } else {
-            let params_local = self.builder.temp(RuntimeTy::Null);
-            self.builder.assign(
-                Place::Local(params_local),
-                Rvalue::Aggregate {
-                    kind: AggregateKind::Class {
-                        class: self.lang_class(baml_base::LangPackage::Baml, &["spawn"], "Params"),
-                        type_arg_templates: Vec::new(),
-                    },
-                    fields: vec![
-                        closure_op.clone(),
-                        name_op.clone(),
-                        Operand::Constant(Constant::Null),
-                        Operand::Constant(Constant::Null),
-                        Operand::Constant(Constant::Bool(false)),
-                    ],
-                },
-            );
-            let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-            let mut cur = params_local;
-            for &with_id in with_exprs {
-                let transformer_op = self.lower_to_operand(with_id)?;
-                let next = self.builder.temp(RuntimeTy::Null);
-                let resume = self.builder.create_block();
-                self.builder.call(
-                    transformer_op,
-                    vec![Operand::Copy(Place::Local(cur))],
-                    Place::Local(next),
-                    resume,
-                    unwind,
-                );
-                self.builder
-                    .set_call_layout(Some(baml_type::CallLayout::positional(1)));
-                self.builder.set_current_block(resume);
-                cur = next;
-            }
-            Some(Box::new(Operand::Copy(Place::Local(cur))))
+    /// The landing context local of the caught error `operand` reads, if it
+    /// reads one.
+    fn caught_error_context(&self, operand: &Operand<'db>) -> Option<Local> {
+        let local = match operand {
+            Operand::Copy(place) | Operand::Move(place) => match place {
+                Place::Local(local) => *local,
+                Place::Deref(cell) => cell.local()?,
+                Place::Capture(_) | Place::Field { .. } | Place::Index { .. } => return None,
+            },
+            Operand::Constant(_) => return None,
         };
-
-        // Allocate the future temp, typed as the `Future<T, E>` TIR inferred.
-        let future_local = self.builder.temp(self.expr_ty(expr_id));
-        let future_place = Place::Local(future_local);
-
-        // The same `Future<T, E>`, as templates: the runtime resolves them
-        // against the spawning frame's type args and stores the pair on the
-        // heap `Future` for reflection and `is`/`match`.
-        let future_ty = self.spawn_future_ty(expr_id);
-
-        let resume = self.builder.create_block();
-        self.builder.spawn(
-            closure_op,
-            name_op,
-            config_op,
-            future_ty,
-            future_place.clone(),
-            resume,
-        );
-        self.builder.set_current_block(resume);
-        // The result of `spawn` is the Future handle.
-        self.builder
-            .assign(dest, Rvalue::Use(Operand::Copy(future_place)));
-        Ok(())
+        self.catch_rethrow_locals
+            .iter()
+            .find(|(caught, _)| *caught == local)
+            .map(|&(_, context)| context)
     }
 
     /// Lower `await expr` into a `Terminator::Await` whose destination is
@@ -6263,9 +6063,8 @@ impl<'db> LoweringContext<'db> {
         };
 
         let resume = self.builder.create_block();
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         self.builder
-            .await_(future_place, await_dest.clone(), resume, unwind);
+            .await_(future_place, await_dest.clone(), resume);
         self.builder.set_current_block(resume);
 
         if let Some(projection) = projection_dest {
@@ -6614,10 +6413,6 @@ impl<'db> LoweringContext<'db> {
         }
 
         let name = &segments[0];
-        if name.as_str() == "$id" {
-            self.lower_current_runtime_id(dest);
-            return Ok(());
-        }
 
         if let Some(place) = self.place_for_path(expr_id, name) {
             self.builder.assign(dest, Rvalue::Use(Operand::Copy(place)));
@@ -7086,7 +6881,6 @@ impl<'db> LoweringContext<'db> {
             &["ops"],
             driver,
         )));
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let needs_temp = !matches!(dest, Place::Local(_));
         let call_dest = if needs_temp {
             Place::local(self.builder.temp(result_ty))
@@ -7094,8 +6888,7 @@ impl<'db> LoweringContext<'db> {
             dest.clone()
         };
         let resume = self.builder.create_block();
-        self.builder
-            .call(callee, args, call_dest.clone(), resume, unwind);
+        self.builder.call(callee, args, call_dest.clone(), resume);
         self.builder.set_current_block(resume);
         if needs_temp {
             self.builder
@@ -7312,7 +7105,6 @@ impl<'db> LoweringContext<'db> {
         // opcode-orderable, so they never reach here. Name it directly rather
         // than reading it back out of `expr_ty`.
         let bool_ty = RuntimeTy::Bool;
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         self.emit_virtual_call_with_operands(
             iface,
             method,
@@ -7320,9 +7112,7 @@ impl<'db> LoweringContext<'db> {
             /* ntypeargs */ 0,
             /* self_arg */ 0,
             /* argument_layout */ None,
-            /* runtime_id */ None,
             bool_ty,
-            unwind,
             dest,
         );
         Ok(())
@@ -7720,7 +7510,6 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         callee: AstExprId,
         args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
         dest: Place,
     ) -> Lowered<()> {
         let callee_op = self.lower_to_operand(callee)?;
@@ -7740,7 +7529,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_call);
 
             self.builder.set_current_block(bb_call);
-            self.lower_call(expr_id, callee, args, runtime_id, dest)?;
+            self.lower_call(expr_id, callee, args, dest)?;
         } else {
             let bb_null = self.builder.create_block();
             let bb_join = self.builder.create_block();
@@ -7749,7 +7538,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_call);
 
             self.builder.set_current_block(bb_call);
-            self.lower_call(expr_id, callee, args, runtime_id, dest.clone())?;
+            self.lower_call(expr_id, callee, args, dest.clone())?;
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
@@ -7806,6 +7595,20 @@ impl<'db> LoweringContext<'db> {
 // ─── 3.5: Call lowering with builtin detection ────────────────────────────────
 
 impl<'db> LoweringContext<'db> {
+    fn call_trace_arg(&self, expr_id: AstExprId) -> Option<AstExprId> {
+        match &self.body.exprs[expr_id] {
+            AstExpr::Call { args, .. } | AstExpr::OptionalCall { args, .. } => args
+                .iter()
+                .find(|arg| {
+                    arg.label
+                        .as_ref()
+                        .is_some_and(|label| label.as_str() == "$trace")
+                })
+                .map(|arg| arg.expr),
+            _ => None,
+        }
+    }
+
     fn lower_call_arg_operands(
         &mut self,
         expr_id: AstExprId,
@@ -7845,14 +7648,16 @@ impl<'db> LoweringContext<'db> {
         // in the call expression). This preserves the original evaluation
         // order, which matters for side effects.
         let provided_args: Vec<_> = plan.provided_args().collect();
+        let trace_arg = self.call_trace_arg(expr_id);
         let mut lowered_args: FxHashMap<AstExprId, Operand<'db>> = FxHashMap::default();
         for &arg in args {
-            if provided_args.contains(&arg) {
+            if provided_args.contains(&arg) || trace_arg == Some(arg) {
                 lowered_args.insert(arg, self.lower_to_operand(arg)?);
             }
         }
 
-        plan.bindings
+        let mut operands = plan
+            .bindings
             .into_iter()
             .map(|binding| match binding {
                 crate::inference_provider::ParamBinding::Provided { arg, .. } => {
@@ -7872,7 +7677,15 @@ impl<'db> LoweringContext<'db> {
                     })
                 }
             })
-            .collect()
+            .collect::<Lowered<Vec<_>>>()?;
+        if let Some(trace_arg) = trace_arg {
+            operands.push(
+                lowered_args.remove(&trace_arg).ok_or_else(|| {
+                    self.internal_error("trace attachment was not lowered", expr_id)
+                })?,
+            );
+        }
+        Ok(operands)
     }
 
     /// Materialize a sys-op parameter's omitted default as a constant operand.
@@ -8037,19 +7850,12 @@ impl<'db> LoweringContext<'db> {
             "from",
         )));
         // `string.from` is `throws never`; the unwind target is harmless/unused.
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let target = self.builder.create_block();
         // The call destination must be a `Place::Local`; route projection/capture
         // dests through a temp + assign-through (mirrors the normal call path).
         if let Place::Local(_) = dest {
-            self.builder.call_with_type_args(
-                callee_op,
-                all_args,
-                ntypeargs,
-                dest.clone(),
-                target,
-                unwind,
-            );
+            self.builder
+                .call_with_type_args(callee_op, all_args, ntypeargs, dest.clone(), target);
             self.builder.set_current_block(target);
         } else {
             let call_ty = self.expr_ty(expr_id);
@@ -8060,7 +7866,6 @@ impl<'db> LoweringContext<'db> {
                 ntypeargs,
                 Place::local(tmp),
                 target,
-                unwind,
             );
             self.builder.set_current_block(target);
             self.builder
@@ -8183,17 +7988,10 @@ impl<'db> LoweringContext<'db> {
             &["json"],
             "from",
         )));
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let target = self.builder.create_block();
         if let Place::Local(_) = dest {
-            self.builder.call_with_type_args(
-                callee_op,
-                all_args,
-                ntypeargs,
-                dest.clone(),
-                target,
-                unwind,
-            );
+            self.builder
+                .call_with_type_args(callee_op, all_args, ntypeargs, dest.clone(), target);
             self.builder.set_current_block(target);
         } else {
             let call_ty = self.expr_ty(expr_id);
@@ -8204,7 +8002,6 @@ impl<'db> LoweringContext<'db> {
                 ntypeargs,
                 Place::local(tmp),
                 target,
-                unwind,
             );
             self.builder.set_current_block(target);
             self.builder
@@ -8304,17 +8101,10 @@ impl<'db> LoweringContext<'db> {
             &["json"],
             "to",
         )));
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let target = self.builder.create_block();
         if let Place::Local(_) = dest {
-            self.builder.call_with_type_args(
-                callee_op,
-                all_args,
-                ntypeargs,
-                dest.clone(),
-                target,
-                unwind,
-            );
+            self.builder
+                .call_with_type_args(callee_op, all_args, ntypeargs, dest.clone(), target);
             self.builder.set_current_block(target);
         } else {
             let call_ty = self.expr_ty(expr_id);
@@ -8325,7 +8115,6 @@ impl<'db> LoweringContext<'db> {
                 ntypeargs,
                 Place::local(tmp),
                 target,
-                unwind,
             );
             self.builder.set_current_block(target);
             self.builder
@@ -8343,7 +8132,6 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         callee: AstExprId,
         args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
         dest: Place,
     ) -> Lowered<()> {
         // `x?.m(...)` is a guarded *method call*, not a call of a bound-method
@@ -8357,19 +8145,11 @@ impl<'db> LoweringContext<'db> {
         // the call itself exactly as `x.m(...)`.
         if let AstExpr::OptionalMemberAccess { base, member } = self.body.exprs[callee].clone() {
             let member_call = AstExpr::MemberAccess { base, member };
-            self.lower_optional_method_call(
-                expr_id,
-                callee,
-                base,
-                &member_call,
-                args,
-                runtime_id,
-                dest,
-            )?;
+            self.lower_optional_method_call(expr_id, callee, base, &member_call, args, dest)?;
             return Ok(());
         }
         let callee_expr = self.body.exprs[callee].clone();
-        self.lower_call_with_callee(expr_id, callee, &callee_expr, args, runtime_id, dest)?;
+        self.lower_call_with_callee(expr_id, callee, &callee_expr, args, dest)?;
         Ok(())
     }
 
@@ -8383,7 +8163,6 @@ impl<'db> LoweringContext<'db> {
     /// `callee` itself stays the original expression id, so every TIR lookup
     /// (resolution, call plan, receiver type) keys on the node the type checker
     /// recorded.
-    #[expect(clippy::too_many_arguments)]
     fn lower_optional_method_call(
         &mut self,
         expr_id: AstExprId,
@@ -8391,7 +8170,6 @@ impl<'db> LoweringContext<'db> {
         base: AstExprId,
         member_call: &AstExpr,
         args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
         dest: Place,
     ) -> Lowered<()> {
         let base_op = self.lower_to_operand(base)?;
@@ -8411,7 +8189,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_call);
 
             self.builder.set_current_block(bb_call);
-            self.lower_call_with_callee(expr_id, callee, member_call, args, runtime_id, dest)?;
+            self.lower_call_with_callee(expr_id, callee, member_call, args, dest)?;
         } else {
             let bb_null = self.builder.create_block();
             let bb_join = self.builder.create_block();
@@ -8420,14 +8198,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_call);
 
             self.builder.set_current_block(bb_call);
-            self.lower_call_with_callee(
-                expr_id,
-                callee,
-                member_call,
-                args,
-                runtime_id,
-                dest.clone(),
-            )?;
+            self.lower_call_with_callee(expr_id, callee, member_call, args, dest.clone())?;
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
@@ -8473,14 +8244,13 @@ impl<'db> LoweringContext<'db> {
         callee: AstExprId,
         callee_expr: &AstExpr,
         args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
         dest: Place,
     ) -> Lowered<()> {
         use crate::inference_provider::MemberResolution;
 
         // A UFCS interface-item call, whatever its spelling — the resolution
         // record, not the syntax, routes it.
-        if self.try_lower_interface_item_call(expr_id, callee, args, runtime_id, &dest)? {
+        if self.try_lower_interface_item_call(expr_id, callee, args, &dest)? {
             return Ok(());
         }
         if let AstExpr::MemberAccess { base, member } = callee_expr {
@@ -8495,7 +8265,6 @@ impl<'db> LoweringContext<'db> {
                 base_id,
                 &member_name,
                 args,
-                runtime_id,
                 &dest,
             )? {
                 return Ok(());
@@ -8509,7 +8278,6 @@ impl<'db> LoweringContext<'db> {
                 base_id,
                 &member_name,
                 args,
-                runtime_id,
                 &dest,
             )? {
                 return Ok(());
@@ -8614,18 +8382,12 @@ impl<'db> LoweringContext<'db> {
                 let mut all_args = frame_type_arg_ops;
                 all_args.push(Operand::Copy(self.value_place(self_local)));
                 all_args.extend(self.lower_call_arg_operands(expr_id, args)?);
-                let runtime_id_operand = self.lower_runtime_id_operand(runtime_id)?;
+                let argument_layout =
+                    self.call_argument_layout(expr_id, all_args.len() - ntypeargs)?;
                 let target = self.builder.create_block();
-                let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-                self.builder.call_with_type_args_and_runtime_id(
-                    callee_op,
-                    all_args,
-                    ntypeargs,
-                    runtime_id_operand,
-                    dest,
-                    target,
-                    unwind,
-                );
+                self.builder
+                    .call_with_type_args(callee_op, all_args, ntypeargs, dest, target);
+                self.builder.set_call_layout(argument_layout);
                 self.builder.set_current_block(target);
                 return Ok(());
             }
@@ -8761,7 +8523,6 @@ impl<'db> LoweringContext<'db> {
                         &method_name,
                         expr_id,
                         args,
-                        runtime_id,
                         &dest,
                     )? {
                         return Ok(());
@@ -8786,7 +8547,6 @@ impl<'db> LoweringContext<'db> {
                             &method_name,
                             expr_id,
                             args,
-                            runtime_id,
                             &dest,
                         )?
                     {
@@ -9084,7 +8844,6 @@ impl<'db> LoweringContext<'db> {
         };
 
         let target = self.builder.create_block();
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
 
         // Check if callee is `reflect.Type.of<T>()` — a value-producing intrinsic.
         // Unlike void intrinsics (log.*), this emits an assignment
@@ -9250,7 +9009,7 @@ impl<'db> LoweringContext<'db> {
             match &dest {
                 Place::Local(l) => {
                     self.builder
-                        .await_any(futures_operand, Place::Local(*l), target, unwind);
+                        .await_any(futures_operand, Place::Local(*l), target);
                 }
                 _ => {
                     // Projection/capture destination: await into a temp, then
@@ -9258,7 +9017,7 @@ impl<'db> LoweringContext<'db> {
                     let call_ty = self.expr_ty(expr_id);
                     let tmp = self.builder.temp(call_ty);
                     self.builder
-                        .await_any(futures_operand, Place::local(tmp), target, unwind);
+                        .await_any(futures_operand, Place::local(tmp), target);
                     self.builder.set_current_block(target);
                     let after = self.builder.create_block();
                     self.builder
@@ -9269,6 +9028,37 @@ impl<'db> LoweringContext<'db> {
                 }
             }
             self.builder.set_current_block(target);
+            return Ok(());
+        }
+
+        // `baml.spawn.__spawn(plan)` lowers to a `Terminator::Spawn`, not a
+        // call: the engine starts the task. (Its `T`/`E` type params are used
+        // only for type checking; the plan carries the future's types.)
+        if self.check_spawn(callee) {
+            let plan_operand = arg_operands
+                .into_iter()
+                .next()
+                .expect("__spawn takes exactly one (plan) argument");
+            match &dest {
+                Place::Local(local) => {
+                    self.builder
+                        .spawn(plan_operand, Place::Local(*local), target);
+                    self.builder.set_current_block(target);
+                }
+                _ => {
+                    // Projection/capture destination: launch into a temp, then
+                    // assign across (mirrors the regular-call path below).
+                    let call_ty = self.expr_ty(expr_id);
+                    let tmp = self.builder.temp(call_ty);
+                    self.builder.spawn(plan_operand, Place::local(tmp), target);
+                    self.builder.set_current_block(target);
+                    let after = self.builder.create_block();
+                    self.builder
+                        .assign(dest, Rvalue::Use(Operand::Copy(Place::local(tmp))));
+                    self.builder.goto(after);
+                    self.builder.set_current_block(after);
+                }
+            }
             return Ok(());
         }
 
@@ -9302,14 +9092,11 @@ impl<'db> LoweringContext<'db> {
             } else {
                 arg_operands
             };
-            let runtime_id_operand = self.lower_runtime_id_operand(runtime_id)?;
-            self.builder.sys_op_with_runtime_id(
+            self.builder.sys_op(
                 callee_operand,
                 sys_op_arg_operands,
-                runtime_id_operand,
                 Place::Local(dest_local),
                 target,
-                unwind,
             );
             if !matches!(dest, Place::Local(_)) {
                 self.builder.set_current_block(target);
@@ -9326,30 +9113,24 @@ impl<'db> LoweringContext<'db> {
             // first, then assign from the temp to the real destination.
             match &dest {
                 Place::Local(_) => {
-                    let runtime_id_operand = self.lower_runtime_id_operand(runtime_id)?;
-                    self.builder.call_with_type_args_and_runtime_id(
+                    self.builder.call_with_type_args(
                         callee_operand,
                         all_arg_operands_for_call,
                         ntypeargs,
-                        runtime_id_operand,
                         dest,
                         target,
-                        unwind,
                     );
                     self.builder.set_call_layout(argument_layout);
                 }
                 _ => {
                     let call_ty = self.expr_ty(expr_id);
                     let tmp = self.builder.temp(call_ty);
-                    let runtime_id_operand = self.lower_runtime_id_operand(runtime_id)?;
-                    self.builder.call_with_type_args_and_runtime_id(
+                    self.builder.call_with_type_args(
                         callee_operand,
                         all_arg_operands_for_call,
                         ntypeargs,
-                        runtime_id_operand,
                         Place::local(tmp),
                         target,
-                        unwind,
                     );
                     self.builder.set_call_layout(argument_layout);
                     self.builder.set_current_block(target);
@@ -9460,6 +9241,13 @@ impl<'db> LoweringContext<'db> {
         matches!(
             self.callee_builtin_kind(callee),
             Some(baml_compiler2_ast::BuiltinKind::AwaitAny)
+        )
+    }
+
+    fn check_spawn(&self, callee: AstExprId) -> bool {
+        matches!(
+            self.callee_builtin_kind(callee),
+            Some(baml_compiler2_ast::BuiltinKind::Spawn)
         )
     }
 
@@ -9693,19 +9481,6 @@ impl<'db> LoweringContext<'db> {
 // ─── 3.6: reflect.Type.of intrinsic ─────────────────────────────────────────
 
 impl<'db> LoweringContext<'db> {
-    /// Detect a `reflect.Type.of<T>()` call and, if found, resolve the type
-    /// argument and return the corresponding `TyTemplate`.
-    ///
-    /// Returns `Some(template)` when:
-    /// - The callee is the `reflect.Type.of` `$compiler_intrinsic`.
-    /// - The call carries exactly one type argument.
-    /// - The type argument resolves to a concrete `RuntimeTy` (no `TypeVar` leaves).
-    ///
-    /// Returns `None` when the callee is not `type_of` **or** when the type
-    /// argument contains a `TypeVar` (generic-parameter reference).  The latter
-    /// case is deferred to template lowering, which produces
-    /// `TyTemplate::TypeArgRef` leaves; attempting it here would emit a broken
-    /// `LoadType` instruction.
     /// Whether a call's callee is `reflect.Package.current`, whichever lane
     /// serves the stdlib: a source declaration reaches here as the callee
     /// operand's function, a precompiled row through the callee expression's
@@ -9737,6 +9512,13 @@ impl<'db> LoweringContext<'db> {
         )
     }
 
+    /// Detect a `reflect.Type.of<T>()` call and, if found, return the
+    /// `TyTemplate` of its written type argument: a realized type as a
+    /// constant, a frame type variable as a `TypeArgRef`.
+    ///
+    /// Returns `None` when the callee is not `reflect.Type.of`, or when the
+    /// call writes no type argument — then the ordinary call path seeds the
+    /// callee frame from the inferred instantiation.
     fn check_type_of_intrinsic(
         &mut self,
         callee: AstExprId,
@@ -9820,81 +9602,27 @@ impl<'db> LoweringContext<'db> {
             }
         }
 
-        // ── 2. Extract the single type argument ─────────────────────────────
-        let type_args = if let AstExpr::Call { type_args, .. } = &self.body.exprs[call_expr_id] {
-            type_args.clone()
-        } else {
+        // ── 2. The written type argument, as TIR resolved it ────────────────
+        // Read from the call plan, never re-resolved from syntax: TIR bound
+        // the written `T` at its lexical position to a `ParamTy` carrying its
+        // identity, so a `defer` body replayed under a shadowing
+        // `type T = …` still names the parameter written at the defer site.
+        let AstExpr::Call { type_args, .. } = &self.body.exprs[call_expr_id] else {
             return None;
         };
-        let type_arg = type_args.into_iter().next()?;
-
-        // Include the enclosing class + function generic params so that `T`
-        // in `reflect.Type.of<T>()` resolves to `Tir2Ty::TypeVar("T")` rather
-        // than an unresolved-type error — both for free generic functions and
-        // for methods on generic classes.  The order (class params first,
-        // then function params) mirrors TIR's `enclosing_class_generic_params
-        // ++ user_generic_params` convention used in `callable.rs`.
+        if type_args.is_empty() {
+            return None;
+        }
+        let key = self.expr_metadata_key(call_expr_id);
+        let emission_ty = self
+            .tir_call_plan(key)
+            .and_then(|plan| plan.slots.first())
+            .map(|slot| slot.emission_ty.clone())
+            .unwrap_or_else(|| {
+                unreachable!("TIR records a call plan for a call with a written type argument")
+            });
         let generic_params = self.enclosing_generic_params();
-
-        // ── 4. Build TyTemplate — TypeVar → TypeArgRef(N) ─────────────────────
-        let template = self.type_expr_to_template(&type_arg, &generic_params);
-        Some(template)
-    }
-
-    fn type_expr_to_template(
-        &self,
-        type_arg: &AstTypeExpr,
-        generic_params: &[ParamTy],
-    ) -> TyTemplate {
-        // `Self.Item` in a default-method body is a projection over the `Self`
-        // slot, not a frame slot of its own — it lowers through the ordinary
-        // road below (the frame-slot fast path only matches bare params).
-        if let Some(template) = Self::direct_frame_type_arg_template(type_arg, generic_params) {
-            return template;
-        }
-        let tir_ty = self.lower_type_arg_to_tir(type_arg, generic_params);
-        self.ty_to_template(&tir_ty, generic_params)
-    }
-
-    /// Lower a written type-argument expression to its `Tir2Ty`, resolving names
-    /// against the canonical package items and with the enclosing
-    /// generic params in scope (so `T` becomes `Tir2Ty::TypeVar("T")`). A `_`
-    /// wildcard is a hard error at lowering (`CannotInferType`) and comes back
-    /// as `Tir2Ty::Error`, so it never reaches runtime conversion.
-    fn lower_type_arg_to_tir(&self, type_arg: &AstTypeExpr, generic_params: &[ParamTy]) -> Tir2Ty {
-        let pkg_info = file_package(self.db, self.file);
-        let pkg_id = pkg_info.root;
-        let pkg_items = baml_compiler2_hir::package::package_items(self.db, pkg_id);
-        lower_expr_in_scope(
-            self.db,
-            type_arg,
-            pkg_items,
-            &pkg_info.namespace_path,
-            generic_params,
-            &self.enclosing_generic_param_bounds(),
-            self.body_self_tir_ty(),
-        )
-    }
-
-    fn direct_frame_type_arg_template(
-        type_arg: &AstTypeExpr,
-        generic_params: &[ParamTy],
-    ) -> Option<TyTemplate> {
-        let AstTypeExprKind::Path {
-            segments,
-            generic_args,
-            associated_type_bindings,
-            ..
-        } = &type_arg.kind
-        else {
-            return None;
-        };
-        if segments.len() != 1 || !generic_args.is_empty() || !associated_type_bindings.is_empty() {
-            return None;
-        }
-        RuntimeGenericLayout::new(generic_params)
-            .slot_by_name(&segments[0])
-            .map(TyTemplate::TypeArgRef)
+        Some(self.ty_to_template(&emission_ty, &generic_params))
     }
 
     /// [`Self::ty_to_template`] for a type read back from inference rather
@@ -10211,7 +9939,6 @@ impl<'db> LoweringContext<'db> {
         &mut self,
         expr_id: AstExprId,
         base: AstExprId,
-        type_args: &[AstTypeExpr],
         dest: Place,
     ) -> Lowered<()> {
         // An interface item — a virtual slot, or a matched impl's method —
@@ -10228,8 +9955,7 @@ impl<'db> LoweringContext<'db> {
             // value* — evaluate it and wrap it in a closure carrying the
             // (frame-resolved) type args — instead of silently erasing them.
             let value = self.lower_to_operand(base)?;
-            let type_arg_templates =
-                self.planned_generic_apply_type_arg_templates(expr_id, type_args);
+            let type_arg_templates = self.planned_generic_apply_type_arg_templates(expr_id);
             self.builder.assign(
                 dest,
                 Rvalue::MakeGenericFunctionFromValue {
@@ -10239,7 +9965,7 @@ impl<'db> LoweringContext<'db> {
             );
             return Ok(());
         };
-        let templates = self.planned_generic_apply_type_arg_templates(expr_id, type_args);
+        let templates = self.planned_generic_apply_type_arg_templates(expr_id);
         if templates.iter().all(TyTemplate::is_fully_concrete) {
             // Concrete args → pooled, interned compile-time constant
             // (pointer-stable identity). Each template is fully concrete, so it
@@ -10354,33 +10080,22 @@ impl<'db> LoweringContext<'db> {
         None
     }
 
-    /// Resolve `GenericApply` AST type args to `TyTemplate`s. A template is
-    /// `is_fully_concrete()` unless the arg references an enclosing generic
-    /// param (then it carries a `TypeArgRef`, resolved at runtime).
-    fn generic_apply_type_arg_templates(&self, type_args: &[AstTypeExpr]) -> Vec<TyTemplate> {
+    /// The `TyTemplate`s of a `GenericApply`'s written type args, as TIR
+    /// resolved them (its call plan keyed at the apply expression). A
+    /// template is `is_fully_concrete()` unless the arg names an enclosing
+    /// type variable — then it carries a `TypeArgRef`, resolved at runtime.
+    fn planned_generic_apply_type_arg_templates(&mut self, expr_id: AstExprId) -> Vec<TyTemplate> {
+        let plan = self
+            .tir_call_plan(self.expr_metadata_key(expr_id))
+            .cloned()
+            .unwrap_or_else(|| {
+                unreachable!("TIR records a call plan for a generic apply's written type arguments")
+            });
         let generic_params = self.enclosing_generic_params();
-        type_args
+        plan.slots
             .iter()
-            .map(|type_arg| self.type_expr_to_template(type_arg, &generic_params))
+            .map(|slot| self.ty_to_template(&slot.emission_ty, &generic_params))
             .collect()
-    }
-
-    fn planned_generic_apply_type_arg_templates(
-        &mut self,
-        expr_id: AstExprId,
-        type_args: &[AstTypeExpr],
-    ) -> Vec<TyTemplate> {
-        if let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned()
-            && !plan.slots.is_empty()
-        {
-            let generic_params = self.enclosing_generic_params();
-            return plan
-                .slots
-                .iter()
-                .map(|slot| self.ty_to_template(&slot.emission_ty, &generic_params))
-                .collect();
-        }
-        self.generic_apply_type_arg_templates(type_args)
     }
 }
 
@@ -10394,11 +10109,18 @@ impl<'db> LoweringContext<'db> {
         Ok(Operand::Copy(Place::Local(temp)))
     }
 
+    /// The operand a `throw` reads. A binding is read in place, a captured one
+    /// through its cell, never through a temp: a thrown catch binding must
+    /// still read the caught error's local, or it would not be a rethrow (see
+    /// `caught_error_context`).
     fn lower_throw_operand(&mut self, expr_id: AstExprId) -> Lowered<Operand<'db>> {
-        match self.try_resolve_to_local(expr_id) {
-            Some(local) => Ok(Operand::copy_local(local)),
-            None => self.lower_to_operand(expr_id),
+        if let AstExpr::Path(segments) = &self.body.exprs[expr_id]
+            && let [name] = segments.as_slice()
+            && let Some(local) = self.local_for_path(expr_id, name)
+        {
+            return Ok(Operand::Copy(self.value_place(local)));
         }
+        self.lower_to_operand(expr_id)
     }
 
     /// An internal inconsistency: lowering cannot produce code here, for a
@@ -10421,44 +10143,6 @@ impl<'db> LoweringContext<'db> {
             message: message.to_string(),
             span: self.builder.current_source_span,
         }
-    }
-
-    fn lower_current_runtime_id(&mut self, dest: Place) {
-        let callee = Operand::Constant(Constant::Function(self.lang_function(
-            baml_base::LangPackage::Baml,
-            &["id"],
-            "current",
-        )));
-        let resume = self.builder.create_block();
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        self.builder.call(callee, Vec::new(), dest, resume, unwind);
-        self.builder.set_current_block(resume);
-    }
-
-    fn lower_set_runtime_id(&mut self, value: AstExprId) -> Lowered<()> {
-        let callee = Operand::Constant(Constant::Function(self.lang_function(
-            baml_base::LangPackage::Baml,
-            &["id"],
-            "set",
-        )));
-        let arg = self.lower_to_operand(value)?;
-        let dest = self.builder.temp(RuntimeTy::String);
-        let resume = self.builder.create_block();
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        self.builder
-            .call(callee, vec![arg], Place::local(dest), resume, unwind);
-        self.builder.set_current_block(resume);
-        Ok(())
-    }
-
-    /// The `$id` runtime-identity special form. MIR owns its lowering (reads
-    /// → `baml.id.current()`, plain `=` writes → `baml.id.set(...)`); TIR
-    /// owns its typing and rejects the invalid shapes (compound assignment,
-    /// member access, call-site labels, `$id` bindings) — see
-    /// `infer_path` / `Stmt::Assign` / `Stmt::AssignOp` in
-    /// `hir_ty`'s inference. Keep the two layers in sync.
-    fn is_runtime_id_path(expr: &AstExpr) -> bool {
-        matches!(expr, AstExpr::Path(segments) if segments.len() == 1 && segments[0].as_str() == "$id")
     }
 
     /// Lowers a condition/logical-operand expression to an operand,
@@ -10627,12 +10311,11 @@ impl<'db> LoweringContext<'db> {
     fn lower_object(
         &mut self,
         expr_id: AstExprId,
-        type_args: &[AstTypeExpr],
         fields: &[baml_compiler2_ast::ObjectExprField],
         spreads: &[baml_compiler2_ast::SpreadField],
         dest: Place,
     ) -> Lowered<()> {
-        let type_arg_templates = self.object_class_type_arg_templates(expr_id, type_args);
+        let type_arg_templates = self.object_class_type_arg_templates(expr_id);
         // The literal constructs the declaration TIR resolved its type to,
         // whichever lane declares it; the class's LAYOUT (slot order, slot
         // count) and its wire spelling both come from that declaration. TIR
@@ -11148,7 +10831,6 @@ impl<'db> LoweringContext<'db> {
     /// Returns `true` when dispatch was emitted. Returns `false` (without
     /// touching the builder) when the receiver isn't interface-typed or no
     /// implementors are registered — the regular call lowering then runs.
-    #[expect(clippy::too_many_arguments)]
     fn try_lower_interface_dispatch(
         &mut self,
         expr_id: AstExprId,
@@ -11156,7 +10838,6 @@ impl<'db> LoweringContext<'db> {
         base: AstExprId,
         method: &Name,
         args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> Lowered<bool> {
         // Same view the field form uses, so `x?.m()` dispatches on the non-null
@@ -11200,7 +10881,6 @@ impl<'db> LoweringContext<'db> {
             method,
             expr_id,
             args,
-            runtime_id,
             dest,
         )
     }
@@ -11222,7 +10902,6 @@ impl<'db> LoweringContext<'db> {
         method: &Name,
         expr_id: AstExprId,
         args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> Lowered<bool> {
         let mut value_ops = vec![Operand::Copy(Place::Local(recv_local))];
@@ -11235,7 +10914,6 @@ impl<'db> LoweringContext<'db> {
             iface_assoc,
             method,
             expr_id,
-            runtime_id,
             dest,
         )
     }
@@ -11255,7 +10933,6 @@ impl<'db> LoweringContext<'db> {
         iface_assoc: &[(Name, Tir2Ty)],
         method: &Name,
         expr_id: AstExprId,
-        runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> Lowered<bool> {
         // The method's OWN generic count, read off the interface that DECLARES
@@ -11313,8 +10990,6 @@ impl<'db> LoweringContext<'db> {
             &self.runtime(),
             &generic_params,
         );
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        let runtime_id_operand = self.lower_runtime_id_operand(runtime_id)?;
         let result_ty = self.expr_ty(expr_id);
         let argument_layout = self.call_argument_layout(expr_id, all_args.len() - ntypeargs)?;
         self.emit_virtual_call_with_operands(
@@ -11324,9 +10999,7 @@ impl<'db> LoweringContext<'db> {
             ntypeargs,
             self_arg,
             argument_layout,
-            runtime_id_operand,
             result_ty,
-            unwind,
             dest.clone(),
         );
         Ok(true)
@@ -11364,9 +11037,7 @@ impl<'db> LoweringContext<'db> {
         ntypeargs: usize,
         self_arg: usize,
         argument_layout: Option<baml_type::CallLayout>,
-        runtime_id: Option<Operand<'db>>,
         result_ty: RuntimeTy,
-        unwind: Option<BlockId>,
         dest: Place,
     ) {
         let resume = self.builder.create_block();
@@ -11377,16 +11048,14 @@ impl<'db> LoweringContext<'db> {
                 (Place::local(tmp), Some(projection))
             }
         };
-        self.builder.virtual_call_with_runtime_id(
+        self.builder.virtual_call(
             iface,
             method.to_string(),
             args,
             ntypeargs,
             self_arg,
-            runtime_id,
             call_dest.clone(),
             resume,
-            unwind,
         );
         self.builder.set_call_layout(argument_layout);
         self.builder.set_current_block(resume);
@@ -11476,7 +11145,6 @@ impl<'db> LoweringContext<'db> {
     /// so a virtual call keyed on the shared interface resolves its impl. Falls
     /// through (returns false) when the members share no providing interface, so
     /// the caller can report the real error.
-    #[expect(clippy::too_many_arguments)]
     fn try_lower_union_iface_dispatch(
         &mut self,
         expr_id: AstExprId,
@@ -11484,7 +11152,6 @@ impl<'db> LoweringContext<'db> {
         base: AstExprId,
         method: &Name,
         args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> Lowered<bool> {
         let Some(members) = self
@@ -11510,7 +11177,6 @@ impl<'db> LoweringContext<'db> {
             method,
             expr_id,
             args,
-            runtime_id,
             dest,
         )
     }
@@ -12425,11 +12091,7 @@ impl LoweringContext<'_> {
                 // enclosing defer region(s), so the exception table routes it to
                 // the innermost defer pad (BEP-042 Stage 2). We do NOT inline-
                 // replay here — that would double-run the defers.
-                if self.operand_is_marked_rethrow(&val_op) {
-                    self.builder.rethrow(val_op);
-                } else {
-                    self.builder.throw(val_op);
-                }
+                self.emit_throw(val_op);
                 let dead = self.builder.create_block();
                 self.builder.set_current_block(dead);
             }
@@ -12458,19 +12120,19 @@ impl LoweringContext<'_> {
                 self.builder.set_current_block(dead);
             }
 
-            AstStmt::Defer { body } => {
-                // BEP-042: register the defer body. It emits NO code here; it is
-                // replayed (re-lowered inline, LIFO) at every exit of the
-                // enclosing scope by `replay_defers_to_depth`, and popped when
-                // the enclosing `lower_scoped_block` truncates `defer_stack`.
-                self.defer_stack.push(body);
+            AstStmt::Defer { .. } => {
+                // A defer is armed by `lower_scoped_block`, which intercepts
+                // it before this dispatch to open its landing-pad region; the
+                // only other statement lowered here is a C-style `for` step,
+                // which the parser never produces as a `defer`.
+                unreachable!(
+                    "a `defer` statement is armed by `lower_scoped_block`, not lowered here"
+                )
             }
 
             AstStmt::Assign { target, value } => {
                 let target_expr = &self.body.exprs[target];
-                if Self::is_runtime_id_path(target_expr) {
-                    self.lower_set_runtime_id(value)?;
-                } else if let AstExpr::OptionalChain { expr: inner } = target_expr {
+                if let AstExpr::OptionalChain { expr: inner } = target_expr {
                     let inner = *inner;
                     self.lower_assign_optional_chain(inner, value)?;
                 } else if self.try_lower_virtual_field_assign(target, value)? {
@@ -12505,13 +12167,8 @@ impl LoweringContext<'_> {
                 let msg = Operand::Constant(Constant::String("missing statement".to_string()));
                 let temp = self.builder.temp(RuntimeTy::Null);
                 let unreachable_block = self.builder.create_block();
-                self.builder.call(
-                    callee,
-                    vec![msg],
-                    Place::local(temp),
-                    unreachable_block,
-                    None,
-                );
+                self.builder
+                    .call(callee, vec![msg], Place::local(temp), unreachable_block);
                 self.builder.set_current_block(unreachable_block);
                 self.builder.unreachable();
                 let dead = self.builder.create_block();
@@ -12544,11 +12201,6 @@ impl LoweringContext<'_> {
         let expr = self.body.exprs[expr_id].clone();
         match &expr {
             AstExpr::Path(segments) if segments.len() == 1 => {
-                // Unresolved single-segment assignment target: only reachable
-                // for programs TIR already rejected (an unresolved name, or a
-                // special form like `$id` in a position its TIR checks forbid)
-                // — a silent temp here is how `$id = ...` once compiled to a
-                // no-op.
                 self.place_for_path(expr_id, &segments[0]).ok_or_else(|| {
                     self.internal_error(
                         &format!(
@@ -13228,12 +12880,16 @@ impl<'db> LoweringContext<'db> {
             // Wildcard arm present
             if let SwitchOtherwise::Catch {
                 error_local,
+                context_local,
                 needs_throw_if_panic: true,
             } = &otherwise
             {
                 let bb_wildcard_body = self.builder.create_block();
-                self.builder
-                    .throw_if_panic(Operand::Copy(Place::Local(*error_local)), bb_wildcard_body);
+                self.builder.throw_if_panic(
+                    Operand::Copy(Place::Local(*error_local)),
+                    *context_local,
+                    bb_wildcard_body,
+                );
                 self.builder.set_current_block(bb_wildcard_body);
             }
             let (pattern, body, _) = arms[idx];
@@ -13252,18 +12908,26 @@ impl<'db> LoweringContext<'db> {
                     SwitchOtherwise::Match { .. } => {
                         self.builder.unreachable();
                     }
-                    SwitchOtherwise::Catch { error_local, .. } => {
+                    SwitchOtherwise::Catch {
+                        error_local,
+                        context_local,
+                        ..
+                    } => {
                         // Even if exhaustive, catch otherwise should rethrow
                         // (the error might not match any arm at runtime).
                         self.builder
-                            .rethrow(Operand::Copy(Place::Local(*error_local)));
+                            .rethrow(Operand::Copy(Place::Local(*error_local)), *context_local);
                     }
                 }
             } else {
                 match &otherwise {
-                    SwitchOtherwise::Catch { error_local, .. } => {
+                    SwitchOtherwise::Catch {
+                        error_local,
+                        context_local,
+                        ..
+                    } => {
                         self.builder
-                            .rethrow(Operand::Copy(Place::Local(*error_local)));
+                            .rethrow(Operand::Copy(Place::Local(*error_local)), *context_local);
                     }
                     SwitchOtherwise::Match { .. } => {
                         self.builder.goto(join);
@@ -14069,7 +13733,6 @@ impl<'db> LoweringContext<'db> {
             end
         };
         let target = self.builder.create_block();
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         self.builder.call(
             Operand::Constant(Constant::Function(self.lang_class_method(
                 baml_base::LangPackage::Baml,
@@ -14083,7 +13746,6 @@ impl<'db> LoweringContext<'db> {
             ],
             Place::local(rest_local),
             target,
-            unwind,
         );
         self.builder.set_current_block(target);
         rest_local
@@ -14975,16 +14637,15 @@ impl LoweringContext<'_> {
         fn install_clause_bindings(
             ctx: &mut LoweringContext<'_>,
             error_local: Local,
-            stack_trace_local: Option<Local>,
+            context_local: Local,
             clause: &ClauseBindings,
         ) -> Lowered<Option<Local>> {
             let error_copy = install_binding(ctx, clause.error.as_ref(), Some(error_local))?;
-            install_binding(ctx, clause.stack_trace.as_ref(), stack_trace_local)?;
+            install_binding(ctx, clause.stack_trace.as_ref(), Some(context_local))?;
             Ok(error_copy)
         }
 
         let bb_join = self.builder.create_block();
-        let bb_handler = self.builder.create_block();
 
         // Use the user-provided binding name (e.g. `e` from `catch (e)`) so it
         // shows up in bytecode instead of an anonymous `_N` temp. Only do this
@@ -15006,10 +14667,18 @@ impl LoweringContext<'_> {
             self.builder
                 .declare_local(single_clause_binding_name, RuntimeTy::Unknown, None);
 
-        let stack_trace_local = clauses
-            .iter()
-            .any(|c| c.stack_trace_binding.is_some())
-            .then(|| self.builder.declare_local(None, RuntimeTy::Unknown, None));
+        // Every landing receives the caught error's context, bound or not: a
+        // rethrow from an arm carries it, and a throw during an arm takes it
+        // as its cause.
+        let context_local = self.builder.declare_local(None, RuntimeTy::Unknown, None);
+
+        // The handler block: the VM lands in it with the error and context
+        // locals. Created under the outer handler, like `bb_join`, so neither
+        // is protected by this catch.
+        let bb_handler = self.builder.create_handler_block(Landing {
+            error_local,
+            context_local,
+        });
 
         let clause_bindings: Vec<ClauseBindings> = clauses
             .iter()
@@ -15042,43 +14711,15 @@ impl LoweringContext<'_> {
             .iter()
             .any(|clause| matches!(clause.kind, CatchClauseKind::CatchAllPanics));
 
-        // Record the catch region (always one handler, one exception table entry).
-        // `handler_body` is filled in after the arms are lowered (below): the
-        // blocks created while lowering the arms ARE the handler body, and they
-        // can be laid out non-contiguously, so `[handler, join)` is not enough.
-        let body_entry = self.builder.current_block();
-        let catch_region_idx = self.builder.catch_regions.len();
-        self.builder.catch_regions.push(CatchRegion {
-            body_entry,
-            handler: bb_handler,
-            handler_body: vec![bb_handler],
-            // Filled in after the try body is lowered (below).
-            body_blocks: Vec::new(),
-            error_local,
-            stack_trace_local,
-        });
-
-        let prev_catch = self.catch_context.take();
-        self.catch_context = Some(CatchContext {
-            unwind_target: bb_handler,
-            error_local,
-        });
-
-        // Lower the try body. Block IDs are dense, so the index window around
-        // the lowering captures exactly the blocks the protected body created
-        // (`bb_join`/`bb_handler` predate the window and stay out). `body_entry`
-        // itself is included for parity with the old `[body_entry_pc, ...)`
-        // range — it can hold instructions from before the catch expression.
-        let body_blocks_lo = self.builder.num_blocks();
+        // The try body unwinds to `bb_handler`; what follows the catch
+        // expression unwinds to the outer handler again.
+        let outer_unwind = self.builder.unwind();
+        self.builder.transition_unwind(Some(bb_handler));
         self.lower_expr(base, dest.clone())?;
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
         }
-        self.builder.catch_regions[catch_region_idx].body_blocks = std::iter::once(body_entry)
-            .chain((body_blocks_lo..self.builder.num_blocks()).map(BlockId))
-            .collect();
-
-        self.catch_context = prev_catch;
+        self.builder.transition_unwind(outer_unwind);
 
         // Before the wildcard arm (if any), insert a throw_if_panic guard to
         // prevent the wildcard from swallowing panics the programmer didn't
@@ -15092,15 +14733,18 @@ impl LoweringContext<'_> {
             .iter()
             .map(|(arm, _, _)| (arm.pattern, arm.body, None))
             .collect();
-        // Everything created from here until the join belongs to the handler
-        // body (the arms), captured into the catch region for the cause chain.
-        let arm_blocks_lo = self.builder.num_blocks();
-        self.builder.set_current_block(bb_handler);
+        // The arms are lowered out of line in `bb_handler`, unwinding to the
+        // outer handler, as this catch's handler body: a throw in an arm is
+        // "during handling of" the caught error (the cause chain).
+        let arms_out_of_line =
+            self.builder
+                .begin_out_of_line(bb_handler, outer_unwind, Some(bb_handler));
         let switch_rethrow_mark = self.catch_rethrow_locals.len();
         if let [clause] = clause_bindings.as_slice() {
-            let error_copy = install_clause_bindings(self, error_local, stack_trace_local, clause)?;
-            self.catch_rethrow_locals.push(error_local);
-            self.catch_rethrow_locals.extend(error_copy);
+            let error_copy = install_clause_bindings(self, error_local, context_local, clause)?;
+            self.catch_rethrow_locals.push((error_local, context_local));
+            self.catch_rethrow_locals
+                .extend(error_copy.map(|copy| (copy, context_local)));
         }
         let lowered_as_switch = clauses.len() == 1
             && self.try_lower_as_switch(
@@ -15110,15 +14754,14 @@ impl LoweringContext<'_> {
                 bb_join,
                 SwitchOtherwise::Catch {
                     error_local,
+                    context_local,
                     needs_throw_if_panic,
                 },
                 None,
             )?;
         self.catch_rethrow_locals.truncate(switch_rethrow_mark);
         if lowered_as_switch {
-            self.builder.catch_regions[catch_region_idx].handler_body = std::iter::once(bb_handler)
-                .chain((arm_blocks_lo..self.builder.num_blocks()).map(BlockId))
-                .collect();
+            self.builder.end_out_of_line(arms_out_of_line);
             self.builder.set_current_block(bb_join);
             return Ok(());
         }
@@ -15141,8 +14784,11 @@ impl LoweringContext<'_> {
         for &(ref arm, body_block, is_wildcard, _) in &arms_with_blocks {
             if is_wildcard && needs_throw_if_panic {
                 let bb_wildcard = self.builder.create_block();
-                self.builder
-                    .throw_if_panic(Operand::Copy(Place::Local(error_local)), bb_wildcard);
+                self.builder.throw_if_panic(
+                    Operand::Copy(Place::Local(error_local)),
+                    context_local,
+                    bb_wildcard,
+                );
                 self.builder.set_current_block(bb_wildcard);
             }
 
@@ -15154,7 +14800,7 @@ impl LoweringContext<'_> {
         // Rethrow if nothing matched.
         if !self.builder.is_current_terminated() {
             self.builder
-                .rethrow(Operand::Copy(Place::Local(error_local)));
+                .rethrow(Operand::Copy(Place::Local(error_local)), context_local);
         }
 
         // Lower each arm body.
@@ -15163,7 +14809,7 @@ impl LoweringContext<'_> {
             let error_copy = install_clause_bindings(
                 self,
                 error_local,
-                stack_trace_local,
+                context_local,
                 &clause_bindings[clause_idx],
             )?;
             self.bind_pattern(
@@ -15172,8 +14818,9 @@ impl LoweringContext<'_> {
                 DefinitionSite::PatternBinding(arm.pattern),
             )?;
             let rethrow_mark = self.catch_rethrow_locals.len();
-            self.catch_rethrow_locals.push(error_local);
-            self.catch_rethrow_locals.extend(error_copy);
+            self.catch_rethrow_locals.push((error_local, context_local));
+            self.catch_rethrow_locals
+                .extend(error_copy.map(|copy| (copy, context_local)));
             self.lower_expr(arm.body, dest.clone())?;
             self.catch_rethrow_locals.truncate(rethrow_mark);
             if !self.builder.is_current_terminated() {
@@ -15181,9 +14828,7 @@ impl LoweringContext<'_> {
             }
         }
 
-        self.builder.catch_regions[catch_region_idx].handler_body = std::iter::once(bb_handler)
-            .chain((arm_blocks_lo..self.builder.num_blocks()).map(BlockId))
-            .collect();
+        self.builder.end_out_of_line(arms_out_of_line);
         self.builder.set_current_block(bb_join);
         Ok(())
     }
@@ -15315,6 +14960,10 @@ fn lower_function_impl<'db>(
                     terminator: Some(Terminator::Unreachable),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
+                    shielded: false,
                 }],
                 entry: BlockId(0),
                 locals: (0..=arity)
@@ -15326,7 +14975,6 @@ fn lower_function_impl<'db>(
                         scope_span: None,
                     })
                     .collect(),
-                catch_regions: vec![],
             }),
             lambdas: vec![],
             signature: None,

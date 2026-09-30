@@ -2168,6 +2168,17 @@ function Demo() -> string {
     }
 
     #[test]
+    fn backtick_single_line_keeps_escaped_newline() {
+        let source = r#"
+function Demo() -> string {
+    `hostname\n`
+}
+"#;
+        let items = parse_and_lower(source);
+        assert_eq!(extract_first_string_literal(items), "hostname\n");
+    }
+
+    #[test]
     fn backtick_escapes_backtick_and_dollar() {
         let source = r#"
 function Demo() -> string {
@@ -2190,6 +2201,35 @@ function Demo() -> string {
 ";
         let items = parse_and_lower(source);
         assert_eq!(extract_first_string_literal(items), "line one\nline two");
+    }
+
+    #[test]
+    fn backtick_single_line_preserves_boundary_whitespace() {
+        let source = r#"
+function Demo() -> string {
+    `  padded content  `
+}
+"#;
+        let items = parse_and_lower(source);
+        assert_eq!(extract_first_string_literal(items), "  padded content  ");
+    }
+
+    #[test]
+    fn backtick_multiline_trims_boundary_layout() {
+        let source = [
+            "function Demo() -> string {",
+            "    `",
+            "",
+            "        line one",
+            "         ",
+            "        line two",
+            "",
+            "    `",
+            "}",
+        ]
+        .join("\n");
+        let items = parse_and_lower(&source);
+        assert_eq!(extract_first_string_literal(items), "line one\n\nline two");
     }
 
     #[test]

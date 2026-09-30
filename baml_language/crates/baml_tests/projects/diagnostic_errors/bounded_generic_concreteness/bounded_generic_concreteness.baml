@@ -78,3 +78,67 @@ function accepted() -> void {
     Pairer { key: a }.pair(A {}, A {});
     Pairer.pair_static(B {}, B {});
 }
+
+// The rule covers an impl header's bounded parameter too: a blanket impl
+// applies "to all concrete types satisfying the bounds". `Holder<Combinable>`
+// would bind the header's `T` to the existential, and `held` could meet two
+// implementors through one `T`. The impl is reached by two roads that must
+// agree: a goal with an argument only the impl can supply (`X` below) goes
+// through impl selection, which replays the header's bound; a goal with none
+// open asks the resolver directly.
+interface Holds<X> {
+    function held(self) -> X throws never
+}
+
+class Holder<T> {
+    item T
+}
+
+implements<T extends Combinable> Holds<string> for Holder<T> {
+    function held(self) -> string throws never {
+        self.item.combine(self.item)
+    }
+}
+
+function holds<X, H extends Holds<X>>(h: H) -> int throws never {
+    0
+}
+
+function rejected_through_impl_header(h: Holder<Combinable>) -> void {
+    holds(h);
+    let ground: Holds<string> = h;
+}
+
+function accepted_through_impl_header(h: Holder<A>) -> void {
+    holds(h);
+    let ground: Holds<string> = h;
+}
+
+// An alias is its target, so an alias of an existential or of a union is just
+// as abstract - a recursive one included - while an alias of a concrete type is
+// that type.
+type CombinableAlias = Combinable;
+type Either = A | B;
+type Tree = A | Tree[];
+type Concrete = A;
+
+function rejected_through_aliases(c: CombinableAlias, e: Either, t: Tree) -> void {
+    pair(c, c);
+    pair(e, e);
+    pair(t, t);
+}
+
+function accepted_through_alias(a: Concrete) -> void {
+    pair(a, a);
+}
+
+// `unknown` spans every type and `never` none, so neither is concrete either.
+function one<T extends Combinable>(a: T) -> string throws never {
+    "one"
+}
+
+function rejected_top_and_bottom(u: unknown, n: never) -> void {
+    one(u);
+    one<unknown>(u);
+    one(n);
+}

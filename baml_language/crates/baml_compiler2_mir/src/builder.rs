@@ -29,9 +29,9 @@
 use baml_base::{Name, Span};
 
 use crate::{
-    BasicBlock, BlockId, CatchRegion, FunctionOwner, Local, LocalDecl, MirFunction,
-    MirFunctionBody, MirFunctionKind, Operand, Place, RuntimeTy, Rvalue, Statement, StatementKind,
-    SwitchKey, Terminator, TypeTest,
+    BasicBlock, BlockId, FunctionOwner, Landing, Local, LocalDecl, MirFunction, MirFunctionBody,
+    MirFunctionKind, Operand, Place, RuntimeTy, Rvalue, Statement, StatementKind, SwitchKey,
+    Terminator, TypeTest,
 };
 
 /// Builder for constructing MIR functions.
@@ -47,8 +47,42 @@ pub(crate) struct MirBuilder<'db> {
     span: Option<Span>,
     /// Current source span for tagging statements/terminators.
     pub(crate) current_source_span: Option<Span>,
-    /// Catch regions recorded during lowering for exception table construction.
-    pub(crate) catch_regions: Vec<CatchRegion>,
+    /// The handler a throw or panic at the current lowering position unwinds
+    /// to: the innermost enclosing `catch` handler or `defer` landing pad.
+    /// Every block is stamped with it at creation (`BasicBlock::unwind`), and
+    /// changing it moves lowering to a fresh block (`transition_unwind`), so
+    /// a block is always a maximal run of code under one handler. Every
+    /// append checks that the current block was created under the value in
+    /// force, so code can never land in a block whose handler differs from
+    /// the position it was lowered at.
+    current_unwind: Option<BlockId>,
+    /// The innermost handler whose body is being lowered
+    /// (`BasicBlock::handling`), stamped the same way.
+    current_handling: Option<BlockId>,
+    /// How many `defer` bodies the current lowering position is inside; a
+    /// block is stamped `shielded` when this is non-zero
+    /// (`BasicBlock::shielded`), with the same fresh-block discipline as the
+    /// handler.
+    shield_depth: u32,
+}
+
+/// Where lowering was before it moved out of line to fill a handler block;
+/// [`MirBuilder::end_out_of_line`] returns there.
+#[must_use = "lowering returns by handing this back to `end_out_of_line`"]
+pub(crate) struct OutOfLine {
+    block: BlockId,
+    unwind: Option<BlockId>,
+    handling: Option<BlockId>,
+}
+
+/// An open shield — a `defer` body being lowered. [`MirBuilder::enter_shield`]
+/// opens one; handing it back to [`MirBuilder::leave_shield`] closes it, so a
+/// shield cannot be closed twice, and one left open is a token never handed
+/// back.
+#[must_use = "a shield is closed by handing this back to `leave_shield`"]
+pub(crate) struct Shield {
+    /// The depth entered; shields close innermost first.
+    depth: u32,
 }
 
 impl<'db> MirBuilder<'db> {
@@ -62,7 +96,9 @@ impl<'db> MirBuilder<'db> {
             current_block: None,
             span: None,
             current_source_span: None,
-            catch_regions: Vec::new(),
+            current_unwind: None,
+            current_handling: None,
+            shield_depth: 0,
         }
     }
 
@@ -163,18 +199,16 @@ impl<'db> MirBuilder<'db> {
     // Block Management
     // ========================================================================
 
-    /// Create a new basic block and return its ID.
+    /// Create a new basic block and return its ID. It unwinds to the handler
+    /// in force here and belongs to the handler body being lowered.
     pub(crate) fn create_block(&mut self) -> BlockId {
         let id = BlockId(self.blocks.len());
-        self.blocks.push(BasicBlock::new(id));
+        let mut block = BasicBlock::new(id);
+        block.unwind = self.current_unwind;
+        block.handling = self.current_handling;
+        block.shielded = self.shield_depth > 0;
+        self.blocks.push(block);
         id
-    }
-
-    /// Number of blocks created so far. Block IDs are dense `0..num_blocks()`,
-    /// so a range captured around a lowering step names exactly the blocks that
-    /// step created (used to record a catch handler body, BEP-042).
-    pub(crate) fn num_blocks(&self) -> usize {
-        self.blocks.len()
     }
 
     /// Set the current block for emitting statements and terminators.
@@ -195,12 +229,177 @@ impl<'db> MirBuilder<'db> {
     }
 
     // ========================================================================
+    // Handlers
+    // ========================================================================
+
+    /// The handler the current lowering position unwinds to.
+    pub(crate) fn unwind(&self) -> Option<BlockId> {
+        self.current_unwind
+    }
+
+    /// Create a handler block: the VM lands in it with `landing`, and it is
+    /// the first block of its own handler body. It unwinds to the handler in
+    /// force where it is created — never to itself.
+    pub(crate) fn create_handler_block(&mut self, landing: Landing) -> BlockId {
+        let id = self.create_block();
+        let block = &mut self.blocks[id.0];
+        block.landing = Some(landing);
+        block.handling = Some(id);
+        id
+    }
+
+    /// Lower what follows with `unwind` as its handler. Live code needs a
+    /// block created under the new handler, so the current block (created
+    /// under the old one) is left with a `goto` to a fresh block, which
+    /// becomes current. A current block that is still empty simply takes the
+    /// new handler: everything lowered into it will run under it. A
+    /// terminated current block needs nothing, the caller moves away from
+    /// it. A `catch` opens with its handler over the try body and closes with
+    /// the outer value; a `defer` opens with its pad over the rest of the
+    /// block; an inline replay retreats to the value its defer was armed
+    /// under and comes back.
+    pub(crate) fn transition_unwind(&mut self, unwind: Option<BlockId>) {
+        if self.current_unwind == unwind {
+            return;
+        }
+        if let Some(handler) = unwind {
+            assert!(
+                self.blocks[handler.0].landing.is_some(),
+                "{handler:?} is not a handler block: nothing can unwind to it"
+            );
+        }
+        if self.is_current_terminated() {
+            self.current_unwind = unwind;
+            return;
+        }
+        let current = self.current_block();
+        if self.blocks[current.0].statements.is_empty() {
+            self.blocks[current.0].unwind = unwind;
+            self.current_unwind = unwind;
+            return;
+        }
+        // The goto belongs to the block it leaves, under the old handler.
+        let fresh = BlockId(self.blocks.len());
+        self.set_terminator(Terminator::Goto { target: fresh });
+        self.current_unwind = unwind;
+        let created = self.create_block();
+        debug_assert_eq!(created, fresh);
+        self.current_block = Some(fresh);
+    }
+
+    /// Lower what follows inside a `defer` body: shielded from cancellation.
+    /// Nests; handing the returned [`Shield`] to [`Self::leave_shield`]
+    /// closes it. Live code that follows needs a block stamped shielded, so
+    /// the current block is left with a `goto` to a fresh one (an empty
+    /// block is restamped).
+    pub(crate) fn enter_shield(&mut self) -> Shield {
+        let depth = self.shield_depth + 1;
+        self.transition_shield(depth);
+        Shield { depth }
+    }
+
+    /// Close `shield`, the innermost one open.
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "the token is consumed so a shield cannot be closed twice"
+    )]
+    pub(crate) fn leave_shield(&mut self, shield: Shield) {
+        debug_assert_eq!(
+            shield.depth, self.shield_depth,
+            "shields close innermost first"
+        );
+        self.transition_shield(shield.depth - 1);
+    }
+
+    /// Make `depth` the shield depth. Nothing more if the current block is
+    /// terminated or already carries the new shield state; an empty current
+    /// block is restamped; otherwise it is left with a `goto` — emitted under
+    /// the old state, the block's own — to a fresh block created under the new.
+    fn transition_shield(&mut self, depth: u32) {
+        let shielded = depth > 0;
+        if self.is_current_terminated() {
+            self.shield_depth = depth;
+            return;
+        }
+        let current = self.current_block();
+        if self.blocks[current.0].shielded == shielded {
+            self.shield_depth = depth;
+            return;
+        }
+        if self.blocks[current.0].statements.is_empty() {
+            self.blocks[current.0].shielded = shielded;
+            self.shield_depth = depth;
+            return;
+        }
+        let fresh = BlockId(self.blocks.len());
+        self.set_terminator(Terminator::Goto { target: fresh });
+        self.shield_depth = depth;
+        let created = self.create_block();
+        debug_assert_eq!(created, fresh);
+        self.current_block = Some(fresh);
+    }
+
+    /// Fill `block` (a handler created earlier) with `unwind` as its handler
+    /// and `handling` as the handler body it is part of, leaving the current
+    /// block where it is; the returned token brings lowering back to it.
+    pub(crate) fn begin_out_of_line(
+        &mut self,
+        block: BlockId,
+        unwind: Option<BlockId>,
+        handling: Option<BlockId>,
+    ) -> OutOfLine {
+        let out_of_line = OutOfLine {
+            block: self.current_block(),
+            unwind: self.current_unwind,
+            handling: self.current_handling,
+        };
+        self.current_block = Some(block);
+        self.current_unwind = unwind;
+        self.current_handling = handling;
+        out_of_line
+    }
+
+    /// Return from [`Self::begin_out_of_line`].
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "the token is consumed so lowering cannot return to the same place twice"
+    )]
+    pub(crate) fn end_out_of_line(&mut self, out_of_line: OutOfLine) {
+        self.current_block = Some(out_of_line.block);
+        self.current_unwind = out_of_line.unwind;
+        self.current_handling = out_of_line.handling;
+    }
+
+    // ========================================================================
     // Statement Emission
     // ========================================================================
 
     fn current_block_mut(&mut self) -> &mut BasicBlock<'db> {
+        self.check_current_protection();
         let id = self.current_block.expect("no current block set");
         &mut self.blocks[id.0]
+    }
+
+    /// The current block must have been created under the handler in force:
+    /// a block's handler is fixed at creation, so lowering code into it from
+    /// a position with a different handler would give that code the wrong
+    /// one.
+    fn check_current_protection(&self) {
+        let id = self.current_block.expect("no current block set");
+        let block = &self.blocks[id.0];
+        assert!(
+            block.unwind == self.current_unwind
+                && block.handling == self.current_handling
+                && block.shielded == (self.shield_depth > 0),
+            "{id:?} was created unwinding to {:?} (handling {:?}, shielded {}) but code is being \
+             lowered into it unwinding to {:?} (handling {:?}, shielded {})",
+            block.unwind,
+            block.handling,
+            block.shielded,
+            self.current_unwind,
+            self.current_handling,
+            self.shield_depth > 0,
+        );
     }
 
     /// Push a statement to the current block.
@@ -355,15 +554,12 @@ impl<'db> MirBuilder<'db> {
         args: Vec<Operand<'db>>,
         destination: Place,
         target: BlockId,
-        unwind: Option<BlockId>,
     ) {
-        self.call_with_type_args(callee, args, 0, destination, target, unwind);
+        self.call_with_type_args(callee, args, 0, destination, target);
     }
 
-    /// Emit a function call with an explicit type-argument count.
-    ///
-    /// The first `ntypeargs` entries of `args` must be `Object::Type` values
-    /// produced by `Rvalue::LoadType`.  Regular value args follow after them.
+    /// Emit a call whose leading `ntypeargs` operands are runtime types,
+    /// followed by the ordinary value arguments.
     pub(crate) fn call_with_type_args(
         &mut self,
         callee: Operand<'db>,
@@ -371,76 +567,64 @@ impl<'db> MirBuilder<'db> {
         ntypeargs: usize,
         destination: Place,
         target: BlockId,
-        unwind: Option<BlockId>,
-    ) {
-        self.call_with_type_args_and_runtime_id(
-            callee,
-            args,
-            ntypeargs,
-            None,
-            destination,
-            target,
-            unwind,
-        );
-    }
-
-    /// Emit a function call with an optional hidden runtime-id operand.
-    #[expect(clippy::too_many_arguments)]
-    pub(crate) fn call_with_type_args_and_runtime_id(
-        &mut self,
-        callee: Operand<'db>,
-        args: Vec<Operand<'db>>,
-        ntypeargs: usize,
-        runtime_id: Option<Operand<'db>>,
-        destination: Place,
-        target: BlockId,
-        unwind: Option<BlockId>,
     ) {
         debug_assert!(
             matches!(destination, Place::Local(_)),
             "Call destination must be a local place"
         );
         self.set_terminator(Terminator::Call {
+            has_trace: false,
             argument_layout: None,
             callee,
             args,
             ntypeargs,
-            runtime_id,
             destination,
             target,
-            unwind,
+            unwind: self.current_unwind,
         });
     }
 
     /// Attach the checked argument layout to the call terminator just emitted.
+    /// The layout describes only callee parameters; one extra trailing operand
+    /// is the invocation's trace attachment.
     pub(crate) fn set_call_layout(&mut self, layout: Option<baml_type::CallLayout>) {
         match &mut self.current_block_mut().terminator {
             Some(
                 Terminator::Call {
-                    argument_layout, ..
+                    argument_layout,
+                    args,
+                    ntypeargs,
+                    has_trace,
+                    ..
                 }
                 | Terminator::VirtualCall {
-                    argument_layout, ..
+                    argument_layout,
+                    args,
+                    ntypeargs,
+                    has_trace,
+                    ..
                 },
-            ) => *argument_layout = layout,
+            ) => {
+                *has_trace = layout
+                    .as_ref()
+                    .is_some_and(|layout| args.len() == *ntypeargs + layout.len() + 1);
+                *argument_layout = layout;
+            }
             _ => unreachable!("call layout requires a call terminator"),
         }
     }
 
-    /// Emit an open-world virtual interface-method call with an optional hidden
-    /// runtime-id operand.
+    /// Resolve an interface method from the receiver's concrete type at runtime.
     #[expect(clippy::too_many_arguments)]
-    pub(crate) fn virtual_call_with_runtime_id(
+    pub(crate) fn virtual_call(
         &mut self,
         iface: crate::TyTemplateInterface,
         method: String,
         args: Vec<Operand<'db>>,
         ntypeargs: usize,
         self_arg: usize,
-        runtime_id: Option<Operand<'db>>,
         destination: Place,
         target: BlockId,
-        unwind: Option<BlockId>,
     ) {
         debug_assert!(
             matches!(destination, Place::Local(_)),
@@ -452,16 +636,16 @@ impl<'db> MirBuilder<'db> {
             args.len() - ntypeargs
         );
         self.set_terminator(Terminator::VirtualCall {
+            has_trace: false,
             argument_layout: None,
             iface,
             method,
             args,
             ntypeargs,
             self_arg,
-            runtime_id,
             destination,
             target,
-            unwind,
+            unwind: self.current_unwind,
         });
     }
 
@@ -475,26 +659,38 @@ impl<'db> MirBuilder<'db> {
         self.set_terminator(Terminator::Throw { value });
     }
 
-    /// Emit a rethrow terminator for a caught error value.
-    pub(crate) fn rethrow(&mut self, value: Operand<'db>) {
-        self.set_terminator(Terminator::Rethrow { value });
+    /// Emit a rethrow terminator for a caught error value, carrying the
+    /// context its landing wrote into `context` (a landing local, never
+    /// captured).
+    pub(crate) fn rethrow(&mut self, value: Operand<'db>, context: Local) {
+        self.set_terminator(Terminator::Rethrow {
+            value,
+            context: Operand::Copy(Place::Local(context)),
+        });
     }
 
     /// Emit a throw-if-panic terminator: if the value is a panic instance,
-    /// throw it; otherwise continue to `otherwise`.
-    pub(crate) fn throw_if_panic(&mut self, value: Operand<'db>, otherwise: BlockId) {
-        self.set_terminator(Terminator::ThrowIfPanic { value, otherwise });
+    /// rethrow it with its landing's `context`; otherwise continue to
+    /// `otherwise`.
+    pub(crate) fn throw_if_panic(
+        &mut self,
+        value: Operand<'db>,
+        context: Local,
+        otherwise: BlockId,
+    ) {
+        self.set_terminator(Terminator::ThrowIfPanic {
+            value,
+            context: Operand::Copy(Place::Local(context)),
+            otherwise,
+        });
     }
 
-    /// BEP-034 phase D′ sys-op call with an optional hidden runtime-id operand.
-    pub(crate) fn sys_op_with_runtime_id(
+    pub(crate) fn sys_op(
         &mut self,
         callee: Operand<'db>,
         args: Vec<Operand<'db>>,
-        runtime_id: Option<Operand<'db>>,
         destination: Place,
         target: BlockId,
-        unwind: Option<BlockId>,
     ) {
         debug_assert!(
             matches!(destination, Place::Local(_)),
@@ -503,21 +699,14 @@ impl<'db> MirBuilder<'db> {
         self.set_terminator(Terminator::SysOp {
             callee,
             args,
-            runtime_id,
             destination,
             target,
-            unwind,
+            unwind: self.current_unwind,
         });
     }
 
     /// Emit an await.
-    pub(crate) fn await_(
-        &mut self,
-        future: Place,
-        destination: Place,
-        target: BlockId,
-        unwind: Option<BlockId>,
-    ) {
+    pub(crate) fn await_(&mut self, future: Place, destination: Place, target: BlockId) {
         debug_assert!(
             matches!(future, Place::Local(_)),
             "Await future place must be local"
@@ -530,19 +719,13 @@ impl<'db> MirBuilder<'db> {
             future,
             destination,
             target,
-            unwind,
+            unwind: self.current_unwind,
         });
     }
 
     /// BEP-034: emit an `await_any` terminator — suspend until the first of
     /// the `futures` array settles and bind its `int` index into `destination`.
-    pub(crate) fn await_any(
-        &mut self,
-        futures: Operand<'db>,
-        destination: Place,
-        target: BlockId,
-        unwind: Option<BlockId>,
-    ) {
+    pub(crate) fn await_any(&mut self, futures: Operand<'db>, destination: Place, target: BlockId) {
         debug_assert!(
             matches!(destination, Place::Local(_)),
             "AwaitAny destination must be a local place"
@@ -551,31 +734,19 @@ impl<'db> MirBuilder<'db> {
             futures,
             destination,
             target,
-            unwind,
+            unwind: self.current_unwind,
         });
     }
 
-    /// BEP-034: emit a spawn terminator. Pops a closure operand plus an
-    /// optional name operand and binds the resulting `Future<T, E>`
-    /// handle into `future`.
-    pub(crate) fn spawn(
-        &mut self,
-        closure: Operand<'db>,
-        name: Operand<'db>,
-        config: Option<Box<Operand<'db>>>,
-        future_ty: Box<crate::ir::SpawnFutureTy>,
-        future: Place,
-        resume: BlockId,
-    ) {
+    /// Emit a spawn terminator — start `plan` as a new task and bind its
+    /// `Future<T, E>` handle into `future`.
+    pub(crate) fn spawn(&mut self, plan: Operand<'db>, future: Place, resume: BlockId) {
         debug_assert!(
             matches!(future, Place::Local(_)),
             "Spawn future handle place must be local"
         );
         self.set_terminator(Terminator::Spawn {
-            closure,
-            name,
-            config,
-            future_ty,
+            plan,
             future,
             resume,
         });
@@ -597,6 +768,7 @@ impl<'db> MirBuilder<'db> {
     /// - Any block is unterminated
     pub(crate) fn build(self) -> MirFunction<'db> {
         assert!(!self.blocks.is_empty(), "function has no blocks");
+        self.assert_regions_closed();
 
         for (i, block) in self.blocks.iter().enumerate() {
             assert!(block.terminator.is_some(), "block bb{i} is not terminated");
@@ -610,7 +782,6 @@ impl<'db> MirBuilder<'db> {
                 blocks: self.blocks,
                 entry: BlockId(0),
                 locals: self.locals,
-                catch_regions: self.catch_regions.clone(),
             }),
             lambdas: vec![],
             signature: None,
@@ -623,6 +794,7 @@ impl<'db> MirBuilder<'db> {
     /// never a `MirFunction` of its own.
     pub(crate) fn build_body(self) -> MirFunctionBody<'db> {
         assert!(!self.blocks.is_empty(), "let body has no blocks");
+        self.assert_regions_closed();
         for (i, block) in self.blocks.iter().enumerate() {
             assert!(block.terminator.is_some(), "block bb{i} is not terminated");
         }
@@ -630,7 +802,18 @@ impl<'db> MirBuilder<'db> {
             blocks: self.blocks,
             entry: BlockId(0),
             locals: self.locals,
-            catch_regions: self.catch_regions,
         }
+    }
+
+    fn assert_regions_closed(&self) {
+        assert!(
+            self.current_unwind.is_none()
+                && self.current_handling.is_none()
+                && self.shield_depth == 0,
+            "a handler ({:?}, handling {:?}) or a shield (depth {}) is still in force at build",
+            self.current_unwind,
+            self.current_handling,
+            self.shield_depth,
+        );
     }
 }

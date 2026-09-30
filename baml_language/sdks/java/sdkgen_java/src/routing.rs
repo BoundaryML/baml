@@ -1,4 +1,4 @@
-//! Routing: turns a `baml_codegen_types::Name` into the Java package
+//! Routing: turns a `baml_sdkgen_types::Name` into the Java package
 //! path (under `baml_sdk/`) where that symbol's generated source lives.
 //! Single source of truth for per-symbol placement; `to_source_code`
 //! uses this to place per-symbol files, and later phases reuse it when
@@ -14,7 +14,7 @@
 //! name from HIR — `"user"` for project files, `"baml"` for stdlib,
 //! `"<vendor>"` for declared external packages.
 //!
-//! `"baml"` routes under `baml/`, anything else under `vendor/<pkg>/`.
+//! Core language packages route under their own names; other dependencies route under `vendor/<pkg>/`, as defined by `baml_sdkgen_types::namespace_segments`.
 //! Routing is independent of the symbol kind.
 //!
 //! Unlike TS (where `sanitize_module_segment` is a no-op), Java package
@@ -24,7 +24,7 @@
 //! symbol-level collisions (see
 //! `sdks/agent-docs/bridge-ref/ref-java-codegen-conventions.md`).
 
-use baml_codegen_types::Name;
+use baml_sdkgen_types::Name;
 
 /// Package path under `baml_sdk/`. Empty segments means the root
 /// package (`baml_sdk` itself).
@@ -160,22 +160,12 @@ pub(crate) fn java_identifier(seg: &str) -> String {
 ///
 /// Routing depends only on the symbol's package + namespace path.
 pub(crate) fn route(name: &Name) -> PackagePath {
-    let mut segs: Vec<String> = Vec::new();
-
-    match name.package().as_str() {
-        "user" => {}
-        "baml" => segs.push("baml".to_string()),
-        other => {
-            segs.push("vendor".to_string());
-            segs.push(java_identifier(other));
-        }
+    PackagePath {
+        segments: baml_sdkgen_types::namespace_segments(name)
+            .iter()
+            .map(|segment| java_identifier(segment))
+            .collect(),
     }
-
-    for seg in name.namespace() {
-        segs.push(java_identifier(seg.as_str()));
-    }
-
-    PackagePath { segments: segs }
 }
 
 #[cfg(test)]
@@ -204,6 +194,16 @@ mod tests {
         let pp = route(&name("user", &["lorem"], "Resume"));
         assert_eq!(pp.segments, vec!["lorem".to_string()]);
         assert_eq!(pp.java_package(), "baml_sdk.lorem");
+    }
+
+    #[test]
+    fn ai_and_reflect_use_builtin_roots_with_target_escaping() {
+        for package in ["ai", "reflect"] {
+            assert_eq!(
+                route(&name(package, &["void"], "Thing")).segments,
+                [package, "void$"]
+            );
+        }
     }
 
     #[test]

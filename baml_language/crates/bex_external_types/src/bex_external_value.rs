@@ -202,6 +202,14 @@ pub enum BexExternalValue {
     /// 64-bit floating point.
     Float(f64),
 
+    /// A JavaScript `number` whose BAML representation has not yet been
+    /// selected from contextual type information. Integral values can become
+    /// `Int` or `Float`; non-integral values can become only `Float`.
+    ///
+    /// This is an inbound bridge carrier and must be resolved before VM heap
+    /// materialization or outbound encoding.
+    JsNumber(f64),
+
     /// Boolean value.
     Bool(bool),
 
@@ -288,6 +296,22 @@ pub enum BexExternalValue {
     HostValue(std::sync::Arc<bex_resource_types::HostValueArc>),
 }
 
+/// Return the exact `i64` represented by an integral JavaScript number.
+///
+/// The upper bound is exclusive because `i64::MAX as f64` rounds to `2^63`.
+/// Checking it explicitly avoids Rust's saturating float-to-int cast turning
+/// that out-of-range value into `i64::MAX`.
+#[must_use]
+pub fn js_number_to_i64(value: f64) -> Option<i64> {
+    const I64_MIN_F64: f64 = -9_223_372_036_854_775_808.0;
+    const I64_MAX_PLUS_ONE_F64: f64 = 9_223_372_036_854_775_808.0;
+
+    (value.is_finite()
+        && value.fract() == 0.0
+        && (I64_MIN_F64..I64_MAX_PLUS_ONE_F64).contains(&value))
+    .then_some(value as i64)
+}
+
 impl std::fmt::Debug for BexExternalValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -295,6 +319,7 @@ impl std::fmt::Debug for BexExternalValue {
             Self::Int(v) => f.debug_tuple("Int").field(v).finish(),
             Self::Bigint(v) => f.debug_tuple("Bigint").field(v).finish(),
             Self::Float(v) => f.debug_tuple("Float").field(v).finish(),
+            Self::JsNumber(v) => f.debug_tuple("JsNumber").field(v).finish(),
             Self::Bool(v) => f.debug_tuple("Bool").field(v).finish(),
             Self::String(v) => f.debug_tuple("String").field(v).finish(),
             Self::Array {
@@ -362,6 +387,7 @@ impl PartialEq for BexExternalValue {
             (Self::Int(a), Self::Int(b)) => a == b,
             (Self::Bigint(a), Self::Bigint(b)) => a == b,
             (Self::Float(a), Self::Float(b)) => a == b,
+            (Self::JsNumber(a), Self::JsNumber(b)) => a == b,
             (Self::Bool(a), Self::Bool(b)) => a == b,
             (Self::String(a), Self::String(b)) => a == b,
             (
@@ -544,6 +570,7 @@ impl BexExternalValue {
             BexExternalValue::Int(_) => "int",
             BexExternalValue::Bigint(_) => "bigint",
             BexExternalValue::Float(_) => "float",
+            BexExternalValue::JsNumber(_) => "js_number",
             BexExternalValue::Bool(_) => "bool",
             BexExternalValue::String(_) => "string",
             BexExternalValue::Array { .. } => "array",
@@ -614,6 +641,7 @@ impl BexExternalValue {
                     format!("{s}.0")
                 }
             }
+            BexExternalValue::JsNumber(f) => f.to_string(),
             BexExternalValue::Bool(b) => b.to_string(),
             BexExternalValue::String(s) => format!("{s:?}"),
             BexExternalValue::Array { items, .. } => {
@@ -883,6 +911,21 @@ pub fn try_convert_rust_data(
 #[cfg(test)]
 mod render_readable_tests {
     use super::*;
+
+    #[test]
+    fn js_number_to_i64_checks_integrality_and_exact_i64_bounds() {
+        assert_eq!(js_number_to_i64(0.0), Some(0));
+        assert_eq!(js_number_to_i64(-0.0), Some(0));
+        assert_eq!(js_number_to_i64(42.0), Some(42));
+        assert_eq!(js_number_to_i64(42.5), None);
+        assert_eq!(js_number_to_i64(f64::NAN), None);
+        assert_eq!(js_number_to_i64(f64::INFINITY), None);
+        assert_eq!(
+            js_number_to_i64(-9_223_372_036_854_775_808.0),
+            Some(i64::MIN)
+        );
+        assert_eq!(js_number_to_i64(9_223_372_036_854_775_808.0), None);
+    }
 
     /// A thrown error instance renders as `Class { field: value }`, not the
     /// Rust `Debug` shape `Instance { class_name: .., type_args: [], fields: .. }`.

@@ -1,0 +1,26 @@
+[package]
+name = "btel_types"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "Core types for BAML telemetry producers"
+
+[lib]
+doctest = false
+
+[dependencies]
+btel_settings = { workspace = true }
+rustc-hash = { workspace = true }
+uuid = { workspace = true, features = [ "v4" ] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { workspace = true, features = [ "js" ] }
+
+[lints]
+workspace = true

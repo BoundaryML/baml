@@ -2,10 +2,10 @@ use std::io;
 
 use super::BlobRef;
 use crate::{
-    ids::{BexCallId, BexThreadId, BoundaryId, EngineId, ProcessEuid},
+    ids::{BexThreadId, BoundaryId, EngineId, ProcessEuid},
     run::{
         CancellationState, ProjectGeneration, ProjectId, RunError, RunErrorClass,
-        RunRequestSummary, RunStatus, RunTarget, RunTimeAnchor, SourceLocation, TraceCallKey,
+        RunRequestSummary, RunStatus, RunTarget, RunTimeAnchor, SourceLocation, ThreadRef,
     },
 };
 
@@ -93,7 +93,7 @@ pub struct RunCompletedRecord {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LogEventRecord {
-    pub call: TraceCallKey,
+    pub call: ThreadRef,
     pub level: Option<String>,
     pub source: Option<SourceLocation>,
     pub timestamp_ms: u64,
@@ -132,7 +132,7 @@ pub struct CaptureLossRecord {
     pub kind: CaptureLossKind,
     pub reason: CaptureLossReason,
     pub skipped_count: u64,
-    pub call: Option<TraceCallKey>,
+    pub call: Option<ThreadRef>,
     pub message: Option<String>,
     pub timestamp_ms: u64,
 }
@@ -254,15 +254,15 @@ impl From<&BlobRef> for crate::value::pb::BlobRefV1 {
     }
 }
 
-impl TryFrom<crate::value::pb::TraceCallKeyV1> for TraceCallKey {
+impl TryFrom<crate::value::pb::ThreadKeyV1> for ThreadRef {
     type Error = io::Error;
 
-    fn try_from(value: crate::value::pb::TraceCallKeyV1) -> Result<Self, Self::Error> {
+    fn try_from(value: crate::value::pb::ThreadKeyV1) -> Result<Self, Self::Error> {
         let process_id: [u8; 16] = value.process_id.as_slice().try_into().map_err(|_| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!(
-                    "trace call process id must be 16 bytes, got {}",
+                    "log thread process id must be 16 bytes, got {}",
                     value.process_id.len()
                 ),
             )
@@ -271,18 +271,16 @@ impl TryFrom<crate::value::pb::TraceCallKeyV1> for TraceCallKey {
             process_euid: ProcessEuid(process_id),
             engine_id: EngineId(value.engine_id),
             thread_id: BexThreadId(value.thread_id),
-            call_id: BexCallId(value.call_id),
         })
     }
 }
 
-impl From<TraceCallKey> for crate::value::pb::TraceCallKeyV1 {
-    fn from(value: TraceCallKey) -> Self {
+impl From<ThreadRef> for crate::value::pb::ThreadKeyV1 {
+    fn from(value: ThreadRef) -> Self {
         Self {
             process_id: value.process_euid.0.to_vec(),
             engine_id: value.engine_id.0,
             thread_id: value.thread_id.0,
-            call_id: value.call_id.0,
         }
     }
 }

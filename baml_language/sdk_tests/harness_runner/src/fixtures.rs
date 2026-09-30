@@ -42,6 +42,17 @@ pub fn discover_shared(fixtures_root: &Path) -> Vec<String> {
     found
 }
 
+/// Validate the on-disk corpus before returning the fixtures to generate.
+pub fn checked_shared(fixtures_root: &Path) -> &'static [&'static str] {
+    assert_eq!(
+        discover_shared(fixtures_root),
+        SHARED,
+        "the fixture corpus at {} has drifted from `fixtures::SHARED`",
+        fixtures_root.display()
+    );
+    SHARED
+}
+
 /// Fail unless a generator crate's declared fixtures, [`SHARED`], and the
 /// corpus on disk all agree.
 ///

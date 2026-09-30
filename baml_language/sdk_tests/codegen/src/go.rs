@@ -10,7 +10,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use baml_base::{Literal, Name as BaseName};
-use baml_codegen_types::{
+use baml_sdkgen_types::{
     CallableParam, Class, ClassProperty, CodegenFunctionParamMode, DefaultLiteral, Enum,
     EnumVariant, Function, FunctionArgument, FunctionArgumentDefault, Name, NamingConvention,
     Origin, Symbol, SymbolPool, Ty, TypeAlias,
@@ -72,15 +72,9 @@ fn ty_callable(params: Vec<Ty>, ret: Ty) -> Ty {
 /// someone is running the Go suite, so a panic here should stop the setup
 /// script outright instead of surfacing later as a separate test.
 pub fn run_all(ctx: &CodegenCtx) {
-    let discovered = fixtures::discover_shared(&ctx.fixtures_root);
-    assert_eq!(
-        discovered,
-        fixtures::SHARED,
-        "the fixture corpus at {} has drifted from `fixtures::SHARED`",
-        ctx.fixtures_root.display()
-    );
+    let fixtures = fixtures::checked_shared(&ctx.fixtures_root);
 
-    for fixture in fixtures::SHARED {
+    for fixture in fixtures {
         let loaded = load_fixture(&ctx.fixtures_root, fixture);
         let output = sdkgen_go::to_source_code_with_bytecode(
             &loaded.pool,
@@ -493,7 +487,7 @@ fn synthetic_method(name: &str, arguments: Vec<(&str, Ty, bool)>, return_type: T
                 docstring: None,
                 ty,
                 default: defaulted.then_some(
-                    baml_codegen_types::FunctionArgumentDefault::Expression { source: None },
+                    baml_sdkgen_types::FunctionArgumentDefault::Expression { source: None },
                 ),
             })
             .collect(),

@@ -163,6 +163,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ar_archive_writer"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73cd58deff2140a0a8eae87e417bd01db68a33e148aa93d1e8cd837e55e312b6"
+dependencies = [
+ "object 0.39.1",
+]
+
+[[package]]
 name = "arbitrary"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -597,8 +606,10 @@ name = "baml_artifact"
 version = "0.0.0-beta"
 dependencies = [
  "baml_version",
+ "base64",
  "borsh",
  "log",
+ "lz4_flex",
  "sha2",
  "thiserror 2.0.18",
 ]
@@ -664,16 +675,15 @@ dependencies = [
  "anyhow",
  "baml_artifact",
  "baml_builtins2",
- "baml_codegen_types",
  "baml_db",
  "baml_exec",
  "baml_fmt",
  "baml_ide",
  "baml_linker_types",
  "baml_lsp_server",
- "baml_query",
- "baml_query_profiles",
+ "baml_query_btel",
  "baml_release",
+ "baml_sdkgen_types",
  "baml_tests",
  "baml_type",
  "baml_version",
@@ -684,19 +694,18 @@ dependencies = [
  "bex_project",
  "bex_vm_types",
  "borsh",
+ "btel_file",
+ "btel_settings",
  "clap",
  "console",
  "ctrlc",
- "datafusion",
  "hex",
- "indexmap",
  "indicatif",
  "insta",
  "libsui",
  "mimalloc",
  "mime_guess",
  "rayon",
- "regex",
  "reqwest",
  "sdkgen_cpp",
  "sdkgen_csharp",
@@ -719,20 +728,6 @@ dependencies = [
  "uuid",
  "webbrowser",
  "yaml_serde",
-]
-
-[[package]]
-name = "baml_codegen_types"
-version = "0.0.0-beta"
-dependencies = [
- "baml_base",
- "baml_type",
- "fs2",
- "serde",
- "serde_json",
- "sha2",
- "strum",
- "tempfile",
 ]
 
 [[package]]
@@ -781,7 +776,6 @@ name = "baml_compiler2_hir"
 version = "0.1.0"
 dependencies = [
  "baml_base",
- "baml_builtins2",
  "baml_compiler2_ast",
  "baml_compiler_diagnostics",
  "baml_compiler_parser",
@@ -814,6 +808,7 @@ dependencies = [
  "sha2",
  "smol_str",
  "strsim",
+ "sys_regex",
  "text-size",
 ]
 
@@ -945,7 +940,6 @@ name = "baml_fmt"
 version = "0.0.0-beta"
 dependencies = [
  "baml_db",
- "baml_type",
  "ouroboros",
  "rowan 0.16.1",
  "salsa",
@@ -967,7 +961,6 @@ dependencies = [
  "baml_artifact",
  "baml_base",
  "baml_builtins2",
- "baml_codegen_types",
  "baml_compiler2_ast",
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
@@ -977,6 +970,7 @@ dependencies = [
  "baml_compiler_parser",
  "baml_compiler_syntax",
  "baml_db",
+ "baml_sdkgen_types",
  "baml_type",
  "bitflags 2.11.1",
  "insta",
@@ -1018,7 +1012,6 @@ dependencies = [
  "baml_db",
  "baml_fmt",
  "baml_ide",
- "baml_type",
  "baml_version",
  "crossbeam-channel",
  "ignore",
@@ -1046,22 +1039,18 @@ dependencies = [
  "baml_db",
  "baml_ide",
  "baml_lsp",
- "baml_query",
- "baml_query_profiles",
- "baml_type",
+ "baml_query_btel",
  "baml_version",
  "base64",
  "bex_engine",
  "bex_events",
  "bex_heap",
- "bex_prof_store",
  "bex_project",
  "bex_vm_types",
  "bridge_ctypes",
+ "btel_settings",
  "crossbeam-channel",
- "datafusion",
  "futures",
- "hex",
  "indexmap",
  "lsp-server",
  "lsp-types",
@@ -1094,6 +1083,7 @@ dependencies = [
  "bex_engine",
  "bex_events",
  "bex_project",
+ "btel_settings",
  "libsui",
  "sys_native",
  "tokio",
@@ -1122,20 +1112,31 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml_query_profiles"
+name = "baml_query_btel"
 version = "0.0.0-beta"
 dependencies = [
- "async-trait",
- "baml_query",
+ "baml_db",
+ "baml_query_btel",
  "base64",
- "bex_prof_store",
- "datafusion",
- "hex",
- "num-bigint",
+ "bex_engine",
+ "bex_heap",
+ "bex_vm_types",
+ "btel_clock",
+ "btel_reader",
+ "btel_recorder",
+ "btel_snapshot",
+ "fs2",
  "prost",
- "sha2",
+ "rusqlite",
+ "rustc-hash 2.1.2",
+ "serde",
+ "serde_json",
+ "sqlparser",
+ "sys_native",
+ "sys_types",
  "tempfile",
  "tokio",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -1150,10 +1151,23 @@ dependencies = [
  "serde_json",
  "sha2",
  "tar",
- "tempfile",
  "thiserror 2.0.18",
- "toml 0.8.23",
  "zip",
+]
+
+[[package]]
+name = "baml_sdkgen_types"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_artifact",
+ "baml_base",
+ "baml_type",
+ "fs2",
+ "serde",
+ "serde_json",
+ "sha2",
+ "strum",
+ "tempfile",
 ]
 
 [[package]]
@@ -1286,6 +1300,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bex_chunkedringbuffer"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_settings",
+ "loom",
+ "web-time",
+]
+
+[[package]]
 name = "bex_engine"
 version = "0.0.0-beta"
 dependencies = [
@@ -1295,6 +1318,7 @@ dependencies = [
  "baml_db",
  "baml_type",
  "baml_type_runtime",
+ "baml_version",
  "bex_events",
  "bex_external_types",
  "bex_heap",
@@ -1302,7 +1326,17 @@ dependencies = [
  "bex_str",
  "bex_vm",
  "bex_vm_types",
+ "borsh",
  "bridge_ctypes",
+ "btel_bcs",
+ "btel_clock",
+ "btel_file",
+ "btel_processor",
+ "btel_recorder",
+ "btel_settings",
+ "btel_snapshot",
+ "btel_types",
+ "clap",
  "futures",
  "indexmap",
  "libc",
@@ -1328,22 +1362,15 @@ name = "bex_events"
 version = "0.0.0-beta"
 dependencies = [
  "base64",
- "bex_prof_store",
  "bex_vm_types",
- "crossbeam-channel",
- "crossbeam-utils",
- "fs2",
- "hex",
+ "btel_types",
  "loom",
  "prost",
  "prost-build",
  "protoc-bin-vendored",
- "rustc-hash 2.1.2",
  "serde_json",
  "sha2",
- "smallvec",
  "sys_types",
- "tempfile",
  "uuid",
  "web-time",
 ]
@@ -1369,30 +1396,13 @@ dependencies = [
  "bex_external_types",
  "bex_str",
  "bex_vm_types",
+ "btel_types",
  "indexmap",
  "num-bigint",
  "parking_lot",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
- "web-time",
-]
-
-[[package]]
-name = "bex_prof_store"
-version = "0.0.0-beta"
-dependencies = [
- "baml_version",
- "base64",
- "crossbeam-channel",
- "fs2",
- "hex",
- "libc",
- "rustc-hash 2.1.2",
- "sha2",
- "smallvec",
- "tempfile",
- "uuid",
  "web-time",
 ]
 
@@ -1481,6 +1491,7 @@ dependencies = [
  "bytecount",
  "codspeed-divan-compat",
  "indexmap",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -1496,10 +1507,15 @@ dependencies = [
  "baml_linker_types",
  "baml_type",
  "base64",
- "bex_events",
  "bex_heap",
  "bex_str",
  "bex_vm_types",
+ "btel_clock",
+ "btel_processor",
+ "btel_records",
+ "btel_settings",
+ "btel_snapshot",
+ "btel_types",
  "chacha20poly1305",
  "console",
  "getrandom 0.2.17",
@@ -1509,10 +1525,12 @@ dependencies = [
  "rand_chacha 0.3.1",
  "rand_core 0.6.4",
  "rand_xoshiro",
+ "rustc-hash 2.1.2",
  "serde",
  "serde_json",
  "sha2",
  "smallvec",
+ "sys_regex",
  "time",
  "tokio",
  "tokio-util",
@@ -1533,6 +1551,7 @@ dependencies = [
  "bex_resource_types",
  "bex_str",
  "borsh",
+ "btel_types",
  "hex",
  "indexmap",
  "num-bigint",
@@ -1554,6 +1573,21 @@ dependencies = [
  "num-integer",
  "num-traits",
 ]
+
+[[package]]
+name = "bit-set"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08807e080ed7f9d5433fa9b275196cfc35414f66a0c79d864dc51a0d825231a3"
+dependencies = [
+ "bit-vec",
+]
+
+[[package]]
+name = "bit-vec"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
 
 [[package]]
 name = "bitflags"
@@ -1635,7 +1669,7 @@ dependencies = [
  "bex_project",
  "bridge_ctypes",
  "cbindgen",
- "find-msvc-tools",
+ "cc",
  "futures",
  "indexmap",
  "libc",
@@ -1796,6 +1830,150 @@ checksum = "63044e1ae8e69f3b5a92c736ca6269b8d12fa7efe39bf34ddb06d102cf0e2cab"
 dependencies = [
  "memchr",
  "serde",
+]
+
+[[package]]
+name = "btel_bcs"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_clock",
+ "btel_processor",
+ "btel_recorder",
+ "btel_records",
+ "btel_settings",
+ "btel_snapshot",
+ "btel_types",
+ "bytes",
+ "futures",
+ "hex",
+ "prost",
+ "prost-build",
+ "protoc-bin-vendored",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "uuid",
+ "wiremock",
+]
+
+[[package]]
+name = "btel_clock"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_settings",
+ "btel_types",
+ "quanta",
+ "web-time",
+]
+
+[[package]]
+name = "btel_file"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_processor",
+ "btel_recorder",
+ "btel_records",
+ "btel_settings",
+ "btel_snapshot",
+ "btel_types",
+ "prost",
+ "tempfile",
+]
+
+[[package]]
+name = "btel_processor"
+version = "0.0.0-beta"
+dependencies = [
+ "bex_chunkedringbuffer",
+ "btel_clock",
+ "btel_records",
+ "btel_settings",
+ "btel_snapshot",
+ "btel_types",
+ "rustc-hash 2.1.2",
+ "web-time",
+]
+
+[[package]]
+name = "btel_reader"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_type",
+ "base64",
+ "btel_file",
+ "btel_recorder",
+ "btel_settings",
+ "btel_snapshot",
+ "num-bigint",
+ "prost",
+ "serde_json",
+ "tempfile",
+ "xxhash-rust",
+]
+
+[[package]]
+name = "btel_recorder"
+version = "0.0.0-beta"
+dependencies = [
+ "bex_chunkedringbuffer",
+ "btel_clock",
+ "btel_processor",
+ "btel_records",
+ "btel_settings",
+ "btel_snapshot",
+ "btel_types",
+ "prost",
+ "prost-build",
+ "protoc-bin-vendored",
+ "rustc-hash 2.1.2",
+ "web-time",
+]
+
+[[package]]
+name = "btel_records"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_clock",
+ "btel_settings",
+ "btel_snapshot",
+ "btel_types",
+]
+
+[[package]]
+name = "btel_ringbuffer"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_settings",
+ "btel_types",
+ "loom",
+]
+
+[[package]]
+name = "btel_settings"
+version = "0.0.0-beta"
+
+[[package]]
+name = "btel_snapshot"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_type",
+ "bex_str",
+ "borsh",
+ "btel_settings",
+ "num-bigint",
+ "xxhash-rust",
+]
+
+[[package]]
+name = "btel_types"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_settings",
+ "rustc-hash 2.1.2",
+ "uuid",
 ]
 
 [[package]]
@@ -3278,6 +3456,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "fallible-iterator"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
+
+[[package]]
+name = "fallible-streaming-iterator"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
+
+[[package]]
+name = "fancy-regex"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "476de73bddf2ef8490aa4ee8f1cf40b430bf1d56c48c22080e5186952cd580e6"
+dependencies = [
+ "bit-set",
+ "regex-automata",
+ "regex-syntax 0.8.10",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4535,6 +4736,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "libsqlite3-sys"
+version = "0.35.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "133c182a6a2c87864fe97778797e46c7e999672690dc9fa3ee8e241aa4a9c13f"
+dependencies = [
+ "cc",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
 name = "libsui"
 version = "0.16.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5079,6 +5291,15 @@ name = "object"
 version = "0.37.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff76201f031d8863c38aa7f905eca4f53abbfa15f609db4277d44cd8938f33fe"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
+name = "object"
+version = "0.39.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e5a6c098c7a3b6547378093f5cc30bc54fd361ce711e05293a5cc589562739b"
 dependencies = [
  "memchr",
 ]
@@ -5666,6 +5887,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95067976aca6421a523e491fce939a3e65249bac4b977adee0ee9771568e8aa3"
 
 [[package]]
+name = "psm"
+version = "0.1.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4dcd034599e63b970727f70d79e02d62390a4a84f7c6b827c27c46d5ac3fa622"
+dependencies = [
+ "ar_archive_writer",
+ "cc",
+]
+
+[[package]]
 name = "pxfm"
 version = "0.1.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5780,6 +6011,19 @@ dependencies = [
  "quote",
  "rustpython-parser",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "quanta"
+version = "0.12.6"
+dependencies = [
+ "libc",
+ "portable-atomic",
+ "raw-cpuid",
+ "wasip1",
+ "wasip2",
+ "web-sys",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5928,6 +6172,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "raw-cpuid"
+version = "11.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "498cd0dc59d73224351ee52a95fee0f1a617a2eae0e7d9d720cc622c73a54186"
+dependencies = [
+ "bitflags 2.11.1",
+]
+
+[[package]]
 name = "rayon"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5945,6 +6198,26 @@ checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
+]
+
+[[package]]
+name = "recursive"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0786a43debb760f491b1bc0269fe5e84155353c67482b9e60d0cfb596054b43e"
+dependencies = [
+ "recursive-proc-macro-impl",
+ "stacker",
+]
+
+[[package]]
+name = "recursive-proc-macro-impl"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76009fbe0614077fc1a2ce255e3a1881a2e3a3527097d5dc6d8212c585e7e38b"
+dependencies = [
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -5980,9 +6253,9 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
-version = "0.4.14"
+version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e1dd4122fc1595e8162618945476892eefca7b88c52820e74af6262213cae8f"
+checksum = "ad8553b9b26413251cbf30e620595c7a41b3887f03da04579c0e6b0d6a06b4b2"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -6109,6 +6382,20 @@ dependencies = [
  "spki",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "rusqlite"
+version = "0.37.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "165ca6e57b20e1351573e3729b958bc62f0e48025386970b6e4d29e7a7e71f3f"
+dependencies = [
+ "bitflags 2.11.1",
+ "fallible-iterator",
+ "fallible-streaming-iterator",
+ "hashlink",
+ "libsqlite3-sys",
+ "smallvec",
 ]
 
 [[package]]
@@ -6386,10 +6673,9 @@ version = "0.1.0"
 dependencies = [
  "baml_artifact",
  "baml_base",
- "baml_codegen_types",
  "baml_db",
  "baml_ide",
- "baml_type",
+ "baml_sdkgen_types",
  "baml_version",
  "proc-macro2",
  "quote",
@@ -6420,6 +6706,7 @@ dependencies = [
  "bridge_ctypes",
  "indexmap",
  "prost",
+ "sdk_test_harness_runner",
 ]
 
 [[package]]
@@ -6497,7 +6784,7 @@ name = "sdkgen_cpp"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
- "baml_codegen_types",
+ "baml_sdkgen_types",
  "baml_version",
  "flate2",
  "protoc-bin-vendored",
@@ -6510,7 +6797,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_artifact",
  "baml_base",
- "baml_codegen_types",
+ "baml_sdkgen_types",
  "bex_vm_types",
  "serde",
  "serde_json",
@@ -6523,7 +6810,7 @@ name = "sdkgen_go"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
- "baml_codegen_types",
+ "baml_sdkgen_types",
  "baml_type",
 ]
 
@@ -6532,7 +6819,7 @@ name = "sdkgen_java"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
- "baml_codegen_types",
+ "baml_sdkgen_types",
 ]
 
 [[package]]
@@ -6541,7 +6828,7 @@ version = "0.0.0-beta"
 dependencies = [
  "askama",
  "baml_base",
- "baml_codegen_types",
+ "baml_sdkgen_types",
  "indexmap",
  "pretty_assertions",
 ]
@@ -6551,8 +6838,7 @@ name = "sdkgen_rust"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
- "baml_codegen_types",
- "indexmap",
+ "baml_sdkgen_types",
  "pretty_assertions",
  "prettyplease",
  "proc-macro2",
@@ -6564,21 +6850,19 @@ dependencies = [
 name = "sdkgen_swift"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_artifact",
  "baml_base",
- "baml_codegen_types",
+ "baml_sdkgen_types",
  "baml_version",
- "base64",
- "indexmap",
- "pretty_assertions",
 ]
 
 [[package]]
 name = "sdkgen_typescript_shared"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_artifact",
  "baml_base",
- "baml_codegen_types",
- "base64",
+ "baml_sdkgen_types",
 ]
 
 [[package]]
@@ -6888,6 +7172,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c6d1b651dc4edf07eead2a0c6c78016ce971bc2c10da5266861b13f25e7cec"
 dependencies = [
  "log",
+ "recursive",
  "sqlparser_derive",
 ]
 
@@ -6907,6 +7192,19 @@ name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
+
+[[package]]
+name = "stacker"
+version = "0.1.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "707f49d46706bacf8a2b00d51dace3f9de527c13eec3778f570c411f89e69967"
+dependencies = [
+ "cc",
+ "cfg-if",
+ "libc",
+ "psm",
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "static_assertions"
@@ -7089,6 +7387,15 @@ dependencies = [
  "sys_types",
  "thiserror 2.0.18",
  "tokio",
+]
+
+[[package]]
+name = "sys_regex"
+version = "0.0.0-beta"
+dependencies = [
+ "fancy-regex",
+ "regex",
+ "regex-syntax 0.8.10",
 ]
 
 [[package]]
@@ -7973,6 +8280,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
+name = "wasip1"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5e26842486624357dbeb8f0381cf1fb42f022291fd787d4a816768fec8cc760"
+
+[[package]]
 name = "wasip2"
 version = "1.0.3+wasi-0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8636,6 +8949,9 @@ name = "wit-bindgen"
 version = "0.57.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
+dependencies = [
+ "bitflags 2.11.1",
+]
 
 [[package]]
 name = "wit-bindgen-core"
@@ -8731,6 +9047,12 @@ dependencies = [
  "libc",
  "rustix",
 ]
+
+[[package]]
+name = "xxhash-rust"
+version = "0.8.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdd20c5420375476fbd4394763288da7eb0cc0b8c11deed431a91562af7335d3"
 
 [[package]]
 name = "yaml_serde"

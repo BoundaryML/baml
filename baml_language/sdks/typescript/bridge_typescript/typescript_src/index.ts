@@ -58,8 +58,13 @@ export function initializeRuntime(srcDir: string, files: Record<string, string>)
  * Free-function runtime initializer used by generated `baml_sdk/index.ts` when
  * codegen embeds precompiled BAML bytecode.
  */
-export function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array, embeddedBamlToml?: string): void {
-    BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytecode), embeddedBamlToml);
+export function initializeRuntimeFromBlob(bytecode: string | Buffer | Uint8Array, embeddedBamlToml?: string): void {
+    // Generated SDKs pass their embedded bytecode string through untouched;
+    // the native bridge decodes it.
+    BamlRuntime.initializeRuntimeFromBlob(
+        typeof bytecode === "string" ? bytecode : Buffer.from(bytecode),
+        embeddedBamlToml,
+    );
 }
 export {
     BamlAbortError,

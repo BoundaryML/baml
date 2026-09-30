@@ -35,8 +35,7 @@ use baml_compiler2_mir::{
 };
 use baml_type::ParamTy;
 use bex_vm_types::{
-    Bytecode, CaptureCategory, Function, FunctionCaptureProps, FunctionKind, FunctionMeta,
-    FunctionOrigin, Object, ObjectPool,
+    Bytecode, Function, FunctionKind, FunctionMeta, FunctionOrigin, Object, ObjectPool,
 };
 pub(crate) use emit::compile_mir_function;
 pub use package::{emit_package, emit_session_submission};
@@ -44,25 +43,9 @@ pub use package::{emit_package, emit_session_submission};
 /// Is `name` spelled under a language package? Such a function is a builtin
 /// whatever file it comes from.
 fn is_builtin_function_name(name: &str) -> bool {
-    matches!(
-        name.split('.').next(),
-        Some(
-            "baml"
-                | "boundary"
-                | "reflect"
-                | "assert"
-                | "testing"
-                | "log"
-                | "env"
-                | "ai"
-                | "openai"
-                | "anthropic"
-                | "google"
-                | "aws"
-                | "vercel"
-                | "claude_code"
-        )
-    )
+    name.split('.')
+        .next()
+        .is_some_and(|package| baml_builtins2::stdlib_package_names().contains(&package))
 }
 
 fn emitted_function_origin(
@@ -1110,7 +1093,7 @@ fn builtin_emit_function(
     arity: usize,
 ) -> Option<Function> {
     let kind = match kind {
-        BuiltinKind::Intrinsic | BuiltinKind::AwaitAny => return None,
+        BuiltinKind::Intrinsic | BuiltinKind::AwaitAny | BuiltinKind::Spawn => return None,
         BuiltinKind::Io => {
             let sys_op = bex_vm_types::sys_op_for_path(native_path)
                 .unwrap_or_else(|| panic!("unknown sys_op path: {native_path}"));
@@ -1131,6 +1114,9 @@ fn builtin_emit_function(
         real_local_count: 0,
         bytecode: Bytecode::default(),
         kind,
+        telemetry_function_id: None,
+        telemetry_registration: bex_vm_types::FunctionRegistration::default(),
+        telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: Span::fake(),
@@ -1147,8 +1133,7 @@ fn builtin_emit_function(
         is_interface_body: false, // set from the item tree by attach_function_metadata
         native_key,
         body_meta: None,
-        capture: FunctionCaptureProps::disabled(),
-        function_id: 0, // assigned at engine init (interim provider)
+
         runtime_package: bex_vm_types::HeapPtr::null(),
     })
 }
@@ -1190,10 +1175,6 @@ fn attach_function_metadata<'db>(
         compiled_fn.body_meta = Some(FunctionMeta::Llm {
             client: client.to_string(),
         });
-        compiled_fn.capture = FunctionCaptureProps::disabled()
-            .with_auto(CaptureCategory::Input)
-            .with_auto(CaptureCategory::Output)
-            .with_auto(CaptureCategory::Error);
     }
 }
 
@@ -1306,6 +1287,24 @@ mod tests {
     use salsa::Setter;
 
     use super::*;
+
+    #[test]
+    fn builtin_function_names_follow_the_stdlib_inventory() {
+        for package in baml_builtins2::stdlib_package_names() {
+            assert!(is_builtin_function_name(&format!(
+                "{package}.nested.function"
+            )));
+        }
+        for name in [
+            "",
+            "root.function",
+            "user.function",
+            "env.function",
+            "boundary.function",
+        ] {
+            assert!(!is_builtin_function_name(name), "{name}");
+        }
+    }
 
     #[salsa::db]
     pub(crate) struct TestDb {

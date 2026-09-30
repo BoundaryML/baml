@@ -1,7 +1,7 @@
 //! Shared emitter-internal representation of TypeScript-side symbols.
 //!
 //! These types describe what the emitter will render to TypeScript, as
-//! opposed to `baml_codegen_types` which describes BAML-side input
+//! opposed to `baml_sdkgen_types` which describes BAML-side input
 //! symbols. The fan-out logic (sync + async per callable, companion
 //! suffix rules) is a verbatim port of `sdkgen_python_pydantic2/src/emit/mod.rs`.
 
@@ -12,7 +12,7 @@ pub(crate) mod method;
 pub(crate) mod type_alias;
 pub(crate) mod typemap_file;
 
-use baml_codegen_types::{FunctionArgument, Name, Symbol, SymbolPool, Ty};
+use baml_sdkgen_types::{FunctionArgument, Name, Symbol, SymbolPool, Ty};
 
 use crate::{
     emit::{
@@ -142,7 +142,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
 fn expand_function(
     leaf: &LeafPath,
     key: &Name,
-    f: &baml_codegen_types::Function,
+    f: &baml_sdkgen_types::Function,
     sort_key: &SortKey,
     out: &mut Vec<(LeafPath, EmittedSymbol, SortKey)>,
 ) {
@@ -185,8 +185,8 @@ fn expand_function(
 /// `Ty`, in source order, de-duping exact-equal names. Class/Enum/
 /// `TypeAlias` contribute their unqualified leaf name; a union contributes
 /// each member's; an optional unwraps; anything else contributes nothing.
-fn collect_raises_names(throws: Option<&baml_codegen_types::Ty>) -> Vec<String> {
-    use baml_codegen_types::Ty;
+fn collect_raises_names(throws: Option<&baml_sdkgen_types::Ty>) -> Vec<String> {
+    use baml_sdkgen_types::Ty;
 
     fn walk(ty: &Ty, out: &mut Vec<String>) {
         match ty {
@@ -212,11 +212,11 @@ fn collect_raises_names(throws: Option<&baml_codegen_types::Ty>) -> Vec<String> 
 /// `TypeScriptMethodBinding` per emitted line. Methods are sorted by `(file,
 /// span, name)` so a parent and its companions cluster together.
 fn expand_methods(
-    methods: &[baml_codegen_types::Function],
+    methods: &[baml_sdkgen_types::Function],
     class_fqn_root: &str,
     kind: MethodKind,
 ) -> Vec<TypeScriptMethodBinding> {
-    let mut sorted: Vec<&baml_codegen_types::Function> = methods.iter().collect();
+    let mut sorted: Vec<&baml_sdkgen_types::Function> = methods.iter().collect();
     sorted.sort_by_key(|m| (origin_key(&m.origin), m.name.as_str()));
 
     let mut out: Vec<TypeScriptMethodBinding> = Vec::new();
@@ -300,7 +300,7 @@ fn bare_callable_name(name: &str) -> String {
 fn expand_callable<F>(
     bare: &str,
     fqn_root: &str,
-    arguments: &[baml_codegen_types::FunctionArgument],
+    arguments: &[baml_sdkgen_types::FunctionArgument],
     return_type: &Ty,
     mut emit: F,
 ) where
@@ -310,7 +310,7 @@ fn expand_callable<F>(
         SyncAsync,
         Vec<String>,
         Vec<Ty>,
-        Vec<Option<baml_codegen_types::FunctionArgumentDefault>>,
+        Vec<Option<baml_sdkgen_types::FunctionArgumentDefault>>,
         Ty,
     ),
 {
@@ -319,7 +319,7 @@ fn expand_callable<F>(
         .map(|a| a.name.as_str().to_string())
         .collect();
     let arg_types: Vec<Ty> = arguments.iter().map(|a| a.ty.clone()).collect();
-    let arg_defaults: Vec<Option<baml_codegen_types::FunctionArgumentDefault>> =
+    let arg_defaults: Vec<Option<baml_sdkgen_types::FunctionArgumentDefault>> =
         arguments.iter().map(|a| a.default.clone()).collect();
     emit(
         bare.to_string(),
@@ -341,7 +341,7 @@ fn expand_callable<F>(
     );
 }
 
-fn origin_key(origin: &baml_codegen_types::Origin) -> SortKey {
+fn origin_key(origin: &baml_sdkgen_types::Origin) -> SortKey {
     (origin.source_file_path.clone(), origin.span_start)
 }
 

@@ -671,20 +671,6 @@ pub enum Instruction {
     /// created — sys-ops are not user-observable futures in BAML, so
     /// the schedule + await pair is pure overhead.
     SysOp(GlobalIndex),
-    SysOpWithRuntimeId(GlobalIndex),
-
-    /// BEP-034 `spawn { body }`. Pops `[closure, name, config, returns,
-    /// throws]` from the stack (in reverse push order), allocates an
-    /// `UnscheduledFuture` into the TLAB, and yields
-    /// `VmExecState::Spawn(ptr)` so the engine routes the closure to a fresh
-    /// `BexThread`.
-    ///
-    /// `returns` / `throws` are the `Object::Type` values a preceding pair of
-    /// `LoadType`s pushed — the `Future<T, E>` this spawn is typed at, already
-    /// resolved against the frame's type args. They travel with the request so
-    /// the engine can type the heap `Future` it allocates, which is what makes
-    /// a future's generic parameters visible to reflection and `is`/`match`.
-    Spawn,
 
     /// Awaits the future on top of the stack.
     ///
@@ -731,15 +717,6 @@ pub enum Instruction {
         ntypeargs: u16,
     },
 
-    /// `Call` plus a caller-provided `boundary.LocalId` operand on top of the
-    /// stack. Ordinary call arity is unchanged; the VM pops the id first,
-    /// consumes it, installs the callee runtime-id/capture policy, then enters
-    /// the callee.
-    CallWithRuntimeId {
-        callee: GlobalIndex,
-        ntypeargs: u16,
-    },
-
     /// Call a function value from the eval stack.
     ///
     /// Format: `CALL_INDIRECT`.
@@ -750,10 +727,6 @@ pub enum Instruction {
     /// VM maps onto the runtime callee's parameters; a site without one pushed
     /// the callee's own slots and N is the callee's arity.
     CallIndirect,
-
-    /// `CallIndirect` plus a caller-provided `boundary.LocalId` operand above
-    /// the callee value.
-    CallIndirectWithRuntimeId,
 
     /// Virtual interface-method call: resolve the callee at runtime from the
     /// receiver's concrete `Self` type, then call it. The callee is *not* a
@@ -794,22 +767,15 @@ pub enum Instruction {
         self_arg: u16,
     },
 
-    /// `VirtualCall` plus a caller-provided `boundary.LocalId` operand above
-    /// the method-name value.
-    VirtualCallWithRuntimeId {
-        nargs: u16,
-        ntypeargs: u16,
-        self_arg: u16,
-    },
-
     /// Throw the value on top of the stack.
     ///
     /// Stack: `[error_value]` -> `[]` (control transfers to unwind handler or caller)
     Throw,
 
-    /// Re-throw a caught value on top of the stack.
+    /// Re-throw a caught value with the `baml.errors.Context` it was caught
+    /// with, so it keeps its original trace and cause.
     ///
-    /// Stack: `[error_value]` -> `[]` (control transfers to unwind handler or caller)
+    /// Stack: `[error_value, context]` -> `[]` (control transfers to unwind handler or caller)
     Rethrow,
 
     /// Return from a function.
@@ -858,10 +824,7 @@ pub enum Instruction {
 
     /// Pops and tests the top value, stores it in `destination` on success,
     /// and pushes the `Bool` result.
-    NarrowBind {
-        ty: usize,
-        destination: usize,
-    },
+    NarrowBind { ty: usize, destination: usize },
 
     /// Materialise a `Ty` from a constant-pool `TyTemplate`, substituting
     /// any `TypeArgRef(n)` leaves with `frame.type_args[n]`.
@@ -890,10 +853,11 @@ pub enum Instruction {
     /// Memory per switch scales with K (arms), not N (total classes).
     DenseTag(usize),
 
-    /// If the top-of-stack value is a panic instance (`baml.panics.*`), throw it.
-    /// Otherwise pop the value and continue to the next instruction.
+    /// If the caught value is a panic instance (`baml.panics.*`), re-throw it
+    /// with the `baml.errors.Context` it was caught with. Otherwise pop both and
+    /// continue to the next instruction.
     ///
-    /// Stack: `[value]` -> `[]` (continues) or unwinds (throws)
+    /// Stack: `[value, context]` -> `[]` (continues) or unwinds (throws)
     ///
     /// Used in catch handlers before wildcard arms to prevent them from
     /// swallowing panics the programmer didn't explicitly name.
@@ -1063,7 +1027,8 @@ pub enum Instruction {
     ///
     /// The VM yields `VmExecState::Event { event_name, data }` so the engine
     /// can emit a `CustomEvent` with full span context. Execution resumes
-    /// after the engine processes the event.
+    /// after the engine processes the event. Names starting with `$baml_`
+    /// are reserved for the compiler ([`LOG_EVENT`]).
     SendEvent,
 
     // ── Operand-movement superinstructions (CPython-style) ────────────────
@@ -1091,6 +1056,17 @@ pub enum Instruction {
     JumpIfTrueOrPop(isize),
     /// Keep a non-null value on the taken edge; pop on fallthrough.
     JumpIfNotNullOrPop(isize),
+
+    /// Pop tracing configuration for the immediately following call.
+    SetCallTrace,
+
+    /// `baml.spawn.__spawn(plan)`, what a `spawn` expression compiles to.
+    /// Pops a `baml.spawn.Plan` and yields `VmExecState::Spawn` so the engine
+    /// starts it as a task on a fresh `BexThread`; the engine pushes the
+    /// task's `Future<T, E>`. The plan carries the body, its limits and
+    /// cancel tokens, its cancellation parent, and the future's types, so
+    /// nothing else travels with the request.
+    Spawn,
 }
 
 /// Compact bytecode opcodes.
@@ -1210,7 +1186,6 @@ pub enum OpCode {
     InitInstance,
     AllocVariant,
     SysOp,
-    Spawn,
     Call,
     IsType,
     DenseTag,
@@ -1253,13 +1228,7 @@ pub enum OpCode {
     // from the `Self` of value argument `self_arg`.
     VirtualCall,
 
-    // ── Phase 6 ID-aware call forms, appended to preserve discriminants ──
-    CallWithRuntimeId,
-    CallIndirectWithRuntimeId,
-    VirtualCallWithRuntimeId,
-    SysOpWithRuntimeId,
-
-    // ── Phase 5 trace-origin marker, appended to preserve discriminants ──
+    // Re-raise an existing exception without replacing its cause or stack trace.
     Rethrow,
 
     // ── Appended to preserve discriminants ──
@@ -1295,6 +1264,16 @@ pub enum OpCode {
     JumpIfFalseOrPop,
     JumpIfTrueOrPop,
     JumpIfNotNullOrPop,
+
+    /// Load-time specialization of `Call` for a plain bytecode function whose
+    /// arguments already match its parameters, with no type arguments. Uses
+    /// the same u32 global + u16 zero operands as `Call`, preserving every PC.
+    /// This opcode is never emitted into serialized `Instruction` streams.
+    CallExactArgs,
+    SetCallTrace,
+
+    // The plan-taking spawn, appended to preserve serialized discriminants.
+    Spawn,
 }
 
 impl OpCode {
@@ -1311,7 +1290,7 @@ impl OpCode {
             | Self::StoreArrayElement
             | Self::StoreMapElement
             | Self::CallIndirect
-            | Self::CallIndirectWithRuntimeId
+            | Self::SetCallTrace
             | Self::Discriminant
             | Self::TypeTag
             | Self::ThrowIfPanic
@@ -1402,7 +1381,6 @@ impl OpCode {
             | Self::InitInstance
             | Self::AllocVariant
             | Self::SysOp
-            | Self::SysOpWithRuntimeId
             | Self::IsType
             | Self::DenseTag
             | Self::LoadType
@@ -1424,7 +1402,7 @@ impl OpCode {
             | Self::VirtualStoreField => 5,
 
             // 7-byte: opcode + u16 nargs + u16 ntypeargs + u16 self_arg
-            Self::VirtualCall | Self::VirtualCallWithRuntimeId => 7,
+            Self::VirtualCall => 7,
 
             Self::LoadCurrentPackage => 5,
 
@@ -1434,10 +1412,7 @@ impl OpCode {
             | Self::MakeVirtualFunction => 3,
 
             // 7-byte: opcode + u32 + u16 (type-arg threading)
-            Self::AllocInstance
-            | Self::Call
-            | Self::CallWithRuntimeId
-            | Self::MakeGenericFunction => 7,
+            Self::AllocInstance | Self::Call | Self::CallExactArgs | Self::MakeGenericFunction => 7,
 
             // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
             Self::MakeClosure => 9,
@@ -1468,7 +1443,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::StoreArrayElement as u8 => Ok(Self::StoreArrayElement),
             x if x == Self::StoreMapElement as u8 => Ok(Self::StoreMapElement),
             x if x == Self::CallIndirect as u8 => Ok(Self::CallIndirect),
-            x if x == Self::CallIndirectWithRuntimeId as u8 => Ok(Self::CallIndirectWithRuntimeId),
+
             x if x == Self::Discriminant as u8 => Ok(Self::Discriminant),
             x if x == Self::TypeTag as u8 => Ok(Self::TypeTag),
             x if x == Self::LoadCurrentPackage as u8 => Ok(Self::LoadCurrentPackage),
@@ -1554,7 +1529,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::InitInstance as u8 => Ok(Self::InitInstance),
             x if x == Self::AllocVariant as u8 => Ok(Self::AllocVariant),
             x if x == Self::SysOp as u8 => Ok(Self::SysOp),
-            x if x == Self::SysOpWithRuntimeId as u8 => Ok(Self::SysOpWithRuntimeId),
+
             x if x == Self::Spawn as u8 => Ok(Self::Spawn),
             x if x == Self::Call as u8 => Ok(Self::Call),
             x if x == Self::IsType as u8 => Ok(Self::IsType),
@@ -1585,10 +1560,11 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::VirtualLoadField as u8 => Ok(Self::VirtualLoadField),
             x if x == Self::VirtualStoreField as u8 => Ok(Self::VirtualStoreField),
             x if x == Self::VirtualCall as u8 => Ok(Self::VirtualCall),
-            x if x == Self::CallWithRuntimeId as u8 => Ok(Self::CallWithRuntimeId),
-            x if x == Self::VirtualCallWithRuntimeId as u8 => Ok(Self::VirtualCallWithRuntimeId),
+
             x if x == Self::NarrowBind as u8 => Ok(Self::NarrowBind),
             x if x == Self::Truthy as u8 => Ok(Self::Truthy),
+            x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
+            x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
             _ => Err(byte),
         }
     }
@@ -1603,7 +1579,7 @@ impl std::fmt::Display for OpCode {
             Self::VirtualLoadField => "VIRTUAL_LOAD_FIELD",
             Self::VirtualStoreField => "VIRTUAL_STORE_FIELD",
             Self::VirtualCall => "VIRTUAL_CALL",
-            Self::VirtualCallWithRuntimeId => "VIRTUAL_CALL_WITH_RUNTIME_ID",
+
             Self::Throw => "THROW",
             Self::Rethrow => "RETHROW",
             Self::MakeVirtualBoundMethod => "MAKE_VIRTUAL_BOUND_METHOD",
@@ -1613,7 +1589,8 @@ impl std::fmt::Display for OpCode {
             Self::StoreArrayElement => "STORE_ARRAY_ELEMENT",
             Self::StoreMapElement => "STORE_MAP_ELEMENT",
             Self::CallIndirect => "CALL_INDIRECT",
-            Self::CallIndirectWithRuntimeId => "CALL_INDIRECT_WITH_RUNTIME_ID",
+            Self::SetCallTrace => "SET_CALL_TRACE",
+
             Self::Discriminant => "DISCRIMINANT",
             Self::TypeTag => "TYPE_TAG",
             Self::LoadCurrentPackage => "LOAD_CURRENT_PACKAGE",
@@ -1700,10 +1677,11 @@ impl std::fmt::Display for OpCode {
             Self::InitInstance => "INIT_INSTANCE",
             Self::AllocVariant => "ALLOC_VARIANT",
             Self::SysOp => "SYS_OP",
-            Self::SysOpWithRuntimeId => "SYS_OP_WITH_RUNTIME_ID",
+
             Self::Spawn => "SPAWN",
             Self::Call => "CALL",
-            Self::CallWithRuntimeId => "CALL_WITH_RUNTIME_ID",
+            Self::CallExactArgs => "CALL_EXACT_ARGS",
+
             Self::IsType => "IS_TYPE",
             Self::DenseTag => "DENSE_TAG",
             Self::LoadType => "LOAD_TYPE",
@@ -1901,18 +1879,14 @@ impl std::fmt::Display for Instruction {
             Instruction::InitInstance(i) => write!(f, "INIT_INSTANCE {i}"),
             Instruction::AllocVariant(i) => write!(f, "ALLOC_VARIANT {i}"),
             Instruction::SysOp(callee) => write!(f, "SYS_OP {callee}"),
-            Instruction::SysOpWithRuntimeId(callee) => {
-                write!(f, "SYS_OP_WITH_RUNTIME_ID {callee}")
-            }
+
             Instruction::Spawn => write!(f, "SPAWN"),
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::AwaitAny => f.write_str("AWAIT_ANY"),
             Instruction::Call { callee, ntypeargs } => {
                 write!(f, "CALL {callee} ntypeargs={ntypeargs}")
             }
-            Instruction::CallWithRuntimeId { callee, ntypeargs } => {
-                write!(f, "CALL_WITH_RUNTIME_ID {callee} ntypeargs={ntypeargs}")
-            }
+
             Instruction::MakeGenericFunction {
                 function,
                 ntypeargs,
@@ -1923,7 +1897,8 @@ impl std::fmt::Display for Instruction {
                 write!(f, "MAKE_GENERIC_FUNCTION_FROM_VALUE ntypeargs={ntypeargs}")
             }
             Instruction::CallIndirect => f.write_str("CALL_INDIRECT"),
-            Instruction::CallIndirectWithRuntimeId => f.write_str("CALL_INDIRECT_WITH_RUNTIME_ID"),
+            Instruction::SetCallTrace => f.write_str("SET_CALL_TRACE"),
+
             Instruction::VirtualCall {
                 nargs,
                 ntypeargs,
@@ -1934,17 +1909,7 @@ impl std::fmt::Display for Instruction {
                     "VIRTUAL_CALL nargs={nargs} ntypeargs={ntypeargs} self_arg={self_arg}"
                 )
             }
-            Instruction::VirtualCallWithRuntimeId {
-                nargs,
-                ntypeargs,
-                self_arg,
-            } => {
-                write!(
-                    f,
-                    "VIRTUAL_CALL_WITH_RUNTIME_ID nargs={nargs} ntypeargs={ntypeargs} \
-                     self_arg={self_arg}"
-                )
-            }
+
             Instruction::Throw => f.write_str("THROW"),
             Instruction::Rethrow => f.write_str("RETHROW"),
             Instruction::MakeVirtualBoundMethod { ntypeargs } => {
@@ -2104,25 +2069,38 @@ pub struct ExceptionTableEntry {
     pub handler_pc: usize,
     /// Frame-local slot index for the caught error value.
     pub error_slot: usize,
-    /// Frame-local slot for the stack trace value.
-    /// `u32::MAX` means no stack trace binding (catch (e) without second param).
-    pub stack_trace_slot: usize,
+    /// Frame-local slot for the caught error's `baml.errors.Context`.
+    pub context_slot: usize,
 }
 
-impl ExceptionTableEntry {
-    pub const NO_STACK_TRACE: usize = u32::MAX as usize;
+/// The event a `log.*` call sends: `{ level, data }`.
+pub const LOG_EVENT: &str = "$baml_log";
 
-    pub fn has_stack_trace_slot(&self) -> bool {
-        self.stack_trace_slot != Self::NO_STACK_TRACE
-    }
+/// One PC range of code that runs shielded from cancellation: the body of a
+/// `defer`. A thread whose execution is inside such a range — in the frame
+/// itself, or in a callee whose caller's frame sits at a call inside it — is
+/// not delivered `Cancelled` at its yield points, so cleanup may suspend.
+/// Derived by the emitter from the blocks lowered shielded, like the
+/// exception table; sorted by `start_pc`, non-overlapping.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct ShieldRange {
+    pub start_pc: usize,
+    /// Exclusive.
+    pub end_pc: usize,
+}
+
+/// Whether `pc` lies in one of `ranges` (sorted, non-overlapping).
+fn pc_in_ranges(ranges: &[ShieldRange], pc: usize) -> bool {
+    let next = ranges.partition_point(|range| range.start_pc <= pc);
+    next > 0 && pc < ranges[next - 1].end_pc
 }
 
 /// One handler-body PC range, for the BEP-042 cause-chain pre-walk.
 ///
 /// A throw whose PC lies in `[start_pc, end_pc)` happened *during handling of*
 /// the error caught by the owning catch (or while unwinding through a defer
-/// pad). That caught error's materialized `ErrorContext` lives in
-/// `stack_trace_slot` and becomes the new error's `cause`.
+/// pad). That caught error's `baml.errors.Context` lives in `context_slot` and
+/// becomes the new error's `cause`.
 ///
 /// One catch contributes one entry *per handler-body block*. A handler body is
 /// the union of blocks captured at lowering; layout can fragment it across
@@ -2141,16 +2119,8 @@ pub struct HandlerContextEntry {
     pub end_pc: usize,
     /// Handler block PC of the owning catch — the nesting key.
     pub handler_pc: usize,
-    /// Frame-local slot holding the owning catch's `ErrorContext`.
-    /// `ExceptionTableEntry::NO_STACK_TRACE` means the catch bound no `ctx`, so
-    /// there is no context object to chain — the pre-walk stops with `null`.
-    pub stack_trace_slot: usize,
-}
-
-impl HandlerContextEntry {
-    pub fn has_stack_trace_slot(&self) -> bool {
-        self.stack_trace_slot != ExceptionTableEntry::NO_STACK_TRACE
-    }
+    /// Frame-local slot holding the owning catch's `baml.errors.Context`.
+    pub context_slot: usize,
 }
 
 /// Compact jump table: maps discriminant values to i32 byte offsets
@@ -2196,6 +2166,9 @@ pub struct CompactCode {
     /// Handler-body ranges (BEP-042 cause chain) with PCs translated to byte
     /// offsets. Parallel to `Bytecode::handler_context_table`.
     pub handler_context_table: Vec<HandlerContextEntry>,
+    /// Cancellation-shielded ranges with PCs translated to byte offsets.
+    /// Parallel to `Bytecode::shield_table`.
+    pub shield_table: Vec<ShieldRange>,
     /// Jump tables with offsets translated to byte offsets.
     /// Parallel to `Bytecode::jump_tables`.
     pub jump_tables: Vec<CompactJumpTable>,
@@ -2228,13 +2201,24 @@ impl CompactCode {
 
     /// The innermost handler-body range (byte-offset) covering `pc`, or `None`.
     /// BEP-042 cause-chain pre-walk: a throw here is "during handling of" the
-    /// error whose `ErrorContext` lives in the entry's `stack_trace_slot`.
+    /// error whose `baml.errors.Context` lives in the entry's `context_slot`.
     /// Innermost = largest `handler_pc` among covering ranges.
     pub fn handler_context_for_pc(&self, pc: usize) -> Option<&HandlerContextEntry> {
+        self.handler_contexts_for_pc(pc)
+            .max_by_key(|e| e.handler_pc)
+    }
+
+    /// Every handler whose body covers `pc`: the handlers active there,
+    /// innermost and enclosing alike.
+    pub fn handler_contexts_for_pc(&self, pc: usize) -> impl Iterator<Item = &HandlerContextEntry> {
         self.handler_context_table
             .iter()
-            .filter(|e| pc >= e.start_pc && pc < e.end_pc)
-            .max_by_key(|e| e.handler_pc)
+            .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
+    }
+
+    /// Whether the code at byte-offset `pc` runs shielded from cancellation.
+    pub fn pc_is_shielded(&self, pc: usize) -> bool {
+        pc_in_ranges(&self.shield_table, pc)
     }
 }
 
@@ -2298,6 +2282,10 @@ pub struct Bytecode {
     /// whether a throw happened "during handling of" another error.
     pub handler_context_table: Vec<HandlerContextEntry>,
 
+    /// PC ranges that run shielded from cancellation: the bodies of `defer`s.
+    /// Sorted by `start_pc`, non-overlapping. See [`ShieldRange`].
+    pub shield_table: Vec<ShieldRange>,
+
     /// Compact bytecode encoding. Populated at engine load time by
     /// `lower_to_compact()`. `None` until lowering runs.
     #[borsh(skip)]
@@ -2324,6 +2312,7 @@ impl Bytecode {
             line_table: Vec::new(),
             meta: Vec::new(),
             exception_table: Vec::new(),
+            shield_table: Vec::new(),
             handler_context_table: Vec::new(),
             compact: None,
         }
@@ -2359,13 +2348,24 @@ impl Bytecode {
 
     /// The innermost handler-body range covering `pc`, or `None`.
     /// BEP-042 cause-chain pre-walk: a throw here is "during handling of" the
-    /// error whose `ErrorContext` lives in the entry's `stack_trace_slot`.
+    /// error whose `baml.errors.Context` lives in the entry's `context_slot`.
     /// Innermost = largest `handler_pc` among covering ranges.
     pub fn handler_context_for_pc(&self, pc: usize) -> Option<&HandlerContextEntry> {
+        self.handler_contexts_for_pc(pc)
+            .max_by_key(|e| e.handler_pc)
+    }
+
+    /// Every handler whose body covers `pc`: the handlers active there,
+    /// innermost and enclosing alike.
+    pub fn handler_contexts_for_pc(&self, pc: usize) -> impl Iterator<Item = &HandlerContextEntry> {
         self.handler_context_table
             .iter()
-            .filter(|e| pc >= e.start_pc && pc < e.end_pc)
-            .max_by_key(|e| e.handler_pc)
+            .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
+    }
+
+    /// Whether the instruction at index `pc` runs shielded from cancellation.
+    pub fn pc_is_shielded(&self, pc: usize) -> bool {
+        pc_in_ranges(&self.shield_table, pc)
     }
 
     /// Encode `self.instructions` into a compact `Vec<u8>` byte stream.
@@ -2419,7 +2419,7 @@ impl Bytecode {
                 | Instruction::StoreArrayElement
                 | Instruction::StoreMapElement
                 | Instruction::CallIndirect
-                | Instruction::CallIndirectWithRuntimeId
+                | Instruction::SetCallTrace
                 | Instruction::Discriminant
                 | Instruction::TypeTag
                 | Instruction::ThrowIfPanic
@@ -2516,7 +2516,6 @@ impl Bytecode {
                 Instruction::LoadGlobal(g)
                 | Instruction::StoreGlobal(g)
                 | Instruction::SysOp(g)
-                | Instruction::SysOpWithRuntimeId(g)
                 | Instruction::MakeBoundMethod(g) => {
                     code.extend_from_slice(
                         &u32::try_from(g.into_raw())
@@ -2526,8 +2525,7 @@ impl Bytecode {
                 }
 
                 // ── Call: u32 callee + u16 ntypeargs ─────────────────
-                Instruction::Call { callee, ntypeargs }
-                | Instruction::CallWithRuntimeId { callee, ntypeargs } => {
+                Instruction::Call { callee, ntypeargs } => {
                     code.extend_from_slice(
                         &u32::try_from(callee.into_raw())
                             .expect("global index fits u32")
@@ -2558,11 +2556,6 @@ impl Bytecode {
 
                 // ── VirtualCall: u16 nargs, u16 ntypeargs, u16 self_arg ──
                 Instruction::VirtualCall {
-                    nargs,
-                    ntypeargs,
-                    self_arg,
-                }
-                | Instruction::VirtualCallWithRuntimeId {
                     nargs,
                     ntypeargs,
                     self_arg,
@@ -2706,7 +2699,7 @@ impl Bytecode {
                 end_pc: index_to_offset[entry.end_pc],
                 handler_pc: index_to_offset[entry.handler_pc],
                 error_slot: entry.error_slot,
-                stack_trace_slot: entry.stack_trace_slot,
+                context_slot: entry.context_slot,
             })
             .collect();
 
@@ -2723,7 +2716,7 @@ impl Bytecode {
                     .copied()
                     .unwrap_or(code.len()),
                 handler_pc: index_to_offset[entry.handler_pc],
-                stack_trace_slot: entry.stack_trace_slot,
+                context_slot: entry.context_slot,
             })
             .collect();
 
@@ -2774,6 +2767,20 @@ impl Bytecode {
             })
             .collect();
 
+        let shield_table = self
+            .shield_table
+            .iter()
+            .map(|range| ShieldRange {
+                start_pc: index_to_offset[range.start_pc],
+                // `end_pc` may equal `instructions.len()` when a shielded block
+                // runs to the end of the function.
+                end_pc: index_to_offset
+                    .get(range.end_pc)
+                    .copied()
+                    .unwrap_or(code.len()),
+            })
+            .collect();
+
         CompactCode {
             code,
             call_layouts: self
@@ -2784,6 +2791,7 @@ impl Bytecode {
             line_table,
             exception_table,
             handler_context_table,
+            shield_table,
             jump_tables,
         }
     }
@@ -2807,7 +2815,8 @@ impl Bytecode {
             Instruction::StoreArrayElement => OpCode::StoreArrayElement,
             Instruction::StoreMapElement => OpCode::StoreMapElement,
             Instruction::CallIndirect => OpCode::CallIndirect,
-            Instruction::CallIndirectWithRuntimeId => OpCode::CallIndirectWithRuntimeId,
+            Instruction::SetCallTrace => OpCode::SetCallTrace,
+
             Instruction::Discriminant => OpCode::Discriminant,
             Instruction::TypeTag => OpCode::TypeTag,
             Instruction::ThrowIfPanic => OpCode::ThrowIfPanic,
@@ -2874,10 +2883,10 @@ impl Bytecode {
             Instruction::InitInstance(_) => OpCode::InitInstance,
             Instruction::AllocVariant(_) => OpCode::AllocVariant,
             Instruction::SysOp(_) => OpCode::SysOp,
-            Instruction::SysOpWithRuntimeId(_) => OpCode::SysOpWithRuntimeId,
+
             Instruction::Spawn => OpCode::Spawn,
             Instruction::Call { .. } => OpCode::Call,
-            Instruction::CallWithRuntimeId { .. } => OpCode::CallWithRuntimeId,
+
             Instruction::IsType(_) => OpCode::IsType,
             Instruction::NarrowBind { .. } => OpCode::NarrowBind,
             Instruction::DenseTag(_) => OpCode::DenseTag,
@@ -2953,7 +2962,6 @@ impl Bytecode {
                 OpCode::MakeGenericFunctionFromValue
             }
             Instruction::VirtualCall { .. } => OpCode::VirtualCall,
-            Instruction::VirtualCallWithRuntimeId { .. } => OpCode::VirtualCallWithRuntimeId,
         }
     }
 }
@@ -2988,6 +2996,7 @@ mod compact_tests {
             line_table: Vec::new(),
             meta,
             exception_table: Vec::new(),
+            shield_table: Vec::new(),
             handler_context_table: Vec::new(),
             compact: None,
         }
@@ -3194,6 +3203,33 @@ mod compact_tests {
             ])
             .is_dispatchable(),
             "bisection needs ascending keys"
+        );
+    }
+
+    #[test]
+    fn trace_call_prefix_survives_serialization() {
+        let bytecode = make_bytecode(
+            vec![
+                Instruction::SetCallTrace,
+                Instruction::CallIndirect,
+                Instruction::Return,
+            ],
+            vec![],
+        );
+        let serialized = borsh::to_vec(&bytecode).unwrap();
+        let restored: Bytecode = borsh::from_slice(&serialized).unwrap();
+        let compact = restored.lower_to_compact();
+        assert_eq!(
+            compact.code,
+            vec![
+                OpCode::SetCallTrace as u8,
+                OpCode::CallIndirect as u8,
+                OpCode::Return as u8,
+            ]
+        );
+        assert_eq!(
+            OpCode::try_from(OpCode::SetCallTrace as u8).unwrap(),
+            OpCode::SetCallTrace
         );
     }
 
@@ -3495,6 +3531,7 @@ mod compact_tests {
             ],
             meta: vec![InstructionMeta { operand: None }; 2],
             exception_table: Vec::new(),
+            shield_table: Vec::new(),
             handler_context_table: Vec::new(),
             compact: None,
         };
@@ -3525,13 +3562,14 @@ mod compact_tests {
                 end_pc: 2,
                 handler_pc: 2,
                 error_slot: 0,
-                stack_trace_slot: ExceptionTableEntry::NO_STACK_TRACE,
+                context_slot: 1,
             }],
+            shield_table: Vec::new(),
             handler_context_table: vec![HandlerContextEntry {
                 start_pc: 2,
                 end_pc: 3, // one past the last instruction → mapped to total byte length
                 handler_pc: 2,
-                stack_trace_slot: 0,
+                context_slot: 0,
             }],
             compact: None,
         };

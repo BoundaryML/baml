@@ -31,7 +31,7 @@ export declare function initializeRuntime(srcDir: string, files: Record<string, 
  * Free-function runtime initializer used by generated `baml_sdk/index.ts` when
  * codegen embeds precompiled BAML bytecode.
  */
-export declare function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array, embeddedBamlToml?: string): void;
+export declare function initializeRuntimeFromBlob(bytecode: string | Buffer | Uint8Array, embeddedBamlToml?: string): void;
 export { BamlAbortError, BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
 export declare function newFunctionCall(): bigint;
 export declare function cancelFunctionCall(callId: bigint): boolean;

@@ -1,13 +1,17 @@
 import "./baml_sdk/index.js";
-import { BamlAbortError, BamlCallContext, BamlError, BamlPanic, initializeRuntimeFromBytecode } from "@boundaryml/baml-bridge";
+import { BamlAbortError, BamlCallContext, BamlError, BamlPanic, initializeRuntimeFromBlob } from "@boundaryml/baml-bridge";
 import { describe, expect, it } from "vitest";
 import { BYTECODE } from "./baml_sdk/_inlinedbaml.js";
 import {
+  FloatSize,
   Person,
   ValidationError,
   call_callback_with_optional_args_all_set_async,
   call_callback_with_optional_args_all_unset_async,
   call_callback_with_optional_args_partially_set_async,
+  call_float_bigint_union_callback_async,
+  call_float_callback_async,
+  call_float_class_callback_async,
   call_int_callback_async,
   call_repeatedly_async,
   call_returned_callback_async,
@@ -45,6 +49,25 @@ describe("function_calls — generated SDK host callables", () => {
     const cb = (x: number) => x * 2;
 
     await expect(call_int_callback_async(cb, 21)).resolves.toBe(42);
+  });
+
+  // SDK_PARITY_LINT(skip): exercises the Node bridge's JavaScript number encoding for float host returns
+  it("host_callables_resolves_integral_number_for_float_return", async () => {
+    await expect(call_float_callback_async(() => 1)).resolves.toBe(1);
+  });
+
+  // SDK_PARITY_LINT(skip): exercises JavaScript's distinct number and bigint host representations
+  it("host_callables_preserves_number_kind_for_float_bigint_union", async () => {
+    const result = await call_float_bigint_union_callback_async(() => 1);
+    expect(result).toBe(1);
+    expect(typeof result).toBe("number");
+  });
+
+  // SDK_PARITY_LINT(skip): exercises the Node bridge's JavaScript number encoding in generated classes
+  it("host_callables_resolves_integral_number_for_float_class_field", async () => {
+    await expect(
+      call_float_class_callback_async(() => new FloatSize({ width: 612 })),
+    ).resolves.toBe(612);
   });
 
   it("baml_closure_is_a_native_callable_with_host_language_arguments", () => {
@@ -204,7 +227,7 @@ describe("function_calls — generated SDK host callables", () => {
 
     const pending = call_with_callback_async(callback, 9);
     await wasDispatched;
-    initializeRuntimeFromBytecode(BYTECODE);
+    initializeRuntimeFromBlob(BYTECODE);
     resolveResult("after-replacement");
     await expect(pending).resolves.toBe("after-replacement");
   });
@@ -240,7 +263,7 @@ describe("function_calls — generated SDK host callables", () => {
 
     const pending = call_with_callback_async(callback, 12, { $ctx: ctx });
     await wasDispatched;
-    initializeRuntimeFromBytecode(BYTECODE);
+    initializeRuntimeFromBlob(BYTECODE);
     ctx.abort();
     await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
     settle("late after replacement");

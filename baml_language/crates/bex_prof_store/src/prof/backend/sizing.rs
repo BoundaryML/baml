@@ -21,8 +21,7 @@ pub struct ProfilerConfig {
     pub disk: DiskBudget,
     /// Publication batching age trigger (streams spec §5.3). `ZERO` =
     /// publish on every consumer pass with pending work; `MAX` = manual
-    /// (explicit flush only). Default 1 s, overridable via
-    /// `BAML_PROFILE_PUBLISH_INTERVAL_MS` (tests).
+    /// (explicit flush only). Default 1 s.
     pub publish_interval: Duration,
     /// Stream identity override; `None` = this process
     /// (`ProcessEuid::current()`).
@@ -31,12 +30,8 @@ pub struct ProfilerConfig {
 
 impl Default for ProfilerConfig {
     fn default() -> Self {
-        let publish_interval = std::env::var("BAML_PROFILE_PUBLISH_INTERVAL_MS")
-            .ok()
-            .and_then(|value| value.parse::<u64>().ok())
-            .map_or(Duration::from_secs(1), Duration::from_millis);
-        let store_root = std::env::var_os("BAML_PROFILE_DIR")
-            .map_or_else(|| PathBuf::from(".baml/profiles-v1"), PathBuf::from);
+        let publish_interval = Duration::from_secs(1);
+        let store_root = PathBuf::from(".baml/profiles-v1");
         Self {
             enabled: cfg!(not(target_arch = "wasm32")),
             store_root,

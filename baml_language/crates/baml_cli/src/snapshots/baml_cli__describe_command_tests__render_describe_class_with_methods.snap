@@ -14,6 +14,6 @@ methods:
   function IsAdult(self) -> bool throws never  methods.baml:10-12
 
 implementations (1):
-  implement<T> Concrete for T  <builtin>/baml/core.baml:20
+  implement<T> Concrete for T  <builtin>/baml/core.baml:21
 
 references (0):

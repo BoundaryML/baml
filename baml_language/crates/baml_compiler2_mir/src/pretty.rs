@@ -90,6 +90,7 @@ pub fn write_function(
                 BuiltinKind::Vm => "vm",
                 BuiltinKind::Intrinsic => "intrinsic",
                 BuiltinKind::AwaitAny => "await_any",
+                BuiltinKind::Spawn => "spawn",
             };
             writeln!(
                 f,
@@ -202,7 +203,24 @@ fn write_local_decl_inline(
 }
 
 fn write_block(f: &mut impl Write, db: &dyn crate::Db, block: &BasicBlock<'_>) -> fmt::Result {
-    writeln!(f, "    {}: {{", block.id)?;
+    write!(f, "    {}", block.id)?;
+    if let Some(landing) = block.landing {
+        write!(
+            f,
+            " [landing {}, {}]",
+            landing.error_local, landing.context_local
+        )?;
+    }
+    if let Some(unwind) = block.unwind {
+        write!(f, " [unwind {unwind}]")?;
+    }
+    if let Some(handling) = block.handling {
+        write!(f, " [handling {handling}]")?;
+    }
+    if block.shielded {
+        write!(f, " [shielded]")?;
+    }
+    writeln!(f, ": {{")?;
 
     for stmt in &block.statements {
         write!(f, "        ")?;
@@ -358,7 +376,6 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
             callee,
             args,
             ntypeargs,
-            runtime_id,
             destination,
             target,
             unwind,
@@ -385,7 +402,6 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
                 write_operand(f, db, arg)?;
                 wrote_arg = true;
             }
-            write_runtime_id_arg(f, db, wrote_arg, runtime_id.as_ref())?;
             write!(f, ") -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
@@ -398,7 +414,6 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
             args,
             ntypeargs,
             self_arg,
-            runtime_id,
             destination,
             target,
             unwind,
@@ -428,7 +443,6 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
                 write_operand(f, db, arg)?;
                 wrote_arg = true;
             }
-            write_runtime_id_arg(f, db, wrote_arg, runtime_id.as_ref())?;
             write!(f, ")")?;
             // The receiver position is the norm; only a dispatch elsewhere
             // is worth a word.
@@ -447,7 +461,6 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
         Terminator::SysOp {
             callee,
             args,
-            runtime_id,
             destination,
             target,
             unwind,
@@ -463,7 +476,6 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
                 write_operand(f, db, arg)?;
                 wrote_arg = true;
             }
-            write_runtime_id_arg(f, db, wrote_arg, runtime_id.as_ref())?;
             write!(f, ") -> {target}")?;
             if let Some(u) = unwind {
                 write!(f, " unwind {u}")?;
@@ -471,26 +483,12 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
             write!(f, ";")
         }
         Terminator::Spawn {
-            closure,
-            name,
-            config,
-            future_ty,
+            plan,
             future,
             resume,
         } => {
-            write!(
-                f,
-                "{future} = spawn<{}, {}> ",
-                Names::of(db).template(&future_ty.returns),
-                Names::of(db).template(&future_ty.throws)
-            )?;
-            write_operand(f, db, closure)?;
-            write!(f, " name=")?;
-            write_operand(f, db, name)?;
-            if let Some(config) = config {
-                write!(f, " config=")?;
-                write_operand(f, db, config)?;
-            }
+            write!(f, "{future} = spawn ")?;
+            write_operand(f, db, plan)?;
             write!(f, " -> {resume};")
         }
         Terminator::Await {
@@ -524,14 +522,22 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
             write_operand(f, db, value)?;
             write!(f, ";")
         }
-        Terminator::Rethrow { value } => {
+        Terminator::Rethrow { value, context } => {
             write!(f, "rethrow ")?;
             write_operand(f, db, value)?;
+            write!(f, " with ")?;
+            write_operand(f, db, context)?;
             write!(f, ";")
         }
-        Terminator::ThrowIfPanic { value, otherwise } => {
+        Terminator::ThrowIfPanic {
+            value,
+            context,
+            otherwise,
+        } => {
             write!(f, "throw_if_panic ")?;
             write_operand(f, db, value)?;
+            write!(f, " with ")?;
+            write_operand(f, db, context)?;
             write!(f, " -> {otherwise};")
         }
         Terminator::ShortCircuit {
@@ -551,22 +557,6 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
             write!(f, " -> [eval: {eval_rhs}, join: {join}];")
         }
     }
-}
-
-fn write_runtime_id_arg(
-    f: &mut impl Write,
-    db: &dyn crate::Db,
-    wrote_arg: bool,
-    runtime_id: Option<&Operand<'_>>,
-) -> fmt::Result {
-    if let Some(runtime_id) = runtime_id {
-        if wrote_arg {
-            write!(f, ", ")?;
-        }
-        write!(f, "$id = ")?;
-        write_operand(f, db, runtime_id)?;
-    }
-    Ok(())
 }
 
 fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> fmt::Result {
@@ -840,145 +830,5 @@ fn write_constant(f: &mut impl Write, db: &dyn crate::Db, constant: &Constant<'_
                 crate::lower::enum_link_name(db, *enum_ref)
             )
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use baml_base::{SourceRoot, SourceRootKind, SourceRootTable};
-
-    use super::*;
-    use crate::{BlockId, Place};
-
-    /// The smallest database the renderer's signature admits: a workspace
-    /// root and a root named `baml`, so a head can name a declaration and
-    /// render as the program spells its package.
-    #[salsa::db]
-    struct TestDb {
-        storage: salsa::Storage<TestDb>,
-        roots: Option<SourceRootTable>,
-        baml: Option<SourceRoot>,
-    }
-
-    impl Default for TestDb {
-        fn default() -> Self {
-            let mut db = Self {
-                storage: salsa::Storage::default(),
-                roots: None,
-                baml: None,
-            };
-            let baml = SourceRoot::new(
-                &db,
-                std::path::PathBuf::from("<builtin>/baml"),
-                SourceRootKind::Stdlib,
-                Some(baml_base::Name::new("baml")),
-                Vec::new(),
-                None,
-                Vec::new(),
-            );
-            let workspace = SourceRoot::new(
-                &db,
-                std::path::PathBuf::from("."),
-                SourceRootKind::Workspace,
-                None,
-                Vec::new(),
-                None,
-                Vec::new(),
-            );
-            db.roots = Some(SourceRootTable::new(&db, vec![baml, workspace]));
-            db.baml = Some(baml);
-            db
-        }
-    }
-
-    #[salsa::db]
-    impl salsa::Database for TestDb {}
-
-    #[salsa::db]
-    impl baml_compiler2_hir::Db for TestDb {
-        fn source_roots(&self) -> SourceRootTable {
-            self.roots.expect("root table present from construction")
-        }
-    }
-
-    #[salsa::db]
-    impl crate::Db for TestDb {}
-
-    fn render_terminator(db: &TestDb, terminator: &Terminator<'_>) -> String {
-        let mut output = String::new();
-        write_terminator(&mut output, db, terminator).expect("terminator renders");
-        output
-    }
-
-    fn local_copy(local: usize) -> Operand<'static> {
-        Operand::copy_local(Local(local))
-    }
-
-    #[test]
-    fn call_runtime_id_without_visible_args_has_no_leading_comma() {
-        let db = TestDb::default();
-        let terminator = Terminator::Call {
-            callee: local_copy(1),
-            args: Vec::new(),
-            argument_layout: None,
-            ntypeargs: 0,
-            runtime_id: Some(local_copy(9)),
-            destination: Place::local(Local(0)),
-            target: BlockId(1),
-            unwind: None,
-        };
-
-        assert_eq!(
-            render_terminator(&db, &terminator),
-            "_0 = call copy _1($id = copy _9) -> [bb1];"
-        );
-    }
-
-    #[test]
-    fn virtual_call_runtime_id_without_visible_args_has_no_leading_comma() {
-        let db = TestDb::default();
-        let terminator = Terminator::VirtualCall {
-            argument_layout: None,
-            iface: TyTemplateInterface {
-                name: baml_type::DeclName::in_root(
-                    db.baml.expect("the test database installs `baml`"),
-                    vec![baml_base::Name::new("ops")],
-                    baml_base::Name::new("Equals"),
-                ),
-                generics: Box::new([]),
-                associated_types: Box::new([]),
-            },
-            method: "eq".to_string(),
-            args: Vec::new(),
-            ntypeargs: 0,
-            self_arg: 0,
-            runtime_id: Some(local_copy(9)),
-            destination: Place::local(Local(0)),
-            target: BlockId(1),
-            unwind: None,
-        };
-
-        assert_eq!(
-            render_terminator(&db, &terminator),
-            "_0 = virtual_call eq as baml.ops.Equals($id = copy _9) -> [bb1];"
-        );
-    }
-
-    #[test]
-    fn sys_op_runtime_id_without_visible_args_has_no_leading_comma() {
-        let db = TestDb::default();
-        let terminator = Terminator::SysOp {
-            callee: local_copy(1),
-            args: Vec::new(),
-            runtime_id: Some(local_copy(9)),
-            destination: Place::local(Local(0)),
-            target: BlockId(1),
-            unwind: None,
-        };
-
-        assert_eq!(
-            render_terminator(&db, &terminator),
-            "_0 = sys_op copy _1($id = copy _9) -> bb1;"
-        );
     }
 }

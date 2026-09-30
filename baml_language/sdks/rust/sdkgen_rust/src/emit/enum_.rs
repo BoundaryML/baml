@@ -6,7 +6,7 @@
 //! The impl shape is pinned by the hand-written executable spec in
 //! `bridge_rust/tests/conversions.rs`.
 
-use baml_codegen_types::{Enum, Name};
+use baml_sdkgen_types::{Enum, Name};
 use proc_macro2::TokenStream;
 use quote::quote;
 

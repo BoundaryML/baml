@@ -1,15 +1,14 @@
 use ::bex_heap::HeapPermit as _;
 use ::std::sync::Arc;
 use async_trait::async_trait;
-use bex_engine::{BexCallArg, BexEngine, CallRef, FunctionCallContext, UnhandledSpawnErrorHandler};
+use bex_engine::{BexCallArg, BexEngine, FunctionCallContext, UnhandledSpawnErrorHandler};
 use bex_heap::{BexExternalValue, BexValue};
 use sys_types::CallId;
 
 use crate::{BexArgs, RuntimeError};
 
-pub struct BexCallTraceResult {
+pub struct BexRunResult {
     pub value: Result<BexExternalValue, RuntimeError>,
-    pub entry_call_ref: CallRef,
 }
 
 /// Core runtime API: call functions and introspect parameters.
@@ -31,17 +30,16 @@ pub trait Bex: Send + Sync {
         call_ctx: FunctionCallContext,
     ) -> Result<BexExternalValue, RuntimeError>;
 
-    /// Execute a function by name and surface the BEX entry trace identity once
-    /// the VM has actually started. Pre-entry failures return `Err`; runtime
-    /// success/failure returns `Ok` with the traced outcome.
-    async fn call_function_with_trace(
+    /// Execute a function by name, distinguishing setup failures (`Err`) from
+    /// outcomes after VM entry (`Ok`, including runtime errors).
+    async fn call_function_with_outcome(
         self: Arc<Self>,
         function_name: &str,
         args: BexArgs,
         call_ctx: FunctionCallContext,
-    ) -> Result<BexCallTraceResult, RuntimeError>;
+    ) -> Result<BexRunResult, RuntimeError>;
 
-    /// Run-vocabulary alias for the traced function entry path. `call_ctx`
+    /// Run-vocabulary alias for the function entry path. `call_ctx`
     /// carries adapter-owned host plumbing; durable run identity stays in
     /// `RunStore`.
     async fn start_run(
@@ -49,8 +47,8 @@ pub trait Bex: Send + Sync {
         function_name: &str,
         args: BexArgs,
         call_ctx: FunctionCallContext,
-    ) -> Result<BexCallTraceResult, RuntimeError> {
-        self.call_function_with_trace(function_name, args, call_ctx)
+    ) -> Result<BexRunResult, RuntimeError> {
+        self.call_function_with_outcome(function_name, args, call_ctx)
             .await
     }
 
@@ -58,7 +56,11 @@ pub trait Bex: Send + Sync {
 
     fn set_unhandled_spawn_error_handler(&self, handler: Option<UnhandledSpawnErrorHandler>);
 
-    async fn shutdown(self: Arc<Self>);
+    /// Wait for in-flight calls and spawned work, report unreachable
+    /// unobserved errors, and close the runtime. `grace` bounds the whole
+    /// wait (`None` waits for as long as the work takes); see
+    /// `BexEngine::shutdown_with_deadline` for what happens at the deadline.
+    async fn shutdown(self: Arc<Self>, grace: Option<std::time::Duration>);
 
     /// Run-vocabulary alias for host-call cancellation. The parameter is still
     /// the adapter-owned `HostCallId` backing value, not a `RunId`.
@@ -77,7 +79,7 @@ impl Bex for BexEngine {
         args: BexArgs,
         call_ctx: FunctionCallContext,
     ) -> Result<BexExternalValue, RuntimeError> {
-        let result = Bex::call_function_with_trace(self, function_name, args, call_ctx).await?;
+        let result = Bex::call_function_with_outcome(self, function_name, args, call_ctx).await?;
         result.value
     }
 
@@ -94,7 +96,7 @@ impl Bex for BexEngine {
 
     /// Resolve named `BexArgs` into the positional `Vec<BexExternalValue>` that
     /// `BexEngine::call_function` expects, using the engine's parameter metadata.
-    async fn call_function_with_trace(
+    async fn call_function_with_outcome(
         self: Arc<Self>,
         function_name: &str,
         BexArgs {
@@ -102,7 +104,7 @@ impl Bex for BexEngine {
             mut optional,
         }: BexArgs,
         call_ctx: FunctionCallContext,
-    ) -> Result<BexCallTraceResult, RuntimeError> {
+    ) -> Result<BexRunResult, RuntimeError> {
         let params = self
             .function_params(function_name)
             .map_err(RuntimeError::from)?;
@@ -141,7 +143,7 @@ impl Bex for BexEngine {
             });
         }
 
-        let result = BexEngine::call_function_bound_args_with_trace(
+        let result = BexEngine::call_function_bound_args_with_outcome(
             &self,
             function_name,
             ordered_args,
@@ -165,10 +167,7 @@ impl Bex for BexEngine {
             Err(err) => Err(RuntimeError::from(err)),
         };
 
-        Ok(BexCallTraceResult {
-            value,
-            entry_call_ref: result.entry_call_ref,
-        })
+        Ok(BexRunResult { value })
     }
 
     fn cancel_function_call(&self, call_id: CallId) -> Result<(), RuntimeError> {
@@ -179,7 +178,8 @@ impl Bex for BexEngine {
         BexEngine::set_unhandled_spawn_error_handler(self, handler);
     }
 
-    async fn shutdown(self: Arc<Self>) {
-        BexEngine::shutdown(&self).await;
+    async fn shutdown(self: Arc<Self>, grace: Option<std::time::Duration>) {
+        BexEngine::shutdown_with_deadline(&self, grace, BexEngine::report_shutdown_wait, |_| {})
+            .await;
     }
 }

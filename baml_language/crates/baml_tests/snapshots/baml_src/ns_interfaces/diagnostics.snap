@@ -2,6 +2,15 @@
 source: crates/baml_tests/src/corpus.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[interfaces_2.baml:521:17]
+ 521 │     return (if (true) { Fz04Dog {} } else { Fz04Cat {} }).speak()
+     ·                 ────                      ───────┬──────
+     ·                   │                              ╰── this branch is unreachable
+     ╰────
+
   [type] E0063
 
   ⚠ unreachable arm

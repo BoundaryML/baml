@@ -193,7 +193,7 @@ fn generate_speedtest_benches(manifest_dir: &str) {
 
     write_formatted_code(&dest_path, benches, header);
 
-    // Also emit the small fixed subset consumed by the `profiling_overhead`
+    // Also emit the small fixed subset consumed by the `call_overhead`
     // bench target: same single source of truth, but only the workloads chosen
     // to characterize tracing cost (per-call ring pairs, allocation-heavy
     // loops, the known ring-overflow reproducer, and a string baseline).

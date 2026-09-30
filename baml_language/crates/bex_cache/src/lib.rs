@@ -139,7 +139,18 @@ use sha2::{Digest, Sha256};
 /// BEP-075 removed type attributes), shifting the borsh discriminants of all
 /// later variants.
 ///
-/// Version 17: the identity-keyed unit format (`baml_linker_types`): one
+/// Version 17: `Bytecode::shield_table` records the PC ranges of `defer`
+/// bodies, which run shielded from cancellation. The `Spawn` opcode yields a
+/// `baml.spawn.Plan` instead of a pre-allocated `UnscheduledFuture`, and moved
+/// to the end of the `Instruction` and `OpCode` enums (after `SetCallTrace`),
+/// changing its serialized discriminant. `Object`/`ObjectType` lost
+/// `UnscheduledFuture` from the middle of the enum, renumbering the Borsh
+/// discriminants after it, and `Rethrow`/`ThrowIfPanic` pop the caught error's
+/// context under its value, with every exception-table entry naming a context
+/// slot. (It is 17, not 16: version 16 is BEP-075's and shipped in 0.20.0, so
+/// reusing it would admit a released cache entry.)
+///
+/// Version 18: the identity-keyed unit format (`baml_linker_types`): one
 /// `CompilationUnit` per package with a dependency table and
 /// `DeclKey`-keyed import/export tables, a `PackageRecord`, and a per-package
 /// `InitTail`, cached together as one [`EmittedPackage`] entry per package
@@ -164,7 +175,7 @@ use sha2::{Digest, Sha256};
 /// `callable_throws` fragments from their file's; a dependency table is a
 /// list of `Locator`s; and the executable is laid out package-major in
 /// link-set order.
-pub const FORMAT_VERSION: u32 = 17;
+pub const FORMAT_VERSION: u32 = 18;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

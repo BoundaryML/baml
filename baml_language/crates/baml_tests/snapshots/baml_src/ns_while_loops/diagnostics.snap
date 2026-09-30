@@ -1,0 +1,25 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0167
+
+  ⚠ this condition is always falsy: a value of type `false` can never be truthy
+     ╭─[while_loops.baml:175:16]
+ 175 │ ╭─▶         while (false) {
+     · │                  ─────
+ 176 │ │               continue;
+ 177 │ ├─▶         }
+     · ╰──── this loop body is unreachable
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always falsy: a value of type `false` can never be truthy
+     ╭─[while_loops.baml:178:13]
+ 178 │ ╭─▶         if (false) {
+     · │               ─────
+ 179 │ │               continue;
+ 180 │ ├─▶         }
+     · ╰──── this branch is unreachable
+     ╰────

@@ -300,7 +300,8 @@ impl InferenceContext<'_> {
             (None, None) => base,
             (Some(live), None) | (None, Some(live)) => live,
             (Some(then_flow), Some(else_flow)) => {
-                let mut merged = base;
+                // Facts invalidated on both paths must not reappear from base.
+                let mut merged = FxHashMap::default();
                 let keys: FxHashSet<BindingId> =
                     then_flow.keys().chain(else_flow.keys()).copied().collect();
                 for binding in keys {

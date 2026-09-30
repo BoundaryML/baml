@@ -23,9 +23,8 @@ use baml_compiler2_mir::{
 };
 use baml_type::DeclName;
 use bex_vm_types::{
-    BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionCaptureProps, FunctionKind,
-    FunctionOrigin, GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool,
-    UnaryOp as VmUnaryOp,
+    BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
+    GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
     bytecode::{
         ClassInitPlan, DebugLocalScope, FieldCopy, FieldCopySet, InstructionMeta, JumpTableData,
         LineTableEntry, OperandMeta, SwitchKey, SwitchTable,
@@ -237,6 +236,10 @@ struct StackifyCodegen<'db: 'ctx, 'ctx, 'obj, 'w> {
     /// fragment pool based at the shared watermark, so every index this
     /// codegen embeds is program-absolute either way.
     objects_base: usize,
+    /// String objects this function has minted, by content: a string
+    /// constant is minted once per function however many sites load it
+    /// (`string_object`). Strings compare by value, so sharing is unobservable.
+    string_objects: HashMap<String, usize>,
 
     /// Analysis results (classifications, def-use, etc.).
     analysis: AnalysisResult<'ctx>,
@@ -362,6 +365,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             class_fields: ctx.class_fields,
             objects: ctx.objects,
             objects_base: ctx.objects_base,
+            string_objects: HashMap::new(),
             analysis,
             local_slots: HashMap::with_capacity(body.locals.len()),
             real_local_count: 0,
@@ -395,6 +399,17 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
     fn mint_object(&mut self, object: Object) -> usize {
         let idx = self.objects_base + self.objects.len();
         self.objects.push(object);
+        idx
+    }
+
+    /// The program-absolute index of the string object holding `value`,
+    /// minted on first use in this function and shared by every later load.
+    fn string_object(&mut self, value: &str) -> usize {
+        if let Some(&idx) = self.string_objects.get(value) {
+            return idx;
+        }
+        let idx = self.mint_object(Object::String(value.into()));
+        self.string_objects.insert(value.to_owned(), idx);
         idx
     }
 
@@ -843,8 +858,9 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         self.patch_jumps();
         self.patch_jump_tables();
 
-        // 4. Build exception table from MIR catch regions
+        // 4. Build exception table from the blocks' handler edges
         self.build_exception_table(mir);
+        self.build_shield_table(mir);
 
         let debug_locals = Self::build_debug_locals(mir, &self.local_slots);
 
@@ -860,6 +876,9 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             real_local_count: self.real_local_count,
             bytecode: self.bytecode,
             kind: FunctionKind::Bytecode,
+            telemetry_function_id: None,
+            telemetry_registration: bex_vm_types::FunctionRegistration::default(),
+            telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
             local_names: self.slot_names,
             debug_locals,
             span: Span::fake(),
@@ -876,8 +895,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             is_interface_body: false, // set from the item tree by attach_function_metadata
             native_key: None,
             body_meta: None,
-            capture: FunctionCaptureProps::disabled(),
-            function_id: 0, // assigned at engine init (interim provider)
+
             runtime_package: bex_vm_types::HeapPtr::null(),
         }
     }
@@ -982,6 +1000,12 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
     fn set_debug_span(&mut self, span: Option<Span>, sequence_point: bool) {
         self.current_debug_span = span;
         self.pending_sequence_point = sequence_point;
+    }
+
+    /// Put back a span saved before pulling operands. A pull that emitted no
+    /// instruction has not used the pending sequence point, so it stays.
+    fn restore_debug_span(&mut self, span: Option<Span>) {
+        self.current_debug_span = span;
     }
 
     /// Emit a line-table entry for an instruction if needed.
@@ -1322,13 +1346,15 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                         let call_site_span = self.current_debug_span;
 
                         // 1. Push event name "$baml_log"
-                        let log_str_idx = self.mint_object(Object::String("$baml_log".into()));
+                        let log_str_idx = self.string_object(bex_vm_types::bytecode::LOG_EVENT);
                         let log_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(log_str_idx)));
                         let inst = self.emit(Instruction::LoadConst(log_const_idx));
                         self.set_operand(
                             inst,
-                            OperandMeta::Const(Self::display_string_operand("$baml_log")),
+                            OperandMeta::Const(Self::display_string_operand(
+                                bex_vm_types::bytecode::LOG_EVENT,
+                            )),
                         );
 
                         // 2. Push level value string
@@ -1338,7 +1364,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                             LogLevel::Warn => "warn",
                             LogLevel::Error => "error",
                         };
-                        let level_val_idx = self.mint_object(Object::String(level_str.into()));
+                        let level_val_idx = self.string_object(level_str);
                         let level_val_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(level_val_idx)));
                         let inst = self.emit(Instruction::LoadConst(level_val_const_idx));
@@ -1351,7 +1377,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                         unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
 
                         // 4. Push key "level"
-                        let level_key_idx = self.mint_object(Object::String("level".into()));
+                        let level_key_idx = self.string_object("level");
                         let level_key_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(level_key_idx)));
                         let inst = self.emit(Instruction::LoadConst(level_key_const_idx));
@@ -1361,7 +1387,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                         );
 
                         // 5. Push key "data"
-                        let data_key_idx = self.mint_object(Object::String("data".into()));
+                        let data_key_idx = self.string_object("data");
                         let data_key_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(data_key_idx)));
                         let inst = self.emit(Instruction::LoadConst(data_key_const_idx));
@@ -1602,7 +1628,10 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         self.emit(Instruction::Copy(0));
         unwrap_infallible(self.load_field(*field, &name));
         self.emit_operand_pull(right);
-        self.emit(Self::binop_instruction(*op));
+        let instruction = self
+            .try_specialize_binary_op(*op, left, right)
+            .unwrap_or_else(|| Self::binop_instruction(*op));
+        self.emit(instruction);
         unwrap_infallible(self.store_field_value(*field, &name));
         true
     }
@@ -1647,15 +1676,6 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 return;
             }
             if self.try_emit_class_aggregate_field_copy_sets(*class, type_arg_templates, fields) {
-                return;
-            }
-        }
-        // Specialize BinaryOp when both operand types are statically known.
-        if let Rvalue::BinaryOp { op, left, right } = rvalue {
-            if let Some(specialized) = self.try_specialize_binary_op(*op, left, right) {
-                self.emit_operand_pull(left);
-                self.emit_operand_pull(right);
-                self.emit(specialized);
                 return;
             }
         }
@@ -1889,7 +1909,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             }
             Constant::String(s) => {
                 let display = Self::display_string_operand(s);
-                let obj_idx = self.mint_object(Object::String(s.as_str().into()));
+                let obj_idx = self.string_object(s);
                 let idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)));
                 let inst = self.emit(Instruction::LoadConst(idx));
                 self.set_operand(inst, OperandMeta::Const(display));
@@ -2278,11 +2298,12 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             }
 
             Terminator::Call {
+                has_trace,
                 argument_layout,
                 callee,
                 args,
                 ntypeargs,
-                runtime_id,
+
                 destination,
                 target,
                 unwind: _,
@@ -2301,19 +2322,13 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
 
                 if let Some(global_callee) = global_callee {
                     unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                    if let Some(runtime_id) = runtime_id {
-                        unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
+                    if *has_trace {
+                        self.emit(Instruction::SetCallTrace);
                     }
-                    let instruction = if runtime_id.is_some() {
-                        Instruction::CallWithRuntimeId {
-                            callee: global_callee,
-                            ntypeargs,
-                        }
-                    } else {
-                        Instruction::Call {
-                            callee: global_callee,
-                            ntypeargs,
-                        }
+
+                    let instruction = Instruction::Call {
+                        callee: global_callee,
+                        ntypeargs,
                     };
                     // Pulling nested argument producers may install their own
                     // debug spans. Restore the terminator's enclosing call span
@@ -2340,14 +2355,12 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                         "indirect calls require an explicit caller layout"
                     );
                     unwrap_infallible(pull_semantics::walk_call_indirect_operands(
-                        self, callee, args,
+                        self, callee, args, *has_trace,
                     ));
-                    let instruction = if let Some(runtime_id) = runtime_id {
-                        unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
-                        Instruction::CallIndirectWithRuntimeId
-                    } else {
-                        Instruction::CallIndirect
-                    };
+                    if *has_trace {
+                        self.emit(Instruction::SetCallTrace);
+                    }
+                    let instruction = Instruction::CallIndirect;
                     self.set_debug_span(call_span, false);
                     let inst = self.emit(instruction);
                     self.record_call_layout(inst, argument_layout.as_ref());
@@ -2357,13 +2370,13 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             }
 
             Terminator::VirtualCall {
+                has_trace,
                 argument_layout,
                 iface,
                 method,
                 args,
                 ntypeargs,
                 self_arg,
-                runtime_id,
                 destination,
                 target,
                 unwind: _,
@@ -2373,7 +2386,8 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 // layout `OpCode::VirtualCall` expects: it pops the method name,
                 // then the interface, then the `ntypeargs` method type args, then
                 // reads value arg `self_arg` to resolve the impl at runtime.
-                unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
+                let value_args = &args[..args.len() - usize::from(*has_trace)];
+                unwrap_infallible(pull_semantics::walk_call_direct_args(self, value_args));
                 let iface_template = self.refs.anchor_template(&iface.to_template());
                 let iface_const = self.add_constant(ConstValue::Type(iface_template));
                 let inst = self.emit(Instruction::LoadType(iface_const));
@@ -2382,10 +2396,12 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                     OperandMeta::Const(self.spelled_template(&iface.to_template())),
                 );
                 self.emit_constant(&Constant::String(method.clone()));
-                if let Some(runtime_id) = runtime_id {
-                    unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
+                if *has_trace {
+                    self.emit_operand_pull(args.last().expect("trace attachment"));
+                    self.emit(Instruction::SetCallTrace);
                 }
-                let nargs = args.len() - ntypeargs;
+
+                let nargs = value_args.len() - ntypeargs;
                 let nargs = u16::try_from(nargs)
                     .unwrap_or_else(|_| unreachable!("a call's argument count fits in u16"));
                 let ntypeargs = u16::try_from(*ntypeargs)
@@ -2393,18 +2409,10 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 let self_arg = u16::try_from(*self_arg).unwrap_or_else(|_| {
                     unreachable!("a virtual call's dispatch index fits in u16")
                 });
-                let instruction = if runtime_id.is_some() {
-                    Instruction::VirtualCallWithRuntimeId {
-                        nargs,
-                        ntypeargs,
-                        self_arg,
-                    }
-                } else {
-                    Instruction::VirtualCall {
-                        nargs,
-                        ntypeargs,
-                        self_arg,
-                    }
+                let instruction = Instruction::VirtualCall {
+                    nargs,
+                    ntypeargs,
+                    self_arg,
                 };
                 let inst = self.emit(instruction);
                 self.record_call_layout(inst, argument_layout.as_ref());
@@ -2424,7 +2432,6 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             Terminator::SysOp {
                 callee,
                 args,
-                runtime_id,
                 destination,
                 target,
                 unwind: _,
@@ -2444,14 +2451,8 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                     });
 
                 unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                if let Some(runtime_id) = runtime_id {
-                    unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
-                }
-                let inst = if runtime_id.is_some() {
-                    self.emit(Instruction::SysOpWithRuntimeId(global_callee))
-                } else {
-                    self.emit(Instruction::SysOp(global_callee))
-                };
+
+                let inst = self.emit(Instruction::SysOp(global_callee));
                 if let Some(func) = callee_item {
                     self.set_operand(
                         inst,
@@ -2465,23 +2466,16 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             }
 
             Terminator::Spawn {
-                closure,
-                name,
-                config,
-                future_ty,
+                plan,
                 future,
                 resume,
             } => {
-                // Push closure, name, config, then the future's `T`/`E`. The
-                // runtime `OpCode::Spawn` pops them in reverse. Config is null
-                // when there is no `with` clause, so a fixed five values are
-                // always pushed (BEP-034 spawn options).
-                self.emit_operand_pull(closure);
-                self.emit_operand_pull(name);
-                let null_config = Operand::Constant(Constant::Null);
-                self.emit_operand_pull(config.as_deref().unwrap_or(&null_config));
-                unwrap_infallible(self.load_type(&future_ty.returns));
-                unwrap_infallible(self.load_type(&future_ty.throws));
+                // `Spawn` pops the plan and pushes the task's future. As for
+                // calls: the operand may install nested spans; the spawn
+                // opcode belongs to the whole spawn expression.
+                let spawn_span = self.current_debug_span;
+                self.emit_operand_pull(plan);
+                self.restore_debug_span(spawn_span);
                 self.emit(Instruction::Spawn);
                 self.emit_store_place(future);
                 self.emit_jump_unless_fallthrough(*resume);
@@ -2493,7 +2487,9 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 target,
                 unwind: _,
             } => {
+                let await_span = self.current_debug_span;
                 unwrap_infallible(pull_semantics::walk_await_future(self, future));
+                self.restore_debug_span(await_span);
                 self.emit(Instruction::Await);
 
                 self.emit_store_place(destination);
@@ -2515,17 +2511,31 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 self.emit_jump_unless_fallthrough(*target);
             }
 
+            // The raising opcode belongs to the throw itself, not to the last
+            // nested span its operand installed.
             Terminator::Throw { value } => {
+                let throw_span = self.current_debug_span;
                 self.emit_operand_pull(value);
+                self.restore_debug_span(throw_span);
                 self.emit(Instruction::Throw);
             }
-            Terminator::Rethrow { value } => {
+            Terminator::Rethrow { value, context } => {
+                let throw_span = self.current_debug_span;
                 self.emit_operand_pull(value);
+                self.emit_operand_pull(context);
+                self.restore_debug_span(throw_span);
                 self.emit(Instruction::Rethrow);
             }
 
-            Terminator::ThrowIfPanic { value, otherwise } => {
+            Terminator::ThrowIfPanic {
+                value,
+                context,
+                otherwise,
+            } => {
+                let throw_span = self.current_debug_span;
                 self.emit_operand_pull(value);
+                self.emit_operand_pull(context);
+                self.restore_debug_span(throw_span);
                 self.emit(Instruction::ThrowIfPanic);
                 self.emit_jump_unless_fallthrough(*otherwise);
             }
@@ -2708,120 +2718,131 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         }
     }
 
-    /// Build the bytecode exception table from MIR catch regions.
+    /// Build the bytecode exception table from the blocks' handler edges.
     ///
-    /// Each `CatchRegion` contributes the exact PC ranges of its protected
-    /// `body_blocks` (coalesced where the layout made them contiguous), NOT a
-    /// single `[body_entry_pc, handler_pc)` span. A span-based table is only
-    /// correct if the layout places every protected block before the handler
-    /// and every unprotected block outside the span — reverse-postorder
-    /// guarantees neither (a direct-throw block is a CFG leaf that sinks past
-    /// the handler; a panic-capable call-free block has no unwind edge to
-    /// anchor it), and both escaped their `catch` before this was made exact.
+    /// Every block names the handler a throw or panic inside it unwinds to
+    /// (`BasicBlock::unwind`), so each block contributes one entry over its
+    /// exact PC range (adjacent ranges to the same handler are coalesced).
+    /// Coverage therefore does not depend on layout: a direct-throw block
+    /// that sinks past its handler, or a call-free panic-capable block with
+    /// no unwind edge to anchor it, is covered by its own range. Entries
+    /// never overlap — a block has one handler — so the VM's innermost-entry
+    /// selection has exactly one candidate at any PC.
     ///
-    /// Nested regions overlap: the protected PC set of an inner region is a
-    /// subset of every enclosing region's (inner windows nest inside outer
-    /// windows at lowering). The VM picks the innermost covering entry —
-    /// largest `start_pc`, then smallest `end_pc`, then latest table order —
-    /// which subset-nesting makes unambiguous: the inner region's coalesced
-    /// range around any PC is contained in the outer's, and for byte-identical
-    /// ranges the stable sort below preserves `catch_regions` creation order
-    /// (always outer before inner), so the last matching entry is the inner
-    /// handler.
+    /// `BasicBlock::handling` gives one `HandlerContextEntry` per block the
+    /// same way, for the BEP-042 cause chain: a throw there is "during
+    /// handling of" the error whose context lives in that handler's landing.
     fn build_exception_table(&mut self, mir: &MirFunctionBody<'ctx>) {
         use bex_vm_types::bytecode::{ExceptionTableEntry, HandlerContextEntry};
 
-        for region in &mir.catch_regions {
-            let handler = self.analysis.resolve_jump_target(region.handler);
-
-            let &handler_pc = self.block_addresses.get(&handler).unwrap_or_else(|| {
-                unreachable!(
-                    "exception table: handler block {handler:?} has no PC address — \
-                     catch region was emitted but its handler block was dropped"
-                )
-            });
-            // If the error local was optimized away (e.g. an inline
-            // `throw X catch ...` that the MIR lowers as a direct jump),
-            // the catch region doesn't need a VM-level exception table entry.
-            let Some(&error_slot) = self.local_slots.get(&region.error_local) else {
-                log::debug!(
-                    "exception table: error local {:?} has no slot (optimized away)",
-                    region.error_local,
-                );
-                continue;
+        // (start, end, handler) per emitted, non-empty block.
+        let mut protected: Vec<(usize, usize, BlockId)> = Vec::new();
+        let mut handling: Vec<(usize, usize, BlockId)> = Vec::new();
+        for block in &mir.blocks {
+            let (Some(&start), Some(&end)) = (
+                self.block_addresses.get(&block.id),
+                self.block_end_addresses.get(&block.id),
+            ) else {
+                continue; // block dropped by layout / DCE
             };
-
-            let stack_trace_slot = region
-                .stack_trace_local
-                .and_then(|local| self.local_slots.get(&local).copied())
-                .unwrap_or(ExceptionTableEntry::NO_STACK_TRACE);
-
-            // BEP-042 cause chain: a throw inside the handler body is "during
-            // handling of" this catch's error. The handler body is the union of
-            // the arm blocks (or defer-pad body blocks) captured at lowering;
-            // the layout can fragment them across non-contiguous PCs. Emit one
-            // `HandlerContextEntry` per block so the coverage is exact — a
-            // single `[handler_pc, max_end)` span would over-cover the gaps
-            // between fragments and mis-chain a throw laid out there. An empty
-            // or fully-dropped body contributes no entries and never chains.
-            for &block in &region.handler_body {
-                let (Some(&block_start), Some(&block_end)) = (
-                    self.block_addresses.get(&block),
-                    self.block_end_addresses.get(&block),
-                ) else {
-                    continue; // block dropped by layout / DCE
-                };
-                if block_start >= block_end {
-                    continue; // empty block — nothing to cover
-                }
-                self.bytecode
-                    .handler_context_table
-                    .push(HandlerContextEntry {
-                        start_pc: block_start,
-                        end_pc: block_end,
-                        handler_pc,
-                        stack_trace_slot,
-                    });
+            if start >= end {
+                continue; // empty block — nothing to cover
             }
-
-            // Exact protected coverage: one PC range per protected block,
-            // merged where the layout put member blocks back-to-back. Blocks
-            // dropped by layout/DCE have no addresses and nothing to protect;
-            // gaps between member fragments (e.g. an interleaved handler or
-            // post-join block) stay uncovered by construction.
-            let mut ranges: Vec<(usize, usize)> = region
-                .body_blocks
-                .iter()
-                .filter_map(|&block| {
-                    let &block_start = self.block_addresses.get(&block)?;
-                    let &block_end = self.block_end_addresses.get(&block)?;
-                    (block_start < block_end).then_some((block_start, block_end))
-                })
-                .collect();
-            ranges.sort_unstable();
-            let mut coalesced: Vec<(usize, usize)> = Vec::new();
-            for (start, end) in ranges {
-                match coalesced.last_mut() {
-                    Some(last) if start <= last.1 => last.1 = last.1.max(end),
-                    _ => coalesced.push((start, end)),
-                }
+            if let Some(handler) = block.unwind {
+                protected.push((start, end, handler));
             }
-            for (start_pc, end_pc) in coalesced {
-                self.bytecode.exception_table.push(ExceptionTableEntry {
+            if let Some(handler) = block.handling {
+                handling.push((start, end, handler));
+            }
+        }
+        protected.sort_unstable_by_key(|&(start, end, _)| (start, end));
+        let mut coalesced: Vec<(usize, usize, BlockId)> = Vec::new();
+        for (start, end, handler) in protected {
+            match coalesced.last_mut() {
+                Some(last) if last.2 == handler && start <= last.1 => last.1 = last.1.max(end),
+                _ => coalesced.push((start, end, handler)),
+            }
+        }
+        for (start_pc, end_pc, handler) in coalesced {
+            let (handler_pc, error_slot, context_slot) = self.landing_slots(mir, handler);
+            self.bytecode.exception_table.push(ExceptionTableEntry {
+                start_pc,
+                end_pc,
+                handler_pc,
+                error_slot,
+                context_slot,
+            });
+        }
+        for (start_pc, end_pc, handler) in handling {
+            let (handler_pc, _, context_slot) = self.landing_slots(mir, handler);
+            self.bytecode
+                .handler_context_table
+                .push(HandlerContextEntry {
                     start_pc,
                     end_pc,
                     handler_pc,
-                    error_slot,
-                    stack_trace_slot,
+                    context_slot,
                 });
+        }
+        self.bytecode.exception_table.sort_by_key(|e| e.start_pc);
+    }
+
+    /// Build the bytecode's shield table from the blocks stamped `shielded`
+    /// (the bodies of `defer`s): one exact PC range per emitted block,
+    /// coalesced where the layout put them back-to-back, sorted by start.
+    fn build_shield_table(&mut self, mir: &MirFunctionBody<'ctx>) {
+        use bex_vm_types::bytecode::ShieldRange;
+
+        let mut ranges: Vec<(usize, usize)> = mir
+            .blocks
+            .iter()
+            .filter(|block| block.shielded)
+            .filter_map(|block| {
+                let &start = self.block_addresses.get(&block.id)?;
+                let &end = self.block_end_addresses.get(&block.id)?;
+                (start < end).then_some((start, end))
+            })
+            .collect();
+        ranges.sort_unstable();
+        for (start_pc, end_pc) in ranges {
+            match self.bytecode.shield_table.last_mut() {
+                Some(last) if start_pc <= last.end_pc => last.end_pc = last.end_pc.max(end_pc),
+                _ => self
+                    .bytecode
+                    .shield_table
+                    .push(ShieldRange { start_pc, end_pc }),
             }
         }
+    }
 
-        // Stable sort by start_pc: the VM selects the innermost covering entry
-        // by (largest start_pc, smallest end_pc, latest table order); stability
-        // keeps outer-before-inner creation order for byte-identical ranges so
-        // "latest" resolves to the inner handler (see the function doc).
-        self.bytecode.exception_table.sort_by_key(|e| e.start_pc);
+    /// Where the VM lands for `handler`: its PC and the slots of its error
+    /// and context locals (landing locals are always `Real`).
+    fn landing_slots(
+        &self,
+        mir: &MirFunctionBody<'ctx>,
+        handler: BlockId,
+    ) -> (usize, usize, usize) {
+        let landing = mir
+            .block(handler)
+            .landing
+            .unwrap_or_else(|| unreachable!("{handler:?} is not a handler block"));
+        let resolved = self.analysis.resolve_jump_target(handler);
+        let &handler_pc = self.block_addresses.get(&resolved).unwrap_or_else(|| {
+            unreachable!(
+                "exception table: handler block {handler:?} has no PC address — \
+                 a block unwinds to it but it was dropped"
+            )
+        });
+        let slot_of = |local: Local| {
+            *self.local_slots.get(&local).unwrap_or_else(|| {
+                unreachable!("landing local {local:?} of handler {handler:?} has no slot")
+            })
+        };
+        (
+            handler_pc,
+            slot_of(landing.error_local),
+            slot_of(landing.context_local),
+        )
     }
 
     // ========================================================================
@@ -3156,7 +3177,11 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
 
         let action = match classification {
             LocalClassification::Virtual => {
-                // Attribute inlined virtual loads to their defining statement.
+                // Attribute inlined virtual loads to their defining statement,
+                // then give the consumer back its own span: the instruction that
+                // uses this operand (a division, a call) belongs to the consuming
+                // expression, not to its last inlined operand.
+                let consumer_span = self.current_debug_span;
                 self.set_debug_span(self.def_span_for_local(local), false);
                 // Inline the definition rvalue at use site.
                 let rvalue = self.analysis.def_use[&local]
@@ -3167,9 +3192,6 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
                 // MakeClosure, MakeBoundMethod, MakeVirtualBoundMethod, and
                 // VirtualFieldAccess are materialized only by `emit_rvalue_pull`
                 // (`walk_rvalue_pull` panics on them), so route through it.
-                // BinaryOp must be routed through `emit_rvalue_pull` so that the
-                // type-aware specialization in `try_specialize_binary_op` can fire
-                // (e.g. emitting `CmpBigintOp` instead of the generic `CmpOp`).
                 // Class aggregates may use emitter-only spread helpers, so they
                 // also need to flow through `emit_rvalue_pull` when inlined.
                 if matches!(
@@ -3179,16 +3201,17 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
                         | Rvalue::MakeVirtualBoundMethod { .. }
                         | Rvalue::MakeVirtualFunction { .. }
                         | Rvalue::VirtualFieldAccess { .. }
-                        | Rvalue::BinaryOp { .. }
                         | Rvalue::Aggregate {
                             kind: baml_compiler2_mir::AggregateKind::Class { .. },
                             ..
                         }
                 ) {
                     self.emit_rvalue_pull(&rvalue);
-                    return Ok(LocalPullAction::Done);
+                } else {
+                    pull_semantics::walk_rvalue_pull(self, &rvalue)?;
                 }
-                LocalPullAction::Inline(Box::new(rvalue))
+                self.restore_debug_span(consumer_span);
+                LocalPullAction::Done
             }
             LocalClassification::PhiLike
             | LocalClassification::ReturnPhi
@@ -3235,8 +3258,17 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
         Ok(())
     }
 
-    fn binary_op(&mut self, op: BinOp) -> Result<(), Self::Error> {
-        self.emit(Self::binop_instruction(op));
+    /// Select a type-specialized binary instruction when operand types permit it.
+    fn binary_op(
+        &mut self,
+        op: BinOp,
+        left: &Operand<'ctx>,
+        right: &Operand<'ctx>,
+    ) -> Result<(), Self::Error> {
+        let instruction = self
+            .try_specialize_binary_op(op, left, right)
+            .unwrap_or_else(|| Self::binop_instruction(op));
+        self.emit(instruction);
         Ok(())
     }
 
@@ -3650,7 +3682,6 @@ mod tests {
             blocks: vec![entry, then_block, unreachable_else, return_block],
             entry: BlockId(0),
             locals: vec![local(RuntimeTy::int()), local(RuntimeTy::bool())],
-            catch_regions: Vec::new(),
         };
 
         let class_fields = HashMap::new();

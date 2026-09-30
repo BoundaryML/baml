@@ -398,17 +398,17 @@ export const SPAWN_BENCH = [
   },
 ] as const;
 
-export const BAML_SPAWN_ADV = `// cap shard work at two in flight; extras queue fifo in the group
+export const BAML_SPAWN_ADV = `// cap shard work at two in flight; extras wait in line for a slot
 function main() -> int {
-  let pool = baml.spawn.TaskGroup.new(2, name = "shards");
+  let pool = baml.spawn.Limit.new(2);
 
-  let a = spawn "shard-0" with baml.spawn.options(group = pool) {
+  let a = spawn "shard-0" with pool {
     checksum(0, 50000)
   };
-  let b = spawn "shard-1" with baml.spawn.options(group = pool) {
+  let b = spawn "shard-1" with pool {
     checksum(50000, 100000)
   };
-  let c = spawn "shard-2" with baml.spawn.options(group = pool) {
+  let c = spawn "shard-2" with pool {
     read_segment(7)
   };
 

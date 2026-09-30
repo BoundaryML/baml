@@ -51,6 +51,11 @@ message InboundValue {
     // and engine-created values have one canonical representation.
     BamlValueMedia media_value = 15;
     BamlValuePromptAst prompt_ast_value = 16;
+    // A JavaScript `number`. Unlike `int_value` and `float_value`, this does
+    // not choose a BAML numeric representation: an integral value may inhabit
+    // either `int` or `float`, and the declared contextual type selects one.
+    // Non-integral values can inhabit only `float`.
+    double js_number_value = 17;
   }
   // Absent oneof = null value.
 }

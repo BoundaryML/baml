@@ -167,6 +167,19 @@ pub enum TirTypeError {
     /// A mounted callable whose implementation is compiler-owned and has no
     /// location-free link ABI was invoked from a source-less consumer.
     MountedPackageCallUnsupported { path: Name },
+    /// A constant pattern argument to `baml.regex.new` does not compile.
+    /// Checked here so a typo in a literal pattern is a source error rather
+    /// than a throw the program has to reach to discover.
+    InvalidRegexPattern {
+        /// The same classification `baml.regex.Error.kind` carries at runtime.
+        kind: sys_regex::ErrorKind,
+        /// The engine's own one-line diagnostic.
+        message: String,
+        /// Codepoint offset into the pattern where the problem starts, when
+        /// the engine reports one. The pattern is a decoded string literal, so
+        /// this indexes the pattern, not the source line.
+        offset: Option<usize>,
+    },
     /// A shorthand property (`{ name }`) could not resolve its implicit value.
     /// Suggestions are in-scope values with similar names; the diagnostic
     /// renders them as explicit `name: suggestion` mappings.
@@ -200,24 +213,28 @@ pub enum TirTypeError {
         class_name: baml_type::DeclName,
         companion: baml_type::type_kind::BuiltinCompanion,
     },
+    /// A class literal for a class with a `$rust_type` field. Only the
+    /// class's own native functions create that state, so the literal could
+    /// only relabel a handle taken from another value.
+    CannotConstructOpaqueClass {
+        class_name: baml_type::DeclName,
+        /// The first field that holds native state.
+        field: Name,
+    },
     /// A constructor head that is an alias of a type no object literal can
     /// construct (anything but a class).
     CannotConstructAlias { name: Name, denotes: baml_type::Ty },
+    /// A builtin that is lowered where it is called (`log.info`,
+    /// `baml.spawn.__spawn`, ...) was referenced as a value.
+    CallSiteBuiltinValue { reference: String },
     /// Unreachable code after a diverging statement (return/break/continue).
-    DeadCode {
-        after: StmtId,
-        unreachable_count: usize,
-    },
+    DeadCode { unreachable_count: usize },
     /// A `void` expression (e.g. `if` without `else`) was used where a value
     /// is required — assigned to a variable, passed as an argument, or returned.
     VoidUsedAsValue,
     /// The return value of a void-returning function was used where a value
     /// is required — assigned to a variable, passed as an argument, etc.
     VoidFunctionResultUsed,
-    /// A `spawn ... with` clause expression is not a middleware transformer
-    /// (BEP-034: each `with` expression must be a function
-    /// `(baml.spawn.Params<T, E>) -> baml.spawn.Params<U, F>`).
-    SpawnWithNotATransformer { expected_input: Ty, got: Ty },
     /// Expression is not callable (e.g. `42(1)` or `Foo(1)` where Foo is a class).
     NotCallable { ty: Ty },
     /// Expression is not iterable (e.g. `for let i in 42 { ... }` where 42 is an int).
@@ -327,6 +344,10 @@ pub enum TirTypeError {
     DuplicateNamedArgument { name: Name },
     /// A call supplied a named argument that is not present in the callable type.
     UnknownNamedArgument { name: Name },
+    /// Native and compiler-only calls do not expose a traceable invocation.
+    TraceUnsupportedCall,
+    /// Trace handles have no public constructor or fields.
+    TraceOpaqueValue,
     /// A defaulted parameter was supplied positionally instead of by name.
     DefaultedParamPassedPositionally { name: Name },
     /// A required parameter was omitted.
@@ -548,9 +569,14 @@ pub enum TirTypeError {
     /// BEP-049 §11: an untagged `${expr}` interpolates a value whose type has
     /// no `to_string` method, so it can't be implicitly stringified.
     TypeNotInterpolatable { ty: Ty },
-    /// B-1563 truthiness: a non-literal condition whose static type decides
-    /// the branch - the test is constant, so one arm is dead.
-    ConditionAlwaysConstant { ty: Ty, always_true: bool },
+    /// A condition whose truthiness is statically known. The type is included
+    /// when it alone proves the result (rather than boolean composition).
+    ConditionAlwaysConstant { ty: Option<Ty>, always_true: bool },
+    /// A function value tested without being called.
+    UncalledFunctionInCondition {
+        name: String,
+        suggestion: Option<String>,
+    },
 
     /// BEP-044 §"Method Disambiguation": an unqualified call resolves to
     /// a method declared by two or more interfaces — the receiver carries
@@ -665,19 +691,13 @@ pub enum TirTypeError {
     /// BEP-044: a value almost satisfies an interface via a blanket impl, but a
     /// generic bound (`T extends Bound`) is not met. Names the failed bound.
     BlanketBoundNotSatisfied { value_type: Ty, bound: Ty },
-    /// `$id` cannot be the target of a compound assignment (`$id += ...`):
-    /// the runtime ID can only be replaced wholesale with an override from
-    /// `baml.id.new()` via `$id = ...`.
-    RuntimeIdCompoundAssignment,
-    /// Member access on `$id` (e.g. `$id.len()`). `$id` reads as a plain
-    /// string value but is not a binding; bind it to a local first.
-    RuntimeIdMemberAccess { member: Name },
-    /// A second `$id` side channel was supplied to one call.
-    DuplicateRuntimeIdArgument,
-    /// `$id` is trailing call metadata and an ordinary argument followed it.
-    RuntimeIdArgumentMustBeLast,
-    /// The `$id` side channel accepts only a `boundary.LocalId`.
-    RuntimeIdArgumentTypeMismatch { got: Ty },
+    /// More than one implementation could prove that `value_type` implements
+    /// `interface`, and nothing in the program picks one (rustc's E0283).
+    AmbiguousImplementation {
+        value_type: Ty,
+        /// The interface as far as inference determined it.
+        interface: Ty,
+    },
     /// An integer literal (or a constant-folded integer expression) is outside
     /// the representable `int` range `[-2^62, 2^62-1]`. `int` is 63-bit; larger
     /// magnitudes need a `bigint` literal (`n` suffix).
@@ -1118,6 +1138,17 @@ impl TirTypeError {
                         );
                     f.write_str(diagnostic.message.as_str())
                 }
+                TirTypeError::CannotConstructOpaqueClass { class_name, field } => write!(
+                    f,
+                    "class `{}` cannot be built with a class literal: its field `{field}` holds \
+                 state that only the class's own functions create",
+                    class_name.spell(vp)
+                ),
+                TirTypeError::CallSiteBuiltinValue { reference } => write!(
+                    f,
+                    "`{reference}` can only be called directly, not used as a value; to pass \
+                 it along, wrap the call in a lambda"
+                ),
                 TirTypeError::CannotConstructAlias { name, denotes } => write!(
                     f,
                     "cannot construct `{name}`: it is an alias of `{}`, not a class",
@@ -1129,6 +1160,23 @@ impl TirTypeError {
                             path.as_str(),
                         );
                     f.write_str(diagnostic.message.as_str())
+                }
+                TirTypeError::InvalidRegexPattern {
+                    kind,
+                    message,
+                    offset,
+                } => {
+                    let headline = match kind {
+                        sys_regex::ErrorKind::Syntax => "invalid regex pattern",
+                        sys_regex::ErrorKind::Unsupported => "unsupported regex construct",
+                        sys_regex::ErrorKind::TooLarge => "regex pattern is too large",
+                    };
+                    match offset {
+                        Some(offset) => {
+                            write!(f, "{headline} at character {offset}: {message}")
+                        }
+                        None => write!(f, "{headline}: {message}"),
+                    }
                 }
                 TirTypeError::DeadCode {
                     unreachable_count, ..
@@ -1146,17 +1194,6 @@ impl TirTypeError {
                 }
                 TirTypeError::VoidFunctionResultUsed => {
                     write!(f, "cannot use return value of a void function")
-                }
-                TirTypeError::SpawnWithNotATransformer {
-                    expected_input,
-                    got,
-                } => {
-                    write!(
-                        f,
-                        "`spawn ... with` takes middleware transformer functions: this link receives `{}` and must return a `baml.spawn.Params`, got `{}`",
-                        expected_input.spell(vp),
-                        got.spell(vp)
-                    )
                 }
                 TirTypeError::NotCallable { ty } => {
                     write!(
@@ -1375,6 +1412,18 @@ impl TirTypeError {
                 }
                 TirTypeError::UnknownNamedArgument { name } => {
                     write!(f, "unknown named argument `{name}`")
+                }
+                TirTypeError::TraceUnsupportedCall => {
+                    write!(
+                        f,
+                        "`$trace` is not supported on native, host, or compiler-intrinsic calls"
+                    )
+                }
+                TirTypeError::TraceOpaqueValue => {
+                    write!(
+                        f,
+                        "trace options, reservations, and span IDs are opaque; use their public methods"
+                    )
                 }
                 TirTypeError::DefaultedParamPassedPositionally { name } => {
                     write!(f, "defaulted parameter `{name}` must be passed by name")
@@ -1738,17 +1787,24 @@ impl TirTypeError {
                 TirTypeError::OutputFormatNotCalled => {
                     write!(f, "`output_format` must be called; use `output_format()`")
                 }
+                TirTypeError::UncalledFunctionInCondition { name, .. } => {
+                    write!(f, "function `{name}` is always truthy")
+                }
                 TirTypeError::ConditionAlwaysConstant { ty, always_true } => {
                     let (always, never) = if *always_true {
                         ("truthy", "falsy")
                     } else {
                         ("falsy", "truthy")
                     };
-                    write!(
-                        f,
-                        "this condition is always {always}: a value of type `{}` can never be {never}",
-                        ty.spell(vp)
-                    )
+                    write!(f, "this condition is always {always}")?;
+                    if let Some(ty) = ty {
+                        write!(
+                            f,
+                            ": a value of type `{}` can never be {never}",
+                            ty.spell(vp)
+                        )?;
+                    }
+                    Ok(())
                 }
                 TirTypeError::TypeNotInterpolatable { ty } => write!(
                     f,
@@ -1920,27 +1976,15 @@ impl TirTypeError {
                     value_type.spell(vp),
                     bound.spell(vp)
                 ),
-                TirTypeError::RuntimeIdCompoundAssignment => write!(
+                TirTypeError::AmbiguousImplementation {
+                    value_type,
+                    interface,
+                } => write!(
                     f,
-                    "`$id` cannot be the target of a compound assignment; use `$id = ...` with an \
-                 override from `baml.id.new()`"
-                ),
-                TirTypeError::RuntimeIdMemberAccess { member } => write!(
-                    f,
-                    "`$id` is a value, not a binding; bind it to a local before accessing `.{member}` \
-                 (e.g. `let id = $id; id.{member}`)"
-                ),
-                TirTypeError::DuplicateRuntimeIdArgument => {
-                    write!(f, "duplicate `$id` call argument")
-                }
-                TirTypeError::RuntimeIdArgumentMustBeLast => write!(
-                    f,
-                    "`$id` must be the final call argument because it is trailing call metadata"
-                ),
-                TirTypeError::RuntimeIdArgumentTypeMismatch { got } => write!(
-                    f,
-                    "`$id` at a call site expects `boundary.LocalId`, got {}",
-                    got.spell(vp)
+                    "type annotations needed: more than one implementation could make type \
+                 `{}` implement `{}`",
+                    value_type.spell(vp),
+                    interface.spell(vp)
                 ),
                 TirTypeError::IntegerLiteralOutOfRange { value } => write!(
                     f,
@@ -1975,8 +2019,8 @@ impl TirTypeError {
                     write!(
                         f,
                         "type argument `{}` is not concrete; a type parameter bounded by `{bound}` \
-                     requires a concrete type that implements it (an abstract type like a union \
-                     or interface has no single runtime type to dispatch on)",
+                     requires a concrete type that implements it (a union, an interface, \
+                     `unknown` or `never` has no single runtime type to dispatch on)",
                         arg.spell(vp)
                     )
                 }

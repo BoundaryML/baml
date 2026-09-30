@@ -449,7 +449,7 @@ impl PlaygroundSeam {
             })?;
         lease
             .engine
-            .call_function_with_trace(
+            .call_function_with_outcome(
                 "testing.TestRegistry.run_test",
                 vec![
                     bex_project::BexExternalValue::Handle(lease.handle.clone()),
@@ -726,8 +726,10 @@ impl PlaygroundSeam {
         // against this root: the process serves every project at once and
         // never changes directory.
         let sys_ops = Arc::new(self.platform.for_root(root));
+        // Playground runs record to the project's `.baml/btel`, like `baml run`.
+        let recording_root = root.to_path_buf();
         let candidate = tokio::task::spawn_blocking(move || {
-            construct_engine_candidate(*program, sys_ops, revision)
+            construct_engine_candidate(*program, sys_ops, revision, Some(&recording_root))
         })
         .await;
         let candidate = match candidate {
@@ -902,7 +904,6 @@ impl PlaygroundSeam {
 
         let ctx = bex_project::FunctionCallContextBuilder::new(call_id)
             .with_cancel_token(cancel)
-            .suppress_internal_profile()
             .build();
         let data = match engine
             .call_function("testing.TestRegistry.serialize", vec![registry], ctx, true)
@@ -925,6 +926,15 @@ impl PlaygroundSeam {
     /// Expand one lazy test set in place and re-push the tree. Fire-and-forget
     /// from the wire's perspective: the result arrives as a
     /// `TestCollectionResult` notification.
+    /// Source identity of `project`'s installed program, if one is built.
+    pub fn installed_source_snapshot(&self, project: &str) -> Option<[u8; 32]> {
+        let root = std::fs::canonicalize(project).ok()?;
+        self.runtimes
+            .existing(&root)
+            .or_else(|| self.runtimes.existing(Path::new(project)))?
+            .installed_source_snapshot()
+    }
+
     pub async fn expand_test_set(self: &Arc<Self>, project: &str, generation: u64, name: &str) {
         let lease = match self.lease_registry(project, generation).await {
             Ok(lease) => lease,
@@ -964,7 +974,6 @@ impl PlaygroundSeam {
 
         let ctx = bex_project::FunctionCallContextBuilder::new(call_id)
             .with_cancel_token(cancel.clone())
-            .suppress_internal_profile()
             .build();
         let expand_error = match engine
             .call_function(
@@ -992,7 +1001,6 @@ impl PlaygroundSeam {
         // the UI from its loading state instead of spinning forever.
         let ctx = bex_project::FunctionCallContextBuilder::new(sys_types::CallId::next())
             .with_cancel_token(cancel)
-            .suppress_internal_profile()
             .build();
         let data = match engine
             .call_function(

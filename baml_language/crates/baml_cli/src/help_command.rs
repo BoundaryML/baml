@@ -159,7 +159,7 @@ pub(crate) fn render_for_test(query: &[&str]) -> String {
             .iter()
             .map(|part| (*part).to_string())
             .collect::<Vec<_>>(),
-        RuntimeCli::command_with_internal(false),
+        RuntimeCli::command_with_internal(false).term_width(100),
     )
     .unwrap()
     .help

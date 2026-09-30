@@ -338,11 +338,6 @@ pub(crate) mod support {
                 format!("{}?.({})", callee_str, args_str.join(", "))
             }
             Expr::OptionalChain { expr } => expr_desc(*expr, body),
-            Expr::Spawn {
-                body: spawn_body, ..
-            } => {
-                format!("spawn {{ {} }}", expr_desc(*spawn_body, body))
-            }
             Expr::Await { future } => format!("await {}", expr_desc(*future, body)),
             Expr::Template { tag, .. } => match tag {
                 baml_compiler2_ast::TemplateTag::Custom { tag, .. } => {
@@ -1986,14 +1981,6 @@ pub(crate) mod support {
                     expr_desc_hir(*expr, body, prefix, local_type_names)
                 }
                 Expr::ByteStringLiteral(bytes) => format!("b\"<{} bytes>\"", bytes.len()),
-                Expr::Spawn {
-                    body: spawn_body, ..
-                } => {
-                    format!(
-                        "spawn {{ {} }}",
-                        expr_desc_hir(*spawn_body, body, prefix, local_type_names)
-                    )
-                }
                 Expr::Await { future } => format!(
                     "await {}",
                     expr_desc_hir(*future, body, prefix, local_type_names)

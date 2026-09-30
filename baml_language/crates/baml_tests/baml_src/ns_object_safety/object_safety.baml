@@ -87,11 +87,11 @@ test "a default body dispatches Self from a later argument" {
     assert.equal(q.later_twice(), 44);
 }
 
-test "a runtime id rides a virtual call dispatched on a later argument" {
+test "a call trace rides a virtual call dispatched on a later argument" {
     let p: Pairable = P { v: 40 };
     let q: Pairable = Q { w: 7 };
-    assert.equal(Pairable.later(2, p, $id = boundary.id()), 42);
-    assert.equal(Pairable.later(6, q, $id = boundary.id()), 42);
+    assert.equal(Pairable.later(2, p, $trace = trace.span()), 42);
+    assert.equal(Pairable.later(6, q, $trace = trace.hidden()), 42);
 }
 
 // The served lane: an interface row of a runtime-compiled package carries

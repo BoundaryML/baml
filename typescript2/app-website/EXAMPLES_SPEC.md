@@ -153,7 +153,7 @@ These have nested proof scenes.
   functions do not become `async`-colored.
 - **Ambient Cancellation** — cancellation arrives at `await` points without
   passing `ctx` or `AbortSignal` through every function.
-- **Bounded Concurrency** — named spawns, `TaskGroup.new(limit)`, FIFO queueing,
+- **Bounded Concurrency** — named spawns, `Limit.new(capacity)`, queueing,
   and cancellation of active and queued work.
 - **Composable Policies** — `withRetry`, timeout, timing, rate limiting, and
   future combinators like `all`, `race`, `any`.
@@ -234,7 +234,7 @@ wanted.
 | **Explorer shell** — tab row, header (title + description + Run), swappable body. Needs 2-level nesting for §5's proof scenes. Responsive: tabs scroll or collapse, code pane scrolls inside itself. | every section | **build** |
 | **Variant toggle** — segmented control that swaps one line of the snippet. | §1.2, §1.4, §6.2, §6.3, §4.5 | **build** |
 | **Two-axis bridge explorer** — feature selector × host-language selector, two synced panes. | §7 only | **build** |
-| **Concurrency scene** — cancellation propagating to await points, TaskGroup limit, FIFO queue, cancellation of in-flight and queued work. | §5.2, §5.3 | **build**, hardest |
+| **Concurrency scene** — cancellation propagating to await points, a spawn `Limit`, queued tasks, cancellation of in-flight and queued work. | §5.2, §5.3 | **build**, hardest |
 | **Stream animation** — typed partial object filling in over time. | §1.3 | **build**, small |
 | **Distribution dots** — 5 runs, 3 pass. | §6.3 | **build**, small |
 | **Run + typed result** — the WASM playground. | §1.1, §1.5, §6.1, §7 | adapt `LivePlayground` |

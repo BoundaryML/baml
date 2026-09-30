@@ -175,8 +175,12 @@ The compiler, engine, and LSP server live in the `baml_language/` Cargo
 workspace. Common commands (run from `baml_language/`):
 
 ```bash
-# Unit tests for the whole workspace (always run these after Rust changes)
-cargo test --lib
+# Rust library tests (SDK harnesses need nextest's setup scripts)
+cargo build -p bridge_cffi  # Rust bridge tests load this local engine library
+cargo test --lib --workspace --exclude 'sdk_test_*'
+
+# SDK harnesses: generates fixtures and installs each language's dependencies
+cargo nextest run -p 'sdk_test_*'
 
 # Unit tests for one crate
 cargo test --lib -p bex_project

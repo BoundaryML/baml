@@ -25,14 +25,12 @@ use baml_compiler2_hir::{
     type_ref::{TypeRefId, TypeRefStore},
 };
 use baml_compiler2_hir_ty::{extern_loc::InterfaceRef, layout, lower::qualify_def};
-use baml_compiler2_mir::{
-    BuiltinKind, RuntimeLowering, definition_link_name, lower_let_body, tir2_to_template,
-};
+use baml_compiler2_mir::{RuntimeLowering, definition_link_name, lower_let_body, tir2_to_template};
 use baml_type::{DeclName, ParamTy, Ty, TypeName, typetag::TypeTag};
 use bex_vm_types::{
-    Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionCaptureProps,
-    FunctionKind, FunctionOrigin, GlobalIndex, ImplBodyCoherence, Instruction, InterfaceBound,
-    ObjectPool, SpelledBound, TyTemplate,
+    Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionKind,
+    FunctionOrigin, GlobalIndex, ImplBodyCoherence, Instruction, InterfaceBound, ObjectPool,
+    SpelledBound, TyTemplate,
     bytecode::{InstructionMeta, OperandMeta},
     types::TypeAliasDef,
 };
@@ -62,7 +60,7 @@ pub(crate) fn owns_no_slot<'db>(
     is_required_interface_method(db, func)
         || matches!(
             function_body(db, func).as_ref(),
-            FunctionBody::Builtin(BuiltinKind::Intrinsic | BuiltinKind::AwaitAny)
+            FunctionBody::Builtin(kind) if kind.lowers_at_call_site()
         )
 }
 
@@ -1071,6 +1069,9 @@ fn synthesized_function(name: String, bytecode: Bytecode) -> Function {
         real_local_count: 0,
         bytecode,
         kind: FunctionKind::Bytecode,
+        telemetry_function_id: None,
+        telemetry_registration: bex_vm_types::FunctionRegistration::default(),
+        telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: baml_base::Span::fake(),
@@ -1087,8 +1088,6 @@ fn synthesized_function(name: String, bytecode: Bytecode) -> Function {
         is_interface_body: false,
         native_key: None,
         body_meta: None,
-        capture: FunctionCaptureProps::disabled(),
-        function_id: 0, // assigned at engine init (interim provider)
         runtime_package: bex_vm_types::HeapPtr::null(),
     }
 }

@@ -271,7 +271,7 @@ fn is_stack_carry_use_safe(
 
     let single_entry = |from, to| {
         to != body.entry
-            && !body.catch_regions.iter().any(|region| region.handler == to)
+            && !body.is_handler(to)
             && predecessors
                 .get(&to)
                 .is_some_and(|preds| preds.as_slice() == [from])
@@ -626,12 +626,16 @@ fn simulate_terminator_stack<'db>(
             sim.pop_n(1)
         }
         Terminator::Call {
+            has_trace,
             callee,
             args,
-            runtime_id,
+
             destination,
             ..
         } => {
+            if *has_trace {
+                return false;
+            }
             if args.iter().any(|arg| is_operand_local(arg, carried_local)) {
                 let direct = pull_semantics::resolve_constant_function_item(
                     callee,
@@ -644,9 +648,7 @@ fn simulate_terminator_stack<'db>(
                 if !direct {
                     trailing.push(callee);
                 }
-                if let Some(id) = runtime_id {
-                    trailing.push(id);
-                }
+
                 return simulate_stack_consuming_aggregate(
                     AggregateStackShape {
                         value_operands: &values,
@@ -660,7 +662,6 @@ fn simulate_terminator_stack<'db>(
                     def_use,
                 ) && simulate_store_place_stack(destination, sim, classifications);
             }
-            let runtime_id_slots = usize::from(runtime_id.is_some());
             let direct_call =
                 pull_semantics::resolve_constant_function_item(callee, classifications, def_use)
                     .is_some();
@@ -674,12 +675,8 @@ fn simulate_terminator_stack<'db>(
                 if pull_semantics::walk_call_direct_args(&mut sink, args).is_err() {
                     return false;
                 }
-                if let Some(runtime_id) = runtime_id
-                    && pull_semantics::walk_operand_pull(&mut sink, runtime_id).is_err()
-                {
-                    return false;
-                }
-                if !sim.pop_n(args.len() + runtime_id_slots) {
+
+                if !sim.pop_n(args.len()) {
                     return false;
                 }
             } else {
@@ -689,15 +686,13 @@ fn simulate_terminator_stack<'db>(
                     classifications,
                     def_use,
                 };
-                if pull_semantics::walk_call_indirect_operands(&mut sink, callee, args).is_err() {
-                    return false;
-                }
-                if let Some(runtime_id) = runtime_id
-                    && pull_semantics::walk_operand_pull(&mut sink, runtime_id).is_err()
+                if pull_semantics::walk_call_indirect_operands(&mut sink, callee, args, false)
+                    .is_err()
                 {
                     return false;
                 }
-                if !sim.pop_n(args.len() + 1 + runtime_id_slots) {
+
+                if !sim.pop_n(args.len() + 1) {
                     return false;
                 }
             }
@@ -705,14 +700,17 @@ fn simulate_terminator_stack<'db>(
             simulate_store_place_stack(destination, sim, classifications)
         }
         Terminator::VirtualCall {
+            has_trace,
             args,
-            runtime_id,
             destination,
             ..
         } => {
+            if *has_trace {
+                return false;
+            }
             if args.iter().any(|arg| is_operand_local(arg, carried_local)) {
                 let values = args.iter().collect::<Vec<_>>();
-                let trailing = runtime_id.iter().collect::<Vec<_>>();
+                let trailing = [];
                 return simulate_stack_consuming_aggregate(
                     AggregateStackShape {
                         value_operands: &values,
@@ -742,21 +740,8 @@ fn simulate_terminator_stack<'db>(
             // plus those two operands and pushes the result.
             sim.push();
             sim.push();
-            let runtime_id_slots = if let Some(runtime_id) = runtime_id {
-                let mut sink = StackCarryPullSink {
-                    sim,
-                    carried_local,
-                    classifications,
-                    def_use,
-                };
-                if pull_semantics::walk_operand_pull(&mut sink, runtime_id).is_err() {
-                    return false;
-                }
-                1
-            } else {
-                0
-            };
-            if !sim.pop_n(args.len() + 2 + runtime_id_slots) {
+
+            if !sim.pop_n(args.len() + 2) {
                 return false;
             }
             sim.push();
@@ -765,7 +750,7 @@ fn simulate_terminator_stack<'db>(
         Terminator::SysOp {
             callee,
             args,
-            runtime_id,
+
             destination,
             ..
         } => {
@@ -785,50 +770,24 @@ fn simulate_terminator_stack<'db>(
                 return false;
             }
 
-            let runtime_id_slots = if let Some(runtime_id) = runtime_id {
-                if pull_semantics::walk_operand_pull(&mut sink, runtime_id).is_err() {
-                    return false;
-                }
-                1
-            } else {
-                0
-            };
-            if !sim.pop_n(args.len() + runtime_id_slots) {
+            if !sim.pop_n(args.len()) {
                 return false;
             }
             sim.push();
             simulate_store_place_stack(destination, sim, classifications)
         }
-        Terminator::Spawn {
-            closure,
-            name,
-            config,
-            future,
-            ..
-        } => {
+        Terminator::Spawn { plan, future, .. } => {
             let mut sink = StackCarryPullSink {
                 sim,
                 carried_local,
                 classifications,
                 def_use,
             };
-            if pull_semantics::walk_operand_pull(&mut sink, closure).is_err() {
+            if pull_semantics::walk_operand_pull(&mut sink, plan).is_err() {
                 return false;
             }
-            if pull_semantics::walk_operand_pull(&mut sink, name).is_err() {
-                return false;
-            }
-            // Config operand is pushed last (null when there is no `with`
-            // clause). Mirror `emit`: always push three, pop three. The
-            // future's `T`/`E` types are pushed after it by `load_type` and
-            // popped again by `Spawn`, so like `alloc_array`'s element type
-            // they leave the net stack effect unchanged.
-            let null_config = Operand::Constant(Constant::Null);
-            let config_op = config.as_deref().unwrap_or(&null_config);
-            if pull_semantics::walk_operand_pull(&mut sink, config_op).is_err() {
-                return false;
-            }
-            if !sim.pop_n(3) {
+            // `Spawn` pops the plan and pushes the future.
+            if !sim.pop_n(1) {
                 return false;
             }
             sim.push();
@@ -876,7 +835,7 @@ fn simulate_terminator_stack<'db>(
             sim.push();
             simulate_store_place_stack(destination, sim, classifications)
         }
-        Terminator::Throw { value } | Terminator::Rethrow { value } => {
+        Terminator::Throw { value } => {
             let mut sink = StackCarryPullSink {
                 sim,
                 carried_local,
@@ -889,19 +848,22 @@ fn simulate_terminator_stack<'db>(
             // THROW consumes the thrown value from the stack when unwinding.
             sim.pop_n(1)
         }
-        Terminator::ThrowIfPanic { value, .. } => {
+        Terminator::Rethrow { value, context }
+        | Terminator::ThrowIfPanic { value, context, .. } => {
             let mut sink = StackCarryPullSink {
                 sim,
                 carried_local,
                 classifications,
                 def_use,
             };
-            if pull_semantics::walk_operand_pull(&mut sink, value).is_err() {
+            if pull_semantics::walk_operand_pull(&mut sink, value).is_err()
+                || pull_semantics::walk_operand_pull(&mut sink, context).is_err()
+            {
                 return false;
             }
-            // ThrowIfPanic loads the value, checks it, and either throws (consuming it)
-            // or continues (consuming it). Either way the stack is clean after.
-            sim.pop_n(1)
+            // RETHROW consumes the value and its context when unwinding;
+            // THROW_IF_PANIC consumes both whether it throws or continues.
+            sim.pop_n(2)
         }
         Terminator::ShortCircuit { operand, .. } => {
             // ShortCircuit peeks the operand (stays on TOS), then conditionally
@@ -1455,7 +1417,12 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         Ok(())
     }
 
-    fn binary_op(&mut self, _op: baml_compiler2_mir::BinOp) -> Result<(), Self::Error> {
+    fn binary_op(
+        &mut self,
+        _op: baml_compiler2_mir::BinOp,
+        _left: &Operand<'a>,
+        _right: &Operand<'a>,
+    ) -> Result<(), Self::Error> {
         if !self.sim.pop_n(2) {
             return Err(());
         }
@@ -1724,10 +1691,13 @@ mod tests {
                 terminator: Some(Terminator::Return),
                 span: None,
                 terminator_span: None,
+                unwind: None,
+                handling: None,
+                landing: None,
+                shielded: false,
             }],
             entry: baml_compiler2_mir::BlockId(0),
             locals: local_tys.into_iter().map(local_decl).collect(),
-            catch_regions: vec![],
         }
     }
 
@@ -1757,11 +1727,12 @@ mod tests {
             span: None,
         });
         body.blocks[0].terminator = Some(Terminator::Call {
+            has_trace: false,
             argument_layout: None,
             callee: Operand::Constant(Constant::Null),
             args: vec![],
             ntypeargs: 0,
-            runtime_id: None,
+
             destination: Place::Local(right),
             target: BlockId(1),
             unwind: None,

@@ -7,8 +7,8 @@ use bex_vm_types::{
     Object, ObjectIndex, RealizedTy, TypeHead,
     bytecode::{Bytecode, SwitchDispatch, SwitchEntry, SwitchKey, SwitchTable},
     types::{
-        Class, EdgeKind, Function, FunctionCaptureProps, FunctionKind, FunctionOrigin,
-        GenericFunction, LocalName, ProgramEdge, ProgramPackage,
+        Class, EdgeKind, Function, FunctionKind, FunctionOrigin, GenericFunction, LocalName,
+        ProgramEdge, ProgramPackage,
     },
 };
 
@@ -31,6 +31,9 @@ fn func(name: &str, instructions: Vec<Instruction>) -> Object {
             ..Bytecode::default()
         },
         kind: FunctionKind::Bytecode,
+        telemetry_function_id: None,
+        telemetry_registration: bex_vm_types::FunctionRegistration::default(),
+        telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: baml_base::Span::fake(),
@@ -47,8 +50,6 @@ fn func(name: &str, instructions: Vec<Instruction>) -> Object {
         is_interface_body: false,
         native_key: None,
         body_meta: None,
-        capture: FunctionCaptureProps::disabled(),
-        function_id: 0,
         runtime_package: bex_vm_types::HeapPtr::null(),
     }))
 }

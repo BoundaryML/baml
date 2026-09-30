@@ -6,7 +6,7 @@ use std::{
 };
 
 use baml_base::Name;
-use baml_codegen_types::SymbolPool;
+use baml_sdkgen_types::SymbolPool;
 
 use crate::{names::GoPackageName, rendering::is_protected_go_identifier};
 
@@ -51,7 +51,7 @@ impl GoPackages {
 
     pub(crate) fn for_pool_with_interfaces(
         pool: &SymbolPool,
-        interface_tokens: &BTreeSet<baml_codegen_types::Name>,
+        interface_tokens: &BTreeSet<baml_sdkgen_types::Name>,
     ) -> Self {
         let mut baml_names = pool
             .keys()
@@ -179,7 +179,7 @@ fn short_hash(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use baml_codegen_types::{Class, Name as SymbolName, Origin, Symbol};
+    use baml_sdkgen_types::{Class, Name as SymbolName, Origin, Symbol};
 
     use super::*;
 

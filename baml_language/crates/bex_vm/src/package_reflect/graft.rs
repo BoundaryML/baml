@@ -408,7 +408,10 @@ fn place_objects<'a>(
     for object in owned {
         let mut object = object.clone();
         adopt(&mut object, package_ptr);
-        let ptr = vm.alloc(object);
+        // A runtime function takes its telemetry identity at allocation.
+        let ptr = vm
+            .alloc_runtime_object(object)
+            .map_err(VmRustFnError::InternalError)?;
         locals.push(image.add(vm, ptr));
     }
     let mut placed = Vec::with_capacity(imports.len());

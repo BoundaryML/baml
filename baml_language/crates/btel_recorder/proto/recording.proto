@@ -1,0 +1,537 @@
+// Btel recording v2. Rust types are generated into OUT_DIR by btel_recorder.
+// RecordingPublisher seals this format; destination delivery is separate.
+syntax = "proto3";
+package baml.btel.recording.v2;
+
+// One complete protobuf message per immutable local file or S3 object.
+// All sections may coexist. References may resolve in earlier OR later files.
+// Publisher does not order, deduplicate, or join spans, announcements or definitions.
+// Post-processing joins identities, reconciles repeated definitions/clock observations,
+// and reports unresolved references; missing references do not block file creation.
+// A live query can expose available data without claiming full structural resolution.
+// Readers apply each file once; RecordingEnd is not required to query a prefix.
+message RecordingFile {
+  RecordingHeader header = 1;
+  uint64 sequence = 2;        // Contiguous from 1 within a recording; never reused.
+  Definitions definitions = 3;
+  AggregateBatch aggregates = 4;
+  SpanBatch spans = 5;
+  ClockStateBatch clock_states = 6;
+  RecordingEnd end = 7;       // If present, this sequence is the final sequence.
+  // Minor 2. Exception evidence. One unwind's raise, links and end can be
+  // in different files; readers join them by raise ID.
+  ErrorBatch errors = 8;
+  // Minor 3. Tokens each model turn used.
+  UsageBatch usage = 9;
+}
+
+message RecordingHeader {
+  uint32 format_major = 1;       // Exactly 1.
+  uint32 format_minor = 2;       // Additive optional fields only. 1 adds argument layouts;
+                                 // 2 adds source maps and error evidence; 3 adds process
+                                 // identity, panics, future names, sysop time and usage.
+  bytes recording_id = 3;       // Exactly 16 random bytes, not all zero.
+  optional bytes source_snapshot_id = 4; // Exactly 32 bytes when supplied; not identity.
+  // Minor 3. The OS process that ran this engine. Every engine of one
+  // process writes the same process_id; other fields describe the process.
+  optional bytes process_id = 5; // Exactly 16 bytes (UUID) when supplied.
+  optional string baml_version = 6;
+  optional string host = 7;     // cli, lsp, pack, python, ...
+  repeated string command = 8;  // The process's arguments; debugging only.
+  optional sfixed64 process_started_at_unix_ns = 9;
+  // The project's BAML sources, as a CAS map<path, content> snapshot.
+  optional SnapshotId source_cas_id = 10;
+}
+
+message Definitions {
+  repeated FunctionDefinition functions = 1;
+  repeated CallPathDefinition call_paths = 2;
+  repeated ThreadDefinition threads = 3;
+  repeated ClockEpochDefinition clock_epochs = 4;
+}
+
+message FunctionDefinition {
+  uint64 function_id = 1;       // Nonzero, engine-scoped runtime definition ID.
+  oneof resolution {
+    FunctionMetadata metadata = 2;
+    MetadataUnavailable unavailable = 3;
+  }
+}
+
+// Lookup did not return metadata. This is an observation, not immutable metadata.
+// A later successful definition supersedes it; it never erases known metadata.
+message MetadataUnavailable {}
+
+message FunctionMetadata {
+  string fqn = 1;
+  string display_name = 2;
+  optional string source_file = 3;
+  SourceSpan source_span = 4;   // Absent if unavailable.
+  FunctionKind kind = 5;
+  optional string sys_op_name = 6; // Present iff kind == FUNCTION_KIND_SYS_OP.
+  FunctionOrigin origin = 7;
+  optional string owner_type_key = 8;
+  optional string parent_function_key = 9;
+  optional string lambda_path = 10;
+  optional string definition_key = 11;
+  optional string package_name = 12;
+  repeated string namespace = 13;
+  // Minor 1. Absent means the slot names are unknown (older producers, or
+  // declarations that do not name every slot). Present with no slots is a
+  // known zero-argument function.
+  ArgumentLayout argument_layout = 14;
+  // Minor 2. Absent: no map was recorded (older producers, functions without
+  // compact bytecode). Never inferred from today's source.
+  SourceMap source_map = 15;
+}
+
+// Line table of the code the VM executed, sorted by strictly increasing PC.
+// Parallel arrays: entry i applies from pc[i] up to pc[i + 1], the last one
+// up to code_bytes. A PC before pc[0] or at/after code_bytes has no source.
+message SourceMap {
+  PcCoordinate coordinate = 1;
+  uint32 code_bytes = 2;        // Executed code length in the coordinate's unit.
+  repeated uint32 pc = 3;
+  // Compiler-local file of each entry. Empty means every entry is in the
+  // function's own source_span file.
+  repeated uint32 file_id = 4;
+  repeated uint32 start = 5;    // Half-open source byte range.
+  repeated uint32 end = 6;
+  repeated uint32 line = 7;     // One-based line of start.
+}
+
+enum PcCoordinate {
+  PC_COORDINATE_UNSPECIFIED = 0;
+  // Byte offset of an instruction's opcode in the function's compact code.
+  // Call-path caller_pc and error PCs use this coordinate.
+  PC_COORDINATE_COMPACT_BYTE_OFFSET = 1;
+}
+
+// Names for FunctionArgs capture slots, which record positions only.
+message ArgumentLayout {
+  repeated ArgumentSlot slots = 1; // Callee parameter-slot order.
+}
+
+message ArgumentSlot {
+  optional string name = 1;     // Absent for an unnamed slot.
+  bool receiver = 2;            // Method receiver slot.
+}
+
+message SourceSpan {
+  uint32 file_id = 1;           // Compiler-local reference; not globally unique.
+  uint32 start = 2;             // Preserve compiler offsets, half-open range.
+  uint32 end = 3;
+}
+
+enum FunctionKind {
+  FUNCTION_KIND_UNSPECIFIED = 0;
+  FUNCTION_KIND_BYTECODE = 1;
+  FUNCTION_KIND_SYS_OP = 2;
+  FUNCTION_KIND_NATIVE = 3;
+  FUNCTION_KIND_NATIVE_UNRESOLVED = 4;
+}
+
+enum FunctionOrigin {
+  FUNCTION_ORIGIN_UNSPECIFIED = 0;
+  FUNCTION_ORIGIN_USER_DEFINED = 1;
+  FUNCTION_ORIGIN_COMPANION = 2;
+  FUNCTION_ORIGIN_INTERNAL = 3;
+  FUNCTION_ORIGIN_BUILTIN = 4;
+  FUNCTION_ORIGIN_AUTO_DERIVE = 5;
+}
+
+message CallPathDefinition {
+  uint32 call_path_id = 1;      // Nonzero.
+  uint64 thread_id = 2;        // From selector context when path was defined.
+  uint32 parent_call_path_id = 3; // Zero is the root sentinel.
+  optional uint64 visible_caller_function_id = 4; // Nonzero when present.
+  uint32 caller_pc = 5;        // Existing bytecode instruction coordinate.
+  uint64 callee_function_id = 6; // Nonzero.
+  CallPathEdge edge = 7;
+}
+
+enum CallPathEdge {
+  CALL_PATH_EDGE_UNSPECIFIED = 0;
+  CALL_PATH_EDGE_SYNCHRONOUS = 1;
+  CALL_PATH_EDGE_SPAWN = 2;
+}
+
+// Extracted from a thread announcement OR completion; either carries all fields.
+message ThreadDefinition {
+  uint64 thread_id = 1;        // Nonzero TelemetryId, not an OS thread ID.
+  optional uint64 parent_id = 2; // Absent for roots; otherwise nonzero node ID.
+  uint32 spawn_call_path_id = 3; // Zero allowed.
+  fixed64 started_at_ticks = 4;
+  uint64 clock_epoch_id = 5;   // Nonzero.
+  optional string name = 6;    // Minor 3. The future's name, when it has one.
+}
+
+message ClockEpochDefinition {
+  uint64 epoch_id = 1;         // Nonzero.
+  uint64 domain_id = 2;        // Nonzero; immutable scale identity.
+  ClockSource source = 3;
+  fixed64 reference_tick = 4;
+  fixed64 reference_monotonic_ns = 5;
+  fixed64 multiplier = 6;      // Nonzero.
+  uint32 shift = 7;            // 0..127; delta conversion uses a u128 product.
+  uint64 origin_uncertainty_ns = 8;
+  uint64 rate_error_ppb = 9;
+  CalibrationQuality calibration = 10;
+  FallbackReason fallback = 11; // NONE is meaningful.
+  UtcAnchor utc = 12;
+}
+
+enum ClockSource {
+  CLOCK_SOURCE_UNSPECIFIED = 0;
+  CLOCK_SOURCE_OS_MONOTONIC = 1;
+  CLOCK_SOURCE_WINDOWS_QPC = 2;
+  CLOCK_SOURCE_X86_TSC = 3;
+  CLOCK_SOURCE_ARM_SYSTEM_COUNTER = 4;
+  CLOCK_SOURCE_MOCK = 5;       // Test recordings only.
+}
+
+message CalibrationQuality {
+  CalibrationStatus status = 1;
+  uint64 samples = 2;
+  uint64 elapsed_ns = 3;
+  double mean_residual_ns = 4;
+  double mean_error_ns = 5;
+}
+
+enum CalibrationStatus {
+  CALIBRATION_STATUS_UNSPECIFIED = 0;
+  CALIBRATION_STATUS_NOT_REQUIRED = 1;
+  CALIBRATION_STATUS_CONVERGED = 2;
+  CALIBRATION_STATUS_DEADLINE_REACHED = 3;
+}
+
+enum FallbackReason {
+  FALLBACK_REASON_NONE = 0;
+  FALLBACK_REASON_REQUESTED = 1;
+  FALLBACK_REASON_UNSUPPORTED = 2;
+  FALLBACK_REASON_CALIBRATION = 3;
+  FALLBACK_REASON_SCALE_VALIDATION = 4;
+  FALLBACK_REASON_DISCONTINUITY = 5;
+}
+
+message UtcAnchor {
+  fixed64 ticks = 1;
+  UnixNanos unix_nanos = 2;
+  uint64 uncertainty_ns = 3;
+}
+
+// Lossless representation of the runtime's i128, not a new timestamp scale.
+// signed value = signed(high) * 2^64 + unsigned(low).
+message UnixNanos {
+  fixed64 low = 1;
+  sfixed64 high = 2;
+}
+
+message ClockStateBatch {
+  repeated ClockEpochState states = 1;
+}
+
+message ClockEpochState {
+  uint64 epoch_id = 1;
+  TimingStatus status = 2;
+  bool final = 3;             // Epoch lifecycle settled; status cannot change.
+}
+
+enum TimingStatus {
+  TIMING_STATUS_UNSPECIFIED = 0;
+  TIMING_STATUS_VALID = 1;
+  TIMING_STATUS_RESTORED = 2;
+  TIMING_STATUS_DISCONTINUITY = 3;
+  TIMING_STATUS_UNCERTAIN = 4;
+  TIMING_STATUS_MODE_CHANGED = 5;
+}
+
+message AggregateBatch {
+  repeated AggregateDelta entries = 1;
+  repeated SysOpTime sysop_times = 2; // Minor 3.
+}
+
+message AggregateDelta {
+  uint64 node = 1;             // (uint64(call_path_id) << 1) | reentry; 33 bits.
+  uint64 count = 2;            // Positive; includes recursive invocations.
+  fixed64 total_duration_ticks = 3;
+  fixed64 total_self_await_ticks = 4;
+  // Outcomes of the same `count` completions, including timing-only calls.
+  // Absent means outcomes are unknown (older producers); never assume success.
+  // Present, even with both counters zero, when every completion was counted.
+  // Detected by presence, not by format_minor.
+  AggregateOutcomes outcomes = 5;
+}
+
+// Succeeded = count - errored - cancelled; errored + cancelled <= count.
+message AggregateOutcomes {
+  uint64 errored = 1;
+  uint64 cancelled = 2;
+  // Minor 3. The errored completions a panic ended; panicked <= errored.
+  // Absent from older producers: the split is unknown.
+  optional uint64 panicked = 3;
+}
+
+// Minor 3. Time spent in sysops, charged to the innermost observed call path
+// when each sysop finished. Counted apart from AggregateDelta, whose count
+// is completions: a sysop can finish while its caller is still running.
+message SysOpTime {
+  uint64 node = 1;              // (uint64(call_path_id) << 1); never reentry.
+  uint64 sysops = 2;            // Positive.
+  fixed64 total_ticks = 3;
+}
+
+message SpanBatch {
+  repeated ThreadSection sections = 1; // Consecutive runs, not global regrouping.
+}
+
+message ThreadSection {
+  uint64 thread_id = 1;        // Nonzero; context applies only within this section.
+  repeated SpanEvent events = 2;
+}
+
+message SpanEvent {
+  oneof event {
+    ThreadAnnouncement thread_announcement = 1;
+    ThreadCompletion thread_completion = 2;
+    FunctionAnnouncement function_announcement = 3;
+    FunctionCompletion function_completion = 4;
+    FunctionCompletion late_function_completion = 5;
+  }
+}
+
+// Explicit occurrence; immutable start fields live in ThreadDefinition.
+message ThreadAnnouncement {}
+
+message ThreadCompletion {
+  fixed64 completed_at_ticks = 1;
+  InvocationOutcome outcome = 2;
+  bool panicked = 3;            // Minor 3. Only with ERRORED: a panic ended it.
+}
+
+message FunctionAnnouncement {
+  uint64 id = 1;               // Nonzero TelemetryId.
+  uint64 parent_id = 2;        // Nonzero thread/function node ID.
+  uint32 call_path_id = 3;     // Nonzero; producer announcement has no reentry bit.
+  fixed64 entered_at_ticks = 4;
+  SnapshotId inputs_cas_id = 5; // Presence does not promise payload availability.
+}
+
+message FunctionCompletion {
+  uint64 id = 1;
+  uint64 parent_id = 2;
+  uint64 node = 3;             // Path + reentry, no second path/reentry field.
+  fixed64 entered_at_ticks = 4;
+  fixed64 exited_at_ticks = 5;
+  fixed64 self_await_ticks = 6;
+  // Bits 0..1: InvocationOutcome (1=OK, 2=ERRORED, 3=CANCELLED; 0 invalid).
+  // Bit 3: requires entry input announcement.
+  // All other bits must be zero in v2. Reentry is already encoded in node.
+  // Late completions must not set bit 3. This is an explicit wire mapping,
+  // unrelated to the Rust enum's discriminants or memory layout.
+  uint32 completion_flags = 7;
+  SnapshotId value_cas_id = 8; // Output/error identity; absence means no captured value.
+  // Minor 3. Only with an ERRORED outcome: a panic ended it. Since minor 3
+  // an errored value is the baml.errors.Context a handler would bind.
+  bool panicked = 9;
+}
+
+enum InvocationOutcome {
+  INVOCATION_OUTCOME_UNSPECIFIED = 0;
+  INVOCATION_OUTCOME_OK = 1;
+  INVOCATION_OUTCOME_ERRORED = 2;
+  INVOCATION_OUTCOME_CANCELLED = 3;
+}
+
+// XXH3-128 snapshot-format-1 digest, seed zero. Words are little-endian.
+// All-zero is valid. Message presence distinguishes no capture from that ID.
+// A reference can be unresolved: this schema does not assert CAS delivery.
+message SnapshotId {
+  fixed64 low = 1;
+  fixed64 high = 2;
+}
+
+// Minor 2. Exception evidence, outside span sections so a stack never passes
+// through the scalar span-event encoder.
+message ErrorBatch {
+  repeated ErrorRaise raises = 1;
+  repeated ErrorCallLink call_links = 2;
+  repeated ErrorUnwindEnd unwind_ends = 3;
+}
+
+// One observed start of unwinding. Every raise has its own ID, including two
+// throws of equal values. An occurrence is identified by its first raise.
+message ErrorRaise {
+  uint64 raise_id = 1;          // Nonzero, from the telemetry node ID space.
+  uint64 thread_id = 2;         // Telemetry thread that unwound.
+  fixed64 raised_at_ticks = 3;  // That thread's clock epoch.
+  RaiseKind kind = 4;
+  // Innermost bytecode frame when unwinding started, and its live PC. For a
+  // boundary kind this is the BAML call site, not a location in native code.
+  optional uint64 function_id = 5;
+  optional uint32 pc = 6;       // PC_COORDINATE_COMPACT_BYTE_OFFSET.
+  OriginState origin_state = 7;
+  // PROVEN only: the occurrence's first raise.
+  optional uint64 origin_raise_id = 8;
+  // PROVEN only, when exactly one earlier raise delivered the value here.
+  optional uint64 previous_raise_id = 9;
+  OriginVia origin_via = 10;    // How a non-fresh origin was looked up.
+  uint32 origin_candidates = 11; // AMBIGUOUS: distinct origins that matched.
+  UnresolvedReason unresolved_reason = 12; // UNRESOLVED only.
+  reserved 13;
+  // Live stack, innermost first, bounded. Only without call_path_id: some
+  // bytecode frame was not observed, or no bytecode frame raised.
+  repeated ErrorFrame frames = 14;
+  uint32 frame_count = 15;      // Frames on the stack, native ones included.
+  // Diagnostic trace the VM carried from an earlier throw, recorded only
+  // when the origin is not proven. Weaker evidence: names and lines, no IDs.
+  repeated InheritedFrame inherited_frames = 16;
+  uint32 inherited_frame_count = 17;
+  // The raising frame's call path, when every bytecode frame on the thread
+  // was observed. The stack is function_id at pc, then each path's caller at
+  // its caller_pc, up to the thread's first frame. Native frames are not on
+  // call paths, and direct recursion shares one path: frame_count can exceed
+  // the frames it names.
+  optional uint32 call_path_id = 18;
+}
+
+message ErrorFrame {
+  optional uint64 function_id = 1; // Absent when the function has no telemetry ID.
+  optional uint32 pc = 2;       // Innermost: live PC; outer: call-site PC. Absent for native frames.
+  bool native = 3;
+}
+
+message InheritedFrame {
+  string function_name = 1;
+  string file = 2;
+  uint32 line = 3;              // Zero when unknown.
+}
+
+enum RaiseKind {
+  RAISE_KIND_UNSPECIFIED = 0;
+  RAISE_KIND_THROW = 1;         // `throw` of a value.
+  RAISE_KIND_RETHROW = 2;       // Rethrow of a caught value (bare rethrow, no-match, defer).
+  RAISE_KIND_PANIC_RETHROW = 3; // A wildcard catch passing a panic on.
+  RAISE_KIND_AWAIT = 4;         // Awaited future failed.
+  RAISE_KIND_AWAIT_CANCELLED = 5; // Awaited future was cancelled.
+  RAISE_KIND_NATIVE_BOUNDARY = 6; // A native function or call setup failed at this call site.
+  RAISE_KIND_HOST_BOUNDARY = 7; // The engine injected a sys-op or host failure.
+  RAISE_KIND_RUNTIME = 8;       // The VM raised a panic at this instruction.
+}
+
+enum OriginState {
+  ORIGIN_STATE_UNSPECIFIED = 0;
+  ORIGIN_STATE_FRESH = 1;       // This raise starts a new occurrence.
+  ORIGIN_STATE_PROVEN = 2;
+  ORIGIN_STATE_AMBIGUOUS = 3;   // Several different origins matched.
+  ORIGIN_STATE_UNRESOLVED = 4;
+}
+
+enum OriginVia {
+  ORIGIN_VIA_UNSPECIFIED = 0;
+  ORIGIN_VIA_RETHROW = 1;       // A catch landing in the same frame.
+  ORIGIN_VIA_AWAIT = 2;         // The failed future's recorded raise.
+  ORIGIN_VIA_NORMALIZATION = 3; // Context carried by UnknownError conversion.
+}
+
+enum UnresolvedReason {
+  UNRESOLVED_REASON_UNSPECIFIED = 0;
+  UNRESOLVED_REASON_NO_LANDING = 1;       // No recorded catch holds this value.
+  UNRESOLVED_REASON_LANDINGS_EVICTED = 2; // As above, after bounded notes were dropped.
+  UNRESOLVED_REASON_FUTURE_LINK_MISSING = 3;
+  UNRESOLVED_REASON_FUTURE_LINK_EVICTED = 4;
+  UNRESOLVED_REASON_NO_FUTURE = 5;        // The awaited operand was not found.
+  // UnknownError conversion: where the converted value came from is not
+  // recorded, and an equal value in a catch slot does not prove it.
+  UNRESOLVED_REASON_SOURCE_NOT_RECORDED = 6;
+}
+
+// A retained call associated with a raise, emitted by the recorder from the
+// order of records on one telemetry thread.
+message ErrorCallLink {
+  uint64 raise_id = 1;
+  uint64 call_id = 2;
+  ErrorLinkRole role = 3;
+}
+
+enum ErrorLinkRole {
+  ERROR_LINK_ROLE_UNSPECIFIED = 0;
+  // The call whose frame raised it. It may still be running when caught in place.
+  ERROR_LINK_ROLE_RAISE_FRAME = 1;
+  // A call that completed while this raise unwound it.
+  ERROR_LINK_ROLE_UNWOUND = 2;
+}
+
+message ErrorUnwindEnd {
+  uint64 raise_id = 1;
+  UnwindResult result = 2;
+  optional uint64 handler_function_id = 3; // CAUGHT: the catching frame.
+  optional uint32 handler_pc = 4;          // CAUGHT: handler entry PC.
+  uint32 unwound_frames = 5;    // Bytecode frames popped, observed or not.
+}
+
+enum UnwindResult {
+  UNWIND_RESULT_UNSPECIFIED = 0;
+  UNWIND_RESULT_CAUGHT = 1;
+  UNWIND_RESULT_UNHANDLED = 2;  // Escaped the thread's outermost frame.
+  UNWIND_RESULT_ESCAPED_TO_NATIVE = 3; // Returned to a native caller without a bytecode handler.
+  UNWIND_RESULT_ABORTED = 4;    // The unwinder stopped with an internal error.
+}
+
+// Present only in the last file; its containing sequence declares the file count.
+// Emitted only after input, metadata attempts and final epoch states settle.
+message RecordingEnd {
+  // Minor 3. Set when the host shut this engine down because its process is
+  // exiting: how the process ended.
+  ProcessEnd process_end = 1;
+}
+
+message ProcessEnd {
+  ProcessStatus status = 1;
+  sfixed64 at_unix_ns = 2;
+}
+
+enum ProcessStatus {
+  PROCESS_STATUS_UNSPECIFIED = 0;
+  PROCESS_STATUS_SUCCESS = 1;
+  PROCESS_STATUS_ERROR = 2;
+  PROCESS_STATUS_PANICKED = 3;
+}
+
+// Minor 3. Model usage, outside span sections: a model name has no bound.
+message UsageBatch {
+  repeated ModelUsage entries = 1;
+}
+
+// Tokens one model turn reported. Several entries can name one node.
+message ModelUsage {
+  uint64 node_id = 1;           // The span or thread that made the call.
+  uint64 thread_id = 2;         // The thread that recorded it.
+  optional string model = 3;
+  uint64 input_tokens = 4;      // Full-rate input: cache reads and writes excluded.
+  uint64 output_tokens = 5;
+  optional uint64 cache_read_tokens = 6;
+  optional uint64 cache_write_tokens = 7;
+  optional uint64 reasoning_tokens = 8;
+}
+
+// BCS control plane only. Telemetry bytes go directly to S3 using the returned PUT URL.
+// HTTP routing/authentication and response representation are outside this schema.
+message PresignRecordingFileRequest {
+  bytes recording_id = 1;     // Exactly 16 bytes.
+  uint64 sequence = 2;        // Matches RecordingFile.sequence.
+  uint64 byte_length = 3;     // Length of the finalized protobuf file.
+  optional bytes sha256 = 4;  // Integrity only: 32 bytes when supplied; not object identity.
+}
+
+message PresignRecordingFileResponse {
+  string put_url = 1;
+  string object_key = 2;      // Server-controlled authorized recording prefix/name.
+  repeated UploadHeader required_headers = 3;
+  uint64 expires_at_unix_seconds = 4; // Planning hint; a rejected URL may need renewal.
+}
+
+message UploadHeader {
+  string name = 1;
+  string value = 2;
+}

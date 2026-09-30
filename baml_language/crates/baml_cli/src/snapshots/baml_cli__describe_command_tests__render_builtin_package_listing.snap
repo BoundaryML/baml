@@ -1,6 +1,5 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
-assertion_line: 813
 expression: output
 ---
 class            baml.Bigint                      <builtin>/baml/bigint.baml:26
@@ -12,9 +11,9 @@ interface        baml.FloatStats                  <builtin>/baml/containers.baml
 interface        baml.ToString                    <builtin>/baml/conversions.baml:25
 interface        baml.ToJson                      <builtin>/baml/conversions.baml:100
 interface        baml.FromJson                    <builtin>/baml/conversions.baml:163
-function         baml.deep_copy                   <builtin>/baml/core.baml:10
-interface        baml.Concrete                    <builtin>/baml/core.baml:18
-class            baml.TaggedString                <builtin>/baml/core.baml:32
+function         baml.deep_copy                   <builtin>/baml/core.baml:11
+interface        baml.Concrete                    <builtin>/baml/core.baml:19
+class            baml.TaggedString                <builtin>/baml/core.baml:33
 class            baml.Float                       <builtin>/baml/float.baml:17
 class            baml.Int                         <builtin>/baml/int.baml:33
 class            baml.Null                        <builtin>/baml/null.baml:2
@@ -94,15 +93,15 @@ function         baml.fs.chmod                    <builtin>/baml/ns_fs/fs.baml:2
 function         baml.fs.symlink                  <builtin>/baml/ns_fs/fs.baml:221
 enum             baml.future.State                <builtin>/baml/ns_future/future.baml:19
 class            baml.future.Future               <builtin>/baml/ns_future/future.baml:26
-class            baml.future.Success              <builtin>/baml/ns_future/future.baml:76
-class            baml.future.Failure              <builtin>/baml/ns_future/future.baml:81
-class            baml.future.Panicked             <builtin>/baml/ns_future/future.baml:86
-function         baml.future.all_settled          <builtin>/baml/ns_future/future.baml:98
-function         baml.future.all                  <builtin>/baml/ns_future/future.baml:128
-class            baml.future.AllFailed            <builtin>/baml/ns_future/future.baml:167
-function         baml.future.race                 <builtin>/baml/ns_future/future.baml:185
-function         baml.future.any                  <builtin>/baml/ns_future/future.baml:201
-function         baml.future.with_timeout         <builtin>/baml/ns_future/future.baml:285
+class            baml.future.Success              <builtin>/baml/ns_future/future.baml:79
+class            baml.future.Failure              <builtin>/baml/ns_future/future.baml:84
+class            baml.future.Panicked             <builtin>/baml/ns_future/future.baml:89
+function         baml.future.all_settled          <builtin>/baml/ns_future/future.baml:101
+function         baml.future.all                  <builtin>/baml/ns_future/future.baml:136
+class            baml.future.AllFailed            <builtin>/baml/ns_future/future.baml:175
+function         baml.future.race                 <builtin>/baml/ns_future/future.baml:193
+function         baml.future.any                  <builtin>/baml/ns_future/future.baml:209
+function         baml.future.with_timeout         <builtin>/baml/ns_future/future.baml:293
 class            baml.glob.ScanOptions            <builtin>/baml/ns_glob/glob.baml:2
 class            baml.glob.Glob                   <builtin>/baml/ns_glob/glob.baml:18
 function         baml.glob.new                    <builtin>/baml/ns_glob/glob.baml:41
@@ -118,9 +117,6 @@ class            baml.http.Server                 <builtin>/baml/ns_http/server.
 type             baml.http.WsAccept               <builtin>/baml/ns_http/server.baml:148
 function         baml.http.reject_websocket       <builtin>/baml/ns_http/server.baml:156
 class            baml.http.TlsConfig              <builtin>/baml/ns_http/server.baml:172
-function         baml.id.current                  <builtin>/baml/ns_id/id.baml:6
-function         baml.id.new                      <builtin>/baml/ns_id/id.baml:13
-function         baml.id.set                      <builtin>/baml/ns_id/id.baml:25
 function         baml.io.input                    <builtin>/baml/ns_io/io.baml:13
 function         baml.io.print                    <builtin>/baml/ns_io/io.baml:23
 function         baml.io.println                  <builtin>/baml/ns_io/io.baml:32
@@ -212,12 +208,20 @@ interface        baml.random.Rng                  <builtin>/baml/ns_random/rando
 class            baml.random.SystemRandom         <builtin>/baml/ns_random/random.baml:45
 class            baml.random.Xoshiro256PlusPlus   <builtin>/baml/ns_random/random.baml:68
 class            baml.random.ChaCha20             <builtin>/baml/ns_random/random.baml:114
+class            baml.regex.Group                 <builtin>/baml/ns_regex/regex.baml:19
+class            baml.regex.Match                 <builtin>/baml/ns_regex/regex.baml:39
+enum             baml.regex.ErrorKind             <builtin>/baml/ns_regex/regex.baml:55
+class            baml.regex.Error                 <builtin>/baml/ns_regex/regex.baml:71
+class            baml.regex.Regex                 <builtin>/baml/ns_regex/regex.baml:97
+function         baml.regex.new                   <builtin>/baml/ns_regex/regex.baml:244
+function         baml.regex.escape                <builtin>/baml/ns_regex/regex.baml:268
 function         baml.sap.parse                   <builtin>/baml/ns_sap/sap.baml:41
 function         baml.sap.parse_type              <builtin>/baml/ns_sap/sap.baml:54
-class            baml.spawn.Params                <builtin>/baml/ns_spawn/spawn.baml:17
-class            baml.spawn.TaskGroup             <builtin>/baml/ns_spawn/spawn.baml:36
-class            baml.spawn.CancelToken           <builtin>/baml/ns_spawn/spawn.baml:101
-function         baml.spawn.options               <builtin>/baml/ns_spawn/spawn.baml:139
+class            baml.spawn.CancelToken           <builtin>/baml/ns_spawn/spawn.baml:23
+interface        baml.spawn.Modifier              <builtin>/baml/ns_spawn/spawn.baml:60
+class            baml.spawn.Plan                  <builtin>/baml/ns_spawn/spawn.baml:78
+class            baml.spawn.Limit                 <builtin>/baml/ns_spawn/spawn.baml:146
+class            baml.spawn.Root                  <builtin>/baml/ns_spawn/spawn.baml:183
 class            baml.sys.ProcessOptions          <builtin>/baml/ns_sys/sys.baml:2
 enum             baml.sys.StderrMode              <builtin>/baml/ns_sys/sys.baml:18
 class            baml.sys.ShellOutput             <builtin>/baml/ns_sys/sys.baml:29

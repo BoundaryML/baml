@@ -555,6 +555,9 @@ InboundValue::InboundValue(
       case kPromptAstValue:
         _impl_.value_.prompt_ast_value_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.value_.prompt_ast_value_);
         break;
+      case kJsNumberValue:
+        _impl_.value_.js_number_value_ = from._impl_.value_.js_number_value_;
+        break;
   }
 
   // @@protoc_insertion_point(copy_constructor:baml_bridge.cffi.v1.InboundValue)
@@ -703,6 +706,10 @@ void InboundValue::clear_value() {
       }
       break;
     }
+    case kJsNumberValue: {
+      // No need to clear
+      break;
+    }
     case VALUE_NOT_SET: {
       break;
     }
@@ -751,16 +758,16 @@ InboundValue::GetClassData() const {
   return InboundValue_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<0, 16, 10, 81, 2>
+const ::_pbi::TcParseTable<0, 17, 10, 81, 2>
 InboundValue::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(InboundValue, _impl_._has_bits_),
     0, // no _extensions_
-    16, 0,  // max_field_number, fast_idx_mask
+    17, 0,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294901760,  // skipmap
+    4294836224,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    16,  // num_field_entries
+    17,  // num_field_entries
     10,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     InboundValue_class_data_.base(),
@@ -824,6 +831,9 @@ InboundValue::_table_ = {
     // .baml_bridge.cffi.v1.BamlValuePromptAst prompt_ast_value = 16;
     {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.prompt_ast_value_), _Internal::kOneofCaseOffset + 0, 9,
     (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    // double js_number_value = 17;
+    {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.js_number_value_), _Internal::kOneofCaseOffset + 0, 0,
+    (0 | ::_fl::kFcOneof | ::_fl::kDouble)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTy>()},
@@ -976,6 +986,12 @@ PROTOBUF_NOINLINE void InboundValue::Clear() {
           stream);
       break;
     }
+    case kJsNumberValue: {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteDoubleToArray(
+          17, this_._internal_js_number_value(), target);
+      break;
+    }
     default:
       break;
   }
@@ -1097,6 +1113,11 @@ PROTOBUF_NOINLINE void InboundValue::Clear() {
     case kPromptAstValue: {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.value_.prompt_ast_value_);
+      break;
+    }
+    // double js_number_value = 17;
+    case kJsNumberValue: {
+      total_size += 10;
       break;
     }
     case VALUE_NOT_SET: {
@@ -1243,6 +1264,10 @@ void InboundValue::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::go
         } else {
           _this->_impl_.value_.prompt_ast_value_->CheckTypeAndMergeFrom(*from._impl_.value_.prompt_ast_value_);
         }
+        break;
+      }
+      case kJsNumberValue: {
+        _this->_impl_.value_.js_number_value_ = from._impl_.value_.js_number_value_;
         break;
       }
       case VALUE_NOT_SET:

@@ -2006,7 +2006,7 @@ contexts:
     - match: '\G\s*(?!with\b)(?=[^\{\r\n])'
       push: spawn-name--body
   spawn-with-clause--body:
-    - meta_scope: meta.spawn.options.baml
+    - meta_scope: meta.spawn.modifiers.baml
     - match: '(?=\{)'
       pop: true
     - include: comments

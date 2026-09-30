@@ -1,10 +1,11 @@
 // Tests for the `bigint` builtin class (BEP-022).
 //
 // Converted from crates/baml_tests/tests/bigints.rs. Mirrors ns_ints/ints.baml:
-// pure expressions are asserted inline; tests that use locals (let bindings,
-// compound assignment, lambdas, generics with receivers) go through a top-level
-// helper function to avoid the test-block local-boxing VM bug. Value results
-// are compared with `assert.equal`; boolean results are asserted directly.
+// pure expressions are asserted inline; many tests with locals use top-level
+// helpers because of a historical test-block local-boxing bug. The bug no longer
+// reproduces (see ns_test_block_locals), so the indexed-assignment regressions
+// below exercise locals directly in test blocks. Value results are compared
+// with `assert.equal`; boolean results are asserted directly.
 //
 // Throw tests use the `{ <body>; baml.sys.panic("…") } catch (e) { <Type> => null }`
 // pattern. For throws raised by a *pure operator* (`/`, `%`, `<<`, `>>`, `*`),
@@ -96,6 +97,33 @@ function bigint_box_caller() -> bigint {
 
 test "test_bigint_generic_method_class_type_arg" {
     assert.equal(bigint_box_caller(), 7n)
+}
+
+class BigintTimer {
+    elapsed bigint
+}
+
+function bigint_clock() -> bigint { 10n }
+
+function bigint_direct_field_subtraction() -> bigint {
+    let started = bigint_clock();
+    let timer = BigintTimer { elapsed: 0n };
+    timer.elapsed = bigint_clock() - started;
+    timer.elapsed
+}
+
+test "test_bigint_subtraction_assigned_directly_to_field" {
+    assert.equal(bigint_direct_field_subtraction(), 0n)
+}
+
+function bigint_compound_field_subtraction() -> bigint {
+    let timer = BigintTimer { elapsed: 15n };
+    timer.elapsed -= 6n;
+    timer.elapsed
+}
+
+test "test_bigint_compound_subtraction_on_field" {
+    assert.equal(bigint_compound_field_subtraction(), 9n)
 }
 
 // ─── generic-path bigint comparison (union operand → generic CmpOp) ──────────
@@ -845,4 +873,92 @@ test "bigint_negative_prefixed" {
 // limits that apply to int literals.
 test "bigint_hex_beyond_int_range" {
     assert.equal(0xFFFF_FFFF_FFFF_FFFF_FFFFn, 1208925819614629174706175n)
+}
+
+// ─── regression: bigint binary ops in indexed compound assignments ───────
+
+test "test_bigint_array_entry_subtraction" {
+    let values: bigint[] = [15n];
+    values[0] -= 6n;
+    assert.equal(values[0], 9n)
+}
+
+test "test_bigint_map_entry_addition" {
+    let values: map<string, bigint> = { "remaining": 15n };
+    values["remaining"] += 6n;
+    assert.equal(values["remaining"], 21n)
+}
+
+// ─── generic binop path (specialization declined) ─────────────────────────────
+//
+// Emit normally routes bigint arithmetic to the specialized `*Bigint` opcodes.
+// An operand read from a cell a spawned closure shares makes it decline (the
+// #3583 race guard) and fall back to the generic `bin_op`, which used to fail
+// at runtime because the generic handler had no bigint arm (BAMLGH-79); these
+// pin every operator on that path, plus `<` which always worked and is the
+// control.
+
+function bigint_spawn_captured_add(n: bigint) -> bigint { let p = spawn { n + 1n }; await p }
+function bigint_spawn_captured_sub(n: bigint) -> bigint { let p = spawn { n - 1n }; await p }
+function bigint_spawn_captured_mul(n: bigint) -> bigint { let p = spawn { n * 2n }; await p }
+function bigint_spawn_captured_div(n: bigint) -> bigint { let p = spawn { n / 2n }; await p }
+function bigint_spawn_captured_mod(n: bigint) -> bigint { let p = spawn { n % 3n }; await p }
+function bigint_spawn_captured_shl(n: bigint) -> bigint { let p = spawn { n << 2n }; await p }
+function bigint_spawn_captured_bitand(n: bigint) -> bigint { let p = spawn { n & 6n }; await p }
+function bigint_spawn_captured_mixed_int(n: bigint) -> bigint { let p = spawn { n + 1 }; await p }
+function bigint_spawn_captured_mixed_int_left(n: bigint) -> bigint { let p = spawn { 1 + n }; await p }
+function bigint_spawn_captured_lt(n: bigint) -> bool { let p = spawn { n < 20n }; await p }
+
+test "bigint_generic_path_spawn_captured_add" {
+    assert.equal(bigint_spawn_captured_add(10n), 11n)
+}
+
+test "bigint_generic_path_spawn_captured_sub" {
+    assert.equal(bigint_spawn_captured_sub(10n), 9n)
+}
+
+test "bigint_generic_path_spawn_captured_mul" {
+    assert.equal(bigint_spawn_captured_mul(10n), 20n)
+}
+
+test "bigint_generic_path_spawn_captured_div" {
+    assert.equal(bigint_spawn_captured_div(10n), 5n)
+}
+
+test "bigint_generic_path_spawn_captured_mod" {
+    assert.equal(bigint_spawn_captured_mod(10n), 1n)
+}
+
+test "bigint_generic_path_spawn_captured_shl" {
+    assert.equal(bigint_spawn_captured_shl(10n), 40n)
+}
+
+test "bigint_generic_path_spawn_captured_bitand" {
+    assert.equal(bigint_spawn_captured_bitand(10n), 2n)
+}
+
+test "bigint_generic_path_spawn_captured_mixed_int" {
+    assert.equal(bigint_spawn_captured_mixed_int(10n), 11n)
+}
+
+test "bigint_generic_path_spawn_captured_mixed_int_left" {
+    assert.equal(bigint_spawn_captured_mixed_int_left(10n), 11n)
+}
+
+test "bigint_generic_path_spawn_captured_lt_control" {
+    assert.is_true(bigint_spawn_captured_lt(10n))
+}
+
+// The generic path still throws the same catchable panics as the specialized
+// opcodes: a captured-operand division by zero is `DivisionByZero`, not an
+// internal error.
+function bigint_spawn_captured_div_by_zero(n: bigint) -> bigint { let p = spawn { n / 0n }; await p }
+
+test "bigint_generic_path_spawn_captured_div_by_zero" {
+    {
+        bigint_spawn_captured_div_by_zero(1n);
+        baml.sys.panic("expected captured 1n / 0n to throw")
+    } catch (e) {
+        baml.panics.DivisionByZero => null
+    }
 }

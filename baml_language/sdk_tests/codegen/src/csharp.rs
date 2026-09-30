@@ -462,18 +462,15 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
             ],
         ),
         (
-            "Spawn/TaskGroup.g.cs",
+            // `apply` comes from `implements baml.spawn.Modifier`;
+            // interface-impl methods are not generated, which is what keeps
+            // the host-unrepresentable `baml.spawn.Plan` off this surface.
+            "Spawn/Limit.g.cs",
             vec![
                 " New(",
                 " NewAsync(",
-                " Cancel(",
-                " CancelAsync(",
-                " SetLimit(",
-                " SetLimitAsync(",
-                " Limit(",
-                " LimitAsync(",
-                " Name(",
-                " NameAsync(",
+                " Capacity(",
+                " CapacityAsync(",
                 " ActiveCount(",
                 " ActiveCountAsync(",
                 " QueuedCount(",
@@ -584,22 +581,6 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
         }
     }
 
-    let local_id = fs::read_to_string(
-        fixture
-            .join("baml_sdk")
-            .join("Boundary")
-            .join("LocalId.g.cs"),
-    )
-    .expect("failed to read generated boundary.LocalId resource surface");
-    for expected in [
-        " : global::System.IDisposable",
-        " Capture(",
-        " CaptureAsync(",
-        " Clone() => new(",
-    ] {
-        assert!(local_id.contains(expected));
-    }
-
     let function_surfaces = [
         (
             "Fs/Functions.g.cs",
@@ -686,16 +667,6 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
             );
         }
     }
-
-    let boundary_functions = fs::read_to_string(
-        fixture
-            .join("baml_sdk")
-            .join("Boundary")
-            .join("Functions.g.cs"),
-    )
-    .expect("failed to read generated boundary function surface");
-    assert!(boundary_functions.contains(" Id("));
-    assert!(boundary_functions.contains(" IdAsync("));
 
     let request = fs::read_to_string(generated.join("Http").join("Request.g.cs"))
         .expect("failed to read generated baml.http.Request structural surface");

@@ -11,6 +11,7 @@
 //! The instructions that the VM runs are defined in [`bex_vm_types::bytecode::Instruction`] enum.
 
 pub(crate) mod array_index;
+mod call_specialize;
 pub mod compile_artifact;
 pub mod debug;
 pub mod errors;
@@ -18,13 +19,15 @@ pub mod indexable;
 pub mod kperf;
 pub mod package_ai;
 pub mod package_baml;
-pub mod package_boundary;
 pub mod package_load;
 pub mod package_reflect;
+pub mod package_trace;
 pub mod reachable;
+pub mod telemetry;
 mod type_context;
 mod type_match;
 pub mod types;
+mod vec_ext;
 pub mod vm;
 
 pub use compile_artifact::{
@@ -35,7 +38,6 @@ pub use errors::{StackFrame, VmPanic, format_traceback};
 pub use indexable::EvalStack;
 pub use package_baml::NativeFunction;
 pub use vm::{
-    BexVm, BytecodeFrame, BytecodeProgram, Frame, VmCallCaptureEvent, VmCallCaptureKind,
-    VmCallInputCapture, VmCallInputCaptureHook, VmCaptureMask, VmErrorCaptureEvent,
-    VmEventSourceLocation, VmExecState, convert_program,
+    BexVm, BytecodeFrame, BytecodeProgram, Frame, VmEventSourceLocation, VmExecState,
+    convert_program, prepare_compact_code,
 };

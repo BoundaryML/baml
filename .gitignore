@@ -176,6 +176,8 @@ third_party
 
 baml_repl_history.txt
 trace_events_debug.json
+**/.baml/btel/recordings/
+**/.baml/btel/cas/
 debug_events*
 
 result
@@ -184,8 +186,11 @@ target/
 
 baml-graph/_site/
 
-# claude
-.claude/
+# claude (shared project settings are checked in; everything else is per-user).
+# `**/` keeps nested `.claude/` directories ignored too: a pattern with a
+# slash in it otherwise matches only at the repository root.
+**/.claude/*
+!/.claude/settings.json
 rpi/
 
 # Riptide artifacts (cloud-synced)
@@ -199,6 +204,11 @@ baml_language/sdks/typescript/bridge_typescript/dist/*.node
 
 # Local developer-docs planning artifacts
 /DEVELOPER_DOCS_*.md
+
+# Pinned telemetry clock dependency (source and license only).
+!/baml_language/vendor/
+/baml_language/vendor/*
+!/baml_language/vendor/quanta/
 
 # JUnit reports for Trunk Flaky Tests uploads (nextest writes its own under
 # baml_language/target/, already ignored).

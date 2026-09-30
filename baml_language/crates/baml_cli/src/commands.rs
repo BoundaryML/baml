@@ -137,12 +137,12 @@ pub(crate) enum Commands {
     #[command(about = "Check BAML source files for compiler errors")]
     Check(crate::check_command::CheckArgs),
 
-    #[command(about = "Remove segmented local profiler data")]
+    #[command(about = "Profile cleanup (currently unavailable)")]
     Clean(crate::clean_command::CleanArgs),
 
     #[command(about = "Describe a BAML symbol", name = "describe")]
     Describe(crate::describe_command::DescribeArgs),
-    #[command(about = "Query the local profile store with SQL")]
+    #[command(about = "Query BTEL recordings with SQL")]
     Query(crate::query_command::QueryArgs),
 
     // #[command(about = "Starts a server that translates LLM responses to BAML responses")]
@@ -633,7 +633,7 @@ mod tests {
     #[test]
     fn generate_add_help_lists_every_output_type() {
         let help = help_for(&["baml-cli", "generate", "add", "--help"]);
-        for &output_type in baml_codegen_types::OutputType::all() {
+        for &output_type in baml_sdkgen_types::OutputType::all() {
             assert!(
                 help.contains(output_type.add_name()),
                 "missing {output_type:?} in:\n{help}"
@@ -670,7 +670,7 @@ mod tests {
         };
         assert_eq!(
             args.output_type,
-            baml_codegen_types::OutputType::PythonPydantic
+            baml_sdkgen_types::OutputType::PythonPydantic
         );
         assert_eq!(args.from, Some(PathBuf::from("workspace")));
     }
@@ -745,7 +745,7 @@ mod tests {
             (
                 &["test"],
                 &[
-                    "--log <LEVEL>\n          Set the BAML log level; overrides BAML_LOG [default: off] [possible values: off, error,\n          warn, info, debug, trace]",
+                    "--log <LEVEL>\n          Set the BAML log level; overrides BAML_LOG [default: info] [possible values: off, error,\n          warn, info, debug, trace]",
                 ],
             ),
             (

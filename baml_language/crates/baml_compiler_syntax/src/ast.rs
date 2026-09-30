@@ -1216,7 +1216,7 @@ impl BacktickStringLiteral {
     /// For `` `Hello, ${user.name}!` `` returns:
     /// `[Text("Hello, "), Interp(<${user.name}>), Text("!")]`.
     ///
-    /// Multi-line content is dedented per BEP §12 (see
+    /// Multiline content is dedented per BEP §12 (see
     /// [`baml_base::dedent::dedent_backtick`]) with interpolations excluded from
     /// the min-indent calculation (§12 rule 8 — "Whitespace inside `${...}` is
     /// preserved verbatim"), §13 block-tag whitespace control is applied, and
@@ -1334,10 +1334,10 @@ impl BacktickStringLiteral {
         // "Whitespace inside `${...}` is preserved verbatim"), then split the
         // dedented result back into text segments and reattach the parts in
         // order.
-        let needs_dedent = parts
+        if parts
             .iter()
-            .any(|p| matches!(p, FlatPart::Text(s) if s.contains(['\n', '\r'])));
-        if needs_dedent {
+            .any(|part| matches!(part, FlatPart::Text(text) if text.contains('\n') || text.contains('\r')))
+        {
             // Pick a placeholder that doesn't appear in user content
             // (ultrareview bug_006). Walk the PUA range U+E000..U+F8FF and
             // use the first codepoint not present in any text chunk.

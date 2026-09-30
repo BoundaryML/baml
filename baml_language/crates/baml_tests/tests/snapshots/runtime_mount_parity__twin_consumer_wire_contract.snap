@@ -12,6 +12,6 @@ import global @1 method Widget.bump
 import global @1 method Widget.of
 import global @2 method String.from
 export object function level_name = Code(2)
-export object function summary = Code(12)
+export object function summary = Code(9)
 export global function level_name = 0
 export global function summary = 1

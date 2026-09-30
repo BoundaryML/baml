@@ -15,7 +15,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_codegen_types::{CallableParam, Class, Function, ParamTy, Symbol, SymbolPool, Ty};
+use baml_sdkgen_types::{CallableParam, Class, Function, ParamTy, Symbol, SymbolPool, Ty};
 
 /// Rewrite every function / method signature in `pool` with its synthetic
 /// effect params renamed, returning the rewritten pool.
@@ -222,7 +222,7 @@ fn rename_typevars(ty: &Ty, renames: &HashMap<String, String>) -> Ty {
 #[cfg(test)]
 mod tests {
     use baml_base::Name as BaseName;
-    use baml_codegen_types::{CallableParam, Function, FunctionArgument, Origin, ParamTy, Ty};
+    use baml_sdkgen_types::{CallableParam, Function, FunctionArgument, Origin, ParamTy, Ty};
 
     use super::{callback_root, rename_function};
 
@@ -239,7 +239,7 @@ mod tests {
             params: Box::new([CallableParam {
                 name: Some(BaseName::new("value")),
                 ty: int(),
-                mode: baml_codegen_types::CodegenFunctionParamMode::Required,
+                mode: baml_sdkgen_types::CodegenFunctionParamMode::Required,
             }]),
             ret: Box::new(int()),
             throws: Box::new(effect_var()),

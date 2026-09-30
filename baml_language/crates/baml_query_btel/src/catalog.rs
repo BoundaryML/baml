@@ -1,0 +1,565 @@
+//! The public relations: `processes`, `profiler`, `spans` and
+//! `span_announcements`, the tables local `baml query` and the cloud share.
+//! Each is a TEMP view over the internal tables, created on every query
+//! connection so its definition always matches this binary.
+//!
+//! IDs render as text. `process_id` is 32 hex digits. Spans (function calls
+//! and futures) are `<recording_id>:<n>`, unique across recordings, the pair
+//! `trace.SpanId` holds. Profiler nodes are 16 hex digits hashed from the
+//! function names on their path, so the same node has the same ID in every
+//! process. Timestamps are RFC 3339 UTC; durations are nanoseconds, NULL
+//! when the clock evidence cannot support them. `input_args`,
+//! `output_value`, `error_value`, `context_metadata`, `status_history` and
+//! `temporary_projections` are BAML values: navigate them with `['key']` and
+//! `[index]`.
+use serde::Serialize;
+
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct Column {
+    pub name: &'static str,
+    #[serde(rename = "type")]
+    pub sql_type: &'static str,
+    /// A BAML value column: supports bracket navigation, rendered on output.
+    pub value: bool,
+    pub doc: &'static str,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct Relation {
+    pub name: &'static str,
+    pub doc: &'static str,
+    pub columns: &'static [Column],
+    #[serde(skip)]
+    pub view: &'static str,
+}
+
+impl Relation {
+    /// The `CREATE TEMP VIEW` statement for this relation.
+    pub fn create_sql(&self) -> String {
+        self.view.to_owned()
+    }
+}
+
+const fn col(name: &'static str, sql_type: &'static str, doc: &'static str) -> Column {
+    Column {
+        name,
+        sql_type,
+        value: false,
+        doc,
+    }
+}
+const fn value(name: &'static str, doc: &'static str) -> Column {
+    Column {
+        name,
+        sql_type: "baml_value",
+        value: true,
+        doc,
+    }
+}
+
+pub const PROCESSES: Relation = Relation {
+    name: "processes",
+    doc: "One row per process that ran BAML: every engine it started shares the row.",
+    columns: &[
+        col(
+            "process_id",
+            "text",
+            "32 hex digits; a recording from before process IDs is its own process",
+        ),
+        col(
+            "baml_source_code_content_id",
+            "text",
+            "CAS id of the BAML sources it ran, a map<path, content>; NULL when not recorded",
+        ),
+        col("baml_version", "text", ""),
+        col(
+            "host",
+            "text",
+            "what ran BAML: baml (the CLI), lsp, pack, python, ...",
+        ),
+        col(
+            "command",
+            "text",
+            "the process's arguments, space-separated; debugging only",
+        ),
+        col(
+            "context_distinct_id",
+            "text",
+            "not recorded yet: always NULL",
+        ),
+        value("context_metadata", "not recorded yet: always an empty map"),
+        col(
+            "status",
+            "text",
+            "running, success, error, panicked, or unknown (its engines stopped without saying how the process ended)",
+        ),
+        value(
+            "status_history",
+            "[{status, timestamp}]: running from the process's start, then how it ended",
+        ),
+        col(
+            "last_updated",
+            "text",
+            "when it ended, else the newest recording file indexed",
+        ),
+    ],
+    view: "
+CREATE TEMP VIEW processes AS
+SELECT lower(hex(g.process_id)) AS process_id,
+  lower(hex(g.source_cas)) AS baml_source_code_content_id,
+  g.baml_version, g.host,
+  (SELECT group_concat(a.value, ' ') FROM json_each(g.command) a) AS command,
+  NULL AS context_distinct_id,
+  __btel_empty_map() AS context_metadata,
+  COALESCE(g.ended, IIF(g.open = 0, 'unknown', 'running')) AS status,
+  __btel_status_history(g.started_ns, g.ended, g.ended_ns) AS status_history,
+  __btel_ns_utc(COALESCE(g.ended_ns, g.updated_ns)) AS last_updated
+FROM (
+  SELECT COALESCE(r.process_id, r.recording_id) AS process_id,
+    MAX(r.source_cas) AS source_cas, MAX(r.baml_version) AS baml_version,
+    MAX(r.host) AS host, MAX(r.command) AS command,
+    MIN(r.process_started_ns) AS started_ns,
+    CASE MAX(r.process_end_status) WHEN 1 THEN 'success' WHEN 2 THEN 'error'
+      WHEN 3 THEN 'panicked' END AS ended,
+    MAX(r.process_end_ns) AS ended_ns,
+    SUM(r.terminal_sequence IS NULL) AS open,
+    MAX(r.updated_ns) AS updated_ns
+  FROM main.recording r
+  GROUP BY COALESCE(r.process_id, r.recording_id)
+) g",
+};
+
+pub const PROFILER: Relation = Relation {
+    name: "profiler",
+    doc: "One row per calling-context tree node of each ended process, merged over its call sites, threads and engines. Empty for a process until its end is recorded.",
+    columns: &[
+        col(
+            "profiler_node_id",
+            "text",
+            "16 hex digits; the same code path has the same ID in every process",
+        ),
+        col("process_id", "text", ""),
+        col(
+            "parent_profiler_node_id",
+            "text",
+            "NULL for a top-level call",
+        ),
+        col(
+            "function_name",
+            "text",
+            "fully qualified, package included; NULL when not recorded",
+        ),
+        col(
+            "total_time",
+            "integer",
+            "nanoseconds in completed invocations; direct recursion counted once",
+        ),
+        col(
+            "self_time",
+            "integer",
+            "total_time minus the synchronous callees' total_time",
+        ),
+        col(
+            "io_total_time",
+            "integer",
+            "nanoseconds in sysops (baml.fs.read, baml.http.send, ...), callees included",
+        ),
+        col(
+            "io_self_time",
+            "integer",
+            "nanoseconds in sysops this node called itself",
+        ),
+        col(
+            "invocation_count",
+            "integer",
+            "return_count + error_count + missing_count",
+        ),
+        col("return_count", "integer", ""),
+        col(
+            "error_count",
+            "integer",
+            "panic_error_count + user_error_count + cancel_error_count",
+        ),
+        col(
+            "panic_error_count",
+            "integer",
+            "ended by a panic (cancellations excluded); NULL for recordings from before panics were recorded",
+        ),
+        col("user_error_count", "integer", ""),
+        col("cancel_error_count", "integer", ""),
+        col(
+            "missing_count",
+            "integer",
+            "started but never finished; 0 for an ended process",
+        ),
+    ],
+    view: "
+CREATE TEMP VIEW profiler AS
+SELECT __btel_hex(n.node_id) AS profiler_node_id,
+  lower(hex(n.process_id)) AS process_id,
+  __btel_hex(n.parent_node_id) AS parent_profiler_node_id,
+  n.function_name,
+  n.total_ns AS total_time, n.self_ns AS self_time,
+  n.io_total_ns AS io_total_time, n.io_self_ns AS io_self_time,
+  n.invocation_count, n.return_count, n.error_count, n.panic_error_count,
+  n.user_error_count, n.cancel_error_count, n.missing_count
+FROM main.profile_node n",
+};
+
+const SPAN_STATUS_DOC: &str = "return, user_error, panic_error (a panic other than a cancellation), or cancel_error (cancelled, or unwound by baml.sys.exit)";
+
+pub const SPANS: Relation = Relation {
+    name: "spans",
+    doc: "One row per completed span: a retained function call (LLM functions, $trace spans, promoted calls) or a future (a spawned future, or a host's root call).",
+    columns: &[
+        col("span_id", "text", "<recording_id>:<n>"),
+        col("span_type", "text", "function or future"),
+        col(
+            "span_name",
+            "text",
+            "the function's fully qualified name; for a future its name, else the function it runs",
+        ),
+        col("process_id", "text", ""),
+        col(
+            "future_id",
+            "text",
+            "the future a function span ran on; for a future, the future that spawned it",
+        ),
+        col(
+            "profiler_node_id",
+            "text",
+            "its node in the process's profiler; NULL while a function on its path is unknown",
+        ),
+        col(
+            "parent_span_id",
+            "text",
+            "the enclosing span; NULL for a root call",
+        ),
+        col("status", "text", SPAN_STATUS_DOC),
+        col("start_time", "text", "RFC 3339 UTC"),
+        col("end_time", "text", "RFC 3339 UTC"),
+        col("duration", "integer", "nanoseconds"),
+        value(
+            "input_args",
+            "captured arguments by name or position: input_args['customer'], input_args[0]; NULL for futures",
+        ),
+        value("output_value", "captured return value of a span that returned"),
+        value(
+            "error_value",
+            "the baml.errors.Context of a failed span: error_value['error'], error_value['stack_trace'], error_value['cause']",
+        ),
+        col("context_distinct_id", "text", "not recorded yet: always NULL"),
+        value("context_metadata", "not recorded yet: always an empty map"),
+        value(
+            "temporary_projections",
+            "model usage of calls made directly in this span: model_name, model_calls (model turns), input_tokens (full-rate), output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens, cost (dollars; NULL for an unpriced model). NULL without model calls",
+        ),
+        col(
+            "span_reason",
+            "text",
+            "policy_promoted (recorded only after it finished, by a policy) or other",
+        ),
+    ],
+    view: "
+CREATE TEMP VIEW spans AS
+SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
+  'function' AS span_type,
+  f.fqn AS span_name,
+  lower(hex(COALESCE(r.process_id, r.recording_id))) AS process_id,
+  __btel_pubid(r.recording_id, c.thread_id) AS future_id,
+  __btel_hex(p.node_id) AS profiler_node_id,
+  __btel_pubid(r.recording_id, c.parent_id) AS parent_span_id,
+  CASE c.outcome WHEN 1 THEN 'return' WHEN 2 THEN IIF(c.panicked, 'panic_error', 'user_error')
+    WHEN 3 THEN 'cancel_error' END AS status,
+  __btel_utc(c.entered_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
+    e.multiplier, e.shift) AS start_time,
+  __btel_utc(c.exited_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
+    e.multiplier, e.shift) AS end_time,
+  __btel_duration(c.entered_ticks, c.exited_ticks, e.multiplier, e.shift, s.status,
+    IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS duration,
+  __btel_ref(1, c.inputs_cas, f.argument_names,
+    c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS input_args,
+  IIF(c.outcome = 1, __btel_ref(2, c.value_cas, NULL, 0), NULL) AS output_value,
+  IIF(c.outcome IN (2, 3), __btel_ref(3, c.value_cas, NULL, 0), NULL) AS error_value,
+  NULL AS context_distinct_id,
+  __btel_empty_map() AS context_metadata,
+  (SELECT __btel_usage(u.model, u.input_tokens, u.output_tokens, u.cache_read_tokens,
+     u.cache_write_tokens, u.reasoning_tokens)
+   FROM main.model_usage u WHERE u.rec = c.rec AND u.node_id = c.call_id) AS temporary_projections,
+  IIF(c.late = 1, 'policy_promoted', 'other') AS span_reason,
+  c.rec AS __span_id_rec, c.call_id AS __span_id_key,
+  c.rec AS __future_id_rec, c.thread_id AS __future_id_key,
+  c.rec AS __parent_span_id_rec, c.parent_id AS __parent_span_id_key
+FROM main.call c
+JOIN main.recording r ON r.rec = c.rec
+LEFT JOIN main.call_path p ON p.rec = c.rec AND p.call_path_id = c.call_path_id
+LEFT JOIN main.function_def f ON f.rec = c.rec AND f.function_id = p.callee_function_id
+LEFT JOIN main.thread t ON t.rec = c.rec AND t.thread_id = c.thread_id
+LEFT JOIN main.epoch e ON e.rec = c.rec AND e.epoch_id = t.epoch_id AND e.defined = 1
+LEFT JOIN main.epoch_state s ON s.rec = c.rec AND s.epoch_id = t.epoch_id
+WHERE c.outcome IS NOT NULL
+UNION ALL
+SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
+  'future' AS span_type,
+  COALESCE(t.name, sf.fqn, (SELECT ef.fqn FROM main.call_path ep
+     JOIN main.function_def ef ON ef.rec = ep.rec AND ef.function_id = ep.callee_function_id
+     WHERE ep.rec = t.rec AND ep.thread_id = t.thread_id AND ep.parent_call_path_id = 0
+       AND ep.edge = 1 LIMIT 1)) AS span_name,
+  lower(hex(COALESCE(r.process_id, r.recording_id))) AS process_id,
+  __btel_pubid(r.recording_id, COALESCE(pt.thread_id, pc.thread_id)) AS future_id,
+  __btel_hex(COALESCE(sp.node_id, (SELECT ep.node_id FROM main.call_path ep
+     WHERE ep.rec = t.rec AND ep.thread_id = t.thread_id AND ep.parent_call_path_id = 0
+       AND ep.edge = 1 LIMIT 1))) AS profiler_node_id,
+  __btel_pubid(r.recording_id, t.parent_id) AS parent_span_id,
+  CASE t.outcome WHEN 1 THEN 'return' WHEN 2 THEN IIF(t.panicked, 'panic_error', 'user_error')
+    WHEN 3 THEN 'cancel_error' END AS status,
+  __btel_utc(t.started_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
+    e.multiplier, e.shift) AS start_time,
+  __btel_utc(t.completed_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
+    e.multiplier, e.shift) AS end_time,
+  __btel_duration(t.started_ticks, t.completed_ticks, e.multiplier, e.shift, s.status,
+    IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS duration,
+  NULL AS input_args,
+  NULL AS output_value,
+  NULL AS error_value,
+  NULL AS context_distinct_id,
+  __btel_empty_map() AS context_metadata,
+  (SELECT __btel_usage(u.model, u.input_tokens, u.output_tokens, u.cache_read_tokens,
+     u.cache_write_tokens, u.reasoning_tokens)
+   FROM main.model_usage u WHERE u.rec = t.rec AND u.node_id = t.thread_id) AS temporary_projections,
+  'other' AS span_reason,
+  t.rec AS __span_id_rec, t.thread_id AS __span_id_key,
+  t.rec AS __future_id_rec, COALESCE(pt.thread_id, pc.thread_id) AS __future_id_key,
+  t.rec AS __parent_span_id_rec, t.parent_id AS __parent_span_id_key
+FROM main.thread t
+JOIN main.recording r ON r.rec = t.rec
+LEFT JOIN main.call_path sp ON sp.rec = t.rec AND sp.call_path_id = t.spawn_call_path_id
+LEFT JOIN main.function_def sf ON sf.rec = t.rec AND sf.function_id = sp.callee_function_id
+LEFT JOIN main.thread pt ON pt.rec = t.rec AND pt.thread_id = t.parent_id
+LEFT JOIN main.call pc ON pc.rec = t.rec AND pc.call_id = t.parent_id
+LEFT JOIN main.epoch e ON e.rec = t.rec AND e.epoch_id = t.epoch_id AND e.defined = 1
+LEFT JOIN main.epoch_state s ON s.rec = t.rec AND s.epoch_id = t.epoch_id
+WHERE t.outcome IS NOT NULL",
+};
+
+pub const SPAN_ANNOUNCEMENTS: Relation = Relation {
+    name: "span_announcements",
+    doc: "One row per span known to have started, finished or not.",
+    columns: &[
+        col("span_id", "text", "<recording_id>:<n>"),
+        col("span_type", "text", "function or future"),
+        col("span_name", "text", "as in spans"),
+        col("process_id", "text", ""),
+        col("future_id", "text", "as in spans"),
+        col("profiler_node_id", "text", "as in spans"),
+        col("parent_span_id", "text", "as in spans"),
+        col("start_time", "text", "RFC 3339 UTC"),
+        value("input_args", "as in spans"),
+        col(
+            "context_distinct_id",
+            "text",
+            "not recorded yet: always NULL",
+        ),
+        value("context_metadata", "not recorded yet: always an empty map"),
+        col(
+            "is_complete",
+            "integer",
+            "1 once spans has the span's completion",
+        ),
+    ],
+    view: "
+CREATE TEMP VIEW span_announcements AS
+SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
+  'function' AS span_type,
+  f.fqn AS span_name,
+  lower(hex(COALESCE(r.process_id, r.recording_id))) AS process_id,
+  __btel_pubid(r.recording_id, c.thread_id) AS future_id,
+  __btel_hex(p.node_id) AS profiler_node_id,
+  __btel_pubid(r.recording_id, c.parent_id) AS parent_span_id,
+  __btel_utc(c.entered_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
+    e.multiplier, e.shift) AS start_time,
+  __btel_ref(1, c.inputs_cas, f.argument_names,
+    c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS input_args,
+  NULL AS context_distinct_id,
+  __btel_empty_map() AS context_metadata,
+  c.outcome IS NOT NULL AS is_complete,
+  c.rec AS __span_id_rec, c.call_id AS __span_id_key,
+  c.rec AS __future_id_rec, c.thread_id AS __future_id_key,
+  c.rec AS __parent_span_id_rec, c.parent_id AS __parent_span_id_key
+FROM main.call c
+JOIN main.recording r ON r.rec = c.rec
+LEFT JOIN main.call_path p ON p.rec = c.rec AND p.call_path_id = c.call_path_id
+LEFT JOIN main.function_def f ON f.rec = c.rec AND f.function_id = p.callee_function_id
+LEFT JOIN main.thread t ON t.rec = c.rec AND t.thread_id = c.thread_id
+LEFT JOIN main.epoch e ON e.rec = c.rec AND e.epoch_id = t.epoch_id AND e.defined = 1
+UNION ALL
+SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
+  'future' AS span_type,
+  COALESCE(t.name, sf.fqn, (SELECT ef.fqn FROM main.call_path ep
+     JOIN main.function_def ef ON ef.rec = ep.rec AND ef.function_id = ep.callee_function_id
+     WHERE ep.rec = t.rec AND ep.thread_id = t.thread_id AND ep.parent_call_path_id = 0
+       AND ep.edge = 1 LIMIT 1)) AS span_name,
+  lower(hex(COALESCE(r.process_id, r.recording_id))) AS process_id,
+  __btel_pubid(r.recording_id, COALESCE(pt.thread_id, pc.thread_id)) AS future_id,
+  __btel_hex(COALESCE(sp.node_id, (SELECT ep.node_id FROM main.call_path ep
+     WHERE ep.rec = t.rec AND ep.thread_id = t.thread_id AND ep.parent_call_path_id = 0
+       AND ep.edge = 1 LIMIT 1))) AS profiler_node_id,
+  __btel_pubid(r.recording_id, t.parent_id) AS parent_span_id,
+  __btel_utc(t.started_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
+    e.multiplier, e.shift) AS start_time,
+  NULL AS input_args,
+  NULL AS context_distinct_id,
+  __btel_empty_map() AS context_metadata,
+  t.outcome IS NOT NULL AS is_complete,
+  t.rec AS __span_id_rec, t.thread_id AS __span_id_key,
+  t.rec AS __future_id_rec, COALESCE(pt.thread_id, pc.thread_id) AS __future_id_key,
+  t.rec AS __parent_span_id_rec, t.parent_id AS __parent_span_id_key
+FROM main.thread t
+JOIN main.recording r ON r.rec = t.rec
+LEFT JOIN main.call_path sp ON sp.rec = t.rec AND sp.call_path_id = t.spawn_call_path_id
+LEFT JOIN main.function_def sf ON sf.rec = t.rec AND sf.function_id = sp.callee_function_id
+LEFT JOIN main.thread pt ON pt.rec = t.rec AND pt.thread_id = t.parent_id
+LEFT JOIN main.call pc ON pc.rec = t.rec AND pc.call_id = t.parent_id
+LEFT JOIN main.epoch e ON e.rec = t.rec AND e.epoch_id = t.epoch_id AND e.defined = 1
+WHERE t.defined = 1 OR t.announced = 1 OR t.outcome IS NOT NULL",
+};
+
+pub const RELATIONS: &[Relation] = &[PROCESSES, PROFILER, SPANS, SPAN_ANNOUNCEMENTS];
+
+/// Id columns a filter can use indexes for: `(relation, column, prefix)`.
+/// The relation's view also selects the id's stored parts as hidden columns
+/// `__<column>_rec` and `__<column>_key`, which the SQL translator adds to
+/// `=` and `IN` on the id. The prefix is the id's kind, as `__btel_key`
+/// takes it (empty for spans).
+pub const KEYS: &[(&str, &str, &str)] = &[
+    ("spans", "span_id", ""),
+    ("spans", "future_id", ""),
+    ("spans", "parent_span_id", ""),
+    ("span_announcements", "span_id", ""),
+    ("span_announcements", "future_id", ""),
+    ("span_announcements", "parent_span_id", ""),
+];
+
+/// The kind of `relation.column` when it is an indexable id.
+pub fn key(relation: &str, column: &str) -> Option<&'static str> {
+    KEYS.iter()
+        .find(|(r, c, _)| r.eq_ignore_ascii_case(relation) && c.eq_ignore_ascii_case(column))
+        .map(|(_, _, prefix)| *prefix)
+}
+
+pub fn relation(name: &str) -> Option<&'static Relation> {
+    RELATIONS
+        .iter()
+        .find(|relation| relation.name.eq_ignore_ascii_case(name))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use rusqlite::Connection;
+
+    fn plan(conn: &Connection, sql: &str) -> Vec<(i64, i64, String)> {
+        conn.prepare(&format!("EXPLAIN QUERY PLAN {sql}"))
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(3)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+    }
+
+    /// Without statistics, SQLite may look rows up by recording alone inside
+    /// a loop, rescanning the recording's history once per row. No relation
+    /// may plan that way: every inner lookup narrows past `rec`, and full
+    /// scans only drive the outermost loop of a (non-correlated) query.
+    fn assert_no_rescan(name: &str, plan: &[(i64, i64, String)]) {
+        let detail = |id: i64| {
+            plan.iter()
+                .find(|(step, _, _)| *step == id)
+                .map_or("", |(_, _, detail)| detail.as_str())
+        };
+        let mut outer_loops = HashSet::new();
+        for (_, parent, step) in plan {
+            if !(step.starts_with("SCAN ") || step.starts_with("SEARCH ")) {
+                continue;
+            }
+            let inner = !outer_loops.insert(*parent) || detail(*parent).starts_with("CORRELATED");
+            // A compound view's second branch is a second outer loop.
+            let compound =
+                detail(*parent).starts_with("COMPOUND") || detail(*parent).starts_with("UNION ALL");
+            // json_each walks one row's command arguments.
+            let rescans = step.ends_with("(rec=?)")
+                || (inner
+                    && !compound
+                    && step.starts_with("SCAN ")
+                    && !step.contains("VIRTUAL TABLE"));
+            assert!(!rescans, "{name} rescans per row: {step}\n{plan:#?}");
+        }
+    }
+
+    fn connection() -> Connection {
+        let mut conn = Connection::open_in_memory().unwrap();
+        crate::store::ensure_schema(&mut conn).unwrap();
+        crate::functions::register(&conn, &crate::functions::ContextSlot::default()).unwrap();
+        for relation in super::RELATIONS {
+            conn.execute_batch(&relation.create_sql()).unwrap();
+        }
+        conn
+    }
+
+    #[test]
+    fn relations_never_rescan_a_recording_per_row() {
+        let conn = connection();
+        for relation in super::RELATIONS {
+            let sql = format!("SELECT * FROM {}", relation.name);
+            assert_no_rescan(relation.name, &plan(&conn, &sql));
+        }
+        // Keyed filters narrow to one row per branch, on an index.
+        for (relation, column, _) in super::KEYS {
+            let sql = format!(
+                "SELECT * FROM {relation} WHERE __{column}_rec = 1 AND __{column}_key = x'0000000000000001'"
+            );
+            let plan = plan(&conn, &sql);
+            // A future's own future_id is derived from its parent: that
+            // branch reads the recording's futures once.
+            if *column != "future_id" {
+                assert_no_rescan(relation, &plan);
+                assert!(
+                    plan.iter()
+                        .filter(|(_, _, step)| step.starts_with("SCAN "))
+                        .all(|(_, _, step)| {
+                            // Only the view's own rows, already narrowed.
+                            step == &format!("SCAN {relation}") || step.contains("VIRTUAL TABLE")
+                        }),
+                    "{relation}.{column} scans:\n{plan:#?}"
+                );
+            }
+        }
+    }
+
+    /// Every relation's documented columns are exactly its view's columns.
+    #[test]
+    fn documented_columns_match_views() {
+        let conn = connection();
+        for relation in super::RELATIONS {
+            let statement = conn
+                .prepare(&format!("SELECT * FROM {}", relation.name))
+                .unwrap();
+            let names = statement.column_names();
+            let (hidden, actual): (Vec<&str>, Vec<&str>) =
+                names.iter().partition(|name| name.starts_with("__"));
+            let documented: Vec<&str> = relation.columns.iter().map(|c| c.name).collect();
+            assert_eq!(actual, documented, "{}", relation.name);
+            // Hidden columns are exactly the stored parts of its keyed ids.
+            let keyed: Vec<String> = super::KEYS
+                .iter()
+                .filter(|(r, _, _)| *r == relation.name)
+                .flat_map(|(_, c, _)| [format!("__{c}_rec"), format!("__{c}_key")])
+                .collect();
+            assert_eq!(hidden, keyed, "{}", relation.name);
+            for (_, column, _) in super::KEYS.iter().filter(|(r, _, _)| *r == relation.name) {
+                assert!(documented.contains(column), "{}.{column}", relation.name);
+            }
+        }
+    }
+}

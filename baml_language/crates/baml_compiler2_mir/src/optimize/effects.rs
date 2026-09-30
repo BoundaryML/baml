@@ -555,11 +555,7 @@ pub(super) struct Analysis {
 
 impl Analysis {
     pub(super) fn new(body: &MirFunctionBody<'_>) -> Self {
-        let handlers: HashSet<_> = body
-            .catch_regions
-            .iter()
-            .map(|region| region.handler)
-            .collect();
+        let handlers: HashSet<_> = body.handlers().map(|(handler, _)| handler).collect();
         let clobber_model = memory::ClobberModel::for_body(body);
         let mut entries = vec![None; body.blocks.len()];
         let mut work = VecDeque::new();

@@ -373,6 +373,119 @@ async fn host_callable_returns_int_result() {
     drop(arc);
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_resolves_integral_js_number_to_float() {
+    let source = r#"
+        function measure(f: () -> float) -> float {
+            return f();
+        }
+    "#;
+
+    let arc = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::JsNumber(1.0)));
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "measure",
+            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("integral JavaScript number should satisfy a float return contract");
+
+    let value = match result {
+        BexExternalValue::Float(value) => value,
+        other => panic!("expected Float(1.0), got {other:?}"),
+    };
+    assert!((value - 1.0).abs() < f64::EPSILON);
+    drop(arc);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_resolves_integral_js_number_class_field_to_float() {
+    let source = r#"
+        class Size {
+            width float
+        }
+        function measure(f: () -> Size) -> float {
+            return f().width;
+        }
+    "#;
+
+    let arc = register_host_callable(|_items| {
+        let mut fields = IndexMap::new();
+        fields.insert("width".to_string(), BexExternalValue::JsNumber(612.0));
+        FakeReturn::Ok(BexExternalValue::Instance {
+            class_name: "Size".to_string(),
+            type_args: vec![],
+            fields,
+        })
+    });
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "measure",
+            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("integral class field should satisfy its float contract");
+
+    let value = match result {
+        BexExternalValue::Float(value) => value,
+        other => panic!("expected Float(612.0), got {other:?}"),
+    };
+    assert!((value - 612.0).abs() < f64::EPSILON);
+    drop(arc);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_integral_number_uses_float_in_float_bigint_union() {
+    let source = r#"
+        function measure(f: () -> float | bigint) -> float | bigint {
+            return f();
+        }
+    "#;
+
+    let arc = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::JsNumber(1.0)));
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "measure",
+            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("an integral JavaScript number should select the float arm");
+
+    let BexExternalValue::Union { value, metadata } = result else {
+        panic!("expected selected union result")
+    };
+    assert_eq!(metadata.selected_option, RuntimeTy::float());
+    let BexExternalValue::Float(value) = *value else {
+        panic!("expected a float payload")
+    };
+    assert!((value - 1.0).abs() < f64::EPSILON);
+    drop(arc);
+}
+
 /// A callable that crosses a host boundary may itself be host-owned. APIs such
 /// as the HTTP server retain a callable handle and later ask the engine to
 /// invoke it as a fresh VM root, so that entry path must accept the same
@@ -712,40 +825,6 @@ async fn host_callable_optional_union_is_omitted_or_sent_with_selected_arm() {
         BexExternalValue::Array { ref items, .. }
             if matches!(items.as_slice(), [BexExternalValue::Int(0), BexExternalValue::Int(1)])
     ));
-    drop(arc);
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn explicit_local_id_rejects_host_callable_with_catchable_invalid_argument() {
-    let source = r#"
-        function call_host_with_id(
-            f: (int) -> int throws baml.errors.InvalidArgument,
-            x: int,
-        ) -> string {
-            baml.json.to_string(f(x, $id = boundary.id())) catch (e) {
-                baml.errors.InvalidArgument => "caught"
-            }
-        }
-    "#;
-    let arc = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::Int(999)));
-    let snapshot = compile_for_engine(source);
-    let engine = Arc::new(
-        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
-            .expect("engine construction"),
-    );
-    let result = engine
-        .call_function(
-            "call_host_with_id",
-            vec![
-                BexExternalValue::HostValue(Arc::clone(&arc)),
-                BexExternalValue::Int(1),
-            ],
-            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-            true,
-        )
-        .await
-        .expect("host-callable rejection should be caught in BAML");
-    assert_eq!(result, BexExternalValue::String("caught".into()));
     drop(arc);
 }
 
@@ -2217,7 +2296,7 @@ async fn spawn_in_map_closure_with_erroring_child_does_not_wedge() {
                 let tok = baml.spawn.CancelToken.new();
                 let items = [1, 2, 3];
                 let futures = items.map((n: int) -> baml.future.Future<string, never> {
-                    spawn with baml.spawn.options(cancel = tok) {
+                    spawn with tok {
                         if (n == 2) {
                             // parks the awaiter first, then faults the bridge
                             baml.sys.sleep(baml.time.Duration.from_milliseconds(50n)) catch_all (e) {
@@ -2340,6 +2419,69 @@ async fn shutdown_deadline_abandons_leaked_spawn_and_reports_origin() {
         "user.main",
         "leak should be attributed to the spawning function"
     );
+}
+
+/// Shutdown-deadline regression: an in-flight call may not finish in time
+/// once cancelled, because cancellation unwinds a call and its cleanup can
+/// take as long as it likes (a `defer` body runs shielded; a call can also
+/// catch its own `Cancelled` and keep going). The deadline bounds the wait for
+/// in-flight calls too: once it passes, the call's token fires, it gets one
+/// settle window, and shutdown stops waiting for it. Before, shutdown waited
+/// for in-flight calls with no bound, whatever the deadline.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn shutdown_deadline_abandons_a_call_whose_cleanup_outlasts_it() {
+    let source = r#"
+        function slow_cleanup() -> int {
+            defer {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+            }
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+            0
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let call_engine = Arc::clone(&engine);
+    let call = tokio::spawn(async move {
+        call_engine
+            .call_function(
+                "slow_cleanup",
+                Vec::new(),
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await
+    });
+    // Let the call reach its first sleep.
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    assert!(!call.is_finished(), "the call should still be running");
+
+    let started = std::time::Instant::now();
+    let shutdown = engine.shutdown_with_deadline(
+        Some(std::time::Duration::from_millis(300)),
+        |_count| {},
+        |_leaks| {},
+    );
+    tokio::time::timeout(std::time::Duration::from_secs(30), shutdown)
+        .await
+        .expect("shutdown wedged: the deadline did not bound the in-flight call");
+    // The deadline (0.3s) plus the bounded settle window decide the wall
+    // clock, not the cleanup's 60s sleep.
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(15),
+        "shutdown took {:?}",
+        started.elapsed()
+    );
+    assert!(
+        !call.is_finished(),
+        "the call's cleanup should still be running"
+    );
+    call.abort();
 }
 
 /// `throws never` is a declared contract, not an absent one: a callback that

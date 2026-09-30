@@ -12,12 +12,15 @@ function context(
 ): ContextNode {
   return {
     awaitMs: 0,
+    cancelled: 0,
     enters: 1,
     errors: 0,
     fn: overrides.id,
     folded: false,
     fqn: `user.${overrides.id}`,
     kind: 'baml',
+    ok: 1,
+    outcomeState: null,
     parentId: null,
     selfMs: 0,
     source: null,

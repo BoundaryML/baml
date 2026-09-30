@@ -1,0 +1,23 @@
+{
+  "plan_id": "cloud-v1-all-skip",
+  "expires_at_unix_ms": 4102444800000,
+  "uploads": [
+    {
+      "upload_id": "recording",
+      "client_target_id": 0,
+      "object_key": "org-fixture/cloud-v1-all-skip/recording",
+      "presigned_put_url": "https://uploads.invalid/cloud-v1/all-skip/recording?capability=fixed-v1",
+      "expires_at_unix_ms": 4102444800000,
+      "required_headers": {"x-bcs-fixture": "cloud-v1", "x-amz-meta-upload-id": "recording"},
+      "kind": "recording",
+      "candidate_indices": []
+    }
+  ],
+  "cas": [
+    {"candidate_index": 0, "disposition": {"kind": "already_available"}},
+    {"candidate_index": 1, "disposition": {"kind": "already_available"}},
+    {"candidate_index": 2, "disposition": {"kind": "already_available"}},
+    {"candidate_index": 3, "disposition": {"kind": "already_available"}},
+    {"candidate_index": 4, "disposition": {"kind": "already_available"}}
+  ]
+}

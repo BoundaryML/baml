@@ -53,6 +53,8 @@ pub struct UnhandledSpawnError {
     pub future_id: FutureId,
     pub value: Value,
     pub trace: Vec<StackFrame>,
+    /// Cancellation reached the task, by any route: see
+    /// [`bex_vm_types::Future::was_cancelled`].
     pub cancelled: bool,
 }
 impl Generation {
@@ -129,6 +131,7 @@ pub struct BexHeap {
     /// Compile-time objects (never collected).
     /// These are permanent: functions, classes, enums, string literals.
     compile_time: Vec<Object>,
+    pub(crate) functions: btel_types::FunctionLookup<HeapPtr>,
 
     /// Gen0 nursery — all TLAB allocations land here.
     /// Uses ChunkedVec for stable pointers during concurrent access.
@@ -346,6 +349,7 @@ impl BexHeap {
 
         Self {
             compile_time: compile_time_objects,
+            functions: btel_types::FunctionLookup::default(),
             gen0: UnsafeCell::new(ChunkedVec::new()),
             gen1: UnsafeCell::new(ChunkedVec::new()),
             gen2: UnsafeCell::new(ChunkedVec::new()),
@@ -381,9 +385,21 @@ impl BexHeap {
         heap
     }
 
-    /// Freeze the heap behind the shared `Arc`. After this the compile-time
-    /// objects are immutable. See [`Self::build_unsealed`].
-    pub fn seal(self) -> Arc<Self> {
+    /// Freeze the heap behind the shared `Arc`. Compile-time slots can no
+    /// longer be replaced. See [`Self::build_unsealed`].
+    pub fn seal(mut self) -> Arc<Self> {
+        // Assign IDs only after all placeholders have been replaced. The Vec
+        // and its pointers remain stable for the lifetime of the sealed heap.
+        for index in 0..self.compile_time.len() {
+            let ptr = self.compile_time_ptr(index);
+            if let Object::Function(function) = &mut self.compile_time[index] {
+                function.telemetry_function_id = Some(
+                    self.functions
+                        .register_static(ptr, &function.telemetry_registration)
+                        .expect("compile-time functions exceed the FunctionId space"),
+                );
+            }
+        }
         Arc::new(self)
     }
 
@@ -595,6 +611,12 @@ impl BexHeap {
     /// Get the number of compile-time objects.
     pub fn compile_time_len(&self) -> usize {
         self.compile_time.len()
+    }
+
+    /// Borrow a compile-time object. These slots are immutable after sealing
+    /// and are never moved or collected.
+    pub(crate) fn compile_time_object(&self, index: usize) -> &Object {
+        &self.compile_time[index]
     }
 
     /// Get the compile-time boundary index (alias for compile_time_len).
@@ -1300,9 +1322,7 @@ mod tests {
     /// A bytecode function dispatching through `table`.
     fn function_switching_through(table: bex_vm_types::bytecode::SwitchTable) -> Object {
         use bex_vm_types::{
-            Bytecode, Function, FunctionKind,
-            bytecode::Instruction,
-            types::{FunctionCaptureProps, FunctionOrigin},
+            Bytecode, Function, FunctionKind, bytecode::Instruction, types::FunctionOrigin,
         };
         Object::Function(Box::new(Function {
             name: "user.pick".to_string(),
@@ -1317,6 +1337,9 @@ mod tests {
                 ..Bytecode::default()
             },
             kind: FunctionKind::Bytecode,
+            telemetry_function_id: None,
+            telemetry_registration: bex_vm_types::FunctionRegistration::default(),
+            telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),
@@ -1333,8 +1356,6 @@ mod tests {
             is_interface_body: false,
             native_key: None,
             body_meta: None,
-            capture: FunctionCaptureProps::disabled(),
-            function_id: 0,
             runtime_package: HeapPtr::null(),
         }))
     }

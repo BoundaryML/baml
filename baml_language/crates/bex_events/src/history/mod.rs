@@ -803,10 +803,10 @@ mod tests {
 
     use super::{HistoryStore, HistoryValueReadResult};
     use crate::{
-        ids::{BexCallId, BexThreadId, BoundaryId, EngineId, ProcessEuid},
+        ids::{BexThreadId, BoundaryId, EngineId, ProcessEuid},
         run::{
             ProjectGeneration, ProjectId, RequestId, RunOutcome, RunResult, RunTarget,
-            RunTimeAnchor, StartGuard, StartRunContext, TraceCallKey,
+            RunTimeAnchor, StartGuard, StartRunContext, ThreadRef,
         },
         value::{LogEventRecord, ValueCodec},
     };
@@ -850,11 +850,10 @@ mod tests {
             .append_log_body(
                 boundary_id,
                 LogEventRecord {
-                    call: TraceCallKey {
+                    call: ThreadRef {
                         process_euid: ProcessEuid([1; 16]),
                         engine_id: EngineId(2),
                         thread_id: BexThreadId(3),
-                        call_id: BexCallId(4),
                     },
                     level: Some("info".to_string()),
                     source: None,
@@ -919,11 +918,10 @@ mod tests {
 
     fn log_record(thread_id: u64, timestamp_ms: u64, message: &str) -> LogEventRecord {
         LogEventRecord {
-            call: TraceCallKey {
+            call: ThreadRef {
                 process_euid: ProcessEuid([1; 16]),
                 engine_id: EngineId(2),
                 thread_id: BexThreadId(thread_id),
-                call_id: BexCallId(4),
             },
             level: Some("info".to_string()),
             source: None,
@@ -981,20 +979,8 @@ mod tests {
         // replayed payload id.
         let live = crate::run::InMemoryRunStore::default();
         assert!(live.insert_replayed_run(run));
-        live.ingest_log_value_ref(
-            boundary_id,
-            TraceCallKey {
-                process_euid: ProcessEuid([1; 16]),
-                engine_id: EngineId(2),
-                thread_id: BexThreadId(1),
-                call_id: BexCallId(4),
-            },
-            None,
-            "live".to_string(),
-            None,
-            None,
-        )
-        .unwrap();
+        live.ingest_log_value_ref(boundary_id, None, "live".to_string(), None, None)
+            .unwrap();
         let ids = live
             .snapshot(boundary_id)
             .unwrap()

@@ -35,16 +35,19 @@ impl BamlRuntime {
         }
     }
 
-    /// Initialize the process-global runtime from precompiled BAML bytecode.
-    #[napi(factory, js_name = "initializeRuntimeFromBytecode")]
-    pub fn initialize_runtime_from_bytecode(
-        bytecode: Buffer,
+    /// Initialize the process-global runtime from precompiled BAML bytecode:
+    /// a raw artifact, or the encoded string generated SDKs embed (decoded
+    /// natively, never in JavaScript).
+    #[napi(factory, js_name = "initializeRuntimeFromBlob")]
+    pub fn initialize_runtime_from_blob(
+        bytecode: Either<String, Buffer>,
         embedded_baml_toml: Option<String>,
     ) -> napi::Result<Self> {
-        match bridge_cffi::initialize_runtime_from_bytecode(
-            bytecode.as_ref(),
-            embedded_baml_toml.as_deref(),
-        ) {
+        let bytecode: &[u8] = match &bytecode {
+            Either::A(encoded) => encoded.as_bytes(),
+            Either::B(bytes) => bytes.as_ref(),
+        };
+        match bridge_cffi::initialize_runtime_from_blob(bytecode, embedded_baml_toml.as_deref()) {
             Ok(_bex) => Ok(BamlRuntime {}),
             Err(e) => Err(bridge_error_to_napi(e)),
         }

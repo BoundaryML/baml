@@ -1,11 +1,11 @@
-use std::{collections::BTreeMap, future::Future, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
-use bex_engine::BexEngine;
+use bex_engine::{BexEngine, ProcessStatus};
 
 use crate::reporter::Reporter;
 
-/// Default grace for the end-of-run wait on orphaned background futures
-/// before they are cancelled and abandoned. Override with
+/// Default grace for the end-of-run wait on in-flight calls and orphaned
+/// background futures before they are cancelled and abandoned. Override with
 /// `BAML_SHUTDOWN_GRACE_MS`; `0` waits forever (the pre-deadline behavior).
 const DEFAULT_SHUTDOWN_GRACE: Duration = Duration::from_secs(15);
 
@@ -24,25 +24,34 @@ pub(crate) fn shutdown_engine(
     rt: &tokio::runtime::Runtime,
     engine: &Arc<BexEngine>,
     reporter: &Reporter,
+    status: ProcessStatus,
 ) {
-    rt.block_on(shutdown_engine_future(engine, reporter));
+    rt.block_on(shutdown_engine_future(engine, reporter, status));
 }
 
-pub(crate) fn shutdown_engine_future<'a>(
-    engine: &'a Arc<BexEngine>,
-    reporter: &'a Reporter,
-) -> impl Future<Output = ()> + 'a {
-    engine.shutdown_with_deadline(
-        shutdown_grace(),
-        |count| {
-            reporter.status("Waiting", wait_message(count));
-        },
-        |leaks| {
-            if !leaks.is_empty() {
-                reporter.warning(leak_message(leaks));
-            }
-        },
-    )
+/// The CLI exits after this: the recording ends with the process's status.
+pub(crate) async fn shutdown_engine_future(
+    engine: &Arc<BexEngine>,
+    reporter: &Reporter,
+    status: ProcessStatus,
+) {
+    engine.record_process_exit(status);
+    engine
+        .shutdown_with_deadline(
+            shutdown_grace(),
+            |count| {
+                reporter.status("Waiting", wait_message(count));
+            },
+            |leaks| {
+                if !leaks.is_empty() {
+                    reporter.warning(leak_message(leaks));
+                }
+            },
+        )
+        .await;
+    if let Some(Err(error)) = engine.telemetry_result() {
+        reporter.warning(format_args!("telemetry recording failed: {error}"));
+    }
 }
 
 fn wait_message(count: usize) -> String {

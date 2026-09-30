@@ -1,6 +1,6 @@
 //! `PyEnum` — Python enum definition.
 
-use baml_codegen_types::Name;
+use baml_sdkgen_types::Name;
 
 /// Python enum definition. Renders as `class Foo(str, enum.Enum): …`
 /// with `<VARIANT> = "<value>"` lines in IR order.

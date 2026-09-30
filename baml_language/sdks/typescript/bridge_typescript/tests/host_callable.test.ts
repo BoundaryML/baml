@@ -40,6 +40,10 @@ function CallCb(callback: (int) -> string, x: int) -> string {
 function CallIntCb(callback: (int) -> int, x: int) -> int {
     callback(x)
 }
+
+function CallFloatCb(callback: () -> float) -> float {
+    callback()
+}
 `;
 
 function makeRuntime(): BamlRuntime {
@@ -59,6 +63,12 @@ describe('host-callable round-trip', () => {
         const cb = (x: number) => x + 1;
         const result = await callFunction(rt, 'CallIntCb', { callback: cb, x: 41 });
         expect(result.result()).toBe(42);
+    });
+
+    test('integral Number returned for float stays a float contract value', async () => {
+        const rt = makeRuntime();
+        const result = await callFunction(rt, 'CallFloatCb', { callback: () => 1 });
+        expect(result.result()).toBe(1);
     });
 
     test('arrow function (lambda) callback', async () => {

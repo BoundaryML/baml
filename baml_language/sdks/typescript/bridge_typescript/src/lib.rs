@@ -55,7 +55,7 @@ pub fn flush_events() {}
 
 #[napi(js_name = "shutdownRuntime")]
 pub async fn shutdown_runtime() -> napi::Result<()> {
-    bridge_cffi::shutdown_runtime()
+    bridge_cffi::shutdown_runtime(None)
         .await
         .map_err(errors::bridge_error_to_napi)
 }

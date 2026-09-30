@@ -22,22 +22,39 @@ pub enum LangPackage {
     /// LLM functions and clients; the `client:` desugar and prompt lowering
     /// name its declarations.
     Ai,
-    /// The `boundary` package, whose root-level `id` function is the one
-    /// allowlisted namespace shadow.
-    Boundary,
     /// The `log` package, whose `info`/`debug`/`warn`/`error` are the
     /// compiler intrinsics MIR lowers to log statements.
     Log,
+    /// Invocation tracing options accepted by the reserved `$trace` argument.
+    Trace,
+}
+
+/// The package roots the COMPILER itself spells in the paths its desugars
+/// emit, and which a binding in a body therefore may not shadow.
+///
+/// A desugar lowers to source-level paths (`spawn { .. }` becomes
+/// `baml.spawn.Plan.new(..)`, `env.X` becomes `baml.env.ref(..)`), and those
+/// paths resolve in the user's own scope: a local named `baml`, or a body
+/// `type baml = ..` binding, wins over the package, and every `spawn` in its
+/// scope fails. Items do NOT shadow a package root this way, so a user class
+/// or function may still be named `baml` - only a binding is reserved.
+///
+/// Deliberately not every language package: `#4543` ruled that a language
+/// root is an ordinary package a user name shadows like any other (a local
+/// named `reflect` is legal and tested). Only the roots the compiler emits
+/// are reserved, which is why this list is here rather than being derived
+/// from [`LangPackage::ALL`].
+pub const DESUGAR_PATH_ROOTS: &[&str] = &[LangPackage::Baml.manifest_name()];
+
+/// Whether a binding named `name` is refused (E0176): it would shadow one of
+/// [`DESUGAR_PATH_ROOTS`]. The one rule behind both the report, at every
+/// binding declaration, and the checker's treatment of a refused binding.
+pub fn is_reserved_binding_name(name: &str) -> bool {
+    DESUGAR_PATH_ROOTS.contains(&name)
 }
 
 impl LangPackage {
-    pub const ALL: [Self; 5] = [
-        Self::Baml,
-        Self::Reflect,
-        Self::Ai,
-        Self::Boundary,
-        Self::Log,
-    ];
+    pub const ALL: [Self; 5] = [Self::Baml, Self::Reflect, Self::Ai, Self::Log, Self::Trace];
 
     /// The package's `[package].name` in the stdlib manifests — the ONE
     /// spelling the installer matches to find the root.
@@ -46,8 +63,8 @@ impl LangPackage {
             Self::Baml => "baml",
             Self::Reflect => "reflect",
             Self::Ai => "ai",
-            Self::Boundary => "boundary",
             Self::Log => "log",
+            Self::Trace => "trace",
         }
     }
 }
@@ -60,8 +77,8 @@ pub struct LangRoots {
     baml: Option<SourceRoot>,
     reflect: Option<SourceRoot>,
     ai: Option<SourceRoot>,
-    boundary: Option<SourceRoot>,
     log: Option<SourceRoot>,
+    trace: Option<SourceRoot>,
 }
 
 impl LangRoots {
@@ -72,8 +89,8 @@ impl LangRoots {
             LangPackage::Baml => self.baml,
             LangPackage::Reflect => self.reflect,
             LangPackage::Ai => self.ai,
-            LangPackage::Boundary => self.boundary,
             LangPackage::Log => self.log,
+            LangPackage::Trace => self.trace,
         }
     }
 
@@ -90,8 +107,8 @@ impl LangRoots {
             LangPackage::Baml => &mut self.baml,
             LangPackage::Reflect => &mut self.reflect,
             LangPackage::Ai => &mut self.ai,
-            LangPackage::Boundary => &mut self.boundary,
             LangPackage::Log => &mut self.log,
+            LangPackage::Trace => &mut self.trace,
         };
         *slot = Some(root);
         self

@@ -15,8 +15,8 @@ use baml_base::{
     qualified_name::{AI_STREAM_DONE, AI_STREAM_STREAM},
 };
 #[cfg(test)]
-use baml_codegen_types::FunctionArgument;
-use baml_codegen_types::{
+use baml_sdkgen_types::FunctionArgument;
+use baml_sdkgen_types::{
     CallableParam, Class, ClassProperty, CodegenFunctionParamMode, EnumVariant, Function, Name,
     ParamTy, Symbol, Ty,
 };
@@ -132,7 +132,7 @@ struct ClassSpec<'a> {
 }
 
 struct MethodSpec<'a> {
-    method: &'a baml_codegen_types::Function,
+    method: &'a baml_sdkgen_types::Function,
     wire_identity: String,
     is_static: bool,
     variant: CallableVariant,
@@ -229,9 +229,12 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.csv.Position"
         | "baml.csv.ReaderOptions"
         | "baml.csv.WriterOptions"
+        // A field-less marker a user signature can pass around, like
+        // `baml.iter.Done`.
+        | "baml.spawn.Root"
         | "baml.ws.CloseEvent" => Some(BuiltinProjection::StructuralClass),
         "baml.csv.ErrorKind" => Some(BuiltinProjection::StructuralEnum),
-        "baml.spawn.TaskGroup"
+        "baml.spawn.Limit"
         | "baml.spawn.CancelToken"
         | "baml.http.Response"
         | "baml.http.SseStream"
@@ -239,7 +242,6 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.http.TlsConfig"
         | "baml.glob.Glob"
         | "baml.fs.File"
-        | "boundary.LocalId"
         | "baml.csv.Record"
         | "baml.csv.Reader"
         | "baml.csv.Rows"
@@ -250,7 +252,10 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.ws.WebSocket" => Some(BuiltinProjection::Resource),
         "ai.FunctionSpec" => Some(BuiltinProjection::FunctionSpec),
         "ai.Prompt" => Some(BuiltinProjection::Prompt),
-        "baml.csv._NeedData"
+        // A plan holds a BAML closure: no host can build or run one, so a
+        // signature that mentions it has no host shape.
+        "baml.spawn.Plan"
+        | "baml.csv._NeedData"
         | "baml.csv._Skip"
         | "baml.csv._Headers"
         | "ai.OutputFormat"
@@ -293,21 +298,13 @@ fn is_public_resource_stdlib_function(name: &Name) -> bool {
     if name.name().as_str().starts_with('_') {
         return false;
     }
-    // `spawn.options` returns a VM closure, not a resource. Python and C# both
-    // classify native closure values as unsupported SDK boundaries; keeping it
-    // out here does not omit any resource factory or method.
-    if name.to_string() == "baml.spawn.options" {
-        return false;
-    }
-
-    (name.package().as_str() == "baml"
+    name.package().as_str() == "baml"
         && name.namespace().first().is_some_and(|namespace| {
             matches!(
                 namespace.as_str(),
                 "csv" | "fs" | "glob" | "http" | "net" | "spawn"
             )
-        }))
-        || name.to_string() == "boundary.id"
+        })
 }
 
 fn is_runtime_class_projection(name: &Name) -> bool {
@@ -1814,9 +1811,6 @@ fn require_supported_type_inner(
 fn contains_type_var(ty: &Ty) -> bool {
     match ty {
         Ty::TypeVar(..) => true,
-        Ty::Class(_, arguments) | Ty::Union(arguments) => arguments.iter().any(contains_type_var),
-        Ty::List(item) => contains_type_var(item),
-        Ty::Map { key, value, .. } => contains_type_var(key) || contains_type_var(value),
         Ty::Function {
             params,
             ret,
@@ -1829,7 +1823,7 @@ fn contains_type_var(ty: &Ty) -> bool {
                 || contains_type_var(ret)
                 || (!is_synthetic_effect_type(throws) && contains_type_var(throws))
         }
-        _ => false,
+        _ => baml_sdkgen_types::any_type_child(ty, contains_type_var),
     }
 }
 
@@ -4470,12 +4464,6 @@ fn namespace_requests(name: &Name, origin: CSharpNameOrigin) -> Vec<CSharpNameRe
         std::iter::once(BaseName::new("Baml"))
             .chain(name.namespace().iter().cloned())
             .collect::<Vec<_>>()
-    } else if name.package().as_str() == "boundary"
-        && (is_resource_projection(name) || is_public_resource_stdlib_function(name))
-    {
-        std::iter::once(BaseName::new("Boundary"))
-            .chain(name.namespace().iter().cloned())
-            .collect::<Vec<_>>()
     } else {
         name.namespace().clone()
     };
@@ -4705,7 +4693,7 @@ mod tests {
             }],
             static_methods: vec![],
             instance_methods: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "review.baml".to_string(),
                 span_start: 0,
             },
@@ -4749,7 +4737,7 @@ mod tests {
             ty,
             default: None,
         };
-        let function = baml_codegen_types::Function {
+        let function = baml_sdkgen_types::Function {
             name: wire_name.clone(),
             generic_params: vec![],
             docstring: None,
@@ -4764,7 +4752,7 @@ mod tests {
             return_type: Ty::Unknown,
             throws: None,
             watchers: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "dynamic_contract.baml".to_string(),
                 span_start: 0,
             },
@@ -4815,7 +4803,7 @@ mod tests {
                 ret: Box::new(ret),
                 throws: Box::new(Ty::Never),
             };
-            baml_codegen_types::Function {
+            baml_sdkgen_types::Function {
                 name: BaseName::new(name),
                 generic_params: vec![],
                 docstring: None,
@@ -4823,7 +4811,7 @@ mod tests {
                 return_type: callable,
                 throws: None,
                 watchers: vec![],
-                origin: baml_codegen_types::Origin {
+                origin: baml_sdkgen_types::Origin {
                     source_file_path: "returned_callable_codec.baml".to_string(),
                     span_start: 0,
                 },
@@ -4902,7 +4890,7 @@ mod tests {
             BaseName::new("Envelope"),
         );
         let function_name = Name::new(BaseName::new("user"), namespace, BaseName::new("Echo"));
-        let origin = || baml_codegen_types::Origin {
+        let origin = || baml_sdkgen_types::Origin {
             source_file_path: "mixed_closed.baml".to_string(),
             span_start: 0,
         };
@@ -4924,7 +4912,7 @@ mod tests {
         };
         let type_parameter = BaseName::new("T");
         let envelope_ty = Ty::Class(envelope_name.clone(), Box::new([]));
-        let function = baml_codegen_types::Function {
+        let function = baml_sdkgen_types::Function {
             name: BaseName::new("Echo"),
             generic_params: vec![],
             docstring: None,
@@ -4945,7 +4933,7 @@ mod tests {
         symbols.insert(function_name.clone(), Symbol::Function(function));
         symbols.insert(
             color_name.clone(),
-            Symbol::Enum(baml_codegen_types::Enum {
+            Symbol::Enum(baml_sdkgen_types::Enum {
                 name: color_name.clone(),
                 docstring: None,
                 variants: ["red", "blue"]
@@ -4980,7 +4968,7 @@ mod tests {
         );
         symbols.insert(
             label_name.clone(),
-            Symbol::TypeAlias(baml_codegen_types::TypeAlias {
+            Symbol::TypeAlias(baml_sdkgen_types::TypeAlias {
                 name: label_name.clone(),
                 resolves_to: primitive_int(),
                 recursive: false,
@@ -5003,7 +4991,7 @@ mod tests {
                             primitive_int(),
                             Ty::Literal(
                                 Literal::String("fixed".to_string()),
-                                baml_codegen_types::Freshness::Regular,
+                                baml_sdkgen_types::Freshness::Regular,
                             ),
                         ]))
                         .canonicalize(),
@@ -5055,7 +5043,7 @@ mod tests {
             ty: primitive_string(),
             default: None,
         };
-        let function = |name: BaseName, return_type: Ty| baml_codegen_types::Function {
+        let function = |name: BaseName, return_type: Ty| baml_sdkgen_types::Function {
             name,
             generic_params: vec![],
             docstring: None,
@@ -5063,7 +5051,7 @@ mod tests {
             return_type,
             throws: None,
             watchers: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "stream_contract.baml".to_string(),
                 span_start: 0,
             },
@@ -5129,7 +5117,7 @@ mod tests {
             properties: vec![],
             static_methods: vec![],
             instance_methods: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "builtin.baml".to_string(),
                 span_start: 0,
             },
@@ -5167,7 +5155,7 @@ mod tests {
                 properties,
                 static_methods: vec![],
                 instance_methods: vec![],
-                origin: baml_codegen_types::Origin {
+                origin: baml_sdkgen_types::Origin {
                     source_file_path: "builtin.baml".to_string(),
                     span_start: 0,
                 },
@@ -5179,7 +5167,7 @@ mod tests {
             vec![BaseName::new("stdlib_contract")],
             BaseName::new("Echo"),
         );
-        let function = baml_codegen_types::Function {
+        let function = baml_sdkgen_types::Function {
             name: BaseName::new("Echo"),
             generic_params: vec![],
             docstring: None,
@@ -5202,7 +5190,7 @@ mod tests {
             return_type: Ty::Class(datagram_name.clone(), Box::new([])),
             throws: None,
             watchers: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "stdlib_contract.baml".to_string(),
                 span_start: 0,
             },
@@ -5250,11 +5238,11 @@ mod tests {
                     Ty::Union(Box::new([
                         Ty::Literal(
                             Literal::String("none".to_string()),
-                            baml_codegen_types::Freshness::Regular,
+                            baml_sdkgen_types::Freshness::Regular,
                         ),
                         Ty::Literal(
                             Literal::String("fields".to_string()),
-                            baml_codegen_types::Freshness::Regular,
+                            baml_sdkgen_types::Freshness::Regular,
                         ),
                         Ty::Null,
                     ]))
@@ -5264,7 +5252,7 @@ mod tests {
         );
         symbols.insert(
             error_kind_name.clone(),
-            Symbol::Enum(baml_codegen_types::Enum {
+            Symbol::Enum(baml_sdkgen_types::Enum {
                 name: error_kind_name,
                 docstring: None,
                 variants: ["Options", "FieldCount", "Decode"]
@@ -5275,7 +5263,7 @@ mod tests {
                         value: name.to_string(),
                     })
                     .collect(),
-                origin: baml_codegen_types::Origin {
+                origin: baml_sdkgen_types::Origin {
                     source_file_path: "builtin.baml".to_string(),
                     span_start: 0,
                 },
@@ -5337,7 +5325,7 @@ mod tests {
             let name = Name::new(BaseName::new("user"), namespace.clone(), wire_name.clone());
             symbols.insert(
                 name.clone(),
-                Symbol::Function(baml_codegen_types::Function {
+                Symbol::Function(baml_sdkgen_types::Function {
                     name: wire_name.clone(),
                     generic_params: vec![],
                     docstring: None,
@@ -5354,7 +5342,7 @@ mod tests {
                     return_type,
                     throws: None,
                     watchers: vec![],
-                    origin: baml_codegen_types::Origin {
+                    origin: baml_sdkgen_types::Origin {
                         source_file_path: "modular_contract.baml".to_string(),
                         span_start: u32::try_from(index)
                             .expect("the fixed companion fixture count fits in u32"),
@@ -5419,7 +5407,7 @@ mod tests {
             vec![BaseName::new("callback_contract")],
             BaseName::new("UseCallback"),
         );
-        let function = baml_codegen_types::Function {
+        let function = baml_sdkgen_types::Function {
             name: BaseName::new("UseCallback"),
             generic_params: vec![],
             docstring: None,
@@ -5433,7 +5421,7 @@ mod tests {
             return_type: primitive_string(),
             throws: None,
             watchers: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "callback_contract.baml".to_string(),
                 span_start: 0,
             },
@@ -5484,7 +5472,7 @@ mod tests {
             ret: Box::new(type_r.clone()),
             throws: Box::new(Ty::Never),
         };
-        let function = baml_codegen_types::Function {
+        let function = baml_sdkgen_types::Function {
             name: BaseName::new("Apply"),
             generic_params: vec![parameter_t, parameter_r],
             docstring: None,
@@ -5507,7 +5495,7 @@ mod tests {
             return_type: type_r,
             throws: None,
             watchers: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "generic_callback_contract.baml".to_string(),
                 span_start: 0,
             },
@@ -5546,7 +5534,7 @@ mod tests {
             BaseName::new("Echo"),
         );
         let nullable_bytes = Ty::Union(Box::new([primitive_bytes(), Ty::Null])).canonicalize();
-        let function = baml_codegen_types::Function {
+        let function = baml_sdkgen_types::Function {
             name: BaseName::new("Echo"),
             generic_params: vec![],
             docstring: None,
@@ -5560,7 +5548,7 @@ mod tests {
             return_type: nullable_bytes,
             throws: None,
             watchers: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "nullable_bytes_contract.baml".to_string(),
                 span_start: 0,
             },
@@ -5639,7 +5627,7 @@ mod tests {
                 vec![BaseName::new("union_order")],
                 BaseName::new("RoundTrip"),
             );
-            let function = baml_codegen_types::Function {
+            let function = baml_sdkgen_types::Function {
                 name: BaseName::new("RoundTrip"),
                 generic_params: vec![],
                 docstring: None,
@@ -5653,7 +5641,7 @@ mod tests {
                 return_type: union,
                 throws: None,
                 watchers: vec![],
-                origin: baml_codegen_types::Origin {
+                origin: baml_sdkgen_types::Origin {
                     source_file_path: "union_order.baml".to_string(),
                     span_start: 0,
                 },
@@ -6048,11 +6036,11 @@ mod tests {
         let mut symbols = HashMap::new();
         symbols.insert(
             alias_name.clone(),
-            Symbol::TypeAlias(baml_codegen_types::TypeAlias {
+            Symbol::TypeAlias(baml_sdkgen_types::TypeAlias {
                 name: alias_name.clone(),
                 resolves_to: primitive_string(),
                 recursive: false,
-                origin: baml_codegen_types::Origin {
+                origin: baml_sdkgen_types::Origin {
                     source_file_path: "projection.baml".to_string(),
                     span_start: 0,
                 },
@@ -6066,7 +6054,7 @@ mod tests {
             Ty::TypeAlias(alias_name),
             Ty::Literal(
                 Literal::String("fixed".to_string()),
-                baml_codegen_types::Freshness::Regular,
+                baml_sdkgen_types::Freshness::Regular,
             ),
         ]));
         let error = require_unambiguous_csharp_unions(&union, &model, "test.location")
@@ -6086,7 +6074,7 @@ mod tests {
             BaseName::new("Counter"),
         );
         let method_name = BaseName::new("new");
-        let method = baml_codegen_types::Function {
+        let method = baml_sdkgen_types::Function {
             name: method_name.clone(),
             generic_params: vec![],
             docstring: None,
@@ -6100,13 +6088,13 @@ mod tests {
             return_type: Ty::Class(owner.clone(), Box::new([])),
             throws: None,
             watchers: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "only_methods.baml".to_string(),
                 span_start: 20,
             },
         };
         let stream_method_name = BaseName::new("new@stream");
-        let stream_method = baml_codegen_types::Function {
+        let stream_method = baml_sdkgen_types::Function {
             name: stream_method_name.clone(),
             generic_params: vec![],
             docstring: None,
@@ -6127,7 +6115,7 @@ mod tests {
             ),
             throws: None,
             watchers: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "only_methods.baml".to_string(),
                 span_start: 21,
             },
@@ -6143,7 +6131,7 @@ mod tests {
             }],
             static_methods: vec![method, stream_method],
             instance_methods: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "only_methods.baml".to_string(),
                 span_start: 0,
             },
@@ -6198,5 +6186,31 @@ mod tests {
         assert!(source.contains("BamlOptional<global::Baml.BamlValue> client = default"));
         assert!(!source.contains("NewStreamAsync"));
         assert!(source.contains("\"user.only_methods.Counter.new@stream\""));
+    }
+}
+
+#[cfg(test)]
+mod shared_traversal_tests {
+    use super::*;
+
+    #[test]
+    fn nested_variables_are_found_but_synthetic_callable_effects_are_not() {
+        let variable = |name: &str| Ty::TypeVar(baml_sdkgen_types::ParamTy::new(0, name.into()));
+        let callable = |throws| Ty::Function {
+            params: Box::new([]),
+            ret: Box::new(Ty::Int),
+            throws: Box::new(throws),
+        };
+        assert!(!contains_type_var(&callable(variable("__effect_param_0"))));
+        assert!(contains_type_var(&callable(variable("E"))));
+        let interface = Ty::Interface(
+            Name::new("user".into(), vec![], "I".into()),
+            Box::new([]),
+            Box::new([("Item".into(), variable("T"))]),
+        );
+        assert!(contains_type_var(&Ty::Future(
+            Box::new(interface),
+            Box::new(Ty::Never)
+        )));
     }
 }

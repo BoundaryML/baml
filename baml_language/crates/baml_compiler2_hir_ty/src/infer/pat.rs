@@ -88,6 +88,17 @@ impl<'db> InferenceContext<'db> {
         let scrut_binding = self.narrowable_binding(body, scrutinee);
         let branch_expectation = expected.adjust_for_branches(&mut self.table);
 
+        // Arm execution can change outer locals. Do not restore an entry
+        // fact after an arm (or its deferred cleanup) invalidates it.
+        for &arm in arms {
+            let arm = &body.match_arms[arm];
+            for root in arm.guard.into_iter().chain(std::iter::once(arm.body)) {
+                for binding in self.assigned_bindings(body, root) {
+                    self.flow.remove(&binding);
+                }
+            }
+        }
+
         let entry_diverges = self.diverges;
         let mut arm_tys = Vec::new();
         let mut matrix_arms: Vec<DPat> = Vec::new();
@@ -1185,7 +1196,11 @@ impl<'db> InferenceContext<'db> {
         };
 
         let head = crate::lower::class_ty(self.lang(), qtn.clone(), args.clone());
-        let declared = crate::lower::class_field_types(self.db, class);
+        let declared = if self.is_opaque_trace_type(&qtn) {
+            Vec::new()
+        } else {
+            crate::lower::class_field_types(self.db, class)
+        };
         let mut field_covers = true;
         let mut sub_dpats: Vec<Option<DPat>> = vec![None; declared.len()];
         for (name, field_pat) in field_pats {

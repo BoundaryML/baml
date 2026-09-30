@@ -328,6 +328,19 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.emit_duplicate_diagnostics(seen);
     }
 
+    /// Reject a value binding or body type binding that takes one of
+    /// [`DESUGAR_PATH_ROOTS`]: the compiler emits paths rooted at those names,
+    /// and a binding shadows a package root where an item does not, so it
+    /// would break every desugared path in scope.
+    fn reject_reserved_binding_name(&mut self, name: &Name, span: TextRange) {
+        if baml_base::lang::is_reserved_binding_name(name.as_str()) {
+            self.diagnostics.push(Hir2Diagnostic::ReservedBindingName {
+                name: name.clone(),
+                span,
+            });
+        }
+    }
+
     /// Emit `DuplicateDefinition` diagnostics for any name with more than one site.
     fn emit_duplicate_diagnostics(&mut self, seen: FxHashMap<Name, Vec<MemberSite>>) {
         let scope = self.current_scope_path();
@@ -427,16 +440,22 @@ impl<'db> SemanticIndexBuilder<'db> {
     ) {
         match &body.stmts[stmt_id] {
             ast::Stmt::Expr(expr) => self.walk_expr(*expr, body, source_map, true),
-            // The runtime operand is an ordinary expression in the enclosing
-            // scope (`T` is not yet in scope while its own operand runs).
-            ast::Stmt::TypeBinding {
-                value: ast::TypeBindingValue::Runtime(operand),
-                ..
-            } => self.walk_expr(*operand, body, source_map, true),
-            ast::Stmt::TypeBinding {
-                value: ast::TypeBindingValue::Static(_),
-                ..
-            } => {}
+            ast::Stmt::TypeBinding { name, value } => {
+                // A body type binding shadows a package root in value paths
+                // just as a value binding does.
+                if let Some(span) = source_map.type_binding_name_span(stmt_id) {
+                    self.reject_reserved_binding_name(name, span);
+                }
+                match value {
+                    // The runtime operand is an ordinary expression in the
+                    // enclosing scope (`T` is not yet in scope while its own
+                    // operand runs).
+                    ast::TypeBindingValue::Runtime(operand) => {
+                        self.walk_expr(*operand, body, source_map, true);
+                    }
+                    ast::TypeBindingValue::Static(_) => {}
+                }
+            }
             ast::Stmt::Let {
                 pattern,
                 initializer,
@@ -643,19 +662,6 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.walk_expr(*value, body, source_map, true);
                 }
             }
-            ast::Expr::Spawn {
-                name,
-                with_exprs,
-                body: spawn_body,
-            } => {
-                if let Some(name) = name {
-                    self.walk_expr(*name, body, source_map, true);
-                }
-                for with_expr in with_exprs {
-                    self.walk_expr(*with_expr, body, source_map, true);
-                }
-                self.walk_expr(*spawn_body, body, source_map, true);
-            }
             ast::Expr::Await { future } => {
                 self.walk_expr(*future, body, source_map, true);
             }
@@ -852,6 +858,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
 
         for (name, (name_range, bind_pattern)) in names.names {
+            self.reject_reserved_binding_name(&name, name_range);
             self.scope_bindings[scope_id.index() as usize]
                 .bindings
                 .push(LocalBinding {
@@ -1141,6 +1148,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         let scope_id = self.current_scope_id();
         self.lambda_scopes.push((key, scope_id));
         for (idx, param) in lambda.params.iter().enumerate() {
+            self.reject_reserved_binding_name(&param.name, param.name_span);
             self.scope_bindings[scope_id.index() as usize]
                 .params
                 .push((param.name.clone(), idx));
@@ -1296,6 +1304,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.record_scope_owner(scope_id, ItemScopeOwner::Function(local_id));
 
         for (idx, param) in f.params.iter().enumerate() {
+            self.reject_reserved_binding_name(&param.name, param.name_span);
             self.scope_bindings[scope_id.index() as usize]
                 .params
                 .push((param.name.clone(), idx));
@@ -1760,6 +1769,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     ast::BuiltinKind::Io => "$rust_io_function",
                     ast::BuiltinKind::Intrinsic => "$compiler_intrinsic",
                     ast::BuiltinKind::AwaitAny => "$await_any",
+                    ast::BuiltinKind::Spawn => "$spawn",
                 };
                 self.diagnostics.push(Hir2Diagnostic::BuiltinOnlySyntax {
                     feature: feature.to_string(),

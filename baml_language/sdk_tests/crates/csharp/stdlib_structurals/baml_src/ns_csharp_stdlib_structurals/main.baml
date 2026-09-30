@@ -26,6 +26,10 @@ function echo_done(value: baml.iter.Done) -> baml.iter.Done {
   value
 }
 
+function echo_root(value: baml.spawn.Root) -> baml.spawn.Root {
+  value
+}
+
 function echo_csv_error_kind(value: baml.csv.ErrorKind) -> baml.csv.ErrorKind {
   value
 }
