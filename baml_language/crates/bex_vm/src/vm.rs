@@ -1719,6 +1719,10 @@ pub struct BytecodeProgram {
 /// 1. Attaches native function implementations to builtin functions
 /// 2. Builds resolved name lookups for functions, classes, and enums
 pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram, VmInternalError> {
+    // The one road from an executable into a VM: a decoded program is
+    // checked against the format's laws here, and everything after — the
+    // rendered views, the loader — indexes into a program that keeps them.
+    program.validate()?;
     let callables = program.rendered_callables();
     // Convert objects, attaching native functions
     let mut objects: Vec<Object> = program

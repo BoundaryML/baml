@@ -4,18 +4,18 @@
 //! writes its assigned tag), and the type switches solved over those tags.
 
 use baml_base::Name;
-use baml_linker_types::{CompilationUnit, InitTail, import_ordinal};
+use baml_linker_types::{CompilationUnit, ImportEntry, InitTail, import_ordinal};
 use baml_type::typetag::TypeTag;
 use bex_vm_types::{
     GlobalIndex, Object, ObjectIndex, TypeHead,
-    bytecode::SwitchDispatch,
+    bytecode::{SwitchDispatch, SwitchKey},
     head_walk::visit_object_heads_mut,
     relink::{IndexOperand, visit_object_operands},
 };
 
 use super::{
     LinkError, PerPackage,
-    layout::{Placed, SlotLayout, TailSlots, UnitObjects},
+    layout::{Bucket, Placed, SlotLayout, TailSlots, UnitObjects},
 };
 
 /// Resolve a global operand in unit or tail convention: an import ordinal
@@ -36,6 +36,46 @@ pub(super) fn global_operand(
         None => local(raw).ok_or_else(|| {
             LinkError::invalid(format!(
                 "package `{name}` references local global {raw} outside its slots"
+            ))
+        }),
+    }
+}
+
+/// Resolve an object operand that must name a type declaration: an import
+/// of a type through `imports`, a local declaration through `local`. What a
+/// head or a type switch's declaration key may name — the image index it
+/// resolves to is the tag the link assigns that declaration.
+fn declaration_operand(
+    name: &Name,
+    raw: usize,
+    entries: &[ImportEntry],
+    imports: &[usize],
+    local: impl Fn(usize) -> Option<usize>,
+) -> Result<usize, LinkError> {
+    match import_ordinal(raw) {
+        Some(ordinal) => {
+            let Some(entry) = entries.get(ordinal) else {
+                return Err(LinkError::invalid(format!(
+                    "package `{name}` references object import {ordinal} of {}",
+                    entries.len()
+                )));
+            };
+            if !entry.key.path.is_type() {
+                return Err(LinkError::invalid(format!(
+                    "package `{name}` names {} where a type declaration is required",
+                    entry.key.path
+                )));
+            }
+            imports.get(ordinal).copied().ok_or_else(|| {
+                LinkError::invalid(format!(
+                    "package `{name}` references object import {ordinal} of {}",
+                    imports.len()
+                ))
+            })
+        }
+        None => local(raw).ok_or_else(|| {
+            LinkError::invalid(format!(
+                "package `{name}` names local object {raw}, which is not a type declaration"
             ))
         }),
     }
@@ -103,11 +143,19 @@ pub(super) trait OperandSpace {
     fn ordinal(&self) -> usize;
     fn object(&self, raw: usize) -> Result<usize, LinkError>;
     fn global(&self, raw: usize) -> Result<usize, LinkError>;
+    /// An object operand that must name a type declaration.
+    fn declaration(&self, raw: usize) -> Result<usize, LinkError>;
 
     /// The tag the link assigns the declaration a unit-convention head
     /// names: that declaration's image index.
     fn head(&self, head: &TypeHead) -> Result<TypeHead, LinkError> {
-        let abs = self.object(head.operand().raw())?;
+        let Some(operand) = head.try_operand() else {
+            return Err(LinkError::invalid(format!(
+                "package `{}` carries a type head outside the unit convention",
+                self.name()
+            )));
+        };
+        let abs = self.declaration(operand.raw())?;
         Ok(TypeHead::unresolved(TypeTag::of_static_index(abs)))
     }
 }
@@ -141,6 +189,22 @@ impl OperandSpace for UnitSpace<'_> {
             self.slots.local(local)
         })
     }
+
+    fn declaration(&self, raw: usize) -> Result<usize, LinkError> {
+        // The type buckets come first in the unit convention, so a local
+        // declaration operand is one below the code bucket.
+        declaration_operand(
+            self.name,
+            raw,
+            &self.unit.object_imports,
+            &self.imports.objects,
+            |local| {
+                (local < Bucket::type_count(self.unit))
+                    .then(|| self.objects.local(self.unit, local))
+                    .flatten()
+            },
+        )
+    }
 }
 
 pub(super) struct TailSpace<'l> {
@@ -172,12 +236,42 @@ impl OperandSpace for TailSpace<'_> {
             self.slots.local(self.tail, local)
         })
     }
+
+    fn declaration(&self, raw: usize) -> Result<usize, LinkError> {
+        // A tail declares no types: every declaration it names is an import.
+        declaration_operand(
+            self.name,
+            raw,
+            &self.tail.object_imports,
+            &self.imports.objects,
+            |_| None,
+        )
+    }
 }
 
 /// Rewrite every index operand of a pooled `object` into image space, every
 /// head into the tag its declaration is assigned, and solve every type
 /// switch the object carries over those tags.
 pub(super) fn relocate(object: &mut Object, space: &impl OperandSpace) -> Result<(), LinkError> {
+    // A type switch states keys, and each declaration key names a type
+    // declaration — checked while the keys are still unit operands, before
+    // the walk below rewrites them.
+    if let Object::Function(function) = &*object {
+        for table in &function.bytecode.switch_tables {
+            let SwitchDispatch::Keys(keys) = &table.dispatch else {
+                return Err(LinkError::invalid(format!(
+                    "package `{}`: function `{}` states a switch by values instead of keys",
+                    space.name(),
+                    function.name
+                )));
+            };
+            for key in keys {
+                if let SwitchKey::Declaration(declaration) = key {
+                    space.declaration(declaration.raw())?;
+                }
+            }
+        }
+    }
     let mut failure = None;
     visit_object_operands(object, |operand| {
         if failure.is_some() {
@@ -213,11 +307,7 @@ pub(super) fn relocate(object: &mut Object, space: &impl OperandSpace) -> Result
         }
         for table in &mut function.bytecode.switch_tables {
             let SwitchDispatch::Keys(keys) = &table.dispatch else {
-                return Err(LinkError::invalid(format!(
-                    "package `{}`: function `{}` states a switch by values instead of keys",
-                    space.name(),
-                    function.name
-                )));
+                unreachable!("every table was checked to state keys before relocation")
             };
             // The keys are image indices now; the tag of each is its index.
             table.dispatch = SwitchDispatch::solved(keys, |declaration| {

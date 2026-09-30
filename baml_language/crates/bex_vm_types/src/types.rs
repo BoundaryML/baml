@@ -21,7 +21,7 @@ mod type_alias;
 mod type_value;
 mod value;
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 /// Re-exported from `baml_type`, which owns the naming vocabulary; the
 /// runtime spells it unqualified everywhere it builds a declaration.
@@ -156,9 +156,304 @@ pub struct RetryPolicyMeta {
     pub max_delay_ms: i64,
 }
 
+/// An executable that breaks the format's laws: an index outside its pool, a
+/// table naming an object of another kind, a head or switch the loader
+/// could not bind. See [`Program::validate`].
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("invalid program: {0}")]
+pub struct InvalidProgram(pub String);
+
 impl Program {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Check the executable against the format's laws — every index within
+    /// its pool, every table naming an object of the kind it says, every
+    /// head bindable to the declaration its tag encodes, every type switch
+    /// solved, the init order exactly the packages with an `$init` — so that
+    /// nothing downstream indexes into a program that breaks them. A linked
+    /// program satisfies them by construction; a decoded one is checked here,
+    /// at the one road into a VM, so a corrupt or forged artifact is refused
+    /// rather than a panic in the loader.
+    ///
+    /// # Errors
+    ///
+    /// The first law broken, named.
+    pub fn validate(&self) -> Result<(), InvalidProgram> {
+        let invalid = |message: String| InvalidProgram(message);
+        let object_count = self.objects.len();
+        let object = |index: ObjectIndex, role: &str| -> Result<&Object, InvalidProgram> {
+            self.objects.get(index.raw()).ok_or_else(|| {
+                invalid(format!(
+                    "{role} names object {} of {object_count}",
+                    index.raw()
+                ))
+            })
+        };
+        let function =
+            |index: ObjectIndex, role: &str, is_body: bool| -> Result<(), InvalidProgram> {
+                match object(index, role)? {
+                    Object::Function(function) if function.is_interface_body == is_body => Ok(()),
+                    other => Err(invalid(format!(
+                        "{role} names a {:?} object where {} is required",
+                        ObjectType::of(other),
+                        if is_body {
+                            "an interface body"
+                        } else {
+                            "a function"
+                        }
+                    ))),
+                }
+            };
+
+        let package_count = self.packages.len();
+        if self.root as usize >= package_count {
+            return Err(invalid(format!(
+                "the root is package {} of {package_count}",
+                self.root
+            )));
+        }
+        for package in &self.packages {
+            let name = &package.name;
+            let mut edge_names = HashSet::new();
+            for edge in &package.edges {
+                if edge.target as usize >= package_count {
+                    return Err(invalid(format!(
+                        "package `{name}` edge `{}` names package {} of {package_count}",
+                        edge.name, edge.target
+                    )));
+                }
+                if !edge_names.insert(&edge.name) {
+                    return Err(invalid(format!(
+                        "package `{name}` reaches two packages as `{}`",
+                        edge.name
+                    )));
+                }
+            }
+            let declarations = |kind: &str,
+                                table: &IndexMap<LocalName, ObjectIndex>,
+                                holds: fn(&Object) -> bool|
+             -> Result<(), InvalidProgram> {
+                for (item, &index) in table {
+                    let role = format!("package `{name}` {kind} `{item}`");
+                    let pooled = object(index, &role)?;
+                    if !holds(pooled) {
+                        return Err(invalid(format!(
+                            "{role} names a {:?} object",
+                            ObjectType::of(pooled)
+                        )));
+                    }
+                }
+                Ok(())
+            };
+            declarations("class", &package.classes, |object| {
+                matches!(object, Object::Class(_))
+            })?;
+            declarations("enum", &package.enums, |object| {
+                matches!(object, Object::Enum(_))
+            })?;
+            declarations("interface", &package.interfaces, |object| {
+                matches!(object, Object::Interface(_))
+            })?;
+            declarations("type alias", &package.type_aliases, |object| {
+                matches!(object, Object::TypeAlias(_))
+            })?;
+            for (&interface, rules) in &package.impl_rules {
+                let role = format!("package `{name}` implements object {}", interface.raw());
+                if !matches!(object(interface, &role)?, Object::Interface(_)) {
+                    return Err(invalid(format!("{role}, which is not an interface")));
+                }
+                for rule in rules {
+                    if rule.interface_head != interface {
+                        return Err(invalid(format!(
+                            "{role} with a rule whose head is object {}",
+                            rule.interface_head.raw()
+                        )));
+                    }
+                    for (method, body) in &rule.methods {
+                        function(body.fqn, &format!("{role}, method `{method}`,"), true)?;
+                    }
+                }
+            }
+            if let Some(init) = package.init {
+                function(init, &format!("package `{name}` `$init`"), false)?;
+            }
+            if let Some(test_init) = package.test_init {
+                function(test_init, &format!("package `{name}` `$init_test`"), false)?;
+            }
+            for (path, &ordinal) in &package.globals {
+                if !path.owns_global_slot() {
+                    return Err(invalid(format!(
+                        "package `{name}` slots {path}, which owns no cell"
+                    )));
+                }
+                let slot = package.slot_base.raw() + ordinal as usize;
+                let Some(cell) = self.globals.get(slot) else {
+                    return Err(invalid(format!(
+                        "package `{name}` slots {path} at cell {slot} of {}",
+                        self.globals.len()
+                    )));
+                };
+                match path {
+                    DeclPath::Function(_) | DeclPath::InterfaceBody(_) => {
+                        let ConstValue::Object(index) = cell else {
+                            return Err(invalid(format!(
+                                "package `{name}` cell for {path} holds no object"
+                            )));
+                        };
+                        function(
+                            *index,
+                            &format!("package `{name}` cell for {path}"),
+                            matches!(path, DeclPath::InterfaceBody(_)),
+                        )?;
+                    }
+                    DeclPath::Let(_) => {}
+                    DeclPath::Class(_)
+                    | DeclPath::Enum(_)
+                    | DeclPath::Interface(_)
+                    | DeclPath::TypeAlias(_) => {
+                        unreachable!("a type owns no cell: checked above")
+                    }
+                }
+            }
+        }
+
+        let with_init: BTreeSet<usize> = self
+            .packages
+            .iter()
+            .enumerate()
+            .filter(|(_, package)| package.init.is_some())
+            .map(|(ordinal, _)| ordinal)
+            .collect();
+        let mut ordered = BTreeSet::new();
+        for &ordinal in &self.init_order {
+            let ordinal = ordinal as usize;
+            if ordinal >= package_count {
+                return Err(invalid(format!(
+                    "the init order names package {ordinal} of {package_count}"
+                )));
+            }
+            if !ordered.insert(ordinal) {
+                return Err(invalid(format!(
+                    "the init order names package {ordinal} twice"
+                )));
+            }
+        }
+        if ordered != with_init {
+            return Err(invalid(
+                "the init order is not exactly the packages with an `$init`".to_string(),
+            ));
+        }
+
+        for (slot, cell) in self.globals.iter().enumerate() {
+            if let ConstValue::Object(index) = cell {
+                object(*index, &format!("cell {slot}"))?;
+            }
+        }
+
+        for (index, pooled) in self.objects.iter().enumerate() {
+            let role = format!("object {index}");
+            let mut failure = None;
+            crate::head_walk::visit_object_heads(pooled, &mut |head| {
+                if failure.is_some() {
+                    return;
+                }
+                let tag = head.tag();
+                let bound = tag
+                    .static_index()
+                    .and_then(|declaration| self.objects.get(declaration))
+                    .is_some_and(|declaration| declaration.declaration_tag() == Some(tag));
+                if !bound {
+                    failure = Some(invalid(format!(
+                        "{role} carries a head with tag {tag:?}, which names no declaration"
+                    )));
+                }
+            });
+            if let Some(failure) = failure {
+                return Err(failure);
+            }
+            match pooled {
+                Object::Function(function) => {
+                    crate::relink::visit_index_operands_ref(function, |operand| {
+                        if failure.is_some() {
+                            return;
+                        }
+                        let in_range = match operand {
+                            crate::relink::IndexOperandRef::Object(index) => {
+                                index.raw() < object_count
+                            }
+                            crate::relink::IndexOperandRef::Global(slot) => {
+                                slot.raw() < self.globals.len()
+                            }
+                        };
+                        if !in_range {
+                            failure = Some(invalid(format!(
+                                "{role} (function `{}`) references an operand outside the program",
+                                function.name
+                            )));
+                        }
+                    });
+                    if let Some(failure) = failure {
+                        return Err(failure);
+                    }
+                    for instruction in &function.bytecode.instructions {
+                        if let crate::bytecode::Instruction::LoadCurrentPackage(package) =
+                            instruction
+                            && *package >= package_count
+                        {
+                            return Err(invalid(format!(
+                                "{role} (function `{}`) loads package {package} of {package_count}",
+                                function.name
+                            )));
+                        }
+                    }
+                    if let Some((table, _)) = function
+                        .bytecode
+                        .switch_tables
+                        .iter()
+                        .enumerate()
+                        .find(|(_, table)| !table.dispatch.is_dispatchable())
+                    {
+                        return Err(invalid(format!(
+                            "{role} (function `{}`) switch table {table} is not solved",
+                            function.name
+                        )));
+                    }
+                }
+                Object::Interface(interface) => {
+                    for method in &interface.methods {
+                        if let Some(default) = method.default {
+                            function(
+                                default,
+                                &format!("{role} (interface) default of `{}`", method.name),
+                                true,
+                            )?;
+                        }
+                    }
+                }
+                Object::Class(class) => {
+                    for (name, method) in &class.methods {
+                        function(
+                            method.function,
+                            &format!("{role} (class) method `{name}`"),
+                            false,
+                        )?;
+                    }
+                }
+                Object::GenericFunction(generic)
+                    if generic.function.raw() >= self.globals.len() =>
+                {
+                    return Err(invalid(format!(
+                        "{role} (generic value) references cell {} of {}",
+                        generic.function.raw(),
+                        self.globals.len()
+                    )));
+                }
+                _ => {}
+            }
+        }
+        Ok(())
     }
 
     /// Add an object to the pool and return its index.
@@ -549,7 +844,17 @@ impl Type {
 
 #[cfg(test)]
 mod tests {
-    use super::{ConstValue, HeapPtr, Instance, Type, Value, format_float};
+    use super::{ConstValue, HeapPtr, Instance, Program, Type, Value, format_float};
+
+    /// The empty program names a root it does not have; nothing may index
+    /// into it, and the check says so instead.
+    #[test]
+    fn an_empty_program_is_refused_for_its_root() {
+        let error = Program::default()
+            .validate()
+            .expect_err("no package for the root");
+        assert!(error.0.contains("the root is package 0 of 0"), "{error}");
+    }
 
     #[test]
     fn test_format_float() {

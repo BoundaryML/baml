@@ -48,6 +48,36 @@ impl Bucket {
             Self::Code => &unit.code,
         }
     }
+
+    /// The number of objects in the type buckets — the unit-convention
+    /// operands below it name declarations, the ones from it code.
+    pub(super) fn type_count(unit: &CompilationUnit) -> usize {
+        unit.classes.len()
+            + unit.enums.len()
+            + unit.interfaces.len()
+            + unit.type_alias_objects.len()
+    }
+}
+
+/// Refuse a unit whose buckets hold objects of another kind, or a tail
+/// holding what only a unit's type buckets may.
+pub(super) fn validate_objects(
+    name: &Name,
+    unit: &CompilationUnit,
+    tail: Option<&InitTail>,
+) -> Result<(), LinkError> {
+    let misplaced = unit
+        .misplaced_object()
+        .or_else(|| tail.and_then(InitTail::misplaced_object));
+    match misplaced {
+        Some(misplaced) => Err(LinkError::invalid(format!(
+            "package `{name}` pools a {:?} object at offset {} of `{}`",
+            bex_vm_types::ObjectType::of(misplaced.object),
+            misplaced.offset,
+            misplaced.bucket
+        ))),
+        None => Ok(()),
+    }
 }
 
 /// Where one pooled object of a unit or tail landed.
@@ -80,8 +110,9 @@ pub(super) struct HeadKeys {
     /// By unit-convention object index over the type buckets; `None` where
     /// no export names the object (a malformed unit).
     objects: Vec<Option<PathKey>>,
-    /// By import ordinal.
-    imports: Vec<PathKey>,
+    /// By import ordinal; `None` where the import is not of a type, or
+    /// names a dependency slot the table lacks (a malformed unit).
+    imports: Vec<Option<PathKey>>,
 }
 
 impl HeadKeys {
@@ -126,22 +157,30 @@ impl HeadKeys {
     fn import_keys(
         entries: &[baml_linker_types::ImportEntry],
         table: &[LinkPackageId],
-    ) -> Vec<PathKey> {
+    ) -> Vec<Option<PathKey>> {
         entries
             .iter()
-            .filter_map(|entry| {
-                table
-                    .get(entry.key.dep.0 as usize)
-                    .map(|&id| (id, entry.key.path.clone()))
+            .map(|entry| {
+                let id = *table.get(entry.key.dep.0 as usize)?;
+                entry
+                    .key
+                    .path
+                    .is_type()
+                    .then(|| (id, entry.key.path.clone()))
             })
             .collect()
     }
 
     /// The declaration `head` names.
     fn key(&self, name: &Name, head: &TypeHead) -> Result<PathKey, LinkError> {
-        let raw = head.operand().raw();
+        let Some(operand) = head.try_operand() else {
+            return Err(LinkError::invalid(format!(
+                "package `{name}` carries a type head outside the unit convention"
+            )));
+        };
+        let raw = operand.raw();
         let key = match import_ordinal(raw) {
-            Some(ordinal) => self.imports.get(ordinal).cloned(),
+            Some(ordinal) => self.imports.get(ordinal).cloned().flatten(),
             None => self.objects.get(raw).cloned().flatten(),
         };
         key.ok_or_else(|| {

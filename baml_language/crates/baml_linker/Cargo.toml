@@ -24,3 +24,6 @@ baml_linker_types = { workspace = true }
 baml_type = { workspace = true }
 bex_vm_types = { workspace = true }
 indexmap = { workspace = true }
+
+[dev-dependencies]
+borsh = { workspace = true }

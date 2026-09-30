@@ -455,7 +455,7 @@ fn generic_values_are_interned_by_base_slot_across_packages_and_tails() {
         ],
     };
     set.packages[1].tail = Some(&tail);
-    let program = link(&set).unwrap();
+    let program = linked(&set);
     // Pool: lib.f, lib's f<int>, user's f<string>, user.g, $init — every
     // duplicate shadowed.
     assert_eq!(
@@ -498,7 +498,7 @@ fn dependency_slots_bind_through_edge_tables() {
             package("user", vec![("gadgets", 0)], &consumer, &record),
         ],
     };
-    let program = link(&set).unwrap();
+    let program = linked(&set);
     assert_eq!(
         function(&program, 1).bytecode.instructions[0],
         Instruction::AllocInstance {
@@ -547,7 +547,7 @@ fn transitive_dependencies_bind_through_the_parent_edge_table() {
             package("user", vec![("b", 1)], &consumer, &record),
         ],
     };
-    let program = link(&set).unwrap();
+    let program = linked(&set);
     assert_eq!(
         function(&program, 1).bytecode.instructions[0],
         Instruction::AllocInstance {
@@ -591,7 +591,7 @@ fn layout_is_package_major_in_set_order() {
             stdlib,
         ],
     };
-    let program = link(&set).unwrap();
+    let program = linked(&set);
     assert_eq!(
         function_names(&program),
         vec!["class user.U", "user.f", "class user.S", "baml.x"]
@@ -827,7 +827,7 @@ fn heads_and_switch_keys_relocate_to_the_assigned_tags() {
             package("user", vec![("app", 0)], &consumer, &record),
         ],
     };
-    let program = link(&set).unwrap();
+    let program = linked(&set);
     let foo = TypeTag::of_static_index(0);
     let Object::Class(class) = &program.objects[ObjectIndex::from_raw(0)] else {
         panic!("object 0 is not the class")
@@ -941,7 +941,7 @@ fn a_switch_over_many_sparse_declarations_links() {
             package("user", vec![("app", 0)], &consumer, &record),
         ],
     };
-    let program = link(&set).expect("a switch links whatever tags its keys were assigned");
+    let program = linked(&set);
     let table = &function(&program, CLASSES).bytecode.switch_tables[0];
     assert!(table.dispatch.is_dispatchable());
     for (arm, &class) in armed.iter().enumerate() {
@@ -1232,4 +1232,173 @@ fn a_declared_dependency_without_an_interface_payload_is_refused() {
             edge: Name::new("app"),
         })
     );
+}
+
+/// Link `set`, and hold the result to the executable's laws: what the link
+/// produces by construction is exactly what a decoded program is checked
+/// against, so every linked program here is the oracle for that check.
+fn linked(set: &LinkSet<'_>) -> Program {
+    let program = link(set).expect("the set links");
+    program
+        .validate()
+        .expect("a linked program satisfies the executable's laws");
+    program
+}
+
+/// A one-package set around `unit`, with `tail` when given.
+fn lone(unit: &CompilationUnit, tail: Option<&InitTail>, record: &PackageRecord) -> Program {
+    let mut package = package("user", vec![], unit, record);
+    package.tail = tail;
+    linked(&LinkSet {
+        root: LinkPackageId(0),
+        packages: vec![package],
+    })
+}
+
+fn refused(unit: &CompilationUnit, tail: Option<&InitTail>, record: &PackageRecord) -> String {
+    let mut package = package("user", vec![], unit, record);
+    package.tail = tail;
+    match link(&LinkSet {
+        root: LinkPackageId(0),
+        packages: vec![package],
+    }) {
+        Err(LinkError::InvalidUnit(message)) => message,
+        other => panic!("expected an invalid unit, got {other:?}"),
+    }
+}
+
+/// A malformed unit is refused as such, never a panic, whatever it puts
+/// where: each bucket holds its kind, an exported function is a function, a
+/// head and a type switch's declaration key name type declarations, and a
+/// head is in the unit convention. The same units link once corrected.
+#[test]
+fn a_unit_whose_buckets_hold_another_kind_is_refused() {
+    let record = interface_record(b"iface");
+    let mut unit = unit_with_class("Foo", "Foo");
+    // A function in the class bucket.
+    unit.classes
+        .push(func("user.stray", vec![Instruction::Return]));
+    assert!(refused(&unit, None, &record).contains("of `classes`"));
+
+    // A class in the code bucket: a declaration no export names.
+    let mut unit = unit_with_fn("user.f", vec![Instruction::Return]);
+    unit.code.push(class("Stray"));
+    assert!(refused(&unit, None, &record).contains("of `code`"));
+
+    // A class in a tail.
+    let unit = unit_with_fn("user.f", vec![Instruction::Return]);
+    let mut tail = let_bearing_tail("user");
+    tail.objects.push(class("Stray"));
+    tail.test_objects_start = 2;
+    assert!(refused(&unit, Some(&tail), &record).contains("of `objects`"));
+}
+
+#[test]
+fn an_exported_function_must_be_a_function() {
+    let record = interface_record(b"iface");
+    // The code bucket holds a string where the export says a function is.
+    let mut unit = unit_with_fn("user.f", vec![Instruction::Return]);
+    unit.code[0] = Object::String("not code".into());
+    assert!(refused(&unit, None, &record).contains("as a String object"));
+
+    // A function exported as an interface body, and a body as a function.
+    let mut unit = unit_with_fn("user.f", vec![Instruction::Return]);
+    let Object::Function(function) = &mut unit.code[0] else {
+        unreachable!()
+    };
+    function.is_interface_body = true;
+    assert!(refused(&unit, None, &record).contains("exports function f"));
+}
+
+#[test]
+fn a_head_naming_a_code_object_is_refused() {
+    let record = interface_record(b"iface");
+    let mut unit = unit_with_fn("user.f", vec![Instruction::Return]);
+    let Object::Function(function) = &mut unit.code[0] else {
+        unreachable!()
+    };
+    // Operand 0 is the function itself: the unit has no type buckets.
+    function.param_types = vec![bex_vm_types::TyTemplate::Class(
+        TypeHead::unresolved_operand(ObjectIndex::from_raw(0)),
+        Box::new([]),
+    )];
+    assert!(refused(&unit, None, &record).contains("not a type declaration"));
+
+    // A head importing a FUNCTION of a dependency.
+    let provider = unit_with_fn("app.make", vec![Instruction::Return]);
+    let mut consumer = unit_with_fn("user.f", vec![Instruction::Return]);
+    let Object::Function(function) = &mut consumer.code[0] else {
+        unreachable!()
+    };
+    function.param_types = vec![bex_vm_types::TyTemplate::Class(
+        TypeHead::unresolved_operand(ObjectIndex::from_raw(import_operand(0))),
+        Box::new([]),
+    )];
+    consumer
+        .dependencies
+        .push(direct("app", fingerprint_of(&record)));
+    consumer.object_imports.push(import(1, free_fn("make")));
+    let set = LinkSet {
+        root: LinkPackageId(1),
+        packages: vec![
+            package("app", vec![], &provider, &record),
+            package("user", vec![("app", 0)], &consumer, &record),
+        ],
+    };
+    assert!(matches!(
+        link(&set),
+        Err(LinkError::InvalidUnit(message)) if message.contains("where a type declaration is required")
+    ));
+}
+
+#[test]
+fn a_head_outside_the_unit_convention_is_refused() {
+    let record = interface_record(b"iface");
+    let mut unit = unit_with_fn("user.f", vec![Instruction::Return]);
+    let Object::Function(function) = &mut unit.code[0] else {
+        unreachable!()
+    };
+    // A head decodes from its tag alone, so a decoded unit may carry any
+    // tag; a negative one encodes no operand.
+    let negative = <TypeHead as borsh::BorshDeserialize>::try_from_slice(
+        &borsh::to_vec(&TypeTag::from_i64(-3)).expect("serialize"),
+    )
+    .expect("decode");
+    function.param_types = vec![bex_vm_types::TyTemplate::Class(negative, Box::new([]))];
+    assert!(refused(&unit, None, &record).contains("outside the unit convention"));
+}
+
+#[test]
+fn a_switch_keyed_on_a_code_object_is_refused() {
+    let record = interface_record(b"iface");
+    let mut unit = unit_with_fn(
+        "user.f",
+        vec![Instruction::DenseTag(0), Instruction::Return],
+    );
+    let Object::Function(function) = &mut unit.code[0] else {
+        unreachable!()
+    };
+    function.bytecode.switch_tables = vec![SwitchTable::of_keys(
+        vec![SwitchKey::Declaration(ObjectIndex::from_raw(0))],
+        vec!["f".to_string()],
+    )];
+    assert!(refused(&unit, None, &record).contains("not a type declaration"));
+}
+
+#[test]
+fn a_tail_part_nothing_names_is_refused() {
+    let record = interface_record(b"iface");
+    let unit = unit_with_fn("user.f", vec![Instruction::Return]);
+    // A session submission's shape: helpers in the init part, no `$init`.
+    // The graft runs it; the static linker would place nothing and leave
+    // every operand into it dangling, so it refuses the tail.
+    let mut tail = let_bearing_tail("user");
+    tail.init = None;
+    assert!(refused(&unit, Some(&tail), &record).contains("no `$init` to run them"));
+
+    // Named, or empty, it links.
+    let program = lone(&unit, Some(&let_bearing_tail("user")), &record);
+    assert!(program.packages[0].init.is_some());
+    let program = lone(&unit, Some(&InitTail::default()), &record);
+    assert!(program.packages[0].init.is_none());
 }

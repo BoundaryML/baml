@@ -149,17 +149,27 @@ impl TypeHead {
     }
 
     /// The declaration operand of a head in the unit convention — the inverse
-    /// of [`unresolved_operand`](Self::unresolved_operand), for the linker or
-    /// grafter relocating it.
+    /// of [`unresolved_operand`](Self::unresolved_operand), for the emitter
+    /// reading back a head it minted itself. A consumer of a decoded unit
+    /// reads [`try_operand`](Self::try_operand) instead.
     #[must_use]
     pub fn operand(self) -> ObjectIndex {
-        debug_assert!(
-            !self.is_resolved(),
-            "a resolved head carries a tag, not a unit operand",
-        );
-        ObjectIndex::from_raw(
-            usize::try_from(self.tag.as_i64()).expect("a unit head carries an object operand"),
-        )
+        self.try_operand()
+            .expect("a unit head carries an object operand")
+    }
+
+    /// The declaration operand of a head in the unit convention, or `None`
+    /// for a head that is not in it — a resolved head, or a tag no object
+    /// operand encodes. What a linker or grafter reads off a decoded unit,
+    /// where a malformed head is a link error rather than an invariant.
+    #[must_use]
+    pub fn try_operand(self) -> Option<ObjectIndex> {
+        if self.is_resolved() {
+            return None;
+        }
+        usize::try_from(self.tag.as_i64())
+            .ok()
+            .map(ObjectIndex::from_raw)
     }
 
     /// The fully-qualified name of the declaration this head points at, or
@@ -576,6 +586,15 @@ mod tests {
         // before any tag exists.
         assert_eq!(head, TypeHead::unresolved_operand(operand));
         assert_ne!(head, TypeHead::unresolved_operand(ObjectIndex::from_raw(4)));
+
+        // A consumer reads the operand fallibly: a head outside the unit
+        // convention — a negative tag on the wire, a bound head — is `None`.
+        assert_eq!(head.try_operand(), Some(operand));
+        // A head decodes from its tag alone, so the wire can carry any tag.
+        let negative =
+            TypeHead::try_from_slice(&borsh::to_vec(&TypeTag::from_i64(-7)).expect("serialize"))
+                .expect("decode");
+        assert_eq!(negative.try_operand(), None);
     }
 
     /// A heap-headed type renders by reaching its declaration, so the runtime

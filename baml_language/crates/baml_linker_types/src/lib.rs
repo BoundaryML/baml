@@ -116,6 +116,87 @@ pub enum LocalRef {
     Code(u32),
 }
 
+/// An object pooled in a bucket of another kind: a malformed unit.
+#[derive(Clone, Copy, Debug)]
+pub struct MisplacedObject<'a> {
+    /// The bucket, by the field it is pooled in.
+    pub bucket: &'static str,
+    pub offset: usize,
+    pub object: &'a Object,
+}
+
+/// What a code bucket or a tail may hold: an object a link or graft copies
+/// into the image unchanged. A declaration is not one — it would carry a tag
+/// no link assigned and be a type no export names — and neither is a
+/// package or a rule, which the link constructs itself.
+#[must_use]
+pub fn is_placed_as_is(object: &Object) -> bool {
+    !matches!(
+        object,
+        Object::Class(_)
+            | Object::Enum(_)
+            | Object::Interface(_)
+            | Object::TypeAlias(_)
+            | Object::Package(_)
+            | Object::ImplRule(_)
+    )
+}
+
+impl CompilationUnit {
+    /// The first object pooled in a bucket that does not hold its kind, if
+    /// any: each type bucket holds declarations of its kind and the code
+    /// bucket holds only what [`is_placed_as_is`]. The consumers of a unit
+    /// refuse such a unit before reading its buckets by arithmetic.
+    #[must_use]
+    pub fn misplaced_object(&self) -> Option<MisplacedObject<'_>> {
+        misplaced_in("classes", &self.classes, |object| {
+            matches!(object, Object::Class(_))
+        })
+        .or_else(|| {
+            misplaced_in("enums", &self.enums, |object| {
+                matches!(object, Object::Enum(_))
+            })
+        })
+        .or_else(|| {
+            misplaced_in("interfaces", &self.interfaces, |object| {
+                matches!(object, Object::Interface(_))
+            })
+        })
+        .or_else(|| {
+            misplaced_in("type_alias_objects", &self.type_alias_objects, |object| {
+                matches!(object, Object::TypeAlias(_))
+            })
+        })
+        .or_else(|| misplaced_in("code", &self.code, is_placed_as_is))
+    }
+}
+
+impl InitTail {
+    /// The first tail object that is not [`is_placed_as_is`], if any: a tail
+    /// declares no types.
+    #[must_use]
+    pub fn misplaced_object(&self) -> Option<MisplacedObject<'_>> {
+        misplaced_in("objects", &self.objects, is_placed_as_is)
+    }
+}
+
+/// The first object of `bucket` that `holds` rejects.
+fn misplaced_in<'a>(
+    bucket: &'static str,
+    objects: &'a [Object],
+    holds: fn(&Object) -> bool,
+) -> Option<MisplacedObject<'a>> {
+    objects
+        .iter()
+        .enumerate()
+        .find(|(_, object)| !holds(object))
+        .map(|(offset, object)| MisplacedObject {
+            bucket,
+            offset,
+            object,
+        })
+}
+
 impl LocalRef {
     /// Is this the bucket a declaration at `path` is pooled in? Never true
     /// for a `let`, which owns no pool object.

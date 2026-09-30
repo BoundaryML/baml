@@ -54,25 +54,43 @@ impl LayoutOrder {
     }
 
     fn validate_tail(name: &Name, tail: &InitTail) -> Result<(), LinkError> {
+        let split_ok = tail.test_objects_start as usize <= tail.objects.len()
+            && tail.test_slots_start as usize <= tail.slot_objects.len();
+        if !split_ok {
+            return Err(LinkError::invalid(format!(
+                "package `{name}` has a malformed init tail"
+            )));
+        }
         let init_ok = tail
             .init
             .is_none_or(|k| TailPart::Init.objects(tail).contains(&(k as usize)));
         let test_ok = tail
             .init_test
             .is_none_or(|k| TailPart::Test.objects(tail).contains(&(k as usize)));
-        let split_ok = tail.test_objects_start as usize <= tail.objects.len()
-            && tail.test_slots_start as usize <= tail.slot_objects.len();
         let slots_ok = tail
             .slot_objects
             .iter()
             .all(|&object| (object as usize) < tail.objects.len());
-        if init_ok && test_ok && split_ok && slots_ok {
-            Ok(())
-        } else {
-            Err(LinkError::invalid(format!(
+        if !(init_ok && test_ok && slots_ok) {
+            return Err(LinkError::invalid(format!(
                 "package `{name}` has a malformed init tail"
-            )))
+            )));
         }
+        // A part is placed only when its `$init` names it. Objects in a part
+        // nothing names would go unplaced while operands still reached for
+        // them — the shape a session submission has, which never links
+        // statically — so the linker refuses it outright.
+        for part in [TailPart::Init, TailPart::Test] {
+            if part.named(tail).is_none()
+                && !(part.objects(tail).is_empty() && part.slots(tail).is_empty())
+            {
+                return Err(LinkError::invalid(format!(
+                    "package `{name}` has objects in a tail part with no `{}` to run them",
+                    part.synthesized_name()
+                )));
+            }
+        }
+        Ok(())
     }
 
     /// The placement order.

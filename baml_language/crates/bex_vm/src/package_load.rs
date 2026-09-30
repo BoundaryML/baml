@@ -694,6 +694,12 @@ pub fn all_recursive_type_aliases(
 /// the per-package `Object::Package` / `Object::ImplRule` objects and returning
 /// the [`PackageIndex`] rooted at the package at `root`. The heap is sealed
 /// on return.
+///
+/// The input is a converted program (`convert_program`), which checked the
+/// executable against the format's laws (`Program::validate`) before handing
+/// it on: every index here is within its pool and names the kind its table
+/// says, every head binds, every switch is solved. The assertions below hold
+/// the loader to that, not to a decoded artifact.
 pub fn build_heap_with_packages(
     mut compile_time_objects: Vec<Object>,
     packages: &[ProgramPackage],

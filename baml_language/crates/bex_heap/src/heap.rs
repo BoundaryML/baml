@@ -599,13 +599,7 @@ impl BexHeap {
     /// The tag under which `object` can head a nominal type, or `None` when it
     /// is not a declaration.
     pub fn declaration_tag(object: &Object) -> Option<baml_type::typetag::TypeTag> {
-        match object {
-            Object::Class(class) => Some(class.type_tag),
-            Object::Enum(enm) => Some(enm.type_tag),
-            Object::Interface(interface) => Some(interface.type_tag),
-            Object::TypeAlias(alias) => Some(alias.type_tag),
-            _ => None,
-        }
+        object.declaration_tag()
     }
 
     /// Get the number of compile-time objects.

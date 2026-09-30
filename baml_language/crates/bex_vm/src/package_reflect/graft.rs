@@ -49,7 +49,7 @@
 //! native call runs between safepoints, and the collector moves nothing
 //! until the VM reaches one.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use baml_linker_types::{
     CompilationUnit, DeclKey, DepSlot, EmittedPackage, ImportEntry, InitTail, LocalRef, Locator,
@@ -126,6 +126,17 @@ pub(super) fn load_package(
     commits: &[Commit<'_>],
 ) -> Result<Loaded, VmRustFnError> {
     let unit = &emitted.unit;
+    if let Some(misplaced) = unit
+        .misplaced_object()
+        .or_else(|| emitted.tail.as_ref().and_then(InitTail::misplaced_object))
+    {
+        return Err(link_error(format!(
+            "the unit pools a {:?} object at offset {} of `{}`",
+            ObjectType::of(misplaced.object),
+            misplaced.offset,
+            misplaced.bucket
+        )));
+    }
     if target == LoadTarget::Package
         && let Some(entry) = unit
             .object_imports
@@ -156,7 +167,7 @@ pub(super) fn load_package(
     image
         .cells
         .extend((0..local_count).map(|_| AtomicValueSlot::new(Value::NULL)));
-    slot_unit_functions(&mut image, unit, &locals, base_slot)?;
+    slot_unit_functions(vm, &mut image, unit, &locals, base_slot)?;
     let import_slots = place_globals(vm, &mut image, package_ptr, &slots, &unit.global_imports)?;
     let space = Space {
         locals,
@@ -185,7 +196,7 @@ pub(super) fn load_package(
             .map_err(|_| link_error("the package's slot table outgrew u32".to_string()))?;
         slot_table.insert(path.clone(), ordinal);
     }
-    image.declare(unit, &space, &slot_table)?;
+    image.declare(vm, unit, &space, &slot_table)?;
     image.globals.extend(slot_table);
 
     let tail = match &emitted.tail {
@@ -391,21 +402,46 @@ impl Image {
         image
     }
 
-    /// Enter the unit's declarations from its export table, checked against
-    /// the slot table the unit's own exports produced.
+    /// Enter the unit's declarations from its export table: each from the
+    /// bucket its path says, of the kind its path says, once — checked
+    /// against the slot table the unit's own exports produced.
     fn declare(
         &mut self,
+        vm: &BexVm,
         unit: &CompilationUnit,
         space: &Space,
         slots: &IndexMap<DeclPath, u32>,
     ) -> Result<(), VmRustFnError> {
+        let mut exported: HashSet<&DeclPath> = HashSet::with_capacity(unit.exports.objects.len());
         for (path, local_ref) in &unit.exports.objects {
+            if !exported.insert(path) {
+                return Err(link_error(format!("the unit exports `{path}` twice")));
+            }
+            if !local_ref.holds(path) {
+                return Err(link_error(format!(
+                    "the unit exports `{path}` from the {local_ref:?} bucket"
+                )));
+            }
             let local = space
                 .locals
                 .get(unit.local_index(*local_ref))
                 .copied()
                 .ok_or_else(|| link_error(format!("`{path}` points outside the unit")))?;
             let ptr = self.objects[local];
+            // The buckets hold their kind (checked before placement); a code
+            // export must be the function its path says.
+            if let DeclPath::Function(_) | DeclPath::InterfaceBody(_) = path {
+                let is_body = matches!(path, DeclPath::InterfaceBody(_));
+                if !matches!(
+                    vm.get_object(ptr),
+                    Object::Function(function) if function.is_interface_body == is_body
+                ) {
+                    return Err(link_error(format!(
+                        "the unit exports `{path}` as a {:?} object",
+                        ObjectType::of(vm.get_object(ptr))
+                    )));
+                }
+            }
             match path {
                 DeclPath::Class(item) => {
                     self.classes.insert(item.clone(), ptr);
@@ -527,14 +563,29 @@ fn place_globals(
     Ok(placed)
 }
 
-/// Fill the unit's own function and body slots with their objects. A `let`'s
-/// slot stays `null` for its initializer.
+/// Fill the unit's own function and body slots with their objects, checking
+/// the slot table on the way: every slot within the table, none owned twice.
+/// A `let`'s slot stays `null` for its initializer.
 fn slot_unit_functions(
+    vm: &BexVm,
     image: &mut Image,
     unit: &CompilationUnit,
     locals: &[usize],
     base_slot: usize,
 ) -> Result<(), VmRustFnError> {
+    let mut owned = vec![false; unit.exports.globals.len()];
+    for (path, slot) in &unit.exports.globals {
+        let Some(seen) = owned.get_mut(*slot as usize) else {
+            return Err(link_error(format!(
+                "`{path}` owns slot {slot}, outside the unit's slot table"
+            )));
+        };
+        if std::mem::replace(seen, true) {
+            return Err(link_error(format!(
+                "the unit places two globals at local slot {slot}"
+            )));
+        }
+    }
     let code_of: HashMap<&DeclPath, u32> = unit
         .exports
         .objects
@@ -574,6 +625,12 @@ fn slot_unit_functions(
         })?;
         let global = base_slot + *slot as usize;
         let function = image.objects[object];
+        if !matches!(vm.get_object(function), Object::Function(_)) {
+            return Err(link_error(format!(
+                "`{path}` owns a slot, but the unit pools a {:?} object for it",
+                ObjectType::of(vm.get_object(function))
+            )));
+        }
         *image.cells.get_mut(global).ok_or_else(|| {
             link_error(format!(
                 "`{path}` owns slot {slot}, outside the unit's slot table"
@@ -722,10 +779,20 @@ fn verify_fingerprint(
     Ok(())
 }
 
-fn slot_binding(package_ptr: HeapPtr, slots: &[Bound], dep: DepSlot) -> Bound {
+fn slot_binding(
+    package_ptr: HeapPtr,
+    slots: &[Bound],
+    dep: DepSlot,
+) -> Result<Bound, VmRustFnError> {
     match dep.dependency_index() {
-        None => Bound::Package(package_ptr),
-        Some(index) => slots[index],
+        None => Ok(Bound::Package(package_ptr)),
+        Some(index) => slots.get(index).copied().ok_or_else(|| {
+            link_error(format!(
+                "dependency slot {} names no entry of the table of {}",
+                dep.0,
+                slots.len()
+            ))
+        }),
     }
 }
 
@@ -801,24 +868,29 @@ impl Tables<'_> {
     }
 }
 
-/// The tables `dep` resolves through, or the declaration it binds.
+/// What `dep` resolves through: tables, or the declaration it binds.
+enum BoundTables<'a> {
+    Tables(Tables<'a>),
+    Declaration(HeapPtr),
+}
+
 fn bound_tables<'a>(
     vm: &'a BexVm,
     image: &'a Image,
     package_ptr: HeapPtr,
     slots: &[Bound],
     dep: DepSlot,
-) -> Result<Tables<'a>, HeapPtr> {
-    match slot_binding(package_ptr, slots, dep) {
-        Bound::Package(owner) if owner == package_ptr => Ok(Tables::Own(image)),
+) -> Result<BoundTables<'a>, VmRustFnError> {
+    Ok(match slot_binding(package_ptr, slots, dep)? {
+        Bound::Package(owner) if owner == package_ptr => BoundTables::Tables(Tables::Own(image)),
         Bound::Package(owner) => {
             let Object::Package(package) = vm.get_object(owner) else {
                 unreachable!("a bound dependency slot is a package")
             };
-            Ok(Tables::Dependency(package))
+            BoundTables::Tables(Tables::Dependency(package))
         }
-        Bound::Declaration(declaration) => Err(declaration),
-    }
+        Bound::Declaration(declaration) => BoundTables::Declaration(declaration),
+    })
 }
 
 /// The object `key` names, through the bound package's tables.
@@ -829,9 +901,9 @@ fn resolve_object(
     slots: &[Bound],
     key: &DeclKey,
 ) -> Result<HeapPtr, VmRustFnError> {
-    let tables = match bound_tables(vm, image, package_ptr, slots, key.dep) {
-        Ok(tables) => tables,
-        Err(declaration) => {
+    let tables = match bound_tables(vm, image, package_ptr, slots, key.dep)? {
+        BoundTables::Tables(tables) => tables,
+        BoundTables::Declaration(declaration) => {
             return anonymous_export(vm, declaration, &key.path).ok_or_else(|| {
                 link_error(format!(
                     "`{}` is not the declaration bound at dependency slot {}",
@@ -950,12 +1022,15 @@ fn resolve_global(
     slots: &[Bound],
     key: &DeclKey,
 ) -> Result<GlobalBinding, VmRustFnError> {
-    let tables = bound_tables(vm, image, package_ptr, slots, key.dep).map_err(|_| {
-        link_error(format!(
-            "`{}` names a cell of a declaration, which owns none",
-            key.path
-        ))
-    })?;
+    let tables = match bound_tables(vm, image, package_ptr, slots, key.dep)? {
+        BoundTables::Tables(tables) => tables,
+        BoundTables::Declaration(_) => {
+            return Err(link_error(format!(
+                "`{}` names a cell of a declaration, which owns none",
+                key.path
+            )));
+        }
+    };
     if let DeclPath::InterfaceBody(body) = &key.path {
         return match resolve_body(vm, tables, &key.path, body)? {
             Some(BoundBody::Own(cell)) => Ok(GlobalBinding::Slot(cell as usize)),
@@ -1069,8 +1144,8 @@ fn relocate(
         if failure.is_some() {
             return;
         }
-        match space
-            .object(head.operand().raw())
+        match head_operand(head)
+            .and_then(|operand| space.object(operand.raw()))
             .and_then(|index| image.head(index))
         {
             Ok(relocated) => *head = relocated,
@@ -1158,8 +1233,8 @@ fn relocate_template(
         if failure.is_some() {
             return;
         }
-        match space
-            .object(head.operand().raw())
+        match head_operand(head)
+            .and_then(|operand| space.object(operand.raw()))
             .and_then(|index| image.head(index))
         {
             Ok(relocated) => *head = relocated,
@@ -1167,6 +1242,13 @@ fn relocate_template(
         }
     });
     failure.map_or(Ok(()), Err)
+}
+
+/// The declaration operand of a unit-convention head; a head outside the
+/// convention is a link error.
+fn head_operand(head: &TypeHead) -> Result<ObjectIndex, VmRustFnError> {
+    head.try_operand()
+        .ok_or_else(|| link_error("the unit carries a type head outside the unit convention"))
 }
 
 /// Build and allocate one `implements` rule from its fragment: the
@@ -1212,7 +1294,7 @@ fn load_rule(
     relocate_template(&mut for_ty_pattern, space, image)?;
     let mut generic_param_bounds = rule.generic_param_bounds.clone();
     for bound in generic_param_bounds.iter_mut().flatten() {
-        bound.interface = image.head(space.object(bound.interface.operand().raw())?)?;
+        bound.interface = image.head(space.object(head_operand(&bound.interface)?.raw())?)?;
         for arg in &mut bound.args {
             relocate_template(arg, space, image)?;
         }

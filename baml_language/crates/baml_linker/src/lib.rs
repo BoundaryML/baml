@@ -15,12 +15,16 @@
 //! The link is one pipeline — bind dependency tables, lay out slots, resolve
 //! global imports, lay out objects (interning generic values), resolve object
 //! imports, assemble — with one relocation walk over an operand space and one
-//! set of structural checks: an import of one kind never binds an export of
-//! another, a package never exports one path twice, an unbindable dependency
-//! or import is an error, and a direct dependency binds only to a package
-//! whose interface payload carries the fingerprint the unit was compiled
-//! against ([`LinkError::InterfaceMismatch`] — the edge locates, the
-//! fingerprint binds).
+//! set of structural checks: every bucket holds its kind, an exported
+//! function is a function, a head and a type switch's key name type
+//! declarations, an import of one kind never binds an export of another, a
+//! package never exports one path twice, an unbindable dependency or import
+//! is an error, and a direct dependency binds only to a package whose
+//! interface payload carries the fingerprint the unit was compiled against
+//! ([`LinkError::InterfaceMismatch`] — the edge locates, the fingerprint
+//! binds). A malformed unit — one from a corrupt or forged cache entry — is
+//! [`LinkError::InvalidUnit`], never a panic: the caller's contract is to
+//! recompile.
 //!
 //! # Type tags
 //!
@@ -227,6 +231,7 @@ impl Linker<'_, '_> {
             )));
         }
         for package in &self.set.packages {
+            layout::validate_objects(&package.name, package.unit, package.tail)?;
             let mut edges = HashSet::new();
             for edge in &package.edges {
                 if !edges.insert(&edge.name) {

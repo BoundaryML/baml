@@ -3,11 +3,12 @@
 use std::collections::HashMap;
 
 use baml_linker_types::{CompilationUnit, ImportEntry, InitTail};
-use bex_vm_types::{BodyKey, DeclPath};
+use bex_vm_types::{BodyKey, DeclPath, Object};
 
 use super::{
     LinkError, LinkPackageId, LinkSet, Linker, PerPackage,
     bind::Tables,
+    layout::Bucket,
     order::{Objects, Slots},
     space::Resolved,
 };
@@ -58,6 +59,27 @@ pub(super) fn export_objects(
                     package.name
                 )));
             };
+            // The type buckets hold their kind by construction (validated
+            // up front); a code export must be the function its path says.
+            let (bucket, k) = Bucket::of(*local);
+            let object = &bucket.objects(package.unit)[k];
+            let is_body = |object: &Object| matches!(object, Object::Function(function) if function.is_interface_body);
+            let exported_kind_holds = match path {
+                DeclPath::Function(_) => matches!(object, Object::Function(_)) && !is_body(object),
+                DeclPath::InterfaceBody(_) => is_body(object),
+                DeclPath::Class(_)
+                | DeclPath::Enum(_)
+                | DeclPath::Interface(_)
+                | DeclPath::TypeAlias(_)
+                | DeclPath::Let(_) => true,
+            };
+            if !exported_kind_holds {
+                return Err(LinkError::invalid(format!(
+                    "package `{}` exports {path} as a {:?} object",
+                    package.name,
+                    bex_vm_types::ObjectType::of(object)
+                )));
+            }
             if map.insert((id, path.clone()), abs).is_some() {
                 return Err(LinkError::DuplicateExport {
                     package: package.name.clone(),
