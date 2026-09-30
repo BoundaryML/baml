@@ -1,0 +1,22 @@
+---
+title: Heabsy
+---
+
+[Heabsy](https://heabsy.com/) is a European inference API for open models, served
+through an OpenAI-compatible endpoint.
+
+Heabsy supports the OpenAI client, allowing you to use the [`openai-generic`](/docs/snippets/clients/providers/openai) provider
+with an overridden `base_url`.
+
+
+```baml
+client<llm> Heabsy {
+  provider openai-generic
+  retry_policy Exponential
+  options {
+    base_url "https://api.heabsy.com/v1"
+    model "qwen38"
+    api_key env.HEABSY_API_KEY
+  }
+}
+```
