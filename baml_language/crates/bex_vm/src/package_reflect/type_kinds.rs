@@ -550,6 +550,21 @@ impl BamlNamespaceClass for PackageReflectImpl {
         })
     }
 
+    /// The class declaration's own name, which carries no type arguments.
+    /// Every `reflect.AnyClass` value is a class instance; anything else
+    /// falls back to its rendered runtime type.
+    fn _name(vm: &BexVm, value: &Value) -> bex_str::BexStr {
+        if let Some(ptr) = value.as_object_ptr()
+            && let Object::Instance(instance) = vm.get_object(ptr)
+        {
+            let Object::Class(class) = vm.get_object(instance.class) else {
+                unreachable!("Instance.class must point to Object::Class")
+            };
+            return bex_str::BexStr::from(class.name.display_name().to_string());
+        }
+        bex_str::BexStr::from(vm.type_of(value).to_string())
+    }
+
     fn builder(vm: &mut BexVm, name: &bex_str::BexStr) -> Value {
         super::runtime_class_builder::alloc_builder(vm, name.as_str())
     }

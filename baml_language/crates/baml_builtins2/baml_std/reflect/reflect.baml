@@ -195,9 +195,12 @@ interface AnyClass {
         fields
     }
 
-    /// The rendered name of this value's concrete runtime type.
+    /// The declared name of this value's class, without type arguments: a
+    /// `Box<int>` instance reports `Box`. Namespaced and non-`user` package
+    /// classes keep their qualifier. Use `type().to_string()` for the full
+    /// type, including type arguments.
     function name(self) -> string throws never {
-        reflect.Type.of_value(self).to_string()
+        reflect.class._name(self)
     }
 
     /// This value's concrete runtime type.

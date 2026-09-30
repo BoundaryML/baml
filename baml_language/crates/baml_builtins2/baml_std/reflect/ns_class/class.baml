@@ -190,3 +190,10 @@ class Type {
         $rust_function
     }
 }
+
+/// (internal) The declared name of `value`'s class, without type arguments:
+/// `Box` for a `Box<int>` instance. Backs `reflect.AnyClass.name`.
+//baml:vm
+function _name(value: unknown) -> string throws never {
+    $rust_function
+}
