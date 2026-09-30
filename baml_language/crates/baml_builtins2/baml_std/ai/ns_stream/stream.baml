@@ -123,8 +123,8 @@ class TurnStream {
     _require_terminal: string?,
     // whether a TurnDone was actually decoded before the stream ended.
     _saw_terminal: bool,
-    // Whether this attempt decoded any successful text or metadata event.
-    _saw_output: bool,
+    // Number of successful text or metadata events decoded in this attempt.
+    _decoded_events: int,
     // Wire telemetry (LLMCall records), surfaced by final_turn().calls.
     // _calls is the full oldest-first list; composite relays share it by
     // reference to prepend failed legs. _wire_call is THIS stream's own
@@ -177,7 +177,7 @@ class TurnStream {
             _done: false,
             _require_terminal: require_terminal,
             _saw_terminal: false,
-            _saw_output: false,
+            _decoded_events: 0,
             _calls: [],
             _wire_call: null,
             _call_started: null,
@@ -208,7 +208,7 @@ class TurnStream {
             _done: false,
             _require_terminal: null,
             _saw_terminal: false,
-            _saw_output: false,
+            _decoded_events: 0,
             _calls: [],
             _wire_call: null,
             _call_started: null,
@@ -240,7 +240,7 @@ class TurnStream {
             _done: false,
             _require_terminal: null,
             _saw_terminal: false,
-            _saw_output: false,
+            _decoded_events: 0,
             _calls: [],
             _wire_call: null,
             _call_started: null,
@@ -313,7 +313,7 @@ class TurnStream {
     /// any successful text/metadata event; explicit failures never take this path.
     function _check_terminal(self) -> void {
         if let provider: string = self._require_terminal {
-            if (!self._saw_terminal && !self._saw_output) {
+            if (!self._saw_terminal && self._decoded_events == 0) {
                 throw root.errors.NetworkFailure {
                     status_code: null,
                     provider: provider,
@@ -350,7 +350,7 @@ class TurnStream {
                 self._pcursor += 1;
                 match (e) {
                     let d: TextDelta => {
-                        self._saw_output = true;
+                        self._decoded_events = self._decoded_events + 1;
                         self._stamp_first_delta();
                         self._text = `${self._text}${d.text}`;
                         ready.push(d.text);
@@ -362,11 +362,11 @@ class TurnStream {
                         self._input_tokens = null;
                         self._output_tokens = null;
                         self._saw_terminal = false;
-                        self._saw_output = false;
+                        self._decoded_events = 0;
                         return reset;
                     },
                     let m: TurnMeta => {
-                        self._saw_output = true;
+                        self._decoded_events = self._decoded_events + 1;
                         if let s: root.content.StopReason = m.stop_reason {
                             self._stop_reason = s;
                         }
