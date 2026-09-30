@@ -162,6 +162,25 @@ fn an_operand_outside_the_program_is_refused() {
 }
 
 #[test]
+fn a_virtual_call_dispatching_past_its_arguments_is_refused() {
+    let mut program = program();
+    let function = some_function(&program);
+    let Some(Object::Function(pooled)) = program.objects.get_mut(function) else {
+        unreachable!("the position was of a function")
+    };
+    // Dispatch on argument 2 of 2: the VM would read past the stack.
+    pooled
+        .bytecode
+        .instructions
+        .push(bex_vm_types::Instruction::VirtualCall {
+            nargs: 2,
+            ntypeargs: 0,
+            self_arg: 2,
+        });
+    assert!(refused(program).contains("dispatches a virtual call on argument 2 of 2"));
+}
+
+#[test]
 fn an_init_order_that_is_not_the_init_packages_is_refused() {
     let mut program = program();
     // The root declares no `let`, so it has no `$init` to order.

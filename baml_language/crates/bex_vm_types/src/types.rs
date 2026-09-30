@@ -367,14 +367,28 @@ impl Program {
                         return Err(failure);
                     }
                     for instruction in &function.bytecode.instructions {
-                        if let crate::bytecode::Instruction::LoadCurrentPackage(package) =
-                            instruction
-                            && *package >= package_count
-                        {
-                            return Err(invalid(format!(
-                                "{role} (function `{}`) loads package {package} of {package_count}",
-                                function.name
-                            )));
+                        match instruction {
+                            crate::bytecode::Instruction::LoadCurrentPackage(package)
+                                if *package >= package_count =>
+                            {
+                                return Err(invalid(format!(
+                                    "{role} (function `{}`) loads package {package} of \
+                                     {package_count}",
+                                    function.name
+                                )));
+                            }
+                            // The VM reads the dispatch value at `args_offset +
+                            // self_arg`; past `nargs` that is past the stack.
+                            crate::bytecode::Instruction::VirtualCall {
+                                nargs, self_arg, ..
+                            } if self_arg >= nargs => {
+                                return Err(invalid(format!(
+                                    "{role} (function `{}`) dispatches a virtual call on \
+                                     argument {self_arg} of {nargs}",
+                                    function.name
+                                )));
+                            }
+                            _ => {}
                         }
                     }
                     if let Some((table, _)) = function

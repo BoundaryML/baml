@@ -69,6 +69,10 @@ pub enum CompileProgramError {
     Emit(LoweringError),
     /// The packages failed to link.
     Link(LinkError),
+    /// A package served from its interface — one with no source to emit —
+    /// has no compiled output in the store, so nothing can stand in the
+    /// program for it.
+    ServedWithoutOutput { package: Name },
 }
 
 impl std::fmt::Display for CompileProgramError {
@@ -76,6 +80,11 @@ impl std::fmt::Display for CompileProgramError {
         match self {
             Self::Emit(error) => write!(f, "{error}"),
             Self::Link(error) => write!(f, "{error}"),
+            Self::ServedWithoutOutput { package } => write!(
+                f,
+                "package `{package}` is served from its interface, but no store holds its \
+                 compiled output"
+            ),
         }
     }
 }
@@ -122,24 +131,33 @@ pub fn compile_program_with(
     opt: OptLevel,
     cache: &dyn PackageCache,
 ) -> Result<Program, CompileProgramError> {
-    // A dependency without files declares nothing itself: it is in the
-    // program only when the store serves its output (a mounted package), and
-    // then there is nothing to emit for it. The root is always in the program
-    // — it is the viewpoint every host name resolves from — even before it
-    // declares anything.
+    // A dependency without files declares nothing itself. Served from its
+    // interface (a mounted package), it is in the program through the output
+    // the store holds for it — there is nothing to emit, and a store that
+    // holds nothing is an error, never a package quietly missing from the
+    // set with every import of it left dangling. Without an interface it is
+    // an empty package, and nothing can import from it. The root is always
+    // in the program — it is the viewpoint every host name resolves from —
+    // even before it declares anything.
     let packages = world_roots(db, root)
         .iter()
         .copied()
         .filter_map(|package| {
             let emitted = match cache.load(db, package, opt) {
                 Some(emitted) => emitted,
-                None if package != root && package.files(db).is_empty() => return None,
+                None if package != root && package.files(db).is_empty() => {
+                    return package.interface(db).is_some().then(|| {
+                        Err(CompileProgramError::ServedWithoutOutput {
+                            package: spelling(db).of(package).clone(),
+                        })
+                    });
+                }
                 None => match emit_package(db, package, opt) {
                     Ok(emitted) => {
                         cache.store(db, package, opt, &emitted);
                         emitted
                     }
-                    Err(error) => return Some(Err(error)),
+                    Err(error) => return Some(Err(CompileProgramError::Emit(error))),
                 },
             };
             Some(Ok(LinkedPackage {
@@ -148,7 +166,7 @@ pub fn compile_program_with(
                 emitted,
             }))
         })
-        .collect::<Result<Vec<_>, LoweringError>>()?;
+        .collect::<Result<Vec<_>, CompileProgramError>>()?;
     let packages = program_order(db, root, packages);
     let mut program = link(&link_set(db, &packages, root))?;
     program.source_content_hash = Some(project_source_content_hash(db, root));

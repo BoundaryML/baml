@@ -302,6 +302,26 @@ function main() -> int throws never {
     );
 }
 
+/// A mounted dependency is in the program through the output a store holds
+/// for it. A store that holds nothing is refused by name — never a package
+/// quietly missing from the link set with the consumer's imports of it left
+/// to fail as unknown edges.
+#[test]
+fn a_mounted_dependency_without_served_output_is_refused_by_name() {
+    let artifacts = library_artifacts();
+    let db = blob_db(WIDGET_CONSUMER, artifacts.blob.clone());
+    assert_no_diagnostic_errors(&db);
+    let error = compile_program_with(&db, package(&db), OPT, &baml_db::NoCache)
+        .expect_err("nothing serves `app`");
+    assert!(
+        matches!(
+            &error,
+            baml_db::CompileProgramError::ServedWithoutOutput { package } if package.as_str() == "app"
+        ),
+        "{error}"
+    );
+}
+
 async fn run(program: Program, entry: &str) -> Result<BexExternalValue, String> {
     run_compiled(program, entry, IndexMap::new(), false)
         .await

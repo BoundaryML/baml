@@ -106,41 +106,23 @@ enum InboundDeclarationKind {
     Enum,
 }
 
-/// The host proxy kind for a live stdlib capability.
-///
-/// A declaration's display name is never an identity: in particular,
-/// `user.ai.FunctionSpec` displays as `ai.FunctionSpec`, and a runtime package
-/// may compile that same local spelling again under a fresh head. Trust only
-/// a declaration of the static image (a runtime-created head carries a
-/// dynamic tag and is rejected first) under the exact stdlib declaration
-/// spelling — which, within one image, only the stdlib's own declaration
-/// bears.
+/// The host proxy kind for a live stdlib capability: the class IS the
+/// stdlib's own declaration, by identity. A declaration's display name is
+/// never an identity — a user package spelled `ai`, or a runtime package
+/// compiling the same local spelling under a fresh head, renders the same
+/// name — so nothing here reads one.
 fn trusted_stdlib_capability_kind(
+    stdlib_heads: &bex_vm::package_load::StdlibHeads,
     class: &bex_vm_types::Class,
 ) -> Option<bex_external_types::TaggedHeapHandleKind> {
-    if class.type_tag.is_dynamic() {
-        return None;
-    }
-
-    let name = class.name.declared()?;
-    let (qualified_name, kind) = match (
-        name.package().as_str(),
-        name.namespace().as_slice(),
-        name.name().as_str(),
-    ) {
-        ("ai", [], "FunctionSpec") => (
-            baml_type::qualified_name::AI_FUNCTION_SPEC,
-            bex_external_types::TaggedHeapHandleKind::FunctionSpec,
-        ),
-        ("ai", [namespace], "Stream") if namespace.as_str() == "stream" => (
-            baml_type::qualified_name::AI_STREAM_STREAM,
-            bex_external_types::TaggedHeapHandleKind::Stream,
-        ),
-        _ => return None,
-    };
-
-    debug_assert_eq!(name.render_dotted(false), qualified_name);
-    Some(kind)
+    Some(match stdlib_heads.capability(class.type_tag)? {
+        bex_vm::package_load::StdlibCapability::FunctionSpec => {
+            bex_external_types::TaggedHeapHandleKind::FunctionSpec
+        }
+        bex_vm::package_load::StdlibCapability::Stream => {
+            bex_external_types::TaggedHeapHandleKind::Stream
+        }
+    })
 }
 
 #[derive(Clone, Copy)]
@@ -709,7 +691,7 @@ impl BexEngine {
                 // selects the host proxy; the wire `ty` is annotation-only.
                 // Method generic substitution must recover the instance's
                 // TypeHead/class_type_args after resolving this handle.
-                let capability_kind = trusted_stdlib_capability_kind(class);
+                let capability_kind = trusted_stdlib_capability_kind(&self.stdlib_heads, class);
                 if let Some(kind) = capability_kind {
                     let handle = self.heap.create_handle(ptr);
                     let ty = RuntimeTy::Class(

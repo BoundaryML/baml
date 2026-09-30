@@ -688,9 +688,14 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
             receiver,
             type_args,
         } => {
-            write!(f, "make_virtual_bound_method {iface:?}.{method}")?;
+            let names = Names::of(db);
+            write!(
+                f,
+                "make_virtual_bound_method {}.{method}",
+                names.interface(iface)
+            )?;
             if !type_args.is_empty() {
-                write!(f, "<{type_args:?}>")?;
+                write!(f, "<{}>", names.templates(type_args))?;
             }
             write!(f, "(")?;
             write_operand(f, db, receiver)?;
@@ -704,7 +709,7 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
         } => {
             write!(
                 f,
-                "make_virtual_function ({} as {:?}).{method}",
+                "make_virtual_function ({} as {}).{method}",
                 Names::of(db).template(self_ty),
                 Names::of(db).interface(iface)
             )?;

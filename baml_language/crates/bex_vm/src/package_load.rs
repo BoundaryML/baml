@@ -578,9 +578,10 @@ pub enum TimeClass {
 }
 
 /// The stdlib declarations the runtime recognizes structurally — the CSV
-/// cell classes, the JSON media wrappers, and the `json` alias — resolved to
-/// heads once from the loaded packages and shared by every VM the engine
-/// spawns, like the error and panic class tables.
+/// cell classes, the JSON media wrappers, the `json` alias, and the live
+/// capabilities a host proxies — resolved to heads once from the loaded
+/// packages and shared by every VM the engine spawns, like the error and
+/// panic class tables.
 ///
 /// A program that does not load one of them (no stdlib) has no value of that
 /// type, so the entry is absent and nothing matches it.
@@ -589,6 +590,17 @@ pub struct StdlibHeads {
     time: Vec<(TimeClass, TypeHead)>,
     media: Vec<(MediaKind, TypeHead)>,
     json: Option<TypeHead>,
+    capabilities: Vec<(StdlibCapability, TypeHead)>,
+}
+
+/// A live stdlib capability a host reaches through a proxy rather than a
+/// value: an instance stays on the heap behind a handle.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StdlibCapability {
+    /// `ai.FunctionSpec`.
+    FunctionSpec,
+    /// `ai.stream.Stream`.
+    Stream,
 }
 
 impl StdlibHeads {
@@ -613,11 +625,38 @@ impl StdlibHeads {
         .into_iter()
         .filter_map(|kind| Some((kind, head(kind.wrapper_class_name()?)?)))
         .collect();
+        // Resolved from the root's viewpoint under the prelude's fixed names,
+        // once, at load: a package of the user's spelled `ai` cannot be
+        // reached under that name (the edge is reserved), and nothing here is
+        // ever re-derived from a declaration's rendered name.
+        let capabilities = [
+            (
+                StdlibCapability::FunctionSpec,
+                baml_type::qualified_name::AI_FUNCTION_SPEC,
+            ),
+            (
+                StdlibCapability::Stream,
+                baml_type::qualified_name::AI_STREAM_STREAM,
+            ),
+        ]
+        .into_iter()
+        .filter_map(|(capability, fqn)| Some((capability, head(fqn)?)))
+        .collect();
         Self {
             time,
             media,
             json: head("baml.json.json"),
+            capabilities,
         }
+    }
+
+    /// Which live stdlib capability the declaration tagged `tag` is, if any:
+    /// the stdlib's own declaration, by identity, never a same-spelled one.
+    pub fn capability(&self, tag: baml_type::typetag::TypeTag) -> Option<StdlibCapability> {
+        self.capabilities
+            .iter()
+            .find(|(_, head)| head.tag() == tag)
+            .map(|(capability, _)| *capability)
     }
 
     /// Which stdlib time class `head` is, if any.

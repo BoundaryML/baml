@@ -144,12 +144,23 @@ impl TypeTag {
     }
 
     /// The absolute object index a static tag encodes, or `None` for a
-    /// primitive or a dynamic tag.
+    /// primitive or a dynamic tag — or for an index this platform cannot
+    /// address (a 32-bit `usize` covers a fraction of the static range, and
+    /// a decoded tag beyond it must not wrap to a lower index).
     #[must_use]
-    #[expect(clippy::cast_sign_loss, reason = "non-negative by the range check")]
+    #[expect(
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        reason = "non-negative by the range check; within usize by the bound"
+    )]
     pub const fn static_index(self) -> Option<usize> {
         if self.0 >= CLASS_BASE && self.0 < DYNAMIC_BASE {
-            Some((self.0 - CLASS_BASE) as usize)
+            let index = (self.0 - CLASS_BASE) as u64;
+            if index > usize::MAX as u64 {
+                None
+            } else {
+                Some(index as usize)
+            }
         } else {
             None
         }
