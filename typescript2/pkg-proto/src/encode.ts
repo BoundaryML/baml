@@ -164,6 +164,8 @@ export function encodeCallArgs(
     // Generic TypeVar bindings (`type_args`) — unused by this playground
     // encoder, which only sends positional kwargs.
     typeArgs: [],
+    // `baml.SpawnLocalStorage` seeds — unused by this playground encoder.
+    spawnLocalStorage: [],
   };
 
   return CallFunctionArgs.encode(args).finish();
