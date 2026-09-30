@@ -2,3 +2,4 @@
 /.wheels/
 /baml_sdk/
 /results/
+/recordings/*.partial

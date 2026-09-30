@@ -66,11 +66,15 @@ def make_handler(args):
                 self.end_headers()
                 self.wfile.write(detail)
                 return
-            with resp, args.recording.open('wb') as out:
+            # Written aside and renamed on success, so a failed capture never
+            # clobbers the previous recording.
+            partial = args.recording.with_suffix(args.recording.suffix + '.partial')
+            with resp, partial.open('wb') as out:
                 self._start_sse()
                 while line := resp.readline():
                     out.write(line)
                     self._chunk(line)
+            partial.replace(args.recording)
             self._chunk(b'')
 
     return Handler

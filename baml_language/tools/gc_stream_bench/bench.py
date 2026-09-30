@@ -191,7 +191,11 @@ def start_server(args):
         for key in ('ANTHROPIC_API_KEY', 'OPENAI_API_KEY'):
             os.environ.setdefault(key, 'replay-placeholder')
     server = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
-    os.environ[BASE_URL_ENV] = f'http://127.0.0.1:{server.stdout.readline().strip()}'
+    port = server.stdout.readline().strip()
+    if not port:
+        server.wait()
+        sys.exit('replay_server.py exited before reporting a port')
+    os.environ[BASE_URL_ENV] = f'http://127.0.0.1:{port}'
     return server
 
 
