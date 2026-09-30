@@ -1447,6 +1447,7 @@ impl io::IoNamespaceHttp for DefaultIoOps {
         _c: CallId,
         _url: String,
         _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -1460,6 +1461,7 @@ impl io::IoNamespaceHttp for DefaultIoOps {
         _c: CallId,
         _req: io::owned::http::Request,
         _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -1474,6 +1476,8 @@ impl io::IoNamespaceHttp for DefaultIoOps {
         _req: io::owned::http::Request,
         _timeout_nanos: Arc<num_bigint::BigInt>,
         _first_event_timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
+        _idle_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::SseStream> {
         SysOpOutput::err(VmPanic::HostUnavailable {

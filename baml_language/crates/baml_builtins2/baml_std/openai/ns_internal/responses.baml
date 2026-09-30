@@ -1023,6 +1023,8 @@ function invoke(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.ModelTu
         c.id(),
         capture_wire = c.capture_wire,
         request_timeout_ms = c.request_timeout_ms,
+        request_timeout = c.request_timeout,
+        connect_timeout = c.connect_timeout,
     );
     let turn = parse(sent.value);
     ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
@@ -1254,8 +1256,11 @@ function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.
     let started = baml.time.Instant.now();
     let sse = baml.http.fetch_sse(
         req,
-        timeout = baml.time.Duration.from_milliseconds(c.request_timeout_ms ?? 0),
-        first_event_timeout = baml.time.Duration.from_milliseconds(c.time_to_first_token_timeout_ms ?? 0),
+        timeout = c.request_timeout ?? baml.time.Duration.from_milliseconds(c.request_timeout_ms ?? 0),
+        connect_timeout = c.connect_timeout,
+        idle_timeout = c.idle_timeout,
+        first_event_timeout = c.time_to_first_token_timeout
+            ?? baml.time.Duration.from_milliseconds(c.time_to_first_token_timeout_ms ?? 0),
     ) catch_all (e) {
         _ => _stream_open_failure(e),
     };

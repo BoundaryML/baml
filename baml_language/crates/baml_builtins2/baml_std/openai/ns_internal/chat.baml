@@ -1378,9 +1378,15 @@ function _chat_send(
     capture_wire: bool = true,
     audio_mime: string = "audio/wav",
     request_timeout_ms: int? = null,
+    request_timeout: baml.time.Duration? = null,
+    connect_timeout: baml.time.Duration? = null,
 ) -> ai.ModelTurn {
     let started = baml.time.Instant.now();
-    let response = baml.http.send(request, timeout = baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0)) catch_all (e) {
+    let response = baml.http.send(
+        request,
+        timeout = request_timeout ?? baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
+        connect_timeout = connect_timeout,
+    ) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw ai.errors.NetworkFailure { status_code: null,
@@ -1456,6 +1462,8 @@ function chat_invoke(
     input: ai.ModelTurnInput,
     capture_wire: bool = true,
     request_timeout_ms: int? = null,
+    request_timeout: baml.time.Duration? = null,
+    connect_timeout: baml.time.Duration? = null,
 ) -> ai.ModelTurn {
     let request = chat_render(compat, params, input, false);
     _chat_send(
@@ -1465,6 +1473,8 @@ function chat_invoke(
         capture_wire = capture_wire,
         audio_mime = _chat_audio_output_mime(params.request_body),
         request_timeout_ms = request_timeout_ms,
+        request_timeout = request_timeout,
+        connect_timeout = connect_timeout,
     )
 }
 
@@ -1673,15 +1683,22 @@ function chat_invoke_stream(
     input: ai.ModelTurnInput,
     capture_wire: bool = true,
     request_timeout_ms: int? = null,
+    request_timeout: baml.time.Duration? = null,
+    connect_timeout: baml.time.Duration? = null,
     time_to_first_token_timeout_ms: int? = null,
+    time_to_first_token_timeout: baml.time.Duration? = null,
+    idle_timeout: baml.time.Duration? = null,
 ) -> ai.stream.TurnStream {
     let request = chat_render(compat, params, input, true);
     let decoder = ChatStreamDecoder.new(provider = compat.provider);
     let started = baml.time.Instant.now();
     let sse = baml.http.fetch_sse(
         request,
-        timeout = baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
-        first_event_timeout = baml.time.Duration.from_milliseconds(time_to_first_token_timeout_ms ?? 0),
+        timeout = request_timeout ?? baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
+        first_event_timeout = time_to_first_token_timeout
+            ?? baml.time.Duration.from_milliseconds(time_to_first_token_timeout_ms ?? 0),
+        connect_timeout = connect_timeout,
+        idle_timeout = idle_timeout,
     ) catch_all (e) {
         _ => _chat_stream_open_failure(compat.provider, e),
     };

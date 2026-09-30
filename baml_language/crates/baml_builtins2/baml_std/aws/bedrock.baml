@@ -93,6 +93,10 @@ class BedrockClient {
     /// Record request/response bodies on the LLMCall wire records delivered
     /// through on_event. Status, headers, and timing are always recorded; this
     /// flag only gates the bodies.
+    // Native HTTP budgets. Null/non-positive is unbounded. Duration options
+    // take precedence over the legacy millisecond options when both are set.
+    connect_timeout: baml.time.Duration?,
+    request_timeout: baml.time.Duration?,
     capture_wire: bool,
 
     /// Creates a client. Construction reads no environment variable, so
@@ -118,6 +122,8 @@ class BedrockClient {
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
         capture_wire: bool = true,
+        connect_timeout: baml.time.Duration? = null,
+        request_timeout: baml.time.Duration? = null,
     ) -> BedrockClient {
         BedrockClient {
             model: model,
@@ -138,6 +144,8 @@ class BedrockClient {
             request_body: request_body,
             headers: headers,
             query_params: query_params,
+            connect_timeout: connect_timeout,
+            request_timeout: request_timeout,
             capture_wire: capture_wire,
         }
     }

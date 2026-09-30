@@ -2607,6 +2607,19 @@ pub(crate) fn http_transport_error(context: &str, e: &reqwest::Error) -> VmBamlE
     }
 }
 
+#[cfg(feature = "bundle-http")]
+fn build_http_client(
+    connect_timeout_nanos: &num_bigint::BigInt,
+) -> Result<reqwest::Client, VmBamlError> {
+    let mut builder = reqwest::Client::builder();
+    if let Some(timeout) = timeout_from_nanos(connect_timeout_nanos) {
+        builder = builder.connect_timeout(timeout);
+    }
+    builder
+        .build()
+        .map_err(|e| http_transport_error("HTTP client initialization failed", &e))
+}
+
 /// Applies the optional total-request timeout (carried as bigint nanos across
 /// the sys-op boundary) to a `reqwest` request builder. `0n`/negative means no
 /// deadline (`timeout_from_nanos` returns `None`); a configured deadline that
@@ -2854,11 +2867,12 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _call_id: CallId,
         url: String,
         timeout_nanos: Arc<num_bigint::BigInt>,
+        connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         SysOpOutput::async_op(async move {
             crate::ensure_rustls_crypto_provider();
-            let client = reqwest::Client::new();
+            let client = build_http_client(&connect_timeout_nanos)?;
             let response = apply_http_timeout(client.get(&url), &timeout_nanos)
                 .send()
                 .await
@@ -2875,6 +2889,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _call_id: CallId,
         _url: String,
         _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -2890,6 +2905,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _call_id: CallId,
         request: owned::http::Request,
         timeout_nanos: Arc<num_bigint::BigInt>,
+        connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         SysOpOutput::async_op(async move {
@@ -2900,7 +2916,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
             })?;
 
             crate::ensure_rustls_crypto_provider();
-            let client = reqwest::Client::new();
+            let client = build_http_client(&connect_timeout_nanos)?;
             let mut builder = client.request(method, &request.url);
 
             for (k, v) in &request.headers {
@@ -2927,6 +2943,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _call_id: CallId,
         _request: owned::http::Request,
         _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -2943,6 +2960,8 @@ impl io::IoNamespaceHttp for NativeSysOps {
         request: owned::http::Request,
         timeout_nanos: Arc<num_bigint::BigInt>,
         first_event_timeout_nanos: Arc<num_bigint::BigInt>,
+        connect_timeout_nanos: Arc<num_bigint::BigInt>,
+        idle_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::SseStream> {
         use std::sync::atomic::{AtomicBool, Ordering};
@@ -2961,7 +2980,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
             })?;
 
             crate::ensure_rustls_crypto_provider();
-            let client = reqwest::Client::new();
+            let client = build_http_client(&connect_timeout_nanos)?;
             let mut builder = client.request(method, &request.url);
 
             for (key, value) in &request.headers {
@@ -3062,9 +3081,13 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 let mut parser = StreamDecoder::for_content_type(content_type.as_deref());
                 let mut byte_stream = response.bytes_stream();
                 let mut first_event_deadline = first_event_deadline;
+                let idle_timeout = timeout_from_nanos(&idle_timeout_nanos);
+                let mut idle_deadline = None;
 
                 loop {
-                    let next_chunk = if let Some((deadline, duration)) = first_event_deadline {
+                    let next_chunk = if let Some((deadline, duration)) =
+                        first_event_deadline.or(idle_deadline)
+                    {
                         // `timeout_at` polls the inner future before checking
                         // the clock, so a task whose first poll is delayed past
                         // BOTH the deadline and the server's send would find
@@ -3084,7 +3107,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                                 let mut buf = buf_clone.lock().await;
                                 buf.error = Some(VmBamlError::Timeout {
                                     message: format!(
-                                        "SSE first event timed out after {}ms",
+                                        "SSE event timed out after {}ms",
                                         duration.as_millis()
                                     ),
                                     duration_ms: i64::try_from(duration.as_millis()).ok(),
@@ -3124,13 +3147,14 @@ impl io::IoNamespaceHttp for NativeSysOps {
                                 // chunk taken in time can still parse late.
                                 // Enforcing here, where the first events are
                                 // about to be stored, covers every path.
-                                if let Some((deadline, duration)) = first_event_deadline
+                                if let Some((deadline, duration)) =
+                                    first_event_deadline.or(idle_deadline)
                                     && tokio::time::Instant::now() >= deadline
                                 {
                                     let mut buf = buf_clone.lock().await;
                                     buf.error = Some(VmBamlError::Timeout {
                                         message: format!(
-                                            "SSE first event timed out after {}ms",
+                                            "SSE event timed out after {}ms",
                                             duration.as_millis()
                                         ),
                                         duration_ms: i64::try_from(duration.as_millis()).ok(),
@@ -3141,6 +3165,9 @@ impl io::IoNamespaceHttp for NativeSysOps {
                                     return;
                                 }
                                 first_event_deadline = None;
+                                idle_deadline = idle_timeout.map(|duration| {
+                                    (tokio::time::Instant::now() + duration, duration)
+                                });
                                 let mut buf = buf_clone.lock().await;
                                 buf.events.extend(events);
                                 notify_clone.notify_waiters();
@@ -3176,15 +3203,12 @@ impl io::IoNamespaceHttp for NativeSysOps {
                     }
                 };
                 if !final_events.is_empty()
-                    && let Some((deadline, duration)) = first_event_deadline
+                    && let Some((deadline, duration)) = first_event_deadline.or(idle_deadline)
                     && tokio::time::Instant::now() >= deadline
                 {
                     let mut buf = buf_clone.lock().await;
                     buf.error = Some(VmBamlError::Timeout {
-                        message: format!(
-                            "SSE first event timed out after {}ms",
-                            duration.as_millis()
-                        ),
+                        message: format!("SSE event timed out after {}ms", duration.as_millis()),
                         duration_ms: i64::try_from(duration.as_millis()).ok(),
                     });
                     buf.done = true;
@@ -3226,6 +3250,8 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _request: owned::http::Request,
         _timeout_nanos: Arc<num_bigint::BigInt>,
         _first_event_timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
+        _idle_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::SseStream> {
         SysOpOutput::err(VmPanic::HostUnavailable {

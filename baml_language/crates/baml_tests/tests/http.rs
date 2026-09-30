@@ -61,6 +61,7 @@ async fn http_fetch_and_text() {
     function main() -> string {
         load_const "{URI}/data"
         load_const <omitted>
+        load_const <omitted>
         call baml.http.fetch
         sys_op baml.http.Response.text
         return
@@ -102,6 +103,7 @@ async fn foreign_class_field_access_compiles_correctly() {
     function main() -> int {
         load_const "{URI}/test"
         load_const <omitted>
+        load_const <omitted>
         call baml.http.fetch
         load_field .status_code
         return
@@ -131,6 +133,7 @@ async fn http_response_ok_true() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> bool {
         load_const "{URI}/ok"
+        load_const <omitted>
         load_const <omitted>
         call baml.http.fetch
         call baml.http.Response.ok
@@ -162,6 +165,7 @@ async fn http_response_ok_false() {
     function main() -> bool {
         load_const "{URI}/notfound"
         load_const <omitted>
+        load_const <omitted>
         call baml.http.fetch
         call baml.http.Response.ok
         return
@@ -192,6 +196,7 @@ async fn http_response_url() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> string {
         load_const "{URI}/endpoint"
+        load_const <omitted>
         load_const <omitted>
         call baml.http.fetch
         load_field .url
@@ -300,6 +305,7 @@ async fn http_response_text_consumed() {
     function main() -> string {
         load_const "{URI}/once"
         load_const <omitted>
+        load_const <omitted>
         call baml.http.fetch
         store_var response
         load_var response
@@ -315,4 +321,70 @@ async fn http_response_text_consumed() {
       File "test.baml", line 5, in user.main
     uncaught throw: baml.errors.Io {message: "Response body has already been consumed"}
     "#);
+}
+
+#[tokio::test]
+async fn http_connect_timeout_includes_tls_handshake() {
+    // TCP succeeds, but the peer never answers the TLS ClientHello. This
+    // deterministically exercises connection establishment without a blackhole IP.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (_socket, _) = listener.accept().await.unwrap();
+        std::future::pending::<()>().await;
+    });
+    let output = baml_test!(&format!(
+        r#"
+        function main() -> string {{
+            baml.http.fetch("https://{addr}", connect_timeout = baml.time.Duration.from_ms(100)) catch_all (e) {{
+                let t: baml.errors.Timeout => {{ return "timeout"; }},
+                _ => {{ return "wrong error"; }},
+            }};
+            "unexpected success"
+        }}
+        "#
+    ));
+    server.abort();
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("timeout".into()))
+    );
+}
+
+#[tokio::test]
+async fn http_sse_idle_deadline_after_first_event() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut buf = [0; 4096];
+        let _ = socket.read(&mut buf).await.unwrap();
+        // A complete first event arrives; the body then remains open forever.
+        socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\nB\r\ndata: one\n\n\r\n").await.unwrap();
+        std::future::pending::<()>().await;
+    });
+    let output = baml_test!(&format!(
+        r#"
+        function main() -> string {{
+            let stream = baml.http.fetch_sse(
+                baml.http.Request {{ method: "GET", url: "http://{addr}", headers: {{}}, body: "" }},
+                connect_timeout = baml.time.Duration.from_ms(1000),
+                idle_timeout = baml.time.Duration.from_ms(100),
+            );
+            let first = stream.next();
+            if (first == null) {{ return "missing first event"; }}
+            stream.next() catch_all (e) {{
+                let t: baml.errors.Timeout => {{ return "timeout"; }},
+                _ => {{ return "wrong error"; }},
+            }};
+            "unexpected success"
+        }}
+        "#
+    ));
+    server.abort();
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("timeout".into()))
+    );
 }

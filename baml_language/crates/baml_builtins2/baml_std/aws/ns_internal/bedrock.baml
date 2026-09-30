@@ -1399,6 +1399,8 @@ function invoke(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.Mode
         "aws-bedrock",
         client.id(),
         capture_wire = client.capture_wire,
+        request_timeout = client.request_timeout,
+        connect_timeout = client.connect_timeout,
     );
     let turn = parse_response(sent.value);
     ai.ModelTurn { ...turn, calls: [sent.call], model: client.model }

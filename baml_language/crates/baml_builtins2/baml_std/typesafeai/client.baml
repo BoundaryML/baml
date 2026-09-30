@@ -8,6 +8,10 @@ class Client {
     api_key: ai.Credential?,
     base_url: ai.Credential?,
     request_timeout_ms: int?,
+    // Native HTTP budgets. Null/non-positive is unbounded. Duration options
+    // take precedence over the legacy millisecond options when both are set.
+    connect_timeout: baml.time.Duration?,
+    request_timeout: baml.time.Duration?,
     capture_wire: bool,
 
     /// Construction is pure. Credentials resolve when invoking, using
@@ -18,12 +22,16 @@ class Client {
         base_url: ai.Credential? = "https://api.typesafe.ai/v1",
         request_timeout_ms: int? = null,
         capture_wire: bool = true,
+        connect_timeout: baml.time.Duration? = null,
+        request_timeout: baml.time.Duration? = null,
     ) -> Client {
         Client {
             model: model,
             api_key: api_key,
             base_url: base_url,
             request_timeout_ms: request_timeout_ms,
+            connect_timeout: connect_timeout,
+            request_timeout: request_timeout,
             capture_wire: capture_wire,
         }
     }

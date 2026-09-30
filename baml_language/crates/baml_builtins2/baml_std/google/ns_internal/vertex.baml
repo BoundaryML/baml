@@ -372,6 +372,8 @@ function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.Mod
             c.id(),
             capture_wire = c.capture_wire,
             request_timeout_ms = c.request_timeout_ms,
+            request_timeout = c.request_timeout,
+            connect_timeout = c.connect_timeout,
         );
         let turn = anthropic.internal.parse(sent.value);
         return ai.ModelTurn { ...turn, calls: [sent.call], model: c.model };
@@ -383,6 +385,8 @@ function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.Mod
         c.id(),
         capture_wire = c.capture_wire,
         request_timeout_ms = c.request_timeout_ms,
+        request_timeout = c.request_timeout,
+        connect_timeout = c.connect_timeout,
     );
     let turn = root.internal.parse(sent.value, seq, provider = "vertex");
     ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
@@ -406,7 +410,11 @@ function vertex_invoke_stream(
         req,
         "vertex",
         request_timeout_ms = c.request_timeout_ms,
+        request_timeout = c.request_timeout,
+        connect_timeout = c.connect_timeout,
         time_to_first_token_timeout_ms = c.time_to_first_token_timeout_ms,
+        time_to_first_token_timeout = c.time_to_first_token_timeout,
+        idle_timeout = c.idle_timeout,
     );
     // Both decoders yield an explicit `TurnDone` (Anthropic's `message_stop`,
     // Gemini's `finishReason` fragment), so both streams are strict: a

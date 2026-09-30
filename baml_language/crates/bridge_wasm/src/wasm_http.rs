@@ -684,6 +684,7 @@ impl IoNamespaceHttp for WasmHttp {
         call_id: CallId,
         url: String,
         _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         let req = io::owned::http::Request {
@@ -701,6 +702,7 @@ impl IoNamespaceHttp for WasmHttp {
         call_id: CallId,
         request: io::owned::http::Request,
         _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         self.do_send(call_id, request)
@@ -713,6 +715,8 @@ impl IoNamespaceHttp for WasmHttp {
         request: io::owned::http::Request,
         _timeout_nanos: Arc<num_bigint::BigInt>,
         _first_event_timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
+        _idle_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::SseStream> {
         SysOpOutput::async_op(SendFuture(async move {

@@ -990,13 +990,20 @@ function _gm_open_sse(
     req: baml.http.Request,
     provider: string,
     request_timeout_ms: int? = null,
+    request_timeout: baml.time.Duration? = null,
     time_to_first_token_timeout_ms: int? = null,
+    time_to_first_token_timeout: baml.time.Duration? = null,
+    connect_timeout: baml.time.Duration? = null,
+    idle_timeout: baml.time.Duration? = null,
 ) -> baml.http.SseStream {
     _gm_route_sse_open(provider, () -> {
         baml.http.fetch_sse(
             req,
-            timeout = baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
-            first_event_timeout = baml.time.Duration.from_milliseconds(time_to_first_token_timeout_ms ?? 0),
+            timeout = request_timeout ?? baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
+            first_event_timeout = time_to_first_token_timeout
+                ?? baml.time.Duration.from_milliseconds(time_to_first_token_timeout_ms ?? 0),
+            connect_timeout = connect_timeout,
+            idle_timeout = idle_timeout,
         )
     })
 }
@@ -1148,7 +1155,14 @@ function gemini_invoke(c: root.GeminiClient, input: ai.ModelTurnInput) -> ai.Mod
     // from it are stable across re-renders.
     let seq = input.journal.entries().length();
     let req = render(c, input);
-    let sent = ai.wire.send_as_with_wire<GmResponse>(req, "google", c.id(), capture_wire = c.capture_wire);
+    let sent = ai.wire.send_as_with_wire<GmResponse>(
+        req,
+        "google",
+        c.id(),
+        capture_wire = c.capture_wire,
+        request_timeout = c.request_timeout,
+        connect_timeout = c.connect_timeout,
+    );
     let turn = parse(sent.value, seq);
     ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
 }
@@ -1165,7 +1179,14 @@ function gemini_invoke_stream(
 ) -> ai.stream.TurnStream {
     let req = _request(c, input, true);
     let started = baml.time.Instant.now();
-    let sse = _gm_open_sse(req, "google");
+    let sse = _gm_open_sse(
+        req,
+        "google",
+        request_timeout = c.request_timeout,
+        time_to_first_token_timeout = c.time_to_first_token_timeout,
+        connect_timeout = c.connect_timeout,
+        idle_timeout = c.idle_timeout,
+    );
     // Strict termination: the `finishReason` fragment decodes as TurnDone, so
     // a connection that closes before it is a truncated turn, not an answer.
     let stream = ai.stream.TurnStream.from_sse(

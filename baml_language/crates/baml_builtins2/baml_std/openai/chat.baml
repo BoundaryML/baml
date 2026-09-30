@@ -36,6 +36,12 @@ class ChatClient {
     top_p: float?,
     stop: string[]?,
     seed: int?,
+    // Native HTTP budgets. Null/non-positive is unbounded. Duration options
+    // take precedence over the legacy millisecond options when both are set.
+    connect_timeout: baml.time.Duration?,
+    request_timeout: baml.time.Duration?,
+    time_to_first_token_timeout: baml.time.Duration?,
+    idle_timeout: baml.time.Duration?,
     // Record request/response bodies (and raw SSE events) on the LLMCall wire
     // records delivered through on_event. Status, headers, and timing are
     // always recorded; this flag only gates the bodies.
@@ -60,6 +66,10 @@ class ChatClient {
         stop: string[]? = null,
         seed: int? = null,
         capture_wire: bool = true,
+        connect_timeout: baml.time.Duration? = null,
+        request_timeout: baml.time.Duration? = null,
+        time_to_first_token_timeout: baml.time.Duration? = null,
+        idle_timeout: baml.time.Duration? = null,
     ) -> ChatClient {
         ChatClient {
             model: model,
@@ -76,6 +86,10 @@ class ChatClient {
             top_p: top_p,
             stop: stop,
             seed: seed,
+            connect_timeout: connect_timeout,
+            request_timeout: request_timeout,
+            time_to_first_token_timeout: time_to_first_token_timeout,
+            idle_timeout: idle_timeout,
             capture_wire: capture_wire,
         }
     }
@@ -152,6 +166,8 @@ class ChatClient {
                 input,
                 capture_wire = self.capture_wire,
                 request_timeout_ms = self.request_timeout_ms,
+                request_timeout = self.request_timeout,
+                connect_timeout = self.connect_timeout,
             ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }
@@ -166,7 +182,11 @@ class ChatClient {
                 input,
                 capture_wire = self.capture_wire,
                 request_timeout_ms = self.request_timeout_ms,
+                request_timeout = self.request_timeout,
+                connect_timeout = self.connect_timeout,
                 time_to_first_token_timeout_ms = self.time_to_first_token_timeout_ms,
+                time_to_first_token_timeout = self.time_to_first_token_timeout,
+                idle_timeout = self.idle_timeout,
             ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }

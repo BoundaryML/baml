@@ -297,6 +297,7 @@ impl IoNamespaceHttp for WebHttp {
         _call_id: CallId,
         url: String,
         timeout_nanos: Arc<num_bigint::BigInt>,
+        connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         self.send(
@@ -317,6 +318,7 @@ impl IoNamespaceHttp for WebHttp {
         _call_id: CallId,
         request: io::owned::http::Request,
         timeout_nanos: Arc<num_bigint::BigInt>,
+        connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         self.send(SysOp::BamlHttpSend, request, timeout_nanos.as_ref())
@@ -329,6 +331,8 @@ impl IoNamespaceHttp for WebHttp {
         _request: io::owned::http::Request,
         _timeout_nanos: Arc<num_bigint::BigInt>,
         _first_event_timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
+        _idle_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::SseStream> {
         host_unavailable("http")

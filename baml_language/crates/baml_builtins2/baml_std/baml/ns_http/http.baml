@@ -140,15 +140,17 @@ function _timeout_nanos(timeout: root.time.Duration?) -> bigint throws never {
 function fetch(
     url: string,
     timeout: root.time.Duration? = null,
+    connect_timeout: root.time.Duration? = null,
 ) -> Response throws root.errors.Io | root.errors.Timeout {
     // Thin wrapper resolving the default: `$rust_io_function` sys-ops don't fill
     // omitted args, so `fetch` forwards to the all-required `_fetch` sys-op.
-    _fetch(url, _timeout_nanos(timeout))
+    _fetch(url, _timeout_nanos(timeout), _timeout_nanos(connect_timeout))
 }
 
 function _fetch(
     url: string,
     timeout_nanos: bigint,
+    connect_timeout_nanos: bigint,
 ) -> Response throws root.errors.Io | root.errors.Timeout {
     $rust_io_function
 }
@@ -158,6 +160,9 @@ function _fetch(
 /// `timeout` is the total deadline for the request, as in `fetch`. `null` (the
 /// default) imposes no deadline.
 ///
+/// `connect_timeout` bounds connection establishment (including TLS), independently of the total deadline.
+/// Null/non-positive is unbounded. Native transports enforce this option.
+///
 /// # Throws
 ///
 /// - `InvalidArgument` if `request.method` is not a valid HTTP method.
@@ -166,13 +171,15 @@ function _fetch(
 function send(
     request: Request,
     timeout: root.time.Duration? = null,
+    connect_timeout: root.time.Duration? = null,
 ) -> Response throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
-    _send(request, _timeout_nanos(timeout))
+    _send(request, _timeout_nanos(timeout), _timeout_nanos(connect_timeout))
 }
 
 function _send(
     request: Request,
     timeout_nanos: bigint,
+    connect_timeout_nanos: bigint,
 ) -> Response throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
     $rust_io_function
 }
@@ -181,7 +188,11 @@ function _send(
 ///
 /// On native transports, `timeout` covers the request and streaming body.
 /// `first_event_timeout` starts after open and ends on the first parsed event.
+/// `idle_timeout` bounds the gap between parsed SSE events after the first event.
 /// Null/non-positive is unbounded; browser/Wasm does not enforce these fields.
+///
+/// `connect_timeout` bounds connection establishment (including TLS), independently of the total deadline.
+/// Null/non-positive is unbounded. Native transports enforce this option.
 ///
 /// # Throws
 ///
@@ -192,14 +203,24 @@ function fetch_sse(
     request: Request,
     timeout: root.time.Duration? = null,
     first_event_timeout: root.time.Duration? = null,
+    connect_timeout: root.time.Duration? = null,
+    idle_timeout: root.time.Duration? = null,
 ) -> SseStream throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
-    _fetch_sse(request, _timeout_nanos(timeout), _timeout_nanos(first_event_timeout))
+    _fetch_sse(
+        request,
+        _timeout_nanos(timeout),
+        _timeout_nanos(first_event_timeout),
+        _timeout_nanos(connect_timeout),
+        _timeout_nanos(idle_timeout),
+    )
 }
 
 function _fetch_sse(
     request: Request,
     timeout_nanos: bigint,
     first_event_timeout_nanos: bigint,
+    connect_timeout_nanos: bigint,
+    idle_timeout_nanos: bigint,
 ) -> SseStream throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
     $rust_io_function
 }

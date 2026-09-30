@@ -47,6 +47,11 @@ class Duration {
                 * 1000n,
         }
     }
+    /// Alias for `from_milliseconds`, convenient for HTTP timeout options.
+    function from_ms(ms: int | bigint) -> Duration throws never {
+        Duration.from_milliseconds(ms)
+    }
+
     /// A timespan of `ms` milliseconds, i.e. `ms * 1000000` nanoseconds.
     function from_milliseconds(ms: int | bigint) -> Duration throws never {
         Duration {

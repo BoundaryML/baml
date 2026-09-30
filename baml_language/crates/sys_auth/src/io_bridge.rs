@@ -165,6 +165,7 @@ impl BamlAuthIo {
             .http__send(
                 request,
                 Arc::new(num_bigint::BigInt::from(CREDENTIAL_REQUEST_TIMEOUT_NANOS)),
+                Arc::new(num_bigint::BigInt::from(0)),
             )
             .await
             .map_err(|e| e.to_string())?;

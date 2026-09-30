@@ -324,6 +324,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
         call_id: CallId,
         request: owned::http::Request,
         timeout_nanos: Arc<num_bigint::BigInt>,
+        connect_timeout_nanos: Arc<num_bigint::BigInt>,
         ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         let state = self.0.clone();
@@ -356,6 +357,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
             call_id,
             request,
             timeout_nanos,
+            connect_timeout_nanos,
             ctx,
         );
 
@@ -488,6 +490,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
         call_id: CallId,
         url: String,
         timeout_nanos: Arc<num_bigint::BigInt>,
+        connect_timeout_nanos: Arc<num_bigint::BigInt>,
         ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         let req = owned::http::Request {
@@ -496,7 +499,14 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
             headers: indexmap::IndexMap::new(),
             body: String::new(),
         };
-        self._send(heap, call_id, req, timeout_nanos, ctx)
+        self._send(
+            heap,
+            call_id,
+            req,
+            timeout_nanos,
+            connect_timeout_nanos,
+            ctx,
+        )
     }
 
     fn _fetch_sse(
@@ -506,6 +516,8 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
         request: owned::http::Request,
         timeout_nanos: Arc<num_bigint::BigInt>,
         first_event_timeout_nanos: Arc<num_bigint::BigInt>,
+        connect_timeout_nanos: Arc<num_bigint::BigInt>,
+        idle_timeout_nanos: Arc<num_bigint::BigInt>,
         ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::SseStream> {
         // Delegate to native implementation — playground doesn't need SSE logging yet.
@@ -516,6 +528,8 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
             request,
             timeout_nanos,
             first_event_timeout_nanos,
+            connect_timeout_nanos,
+            idle_timeout_nanos,
             ctx,
         )
     }
