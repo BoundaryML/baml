@@ -259,17 +259,14 @@ fn decode(r: &mut Reader<'_, '_>) -> Result<DecodedSnapshot, BlobError> {
         return Err(BlobError::Version(version));
     }
     let declared = CasId::from_bytes(r.take(16)?.try_into().expect("16 bytes"));
-    let mut blob_hash = Hasher::new(HashDomain::Blob);
     let child_count = r.u32()?;
     if child_count as usize > r.input.len() / 16 {
         return Err(BlobError::Truncated);
     }
     r.charge(child_count as usize * std::mem::size_of::<CasId>())?;
-    blob_hash.number(u64::from(child_count));
     let mut children = Vec::with_capacity(child_count as usize);
     for _ in 0..child_count {
         let child = CasId::from_bytes(r.take(16)?.try_into().expect("16 bytes"));
-        blob_hash.absorb(child.as_bytes());
         children.push(child);
     }
     // Sorted, so that a long table cannot make the check quadratic.
@@ -289,8 +286,10 @@ fn decode(r: &mut Reader<'_, '_>) -> Result<DecodedSnapshot, BlobError> {
     }
     r.objects = object_count;
     r.charge(object_count as usize * std::mem::size_of::<DecodedObject>())?;
-    blob_hash.number(u64::from(object_count));
 
+    // One stream, fed in byte order as hash format 3 defines it: the root,
+    // the objects, then the child table and object count.
+    let mut blob_hash = Hasher::new(HashDomain::Blob);
     let root = match r.u8()? {
         0 => {
             blob_hash.byte(0);
@@ -304,11 +303,10 @@ fn decode(r: &mut Reader<'_, '_>) -> Result<DecodedSnapshot, BlobError> {
             DecodedRoot::Value(value)
         }
         1 => {
-            let parameter_count = r.u64()?;
-            let (slots, digest) = r.values()?;
             blob_hash.byte(1);
+            let parameter_count = r.u64()?;
             blob_hash.number(parameter_count);
-            range(&mut blob_hash, slots.len(), digest);
+            let slots = r.values(&mut blob_hash)?;
             DecodedRoot::FunctionArgs {
                 parameter_count,
                 slots,
@@ -326,9 +324,7 @@ fn decode(r: &mut Reader<'_, '_>) -> Result<DecodedSnapshot, BlobError> {
                 "object {number} is not referenced before its definition"
             )));
         }
-        let (object, digest) = r.object()?;
-        blob_hash.digest(digest);
-        objects.push(object);
+        objects.push(r.object(&mut blob_hash)?);
     }
     if !r.input.is_empty() {
         return Err(invalid("trailing bytes".into()));
@@ -336,6 +332,11 @@ fn decode(r: &mut Reader<'_, '_>) -> Result<DecodedSnapshot, BlobError> {
     if r.children_referenced != r.children {
         return Err(invalid("unreferenced child blob".into()));
     }
+    blob_hash.size(children.len());
+    for child in &children {
+        blob_hash.absorb(child.as_bytes());
+    }
+    blob_hash.size(objects.len());
     let computed = CasId::from_bytes(blob_hash.finish().0);
     if computed != declared {
         return Err(BlobError::IdMismatch { declared, computed });
@@ -352,11 +353,6 @@ fn decode(r: &mut Reader<'_, '_>) -> Result<DecodedSnapshot, BlobError> {
 
 fn invalid(reason: String) -> BlobError {
     BlobError::Invalid(reason)
-}
-
-fn range(h: &mut Hasher, len: usize, digest: Digest) {
-    h.number(len as u64);
-    h.digest(digest);
 }
 
 struct Reader<'a, 'scope> {
@@ -489,20 +485,18 @@ impl<'a> Reader<'a, '_> {
         }
         Ok(n)
     }
-    /// UTF-8 text and its content hash (`BexStr::content_hash`).
-    fn text(&mut self) -> Result<(&'a str, u128), BlobError> {
+    fn text(&mut self) -> Result<&'a str, BlobError> {
         let len = self.u32()? as usize;
         let bytes = self.take(len)?;
         self.charge(len)?;
-        let text = std::str::from_utf8(bytes).map_err(|_| invalid("string is not UTF-8".into()))?;
-        Ok((text, xxhash_rust::xxh3::xxh3_128(bytes)))
+        std::str::from_utf8(bytes).map_err(|_| invalid("string is not UTF-8".into()))
     }
-    /// UTF-8 text and its string-leaf digest.
+    /// UTF-8 text and its string-leaf digest, its content hash
+    /// (`BexStr::content_hash`).
     fn string(&mut self) -> Result<(&'a str, Digest), BlobError> {
-        let (text, content) = self.text()?;
-        let mut h = Hasher::new(HashDomain::String);
-        h.string_parts(text.len(), content);
-        Ok((text, h.finish()))
+        let text = self.text()?;
+        let digest = Digest(xxhash_rust::xxh3::xxh3_128(text.as_bytes()).to_le_bytes());
+        Ok((text, digest))
     }
     /// One Borsh type description and its digest (hash of the raw bytes).
     fn ty(&mut self) -> Result<(TypeDescription, Digest), BlobError> {
@@ -659,31 +653,32 @@ impl<'a> Reader<'a, '_> {
             other => return Err(invalid(format!("value tag {other}"))),
         })
     }
-    /// A value sequence and its range digest.
-    fn values(&mut self) -> Result<(Vec<DecodedValue>, Digest), BlobError> {
+    /// A value sequence.
+    fn values(&mut self, h: &mut Hasher) -> Result<Vec<DecodedValue>, BlobError> {
         let n = self.count(1)?;
         self.charge(n * std::mem::size_of::<DecodedValue>())?;
-        let mut h = Hasher::new(HashDomain::Range);
+        h.size(n);
         let mut values = Vec::with_capacity(n);
         for _ in 0..n {
-            values.push(self.value(&mut h)?);
+            values.push(self.value(h)?);
         }
-        Ok((values, h.finish()))
+        Ok(values)
     }
-    /// Keyed entries and their range digest.
-    fn entries(&mut self) -> Result<(Entries, Digest), BlobError> {
+    /// Keyed entries; keys are hashed in place.
+    fn entries(&mut self, h: &mut Hasher) -> Result<Entries, BlobError> {
         // Key length (4) plus a value tag (1).
         let n = self.count(5)?;
         self.charge(n * std::mem::size_of::<(Box<str>, DecodedValue)>())?;
-        let mut h = Hasher::new(HashDomain::Range);
+        h.size(n);
         let mut entries = Vec::with_capacity(n);
         for _ in 0..n {
-            let (key, content) = self.text()?;
-            h.string_parts(key.len(), content);
-            let value = self.value(&mut h)?;
+            let key = self.text()?;
+            h.size(key.len());
+            h.absorb(key.as_bytes());
+            let value = self.value(h)?;
             entries.push((key.into(), value));
         }
-        Ok((entries, h.finish()))
+        Ok(entries)
     }
     fn bigint(&mut self) -> Result<(BigInt, Digest), BlobError> {
         let sign = self.u8()?;
@@ -715,32 +710,33 @@ impl<'a> Reader<'a, '_> {
         };
         Ok((BigInt::from_biguint(sign, magnitude), h.finish()))
     }
-    fn types(&mut self) -> Result<(Vec<TypeDescription>, Digest), BlobError> {
+    fn types(&mut self, h: &mut Hasher) -> Result<Vec<TypeDescription>, BlobError> {
         let n = self.count(1)?;
         self.charge(n * std::mem::size_of::<TypeDescription>())?;
-        let mut h = Hasher::new(HashDomain::Range);
+        h.size(n);
         let mut types = Vec::with_capacity(n);
         for _ in 0..n {
             let (ty, digest) = self.ty()?;
             h.digest(digest);
             types.push(ty);
         }
-        Ok((types, h.finish()))
+        Ok(types)
     }
-    fn object(&mut self) -> Result<(DecodedObject, Digest), BlobError> {
+    /// One object definition, hashed into `h` exactly as hash format 3 does.
+    fn object(&mut self, h: &mut Hasher) -> Result<DecodedObject, BlobError> {
         let tag = self.u8()?;
-        let mut h = Hasher::new(HashDomain::Object);
         h.byte(tag);
-        let object = match tag {
+        Ok(match tag {
             0 => {
                 let original_len = self.u64()?;
+                h.number(original_len);
                 let len = self.u32()? as usize;
                 let data = self.take(len)?;
                 self.charge(len)?;
                 let mut digest = Hasher::new(HashDomain::Uint8Array);
                 digest.absorb(data);
-                h.number(original_len);
-                range(&mut h, len, digest.finish());
+                h.size(len);
+                h.digest(digest.finish());
                 DecodedObject::Uint8Array {
                     data: data.to_vec(),
                     original_len,
@@ -748,11 +744,10 @@ impl<'a> Reader<'a, '_> {
             }
             1 => {
                 let (element_type, type_digest) = self.ty()?;
-                let original_len = self.u64()?;
-                let (items, digest) = self.values()?;
                 h.digest(type_digest);
+                let original_len = self.u64()?;
                 h.number(original_len);
-                range(&mut h, items.len(), digest);
+                let items = self.values(h)?;
                 DecodedObject::List {
                     element_type,
                     items,
@@ -761,13 +756,12 @@ impl<'a> Reader<'a, '_> {
             }
             2 => {
                 let (key_type, key_digest) = self.ty()?;
-                let (value_type, value_digest) = self.ty()?;
-                let original_len = self.u64()?;
-                let (entries, digest) = self.entries()?;
                 h.digest(key_digest);
+                let (value_type, value_digest) = self.ty()?;
                 h.digest(value_digest);
+                let original_len = self.u64()?;
                 h.number(original_len);
-                range(&mut h, entries.len(), digest);
+                let entries = self.entries(h)?;
                 DecodedObject::Map {
                     key_type,
                     value_type,
@@ -776,14 +770,12 @@ impl<'a> Reader<'a, '_> {
                 }
             }
             3 => {
-                let (type_arguments, types_digest) = self.types()?;
+                let type_arguments = self.types(h)?;
                 let declaration = self.reference()?;
-                let original_len = self.u64()?;
-                let (fields, digest) = self.entries()?;
-                range(&mut h, type_arguments.len(), types_digest);
                 h.number(u64::from(declaration.0));
+                let original_len = self.u64()?;
                 h.number(original_len);
-                range(&mut h, fields.len(), digest);
+                let fields = self.entries(h)?;
                 DecodedObject::Instance {
                     type_arguments,
                     declaration,
@@ -813,7 +805,7 @@ impl<'a> Reader<'a, '_> {
                     is_enum,
                 }
             }
-            5 => DecodedObject::Cell(self.value(&mut h)?),
+            5 => DecodedObject::Cell(self.value(h)?),
             6 => DecodedObject::NonSnapshotable,
             7 => {
                 let kind = description(self.u8()?)?;
@@ -835,8 +827,7 @@ impl<'a> Reader<'a, '_> {
                 DecodedObject::Truncated(limit)
             }
             other => return Err(invalid(format!("object tag {other}"))),
-        };
-        Ok((object, h.finish()))
+        })
     }
 }
 

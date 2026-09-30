@@ -19,24 +19,33 @@
 //!   [`REFERENCE_WEIGHT`] for a referenced unit that is cut. Counting per
 //!   reference keeps the weight a function of the value alone.
 //! - A unit is cut when its weight reaches the policy's unit size. A string,
-//!   bigint or `uint8array` is cut when its content reaches the leaf size.
-//! - Declarations are never cut: every blob carries the ones it names.
+//!   bigint or `uint8array` is cut when its content reaches the leaf size; a
+//!   `uint8array` never by its weight.
+//! - Declarations are never cut, and an instance or enum value naming one adds
+//!   nothing to the weight: every blob carries the declarations it names.
+//!
+//! Finding the units costs a pass over every object, which most captures do
+//! not need: without a shared object every unit's weight is at most the
+//! capture's encoded size, so a capture whose size bound is under the unit
+//! size and whose largest leaf is under the leaf size is one blob without
+//! the pass. The result is the same either way.
 //!
 //! A blob holds its unit and everything that unit reaches without crossing a
 //! cut. Objects below the threshold that several blobs reach are copied into
 //! each. A cut cycle's blob starts at the member with the smallest
-//! [`HashDomain::CycleRoot`] digest, so every capture that reaches the cycle
-//! from outside produces the same blob; other blobs name its other members by
-//! blob and local number. A capture's own root blob always starts at the
+//! [`HashDomain::CycleRoot`] digest, so captures that reach the cycle from
+//! outside produce the same blob, unless several members share that digest:
+//! the first visited then starts it, and the blob can differ between
+//! captures. Other blobs name its other members by blob and local number. A capture's own root blob always starts at the
 //! captured value.
 use rustc_hash::FxHashMap;
 
 use super::{
-    BexStr, BigintId, BlobEntry, BlobIndex, CasId, Home, ObjectId, OwnedType, Range,
-    SnapshotObject, SnapshotRoot, SnapshotValue, Storage, StringId, grow,
-    hash::{Absorb, Digest, Hasher, TypeLeaf},
+    BigintId, BlobEntry, BlobIndex, CasId, Home, ObjectId, Range, SnapshotObject, SnapshotRoot,
+    SnapshotValue, Storage, StringId, grow,
+    hash::{Absorb, Digest, Hasher},
     tags::HashDomain,
-    walk::{self, Both, Length, Reference, Resolver, Visitor, bigint_limb_bytes, infallible},
+    walk::{self, Both, Length, Reference, Resolver, bigint_limb_bytes, infallible},
 };
 
 /// Where a capture is cut into blobs. The policy decides blob IDs, never
@@ -55,7 +64,8 @@ pub enum ShapePolicy {
     },
 }
 
-/// Weight of a reference to a cut value: its entry in the child table.
+/// Weight of a reference to a cut unit: its entry in the child table. A
+/// reference to a cut string or bigint weighs its encoded reference.
 pub const REFERENCE_WEIGHT: u64 = 16;
 
 /// Bytes of a blob before its child table: magic, version and ID.
@@ -71,10 +81,6 @@ pub struct Shaper {
     local: Vec<u32>,
     /// Members of the blob being shaped, in local order.
     order: Vec<ObjectId>,
-    /// Object digests in local order.
-    digests: Vec<Digest>,
-    /// The root's hash input, replayed after the counts it follows.
-    root: Vec<u8>,
     /// Child table of the blob being shaped, in first-use order.
     children: Vec<BlobIndex>,
     /// Blob index to its slot in `children`, [`UNNUMBERED`] for every other
@@ -106,18 +112,48 @@ impl Shaper {
         self.local.resize(s.objects.len(), UNNUMBERED);
         self.slots.clear();
         self.ids.clear();
+        let bound = s.encoded_bound();
         match self.policy {
             ShapePolicy::Whole => {}
             ShapePolicy::Split {
                 unit_bytes,
                 leaf_bytes,
-            } => self.cut(s, root, unit_bytes, leaf_bytes),
+            } => {
+                if s.shared || bound >= unit_bytes || s.largest_leaf as u64 >= leaf_bytes {
+                    self.cut(s, root, unit_bytes, leaf_bytes);
+                } else {
+                    #[cfg(debug_assertions)]
+                    self.check_nothing_to_cut(s, root, unit_bytes, leaf_bytes);
+                }
+            }
         }
         let index = self.blob(s, root, 0..0);
         debug_assert_eq!(
             index.0 as usize + 1,
             s.blobs.len(),
             "a capture's root blob holds its children, so it equals none of them"
+        );
+        debug_assert!(
+            s.blobs.len() > 1 || s.blobs[0].encoded_len <= bound,
+            "a capture's size bound covers its blob"
+        );
+    }
+
+    /// The pass a capture under both thresholds skips would have cut nothing.
+    #[cfg(debug_assertions)]
+    fn check_nothing_to_cut(
+        &mut self,
+        s: &Storage,
+        root: SnapshotRoot,
+        unit_bytes: u64,
+        leaf_bytes: u64,
+    ) {
+        self.cuts.find(s, root, unit_bytes, leaf_bytes);
+        assert!(
+            self.cuts.units.iter().all(|unit| !unit.cut)
+                && !self.cuts.strings.contains(&true)
+                && !self.cuts.bigints.contains(&true),
+            "a capture under the size bound has nothing to cut"
         );
     }
 
@@ -126,7 +162,9 @@ impl Shaper {
         self.cuts.find(s, root, unit_bytes, leaf_bytes);
         // The root's own unit is the root blob, wherever its weight falls.
         let root_unit = match root {
-            SnapshotRoot::Value(SnapshotValue::Object(id)) => Some(self.cuts.unit[id.0 as usize]),
+            SnapshotRoot::Value(SnapshotValue::Object(id)) => {
+                Some(self.cuts.nodes[id.0 as usize].unit)
+            }
             SnapshotRoot::Value(
                 SnapshotValue::Null
                 | SnapshotValue::OmittedArg
@@ -199,8 +237,6 @@ impl Shaper {
         let Self {
             local,
             order,
-            digests,
-            root: root_input,
             children,
             slots,
             ids,
@@ -209,10 +245,8 @@ impl Shaper {
         } = self;
         slots.resize(s.blobs.len(), UNNUMBERED);
         order.clear();
-        digests.clear();
-        root_input.clear();
         children.clear();
-        let content_bytes = {
+        let (mut h, content_bytes) = {
             let s: &Storage = s;
             let mut numbering = Numbering {
                 s,
@@ -221,10 +255,7 @@ impl Shaper {
                 children: &mut *children,
                 slots: &mut *slots,
             };
-            let mut visitor = Both(
-                Hash::new(&mut *root_input, &mut *digests, HashDomain::Object),
-                Length::default(),
-            );
+            let mut visitor = Both(Hasher::new(HashDomain::Blob), Length::default());
             infallible(walk::root(&mut visitor, &mut numbering, s, root));
             // Hashing a definition numbers its new references, which extends
             // `order` with the objects to hash next.
@@ -234,20 +265,15 @@ impl Shaper {
                 infallible(walk::object(&mut visitor, &mut numbering, s, object));
                 next += 1;
             }
-            let Both(_, Length(content_bytes)) = visitor;
-            content_bytes
+            let Both(h, Length(content_bytes)) = visitor;
+            (h, content_bytes)
         };
-
-        let mut h = Hasher::new(HashDomain::Blob);
+        // The child table is complete only now; the ID covers it last.
         h.size(children.len());
         for child in children.iter() {
             h.absorb(s.blobs[child.0 as usize].id.as_bytes());
         }
         h.size(order.len());
-        h.absorb(root_input);
-        for digest in digests.iter() {
-            h.digest(*digest);
-        }
         let id = CasId::from_bytes(h.finish().0);
         // Header, child count and IDs, object count, then the content.
         let encoded_len = HEADER_BYTES
@@ -346,141 +372,6 @@ impl Resolver for Numbering<'_> {
     }
 }
 
-/// Hash format 3 input. The root goes to a buffer; each object and each
-/// sequence has a hasher of its own.
-struct Hash<'a> {
-    root: &'a mut Vec<u8>,
-    digests: &'a mut Vec<Digest>,
-    /// The open object's hasher; meaningful while `at` is not the root.
-    object: Hasher,
-    /// The open sequence's hasher, its length and the scope it opened in;
-    /// meaningful while `at` is a range.
-    range: Hasher,
-    range_len: usize,
-    range_in: At,
-    at: At,
-    /// Domain of each object's digest.
-    domain: HashDomain,
-}
-/// The innermost open scope: a sequence, else an object, else the root.
-#[derive(Clone, Copy)]
-enum At {
-    Root,
-    Object,
-    Range,
-}
-impl<'a> Hash<'a> {
-    fn new(root: &'a mut Vec<u8>, digests: &'a mut Vec<Digest>, domain: HashDomain) -> Self {
-        Self {
-            root,
-            digests,
-            object: Hasher::new(domain),
-            range: Hasher::new(HashDomain::Range),
-            range_len: 0,
-            range_in: At::Root,
-            at: At::Root,
-            domain,
-        }
-    }
-}
-impl Absorb for Hash<'_> {
-    #[inline]
-    fn absorb(&mut self, bytes: &[u8]) {
-        match self.at {
-            At::Range => self.range.absorb(bytes),
-            At::Object => self.object.absorb(bytes),
-            At::Root => self.root.extend_from_slice(bytes),
-        }
-    }
-}
-impl Visitor for Hash<'_> {
-    type Error = std::convert::Infallible;
-    fn byte(&mut self, byte: u8) -> Result<(), Self::Error> {
-        Absorb::byte(self, byte);
-        Ok(())
-    }
-    fn int(&mut self, value: i64) -> Result<(), Self::Error> {
-        self.absorb(&value.to_le_bytes());
-        Ok(())
-    }
-    fn bits(&mut self, bits: u64) -> Result<(), Self::Error> {
-        self.number(bits);
-        Ok(())
-    }
-    fn index(&mut self, index: u32) -> Result<(), Self::Error> {
-        self.number(u64::from(index));
-        Ok(())
-    }
-    fn length(&mut self, length: usize) -> Result<(), Self::Error> {
-        self.size(length);
-        Ok(())
-    }
-    fn string(&mut self, _: &BexStr, digest: Digest) -> Result<(), Self::Error> {
-        self.digest(digest);
-        Ok(())
-    }
-    fn key(&mut self, text: &BexStr) -> Result<(), Self::Error> {
-        self.string_parts(text.len(), text.content_hash());
-        Ok(())
-    }
-    fn bigint(&mut self, _: &num_bigint::BigInt, digest: Digest) -> Result<(), Self::Error> {
-        self.digest(digest);
-        Ok(())
-    }
-    fn ty(&mut self, _: &OwnedType, leaf: TypeLeaf) -> Result<(), Self::Error> {
-        self.digest(leaf.digest);
-        Ok(())
-    }
-    fn bytes(&mut self, bytes: &[u8], digest: Digest) -> Result<(), Self::Error> {
-        self.size(bytes.len());
-        self.digest(digest);
-        Ok(())
-    }
-    fn declaration(
-        &mut self,
-        tag: baml_type::typetag::TypeTag,
-        name: &baml_type::DeclarationName,
-    ) -> Result<(), Self::Error> {
-        debug_assert!(matches!(self.at, At::Object), "a declaration is an object");
-        self.object.borsh(&tag);
-        self.object.borsh(name);
-        Ok(())
-    }
-    fn begin_range(&mut self, len: usize) -> Result<(), Self::Error> {
-        debug_assert!(!matches!(self.at, At::Range), "sequences never nest");
-        self.range = Hasher::new(HashDomain::Range);
-        self.range_len = len;
-        self.range_in = self.at;
-        self.at = At::Range;
-        Ok(())
-    }
-    fn end_range(&mut self) -> Result<(), Self::Error> {
-        debug_assert!(
-            matches!(self.at, At::Range),
-            "a sequence ends after it begins"
-        );
-        let digest = self.range.finish();
-        let len = self.range_len;
-        self.at = self.range_in;
-        self.size(len);
-        self.digest(digest);
-        Ok(())
-    }
-    fn begin_object(&mut self) {
-        debug_assert!(matches!(self.at, At::Root), "objects never nest");
-        self.object = Hasher::new(self.domain);
-        self.at = At::Object;
-    }
-    fn end_object(&mut self) {
-        debug_assert!(
-            matches!(self.at, At::Object),
-            "an object ends after it begins"
-        );
-        self.digests.push(self.object.finish());
-        self.at = At::Root;
-    }
-}
-
 /// Every reference the same: what an object holds without what it points at.
 struct Unresolved;
 impl Resolver for Unresolved {
@@ -510,6 +401,29 @@ struct Unit {
 const UNVISITED: u32 = u32::MAX;
 const NO_UNIT: u32 = u32::MAX;
 
+/// One object's state during the search, kept together for locality.
+#[derive(Clone, Copy)]
+struct Node {
+    /// Discovery number, [`UNVISITED`] before its visit.
+    index: u32,
+    lowlink: u32,
+    /// Its unit, [`NO_UNIT`] until that completes.
+    unit: u32,
+    /// Its encoded size plus what its completed references weigh.
+    weight: u64,
+    /// Its range of [`Cuts::edges`].
+    first_edge: u32,
+    edge_count: u32,
+}
+const FRESH: Node = Node {
+    index: UNVISITED,
+    lowlink: 0,
+    unit: NO_UNIT,
+    weight: 0,
+    first_edge: 0,
+    edge_count: 0,
+};
+
 /// Which values of one capture get blobs of their own.
 ///
 /// One depth-first pass (Tarjan's algorithm, without recursion) finds the
@@ -517,15 +431,7 @@ const NO_UNIT: u32 = u32::MAX;
 /// up weights as units complete.
 #[derive(Default)]
 struct Cuts {
-    /// Discovery number per object, [`UNVISITED`] before its visit.
-    index: Vec<u32>,
-    lowlink: Vec<u32>,
-    /// Unit per object, [`NO_UNIT`] until its unit completes.
-    unit: Vec<u32>,
-    /// Per object: its encoded size plus what its completed references weigh.
-    weight: Vec<u64>,
-    /// Per object: its range of `edges`.
-    edge_range: Vec<(u32, u32)>,
+    nodes: Vec<Node>,
     /// Every reference to an object, in encoding order.
     edges: Vec<ObjectId>,
     /// Visited objects whose unit is incomplete.
@@ -538,24 +444,12 @@ struct Cuts {
     /// Per string and bigint: whether a value that holds it is cut there.
     strings: Vec<bool>,
     bigints: Vec<bool>,
-    /// Scratch for choosing a cycle's root.
-    digests: Vec<Digest>,
-    root: Vec<u8>,
 }
 
 impl Cuts {
     fn find(&mut self, s: &Storage, root: SnapshotRoot, unit_bytes: u64, leaf_bytes: u64) {
-        let objects = s.objects.len();
-        self.index.clear();
-        self.index.resize(objects, UNVISITED);
-        self.lowlink.clear();
-        self.lowlink.resize(objects, 0);
-        self.unit.clear();
-        self.unit.resize(objects, NO_UNIT);
-        self.weight.clear();
-        self.weight.resize(objects, 0);
-        self.edge_range.clear();
-        self.edge_range.resize(objects, (0, 0));
+        self.nodes.clear();
+        self.nodes.resize(s.objects.len(), FRESH);
         self.edges.clear();
         self.stack.clear();
         self.path.clear();
@@ -567,6 +461,9 @@ impl Cuts {
         self.bigints.resize(s.bigints.len(), false);
 
         // The root's references start every search.
+        if let SnapshotRoot::Value(SnapshotValue::Object(id)) = root {
+            self.edges.push(id);
+        }
         let mut edges = Edges {
             s,
             leaf_bytes,
@@ -579,7 +476,7 @@ impl Cuts {
         let mut visited = 0;
         for at in 0..roots {
             let start = self.edges[at];
-            if self.index[start.0 as usize] == UNVISITED {
+            if self.nodes[start.0 as usize].index == UNVISITED {
                 self.search(s, start, &mut visited, unit_bytes, leaf_bytes);
             }
         }
@@ -588,10 +485,6 @@ impl Cuts {
     /// First visit: number the object, measure it and list its references.
     fn enter(&mut self, s: &Storage, id: ObjectId, visited: &mut u32, leaf_bytes: u64) {
         let at = id.0 as usize;
-        self.index[at] = *visited;
-        self.lowlink[at] = *visited;
-        *visited += 1;
-        self.stack.push(id);
         let start = self.edges.len();
         let mut length = Length::default();
         let mut edges = Edges {
@@ -602,11 +495,16 @@ impl Cuts {
             bigints: &mut self.bigints,
         };
         infallible(walk::object(&mut length, &mut edges, s, &s.objects[at]));
-        self.weight[at] = length.0;
-        self.edge_range[at] = (
-            u32::try_from(start).expect("bounded references"),
-            u32::try_from(self.edges.len() - start).expect("bounded references"),
-        );
+        self.nodes[at] = Node {
+            index: *visited,
+            lowlink: *visited,
+            unit: NO_UNIT,
+            weight: length.0,
+            first_edge: u32::try_from(start).expect("bounded references"),
+            edge_count: u32::try_from(self.edges.len() - start).expect("bounded references"),
+        };
+        *visited += 1;
+        self.stack.push(id);
         self.path.push((id, 0));
     }
 
@@ -632,32 +530,40 @@ impl Cuts {
         while let Some(top) = self.path.last_mut() {
             let (id, next) = *top;
             let at = id.0 as usize;
-            let (first, count) = self.edge_range[at];
-            if next < count {
+            let Node {
+                first_edge,
+                edge_count,
+                ..
+            } = self.nodes[at];
+            if next < edge_count {
                 top.1 = next + 1;
-                let target = self.edges[(first + next) as usize];
-                let to = target.0 as usize;
-                if self.index[to] == UNVISITED {
+                let target = self.edges[(first_edge + next) as usize];
+                let to = self.nodes[target.0 as usize];
+                if to.index == UNVISITED {
                     self.enter(s, target, visited, leaf_bytes);
-                } else if self.unit[to] == NO_UNIT {
+                } else if to.unit == NO_UNIT {
                     // Still on the stack: part of this object's unit.
-                    self.lowlink[at] = self.lowlink[at].min(self.index[to]);
+                    let node = &mut self.nodes[at];
+                    node.lowlink = node.lowlink.min(to.index);
                 } else {
-                    let weight = self.reference_weight(self.unit[to]);
-                    self.weight[at] = self.weight[at].saturating_add(weight);
+                    let weight = self.reference_weight(to.unit);
+                    let node = &mut self.nodes[at];
+                    node.weight = node.weight.saturating_add(weight);
                 }
                 continue;
             }
             self.path.pop();
-            if self.lowlink[at] == self.index[at] {
+            if self.nodes[at].lowlink == self.nodes[at].index {
                 self.complete(s, id, unit_bytes, leaf_bytes);
             }
             if let Some((parent, _)) = self.path.last() {
                 let parent = parent.0 as usize;
-                self.lowlink[parent] = self.lowlink[parent].min(self.lowlink[at]);
-                if self.unit[at] != NO_UNIT {
-                    let weight = self.reference_weight(self.unit[at]);
-                    self.weight[parent] = self.weight[parent].saturating_add(weight);
+                let child = self.nodes[at];
+                let node = &mut self.nodes[parent];
+                node.lowlink = node.lowlink.min(child.lowlink);
+                if child.unit != NO_UNIT {
+                    let weight = self.reference_weight(child.unit);
+                    self.nodes[parent].weight = self.nodes[parent].weight.saturating_add(weight);
                 }
             }
         }
@@ -674,9 +580,10 @@ impl Cuts {
                 .stack
                 .pop()
                 .unwrap_or_else(|| unreachable!("a unit's first object is on the stack"));
-            self.unit[member.0 as usize] = unit;
+            let node = &mut self.nodes[member.0 as usize];
+            node.unit = unit;
             self.members.push(member);
-            weight = weight.saturating_add(self.weight[member.0 as usize]);
+            weight = weight.saturating_add(node.weight);
             if member == first {
                 break;
             }
@@ -701,19 +608,17 @@ impl Cuts {
 
     /// The object a cut unit's blob starts at: the one with the smallest
     /// digest of its own content, the first visited among equals.
-    fn start(&mut self, s: &Storage, members: std::ops::Range<usize>) -> ObjectId {
+    fn start(&self, s: &Storage, members: std::ops::Range<usize>) -> ObjectId {
         if let [only] = &self.members[members.clone()] {
             return *only;
         }
         let mut best: Option<(Digest, u32, ObjectId)> = None;
         for member in &self.members[members] {
-            self.digests.clear();
-            self.root.clear();
-            let mut visitor = Hash::new(&mut self.root, &mut self.digests, HashDomain::CycleRoot);
+            let mut h = Hasher::new(HashDomain::CycleRoot);
             let object = &s.objects[member.0 as usize];
-            infallible(walk::object(&mut visitor, &mut Unresolved, s, object));
-            let digest = self.digests[0];
-            let candidate = (digest, self.index[member.0 as usize], *member);
+            infallible(walk::object(&mut h, &mut Unresolved, s, object));
+            let digest = h.finish();
+            let candidate = (digest, self.nodes[member.0 as usize].index, *member);
             if best.is_none_or(|(least, visited, _)| (digest.0, candidate.1) < (least.0, visited)) {
                 best = Some(candidate);
             }
@@ -724,6 +629,7 @@ impl Cuts {
 }
 
 /// Lists an object's references and marks the leaves cut where it holds them.
+/// Declarations are named, never referenced: they belong to no unit.
 struct Edges<'a> {
     s: &'a Storage,
     leaf_bytes: u64,
@@ -732,8 +638,7 @@ struct Edges<'a> {
     bigints: &'a mut [bool],
 }
 impl Resolver for Edges<'_> {
-    fn member(&mut self, id: ObjectId) -> u32 {
-        self.found.push(id);
+    fn member(&mut self, _: ObjectId) -> u32 {
         0
     }
     fn object(&mut self, id: ObjectId) -> Reference {

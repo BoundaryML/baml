@@ -15,7 +15,7 @@ use num_bigint::BigInt;
 use super::{
     BexStr, BigintId, MapEntry, ObjectId, OwnedType, Range, SnapshotObject, SnapshotRoot,
     SnapshotValue, Storage, StringId,
-    hash::{Digest, TypeLeaf},
+    hash::{Absorb, Counter, Digest, Hasher, TypeLeaf},
     tags::{self, ObjectTag, RootTag, ValueTag},
 };
 
@@ -63,13 +63,8 @@ pub(crate) trait Visitor {
     fn ty(&mut self, ty: &OwnedType, leaf: TypeLeaf) -> Result<(), Self::Error>;
     fn bytes(&mut self, bytes: &[u8], digest: Digest) -> Result<(), Self::Error>;
     fn declaration(&mut self, tag: TypeTag, name: &DeclarationName) -> Result<(), Self::Error>;
-    /// A sequence of `len` items follows, up to the matching [`Self::end_range`].
-    /// Sequences never nest.
+    /// A sequence of `len` items follows.
     fn begin_range(&mut self, len: usize) -> Result<(), Self::Error>;
-    fn end_range(&mut self) -> Result<(), Self::Error>;
-    /// An object definition follows, up to the matching [`Self::end_object`].
-    fn begin_object(&mut self) {}
-    fn end_object(&mut self) {}
 }
 
 /// Where a value sits in its blob.
@@ -97,18 +92,6 @@ pub(crate) fn root<V: Visitor, R: Resolver>(
             values(v, r, s, args.slots)
         }
     }
-}
-
-pub(crate) fn object<V: Visitor, R: Resolver>(
-    v: &mut V,
-    r: &mut R,
-    s: &Storage,
-    object: &SnapshotObject,
-) -> Result<(), V::Error> {
-    v.begin_object();
-    definition(v, r, s, object)?;
-    v.end_object();
-    Ok(())
 }
 
 fn child<V: Visitor>(v: &mut V, slot: u32) -> Result<(), V::Error> {
@@ -218,7 +201,7 @@ fn values<V: Visitor, R: Resolver>(
     for item in &s.values[range.indexes()] {
         value(v, r, s, *item, Place::Nested)?;
     }
-    v.end_range()
+    Ok(())
 }
 
 fn entries<V: Visitor, R: Resolver>(
@@ -232,10 +215,10 @@ fn entries<V: Visitor, R: Resolver>(
         v.key(&entry.key)?;
         value(v, r, s, entry.value, Place::Nested)?;
     }
-    v.end_range()
+    Ok(())
 }
 
-fn definition<V: Visitor, R: Resolver>(
+pub(crate) fn object<V: Visitor, R: Resolver>(
     v: &mut V,
     r: &mut R,
     s: &Storage,
@@ -282,7 +265,6 @@ fn definition<V: Visitor, R: Resolver>(
             for index in type_arguments.indexes() {
                 v.ty(&s.types[index], s.type_leaves[index])?;
             }
-            v.end_range()?;
             v.index(r.member(*declaration))?;
             v.length(*original_len)?;
             entries(v, r, s, *fields)
@@ -313,6 +295,63 @@ fn definition<V: Visitor, R: Resolver>(
             v.byte(ObjectTag::Truncated as u8)?;
             v.byte(tags::limit(*limit))
         }
+    }
+}
+
+/// Hash format 3 input: each piece as the encoding writes it, with a leaf's
+/// content replaced by its digest. One stream hashes a whole blob.
+impl Visitor for Hasher {
+    type Error = std::convert::Infallible;
+    fn byte(&mut self, byte: u8) -> Result<(), Self::Error> {
+        Absorb::byte(self, byte);
+        Ok(())
+    }
+    fn int(&mut self, value: i64) -> Result<(), Self::Error> {
+        self.absorb(&value.to_le_bytes());
+        Ok(())
+    }
+    fn bits(&mut self, bits: u64) -> Result<(), Self::Error> {
+        self.number(bits);
+        Ok(())
+    }
+    fn index(&mut self, index: u32) -> Result<(), Self::Error> {
+        self.number(u64::from(index));
+        Ok(())
+    }
+    fn length(&mut self, length: usize) -> Result<(), Self::Error> {
+        self.size(length);
+        Ok(())
+    }
+    fn string(&mut self, _: &BexStr, digest: Digest) -> Result<(), Self::Error> {
+        self.digest(digest);
+        Ok(())
+    }
+    fn key(&mut self, text: &BexStr) -> Result<(), Self::Error> {
+        self.size(text.len());
+        self.absorb(text.as_bytes());
+        Ok(())
+    }
+    fn bigint(&mut self, _: &BigInt, digest: Digest) -> Result<(), Self::Error> {
+        self.digest(digest);
+        Ok(())
+    }
+    fn ty(&mut self, _: &OwnedType, leaf: TypeLeaf) -> Result<(), Self::Error> {
+        self.digest(leaf.digest);
+        Ok(())
+    }
+    fn bytes(&mut self, bytes: &[u8], digest: Digest) -> Result<(), Self::Error> {
+        self.size(bytes.len());
+        self.digest(digest);
+        Ok(())
+    }
+    fn declaration(&mut self, tag: TypeTag, name: &DeclarationName) -> Result<(), Self::Error> {
+        self.borsh(&tag);
+        self.borsh(name);
+        Ok(())
+    }
+    fn begin_range(&mut self, len: usize) -> Result<(), Self::Error> {
+        self.size(len);
+        Ok(())
     }
 }
 
@@ -417,21 +456,6 @@ impl Visitor for Length {
         self.add(4);
         Ok(())
     }
-    #[inline(always)]
-    fn end_range(&mut self) -> Result<(), Self::Error> {
-        Ok(())
-    }
-}
-
-struct Counter(usize);
-impl std::io::Write for Counter {
-    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        self.0 += bytes.len();
-        Ok(bytes.len())
-    }
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
 }
 
 /// A visitor and a second one that cannot fail, run together.
@@ -506,21 +530,6 @@ where
     fn begin_range(&mut self, len: usize) -> Result<(), Self::Error> {
         infallible(self.1.begin_range(len));
         self.0.begin_range(len)
-    }
-    #[inline(always)]
-    fn end_range(&mut self) -> Result<(), Self::Error> {
-        infallible(self.1.end_range());
-        self.0.end_range()
-    }
-    #[inline(always)]
-    fn begin_object(&mut self) {
-        self.0.begin_object();
-        self.1.begin_object();
-    }
-    #[inline(always)]
-    fn end_object(&mut self) {
-        self.0.end_object();
-        self.1.end_object();
     }
 }
 

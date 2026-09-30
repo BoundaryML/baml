@@ -6,6 +6,10 @@
 //! ```sh
 //! cargo test --release -p btel_snapshot --test shape_bench -- --ignored --nocapture
 //! ```
+//!
+//! `SHAPE_BENCH_REPS` sets the repetitions; `SHAPE_BENCH_WORKLOAD` and
+//! `SHAPE_BENCH_POLICY` select one workload or policy by name, which is how
+//! a profiler is pointed at one of them.
 #![expect(clippy::print_stdout, reason = "machine-readable benchmark results")]
 #![expect(
     clippy::cast_precision_loss,
@@ -233,10 +237,24 @@ fn shape_bench() {
     assert!(!cfg!(debug_assertions), "measure release builds only");
     let repetitions: usize = std::env::var("SHAPE_BENCH_REPS")
         .map_or(200, |value| value.parse().expect("numeric setting"));
+    let only_workload = std::env::var("SHAPE_BENCH_WORKLOAD").ok();
+    let only_policy = std::env::var("SHAPE_BENCH_POLICY").ok();
     let pool = SnapshotPool::new(1, Limits::default());
     let mut scratch = BlobScratch::default();
     for (workload, build) in workloads() {
+        if only_workload
+            .as_deref()
+            .is_some_and(|name| name != workload)
+        {
+            continue;
+        }
         for (policy_name, policy) in policies() {
+            if only_policy
+                .as_deref()
+                .is_some_and(|name| name != policy_name)
+            {
+                continue;
+            }
             let mut shaper = Shaper::new(policy);
             let mut build_times = Vec::with_capacity(repetitions);
             let mut shape_times = Vec::with_capacity(repetitions);

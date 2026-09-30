@@ -300,6 +300,31 @@ struct Storage {
     stats: CaptureStats,
     charged: usize,
     content: usize,
+    /// Encoded bytes beyond the leaf content in `content`: every value's and
+    /// object's tags, numbers and lengths; map keys and field names;
+    /// declaration names; type descriptions at each use; and each use of a
+    /// string or bigint after its first. Together with the header they bound
+    /// the capture's size as one blob.
+    value_bytes: usize,
+    object_bytes: usize,
+    /// Reserved objects not set yet; each writes as a truncation marker.
+    unset_objects: usize,
+    key_bytes: usize,
+    declaration_bytes: usize,
+    type_bytes: usize,
+    reuse_bytes: usize,
+    /// The largest leaf as the leaf size measures it: a string's or byte
+    /// array's length, a bigint's limb bytes.
+    largest_leaf: usize,
+    /// Per object, string and bigint: whether a value has used it yet.
+    referenced: Vec<bool>,
+    string_used: Vec<bool>,
+    bigint_used: Vec<bool>,
+    /// Whether a value or cell references some object a second time: the
+    /// capture shares or cycles through it. References to a declaration
+    /// through the values of its type never count; every blob carries the
+    /// declarations it names.
+    shared: bool,
     string_hashes: Vec<hash::Digest>,
     bigint_hashes: Vec<hash::Digest>,
     type_leaves: Vec<hash::TypeLeaf>,
@@ -316,7 +341,92 @@ struct Storage {
     string_homes: Vec<Option<BlobIndex>>,
     bigint_homes: Vec<Option<BlobIndex>>,
 }
+/// The header, the object and child counts, the root tag and an argument
+/// root's parameter and slot counts.
+const ROOT_BOUND: u64 = 8 + 4 + 16 + 4 + 4 + 1 + 8 + 4;
+/// A reserved object holds `Truncated(Limit::Objects)` until it is set, and
+/// writes as that if it never is.
+const RESERVED_OBJECT_BYTES: u64 = 2;
+
 impl Storage {
+    /// An upper bound on the capture's encoded size as one blob, kept as the
+    /// capture is built. Shaping checks it against what it writes.
+    fn encoded_bound(&self) -> u64 {
+        (self.content as u64)
+            .saturating_add(self.value_bytes as u64)
+            .saturating_add(self.object_bytes as u64)
+            .saturating_add((self.unset_objects as u64).saturating_mul(RESERVED_OBJECT_BYTES))
+            .saturating_add(self.key_bytes as u64)
+            .saturating_add((self.entries.len() as u64).saturating_mul(4))
+            .saturating_add(self.declaration_bytes as u64)
+            .saturating_add(self.type_bytes as u64)
+            .saturating_add(self.reuse_bytes as u64)
+            .saturating_add(ROOT_BOUND)
+    }
+    /// A value or cell references `id`.
+    fn reference(&mut self, id: ObjectId) {
+        let referenced = &mut self.referenced[id.0 as usize];
+        if *referenced {
+            self.shared = true;
+        } else {
+            *referenced = true;
+        }
+    }
+    /// A value is written: note what it references and what its encoding
+    /// adds beyond the leaf content already counted (its tag, numbers and
+    /// lengths, as `encoding` writes them).
+    fn use_value(&mut self, value: SnapshotValue) {
+        self.value_bytes += match value {
+            SnapshotValue::Null | SnapshotValue::OmittedArg => 1,
+            SnapshotValue::Bool(_) | SnapshotValue::Truncated(_) => 2,
+            SnapshotValue::Int(_) | SnapshotValue::Float(_) => 9,
+            SnapshotValue::Object(id) => {
+                self.reference(id);
+                5
+            }
+            SnapshotValue::String(id) => {
+                self.use_string(id);
+                5
+            }
+            SnapshotValue::Bigint(id) => {
+                // Sign and bit length, then whole limbs: the content counted
+                // the bytes, and a first use pads them to a limb.
+                let limbs = walk::bigint_limb_bytes(&self.bigints[id.0 as usize]);
+                let used = &mut self.bigint_used[id.0 as usize];
+                if *used {
+                    self.reuse_bytes += limbs;
+                } else {
+                    *used = true;
+                    self.reuse_bytes += limbs.saturating_sub(
+                        usize::try_from(self.bigints[id.0 as usize].bits().div_ceil(8))
+                            .unwrap_or(usize::MAX),
+                    );
+                }
+                1 + 1 + 8
+            }
+            SnapshotValue::Type(id) => {
+                self.use_type(id);
+                1
+            }
+            SnapshotValue::Enum { name, .. } => {
+                self.use_string(name);
+                1 + 4 + 4 + 4
+            }
+        };
+    }
+    /// A string is written in place; its content counts once at capture and
+    /// again at every later use.
+    fn use_string(&mut self, id: StringId) {
+        let used = &mut self.string_used[id.0 as usize];
+        if *used {
+            self.reuse_bytes += self.strings[id.0 as usize].len();
+        } else {
+            *used = true;
+        }
+    }
+    fn use_type(&mut self, id: TypeId) {
+        self.type_bytes += self.type_leaves[id.0 as usize].encoded_len as usize;
+    }
     fn object_home(&self, id: ObjectId) -> Option<Home> {
         self.object_homes.get(id.0 as usize).copied().flatten()
     }
@@ -500,6 +610,9 @@ impl Snapshot {
             + std::mem::size_of_val(self.0.string_hashes.as_slice())
             + std::mem::size_of_val(self.0.bigint_hashes.as_slice())
             + std::mem::size_of_val(self.0.type_leaves.as_slice())
+            + std::mem::size_of_val(self.0.referenced.as_slice())
+            + std::mem::size_of_val(self.0.string_used.as_slice())
+            + std::mem::size_of_val(self.0.bigint_used.as_slice())
             + std::mem::size_of_val(self.0.blobs.as_slice())
             + std::mem::size_of_val(self.0.members.as_slice())
             + std::mem::size_of_val(self.0.blob_children.as_slice())
@@ -561,6 +674,18 @@ impl SnapshotPool {
                 stats: CaptureStats::default(),
                 charged: std::mem::size_of::<Storage>(),
                 content: 0,
+                value_bytes: 0,
+                object_bytes: 0,
+                unset_objects: 0,
+                key_bytes: 0,
+                declaration_bytes: 0,
+                type_bytes: 0,
+                reuse_bytes: 0,
+                largest_leaf: 0,
+                referenced: Vec::new(),
+                string_used: Vec::new(),
+                bigint_used: Vec::new(),
+                shared: false,
                 string_hashes: Vec::new(),
                 bigint_hashes: Vec::new(),
                 type_leaves: Vec::new(),
@@ -716,10 +841,68 @@ impl Builder {
         let id = ObjectId(u32::try_from(s.objects.len()).expect("bounded objects"));
         grow(&mut s.objects, 1, s.owner.as_ref().unwrap(), &mut s.charged);
         s.objects.push(SnapshotObject::Truncated(Limit::Objects));
+        s.unset_objects += 1;
+        grow(
+            &mut s.referenced,
+            1,
+            s.owner.as_ref().unwrap(),
+            &mut s.charged,
+        );
+        s.referenced.push(false);
         Some(id)
     }
+    /// The object's encoding beyond its content, keys, types and values is
+    /// added to the size bound as `encoding` writes it.
     pub fn set_object(&mut self, id: ObjectId, object: SnapshotObject) {
-        self.storage().objects[id.0 as usize] = object;
+        let s = self.storage();
+        if matches!(
+            s.objects[id.0 as usize],
+            SnapshotObject::Truncated(Limit::Objects)
+        ) {
+            s.unset_objects -= 1;
+        }
+        s.object_bytes += match &object {
+            SnapshotObject::Cell(value) => {
+                s.use_value(*value);
+                1
+            }
+            SnapshotObject::Declaration { name, tag, .. } => {
+                let mut counter = hash::Counter(0);
+                borsh::BorshSerialize::serialize(tag, &mut counter).expect("counting cannot fail");
+                borsh::BorshSerialize::serialize(name, &mut counter).expect("counting cannot fail");
+                s.declaration_bytes += counter.0;
+                1 + 1
+            }
+            SnapshotObject::Uint8Array { .. } => 1 + 8 + 4,
+            SnapshotObject::List { element_type, .. } => {
+                s.use_type(*element_type);
+                1 + 8 + 4
+            }
+            SnapshotObject::Map {
+                key_type,
+                value_type,
+                ..
+            } => {
+                s.use_type(*key_type);
+                s.use_type(*value_type);
+                1 + 8 + 4
+            }
+            SnapshotObject::Instance { type_arguments, .. } => {
+                for index in type_arguments.indexes() {
+                    s.use_type(TypeId(u32::try_from(index).expect("bounded types")));
+                }
+                1 + 4 + 4 + 8 + 4
+            }
+            SnapshotObject::Descriptive { name, .. } => {
+                if let Some(name) = name {
+                    s.use_string(*name);
+                }
+                1 + 1 + 1 + 4
+            }
+            SnapshotObject::NonSnapshotableValue {} => 1,
+            SnapshotObject::Truncated(_) => 2,
+        };
+        s.objects[id.0 as usize] = object;
     }
     pub fn value_start(&mut self) -> usize {
         self.storage().values.len()
@@ -738,6 +921,7 @@ impl Builder {
     pub fn push_value(&mut self, value: SnapshotValue) {
         assert!(self.remaining_values() > 0);
         let s = self.storage();
+        s.use_value(value);
         grow(&mut s.values, 1, s.owner.as_ref().unwrap(), &mut s.charged);
         s.values.push(value);
     }
@@ -760,6 +944,8 @@ impl Builder {
     pub fn entry(&mut self, key: &BexStr, value: SnapshotValue) {
         assert!(self.remaining_entries() > 0);
         let s = self.storage();
+        s.use_value(value);
+        s.key_bytes += key.len();
         grow(&mut s.entries, 1, s.owner.as_ref().unwrap(), &mut s.charged);
         s.entries.push(MapEntry {
             key: key.clone(),
@@ -797,6 +983,14 @@ impl Builder {
             s.owner.as_ref().unwrap(),
             &mut s.charged,
         );
+        grow(
+            &mut s.string_used,
+            1,
+            s.owner.as_ref().unwrap(),
+            &mut s.charged,
+        );
+        s.string_used.push(false);
+        s.largest_leaf = s.largest_leaf.max(value.len());
         s.string_hashes.push(hash::string(value));
         s.strings.push(value.clone());
         Some(id)
@@ -817,6 +1011,14 @@ impl Builder {
             s.owner.as_ref().unwrap(),
             &mut s.charged,
         );
+        grow(
+            &mut s.bigint_used,
+            1,
+            s.owner.as_ref().unwrap(),
+            &mut s.charged,
+        );
+        s.bigint_used.push(false);
+        s.largest_leaf = s.largest_leaf.max(walk::bigint_limb_bytes(value));
         s.bigint_hashes.push(hash::bigint(value));
         s.bigints.push(value.clone());
         Some(id)
@@ -848,6 +1050,7 @@ impl Builder {
         }
         self.content(count, false);
         let s = self.storage();
+        s.largest_leaf = s.largest_leaf.max(count);
         let start = s.bytes.len();
         grow(
             &mut s.bytes,
@@ -885,30 +1088,80 @@ impl Builder {
     }
     /// Shape the capture into blobs; the snapshot is immutable afterwards.
     fn finish(mut self, root: SnapshotRoot, shaper: &mut Shaper) -> Snapshot {
+        if let SnapshotRoot::Value(value) = root {
+            self.storage().use_value(value);
+        }
         shaper.shape(self.storage(), root);
         Snapshot(std::mem::ManuallyDrop::new(self.0.take().unwrap()))
     }
 }
 fn recycle(mut storage: Box<Storage>) {
     let pool = storage.owner.take().unwrap();
-    storage.objects.clear();
-    storage.entries.clear();
-    storage.bytes.clear();
-    storage.values.clear();
-    storage.strings.clear();
-    storage.bigints.clear();
-    storage.types.clear();
-    storage.string_hashes.clear();
-    storage.bigint_hashes.clear();
-    storage.type_leaves.clear();
-    storage.blobs.clear();
-    storage.members.clear();
-    storage.blob_children.clear();
-    storage.object_homes.clear();
-    storage.string_homes.clear();
-    storage.bigint_homes.clear();
-    storage.stats = CaptureStats::default();
-    storage.content = 0;
+    // Every field is named, so none can keep a previous capture's state.
+    let Storage {
+        owner: _,
+        values,
+        objects,
+        entries,
+        bytes,
+        strings,
+        bigints,
+        types,
+        stats,
+        charged: _,
+        content,
+        value_bytes,
+        object_bytes,
+        unset_objects,
+        key_bytes,
+        declaration_bytes,
+        type_bytes,
+        reuse_bytes,
+        largest_leaf,
+        referenced,
+        string_used,
+        bigint_used,
+        shared,
+        string_hashes,
+        bigint_hashes,
+        type_leaves,
+        blobs,
+        members,
+        blob_children,
+        object_homes,
+        string_homes,
+        bigint_homes,
+    } = &mut *storage;
+    values.clear();
+    objects.clear();
+    entries.clear();
+    bytes.clear();
+    strings.clear();
+    bigints.clear();
+    types.clear();
+    *stats = CaptureStats::default();
+    *content = 0;
+    *value_bytes = 0;
+    *object_bytes = 0;
+    *unset_objects = 0;
+    *key_bytes = 0;
+    *declaration_bytes = 0;
+    *type_bytes = 0;
+    *reuse_bytes = 0;
+    *largest_leaf = 0;
+    referenced.clear();
+    string_used.clear();
+    bigint_used.clear();
+    *shared = false;
+    string_hashes.clear();
+    bigint_hashes.clear();
+    type_leaves.clear();
+    blobs.clear();
+    members.clear();
+    blob_children.clear();
+    object_homes.clear();
+    string_homes.clear();
+    bigint_homes.clear();
     let mut state = pool
         .state
         .lock()

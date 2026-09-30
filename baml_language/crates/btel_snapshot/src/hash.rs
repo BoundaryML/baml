@@ -1,18 +1,21 @@
 //! Snapshot hash format 3: XXH3-128, seed zero, little-endian digest bytes.
 //!
-//! Leaf digests (strings, bigints, types and copied bytes) depend only on
-//! their content and are computed once, at capture. Graph digests are computed
-//! when a blob is shaped (see `shape`): a reference names its target by
-//! blob-local number, so a blob's identity depends on its reachable content
-//! and never on capture discovery order, heap addresses, arena capacities or
-//! string rope shape. Map and argument order matter. Cycles need no recursive
-//! Merkle dependencies. A value stored in another blob is hashed as the slot
-//! of that blob in the child table, and the table's IDs are hashed ahead of
-//! the content, so a blob's identity covers everything it reaches. Every
-//! hashed input is either a byte of the blob or a digest recomputed from its
-//! bytes, so a blob verifies without its children.
-//! Borsh's attribute-free type encoding is part of version 3: changes to it
-//! require a hash-format version change. Hash equality is not proof of delivery.
+//! Leaf digests depend only on their content and are computed once, at
+//! capture: a string's is its content hash, which the string caches; bigints,
+//! types and copied bytes are hashed as they are captured. A blob's ID is one
+//! hash over its content in encoding order (see `walk`): the root, then each
+//! object definition in blob-local order, then the child table and the object
+//! count. Strings, including enum variant and descriptive names, bigints and
+//! types are replaced by their digests; map keys and declaration names are
+//! hashed in place; a reference is its blob-local number, or the slot of the
+//! child blob it names. A blob's identity therefore depends on its reachable
+//! content and never on capture discovery order, heap addresses, arena
+//! capacities or string rope shape. Map and argument order matter. Cycles
+//! need no recursive Merkle dependencies. Every hashed input is either a byte
+//! of the blob or a digest recomputed from its bytes, so a blob verifies
+//! without its children. Borsh's attribute-free type encoding is part of
+//! version 3: changes to it require a hash-format version change. Hash
+//! equality is not proof of delivery.
 use std::io::{self, Write};
 
 use borsh::BorshSerialize;
@@ -35,7 +38,7 @@ impl CasId {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Digest(pub(crate) [u8; 16]);
 
-/// A destination for hash input: a hasher, or a buffer replayed into one.
+/// A destination for hash input.
 pub(crate) trait Absorb {
     fn absorb(&mut self, bytes: &[u8]);
     fn byte(&mut self, n: u8) {
@@ -49,11 +52,6 @@ pub(crate) trait Absorb {
     }
     fn digest(&mut self, h: Digest) {
         self.absorb(&h.0);
-    }
-    /// A string by length and content hash (`BexStr::content_hash`).
-    fn string_parts(&mut self, len: usize, content: u128) {
-        self.size(len);
-        self.absorb(&content.to_le_bytes());
     }
 }
 
@@ -85,11 +83,6 @@ impl Absorb for Hasher {
         self.0.update(bytes);
     }
 }
-impl Absorb for Vec<u8> {
-    fn absorb(&mut self, bytes: &[u8]) {
-        self.extend_from_slice(bytes);
-    }
-}
 struct Counted<'a> {
     hasher: &'a mut Hasher,
     written: usize,
@@ -98,6 +91,17 @@ impl Write for Counted<'_> {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
         self.hasher.0.update(bytes);
         self.written += bytes.len();
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+/// A writer that only measures.
+pub(crate) struct Counter(pub(crate) usize);
+impl Write for Counter {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0 += bytes.len();
         Ok(bytes.len())
     }
     fn flush(&mut self) -> io::Result<()> {
@@ -120,10 +124,10 @@ impl BorshSerialize for TypeIdentity {
         }
     }
 }
+/// A string's digest is its content hash; the tag before it in the hash
+/// input keeps it apart from every other leaf.
 pub(crate) fn string(s: &BexStr) -> Digest {
-    let mut h = Hasher::new(HashDomain::String);
-    h.string_parts(s.len(), s.content_hash());
-    h.finish()
+    Digest(s.content_hash().to_le_bytes())
 }
 pub(crate) fn bigint(n: &BigInt) -> Digest {
     let mut h = Hasher::new(HashDomain::Bigint);

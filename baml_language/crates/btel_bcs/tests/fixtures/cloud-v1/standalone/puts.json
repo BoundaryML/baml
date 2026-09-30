@@ -13,7 +13,7 @@
       "headers": {"content-type": "application/x-protobuf", "x-bcs-fixture": "cloud-v1", "x-amz-meta-upload-id": "recording"},
       "body_file": "recording.hex",
       "length": 140,
-      "sha256": "5f9a755419ed684e731dd5a8f1b5e703ba6061779d81a1f6eb1a509c9655bd8c"
+      "sha256": "763a2ea608277982d55a842e19ba9218a38d806f33c115630e0c54ab850d5cd6"
     },
     {
       "upload_id": "object",
@@ -22,7 +22,7 @@
       "headers": {"content-type": "application/x-protobuf", "x-bcs-fixture": "cloud-v1", "x-amz-meta-upload-id": "object"},
       "body_file": "object.hex",
       "length": 135,
-      "sha256": "4847939ea2ae2a98a9cd7c2de3859cbe52f1a8717d3f5f41c2e17d2b7d5144c9"
+      "sha256": "2b0edda98ed961c356d9b50de95b508f6784199a140a52615fcedfa85b743891"
     }
   ]
 }

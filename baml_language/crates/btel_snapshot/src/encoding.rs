@@ -233,9 +233,6 @@ impl<W: Write> Visitor for Writer<'_, W> {
     fn begin_range(&mut self, len: usize) -> io::Result<()> {
         size(self.0, len)
     }
-    fn end_range(&mut self) -> io::Result<()> {
-        Ok(())
-    }
 }
 
 #[cfg(test)]

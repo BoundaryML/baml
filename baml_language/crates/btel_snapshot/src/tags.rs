@@ -47,20 +47,18 @@ pub(super) enum TypeIdentityTag {
     Resolved = 1,
 }
 
+/// What a hash is of. Strings need none: their digest is their content hash.
 #[derive(Clone, Copy)]
 #[repr(u8)]
 pub(super) enum HashDomain {
-    String = 1,
     Bigint = 2,
     Type = 3,
-    Object = 4,
     Blob = 5,
     /// `uint8array` contents, hashed while they are copied.
     Uint8Array = 6,
     /// One member of a cycle with its references left out, to choose the
     /// cycle's root. Never stored.
     CycleRoot = 7,
-    Range = 32,
 }
 
 pub(super) fn limit(value: Limit) -> u8 {
