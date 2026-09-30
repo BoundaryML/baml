@@ -291,19 +291,19 @@ class Agent {
         if let u: root.events.Usage = turn.usage {
             batch.push(u);
         }
+        j.append_all(batch);
+        root.wire.check_finish_reason(
+            turn,
+            c.id(),
+            allow_list = self.finish_reason_allow_list,
+            deny_list = self.finish_reason_deny_list,
+        );
         let candidate = turn.terminal_text() ?? "";
         let accepted = turn.tool_uses().length() > 0
             || turn.stop_reason == root.content.StopReason.MaxTokens
             || turn.stop_reason == root.content.StopReason.Refused
             || self._parses<Out>(turn, candidate);
         if (accepted) {
-            j.append_all(batch);
-            root.wire.check_finish_reason(
-                turn,
-                c.id(),
-                allow_list = self.finish_reason_allow_list,
-                deny_list = self.finish_reason_deny_list,
-            );
             // terminal wire outcomes are thrown here, with the turn on the record
             match (turn.stop_reason) {
                 root.content.StopReason.Refused => {
@@ -313,15 +313,15 @@ class Agent {
             };
             turn
         } else if (attempts_left > 1) {
-            batch.push(
-                root.events.UserMessage.new(
-                    "The reply did not match the required schema. Answer again with only the corrected value.",
-                ),
+            j.append_all(
+                [
+                    root.events.UserMessage.new(
+                        "The reply did not match the required schema. Answer again with only the corrected value.",
+                    ),
+                ],
             );
-            j.append_all(batch);
             self._attempt_turn<Out>(c, spec, j, total, attempts_left - 1)
         } else {
-            j.append_all(batch);
             throw root.errors.ParseFailed { provider: c.id(), raw_output: candidate }
         }
     }
