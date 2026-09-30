@@ -1702,11 +1702,7 @@ function chat_invoke_stream(
     ) catch_all (e) {
         _ => _chat_stream_open_failure(compat.provider, e),
     };
-    // Chat completions has an explicit terminator — the literal `data: [DONE]`
-    // — so a connection that ends without it lost data. `require_terminal` makes
-    // the stream throw `ai.errors.NetworkFailure` there instead of reporting the
-    // partial text as a completed turn, which is what silently fed truncated
-    // answers to `require_done` / `Retry`.
+    // Empty streams fail; clean EOF after decoded output returns the partial turn.
     let stream = ai.stream.TurnStream.from_sse(
         sse,
         (batch) -> {

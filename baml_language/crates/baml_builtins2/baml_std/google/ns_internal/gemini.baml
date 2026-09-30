@@ -1017,8 +1017,8 @@ function _gm_open_sse(
 /// Termination: Gemini's SSE has no terminal sentinel — the fragment carrying
 /// `finishReason` IS the end of the turn, and the connection then closes. That
 /// fragment is decoded as `ai.stream.TurnDone`, which lets both stream call
-/// sites pass `require_terminal`: a connection cut mid-answer then surfaces as
-/// an `ai.errors.NetworkFailure` instead of a silently truncated Complete turn.
+/// sites name the provider in `require_terminal`. Empty streams fail, while
+/// clean EOF after decoded output returns the partial turn for v0 compatibility.
 ///
 /// A `data:` payload that is not decodable is a failure too. Dropping it (what
 /// this used to do) turns a cut or a proxy's error page into missing text that
@@ -1187,8 +1187,7 @@ function gemini_invoke_stream(
         connect_timeout = c.connect_timeout,
         idle_timeout = c.idle_timeout,
     );
-    // Strict termination: the `finishReason` fragment decodes as TurnDone, so
-    // a connection that closes before it is a truncated turn, not an answer.
+    // Empty streams fail; clean EOF after decoded output returns the partial turn.
     let stream = ai.stream.TurnStream.from_sse(
         sse,
         (batch: string) -> {

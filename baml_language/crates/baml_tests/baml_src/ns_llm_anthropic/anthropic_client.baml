@@ -550,17 +550,17 @@ test "anthropic_stop_reason_stop_sequence" {
 }
 
 test "anthropic_stop_reason_max_tokens" {
-    assert.equal(anthropic_stop_reason_outcome("max_tokens"), "FinishReasonError:MaxTokens:pong")
+    assert.equal(anthropic_stop_reason_outcome("max_tokens"), "pong")
 }
 
 test "anthropic_stop_reason_pause_turn" {
-    assert.equal(anthropic_stop_reason_outcome("pause_turn"), "FinishReasonError:MaxTokens:pong")
+    assert.equal(anthropic_stop_reason_outcome("pause_turn"), "pong")
 }
 
 test "anthropic_stop_reason_unknown" {
     assert.equal(
         anthropic_stop_reason_outcome("model_context_window_exceeded"),
-        "FinishReasonError:MaxTokens:pong",
+        "pong",
     )
 }
 
@@ -717,10 +717,8 @@ function anthropic_stream_truncated() -> string {
     )
 }
 
-test "anthropic_stream_truncated" {
-    let got = anthropic_stream_truncated();
-    // retry-safe transport failure, not `par` as a Complete turn
-    assert.contains(got, "NetworkFailure:stream ended before the provider's terminal event")
+test "anthropic_stream_clean_eof_returns_partial" {
+    assert.equal(anthropic_stream_truncated(), "par")
 }
 
 // BUG 7.3: a mid-stream `error` event used to be dropped, ending the turn as a
@@ -838,6 +836,7 @@ function anthropic_decode_tool_stream() -> string {
     let seen: string[] = [];
     for (let ev in anthropic.internal.decode_batch(batch, state)) {
         match (ev) {
+            let reset: ai.stream.TurnReset => baml.sys.panic("leaf decoder emitted reset"),
             let d: ai.stream.TextDelta => {
                 seen.push(`text:${d.text}`);
                 null

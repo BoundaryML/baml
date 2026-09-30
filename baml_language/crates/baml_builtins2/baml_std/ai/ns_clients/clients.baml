@@ -104,8 +104,8 @@ class Backoff {
     }
 }
 
-// Streaming retries use the same safety judgment and backoff as invoke, but a
-// new stream may be opened only before the first text delta is returned.
+// Streaming retries use the same safety judgment and backoff as invoke.
+// A replacement attempt resets accumulated output, including visible partials.
 /// (internal) Map a classified failure to a failed-leg wire record (`selected: false`).
 /// Timing is best-effort: a failed leg's start was never measured, so it is
 /// null — never fabricated. `client_name` falls back to the failure's own
@@ -150,6 +150,24 @@ function _failed_leg_call(client_name: string?, f: root.errors.Failure) -> root.
     }
 }
 
+/// Project a request deadline into a retry judgment without replacing the
+/// error eventually raised by an exhausted policy.
+function _reliability_failure(
+    error: root.errors.Failure | baml.errors.Timeout,
+) -> root.errors.Failure throws never {
+    match (error) {
+        let failure: root.errors.Failure => failure,
+        let timeout: baml.errors.Timeout => {
+            root.errors.NetworkFailure {
+                provider: "http",
+                status_code: null,
+                detail: timeout.message,
+                raw_body: null,
+            }
+        },
+    }
+}
+
 class Retry {
     inner: root.Client,
     max_attempts: int,
@@ -177,7 +195,8 @@ class Retry {
         failed: root.events.LLMCall[],
     ) -> root.ModelTurn {
         self.inner.invoke(input) catch_all (e) {
-            let f: root.errors.Failure => {
+            let error: root.errors.Failure | baml.errors.Timeout => {
+                let f = _reliability_failure(error);
                 // the safety gate is not overridable; the judgment is
                 if (
                     remaining > 1
@@ -189,6 +208,7 @@ class Retry {
                     let _ = baml.sys.sleep(
                         baml.time.Duration.from_milliseconds(self.backoff.delay_ms(attempt, f)),
                     ) catch_all (se) {
+                        let cancelled: baml.panics.Cancelled => throw cancelled,
                         _ => null,
                     };
                     self._attempt(input, remaining - 1, failed)
@@ -264,7 +284,7 @@ class Retry {
                 open: open,
                 retry: retry,
                 current: null,
-                emitted: false,
+                reset_pending: false,
                 pending_text: [],
                 pending_cursor: 0,
                 terminal: [],
@@ -394,8 +414,9 @@ class RoundRobin {
     }
 }
 
-/// Streaming fallback advances in member order only for a typed, safely
-/// retryable failure that occurs before the first text delta is returned.
+/// Fallback advances in declaration order on safe provider failures and HTTP
+/// deadlines, including failures after visible partials. Cancellation and unsafe
+/// failures propagate without advancing.
 class Fallback {
     members: root.Client[],
 
@@ -408,7 +429,8 @@ class Fallback {
         match (self.members.at(index)) {
             let c: root.Client => {
                 c.invoke(input) catch_all (e) {
-                    let f: root.errors.Failure => {
+                    let error: root.errors.Failure | baml.errors.Timeout => {
+                        let f = _reliability_failure(error);
                         if (
                             index + 1 < self.members.length()
                                 && f.retry_safety() == root.errors.RetrySafety.Safe
@@ -509,7 +531,7 @@ class Fallback {
                 open: open,
                 retry: advance,
                 current: null,
-                emitted: false,
+                reset_pending: false,
                 pending_text: [],
                 pending_cursor: 0,
                 terminal: [],
@@ -524,16 +546,13 @@ class Fallback {
     }
 }
 
-/// Pulls one selected stream through a reliability policy. A typed, safely
-/// retryable failure may replace the selected stream only before the first text
-/// delta has been returned. Once any delta is visible, every later failure is
-/// terminal: replaying would duplicate a prefix and there is no resumable-stream
-/// contract at the client boundary.
+/// Pulls one selected stream through a reliability policy. A replacement emits
+/// TurnReset so raw and typed consumers discard the failed attempt's state.
 class StreamRelay {
     open: () -> root.stream.TurnStream throws root.errors.InvokeError,
     retry: (root.errors.Failure) -> bool throws root.errors.InvokeError,
     current: root.stream.TurnStream?,
-    emitted: bool,
+    reset_pending: bool,
     // Deltas from the current stream's last batch not yet re-emitted:
     // next() returns every ready delta at once; next_event relays them
     // one TextDelta at a time so downstream granularity is preserved.
@@ -555,18 +574,20 @@ class StreamRelay {
 
     function recover(self, error: root.errors.RaisedInClient) -> void {
         match (root.errors.normalize_invoke(error)) {
-            let timeout: baml.errors.Timeout => {
-                self.close_current();
-                throw timeout
-            },
-            let failure: root.errors.Failure => {
-                if (!self.emitted && self.retry(failure)) {
+            let error: root.errors.Failure | baml.errors.Timeout => {
+                let failure = _reliability_failure(error);
+                if (self.retry(failure)) {
                     self.calls.push(_failed_leg_call(null, failure));
                     self.close_current();
                     self.current = null;
+                    self.pending_text = [];
+                    self.pending_cursor = 0;
+                    self.terminal = [];
+                    self.terminal_cursor = 0;
+                    self.reset_pending = true;
                 } else {
                     self.close_current();
-                    throw failure
+                    throw error
                 }
             },
             let unknown_error: baml.errors.UnknownError => {
@@ -581,11 +602,14 @@ class StreamRelay {
     }
 
     function next_event(self) -> root.stream.Event | root.stream.Done {
+        if (self.reset_pending) {
+            self.reset_pending = false;
+            return root.stream.TurnReset {};
+        }
         if (self.pending_cursor < self.pending_text.length()) {
             let text = self.pending_text.at(self.pending_cursor)
                 ?? baml.sys.panic("StreamRelay lost a pending delta");
             self.pending_cursor += 1;
-            self.emitted = true;
             return root.stream.TextDelta { text: text };
         }
         if (self.terminal_cursor < self.terminal.length()) {
@@ -609,12 +633,14 @@ class StreamRelay {
             }
         }
         if let stream: root.stream.TurnStream = self.current {
-            let next: string[] | root.stream.Done | StreamRelayError = stream.next() catch_all (e) {
+            let next: string[] | root.stream.Done | root.stream.TurnReset | StreamRelayError = stream.next() catch_all (e) {
                 _ => StreamRelayError { error: e },
             };
             match (next) {
+                let reset: root.stream.TurnReset => {
+                    reset
+                },
                 let batch: string[] => {
-                    self.emitted = true;
                     self.pending_text = batch;
                     self.pending_cursor = 1;
                     root.stream.TextDelta {

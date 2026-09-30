@@ -38,7 +38,7 @@ fn user.fixtures.llm_quoted_prompt.QuotedPrompt(topic: string, client: null | ai
 
     bb4: {
         _8 = load_type(unknown);
-        _7 = call const fn ai.Agent.new<copy _8>(const <omitted>, const <omitted>, copy _2, const <omitted>, copy _3) -> [bb5];
+        _7 = call const fn ai.Agent.new<copy _8>(const <omitted>, const <omitted>, copy _2, const <omitted>, copy _3, const <omitted>, const <omitted>) -> [bb5];
     }
 
     bb5: {
@@ -414,7 +414,7 @@ fn user.fixtures.llm_quoted_prompt.QuotedPrompt@stream(topic: string, client: nu
 
     bb5: {
         _7 = load_type(string);
-        _0 = call const fn ai.stream.from_spec<copy _7>(copy _6, copy _2, copy _3) -> [bb6];
+        _0 = call const fn ai.stream.from_spec<copy _7>(copy _6, copy _2, copy _3, const <omitted>, const <omitted>) -> [bb6];
     }
 
     bb6: {
@@ -458,7 +458,7 @@ fn user.fixtures.llm_quoted_prompt.BacktickPrompt(topic: string, client: null | 
 
     bb4: {
         _8 = load_type(unknown);
-        _7 = call const fn ai.Agent.new<copy _8>(const <omitted>, const <omitted>, copy _2, const <omitted>, copy _3) -> [bb5];
+        _7 = call const fn ai.Agent.new<copy _8>(const <omitted>, const <omitted>, copy _2, const <omitted>, copy _3, const <omitted>, const <omitted>) -> [bb5];
     }
 
     bb5: {
@@ -887,7 +887,7 @@ fn user.fixtures.llm_quoted_prompt.BacktickPrompt@stream(topic: string, client: 
 
     bb5: {
         _7 = load_type(string);
-        _0 = call const fn ai.stream.from_spec<copy _7>(copy _6, copy _2, copy _3) -> [bb6];
+        _0 = call const fn ai.stream.from_spec<copy _7>(copy _6, copy _2, copy _3, const <omitted>, const <omitted>) -> [bb6];
     }
 
     bb6: {

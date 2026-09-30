@@ -129,7 +129,7 @@ test "Client and Agent preserve typed timeout" {
     assert.equal(agent_probe.count, 1)
 }
 
-test "non-stream composed clients preserve typed timeout without replay" {
+test "composed clients exhaust deadlines and preserve the last typed timeout" {
     let retry_probe = TimeoutInvocationProbe { count: 0 };
     let retry_inner = TimeoutInvokeClient {
         timeout: baml.errors.Timeout { message: "retry-timeout", duration_ms: 100 },
@@ -165,9 +165,9 @@ test "non-stream composed clients preserve typed timeout without replay" {
 
     assert.equal(timeout_detail(retry_error), "retry-timeout:100");
     assert.equal(timeout_detail(round_robin_error), "round-robin-timeout:200");
-    assert.equal(timeout_detail(fallback_error), "fallback-timeout:300");
-    assert.equal(retry_probe.count, 1);
+    assert.equal(timeout_detail(fallback_error), "backup-timeout:400");
+    assert.equal(retry_probe.count, 3);
     assert.equal(round_robin_probe.count, 1);
     assert.equal(fallback_probe.count, 1);
-    assert.equal(backup_probe.count, 0)
+    assert.equal(backup_probe.count, 1)
 }

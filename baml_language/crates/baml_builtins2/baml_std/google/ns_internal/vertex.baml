@@ -416,10 +416,7 @@ function vertex_invoke_stream(
         time_to_first_token_timeout = c.time_to_first_token_timeout,
         idle_timeout = c.idle_timeout,
     );
-    // Both decoders yield an explicit `TurnDone` (Anthropic's `message_stop`,
-    // Gemini's `finishReason` fragment), so both streams are strict: a
-    // connection cut mid-answer raises instead of reporting the partial text
-    // as a completed turn.
+    // Empty streams fail; clean EOF after decoded output returns the partial turn.
     let stream = if (_vertex_publisher(c) == "anthropic") {
         let state = anthropic.internal.AnthStreamState.new();
         ai.stream.TurnStream.from_sse(

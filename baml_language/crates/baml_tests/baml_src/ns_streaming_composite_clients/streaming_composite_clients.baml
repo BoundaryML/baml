@@ -39,7 +39,8 @@ class ScriptedStreamClient {
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
-            ai.ModelTurn { calls: [],
+            ai.ModelTurn {
+                calls: [],
                 content: [ai.content.Text { text: self.chunks.join("") }],
                 stop_reason: ai.content.StopReason.Complete,
                 usage: null,
@@ -82,7 +83,7 @@ class ScriptedStreamClient {
                     throw ai.errors.StepBudgetExceeded { steps: 1 }
                 });
             }
-            if (self.fail_after_delta) {
+            if (self.fail_after_delta && attempt == 1) {
                 let cursor = 0;
                 let probe = self.probe;
                 let client_id = self.client_id;
@@ -128,7 +129,8 @@ class NonStreamingClient {
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
-            ai.ModelTurn { calls: [],
+            ai.ModelTurn {
+                calls: [],
                 content: [ai.content.Text { text: "not streamed" }],
                 stop_reason: ai.content.StopReason.Complete,
                 usage: null,
@@ -271,7 +273,7 @@ test "retry_stream_retries_when_open_fails" {
     )
 }
 
-function retry_stream_does_not_retry_after_delta_case() -> string {
+function retry_stream_recovers_after_delta_case() -> string {
     let probe = StreamProbe { events: [] };
     let inner = scripted_client("partial", ["prefix"], probe, fail_after_delta = true);
     let retry = ai.clients.Retry.new(
@@ -283,17 +285,19 @@ function retry_stream_does_not_retry_after_delta_case() -> string {
     let first = match (stream.next()) {
         let batch: string[] => batch.join(""),
         let done: ai.stream.Done => "done",
+        let reset: ai.stream.TurnReset => "reset",
     };
-    let second = stream.next() catch_all (e) {
-        _ => failure_name(e),
-    };
+    let second = stream.final_turn().terminal_text()
+        ?? "" catch_all (e) {
+            _ => failure_name(e),
+        };
     `${first}|${second.to_string()}|${probe.events.join(",")}`
 }
 
-test "retry_stream_does_not_retry_after_delta" {
+test "retry_stream_recovers_after_delta" {
     assert.equal(
-        retry_stream_does_not_retry_after_delta_case(),
-        "prefix|NetworkFailure:failed after first delta|open:partial:1,partial-fail:partial:1",
+        retry_stream_recovers_after_delta_case(),
+        "prefix|prefix|open:partial:1,partial-fail:partial:1,open:partial:2",
     )
 }
 
@@ -312,7 +316,7 @@ test "fallback_stream_advances_before_first_delta_in_order" {
     )
 }
 
-function fallback_stream_does_not_advance_after_delta_case() -> string {
+function fallback_stream_recovers_after_delta_case() -> string {
     let probe = StreamProbe { events: [] };
     let first = scripted_client("first", ["prefix"], probe, fail_after_delta = true);
     let second = scripted_client("second", ["winner"], probe);
@@ -321,17 +325,19 @@ function fallback_stream_does_not_advance_after_delta_case() -> string {
     let first_delta = match (stream.next()) {
         let batch: string[] => batch.join(""),
         let done: ai.stream.Done => "done",
+        let reset: ai.stream.TurnReset => "reset",
     };
-    let outcome = stream.next() catch_all (e) {
-        _ => failure_name(e),
-    };
+    let outcome = stream.final_turn().terminal_text()
+        ?? "" catch_all (e) {
+            _ => failure_name(e),
+        };
     `${first_delta}|${outcome.to_string()}|${probe.events.join(",")}`
 }
 
-test "fallback_stream_does_not_advance_after_delta" {
+test "fallback_stream_recovers_after_delta" {
     assert.equal(
-        fallback_stream_does_not_advance_after_delta_case(),
-        "prefix|NetworkFailure:failed after first delta|open:first:1,partial-fail:first:1",
+        fallback_stream_recovers_after_delta_case(),
+        "prefix|winner|open:first:1,partial-fail:first:1,open:second:1",
     )
 }
 

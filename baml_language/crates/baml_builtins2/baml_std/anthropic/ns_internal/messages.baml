@@ -829,8 +829,8 @@ function preview(c: root.Client, input: ai.ModelTurnInput) -> baml.http.Request 
 /// `end_turn`/`stop_sequence` are the only reasons that mean "the model said
 /// everything it meant to say". `pause_turn`, `model_context_window_exceeded`
 /// and anything Anthropic ships next are TRUNCATIONS, so they map to MaxTokens
-/// (the runner's "incomplete answer" outcome) rather than silently reporting a
-/// truncated candidate as a successful completion.
+/// so callers can distinguish budget exhaustion from normal completion and
+/// optionally reject it through the runner's finish-reason policy.
 function _stop_reason(s: string) -> ai.content.StopReason {
     match (s) {
         "end_turn" | "stop_sequence" => ai.content.StopReason.Complete,

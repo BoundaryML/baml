@@ -57,6 +57,7 @@ function make_backlog(n: int) -> ai.stream.TurnStream {
         _done: false,
         _require_terminal: null,
         _saw_terminal: false,
+        _saw_output: false,
         _calls: [],
         _wire_call: null,
         _call_started: null,

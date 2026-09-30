@@ -1,6 +1,6 @@
 // v0 oracle: engine/baml-runtime/src/internal/llm_client/orchestrator/{call,stream}.rs.
 // A successful provider response stops fallback before SAP/finish validation.
-// Provider failures advance even after streamed partials (a known v1 gap).
+// Provider failures advance even after streamed partials.
 // All sockets and providers below are local; reliability executes in BAML.
 
 function FallbackInteger() -> int {
@@ -49,11 +49,28 @@ function fallback_error(error: unknown) -> string {
     }
 }
 
-function fallback_value(chain: ai.clients.Fallback, streaming: bool) -> string {
-    if (streaming) {
-        ai.stream.from_spec<string>(CompositeStreamSpec@spec(), client = chain).final()
+function fallback_value(
+    chain: ai.clients.Fallback,
+    streaming: bool,
+    reject_max_tokens: bool = false,
+) -> string {
+    let denied: ai.content.StopReason[]? = if (reject_max_tokens) {
+        [ai.content.StopReason.MaxTokens]
     } else {
-        ai.Agent.new(client = chain).run(CompositeStreamSpec@spec()).value
+        null
+    };
+    if (streaming) {
+        ai.stream
+            .from_spec<string>(
+                CompositeStreamSpec@spec(),
+                client = chain,
+                finish_reason_deny_list = denied,
+            )
+            .final()
+    } else {
+        ai.Agent.new(client = chain, finish_reason_deny_list = denied)
+            .run(CompositeStreamSpec@spec())
+            .value
     }
 }
 
@@ -131,7 +148,11 @@ test "fallback_connection_failure_streaming" {
     assert.equal(fallback_connection_case(true), "winner|0|1")
 }
 
-function fallback_json_case(body: string, integer: bool = false) -> string {
+function fallback_json_case(
+    body: string,
+    integer: bool = false,
+    reject_max_tokens: bool = false,
+) -> string {
     root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(body)], (
         primary: root.llm_mock.MockJsonServer,
     ) -> {
@@ -144,7 +165,7 @@ function fallback_json_case(body: string, integer: bool = false) -> string {
             let value = if (integer) {
                 ai.Agent.new(client = chain).run(FallbackInteger@spec()).value.to_string()
             } else {
-                fallback_value(chain, false)
+                fallback_value(chain, false, reject_max_tokens = reject_max_tokens)
             } catch_all (e) {
                 _ => fallback_error(e)
             };
@@ -161,27 +182,28 @@ test "fallback_malformed_response_advances" {
     assert.equal(fallback_json_case("{broken"), "42|1|1")
 }
 
-function fallback_default_schema_gap_case() -> bool {
+function fallback_default_schema_parity_case() -> bool {
     let actual = fallback_json_case(fallback_body(text = "not an integer"), integer = true);
-    assert.equal(actual, "ParseFailed|2|0");
-    if (actual != "ParseFailed|1|0") {
-        throw baml.panics.AssertionFailed { message: "v0 fallback parity: ParseFailed|1|0" };
-    }
+    assert.equal(actual, "ParseFailed|1|0");
     true
 }
 
-test "fallback_output_parse_failure_no_replay_v0_parity" with fallback_known_gap("ParseFailed|1|0") {
-    assert.is_true(fallback_default_schema_gap_case())
+test "fallback_output_parse_failure_no_replay_v0_parity" {
+    assert.is_true(fallback_default_schema_parity_case())
 }
 
 test "fallback_finish_reason_failure_does_not_advance" {
     assert.equal(
-        fallback_json_case(fallback_body(text = "prefix", incomplete = true)),
+        fallback_json_case(fallback_body(text = "prefix", incomplete = true), reject_max_tokens = true),
         "FinishReasonError|1|0",
     )
 }
 
-function fallback_stream_case(events: string[], integer: bool = false) -> string {
+function fallback_stream_case(
+    events: string[],
+    integer: bool = false,
+    reject_max_tokens: bool = false,
+) -> string {
     root.llm_mock.mock_sse_serve(events, (primary: root.llm_mock.MockSseServer) -> {
         root.llm_mock.mock_sse_serve(fallback_success_events("42"), (
             backup: root.llm_mock.MockSseServer,
@@ -192,7 +214,7 @@ function fallback_stream_case(events: string[], integer: bool = false) -> string
             let value = if (integer) {
                 ai.stream.from_spec<int>(FallbackInteger@spec(), client = chain).final().to_string()
             } else {
-                fallback_value(chain, true)
+                fallback_value(chain, true, reject_max_tokens = reject_max_tokens)
             } catch_all (e) {
                 _ => fallback_error(e)
             };
@@ -232,7 +254,7 @@ test "fallback_stream_output_parse_failure_does_not_advance" {
     )
 }
 
-function fallback_stream_finish_reason_gap_case() -> bool {
+function fallback_stream_finish_reason_parity_case() -> bool {
     let actual = fallback_stream_case(
         [
             fallback_prefix_event(),
@@ -240,39 +262,14 @@ function fallback_stream_finish_reason_gap_case() -> bool {
                 `{"type":"response.incomplete","sequence_number":1,"response":${fallback_body(text = "prefix", incomplete = true)}}`,
             ),
         ],
+        reject_max_tokens = true,
     );
-    assert.equal(actual, "prefix|1|0");
-    if (actual != "FinishReasonError|1|0") {
-        throw baml.panics.AssertionFailed { message: "v0 fallback parity: FinishReasonError|1|0" };
-    }
+    assert.equal(actual, "FinishReasonError|1|0");
     true
 }
 
-test "fallback_stream_finish_reason_failure_v0_parity" with fallback_known_gap("FinishReasonError|1|0") {
-    assert.is_true(fallback_stream_finish_reason_gap_case())
-}
-
-// Strict expected-failure runner for a confirmed v0 compatibility gap. The
-// body checks observed behavior before the single parity assertion. Only that
-// assertion's specific message is allowed; unrelated failures/errors fail CI.
-function fallback_known_gap(expected_value: string) -> testing.TestRunner {
-    (run_once) -> testing.TestReportThunk {
-        () -> testing.TestReport {
-            let report = run_once();
-            let run = report.runs.at(0);
-            let expected = report.outcome == "fail"
-                && report.runs.length() == 1
-                && (run?.message ?? "") == `v0 fallback parity: ${expected_value}`;
-            testing.TestReport {
-                outcome: if (expected) {
-                    "pass"
-                } else {
-                    "fail"
-                },
-                runs: report.runs,
-            }
-        }
-    }
+test "fallback_stream_finish_reason_failure_v0_parity" {
+    assert.is_true(fallback_stream_finish_reason_parity_case())
 }
 
 // The producer cannot fail until the consumer acknowledges a visible prefix.
@@ -321,28 +318,24 @@ function fallback_stream_after_text_case(tail: string[]) -> string {
     })
 }
 
-function fallback_stream_gap_case(tail: string[], expected_value: string = "42|1|1") -> bool {
+function fallback_stream_parity_case(tail: string[], expected_value: string = "42|1|1") -> bool {
     let actual = fallback_stream_after_text_case(tail);
-    // A fix should remove this runner and the current-behavior assertion.
-    assert.equal(actual, "NetworkFailure|1|0");
-    if (actual != expected_value) {
-        throw baml.panics.AssertionFailed { message: `v0 fallback parity: ${expected_value}` };
-    }
+    assert.equal(actual, expected_value);
     true
 }
 
-test "fallback_stream_provider_error_after_text_v0_parity" with fallback_known_gap("42|1|1") {
-    assert.is_true(fallback_stream_gap_case([fallback_failed_event()]))
+test "fallback_stream_provider_error_after_text_v0_parity" {
+    assert.is_true(fallback_stream_parity_case([fallback_failed_event()]))
 }
 
-test "fallback_stream_malformed_event_after_text_v0_parity" with fallback_known_gap("42|1|1") {
-    assert.is_true(fallback_stream_gap_case([root.llm_mock.sse_data("{broken")]))
+test "fallback_stream_malformed_event_after_text_v0_parity" {
+    assert.is_true(fallback_stream_parity_case([root.llm_mock.sse_data("{broken")]))
 }
 
 // v0 accepts natural EOF after text even without a provider terminal event.
 // This differs from an actual transport/provider error after that text.
-test "fallback_stream_eof_after_text_v0_parity" with fallback_known_gap("prefix|1|0") {
-    assert.is_true(fallback_stream_gap_case([], expected_value = "prefix|1|0"))
+test "fallback_stream_eof_after_text_v0_parity" {
+    assert.is_true(fallback_stream_parity_case([], expected_value = "prefix|1|0"))
 }
 
 function fallback_exhaustion_case(streaming: bool, singleton: bool = false) -> string {
@@ -581,40 +574,34 @@ function fallback_timeout_case(streaming: bool, first_token: bool) -> string {
     )
 }
 
-function fallback_timeout_gap_case(streaming: bool, first_token: bool) -> bool {
+function fallback_timeout_parity_case(streaming: bool, first_token: bool) -> bool {
     let actual = fallback_timeout_case(streaming, first_token);
-    assert.equal(actual, "Timeout|0");
-    if (actual != "winner|1") {
-        throw baml.panics.AssertionFailed { message: "v0 fallback parity: winner|1" };
-    }
+    assert.equal(actual, "winner|1");
     true
 }
 
-test "fallback_request_timeout_plain_v0_parity" with fallback_known_gap("winner|1") {
-    assert.is_true(fallback_timeout_gap_case(false, false))
+test "fallback_request_timeout_plain_v0_parity" {
+    assert.is_true(fallback_timeout_parity_case(false, false))
 }
 
-test "fallback_request_timeout_stream_v0_parity" with fallback_known_gap("winner|1") {
-    assert.is_true(fallback_timeout_gap_case(true, false))
+test "fallback_request_timeout_stream_v0_parity" {
+    assert.is_true(fallback_timeout_parity_case(true, false))
 }
 
-test "fallback_first_token_timeout_v0_parity" with fallback_known_gap("winner|1") {
-    assert.is_true(fallback_timeout_gap_case(true, true))
+test "fallback_first_token_timeout_v0_parity" {
+    assert.is_true(fallback_timeout_parity_case(true, true))
 }
 
 // v0 defaults to FinishReasonFilter::All. The earlier rejection scenarios
 // correspond to an explicitly denied max-token reason in the v0 client.
-function fallback_default_finish_reason_gap_case() -> bool {
+function fallback_default_finish_reason_parity_case() -> bool {
     let actual = fallback_json_case(fallback_body(text = "prefix", incomplete = true));
-    assert.equal(actual, "FinishReasonError|1|0");
-    if (actual != "prefix|1|0") {
-        throw baml.panics.AssertionFailed { message: "v0 fallback parity: prefix|1|0" };
-    }
+    assert.equal(actual, "prefix|1|0");
     true
 }
 
-test "fallback_default_finish_reason_plain_v0_parity" with fallback_known_gap("prefix|1|0") {
-    assert.is_true(fallback_default_finish_reason_gap_case())
+test "fallback_default_finish_reason_plain_v0_parity" {
+    assert.is_true(fallback_default_finish_reason_parity_case())
 }
 
 test "fallback_default_finish_reason_streaming" {
@@ -689,4 +676,146 @@ function fallback_unsafe_stream_case() -> string {
 
 test "fallback_unsafe_stream_failure_does_not_advance" {
     assert.equal(fallback_unsafe_stream_case(), "StepBudgetExceeded:1|open:unsafe:1")
+}
+
+class DeadlineProbeClient {
+    probe: StreamProbe,
+    implements ai.Client {
+        function id(self) -> string {
+            "deadline"
+        }
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            let _ = input;
+            baml.http.Request { method: "GET", url: "http://127.0.0.1:0", headers: {}, body: "" }
+        }
+        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+            let _ = input;
+            self.probe.events.push("deadline");
+            throw baml.errors.Timeout { message: "request deadline", duration_ms: 100 }
+        }
+    }
+    implements ai.stream.StreamingClient {
+        function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
+            let _ = input;
+            self.probe.events.push("deadline");
+            throw baml.errors.Timeout { message: "request deadline", duration_ms: 100 }
+        }
+    }
+}
+
+function fallback_retried_deadline_case(streaming: bool, exhausted: bool) -> string {
+    let probe = StreamProbe { events: [] };
+    let deadline = DeadlineProbeClient { probe: probe };
+    let retry = ai.clients.Retry.new(
+        deadline,
+        max_attempts = 2,
+        backoff = ai.clients.Backoff.new(initial_ms = 0, max_ms = 0),
+    );
+    let chain = ai.clients.Fallback {
+        members: if (exhausted) {
+            [retry, deadline]
+        } else {
+            [retry, fallback_probe_leaf("winner", 0, streaming, probe)]
+        },
+    };
+    let value = fallback_probe_value(chain, streaming) catch_all (e) {
+        let timeout: baml.errors.Timeout => timeout.message,
+        _ => fallback_error(e),
+    };
+    `${value}|${probe.events.join(",")}`
+}
+
+test "timeouts_exhaust_leaf_retry_before_fallback" {
+    for (let streaming in [false, true]) {
+        assert.equal(
+            fallback_retried_deadline_case(streaming, false),
+            "winner|deadline,deadline,open:winner:1",
+        );
+        assert.equal(
+            fallback_retried_deadline_case(streaming, true),
+            "request deadline|deadline,deadline,deadline",
+        );
+    }
+}
+
+function fallback_nested_reset_case(retry_outside: bool) -> string {
+    let probe = StreamProbe { events: [] };
+    let a = scripted_client("a", ["failed-a"], probe, fail_after_delta = true);
+    let b = scripted_client("b", ["failed-b"], probe, fail_after_delta = true);
+    let c = scripted_client("c", ["winner"], probe);
+    let nested = ai.clients.Fallback { members: [ai.clients.Fallback { members: [a, b] }, c] };
+    let selected: ai.stream.StreamingClient = if (retry_outside) {
+        ai.clients.Retry.new(
+            nested,
+            max_attempts = 2,
+            backoff = ai.clients.Backoff.new(initial_ms = 0, max_ms = 0),
+        )
+    } else {
+        nested
+    };
+    let value = ai.stream.from_spec<string>(CompositeStreamSpec@spec(), client = selected).final();
+    `${value}|${probe.events.join(",")}`
+}
+
+test "nested_fallback_and_retry_propagate_stream_resets" {
+    for (let retry_outside in [false, true]) {
+        assert.equal(
+            fallback_nested_reset_case(retry_outside),
+            "winner|open:a:1,partial-fail:a:1,open:b:1,partial-fail:b:1,open:c:1",
+        );
+    }
+}
+
+function fallback_idle_timeout_after_text_case() -> string {
+    let gate = FallbackStreamGate { released: false, requests: 0, tail: [] };
+    let server = baml.http.Server.bind("127.0.0.1:0");
+    let task = spawn { server.serve(gate.handle) };
+    defer { gate.released = true; task.cancel(); }
+    root.llm_mock.mock_sse_serve(fallback_success_events("42"), (
+        backup: root.llm_mock.MockSseServer,
+    ) -> {
+        let primary = openai.ResponsesClient.new(
+            api_key = "test-key",
+            base_url = `http://${server.addr}`,
+            idle_timeout = baml.time.Duration.from_ms(300),
+            request_timeout = baml.time.Duration.from_ms(5000),
+        );
+        let chain = ai.clients.Fallback { members: [primary, fallback_leaf(backup.base_url())] };
+        let stream = ai.stream.from_spec<string>(CompositeStreamSpec@spec(), client = chain);
+        assert.equal(stream.next(), "prefix");
+        // Leave the producer blocked: the idle deadline must replace it.
+        `${stream.final()}|${gate.requests}|${backup.request_count()}`
+    })
+}
+
+test "idle_timeout_after_visible_text_selects_backup_and_resets_parser" {
+    assert.equal(fallback_idle_timeout_after_text_case(), "42|1|1")
+}
+
+function reset_metadata_case() -> string {
+    let cursor = 0;
+    let events: ai.stream.Event[] = [
+        ai.stream.TurnMeta {
+            stop_reason: ai.content.StopReason.MaxTokens,
+            input_tokens: 100,
+            output_tokens: 200,
+        },
+        ai.stream.TextDelta { text: "failed" },
+        ai.stream.TurnReset {},
+        ai.stream.TextDelta { text: "winner" },
+        ai.stream.TurnDone {},
+    ];
+    let stream = ai.stream.TurnStream.from_event_source(() -> {
+        let event = events.at(cursor);
+        cursor += 1;
+        event ?? ai.stream.Done {}
+    });
+    assert.equal(stream.next(), ["failed"]);
+    assert.is_true(stream.next() is ai.stream.TurnReset);
+    let turn = stream.final_turn();
+    `${turn.terminal_text() ?? ""}|${turn.stop_reason.to_string()}|${turn.usage == null}`
+}
+
+test "stream_reset_discards_failed_attempt_metadata" {
+    assert.equal(reset_metadata_case(), "winner|Complete|true")
 }

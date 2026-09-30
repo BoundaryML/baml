@@ -6,16 +6,9 @@
 // metadata, `data: [DONE]` as the explicit end-of-turn event (decoded as
 // `ai.stream.TurnDone`).
 //
-// What is under test (see the contract comment at the top of
-// `baml_std/ai/ns_stream/stream.baml`):
-//
-//   * a stream that ends WITHOUT the terminal event, opened WITH
-//     `require_terminal`, throws `ai.errors.NetworkFailure` instead of
-//     reporting the truncated text as a completed turn;
-//   * the same truncated stream opened WITHOUT `require_terminal` keeps the
-//     historical behavior (a `StopReason.Complete` turn with the prefix) — the
-//     opt-in must be backward compatible;
-//   * a complete stream opened WITH `require_terminal` behaves normally.
+// Clean EOF after decoded output succeeds, matching v0, whether or not the
+// protocol has a terminal marker. Empty strict streams still fail. Explicit
+// decoding/transport errors remain distinct from graceful EOF.
 //
 // Authoring rules: each case is a top-level `function` with a thin `test`
 // block (test-block locals are boxed by the VM), and cross-namespace helpers
@@ -142,39 +135,15 @@ function contract_complete_events() -> string[] {
 
 // ─── cases ───────────────────────────────────────────────────────────────────
 
-// Opted in + truncated: the disconnect surfaces as a classified failure.
-function stream_contract_truncated_strict_throws() -> string {
-    root.llm_mock.mock_sse_serve(
-        contract_truncated_events(),
-        (mock: root.llm_mock.MockSseServer) -> {
-            contract_drain_strict(mock.base_url()) catch_all (e) {
-                _ => contract_error_label(e),
-            }
-        },
-    )
+// A strict provider stream accepts clean EOF once it has produced output.
+function stream_contract_clean_eof_returns_partial() -> string {
+    root.llm_mock.mock_sse_serve(contract_truncated_events(), (mock: root.llm_mock.MockSseServer) -> {
+        contract_drain_strict(mock.base_url())
+    })
 }
 
-// The three things the strict label must say, as one comparable string: the
-// classification, the reason, and the preserved prefix. Asserted from a
-// top-level function so the value is never a test-block local (the corpus rule
-// at the top of this file).
-function stream_contract_truncated_strict_label() -> string {
-    let got = stream_contract_truncated_strict_throws();
-    [
-        // classified as a transport failure, safely retryable, named provider
-        `classified=${got.includes("NetworkFailure|Safe|mockprovider|")}`,
-        `reason=${got.includes("stream ended before the provider's terminal event")}`,
-        // the prefix that did arrive is preserved for debugging, not returned
-        // as the answer
-        `prefix=${got.includes("raw=partial")}`,
-    ].join("|")
-}
-
-test "stream_contract_truncated_strict_throws" {
-    assert.equal(
-        stream_contract_truncated_strict_label(),
-        "classified=true|reason=true|prefix=true",
-    )
+test "stream_contract_clean_eof_returns_partial" {
+    assert.equal(stream_contract_clean_eof_returns_partial(), "stop=Complete|text=partial")
 }
 
 // NOT opted in + truncated: unchanged legacy behavior. This is the guard that
@@ -222,6 +191,7 @@ function contract_deltas_then_outcome(base_url: string) -> string {
     let chunks: string[] = [];
     while (true) {
         match (stream.next()) {
+            let reset: ai.stream.TurnReset => baml.sys.panic("leaf stream emitted reset"),
             let d: ai.stream.Done => {
                 break;
             },
@@ -247,9 +217,8 @@ function stream_contract_truncated_strict_next_throws() -> string {
     )
 }
 
-test "stream_contract_truncated_strict_next_throws" {
-    // next() itself refuses to report Done for a stream that was cut off
-    assert.contains(stream_contract_truncated_strict_next_throws(), "NetworkFailure|Safe|mockprovider|")
+test "stream_contract_clean_eof_next_returns_partials" {
+    assert.equal(stream_contract_truncated_strict_next_throws(), "par,tial")
 }
 
 function stream_contract_complete_strict_yields_deltas() -> string {
@@ -274,4 +243,14 @@ function stream_contract_from_chunks_unchanged() -> string {
 
 test "stream_contract_from_chunks_unchanged" {
     assert.equal(stream_contract_from_chunks_unchanged(), "stop=Complete|text=ab")
+}
+
+function stream_contract_metadata_eof() -> string {
+    root.llm_mock.mock_sse_serve([root.llm_mock.sse_data(`{"stop":"complete"}`)], (mock: root.llm_mock.MockSseServer) -> {
+        contract_drain_strict(mock.base_url())
+    })
+}
+
+test "stream_contract_clean_eof_after_metadata_matches_v0" {
+    assert.equal(stream_contract_metadata_eof(), "stop=Complete|text=")
 }

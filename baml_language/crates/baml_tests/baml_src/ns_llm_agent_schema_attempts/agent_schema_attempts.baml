@@ -31,7 +31,8 @@ class InvalidSchemaClient {
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
             self.probe.count += 1;
-            ai.ModelTurn { calls: [],
+            ai.ModelTurn {
+                calls: [],
                 content: [ai.content.Text { text: "schema-mismatch" }],
                 stop_reason: ai.content.StopReason.Complete,
                 usage: null,
@@ -50,7 +51,7 @@ function schema_attempt_validation_message(schema_attempts: int) -> string {
     "accepted"
 }
 
-test "default Agent makes two total schema attempts" {
+test "default Agent makes one total schema attempt" {
     let probe = InvocationProbe { count: 0 };
     let scripted = InvalidSchemaClient { probe: probe };
     let agent = ai.Agent.new(client = scripted);
@@ -60,7 +61,7 @@ test "default Agent makes two total schema attempts" {
     };
 
     assert.equal(raw_output, "schema-mismatch");
-    assert.equal(probe.count, 2)
+    assert.equal(probe.count, 1)
 }
 
 test "configured Agent makes one total schema attempt" {

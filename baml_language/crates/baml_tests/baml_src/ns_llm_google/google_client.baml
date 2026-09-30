@@ -611,8 +611,8 @@ function google_stream_truncated() -> string {
     )
 }
 
-test "google_stream_truncated" {
-    assert.equal(google_stream_truncated(), "NetworkFailure")
+test "google_stream_clean_eof_returns_partial" {
+    assert.equal(google_stream_truncated(), "po")
 }
 
 // A `data:` payload that does not decode is a failure too: dropping it (what
