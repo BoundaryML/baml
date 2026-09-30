@@ -40,7 +40,8 @@ Mostly it behaves like JavaScript/TypeScript, with very similar syntax — but B
 - **Test the pure code, not the model.** Unit-test orchestration/post-processing on literal data with `assert.`*. Calling an LLM function in a `test` with a live client makes a real request. To test prompts, requests, and parsing offline, use `F@spec(args)` or a scripted client (see [Running AI functions](#running-ai-functions)).
 - **Build strings with interpolation, not coercion.** ``score=${n}`` stringifies any value (implicit `.to_string()`); call `.to_string()` for the string alone. `+` needs both sides already strings (`"n=" + 5` won't compile).
 - **`catch` for some, `catch_all` for all.** `expr catch (e) { baml.errors.ParseError => fallback }` handles a *specific* error; `expr catch_all (e) { _ => fallback }` is *exhaustive* — for a workflow top / entrypoint. Errors propagate implicitly; callers needn't re-declare. **Raise** with `throw baml.errors.InvalidArgument { message: "…" }` (error types are the builtin `baml.errors.*` classes — `InvalidArgument`/`ParseError`/`Io`/`Timeout`/…; `baml describe baml.errors`); annotate a fallible signature with `-> T throws ErrType`. Prefer a typed result **union** (`type R = Ok | Err`) over throwing for ordinary control flow.
-- **Interfaces = shared behavior + dynamic dispatch.** `interface I { function m(self) -> T throws never }` (each method declares its `throws` clause and may have a default body); a class opts in via `implements I { … }`; a value typed `I` (or `I[]`) dispatches to the implementor at runtime. Interfaces can also declare associated types and generic bounds. `baml describe interfaces`.
+- **Interfaces = shared behavior + dynamic dispatch.** `interface I { function m(self) -> T throws never }`; each method declares its `throws` clause. A method with a body is a default implementation, which an implementor may override. A class opts in via `implements I { … }`; a value typed `I` (or `I[]`) dispatches to the implementor at runtime. Interfaces can also declare associated types and generic bounds. `baml describe interfaces`.
+- **`requires`, not inheritance.** BAML has no inheritance: a class can't extend a class. `interface Pet requires Animal, Named { … }` makes those interfaces prerequisites of `Pet`. `Pet`'s default bodies can call their methods, and a value typed `Pet` exposes them. Every `Pet` implementor also writes its own `implements Animal` and `implements Named` blocks (E0125 otherwise). A diamond of `requires` compiles, and the shared interface is implemented once; a cycle is an error. When two interfaces on one class declare the same method name, an unqualified call is an error (E0121); call `obj.as<I>.m()` instead.
 - **Pattern matching.** `match (v) { … }` over values/types; arms are `pattern => expr` — literals, `let x: T` (bind + narrow), class destructure `T { f: let y }`, or-patterns `A | B`, guards `… if cond`, `_`; must be exhaustive. Also `v is T` → bool (narrows) and `if let x: T = v { … } else { … }`. `baml describe patterns`.
 - **Concurrency = green threads.** `spawn { … }` returns a `Future`; `await` collects it. Combine many with `baml.future.all` / `all_settled` / `race` / `any`. `all_settled` returns `Success<T>`, `Failure<E>`, or `Panicked` for each input; input cancellation is a `Panicked` outcome. Configure a spawn with a `with` clause: `spawn with limit, token { … }` — each value listed is a `baml.spawn.Modifier` that transforms the plan the spawn builds, left to right. `baml.spawn.Limit.new(n)` caps concurrency (excess spawns queue), a `baml.spawn.CancelToken` cancels cooperatively, `baml.spawn.Root.new()` detaches the task from its spawner's cancellation. `baml describe spawn` / `baml describe baml.future`.
 - **Resource safety — `defer`, `cleanup`, `catch (e, ctx)`.** `defer { … }` runs a block at scope exit, LIFO, on *every* path (return / throw / fall-through) — like Go. A class method named `function cleanup(self) -> void` is a **finalizer**: it runs at most once per instance whether you call it, `defer` it, or the GC reclaims it. `catch (e, ctx)` binds an **`ErrorContext`** alongside the error — an error thrown while handling another chains onto it, so `ctx.root_cause()` / `ctx.cause` walk back to the original failure and `ctx.to_string()` renders the whole chain (Python `__context__`-style). `while let PATTERN = expr { … }` loops until the pattern fails (e.g. draining a `T?`-returning `.pop()`).
@@ -212,7 +213,7 @@ test "lang" {
 }
 ```
 
-## Example 3 — interfaces (shared behavior, default method, dynamic dispatch)
+## Example 3 — interfaces (shared behavior, default method, dynamic dispatch, `requires`)
 
 ```baml
 interface Animal {
@@ -220,9 +221,16 @@ interface Animal {
     function describe(self) -> string throws never { `${self.sound()}!` } // default method
 }
 
+// Every Pet is an Animal, so Pet's defaults can call Animal's methods.
+interface Pet requires Animal {
+    function pet_name(self) -> string throws never
+    function greet(self) -> string throws never { `${self.pet_name()}: ${self.describe()}` }
+}
+
 class Dog {
     name: string,
     implements Animal { function sound(self) -> string { "woof" } }
+    implements Pet { function pet_name(self) -> string { self.name } } // needs `implements Animal` too
 }
 
 class Cat {
@@ -240,7 +248,10 @@ function chorus(animals: Animal[]) -> string {
 
 test "interfaces" {
     let animals: Animal[] = [Dog { name: "Rex" }, Cat { indoor: true }];
-    assert.equal(chorus(animals), "woof! quiet meow")
+    assert.equal(chorus(animals), "woof! quiet meow");
+    let pet: Pet = Dog { name: "Rex" };
+    assert.equal(pet.greet(), "Rex: woof!");
+    assert.equal(pet.sound(), "woof")                             // Animal's methods, through Pet
 }
 ```
 
