@@ -30,6 +30,18 @@
 //! class every submission names — is that entry, so the table grows by what
 //! a load declares and first reaches, never by what it repeats.
 //!
+//! # Publish once
+//!
+//! A load builds the package's next image in full — its objects and cells,
+//! the declaration and slot tables that index them, its rules, and the
+//! tail — and writes it into the package object once, at the end, dirtying
+//! the package's card as part of that write. The tail names the unit's
+//! declarations as `SELF` imports, so own resolution reads the image being
+//! built, never the package object. A load that fails publishes nothing: the
+//! package is exactly what it was, and what the load allocated is garbage. A
+//! session survives a refused submission this way — nothing it can reach
+//! points at objects only a finished load would have kept alive.
+//!
 //! # Allocation and collection
 //!
 //! Every pointer here is held in plain locals across allocations. That is
@@ -41,7 +53,7 @@ use std::collections::HashMap;
 
 use baml_linker_types::{
     CompilationUnit, DeclKey, DepSlot, EmittedPackage, ImportEntry, InitTail, LocalRef, Locator,
-    ProgramImplRuleFrag, SessionInitializer, import_ordinal,
+    ProgramImplRuleFrag, import_ordinal,
 };
 use baml_type::typetag::TypeTag;
 use bex_heap::TlabHolder;
@@ -76,33 +88,42 @@ pub(super) enum LoadTarget {
     Session,
 }
 
+/// One initializer of a session submission, as the session will run it: the
+/// tail slot of the helper computing the value and the `let` whose cell
+/// receives it — the binding the step declares, or, for an assignment step,
+/// the visible binding it writes back to.
+pub(super) struct Commit<'a> {
+    pub(super) helper: u32,
+    pub(super) target: &'a LocalName,
+}
+
 /// What a load produced beyond the tables it filled.
 pub(super) struct Loaded {
     /// The package's `$init`, when its tail has one.
     pub(super) init: Option<HeapPtr>,
-    /// The package's `$init_test`, when its tail has one.
-    pub(super) test_init: Option<HeapPtr>,
-    /// A submission's recorded initializers in execution order: each
-    /// helper's pointer and the package slot of the `let` it computes.
-    pub(super) initializers: Vec<(HeapPtr, usize)>,
+    /// A submission's commits in execution order: each helper's pointer and
+    /// the package slot of the cell it commits into.
+    pub(super) commits: Vec<(HeapPtr, usize)>,
 }
 
 /// Graft `emitted` onto `package_ptr`'s image. The package object already
 /// exists (its dependency table is what slots bind through); on return its
-/// declaration tables, slot table, object table, rules, and type values hold
-/// the output, and the tail's `$init` is returned for the caller to run.
+/// declaration tables, slot table, object table, rules, and `$init`s hold
+/// the output — written once, after the whole load succeeded — and the
+/// tail's `$init` is returned for the caller to run.
 ///
 /// # Errors
 ///
 /// A dependency the package cannot bind, an import naming nothing in the
-/// bound package, an operand outside the unit, or a switch table no hash
-/// separates: each is a link error, never a dangling reference.
+/// bound package, an operand outside the unit, a switch table no hash
+/// separates, or a commit into a cell the package does not own: each is a
+/// link error, never a dangling reference, and leaves the package untouched.
 pub(super) fn load_package(
     vm: &mut BexVm,
     package_ptr: HeapPtr,
     target: LoadTarget,
     emitted: &EmittedPackage,
-    initializers: &[SessionInitializer],
+    commits: &[Commit<'_>],
 ) -> Result<Loaded, VmRustFnError> {
     let unit = &emitted.unit;
     if target == LoadTarget::Package
@@ -130,10 +151,10 @@ pub(super) fn load_package(
     )?;
     // The unit's own slots — every function and `let` in export order — then
     // one slot per global import that copies a dependency's value.
-    let base_slot = image.globals.len();
+    let base_slot = image.cells.len();
     let local_count = unit.exports.globals.len();
     image
-        .globals
+        .cells
         .extend((0..local_count).map(|_| AtomicValueSlot::new(Value::NULL)));
     slot_unit_functions(&mut image, unit, &locals, base_slot)?;
     let import_slots = place_globals(vm, &mut image, package_ptr, &slots, &unit.global_imports)?;
@@ -148,11 +169,14 @@ pub(super) fn load_package(
     // rules the unit declares.
     relocate_all(vm, &mut image, &space)?;
     let type_count = unit.type_object_count();
-    let mut impl_rules: IndexMap<HeapPtr, Vec<HeapPtr>> = IndexMap::new();
     for rule in &unit.impl_rules {
         let (interface_ptr, rule_ptr) = load_rule(vm, rule, &space, &image, type_count)?;
         image.add(vm, rule_ptr);
-        impl_rules.entry(interface_ptr).or_default().push(rule_ptr);
+        image
+            .impl_rules
+            .entry(interface_ptr)
+            .or_default()
+            .push(rule_ptr);
     }
 
     let mut slot_table: IndexMap<DeclPath, u32> = IndexMap::new();
@@ -161,89 +185,72 @@ pub(super) fn load_package(
             .map_err(|_| link_error("the package's slot table outgrew u32".to_string()))?;
         slot_table.insert(path.clone(), ordinal);
     }
-    let declared = Declared::of(unit, &space, &image, &slot_table)?;
+    image.declare(unit, &space, &slot_table)?;
+    image.globals.extend(slot_table);
 
-    // Publish the unit before the tail: the tail names the unit's
-    // declarations as `SELF` imports, resolved through these tables.
-    {
-        let Object::Package(package) = vm.get_object_mut(package_ptr) else {
-            unreachable!("a graft target is a package")
-        };
-        package.classes.extend(declared.classes);
-        package.enums.extend(declared.enums);
-        package.interfaces.extend(declared.interfaces);
-        package.type_aliases.extend(declared.type_aliases);
-        package.globals.extend(slot_table);
-        for (interface, rules) in impl_rules {
-            package
-                .impl_rules
-                .entry(interface)
-                .or_default()
-                .extend(rules);
-        }
-        let initialized = matches!(
-            package.slots,
-            Slots::Own {
-                initialized: true,
-                ..
+    let tail = match &emitted.tail {
+        Some(tail) => load_tail(vm, package_ptr, tail, commits, &mut image)?,
+        None => {
+            if let Some(commit) = commits.first() {
+                return Err(link_error(format!(
+                    "a commit into `{}` is recorded, but the submission has no tail",
+                    commit.target
+                )));
             }
-        );
-        package.slots = Slots::Own {
-            cells: image.globals.clone().into_boxed_slice(),
-            initialized,
-        };
-        package.objects = Objects::Own(image.objects.clone().into_boxed_slice());
-    }
-
-    let Some(tail) = &emitted.tail else {
-        if let Some(initializer) = initializers.first() {
-            return Err(link_error(format!(
-                "initializer `{}` is recorded, but the submission has no tail",
-                initializer.target
-            )));
+            LoadedTail::default()
         }
-        return Ok(Loaded {
-            init: None,
-            test_init: None,
-            initializers: Vec::new(),
-        });
     };
-    load_tail(vm, package_ptr, tail, initializers, image)
+    let LoadedTail {
+        init,
+        test_init,
+        commits,
+    } = tail;
+    publish(vm, package_ptr, image, init, test_init);
+    Ok(Loaded { init, commits })
+}
+
+/// What a tail added to the image beyond its objects and cells.
+#[derive(Default)]
+struct LoadedTail {
+    init: Option<HeapPtr>,
+    test_init: Option<HeapPtr>,
+    commits: Vec<(HeapPtr, usize)>,
 }
 
 /// Graft a package's tail after its unit: the `let` helpers, `$init`, and
-/// `$init_test` chainer, each in a slot of its own.
+/// `$init_test` chainer, each in a slot of its own, and each recorded commit
+/// bound to the cell it writes.
 fn load_tail(
     vm: &mut BexVm,
     package_ptr: HeapPtr,
     tail: &InitTail,
-    initializers: &[SessionInitializer],
-    mut image: Image,
-) -> Result<Loaded, VmRustFnError> {
+    commits: &[Commit<'_>],
+    image: &mut Image,
+) -> Result<LoadedTail, VmRustFnError> {
     let slots = bind_slots(vm, package_ptr, &tail.dependencies)?;
     let (locals, imports) = place_objects(
         vm,
-        &mut image,
+        image,
         package_ptr,
         &slots,
         tail.objects.iter(),
         &tail.object_imports,
     )?;
-    let base_slot = image.globals.len();
+    let base_slot = image.cells.len();
     for &object in &tail.slot_objects {
         let local = *locals
             .get(object as usize)
             .ok_or_else(|| link_error(format!("tail slot object {object} is outside the tail")))?;
-        image.add_global(Value::object(image.objects[local]));
+        image.add_cell(Value::object(image.objects[local]));
     }
-    let import_slots = place_globals(vm, &mut image, package_ptr, &slots, &tail.global_imports)?;
+    let import_slots = place_globals(vm, image, package_ptr, &slots, &tail.global_imports)?;
     let space = Space {
         locals,
         imports,
         local_slots: (base_slot..base_slot + tail.slot_objects.len()).collect(),
         import_slots,
     };
-    relocate_all(vm, &mut image, &space)?;
+    relocate_all(vm, image, &space)?;
 
     let tail_object = |index: u32| -> Result<HeapPtr, VmRustFnError> {
         space
@@ -254,35 +261,47 @@ fn load_tail(
     };
     let init = tail.init.map(tail_object).transpose()?;
     let test_init = tail.init_test.map(tail_object).transpose()?;
-    let mut recorded = Vec::with_capacity(initializers.len());
-    {
-        let Object::Package(package) = vm.get_object(package_ptr) else {
-            unreachable!("a graft target is a package")
-        };
-        for initializer in initializers {
-            let helper = tail
-                .slot_objects
-                .get(initializer.helper as usize)
-                .copied()
-                .ok_or_else(|| {
-                    link_error(format!(
-                        "initializer helper slot {} is outside the tail",
-                        initializer.helper
-                    ))
-                })?;
-            let target_slot = package
-                .globals
-                .get(&DeclPath::Let(initializer.target.clone()))
-                .copied()
-                .ok_or_else(|| {
-                    link_error(format!(
-                        "initializer target `{}` owns no slot of the package",
-                        initializer.target
-                    ))
-                })?;
-            recorded.push((tail_object(helper)?, target_slot as usize));
-        }
+    let mut bound = Vec::with_capacity(commits.len());
+    for commit in commits {
+        let helper = tail
+            .slot_objects
+            .get(commit.helper as usize)
+            .copied()
+            .ok_or_else(|| {
+                link_error(format!(
+                    "commit helper slot {} is outside the tail",
+                    commit.helper
+                ))
+            })?;
+        let cell = image
+            .globals
+            .get(&DeclPath::Let(commit.target.clone()))
+            .copied()
+            .ok_or_else(|| {
+                link_error(format!(
+                    "a commit into `{}` names no cell the package owns",
+                    commit.target
+                ))
+            })?;
+        bound.push((tail_object(helper)?, cell as usize));
     }
+    Ok(LoadedTail {
+        init,
+        test_init,
+        commits: bound,
+    })
+}
+
+/// The one write of a load into its package: every table, the cells and
+/// objects, the rules, and the tail's `$init`s. The package may be old and
+/// everything written is young, so the write dirties its card.
+fn publish(
+    vm: &mut BexVm,
+    package_ptr: HeapPtr,
+    image: Image,
+    init: Option<HeapPtr>,
+    test_init: Option<HeapPtr>,
+) {
     let Object::Package(package) = vm.get_object_mut(package_ptr) else {
         unreachable!("a graft target is a package")
     };
@@ -293,16 +312,20 @@ fn load_tail(
             ..
         }
     );
+    package.classes = image.classes;
+    package.enums = image.enums;
+    package.interfaces = image.interfaces;
+    package.type_aliases = image.type_aliases;
+    package.impl_rules = image.impl_rules;
+    package.globals = image.globals;
     package.slots = Slots::Own {
-        cells: image.globals.into_boxed_slice(),
+        cells: image.cells.into_boxed_slice(),
         initialized,
     };
     package.objects = Objects::Own(image.objects.into_boxed_slice());
-    Ok(Loaded {
-        init,
-        test_init,
-        initializers: recorded,
-    })
+    package.init = init;
+    package.test_init = test_init;
+    vm.tlab.heap().conservative_write_barrier(package_ptr);
 }
 
 fn link_error(message: impl std::fmt::Display) -> VmRustFnError {
@@ -315,14 +338,24 @@ fn live(ptr: HeapPtr) -> Option<HeapPtr> {
     (!ptr.is_null()).then_some(ptr)
 }
 
-/// The package's image as this load extends it: the object table with each
-/// entry's declaration tag beside it (what a head relocates to and a switch
-/// table is solved over), the entry each pointer holds, and the slot table.
+/// The package's image as this load extends it, and what [`publish`]
+/// writes: the object table with each entry's declaration tag beside it
+/// (what a head relocates to and a switch table is solved over), the entry
+/// each pointer holds, the cells, and the tables that index them — the
+/// declarations by kind and item, the slot each `let`, function, and body
+/// owns, and the rules by interface. Own resolution reads these, so the tail
+/// sees the unit's declarations before either is published.
 struct Image {
     objects: Vec<HeapPtr>,
     tags: Vec<Option<TypeTag>>,
     entry_of: HashMap<HeapPtr, usize>,
-    globals: Vec<AtomicValueSlot>,
+    cells: Vec<AtomicValueSlot>,
+    classes: IndexMap<LocalName, HeapPtr>,
+    enums: IndexMap<LocalName, HeapPtr>,
+    interfaces: IndexMap<LocalName, HeapPtr>,
+    type_aliases: IndexMap<LocalName, HeapPtr>,
+    globals: IndexMap<DeclPath, u32>,
+    impl_rules: IndexMap<HeapPtr, Vec<HeapPtr>>,
 }
 
 impl Image {
@@ -344,12 +377,64 @@ impl Image {
             objects: Vec::with_capacity(objects.len()),
             tags: Vec::with_capacity(objects.len()),
             entry_of: HashMap::with_capacity(objects.len()),
-            globals: cells.to_vec(),
+            cells: cells.to_vec(),
+            classes: package.classes.clone(),
+            enums: package.enums.clone(),
+            interfaces: package.interfaces.clone(),
+            type_aliases: package.type_aliases.clone(),
+            globals: package.globals.clone(),
+            impl_rules: package.impl_rules.clone(),
         };
         for &ptr in objects {
             image.add(vm, ptr);
         }
         image
+    }
+
+    /// Enter the unit's declarations from its export table, checked against
+    /// the slot table the unit's own exports produced.
+    fn declare(
+        &mut self,
+        unit: &CompilationUnit,
+        space: &Space,
+        slots: &IndexMap<DeclPath, u32>,
+    ) -> Result<(), VmRustFnError> {
+        for (path, local_ref) in &unit.exports.objects {
+            let local = space
+                .locals
+                .get(unit.local_index(*local_ref))
+                .copied()
+                .ok_or_else(|| link_error(format!("`{path}` points outside the unit")))?;
+            let ptr = self.objects[local];
+            match path {
+                DeclPath::Class(item) => {
+                    self.classes.insert(item.clone(), ptr);
+                }
+                DeclPath::Enum(item) => {
+                    self.enums.insert(item.clone(), ptr);
+                }
+                DeclPath::Interface(item) => {
+                    self.interfaces.insert(item.clone(), ptr);
+                }
+                DeclPath::TypeAlias(item) => {
+                    self.type_aliases.insert(item.clone(), ptr);
+                }
+                // A callable is reached through its cell (a method also
+                // through its class's method table).
+                DeclPath::Function(_) => {}
+                DeclPath::InterfaceBody(_) => {
+                    if !slots.contains_key(path) {
+                        return Err(link_error(format!("`{path}` is pooled but owns no slot")));
+                    }
+                }
+                DeclPath::Let(_) => {
+                    return Err(link_error(format!(
+                        "`{path}` is exported as an object, but a `let` owns none"
+                    )));
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Append `ptr` as a new entry.
@@ -370,9 +455,9 @@ impl Image {
         }
     }
 
-    fn add_global(&mut self, value: Value) -> usize {
-        let slot = self.globals.len();
-        self.globals.push(AtomicValueSlot::new(value));
+    fn add_cell(&mut self, value: Value) -> usize {
+        let slot = self.cells.len();
+        self.cells.push(AtomicValueSlot::new(value));
         slot
     }
 
@@ -416,7 +501,7 @@ fn place_objects<'a>(
     }
     let mut placed = Vec::with_capacity(imports.len());
     for entry in imports {
-        let resolved = resolve_object(vm, package_ptr, slots, &entry.key)?;
+        let resolved = resolve_object(vm, image, package_ptr, slots, &entry.key)?;
         placed.push(image.place(vm, resolved));
     }
     Ok((locals, placed))
@@ -430,15 +515,16 @@ fn place_globals(
     slots: &[Bound],
     imports: &[ImportEntry],
 ) -> Result<Vec<usize>, VmRustFnError> {
-    imports
-        .iter()
-        .map(|entry| {
-            Ok(match resolve_global(vm, package_ptr, slots, &entry.key)? {
+    let mut placed = Vec::with_capacity(imports.len());
+    for entry in imports {
+        placed.push(
+            match resolve_global(vm, image, package_ptr, slots, &entry.key)? {
                 GlobalBinding::Slot(slot) => slot,
-                GlobalBinding::Value(value) => image.add_global(value),
-            })
-        })
-        .collect()
+                GlobalBinding::Value(value) => image.add_cell(value),
+            },
+        );
+    }
+    Ok(placed)
 }
 
 /// Fill the unit's own function and body slots with their objects. A `let`'s
@@ -488,7 +574,7 @@ fn slot_unit_functions(
         })?;
         let global = base_slot + *slot as usize;
         let function = image.objects[object];
-        *image.globals.get_mut(global).ok_or_else(|| {
+        *image.cells.get_mut(global).ok_or_else(|| {
             link_error(format!(
                 "`{path}` owns slot {slot}, outside the unit's slot table"
             ))
@@ -507,66 +593,6 @@ fn relocate_all(vm: &mut BexVm, image: &mut Image, space: &Space) -> Result<(), 
         }
     }
     Ok(())
-}
-
-/// A unit's declaration tables, from its export table.
-struct Declared {
-    classes: IndexMap<LocalName, HeapPtr>,
-    enums: IndexMap<LocalName, HeapPtr>,
-    interfaces: IndexMap<LocalName, HeapPtr>,
-    type_aliases: IndexMap<LocalName, HeapPtr>,
-}
-
-impl Declared {
-    fn of(
-        unit: &CompilationUnit,
-        space: &Space,
-        image: &Image,
-        slots: &IndexMap<DeclPath, u32>,
-    ) -> Result<Self, VmRustFnError> {
-        let mut declared = Self {
-            classes: IndexMap::new(),
-            enums: IndexMap::new(),
-            interfaces: IndexMap::new(),
-            type_aliases: IndexMap::new(),
-        };
-        for (path, local_ref) in &unit.exports.objects {
-            let local = space
-                .locals
-                .get(unit.local_index(*local_ref))
-                .copied()
-                .ok_or_else(|| link_error(format!("`{path}` points outside the unit")))?;
-            let ptr = image.objects[local];
-            match path {
-                DeclPath::Class(item) => {
-                    declared.classes.insert(item.clone(), ptr);
-                }
-                DeclPath::Enum(item) => {
-                    declared.enums.insert(item.clone(), ptr);
-                }
-                DeclPath::Interface(item) => {
-                    declared.interfaces.insert(item.clone(), ptr);
-                }
-                DeclPath::TypeAlias(item) => {
-                    declared.type_aliases.insert(item.clone(), ptr);
-                }
-                // A callable is reached through its cell (a method also
-                // through its class's method table).
-                DeclPath::Function(_) => {}
-                DeclPath::InterfaceBody(_) => {
-                    if !slots.contains_key(path) {
-                        return Err(link_error(format!("`{path}` is pooled but owns no slot")));
-                    }
-                }
-                DeclPath::Let(_) => {
-                    return Err(link_error(format!(
-                        "`{path}` is exported as an object, but a `let` owns none"
-                    )));
-                }
-            }
-        }
-        Ok(declared)
-    }
 }
 
 /// What a dependency slot binds to: a package, or — through an anonymous
@@ -719,16 +745,93 @@ fn anonymous_export(vm: &BexVm, declaration: HeapPtr, path: &DeclPath) -> Option
     exported.then_some(declaration)
 }
 
+/// The tables a path resolves through: the image being built when the slot
+/// is the package itself, the live package object for a dependency. A
+/// package's own declarations are never read off its object mid-load —
+/// they are not there until [`publish`].
+#[derive(Clone, Copy)]
+enum Tables<'a> {
+    Own(&'a Image),
+    Dependency(&'a Package),
+}
+
+impl Tables<'_> {
+    fn class(self, item: &LocalName) -> Option<HeapPtr> {
+        match self {
+            Self::Own(image) => image.classes.get(item).copied(),
+            Self::Dependency(package) => package.classes.get(item).copied(),
+        }
+    }
+
+    fn enum_(self, item: &LocalName) -> Option<HeapPtr> {
+        match self {
+            Self::Own(image) => image.enums.get(item).copied(),
+            Self::Dependency(package) => package.enums.get(item).copied(),
+        }
+    }
+
+    fn interface(self, item: &LocalName) -> Option<HeapPtr> {
+        match self {
+            Self::Own(image) => image.interfaces.get(item).copied(),
+            Self::Dependency(package) => package.interfaces.get(item).copied(),
+        }
+    }
+
+    fn type_alias(self, item: &LocalName) -> Option<HeapPtr> {
+        match self {
+            Self::Own(image) => image.type_aliases.get(item).copied(),
+            Self::Dependency(package) => package.type_aliases.get(item).copied(),
+        }
+    }
+
+    /// The slot `path` owns.
+    fn slot(self, path: &DeclPath) -> Option<u32> {
+        match self {
+            Self::Own(image) => image.globals.get(path).copied(),
+            Self::Dependency(package) => package.globals.get(path).copied(),
+        }
+    }
+
+    /// The value in the cell at `ordinal`.
+    fn cell(self, vm: &BexVm, ordinal: u32) -> Option<Value> {
+        match self {
+            Self::Own(image) => image.cells.get(ordinal as usize).map(AtomicValueSlot::load),
+            Self::Dependency(package) => cell_value(vm, package, ordinal),
+        }
+    }
+}
+
+/// The tables `dep` resolves through, or the declaration it binds.
+fn bound_tables<'a>(
+    vm: &'a BexVm,
+    image: &'a Image,
+    package_ptr: HeapPtr,
+    slots: &[Bound],
+    dep: DepSlot,
+) -> Result<Tables<'a>, HeapPtr> {
+    match slot_binding(package_ptr, slots, dep) {
+        Bound::Package(owner) if owner == package_ptr => Ok(Tables::Own(image)),
+        Bound::Package(owner) => {
+            let Object::Package(package) = vm.get_object(owner) else {
+                unreachable!("a bound dependency slot is a package")
+            };
+            Ok(Tables::Dependency(package))
+        }
+        Bound::Declaration(declaration) => Err(declaration),
+    }
+}
+
 /// The object `key` names, through the bound package's tables.
 fn resolve_object(
     vm: &BexVm,
+    image: &Image,
     package_ptr: HeapPtr,
     slots: &[Bound],
     key: &DeclKey,
 ) -> Result<HeapPtr, VmRustFnError> {
-    let owner = match slot_binding(package_ptr, slots, key.dep) {
-        Bound::Package(owner) => owner,
-        Bound::Declaration(declaration) => {
+    let tables = match bound_tables(vm, image, package_ptr, slots, key.dep) {
+        Ok(tables) => tables,
+        Err(declaration) => {
             return anonymous_export(vm, declaration, &key.path).ok_or_else(|| {
                 link_error(format!(
                     "`{}` is not the declaration bound at dependency slot {}",
@@ -737,46 +840,40 @@ fn resolve_object(
             });
         }
     };
-    let Object::Package(package) = vm.get_object(owner) else {
-        unreachable!("a bound dependency slot is a package")
-    };
-    let found =
-        match &key.path {
-            DeclPath::Class(item) => package.classes.get(item).copied(),
-            DeclPath::Enum(item) => package.enums.get(item).copied(),
-            DeclPath::Interface(item) => package.interfaces.get(item).copied(),
-            DeclPath::TypeAlias(item) => package.type_aliases.get(item).copied(),
-            DeclPath::Function(FnPath::Free(_)) => package
-                .globals
-                .get(&key.path)
-                .and_then(|&cell| cell_value(vm, package, cell))
-                .and_then(|value| value.as_object_ptr()),
-            DeclPath::Function(FnPath::Method { class, name }) => package
-                .classes
-                .get(class)
-                .and_then(|&class_ptr| match vm.get_object(class_ptr) {
+    let found = match &key.path {
+        DeclPath::Class(item) => tables.class(item),
+        DeclPath::Enum(item) => tables.enum_(item),
+        DeclPath::Interface(item) => tables.interface(item),
+        DeclPath::TypeAlias(item) => tables.type_alias(item),
+        DeclPath::Function(FnPath::Free(_)) => tables
+            .slot(&key.path)
+            .and_then(|cell| tables.cell(vm, cell))
+            .and_then(|value| value.as_object_ptr()),
+        DeclPath::Function(FnPath::Method { class, name }) => {
+            tables
+                .class(class)
+                .and_then(|class_ptr| match vm.get_object(class_ptr) {
                     Object::Class(class) => class
                         .methods
                         .get(name)
                         .and_then(|method| live(method.function_ptr)),
                     _ => None,
-                }),
-            DeclPath::InterfaceBody(body) => {
-                match resolve_body(vm, package, owner == package_ptr, &key.path, body)? {
-                    Some(BoundBody::Own(cell)) => {
-                        cell_value(vm, package, cell).and_then(|value| value.as_object_ptr())
-                    }
-                    Some(BoundBody::Function(function)) => Some(function),
-                    None => None,
-                }
-            }
-            DeclPath::Let(_) => {
-                return Err(link_error(format!(
-                    "`{}` is a `let`, which owns no object",
-                    key.path
-                )));
-            }
-        };
+                })
+        }
+        DeclPath::InterfaceBody(body) => match resolve_body(vm, tables, &key.path, body)? {
+            Some(BoundBody::Own(cell)) => tables
+                .cell(vm, cell)
+                .and_then(|value| value.as_object_ptr()),
+            Some(BoundBody::Function(function)) => Some(function),
+            None => None,
+        },
+        DeclPath::Let(_) => {
+            return Err(link_error(format!(
+                "`{}` is a `let`, which owns no object",
+                key.path
+            )));
+        }
+    };
     found.ok_or_else(|| {
         link_error(format!(
             "`{}` names no declaration of the package bound at dependency slot {}",
@@ -804,25 +901,23 @@ pub(super) fn cell_value(vm: &BexVm, package: &Package, ordinal: u32) -> Option<
     }
 }
 
-/// The body `key` names in `package`. Within its own package (`own`) a body
-/// is addressed through its package-private slot entry; from a dependency a
+/// The body `key` names in `tables`. Within its own package a body is
+/// addressed through its package-private slot entry; from a dependency a
 /// default body is the function its interface object binds, and a provided
 /// body is refused — it is dispatched through its rule, never addressed.
 fn resolve_body(
     vm: &BexVm,
-    package: &Package,
-    own: bool,
+    tables: Tables<'_>,
     path: &DeclPath,
     key: &BodyKey,
 ) -> Result<Option<BoundBody>, VmRustFnError> {
-    if own {
-        return Ok(package.globals.get(path).copied().map(BoundBody::Own));
+    if let Tables::Own(image) = tables {
+        return Ok(image.globals.get(path).copied().map(BoundBody::Own));
     }
     match key {
-        BodyKey::Default { interface, method } => Ok(package
-            .interfaces
-            .get(interface)
-            .and_then(|&interface_ptr| match vm.get_object(interface_ptr) {
+        BodyKey::Default { interface, method } => Ok(tables
+            .interface(interface)
+            .and_then(|interface_ptr| match vm.get_object(interface_ptr) {
                 Object::Interface(interface) => interface
                     .methods
                     .iter()
@@ -850,25 +945,19 @@ enum GlobalBinding {
 
 fn resolve_global(
     vm: &BexVm,
+    image: &Image,
     package_ptr: HeapPtr,
     slots: &[Bound],
     key: &DeclKey,
 ) -> Result<GlobalBinding, VmRustFnError> {
-    let owner = match slot_binding(package_ptr, slots, key.dep) {
-        Bound::Package(owner) => owner,
-        Bound::Declaration(_) => {
-            return Err(link_error(format!(
-                "`{}` names a cell of a declaration, which owns none",
-                key.path
-            )));
-        }
-    };
-    let Object::Package(package) = vm.get_object(owner) else {
-        unreachable!("a bound dependency slot is a package")
-    };
-    let own = owner == package_ptr;
+    let tables = bound_tables(vm, image, package_ptr, slots, key.dep).map_err(|_| {
+        link_error(format!(
+            "`{}` names a cell of a declaration, which owns none",
+            key.path
+        ))
+    })?;
     if let DeclPath::InterfaceBody(body) = &key.path {
-        return match resolve_body(vm, package, own, &key.path, body)? {
+        return match resolve_body(vm, tables, &key.path, body)? {
             Some(BoundBody::Own(cell)) => Ok(GlobalBinding::Slot(cell as usize)),
             Some(BoundBody::Function(function)) => {
                 Ok(GlobalBinding::Value(Value::object(function)))
@@ -879,16 +968,17 @@ fn resolve_global(
             ))),
         };
     }
-    let slot = *package.globals.get(&key.path).ok_or_else(|| {
+    let slot = tables.slot(&key.path).ok_or_else(|| {
         link_error(format!(
             "`{}` owns no slot of the package bound at dependency slot {}",
             key.path, key.dep.0
         ))
     })?;
-    if own {
+    if let Tables::Own(_) = tables {
         return Ok(GlobalBinding::Slot(slot as usize));
     }
-    cell_value(vm, package, slot)
+    tables
+        .cell(vm, slot)
         .map(GlobalBinding::Value)
         .ok_or_else(|| link_error(format!("`{}` names a slot outside its package", key.path)))
 }

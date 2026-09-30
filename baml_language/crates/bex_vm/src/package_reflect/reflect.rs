@@ -31,7 +31,7 @@ use indexmap::IndexMap;
 use super::{
     BamlClassPackage, BamlClassSession, BamlPackageReflect, Continuation, ImplResolver,
     NativeCallResult, PackageReflectImpl, copy,
-    graft::{LoadTarget, load_package},
+    graft::{Commit, LoadTarget, load_package},
 };
 use crate::{
     BexVm,
@@ -1057,11 +1057,6 @@ impl BamlClassPackage for PackageReflectImpl {
                 Ok(loaded) => loaded,
                 Err(error) => return error.into(),
             };
-        let Object::Package(package) = vm.get_object_mut(package_ptr) else {
-            unreachable!("package was just allocated")
-        };
-        package.test_init = loaded.test_init;
-        package.init = loaded.init;
 
         // Linking is complete. First telemetry observation may now register
         // owned definitions; imported functions keep their IDs and registration.
@@ -1576,45 +1571,60 @@ impl Continuation for SessionExecution {
 }
 
 /// Graft one submission onto the session package: load it (earlier
-/// submissions bind as `SELF` imports, a `let` to its cell), then pair each
-/// recorded initializer with the step it commits.
+/// submissions bind as `SELF` imports, each recorded initializer to the cell
+/// it commits into), then pair each commit with the step it belongs to.
 fn graft_session_submission(
     vm: &mut BexVm,
     package_ptr: HeapPtr,
     artifact: &RuntimeCompileArtifact,
     metadata: &RuntimeSessionCompileArtifact,
 ) -> Result<Vec<SessionAction>, VmRustFnError> {
-    let loaded = load_package(
-        vm,
-        package_ptr,
-        LoadTarget::Session,
-        &artifact.emitted,
-        &metadata.initializers,
-    )?;
     let step_by_global: HashMap<&LocalName, usize> = metadata
         .steps
         .iter()
         .enumerate()
         .map(|(index, step)| (&step.global, index))
         .collect();
+    // An assignment step commits into the visible binding it names, not the
+    // generated `let` receiving its value; the loader binds each commit to
+    // a cell the session owns, or refuses the submission.
+    let steps: Vec<Option<usize>> = metadata
+        .initializers
+        .iter()
+        .map(|initializer| step_by_global.get(&initializer.target).copied())
+        .collect();
+    let commits: Vec<Commit<'_>> = metadata
+        .initializers
+        .iter()
+        .zip(&steps)
+        .map(|(initializer, step)| Commit {
+            helper: initializer.helper,
+            target: step
+                .and_then(|index| metadata.steps[index].commit_global.as_ref())
+                .unwrap_or(&initializer.target),
+        })
+        .collect();
+    let loaded = load_package(
+        vm,
+        package_ptr,
+        LoadTarget::Session,
+        &artifact.emitted,
+        &commits,
+    )?;
+    let actions = loaded
+        .commits
+        .iter()
+        .zip(&steps)
+        .map(|(&(helper, target), &step)| SessionAction {
+            helper,
+            target,
+            step,
+        })
+        .collect();
+    // The load published the image; what follows holds no heap pointers.
     let Object::Package(package) = vm.get_object_mut(package_ptr) else {
         unreachable!("Session payload is a Package")
     };
-    let mut actions = Vec::with_capacity(loaded.initializers.len());
-    for ((helper, slot), initializer) in loaded.initializers.iter().zip(&metadata.initializers) {
-        let step = step_by_global.get(&initializer.target).copied();
-        // An assignment commits into the cell it names, not the step's own
-        // slot.
-        let target = step
-            .and_then(|index| metadata.steps[index].commit_global.as_ref())
-            .and_then(|commit| package.globals.get(&DeclPath::Let(commit.clone())).copied())
-            .map_or(*slot, |ordinal| ordinal as usize);
-        actions.push(SessionAction {
-            helper: *helper,
-            target,
-            step,
-        });
-    }
     package.surface = ExportSurface::Compiled(artifact.interface_blob.clone());
     let Some(state) = package.session.as_deref_mut() else {
         unreachable!("Session graft target is a Session package")
@@ -1627,11 +1637,6 @@ fn graft_session_submission(
     }
     state.visible.extend(metadata.declarations.clone());
     package.diagnostics.clone_from(&artifact.diagnostics);
-    // The tables above now hold fresh young pointers inside a package object
-    // that may itself have been promoted long ago. Without dirtying its card,
-    // a minor collection would never rescan it and the new declarations
-    // would be collected out from under the session.
-    vm.tlab.heap().conservative_write_barrier(package_ptr);
     Ok(actions)
 }
 

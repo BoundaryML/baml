@@ -413,6 +413,123 @@ async fn cancelled_session_eval_releases_lease_and_preserves_committed_prefix() 
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
+/// Two sessions and a submission compiled on one of them, finished on the
+/// other: the assignment commits into a cell only the first owns, so the
+/// second refuses the submission. `refused` returns that second session;
+/// `control` returns one that never saw a foreign submission.
+const REFUSED_SUBMISSION_PROBE: &str = r#####"
+function refused() -> reflect.Session {
+  let a = reflect.Session.new();
+  a.eval(`let n = 5`);
+  let b = reflect.Session.new();
+  b.eval(`let m = 1`);
+  let artifact = a._compile<unknown>(`n = 9`);
+  let _ = b._finish<unknown>(artifact) catch (e) {
+    baml.errors.InvalidArgument => { null },
+  };
+  b
+}
+
+function control() -> reflect.Session {
+  let b = reflect.Session.new();
+  b.eval(`let m = 1`);
+  b
+}
+"#####;
+
+/// Everything a load writes into a package, rendered for comparison.
+#[derive(Debug, PartialEq, Eq)]
+struct PackageShape {
+    classes: Vec<String>,
+    enums: Vec<String>,
+    interfaces: Vec<String>,
+    type_aliases: Vec<String>,
+    globals: Vec<(String, u32)>,
+    impl_rules: usize,
+    cells: usize,
+    objects: usize,
+    history: Vec<String>,
+    visible: Vec<String>,
+}
+
+async fn session_shape(engine: &Arc<BexEngine>, name: &str) -> PackageShape {
+    let value = engine
+        .call_function(
+            name,
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            false,
+        )
+        .await
+        .expect("the probe returns a session");
+    let BexExternalValue::Handle(handle) = value else {
+        panic!("expected a session handle, got {value:?}")
+    };
+    let inactive = engine.heap_permit_manager().new_permit(()).await;
+    let active = inactive.acquire().await;
+    let wrapper_ptr = engine
+        .resolve_handle(active.proof(), &handle)
+        .expect("the handle roots the session wrapper");
+    // SAFETY: the active permit excludes collection; the handle roots the wrapper.
+    let Object::Instance(wrapper) = (unsafe { wrapper_ptr.get() }) else {
+        panic!("a Session handle wraps an instance")
+    };
+    let package_ptr = wrapper
+        .load_field(0)
+        .as_object_ptr()
+        .expect("the wrapper holds its package");
+    // SAFETY: the wrapper roots its package payload under the same permit.
+    let Object::Package(package) = (unsafe { package_ptr.get() }) else {
+        panic!("a Session's payload is a package")
+    };
+    let names = |table: &indexmap::IndexMap<bex_vm_types::types::LocalName, _>| {
+        table.keys().map(ToString::to_string).collect::<Vec<_>>()
+    };
+    let state = package.session().expect("the payload is a session");
+    PackageShape {
+        classes: names(&package.classes),
+        enums: names(&package.enums),
+        interfaces: names(&package.interfaces),
+        type_aliases: names(&package.type_aliases),
+        globals: package
+            .globals
+            .iter()
+            .map(|(path, slot)| (path.to_string(), *slot))
+            .collect(),
+        impl_rules: package.impl_rules.values().map(Vec::len).sum(),
+        cells: package.slots.own().map_or(0, <[_]>::len),
+        objects: package.objects.own().map_or(0, <[_]>::len),
+        history: state.history.keys().cloned().collect(),
+        visible: state.visible.keys().cloned().collect(),
+    }
+}
+
+/// A refused submission publishes nothing. The loader builds a submission's
+/// whole image before writing any of it, so a session that refuses one is,
+/// table for table, a session that never saw it — not one holding the
+/// submission's declarations, slots, or objects with its bindings and
+/// history unchanged.
+#[tokio::test]
+async fn a_refused_submission_publishes_nothing() {
+    let program = baml_db::testing::compile_source(REFUSED_SUBMISSION_PROBE);
+    let engine = Arc::new(
+        BexEngine::new_with_runtime_compiler(
+            program,
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+            bex_project::runtime_compiler(),
+        )
+        .expect("refused-submission probe engine"),
+    );
+    let refused = session_shape(&engine, "user.refused").await;
+    let control = session_shape(&engine, "user.control").await;
+    assert_eq!(refused, control);
+    assert!(
+        control.globals.iter().any(|(path, _)| path.ends_with("_m")),
+        "the control session owns its own binding: {control:?}"
+    );
+}
+
 #[tokio::test]
 async fn escaped_session_type_retains_provenance_only_while_handle_is_live() {
     let program = baml_db::testing::compile_source(S11_LIVENESS_PROBE);
