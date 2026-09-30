@@ -260,6 +260,17 @@ function leaf_client(name: string) -> ai.Client {
     return azure("gpt-6-luna", "low", 10000, 4000);
   }
 
+  // Stand-ins, not in the user's config: the test subscription has no quota
+  // for the models above yet, so these exercise the same Azure Responses path
+  // (api-key header, reasoning effort, store=false) against a gpt-5-mini
+  // deployment. Drop them once the real deployments exist.
+  if (name == "AzureGpt5MiniLow") {
+    return azure("gpt-5-mini", "low", 120000, 30000);
+  }
+  if (name == "AzureGpt5MiniMedium") {
+    return azure("gpt-5-mini", "medium", 120000, 30000);
+  }
+
   // Google AI Studio (6)
   if (name == "Gemini31FlashLiteMinimal") {
     return gemini("gemini-3.1-flash-lite", "minimal", null);

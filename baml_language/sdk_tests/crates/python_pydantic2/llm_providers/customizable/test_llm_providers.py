@@ -61,6 +61,10 @@ CLIENTS: dict[str, tuple[str, ...]] = {
     "AzureGpt56LunaMedium": _AZURE,
     "AzureGpt56TerraMedium": _AZURE,
     "AzureGpt6LunaLow": _AZURE,
+    # Stand-ins for the five above until the test subscription has quota for
+    # them; not in the user's config.
+    "AzureGpt5MiniLow": _AZURE,
+    "AzureGpt5MiniMedium": _AZURE,
     # Google AI Studio
     "Gemini31FlashLiteMinimal": _GEMINI,
     "Gemini31FlashLiteLow": _GEMINI,
@@ -80,6 +84,16 @@ CLIENTS: dict[str, tuple[str, ...]] = {
 # failure the day Bedrock streaming lands and this list needs trimming.
 _NO_STREAMING = {name for name, env in CLIENTS.items() if env is _BEDROCK}
 
+# The test Azure subscription has no quota for these models yet, so they have
+# no deployment; AzureGpt5Mini* covers the same client path in the meantime.
+_AWAITING_AZURE_QUOTA = {
+    "AzureGpt55Medium",
+    "AzureGpt56LunaLow",
+    "AzureGpt56LunaMedium",
+    "AzureGpt56TerraMedium",
+    "AzureGpt6LunaLow",
+}
+
 
 def _params(streaming: bool) -> list:
     params = []
@@ -87,6 +101,8 @@ def _params(streaming: bool) -> list:
         marks = []
         if not _LIVE:
             marks.append(pytest.mark.skip(reason="set BAML_LIVE_PROVIDER_TESTS=1"))
+        elif name in _AWAITING_AZURE_QUOTA:
+            marks.append(pytest.mark.skip(reason="no Azure deployment: awaiting quota"))
         if streaming and name in _NO_STREAMING:
             marks.append(
                 pytest.mark.xfail(reason="aws.BedrockClient cannot stream", strict=True)
@@ -197,6 +213,8 @@ _EXPECTED_REQUESTS: dict[str, tuple[str, tuple[str, ...]]] = {
     "AzureGpt56LunaMedium": (_AZURE_URL, ('"model":"gpt-5.6-luna"', '"effort":"medium"')),
     "AzureGpt56TerraMedium": (_AZURE_URL, ('"model":"gpt-5.6-terra"', '"effort":"medium"')),
     "AzureGpt6LunaLow": (_AZURE_URL, ('"model":"gpt-6-luna"', '"effort":"low"')),
+    "AzureGpt5MiniLow": (_AZURE_URL, ('"model":"gpt-5-mini"', '"effort":"low"', '"store":false')),
+    "AzureGpt5MiniMedium": (_AZURE_URL, ('"model":"gpt-5-mini"', '"effort":"medium"', '"store":false')),
     "Gemini31FlashLiteMinimal": (_GEMINI_URL, ('"thinkingLevel":"minimal"',)),
     "Gemini31FlashLiteLow": (_GEMINI_URL, ('"thinkingLevel":"low"',)),
     "Gemini35FlashLiteMinimal": (_GEMINI_URL, ('"thinkingLevel":"minimal"', '"temperature":0.0')),
