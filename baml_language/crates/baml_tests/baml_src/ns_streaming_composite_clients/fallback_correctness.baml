@@ -561,7 +561,16 @@ function fallback_timeout_case(streaming: bool, first_token: bool) -> string {
                                 baml.errors.Timeout => "Timeout",
                                 _ => fallback_error(e),
                             };
-                            `${actual}|${slow_json.request_count() + slow_sse.request_count()}|${backup_json.request_count() + backup_sse.request_count()}`
+                            // Under executor load a request deadline can expire before the
+                            // server receives anything. Do not require that dispatch wins
+                            // the race; forbid primary replay and require exact backup use.
+                            let primary_requests = slow_json.request_count() + slow_sse.request_count();
+                            if (first_token) {
+                                assert.equal(primary_requests, 1);
+                            } else {
+                                assert.is_true(primary_requests <= 1);
+                            }
+                            `${actual}|${backup_json.request_count() + backup_sse.request_count()}`
                         })
                     })
                 },
@@ -574,22 +583,22 @@ function fallback_timeout_case(streaming: bool, first_token: bool) -> string {
 
 function fallback_timeout_gap_case(streaming: bool, first_token: bool) -> bool {
     let actual = fallback_timeout_case(streaming, first_token);
-    assert.equal(actual, "Timeout|1|0");
-    if (actual != "winner|1|1") {
-        throw baml.panics.AssertionFailed { message: "v0 fallback parity: winner|1|1" };
+    assert.equal(actual, "Timeout|0");
+    if (actual != "winner|1") {
+        throw baml.panics.AssertionFailed { message: "v0 fallback parity: winner|1" };
     }
     true
 }
 
-test "fallback_request_timeout_plain_v0_parity" with fallback_known_gap("winner|1|1") {
+test "fallback_request_timeout_plain_v0_parity" with fallback_known_gap("winner|1") {
     assert.is_true(fallback_timeout_gap_case(false, false))
 }
 
-test "fallback_request_timeout_stream_v0_parity" with fallback_known_gap("winner|1|1") {
+test "fallback_request_timeout_stream_v0_parity" with fallback_known_gap("winner|1") {
     assert.is_true(fallback_timeout_gap_case(true, false))
 }
 
-test "fallback_first_token_timeout_v0_parity" with fallback_known_gap("winner|1|1") {
+test "fallback_first_token_timeout_v0_parity" with fallback_known_gap("winner|1") {
     assert.is_true(fallback_timeout_gap_case(true, true))
 }
 
