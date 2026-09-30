@@ -4,9 +4,15 @@
 //! shared objects and cycles are preserved rather than expanded. Every length
 //! is checked against the remaining input and the decode budget before any
 //! allocation. The blob ID is recomputed with hash format 3 while reading and
-//! must equal the header's ID; the header alone proves nothing. Objects must be
-//! numbered in first-reference order, and every object and child blob must be
-//! referenced, so each blob has exactly one accepted encoding.
+//! must equal the header's ID; the header alone proves nothing. Objects and
+//! child blobs must be numbered in first-reference order, and every one of
+//! them must be referenced, so a blob's numbering has exactly one accepted
+//! order. Well-formed content a producer would never write, such as a byte
+//! array longer than its recorded original length, is still accepted.
+//!
+//! A blob is verified alone: a value stored in another blob stays a reference
+//! to that child, and nothing here reads the child. Leaf contents are shared
+//! handles, so a decoded value is cheap to copy out of its blob.
 //!
 //! Only the current format is read. Earlier formats are rejected by version:
 //! format 1 types carry attributes that no longer exist, and format 2 numbers
@@ -109,6 +115,10 @@ impl std::error::Error for BlobError {}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NodeId(pub u32);
 
+/// A blob's position in the child table of the blob that names it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ChildIndex(pub u32);
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum DecodedValue {
     Null,
@@ -116,16 +126,24 @@ pub enum DecodedValue {
     Bool(bool),
     Int(i64),
     Float(f64),
-    String(Box<str>),
-    Bigint(Box<BigInt>),
+    String(Arc<str>),
+    Bigint(Arc<BigInt>),
     Object(NodeId),
-    Type(Box<TypeDescription>),
+    Type(Arc<TypeDescription>),
     Enum {
         declaration: NodeId,
         variant: u32,
-        name: Box<str>,
+        name: Arc<str>,
     },
     Truncated(Limit),
+    /// The root value of a child blob.
+    External(ChildIndex),
+    /// An object of a child blob other than its root: a member of a cycle
+    /// that the child holds whole.
+    ExternalNode {
+        child: ChildIndex,
+        node: NodeId,
+    },
 }
 
 /// Map entries or instance fields, in captured order.
@@ -204,6 +222,9 @@ impl DecodedSnapshot {
     pub fn object(&self, id: NodeId) -> &DecodedObject {
         &self.objects[id.0 as usize]
     }
+    pub fn child(&self, index: ChildIndex) -> CasId {
+        self.children[index.0 as usize]
+    }
 }
 
 /// Decode and verify one blob. `bytes` is the complete file contents.
@@ -274,6 +295,12 @@ fn decode(r: &mut Reader<'_, '_>) -> Result<DecodedSnapshot, BlobError> {
         0 => {
             blob_hash.byte(0);
             let value = r.value(&mut blob_hash)?;
+            if matches!(
+                value,
+                DecodedValue::External(_) | DecodedValue::ExternalNode { .. }
+            ) {
+                return Err(invalid("a blob's root value is stored in it".into()));
+            }
             DecodedRoot::Value(value)
         }
         1 => {
@@ -463,15 +490,15 @@ impl<'a> Reader<'a, '_> {
         Ok(n)
     }
     /// UTF-8 text and its content hash (`BexStr::content_hash`).
-    fn text(&mut self) -> Result<(Box<str>, u128), BlobError> {
+    fn text(&mut self) -> Result<(&'a str, u128), BlobError> {
         let len = self.u32()? as usize;
         let bytes = self.take(len)?;
         self.charge(len)?;
         let text = std::str::from_utf8(bytes).map_err(|_| invalid("string is not UTF-8".into()))?;
-        Ok((text.into(), xxhash_rust::xxh3::xxh3_128(bytes)))
+        Ok((text, xxhash_rust::xxh3::xxh3_128(bytes)))
     }
     /// UTF-8 text and its string-leaf digest.
-    fn string(&mut self) -> Result<(Box<str>, Digest), BlobError> {
+    fn string(&mut self) -> Result<(&'a str, Digest), BlobError> {
         let (text, content) = self.text()?;
         let mut h = Hasher::new(HashDomain::String);
         h.string_parts(text.len(), content);
@@ -531,6 +558,25 @@ impl<'a> Reader<'a, '_> {
             ))),
         }
     }
+    /// A child blob named by its slot, in the same first-use discipline as
+    /// object references.
+    fn child(&mut self) -> Result<ChildIndex, BlobError> {
+        let slot = self.u32()?;
+        if slot >= self.children {
+            return Err(invalid(format!("child reference {slot} out of range")));
+        }
+        match slot.cmp(&self.children_referenced) {
+            std::cmp::Ordering::Less => Ok(ChildIndex(slot)),
+            std::cmp::Ordering::Equal => {
+                self.children_referenced += 1;
+                Ok(ChildIndex(slot))
+            }
+            std::cmp::Ordering::Greater => Err(invalid(format!(
+                "child reference {slot} precedes a first reference to {}",
+                self.children_referenced
+            ))),
+        }
+    }
     /// One inline value, hashed into `h` exactly as hash format 3 does.
     fn value(&mut self, h: &mut Hasher) -> Result<DecodedValue, BlobError> {
         let tag = self.u8()?;
@@ -556,12 +602,12 @@ impl<'a> Reader<'a, '_> {
             5 => {
                 let (text, digest) = self.string()?;
                 h.digest(digest);
-                DecodedValue::String(text)
+                DecodedValue::String(text.into())
             }
             6 => {
                 let (n, digest) = self.bigint()?;
                 h.digest(digest);
-                DecodedValue::Bigint(Box::new(n))
+                DecodedValue::Bigint(Arc::new(n))
             }
             7 => {
                 let id = self.reference()?;
@@ -571,7 +617,7 @@ impl<'a> Reader<'a, '_> {
             8 => {
                 let (ty, digest) = self.ty()?;
                 h.digest(digest);
-                DecodedValue::Type(Box::new(ty))
+                DecodedValue::Type(Arc::new(ty))
             }
             9 => {
                 let declaration = self.reference()?;
@@ -583,13 +629,32 @@ impl<'a> Reader<'a, '_> {
                 DecodedValue::Enum {
                     declaration,
                     variant,
-                    name,
+                    name: name.into(),
                 }
             }
             10 => {
                 let limit = self.limit()?;
                 h.byte(limit_tag(limit));
                 DecodedValue::Truncated(limit)
+            }
+            11 => {
+                let child = self.child()?;
+                h.number(u64::from(child.0));
+                DecodedValue::External(child)
+            }
+            12 => {
+                let child = self.child()?;
+                let node = self.u32()?;
+                // A child's root is named by its blob alone.
+                if node == 0 {
+                    return Err(invalid("a child's root is referenced as a node".into()));
+                }
+                h.number(u64::from(child.0));
+                h.number(u64::from(node));
+                DecodedValue::ExternalNode {
+                    child,
+                    node: NodeId(node),
+                }
             }
             other => return Err(invalid(format!("value tag {other}"))),
         })
@@ -616,7 +681,7 @@ impl<'a> Reader<'a, '_> {
             let (key, content) = self.text()?;
             h.string_parts(key.len(), content);
             let value = self.value(&mut h)?;
-            entries.push((key, value));
+            entries.push((key.into(), value));
         }
         Ok((entries, h.finish()))
     }
@@ -758,7 +823,7 @@ impl<'a> Reader<'a, '_> {
                 let name = if has_name {
                     let (name, digest) = self.string()?;
                     h.digest(digest);
-                    Some(name)
+                    Some(name.into())
                 } else {
                     None
                 };
@@ -882,7 +947,9 @@ fn validate_references(snapshot: &DecodedSnapshot) -> Result<(), BlobError> {
         | DecodedValue::Bigint(_)
         | DecodedValue::Object(_)
         | DecodedValue::Type(_)
-        | DecodedValue::Truncated(_) => Ok(()),
+        | DecodedValue::Truncated(_)
+        | DecodedValue::External(_)
+        | DecodedValue::ExternalNode { .. } => Ok(()),
     };
     match &snapshot.root {
         DecodedRoot::Value(value) => check_value(value)?,

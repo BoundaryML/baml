@@ -1,14 +1,18 @@
 //! Bounded semantic equality, independent of CAS IDs, object IDs and rendering.
-//! Build borrowed trees so sharing is immaterial; cycles and opaque values are
-//! explicitly unavailable. Validate both operands before deciding inequality.
-use std::collections::{BTreeMap, HashSet};
+//! Build borrowed trees so sharing and the blobs a value is stored in are
+//! immaterial; cycles and opaque values are explicitly unavailable. Validate
+//! both operands before deciding inequality.
+use std::{
+    collections::{BTreeMap, HashSet},
+    sync::Arc,
+};
 
 use btel_snapshot::{
-    DecodedName, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, NodeId,
+    CasId, DecodedName, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, NodeId,
 };
 use serde_json::Value as Json;
 
-use super::{CmpOp, Leaf, Nav, Unavailable, compare, leaf_of};
+use super::{BlobSource, CmpOp, Leaf, Nav, Unavailable, compare, leaf_of, span::Span};
 use crate::evidence::ArgumentNames;
 
 #[derive(Clone, Copy, Debug)]
@@ -17,6 +21,8 @@ pub struct Limits {
     pub max_nodes: usize,
     /// Text, keys and bytes examined across both operands, including sharing.
     pub max_bytes: usize,
+    /// Blobs read for one comparison beyond the ones its operands start in.
+    pub max_blobs: usize,
 }
 
 impl Default for Limits {
@@ -25,6 +31,7 @@ impl Default for Limits {
             max_depth: 64,
             max_nodes: 100_000,
             max_bytes: 16 << 20,
+            max_blobs: 1024,
         }
     }
 }
@@ -50,9 +57,40 @@ impl Error {
 
 #[derive(Clone, Copy)]
 pub struct Captured<'a> {
-    pub snapshot: &'a DecodedSnapshot,
-    pub nav: Nav<'a>,
+    pub nav: &'a Nav,
     pub names: Option<&'a ArgumentNames>,
+}
+
+/// What a comparison starts from, with the values to read the blobs of.
+enum Start<'a> {
+    Missing,
+    Unavailable(Unavailable),
+    Value(&'a Arc<DecodedSnapshot>, DecodedValue),
+    Arguments(&'a Arc<DecodedSnapshot>),
+}
+
+impl<'a> Start<'a> {
+    fn of(nav: &'a Nav) -> Self {
+        match nav {
+            Nav::Missing => Self::Missing,
+            Nav::Unavailable(reason) => Self::Unavailable(*reason),
+            Nav::Value(found) => Self::Value(found.blob(), found.value().into()),
+            Nav::Arguments(snapshot) => Self::Arguments(snapshot),
+        }
+    }
+
+    fn values(&self) -> Vec<(&Arc<DecodedSnapshot>, &DecodedValue)> {
+        match self {
+            Self::Missing | Self::Unavailable(_) => Vec::new(),
+            Self::Value(blob, value) => vec![(*blob, value)],
+            Self::Arguments(snapshot) => match &snapshot.root {
+                DecodedRoot::FunctionArgs { slots, .. } => {
+                    slots.iter().map(|slot| (*snapshot, slot)).collect()
+                }
+                DecodedRoot::Value(_) => Vec::new(),
+            },
+        }
+    }
 }
 
 type Fields<'a> = BTreeMap<&'a str, Value<'a>>;
@@ -105,15 +143,18 @@ fn fields_equal(a: &Fields<'_>, b: &Fields<'_>) -> bool {
 
 struct Builder<'a> {
     limits: &'a Limits,
+    span: &'a Span,
     nodes: usize,
     bytes: usize,
-    active: HashSet<NodeId>,
+    /// Objects on the path being built, each in its blob.
+    active: HashSet<(CasId, NodeId)>,
 }
 
 impl<'a> Builder<'a> {
-    fn new(limits: &'a Limits) -> Self {
+    fn new(limits: &'a Limits, span: &'a Span) -> Self {
         Self {
             limits,
+            span,
             nodes: 0,
             bytes: 0,
             active: HashSet::new(),
@@ -138,23 +179,25 @@ impl<'a> Builder<'a> {
         Ok(())
     }
 
-    fn captured<'b>(&mut self, value: Captured<'b>) -> Result<Option<Value<'b>>, Error> {
-        match value.nav {
-            Nav::Missing => Ok(None),
-            Nav::Unavailable(reason) => Err(Error::Evidence(reason)),
-            Nav::Value(v) => self.value(value.snapshot, v, 0).map(Some),
-            Nav::Arguments => {
+    fn captured(
+        &mut self,
+        start: &'a Start<'a>,
+        names: Option<&'a ArgumentNames>,
+    ) -> Result<Option<Value<'a>>, Error> {
+        match start {
+            Start::Missing => Ok(None),
+            Start::Unavailable(reason) => Err(Error::Evidence(*reason)),
+            Start::Value(blob, value) => self.value(blob, value, 0).map(Some),
+            Start::Arguments(snapshot) => {
                 let DecodedRoot::FunctionArgs {
                     parameter_count,
                     slots,
-                } = &value.snapshot.root
+                } = &snapshot.root
                 else {
                     return Err(Error::Evidence(Unavailable::WrongRoot));
                 };
                 complete(slots.len(), *parameter_count)?;
-                let names = value
-                    .names
-                    .ok_or(Error::Evidence(Unavailable::ArgumentNamesUnknown))?;
+                let names = names.ok_or(Error::Evidence(Unavailable::ArgumentNamesUnknown))?;
                 if names.slots.len() != slots.len() {
                     return Err(Error::Evidence(Unavailable::ArgumentLayoutMismatch));
                 }
@@ -166,10 +209,7 @@ impl<'a> Builder<'a> {
                         .as_deref()
                         .ok_or(Error::Evidence(Unavailable::ArgumentNamesUnknown))?;
                     self.bytes(name.len())?;
-                    if fields
-                        .insert(name, self.value(value.snapshot, v, 1)?)
-                        .is_some()
-                    {
+                    if fields.insert(name, self.value(snapshot, v, 1)?).is_some() {
                         return Err(Error::Evidence(Unavailable::ArgumentLayoutMismatch));
                     }
                 }
@@ -178,22 +218,63 @@ impl<'a> Builder<'a> {
         }
     }
 
-    fn value<'b>(
+    fn value(
         &mut self,
-        s: &'b DecodedSnapshot,
-        v: &'b DecodedValue,
+        s: &'a DecodedSnapshot,
+        v: &'a DecodedValue,
         depth: usize,
-    ) -> Result<Value<'b>, Error> {
+    ) -> Result<Value<'a>, Error> {
         self.node(depth)?;
         match v {
-            DecodedValue::Object(id) => {
-                if !self.active.insert(*id) {
-                    return Err(Error::Cycle);
-                }
-                let result = self.object(s, s.object(*id), depth);
-                self.active.remove(id);
-                result
+            DecodedValue::External(child) => {
+                let (child, root) = self.span.root_of(s, *child).map_err(Error::Evidence)?;
+                self.stored(child, root, depth)
             }
+            DecodedValue::ExternalNode { child, node } => {
+                let (child, id) = self
+                    .span
+                    .node_of(s, *child, *node)
+                    .map_err(Error::Evidence)?;
+                self.reference(child, id, depth)
+            }
+            DecodedValue::Null
+            | DecodedValue::OmittedArg
+            | DecodedValue::Bool(_)
+            | DecodedValue::Int(_)
+            | DecodedValue::Float(_)
+            | DecodedValue::String(_)
+            | DecodedValue::Bigint(_)
+            | DecodedValue::Object(_)
+            | DecodedValue::Type(_)
+            | DecodedValue::Enum { .. }
+            | DecodedValue::Truncated(_) => self.stored(s, v, depth),
+        }
+    }
+
+    fn reference(
+        &mut self,
+        s: &'a DecodedSnapshot,
+        id: NodeId,
+        depth: usize,
+    ) -> Result<Value<'a>, Error> {
+        let key = (s.id, id);
+        if !self.active.insert(key) {
+            return Err(Error::Cycle);
+        }
+        let result = self.object(s, s.object(id), depth);
+        self.active.remove(&key);
+        result
+    }
+
+    /// A value in the blob that stores it.
+    fn stored(
+        &mut self,
+        s: &'a DecodedSnapshot,
+        v: &'a DecodedValue,
+        depth: usize,
+    ) -> Result<Value<'a>, Error> {
+        match v {
+            DecodedValue::Object(id) => self.reference(s, *id, depth),
             DecodedValue::Enum {
                 declaration, name, ..
             } => {
@@ -217,15 +298,19 @@ impl<'a> Builder<'a> {
                 self.bytes(usize::try_from(n.bits().div_ceil(8)).map_err(|_| Error::Limit)?)?;
                 Ok(Value::Scalar(Leaf::Bigint(n)))
             }
+            // A blob's root value is stored in it.
+            DecodedValue::External(_) | DecodedValue::ExternalNode { .. } => {
+                Err(Error::Evidence(super::span::BROKEN_REFERENCE))
+            }
         }
     }
 
-    fn declaration<'b>(
+    fn declaration(
         &mut self,
-        s: &'b DecodedSnapshot,
+        s: &'a DecodedSnapshot,
         id: NodeId,
         expected_enum: bool,
-    ) -> Result<&'b DecodedName, Error> {
+    ) -> Result<&'a DecodedName, Error> {
         match s.object(id) {
             DecodedObject::Declaration { name, is_enum, .. } if *is_enum == expected_enum => {
                 // Names, not runtime-local type tags, are the old query identity.
@@ -246,13 +331,13 @@ impl<'a> Builder<'a> {
         }
     }
 
-    fn fields<'b>(
+    fn fields(
         &mut self,
-        s: &'b DecodedSnapshot,
-        entries: &'b [(Box<str>, DecodedValue)],
+        s: &'a DecodedSnapshot,
+        entries: &'a [(Box<str>, DecodedValue)],
         original_len: u64,
         depth: usize,
-    ) -> Result<Fields<'b>, Error> {
+    ) -> Result<Fields<'a>, Error> {
         complete(entries.len(), original_len)?;
         let mut fields = BTreeMap::new();
         for (key, v) in entries {
@@ -267,12 +352,12 @@ impl<'a> Builder<'a> {
         Ok(fields)
     }
 
-    fn object<'b>(
+    fn object(
         &mut self,
-        s: &'b DecodedSnapshot,
-        object: &'b DecodedObject,
+        s: &'a DecodedSnapshot,
+        object: &'a DecodedObject,
         depth: usize,
-    ) -> Result<Value<'b>, Error> {
+    ) -> Result<Value<'a>, Error> {
         Ok(match object {
             DecodedObject::Uint8Array { data, original_len } => {
                 complete(data.len(), *original_len)?;
@@ -316,7 +401,7 @@ impl<'a> Builder<'a> {
         })
     }
 
-    fn json<'b>(&mut self, json: &'b Json, depth: usize) -> Result<Value<'b>, Error> {
+    fn json(&mut self, json: &'a Json, depth: usize) -> Result<Value<'a>, Error> {
         self.node(depth)?;
         Ok(match json {
             Json::Null => Value::Scalar(Leaf::Null),
@@ -362,6 +447,7 @@ fn complete(captured: usize, original: u64) -> Result<(), Error> {
 }
 
 pub fn captured(
+    source: &(impl BlobSource + ?Sized),
     left: Captured<'_>,
     op: CmpOp,
     right: Captured<'_>,
@@ -376,13 +462,20 @@ pub fn captured(
         }
         return Ok(compare(a, op, b));
     }
-    let mut builder = Builder::new(limits);
-    let a = builder.captured(left)?;
-    let b = builder.captured(right)?;
+    let (from_left, from_right) = (Start::of(left.nav), Start::of(right.nav));
+    let span = Span::load(
+        source,
+        from_left.values().into_iter().chain(from_right.values()),
+        limits.max_blobs,
+    );
+    let mut builder = Builder::new(limits, &span);
+    let a = builder.captured(&from_left, left.names)?;
+    let b = builder.captured(&from_right, right.names)?;
     Ok(a.zip(b).map(|(a, b)| a.equal(&b) == (op == CmpOp::Eq)))
 }
 
 pub fn json(
+    source: &(impl BlobSource + ?Sized),
     left: Captured<'_>,
     op: CmpOp,
     right: &Json,
@@ -391,8 +484,10 @@ pub fn json(
     if !op.is_equality() {
         return Err(Error::Unsupported);
     }
-    let mut builder = Builder::new(limits);
-    let a = builder.captured(left)?;
+    let from_left = Start::of(left.nav);
+    let span = Span::load(source, from_left.values(), limits.max_blobs);
+    let mut builder = Builder::new(limits, &span);
+    let a = builder.captured(&from_left, left.names)?;
     let b = builder.json(right, 0)?;
     Ok(a.map(|a| a.equal(&b) == (op == CmpOp::Eq)))
 }

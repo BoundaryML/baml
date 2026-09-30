@@ -3,7 +3,27 @@ use btel_snapshot::{CasId, DecodedName, DecodedRoot, TypeDescription};
 use serde_json::json;
 
 use super::*;
-use crate::evidence::SlotName;
+use crate::{cas::CasUnavailable, evidence::SlotName};
+
+/// Blobs by ID, as a CAS directory would hold them.
+#[derive(Default)]
+struct Blobs(HashMap<CasId, Result<Arc<DecodedSnapshot>, CasUnavailable>>);
+impl BlobSource for Blobs {
+    fn load(&self, id: CasId) -> Result<Arc<DecodedSnapshot>, CasUnavailable> {
+        self.0
+            .get(&id)
+            .cloned()
+            .unwrap_or(Err(CasUnavailable::Missing))
+    }
+}
+
+/// What navigation found, when it found a value.
+fn found(nav: &Nav) -> Option<DecodedValue> {
+    match nav {
+        Nav::Value(found) => Some(found.value().into()),
+        Nav::Arguments(_) | Nav::Missing | Nav::Unavailable(_) => None,
+    }
+}
 
 fn ty() -> TypeDescription {
     TypeDescription {
@@ -17,7 +37,7 @@ fn s(text: &str) -> DecodedValue {
 }
 
 /// args: (customer: Customer{name, age, items: [ {name}, shared ], tags}, note: omitted)
-fn snapshot() -> DecodedSnapshot {
+fn snapshot() -> Arc<DecodedSnapshot> {
     use DecodedObject as O;
     use DecodedValue as V;
     let objects = vec![
@@ -66,14 +86,14 @@ fn snapshot() -> DecodedSnapshot {
             value_type: ty(),
             entries: vec![
                 ("self".into(), V::Object(NodeId(4))),
-                ("big".into(), V::Bigint(Box::new(BigInt::from(1) << 80))),
+                ("big".into(), V::Bigint(Arc::new(BigInt::from(1) << 80))),
             ],
             original_len: 2,
         },
         // 5: cell around a scalar
         O::Cell(V::Int(99)),
     ];
-    DecodedSnapshot {
+    Arc::new(DecodedSnapshot {
         id: CasId::from_bytes([0; 16]),
         children: Vec::new(),
         root: DecodedRoot::FunctionArgs {
@@ -81,7 +101,7 @@ fn snapshot() -> DecodedSnapshot {
             slots: vec![V::Object(NodeId(1)), V::OmittedArg],
         },
         objects,
-    }
+    })
 }
 
 fn names() -> ArgumentNames {
@@ -109,8 +129,15 @@ fn path(segments: &[&str]) -> Vec<Segment> {
         .collect()
 }
 
-fn nav<'a>(snapshot: &'a DecodedSnapshot, names: Option<&ArgumentNames>, p: &[&str]) -> Nav<'a> {
-    navigate(snapshot, Root::Arguments, names, &path(p))
+fn nav(snapshot: &Arc<DecodedSnapshot>, names: Option<&ArgumentNames>, p: &[&str]) -> Nav {
+    navigate(
+        &Blobs::default(),
+        snapshot,
+        Root::Arguments,
+        names,
+        &path(p),
+        0,
+    )
 }
 
 #[test]
@@ -118,16 +145,16 @@ fn named_arguments_and_nested_paths_distinguish_null_missing_and_unavailable() {
     let snap = snapshot();
     let n = names();
     assert_eq!(
-        nav(&snap, Some(&n), &["customer", "age"]),
-        Nav::Value(&DecodedValue::Int(30))
+        found(&nav(&snap, Some(&n), &["customer", "age"])),
+        Some(DecodedValue::Int(30))
     );
     assert_eq!(
-        nav(&snap, Some(&n), &["customer", "items", "0", "name"]),
-        Nav::Value(&s("widget"))
+        found(&nav(&snap, Some(&n), &["customer", "items", "0", "name"])),
+        Some(s("widget"))
     );
     assert_eq!(
-        nav(&snap, Some(&n), &["customer", "nothing"]),
-        Nav::Value(&DecodedValue::Null)
+        found(&nav(&snap, Some(&n), &["customer", "nothing"])),
+        Some(DecodedValue::Null)
     );
     assert_eq!(nav(&snap, Some(&n), &["customer", "absent"]), Nav::Missing);
     assert_eq!(
@@ -152,8 +179,8 @@ fn named_arguments_and_nested_paths_distinguish_null_missing_and_unavailable() {
         Nav::Unavailable(Unavailable::Truncated(Limit::Bytes))
     );
     assert_eq!(
-        nav(&snap, Some(&n), &["customer", "cell"]),
-        Nav::Value(&DecodedValue::Int(99))
+        found(&nav(&snap, Some(&n), &["customer", "cell"])),
+        Some(DecodedValue::Int(99))
     );
     // Omitted argument: absent, not null.
     assert_eq!(nav(&snap, Some(&n), &["note"]), Nav::Missing);
@@ -164,8 +191,8 @@ fn named_arguments_and_nested_paths_distinguish_null_missing_and_unavailable() {
         Nav::Unavailable(Unavailable::ArgumentNamesUnknown)
     );
     assert_eq!(
-        nav(&snap, None, &["0", "age"]),
-        Nav::Value(&DecodedValue::Int(30))
+        found(&nav(&snap, None, &["0", "age"])),
+        Some(DecodedValue::Int(30))
     );
     let mut mismatch = names();
     mismatch.slots.pop();
@@ -173,9 +200,9 @@ fn named_arguments_and_nested_paths_distinguish_null_missing_and_unavailable() {
         nav(&snap, Some(&mismatch), &["customer"]),
         Nav::Unavailable(Unavailable::ArgumentLayoutMismatch)
     );
-    assert_eq!(nav(&snap, Some(&n), &[]), Nav::Arguments);
+    assert_eq!(nav(&snap, Some(&n), &[]), Nav::Arguments(Arc::clone(&snap)));
     assert_eq!(
-        navigate(&snap, Root::Value, None, &[]),
+        navigate(&Blobs::default(), &snap, Root::Value, None, &[], 0),
         Nav::Unavailable(Unavailable::WrongRoot)
     );
 }
@@ -236,9 +263,9 @@ fn comparisons_follow_baml_semantics_not_sqlite_coercion() {
         leaf_of_operand(Operand::Null).is_none(),
         "SQL NULL is unknown"
     );
-    assert_eq!(is_null(Nav::Missing), Some(true));
+    assert_eq!(is_null(&Nav::Missing), Some(true));
     assert_eq!(
-        is_null(Nav::Unavailable(Unavailable::ArgumentNamesUnknown)),
+        is_null(&Nav::Unavailable(Unavailable::ArgumentNamesUnknown)),
         None
     );
 }
@@ -247,7 +274,10 @@ fn comparisons_follow_baml_semantics_not_sqlite_coercion() {
 fn rendering_preserves_sharing_cycles_truncation_and_names() {
     let snap = snapshot();
     let limits = RenderLimits::default();
-    let args = render_arguments(&snap, Some(&names()), &limits);
+    let blobs = Blobs::default();
+    let rendered = render_arguments(&blobs, &snap, Some(&names()), &limits);
+    assert_eq!(rendered.incomplete, None);
+    let args = rendered.json;
     let customer = &args["customer"];
     assert_eq!(customer["$class"], json!("Customer"));
     assert_eq!(customer["age"], json!(30));
@@ -274,17 +304,19 @@ fn rendering_preserves_sharing_cycles_truncation_and_names() {
     let big = (BigInt::from(1) << 80_u32).to_string();
     assert_eq!(meta["$map"]["big"], json!({ "$bigint": big }));
     // Without names: positional envelope.
-    let positional = render_arguments(&snap, None, &limits);
+    let positional = render_arguments(&blobs, &snap, None, &limits).json;
     assert_eq!(positional["$args"][1], json!({"$omitted": true}));
     // Depth and size bounds.
     let shallow = render_arguments(
+        &blobs,
         &snap,
         Some(&names()),
         &RenderLimits {
             max_depth: 2,
             ..limits
         },
-    );
+    )
+    .json;
     assert_eq!(
         shallow["customer"]["items"],
         json!({"$truncated": "render_depth"})
@@ -308,7 +340,7 @@ fn shared_labels_follow_output_order_and_skip_truncated_visits() {
     };
     // Argument `deep` reaches map 0 two lists down; `a` and `b` reach it and
     // map 1 directly.
-    let snap = DecodedSnapshot {
+    let snap = Arc::new(DecodedSnapshot {
         id: CasId::from_bytes([0; 16]),
         children: Vec::new(),
         root: DecodedRoot::FunctionArgs {
@@ -325,7 +357,7 @@ fn shared_labels_follow_output_order_and_skip_truncated_visits() {
             list(vec![V::Object(NodeId(3)), V::Object(NodeId(1))]),
             list(vec![V::Object(NodeId(0))]),
         ],
-    };
+    });
     let names = ArgumentNames {
         slots: ["deep", "a", "b"]
             .into_iter()
@@ -339,7 +371,7 @@ fn shared_labels_follow_output_order_and_skip_truncated_visits() {
         max_depth: 3,
         ..RenderLimits::default()
     };
-    let args = render_arguments(&snap, Some(&names), &limits);
+    let args = render_arguments(&Blobs::default(), &snap, Some(&names), &limits).json;
     // Map 0 is first reached at the depth limit: no label is spent there, so
     // its later full rendering carries the `$id`.
     assert_eq!(args["deep"][0][0], json!({"$truncated": "render_depth"}));
@@ -354,7 +386,16 @@ fn scalar_projection_keeps_leaf_kinds() {
     let snap = snapshot();
     let n = names();
     let limits = RenderLimits::default();
-    let scalar = |p: &[&str]| to_scalar(&snap, nav(&snap, Some(&n), p), Some(&n), &limits);
+    let scalar = |p: &[&str]| {
+        let presented = to_scalar(
+            &Blobs::default(),
+            &nav(&snap, Some(&n), p),
+            Some(&n),
+            &limits,
+        );
+        assert_eq!(presented.incomplete, None);
+        (presented.scalar, presented.kind)
+    };
     assert_eq!(
         scalar(&["customer", "age"]),
         (Scalar::Integer(30), Kind::Int)

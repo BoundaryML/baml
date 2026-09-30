@@ -473,6 +473,79 @@ fn cas_is_shared_across_recordings_and_atomic_under_concurrent_writers() {
     );
 }
 
+/// A list of three strings, two of them large enough for blobs of their own.
+fn cut_snapshot(pool: &btel_snapshot::SnapshotPool) -> btel_snapshot::Snapshot {
+    use btel_snapshot::{SnapshotObject, SnapshotValue};
+    let mut b = pool.try_acquire().unwrap();
+    let element_type = b.push_type(btel_snapshot::OwnedType::string());
+    let items: Vec<_> = ["a".repeat(100), "small".to_owned(), "b".repeat(100)]
+        .iter()
+        .map(|text| SnapshotValue::String(b.string(&text.as_str().into()).unwrap()))
+        .collect();
+    let list = b.reserve_object().unwrap();
+    let start = b.value_start();
+    for item in items {
+        b.push_value(item);
+    }
+    let items = b.value_range(start);
+    b.set_object(
+        list,
+        SnapshotObject::List {
+            element_type,
+            items,
+            original_len: 3,
+        },
+    );
+    let mut shaper = btel_snapshot::Shaper::new(btel_snapshot::ShapePolicy::Split {
+        unit_bytes: 1 << 20,
+        leaf_bytes: 64,
+    });
+    b.finish_value(SnapshotValue::Object(list), &mut shaper)
+}
+
+#[test]
+fn every_blob_of_a_capture_is_written_and_stored_ones_are_kept() {
+    let root = tempfile::tempdir().unwrap();
+    let cas = root.path().join("cas");
+    let pool = btel_snapshot::SnapshotPool::new(2, btel_snapshot::Limits::default());
+    let value = cut_snapshot(&pool);
+    let mut scratch = btel_snapshot::BlobScratch::default();
+    let expected: Vec<_> = value
+        .blobs()
+        .map(|blob| {
+            let mut bytes = Vec::new();
+            blob.write(&mut scratch, &mut bytes).unwrap();
+            (cas_path(&cas, blob.id()), bytes)
+        })
+        .collect();
+    assert_eq!(
+        expected.len(),
+        3,
+        "two strings and the list that names them"
+    );
+    // One child is stored already, as another capture would have left it.
+    let (stored, bytes) = &expected[0];
+    fs::create_dir_all(stored.parent().unwrap()).unwrap();
+    fs::write(stored, bytes).unwrap();
+    let modified = fs::metadata(stored).unwrap().modified().unwrap();
+
+    let mut delivery = LocalDelivery::create_with_cas(
+        root.path(),
+        &cas,
+        RecordingId::generate(),
+        LocalDeliveryConfig::default(),
+        |_| {},
+    )
+    .unwrap();
+    delivery.take_handle().send_snapshot(value).unwrap();
+    delivery.finish().unwrap();
+    assert_eq!(pool.stats().in_use, 0);
+    for (path, bytes) in &expected {
+        assert_eq!(&fs::read(path).unwrap(), bytes);
+    }
+    assert_eq!(fs::metadata(stored).unwrap().modified().unwrap(), modified);
+}
+
 #[test]
 fn new_cas_version_does_not_reuse_or_overwrite_old_namespace() {
     let root = tempfile::tempdir().unwrap();

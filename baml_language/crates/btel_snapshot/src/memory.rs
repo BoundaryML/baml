@@ -35,10 +35,13 @@ impl Snapshot {
             types,
             string_hashes,
             bigint_hashes,
-            type_hashes,
+            type_leaves,
             blobs,
             members,
             blob_children,
+            object_homes,
+            string_homes,
+            bigint_homes,
         );
         for string in &s.strings {
             bytes = bytes.checked_add(string.retained_heap_bytes()?)?;

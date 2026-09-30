@@ -1,0 +1,533 @@
+//! The one enumeration of a blob's content, in encoding order.
+//!
+//! Hashing, numbering, measuring and writing a blob all run this walk with a
+//! different [`Visitor`] and [`Resolver`], so they cannot disagree about what
+//! a blob contains or in which order. A visitor decides what each piece
+//! becomes (hash input, bytes, a length); a resolver decides how a reference
+//! is written (a local number, or a position in another blob).
+//!
+//! Only values may name another blob. Map keys, enum variant names,
+//! descriptive names, types and declarations are always written in place, and
+//! a blob's own root value is never a reference to another blob.
+use baml_type::{DeclarationName, typetag::TypeTag};
+use num_bigint::BigInt;
+
+use super::{
+    BexStr, BigintId, MapEntry, ObjectId, OwnedType, Range, SnapshotObject, SnapshotRoot,
+    SnapshotValue, Storage, StringId,
+    hash::{Digest, TypeLeaf},
+    tags::{self, ObjectTag, RootTag, ValueTag},
+};
+
+/// How a reference to an object is written.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Reference {
+    /// A member of this blob, by its local number.
+    Local(u32),
+    /// The root value of the child blob in this slot of the child table.
+    Child(u32),
+    /// Object `node` of the child blob in `slot`. Only a cycle has objects
+    /// other than its root that another blob can name.
+    ChildNode { slot: u32, node: u32 },
+}
+
+/// Decides how references are written in the blob being walked.
+pub(crate) trait Resolver {
+    /// The local number of an object that is always a member of this blob:
+    /// its root object, or a declaration.
+    fn member(&mut self, id: ObjectId) -> u32;
+    fn object(&mut self, id: ObjectId) -> Reference;
+    /// The child slot of a string stored in its own blob, or `None` when it
+    /// is written in place.
+    fn string(&mut self, id: StringId) -> Option<u32>;
+    /// As [`Self::string`], for a bigint.
+    fn bigint(&mut self, id: BigintId) -> Option<u32>;
+}
+
+/// Receives a blob's content piece by piece.
+pub(crate) trait Visitor {
+    type Error;
+    /// One byte: a tag, a flag, or a small enumeration.
+    fn byte(&mut self, byte: u8) -> Result<(), Self::Error>;
+    fn int(&mut self, value: i64) -> Result<(), Self::Error>;
+    /// A float's raw bits.
+    fn bits(&mut self, bits: u64) -> Result<(), Self::Error>;
+    /// A local number, child slot or enum variant.
+    fn index(&mut self, index: u32) -> Result<(), Self::Error>;
+    /// A length that is data, not the size of what follows.
+    fn length(&mut self, length: usize) -> Result<(), Self::Error>;
+    fn string(&mut self, text: &BexStr, digest: Digest) -> Result<(), Self::Error>;
+    /// A map key or field name.
+    fn key(&mut self, text: &BexStr) -> Result<(), Self::Error>;
+    fn bigint(&mut self, value: &BigInt, digest: Digest) -> Result<(), Self::Error>;
+    fn ty(&mut self, ty: &OwnedType, leaf: TypeLeaf) -> Result<(), Self::Error>;
+    fn bytes(&mut self, bytes: &[u8], digest: Digest) -> Result<(), Self::Error>;
+    fn declaration(&mut self, tag: TypeTag, name: &DeclarationName) -> Result<(), Self::Error>;
+    /// A sequence of `len` items follows, up to the matching [`Self::end_range`].
+    /// Sequences never nest.
+    fn begin_range(&mut self, len: usize) -> Result<(), Self::Error>;
+    fn end_range(&mut self) -> Result<(), Self::Error>;
+    /// An object definition follows, up to the matching [`Self::end_object`].
+    fn begin_object(&mut self) {}
+    fn end_object(&mut self) {}
+}
+
+/// Where a value sits in its blob.
+#[derive(Clone, Copy)]
+enum Place {
+    /// The blob's root value.
+    Root,
+    Nested,
+}
+
+pub(crate) fn root<V: Visitor, R: Resolver>(
+    v: &mut V,
+    r: &mut R,
+    s: &Storage,
+    root: SnapshotRoot,
+) -> Result<(), V::Error> {
+    match root {
+        SnapshotRoot::Value(root) => {
+            v.byte(RootTag::Value as u8)?;
+            value(v, r, s, root, Place::Root)
+        }
+        SnapshotRoot::FunctionArgs(args) => {
+            v.byte(RootTag::FunctionArgs as u8)?;
+            v.length(args.parameter_count)?;
+            values(v, r, s, args.slots)
+        }
+    }
+}
+
+pub(crate) fn object<V: Visitor, R: Resolver>(
+    v: &mut V,
+    r: &mut R,
+    s: &Storage,
+    object: &SnapshotObject,
+) -> Result<(), V::Error> {
+    v.begin_object();
+    definition(v, r, s, object)?;
+    v.end_object();
+    Ok(())
+}
+
+fn child<V: Visitor>(v: &mut V, slot: u32) -> Result<(), V::Error> {
+    v.byte(ValueTag::External as u8)?;
+    v.index(slot)
+}
+
+fn local<V: Visitor>(v: &mut V, number: u32) -> Result<(), V::Error> {
+    v.byte(ValueTag::Object as u8)?;
+    v.index(number)
+}
+
+fn value<V: Visitor, R: Resolver>(
+    v: &mut V,
+    r: &mut R,
+    s: &Storage,
+    value: SnapshotValue,
+    place: Place,
+) -> Result<(), V::Error> {
+    match value {
+        SnapshotValue::Null => v.byte(ValueTag::Null as u8),
+        SnapshotValue::OmittedArg => v.byte(ValueTag::OmittedArg as u8),
+        SnapshotValue::Bool(b) => {
+            v.byte(ValueTag::Bool as u8)?;
+            v.byte(u8::from(b))
+        }
+        SnapshotValue::Int(n) => {
+            v.byte(ValueTag::Int as u8)?;
+            v.int(n)
+        }
+        SnapshotValue::Float(f) => {
+            v.byte(ValueTag::Float as u8)?;
+            v.bits(f.to_bits())
+        }
+        SnapshotValue::String(id) => {
+            let slot = match place {
+                Place::Root => None,
+                Place::Nested => r.string(id),
+            };
+            match slot {
+                Some(slot) => child(v, slot),
+                None => {
+                    v.byte(ValueTag::String as u8)?;
+                    v.string(&s.strings[id.0 as usize], s.string_hashes[id.0 as usize])
+                }
+            }
+        }
+        SnapshotValue::Bigint(id) => {
+            let slot = match place {
+                Place::Root => None,
+                Place::Nested => r.bigint(id),
+            };
+            match slot {
+                Some(slot) => child(v, slot),
+                None => {
+                    v.byte(ValueTag::Bigint as u8)?;
+                    v.bigint(&s.bigints[id.0 as usize], s.bigint_hashes[id.0 as usize])
+                }
+            }
+        }
+        SnapshotValue::Object(id) => {
+            let reference = match place {
+                Place::Root => Reference::Local(r.member(id)),
+                Place::Nested => r.object(id),
+            };
+            match reference {
+                Reference::Local(number) => local(v, number),
+                Reference::Child(slot) => child(v, slot),
+                Reference::ChildNode { slot, node } => {
+                    v.byte(ValueTag::ExternalNode as u8)?;
+                    v.index(slot)?;
+                    v.index(node)
+                }
+            }
+        }
+        SnapshotValue::Type(id) => {
+            v.byte(ValueTag::Type as u8)?;
+            v.ty(&s.types[id.0 as usize], s.type_leaves[id.0 as usize])
+        }
+        SnapshotValue::Enum {
+            declaration,
+            variant,
+            name,
+        } => {
+            v.byte(ValueTag::Enum as u8)?;
+            v.index(r.member(declaration))?;
+            v.index(variant)?;
+            v.string(
+                &s.strings[name.0 as usize],
+                s.string_hashes[name.0 as usize],
+            )
+        }
+        SnapshotValue::Truncated(limit) => {
+            v.byte(ValueTag::Truncated as u8)?;
+            v.byte(tags::limit(limit))
+        }
+    }
+}
+
+fn values<V: Visitor, R: Resolver>(
+    v: &mut V,
+    r: &mut R,
+    s: &Storage,
+    range: Range<SnapshotValue>,
+) -> Result<(), V::Error> {
+    v.begin_range(range.len())?;
+    for item in &s.values[range.indexes()] {
+        value(v, r, s, *item, Place::Nested)?;
+    }
+    v.end_range()
+}
+
+fn entries<V: Visitor, R: Resolver>(
+    v: &mut V,
+    r: &mut R,
+    s: &Storage,
+    range: Range<MapEntry>,
+) -> Result<(), V::Error> {
+    v.begin_range(range.len())?;
+    for entry in &s.entries[range.indexes()] {
+        v.key(&entry.key)?;
+        value(v, r, s, entry.value, Place::Nested)?;
+    }
+    v.end_range()
+}
+
+fn definition<V: Visitor, R: Resolver>(
+    v: &mut V,
+    r: &mut R,
+    s: &Storage,
+    object: &SnapshotObject,
+) -> Result<(), V::Error> {
+    let ty =
+        |v: &mut V, id: super::TypeId| v.ty(&s.types[id.0 as usize], s.type_leaves[id.0 as usize]);
+    match object {
+        SnapshotObject::Uint8Array { data, original_len } => {
+            v.byte(ObjectTag::Uint8Array as u8)?;
+            v.length(*original_len)?;
+            v.bytes(&s.bytes[data.range.indexes()], data.digest)
+        }
+        SnapshotObject::List {
+            element_type,
+            items,
+            original_len,
+        } => {
+            v.byte(ObjectTag::List as u8)?;
+            ty(v, *element_type)?;
+            v.length(*original_len)?;
+            values(v, r, s, *items)
+        }
+        SnapshotObject::Map {
+            key_type,
+            value_type,
+            entries: range,
+            original_len,
+        } => {
+            v.byte(ObjectTag::Map as u8)?;
+            ty(v, *key_type)?;
+            ty(v, *value_type)?;
+            v.length(*original_len)?;
+            entries(v, r, s, *range)
+        }
+        SnapshotObject::Instance {
+            type_arguments,
+            declaration,
+            fields,
+            original_len,
+        } => {
+            v.byte(ObjectTag::Instance as u8)?;
+            v.begin_range(type_arguments.len())?;
+            for index in type_arguments.indexes() {
+                v.ty(&s.types[index], s.type_leaves[index])?;
+            }
+            v.end_range()?;
+            v.index(r.member(*declaration))?;
+            v.length(*original_len)?;
+            entries(v, r, s, *fields)
+        }
+        SnapshotObject::Declaration { name, tag, is_enum } => {
+            v.byte(ObjectTag::Declaration as u8)?;
+            v.declaration(*tag, name)?;
+            v.byte(u8::from(*is_enum))
+        }
+        SnapshotObject::Cell(inner) => {
+            v.byte(ObjectTag::Cell as u8)?;
+            value(v, r, s, *inner, Place::Nested)
+        }
+        SnapshotObject::NonSnapshotableValue {} => v.byte(ObjectTag::NonSnapshotableValue as u8),
+        SnapshotObject::Descriptive { kind, name } => {
+            v.byte(ObjectTag::Descriptive as u8)?;
+            v.byte(tags::description(*kind))?;
+            v.byte(u8::from(name.is_some()))?;
+            match name {
+                Some(name) => v.string(
+                    &s.strings[name.0 as usize],
+                    s.string_hashes[name.0 as usize],
+                ),
+                None => Ok(()),
+            }
+        }
+        SnapshotObject::Truncated(limit) => {
+            v.byte(ObjectTag::Truncated as u8)?;
+            v.byte(tags::limit(*limit))
+        }
+    }
+}
+
+/// The encoded length of each piece. Its sum over a blob's root and objects,
+/// plus the header, is the blob's exact size.
+///
+/// Its methods and [`Both`]'s are `inline(always)`: they run once per piece
+/// of every capture on the capturing thread, and left to the optimizer they
+/// cost a measurable share of shaping.
+#[derive(Default)]
+pub(crate) struct Length(pub(crate) u64);
+
+#[expect(
+    clippy::inline_always,
+    reason = "one call per piece of every capture; measured, see `Length`"
+)]
+impl Length {
+    #[inline(always)]
+    fn add(&mut self, bytes: usize) {
+        self.0 = self.0.saturating_add(bytes as u64);
+    }
+}
+
+/// Encoded size of a bigint's magnitude: one u64 limb per 64 significant bits.
+pub(crate) fn bigint_limb_bytes(value: &BigInt) -> usize {
+    usize::try_from(value.bits().div_ceil(64))
+        .unwrap_or(usize::MAX)
+        .saturating_mul(8)
+}
+
+#[expect(
+    clippy::inline_always,
+    reason = "one call per piece of every capture; measured, see `Length`"
+)]
+impl Visitor for Length {
+    type Error = std::convert::Infallible;
+    #[inline(always)]
+    fn byte(&mut self, _: u8) -> Result<(), Self::Error> {
+        self.add(1);
+        Ok(())
+    }
+    #[inline(always)]
+    fn int(&mut self, _: i64) -> Result<(), Self::Error> {
+        self.add(8);
+        Ok(())
+    }
+    #[inline(always)]
+    fn bits(&mut self, _: u64) -> Result<(), Self::Error> {
+        self.add(8);
+        Ok(())
+    }
+    #[inline(always)]
+    fn index(&mut self, _: u32) -> Result<(), Self::Error> {
+        self.add(4);
+        Ok(())
+    }
+    #[inline(always)]
+    fn length(&mut self, _: usize) -> Result<(), Self::Error> {
+        self.add(8);
+        Ok(())
+    }
+    #[inline(always)]
+    fn string(&mut self, text: &BexStr, _: Digest) -> Result<(), Self::Error> {
+        self.add(4);
+        self.add(text.len());
+        Ok(())
+    }
+    #[inline(always)]
+    fn key(&mut self, text: &BexStr) -> Result<(), Self::Error> {
+        self.add(4);
+        self.add(text.len());
+        Ok(())
+    }
+    #[inline(always)]
+    fn bigint(&mut self, value: &BigInt, _: Digest) -> Result<(), Self::Error> {
+        // Sign, bit length, limbs.
+        self.add(1 + 8);
+        self.add(bigint_limb_bytes(value));
+        Ok(())
+    }
+    #[inline(always)]
+    fn ty(&mut self, _: &OwnedType, leaf: TypeLeaf) -> Result<(), Self::Error> {
+        self.add(leaf.encoded_len as usize);
+        Ok(())
+    }
+    #[inline(always)]
+    fn bytes(&mut self, bytes: &[u8], _: Digest) -> Result<(), Self::Error> {
+        self.add(4);
+        self.add(bytes.len());
+        Ok(())
+    }
+    #[inline(always)]
+    fn declaration(&mut self, tag: TypeTag, name: &DeclarationName) -> Result<(), Self::Error> {
+        let mut counter = Counter(0);
+        borsh::BorshSerialize::serialize(&tag, &mut counter).expect("counting cannot fail");
+        borsh::BorshSerialize::serialize(name, &mut counter).expect("counting cannot fail");
+        self.add(counter.0);
+        Ok(())
+    }
+    #[inline(always)]
+    fn begin_range(&mut self, _: usize) -> Result<(), Self::Error> {
+        self.add(4);
+        Ok(())
+    }
+    #[inline(always)]
+    fn end_range(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
+
+struct Counter(usize);
+impl std::io::Write for Counter {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0 += bytes.len();
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// A visitor and a second one that cannot fail, run together.
+pub(crate) struct Both<A, B>(pub(crate) A, pub(crate) B);
+
+#[expect(
+    clippy::inline_always,
+    reason = "one call per piece of every capture; measured, see `Length`"
+)]
+impl<A, B> Visitor for Both<A, B>
+where
+    A: Visitor,
+    B: Visitor<Error = std::convert::Infallible>,
+{
+    type Error = A::Error;
+    #[inline(always)]
+    fn byte(&mut self, byte: u8) -> Result<(), Self::Error> {
+        infallible(self.1.byte(byte));
+        self.0.byte(byte)
+    }
+    #[inline(always)]
+    fn int(&mut self, value: i64) -> Result<(), Self::Error> {
+        infallible(self.1.int(value));
+        self.0.int(value)
+    }
+    #[inline(always)]
+    fn bits(&mut self, bits: u64) -> Result<(), Self::Error> {
+        infallible(self.1.bits(bits));
+        self.0.bits(bits)
+    }
+    #[inline(always)]
+    fn index(&mut self, index: u32) -> Result<(), Self::Error> {
+        infallible(self.1.index(index));
+        self.0.index(index)
+    }
+    #[inline(always)]
+    fn length(&mut self, length: usize) -> Result<(), Self::Error> {
+        infallible(self.1.length(length));
+        self.0.length(length)
+    }
+    #[inline(always)]
+    fn string(&mut self, text: &BexStr, digest: Digest) -> Result<(), Self::Error> {
+        infallible(self.1.string(text, digest));
+        self.0.string(text, digest)
+    }
+    #[inline(always)]
+    fn key(&mut self, text: &BexStr) -> Result<(), Self::Error> {
+        infallible(self.1.key(text));
+        self.0.key(text)
+    }
+    #[inline(always)]
+    fn bigint(&mut self, value: &BigInt, digest: Digest) -> Result<(), Self::Error> {
+        infallible(self.1.bigint(value, digest));
+        self.0.bigint(value, digest)
+    }
+    #[inline(always)]
+    fn ty(&mut self, ty: &OwnedType, leaf: TypeLeaf) -> Result<(), Self::Error> {
+        infallible(self.1.ty(ty, leaf));
+        self.0.ty(ty, leaf)
+    }
+    #[inline(always)]
+    fn bytes(&mut self, bytes: &[u8], digest: Digest) -> Result<(), Self::Error> {
+        infallible(self.1.bytes(bytes, digest));
+        self.0.bytes(bytes, digest)
+    }
+    #[inline(always)]
+    fn declaration(&mut self, tag: TypeTag, name: &DeclarationName) -> Result<(), Self::Error> {
+        infallible(self.1.declaration(tag, name));
+        self.0.declaration(tag, name)
+    }
+    #[inline(always)]
+    fn begin_range(&mut self, len: usize) -> Result<(), Self::Error> {
+        infallible(self.1.begin_range(len));
+        self.0.begin_range(len)
+    }
+    #[inline(always)]
+    fn end_range(&mut self) -> Result<(), Self::Error> {
+        infallible(self.1.end_range());
+        self.0.end_range()
+    }
+    #[inline(always)]
+    fn begin_object(&mut self) {
+        self.0.begin_object();
+        self.1.begin_object();
+    }
+    #[inline(always)]
+    fn end_object(&mut self) {
+        self.0.end_object();
+        self.1.end_object();
+    }
+}
+
+/// Unwrap the result of a walk whose visitor cannot fail.
+pub(crate) fn infallible(result: Result<(), std::convert::Infallible>) {
+    match result {
+        Ok(()) => {}
+        Err(never) => match never {},
+    }
+}

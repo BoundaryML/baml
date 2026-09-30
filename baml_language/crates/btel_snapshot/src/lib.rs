@@ -19,7 +19,7 @@ use num_bigint::BigInt;
 pub mod context;
 mod decode;
 pub use decode::{
-    BlobError, DecodeLimits, DecodedName, DecodedObject, DecodedRoot, DecodedSnapshot,
+    BlobError, ChildIndex, DecodeLimits, DecodedName, DecodedObject, DecodedRoot, DecodedSnapshot,
     DecodedValue, Entries, NodeId, SHALLOW_TYPE_BYTES, SharedSnapshot, TypeDescription,
     decode_blob,
 };
@@ -29,8 +29,9 @@ mod hash;
 pub use hash::CasId;
 mod memory;
 mod shape;
-pub use shape::Shaper;
+pub use shape::{REFERENCE_WEIGHT, ShapePolicy, Shaper};
 mod tags;
+mod walk;
 
 macro_rules! index {
     ($name:ident) => {
@@ -301,7 +302,7 @@ struct Storage {
     content: usize,
     string_hashes: Vec<hash::Digest>,
     bigint_hashes: Vec<hash::Digest>,
-    type_hashes: Vec<hash::Digest>,
+    type_leaves: Vec<hash::TypeLeaf>,
     /// Shaped blobs, children before parents; the last is the capture root.
     /// Empty until the capture is finished.
     blobs: Vec<BlobEntry>,
@@ -309,16 +310,41 @@ struct Storage {
     members: Vec<ObjectId>,
     /// Each blob's children in first-use order, concatenated.
     blob_children: Vec<BlobIndex>,
+    /// Per object, string and bigint: the blob other blobs find it in. Empty
+    /// when the capture is one blob.
+    object_homes: Vec<Option<Home>>,
+    string_homes: Vec<Option<BlobIndex>>,
+    bigint_homes: Vec<Option<BlobIndex>>,
 }
-/// Index of a blob in its snapshot's blob table.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct BlobIndex(u32);
+impl Storage {
+    fn object_home(&self, id: ObjectId) -> Option<Home> {
+        self.object_homes.get(id.0 as usize).copied().flatten()
+    }
+    fn string_home(&self, id: StringId) -> Option<BlobIndex> {
+        self.string_homes.get(id.0 as usize).copied().flatten()
+    }
+    fn bigint_home(&self, id: BigintId) -> Option<BlobIndex> {
+        self.bigint_homes.get(id.0 as usize).copied().flatten()
+    }
+}
+/// Position of a blob in its snapshot's blob table. Meaningless for any other
+/// snapshot.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct BlobIndex(u32);
 #[derive(Clone, Copy, Debug)]
 struct BlobEntry {
     id: CasId,
     root: SnapshotRoot,
     members: Range<ObjectId>,
     children: Range<BlobIndex>,
+    encoded_len: u64,
+}
+/// Where other blobs find an object stored in a blob of its own.
+#[derive(Clone, Copy, Debug)]
+struct Home {
+    blob: BlobIndex,
+    /// The object's local number there; zero is that blob's root.
+    node: u32,
 }
 /// Exclusive pointer-sized owner, frozen before publication.
 /// ```compile_fail
@@ -355,6 +381,23 @@ impl<'s> Blob<'s> {
     pub fn id(&self) -> CasId {
         self.entry().id
     }
+    pub fn index(&self) -> BlobIndex {
+        self.index
+    }
+    /// Exact length of what [`Self::write`] writes.
+    pub fn encoded_len(&self) -> u64 {
+        self.entry().encoded_len
+    }
+    /// The blobs this one names, in the order of its child table.
+    pub fn children(&self) -> impl ExactSizeIterator<Item = Blob<'s>> + use<'s> {
+        let snapshot = self.snapshot;
+        snapshot.0.blob_children[self.entry().children.indexes()]
+            .iter()
+            .map(move |index| Blob {
+                snapshot,
+                index: *index,
+            })
+    }
     fn entry(&self) -> &'s BlobEntry {
         &self.snapshot.0.blobs[self.index.0 as usize]
     }
@@ -375,6 +418,17 @@ impl Snapshot {
     }
     pub fn root_id(&self) -> CasId {
         self.root_blob().id()
+    }
+    /// The blob at `index`, which must come from this snapshot.
+    pub fn blob(&self, index: BlobIndex) -> Blob<'_> {
+        assert!(
+            (index.0 as usize) < self.0.blobs.len(),
+            "blob index from another snapshot"
+        );
+        Blob {
+            snapshot: self,
+            index,
+        }
     }
     /// Every blob, each after the blobs it references; the root is last.
     pub fn blobs(&self) -> impl ExactSizeIterator<Item = Blob<'_>> + '_ {
@@ -445,10 +499,13 @@ impl Snapshot {
             + std::mem::size_of_val(self.0.types.as_slice())
             + std::mem::size_of_val(self.0.string_hashes.as_slice())
             + std::mem::size_of_val(self.0.bigint_hashes.as_slice())
-            + std::mem::size_of_val(self.0.type_hashes.as_slice())
+            + std::mem::size_of_val(self.0.type_leaves.as_slice())
             + std::mem::size_of_val(self.0.blobs.as_slice())
             + std::mem::size_of_val(self.0.members.as_slice())
             + std::mem::size_of_val(self.0.blob_children.as_slice())
+            + std::mem::size_of_val(self.0.object_homes.as_slice())
+            + std::mem::size_of_val(self.0.string_homes.as_slice())
+            + std::mem::size_of_val(self.0.bigint_homes.as_slice())
     }
 }
 const _: () = assert!(std::mem::size_of::<Snapshot>() == std::mem::size_of::<usize>());
@@ -506,10 +563,13 @@ impl SnapshotPool {
                 content: 0,
                 string_hashes: Vec::new(),
                 bigint_hashes: Vec::new(),
-                type_hashes: Vec::new(),
+                type_leaves: Vec::new(),
                 blobs: Vec::new(),
                 members: Vec::new(),
                 blob_children: Vec::new(),
+                object_homes: Vec::new(),
+                string_homes: Vec::new(),
+                bigint_homes: Vec::new(),
             });
             self.0.add_bytes(storage.charged);
             state.allocated += 1;
@@ -769,12 +829,12 @@ impl Builder {
         let id = TypeId(u32::try_from(s.types.len()).expect("type arena exhausted"));
         grow(&mut s.types, 1, s.owner.as_ref().unwrap(), &mut s.charged);
         grow(
-            &mut s.type_hashes,
+            &mut s.type_leaves,
             1,
             s.owner.as_ref().unwrap(),
             &mut s.charged,
         );
-        s.type_hashes.push(hash::ty(&ty));
+        s.type_leaves.push(hash::ty(&ty));
         s.types.push(ty);
         id
     }
@@ -840,10 +900,13 @@ fn recycle(mut storage: Box<Storage>) {
     storage.types.clear();
     storage.string_hashes.clear();
     storage.bigint_hashes.clear();
-    storage.type_hashes.clear();
+    storage.type_leaves.clear();
     storage.blobs.clear();
     storage.members.clear();
     storage.blob_children.clear();
+    storage.object_homes.clear();
+    storage.string_homes.clear();
+    storage.bigint_homes.clear();
     storage.stats = CaptureStats::default();
     storage.content = 0;
     let mut state = pool

@@ -6,8 +6,11 @@
 //! blob-local number, so a blob's identity depends on its reachable content
 //! and never on capture discovery order, heap addresses, arena capacities or
 //! string rope shape. Map and argument order matter. Cycles need no recursive
-//! Merkle dependencies. Every hashed input is either a byte of the blob or a
-//! digest recomputed from its bytes, so a blob verifies without its children.
+//! Merkle dependencies. A value stored in another blob is hashed as the slot
+//! of that blob in the child table, and the table's IDs are hashed ahead of
+//! the content, so a blob's identity covers everything it reaches. Every
+//! hashed input is either a byte of the blob or a digest recomputed from its
+//! bytes, so a blob verifies without its children.
 //! Borsh's attribute-free type encoding is part of version 3: changes to it
 //! require a hash-format version change. Hash equality is not proof of delivery.
 use std::io::{self, Write};
@@ -62,8 +65,16 @@ impl Hasher {
         h.byte(domain as u8);
         h
     }
-    pub(crate) fn borsh(&mut self, value: &impl BorshSerialize) {
-        value.serialize(self).expect("infallible hash writer");
+    /// Absorb a value's Borsh encoding and return its length.
+    pub(crate) fn borsh(&mut self, value: &impl BorshSerialize) -> usize {
+        let mut counted = Counted {
+            hasher: self,
+            written: 0,
+        };
+        value
+            .serialize(&mut counted)
+            .expect("infallible hash writer");
+        counted.written
     }
     pub(crate) fn finish(&self) -> Digest {
         Digest(self.0.digest128().to_le_bytes())
@@ -79,9 +90,14 @@ impl Absorb for Vec<u8> {
         self.extend_from_slice(bytes);
     }
 }
-impl Write for Hasher {
+struct Counted<'a> {
+    hasher: &'a mut Hasher,
+    written: usize,
+}
+impl Write for Counted<'_> {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        self.0.update(bytes);
+        self.hasher.0.update(bytes);
+        self.written += bytes.len();
         Ok(bytes.len())
     }
     fn flush(&mut self) -> io::Result<()> {
@@ -118,8 +134,18 @@ pub(crate) fn bigint(n: &BigInt) -> Digest {
     }
     h.finish()
 }
-pub(crate) fn ty(ty: &OwnedType) -> Digest {
+/// A type description's digest and the length of its encoding, both found by
+/// serializing it once.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct TypeLeaf {
+    pub(crate) digest: Digest,
+    pub(crate) encoded_len: u32,
+}
+pub(crate) fn ty(ty: &OwnedType) -> TypeLeaf {
     let mut h = Hasher::new(HashDomain::Type);
-    h.borsh(ty);
-    h.finish()
+    let encoded_len = u32::try_from(h.borsh(ty)).expect("type description exceeds u32");
+    TypeLeaf {
+        digest: h.finish(),
+        encoded_len,
+    }
 }

@@ -220,7 +220,7 @@ fn every_value_kind_round_trips_with_verified_identity_and_preserved_graph() {
     assert_eq!(field("shared"), &DecodedValue::Object(*list));
     assert_eq!(
         field("big"),
-        &DecodedValue::Bigint(Box::new(BigInt::from(-1) << 100))
+        &DecodedValue::Bigint(Arc::new(BigInt::from(-1) << 100))
     );
     assert!(
         matches!(field("status"), DecodedValue::Enum { variant: 1, name, .. } if &**name == "Active")
@@ -599,4 +599,52 @@ fn child_blobs_must_be_distinct_and_referenced() {
     truncated.truncate(truncated.len() - 8);
     truncated.extend_from_slice(&u32::MAX.to_le_bytes());
     assert_eq!(decode(&truncated), Err(BlobError::Truncated));
+}
+
+/// An argument root with one slot holding `value`.
+fn one_slot(children: &[[u8; 16]], value: &[u8]) -> Vec<u8> {
+    let mut bytes = header(children, 0);
+    bytes.push(1);
+    bytes.extend_from_slice(&1_u64.to_le_bytes());
+    bytes.extend_from_slice(&1_u32.to_le_bytes());
+    bytes.extend_from_slice(value);
+    bytes
+}
+
+#[test]
+fn references_to_other_blobs_follow_first_use_and_never_replace_a_root() {
+    let slot = |tag: u8, slot: u32| {
+        let mut value = vec![tag];
+        value.extend_from_slice(&slot.to_le_bytes());
+        value
+    };
+    let mut root = header(&[[1; 16]], 0);
+    root.push(0);
+    root.extend_from_slice(&slot(11, 0));
+    assert!(invalid_because(
+        &root,
+        "a blob's root value is stored in it"
+    ));
+
+    assert!(invalid_because(
+        &one_slot(&[[1; 16], [2; 16]], &slot(11, 1)),
+        "child reference 1 precedes a first reference to 0"
+    ));
+    assert!(invalid_because(
+        &one_slot(&[[1; 16]], &slot(11, 1)),
+        "child reference 1 out of range"
+    ));
+    let mut node = slot(12, 0);
+    node.extend_from_slice(&0_u32.to_le_bytes());
+    assert!(invalid_because(
+        &one_slot(&[[1; 16]], &node),
+        "a child's root is referenced as a node"
+    ));
+    // Well formed, so only the zero ID in the hand-built header is wrong.
+    let mut node = slot(12, 0);
+    node.extend_from_slice(&3_u32.to_le_bytes());
+    assert!(matches!(
+        decode(&one_slot(&[[1; 16]], &node)),
+        Err(BlobError::IdMismatch { .. })
+    ));
 }

@@ -2,10 +2,12 @@
 //!
 //! Identity and timing functions are pure. Value functions resolve CAS
 //! blobs lazily through the current query's context: a query that never
-//! evaluates `input_args`, `output_value` or `error_value` reads no blob. Within one query,
-//! hydration outcomes (including missing and corrupt blobs) are memoized
-//! under entry and byte limits; the next query starts empty and can find a
-//! blob that arrived in between.
+//! evaluates `input_args`, `output_value` or `error_value` reads no blob. A
+//! path reads only the blobs it crosses; rendering or comparing a whole value
+//! reads every blob it reaches, within the render and comparison limits.
+//! Within one query, hydration outcomes (including missing and corrupt
+//! blobs) are memoized under entry and byte limits; the next query starts
+//! empty and can find a blob that arrived in between.
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     sync::{Arc, Mutex},
@@ -16,7 +18,9 @@ use btel_reader::{
     cas::{CasStore, CasUnavailable},
     evidence::ArgumentNames,
     timing::{Clock, Conversion, EpochStatus, TimingState, UtcAnchor, format_unix_ns},
-    value::{self, CmpOp, Kind, Nav, Operand, RenderLimits, Root, Scalar, Segment, equality},
+    value::{
+        self, BlobSource, CmpOp, Kind, Nav, Operand, RenderLimits, Root, Scalar, Segment, equality,
+    },
 };
 use btel_snapshot::{CasId, DecodedSnapshot};
 use rusqlite::{
@@ -111,50 +115,29 @@ impl QueryContext {
         Ok(())
     }
 
-    fn load(
-        &self,
-        state: &mut CacheState,
-        id: [u8; 16],
-    ) -> Result<Arc<DecodedSnapshot>, CasUnavailable> {
-        if let Some(snapshot) = state.blobs.get(&id) {
-            state.metrics.cas_cache_hits += 1;
-            return snapshot.clone();
-        }
-        let load = self.cas.load(CasId::from_bytes(id));
-        state.metrics.cas_loads += 1;
-        state.metrics.cas_bytes_read += load.bytes_read;
-        if state.blobs.len() < self.limits.max_cached_blobs
-            && state.blob_bytes + load.bytes_read <= self.limits.max_cached_bytes
-        {
-            state.blob_bytes += load.bytes_read;
-            state.blobs.insert(id, load.snapshot.clone());
-        }
-        load.snapshot
-    }
-
     /// The snapshot a handle reads: its CAS blob, or the inline one.
-    fn load_handle(
-        &self,
-        state: &mut CacheState,
-        handle: &Handle,
-    ) -> Result<Arc<DecodedSnapshot>, CasUnavailable> {
+    fn load_handle(&self, handle: &Handle) -> Result<Arc<DecodedSnapshot>, CasUnavailable> {
         match &handle.inline {
             Some(blob) => btel_snapshot::decode_blob(blob, &self.cas.limits().decode)
                 .map(Arc::new)
                 .map_err(CasUnavailable::Corrupt),
-            None => self.load(state, handle.cas),
+            None => BlobSource::load(self, CasId::from_bytes(handle.cas)),
         }
+    }
+
+    fn evaluation(&self) {
+        self.state
+            .lock()
+            .expect("value state")
+            .metrics
+            .value_evaluations += 1;
     }
 
     /// Report `code` once per distinct `key` (a handle, or a handle plus an
     /// operation marker).
     fn note(&self, key: &[u8], code: &str) {
         let mut state = self.state.lock().expect("value state");
-        Self::unavailable(&mut state, key, code);
-    }
-
-    fn unavailable(state: &mut CacheState, handle: &[u8], code: &str) {
-        if state.unavailable_seen.insert(handle.to_vec()) {
+        if state.unavailable_seen.insert(key.to_vec()) {
             *state
                 .metrics
                 .unavailable
@@ -163,40 +146,60 @@ impl QueryContext {
         }
     }
 
-    /// Navigate a handle and present the result as a SQL scalar.
-    fn resolve(&self, handle: &[u8]) -> rusqlite::Result<(Scalar, Kind)> {
-        self.check_deadline()?;
-        let mut state = self.state.lock().expect("value state");
-        state.metrics.value_evaluations += 1;
-        if let Some(result) = state.results.get(handle) {
-            let result = result.clone();
-            state.metrics.result_cache_hits += 1;
-            return Ok(result);
-        }
+    /// What a handle names, or `None` with the reason reported.
+    fn find(&self, handle: &[u8]) -> rusqlite::Result<Option<(Handle, Nav)>> {
         let parsed =
             Handle::decode(handle).ok_or_else(|| user_error("invalid BAML value handle"))?;
         if parsed.pending {
-            Self::unavailable(&mut state, handle, PENDING);
-            return Ok((Scalar::Null, Kind::Unavailable));
+            self.note(handle, PENDING);
+            return Ok(None);
         }
-        let result = match self.load_handle(&mut state, &parsed) {
-            Ok(snapshot) => {
-                let nav = value::navigate(
-                    &snapshot,
-                    parsed.root(),
-                    parsed.names.as_ref(),
-                    &parsed.path,
-                );
-                if let Nav::Unavailable(reason) = nav {
-                    Self::unavailable(&mut state, handle, reason.code());
-                }
-                value::to_scalar(&snapshot, nav, parsed.names.as_ref(), &self.limits.render)
-            }
+        let snapshot = match self.load_handle(&parsed) {
+            Ok(snapshot) => snapshot,
             Err(unavailable) => {
-                Self::unavailable(&mut state, handle, unavailable.code());
-                (Scalar::Null, Kind::Unavailable)
+                self.note(handle, unavailable.code());
+                return Ok(None);
             }
         };
+        let nav = value::navigate(
+            self,
+            &snapshot,
+            parsed.root(),
+            parsed.names.as_ref(),
+            &parsed.path,
+            self.limits.render.max_blobs,
+        );
+        if let Nav::Unavailable(reason) = &nav {
+            self.note(handle, reason.code());
+            return Ok(None);
+        }
+        Ok(Some((parsed, nav)))
+    }
+
+    /// Navigate a handle and present the result as a SQL scalar.
+    fn resolve(&self, handle: &[u8]) -> rusqlite::Result<(Scalar, Kind)> {
+        self.check_deadline()?;
+        {
+            let mut state = self.state.lock().expect("value state");
+            state.metrics.value_evaluations += 1;
+            if let Some(result) = state.results.get(handle) {
+                let result = result.clone();
+                state.metrics.result_cache_hits += 1;
+                return Ok(result);
+            }
+        }
+        let result = match self.find(handle)? {
+            Some((parsed, nav)) => {
+                let presented =
+                    value::to_scalar(self, &nav, parsed.names.as_ref(), &self.limits.render);
+                if let Some(reason) = presented.incomplete {
+                    self.note(handle, reason.code());
+                }
+                (presented.scalar, presented.kind)
+            }
+            None => (Scalar::Null, Kind::Unavailable),
+        };
+        let mut state = self.state.lock().expect("value state");
         if state.results.len() < self.limits.max_cached_results {
             state.results.insert(handle.to_vec(), result.clone());
         }
@@ -204,11 +207,7 @@ impl QueryContext {
     }
 
     /// Navigate and hand the result to `f` (comparisons need the leaf).
-    fn with_nav<T>(
-        &self,
-        handle: &[u8],
-        f: impl FnOnce(Nav<'_>) -> T,
-    ) -> rusqlite::Result<Option<T>> {
+    fn with_nav<T>(&self, handle: &[u8], f: impl FnOnce(&Nav) -> T) -> rusqlite::Result<Option<T>> {
         self.with_value(handle, |value| f(value.nav))
     }
 
@@ -218,61 +217,65 @@ impl QueryContext {
         f: impl FnOnce(equality::Captured<'_>) -> T,
     ) -> rusqlite::Result<Option<T>> {
         self.check_deadline()?;
-        let mut state = self.state.lock().expect("value state");
-        state.metrics.value_evaluations += 1;
-        let parsed =
-            Handle::decode(handle).ok_or_else(|| user_error("invalid BAML value handle"))?;
-        if parsed.pending {
-            Self::unavailable(&mut state, handle, PENDING);
-            return Ok(None);
-        }
-        match self.load_handle(&mut state, &parsed) {
-            Ok(snapshot) => {
-                let nav = value::navigate(
-                    &snapshot,
-                    parsed.root(),
-                    parsed.names.as_ref(),
-                    &parsed.path,
-                );
-                if let Nav::Unavailable(reason) = nav {
-                    Self::unavailable(&mut state, handle, reason.code());
-                    return Ok(None);
-                }
-                drop(state);
-                Ok(Some(f(equality::Captured {
-                    snapshot: &snapshot,
-                    nav,
-                    names: parsed.names.as_ref(),
-                })))
-            }
-            Err(unavailable) => {
-                Self::unavailable(&mut state, handle, unavailable.code());
-                Ok(None)
-            }
-        }
+        self.evaluation();
+        Ok(self.find(handle)?.map(|(parsed, nav)| {
+            f(equality::Captured {
+                nav: &nav,
+                names: parsed.names.as_ref(),
+            })
+        }))
     }
 
     /// `baml_value_state`: what the path finds, without reporting it as
     /// unavailable evidence (the caller asked for exactly this answer).
     fn state(&self, handle: &[u8]) -> rusqlite::Result<String> {
         self.check_deadline()?;
-        let mut state = self.state.lock().expect("value state");
-        state.metrics.value_evaluations += 1;
+        self.evaluation();
         let parsed =
             Handle::decode(handle).ok_or_else(|| user_error("invalid BAML value handle"))?;
         if parsed.pending {
             return Ok(PENDING.to_owned());
         }
-        Ok(match self.load_handle(&mut state, &parsed) {
+        Ok(match self.load_handle(&parsed) {
             Ok(snapshot) => value::state(
+                self,
                 &snapshot,
                 parsed.root(),
                 parsed.names.as_ref(),
                 &parsed.path,
+                self.limits.render.max_blobs,
             )
             .to_owned(),
             Err(unavailable) => unavailable.code().to_owned(),
         })
+    }
+}
+
+/// Blobs a value continues in come from the query's cache, then the CAS.
+/// The state lock is held for bookkeeping only, never while reading a blob
+/// or walking a value.
+impl BlobSource for QueryContext {
+    fn load(&self, id: CasId) -> Result<Arc<DecodedSnapshot>, CasUnavailable> {
+        let key = *id.as_bytes();
+        {
+            let mut state = self.state.lock().expect("value state");
+            if let Some(snapshot) = state.blobs.get(&key) {
+                let snapshot = snapshot.clone();
+                state.metrics.cas_cache_hits += 1;
+                return snapshot;
+            }
+        }
+        let load = self.cas.load(id);
+        let mut state = self.state.lock().expect("value state");
+        state.metrics.cas_loads += 1;
+        state.metrics.cas_bytes_read += load.bytes_read;
+        if state.blobs.len() < self.limits.max_cached_blobs
+            && state.blob_bytes + load.bytes_read <= self.limits.max_cached_bytes
+        {
+            state.blob_bytes += load.bytes_read;
+            state.blobs.insert(key, load.snapshot.clone());
+        }
+        load.snapshot
     }
 }
 
@@ -759,7 +762,7 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
         let context = current(&s)?;
         let result = context.with_value(left, |a| {
             context.with_value(right, |b| {
-                equality::captured(a, op, b, &context.limits.comparison)
+                equality::captured(&*context, a, op, b, &context.limits.comparison)
             })
         })?;
         let result = match result {
@@ -784,7 +787,7 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
         })?;
         let context = current(&s)?;
         let result = context.with_value(handle, |left| {
-            equality::json(left, op, &json, &context.limits.comparison)
+            equality::json(&*context, left, op, &json, &context.limits.comparison)
         })?;
         context.check_deadline()?;
         Ok(comparison_result(&context, handle, result))
@@ -831,17 +834,14 @@ pub(crate) enum Inline {
     List(Vec<Inline>),
 }
 
-/// An inline value's handle: its snapshot travels inside the handle.
+/// An inline value's handle: its snapshot travels inside the handle, which
+/// carries one blob, so the value is kept whole.
 pub(crate) fn inline_handle(value: &Inline) -> Vec<u8> {
     let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
     let mut builder = pool.try_acquire().expect("a fresh pool has a slot");
     let root = build_inline(&mut builder, value);
-    let snapshot = builder.finish_value(root, &mut btel_snapshot::Shaper::default());
-    debug_assert_eq!(
-        snapshot.blobs().len(),
-        1,
-        "a handle carries one blob, so an inline value must not reference others"
-    );
+    let mut whole = btel_snapshot::Shaper::new(btel_snapshot::ShapePolicy::Whole);
+    let snapshot = builder.finish_value(root, &mut whole);
     let mut blob = Vec::new();
     snapshot
         .root_blob()

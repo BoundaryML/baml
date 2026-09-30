@@ -4,10 +4,17 @@
 //! child's 16-byte ID, u32 object count, root, then object definitions in
 //! blob-local order. Root is tag 0/value or tag 1/u64 parameter count/value
 //! sequence. Sequences and UTF-8 strings use u32 lengths. Values inline
-//! immutable leaf contents; only graph objects use u32 references, by local
+//! immutable leaf contents; graph objects use u32 references, by local
 //! number. Numbers follow each object's first reference in this byte order,
 //! so a blob has exactly one encoding and the reader rejects any other. This
 //! also makes leaf-arena sharing irrelevant to the bytes.
+//!
+//! A value stored in another blob is written as tag 11 and the u32 slot of
+//! that blob in the child table (the value is the child's root value), or as
+//! tag 12, slot and u32 local number for an object of the child other than
+//! its root. Slots follow first use in this byte order, like object numbers.
+//! A blob's own root value, map keys, names, types and declarations are
+//! always written in place.
 //!
 //! Value and object tags mirror hash format 3. Type/declaration metadata uses
 //! its Borsh representation. Floats use raw bits (including NaNs). Bigints use
@@ -15,14 +22,20 @@
 //! little-endian u64 magnitude limbs. Any encoding change needs a version bump.
 use std::io::{self, Write};
 
+use baml_type::{DeclarationName, typetag::TypeTag};
 use borsh::BorshSerialize;
 pub use btel_settings::snapshot::{BLOB_MAGIC, BLOB_VERSION};
+use num_bigint::BigInt;
 
 use crate::{
-    Blob, ObjectId, Snapshot, SnapshotObject, SnapshotRoot, SnapshotValue,
+    BexStr, BigintId, Blob, BlobIndex, Home, ObjectId, OwnedType, Storage, StringId,
+    hash::{Digest, TypeLeaf},
     shape::UNNUMBERED,
-    tags::{self, ObjectTag, RootTag, ValueTag},
+    tags,
+    walk::{self, Reference, Resolver, Visitor},
 };
+#[cfg(debug_assertions)]
+use crate::{shape::HEADER_BYTES, walk::Length};
 
 fn size(w: &mut impl Write, n: usize) -> io::Result<()> {
     u32::try_from(n)
@@ -34,217 +47,194 @@ fn original_len(w: &mut impl Write, n: usize) -> io::Result<()> {
         .map_err(|_| io::Error::other("snapshot length exceeds u64"))?
         .serialize(w)
 }
-fn string(w: &mut impl Write, value: &bex_str::BexStr) -> io::Result<()> {
+fn string(w: &mut impl Write, value: &BexStr) -> io::Result<()> {
     size(w, value.len())?;
     w.write_all(value.as_bytes())
 }
 
-/// Reusable map from capture objects to blob-local numbers. Any snapshot's
-/// blobs may share one; it holds nothing between writes.
+/// Reusable maps from a capture's objects and blobs to their numbers in the
+/// blob being written. Any snapshot's blobs may share one; it holds nothing
+/// between writes.
 #[derive(Default)]
 pub struct BlobScratch {
+    /// Object to local number, [`UNNUMBERED`] for every other object and
+    /// between writes.
     local: Vec<u32>,
+    /// Blob to its slot in the child table, likewise.
+    slots: Vec<u32>,
 }
 
 impl Blob<'_> {
     /// Stream this blob's canonical bytes without cloning owners or
     /// allocating an encoded payload. The writer chooses its own buffering.
     pub fn write(&self, scratch: &mut BlobScratch, w: &mut impl Write) -> io::Result<()> {
-        let s = &self.snapshot.0;
+        let s: &Storage = &self.snapshot.0;
         let entry = self.entry();
         let members = &s.members[entry.members.indexes()];
-        let local = &mut scratch.local;
-        local.clear();
-        local.resize(s.objects.len(), UNNUMBERED);
-        for (number, id) in members.iter().enumerate() {
-            local[id.0 as usize] = u32::try_from(number).expect("bounded objects");
-        }
-        let encoder = Encoder {
-            snapshot: self.snapshot,
-            local,
-        };
+        let children = &s.blob_children[entry.children.indexes()];
         w.write_all(&BLOB_MAGIC)?;
         BLOB_VERSION.serialize(w)?;
         w.write_all(entry.id.as_bytes())?;
-        let children = &s.blob_children[entry.children.indexes()];
         size(w, children.len())?;
         for child in children {
             w.write_all(s.blobs[child.0 as usize].id.as_bytes())?;
         }
         size(w, members.len())?;
-        match entry.root {
-            SnapshotRoot::Value(value) => {
-                (RootTag::Value as u8).serialize(w)?;
-                encoder.value(w, value)?;
-            }
-            SnapshotRoot::FunctionArgs(args) => {
-                (RootTag::FunctionArgs as u8).serialize(w)?;
-                original_len(w, args.parameter_count)?;
-                encoder.values(w, self.snapshot.values(args.slots))?;
-            }
-        }
+        let mut stored = Stored::new(scratch, s, members, children);
+        let mut writer = Writer(w);
+        walk::root(&mut writer, &mut stored, s, entry.root)?;
         for id in members {
-            encoder.object(w, self.snapshot.object(*id))?;
+            walk::object(&mut writer, &mut stored, s, &s.objects[id.0 as usize])?;
+        }
+        #[cfg(debug_assertions)]
+        {
+            // Shaping measured this blob; a second walk checks that writing
+            // agrees, without costing release builds anything.
+            let mut length = Length::default();
+            walk::infallible(walk::root(&mut length, &mut stored, s, entry.root));
+            for id in members {
+                let object = &s.objects[id.0 as usize];
+                walk::infallible(walk::object(&mut length, &mut stored, s, object));
+            }
+            assert_eq!(
+                HEADER_BYTES + 4 + 16 * children.len() as u64 + 4 + length.0,
+                entry.encoded_len,
+                "a blob is as long as shaping measured"
+            );
         }
         Ok(())
     }
 }
 
-struct Encoder<'a> {
-    snapshot: &'a Snapshot,
-    local: &'a [u32],
+/// The numbers shaping gave this blob's members and children. Leaves the
+/// scratch clean when dropped, whether or not the write succeeded.
+struct Stored<'a> {
+    s: &'a Storage,
+    scratch: &'a mut BlobScratch,
+    members: &'a [ObjectId],
+    children: &'a [BlobIndex],
+}
+impl<'a> Stored<'a> {
+    fn new(
+        scratch: &'a mut BlobScratch,
+        s: &'a Storage,
+        members: &'a [ObjectId],
+        children: &'a [BlobIndex],
+    ) -> Self {
+        if scratch.local.len() < s.objects.len() {
+            scratch.local.resize(s.objects.len(), UNNUMBERED);
+        }
+        if scratch.slots.len() < s.blobs.len() {
+            scratch.slots.resize(s.blobs.len(), UNNUMBERED);
+        }
+        for (number, id) in members.iter().enumerate() {
+            scratch.local[id.0 as usize] = u32::try_from(number).expect("bounded objects");
+        }
+        for (slot, child) in children.iter().enumerate() {
+            scratch.slots[child.0 as usize] = u32::try_from(slot).expect("bounded blob count");
+        }
+        Self {
+            s,
+            scratch,
+            members,
+            children,
+        }
+    }
+    fn slot(&self, blob: BlobIndex) -> u32 {
+        let slot = self.scratch.slots[blob.0 as usize];
+        debug_assert_ne!(slot, UNNUMBERED, "a blob names only its children");
+        slot
+    }
+}
+impl Drop for Stored<'_> {
+    fn drop(&mut self) {
+        for id in self.members {
+            self.scratch.local[id.0 as usize] = UNNUMBERED;
+        }
+        for child in self.children {
+            self.scratch.slots[child.0 as usize] = UNNUMBERED;
+        }
+    }
+}
+impl Resolver for Stored<'_> {
+    fn member(&mut self, id: ObjectId) -> u32 {
+        let number = self.scratch.local[id.0 as usize];
+        debug_assert_ne!(
+            number, UNNUMBERED,
+            "a blob holds what it must write in place"
+        );
+        number
+    }
+    fn object(&mut self, id: ObjectId) -> Reference {
+        let number = self.scratch.local[id.0 as usize];
+        if number != UNNUMBERED {
+            return Reference::Local(number);
+        }
+        match self.s.object_home(id) {
+            Some(Home { blob, node: 0 }) => Reference::Child(self.slot(blob)),
+            Some(Home { blob, node }) => Reference::ChildNode {
+                slot: self.slot(blob),
+                node,
+            },
+            None => unreachable!("an object outside a blob has a blob of its own"),
+        }
+    }
+    fn string(&mut self, id: StringId) -> Option<u32> {
+        self.s.string_home(id).map(|blob| self.slot(blob))
+    }
+    fn bigint(&mut self, id: BigintId) -> Option<u32> {
+        self.s.bigint_home(id).map(|blob| self.slot(blob))
+    }
 }
 
-impl Encoder<'_> {
-    fn reference(&self, w: &mut impl Write, id: ObjectId) -> io::Result<()> {
-        let number = self.local[id.0 as usize];
-        debug_assert_ne!(number, UNNUMBERED, "a blob references only its members");
-        number.serialize(w)
+struct Writer<'a, W>(&'a mut W);
+impl<W: Write> Visitor for Writer<'_, W> {
+    type Error = io::Error;
+    fn byte(&mut self, byte: u8) -> io::Result<()> {
+        self.0.write_all(&[byte])
     }
-    fn object(&self, w: &mut impl Write, object: &SnapshotObject) -> io::Result<()> {
-        let snapshot = self.snapshot;
-        match object {
-            SnapshotObject::Uint8Array {
-                data,
-                original_len: n,
-            } => {
-                (ObjectTag::Uint8Array as u8).serialize(w)?;
-                original_len(w, *n)?;
-                let bytes = snapshot.bytes(*data);
-                size(w, bytes.len())?;
-                w.write_all(bytes)
-            }
-            SnapshotObject::List {
-                element_type,
-                items,
-                original_len: n,
-            } => {
-                (ObjectTag::List as u8).serialize(w)?;
-                snapshot.ty(*element_type).serialize(w)?;
-                original_len(w, *n)?;
-                self.values(w, snapshot.values(*items))
-            }
-            SnapshotObject::Map {
-                key_type,
-                value_type,
-                entries,
-                original_len: n,
-            } => {
-                (ObjectTag::Map as u8).serialize(w)?;
-                snapshot.ty(*key_type).serialize(w)?;
-                snapshot.ty(*value_type).serialize(w)?;
-                original_len(w, *n)?;
-                self.entries(w, snapshot.entries(*entries))
-            }
-            SnapshotObject::Instance {
-                type_arguments,
-                declaration,
-                fields,
-                original_len: n,
-            } => {
-                (ObjectTag::Instance as u8).serialize(w)?;
-                snapshot.type_arguments(*type_arguments).serialize(w)?;
-                self.reference(w, *declaration)?;
-                original_len(w, *n)?;
-                self.entries(w, snapshot.entries(*fields))
-            }
-            SnapshotObject::Declaration { name, tag, is_enum } => {
-                (ObjectTag::Declaration as u8).serialize(w)?;
-                tag.serialize(w)?;
-                name.serialize(w)?;
-                is_enum.serialize(w)
-            }
-            SnapshotObject::Cell(v) => {
-                (ObjectTag::Cell as u8).serialize(w)?;
-                self.value(w, *v)
-            }
-            SnapshotObject::NonSnapshotableValue {} => {
-                (ObjectTag::NonSnapshotableValue as u8).serialize(w)
-            }
-            SnapshotObject::Descriptive { kind, name } => {
-                (ObjectTag::Descriptive as u8).serialize(w)?;
-                tags::description(*kind).serialize(w)?;
-                name.is_some().serialize(w)?;
-                match name {
-                    Some(id) => string(w, snapshot.string(*id)),
-                    None => Ok(()),
-                }
-            }
-            SnapshotObject::Truncated(reason) => {
-                (ObjectTag::Truncated as u8).serialize(w)?;
-                tags::limit(*reason).serialize(w)
-            }
-        }
+    fn int(&mut self, value: i64) -> io::Result<()> {
+        self.0.write_all(&value.to_le_bytes())
     }
-    fn values(&self, w: &mut impl Write, values: &[SnapshotValue]) -> io::Result<()> {
-        size(w, values.len())?;
-        for value in values {
-            self.value(w, *value)?;
+    fn bits(&mut self, bits: u64) -> io::Result<()> {
+        self.0.write_all(&bits.to_le_bytes())
+    }
+    fn index(&mut self, index: u32) -> io::Result<()> {
+        self.0.write_all(&index.to_le_bytes())
+    }
+    fn length(&mut self, length: usize) -> io::Result<()> {
+        original_len(self.0, length)
+    }
+    fn string(&mut self, text: &BexStr, _: Digest) -> io::Result<()> {
+        string(self.0, text)
+    }
+    fn key(&mut self, text: &BexStr) -> io::Result<()> {
+        string(self.0, text)
+    }
+    fn bigint(&mut self, value: &BigInt, _: Digest) -> io::Result<()> {
+        tags::bigint_sign(value.sign()).serialize(self.0)?;
+        value.bits().serialize(self.0)?;
+        for digit in value.iter_u64_digits() {
+            digit.serialize(self.0)?;
         }
         Ok(())
     }
-    fn entries(&self, w: &mut impl Write, entries: &[crate::MapEntry]) -> io::Result<()> {
-        size(w, entries.len())?;
-        for entry in entries {
-            string(w, &entry.key)?;
-            self.value(w, entry.value)?;
-        }
-        Ok(())
+    fn ty(&mut self, ty: &OwnedType, _: TypeLeaf) -> io::Result<()> {
+        ty.serialize(self.0)
     }
-    fn value(&self, w: &mut impl Write, value: SnapshotValue) -> io::Result<()> {
-        let snapshot = self.snapshot;
-        match value {
-            SnapshotValue::Null => (ValueTag::Null as u8).serialize(w),
-            SnapshotValue::OmittedArg => (ValueTag::OmittedArg as u8).serialize(w),
-            SnapshotValue::Bool(v) => {
-                (ValueTag::Bool as u8).serialize(w)?;
-                v.serialize(w)
-            }
-            SnapshotValue::Int(v) => {
-                (ValueTag::Int as u8).serialize(w)?;
-                v.serialize(w)
-            }
-            SnapshotValue::Float(v) => {
-                (ValueTag::Float as u8).serialize(w)?;
-                v.to_bits().serialize(w)
-            }
-            SnapshotValue::String(id) => {
-                (ValueTag::String as u8).serialize(w)?;
-                string(w, snapshot.string(id))
-            }
-            SnapshotValue::Bigint(id) => {
-                (ValueTag::Bigint as u8).serialize(w)?;
-                let n = snapshot.bigint(id);
-                tags::bigint_sign(n.sign()).serialize(w)?;
-                n.bits().serialize(w)?;
-                for digit in n.iter_u64_digits() {
-                    digit.serialize(w)?;
-                }
-                Ok(())
-            }
-            SnapshotValue::Object(id) => {
-                (ValueTag::Object as u8).serialize(w)?;
-                self.reference(w, id)
-            }
-            SnapshotValue::Type(id) => {
-                (ValueTag::Type as u8).serialize(w)?;
-                snapshot.ty(id).serialize(w)
-            }
-            SnapshotValue::Enum {
-                declaration,
-                variant,
-                name,
-            } => {
-                (ValueTag::Enum as u8).serialize(w)?;
-                self.reference(w, declaration)?;
-                variant.serialize(w)?;
-                string(w, snapshot.string(name))
-            }
-            SnapshotValue::Truncated(reason) => {
-                (ValueTag::Truncated as u8).serialize(w)?;
-                tags::limit(reason).serialize(w)
-            }
-        }
+    fn bytes(&mut self, bytes: &[u8], _: Digest) -> io::Result<()> {
+        size(self.0, bytes.len())?;
+        self.0.write_all(bytes)
+    }
+    fn declaration(&mut self, tag: TypeTag, name: &DeclarationName) -> io::Result<()> {
+        tag.serialize(self.0)?;
+        name.serialize(self.0)
+    }
+    fn begin_range(&mut self, len: usize) -> io::Result<()> {
+        size(self.0, len)
+    }
+    fn end_range(&mut self) -> io::Result<()> {
+        Ok(())
     }
 }
 
@@ -253,7 +243,7 @@ mod tests {
     use borsh::BorshDeserialize;
 
     use super::*;
-    use crate::{Limits, Shaper, SnapshotObject as O, SnapshotPool, SnapshotValue as V};
+    use crate::{Limits, Shaper, Snapshot, SnapshotObject as O, SnapshotPool, SnapshotValue as V};
 
     fn root_blob(snapshot: &Snapshot) -> Vec<u8> {
         let mut bytes = Vec::new();

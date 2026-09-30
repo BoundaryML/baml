@@ -1970,6 +1970,7 @@ dependencies = [
  "btel_settings",
  "btel_types",
  "num-bigint",
+ "rustc-hash 2.1.2",
  "xxhash-rust",
 ]
 

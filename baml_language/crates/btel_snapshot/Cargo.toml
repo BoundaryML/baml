@@ -16,4 +16,5 @@ btel_settings = { workspace = true }
 btel_types = { workspace = true }
 borsh = { workspace = true }
 num-bigint = { workspace = true }
+rustc-hash = { workspace = true }
 xxhash-rust = { workspace = true }

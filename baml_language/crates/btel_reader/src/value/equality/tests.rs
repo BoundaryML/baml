@@ -4,9 +4,18 @@ use serde_json::json;
 
 use super::*;
 use crate::{
+    cas::CasUnavailable,
     evidence::SlotName,
     value::{Root, navigate},
 };
+
+/// These values are each stored in one blob.
+struct NoBlobs;
+impl BlobSource for NoBlobs {
+    fn load(&self, _: CasId) -> Result<Arc<DecodedSnapshot>, CasUnavailable> {
+        Err(CasUnavailable::Missing)
+    }
+}
 
 fn snapshot(root: DecodedValue, objects: Vec<DecodedObject>) -> DecodedSnapshot {
     DecodedSnapshot {
@@ -41,16 +50,47 @@ fn map(entries: Vec<(&str, DecodedValue)>) -> DecodedObject {
     }
 }
 
-fn capture(s: &DecodedSnapshot) -> Captured<'_> {
-    Captured {
-        snapshot: s,
-        nav: navigate(s, Root::Value, None, &[]),
-        names: None,
-    }
+fn whole(s: &DecodedSnapshot) -> Nav {
+    navigate(&NoBlobs, &Arc::new(s.clone()), Root::Value, None, &[], 0)
+}
+
+fn compared(
+    a: &DecodedSnapshot,
+    op: CmpOp,
+    b: &DecodedSnapshot,
+    limits: &Limits,
+) -> Result<Option<bool>, Error> {
+    let (a, b) = (whole(a), whole(b));
+    super::captured(
+        &NoBlobs,
+        Captured {
+            nav: &a,
+            names: None,
+        },
+        op,
+        Captured {
+            nav: &b,
+            names: None,
+        },
+        limits,
+    )
 }
 
 fn eq(a: &DecodedSnapshot, b: &DecodedSnapshot) -> Result<Option<bool>, Error> {
-    captured(capture(a), CmpOp::Eq, capture(b), &Limits::default())
+    compared(a, CmpOp::Eq, b, &Limits::default())
+}
+
+fn is(a: &DecodedSnapshot, literal: &Json) -> Result<Option<bool>, Error> {
+    super::json(
+        &NoBlobs,
+        Captured {
+            nav: &whole(a),
+            names: None,
+        },
+        CmpOp::Eq,
+        literal,
+        &Limits::default(),
+    )
 }
 
 fn declaration(name: &str, is_enum: bool) -> DecodedObject {
@@ -83,7 +123,7 @@ fn maps_ignore_order_and_lists_ignore_storage_sharing() {
     b.objects[2] = map(vec![("a", Int(9)), ("b", Int(2))]);
     assert_eq!(eq(&a, &b), Ok(Some(false)));
     assert_eq!(
-        captured(capture(&a), CmpOp::NotEq, capture(&b), &Limits::default()),
+        compared(&a, CmpOp::NotEq, &b, &Limits::default()),
         Ok(Some(true))
     );
     b.objects[0] = list(vec![Object(NodeId(1))]);
@@ -115,12 +155,7 @@ fn class_enum_identity_and_field_presence_are_semantic() {
     fields[0].1 = DecodedValue::OmittedArg;
     assert_eq!(eq(&a, &b), Ok(Some(false)));
     assert_eq!(
-        super::json(
-            capture(&a),
-            CmpOp::Eq,
-            &json!({"x": null}),
-            &Limits::default()
-        ),
+        is(&a, &json!({"x": null})),
         Ok(Some(false)),
         "plain JSON is a map, not a class"
     );
@@ -136,10 +171,7 @@ fn class_enum_identity_and_field_presence_are_semantic() {
     assert_eq!(eq(&a, &b), Ok(Some(true)));
     b.objects[0] = declaration("user.Other", true);
     assert_eq!(eq(&a, &b), Ok(Some(false)));
-    assert_eq!(
-        super::json(capture(&a), CmpOp::Eq, &json!("Ready"), &Limits::default()),
-        Ok(Some(false))
-    );
+    assert_eq!(is(&a, &json!("Ready")), Ok(Some(false)));
 }
 
 #[test]
@@ -155,7 +187,7 @@ fn numeric_equality_preserves_precision_nan_and_signed_zero() {
     assert_eq!(
         eq(
             &scalar(DecodedValue::Int(7)),
-            &scalar(DecodedValue::Bigint(Box::new(7.into())))
+            &scalar(DecodedValue::Bigint(Arc::new(7.into())))
         ),
         Ok(Some(true))
     );
@@ -180,25 +212,9 @@ fn numeric_equality_preserves_precision_nan_and_signed_zero() {
         ),
         Ok(Some(true))
     );
-    let large = scalar(DecodedValue::Bigint(Box::new(u64::MAX.into())));
-    assert_eq!(
-        super::json(
-            capture(&large),
-            CmpOp::Eq,
-            &json!(u64::MAX),
-            &Limits::default()
-        ),
-        Ok(Some(true))
-    );
-    assert_eq!(
-        super::json(
-            capture(&large),
-            CmpOp::Eq,
-            &json!(u64::MAX - 1),
-            &Limits::default()
-        ),
-        Ok(Some(false))
-    );
+    let large = scalar(DecodedValue::Bigint(Arc::new(u64::MAX.into())));
+    assert_eq!(is(&large, &json!(u64::MAX)), Ok(Some(true)));
+    assert_eq!(is(&large, &json!(u64::MAX - 1)), Ok(Some(false)));
 }
 
 #[test]
@@ -215,10 +231,7 @@ fn bytes_cells_and_json_literals_compare_without_rendering() {
         DecodedValue::Object(NodeId(0)),
         vec![list(vec![DecodedValue::Int(1), DecodedValue::Int(2)])],
     );
-    assert_eq!(
-        super::json(capture(&b), CmpOp::Eq, &json!([1, 2]), &Limits::default()),
-        Ok(Some(true))
-    );
+    assert_eq!(is(&b, &json!([1, 2])), Ok(Some(true)));
     let cell = snapshot(
         DecodedValue::Object(NodeId(0)),
         vec![
@@ -226,15 +239,7 @@ fn bytes_cells_and_json_literals_compare_without_rendering() {
             map(vec![("answer", DecodedValue::Int(42))]),
         ],
     );
-    assert_eq!(
-        super::json(
-            capture(&cell),
-            CmpOp::Eq,
-            &json!({"answer": 42}),
-            &Limits::default()
-        ),
-        Ok(Some(true))
-    );
+    assert_eq!(is(&cell, &json!({"answer": 42})), Ok(Some(true)));
 }
 
 #[test]
@@ -312,17 +317,14 @@ fn limits_bound_shared_expansion_depth_and_bytes() {
             ..Limits::default()
         },
     ] {
-        assert_eq!(
-            captured(capture(&a), CmpOp::Eq, capture(&a), &limits),
-            Err(Error::Limit)
-        );
+        assert_eq!(compared(&a, CmpOp::Eq, &a, &limits), Err(Error::Limit));
     }
     let text = snapshot(DecodedValue::String("long".into()), vec![]);
     assert_eq!(
-        captured(
-            capture(&text),
+        compared(
+            &text,
             CmpOp::Eq,
-            capture(&text),
+            &text,
             &Limits {
                 max_bytes: 7,
                 ..Limits::default()
@@ -347,18 +349,18 @@ fn whole_arguments_require_complete_names_and_preserve_omitted_slots() {
             receiver: false,
         }],
     };
+    let nav = Nav::Arguments(Arc::new(s));
     let mut a = Captured {
-        snapshot: &s,
-        nav: Nav::Arguments,
+        nav: &nav,
         names: Some(&names),
     };
     assert_eq!(
-        super::json(a, CmpOp::Eq, &json!({"n":7}), &Limits::default()),
+        super::json(&NoBlobs, a, CmpOp::Eq, &json!({"n":7}), &Limits::default()),
         Ok(Some(true))
     );
     a.names = None;
     assert_eq!(
-        super::json(a, CmpOp::Eq, &json!({"n":7}), &Limits::default()),
+        super::json(&NoBlobs, a, CmpOp::Eq, &json!({"n":7}), &Limits::default()),
         Err(Error::Evidence(Unavailable::ArgumentNamesUnknown))
     );
 }

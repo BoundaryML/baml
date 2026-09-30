@@ -22,6 +22,10 @@ pub(super) enum ValueTag {
     Type = 8,
     Enum = 9,
     Truncated = 10,
+    /// The root value of a child blob.
+    External = 11,
+    /// One object of a child blob that is not that blob's root.
+    ExternalNode = 12,
 }
 
 #[repr(u8)]
@@ -43,6 +47,7 @@ pub(super) enum TypeIdentityTag {
     Resolved = 1,
 }
 
+#[derive(Clone, Copy)]
 #[repr(u8)]
 pub(super) enum HashDomain {
     String = 1,
@@ -52,6 +57,9 @@ pub(super) enum HashDomain {
     Blob = 5,
     /// `uint8array` contents, hashed while they are copied.
     Uint8Array = 6,
+    /// One member of a cycle with its references left out, to choose the
+    /// cycle's root. Never stored.
+    CycleRoot = 7,
     Range = 32,
 }
 

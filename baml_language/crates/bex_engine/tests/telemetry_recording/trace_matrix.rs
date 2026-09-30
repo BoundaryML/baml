@@ -226,34 +226,146 @@ impl Recording {
     }
 }
 
-/// Structural equality across two snapshots: object IDs are local to each.
+/// Structural equality across two blobs: object numbers are local to each.
+/// Every capture here is one blob.
 fn same_value(
     a: &btel_snapshot::DecodedSnapshot,
     x: &btel_snapshot::DecodedValue,
     b: &btel_snapshot::DecodedSnapshot,
     y: &btel_snapshot::DecodedValue,
 ) -> bool {
-    use btel_snapshot::{DecodedObject, DecodedValue};
+    use btel_snapshot::DecodedValue as V;
     match (x, y) {
+        (V::External(_) | V::ExternalNode { .. }, _)
+        | (_, V::External(_) | V::ExternalNode { .. }) => {
+            panic!("expected each capture in one blob")
+        }
+        (V::Null, V::Null) | (V::OmittedArg, V::OmittedArg) => true,
+        (V::Bool(x), V::Bool(y)) => x == y,
+        (V::Int(x), V::Int(y)) => x == y,
         // NaN is its own bits, not equal to itself.
-        (DecodedValue::Float(x), DecodedValue::Float(y)) => x.to_bits() == y.to_bits(),
-        (DecodedValue::Object(x), DecodedValue::Object(y)) => match (a.object(*x), b.object(*y)) {
-            (DecodedObject::List { items: x, .. }, DecodedObject::List { items: y, .. }) => {
-                x.len() == y.len() && x.iter().zip(y).all(|(x, y)| same_value(a, x, b, y))
-            }
-            (
-                DecodedObject::Map { entries: x, .. } | DecodedObject::Instance { fields: x, .. },
-                DecodedObject::Map { entries: y, .. } | DecodedObject::Instance { fields: y, .. },
-            ) => {
-                x.len() == y.len()
-                    && x.iter()
-                        .zip(y)
-                        .all(|((kx, x), (ky, y))| kx == ky && same_value(a, x, b, y))
-            }
-            (DecodedObject::Cell(x), DecodedObject::Cell(y)) => same_value(a, x, b, y),
-            (x, y) => x == y,
-        },
-        (x, y) => x == y,
+        (V::Float(x), V::Float(y)) => x.to_bits() == y.to_bits(),
+        (V::String(x), V::String(y)) => x == y,
+        (V::Bigint(x), V::Bigint(y)) => x == y,
+        (V::Type(x), V::Type(y)) => x == y,
+        (V::Truncated(x), V::Truncated(y)) => x == y,
+        (V::Object(x), V::Object(y)) => same_object(a, a.object(*x), b, b.object(*y)),
+        (
+            V::Enum {
+                declaration: x,
+                variant: variant_x,
+                name: name_x,
+            },
+            V::Enum {
+                declaration: y,
+                variant: variant_y,
+                name: name_y,
+            },
+        ) => {
+            variant_x == variant_y
+                && name_x == name_y
+                && same_object(a, a.object(*x), b, b.object(*y))
+        }
+        (
+            V::Null
+            | V::OmittedArg
+            | V::Bool(_)
+            | V::Int(_)
+            | V::Float(_)
+            | V::String(_)
+            | V::Bigint(_)
+            | V::Type(_)
+            | V::Truncated(_)
+            | V::Object(_)
+            | V::Enum { .. },
+            _,
+        ) => false,
+    }
+}
+
+fn same_object(
+    a: &btel_snapshot::DecodedSnapshot,
+    x: &btel_snapshot::DecodedObject,
+    b: &btel_snapshot::DecodedSnapshot,
+    y: &btel_snapshot::DecodedObject,
+) -> bool {
+    use btel_snapshot::{DecodedObject as O, Entries};
+    let same_entries = |x: &Entries, y: &Entries| {
+        x.len() == y.len()
+            && x.iter()
+                .zip(y)
+                .all(|((key_x, x), (key_y, y))| key_x == key_y && same_value(a, x, b, y))
+    };
+    match (x, y) {
+        (
+            O::List {
+                element_type: type_x,
+                items: x,
+                original_len: len_x,
+            },
+            O::List {
+                element_type: type_y,
+                items: y,
+                original_len: len_y,
+            },
+        ) => {
+            type_x == type_y
+                && len_x == len_y
+                && x.len() == y.len()
+                && x.iter().zip(y).all(|(x, y)| same_value(a, x, b, y))
+        }
+        (
+            O::Map {
+                key_type: key_x,
+                value_type: value_x,
+                entries: x,
+                original_len: len_x,
+            },
+            O::Map {
+                key_type: key_y,
+                value_type: value_y,
+                entries: y,
+                original_len: len_y,
+            },
+        ) => key_x == key_y && value_x == value_y && len_x == len_y && same_entries(x, y),
+        (
+            O::Instance {
+                type_arguments: arguments_x,
+                declaration: declaration_x,
+                fields: x,
+                original_len: len_x,
+            },
+            O::Instance {
+                type_arguments: arguments_y,
+                declaration: declaration_y,
+                fields: y,
+                original_len: len_y,
+            },
+        ) => {
+            arguments_x == arguments_y
+                && len_x == len_y
+                && same_object(a, a.object(*declaration_x), b, b.object(*declaration_y))
+                && same_entries(x, y)
+        }
+        (O::Cell(x), O::Cell(y)) => same_value(a, x, b, y),
+        // Objects without references compare as they are.
+        (O::Uint8Array { .. }, O::Uint8Array { .. })
+        | (O::Declaration { .. }, O::Declaration { .. })
+        | (O::NonSnapshotable, O::NonSnapshotable)
+        | (O::Descriptive { .. }, O::Descriptive { .. })
+        | (O::Truncated(_), O::Truncated(_)) => x == y,
+        (
+            O::Uint8Array { .. }
+            | O::List { .. }
+            | O::Map { .. }
+            | O::Instance { .. }
+            | O::Declaration { .. }
+            | O::Cell(_)
+            | O::NonSnapshotable
+            | O::Descriptive { .. }
+            | O::Truncated(_),
+            _,
+        ) => false,
     }
 }
 

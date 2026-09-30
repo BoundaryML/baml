@@ -209,7 +209,7 @@ fn read_string_capture(root: &std::path::Path, id: proto::CasId, args: bool) -> 
     let DecodedValue::String(value) = value else {
         panic!("expected captured string");
     };
-    value.into()
+    value.to_string()
 }
 
 /// Every entry of a recording directory with its bytes, sorted by name:

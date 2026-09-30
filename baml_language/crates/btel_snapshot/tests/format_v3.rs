@@ -6,8 +6,8 @@ use std::{fmt::Write as _, sync::Arc};
 
 use baml_type::{DeclarationName, RealizedTy, TaggedTypeName, TypeName, typetag::TypeTag};
 use btel_snapshot::{
-    BlobScratch, Description, Limit, Limits, Shaper, Snapshot, SnapshotObject as O, SnapshotPool,
-    SnapshotValue as V, TypeIdentity,
+    BlobScratch, Description, Limit, Limits, ShapePolicy, Shaper, Snapshot, SnapshotObject as O,
+    SnapshotPool, SnapshotValue as V, TypeIdentity,
 };
 
 fn hex(bytes: &[u8]) -> String {
@@ -201,4 +201,110 @@ fn nominal_identity_tags_preserve_v3_bytes() {
         hex(&borsh::to_vec(&TypeIdentity::Resolved(TaggedTypeName::new(tag, name))).unwrap()),
         "012a0000000000000000000000000006000000476f6c64656e"
     );
+}
+
+/// Arguments cut into blobs: a string and bytes stored alone, a map that
+/// names a stored string, and two lists that hold each other, named once at
+/// the root of their blob and once inside it.
+fn cut_graph(pool: &SnapshotPool) -> Snapshot {
+    let mut b = pool.try_acquire().unwrap();
+    let ty = b.push_type(RealizedTy::Int);
+    let text = b.string(&"t".repeat(40).as_str().into()).unwrap();
+    let note = b.string(&"n".repeat(40).as_str().into()).unwrap();
+    let data = b.copy_bytes(&[9; 40]);
+    let array = b.reserve_object().unwrap();
+    b.set_object(
+        array,
+        O::Uint8Array {
+            data,
+            original_len: 40,
+        },
+    );
+    let map = b.reserve_object().unwrap();
+    let entries_start = b.entry_start();
+    b.entry(&"note".into(), V::String(note));
+    b.entry(&"padding".into(), V::Int(1));
+    b.entry(&"more padding".into(), V::Int(2));
+    let entries = b.entry_range(entries_start);
+    b.set_object(
+        map,
+        O::Map {
+            key_type: ty,
+            value_type: ty,
+            entries,
+            original_len: 3,
+        },
+    );
+    let [first, second] = [(); 2].map(|()| b.reserve_object().unwrap());
+    for (list, other, label) in [(first, second, "first"), (second, first, "second")] {
+        let label = b.string(&label.repeat(4).as_str().into()).unwrap();
+        let start = b.value_start();
+        b.push_value(V::Object(other));
+        b.push_value(V::String(label));
+        let items = b.value_range(start);
+        b.set_object(
+            list,
+            O::List {
+                element_type: ty,
+                items,
+                original_len: 2,
+            },
+        );
+    }
+    let start = b.value_start();
+    for value in [
+        V::String(text),
+        V::Object(first),
+        V::Object(map),
+        V::Object(second),
+        V::Object(array),
+        V::String(text),
+    ] {
+        b.push_value(value);
+    }
+    let slots = b.value_range(start);
+    let mut shaper = Shaper::new(ShapePolicy::Split {
+        unit_bytes: 64,
+        leaf_bytes: 32,
+    });
+    b.finish_args(6, slots, &mut shaper)
+}
+
+/// One line of hex per blob, children first.
+fn blob_lines(snapshot: &Snapshot) -> Vec<String> {
+    let mut scratch = BlobScratch::default();
+    snapshot
+        .blobs()
+        .map(|blob| {
+            let mut bytes = Vec::new();
+            blob.write(&mut scratch, &mut bytes).unwrap();
+            assert_eq!(blob.encoded_len(), bytes.len() as u64);
+            let decoded =
+                btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default())
+                    .expect("the reader must verify the frozen v3 fixture");
+            assert_eq!(decoded.id, blob.id());
+            hex(&bytes)
+        })
+        .collect()
+}
+
+#[test]
+fn references_between_blobs_preserve_v3_bytes_and_content_ids() {
+    let pool = SnapshotPool::new(1, Limits::default());
+    let lines = blob_lines(&cut_graph(&pool));
+    let expected: Vec<_> = include_str!("fixtures/format_v3_external.hex")
+        .lines()
+        .collect();
+    assert_eq!(lines, expected);
+    assert_eq!(pool.stats().in_use, 0);
+}
+
+#[test]
+#[ignore = "prints current encodings for review; never rewrites the fixtures"]
+#[expect(clippy::print_stdout, reason = "the output is the point")]
+fn print_format_v3_external_encodings() {
+    let pool = SnapshotPool::new(1, Limits::default());
+    for line in blob_lines(&cut_graph(&pool)) {
+        println!("{line}");
+    }
 }
