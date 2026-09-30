@@ -2164,19 +2164,6 @@ impl BexVm {
             .unwrap_or(&self.root_context)
     }
 
-    pub(crate) fn update_context(&mut self, patch: &ContextPatch) {
-        if let Some(frame) = self.frames.iter_mut().rev().find_map(|frame| match frame {
-            Frame::Bytecode(frame) => Some(frame),
-            Frame::Native(_) => None,
-        }) {
-            frame.context = frame.context.with_patch(patch);
-        }
-        let context = self.current_context().clone();
-        if let Some(telemetry) = &mut self.telemetry {
-            telemetry.set_context(context);
-        }
-    }
-
     pub fn set_root_context(&mut self, context: Context) {
         assert!(
             self.frames.is_empty(),

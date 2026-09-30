@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use btel_reader::context::{ContextReference, reference};
 use btel_recorder::proto;
@@ -45,8 +45,8 @@ pub(super) fn assert_leaf_contexts(
     minimum: usize,
 ) {
     use proto::span_event::Event;
-    let mut entries = BTreeSet::new();
-    let mut completions = BTreeSet::new();
+    let mut entries = BTreeMap::new();
+    let mut completions = BTreeMap::new();
     for section in files
         .iter()
         .flat_map(|file| file.spans.iter().flat_map(|spans| &spans.sections))
@@ -71,15 +71,12 @@ pub(super) fn assert_leaf_contexts(
                 Some(Event::FunctionAnnouncement(entry)) if phase.as_ref() == "entry" => {
                     assert_eq!(values.len(), 4);
                     assert_eq!(values["remove"], &DecodedValue::String("yes".into()));
-                    entries.insert(entry.id);
+                    entries.insert(entry.id, id);
                 }
-                Some(Event::FunctionCompletion(done)) if phase.as_ref() == "done" => {
-                    assert_eq!(values.len(), 6);
-                    assert!(!values.contains_key("remove"));
-                    assert_eq!(values["count"], &DecodedValue::Int(2));
-                    assert_eq!(values["ratio"], &DecodedValue::Float(1.5));
-                    assert_eq!(values["flag"], &DecodedValue::Bool(true));
-                    completions.insert(done.id);
+                Some(Event::FunctionCompletion(done)) if phase.as_ref() == "entry" => {
+                    assert_eq!(values.len(), 4);
+                    assert_eq!(values["remove"], &DecodedValue::String("yes".into()));
+                    completions.insert(done.id, id);
                 }
                 _ => {}
             }
@@ -92,6 +89,6 @@ pub(super) fn assert_leaf_contexts(
     );
     assert_eq!(
         entries, completions,
-        "each recorded entry must retain its final context"
+        "each invocation must retain the same scoped context at completion"
     );
 }

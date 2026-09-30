@@ -25,30 +25,41 @@ function data_second(order: int[]) -> int {
 }
 
 function log_sequence(long_name: string) -> int {
-    trace.update_context(metadata = { "phase": "before" }, distinct_id = "log-user");
-    let mutable = [1, 2];
-    log.info(mutable, event_name = "mutable");
-    mutable.push(3);
-    log.info({ "level": "user", "data": 42, "event_name": "payload" }, event_name = "structured");
-    trace.update_context(metadata = { "phase": "after" });
-    log.debug(null);
-    log.warn([null, true, 1.5], event_name = null);
-    log.error("empty name", event_name = "");
-    log.info(LogValue { value: 7 }, event_name = "class");
-    log.info(LogChoice.First, event_name = "enum");
-    let cycle: map<string, unknown> = {};
-    cycle["self"] = cycle;
-    log.info(cycle, event_name = "cycle");
-    hidden_log($trace = trace.hidden().context(metadata = { "phase": "hidden" }));
-    let task = spawn { log.info("spawn", event_name = "spawned"); };
-    await task;
-    let order: int[] = [];
-    log.info(event_name = name_first(order), data = data_second(order));
-    assert.equal(order, [1, 2]);
-    log.info("long", event_name = long_name);
-    span_log($trace = trace.span(inputs = false, output = false, error = false));
-    log.debug(7, event_name = "last");
-    14
+    (
+        () -> {
+            let mutable = [1, 2];
+            log.info(mutable, event_name = "mutable");
+            mutable.push(3);
+            log.info(
+                { "level": "user", "data": 42, "event_name": "payload" },
+                event_name = "structured",
+            );
+            (
+                () -> {
+                    log.debug(null);
+                    log.warn([null, true, 1.5], event_name = null);
+                    log.error("empty name", event_name = "");
+                    log.info(LogValue { value: 7 }, event_name = "class");
+                    log.info(LogChoice.First, event_name = "enum");
+                    let cycle: map<string, unknown> = {};
+                    cycle["self"] = cycle;
+                    log.info(cycle, event_name = "cycle");
+                    hidden_log($trace = trace.hidden().context(metadata = { "phase": "hidden" }));
+                    let task = spawn {
+                        log.info("spawn", event_name = "spawned");
+                    };
+                    await task;
+                    let order: int[] = [];
+                    log.info(event_name = name_first(order), data = data_second(order));
+                    assert.equal(order, [1, 2]);
+                    log.info("long", event_name = long_name);
+                    span_log($trace = trace.span(inputs = false, output = false, error = false));
+                    log.debug(7, event_name = "last");
+                    14
+                }
+            )($trace = trace.context(metadata = { "phase": "after" }))
+        }
+    )($trace = trace.context(metadata = { "phase": "before" }, distinct_id = "log-user"))
 }
 
 test "named and unnamed logs preserve source evaluation and context boundaries" {

@@ -148,6 +148,13 @@ function current_span_id() -> SpanId? throws never {
     $rust_function
 }
 
+/// Apply a context patch to a call. Use an IIFE for a smaller scope:
+///
+/// ```baml
+/// (() -> {
+///     log.info("Processing payment")
+/// })($trace = trace.context(metadata = { "phase": "payment" }))
+/// ```
 //baml:mut_vm
 function context(
     metadata: map<string, string | int | float | bool | null> = {},
@@ -159,15 +166,6 @@ function context(
 /// Read a detached snapshot of the current invocation, even with tracing off.
 //baml:mut_vm
 function current_context() -> Context throws never {
-    $rust_function
-}
-
-/// Update this invocation and subsequently launched descendants, not its caller.
-//baml:mut_vm
-function update_context(
-    metadata: map<string, string | int | float | bool | null> = {},
-    distinct_id: string? = null,
-) -> void throws never {
     $rust_function
 }
 

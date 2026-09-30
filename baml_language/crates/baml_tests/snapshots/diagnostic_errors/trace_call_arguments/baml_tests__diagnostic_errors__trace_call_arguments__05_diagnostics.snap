@@ -114,3 +114,11 @@ source: crates/baml_tests/src/generated_tests.rs
  50 │   let trace.Options { _handle } = options
     ·   ─────────────────────────────
     ╰────
+
+  [type] E0003
+
+  × unresolved name: `trace.update_context`
+    ╭─[trace.baml:55:3]
+ 55 │   trace.update_context()
+    ·   ────────────────────
+    ╰────

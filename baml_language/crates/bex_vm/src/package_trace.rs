@@ -250,15 +250,6 @@ impl BamlPackageTrace for PackageTraceImpl {
         alloc_context(vm, &context)
     }
 
-    fn update_context(
-        vm: &mut BexVm,
-        metadata: &IndexMap<bex_str::BexStr, Value>,
-        distinct_id: Option<&bex_str::BexStr>,
-    ) {
-        let patch = patch_from_values(vm, metadata, distinct_id);
-        vm.update_context(&patch);
-    }
-
     fn _options(vm: &mut BexVm, mode: Option<&Value>) -> Value {
         let mode = mode_from_value(vm, mode);
         alloc_options(

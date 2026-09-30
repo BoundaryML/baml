@@ -1361,11 +1361,7 @@ mod tests {
     #[test]
     fn context_controls_resolve_empty_map_defaults_without_a_wrapper_frame() {
         let (builtins, _, _) = extract_native_builtins_for("trace").unwrap();
-        for path in [
-            "trace.context",
-            "trace.update_context",
-            "trace.Options.context",
-        ] {
+        for path in ["trace.context", "trace.Options.context"] {
             let builtin = builtins
                 .iter()
                 .find(|builtin| builtin.path == path)
