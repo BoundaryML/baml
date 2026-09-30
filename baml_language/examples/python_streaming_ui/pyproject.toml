@@ -1,0 +1,25 @@
+[project]
+name = "python-streaming-ui"
+version = "0.0.0"
+description = "Streamlit app comparing streamed LLM output through baml_sdk, openai and anthropic"
+requires-python = ">=3.10"
+dependencies = [
+    "baml_bridge",
+    "streamlit>=1.40",
+    "openai>=1.60",
+    "anthropic>=0.60",
+    "pydantic>=2",
+    "jiter>=0.8",
+    "pandas>=2",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+# Built from this checkout (release profile) so the numbers reflect the repo's runtime.
+baml_bridge = { path = "../../sdks/python" }
+
+[tool.ruff]
+line-length = 120
+extend-exclude = ["baml_sdk"]
