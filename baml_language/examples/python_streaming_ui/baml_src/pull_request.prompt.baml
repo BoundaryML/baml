@@ -85,13 +85,10 @@ class Comment {
     url: string,
 }
 
-function ExtractPullRequest(
-    pr_text: string,
-    provider: Provider = "anthropic",
-    model: string = "claude-haiku-4-5",
-) -> PullRequest {
-    client: make_client(provider, model)
+function ExtractPullRequest(pr_text: string, scenario: int) -> PullRequest {
+    client: scenario_client(scenario)
     prompt: `
+        ${role("user")}
         Convert this GitHub pull request, written out as prose, back into structured data.
         Copy every text field (bodies, message bodies, headlines) verbatim, including markdown and HTML.
         Use null for timestamps given as "-". Enum-like values (state, changeType, authorAssociation) are upper-case.

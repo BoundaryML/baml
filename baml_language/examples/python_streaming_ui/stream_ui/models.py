@@ -90,7 +90,3 @@ class PullRequest(BaseModel):
     commits: list[Commit]
     reviews: list[Review]
     comments: list[Comment]
-
-
-class Narrative(BaseModel):
-    text: str

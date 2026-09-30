@@ -1,13 +1,15 @@
 [project]
 name = "python-streaming-ui"
 version = "0.0.0"
-description = "Streamlit app comparing streamed LLM output through baml_sdk, openai and anthropic"
+description = "Streamlit app comparing structured-output streaming through baml_sdk and native provider SDKs"
 requires-python = ">=3.10"
 dependencies = [
     "baml_bridge",
     "streamlit>=1.64",
     "openai>=3.22",
-    "anthropic>=1.10",
+    "anthropic[bedrock]>=1.10",
+    "google-genai>=1.0",
+    "google-auth>=2.0",
     "pydantic>=2",
     "jiter>=0.8",
     "pandas>=2",
