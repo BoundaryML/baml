@@ -1880,6 +1880,7 @@ dependencies = [
  "btel_snapshot",
  "btel_types",
  "prost",
+ "rustc-hash 2.1.2",
  "tempfile",
 ]
 

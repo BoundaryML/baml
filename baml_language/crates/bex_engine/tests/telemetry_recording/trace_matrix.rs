@@ -144,27 +144,43 @@ impl Recording {
         };
         for (_, entry, done) in &recording.spans {
             for id in entry.inputs_cas_id.iter().chain(done.value_cas_id.iter()) {
-                recording.blob(id);
+                recording.blobs(capture_id(id));
             }
         }
         (result, recording)
     }
 
-    fn blob(&self, id: &proto::CasId) -> Vec<u8> {
-        let id = capture_id(id);
+    /// One blob from the recording's CAS, decoded and checked against its ID.
+    fn blob(&self, id: btel_snapshot::CasId) -> (Vec<u8>, btel_snapshot::DecodedSnapshot) {
         let path = btel_file::cas_path(&self.directory.path().join("cas"), id);
         let bytes = std::fs::read(path).unwrap();
         let decoded =
             btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default()).unwrap();
         assert_eq!(decoded.id, id);
-        bytes
+        (bytes, decoded)
+    }
+
+    /// A capture's blobs as the recording's CAS holds them: the root and every
+    /// blob it reaches, each of which must be there.
+    fn blobs(&self, root: btel_snapshot::CasId) -> Blobs {
+        let mut blobs = HashMap::new();
+        let mut pending = vec![root];
+        while let Some(id) = pending.pop() {
+            if blobs.contains_key(&id) {
+                continue;
+            }
+            let (_, decoded) = self.blob(id);
+            pending.extend(decoded.children.iter().copied());
+            blobs.insert(id, decoded);
+        }
+        Blobs { root, blobs }
     }
 
     /// A failure captures the `baml.errors.Context` a handler would bind: its
     /// `error` is the thrown value `expected` holds.
     #[track_caller]
     fn assert_error_capture(&self, actual: Option<&proto::CasId>, expected: Option<&Snapshot>) {
-        use btel_snapshot::{DecodeLimits, DecodedObject, DecodedRoot, DecodedValue, decode_blob};
+        use btel_snapshot::{DecodedObject, DecodedRoot, DecodedValue};
         let (actual, expected) = match (actual, expected) {
             (None, None) => return,
             (Some(actual), Some(expected)) => (actual, expected),
@@ -174,30 +190,28 @@ impl Recording {
                 expected.is_some()
             ),
         };
-        let context = decode_blob(&self.blob(actual), &DecodeLimits::default()).unwrap();
-        let DecodedRoot::Value(DecodedValue::Object(root)) = context.root else {
+        let actual = self.blobs(capture_id(actual));
+        let context = actual.root();
+        let DecodedRoot::Value(DecodedValue::Object(root)) = context.blob.root else {
             panic!("expected a captured context object");
         };
-        let DecodedObject::Instance { fields, .. } = context.object(root) else {
+        let DecodedObject::Instance { fields, .. } = context.blob.object(root) else {
             panic!("expected a baml.errors.Context instance");
         };
-        let mut bytes = Vec::new();
-        expected
-            .root_blob()
-            .write(&mut btel_snapshot::BlobScratch::default(), &mut bytes)
-            .unwrap();
-        let expected = decode_blob(&bytes, &DecodeLimits::default()).unwrap();
-        let DecodedRoot::Value(value) = &expected.root else {
+        let expected = Blobs::of(expected);
+        let expected = expected.root();
+        let DecodedRoot::Value(value) = &expected.blob.root else {
             panic!("expected a captured value");
         };
         assert_eq!(fields[0].0.as_ref(), "error");
         assert!(
-            same_value(&context, &fields[0].1, &expected, value),
+            same_value(context, &fields[0].1, expected, value),
             "error {:?} differs from {value:?}",
             fields[0].1
         );
     }
 
+    /// The recording holds every blob of `expected`, byte for byte.
     #[track_caller]
     fn assert_capture(&self, actual: Option<&proto::CasId>, expected: Option<&Snapshot>) {
         match (actual, expected) {
@@ -207,15 +221,12 @@ impl Recording {
                     // Not the value itself: a failure's context around it.
                     return self.assert_error_capture(Some(actual), Some(expected));
                 }
-                let mut expected_bytes = Vec::new();
-                expected
-                    .root_blob()
-                    .write(
-                        &mut btel_snapshot::BlobScratch::default(),
-                        &mut expected_bytes,
-                    )
-                    .unwrap();
-                assert_eq!(self.blob(actual), expected_bytes);
+                let mut scratch = btel_snapshot::BlobScratch::default();
+                for blob in expected.blobs() {
+                    let mut expected_bytes = Vec::new();
+                    blob.write(&mut scratch, &mut expected_bytes).unwrap();
+                    assert_eq!(self.blob(blob.id()).0, expected_bytes);
+                }
             }
             _ => panic!(
                 "capture presence differs: actual={}, expected={}",
@@ -226,19 +237,95 @@ impl Recording {
     }
 }
 
-/// Structural equality across two blobs: object numbers are local to each.
-/// Every capture here is one blob.
+/// A capture's blobs by ID.
+struct Blobs {
+    root: btel_snapshot::CasId,
+    blobs: HashMap<btel_snapshot::CasId, btel_snapshot::DecodedSnapshot>,
+}
+
+impl Blobs {
+    /// Every blob of a capture this test built.
+    fn of(snapshot: &Snapshot) -> Self {
+        let mut scratch = btel_snapshot::BlobScratch::default();
+        let blobs = snapshot
+            .blobs()
+            .map(|blob| {
+                let mut bytes = Vec::new();
+                blob.write(&mut scratch, &mut bytes).unwrap();
+                let decoded =
+                    btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default())
+                        .unwrap();
+                (blob.id(), decoded)
+            })
+            .collect();
+        Self {
+            root: snapshot.root_id(),
+            blobs,
+        }
+    }
+
+    fn root(&self) -> Side<'_> {
+        Side {
+            blobs: self,
+            blob: &self.blobs[&self.root],
+        }
+    }
+}
+
+/// A capture, and the blob of it a value is read in.
+#[derive(Clone, Copy)]
+struct Side<'a> {
+    blobs: &'a Blobs,
+    blob: &'a btel_snapshot::DecodedSnapshot,
+}
+
+impl Side<'_> {
+    /// What `value` names, and the blob it is read in: a reference into a
+    /// child blob is followed there.
+    fn resolve(self, value: &btel_snapshot::DecodedValue) -> (Self, btel_snapshot::DecodedValue) {
+        use btel_snapshot::{DecodedRoot, DecodedValue as V};
+        match value {
+            V::External(child) => {
+                let blob = &self.blobs.blobs[&self.blob.child(*child)];
+                let DecodedRoot::Value(root) = &blob.root else {
+                    panic!("a child blob's root is a value");
+                };
+                (Side { blob, ..self }, root.clone())
+            }
+            V::ExternalNode { child, node } => {
+                let blob = &self.blobs.blobs[&self.blob.child(*child)];
+                (Side { blob, ..self }, V::Object(*node))
+            }
+            V::Null
+            | V::OmittedArg
+            | V::Bool(_)
+            | V::Int(_)
+            | V::Float(_)
+            | V::String(_)
+            | V::Bigint(_)
+            | V::Type(_)
+            | V::Truncated(_)
+            | V::Object(_)
+            | V::Enum { .. } => (self, value.clone()),
+        }
+    }
+}
+
+/// Structural equality across two captures: object numbers are local to each
+/// blob, and a reference into a child blob compares as what it names.
 fn same_value(
-    a: &btel_snapshot::DecodedSnapshot,
+    a: Side<'_>,
     x: &btel_snapshot::DecodedValue,
-    b: &btel_snapshot::DecodedSnapshot,
+    b: Side<'_>,
     y: &btel_snapshot::DecodedValue,
 ) -> bool {
     use btel_snapshot::DecodedValue as V;
-    match (x, y) {
+    let (a, x) = a.resolve(x);
+    let (b, y) = b.resolve(y);
+    match (&x, &y) {
         (V::External(_) | V::ExternalNode { .. }, _)
         | (_, V::External(_) | V::ExternalNode { .. }) => {
-            panic!("expected each capture in one blob")
+            unreachable!("a blob's root value is stored in it")
         }
         (V::Null, V::Null) | (V::OmittedArg, V::OmittedArg) => true,
         (V::Bool(x), V::Bool(y)) => x == y,
@@ -249,7 +336,7 @@ fn same_value(
         (V::Bigint(x), V::Bigint(y)) => x == y,
         (V::Type(x), V::Type(y)) => x == y,
         (V::Truncated(x), V::Truncated(y)) => x == y,
-        (V::Object(x), V::Object(y)) => same_object(a, a.object(*x), b, b.object(*y)),
+        (V::Object(x), V::Object(y)) => same_object(a, a.blob.object(*x), b, b.blob.object(*y)),
         (
             V::Enum {
                 declaration: x,
@@ -264,7 +351,7 @@ fn same_value(
         ) => {
             variant_x == variant_y
                 && name_x == name_y
-                && same_object(a, a.object(*x), b, b.object(*y))
+                && same_object(a, a.blob.object(*x), b, b.blob.object(*y))
         }
         (
             V::Null
@@ -284,9 +371,9 @@ fn same_value(
 }
 
 fn same_object(
-    a: &btel_snapshot::DecodedSnapshot,
+    a: Side<'_>,
     x: &btel_snapshot::DecodedObject,
-    b: &btel_snapshot::DecodedSnapshot,
+    b: Side<'_>,
     y: &btel_snapshot::DecodedObject,
 ) -> bool {
     use btel_snapshot::{DecodedObject as O, Entries};
@@ -344,7 +431,12 @@ fn same_object(
         ) => {
             arguments_x == arguments_y
                 && len_x == len_y
-                && same_object(a, a.object(*declaration_x), b, b.object(*declaration_y))
+                && same_object(
+                    a,
+                    a.blob.object(*declaration_x),
+                    b,
+                    b.blob.object(*declaration_y),
+                )
                 && same_entries(x, y)
         }
         (O::Cell(x), O::Cell(y)) => same_value(a, x, b, y),

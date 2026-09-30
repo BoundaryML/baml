@@ -1,4 +1,5 @@
-//! Capture-only pool tuning. These settings never limit an active capture.
+//! Capture settings: pool tuning, which never limits an active capture, and
+//! how captures become CAS blobs.
 /// Initial arena capacities; geometric growth handles larger captures.
 pub const INITIAL_OBJECTS: usize = 8;
 pub const INITIAL_ENTRIES: usize = 8;
@@ -13,6 +14,17 @@ pub const MIN_SNAPSHOT_SLOTS: usize = 128;
 
 /// Hash and copy mutable bytes in cache-sized batches during capture.
 pub const COPY_HASH_BATCH_BYTES: usize = 16 * 1024;
+
+/// Where captures are cut into CAS blobs. These decide blob IDs, never whether
+/// a blob can be read: changing them costs dedup against blobs cut the old
+/// way, not a format bump.
+///
+/// A value whose encoded weight reaches this gets a blob of its own.
+pub const SPLIT_UNIT_BYTES: u64 = 64 * 1024;
+/// A string or bigint value, or a `uint8array`, whose content (a bigint's
+/// encoded limbs) reaches this gets a blob of its own, unless it is the
+/// captured value itself. Map keys and names are always written in place.
+pub const SPLIT_LEAF_BYTES: u64 = 16 * 1024;
 
 /// Bounded processor-local whole-snapshot combining window, not a delivery ledger.
 pub const RECENT_CAPTURE_IDS: usize = 4096;

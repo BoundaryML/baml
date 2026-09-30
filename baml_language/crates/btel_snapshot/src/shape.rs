@@ -50,10 +50,9 @@ use super::{
 
 /// Where a capture is cut into blobs. The policy decides blob IDs, never
 /// whether a blob can be read.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ShapePolicy {
     /// One blob per capture.
-    #[default]
     Whole,
     /// Cut values that reach these encoded sizes into blobs of their own.
     Split {
@@ -62,6 +61,18 @@ pub enum ShapePolicy {
         /// Content length at which a string, bigint or `uint8array` is cut.
         leaf_bytes: u64,
     },
+}
+
+impl Default for ShapePolicy {
+    /// The policy captures are shaped with:
+    /// [`SPLIT_UNIT_BYTES`](btel_settings::snapshot::SPLIT_UNIT_BYTES) and
+    /// [`SPLIT_LEAF_BYTES`](btel_settings::snapshot::SPLIT_LEAF_BYTES).
+    fn default() -> Self {
+        Self::Split {
+            unit_bytes: btel_settings::snapshot::SPLIT_UNIT_BYTES,
+            leaf_bytes: btel_settings::snapshot::SPLIT_LEAF_BYTES,
+        }
+    }
 }
 
 /// Weight of a reference to a cut unit: its entry in the child table. A

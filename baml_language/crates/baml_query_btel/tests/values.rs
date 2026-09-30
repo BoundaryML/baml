@@ -213,3 +213,83 @@ async fn missing_and_corrupt_blobs_are_reported_not_answered() {
     assert_eq!(metadata.outcome.status, Status::Complete);
     assert_eq!(metadata.outcome.query.values.cas_loads, 0);
 }
+
+/// The size of every blob in the project's CAS, smallest first.
+fn blob_sizes(project: &std::path::Path) -> Vec<u64> {
+    let mut sizes = Vec::new();
+    let mut pending = vec![btel_reader::layout::SourceLayout::for_project(project).cas];
+    while let Some(directory) = pending.pop() {
+        for entry in std::fs::read_dir(directory).unwrap() {
+            let entry = entry.unwrap();
+            let metadata = entry.metadata().unwrap();
+            if metadata.is_dir() {
+                pending.push(entry.path());
+            } else {
+                sizes.push(metadata.len());
+            }
+        }
+    }
+    sizes.sort_unstable();
+    sizes
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn large_strings_are_stored_once_and_queries_read_through_them() {
+    let project = tempfile::tempdir().unwrap();
+    let source = r#"
+        function Echo(parts: string[]) -> string[] { parts }
+        function main(n: int) -> int {
+            let chunk = "x";
+            let i = 0;
+            while (i < 15) {
+                chunk = chunk + chunk;
+                i = i + 1;
+            }
+            let last = if (n == 0) { "c" } else { "d" };
+            Echo([chunk + "a", chunk + "b", chunk + last]);
+            n
+        }
+    "#;
+    let results = record_program(
+        project.path(),
+        source,
+        &["Echo"],
+        &[("main", 0), ("main", 1)],
+    )
+    .await;
+    assert_eq!(
+        results,
+        vec![
+            Ok(bex_engine::BexExternalValue::Int(0)),
+            Ok(bex_engine::BexExternalValue::Int(1)),
+        ]
+    );
+    // Four distinct 32 KiB strings, each stored once, and per call a small
+    // inputs root and a small output root that name them.
+    let sizes = blob_sizes(project.path());
+    let (small, large): (Vec<u64>, Vec<u64>) = sizes.iter().partition(|size| **size < 1024);
+    assert_eq!(small.len(), 4, "{sizes:?}");
+    assert_eq!(large.len(), 4, "{sizes:?}");
+    assert!(large.iter().all(|size| (32 << 10..33 << 10).contains(size)));
+
+    let mut index = index(project.path());
+    let result = sql(
+        &mut index,
+        "SELECT length(input_args['parts'][0]) AS first, output_value[2] LIKE '%c' AS third_is_c,
+           output_value = input_args['parts'] AS echoed
+         FROM spans WHERE span_name = 'user.Echo' ORDER BY start_time",
+    );
+    assert_eq!(
+        result.rows,
+        vec![
+            vec![json!((32 << 10) + 1), json!(1), json!(1)],
+            vec![json!((32 << 10) + 1), json!(0), json!(1)],
+        ]
+    );
+    assert_eq!(
+        result.outcome.status,
+        Status::Complete,
+        "{:?}",
+        result.outcome.diagnostics
+    );
+}

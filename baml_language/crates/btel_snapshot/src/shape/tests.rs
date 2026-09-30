@@ -118,13 +118,25 @@ fn items(blob: &DecodedSnapshot, node: u32) -> &[DecodedValue] {
 }
 
 #[test]
-fn the_default_policy_keeps_a_capture_whole() {
-    assert_eq!(Shaper::default().policy(), ShapePolicy::Whole);
-    let snapshot = capture(&mut Shaper::default(), |b| {
+fn the_default_policy_cuts_at_the_configured_sizes() {
+    assert_eq!(
+        Shaper::default().policy(),
+        split(
+            btel_settings::snapshot::SPLIT_UNIT_BYTES,
+            btel_settings::snapshot::SPLIT_LEAF_BYTES
+        )
+        .policy()
+    );
+    let large = |b: &mut Builder| {
         let large = text(b, &"x".repeat(1 << 20));
         list(b, &[large, large])
-    });
-    assert_eq!(written(&snapshot).len(), 1);
+    };
+    // The string once, and the list that names it twice.
+    assert_eq!(written(&capture(&mut Shaper::default(), large)).len(), 2);
+    assert_eq!(
+        written(&capture(&mut Shaper::new(ShapePolicy::Whole), large)).len(),
+        1
+    );
 }
 
 /// A map over the unit threshold that holds a string over the leaf threshold.

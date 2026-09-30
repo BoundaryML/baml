@@ -547,6 +547,26 @@ fn every_blob_of_a_capture_is_written_and_stored_ones_are_kept() {
 }
 
 #[test]
+fn a_writer_does_not_check_again_for_blobs_it_placed() {
+    let root = tempfile::tempdir().unwrap();
+    let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+    let value = cut_snapshot(&pool);
+    let child = cas_path(root.path(), value.blobs().next().unwrap().id());
+    let mut writer = crate::cas::CasWriter::new(root.path().to_owned());
+    writer.write(&value).unwrap();
+    let bytes = fs::read(&child).unwrap();
+    // Removing a blob behind a running writer is outside its contract: the
+    // writer trusts what it placed and does not look again.
+    fs::remove_file(&child).unwrap();
+    writer.write(&value).unwrap();
+    assert!(!child.exists());
+    crate::cas::CasWriter::new(root.path().to_owned())
+        .write(&value)
+        .unwrap();
+    assert_eq!(fs::read(&child).unwrap(), bytes);
+}
+
+#[test]
 fn new_cas_version_does_not_reuse_or_overwrite_old_namespace() {
     let root = tempfile::tempdir().unwrap();
     let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
@@ -558,7 +578,9 @@ fn new_cas_version_does_not_reuse_or_overwrite_old_namespace() {
         .join(path.strip_prefix(root.path().join("v3")).unwrap());
     fs::create_dir_all(legacy.parent().unwrap()).unwrap();
     fs::write(&legacy, b"existing v2 entry").unwrap();
-    crate::cas::write_snapshot(root.path(), &value).unwrap();
+    crate::cas::CasWriter::new(root.path().to_owned())
+        .write(&value)
+        .unwrap();
     assert_eq!(fs::read(&path).unwrap(), root_blob(&value));
     assert_eq!(fs::read(&legacy).unwrap(), b"existing v2 entry");
 }

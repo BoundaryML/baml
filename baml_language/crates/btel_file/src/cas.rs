@@ -9,6 +9,7 @@ use std::{
 };
 
 use btel_snapshot::{Blob, BlobScratch, CasId, Snapshot};
+use rustc_hash::FxHashSet;
 
 use crate::{LocalDeliveryError, io_error};
 
@@ -26,12 +27,38 @@ pub fn cas_path(root: &Path, id: CasId) -> PathBuf {
         .join(name)
 }
 
-pub(super) fn write_snapshot(root: &Path, snapshot: &Snapshot) -> Result<(), LocalDeliveryError> {
-    let mut scratch = BlobScratch::default();
-    for blob in snapshot.blobs() {
-        write_blob(root, blob, &mut scratch)?;
+/// Publishes captures beneath one CAS root. Blobs it published or found in
+/// place are not checked again: like the recent-capture window, this assumes
+/// nothing removes blobs while a recording runs.
+pub(super) struct CasWriter {
+    root: PathBuf,
+    scratch: BlobScratch,
+    /// Bounded by [`KNOWN_BLOB_IDS`](btel_settings::local_files::KNOWN_BLOB_IDS).
+    known: FxHashSet<CasId>,
+}
+
+impl CasWriter {
+    pub(super) fn new(root: PathBuf) -> Self {
+        Self {
+            root,
+            scratch: BlobScratch::default(),
+            known: FxHashSet::default(),
+        }
     }
-    Ok(())
+
+    pub(super) fn write(&mut self, snapshot: &Snapshot) -> Result<(), LocalDeliveryError> {
+        for blob in snapshot.blobs() {
+            if self.known.contains(&blob.id()) {
+                continue;
+            }
+            write_blob(&self.root, blob, &mut self.scratch)?;
+            if self.known.len() >= btel_settings::local_files::KNOWN_BLOB_IDS {
+                self.known.clear();
+            }
+            self.known.insert(blob.id());
+        }
+        Ok(())
+    }
 }
 
 fn write_blob(
@@ -84,5 +111,41 @@ fn write_blob(
         Ok(()) => Ok(()),
         Err(error) if error.error.kind() == io::ErrorKind::AlreadyExists => Ok(()),
         Err(error) => Err(io_error(&destination, &error.error)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use btel_snapshot::{Limits, SnapshotPool, SnapshotValue};
+
+    use super::*;
+
+    #[test]
+    fn known_blobs_are_forgotten_at_capacity() {
+        let root = tempfile::tempdir().unwrap();
+        let pool = SnapshotPool::new(2, Limits::default());
+        let snapshot = |n| {
+            pool.try_acquire()
+                .unwrap()
+                .finish_value(SnapshotValue::Int(n), &mut btel_snapshot::Shaper::default())
+        };
+        let mut writer = CasWriter::new(root.path().to_owned());
+        let capacity = btel_settings::local_files::KNOWN_BLOB_IDS;
+        writer.known.extend((1..capacity).map(|n| {
+            let mut id = [0; 16];
+            id[..8].copy_from_slice(&u64::try_from(n).unwrap().to_le_bytes());
+            CasId::from_bytes(id)
+        }));
+        let (first, second) = (snapshot(1), snapshot(2));
+        writer.write(&first).unwrap();
+        assert_eq!(writer.known.len(), capacity);
+        writer.write(&second).unwrap();
+        assert_eq!(
+            writer.known.iter().copied().collect::<Vec<_>>(),
+            [second.root_id()]
+        );
+        for snapshot in [&first, &second] {
+            assert!(cas_path(root.path(), snapshot.root_id()).exists());
+        }
     }
 }
