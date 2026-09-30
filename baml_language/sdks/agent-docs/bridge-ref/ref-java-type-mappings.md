@@ -378,11 +378,9 @@ Function calls return a `BamlOutboundResult` envelope; `ProtoReader.decodeOutbou
   **`BamlPanic` re-parents to `java.lang.Error`** (`BamlPanic.java:20`) so it escapes
   `catch (Exception)` — the analog of Python raising `BamlPanic` off `BaseException`. **LANDED
   (`74782a679`).**
-- **Exit panics** (`baml.sys.exit`, `is_exit_panic`) → run the registered telemetry-flush hooks
-  (`BamlFfi.runExitFlushHooks()`, best-effort) then `Runtime.getRuntime().halt(exitCode)` (hard exit,
-  bypasses shutdown hooks — analog of Python `os._exit`). **Flush hook wired, LANDED (`eab6d37cc`);**
-  no telemetry ships in this slice, so the hook registry is empty by default. `ProtoReader.decodePanic`
-  decodes `is_exit` / `exit_code` and drives the flush-then-halt (`ProtoReader.java:313-319`).
+- **Exit panics** (`baml.sys.exit`, `is_exit_panic`) → `Runtime.getRuntime().halt(exitCode)`
+  (hard exit, bypasses shutdown hooks — analog of Python `os._exit`). `ProtoReader.decodePanic`
+  decodes `is_exit` / `exit_code` and terminates the process.
 - **Cancellation** — **DECIDED 2026-07-17 (D1), full Python parity plus a sync path.** Trailing
   `BamlCallContext` overloads (`f(req…, ctx)`, `f(req…, opts, ctx)`); engine-driven abort →
   `BamlCancelledError extends java.util.concurrent.CancellationException` (the future counts as

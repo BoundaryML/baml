@@ -20,9 +20,7 @@ const packageRootExports = [
   "BamlType",
   "BamlTypeMap",
   "BamlVideo",
-  "CtxManager",
   "FunctionResult",
-  "HostSpanManager",
   "Never",
   "UNSET",
   "_seedFunctionRefHandle",
@@ -34,7 +32,6 @@ const packageRootExports = [
   "defineFunction",
   "defineInstanceFunction",
   "encodeCallArgs",
-  "flushEvents",
   "getBridgeRuntimeVersion",
   "getRuntime",
   "getToolchainVersion",
@@ -68,9 +65,7 @@ const constructors = [
   "BamlType",
   "BamlTypeMap",
   "BamlVideo",
-  "CtxManager",
   "FunctionResult",
-  "HostSpanManager",
 ] as const;
 
 describe("bridge package-root parity contract", () => {

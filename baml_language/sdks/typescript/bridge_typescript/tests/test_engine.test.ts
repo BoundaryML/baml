@@ -1,7 +1,7 @@
 // test_engine.test.ts — mirrors bridge_python/tests/test_engine.py
 
 import { BamlRuntime, callFunctionSync, callFunction,
-         BamlCallContext, getRuntime, getVersion, flushEvents } from '../dist/index.js';
+         BamlCallContext, getRuntime, getVersion } from '../dist/index.js';
 
 const BAML_SOURCE = `
 function ReturnOne() -> int {
@@ -71,10 +71,6 @@ describe('Basics', () => {
     test('from_files creates runtime', () => {
         const rt = makeRuntime(BAML_SOURCE);
         expect(rt).toBeDefined();
-    });
-
-    test('flush_events runs without error', () => {
-        expect(() => flushEvents()).not.toThrow();
     });
 
     test('getRuntime returns initialized runtime', () => {

@@ -18,8 +18,6 @@ use crate::{BridgeError, baml_to_host, error_to_outbound};
 pub mod api;
 #[path = "ffi/mod.rs"]
 mod ffi;
-#[path = "host_spans.rs"]
-pub mod host_spans;
 #[path = "panic.rs"]
 mod panic;
 
@@ -40,7 +38,6 @@ pub use ffi::{
         HostDispatchFn, complete_host_call, register_host_dispatch_callback,
         register_host_release_callback,
     },
-    objects::flush_events,
     runtime::{
         BamlBridgeInfoV1, create_baml_runtime, destroy_baml_runtime,
         initialize_runtime_from_blob as initialize_runtime_from_blob_ffi,

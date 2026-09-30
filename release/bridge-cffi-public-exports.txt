@@ -16,7 +16,6 @@ cancel_function_call
 complete_host_call
 create_baml_runtime
 destroy_baml_runtime
-flush_events
 free_buffer
 initialize_runtime_from_blob
 initialize_runtime_from_blob_with_metadata

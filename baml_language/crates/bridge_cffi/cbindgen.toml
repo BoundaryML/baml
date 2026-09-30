@@ -115,7 +115,6 @@ exclude = [
   "shutdown_runtime",
   "complete_host_call",
   "free_buffer",
-  "flush_events",
   "version",
   "create_baml_runtime",
   "initialize_runtime_from_blob",

@@ -66,13 +66,13 @@ export class BamlStream {
         }
         const rt = getRuntime();
         const argsProto = encodeCallArgs({ self: this }, { syncMode: true, callId: newFunctionCall(), functionName: fqn });
-        const resultBytes = rt.callFunctionSync(argsProto, null);
+        const resultBytes = rt.callFunctionSync(argsProto);
         return decodeCallResult(resultBytes);
     }
     async _callAsync(fqn) {
         const rt = getRuntime();
         const argsProto = encodeCallArgs({ self: this }, { callId: newFunctionCall(), functionName: fqn });
-        const resultBytes = await rt.callFunction(argsProto, null);
+        const resultBytes = await rt.callFunction(argsProto);
         return decodeCallResult(resultBytes);
     }
 }

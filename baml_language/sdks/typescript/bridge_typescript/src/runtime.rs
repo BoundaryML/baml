@@ -8,7 +8,7 @@
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
-use crate::{errors::bridge_error_to_napi, types::HostSpanManager};
+use crate::errors::bridge_error_to_napi;
 
 /// The main BAML runtime. A zero-sized handle (see module docs).
 #[napi]
@@ -55,18 +55,13 @@ impl BamlRuntime {
 
     /// Call a BAML function synchronously (blocking).
     #[napi]
-    pub fn call_function_sync(
-        &self,
-        args_proto: Buffer,
-        ctx: Option<&HostSpanManager>,
-    ) -> napi::Result<Buffer> {
+    pub fn call_function_sync(&self, args_proto: Buffer) -> napi::Result<Buffer> {
         let prepared = (|| -> std::result::Result<_, bridge_cffi::BridgeError> {
             let runtime = bridge_cffi::get_runtime()?;
             let prepared = bridge_cffi::prepare_call(args_proto.as_ref())?;
             let rt = bridge_cffi::get_tokio_runtime()?;
             Ok((runtime, prepared, rt))
         })();
-        let _ = &ctx;
 
         let (runtime, prepared, rt) = match prepared {
             Ok(v) => v,
@@ -88,7 +83,6 @@ impl BamlRuntime {
         &self,
         env: &'e Env,
         args_proto: Buffer,
-        ctx: Option<&HostSpanManager>,
     ) -> napi::Result<PromiseRaw<'e, Buffer>> {
         // `prepare_call` pins a handle target before the future is spawned,
         // so a JS-side release of that handle cannot race the call.
@@ -97,7 +91,6 @@ impl BamlRuntime {
             let prepared = bridge_cffi::prepare_call(args_proto.as_ref())?;
             Ok((runtime, prepared))
         })();
-        let _ = &ctx;
 
         // Same shared invoke_prepared as the sync + C-ABI paths — returns the
         // encoded BamlOutboundResult envelope bytes for the TS decoder.

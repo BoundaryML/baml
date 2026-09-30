@@ -99,7 +99,7 @@ export class BamlPrompt {
         const argsProto = encodeCallArgs({ self: this }, { syncMode: true, callId, functionName: fqn });
         const callCtxBinding = attachCallContext(options?.$ctx, callId);
         try {
-            return decodeCallResult(getRuntime().callFunctionSync(argsProto, null));
+            return decodeCallResult(getRuntime().callFunctionSync(argsProto));
         }
         finally {
             callCtxBinding.detach();
@@ -110,7 +110,7 @@ export class BamlPrompt {
         const argsProto = encodeCallArgs({ self: this }, { callId, functionName: fqn });
         const callCtxBinding = attachCallContext(options?.$ctx, callId);
         try {
-            return decodeCallResult(await getRuntime().callFunction(argsProto, null));
+            return decodeCallResult(await getRuntime().callFunction(argsProto));
         }
         finally {
             callCtxBinding.detach();

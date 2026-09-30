@@ -76,10 +76,10 @@ submit! {
         import typing
 
         class BamlRuntime:
-            def call_function(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None) -> typing.Any:
+            def call_function(self, args_proto: bytes) -> typing.Any:
                 """Call a BAML function asynchronously."""
 
-            def call_function_sync(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None) -> bytes:
+            def call_function_sync(self, args_proto: bytes) -> bytes:
                 """Call a BAML function synchronously (blocking)."""
         "#
     }
@@ -91,14 +91,8 @@ impl BamlRuntime {
     ///
     /// # Arguments
     /// * `args_proto` - Protobuf-encoded `CallFunctionArgs` including its target
-    /// * `ctx` - Accepted for ABI compatibility; currently ignored
-    #[pyo3(signature = (args_proto, ctx=None))]
-    fn call_function<'py>(
-        &self,
-        py: Python<'py>,
-        args_proto: Vec<u8>,
-        ctx: Option<&crate::types::HostSpanManager>,
-    ) -> PyResult<Py<PyAny>> {
+    #[pyo3(signature = (args_proto))]
+    fn call_function<'py>(&self, py: Python<'py>, args_proto: Vec<u8>) -> PyResult<Py<PyAny>> {
         // Byte-returning site (32c): pre-call host-boundary failures don't
         // raise — they become a structured BamlOutboundResult envelope so the
         // future yields bytes that decode_call_result raises uniformly (same
@@ -110,9 +104,6 @@ impl BamlRuntime {
             let prepared = bridge_cffi::prepare_call(&args_proto)?;
             Ok((runtime, prepared))
         })();
-
-        // Host tracing context is accepted for compatibility but is not wired into the call.
-        let _ = &ctx;
 
         // The whole Result -> BamlOutboundResult translation (incl. the
         // catch_unwind -> SdkPanic boundary) lives in bridge_cffi; we just
@@ -131,14 +122,8 @@ impl BamlRuntime {
     ///
     /// # Arguments
     /// * `args_proto` - Protobuf-encoded `CallFunctionArgs` including its target
-    /// * `ctx` - Accepted for ABI compatibility; currently ignored
-    #[pyo3(signature = (args_proto, ctx=None))]
-    fn call_function_sync(
-        &self,
-        py: Python<'_>,
-        args_proto: Vec<u8>,
-        ctx: Option<&crate::types::HostSpanManager>,
-    ) -> PyResult<Vec<u8>> {
+    #[pyo3(signature = (args_proto))]
+    fn call_function_sync(&self, py: Python<'_>, args_proto: Vec<u8>) -> PyResult<Vec<u8>> {
         // Byte-returning site (32c): pre-call host-boundary failures
         // (uninitialized runtime, malformed call-args, no tokio runtime) don't
         // raise — they become a structured BamlOutboundResult envelope so the
@@ -154,9 +139,6 @@ impl BamlRuntime {
             Ok(v) => v,
             Err(e) => return Ok(bridge_cffi::error_to_outbound(e)),
         };
-
-        // Host tracing context is accepted for compatibility but is not wired into the call.
-        let _ = &ctx;
 
         // Same shared invoke_prepared as the async + C-ABI paths — returns the
         // encoded BamlOutboundResult envelope bytes.

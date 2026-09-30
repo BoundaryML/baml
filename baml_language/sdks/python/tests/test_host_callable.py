@@ -25,7 +25,6 @@ from baml_bridge import (
     BamlRuntime,
     call_function_sync,
     call_function,
-    flush_events,
 )
 from baml_bridge.baml_py import (
     _live_handle_count,
@@ -107,8 +106,7 @@ def test_release_fires_on_drop():
     callback then removes the Python callable from the registry, and
     dropping the user's last reference makes it collectible.
 
-    `flush_events()` clears the event-sink arg-snapshot clone; the
-    remaining clone sits on the engine's heap and only goes away when
+    The callable sits on the engine's heap and only goes away when
     GC walks it. Driving extra BAML calls *eventually* triggers GC,
     but a single one usually doesn't — hence xfail-strict-false. The
     release path itself is exercised directly by the `bex_external_types`
@@ -125,12 +123,10 @@ def test_release_fires_on_drop():
     result = call_function_sync(rt, "CallCb", {"callback": cb, "x": 3})
     assert result.result() == "3"
     del cb
-    flush_events()
     # Drive enough calls to nudge the engine's GC heuristic. Even with
     # this, a single-callable program may stay below the threshold.
     for _ in range(64):
         _ = call_function_sync(rt, "CallCb", {"callback": lambda _x: "", "x": 0})
-    flush_events()
     gc.collect()
     assert wr() is None, (
         "expected the host callable to be released after BAML drops its HostClosure"

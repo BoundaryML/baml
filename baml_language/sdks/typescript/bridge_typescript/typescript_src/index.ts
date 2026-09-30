@@ -4,12 +4,11 @@ import {
     BamlRuntime,
     BamlHandle,
     BamlCallContext,
-    HostSpanManager,
     cancelFunctionCall as nativeCancelFunctionCall,
     newFunctionCall as nativeNewFunctionCall,
 } from './native.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
-import { installFlushOnExit } from './exit_hook.js';
+import { installShutdownOnExit } from './exit_hook.js';
 import { wrapNativeError } from './errors.js';
 import { attachCallContext } from './call_context.js';
 
@@ -17,12 +16,10 @@ export {
     BamlRuntime,
     BamlCallContext,
     BamlHandle,
-    HostSpanManager,
     getRuntime,
     getBridgeRuntimeVersion,
     getToolchainVersion,
     getVersion,
-    flushEvents,
 } from './native.js';
 export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 // Runtime-owned stdlib value classes. Exported under their `Baml*` names only;
@@ -34,7 +31,6 @@ export { BamlFunctionSpec } from './function_spec.js';
 export type { BamlFunctionSpecBuildRequestOptions, BamlFunctionSpecCallOptions } from './function_spec.js';
 export { BamlPrompt, encodeCallArgs, decodeCallResult } from './proto.js';
 export type { BamlPromptCallOptions, BamlPromptMessage } from './proto.js';
-export { CtxManager } from './ctx_manager.js';
 // Codegen support: typemap + placeholder sentinel + free runtime initializer.
 export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';
 // Callable factories the generated SDK emits for every BAML function/method.
@@ -106,7 +102,6 @@ export function callFunctionSync(
     rt: BamlRuntime,
     functionName: string,
     kwargs: Record<string, unknown>,
-    ctx?: HostSpanManager,
     callCtx?: BamlCallContext,
 ): FunctionResult {
     // Encode in sync mode so a host callable in the kwargs fast-fails
@@ -124,7 +119,7 @@ export function callFunctionSync(
     try {
         let resultBytes: Buffer;
         try {
-            resultBytes = rt.callFunctionSync(argsProto, ctx ?? null);
+            resultBytes = rt.callFunctionSync(argsProto);
         } catch (err) {
             throw wrapNativeError(err);
         }
@@ -138,7 +133,6 @@ export async function callFunction(
     rt: BamlRuntime,
     functionName: string,
     kwargs: Record<string, unknown>,
-    ctx?: HostSpanManager,
     callCtx?: BamlCallContext,
 ): Promise<FunctionResult> {
     const callId = newFunctionCall();
@@ -152,7 +146,7 @@ export async function callFunction(
     try {
         let resultBytes: Buffer;
         try {
-            resultBytes = await rt.callFunction(argsProto, ctx ?? null);
+            resultBytes = await rt.callFunction(argsProto);
         } catch (err) {
             throw wrapNativeError(err);
         }
@@ -162,5 +156,5 @@ export async function callFunction(
     }
 }
 
-// Register flush on process exit (single registration; see exit_hook.ts).
-installFlushOnExit();
+// Register runtime shutdown on process exit (single registration; see exit_hook.ts).
+installShutdownOnExit();

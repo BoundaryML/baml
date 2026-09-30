@@ -9,7 +9,6 @@ import {
   callFunction,
   callFunctionSync,
   decodeCallResult,
-  flushEvents,
   getRuntime,
   getVersion,
 } from "@boundaryml/baml-bridge-web";
@@ -58,10 +57,9 @@ beforeAll(async () => {
 });
 
 describe("Web runtime and setup errors", () => {
-  it("reports the canonical version and keeps flushEvents harmless", () => {
+  it("reports the canonical version", () => {
     expect(getVersion()).toBe(raw.getVersion());
     expect(getVersion()).not.toBe("0.0.0-web");
-    expect(() => flushEvents()).not.toThrow();
   });
 
   it("uses stable raw setup codes and maps them to public subclasses", () => {

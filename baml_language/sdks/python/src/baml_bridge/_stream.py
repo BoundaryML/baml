@@ -107,7 +107,7 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
             new_function_call(),
             function_name=fqn,
         )
-        result_bytes = rt.call_function_sync(args_proto, None)
+        result_bytes = rt.call_function_sync(args_proto)
         return decode_call_result(result_bytes)
 
     async def _call_async(self, fqn: str) -> Any:
@@ -123,7 +123,7 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
             function_name=fqn,
         )
         try:
-            result_bytes = await rt.call_function(args_proto, None)
+            result_bytes = await rt.call_function(args_proto)
         except asyncio.CancelledError:
             try:
                 cancel_function_call(call_id)

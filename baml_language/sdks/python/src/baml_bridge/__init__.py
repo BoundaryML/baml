@@ -20,9 +20,7 @@ from .baml_py import (
     BamlPyHandle,
     BamlRuntime,
     FunctionResult,
-    HostSpanManager,
     cancel_function_call,
-    flush_events,
     get_runtime as _rust_get_runtime,
     get_bridge_runtime_version,
     get_toolchain_version,
@@ -41,7 +39,6 @@ from .errors import (
 from ._stream import BamlStream
 from ._function_spec import BamlFunctionSpec
 from ._runtime_value import BamlRuntimeValue
-from .ctx_manager import CtxManager as BamlCtxManager
 from .proto import (
     BamlType,
     decode_call_result,
@@ -56,8 +53,7 @@ from .typemap import (
 )
 
 
-# Complete spawned work before flushing buffered trace events.
-atexit.register(flush_events)
+# Complete spawned work before interpreter shutdown.
 atexit.register(shutdown_runtime)
 
 
@@ -126,26 +122,24 @@ def _decode_call_result_async(result_bytes: bytes) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def call_function_sync(rt, function_name, kwargs, ctx=None, _ctx=None):
+def call_function_sync(rt, function_name, kwargs, _ctx=None):
     call_id = new_function_call()
     args_proto = encode_call_args(kwargs, call_id, function_name=function_name)
     _attach_call_ctx(_ctx, call_id)
     try:
-        result_bytes = rt.call_function_sync(args_proto, ctx)
+        result_bytes = rt.call_function_sync(args_proto)
     finally:
         _detach_call_ctx(_ctx, call_id)
     return FunctionResult(decode_call_result(result_bytes))
 
 
-async def call_function(
-    rt, function_name, kwargs, ctx=None, _ctx=None
-):
+async def call_function(rt, function_name, kwargs, _ctx=None):
     call_id = new_function_call()
     args_proto = encode_call_args(kwargs, call_id, function_name=function_name)
     _attach_call_ctx(_ctx, call_id)
     try:
         try:
-            result_bytes = await rt.call_function(args_proto, ctx)
+            result_bytes = await rt.call_function(args_proto)
         except asyncio.CancelledError:
             cancel_function_call(call_id)
             raise
@@ -459,7 +453,7 @@ def define_function(
             )
             _attach_call_ctx(call_ctx, call_id)
             try:
-                result_bytes = rt.call_function_sync(args_proto, None)
+                result_bytes = rt.call_function_sync(args_proto)
             finally:
                 _detach_call_ctx(call_ctx, call_id)
             return decode_call_result(result_bytes)
@@ -500,7 +494,7 @@ def define_function(
             _attach_call_ctx(call_ctx, call_id)
             try:
                 try:
-                    result_bytes = await rt.call_function(args_proto, None)
+                    result_bytes = await rt.call_function(args_proto)
                 except asyncio.CancelledError:
                     cancel_function_call(call_id)
                     raise
@@ -523,14 +517,11 @@ __all__ = [
     "BamlFunctionSpec",
     "BamlRuntimeValue",
     "FunctionResult",
-    "HostSpanManager",
     "UNSET",
-    "BamlCtxManager",
     "BamlCancelledError",
     "BamlError",
     "BamlPanic",
     "make_sdk_panic",
-    "flush_events",
     "shutdown_runtime",
     "get_runtime",
     "get_version",
