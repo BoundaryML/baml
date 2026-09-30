@@ -1257,6 +1257,77 @@ function _stream_frames(stop: string, with_metadata: bool) -> uint8array[] {
     frames
 }
 
+// The ConverseStream event model decodes every event type, including the
+// members the TurnStream does not use (tool-use start and input deltas,
+// reasoning and citation deltas, metrics, trace, performance config), and an
+// event type it does not know is null rather than an error.
+function bedrock_stream_event_model() -> string {
+    let out: string[] = [];
+    let events = [
+        ["messageStart", `{"role":"assistant","p":"padding"}`],
+        ["contentBlockStart", `{"contentBlockIndex":1,"start":{"toolUse":{"toolUseId":"tu_1","name":"weather"}}}`],
+        ["contentBlockDelta", `{"contentBlockIndex":1,"delta":{"toolUse":{"input":"{\\"city\\":"}}}`],
+        ["contentBlockDelta", `{"contentBlockIndex":0,"delta":{"reasoningContent":{"signature":"sig"}}}`],
+        ["contentBlockDelta", `{"contentBlockIndex":0,"delta":{"citation":{"title":"doc","sourceContent":[{"text":"quote"}],"location":{"documentPage":{"documentIndex":0,"start":2,"end":3}}}}}`],
+        ["contentBlockStop", `{"contentBlockIndex":1}`],
+        ["messageStop", `{"stopReason":"tool_use","additionalModelResponseFields":{"k":1}}`],
+        ["metadata", `{"usage":{"inputTokens":10,"outputTokens":2,"totalTokens":12},"metrics":{"latencyMs":321},"trace":{"guardrail":{}},"performanceConfig":{"latency":"optimized"}}`],
+        ["somethingNew", `{}`],
+    ];
+    for (let pair in events) {
+        let decoded = aws.internal.decode_stream_event(pair.at(0) ?? "", pair.at(1) ?? "");
+        let label = match (decoded) {
+            let e: aws.internal.MessageStartEvent => `start:${e.role ?? "-"}`,
+            let e: aws.internal.ContentBlockStartEvent => {
+                `block_start:${e.contentBlockIndex ?? -1}:${e.start?.toolUse?.name ?? "-"}:${e.start?.toolUse?.toolUseId ?? "-"}`
+            },
+            let e: aws.internal.ContentBlockDeltaEvent => {
+                if let tool: aws.internal.ToolUseBlockDelta = e.delta?.toolUse {
+                    `tool_input:${tool.input ?? "-"}`
+                } else if let reasoning: aws.internal.ReasoningContentBlockDelta = e.delta?.reasoningContent {
+                    `reasoning_signature:${reasoning.signature ?? "-"}`
+                } else if let citation: aws.internal.CitationsDelta = e.delta?.citation {
+                    `citation:${citation.title ?? "-"}:${citation.sourceContent?.at(0)?.text ?? "-"}:${citation.location?.documentPage?.start ?? -1}`
+                } else {
+                    "delta:?"
+                }
+            },
+            let e: aws.internal.ContentBlockStopEvent => `block_stop:${e.contentBlockIndex ?? -1}`,
+            let e: aws.internal.MessageStopEvent => {
+                `stop:${e.stopReason ?? "-"}:${baml.json.path_or<int>(e.additionalModelResponseFields ?? baml.json.parse("{}"), ".k", -1)}`
+            },
+            let e: aws.internal.ConverseStreamMetadataEvent => {
+                `metadata:${e.usage?.totalTokens ?? -1}:${e.metrics?.latencyMs ?? -1}:${e.performanceConfig?.latency ?? "-"}:${e.trace != null}`
+            },
+            null => "unknown",
+        };
+        out.push(label);
+    }
+    let failure = baml.json.from_string<aws.internal.ModelStreamErrorException>(
+        `{"message":"boom","originalStatusCode":424,"originalMessage":"upstream"}`,
+    );
+    out.push(`exception:${failure.message ?? "-"}:${failure.originalStatusCode ?? -1}:${failure.originalMessage ?? "-"}`);
+    out.join("|")
+}
+
+test "bedrock_stream_event_model" {
+    assert.equal(
+        bedrock_stream_event_model(),
+        [
+            "start:assistant",
+            "block_start:1:weather:tu_1",
+            "tool_input:{\"city\":",
+            "reasoning_signature:sig",
+            "citation:doc:quote:2",
+            "block_stop:1",
+            "stop:tool_use:1",
+            "metadata:12:321:optimized:true",
+            "unknown",
+            "exception:boom:424:upstream",
+        ].join("|"),
+    )
+}
+
 // The streamed turn's answer text.
 function _stream_text(cl: aws.BedrockClient, input: ai.ModelTurnInput) -> string {
     let text = cl.invoke_stream(input).final_turn().terminal_text() ?? "";

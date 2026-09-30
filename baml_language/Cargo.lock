@@ -3557,10 +3557,7 @@ dependencies = [
 name = "forked_aws_eventstream"
 version = "0.1.0"
 dependencies = [
- "base64",
  "crc32fast",
- "serde",
- "serde_json",
 ]
 
 [[package]]

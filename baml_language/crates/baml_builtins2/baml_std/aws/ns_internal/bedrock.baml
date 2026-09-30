@@ -1410,24 +1410,173 @@ function invoke(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.Mode
 // metadata (usage). `metadata` is always last, so it is the terminal event.
 // ---------------------------------------------------------------------------
 
-class StreamDelta {
+// The ConverseStream event model, ported from `aws-sdk-bedrockruntime`'s
+// `ConverseStreamOutput` (1.106.0) with the SDK's wire keys. As with the
+// Converse response classes above, Smithy unions are classes with one optional
+// field per member and Smithy string enums are plain strings, so a member or
+// value Bedrock adds later decodes instead of failing. `trace` (guardrail and
+// prompt-router traces) stays opaque JSON: nothing here reads it.
+
+/// `messageStart`.
+class MessageStartEvent {
+    /// `"assistant"` or `"user"`.
+    role: string?,
+}
+
+class ToolUseBlockStart {
+    toolUseId: string?,
+    name: string?,
+}
+
+/// Union: which kind of content block is starting.
+class ContentBlockStart {
+    toolUse: ToolUseBlockStart?,
+}
+
+/// `contentBlockStart`: sent before a tool-use block (text blocks start with
+/// their first delta).
+class ContentBlockStartEvent {
+    start: ContentBlockStart?,
+    contentBlockIndex: int?,
+}
+
+class ToolUseBlockDelta {
+    /// A fragment of the tool input's JSON text.
+    input: string?,
+}
+
+/// Union: one reasoning fragment.
+class ReasoningContentBlockDelta {
+    text: string?,
+    /// Base64: thinking the provider redacted.
+    redactedContent: string?,
+    signature: string?,
+}
+
+class CitationSourceContentDelta {
     text: string?,
 }
 
+class DocumentCharLocation {
+    documentIndex: int?,
+    start: int?,
+    end: int?,
+}
+
+class DocumentPageLocation {
+    documentIndex: int?,
+    start: int?,
+    end: int?,
+}
+
+class DocumentChunkLocation {
+    documentIndex: int?,
+    start: int?,
+    end: int?,
+}
+
+/// Union: where in a source document a citation points.
+class CitationLocation {
+    documentChar: DocumentCharLocation?,
+    documentPage: DocumentPageLocation?,
+    documentChunk: DocumentChunkLocation?,
+}
+
+class CitationsDelta {
+    title: string?,
+    sourceContent: CitationSourceContentDelta[]?,
+    location: CitationLocation?,
+}
+
+/// Union: one incremental piece of a content block.
+class ContentBlockDelta {
+    text: string?,
+    toolUse: ToolUseBlockDelta?,
+    reasoningContent: ReasoningContentBlockDelta?,
+    citation: CitationsDelta?,
+}
+
+/// `contentBlockDelta`.
 class ContentBlockDeltaEvent {
+    delta: ContentBlockDelta?,
     contentBlockIndex: int?,
-    delta: StreamDelta?,
 }
 
+/// `contentBlockStop`.
+class ContentBlockStopEvent {
+    contentBlockIndex: int?,
+}
+
+/// `messageStop`.
 class MessageStopEvent {
+    /// See `stop_reason` for the values.
     stopReason: string?,
+    additionalModelResponseFields: baml.json.json?,
 }
 
-class MetadataEvent {
+class ConverseStreamMetrics {
+    latencyMs: int?,
+}
+
+class PerformanceConfiguration {
+    /// `"standard"` or `"optimized"`.
+    latency: string?,
+}
+
+/// `metadata`: always the last event of a turn.
+class ConverseStreamMetadataEvent {
     usage: ConverseUsage?,
+    metrics: ConverseStreamMetrics?,
+    trace: baml.json.json?,
+    performanceConfig: PerformanceConfiguration?,
 }
 
-class StreamExceptionPayload {
+/// One ConverseStream event: the SDK's `ConverseStreamOutput`, keyed on the
+/// wire by the `:event-type` header rather than by JSON.
+type ConverseStreamEvent = MessageStartEvent
+    | ContentBlockStartEvent
+    | ContentBlockDeltaEvent
+    | ContentBlockStopEvent
+    | MessageStopEvent
+    | ConverseStreamMetadataEvent;
+
+/// Decode one event payload by its `:event-type`; `null` for an event type
+/// this model does not know.
+function decode_stream_event(event_type: string, data: string) -> ConverseStreamEvent? {
+    match (event_type) {
+        "messageStart" => baml.json.from_string<MessageStartEvent>(data),
+        "contentBlockStart" => baml.json.from_string<ContentBlockStartEvent>(data),
+        "contentBlockDelta" => baml.json.from_string<ContentBlockDeltaEvent>(data),
+        "contentBlockStop" => baml.json.from_string<ContentBlockStopEvent>(data),
+        "messageStop" => baml.json.from_string<MessageStopEvent>(data),
+        "metadata" => baml.json.from_string<ConverseStreamMetadataEvent>(data),
+        _ => null,
+    }
+}
+
+// The exceptions a ConverseStream can send mid-stream (`:message-type`
+// `exception`), keyed by `:exception-type`.
+
+class InternalServerException {
+    message: string?,
+}
+
+class ModelStreamErrorException {
+    message: string?,
+    /// The status the model itself failed with.
+    originalStatusCode: int?,
+    originalMessage: string?,
+}
+
+class ValidationException {
+    message: string?,
+}
+
+class ThrottlingException {
+    message: string?,
+}
+
+class ServiceUnavailableException {
     message: string?,
 }
 
@@ -1463,16 +1612,14 @@ function decode_stream_batch(batch: string) -> ai.stream.Event[] {
         if (name.starts_with("error:")) {
             throw ai.errors.classify_http("aws-bedrock", 500, `${name.slice(6, name.length())}: ${data}`);
         }
-        match (name) {
-            "contentBlockDelta" => {
-                let event = baml.json.from_string<ContentBlockDeltaEvent>(data);
+        match (decode_stream_event(name, data)) {
+            let event: ContentBlockDeltaEvent => {
                 if let text: string = event.delta?.text {
                     out.push(ai.stream.TextDelta { text: text });
                 }
                 null
             },
-            "messageStop" => {
-                let event = baml.json.from_string<MessageStopEvent>(data);
+            let event: MessageStopEvent => {
                 if let raw_stop: string = event.stopReason {
                     if (_is_malformed_stop(raw_stop)) {
                         throw ai.errors.ParseFailed { provider: "aws-bedrock", raw_output: data }
@@ -1487,8 +1634,7 @@ function decode_stream_batch(batch: string) -> ai.stream.Event[] {
                 }
                 null
             },
-            "metadata" => {
-                let event = baml.json.from_string<MetadataEvent>(data);
+            let event: ConverseStreamMetadataEvent => {
                 out.push(
                     ai.stream.TurnMeta {
                         stop_reason: null,
@@ -1499,8 +1645,8 @@ function decode_stream_batch(batch: string) -> ai.stream.Event[] {
                 out.push(ai.stream.TurnDone {});
                 null
             },
-            // messageStart, contentBlockStart, contentBlockStop, and anything
-            // Bedrock adds later.
+            // messageStart, contentBlockStart, contentBlockStop, and event
+            // types this model does not know (null).
             _ => null,
         };
     }
