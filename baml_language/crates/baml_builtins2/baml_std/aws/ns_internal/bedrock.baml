@@ -68,7 +68,11 @@ function encode_path_label(value: string) -> string {
 /// The Converse request path for a model id, inference-profile id, or ARN;
 /// with `stream`, the ConverseStream path.
 function converse_model_path(model_id: string, stream: bool = false) -> string {
-    let action = if (stream) { "converse-stream" } else { "converse" };
+    let action = if (stream) {
+        "converse-stream"
+    } else {
+        "converse"
+    };
     `/model/${encode_path_label(model_id)}/${action}`
 }
 
@@ -1159,7 +1163,11 @@ function build_request(
 ) -> baml.http.Request {
     let body = _prune_nulls(baml.json.to_json(converse_request(client, input, preview = preview)));
     let merged = ai.wire.merge_request_body(body, client.request_body);
-    let accept = if (stream) { "application/vnd.amazon.eventstream" } else { "application/json" };
+    let accept = if (stream) {
+        "application/vnd.amazon.eventstream"
+    } else {
+        "application/json"
+    };
     baml.http.Request {
         method: "POST",
         url: _apply_query(converse_url(client, preview = preview, stream = stream), client.query_params),
@@ -1690,7 +1698,10 @@ function _stream_open_failure(error: baml.errors.Io | baml.errors.Timeout) -> ne
 
 /// The streaming entry point: the signed ConverseStream request, wrapped in a
 /// TurnStream over the decoded event stream.
-function invoke_stream(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
+function invoke_stream(
+    client: root.BedrockClient,
+    input: ai.ModelTurnInput,
+) -> ai.stream.TurnStream {
     let request = sign(client, build_request(client, input, preview = false, stream = true));
     let started = baml.time.Instant.now();
     let sse = baml.http.fetch_sse(request) catch (e) {
