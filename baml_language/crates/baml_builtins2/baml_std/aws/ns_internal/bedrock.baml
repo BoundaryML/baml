@@ -19,12 +19,10 @@
 //      percent-encoded so an ARN or an inference-profile id stays one path
 //      segment (`/` -> %2F, `:` -> %3A).
 //
-// Streaming is deliberately absent: ConverseStream frames responses as binary
-// `application/vnd.amazon.eventstream`, which `baml.http.fetch_sse` cannot
-// consume. `root.BedrockClient` therefore does not implement
-// `ai.stream.StreamingClient`, and asking for a stream raises
-// `ai.errors.StreamingUnsupported`. sys_llm never streamed Bedrock either, so
-// this is zero regression (PLAN §6).
+// Streaming goes through ConverseStream (`/converse-stream`, section 11). Its
+// binary `application/vnd.amazon.eventstream` frames are decoded natively by
+// `baml.http.fetch_sse`, which surfaces each frame as an SSE event named by its
+// `:event-type` header, so the decoder below only sees JSON payloads.
 
 // ---------------------------------------------------------------------------
 // 1. Model-id path encoding
@@ -67,9 +65,11 @@ function encode_path_label(value: string) -> string {
     out.join("")
 }
 
-/// The Converse request path for a model id, inference-profile id, or ARN.
-function converse_model_path(model_id: string) -> string {
-    `/model/${encode_path_label(model_id)}/converse`
+/// The Converse request path for a model id, inference-profile id, or ARN;
+/// with `stream`, the ConverseStream path.
+function converse_model_path(model_id: string, stream: bool = false) -> string {
+    let action = if (stream) { "converse-stream" } else { "converse" };
+    `/model/${encode_path_label(model_id)}/${action}`
 }
 
 // ---------------------------------------------------------------------------
@@ -1052,8 +1052,12 @@ function converse_request(
 /// The Converse endpoint for this client: the `endpoint_url` override when set
 /// (which bypasses region resolution entirely), else
 /// `https://bedrock-runtime.<region>.amazonaws.com`.
-function converse_url(client: root.BedrockClient, preview: bool = false) -> string {
-    let path = converse_model_path(client.model);
+function converse_url(
+    client: root.BedrockClient,
+    preview: bool = false,
+    stream: bool = false,
+) -> string {
+    let path = converse_model_path(client.model, stream = stream);
     if let endpoint: string = client.resolved_endpoint_url() {
         // A trailing slash on the override would double up with the path.
         let base = if (endpoint.ends_with("/")) {
@@ -1144,17 +1148,22 @@ function _apply_query(url: string, params: map<string, string>?) -> string {
 /// -> `request_body` passthrough merged in, plus the user's headers and query
 /// parameters. Signing must come after this and nothing may touch the request
 /// afterwards, so this is the seam request-shape tests assert on.
+///
+/// `stream` targets ConverseStream: same body, the `/converse-stream` path,
+/// and an event-stream `accept`.
 function build_request(
     client: root.BedrockClient,
     input: ai.ModelTurnInput,
     preview: bool = false,
+    stream: bool = false,
 ) -> baml.http.Request {
     let body = _prune_nulls(baml.json.to_json(converse_request(client, input, preview = preview)));
     let merged = ai.wire.merge_request_body(body, client.request_body);
+    let accept = if (stream) { "application/vnd.amazon.eventstream" } else { "application/json" };
     baml.http.Request {
         method: "POST",
-        url: _apply_query(converse_url(client, preview = preview), client.query_params),
-        headers: _merge_headers({ "content-type": "application/json", "accept": "application/json" }, client.headers),
+        url: _apply_query(converse_url(client, preview = preview, stream = stream), client.query_params),
+        headers: _merge_headers({ "content-type": "application/json", "accept": accept }, client.headers),
         body: baml.json.stringify(merged),
     }
 }
@@ -1385,4 +1394,205 @@ function invoke(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.Mode
     );
     let turn = parse_response(sent.value);
     ai.ModelTurn { ...turn, calls: [sent.call], model: client.model }
+}
+
+// ---------------------------------------------------------------------------
+// 11. Streaming: ConverseStream
+//
+// `baml.http.fetch_sse` decodes the binary event stream and hands over one SSE
+// event per frame: `event` is the `:event-type` header and `data` the JSON
+// payload. A modeled exception frame arrives as `exception:<type>` and an
+// unmodeled error as `error:<code>` (see sys_types/src/aws_eventstream.rs).
+//
+// Event order: messageStart, then per content block contentBlockStart? /
+// contentBlockDelta* / contentBlockStop, then messageStop (stopReason), then
+// metadata (usage). `metadata` is always last, so it is the terminal event.
+// ---------------------------------------------------------------------------
+
+class StreamDelta {
+    text: string?,
+}
+
+class ContentBlockDeltaEvent {
+    contentBlockIndex: int?,
+    delta: StreamDelta?,
+}
+
+class MessageStopEvent {
+    stopReason: string?,
+}
+
+class MetadataEvent {
+    usage: ConverseUsage?,
+}
+
+class StreamExceptionPayload {
+    message: string?,
+}
+
+/// (internal) The HTTP status Bedrock documents for each ConverseStream
+/// exception, so a mid-stream failure classifies (and retries) exactly like
+/// the same failure on `invoke`.
+function _stream_exception_status(exception_type: string) -> int {
+    match (exception_type) {
+        "throttlingException" => 429,
+        "serviceUnavailableException" => 503,
+        "internalServerException" => 500,
+        "modelStreamErrorException" => 424,
+        "modelTimeoutException" => 408,
+        "validationException" => 400,
+        "accessDeniedException" => 403,
+        "resourceNotFoundException" => 404,
+        _ => 500,
+    }
+}
+
+/// One `SseStream.next()` batch -> the stream events it contains. Tool-use and
+/// reasoning deltas are skipped: streaming runs no tool loop, and the
+/// non-streaming path does not surface reasoning as text either.
+function decode_stream_batch(batch: string) -> ai.stream.Event[] {
+    let out: ai.stream.Event[] = [];
+    for (let raw in ai.stream.decode_sse_batch(batch)) {
+        let name = raw.event ?? "";
+        let data = raw.data ?? "";
+        if (name.starts_with("exception:")) {
+            let exception_type = name.slice(10, name.length());
+            throw ai.errors.classify_http("aws-bedrock", _stream_exception_status(exception_type), data);
+        }
+        if (name.starts_with("error:")) {
+            throw ai.errors.classify_http("aws-bedrock", 500, `${name.slice(6, name.length())}: ${data}`);
+        }
+        match (name) {
+            "contentBlockDelta" => {
+                let event = baml.json.from_string<ContentBlockDeltaEvent>(data);
+                if let text: string = event.delta?.text {
+                    out.push(ai.stream.TextDelta { text: text });
+                }
+                null
+            },
+            "messageStop" => {
+                let event = baml.json.from_string<MessageStopEvent>(data);
+                if let raw_stop: string = event.stopReason {
+                    if (_is_malformed_stop(raw_stop)) {
+                        throw ai.errors.ParseFailed { provider: "aws-bedrock", raw_output: data }
+                    }
+                    out.push(
+                        ai.stream.TurnMeta {
+                            stop_reason: stop_reason(raw_stop),
+                            input_tokens: null,
+                            output_tokens: null,
+                        },
+                    );
+                }
+                null
+            },
+            "metadata" => {
+                let event = baml.json.from_string<MetadataEvent>(data);
+                out.push(
+                    ai.stream.TurnMeta {
+                        stop_reason: null,
+                        input_tokens: event.usage?.inputTokens,
+                        output_tokens: event.usage?.outputTokens,
+                    },
+                );
+                out.push(ai.stream.TurnDone {});
+                null
+            },
+            // messageStart, contentBlockStart, contentBlockStop, and anything
+            // Bedrock adds later.
+            _ => null,
+        };
+    }
+    out
+}
+
+/// (internal) `fetch_sse` fails a non-2xx status itself ("SSE request failed
+/// with status 403: …"). Route the status through the classifier the
+/// non-streaming path uses, so a 4xx is never a retry-safe NetworkFailure.
+function _stream_open_failure(error: baml.errors.Io | baml.errors.Timeout) -> never {
+    match (error) {
+        let timeout: baml.errors.Timeout => throw timeout,
+        let io: baml.errors.Io => {
+            let prefix = "SSE request failed with status ";
+            let message = io.message;
+            if (message.starts_with(prefix)) {
+                let rest = message.slice(prefix.length(), message.length());
+                if let separator: int = rest.index_of(":") {
+                    let status = baml.Int.parse(rest.slice(0, separator)) catch_all (e) {
+                        _ => 0,
+                    };
+                    if (status > 0) {
+                        throw ai.errors.classify_http(
+                            "aws-bedrock",
+                            status,
+                            rest.slice(separator + 1, rest.length()).trim(),
+                        );
+                    }
+                }
+            }
+            throw ai.errors.NetworkFailure {
+                status_code: null,
+                provider: "aws-bedrock",
+                detail: `transport failed before a response arrived: ${message}`,
+                raw_body: null,
+            }
+        },
+    }
+}
+
+/// The streaming entry point: the signed ConverseStream request, wrapped in a
+/// TurnStream over the decoded event stream.
+function invoke_stream(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
+    let request = sign(client, build_request(client, input, preview = false, stream = true));
+    let started = baml.time.Instant.now();
+    let sse = baml.http.fetch_sse(request) catch (e) {
+        baml.errors.Io => _stream_open_failure(e),
+        baml.errors.Timeout => _stream_open_failure(e),
+    };
+    // `metadata` is ConverseStream's explicit last event, decoded as TurnDone:
+    // a connection that closes before it is a truncated turn, not a complete
+    // one.
+    let stream = ai.stream.TurnStream.from_sse(
+        sse,
+        (batch: string) -> {
+            decode_stream_batch(batch) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        },
+        require_terminal = "aws-bedrock",
+        model = client.model,
+    );
+    let call = ai.events.LLMCall {
+        client_name: client.id(),
+        provider: "aws-bedrock",
+        timing: ai.events.Timing {
+            start_time_utc_ms: started.to_timestamp_milliseconds(),
+            duration_ms: null,
+            ttft_ms: null,
+        },
+        http_request: if (client.capture_wire) {
+            baml.http.Request {
+                method: request.method,
+                url: ai.wire.redact_url_secrets(request.url),
+                headers: ai.wire.redact_request_headers(request.headers),
+                body: request.body,
+            }
+        } else {
+            null
+        },
+        http_response: ai.events.HttpResponse { status: sse.status_code, headers: sse.headers, body: null },
+        usage: null,
+        selected: true,
+        sse_responses: if (client.capture_wire) {
+            []
+        } else {
+            null
+        },
+    };
+    stream._calls = [call];
+    stream._wire_call = call;
+    stream._call_started = started;
+    stream._ttft_from = baml.time.Instant.now();
+    stream._capture_sse = client.capture_wire;
+    stream
 }

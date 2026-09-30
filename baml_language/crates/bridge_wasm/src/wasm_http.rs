@@ -617,22 +617,30 @@ fn serialize_sse_events(events: Vec<sys_types::sse::SseEvent>) -> Result<String,
     })
 }
 
-/// Background task that reads from a byte stream, parses SSE events, and sends
-/// them through the channel. Exits when the stream ends, errors, or the
-/// receiver is dropped (channel closed).
+/// Background task that reads from a byte stream, parses SSE events (or AWS
+/// event-stream frames, by `content_type`), and sends them through the
+/// channel. Exits when the stream ends, errors, or the receiver is dropped
+/// (channel closed).
 async fn sse_background_task(
     byte_stream: crate::registry::ByteStream,
+    content_type: Option<String>,
     sender: futures::channel::mpsc::UnboundedSender<Result<sys_types::sse::SseEvent, String>>,
 ) {
     use futures::StreamExt;
 
     let mut stream = byte_stream;
-    let mut parser = sys_types::sse::SseParser::new();
+    let mut parser = sys_types::sse::StreamDecoder::for_content_type(content_type.as_deref());
 
     loop {
         match stream.next().await {
             Some(Ok(bytes)) => {
-                let events = parser.feed(&bytes);
+                let events = match parser.feed(&bytes) {
+                    Ok(events) => events,
+                    Err(e) => {
+                        let _ = sender.unbounded_send(Err(e.to_string()));
+                        return;
+                    }
+                };
                 for event in events {
                     if sender.unbounded_send(Ok(event)).is_err() {
                         // Receiver dropped — stream was closed.
@@ -646,7 +654,13 @@ async fn sse_background_task(
             }
             None => {
                 // Stream ended. Flush any buffered event without a trailing blank line.
-                let final_events = parser.finish();
+                let final_events = match parser.finish() {
+                    Ok(events) => events,
+                    Err(e) => {
+                        let _ = sender.unbounded_send(Err(e.to_string()));
+                        return;
+                    }
+                };
                 for event in final_events {
                     if sender.unbounded_send(Ok(event)).is_err() {
                         return;
@@ -741,11 +755,20 @@ impl IoNamespaceHttp for WasmHttp {
                 .iter()
                 .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
                 .collect();
+            let content_type = response
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_owned);
             let byte_stream = Box::pin(response.bytes_stream());
 
             // Create channel and spawn background task to parse SSE events.
             let (sender, receiver) = futures::channel::mpsc::unbounded();
-            wasm_bindgen_futures::spawn_local(sse_background_task(byte_stream, sender));
+            wasm_bindgen_futures::spawn_local(sse_background_task(
+                byte_stream,
+                content_type,
+                sender,
+            ));
 
             let handle: Arc<dyn std::any::Any + Send + Sync> =
                 Arc::new(WasmSseStreamHandle::new(receiver));

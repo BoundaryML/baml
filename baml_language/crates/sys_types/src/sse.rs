@@ -170,6 +170,53 @@ impl Default for SseParser {
     }
 }
 
+/// The content type of a binary AWS event stream (Bedrock `ConverseStream`).
+pub const AWS_EVENTSTREAM_CONTENT_TYPE: &str = "application/vnd.amazon.eventstream";
+
+/// Decodes a streaming response body into events, chosen by the response's
+/// `content-type`: an AWS event stream is decoded frame by frame (see
+/// [`crate::aws_eventstream`]), anything else as text SSE.
+pub enum StreamDecoder {
+    Sse(SseParser),
+    AwsEventStream(crate::aws_eventstream::EventStreamDecoder),
+}
+
+impl StreamDecoder {
+    pub fn for_content_type(content_type: Option<&str>) -> Self {
+        let is_eventstream = content_type.is_some_and(|ct| {
+            ct.split(';').next().is_some_and(|mime| {
+                mime.trim()
+                    .eq_ignore_ascii_case(AWS_EVENTSTREAM_CONTENT_TYPE)
+            })
+        });
+        if is_eventstream {
+            Self::AwsEventStream(crate::aws_eventstream::EventStreamDecoder::new())
+        } else {
+            Self::Sse(SseParser::new())
+        }
+    }
+
+    /// Feed raw bytes and return any complete events. Only an event stream can
+    /// fail: text SSE has no invalid input.
+    pub fn feed(
+        &mut self,
+        chunk: &[u8],
+    ) -> Result<Vec<SseEvent>, crate::aws_eventstream::EventStreamError> {
+        match self {
+            Self::Sse(parser) => Ok(parser.feed(chunk)),
+            Self::AwsEventStream(decoder) => decoder.feed(chunk),
+        }
+    }
+
+    /// Flush at end of stream.
+    pub fn finish(&mut self) -> Result<Vec<SseEvent>, crate::aws_eventstream::EventStreamError> {
+        match self {
+            Self::Sse(parser) => Ok(parser.finish()),
+            Self::AwsEventStream(decoder) => decoder.finish(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -545,5 +592,26 @@ mod tests {
         let events = parser.finish();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].data, "line1\nline2");
+    }
+
+    #[test]
+    fn stream_decoder_picks_the_framing_from_the_content_type() {
+        let frame = crate::aws_eventstream::tests::frame(
+            &[(":event-type", "messageStop"), (":message-type", "event")],
+            b"{}",
+        );
+        for ct in [
+            "application/vnd.amazon.eventstream",
+            "Application/VND.Amazon.EventStream; charset=utf-8",
+        ] {
+            let mut decoder = StreamDecoder::for_content_type(Some(ct));
+            let events = decoder.feed(&frame).unwrap();
+            assert_eq!(events[0].event, "messageStop", "{ct}");
+        }
+        for ct in [None, Some("text/event-stream")] {
+            let mut decoder = StreamDecoder::for_content_type(ct);
+            let events = decoder.feed(b"event: ping\ndata: 1\n\n").unwrap();
+            assert_eq!(events[0].event, "ping", "{ct:?}");
+        }
     }
 }

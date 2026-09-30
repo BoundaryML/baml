@@ -18,11 +18,10 @@
 //     chain). Those cases assert that a signature was produced, not what it
 //     is — the signature bytes are the Rust seam's own contract.
 //
-// There are no SSE tests: Bedrock's ConverseStream frames its response as
-// binary `application/vnd.amazon.eventstream`, which `baml.http.fetch_sse`
-// cannot consume, so `BedrockClient` deliberately does not implement
-// `ai.stream.StreamingClient` (PLAN §6). The `::live::` leaf and the error
-// cases take that budget instead.
+//   * STREAMING (section 13) runs `invoke_stream` / `ai.stream.from_spec`
+//     against `root.llm_mock.mock_eventstream_serve`, which serves real binary
+//     `application/vnd.amazon.eventstream` frames (CRCs and all), so the native
+//     frame decoder behind `baml.http.fetch_sse` is exercised end to end.
 //
 // Corpus rules (ns_llm_mock/README.md §4): every case body is a top-level
 // function, `test` blocks only assert, cross-namespace references are
@@ -1225,6 +1224,194 @@ test "bedrock_garbage_body" {
     assert.equal(bedrock_garbage_body(), "ParseFailed")
 }
 
+// ─── 13. streaming (ConverseStream) ──────────────────────────────────────────
+
+function _stream_frames(stop: string, with_metadata: bool) -> uint8array[] {
+    let frames = [
+        root.llm_mock.eventstream_event("messageStart", `{"role":"assistant"}`),
+        root.llm_mock.eventstream_event(
+            "contentBlockDelta",
+            `{"contentBlockIndex":0,"delta":{"text":"po"}}`,
+        ),
+        // Reasoning deltas are not answer text, exactly as `invoke` keeps
+        // reasoning out of the Text blocks.
+        root.llm_mock.eventstream_event(
+            "contentBlockDelta",
+            `{"contentBlockIndex":0,"delta":{"reasoningContent":{"text":"SECRET"}}}`,
+        ),
+        root.llm_mock.eventstream_event(
+            "contentBlockDelta",
+            `{"contentBlockIndex":0,"delta":{"text":"ng"}}`,
+        ),
+        root.llm_mock.eventstream_event("contentBlockStop", `{"contentBlockIndex":0}`),
+        root.llm_mock.eventstream_event("messageStop", `{"stopReason":"${stop}"}`),
+    ];
+    if (with_metadata) {
+        frames.push(
+            root.llm_mock.eventstream_event(
+                "metadata",
+                `{"usage":{"inputTokens":10,"outputTokens":2,"totalTokens":12},"metrics":{"latencyMs":100}}`,
+            ),
+        );
+    }
+    frames
+}
+
+// The streamed turn's answer text.
+function _stream_text(cl: aws.BedrockClient, input: ai.ModelTurnInput) -> string {
+    let text = cl.invoke_stream(input).final_turn().terminal_text() ?? "";
+    text
+}
+
+// Text deltas accumulate into the answer, stopReason and usage fold into the
+// final turn, and the request is the signed ConverseStream call.
+function bedrock_stream_text() -> string {
+    root.llm_mock.mock_eventstream_serve(
+        _stream_frames("end_turn", true),
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = _client(mock.base_url());
+            let stream = cl.invoke_stream(
+                _turn_input(BedrockEcho@spec("Say pong."), _empty_journal(), _no_tools()),
+            );
+            let deltas: string[] = [];
+            while (true) {
+                match (stream.next()) {
+                    let d: ai.stream.Done => break,
+                    let chunk: string[] => {
+                        deltas = deltas.concat(chunk);
+                        null
+                    },
+                };
+            }
+            let turn = stream.final_turn();
+            let sent = mock.last_request();
+            [
+                deltas.join("+"),
+                turn.terminal_text() ?? "",
+                _stop_label(turn),
+                `${turn.usage?.input_tokens ?? -1}/${turn.usage?.output_tokens ?? -1}`,
+                sent.path(),
+                sent.header("accept") ?? "",
+                `${(sent.header("authorization") ?? "").starts_with("AWS4-HMAC-SHA256")}`,
+            ].join("|")
+        },
+    )
+}
+
+test "bedrock_stream_text" {
+    assert.equal(
+        bedrock_stream_text(),
+        "po+ng|pong|Complete|10/2|/model/anthropic.claude-3-5-haiku-20241022-v1%3A0/converse-stream|application/vnd.amazon.eventstream|true",
+    )
+}
+
+// The typed path a generated `Fn@stream` binding takes.
+function bedrock_stream_from_spec() -> string {
+    root.llm_mock.mock_eventstream_serve(
+        _stream_frames("end_turn", true),
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = _client(mock.base_url());
+            ai.stream.from_spec<string>(BedrockEcho@spec("Say pong."), client = cl).final()
+        },
+    )
+}
+
+test "bedrock_stream_from_spec" {
+    assert.equal(bedrock_stream_from_spec(), "pong")
+}
+
+function bedrock_stream_max_tokens() -> string {
+    root.llm_mock.mock_eventstream_serve(
+        _stream_frames("max_tokens", true),
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = _client(mock.base_url());
+            let input = _turn_input(BedrockEcho@spec("hi"), _empty_journal(), _no_tools());
+            _stop_label(cl.invoke_stream(input).final_turn())
+        },
+    )
+}
+
+test "bedrock_stream_max_tokens" {
+    assert.equal(bedrock_stream_max_tokens(), "MaxTokens")
+}
+
+// `metadata` is ConverseStream's last event. A connection that closes after
+// messageStop but before it is a truncated turn: a retry-safe NetworkFailure,
+// never `pong` reported as a complete answer.
+function bedrock_stream_truncated() -> string {
+    root.llm_mock.mock_eventstream_serve(
+        _stream_frames("end_turn", false),
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = _client(mock.base_url());
+            let input = _turn_input(BedrockEcho@spec("hi"), _empty_journal(), _no_tools());
+            _stream_text(cl, input) catch_all (e) {
+                _ => _failure_label(e),
+            }
+        },
+    )
+}
+
+test "bedrock_stream_truncated" {
+    assert.equal(bedrock_stream_truncated(), "NetworkFailure")
+}
+
+// A modeled exception frame mid-stream fails the turn with the identity the
+// same HTTP status gets on `invoke`.
+function bedrock_stream_exception(exception_type: string) -> string {
+    let frames = [
+        root.llm_mock.eventstream_event("messageStart", `{"role":"assistant"}`),
+        root.llm_mock.eventstream_event(
+            "contentBlockDelta",
+            `{"contentBlockIndex":0,"delta":{"text":"par"}}`,
+        ),
+        root.llm_mock.eventstream_exception(exception_type, "stream failed"),
+    ];
+    root.llm_mock.mock_eventstream_serve(
+        frames,
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = _client(mock.base_url());
+            let input = _turn_input(BedrockEcho@spec("hi"), _empty_journal(), _no_tools());
+            _stream_text(cl, input) catch_all (e) {
+                _ => _failure_label(e),
+            }
+        },
+    )
+}
+
+test "bedrock_stream_exceptions" {
+    assert.equal(
+        [
+            bedrock_stream_exception("throttlingException"),
+            bedrock_stream_exception("validationException"),
+            bedrock_stream_exception("modelStreamErrorException"),
+            bedrock_stream_exception("serviceUnavailableException"),
+        ].join("|"),
+        "RateLimited|InvalidRequest/400|InvalidRequest/424|NetworkFailure",
+    )
+}
+
+// A non-2xx before the stream opens classifies like `invoke`'s errors, so a
+// 403 is never a retry-safe NetworkFailure.
+function bedrock_stream_http_error(status: int) -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.error(status, `{"message":"nope"}`)],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = _client(mock.base_url());
+            let input = _turn_input(BedrockEcho@spec("hi"), _empty_journal(), _no_tools());
+            _stream_text(cl, input) catch_all (e) {
+                _ => _failure_label(e),
+            }
+        },
+    )
+}
+
+test "bedrock_stream_http_errors" {
+    assert.equal(
+        [bedrock_stream_http_error(403), bedrock_stream_http_error(429), bedrock_stream_http_error(500)].join("|"),
+        "InvalidRequest/403|RateLimited|NetworkFailure",
+    )
+}
+
 // ─── 14. live ────────────────────────────────────────────────────────────────
 //
 // Real Bedrock. Gated twice: the `live` test profile selects the testset, and
@@ -1258,10 +1445,24 @@ function live_bedrock_answers() -> bool {
     result.value.trim().length() > 0
 }
 
+function live_bedrock_streams() -> bool {
+    let cl = aws.BedrockClient.new(
+        model = "amazon.nova-micro-v1:0",
+        region = baml.env.get("AWS_REGION") ?? "us-east-1",
+        profile = baml.env.get("AWS_PROFILE"),
+        max_tokens = 64,
+    );
+    let stream = ai.stream.from_spec<string>(LiveBedrockEcho@spec("Say pong."), client = cl);
+    stream.final().trim().length() > 0
+}
+
 testset "live" with testing.Sequential() {
     if (baml.env.get("AWS_PROFILE") != null) {
         test "bedrock" {
             assert.is_true(live_bedrock_answers())
+        }
+        test "bedrock_stream" {
+            assert.is_true(live_bedrock_streams())
         }
     } else {
         log.warn("live::bedrock not registered: AWS_PROFILE is unset (local SSO session required)")

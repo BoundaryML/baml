@@ -2948,7 +2948,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
         use std::sync::atomic::{AtomicBool, Ordering};
 
         use futures::StreamExt;
-        use sys_types::sse::SseParser;
+        use sys_types::sse::StreamDecoder;
         use tokio::sync::{Mutex as TokioMutex, Notify};
 
         use crate::registry::{REGISTRY, SseBuffer};
@@ -3001,6 +3001,13 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 .iter()
                 .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
                 .collect();
+            // Text SSE, or a binary AWS event stream (Bedrock ConverseStream)
+            // surfaced as the same events.
+            let content_type = response
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_owned);
             // Legacy TTFT semantics start after the SSE response opens and end
             // on the first parsed event; connection/headers are governed only
             // by the total request timeout.
@@ -3052,7 +3059,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                     completed: false,
                 };
 
-                let mut parser = SseParser::new();
+                let mut parser = StreamDecoder::for_content_type(content_type.as_deref());
                 let mut byte_stream = response.bytes_stream();
                 let mut first_event_deadline = first_event_deadline;
 
@@ -3096,7 +3103,19 @@ impl io::IoNamespaceHttp for NativeSysOps {
                     };
                     match chunk_result {
                         Ok(bytes) => {
-                            let events = parser.feed(&bytes);
+                            let events = match parser.feed(&bytes) {
+                                Ok(events) => events,
+                                Err(e) => {
+                                    let mut buf = buf_clone.lock().await;
+                                    buf.error = Some(VmBamlError::Io {
+                                        message: e.to_string(),
+                                    });
+                                    buf.done = true;
+                                    notify_clone.notify_waiters();
+                                    guard.completed = true;
+                                    return;
+                                }
+                            };
                             if !events.is_empty() {
                                 // The budget runs to the first PARSED event.
                                 // `timeout_at` polls the stream before the
@@ -3143,7 +3162,19 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 // The first-event budget applies here too: a flush-delivered
                 // first event that only materialized after the deadline is a
                 // timeout, not a completion.
-                let final_events = parser.finish();
+                let final_events = match parser.finish() {
+                    Ok(events) => events,
+                    Err(e) => {
+                        let mut buf = buf_clone.lock().await;
+                        buf.error = Some(VmBamlError::Io {
+                            message: e.to_string(),
+                        });
+                        buf.done = true;
+                        notify_clone.notify_waiters();
+                        guard.completed = true;
+                        return;
+                    }
+                };
                 if !final_events.is_empty()
                     && let Some((deadline, duration)) = first_event_deadline
                     && tokio::time::Instant::now() >= deadline
