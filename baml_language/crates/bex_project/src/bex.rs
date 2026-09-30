@@ -62,6 +62,9 @@ pub trait Bex: Send + Sync {
     /// Running totals over every collection this runtime has completed.
     fn gc_totals(&self) -> bex_heap::GcTotals;
 
+    /// Like [`Bex::gc_totals`], then restarts the totals from zero.
+    fn take_gc_totals(&self) -> bex_heap::GcTotals;
+
     /// Wait for in-flight calls and spawned work, report unreachable
     /// unobserved errors, and close the runtime. `grace` bounds the whole
     /// wait (`None` waits for as long as the work takes); see
@@ -190,6 +193,10 @@ impl Bex for BexEngine {
 
     fn gc_totals(&self) -> bex_heap::GcTotals {
         BexEngine::gc_totals(self)
+    }
+
+    fn take_gc_totals(&self) -> bex_heap::GcTotals {
+        BexEngine::take_gc_totals(self)
     }
 
     async fn shutdown(self: Arc<Self>, grace: Option<std::time::Duration>) {

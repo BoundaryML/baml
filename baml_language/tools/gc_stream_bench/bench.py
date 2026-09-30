@@ -222,6 +222,7 @@ def main():
             server.wait()
     print(json.dumps(report, indent=2))
     if args.json_out:
+        args.json_out.parent.mkdir(parents=True, exist_ok=True)
         args.json_out.write_text(json.dumps(report, indent=2) + '\n')
 
 
@@ -236,8 +237,8 @@ def measure(args):
     fns = {'sync': getattr(sdk, f'{name}_stream'), 'async': getattr(sdk, f'{name}_stream_async')}
     text = SEED_TEXT.read_text()
     expected = json.loads(SEED_JSON.read_text())
-    for _ in range(args.warmup):
-        consume_sync(fns, text, Done)
+    if args.warmup:
+        run_streams(argparse.Namespace(**{**vars(args), 'streams': args.warmup}), fns, text, Done)
 
     proc = psutil.Process()
     monitor = PyGcMonitor()
@@ -245,6 +246,7 @@ def measure(args):
     gc.collect()
     py_objects_before = len(gc.get_objects())
     rss_before = proc.memory_info().rss
+    baml_py._gc_stats(reset=True)  # measured GC totals, maxima included, start here
     baml_before = baml_py._gc_stats()
     gc.callbacks.append(monitor)
     sampler.start()

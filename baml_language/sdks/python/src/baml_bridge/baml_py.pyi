@@ -276,13 +276,15 @@ class HostSpanManager:
         Number of active spans (call depth).
         """
 
-def _gc_stats() -> dict:
+def _gc_stats(reset: builtins.bool = False) -> dict:
     r"""
     Diagnostic snapshot of the runtime's heap and its running GC totals, for
     benchmarks (`tools/gc_stream_bench`). Not part of the generated SDK surface.
 
-    Timing keys (`pause_s`, `max_pause_s`, `total_s`, `max_total_s`) are present
-    only when the extension was built with the `gc_profiling` feature.
+    GC totals count from runtime start, or from the last `reset=True` call, which
+    returns them and restarts them from zero. Timing keys (`pause_s`,
+    `max_pause_s`, `total_s`, `max_total_s`) are present only when the extension
+    was built with the `gc_profiling` feature.
     """
 
 def _handle_refcount(key: builtins.int) -> typing.Optional[builtins.int]:

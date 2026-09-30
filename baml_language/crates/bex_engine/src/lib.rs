@@ -2363,6 +2363,17 @@ impl BexEngine {
             .clone()
     }
 
+    /// Return the running totals and restart them from zero, so a caller can
+    /// measure an interval (including its maxima) without earlier cycles.
+    pub fn take_gc_totals(&self) -> bex_heap::GcTotals {
+        std::mem::take(
+            &mut *self
+                .gc_totals
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        )
+    }
+
     /// Get a reference to the heap permit manager.
     pub fn heap_permit_manager(&self) -> &Arc<HeapPermitManager> {
         &self.heap_permit_manager

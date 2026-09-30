@@ -461,4 +461,8 @@ async fn test_gc_totals_accumulate_cycles() {
     if let Some(t) = timings {
         assert!(t.max_pause <= t.pause && t.pause <= t.total);
     }
+
+    assert_eq!(engine.take_gc_totals().cycles, 2);
+    assert_eq!(engine.gc_totals().cycles, 0);
+    assert!(engine.gc_totals().timings.is_none());
 }

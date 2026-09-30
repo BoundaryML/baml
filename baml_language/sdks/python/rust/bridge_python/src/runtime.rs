@@ -191,14 +191,21 @@ pub fn get_runtime() -> PyResult<BamlRuntime> {
 /// Diagnostic snapshot of the runtime's heap and its running GC totals, for
 /// benchmarks (`tools/gc_stream_bench`). Not part of the generated SDK surface.
 ///
-/// Timing keys (`pause_s`, `max_pause_s`, `total_s`, `max_total_s`) are present
-/// only when the extension was built with the `gc_profiling` feature.
+/// GC totals count from runtime start, or from the last `reset=True` call, which
+/// returns them and restarts them from zero. Timing keys (`pause_s`,
+/// `max_pause_s`, `total_s`, `max_total_s`) are present only when the extension
+/// was built with the `gc_profiling` feature.
 #[gen_stub_pyfunction]
 #[pyfunction]
-pub fn _gc_stats(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
+#[pyo3(signature = (reset=false))]
+pub fn _gc_stats(py: Python<'_>, reset: bool) -> PyResult<Bound<'_, PyDict>> {
     let rt = bridge_cffi::get_runtime().map_err(bridge_error_to_sdk_panic)?;
     let heap = rt.heap_stats();
-    let gc = rt.gc_totals();
+    let gc = if reset {
+        rt.take_gc_totals()
+    } else {
+        rt.gc_totals()
+    };
     let out = PyDict::new(py);
     out.set_item("runtime_objects", heap.runtime_objects)?;
     out.set_item("reserved_slots", heap.reserved_slots)?;
