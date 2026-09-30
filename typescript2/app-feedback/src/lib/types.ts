@@ -1,33 +1,49 @@
-// Mirrors tools/atb2/baml_src/models.baml (Issue) and handle_issue.baml
-// (HandleOutcome). Keep in sync when the BAML models change.
+// Supabase issue and run records shared with MiniATB.
+// Includes historical records written before MiniATB.
 
 export type Subsystem =
-  | "Syntax"
-  | "Compiler"
-  | "Runtime"
-  | "StdLibrary"
-  | "Tooling"
-  | "Unknown";
+  | 'Syntax'
+  | 'Compiler'
+  | 'Runtime'
+  | 'StdLibrary'
+  | 'Tooling'
+  | 'Unknown';
 
-export type Difficulty = "Trivial" | "Easy" | "Medium" | "Hard";
+export type Difficulty = 'Trivial' | 'Easy' | 'Medium' | 'Hard';
 
 export type IssueStatus =
-  | { state: "open" }
-  | { state: "in_progress"; pr: string | null }
-  | { state: "rejected"; reason: string }
-  | { state: "deferred"; reason: string; workaround: string | null }
-  | { state: "merged"; pr: string }
-  | { state: "shipped"; version: string; date: string };
+  | { state: 'open' }
+  | { state: 'in_progress'; pr: string | null }
+  | { state: 'cancelled'; reason: string; by: string }
+  | { state: 'rejected'; reason: string }
+  | { state: 'deferred'; reason: string; workaround: string | null }
+  | { state: 'merged'; pr: string }
+  | { state: 'shipped'; version: string; date: string };
 
-export type StatusState = IssueStatus["state"];
+export type StatusState = IssueStatus['state'];
 
 export type Expectation =
-  | { check: "should_compile" }
-  | { check: "should_not_compile"; diagnostic_contains: string | null }
-  | { check: "should_evaluate_to"; expected: unknown }
-  | { check: "requires_inspection"; instructions: string };
+  | { check: 'should_compile' }
+  | { check: 'should_not_compile'; diagnostic_contains: string | null }
+  | { check: 'should_evaluate_to'; expected: unknown }
+  | { check: 'requires_inspection'; instructions: string };
 
 export interface Repro {
+  /** Why this command and expectation; written by the authoring model. */
+  rationale?: string | null;
+  observed?: string | null;
+  verified_version?: string | null;
+  source_files?: Record<string, string> | null;
+  source_observed?: string | null;
+  verification?: 'python_unittest' | null;
+  result?:
+    | 'passes'
+    | 'fails'
+    | 'inconclusive'
+    | 'invalid_repro'
+    | 'unsupported_verification'
+    | 'verification_error'
+    | null;
   files: Record<string, string>;
   command: string;
   setup: string | null;
@@ -38,38 +54,47 @@ export interface Comment {
   author: string;
   body: string;
   at: string;
+  /** "github" (synced from the reported issue), "website", "slack"; undefined on old rows. */
+  source?: 'github' | 'website' | 'slack' | null;
+  /** Permalink to the original comment, when synced. */
+  url?: string | null;
 }
 
-export interface GateStep {
-  name: string;
-  ok: boolean;
-  seconds: number;
-  exit_code: number;
-}
-
-export interface GateResult {
-  steps: GateStep[];
-  ok: boolean;
-  changed_crates: string[];
+/** A historical cross-issue finding retained for existing records. */
+export interface Intuition {
+  id: string;
+  title: string;
+  kind: 'Pattern' | 'SharedCause' | 'Hotspot' | 'Process';
+  insight: string;
+  evidence: string;
+  issue_ids: string[];
+  subsystem: Subsystem;
+  confidence: 'low' | 'medium' | 'high';
+  suggested_action: string;
+  generated_at: string;
 }
 
 /** ~/.atb2/runs/<branch>/outcome.json, as handle_issue writes it. */
 export interface HandleOutcome {
-  kind: "fixed" | "hard" | "gate_failed" | "agent_stopped";
+  kind: 'fixed' | 'hard' | 'agent_stopped';
   branch: string | null;
   pr: string | null;
   turns: number;
   seconds: number;
   timed_out: boolean;
-  gate: GateResult | null;
   design_doc: string | null;
   reason: string | null;
   /** Which pass the run was in when it stopped (mock-only). */
-  running?: "design" | "fix" | "gate" | "pr";
+  running?: 'design' | 'fix' | 'pr';
 }
 
+export type IssueKind = 'bug' | 'feature';
+
 export interface Issue {
+  pipeline_phase?: 'design' | 'fix';
   id: string;
+  /** A bug, or a feature request whose `resolution_plan` is the proposed feature. */
+  kind: IssueKind;
   title: string;
   description: string;
   shepherd: string | null;
@@ -90,4 +115,4 @@ export interface Issue {
   updated_at: string;
 }
 
-export type Dataset = "live" | "eval";
+export type Dataset = 'live' | 'eval';

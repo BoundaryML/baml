@@ -1,267 +1,363 @@
-import Link from "next/link";
-import { ArrowLeft, Check, CircleDashed, ExternalLink, Loader2, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import type { Issue, Repro } from "@/lib/types";
-import { STAGE_LABELS, formatSeconds, stageInfo, type StageState } from "@/lib/pipeline";
-import { cn } from "@/lib/utils";
-import { DifficultyBadge, StatusBadge, SubsystemBadge } from "./issue-status";
-import { PipelineStripLabeled } from "./pipeline-strip";
+import { ArrowLeft, ExternalLink } from 'lucide-react';
+import Link from 'next/link';
+import { FormattedText } from '@/components/code';
+import type { IssueEvent } from '@/lib/db';
+import {
+  investigationPrompt,
+  sourceCitations,
+  ticketSections,
+} from '@/lib/investigation';
+import { formatSeconds, stageInfo } from '@/lib/pipeline';
+import type { Comment, Issue } from '@/lib/types';
+import { InvestigationPrompt } from './investigation-prompt';
+import {
+  DifficultyBadge,
+  KindBadge,
+  StatusBadge,
+  SubsystemBadge,
+} from './issue-status';
+import { PipelineStripLabeled } from './pipeline-strip';
+import { ReproTabs } from './repro-tabs';
 
-function StageIcon({ state }: { state: StageState }) {
-  const base = "h-5 w-5 rounded-full flex items-center justify-center shrink-0";
-  switch (state) {
-    case "done":
-      return (
-        <span className={cn(base, "bg-stage-done text-white")}>
-          <Check className="h-3 w-3" />
-        </span>
-      );
-    case "running":
-      return (
-        <span className={cn(base, "bg-stage-running text-white")}>
-          <Loader2 className="h-3 w-3 animate-spin" />
-        </span>
-      );
-    case "failed":
-      return (
-        <span className={cn(base, "bg-stage-failed text-white")}>
-          <X className="h-3 w-3" />
-        </span>
-      );
-    default:
-      return (
-        <span className={cn(base, "border text-muted-foreground")}>
-          <CircleDashed className="h-3 w-3" />
-        </span>
-      );
-  }
-}
-
-function expectationLabel(r: Repro): string {
-  switch (r.expectation.check) {
-    case "should_compile":
-      return "should compile";
-    case "should_not_compile":
-      return r.expectation.diagnostic_contains
-        ? `should not compile (${r.expectation.diagnostic_contains})`
-        : "should not compile";
-    case "should_evaluate_to":
-      return `should evaluate to ${JSON.stringify(r.expectation.expected)}`;
-    case "requires_inspection":
-      return "requires inspection";
-  }
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <section>
-      <h2 className="text-xs uppercase tracking-wide text-muted-foreground mb-2">{title}</h2>
+      <h2 className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
+        {title}
+      </h2>
       {children}
     </section>
   );
 }
 
-export function IssueDetail({ issue }: { issue: Issue }) {
+const COMMENT_URL =
+  /^https:\/\/github\.com\/BoundaryML\/baml\/issues\/[1-9][0-9]*#issuecomment-[0-9]+$/;
+
+function CommentCard({ comment }: { comment: Comment }) {
+  const url =
+    comment.source === 'github' && comment.url && COMMENT_URL.test(comment.url)
+      ? comment.url
+      : null;
+  return (
+    <div className="min-w-0 rounded-md border p-3">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span>@{comment.author}</span>
+        <span>·</span>
+        <span>
+          {new Date(comment.at).toLocaleString('en-US', { timeZone: 'UTC' })}{' '}
+          UTC
+        </span>
+        {comment.source === 'github' && (
+          <span className="rounded border px-1.5 py-0.5">from GitHub</span>
+        )}
+        {url && (
+          <a
+            className="underline"
+            href={url}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            View on GitHub
+          </a>
+        )}
+      </div>
+      <FormattedText text={comment.body} />
+    </div>
+  );
+}
+
+const PR_URL = /^https:\/\/github\.com\/BoundaryML\/baml\/pull\/[1-9][0-9]*$/;
+
+/** The fix phase in one card; the artifacts (design doc, run) live on /issues/[id]/fix. */
+function FixSummary({ issue }: { issue: Issue }) {
+  const o = issue.outcome;
+  const pr =
+    o?.pr && PR_URL.test(o.pr)
+      ? o.pr
+      : 'pr' in issue.status && issue.status.pr && PR_URL.test(issue.status.pr)
+        ? issue.status.pr
+        : null;
+  const state = o?.running
+    ? `running: ${o.running} pass`
+    : o?.kind === 'fixed'
+      ? 'fix pushed'
+      : o?.kind === 'hard'
+        ? 'design doc written, no code change'
+        : o?.kind === 'agent_stopped'
+          ? 'agent stopped without a result'
+          : 'not started';
+  return (
+    <div className="rounded-lg border bg-card p-4 text-sm">
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1">
+        <dt className="text-muted-foreground">state</dt>
+        <dd>
+          {state}
+          {o?.timed_out ? ' (killed at budget)' : ''}
+        </dd>
+        {pr && (
+          <>
+            <dt className="text-muted-foreground">PR</dt>
+            <dd>
+              <a
+                className="underline underline-offset-2"
+                href={pr}
+                rel="noreferrer"
+                target="_blank"
+              >
+                {pr.replace('https://github.com/', '')}
+              </a>
+            </dd>
+          </>
+        )}
+        {o && (
+          <>
+            <dt className="text-muted-foreground">agent</dt>
+            <dd className="tabular-nums">
+              {o.turns} turns · {formatSeconds(o.seconds)}
+            </dd>
+          </>
+        )}
+        {o?.reason && (
+          <>
+            <dt className="text-muted-foreground">reason</dt>
+            <dd>{o.reason}</dd>
+          </>
+        )}
+      </dl>
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        <Link
+          className="underline underline-offset-2"
+          href={`/issues/${issue.id}/fix`}
+        >
+          {issue.design_doc ? 'Design doc and run details' : 'Run details'}
+        </Link>
+        <Link
+          className="underline underline-offset-2"
+          href={`/agents?issue_id=${encodeURIComponent(issue.id)}`}
+        >
+          Agent transcripts
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+export function IssueDetail({
+  issue,
+  siblings = [],
+  events = [],
+}: {
+  events?: IssueEvent[];
+  issue: Issue;
+  siblings?: Issue[];
+}) {
+  const sections = ticketSections(issue.description);
+  const investigation = [...events]
+    .reverse()
+    .find((e) => e.kind === 'investigated');
+  const evidence = investigation?.payload.evidence as
+    | Record<string, unknown>
+    | undefined;
+  const revision =
+    typeof evidence?.revision === 'string' ? evidence.revision : '';
+  const locations = Array.isArray(evidence?.location)
+    ? evidence.location.filter((v): v is string => typeof v === 'string')
+    : [];
   const stages = stageInfo(issue);
   const o = issue.outcome;
   const st = issue.status;
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 py-6">
-      <Link href="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+    <div className="max-w-4xl mx-auto px-4 py-6">
+      <Link
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        href="/?view=all"
+      >
         <ArrowLeft className="h-4 w-4" /> All issues
       </Link>
 
-      <div className="mt-3 flex flex-col lg:flex-row lg:items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="font-mono text-xs text-muted-foreground">{issue.id}</div>
-          <h1 className="mt-1 text-2xl font-semibold leading-tight">{issue.title}</h1>
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <StatusBadge issue={issue} />
-            <SubsystemBadge subsystem={issue.subsystem} />
-            <DifficultyBadge difficulty={issue.difficulty} />
-            <span>{issue.shepherd ? `shepherd @${issue.shepherd}` : "unassigned"}</span>
-            <span>·</span>
-            <span>seen on v{issue.version}</span>
-            <span>·</span>
-            <span>
-              {issue.feedback_ids.length} report{issue.feedback_ids.length === 1 ? "" : "s"}
-            </span>
+      <div className="mt-3 space-y-8">
+        <div className="min-w-0 space-y-8">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <KindBadge kind={issue.kind} />
+              <span className="font-mono text-xs text-muted-foreground">
+                {issue.id}
+              </span>
+            </div>
+            <h1 className="mt-1 text-2xl font-semibold leading-tight break-words">
+              Issue: {issue.title}
+            </h1>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <StatusBadge issue={issue} />
+              <SubsystemBadge subsystem={issue.subsystem} />
+              <DifficultyBadge difficulty={issue.difficulty} />
+              <span>
+                {issue.shepherd ? `shepherd @${issue.shepherd}` : 'unassigned'}
+              </span>
+              <span>·</span>
+              <span>BAML version: {issue.version || 'unknown'}</span>
+              <span>·</span>
+              <span>
+                {issue.feedback_ids.length} report
+                {issue.feedback_ids.length === 1 ? '' : 's'}
+              </span>
+              {'pr' in issue.status &&
+                issue.status.pr &&
+                /^https:\/\/github\.com\/BoundaryML\/baml\/pull\/[1-9][0-9]*$/.test(
+                  issue.status.pr,
+                ) && (
+                  <>
+                    <span>·</span>
+                    <a
+                      className="inline-flex items-center gap-1 font-medium text-foreground underline"
+                      href={issue.status.pr}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                    >
+                      PR #{issue.status.pr.split('/').pop()}{' '}
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  </>
+                )}
+            </div>
           </div>
-        </div>
-        <div className="w-full lg:w-[380px] shrink-0 rounded-lg border bg-card p-4">
-          <div className="text-xs text-muted-foreground mb-2">Pipeline</div>
-          <PipelineStripLabeled stages={stages} />
-        </div>
-      </div>
+          <nav
+            aria-label="Original feedback"
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs"
+          >
+            <span className="text-muted-foreground">Feedback</span>
+            {issue.feedback_ids.map((id, index) => (
+              <Link
+                className="underline underline-offset-2"
+                href={`/feedback/${encodeURIComponent(id)}`}
+                key={id}
+                title={id}
+              >
+                Report {index + 1}
+              </Link>
+            ))}
+            <InvestigationPrompt prompt={investigationPrompt(issue)} />
+          </nav>
+          {siblings.length > 0 && (
+            <div className="rounded-md border border-dashed p-3 text-sm">
+              <span className="text-muted-foreground">
+                From the same report:{' '}
+              </span>
+              {siblings.map((s, i) => (
+                <span key={s.id}>
+                  {i > 0 && ', '}
+                  <Link className="underline" href={`/issues/${s.id}`}>
+                    {s.title}
+                  </Link>{' '}
+                  <KindBadge className="align-middle" kind={s.kind} />
+                </span>
+              ))}
+            </div>
+          )}
 
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] gap-8">
-        <div className="space-y-8 min-w-0">
-          <Section title="Description">
-            <p className="text-sm leading-relaxed">{issue.description}</p>
+          <Section title="Brief description">
+            <FormattedText text={sections.brief} />
           </Section>
-
-          {st.state === "rejected" && (
-            <Section title="Rejected">
-              <p className="text-sm">{st.reason}</p>
-            </Section>
-          )}
-          {st.state === "deferred" && (
-            <Section title="Deferred">
-              <p className="text-sm">{st.reason}</p>
-              {st.workaround && <p className="mt-1 text-sm text-muted-foreground">Workaround: {st.workaround}</p>}
-            </Section>
-          )}
+          <Section
+            title={
+              issue.kind === 'feature'
+                ? 'Capability investigation'
+                : "What's going wrong"
+            }
+          >
+            <FormattedText
+              citations={sourceCitations(locations, revision)}
+              text={
+                sections.investigation ||
+                'No source investigation recorded yet.'
+              }
+            />
+          </Section>
 
           <Section title={`Repros (${issue.repros.length})`}>
             {issue.repros.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No repro attached.</p>
+              <p className="text-sm text-muted-foreground">
+                {issue.kind === 'feature'
+                  ? 'No reproduction required for this feature request.'
+                  : 'No repro attached.'}
+              </p>
             ) : (
-              <div className="space-y-3">
-                {issue.repros.map((r, i) => (
-                  <div key={i} className="rounded-md border overflow-hidden">
-                    <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-muted/60 text-xs">
-                      <span className="font-mono">$ {r.command}</span>
-                      <Badge variant="outline" className="font-normal">
-                        {expectationLabel(r)}
-                      </Badge>
-                    </div>
-                    {Object.entries(r.files).map(([name, content]) => (
-                      <div key={name}>
-                        <div className="px-3 py-1 text-[11px] font-mono text-muted-foreground border-t">{name}</div>
-                        <pre className="px-3 py-2 text-xs font-mono bg-code-bg text-code-fg overflow-x-auto">
-                          {content}
-                        </pre>
-                      </div>
+              <ReproTabs repros={issue.repros} />
+            )}
+          </Section>
+
+          <details className="border-t pt-4">
+            <summary className="cursor-pointer text-sm text-muted-foreground">
+              Issue details and discussion
+            </summary>
+            <div className="mt-4 space-y-6">
+              {sections.original && <FormattedText text={sections.original} />}
+              {st.state === 'rejected' && (
+                <Section title="Rejected">
+                  <p className="text-sm">{st.reason}</p>
+                </Section>
+              )}
+              {st.state === 'deferred' && (
+                <Section title="Deferred">
+                  <p className="text-sm">{st.reason}</p>
+                  {st.workaround && (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Workaround: {st.workaround}
+                    </p>
+                  )}
+                </Section>
+              )}
+
+              {issue.resolution_plan && (
+                <details>
+                  <summary className="cursor-pointer text-sm text-muted-foreground">
+                    {issue.kind === 'feature'
+                      ? 'Proposed feature'
+                      : 'Resolution plan'}
+                  </summary>
+                  <FormattedText text={issue.resolution_plan} />
+                </details>
+              )}
+
+              {(issue.design_doc || o) && (
+                <Section title="Fix">
+                  <FixSummary issue={issue} />
+                </Section>
+              )}
+
+              <Section title={`Comments (${issue.comments.length})`}>
+                {issue.comments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No comments.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {issue.comments.map((c, i) => (
+                      <CommentCard comment={c} key={c.url ?? i} />
                     ))}
                   </div>
-                ))}
-              </div>
-            )}
-          </Section>
-
-          {issue.resolution_plan && (
-            <Section title="Resolution plan (triage)">
-              <p className="text-sm leading-relaxed">{issue.resolution_plan}</p>
-            </Section>
-          )}
-
-          {issue.design_doc && (
-            <Section title="Design doc (agent)">
-              <pre className="whitespace-pre-wrap text-sm font-sans leading-relaxed rounded-md border p-3 bg-muted/30">
-                {issue.design_doc}
-              </pre>
-            </Section>
-          )}
-
-          <Section title={`Comments (${issue.comments.length})`}>
-            {issue.comments.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No comments.</p>
-            ) : (
-              <div className="space-y-3">
-                {issue.comments.map((c, i) => (
-                  <div key={i} className="rounded-md border p-3">
-                    <div className="text-xs text-muted-foreground">
-                      @{c.author} · {new Date(c.at).toLocaleString()}
-                    </div>
-                    <p className="mt-1 text-sm">{c.body}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Section>
+                )}
+              </Section>
+            </div>
+          </details>
         </div>
 
-        <aside className="space-y-6">
-          <Section title="Timeline">
-            <ol className="relative border-l ml-2.5 space-y-4">
-              {stages.map((s) => (
-                <li key={s.stage} className="ml-5">
-                  <span className="absolute -left-2.5">
-                    <StageIcon state={s.state} />
-                  </span>
-                  <div className="text-sm font-medium leading-5">{STAGE_LABELS[s.stage]}</div>
-                  <div className="text-xs text-muted-foreground">{s.detail}</div>
-                </li>
-              ))}
-            </ol>
-          </Section>
-
-          {o && (
-            <Section title="Last run">
-              <dl className="text-sm grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                <dt className="text-muted-foreground">outcome</dt>
-                <dd className="font-mono text-xs self-center">{o.running ? `running (${o.running})` : o.kind}</dd>
-                <dt className="text-muted-foreground">turns</dt>
-                <dd className="tabular-nums">{o.turns}</dd>
-                <dt className="text-muted-foreground">time</dt>
-                <dd className="tabular-nums">
-                  {formatSeconds(o.seconds)}
-                  {o.timed_out && <span className="text-stage-failed"> (killed at budget)</span>}
-                </dd>
-                {o.reason && (
-                  <>
-                    <dt className="text-muted-foreground">reason</dt>
-                    <dd>{o.reason}</dd>
-                  </>
-                )}
-                {o.branch && (
-                  <>
-                    <dt className="text-muted-foreground">branch</dt>
-                    <dd className="font-mono text-xs break-all self-center">{o.branch}</dd>
-                  </>
-                )}
-                {o.pr && (
-                  <>
-                    <dt className="text-muted-foreground">PR</dt>
-                    <dd>
-                      <a
-                        href={o.pr.startsWith("https://github.com/") ? o.pr : undefined}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 underline underline-offset-2"
-                      >
-                        {o.pr.replace("https://github.com/", "")}
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    </dd>
-                  </>
-                )}
-              </dl>
-              {o.gate && (
-                <div className="mt-3">
-                  <div className="text-xs text-muted-foreground mb-1">
-                    gate · crates: {o.gate.changed_crates.join(", ")}
-                  </div>
-                  <ul className="rounded-md border divide-y text-xs">
-                    {o.gate.steps.map((s) => (
-                      <li key={s.name} className="flex items-center gap-2 px-2 py-1">
-                        <span
-                          className={cn("h-1.5 w-1.5 rounded-full shrink-0", s.ok ? "bg-stage-done" : "bg-stage-failed")}
-                        />
-                        <span className="font-mono truncate">{s.name}</span>
-                        <span className="ml-auto tabular-nums text-muted-foreground">
-                          {formatSeconds(s.seconds)}
-                        </span>
-                        {!s.ok && <span className="text-stage-failed">exit {s.exit_code}</span>}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </Section>
-          )}
-
-          <Section title="Feedback">
-            <ul className="text-xs font-mono space-y-1">
-              {issue.feedback_ids.map((f) => (
-                <li key={f} className="text-muted-foreground">
-                  {f}
-                </li>
-              ))}
-            </ul>
-          </Section>
-        </aside>
+        <details className="border-t pt-4">
+          <summary className="cursor-pointer text-sm text-muted-foreground">
+            Pipeline
+          </summary>
+          <aside className="mt-4 space-y-6">
+            <div className="rounded-lg border bg-card p-4">
+              <div className="text-xs text-muted-foreground mb-2">Pipeline</div>
+              <PipelineStripLabeled stages={stages} />
+            </div>
+          </aside>
+        </details>
       </div>
     </div>
   );

@@ -1,0 +1,43 @@
+app = "atb2-runner"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "tools/miniatb/deployment/Dockerfile"
+
+[env]
+  ATB2_POSTHOG_PROJECT_ID = "490278"
+  ATB2_SLACK_CHANNEL = "C0B36EDQEN6"
+  MINIATB_CLAUDE_HOME = "/data/home"
+  MINIATB_DATA = "/data/miniatb"
+  MINIATB_DATASET = "live"
+  MINIATB_GITHUB_INGRESS = "1"
+  MINIATB_SLACK_NOTIFY = "1"
+  MINIATB_ALLOW_PUSH = "1"
+
+[processes]
+  runner = "/app/deployment/entrypoint"
+
+[[mounts]]
+  source = "atb2_data"
+  destination = "/data"
+  processes = ["runner"]
+
+[http_service]
+  processes = ["runner"]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "180s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
+
+[[vm]]
+  size = "performance-8x"
+  memory = "32gb"
+  processes = ["runner"]

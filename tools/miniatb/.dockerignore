@@ -1,0 +1,4 @@
+.baml
+__pycache__
+*.pyc
+.env*

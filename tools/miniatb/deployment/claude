@@ -1,0 +1,4 @@
+#!/bin/sh
+# Keep service credentials out of the model harness environment.
+cd /app || exit 1
+exec node /app/deployment/claude-images.mjs "$@"
