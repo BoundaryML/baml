@@ -78,11 +78,16 @@ class TextDelta {
 
 /// Turn metadata as it arrives on the wire. Providers send stop_reason and
 /// token counts on different events; each TurnMeta carries what its event had
-/// and TurnStream folds non-null fields together (last write wins).
+/// and TurnStream folds non-null fields together (last write wins). The token
+/// counts mean what they mean in `root.events.Usage`.
 class TurnMeta {
     stop_reason: root.content.StopReason?,
     input_tokens: int?,
     output_tokens: int?,
+    cached_input_tokens: int?,
+    cache_write_input_tokens: int?,
+    uncached_input_tokens: int?,
+    reasoning_tokens: int?,
 }
 
 /// The provider's explicit end-of-turn marker — the decoded form of `[DONE]`,
@@ -142,6 +147,10 @@ class TurnStream {
     _stop_reason: root.content.StopReason?,
     _input_tokens: int?,
     _output_tokens: int?,
+    _cached_input_tokens: int?,
+    _cache_write_input_tokens: int?,
+    _uncached_input_tokens: int?,
+    _reasoning_tokens: int?,
     _done: bool,
     // strict termination (see the contract at the top of this file): the
     // provider id when this stream requires an explicit TurnDone, null when a
@@ -201,6 +210,10 @@ class TurnStream {
             _stop_reason: null,
             _input_tokens: null,
             _output_tokens: null,
+            _cached_input_tokens: null,
+            _cache_write_input_tokens: null,
+            _uncached_input_tokens: null,
+            _reasoning_tokens: null,
             _done: false,
             _require_terminal: require_terminal,
             _saw_terminal: false,
@@ -231,6 +244,10 @@ class TurnStream {
             _stop_reason: null,
             _input_tokens: null,
             _output_tokens: null,
+            _cached_input_tokens: null,
+            _cache_write_input_tokens: null,
+            _uncached_input_tokens: null,
+            _reasoning_tokens: null,
             _done: false,
             _require_terminal: null,
             _saw_terminal: false,
@@ -262,6 +279,10 @@ class TurnStream {
             _stop_reason: null,
             _input_tokens: null,
             _output_tokens: null,
+            _cached_input_tokens: null,
+            _cache_write_input_tokens: null,
+            _uncached_input_tokens: null,
+            _reasoning_tokens: null,
             _done: false,
             _require_terminal: null,
             _saw_terminal: false,
@@ -321,14 +342,15 @@ class TurnStream {
         let target = self._usage_target;
         if (target != 0 && (self._input_tokens != null || self._output_tokens != null)) {
             self._usage_target = 0;
+            // Like a non-streamed turn: full-rate input, then the cache split.
             let _ = trace._record_usage(
                 target,
                 self._usage_model,
-                self._input_tokens ?? 0,
+                self._uncached_input_tokens ?? self._input_tokens ?? 0,
                 self._output_tokens ?? 0,
-                null,
-                null,
-                null,
+                self._cached_input_tokens,
+                self._cache_write_input_tokens,
+                self._reasoning_tokens,
             );
         }
     }
@@ -393,6 +415,18 @@ class TurnStream {
                         }
                         if let o: int = m.output_tokens {
                             self._output_tokens = o;
+                        }
+                        if let c: int = m.cached_input_tokens {
+                            self._cached_input_tokens = c;
+                        }
+                        if let w: int = m.cache_write_input_tokens {
+                            self._cache_write_input_tokens = w;
+                        }
+                        if let u: int = m.uncached_input_tokens {
+                            self._uncached_input_tokens = u;
+                        }
+                        if let r: int = m.reasoning_tokens {
+                            self._reasoning_tokens = r;
                         }
                         null
                     },
@@ -496,10 +530,10 @@ class TurnStream {
             root.events.Usage {
                 input_tokens: self._input_tokens ?? 0,
                 output_tokens: self._output_tokens ?? 0,
-                cached_input_tokens: null,
-                reasoning_tokens: null,
-                cache_write_input_tokens: null,
-                uncached_input_tokens: null,
+                cached_input_tokens: self._cached_input_tokens,
+                reasoning_tokens: self._reasoning_tokens,
+                cache_write_input_tokens: self._cache_write_input_tokens,
+                uncached_input_tokens: self._uncached_input_tokens,
             }
         } else {
             null

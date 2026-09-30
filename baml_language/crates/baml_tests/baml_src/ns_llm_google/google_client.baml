@@ -575,6 +575,43 @@ test "google_stream_decode" {
     )
 }
 
+// A streamed turn reports the cache split a non-streamed one does:
+// promptTokenCount counts the cached share too.
+function google_stream_usage_splits_the_cache() -> string {
+    root.llm_mock.mock_sse_serve(
+        [
+            root.llm_mock.sse_data(
+                `{"candidates":[{"content":{"role":"model","parts":[{"text":"pong"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":5,"cachedContentTokenCount":60,"thoughtsTokenCount":3}}`,
+            ),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = google.GeminiClient.new(
+                model = "gemini-2.5-flash",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let spec = GoogleEcho@spec("Say pong.");
+            let u = cl
+                .invoke_stream(
+                ai.ModelTurnInput {
+                    prompt: spec.prompt_template,
+                    journal: ai.Journal { log: [] },
+                    toolbox: spec.tools(),
+                    output_type: spec.output_type(),
+                },
+                )
+                .final_turn()
+                .usage;
+            `${u?.input_tokens ?? -1}/${u?.cached_input_tokens ?? -1}/${u?.cache_write_input_tokens ?? -1}/${u?.uncached_input_tokens ?? -1}/${u?.output_tokens ?? -1}/${u?.reasoning_tokens ?? -1}`
+        },
+    )
+}
+
+test "google_stream_usage_splits_the_cache" {
+    // input/cached/cache writes/uncached/output/reasoning
+    assert.equal(google_stream_usage_splits_the_cache(), "100/60/-1/40/5/3")
+}
+
 // Gemini's SSE has no terminal sentinel: the `finishReason` fragment IS the
 // end of the turn. Both stream call sites therefore pass `require_terminal`, so
 // a connection cut mid-answer raises instead of handing the caller a silently

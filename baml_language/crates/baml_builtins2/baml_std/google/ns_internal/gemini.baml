@@ -1068,6 +1068,13 @@ function _gm_decode_batch(batch: string, provider: string) -> ai.stream.Event[] 
                         stop_reason: stop,
                         input_tokens: usage?.promptTokenCount,
                         output_tokens: usage?.candidatesTokenCount,
+                        cached_input_tokens: usage?.cachedContentTokenCount,
+                        // promptTokenCount counts the cached share too.
+                        uncached_input_tokens: ai.internal.uncached_input_tokens(
+                            usage?.promptTokenCount,
+                            usage?.cachedContentTokenCount,
+                        ),
+                        reasoning_tokens: usage?.thoughtsTokenCount,
                     },
                 );
                 null

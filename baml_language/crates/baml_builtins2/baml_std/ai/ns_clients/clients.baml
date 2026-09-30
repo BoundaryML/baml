@@ -639,6 +639,10 @@ class StreamRelay {
                                     stop_reason: turn.stop_reason,
                                     input_tokens: turn.usage?.input_tokens,
                                     output_tokens: turn.usage?.output_tokens,
+                                    cached_input_tokens: turn.usage?.cached_input_tokens,
+                                    cache_write_input_tokens: turn.usage?.cache_write_input_tokens,
+                                    uncached_input_tokens: turn.usage?.uncached_input_tokens,
+                                    reasoning_tokens: turn.usage?.reasoning_tokens,
                                 },
                                 root.stream.TurnDone {},
                             ];

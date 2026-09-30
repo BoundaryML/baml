@@ -1605,6 +1605,13 @@ class ChatStreamDecoder {
                                     stop_reason: null,
                                     input_tokens: usage.prompt_tokens,
                                     output_tokens: usage.completion_tokens,
+                                    cached_input_tokens: usage.prompt_tokens_details?.cached_tokens,
+                                    // prompt_tokens counts the cached share too.
+                                    uncached_input_tokens: ai.internal.uncached_input_tokens(
+                                        usage.prompt_tokens,
+                                        usage.prompt_tokens_details?.cached_tokens,
+                                    ),
+                                    reasoning_tokens: usage.completion_tokens_details?.reasoning_tokens,
                                 },
                             );
                         }

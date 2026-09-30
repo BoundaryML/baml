@@ -502,6 +502,91 @@ async fn concurrent_first_queries_share_one_index_without_duplicates() {
     assert_eq!(stats(&mut index(&path)), expected_stats(3, 0));
 }
 
+/// A streamed turn is priced like a non-streamed one with the same tokens:
+/// its cache reads and writes reach `temporary_projections`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn streamed_usage_keeps_the_cache_split() {
+    let project = tempfile::tempdir().unwrap();
+    let source = r##"
+        class Sse {
+            server: baml.http.Server,
+            events: string[],
+
+            function handle(self, req: baml.http.Request) -> baml.http.Response {
+                let resp = baml.http.Response.new_streaming(200, { "content-type": "text/event-stream" });
+                let events = self.events;
+                spawn {
+                    for (let event in events) {
+                        resp.write((event + "\n\n").to_utf8());
+                    }
+                    resp.end();
+                    null
+                };
+                resp
+            }
+        }
+
+        function sse(name: string, data: string) -> string {
+            "event: " + name + "\ndata: " + data
+        }
+
+        function Summarize(text: string) -> string {
+            client: "anthropic/claude-opus-5-5"
+            prompt: `Summarize ${text}`
+        }
+
+        function Stream(base_url: string) -> string {
+            let cl = anthropic.Client.new(
+                model = "claude-opus-5-5",
+                api_key = "test-key",
+                base_url = base_url,
+            );
+            ai.stream.from_spec<string>(Summarize@spec("hi"), client = cl).final()
+        }
+
+        function main(n: int) -> int {
+            let server = Sse {
+                server: baml.http.Server.bind("127.0.0.1:0"),
+                events: [
+                    sse("message_start", `{"type":"message_start","message":{"id":"m","model":"claude-opus-5-5","usage":{"input_tokens":900,"cache_read_input_tokens":200,"cache_creation_input_tokens":100}}}`),
+                    sse("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
+                    sse("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"short"}}`),
+                    sse("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":30}}`),
+                    sse("message_stop", `{"type":"message_stop"}`),
+                ],
+            };
+            let task = spawn { server.server.serve(server.handle) };
+            let text = Stream("http://" + server.server.addr, $trace = trace.span());
+            task.cancel();
+            text.length()
+        }
+    "##;
+    let results = record_program(project.path(), source, &[], &[("main", 0)]).await;
+    assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(5))]);
+    let mut index = index(project.path());
+    let usage = sql(
+        &mut index,
+        "SELECT temporary_projections['model_name'], temporary_projections['model_calls'],
+           temporary_projections['input_tokens'], temporary_projections['output_tokens'],
+           temporary_projections['cache_read_tokens'], temporary_projections['cache_write_tokens'],
+           round(temporary_projections['cost'], 6)
+         FROM spans WHERE span_name = 'user.Stream'",
+    );
+    // The same tokens and price as the non-streamed turn below.
+    assert_eq!(
+        usage.rows,
+        vec![vec![
+            json!("claude-opus-5-5"),
+            json!(1),
+            json!(900),
+            json!(30),
+            json!(200),
+            json!(100),
+            json!(0.00474)
+        ]]
+    );
+}
+
 /// Model usage from the runner, panics, future names and sysop time, as
 /// the engine records them.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
