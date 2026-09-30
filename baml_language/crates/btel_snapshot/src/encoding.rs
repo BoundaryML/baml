@@ -6,8 +6,8 @@
 //! sequence. Sequences and UTF-8 strings use u32 lengths. Values inline
 //! immutable leaf contents; graph objects use u32 references, by local
 //! number. Numbers follow each object's first reference in this byte order,
-//! so a blob has exactly one encoding and the reader rejects any other. This
-//! also makes leaf-arena sharing irrelevant to the bytes.
+//! so a blob has exactly one encoding, and the reader rejects any other
+//! numbering. This also makes leaf-arena sharing irrelevant to the bytes.
 //!
 //! A value stored in another blob is written as tag 11 and the u32 slot of
 //! that blob in the child table (the value is the child's root value), or as
@@ -15,6 +15,12 @@
 //! its root. Slots follow first use in this byte order, like object numbers.
 //! A blob's own root value, map keys, names, types and declarations are
 //! always written in place.
+//!
+//! A media object (tag 9) writes its kind, whether a MIME type follows and
+//! that type, then a source tag: 0 with a URL, 1 with a path, each followed by
+//! whether content follows, or 2, which always has content. Content is its
+//! u64 text length, then the base64 text as a value, so large content can be a
+//! child blob. The MIME type, URL and path are strings written in place.
 //!
 //! Value and object tags mirror hash format 3. Type/declaration metadata uses
 //! its Borsh representation. Floats use raw bits (including NaNs). Bigints use

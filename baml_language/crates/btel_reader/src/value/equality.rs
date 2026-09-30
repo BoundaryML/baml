@@ -8,11 +8,15 @@ use std::{
 };
 
 use btel_snapshot::{
-    CasId, DecodedName, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, NodeId,
+    CasId, DecodedMediaSource, DecodedName, DecodedObject, DecodedRoot, DecodedSnapshot,
+    DecodedValue, NodeId,
 };
 use serde_json::Value as Json;
 
-use super::{BlobSource, CmpOp, Leaf, Nav, Unavailable, compare, leaf_of, span::Span};
+use super::{
+    BlobSource, CmpOp, Leaf, Nav, Unavailable, compare, leaf_of,
+    span::{Examine, Span},
+};
 use crate::evidence::ArgumentNames;
 
 #[derive(Clone, Copy, Debug)]
@@ -104,6 +108,16 @@ enum Value<'a> {
     List(Vec<Self>),
     Map(Fields<'a>),
     Class(&'a DecodedName, Fields<'a>),
+    /// Kind, MIME type and source: media compares as captured, by its base64
+    /// text, not by the bytes that text encodes.
+    Media(baml_type::MediaKind, Option<&'a str>, Source<'a>),
+}
+
+#[derive(PartialEq)]
+enum Source<'a> {
+    Url(&'a str, Option<&'a str>),
+    File(&'a str, Option<&'a str>),
+    Base64(&'a str),
 }
 
 impl Value<'_> {
@@ -122,6 +136,9 @@ impl Value<'_> {
             }
             (Self::Map(a), Self::Map(b)) => fields_equal(a, b),
             (Self::Class(a, x), Self::Class(b, y)) => a == b && fields_equal(x, y),
+            (Self::Media(kind, mime_type, source), Self::Media(other_kind, other_mime, other)) => {
+                kind == other_kind && mime_type == other_mime && source == other
+            }
             (
                 Self::Unsigned(_)
                 | Self::Scalar(_)
@@ -130,7 +147,8 @@ impl Value<'_> {
                 | Self::Enum(..)
                 | Self::List(_)
                 | Self::Map(_)
-                | Self::Class(..),
+                | Self::Class(..)
+                | Self::Media(..),
                 _,
             ) => false,
         }
@@ -177,6 +195,21 @@ impl<'a> Builder<'a> {
             return Err(Error::Limit);
         }
         Ok(())
+    }
+
+    fn text(&mut self, text: &'a str) -> Result<&'a str, Error> {
+        self.bytes(text.len())?;
+        Ok(text)
+    }
+
+    /// A media value's content, from the blob that stores it.
+    fn content(
+        &mut self,
+        s: &'a DecodedSnapshot,
+        data: &'a btel_snapshot::MediaPayload,
+    ) -> Result<&'a str, Error> {
+        let span = self.span;
+        self.text(span.content(s, data).map_err(Error::Evidence)?)
     }
 
     fn captured(
@@ -327,7 +360,8 @@ impl<'a> Builder<'a> {
             | DecodedObject::Instance { .. }
             | DecodedObject::Cell(_)
             | DecodedObject::NonSnapshotable
-            | DecodedObject::Descriptive { .. } => Err(Error::Unsupported),
+            | DecodedObject::Descriptive { .. }
+            | DecodedObject::Media(_) => Err(Error::Unsupported),
         }
     }
 
@@ -392,6 +426,29 @@ impl<'a> Builder<'a> {
                 Value::Class(name, self.fields(s, fields, *original_len, depth)?)
             }
             DecodedObject::Cell(v) => self.value(s, v, depth + 1)?,
+            DecodedObject::Media(media) => {
+                let mime_type = media
+                    .mime_type
+                    .as_deref()
+                    .map(|mime_type| self.text(mime_type))
+                    .transpose()?;
+                let source = match &media.source {
+                    DecodedMediaSource::Url { url, data } => Source::Url(
+                        self.text(url)?,
+                        data.as_ref()
+                            .map(|data| self.content(s, data))
+                            .transpose()?,
+                    ),
+                    DecodedMediaSource::File { path, data } => Source::File(
+                        self.text(path)?,
+                        data.as_ref()
+                            .map(|data| self.content(s, data))
+                            .transpose()?,
+                    ),
+                    DecodedMediaSource::Base64 { data } => Source::Base64(self.content(s, data)?),
+                };
+                Value::Media(media.kind, mime_type, source)
+            }
             DecodedObject::Truncated(reason) => {
                 return Err(Error::Evidence(Unavailable::Truncated(*reason)));
             }
@@ -466,6 +523,7 @@ pub fn captured(
     let span = Span::load(
         source,
         from_left.values().into_iter().chain(from_right.values()),
+        Examine::Content,
         limits.max_blobs,
     );
     let mut builder = Builder::new(limits, &span);
@@ -485,7 +543,12 @@ pub fn json(
         return Err(Error::Unsupported);
     }
     let from_left = Start::of(left.nav);
-    let span = Span::load(source, from_left.values(), limits.max_blobs);
+    let span = Span::load(
+        source,
+        from_left.values(),
+        Examine::Content,
+        limits.max_blobs,
+    );
     let mut builder = Builder::new(limits, &span);
     let a = builder.captured(&from_left, left.names)?;
     let b = builder.json(right, 0)?;

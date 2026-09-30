@@ -293,3 +293,68 @@ async fn large_strings_are_stored_once_and_queries_read_through_them() {
         result.outcome.diagnostics
     );
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn captured_images_store_each_content_once_and_render_as_descriptors() {
+    let project = tempfile::tempdir().unwrap();
+    let source = r#"
+        function Show(images: image[]) -> int { 0 }
+        function main(n: int) -> int {
+            let chunk = "iVBORw0K";
+            let i = 0;
+            while (i < 12) {
+                chunk = chunk + chunk;
+                i = i + 1;
+            }
+            let last = if (n == 0) { "c" } else { "d" };
+            Show([
+                baml.media.Image.from_base64(chunk + "a", "image/png"),
+                baml.media.Image.from_base64(chunk + "b", "image/png"),
+                baml.media.Image.from_base64(chunk + last, "image/png"),
+            ]);
+            n
+        }
+    "#;
+    let results = record_program(
+        project.path(),
+        source,
+        &["Show"],
+        &[("main", 0), ("main", 1)],
+    )
+    .await;
+    assert_eq!(
+        results,
+        vec![
+            Ok(bex_engine::BexExternalValue::Int(0)),
+            Ok(bex_engine::BexExternalValue::Int(1)),
+        ]
+    );
+    // Four distinct images, each stored once; per call a small inputs root
+    // that names them, and one output both calls share.
+    let sizes = blob_sizes(project.path());
+    let (small, large): (Vec<u64>, Vec<u64>) = sizes.iter().partition(|size| **size < 1024);
+    assert_eq!(large.len(), 4, "{sizes:?}");
+    assert_eq!(small.len(), 3, "{sizes:?}");
+    assert!(large.iter().all(|size| (32 << 10..33 << 10).contains(size)));
+
+    let mut index = index(project.path());
+    let result = sql(
+        &mut index,
+        "SELECT input_args['images'][2] AS third,
+           input_args['images'][0] = input_args['images'][0] AS same,
+           input_args['images'][0] = input_args['images'][1] AS different
+         FROM spans WHERE span_name = 'user.Show' ORDER BY start_time",
+    );
+    assert_eq!(
+        result.outcome.status,
+        Status::Complete,
+        "{:?}",
+        result.outcome.diagnostics
+    );
+    let descriptor = json!({"$media": "image", "mime": "image/png", "base64_len": (32 << 10) + 1});
+    for row in &result.rows {
+        assert_eq!(row[0]["_data"], descriptor, "{}", row[0]);
+        assert_eq!((&row[1], &row[2]), (&json!(1), &json!(0)));
+    }
+    assert_eq!(result.rows.len(), 2);
+}

@@ -42,7 +42,8 @@ fn decode(bytes: &[u8]) -> Result<DecodedSnapshot, BlobError> {
 }
 
 /// Instance(Customer){name, tags: List[shared list, self-cycle cell], ...}
-/// covering every value and object kind the capture code produces.
+/// covering the value and object kinds of an ordinary capture; media has
+/// tests of its own.
 fn rich_snapshot(pool: &SnapshotPool) -> Snapshot {
     let mut b = pool.try_acquire().unwrap();
     let declaration = b.reserve_object().unwrap();
@@ -645,6 +646,153 @@ fn references_to_other_blobs_follow_first_use_and_never_replace_a_root() {
     node.extend_from_slice(&3_u32.to_le_bytes());
     assert!(matches!(
         decode(&one_slot(&[[1; 16]], &node)),
+        Err(BlobError::IdMismatch { .. })
+    ));
+}
+
+#[test]
+fn media_round_trips_each_source_with_its_content() {
+    let pool = SnapshotPool::new(1, Limits::default());
+    let mut b = pool.try_acquire().unwrap();
+    let string = |b: &mut crate::Builder, text: &str| b.string(&text.into()).unwrap();
+    let (mime, url, path, data) = (
+        string(&mut b, "image/png"),
+        string(&mut b, "https://example.test/a.png"),
+        string(&mut b, "/data/b.wav"),
+        string(&mut b, "UklGRg=="),
+    );
+    let sources = [
+        (Some(mime), crate::MediaSource::Url { url, data: None }),
+        (
+            None,
+            crate::MediaSource::Url {
+                url,
+                data: Some(data),
+            },
+        ),
+        (
+            None,
+            crate::MediaSource::File {
+                path,
+                data: Some(data),
+            },
+        ),
+        (Some(mime), crate::MediaSource::File { path, data: None }),
+        (Some(mime), crate::MediaSource::Base64 { data }),
+    ];
+    let start = b.value_start();
+    for (index, (mime_type, source)) in sources.into_iter().enumerate() {
+        let id = b.reserve_object().unwrap();
+        let kind = [
+            baml_type::MediaKind::Image,
+            baml_type::MediaKind::Audio,
+            baml_type::MediaKind::Video,
+            baml_type::MediaKind::Pdf,
+            baml_type::MediaKind::Generic,
+        ][index];
+        b.set_object(
+            id,
+            O::Media {
+                kind,
+                mime_type,
+                source,
+            },
+        );
+        b.push_value(V::Object(id));
+    }
+    let slots = b.value_range(start);
+    let decoded = decode(&encode(&b.finish_args(5, slots, &mut Shaper::default()))).unwrap();
+    let inline = || MediaPayload::Inline("UklGRg==".into());
+    let expected = [
+        (
+            MediaKind::Image,
+            Some("image/png"),
+            DecodedMediaSource::Url {
+                url: "https://example.test/a.png".into(),
+                data: None,
+            },
+        ),
+        (
+            MediaKind::Audio,
+            None,
+            DecodedMediaSource::Url {
+                url: "https://example.test/a.png".into(),
+                data: Some(inline()),
+            },
+        ),
+        (
+            MediaKind::Video,
+            None,
+            DecodedMediaSource::File {
+                path: "/data/b.wav".into(),
+                data: Some(inline()),
+            },
+        ),
+        (
+            MediaKind::Pdf,
+            Some("image/png"),
+            DecodedMediaSource::File {
+                path: "/data/b.wav".into(),
+                data: None,
+            },
+        ),
+        (
+            MediaKind::Generic,
+            Some("image/png"),
+            DecodedMediaSource::Base64 { data: inline() },
+        ),
+    ];
+    for (node, (kind, mime_type, source)) in expected.into_iter().enumerate() {
+        assert_eq!(
+            decoded.object(NodeId(u32::try_from(node).unwrap())),
+            &DecodedObject::Media(DecodedMedia {
+                kind,
+                mime_type: mime_type.map(Into::into),
+                source,
+            })
+        );
+    }
+    assert_eq!(pool.stats().in_use, 0);
+}
+
+#[test]
+fn malformed_media_is_rejected() {
+    // A value root naming object 0, then that object's bytes.
+    let blob = |object: &[u8]| {
+        let mut bytes = header(&[], 1);
+        bytes.extend_from_slice(&[0, 7]);
+        bytes.extend_from_slice(&0_u32.to_le_bytes());
+        bytes.extend_from_slice(object);
+        bytes
+    };
+    // Base64 content of `declared` bytes, written as `value`.
+    let base64 = |declared: u64, value: &[u8]| {
+        let mut object = vec![9, 0, 0, 2];
+        object.extend_from_slice(&declared.to_le_bytes());
+        object.extend_from_slice(value);
+        object
+    };
+    let string = |text: &str| {
+        let mut value = vec![5];
+        value.extend_from_slice(&u32::try_from(text.len()).unwrap().to_le_bytes());
+        value.extend_from_slice(text.as_bytes());
+        value
+    };
+    assert!(invalid_because(&blob(&[9, 5, 0, 2]), "media kind tag 5"));
+    assert!(invalid_because(&blob(&[9, 0, 0, 3]), "media source tag 3"));
+    assert!(invalid_because(
+        &blob(&base64(3, &string("ab"))),
+        "media content length"
+    ));
+    let mut int = vec![3];
+    int.extend_from_slice(&7_i64.to_le_bytes());
+    assert!(invalid_because(
+        &blob(&base64(8, &int)),
+        "media content is not a string"
+    ));
+    // Well formed, so only the zero ID in the hand-built header is wrong.
+    assert!(matches!(
+        decode(&blob(&base64(2, &string("ab")))),
         Err(BlobError::IdMismatch { .. })
     ));
 }

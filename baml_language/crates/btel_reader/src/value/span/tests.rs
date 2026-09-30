@@ -213,6 +213,134 @@ fn a_value_reads_the_same_however_it_is_stored() {
     );
 }
 
+/// `{photo, link}`: an image whose base64 `content` is stored alone under
+/// [`cut`], and one that only names its URL.
+fn album(b: &mut Builder, content: &str) -> V {
+    let data = b.string(&content.into()).unwrap();
+    let url = b.string(&"https://example.test/cat.png".into()).unwrap();
+    let media = |b: &mut Builder, source| {
+        let mime_type = b.string(&"image/png".into());
+        let id = b.reserve_object().unwrap();
+        b.set_object(
+            id,
+            O::Media {
+                kind: baml_type::MediaKind::Image,
+                mime_type,
+                source,
+            },
+        );
+        V::Object(id)
+    };
+    let photo = media(b, btel_snapshot::MediaSource::Base64 { data });
+    let link = media(b, btel_snapshot::MediaSource::Url { url, data: None });
+    map(b, &[("photo", photo), ("link", link)])
+}
+
+/// The content of the first media object in `blob` that holds any.
+fn payload(blob: &DecodedSnapshot) -> MediaPayload {
+    blob.objects
+        .iter()
+        .find_map(|object| {
+            let DecodedObject::Media(media) = object else {
+                return None;
+            };
+            media.source.data().cloned()
+        })
+        .expect("a media object with content")
+}
+
+#[test]
+fn media_is_described_without_its_content_and_compared_by_it() {
+    let mut blobs = Blobs::default();
+    let content = "iVBORw0K".repeat(20);
+    let split = capture(&mut cut(), |b| album(b, &content));
+    assert_eq!(split.blobs().len(), 2, "content, album");
+    let content_blob = split.blobs().next().unwrap().id();
+    let split = blobs.store(&split);
+    let whole = capture(&mut Shaper::new(ShapePolicy::Whole), |b| album(b, &content));
+    let whole = blobs.store(&whole);
+    let other = capture(&mut Shaper::new(ShapePolicy::Whole), |b| {
+        album(b, &"R0lGODlh".repeat(20))
+    });
+    let other = blobs.store(&other);
+
+    // Describing media needs no content, so without it nothing is unavailable.
+    let stored = blobs.0.remove(&content_blob).unwrap();
+    let expected = Rendered {
+        json: json!({
+            "photo": {"$media": "image", "mime": "image/png", "base64_len": 160},
+            "link": {"$media": "image", "mime": "image/png", "url": "https://example.test/cat.png"},
+        }),
+        incomplete: None,
+    };
+    for root in [&split, &whole] {
+        assert_eq!(rendered(&blobs, root, &RenderLimits::default()), expected);
+    }
+    assert_eq!(at(&blobs, &split, &["photo", "mime"]), Nav::Missing);
+    // Comparing media compares content, which only the missing blob holds.
+    let photo = |root| at(&blobs, root, &["photo"]);
+    assert_eq!(
+        equal(&blobs, &photo(&split), &photo(&whole)),
+        Err(equality::Error::Evidence(Unavailable::Blob("cas_missing")))
+    );
+    blobs.0.insert(content_blob, stored);
+    let photo = |root| at(&blobs, root, &["photo"]);
+    assert_eq!(
+        equal(&blobs, &photo(&split), &photo(&whole)),
+        Ok(Some(true))
+    );
+    assert_eq!(
+        equal(&blobs, &photo(&split), &photo(&other)),
+        Ok(Some(false))
+    );
+    let link = |root| at(&blobs, root, &["link"]);
+    assert_eq!(equal(&blobs, &link(&split), &link(&other)), Ok(Some(true)));
+}
+
+#[test]
+fn media_content_is_read_from_its_blob_and_checked_against_its_length() {
+    let mut blobs = Blobs::default();
+    let content = "iVBORw0K".repeat(20);
+    let split = capture(&mut cut(), |b| album(b, &content));
+    let content_blob = split.blobs().next().unwrap().id();
+    let split = blobs.store(&split);
+    let external = payload(&split);
+    let MediaPayload::External { child, text_len } = external else {
+        panic!("expected content in its own blob, got {external:?}")
+    };
+    assert_eq!(text_len, 160);
+    assert_eq!(
+        media_content(&blobs, &split, &external).as_deref(),
+        Ok(content.as_str())
+    );
+    let whole = blobs.store(&capture(&mut Shaper::new(ShapePolicy::Whole), |b| {
+        album(b, &content)
+    }));
+    assert_eq!(
+        media_content(&blobs, &whole, &payload(&whole)).as_deref(),
+        Ok(content.as_str())
+    );
+    // The parent's recorded length must match what the child holds.
+    let misstated = MediaPayload::External {
+        child,
+        text_len: 159,
+    };
+    assert_eq!(
+        media_content(&blobs, &split, &misstated),
+        Err(Unavailable::Blob("cas_corrupt"))
+    );
+    // A payload from another blob names a slot this one does not have.
+    assert_eq!(
+        media_content(&blobs, &whole, &external),
+        Err(Unavailable::Blob("cas_corrupt"))
+    );
+    blobs.0.remove(&content_blob);
+    assert_eq!(
+        media_content(&blobs, &split, &external),
+        Err(Unavailable::Blob("cas_missing"))
+    );
+}
+
 /// Two lists that hold each other, each with text of its own.
 fn ring(b: &mut Builder) -> V {
     let first = b.reserve_object().unwrap();
@@ -400,7 +528,7 @@ fn a_child_is_read_only_as_what_it_holds() {
     for root in [as_value, past_the_end, chained] {
         assert_eq!(at(&blobs, &root, &[]), Nav::Unavailable(broken));
         let cell = DecodedValue::Object(NodeId(0));
-        let span = Span::load(&blobs, [(&root, &cell)], 16);
+        let span = Span::load(&blobs, [(&root, &cell)], Examine::Structure, 16);
         let DecodedObject::Cell(inner) = root.object(NodeId(0)) else {
             unreachable!()
         };

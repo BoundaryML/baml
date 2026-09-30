@@ -494,3 +494,68 @@ fn argument_slots_name_cut_values_and_scratch_is_clean_between_captures() {
     assert_eq!(slots[3], slots[0]);
     assert!(root.objects.is_empty());
 }
+
+fn media(b: &mut Builder, source: crate::MediaSource) -> V {
+    let mime_type = b.string(&"image/png".into());
+    let id = b.reserve_object().unwrap();
+    b.set_object(
+        id,
+        O::Media {
+            kind: baml_type::MediaKind::Image,
+            mime_type,
+            source,
+        },
+    );
+    V::Object(id)
+}
+
+#[test]
+fn media_content_past_the_leaf_size_is_one_blob_its_media_objects_name() {
+    let content = "iVBORw0K".repeat(8);
+    let mut shaper = split(1 << 20, 32);
+    let snapshot = capture(&mut shaper, |b| {
+        let data = b.string(&content.as_str().into()).unwrap();
+        let url = b.string(&"https://example.test/cat.png".into()).unwrap();
+        let inline = media(b, crate::MediaSource::Base64 { data });
+        let fetched = media(
+            b,
+            crate::MediaSource::Url {
+                url,
+                data: Some(data),
+            },
+        );
+        list(b, &[inline, fetched])
+    });
+    let blobs = written(&snapshot);
+    // The content once, and the list whose media objects name it.
+    assert_eq!(blobs.len(), 2);
+    let alone = capture(&mut split(1 << 20, 32), |b| text(b, &content));
+    assert_eq!(blobs[0].1.id, alone.root_id());
+    let root = &blobs[1].1;
+    let external = crate::MediaPayload::External {
+        child: crate::ChildIndex(0),
+        text_len: content.len() as u64,
+    };
+    for (node, expected) in [
+        (
+            1,
+            crate::DecodedMediaSource::Base64 {
+                data: external.clone(),
+            },
+        ),
+        (
+            2,
+            crate::DecodedMediaSource::Url {
+                url: "https://example.test/cat.png".into(),
+                data: Some(external),
+            },
+        ),
+    ] {
+        let DecodedObject::Media(media) = root.object(NodeId(node)) else {
+            panic!("expected media, found {:?}", root.object(NodeId(node)));
+        };
+        assert_eq!(media.kind, baml_type::MediaKind::Image);
+        assert_eq!(media.mime_type.as_deref(), Some("image/png"));
+        assert_eq!(media.source, expected);
+    }
+}

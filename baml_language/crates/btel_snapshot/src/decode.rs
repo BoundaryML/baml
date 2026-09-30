@@ -33,14 +33,14 @@ use std::{
     thread::{Scope, ScopedJoinHandle},
 };
 
-use baml_type::{DeclarationName, TaggedTypeName, typetag::TypeTag};
+use baml_type::{DeclarationName, MediaKind, TaggedTypeName, typetag::TypeTag};
 use borsh::BorshDeserialize;
 use num_bigint::{BigInt, BigUint, Sign};
 
 use crate::{
     CasId, Description, Limit, OwnedType, TypeIdentity,
     hash::{Absorb, Digest, Hasher},
-    tags::HashDomain,
+    tags::{self, HashDomain},
 };
 
 /// Type descriptions this size or smaller decode on the caller's stack.
@@ -183,7 +183,63 @@ pub enum DecodedObject {
         kind: Description,
         name: Option<Box<str>>,
     },
+    Media(DecodedMedia),
     Truncated(Limit),
+}
+
+/// A media value: its kind and where its content comes from.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DecodedMedia {
+    pub kind: MediaKind,
+    pub mime_type: Option<Box<str>>,
+    pub source: DecodedMediaSource,
+}
+
+/// Where a media value's content comes from. `data` is content already
+/// loaded from the URL or file.
+#[derive(Clone, Debug, PartialEq)]
+pub enum DecodedMediaSource {
+    Url {
+        url: Box<str>,
+        data: Option<MediaPayload>,
+    },
+    File {
+        path: Box<str>,
+        data: Option<MediaPayload>,
+    },
+    Base64 {
+        data: MediaPayload,
+    },
+}
+
+impl DecodedMediaSource {
+    /// The captured content, if the value holds any.
+    pub fn data(&self) -> Option<&MediaPayload> {
+        match self {
+            Self::Url { data, .. } | Self::File { data, .. } => data.as_ref(),
+            Self::Base64 { data } => Some(data),
+        }
+    }
+}
+
+/// Media content as base64 text.
+#[derive(Clone, Debug, PartialEq)]
+pub enum MediaPayload {
+    /// Stored in this blob.
+    Inline(Arc<str>),
+    /// The root value of a child blob: a string of `text_len` bytes. Only a
+    /// reader of that child can confirm it.
+    External { child: ChildIndex, text_len: u64 },
+}
+
+impl MediaPayload {
+    /// The length of the base64 text, in bytes.
+    pub fn text_len(&self) -> u64 {
+        match self {
+            Self::Inline(text) => text.len() as u64,
+            Self::External { text_len, .. } => *text_len,
+        }
+    }
 }
 
 /// A declaration's recorded name. Equality compares spellings; identity is
@@ -826,8 +882,81 @@ impl<'a> Reader<'a, '_> {
                 h.byte(limit_tag(limit));
                 DecodedObject::Truncated(limit)
             }
+            9 => DecodedObject::Media(self.media(h)?),
             other => return Err(invalid(format!("object tag {other}"))),
         })
+    }
+    /// A media object after its tag.
+    fn media(&mut self, h: &mut Hasher) -> Result<DecodedMedia, BlobError> {
+        let tag = self.u8()?;
+        let kind =
+            tags::media_kind_of(tag).ok_or_else(|| invalid(format!("media kind tag {tag}")))?;
+        h.byte(tag);
+        let has_mime_type = self.bool()?;
+        h.byte(u8::from(has_mime_type));
+        let mime_type = if has_mime_type {
+            Some(self.text_in_place(h)?.into())
+        } else {
+            None
+        };
+        let tag = self.u8()?;
+        h.byte(tag);
+        let source = match tag {
+            0 => DecodedMediaSource::Url {
+                url: self.text_in_place(h)?.into(),
+                data: self.loaded(h)?,
+            },
+            1 => DecodedMediaSource::File {
+                path: self.text_in_place(h)?.into(),
+                data: self.loaded(h)?,
+            },
+            2 => DecodedMediaSource::Base64 {
+                data: self.payload(h)?,
+            },
+            other => return Err(invalid(format!("media source tag {other}"))),
+        };
+        Ok(DecodedMedia {
+            kind,
+            mime_type,
+            source,
+        })
+    }
+    /// A string written in place, hashed by its digest.
+    fn text_in_place(&mut self, h: &mut Hasher) -> Result<&'a str, BlobError> {
+        let (text, digest) = self.string()?;
+        h.digest(digest);
+        Ok(text)
+    }
+    /// Media content loaded from a URL or file, when the value holds it.
+    fn loaded(&mut self, h: &mut Hasher) -> Result<Option<MediaPayload>, BlobError> {
+        let present = self.bool()?;
+        h.byte(u8::from(present));
+        present.then(|| self.payload(h)).transpose()
+    }
+    /// Media content: its length, then its text as a string value.
+    fn payload(&mut self, h: &mut Hasher) -> Result<MediaPayload, BlobError> {
+        let text_len = self.u64()?;
+        h.number(text_len);
+        match self.value(h)? {
+            DecodedValue::String(text) if text.len() as u64 == text_len => {
+                Ok(MediaPayload::Inline(text))
+            }
+            DecodedValue::External(child) => Ok(MediaPayload::External { child, text_len }),
+            DecodedValue::String(_) => Err(invalid("media content length".into())),
+            DecodedValue::Null
+            | DecodedValue::OmittedArg
+            | DecodedValue::Bool(_)
+            | DecodedValue::Int(_)
+            | DecodedValue::Float(_)
+            | DecodedValue::Bigint(_)
+            | DecodedValue::Object(_)
+            | DecodedValue::Type(_)
+            | DecodedValue::Enum { .. }
+            | DecodedValue::Truncated(_)
+            | DecodedValue::ExternalNode { .. } => {
+                Err(invalid("media content is not a string".into()))
+            }
+        }
     }
 }
 
@@ -967,6 +1096,7 @@ fn validate_references(snapshot: &DecodedSnapshot) -> Result<(), BlobError> {
             | DecodedObject::Declaration { .. }
             | DecodedObject::NonSnapshotable
             | DecodedObject::Descriptive { .. }
+            | DecodedObject::Media(_)
             | DecodedObject::Truncated(_) => {}
         }
     }

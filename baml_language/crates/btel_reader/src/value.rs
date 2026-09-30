@@ -14,7 +14,8 @@
 use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 
 use btel_snapshot::{
-    CasId, DecodedObject, DecodedSnapshot, DecodedValue, Description, Limit, NodeId,
+    CasId, DecodedMediaSource, DecodedObject, DecodedSnapshot, DecodedValue, Description, Limit,
+    NodeId,
 };
 use num_bigint::BigInt;
 use serde_json::{Map, Value as Json};
@@ -23,8 +24,8 @@ use crate::evidence::ArgumentNames;
 
 pub mod equality;
 mod span;
-pub use span::{BlobSource, Found, Located};
-use span::{Span, reach};
+pub use span::{BlobSource, Found, Located, media_content};
+use span::{Examine, Span, reach};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Segment {
@@ -208,7 +209,8 @@ fn step<'a>(current: &'a Located, segment: &Segment) -> Result<&'a DecodedValue,
             | DecodedObject::Declaration { .. }
             | DecodedObject::Cell(_)
             | DecodedObject::NonSnapshotable
-            | DecodedObject::Descriptive { .. },
+            | DecodedObject::Descriptive { .. }
+            | DecodedObject::Media(_),
             _,
         ) => Err(Nav::Missing),
     }
@@ -620,6 +622,7 @@ pub fn render_arguments(
     let span = Span::load(
         source,
         slots.iter().map(|slot| (snapshot, slot)),
+        Examine::Structure,
         limits.max_blobs,
     );
     let mut renderer = Renderer::new(&span, limits);
@@ -652,14 +655,22 @@ pub fn render_arguments(
 /// unambiguous; `$`-prefixed markers for BAML kinds JSON lacks, truncation,
 /// opaque objects, and graph structure (`$id`/`$ref` for shared or cyclic
 /// objects). A part in a blob that cannot be read is `$unavailable` with the
-/// reason's code. This is a display format, not a lossless serialization.
+/// reason's code. Media is described, never rendered:
+/// `{"$media": kind, "mime", "url" | "file", "base64_len"}`, with
+/// `base64_len` present when the value holds content, and its content is not
+/// read. This is a display format, not a lossless serialization.
 pub fn render_value(
     source: &(impl BlobSource + ?Sized),
     found: &Located,
     limits: &RenderLimits,
 ) -> Rendered {
     let value = DecodedValue::from(found.value());
-    let span = Span::load(source, [(found.blob(), &value)], limits.max_blobs);
+    let span = Span::load(
+        source,
+        [(found.blob(), &value)],
+        Examine::Structure,
+        limits.max_blobs,
+    );
     let mut renderer = Renderer::new(&span, limits);
     let json = renderer.value(found.blob(), &value, 0);
     Rendered {
@@ -737,6 +748,7 @@ impl<'a> Renderer<'a> {
             | DecodedObject::Cell(_)
             | DecodedObject::NonSnapshotable
             | DecodedObject::Descriptive { .. }
+            | DecodedObject::Media(_)
             | DecodedObject::Truncated(_) => Json::Null,
         }
     }
@@ -908,6 +920,25 @@ impl<'a> Renderer<'a> {
                 map.insert("$opaque".into(), Json::from(description_label(*kind)));
                 if let Some(name) = name {
                     map.insert("$name".into(), Json::from(name.to_string()));
+                }
+            }
+            DecodedObject::Media(media) => {
+                map.insert("$media".into(), Json::from(media.kind.tag_str()));
+                map.insert(
+                    "mime".into(),
+                    media.mime_type.as_deref().map_or(Json::Null, Json::from),
+                );
+                match &media.source {
+                    DecodedMediaSource::Url { url, .. } => {
+                        map.insert("url".into(), Json::from(&**url));
+                    }
+                    DecodedMediaSource::File { path, .. } => {
+                        map.insert("file".into(), Json::from(&**path));
+                    }
+                    DecodedMediaSource::Base64 { .. } => {}
+                }
+                if let Some(data) = media.source.data() {
+                    map.insert("base64_len".into(), Json::from(data.text_len()));
                 }
             }
             DecodedObject::Truncated(limit) => {

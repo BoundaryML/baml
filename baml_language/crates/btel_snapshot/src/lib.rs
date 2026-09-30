@@ -10,7 +10,7 @@ use std::{
     },
 };
 
-use baml_type::{DeclarationName, typetag::TypeTag};
+use baml_type::{DeclarationName, MediaKind, typetag::TypeTag};
 /// The string type the builder takes, so callers need not depend on `bex_str`.
 pub use bex_str::BexStr;
 use hash::Absorb as _;
@@ -19,9 +19,9 @@ use num_bigint::BigInt;
 pub mod context;
 mod decode;
 pub use decode::{
-    BlobError, ChildIndex, DecodeLimits, DecodedName, DecodedObject, DecodedRoot, DecodedSnapshot,
-    DecodedValue, Entries, NodeId, SHALLOW_TYPE_BYTES, SharedSnapshot, TypeDescription,
-    decode_blob,
+    BlobError, ChildIndex, DecodeLimits, DecodedMedia, DecodedMediaSource, DecodedName,
+    DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, Entries, MediaPayload, NodeId,
+    SHALLOW_TYPE_BYTES, SharedSnapshot, TypeDescription, decode_blob,
 };
 mod encoding;
 pub use encoding::{BLOB_MAGIC, BLOB_VERSION, BlobScratch};
@@ -195,7 +195,30 @@ pub enum SnapshotObject {
         kind: Description,
         name: Option<StringId>,
     },
+    /// A media value: its kind and where its content comes from. Its bytes
+    /// are captured, as base64 text, only when the value holds them.
+    Media {
+        kind: MediaKind,
+        mime_type: Option<StringId>,
+        source: MediaSource,
+    },
     Truncated(Limit),
+}
+/// Where a media value's content comes from, as the runtime holds it. `data`
+/// is the base64 text of content already loaded from the URL or file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MediaSource {
+    Url {
+        url: StringId,
+        data: Option<StringId>,
+    },
+    File {
+        path: StringId,
+        data: Option<StringId>,
+    },
+    Base64 {
+        data: StringId,
+    },
 }
 const _: () = assert!(std::mem::size_of::<SnapshotValue>() == 16);
 #[cfg(target_pointer_width = "64")]
@@ -900,6 +923,32 @@ impl Builder {
                 1 + 1 + 1 + 4
             }
             SnapshotObject::NonSnapshotableValue {} => 1,
+            SnapshotObject::Media {
+                mime_type, source, ..
+            } => {
+                // Tag, kind, whether a MIME type follows, and the source's tag.
+                let mut bytes = 1 + 1 + 1 + 1;
+                if let Some(mime_type) = mime_type {
+                    s.use_string(*mime_type);
+                    bytes += 4;
+                }
+                let data = match *source {
+                    MediaSource::Url { url: text, data }
+                    | MediaSource::File { path: text, data } => {
+                        s.use_string(text);
+                        // The text's length, and whether content follows.
+                        bytes += 4 + 1;
+                        data
+                    }
+                    MediaSource::Base64 { data } => Some(data),
+                };
+                if let Some(data) = data {
+                    // The content's length, then the content as a value.
+                    s.use_value(SnapshotValue::String(data));
+                    bytes += 8;
+                }
+                bytes
+            }
             SnapshotObject::Truncated(_) => 2,
         };
         s.objects[id.0 as usize] = object;

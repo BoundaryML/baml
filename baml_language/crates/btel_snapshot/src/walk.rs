@@ -7,16 +7,17 @@
 //! is written (a local number, or a position in another blob).
 //!
 //! Only values may name another blob. Map keys, enum variant names,
-//! descriptive names, types and declarations are always written in place, and
-//! a blob's own root value is never a reference to another blob.
+//! descriptive names, media MIME types, URLs and paths, types and
+//! declarations are always written in place, and a blob's own root value is
+//! never a reference to another blob. Media content is written as a value.
 use baml_type::{DeclarationName, typetag::TypeTag};
 use num_bigint::BigInt;
 
 use super::{
-    BexStr, BigintId, MapEntry, ObjectId, OwnedType, Range, SnapshotObject, SnapshotRoot,
-    SnapshotValue, Storage, StringId,
+    BexStr, BigintId, MapEntry, MediaSource, ObjectId, OwnedType, Range, SnapshotObject,
+    SnapshotRoot, SnapshotValue, Storage, StringId,
     hash::{Absorb, Counter, Digest, Hasher, TypeLeaf},
-    tags::{self, ObjectTag, RootTag, ValueTag},
+    tags::{self, MediaSourceTag, ObjectTag, RootTag, ValueTag},
 };
 
 /// How a reference to an object is written.
@@ -179,15 +180,44 @@ fn value<V: Visitor, R: Resolver>(
             v.byte(ValueTag::Enum as u8)?;
             v.index(r.member(declaration))?;
             v.index(variant)?;
-            v.string(
-                &s.strings[name.0 as usize],
-                s.string_hashes[name.0 as usize],
-            )
+            text(v, s, name)
         }
         SnapshotValue::Truncated(limit) => {
             v.byte(ValueTag::Truncated as u8)?;
             v.byte(tags::limit(limit))
         }
+    }
+}
+
+/// A string written in place, never in another blob.
+fn text<V: Visitor>(v: &mut V, s: &Storage, id: StringId) -> Result<(), V::Error> {
+    v.string(&s.strings[id.0 as usize], s.string_hashes[id.0 as usize])
+}
+
+/// Media content: its length, then its base64 text as a value, which a large
+/// payload leaves to a blob of its own. The length describes the media
+/// without reading that blob.
+fn payload<V: Visitor, R: Resolver>(
+    v: &mut V,
+    r: &mut R,
+    s: &Storage,
+    data: StringId,
+) -> Result<(), V::Error> {
+    v.length(s.strings[data.0 as usize].len())?;
+    value(v, r, s, SnapshotValue::String(data), Place::Nested)
+}
+
+/// Whether content loaded from a URL or file follows, then that content.
+fn loaded<V: Visitor, R: Resolver>(
+    v: &mut V,
+    r: &mut R,
+    s: &Storage,
+    data: Option<StringId>,
+) -> Result<(), V::Error> {
+    v.byte(u8::from(data.is_some()))?;
+    match data {
+        Some(data) => payload(v, r, s, data),
+        None => Ok(()),
     }
 }
 
@@ -284,11 +314,36 @@ pub(crate) fn object<V: Visitor, R: Resolver>(
             v.byte(tags::description(*kind))?;
             v.byte(u8::from(name.is_some()))?;
             match name {
-                Some(name) => v.string(
-                    &s.strings[name.0 as usize],
-                    s.string_hashes[name.0 as usize],
-                ),
+                Some(name) => text(v, s, *name),
                 None => Ok(()),
+            }
+        }
+        SnapshotObject::Media {
+            kind,
+            mime_type,
+            source,
+        } => {
+            v.byte(ObjectTag::Media as u8)?;
+            v.byte(tags::media_kind(*kind))?;
+            v.byte(u8::from(mime_type.is_some()))?;
+            if let Some(mime_type) = mime_type {
+                text(v, s, *mime_type)?;
+            }
+            match *source {
+                MediaSource::Url { url, data } => {
+                    v.byte(MediaSourceTag::Url as u8)?;
+                    text(v, s, url)?;
+                    loaded(v, r, s, data)
+                }
+                MediaSource::File { path, data } => {
+                    v.byte(MediaSourceTag::File as u8)?;
+                    text(v, s, path)?;
+                    loaded(v, r, s, data)
+                }
+                MediaSource::Base64 { data } => {
+                    v.byte(MediaSourceTag::Base64 as u8)?;
+                    payload(v, r, s, data)
+                }
             }
         }
         SnapshotObject::Truncated(limit) => {

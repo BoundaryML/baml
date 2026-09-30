@@ -6,8 +6,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use btel_snapshot::{
-    CasId, ChildIndex, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, NodeId,
-    TypeDescription,
+    CasId, ChildIndex, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, MediaPayload,
+    NodeId, TypeDescription,
 };
 use num_bigint::BigInt;
 
@@ -101,6 +101,47 @@ fn child_root(child: &DecodedSnapshot) -> Result<&DecodedValue, Unavailable> {
     }
 }
 
+/// The media content a child blob holds for a parent that recorded its length.
+fn child_content(child: &DecodedSnapshot, text_len: u64) -> Result<&Arc<str>, Unavailable> {
+    match child_root(child)? {
+        DecodedValue::String(text) if text.len() as u64 == text_len => Ok(text),
+        DecodedValue::String(_)
+        | DecodedValue::Null
+        | DecodedValue::OmittedArg
+        | DecodedValue::Bool(_)
+        | DecodedValue::Int(_)
+        | DecodedValue::Float(_)
+        | DecodedValue::Bigint(_)
+        | DecodedValue::Object(_)
+        | DecodedValue::Type(_)
+        | DecodedValue::Enum { .. }
+        | DecodedValue::Truncated(_)
+        | DecodedValue::External(_)
+        | DecodedValue::ExternalNode { .. } => Err(BROKEN_REFERENCE),
+    }
+}
+
+/// A media value's content as base64 text, read from its own blob when it is
+/// stored there. `blob` holds the media object.
+pub fn media_content(
+    source: &(impl BlobSource + ?Sized),
+    blob: &DecodedSnapshot,
+    payload: &MediaPayload,
+) -> Result<Arc<str>, Unavailable> {
+    match payload {
+        MediaPayload::Inline(text) => Ok(Arc::clone(text)),
+        MediaPayload::External { child, text_len } => {
+            // A payload from another blob may name a slot this one lacks.
+            let id = blob
+                .children
+                .get(child.0 as usize)
+                .ok_or(BROKEN_REFERENCE)?;
+            let child = load(source, *id, &mut 1)?;
+            child_content(&child, *text_len).cloned()
+        }
+    }
+}
+
 fn child_node(child: &DecodedSnapshot, node: NodeId) -> Result<NodeId, Unavailable> {
     if (node.0 as usize) < child.objects.len() {
         Ok(node)
@@ -167,7 +208,8 @@ pub(super) fn reach(
                     | DecodedObject::Instance { .. }
                     | DecodedObject::Declaration { .. }
                     | DecodedObject::NonSnapshotable
-                    | DecodedObject::Descriptive { .. } => {
+                    | DecodedObject::Descriptive { .. }
+                    | DecodedObject::Media(_) => {
                         return found(blob, Found::Object(id));
                     }
                 };
@@ -214,6 +256,15 @@ fn found(blob: Arc<DecodedSnapshot>, value: Found) -> Nav {
     Nav::Value(Located { blob, value })
 }
 
+/// What a walk over a value examines, and so which of its blobs it reads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Examine {
+    /// Structure and leaves. Media is only described, so its content is not read.
+    Structure,
+    /// Everything, media content included.
+    Content,
+}
+
 /// Every blob a value reaches, read once, so that the value can be walked
 /// without reading anything more.
 pub(super) struct Span {
@@ -230,6 +281,7 @@ impl Span {
     pub(super) fn load<'a>(
         source: &(impl BlobSource + ?Sized),
         starts: impl IntoIterator<Item = (&'a Arc<DecodedSnapshot>, &'a DecodedValue)>,
+        examine: Examine,
         max_blobs: usize,
     ) -> Self {
         let mut span = Self {
@@ -260,6 +312,14 @@ impl Span {
                     }
                 }
                 DecodedObject::Cell(value) => span.visit(source, &blob, value, &mut pending),
+                DecodedObject::Media(media) => {
+                    if let (Examine::Content, Some(MediaPayload::External { child, .. })) =
+                        (examine, media.source.data())
+                    {
+                        // Content is text: it names nothing further.
+                        let _ = span.read(source, blob.child(*child));
+                    }
+                }
                 DecodedObject::Uint8Array { .. }
                 | DecodedObject::Declaration { .. }
                 | DecodedObject::NonSnapshotable
@@ -361,6 +421,21 @@ impl Span {
     ) -> Result<(&DecodedSnapshot, NodeId), Unavailable> {
         let child = self.child(blob, child)?;
         Ok((child, child_node(child, node)?))
+    }
+
+    /// A media value's content. Only a span that examines
+    /// [`Examine::Content`] has read the blobs content is stored in.
+    pub(super) fn content<'s>(
+        &'s self,
+        blob: &'s DecodedSnapshot,
+        payload: &'s MediaPayload,
+    ) -> Result<&'s str, Unavailable> {
+        match payload {
+            MediaPayload::Inline(text) => Ok(text),
+            MediaPayload::External { child, text_len } => {
+                Ok(child_content(self.child(blob, *child)?, *text_len)?)
+            }
+        }
     }
 
     /// Whether more than one of the walked values names this object.

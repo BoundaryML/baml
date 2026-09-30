@@ -308,3 +308,99 @@ fn print_format_v3_external_encodings() {
         println!("{line}");
     }
 }
+
+/// Media of every kind and source, with and without a MIME type and loaded
+/// content, as a list root. The longest content is stored alone.
+fn media_graph(pool: &SnapshotPool) -> Snapshot {
+    use baml_type::MediaKind;
+    use btel_snapshot::MediaSource;
+    let mut b = pool.try_acquire().unwrap();
+    let ty = b.push_type(RealizedTy::Unknown);
+    let mime = b.string(&"image/png".into()).unwrap();
+    let url = b.string(&"https://example.test/a.png".into()).unwrap();
+    let path = b.string(&"/data/b.png".into()).unwrap();
+    let short = b.string(&"iVBORw==".into()).unwrap();
+    let long = b.string(&"iVBORw0K".repeat(6).as_str().into()).unwrap();
+    let start = b.value_start();
+    for (kind, mime_type, source) in [
+        (
+            MediaKind::Image,
+            Some(mime),
+            MediaSource::Url { url, data: None },
+        ),
+        (
+            MediaKind::Audio,
+            None,
+            MediaSource::Url {
+                url,
+                data: Some(short),
+            },
+        ),
+        (
+            MediaKind::Video,
+            Some(mime),
+            MediaSource::File { path, data: None },
+        ),
+        (
+            MediaKind::Pdf,
+            None,
+            MediaSource::File {
+                path,
+                data: Some(long),
+            },
+        ),
+        (
+            MediaKind::Generic,
+            Some(mime),
+            MediaSource::Base64 { data: short },
+        ),
+        (MediaKind::Image, None, MediaSource::Base64 { data: long }),
+    ] {
+        let id = b.reserve_object().unwrap();
+        b.set_object(
+            id,
+            O::Media {
+                kind,
+                mime_type,
+                source,
+            },
+        );
+        b.push_value(V::Object(id));
+    }
+    let items = b.value_range(start);
+    let list = b.reserve_object().unwrap();
+    b.set_object(
+        list,
+        O::List {
+            element_type: ty,
+            items,
+            original_len: items.len(),
+        },
+    );
+    let mut shaper = Shaper::new(ShapePolicy::Split {
+        unit_bytes: 1 << 20,
+        leaf_bytes: 32,
+    });
+    b.finish_value(V::Object(list), &mut shaper)
+}
+
+#[test]
+fn media_preserves_v3_bytes_and_content_ids() {
+    let pool = SnapshotPool::new(1, Limits::default());
+    let lines = blob_lines(&media_graph(&pool));
+    let expected: Vec<_> = include_str!("fixtures/format_v3_media.hex")
+        .lines()
+        .collect();
+    assert_eq!(lines, expected);
+    assert_eq!(pool.stats().in_use, 0);
+}
+
+#[test]
+#[ignore = "prints current encodings for review; never rewrites the fixtures"]
+#[expect(clippy::print_stdout, reason = "the output is the point")]
+fn print_format_v3_media_encodings() {
+    let pool = SnapshotPool::new(1, Limits::default());
+    for line in blob_lines(&media_graph(&pool)) {
+        println!("{line}");
+    }
+}

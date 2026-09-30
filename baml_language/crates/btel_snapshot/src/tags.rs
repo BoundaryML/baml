@@ -1,6 +1,8 @@
 //! Stable tag assignments shared by CAS blob and snapshot hash formats 1 to 3.
 //! Changing an assignment requires a format version change.
 
+use baml_type::MediaKind;
+
 use crate::{Description, Limit};
 
 #[repr(u8)]
@@ -39,6 +41,14 @@ pub(super) enum ObjectTag {
     NonSnapshotableValue = 6,
     Descriptive = 7,
     Truncated = 8,
+    Media = 9,
+}
+
+#[repr(u8)]
+pub(super) enum MediaSourceTag {
+    Url = 0,
+    File = 1,
+    Base64 = 2,
 }
 
 #[repr(u8)]
@@ -85,6 +95,28 @@ pub(super) fn description(value: Description) -> u8 {
         Description::TypeAlias => 10,
         Description::Sentinel => 11,
     }
+}
+
+pub(super) fn media_kind(value: MediaKind) -> u8 {
+    match value {
+        MediaKind::Image => 0,
+        MediaKind::Audio => 1,
+        MediaKind::Video => 2,
+        MediaKind::Pdf => 3,
+        MediaKind::Generic => 4,
+    }
+}
+
+/// The kind [`media_kind`] writes as `tag`.
+pub(super) fn media_kind_of(tag: u8) -> Option<MediaKind> {
+    Some(match tag {
+        0 => MediaKind::Image,
+        1 => MediaKind::Audio,
+        2 => MediaKind::Video,
+        3 => MediaKind::Pdf,
+        4 => MediaKind::Generic,
+        _ => return None,
+    })
 }
 
 pub(super) fn bigint_sign(value: num_bigint::Sign) -> u8 {

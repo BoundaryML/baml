@@ -279,7 +279,23 @@ struct Side<'a> {
     blob: &'a btel_snapshot::DecodedSnapshot,
 }
 
-impl Side<'_> {
+impl<'a> Side<'a> {
+    /// Media content, read from the child blob that stores it there.
+    fn content(self, payload: &'a btel_snapshot::MediaPayload) -> &'a str {
+        use btel_snapshot::{DecodedRoot, DecodedValue as V, MediaPayload};
+        match payload {
+            MediaPayload::Inline(text) => text,
+            MediaPayload::External { child, text_len } => {
+                let blob = &self.blobs.blobs[&self.blob.child(*child)];
+                let DecodedRoot::Value(V::String(text)) = &blob.root else {
+                    panic!("media content is a string");
+                };
+                assert_eq!(text.len() as u64, *text_len);
+                text
+            }
+        }
+    }
+
     /// What `value` names, and the blob it is read in: a reference into a
     /// child blob is followed there.
     fn resolve(self, value: &btel_snapshot::DecodedValue) -> (Self, btel_snapshot::DecodedValue) {
@@ -440,6 +456,7 @@ fn same_object(
                 && same_entries(x, y)
         }
         (O::Cell(x), O::Cell(y)) => same_value(a, x, b, y),
+        (O::Media(x), O::Media(y)) => same_media(a, x, b, y),
         // Objects without references compare as they are.
         (O::Uint8Array { .. }, O::Uint8Array { .. })
         | (O::Declaration { .. }, O::Declaration { .. })
@@ -455,10 +472,53 @@ fn same_object(
             | O::Cell(_)
             | O::NonSnapshotable
             | O::Descriptive { .. }
+            | O::Media(_)
             | O::Truncated(_),
             _,
         ) => false,
     }
+}
+
+/// Media compares by kind, MIME type, source and content, wherever each side
+/// stores its content.
+fn same_media(
+    left: Side<'_>,
+    x: &btel_snapshot::DecodedMedia,
+    right: Side<'_>,
+    y: &btel_snapshot::DecodedMedia,
+) -> bool {
+    use btel_snapshot::{DecodedMediaSource as S, MediaPayload};
+    let content = |x: Option<&MediaPayload>, y: Option<&MediaPayload>| match (x, y) {
+        (Some(x), Some(y)) => left.content(x) == right.content(y),
+        (None, None) => true,
+        (Some(_) | None, _) => false,
+    };
+    x.kind == y.kind
+        && x.mime_type == y.mime_type
+        && match (&x.source, &y.source) {
+            (
+                S::Url {
+                    url: source,
+                    data: loaded,
+                },
+                S::Url {
+                    url: other,
+                    data: other_loaded,
+                },
+            )
+            | (
+                S::File {
+                    path: source,
+                    data: loaded,
+                },
+                S::File {
+                    path: other,
+                    data: other_loaded,
+                },
+            ) => source == other && content(loaded.as_ref(), other_loaded.as_ref()),
+            (S::Base64 { data }, S::Base64 { data: other }) => content(Some(data), Some(other)),
+            (S::Url { .. } | S::File { .. } | S::Base64 { .. }, _) => false,
+        }
 }
 
 fn snapshot(args: bool, values: &[External]) -> Snapshot {

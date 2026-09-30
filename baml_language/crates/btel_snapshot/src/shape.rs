@@ -608,6 +608,7 @@ impl Cuts {
             | SnapshotObject::Cell(_)
             | SnapshotObject::NonSnapshotableValue {}
             | SnapshotObject::Descriptive { .. }
+            | SnapshotObject::Media { .. }
             | SnapshotObject::Truncated(_) => weight >= unit_bytes,
         };
         self.units.push(Unit {

@@ -1,8 +1,9 @@
 //! Heap traversal stays in the VM. Frozen graphs contain only owned leaves and
 //! snapshot-local indexes. Locks sample containers independently, not atomically.
-use bex_vm_types::{HeapPtr, Object, Value, ValueKind};
+use bex_vm_types::{HeapPtr, MediaContent, MediaValue, Object, Value, ValueKind};
 use btel_snapshot::{
-    Builder, Description, Limit, ObjectId, Shaper, Snapshot, SnapshotObject, SnapshotValue,
+    Builder, Description, Limit, MediaSource, ObjectId, Shaper, Snapshot, SnapshotObject,
+    SnapshotValue,
 };
 use rustc_hash::FxHashMap;
 
@@ -85,7 +86,13 @@ impl Scratch {
                         return b.limited(Limit::Objects);
                     };
                     self.rust_seen.insert(identity, id);
-                    b.set_object(id, SnapshotObject::NonSnapshotableValue {});
+                    // Media is the one host value captured by content. Others
+                    // hold keys and cipher state, and stay opaque.
+                    let object = match data.downcast_ref::<MediaValue>() {
+                        Some(value) => media(b, value),
+                        None => SnapshotObject::NonSnapshotableValue {},
+                    };
+                    b.set_object(id, object);
                     id
                 };
                 SnapshotValue::Object(id)
@@ -288,6 +295,44 @@ fn declaration(
         SnapshotObject::Truncated(Limit::Bytes)
     }
 }
+/// A media value as the runtime holds it: its kind, MIME type and source, and
+/// loaded content as base64 text shared by handle. Reads no file and fetches
+/// nothing. A part past the byte limit truncates the whole object.
+fn media(b: &mut Builder, value: &MediaValue) -> SnapshotObject {
+    let Ok(mime_type) = value.read_mime_type(|mime| {
+        mime.map(|mime| b.string(&mime.into()).ok_or(()))
+            .transpose()
+    }) else {
+        return SnapshotObject::Truncated(Limit::Bytes);
+    };
+    let source = value.read_content(|content| {
+        let loaded = |b: &mut Builder, data: Option<&bex_str::BexStr>| match data {
+            Some(data) => b.string(data).map(Some),
+            None => Some(None),
+        };
+        Some(match content {
+            MediaContent::Url { url, base64_data } => MediaSource::Url {
+                url: b.string(&url.as_str().into())?,
+                data: loaded(b, base64_data.as_ref())?,
+            },
+            MediaContent::File { file, base64_data } => MediaSource::File {
+                path: b.string(&file.as_str().into())?,
+                data: loaded(b, base64_data.as_ref())?,
+            },
+            MediaContent::Base64 { base64_data } => MediaSource::Base64 {
+                data: b.string(base64_data)?,
+            },
+        })
+    });
+    match source {
+        Some(source) => SnapshotObject::Media {
+            kind: value.kind,
+            mime_type,
+            source,
+        },
+        None => SnapshotObject::Truncated(Limit::Bytes),
+    }
+}
 fn describe(kind: Description) -> SnapshotObject {
     SnapshotObject::Descriptive { kind, name: None }
 }
@@ -366,11 +411,7 @@ mod tests {
         ));
         let big = vm.tlab.alloc_bigint(num_bigint::BigInt::from(123));
         let float = vm.tlab.alloc_float(2.5);
-        let opaque: Arc<dyn std::any::Any + Send + Sync> = bex_vm_types::MediaValue::from_file(
-            baml_type::MediaKind::Image,
-            "/nonexistent/telemetry-must-not-read.png",
-            None,
-        );
+        let opaque: Arc<dyn std::any::Any + Send + Sync> = Arc::new(7_u64);
         let weak = Arc::downgrade(&opaque);
         let first = vm.tlab.alloc_rust_data(opaque.clone());
         let second = vm.tlab.alloc_rust_data(opaque.clone());
@@ -414,6 +455,88 @@ mod tests {
             captured_object(&snapshot, roots[8]),
             Obj::NonSnapshotableValue {}
         ));
+    }
+    #[test]
+    fn media_is_captured_by_content_without_reading_files_or_retaining_sources() {
+        let mut vm = crate::vm::tests::test_vm(Vec::new());
+        // Longer than the inline capacity, so the payload is heap-backed.
+        let payload = bex_str::BexStr::from("iVBORw0K".repeat(64));
+        let bex_str::BexStr::Flat(stored) = &payload else {
+            panic!("expected a heap-backed payload, got {payload:?}")
+        };
+        let stored = Arc::clone(stored);
+        let sources: [Arc<dyn std::any::Any + Send + Sync>; 3] = [
+            MediaValue::from_file(
+                baml_type::MediaKind::Image,
+                "/nonexistent/telemetry-must-not-read.png",
+                None,
+            ),
+            MediaValue::from_url(
+                baml_type::MediaKind::Pdf,
+                "https://example.test/report.pdf",
+                Some("application/pdf"),
+            ),
+            MediaValue::from_base64(baml_type::MediaKind::Audio, payload, Some("audio/wav")),
+        ];
+        let weak: Vec<_> = sources.iter().map(Arc::downgrade).collect();
+        // Two host wrappers of one media value are one captured object.
+        let values: Vec<_> = [&sources[0], &sources[1], &sources[2], &sources[2]]
+            .into_iter()
+            .map(|source| Value::object(vm.tlab.alloc_rust_data(Arc::clone(source))))
+            .collect();
+        drop(sources);
+        let snapshot = capture(&values);
+        unsafe {
+            vm.heap
+                .collect_garbage_generational(&[], bex_heap::CollectionLevel::Major)
+        };
+        drop(vm);
+        assert!(weak.iter().all(|weak| weak.upgrade().is_none()));
+        let roots = snapshot.roots();
+        assert_eq!(roots[2], roots[3]);
+        assert_eq!(snapshot.object_count(), 3);
+        let media = |value| match captured_object(&snapshot, value) {
+            Obj::Media {
+                kind,
+                mime_type,
+                source,
+            } => (
+                *kind,
+                mime_type.map(|id| snapshot.string(id).as_str()),
+                *source,
+            ),
+            other => panic!("expected media, got {other:?}"),
+        };
+        let (kind, mime_type, MediaSource::File { path, data: None }) = media(roots[0]) else {
+            panic!("expected a file without content")
+        };
+        assert_eq!((kind, mime_type), (baml_type::MediaKind::Image, None));
+        assert_eq!(
+            snapshot.string(path).as_str(),
+            "/nonexistent/telemetry-must-not-read.png"
+        );
+        let (kind, mime_type, MediaSource::Url { url, data: None }) = media(roots[1]) else {
+            panic!("expected a URL without content")
+        };
+        assert_eq!(
+            (kind, mime_type),
+            (baml_type::MediaKind::Pdf, Some("application/pdf"))
+        );
+        assert_eq!(
+            snapshot.string(url).as_str(),
+            "https://example.test/report.pdf"
+        );
+        let (kind, mime_type, MediaSource::Base64 { data }) = media(roots[2]) else {
+            panic!("expected base64 content")
+        };
+        assert_eq!(
+            (kind, mime_type),
+            (baml_type::MediaKind::Audio, Some("audio/wav"))
+        );
+        let bex_str::BexStr::Flat(captured) = snapshot.string(data) else {
+            panic!("expected the payload's own handle")
+        };
+        assert!(Arc::ptr_eq(captured, &stored), "capture shares the payload");
     }
     #[test]
     fn concurrent_container_mutation_and_depth_limits_terminate() {
