@@ -18,7 +18,7 @@
 //     chain). Those cases assert that a signature was produced, not what it
 //     is — the signature bytes are the Rust seam's own contract.
 //
-//   * STREAMING (section 13) runs `invoke_stream` / `ai.stream.from_spec`
+//   * STREAMING runs `invoke_stream` / `ai.stream.from_spec`
 //     against `root.llm_mock.mock_eventstream_serve`, which serves real binary
 //     `application/vnd.amazon.eventstream` frames (CRCs and all), so the native
 //     frame decoder behind `baml.http.fetch_sse` is exercised end to end.

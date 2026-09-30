@@ -19,7 +19,7 @@
 //      percent-encoded so an ARN or an inference-profile id stays one path
 //      segment (`/` -> %2F, `:` -> %3A).
 //
-// Streaming goes through ConverseStream (`/converse-stream`, section 11). Its
+// Streaming goes through ConverseStream (`/converse-stream`). Its
 // binary `application/vnd.amazon.eventstream` frames are decoded natively by
 // `baml.http.fetch_sse`, which surfaces each frame as an SSE event named by its
 // `:event-type` header, so the decoder below only sees JSON payloads.
