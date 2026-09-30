@@ -108,3 +108,38 @@ class TestSpawnLocalStorage:
             rt, "ReadInNestedSpawns", {}, spawn_local_storage={"request_id": "req-5"}
         )
         assert result.result() == "req-5"
+
+
+DECODE_BAML = """\
+enum Color {
+    Red
+    Green
+}
+
+function ReadColor() -> Color {
+    let color: baml.SpawnLocalStorage<Color> = baml.SpawnLocalStorage.new("color", Color.Red);
+    let child = spawn { color.get() };
+    await child
+}
+
+function ReadBig() -> bigint {
+    baml.SpawnLocalStorage.new("big", 0n).get()
+}
+"""
+
+
+class TestSpawnLocalStorageDecoding:
+    def test_enum_from_variant_name(self):
+        rt = BamlRuntime.initialize_runtime(".", {"main.baml": DECODE_BAML})
+        result = call_function_sync(
+            rt, "ReadColor", {}, spawn_local_storage={"color": "Green"}
+        )
+        value = result.result()
+        assert getattr(value, "value", value) == "Green"
+
+    def test_bigint_from_numeric_string(self):
+        rt = BamlRuntime.initialize_runtime(".", {"main.baml": DECODE_BAML})
+        result = call_function_sync(
+            rt, "ReadBig", {}, spawn_local_storage={"big": "42"}
+        )
+        assert result.result() == 42

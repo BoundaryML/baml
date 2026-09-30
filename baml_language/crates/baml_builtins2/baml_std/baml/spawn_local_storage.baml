@@ -61,13 +61,18 @@ class SpawnLocalStorage<T> {
         }
         match (frame[self.name]) {
             let value: T => value,
-            // A host-supplied value arrives as `json`; decode it into `T`. The
-            // arms name json's container shapes because a pattern of the
-            // `baml.json.json` alias itself does not match an `unknown`
-            // scrutinee. `int` covers widening to `float` or `bigint`.
+            // A host-supplied value arrives as `json`; decode it into `T` (an
+            // enum from its variant name, a `bigint` from a numeric string, a
+            // class from a map, ...). The arms name json's members because a
+            // pattern of the `baml.json.json` alias itself does not match an
+            // `unknown` scrutinee.
             let value: map<string, baml.json.json> => self._decode(value),
             let value: baml.json.json[] => self._decode(value),
+            let value: string => self._decode(value),
             let value: int => self._decode(value),
+            let value: float => self._decode(value),
+            let value: bigint => self._decode(value),
+            let value: bool => self._decode(value),
             _ => self.default,
         }
     }
