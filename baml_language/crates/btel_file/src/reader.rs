@@ -179,9 +179,19 @@ pub fn validate_file(
             if section.thread_id == 0 {
                 return Err("zero thread identity".into());
             }
+            if section.context == Some(proto::thread_section::Context::EmptyContext(false)) {
+                return Err("invalid empty context marker".into());
+            }
             for record in &section.events {
                 use proto::span_event::Event;
                 match &record.event {
+                    Some(Event::Log(log))
+                        if log.parent_id == 0
+                            || log.function_id == 0
+                            || !(1..=4).contains(&log.level) =>
+                    {
+                        return Err("invalid log observation".into());
+                    }
                     Some(Event::FunctionCompletion(done) | Event::LateFunctionCompletion(done)) => {
                         let late = matches!(record.event, Some(Event::LateFunctionCompletion(_)));
                         if done.id == 0
@@ -338,6 +348,10 @@ fn check_references(read: &mut RecordingRead) {
                 for event in &section.events {
                     use proto::span_event::Event;
                     match &event.event {
+                        Some(Event::Log(log)) => {
+                            references.insert(("node", log.parent_id));
+                            references.insert(("function", log.function_id));
+                        }
                         Some(Event::FunctionAnnouncement(a)) => {
                             nodes.insert(a.id);
                             announcements.insert(a.id);

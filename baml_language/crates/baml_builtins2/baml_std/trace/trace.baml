@@ -17,6 +17,19 @@ class Capture {
 class Settings {
     mode: Mode?,
     capture: Capture,
+    context: ContextOptions,
+}
+
+/// Detached effective context. Metadata contains no removal markers.
+class Context {
+    distinct_id: string?,
+    metadata: map<string, string | int | float | bool>,
+}
+
+/// A detached patch; null metadata values remove keys at invocation entry.
+class ContextOptions {
+    distinct_id: string?,
+    metadata: map<string, string | int | float | bool | null>,
 }
 
 /// An opaque, immutable, globally scoped span identity.
@@ -29,6 +42,16 @@ class SpanId {
 /// Immutable, reusable tracing options. Builders leave their receiver unchanged.
 class Options {
     _handle: $rust_type,
+
+    /// Compose a shallow patch without reading ambient context.
+    //baml:mut_vm
+    function context(
+        self,
+        metadata: map<string, string | int | float | bool | null> = {},
+        distinct_id: string? = null,
+    ) -> Options throws never {
+        $rust_function
+    }
 
     /// Change only mode. Null restores the function's default mode.
     //baml:mut_vm
@@ -122,6 +145,27 @@ function _span(inputs: bool?, output: bool?, error: bool?) -> Options throws nev
 /// Reading the ID does not create or promote a span.
 //baml:mut_vm
 function current_span_id() -> SpanId? throws never {
+    $rust_function
+}
+
+/// Apply a context patch to a call. Use an IIFE for a smaller scope:
+///
+/// ```baml
+/// (() -> {
+///     log.info("Processing payment")
+/// })($trace = trace.context(metadata = { "phase": "payment" }))
+/// ```
+//baml:mut_vm
+function context(
+    metadata: map<string, string | int | float | bool | null> = {},
+    distinct_id: string? = null,
+) -> Options throws never {
+    $rust_function
+}
+
+/// Read a detached snapshot of the current invocation, even with tracing off.
+//baml:mut_vm
+function current_context() -> Context throws never {
     $rust_function
 }
 

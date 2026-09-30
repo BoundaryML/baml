@@ -17,6 +17,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use baml_type::{Int63, IntShiftError, Name, normalize::TypeContext};
+use btel_types::context::{Context, ContextPatch};
 use smallvec::SmallVec;
 
 use crate::{
@@ -214,6 +215,12 @@ pub struct BytecodeFrame {
     pub(crate) faulting_pc: usize,
     /// Producer-only invocation state. `None` means the invocation is hidden.
     pub(crate) telemetry: Option<FrameTelemetry>,
+    context: Context,
+}
+
+struct CallTrace {
+    telemetry: crate::telemetry::TraceConfig,
+    context: Option<Arc<ContextPatch>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -394,6 +401,7 @@ pub(crate) mod tests {
             context_transfers: Vec::new(),
             argv: Arc::from([]),
             pending_call_trace: None,
+            root_context: btel_types::context::Context::default(),
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
             static_load_type_cache: HashMap::new(),
@@ -1549,7 +1557,8 @@ pub struct BexVm {
     /// Saved/restored across nested `Call` instructions; native handlers that
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
-    pending_call_trace: Option<crate::telemetry::TraceConfig>,
+    pending_call_trace: Option<CallTrace>,
+    root_context: Context,
     pending_call_type_args: Vec<bex_vm_types::RealizedTy>,
     pending_call_type_values: Vec<Option<TypeValue>>,
 
@@ -1623,6 +1632,7 @@ pub enum VmExecState {
     Spawn {
         plan: HeapPtr,
         telemetry: Option<crate::telemetry::ThreadSpawnContext>,
+        context: Context,
     },
 
     /// BEP-034 phase D′: VM is invoking a sys-op and wants its return
@@ -1660,6 +1670,15 @@ pub enum VmExecState {
         /// Event payload (raw VM value; engine converts to `BexExternalValue`).
         data: Value,
         /// Source location where the event was emitted.
+        source_location: Option<VmEventSourceLocation>,
+    },
+
+    /// A decoded structured log. The VM has already handed its recording
+    /// snapshot to Btel; the engine can still deliver existing live output.
+    Log {
+        level: btel_records::LogLevel,
+        event_name: Option<Arc<str>>,
+        data: Value,
         source_location: Option<VmEventSourceLocation>,
     },
 
@@ -2079,6 +2098,7 @@ impl BexVm {
             context_transfers: Vec::new(),
             argv,
             pending_call_trace: None,
+            root_context: Context::default(),
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
             static_load_type_cache: HashMap::new(),
@@ -2133,7 +2153,102 @@ impl BexVm {
         }))
     }
 
-    fn trace_config(&mut self, value: Value) -> Result<crate::telemetry::TraceConfig, VmError> {
+    pub(crate) fn current_context(&self) -> &Context {
+        self.frames
+            .iter()
+            .rev()
+            .find_map(|frame| match frame {
+                Frame::Bytecode(frame) => Some(&frame.context),
+                Frame::Native(_) => None,
+            })
+            .unwrap_or(&self.root_context)
+    }
+
+    pub fn set_root_context(&mut self, context: Context) {
+        assert!(
+            self.frames.is_empty(),
+            "root context must precede invocation entry"
+        );
+        self.root_context = context;
+    }
+
+    fn decode_log_event(
+        &self,
+        payload: Value,
+    ) -> Result<(btel_records::LogLevel, Option<Arc<str>>, Value), VmInternalError> {
+        use btel_records::LogLevel;
+        let map = self.as_map(&payload)?;
+        let level = map
+            .get("level")
+            .ok_or(VmInternalError::InvalidLogEvent("missing level"))?;
+        let level = match self.as_string(level)?.as_str() {
+            "info" => LogLevel::Info,
+            "debug" => LogLevel::Debug,
+            "warn" => LogLevel::Warn,
+            "error" => LogLevel::Error,
+            _ => return Err(VmInternalError::InvalidLogEvent("unknown level")),
+        };
+        let name = map
+            .get("event_name")
+            .filter(|value| !value.is_null() && !value.is_omitted())
+            .map(|value| {
+                self.as_string(value)
+                    .map(|name| Arc::<str>::from(name.as_str()))
+            })
+            .transpose()?;
+        let data = *map
+            .get("data")
+            .ok_or(VmInternalError::InvalidLogEvent("missing data"))?;
+        Ok((level, name, data))
+    }
+
+    fn record_log(
+        &mut self,
+        frame_idx: usize,
+        level: btel_records::LogLevel,
+        name: Option<Arc<str>>,
+        data: Value,
+    ) {
+        if self.telemetry.is_none() {
+            return;
+        }
+        let Some(function) = self.frame_function_identity(frame_idx) else {
+            return;
+        };
+        // SAFETY: SendEvent executes under the heap permit and roots its frame.
+        let (_, function) =
+            unsafe { Self::register_call_path_functions(&self.heap, None, function) };
+        let context = self.current_context().clone();
+        let state = self.telemetry.as_mut().unwrap();
+        state.set_context(context);
+        // SAFETY: neither capture nor publication releases the VM heap permit.
+        unsafe {
+            state.record_log(
+                function,
+                u32::try_from(self.cur_pc).unwrap_or(u32::MAX),
+                level,
+                name,
+                data,
+            );
+        }
+    }
+
+    fn restore_caller_context(&mut self, frame_idx: usize) {
+        let Some(state) = &mut self.telemetry else {
+            return;
+        };
+        let context = self.frames[..frame_idx]
+            .iter()
+            .rev()
+            .find_map(|frame| match frame {
+                Frame::Bytecode(frame) => Some(frame.context.clone()),
+                Frame::Native(_) => None,
+            })
+            .unwrap_or_else(|| self.root_context.clone());
+        state.set_context(context);
+    }
+
+    fn trace_config(&mut self, value: Value) -> Result<CallTrace, VmError> {
         use bex_vm_types::trace::{ReservationError, ReservedSpanData, TraceOptionsData};
 
         let handle = self
@@ -2147,7 +2262,7 @@ impl BexVm {
         };
         let (options, reserved_id) =
             if let Ok(options) = self.as_rust_data::<TraceOptionsData>(&handle) {
-                (*options, None)
+                (options.clone(), None)
             } else if let Ok(reservation) = self.as_rust_data::<ReservedSpanData>(&handle) {
                 let local = match reservation.attach(self.trace_scope) {
                     Ok(local) => local,
@@ -2162,17 +2277,20 @@ impl BexVm {
                         }));
                     }
                 };
-                (reservation.options, Some(local))
+                (reservation.options.clone(), Some(local))
             } else {
                 return Err(self
                     .trace_attachment_error("$trace expects trace.Options or trace.ReservedSpan"));
             };
-        Ok(crate::telemetry::TraceConfig {
-            mode: options.mode,
-            inputs: options.inputs,
-            output: options.output,
-            error: options.error,
-            reserved_id,
+        Ok(CallTrace {
+            telemetry: crate::telemetry::TraceConfig {
+                mode: options.mode,
+                inputs: options.inputs,
+                output: options.output,
+                error: options.error,
+                reserved_id,
+            },
+            context: options.context,
         })
     }
 
@@ -3944,6 +4062,7 @@ impl BexVm {
         // throw state.
         if self.frames.is_empty() {
             if let Some(telemetry) = &mut self.telemetry {
+                telemetry.set_context(self.root_context.clone());
                 telemetry.start_thread();
                 telemetry.clear_error_book();
             }
@@ -4049,6 +4168,7 @@ impl BexVm {
                     type_metadata,
                     faulting_pc: 0,
                     telemetry: frame_telemetry,
+                    context: self.root_context.clone(),
                 }));
 
                 // Entry functions need the same frame-local pre-allocation as normal
@@ -4213,6 +4333,7 @@ impl BexVm {
             type_metadata: None,
             faulting_pc: 0,
             telemetry: None,
+            context: self.root_context.clone(),
         }));
     }
 
@@ -4291,6 +4412,7 @@ impl BexVm {
             type_metadata: None,
             faulting_pc: 0,
             telemetry: None,
+            context: self.root_context.clone(),
         }));
     }
 
@@ -6162,6 +6284,14 @@ impl BexVm {
 
             FunctionKind::Bytecode => {
                 // Push the new frame.
+                let inherited = self.current_context();
+                let context = trace
+                    .as_ref()
+                    .and_then(|trace| trace.context.as_deref())
+                    .map_or_else(|| inherited.clone(), |patch| inherited.with_patch(patch));
+                if let Some(telemetry) = &mut self.telemetry {
+                    telemetry.set_context(context.clone());
+                }
                 // Seed frame.type_args from:
                 //  1. BoundMethod callees: the receiver's class_type_args (De
                 //     Bruijn slot 0..n_class_params).  The Call-instruction
@@ -6215,7 +6345,7 @@ impl BexVm {
                             caller_pc,
                             caller_is_observed,
                             args,
-                            trace,
+                            trace.as_ref().map(|trace| trace.telemetry),
                             |caller, callee| {
                                 Self::register_call_path_functions(&self.heap, caller, callee)
                             },
@@ -6235,6 +6365,7 @@ impl BexVm {
                         type_metadata: None,
                         faulting_pc: 0,
                         telemetry: frame_telemetry,
+                        context,
                     })
                 }));
                 let new_len = self.stack.len() + callee.real_local_count;
@@ -6604,12 +6735,15 @@ impl BexVm {
             _ => None,
         };
         let Some(telemetry) = telemetry else {
+            self.restore_caller_context(frame_idx);
             return;
         };
         // SAFETY: the frame remains rooted until after producer completion.
         let function = unsafe { self.load_function(frame_idx) }
             .expect("bytecode frame must retain its function through completion");
-        self.complete_bytecode_invocation_with_function(function, telemetry, outcome, value);
+        self.complete_bytecode_invocation_with_function(
+            frame_idx, function, telemetry, outcome, value,
+        );
     }
 
     /// Complete a bytecode frame the unwinder is about to pop, with the
@@ -6629,6 +6763,7 @@ impl BexVm {
             _ => None,
         };
         let Some(telemetry) = telemetry else {
+            self.restore_caller_context(frame_idx);
             return;
         };
         // A retained call's completion, including a late promotion, must
@@ -6646,6 +6781,9 @@ impl BexVm {
             .telemetry
             .as_mut()
             .expect("observed invocation has telemetry");
+        if let Frame::Bytecode(frame) = &self.frames[frame_idx] {
+            state.set_context(frame.context.clone());
+        }
         // SAFETY: the unwinder holds the heap permit, and the frame and the
         // error stay rooted until after producer completion.
         unsafe {
@@ -6660,17 +6798,26 @@ impl BexVm {
                 None => state.complete_invocation(telemetry, function, outcome, Some(value)),
             }
         }
+        self.restore_caller_context(frame_idx);
     }
 
     #[allow(clippy::inline_always, reason = "measured producer return fast path")]
     #[inline(always)]
     fn complete_bytecode_invocation_with_function(
         &mut self,
+        frame_idx: usize,
         function: &Function,
         telemetry: FrameTelemetry,
         outcome: InvocationOutcome,
         value: Option<Value>,
     ) {
+        let state = self
+            .telemetry
+            .as_mut()
+            .expect("observed invocation has telemetry");
+        if let Frame::Bytecode(frame) = &self.frames[frame_idx] {
+            state.set_context(frame.context.clone());
+        }
         // SAFETY: completion holds the heap permit and the result/error is live.
         unsafe {
             self.telemetry
@@ -6678,6 +6825,7 @@ impl BexVm {
                 .expect("observed invocation has telemetry")
                 .complete_invocation(telemetry, function, outcome, value);
         }
+        self.restore_caller_context(frame_idx);
     }
 
     fn frame_wants_error_capture(&self, frame_idx: usize, function: &Function) -> bool {
@@ -8069,7 +8217,11 @@ impl BexVm {
                         } else {
                             None
                         };
-                        return Ok(Some(VmExecState::Spawn { plan, telemetry }));
+                        return Ok(Some(VmExecState::Spawn {
+                            plan,
+                            telemetry,
+                            context: self.current_context().clone(),
+                        }));
                     }
 
                     // ── Call ──────────────────────────────────────────────────────
@@ -8128,6 +8280,10 @@ impl BexVm {
                                         self.panic_to_exception_value(VmPanic::StackOverflow),
                                     ));
                                 }
+                                let context = self.current_context().clone();
+                                if let Some(telemetry) = &mut self.telemetry {
+                                    telemetry.set_context(context.clone());
+                                }
                                 let frame_telemetry = if self.telemetry.is_some() {
                                     let actual_caller = self.frame_function_identity(*frame_idx);
                                     let caller_is_observed = matches!(
@@ -8173,6 +8329,7 @@ impl BexVm {
                                         type_metadata: None,
                                         faulting_pc: 0,
                                         telemetry: frame_telemetry,
+                                        context,
                                     })
                                 }));
                                 if callee.real_local_count != 0 {
@@ -8592,6 +8749,7 @@ impl BexVm {
 
                         if let Some(frame_telemetry) = frame_telemetry {
                             self.complete_bytecode_invocation_with_function(
+                                *frame_idx,
                                 function,
                                 frame_telemetry,
                                 InvocationOutcome::Ok,
@@ -8610,6 +8768,10 @@ impl BexVm {
                         // SAFETY: this instruction is executing the bytecode frame
                         // accessed above; stack operations cannot remove that frame.
                         unsafe { self.frames.no_return_pop() };
+                        let context = self.current_context().clone();
+                        if let Some(telemetry) = &mut self.telemetry {
+                            telemetry.set_context(context);
+                        }
                         // Select the restored caller. Native continuations and
                         // early yields still hand this frame back to the outer loop.
                         if !self.frames.is_empty() {
@@ -10060,6 +10222,16 @@ impl BexVm {
                         } else {
                             None
                         };
+                        if event_name == bex_vm_types::bytecode::LOG_EVENT {
+                            let (level, name, body) = self.decode_log_event(data)?;
+                            self.record_log(*frame_idx, level, name.clone(), body);
+                            return Ok(Some(VmExecState::Log {
+                                level,
+                                event_name: name,
+                                data: body,
+                                source_location,
+                            }));
+                        }
                         return Ok(Some(VmExecState::Event {
                             event_name,
                             data,

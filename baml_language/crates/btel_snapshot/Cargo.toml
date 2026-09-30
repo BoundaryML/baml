@@ -13,6 +13,7 @@ workspace = true
 baml_type = { workspace = true }
 bex_str = { workspace = true }
 btel_settings = { workspace = true }
+btel_types = { workspace = true }
 borsh = { workspace = true }
 num-bigint = { workspace = true }
 xxhash-rust = { workspace = true }

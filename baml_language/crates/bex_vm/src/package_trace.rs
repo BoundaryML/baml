@@ -4,10 +4,15 @@ use std::sync::Arc;
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
+    MapReadGuard,
     trace::{ReservedSpanData, SpanId, TraceOptionsData},
     types::{Instance, Object, Type, Value},
 };
-use btel_types::InvocationMode;
+use btel_types::{
+    InvocationMode,
+    context::{Context, ContextPatch, ContextValue},
+};
+use indexmap::IndexMap;
 
 use crate::{
     BexVm,
@@ -40,8 +45,9 @@ pub struct PackageTraceImpl;
 
 fn options_data(vm: &BexVm, value: Value) -> TraceOptionsData {
     let instance = vm.as_instance(&value).expect("trace.Options receiver");
-    *vm.as_rust_data::<TraceOptionsData>(&instance.load_field(0))
+    vm.as_rust_data::<TraceOptionsData>(&instance.load_field(0))
         .expect("trace.Options handle")
+        .clone()
 }
 
 fn reservation_data(vm: &BexVm, value: Value) -> &ReservedSpanData {
@@ -82,7 +88,7 @@ fn alloc_id(vm: &mut BexVm, id: SpanId) -> Value {
     .to_value(vm)
 }
 
-fn alloc_settings(vm: &mut BexVm, options: TraceOptionsData) -> Value {
+fn alloc_settings(vm: &mut BexVm, options: &TraceOptionsData) -> Value {
     let mode = options.mode.map_or(Value::NULL, |mode| {
         let name = match mode {
             InvocationMode::Hidden => "Hidden",
@@ -106,10 +112,144 @@ fn alloc_settings(vm: &mut BexVm, options: TraceOptionsData) -> Value {
         error: options.error.map_or(Value::NULL, Value::bool),
     }
     .to_value(vm);
-    copy::Settings { mode, capture }.to_value(vm)
+    let context = alloc_patch(vm, options.context.as_deref());
+    copy::Settings {
+        mode,
+        capture,
+        context,
+    }
+    .to_value(vm)
+}
+
+fn patch_from_values(
+    vm: &BexVm,
+    metadata: &IndexMap<bex_str::BexStr, Value>,
+    distinct_id: Option<&bex_str::BexStr>,
+) -> ContextPatch {
+    ContextPatch {
+        metadata: metadata
+            .iter()
+            .map(|(key, value)| {
+                let value = if value.is_null() {
+                    None
+                } else if let Some(value) = value.as_bool() {
+                    Some(ContextValue::Bool(value))
+                } else if let Some(value) = value.as_int() {
+                    Some(ContextValue::Int(value))
+                } else {
+                    Some(
+                        match vm.get_object(value.as_object_ptr().expect("context primitive")) {
+                            Object::String(value) => ContextValue::String(value.to_string()),
+                            Object::Float(value) => ContextValue::Float(*value),
+                            _ => unreachable!("context metadata must be primitive"),
+                        },
+                    )
+                };
+                (key.to_string(), value)
+            })
+            .collect(),
+        distinct_id: distinct_id.map(ToString::to_string),
+    }
+}
+
+fn alloc_metadata<'a>(
+    vm: &mut BexVm,
+    entries: impl Iterator<Item = (&'a String, Option<&'a ContextValue>)>,
+    nullable: bool,
+) -> Value {
+    use bex_vm_types::RealizedTy;
+    let entries = entries
+        .map(|(key, value)| {
+            let value = match value {
+                None => Value::NULL,
+                Some(ContextValue::String(value)) => Value::object(vm.alloc_string(value.as_str())),
+                Some(ContextValue::Int(value)) => Value::int(*value),
+                Some(ContextValue::Float(value)) => Value::object(vm.alloc_float(*value)),
+                Some(ContextValue::Bool(value)) => Value::bool(*value),
+            };
+            (key.as_str().into(), value)
+        })
+        .collect();
+    let mut members = vec![
+        RealizedTy::String,
+        RealizedTy::Int,
+        RealizedTy::Float,
+        RealizedTy::Bool,
+    ];
+    if nullable {
+        members.push(RealizedTy::Null);
+    }
+    Value::object(vm.alloc_map(
+        RealizedTy::String,
+        RealizedTy::Union(members.into()),
+        entries,
+    ))
+}
+
+fn alloc_identity(vm: &mut BexVm, identity: Option<&str>) -> Value {
+    identity.map_or(Value::NULL, |identity| {
+        Value::object(vm.alloc_string(identity))
+    })
+}
+
+fn alloc_patch(vm: &mut BexVm, patch: Option<&ContextPatch>) -> Value {
+    let empty = ContextPatch::default();
+    let patch = patch.unwrap_or(&empty);
+    let metadata = alloc_metadata(
+        vm,
+        patch
+            .metadata
+            .iter()
+            .map(|(key, value)| (key, value.as_ref())),
+        true,
+    );
+    let distinct_id = alloc_identity(vm, patch.distinct_id.as_deref());
+    copy::ContextOptions {
+        distinct_id,
+        metadata,
+    }
+    .to_value(vm)
+}
+
+fn alloc_context(vm: &mut BexVm, context: &Context) -> Value {
+    let metadata = alloc_metadata(
+        vm,
+        context
+            .metadata()
+            .iter()
+            .map(|(key, value)| (key, Some(value))),
+        false,
+    );
+    let distinct_id = alloc_identity(vm, context.distinct_id());
+    copy::Context {
+        distinct_id,
+        metadata,
+    }
+    .to_value(vm)
+}
+
+fn compose_context(mut options: TraceOptionsData, patch: ContextPatch) -> TraceOptionsData {
+    let mut combined = options.context.as_deref().cloned().unwrap_or_default();
+    combined.compose(patch);
+    options.context = (!combined.is_empty()).then(|| Arc::new(combined));
+    options
 }
 
 impl BamlPackageTrace for PackageTraceImpl {
+    fn context(
+        vm: &mut BexVm,
+        metadata: &IndexMap<bex_str::BexStr, Value>,
+        distinct_id: Option<&bex_str::BexStr>,
+    ) -> Value {
+        let patch = patch_from_values(vm, metadata, distinct_id);
+        alloc_options(vm, compose_context(TraceOptionsData::default(), patch))
+    }
+
+    fn current_context(vm: &mut BexVm) -> Value {
+        let context = vm.current_context().clone();
+        alloc_context(vm, &context)
+    }
+
     fn _options(vm: &mut BexVm, mode: Option<&Value>) -> Value {
         let mode = mode_from_value(vm, mode);
         alloc_options(
@@ -154,6 +294,7 @@ impl BamlPackageTrace for PackageTraceImpl {
                 inputs,
                 output,
                 error,
+                context: None,
             },
         )
     }
@@ -195,6 +336,17 @@ impl BamlPackageTrace for PackageTraceImpl {
     reason = "the native _span method implements the BAML internal builder API"
 )]
 impl BamlClassOptions for PackageTraceImpl {
+    fn context(
+        vm: &mut BexVm,
+        options: &Value,
+        metadata: &IndexMap<bex_str::BexStr, Value>,
+        distinct_id: Option<&bex_str::BexStr>,
+    ) -> Value {
+        let options = options_data(vm, *options);
+        let patch = patch_from_values(vm, metadata, distinct_id);
+        alloc_options(vm, compose_context(options, patch))
+    }
+
     fn mode(vm: &mut BexVm, options: &Value, mode: Option<&Value>) -> Value {
         let mut data = options_data(vm, *options);
         data.mode = mode_from_value(vm, mode);
@@ -203,17 +355,22 @@ impl BamlClassOptions for PackageTraceImpl {
 
     fn _span(
         vm: &mut BexVm,
-        _options: &Value,
+        options: &Value,
         inputs: Option<bool>,
         output: Option<bool>,
         error: Option<bool>,
     ) -> Value {
-        <Self as BamlPackageTrace>::_span(vm, inputs, output, error)
+        let mut options = options_data(vm, *options);
+        options.mode = Some(InvocationMode::Span);
+        options.inputs = inputs;
+        options.output = output;
+        options.error = error;
+        alloc_options(vm, options)
     }
 
     fn inspect(vm: &mut BexVm, options: &Value) -> Value {
         let data = options_data(vm, *options);
-        alloc_settings(vm, data)
+        alloc_settings(vm, &data)
     }
 
     fn reserve(vm: &mut BexVm, options: &Value) -> Value {
@@ -232,7 +389,7 @@ impl BamlClassReservedSpan for PackageTraceImpl {
     }
 
     fn inspect(vm: &mut BexVm, reservedspan: &Value) -> Value {
-        let options = reservation_data(vm, *reservedspan).options;
-        alloc_settings(vm, options)
+        let options = reservation_data(vm, *reservedspan).options.clone();
+        alloc_settings(vm, &options)
     }
 }

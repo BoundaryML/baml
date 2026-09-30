@@ -1452,7 +1452,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     }
                     IntrinsicOp::Log(level) => {
                         // Emit the reserved "$baml_log" event with payload
-                        // { level: "<level>", data: <user_arg> }, where
+                        // { level: "<level>", data: <user_arg>, event_name }, where
                         // <user_arg> may be any BAML value.
 
                         // Save call-site span — walking args may overwrite current_debug_span
@@ -1509,8 +1509,17 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                             OperandMeta::Const(Self::display_string_operand("data")),
                         );
 
+                        let name_key_idx = self.mint_object(Object::String("event_name".into()));
+                        let name_key_const_idx = self
+                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(name_key_idx)));
+                        let inst = self.emit(Instruction::LoadConst(name_key_const_idx));
+                        self.set_operand(
+                            inst,
+                            OperandMeta::Const(Self::display_string_operand("event_name")),
+                        );
+
                         // 6. Push the payload map's key/value type tags, then
-                        //    AllocMap(2) -> { level: "info", data: <user_data> }.
+                        //    allocate the three-entry event envelope.
                         //    The event is a `map<string, unknown>` (string keys;
                         //    heterogeneous values). The VM's `AllocMap` pops the
                         //    value type (top of stack) then the key type (below it)
@@ -1519,7 +1528,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         //    these tags makes the VM read the entry keys as types.
                         unwrap_infallible(self.load_type(&TyTemplate::from(RealizedTy::string())));
                         unwrap_infallible(self.load_type(&TyTemplate::from(RealizedTy::unknown())));
-                        self.emit(Instruction::AllocMap(2));
+                        self.emit(Instruction::AllocMap(3));
 
                         // 7. Restore call-site span and emit SendEvent
                         self.set_debug_span(call_site_span, true);

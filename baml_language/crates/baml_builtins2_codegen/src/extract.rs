@@ -380,6 +380,7 @@ fn extract_from_class(
                 .iter()
                 .map(|p| Param {
                     name: p.name.as_str().to_string(),
+                    empty_map_default: is_empty_map_default(method, p),
                     ty: p
                         .type_expr
                         .as_ref()
@@ -528,6 +529,7 @@ fn extract_from_free_function(
         .iter()
         .map(|p| Param {
             name: p.name.as_str().to_string(),
+            empty_map_default: is_empty_map_default(func_def, p),
             ty: p
                 .type_expr
                 .as_ref()
@@ -704,6 +706,7 @@ fn extract_from_implements_for(
             .skip(1) // skip `self`
             .map(|p| Param {
                 name: p.name.as_str().to_string(),
+                empty_map_default: is_empty_map_default(method, p),
                 ty: p
                     .type_expr
                     .as_ref()
@@ -921,12 +924,22 @@ fn path_to_fn_name(path: &str) -> String {
 }
 
 /// Extract parameters from a method, skipping the first `self` parameter.
+fn is_empty_map_default(func: &FunctionDef, param: &baml_compiler2_ast::Param) -> bool {
+    param.default.is_some_and(|default| {
+        matches!(
+            &func.defaults.exprs.exprs[default.expr()],
+            baml_compiler2_ast::Expr::Map { entries } if entries.is_empty()
+        )
+    })
+}
+
 fn extract_params_skip_self(func: &FunctionDef, generics: &[String]) -> Vec<Param> {
     func.params
         .iter()
         .skip(1) // skip `self`
         .map(|p| Param {
             name: p.name.as_str().to_string(),
+            empty_map_default: is_empty_map_default(func, p),
             ty: p
                 .type_expr
                 .as_ref()
@@ -1343,6 +1356,19 @@ mod tests {
             make("ai.internal.render_output_format").sys_op_variant_name(),
             "AiInternalRenderOutputFormat"
         );
+    }
+
+    #[test]
+    fn context_controls_resolve_empty_map_defaults_without_a_wrapper_frame() {
+        let (builtins, _, _) = extract_native_builtins_for("trace").unwrap();
+        for path in ["trace.context", "trace.Options.context"] {
+            let builtin = builtins
+                .iter()
+                .find(|builtin| builtin.path == path)
+                .unwrap();
+            assert!(builtin.params[0].empty_map_default, "{path}");
+            assert!(!builtin.params[1].empty_map_default, "{path}");
+        }
     }
 
     #[test]

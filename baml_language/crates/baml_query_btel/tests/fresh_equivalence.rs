@@ -311,6 +311,7 @@ mod crafted {
     fn section(thread: u64, events: Vec<Event>) -> proto::ThreadSection {
         proto::ThreadSection {
             thread_id: thread,
+            context: None,
             events: events
                 .into_iter()
                 .map(|event| proto::SpanEvent { event: Some(event) })

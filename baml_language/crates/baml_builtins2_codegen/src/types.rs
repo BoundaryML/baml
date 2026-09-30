@@ -92,6 +92,8 @@ pub enum VmUsage {
 pub struct Param {
     pub name: String,
     pub ty: BamlType,
+    /// A native default resolved by glue without introducing a bytecode frame.
+    pub empty_map_default: bool,
 }
 
 /// Receiver (the `self` parameter) of a method.

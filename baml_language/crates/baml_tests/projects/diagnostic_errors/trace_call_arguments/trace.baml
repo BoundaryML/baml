@@ -50,3 +50,7 @@ function DestructureOpaqueField(options: trace.Options) -> unknown {
   let trace.Options { _handle } = options
   _handle
 }
+
+function RemovedContextMutation() -> void {
+  trace.update_context()
+}

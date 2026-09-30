@@ -3054,6 +3054,7 @@ mod tests {
             (
                 bex_project::TraceLogMetadata {
                     level: Some("info".to_string()),
+                    event_name: None,
                     source: None,
                     timestamp_ms: 21,
                     message_preview: Some("hello from log".to_string()),
