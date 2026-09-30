@@ -276,6 +276,15 @@ class HostSpanManager:
         Number of active spans (call depth).
         """
 
+def _gc_stats() -> dict:
+    r"""
+    Diagnostic snapshot of the runtime's heap and its running GC totals, for
+    benchmarks (`tools/gc_stream_bench`). Not part of the generated SDK surface.
+
+    Timing keys (`pause_s`, `max_pause_s`, `total_s`, `max_total_s`) are present
+    only when the extension was built with the `gc_profiling` feature.
+    """
+
 def _handle_refcount(key: builtins.int) -> typing.Optional[builtins.int]:
     r"""
     Test-only: the outstanding ownership count of a live key — the releases it

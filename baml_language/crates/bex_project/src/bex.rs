@@ -56,6 +56,12 @@ pub trait Bex: Send + Sync {
 
     fn set_unhandled_spawn_error_handler(&self, handler: Option<UnhandledSpawnErrorHandler>);
 
+    /// Current heap occupancy, for host-side diagnostics.
+    fn heap_stats(&self) -> bex_heap::HeapStats;
+
+    /// Running totals over every collection this runtime has completed.
+    fn gc_totals(&self) -> bex_heap::GcTotals;
+
     /// Wait for in-flight calls and spawned work, report unreachable
     /// unobserved errors, and close the runtime. `grace` bounds the whole
     /// wait (`None` waits for as long as the work takes); see
@@ -176,6 +182,14 @@ impl Bex for BexEngine {
 
     fn set_unhandled_spawn_error_handler(&self, handler: Option<UnhandledSpawnErrorHandler>) {
         BexEngine::set_unhandled_spawn_error_handler(self, handler);
+    }
+
+    fn heap_stats(&self) -> bex_heap::HeapStats {
+        BexEngine::heap_stats(self)
+    }
+
+    fn gc_totals(&self) -> bex_heap::GcTotals {
+        BexEngine::gc_totals(self)
     }
 
     async fn shutdown(self: Arc<Self>, grace: Option<std::time::Duration>) {

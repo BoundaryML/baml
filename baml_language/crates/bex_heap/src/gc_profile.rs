@@ -83,6 +83,12 @@ mod enabled {
         pub total: Duration,
     }
 
+    impl GcProfile {
+        pub fn pause_and_total(&self) -> Option<(Duration, Duration)> {
+            Some((self.pause, self.total))
+        }
+    }
+
     /// Captures heap-local phases while the caller holds exclusive heap access.
     pub(crate) struct GcProfiler {
         profile: GcProfile,
@@ -219,6 +225,13 @@ mod disabled {
     /// Profiling is unavailable in this build; occupies no space in `GcStats`.
     #[derive(Clone, Debug, Default)]
     pub struct NoopGcProfile;
+
+    impl NoopGcProfile {
+        #[inline]
+        pub fn pause_and_total(&self) -> Option<(std::time::Duration, std::time::Duration)> {
+            None
+        }
+    }
 
     pub(crate) struct NoopGcProfiler;
 

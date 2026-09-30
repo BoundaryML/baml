@@ -107,9 +107,9 @@ pub use bex_events::{
 };
 pub use bex_external_types::{BexExternalValue, RuntimeTy, TypeName, UnionMetadata};
 use bex_heap::BexHeap;
-// Re-export GcStats for users of the engine
-pub use bex_heap::GcStats;
+// Re-export GC statistics for users of the engine
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
+pub use bex_heap::{GcStats, GcTimingTotals, GcTotals};
 use bex_vm::{BexVm, VmEventSourceLocation, VmExecState};
 use bex_vm_types::{
     Admission, AdmissionTicket, FunctionMeta, FunctionOrigin, GlobalIndex, GlobalPool, HeapPtr,
@@ -843,6 +843,8 @@ pub struct BexEngine {
     /// Used to prevent multiple threads from trying to run GC at the same time.
     /// Only one should run it, the rest should wait for it to complete.
     checking_gc: AtomicBool,
+    /// Running totals over every completed collection.
+    gc_totals: std::sync::Mutex<bex_heap::GcTotals>,
     /// Used to notify long-running threads that they should park the VM even if they aren't at a typical yield point.
     #[cfg(not(target_arch = "wasm32"))]
     park_requested: Arc<AtomicBool>,
@@ -1928,6 +1930,7 @@ impl BexEngine {
             argv,
             heap_permit_manager,
             checking_gc: AtomicBool::new(false),
+            gc_totals: std::sync::Mutex::default(),
             #[cfg(not(target_arch = "wasm32"))]
             park_requested,
             active_calls: Mutex::new(HashMap::new()),
@@ -2350,6 +2353,14 @@ impl BexEngine {
     /// Useful for monitoring concurrent execution and debugging.
     pub fn heap_stats(&self) -> bex_heap::HeapStats {
         self.heap.stats()
+    }
+
+    /// Running totals over every collection this engine has completed.
+    pub fn gc_totals(&self) -> bex_heap::GcTotals {
+        self.gc_totals
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     /// Get a reference to the heap permit manager.
@@ -2970,6 +2981,10 @@ impl BexEngine {
         self.drain_finalizers().await;
 
         cycle.finish(&mut stats, reason, &self.heap);
+        self.gc_totals
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .record(&stats, reason);
         tracing::debug!(
             "GC completed: {} live, {} collected",
             stats.live_count,

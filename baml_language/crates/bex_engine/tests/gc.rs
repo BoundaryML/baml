@@ -428,3 +428,37 @@ async fn test_primitive_returns_are_external_values() {
         .unwrap();
     assert!(matches!(result, BexExternalValue::Bool(true)));
 }
+
+/// `gc_totals` accumulates every completed cycle; timings exist only in
+/// profiling builds.
+#[tokio::test]
+async fn test_gc_totals_accumulate_cycles() {
+    let snapshot = compile_for_engine("function one() -> int { 1 }");
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .unwrap(),
+    );
+    assert_eq!(engine.gc_totals().cycles, 0);
+
+    let minor = engine.collect_garbage(CollectionLevel::Minor).await;
+    let major = engine.collect_garbage(CollectionLevel::Major).await;
+
+    let totals = engine.gc_totals();
+    assert_eq!(totals.cycles, 2);
+    assert_eq!(totals.major_cycles, 1);
+    assert_eq!(totals.cycles_by_reason.get("explicit"), Some(&2));
+    assert_eq!(
+        totals.collected_count,
+        (minor.collected_count + major.collected_count) as u64
+    );
+    assert_eq!(totals.last_live_count, major.live_count);
+    let timings = totals.timings;
+    assert_eq!(timings.is_some(), cfg!(feature = "gc_profiling"));
+    if let Some(t) = timings {
+        assert!(t.max_pause <= t.pause && t.pause <= t.total);
+    }
+}

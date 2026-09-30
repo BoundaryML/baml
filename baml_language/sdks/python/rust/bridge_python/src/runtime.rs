@@ -1,10 +1,10 @@
 //! BamlRuntime PyO3 class - wraps `Arc<dyn Bex>`.
 
 use pyo3::{
-    Py, Python,
+    Bound, Py, Python,
     prelude::{PyResult, pyfunction, pymethods},
     pyclass,
-    types::PyAny,
+    types::{PyAny, PyDict, PyDictMethods},
 };
 use pyo3_stub_gen::{
     derive::{gen_methods_from_python, gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods},
@@ -186,4 +186,35 @@ pub fn get_runtime() -> PyResult<BamlRuntime> {
         other => bridge_error_to_sdk_panic(other),
     })?;
     Ok(BamlRuntime)
+}
+
+/// Diagnostic snapshot of the runtime's heap and its running GC totals, for
+/// benchmarks (`tools/gc_stream_bench`). Not part of the generated SDK surface.
+///
+/// Timing keys (`pause_s`, `max_pause_s`, `total_s`, `max_total_s`) are present
+/// only when the extension was built with the `gc_profiling` feature.
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn _gc_stats(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
+    let rt = bridge_cffi::get_runtime().map_err(bridge_error_to_sdk_panic)?;
+    let heap = rt.heap_stats();
+    let gc = rt.gc_totals();
+    let out = PyDict::new(py);
+    out.set_item("runtime_objects", heap.runtime_objects)?;
+    out.set_item("reserved_slots", heap.reserved_slots)?;
+    out.set_item("active_handles", heap.active_handles)?;
+    out.set_item("cycles", gc.cycles)?;
+    out.set_item("major_cycles", gc.major_cycles)?;
+    out.set_item("cycles_by_reason", gc.cycles_by_reason)?;
+    out.set_item("collected_count", gc.collected_count)?;
+    out.set_item("promoted_to_gen1", gc.promoted_to_gen1)?;
+    out.set_item("promoted_to_gen2", gc.promoted_to_gen2)?;
+    out.set_item("last_live_count", gc.last_live_count)?;
+    if let Some(t) = gc.timings {
+        out.set_item("pause_s", t.pause.as_secs_f64())?;
+        out.set_item("max_pause_s", t.max_pause.as_secs_f64())?;
+        out.set_item("total_s", t.total.as_secs_f64())?;
+        out.set_item("max_total_s", t.max_total.as_secs_f64())?;
+    }
+    Ok(out)
 }

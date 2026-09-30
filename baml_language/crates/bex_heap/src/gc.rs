@@ -84,6 +84,55 @@ pub struct GcStats {
     pub profile: crate::GcProfile,
 }
 
+/// Running totals over every collection an engine has completed, for hosts
+/// that want to observe GC across many calls without subscribing to tracing.
+#[derive(Debug, Clone, Default)]
+pub struct GcTotals {
+    pub cycles: u64,
+    pub major_cycles: u64,
+    /// Cycles per trigger reason, e.g. `allocation_on_entry`, `automatic`, `idle`, `explicit`.
+    pub cycles_by_reason: std::collections::BTreeMap<&'static str, u64>,
+    pub collected_count: u64,
+    pub promoted_to_gen1: u64,
+    pub promoted_to_gen2: u64,
+    /// `live_count` of the most recent cycle.
+    pub last_live_count: usize,
+    /// Wall times from [`crate::GcProfile`]; `None` unless built with `gc_profiling`.
+    pub timings: Option<GcTimingTotals>,
+}
+
+/// Summed and worst-case per-cycle wall times, see [`crate::GcProfile`].
+#[derive(Debug, Clone, Copy, Default)]
+pub struct GcTimingTotals {
+    /// Stop-the-world time: permits parked through permits released.
+    pub pause: std::time::Duration,
+    pub max_pause: std::time::Duration,
+    /// Includes waiting for permits to park and post-GC callbacks/finalizers.
+    pub total: std::time::Duration,
+    pub max_total: std::time::Duration,
+}
+
+impl GcTotals {
+    pub fn record(&mut self, stats: &GcStats, reason: &'static str) {
+        self.cycles += 1;
+        if stats.level == CollectionLevel::Major {
+            self.major_cycles += 1;
+        }
+        *self.cycles_by_reason.entry(reason).or_default() += 1;
+        self.collected_count += stats.collected_count as u64;
+        self.promoted_to_gen1 += stats.promoted_to_gen1 as u64;
+        self.promoted_to_gen2 += stats.promoted_to_gen2 as u64;
+        self.last_live_count = stats.live_count;
+        if let Some((pause, total)) = stats.profile.pause_and_total() {
+            let t = self.timings.get_or_insert_with(GcTimingTotals::default);
+            t.pause += pause;
+            t.max_pause = t.max_pause.max(pause);
+            t.total += total;
+            t.max_total = t.max_total.max(total);
+        }
+    }
+}
+
 impl BexHeap {
     /// Automatic collections are full collections, requested by allocation spending.
     /// This reads only atomics; moving collection still requires exclusive heap access.

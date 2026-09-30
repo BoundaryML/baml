@@ -83,3 +83,5 @@ wasm-bindgen-futures = { workspace = true }
 default = [ "aws-crypto" ]
 aws-crypto = [ "bex_engine/aws-crypto", "bex_cache/aws-crypto" ]
 ring-crypto = [ "bex_engine/ring-crypto", "bex_cache/ring-crypto" ]
+# Per-cycle GC wall times in `Bex::gc_totals` (see bex_heap/gc_profiling).
+gc_profiling = [ "bex_engine/gc_profiling" ]

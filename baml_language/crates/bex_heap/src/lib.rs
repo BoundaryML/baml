@@ -74,7 +74,7 @@ mod tlab;
 pub use accessor::{AccessError, BexClass, BexValue, BuiltinClass};
 pub use bex_external_types::{BexExternalValue, Handle};
 pub use bex_vm_types::PermitProof;
-pub use gc::{CollectionLevel, GcStats};
+pub use gc::{CollectionLevel, GcStats, GcTimingTotals, GcTotals};
 #[cfg(feature = "gc_profiling")]
 pub use gc_profile::GcHeapSnapshot;
 pub use gc_profile::{GcCycleProfiler, GcProfile};

@@ -1,0 +1,4 @@
+/.venv/
+/.wheels/
+/baml_sdk/
+/results/
