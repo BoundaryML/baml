@@ -295,7 +295,7 @@ async fn log_data_and_context_use_existing_cloud_uploads() {
         TelemetryRecording::cloud(
             RecordingConfig::default(),
             CloudPublisherConfig {
-                snapshot_target: 1,
+                candidate_target: 1,
                 max_pending_snapshots: 1,
                 inline_target_bytes: 1024 * 1024,
                 ..CloudPublisherConfig::default()

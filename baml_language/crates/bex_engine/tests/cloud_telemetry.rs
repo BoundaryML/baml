@@ -52,7 +52,7 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
             TelemetryRecording::cloud(
                 RecordingConfig::default(),
                 btel_bcs::CloudPublisherConfig {
-                    snapshot_target: 1,
+                    candidate_target: 1,
                     max_pending_snapshots: 1,
                     inline_target_bytes: 1024 * 1024,
                     ..btel_bcs::CloudPublisherConfig::default()
@@ -140,7 +140,8 @@ fn engine(server: &MockServer, flush_interval_duration: Duration) -> Arc<BexEngi
                 retry_delay: Duration::ZERO,
                 ..DeliveryConfig::new(server.uri().parse().unwrap())
             },
-        ),
+        )
+        .with_sources(vec![("cloud_telemetry.baml".to_owned(), SOURCE.to_owned())]),
     )
 }
 
@@ -177,7 +178,7 @@ async fn capture_pressure_cannot_deadlock_vm_or_fail_execution() {
         TelemetryRecording::cloud(
             RecordingConfig::default(),
             btel_bcs::CloudPublisherConfig {
-                snapshot_target: 2,
+                candidate_target: 2,
                 max_pending_snapshots: 4,
                 ..btel_bcs::CloudPublisherConfig::default()
             },
@@ -350,7 +351,10 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
         assert_eq!(prepare["recording"]["encoded_length"], bytes.len());
         let file = proto::RecordingFile::decode(bytes.as_slice()).unwrap();
         assert_eq!(file.sequence, sequence);
-        assert_eq!(file.header.unwrap().recording_id, recording_id.as_bytes());
+        let header = file.header.unwrap();
+        assert_eq!(header.recording_id, recording_id.as_bytes());
+        // The project's sources are a capture like any other.
+        references.insert(snapshot_hex(header.source_cas_id.unwrap()));
         // Normal shutdown settles every run: the last uploaded file ends it.
         assert_eq!(file.end.is_some(), index + 1 == prepares.len());
         for definition in file.definitions.unwrap_or_default().functions {

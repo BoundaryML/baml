@@ -101,7 +101,7 @@ async fn setup(
 #[tokio::test]
 async fn windows_cross_batches_deduplicate_and_finish_drains_the_final_partial_file() {
     let (server, delivery, mut publisher, pool) = setup(CloudPublisherConfig {
-        snapshot_target: 3,
+        candidate_target: 3,
         ..CloudPublisherConfig::default()
     })
     .await;
@@ -150,7 +150,7 @@ async fn windows_cross_batches_deduplicate_and_finish_drains_the_final_partial_f
 #[tokio::test]
 async fn one_chunk_can_stage_multiple_windows_without_publishing_while_borrowed() {
     let (server, delivery, mut publisher, pool) = setup(CloudPublisherConfig {
-        snapshot_target: 2,
+        candidate_target: 2,
         ..CloudPublisherConfig::default()
     })
     .await;
@@ -375,4 +375,111 @@ async fn lost_recording_replays_metadata_and_reoffers_cas_without_replaying_even
         1
     );
     assert_eq!(recovered.aggregates.unwrap().entries[0].count, 2);
+}
+
+/// A list of `count` distinct strings, each in a blob of its own.
+fn cut_list(pool: &SnapshotPool, count: usize) -> Snapshot {
+    let mut b = pool.try_acquire().unwrap();
+    let element_type = b.push_type(btel_snapshot::OwnedType::string());
+    let start = b.value_start();
+    for index in 0..count {
+        let text = format!("{index}-{}", "x".repeat(100));
+        let id = b.string(&text.as_str().into()).unwrap();
+        b.push_value(SnapshotValue::String(id));
+    }
+    let items = b.value_range(start);
+    let list = b.reserve_object().unwrap();
+    b.set_object(
+        list,
+        btel_snapshot::SnapshotObject::List {
+            element_type,
+            items,
+            original_len: count,
+        },
+    );
+    let mut shaper = btel_snapshot::Shaper::new(btel_snapshot::ShapePolicy::Split {
+        unit_bytes: 1 << 20,
+        leaf_bytes: 64,
+    });
+    b.finish_value(SnapshotValue::Object(list), &mut shaper)
+}
+
+#[tokio::test]
+async fn a_capture_spanning_plans_delivers_every_blob_once_and_ends_last() {
+    let (server, delivery, mut publisher, pool) = setup(CloudPublisherConfig {
+        candidate_target: 4,
+        ..CloudPublisherConfig::default()
+    })
+    .await;
+    // `setup` uses the default delivery limits.
+    let plan = DeliveryConfig::new(server.uri().parse().unwrap()).max_candidates;
+    let snapshot = cut_list(&pool, 2 * plan + 2);
+    let expected: std::collections::HashSet<_> = snapshot.blobs().map(|blob| blob.id()).collect();
+    assert_eq!(expected.len(), 2 * plan + 3);
+    publisher.before_batch(1);
+    publisher.before_span_chunk(1);
+    let thread = allocate_telemetry_id();
+    publisher.span(
+        thread,
+        &mut SpanRecord::<Snapshot, Snapshot>::FunctionSpanAnnouncement {
+            id: allocate_telemetry_id(),
+            parent_id: thread,
+            call_path: CallPathId::ROOT,
+            entered_at: ClockInstant::from_ticks(1),
+            captured_inputs: Some(snapshot),
+        },
+    );
+    publisher.after_batch(1);
+    publisher.finish();
+    finish(delivery).await.unwrap();
+    assert_eq!(
+        pool.stats().in_use,
+        0,
+        "the capture is freed with its last plan"
+    );
+    let requests = server.received_requests().await.unwrap();
+    let prepares = prepare_requests(&requests);
+    // Two full plans, then the end file with the remaining three blobs.
+    assert_eq!(
+        prepares
+            .iter()
+            .map(|request| (
+                request.recording.recording_file_sequence,
+                request.candidates.len()
+            ))
+            .collect::<Vec<_>>(),
+        [(1, plan), (2, plan), (3, 3)]
+    );
+    assert_eq!(
+        recording_ends(&requests),
+        [(1, false), (2, false), (3, true)]
+    );
+    // Every blob is offered once; the mock server has the first three of
+    // each plan already, and the rest are uploaded once.
+    let mut offered = std::collections::HashSet::new();
+    let mut wanted = std::collections::HashSet::new();
+    for request in &prepares {
+        for (index, candidate) in request.candidates.iter().enumerate() {
+            let id = btel_snapshot::CasId::from_bytes(
+                hex::decode(&candidate.snapshot_id)
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+            );
+            assert!(offered.insert(id), "a blob is offered once");
+            if index >= 3 {
+                wanted.insert(id);
+            }
+        }
+    }
+    assert_eq!(offered, expected);
+    let mut uploaded = std::collections::HashSet::new();
+    for request in requests.iter().filter(|r| r.method == "PUT") {
+        let envelope = CloudUploadEnvelope::decode(request.body.as_slice()).unwrap();
+        for object in envelope.cas_objects {
+            let id = btel_snapshot::CasId::from_bytes(object.snapshot_id.try_into().unwrap());
+            assert!(uploaded.insert(id), "a blob is uploaded once");
+        }
+    }
+    assert_eq!(uploaded, wanted);
 }

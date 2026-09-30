@@ -57,10 +57,12 @@ SHA-256 is an integrity check separate from the snapshot identity.
 
 Snapshot/hash format v3 keeps BEP-075's attribute-free type representation and
 numbers each blob's objects in first-reference order, so a blob has exactly one
-encoding. A v3 blob may name child blobs by ID; today each capture is still a
-single blob, uploaded as one candidate. BCS must decode version 3; older CAS
-objects remain separate namespaces and are not reused as v3 content. The upload
-envelope remains v1.
+encoding. A v3 blob may name child blobs by ID, and a capture may be several
+blobs. Each candidate is one blob: a capture's blobs are offered children
+first, and a capture with more new blobs than one plan takes is spread over
+several plans, in files that may carry no events. A `snapshot_id` names a
+blob. BCS must decode version 3; older CAS objects remain separate namespaces
+and are not reused as v3 content. The upload envelope remains v1.
 
 Only prepare requests receive the BCS bearer credential. Upload requests use the
 returned URL and required headers; redirects are not followed. URLs and headers
@@ -117,23 +119,31 @@ implementation details, not a shared delivery interface required by `Publisher`.
 configures cloud-specific batching and placement; `RecordingConfig` is shared
 with local recording, and `DeliveryConfig` controls cloud transport.
 
-The publisher accumulates recording events and structured snapshots across
-processor batches. A window seals at a record boundary when it reaches the
-recording-byte target, 16 distinct snapshots, or 4 MiB of retained snapshot
-storage. A single snapshot may exceed a soft byte target. The non-sliding timer
-starts at the first event, using `RecordingConfig::flush_interval_duration`;
-idle expiry and explicit shutdown also seal pending data.
+The publisher accumulates recording events and queues the blobs of captured
+values across processor batches; a blob offered recently is not queued again,
+and a capture with nothing new to offer is released at once. A window seals at
+a record boundary when it reaches the recording-byte target, 16 queued blobs,
+or 4 MiB of retained capture storage. A single capture may exceed a soft
+target. Each sealed file takes the head of the queue, at most one plan's worth
+of blobs; while 16 or more blobs still wait, further files are sealed to carry
+them, and at the end the last file takes what remains. A blob larger than an
+upload body is refused when its capture is retained, as a counted loss; the
+capture's other blobs still go. The non-sliding timer starts at the first
+event, using `RecordingConfig::flush_interval_duration`; idle expiry and
+explicit shutdown also seal pending data.
 
 Sealed windows are staged until processor input chunks have been recycled.
-The open window and staged windows together retain at most 32 snapshot owners
-and 8 MiB of snapshot storage by default. Staged recording files are separately
-bounded by delivery's plan/recording-byte limits. Construction validates that
-publisher and delivery owner limits leave headroom in the minimum VM pool.
-No network I/O runs on the processor. Admission waits occur only after recycling.
+The queue and staged windows together retain at most 32 captures and 8 MiB of
+capture storage by default; a capture is held until its last blob leaves.
+Staged recording files are separately bounded by delivery's plan/recording-byte
+limits. Construction validates that publisher and delivery capture limits leave
+headroom in the minimum VM pool. No network I/O runs on the processor.
+Admission waits occur only after recycling.
 
-Delivery separately limits pending owners, plans, recording bytes, and CAS bytes.
-It releases owner-slot reservations after serialization releases the snapshots,
-not after their PUTs finish. Immutable upload bodies remain byte-budgeted until
+Delivery separately limits pending captures, plans, recording bytes, and CAS
+bytes; a capture spanning plans counts once per plan. It releases capture-slot
+reservations after serialization releases the captures, not after their PUTs
+finish. Immutable upload bodies remain byte-budgeted until
 delivery completes. Delivery admission waits for temporary plan, byte, or
 owner-slot saturation. Failure, closure, and released capacity wake waiting
 submitters. An individual group that can never fit fails before waiting.
@@ -151,10 +161,10 @@ and delivery backpressure. Snapshot accounting is cached between preflight and
 retention rather than scanning each new snapshot twice. Dropped payloads remain
 observable without stopping later telemetry.
 
-Snapshot IDs use bounded recent deduplication. Loss makes affected content
+Blob IDs use bounded recent deduplication. Loss makes affected content
 eligible to be offered again; reaching the history limit evicts old entries.
-Placement thresholds use retained-memory estimates,
-not exact encoded lengths; output encoding has independent hard limits.
+Placement thresholds use each blob's exact encoded length; output encoding has
+independent hard limits.
 
 Unacknowledged recording metadata is replayed in later files, without replaying
 spans or aggregates. Its journal is bounded; prolonged outages can evict old

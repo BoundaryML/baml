@@ -8,7 +8,7 @@ use std::{
 };
 
 use btel_recorder::SealedFile;
-use btel_snapshot::{BlobScratch, Snapshot};
+use btel_snapshot::{BlobIndex, BlobScratch, CasId, Snapshot};
 use bytes::Bytes;
 use futures::FutureExt;
 use prost::Message;
@@ -52,12 +52,14 @@ pub struct DeliveryConfig {
     pub prepare_base_url: Url,
     pub bearer_token: Option<String>,
     pub max_pending_plans: usize,
-    /// At most 32 owners, leaving default snapshot-pool headroom for VM capture.
+    /// At most 32 captures, leaving default snapshot-pool headroom for VM
+    /// capture. A capture spanning plans counts once per plan.
     pub max_pending_snapshots: usize,
     pub recording_reserved_bytes: usize,
     pub cas_reserved_bytes: usize,
     pub max_request_bytes: usize,
     pub max_response_bytes: usize,
+    /// Blobs per plan.
     pub max_candidates: usize,
     pub max_targets: usize,
     pub max_recording_body_bytes: usize,
@@ -128,7 +130,6 @@ impl DeliveryConfig {
             || self.max_pending_snapshots == 0
             || self.max_pending_snapshots > 32
             || self.max_candidates == 0
-            || self.max_candidates > self.max_pending_snapshots
             || self.max_targets == 0
             || self.max_targets > self.max_candidates + 1
             || self.max_request_bytes == 0
@@ -236,9 +237,55 @@ impl Drop for Reservation {
     }
 }
 
+/// One blob offered with a file: which capture holds it, and where.
+#[derive(Clone, Debug)]
+pub(crate) struct Candidate {
+    /// Index into the window's owners.
+    pub owner: u32,
+    pub blob: BlobIndex,
+    pub id: CasId,
+    pub encoded_len: u64,
+}
+
+/// A file's candidates and the captures that hold them. Several windows may
+/// hold one capture; it is freed with the last.
+#[derive(Default)]
+pub(crate) struct Window {
+    pub(crate) owners: Vec<Arc<Snapshot>>,
+    /// Each owner's retained memory, accounted once by the publisher.
+    pub(crate) sizes: Vec<usize>,
+    /// Per owner: whether this window holds the last of its queued blobs.
+    pub(crate) releases: Vec<bool>,
+    pub(crate) candidates: Vec<Candidate>,
+}
+
+impl Window {
+    /// Every blob of every capture, in the captures' order, children first.
+    fn whole(snapshots: Vec<Snapshot>) -> Result<Self, DeliveryError> {
+        let mut window = Self::default();
+        for snapshot in snapshots {
+            let owner = u32::try_from(window.owners.len()).map_err(|_| DeliveryError::Capacity)?;
+            for blob in snapshot.blobs() {
+                window.candidates.push(Candidate {
+                    owner,
+                    blob: blob.index(),
+                    id: blob.id(),
+                    encoded_len: blob.encoded_len(),
+                });
+            }
+            window
+                .sizes
+                .push(snapshot.retained_bytes().ok_or(DeliveryError::Capacity)?);
+            window.releases.push(true);
+            window.owners.push(Arc::new(snapshot));
+        }
+        Ok(window)
+    }
+}
+
 struct Work {
     file: SealedFile,
-    candidates: Vec<Snapshot>,
+    window: Window,
     request: PrepareUploadsRequest,
     reservation: Reservation,
 }
@@ -316,34 +363,32 @@ impl BcsDeliveryHandle {
         &self.shared.config
     }
 
+    /// Offer every blob of every capture with the file; `proposed_uploads`
+    /// index the blobs in the captures' order, children first.
     pub fn try_submit(
         &self,
         file: SealedFile,
-        candidates: Vec<Snapshot>,
+        snapshots: Vec<Snapshot>,
         proposed_uploads: Vec<ProposedUploadTarget>,
     ) -> Result<(), DeliveryError> {
-        self.submit_and_observe(file, candidates, proposed_uploads, None)
+        let window = match Window::whole(snapshots) {
+            Ok(window) => window,
+            Err(error) => {
+                self.shared.lose(error, true);
+                return Err(error);
+            }
+        };
+        self.try_submit_window(file, window, proposed_uploads)
     }
 
-    /// The publisher accounts each frozen owner once while building its window.
-    pub(crate) fn try_submit_accounted(
+    /// The publisher accounts each capture once while building its window.
+    pub(crate) fn try_submit_window(
         &self,
         file: SealedFile,
-        candidates: Vec<Snapshot>,
+        window: Window,
         proposed_uploads: Vec<ProposedUploadTarget>,
-        retained_sizes: &[usize],
     ) -> Result<(), DeliveryError> {
-        self.submit_and_observe(file, candidates, proposed_uploads, Some(retained_sizes))
-    }
-
-    fn submit_and_observe(
-        &self,
-        file: SealedFile,
-        candidates: Vec<Snapshot>,
-        proposed_uploads: Vec<ProposedUploadTarget>,
-        retained_sizes: Option<&[usize]>,
-    ) -> Result<(), DeliveryError> {
-        let result = self.submit(file, candidates, proposed_uploads, retained_sizes);
+        let result = self.submit(file, window, proposed_uploads);
         if let Err(error) = result {
             if error != DeliveryError::Closed {
                 self.shared.lose(error, true);
@@ -355,16 +400,21 @@ impl BcsDeliveryHandle {
     fn submit(
         &self,
         file: SealedFile,
-        candidates: Vec<Snapshot>,
+        window: Window,
         proposed_uploads: Vec<ProposedUploadTarget>,
-        retained_sizes: Option<&[usize]>,
     ) -> Result<(), DeliveryError> {
         let config = &self.shared.config;
-        if retained_sizes.is_some_and(|sizes| sizes.len() != candidates.len()) {
+        let candidates = &window.candidates;
+        if window.sizes.len() != window.owners.len()
+            || candidates
+                .iter()
+                .any(|c| c.owner as usize >= window.owners.len())
+        {
             return Err(DeliveryError::InvalidPlan);
         }
         if file.bytes().len() > config.max_recording_body_bytes
             || candidates.len() > config.max_candidates
+            || window.owners.len() > config.max_pending_snapshots
             || proposed_uploads.len() > config.max_targets
             || proposed_uploads
                 .iter()
@@ -373,27 +423,27 @@ impl BcsDeliveryHandle {
             return Err(DeliveryError::Capacity);
         }
         let mut metadata = Vec::with_capacity(candidates.len());
-        let mut retained = candidates
+        let mut retained = window
+            .owners
             .capacity()
-            .checked_mul(std::mem::size_of::<Snapshot>())
+            .checked_mul(std::mem::size_of::<Arc<Snapshot>>())
+            .and_then(|v| {
+                candidates
+                    .capacity()
+                    .checked_mul(std::mem::size_of::<Candidate>())
+                    .and_then(|c| v.checked_add(c))
+            })
             .ok_or(DeliveryError::Capacity)?;
-        for (index, snapshot) in candidates.iter().enumerate() {
-            debug_assert_eq!(
-                snapshot.blobs().len(),
-                1,
-                "a candidate uploads only its capture's root blob"
-            );
-            let size = match retained_sizes {
-                Some(sizes) => sizes[index],
-                None => snapshot.retained_bytes().ok_or(DeliveryError::Capacity)?,
-            };
+        for size in &window.sizes {
+            retained = retained.checked_add(*size).ok_or(DeliveryError::Capacity)?;
+        }
+        for (index, candidate) in candidates.iter().enumerate() {
             let index = u32::try_from(index).map_err(|_| DeliveryError::Capacity)?;
-            retained = retained.checked_add(size).ok_or(DeliveryError::Capacity)?;
             let standalone = proposed_uploads
                 .iter()
                 .any(|p| p.kind == UploadKind::CasObject && p.candidate_indices.contains(&index));
             metadata.push(CasCandidate {
-                snapshot_id: hex::encode(snapshot.root_id().as_bytes()),
+                snapshot_id: hex::encode(candidate.id.as_bytes()),
                 snapshot_format_version: btel_settings::snapshot::BLOB_VERSION,
                 size_class: standalone.then_some(CasSizeClass::Large),
             });
@@ -472,10 +522,7 @@ impl BcsDeliveryHandle {
             .and_then(|v| v.checked_mul(2))
             .and_then(|v| v.checked_add(retained))
             .ok_or(DeliveryError::Capacity)?;
-        if recording > config.recording_reserved_bytes
-            || cas > config.cas_reserved_bytes
-            || candidates.len() > config.max_pending_snapshots
-        {
+        if recording > config.recording_reserved_bytes || cas > config.cas_reserved_bytes {
             return Err(DeliveryError::Capacity);
         }
         let mut state = self.shared.state.lock().unwrap();
@@ -499,7 +546,7 @@ impl BcsDeliveryHandle {
             if state.plans >= config.max_pending_plans
                 || !fits(
                     state.snapshots,
-                    candidates.len(),
+                    window.owners.len(),
                     config.max_pending_snapshots,
                 )
                 || !fits(
@@ -516,7 +563,7 @@ impl BcsDeliveryHandle {
         }
         state.recording_bytes += recording;
         state.cas_bytes += cas;
-        state.snapshots += candidates.len();
+        state.snapshots += window.owners.len();
         state.plans += 1;
         state.cas_targets += cas_targets;
         state.last_file = Some(identity);
@@ -524,12 +571,12 @@ impl BcsDeliveryHandle {
             shared: self.shared.clone(),
             recording,
             cas,
-            snapshots: candidates.len(),
+            snapshots: window.owners.len(),
             cas_targets,
         };
         let work = Work {
             file,
-            candidates,
+            window,
             request,
             reservation,
         };
@@ -836,7 +883,7 @@ async fn assemble(
 ) -> Result<Prepared, DeliveryError> {
     let Work {
         file,
-        candidates,
+        window,
         request,
         mut reservation,
     } = work;
@@ -866,12 +913,14 @@ async fn assemble(
         reservation.cas_targets = actual_cas;
         (horizon(state.plans)?, horizon(state.cas_targets)?)
     };
-    let mut candidates: Vec<_> = candidates.into_iter().map(Some).collect();
+    // A candidate serializes at most once; an available one never does.
+    let mut taken = vec![false; window.candidates.len()];
     for disposition in &response.cas {
         if matches!(disposition.disposition, Disposition::AlreadyAvailable {}) {
-            candidates[disposition.candidate_index as usize].take();
+            taken[disposition.candidate_index as usize] = true;
         }
     }
+    let mut scratch = BlobScratch::default();
     let mut recording = None;
     let mut cas = Vec::new();
     for target in response.uploads {
@@ -901,21 +950,21 @@ async fn assemble(
                 return Err(DeliveryError::Capacity);
             }
             for &index in &target.candidate_indices {
-                let snapshot = candidates[index as usize]
-                    .take()
-                    .ok_or(DeliveryError::InvalidPlan)?;
+                let candidate = &window.candidates[index as usize];
+                if std::mem::replace(&mut taken[index as usize], true) {
+                    return Err(DeliveryError::InvalidPlan);
+                }
                 let mut writer = LimitedWriter::new(limit - envelope.encoded_len());
-                snapshot
-                    .root_blob()
-                    .write(&mut BlobScratch::default(), &mut writer)
+                window.owners[candidate.owner as usize]
+                    .blob(candidate.blob)
+                    .write(&mut scratch, &mut writer)
                     .map_err(|_| DeliveryError::Encoding)?;
                 let object = CasObject {
-                    snapshot_id: snapshot.root_id().as_bytes().to_vec(),
+                    snapshot_id: candidate.id.as_bytes().to_vec(),
                     snapshot_format_version: btel_settings::snapshot::BLOB_VERSION,
                     blob_sha256: Sha256::digest(&writer.bytes).to_vec(),
                     blob: writer.bytes.into_boxed_slice().into_vec(),
                 };
-                drop(snapshot);
                 envelope.cas_objects.push(object);
                 if envelope.encoded_len() > limit {
                     return Err(DeliveryError::Capacity);
@@ -932,7 +981,7 @@ async fn assemble(
                     .shared
                     .lose(error, !target.candidate_indices.is_empty());
                 for &index in &target.candidate_indices {
-                    candidates[index as usize].take();
+                    taken[index as usize] = true;
                 }
                 continue;
             }
@@ -943,7 +992,8 @@ async fn assemble(
             cas.push((target, body));
         }
     }
-    drop(candidates);
+    // Every candidate was serialized or skipped: the captures can go.
+    drop(window);
     let recording_sequence = file.sequence().get();
     drop(file);
     reservation.release_snapshot_slots();
