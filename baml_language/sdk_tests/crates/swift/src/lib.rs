@@ -22,6 +22,7 @@ sdk_test_harness_runner::swift::test_suite! {
     fixture llm_functions later
         "sdkgen_swift does not emit the stream_e2e_* streaming projections \
          TestStreamingE2E.swift calls — see _BamlSkipped.swift in the generated tree";
+    fixture llm_providers;
     fixture type_shapes;
     // No Swift overlay (placeholder test only): everything in it is within
     // Swift's type algebra, so it runs as a codegen-compiles integrity check.

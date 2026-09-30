@@ -8,6 +8,7 @@ sdk_test_harness_runner::go::test_suite! {
     fixture docstrings_etc;
     fixture function_calls;
     fixture llm_functions;
+    fixture llm_providers;
     fixture type_shapes;
     fixture unsupported_only;
     // No `baml_src`: built from a hand-constructed SymbolPool to exercise

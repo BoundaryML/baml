@@ -19,6 +19,7 @@ pub const SHARED: &[&str] = &[
     "docstrings_etc",
     "function_calls",
     "llm_functions",
+    "llm_providers",
     "type_shapes",
     "unsupported_only",
 ];
