@@ -47,7 +47,7 @@ async def main() -> None:
         rows.append(row)
         print(json.dumps(row), flush=True)
     if args.out:
-        args.out.write_text("".join(json.dumps(r) + "\n" for r in rows))
+        args.out.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
 
 
 if __name__ == "__main__":

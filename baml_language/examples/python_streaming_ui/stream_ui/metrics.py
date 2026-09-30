@@ -168,9 +168,12 @@ async def measure(
                     continue
                 m.total_s = time.perf_counter() - t0
                 m.final = item.value
+                c0 = time.perf_counter()
+                plain = to_plain(item.value)
+                m.convert_s += time.perf_counter() - c0
                 if render is not None:
                     r0 = time.perf_counter()
-                    render(to_plain(item.value), True)
+                    render(plain, True)
                     m.render_s += time.perf_counter() - r0
         except Exception as e:  # surfaced in the UI table
             m.total_s = time.perf_counter() - t0
