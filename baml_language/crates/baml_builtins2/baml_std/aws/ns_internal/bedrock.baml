@@ -1403,7 +1403,8 @@ function invoke(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.Mode
 // event per frame: `event` is the `:event-type` header and `data` the JSON
 // payload. A modeled exception frame arrives as `exception:<type>` and an
 // unmodeled error as `error:<code>` (see `StreamDecoder` in sys_types/src/sse.rs;
-// the frame codec is the `aws-eventstream` fork, forks/aws-eventstream).
+// the frame codec is the `aws-smithy-eventstream` fork,
+// forks/aws-smithy-eventstream).
 //
 // Event order: messageStart, then per content block contentBlockStart? /
 // contentBlockDelta* / contentBlockStop, then messageStop (stopReason), then

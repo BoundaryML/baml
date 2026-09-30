@@ -159,8 +159,8 @@ askama = { version = "0.14.0" }
 # `forks/*/Cargo.toml`. The dependency keys keep the upstream crate names so
 # call sites import them unchanged; the `package` is the `forked_*` crate.
 aws-config = { path = "forks/aws-config", package = "forked_aws_config" }
-aws-eventstream = { path = "forks/aws-eventstream", package = "forked_aws_eventstream" }
 aws-sigv4 = { path = "forks/aws-sigv4", package = "forked_aws_sigv4" }
+aws-smithy-eventstream = { path = "forks/aws-smithy-eventstream", package = "forked_aws_smithy_eventstream" }
 google-cloud-auth = { path = "forks/google-cloud-auth", package = "forked_google_cloud_auth" }
 axum = { version = "0.8.4", default-features = false, features = [ "http1", "matched-path", "original-uri", "query", "tokio", "ws" ] }
 bitflags = "2"

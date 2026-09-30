@@ -188,7 +188,7 @@ impl std::error::Error for StreamDecodeError {}
 
 /// Decodes a streaming response body into events, chosen by the response's
 /// `content-type`: an AWS event stream is decoded frame by frame (the
-/// `aws-eventstream` fork), anything else as text SSE.
+/// `aws-smithy-eventstream` fork), anything else as text SSE.
 ///
 /// An event-stream message becomes one [`SseEvent`], so it flows through the
 /// same buffer, handle and `SseStream.next()` batches as text SSE:
@@ -202,7 +202,7 @@ impl std::error::Error for StreamDecodeError {}
 ///   header, `data` the `:error-message` header.
 pub enum StreamDecoder {
     Sse(SseParser),
-    AwsEventStream(aws_eventstream::frame::MessageFrameDecoder),
+    AwsEventStream(aws_smithy_eventstream::frame::MessageFrameDecoder),
 }
 
 impl StreamDecoder {
@@ -214,7 +214,7 @@ impl StreamDecoder {
             })
         });
         if is_eventstream {
-            Self::AwsEventStream(aws_eventstream::frame::MessageFrameDecoder::new())
+            Self::AwsEventStream(aws_smithy_eventstream::frame::MessageFrameDecoder::new())
         } else {
             Self::Sse(SseParser::new())
         }
@@ -246,7 +246,7 @@ impl StreamDecoder {
 }
 
 fn eventstream_message_to_sse(
-    message: &aws_eventstream::frame::Message,
+    message: &aws_smithy_eventstream::frame::Message,
 ) -> Result<SseEvent, StreamDecodeError> {
     let header = |name: &str| message.string_header(name).unwrap_or_default().to_owned();
     let payload = || String::from_utf8_lossy(&message.payload).into_owned();
@@ -651,7 +651,7 @@ mod tests {
     }
 
     fn eventstream_frame(headers: &[(&str, &str)], payload: &[u8]) -> Vec<u8> {
-        use aws_eventstream::frame::{Header, HeaderValue, Message, write_message};
+        use aws_smithy_eventstream::frame::{Header, HeaderValue, Message, write_message};
         write_message(&Message {
             headers: headers
                 .iter()

@@ -1,9 +1,9 @@
 //! Parity with upstream `aws-smithy-eventstream` 0.60.11 on its own test
-//! vectors (`test_data/`, see `test_data/NOTICE.md`): the assertions mirror
+//! vectors (`test_data/`, see `test_data/NOTICE`): the assertions mirror
 //! the `read_all_headers_and_payload`, `write_all_headers_and_payload` and
 //! `invalid_messages` tests in upstream `src/frame.rs`.
 
-use aws_eventstream::frame::{
+use aws_smithy_eventstream::frame::{
     ErrorKind, Header, HeaderValue, Message, MessageFrameDecoder, read_message_from, write_message,
 };
 

@@ -3554,13 +3554,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "forked_aws_eventstream"
-version = "0.1.0"
-dependencies = [
- "crc32fast",
-]
-
-[[package]]
 name = "forked_aws_sigv4"
 version = "0.1.0"
 dependencies = [
@@ -3569,6 +3562,13 @@ dependencies = [
  "percent-encoding",
  "sha2",
  "web-time",
+]
+
+[[package]]
+name = "forked_aws_smithy_eventstream"
+version = "0.1.0"
+dependencies = [
+ "crc32fast",
 ]
 
 [[package]]
@@ -7383,7 +7383,7 @@ dependencies = [
  "bex_heap",
  "bex_str",
  "bex_vm_types",
- "forked_aws_eventstream",
+ "forked_aws_smithy_eventstream",
  "indexmap",
  "num-bigint",
  "tokio",
