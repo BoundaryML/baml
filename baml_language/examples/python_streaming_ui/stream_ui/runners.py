@@ -4,6 +4,7 @@ A: baml_sdk `ExtractPullRequest_stream_async`, through the scenario's v1 client 
    The schema goes in the prompt via `${ctx.output_format()}`; BAML parses partials engine-side.
 B: the provider's native Python SDK with structured outputs where the provider has them. Partials come
    from `jiter` parsing the text so far, which is what a hand-written integration would do.
+C: BAML v0 (baml-py) `b.stream.ExtractPullRequest`, through the scenario's v0 `client<llm>` (`v0/baml_src`).
 
 Both sides get the same instructions and the same PR text, and yield `Partial`s then one `Final`.
 """
@@ -19,8 +20,9 @@ import jiter
 
 from . import models
 
-Side = Literal["baml", "native"]
-SIDES: tuple[Side, ...] = ("baml", "native")
+Side = Literal["baml", "native", "v0"]
+SIDES: tuple[Side, ...] = ("baml", "native", "v0")
+SIDE_LETTER: dict[str, str] = {"baml": "A", "native": "B", "v0": "C"}
 
 # Same instructions as baml_src/pull_request.prompt.baml, minus `${ctx.output_format()}`.
 EXTRACT_INSTRUCTIONS = """\
@@ -57,7 +59,7 @@ SCENARIOS: dict[int, Scenario] = {
         ),
         Scenario(
             2, "Bedrock Mantle", "openai.ResponsesClient", "BedrockGptOss20b",
-            "openai.gpt-oss-20b", "openai OpenAI (Mantle /v1)", ("BEDROCK_MANTLE_API_KEY",),
+            "openai.gpt-oss-20b", "openai[bedrock] OpenAI(provider=bedrock())", ("BEDROCK_MANTLE_API_KEY",),
         ),
         Scenario(
             3, "Azure AI Foundry", "openai.ResponsesClient", "AzureGpt5MiniLow",
@@ -99,7 +101,11 @@ class RunConfig:
     @property
     def label(self) -> str:
         s = SCENARIOS[self.scenario]
-        return f"{s.n}A baml ({s.v1_client})" if self.side == "baml" else f"{s.n}B {s.native_sdk}"
+        if self.side == "baml":
+            return f"{s.n}A baml v1 ({s.v1_client})"
+        if self.side == "v0":
+            return f"{s.n}C baml v0 ({s.representative})"
+        return f"{s.n}B {s.native_sdk}"
 
 
 def native_prompt(pr_text: str) -> str:
@@ -121,6 +127,8 @@ def stream(cfg: RunConfig) -> AsyncIterator[Partial | Final]:
     """Yields a `Partial` as each one arrives, then one `Final`."""
     if cfg.side == "baml":
         return _stream_baml(cfg)
+    if cfg.side == "v0":
+        return _stream_v0(cfg)
     return _accumulate(_NATIVE_TEXT[cfg.scenario](native_prompt(cfg.pr_text)))
 
 
@@ -138,6 +146,22 @@ async def _stream_baml(cfg: RunConfig) -> AsyncIterator[Partial | Final]:
             break
         yield Partial(v)
     yield Final(await stream.final_async())
+
+
+# --------------------------------------------------------------------------- C: baml v0
+
+
+async def _stream_v0(cfg: RunConfig) -> AsyncIterator[Partial | Final]:
+    from baml_client.async_client import b
+
+    options: dict[str, Any] = {"client": SCENARIOS[cfg.scenario].representative}
+    if cfg.scenario == 6:
+        # v0 reads VERTEX_ACCESS_TOKEN like the user's config; mint a fresh one per call.
+        options["env"] = {**os.environ, "VERTEX_ACCESS_TOKEN": _vertex_access_token()}
+    stream = b.stream.ExtractPullRequest(cfg.pr_text, baml_options=options)
+    async for partial in stream:
+        yield Partial(partial)
+    yield Final(await stream.get_final_response())
 
 
 # --------------------------------------------------------------------------- B: native SDKs
@@ -188,12 +212,17 @@ async def _text_1(prompt: str) -> AsyncIterator[str]:
 
 async def _text_2(prompt: str) -> AsyncIterator[str]:
     from openai import AsyncOpenAI
-
     from openai.lib._parsing._responses import type_to_text_format_param
+    from openai.providers import bedrock
 
-    client = AsyncOpenAI(base_url=MANTLE_GPT_OSS_BASE_URL, api_key=os.environ["BEDROCK_MANTLE_API_KEY"])
-    # `responses.stream()` fails assembling Mantle's events (a content delta for a part it never announced),
-    # so read the raw event stream instead; the request is the same.
+    # openai[bedrock]'s provider defaults to Mantle's `/openai/v1`, which doesn't serve gpt-oss.
+    client = AsyncOpenAI(
+        provider=bedrock(
+            endpoint="mantle", base_url=MANTLE_GPT_OSS_BASE_URL, api_key=os.environ["BEDROCK_MANTLE_API_KEY"]
+        )
+    )
+    # `responses.stream()` crashes on Mantle's `response.reasoning_part.added` / `reasoning_text.delta` events
+    # (its snapshot never sees the part), so read the raw event stream instead; the request is the same.
     stream = await client.responses.create(
         model=SCENARIOS[2].model,
         input=prompt,

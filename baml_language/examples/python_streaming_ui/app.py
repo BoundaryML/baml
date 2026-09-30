@@ -1,6 +1,6 @@
 """Streamlit app: A vs B structured-output streaming for the six (provider, v1 client) scenarios.
 
-A = baml_sdk through the scenario's v1 client; B = the provider's native Python SDK.
+A = baml_sdk (v1) through the scenario's v1 client; B = the provider's native Python SDK; C = BAML v0 (baml-py).
 
 uv run streamlit run app.py
 """
@@ -16,7 +16,7 @@ import streamlit as st
 from stream_ui import metrics, models, runners
 
 DATA = Path(__file__).parent / "data"
-SIDE_NAME = {"baml": "A · baml", "native": "B · native SDK"}
+SIDE_NAME = {"baml": "A · baml v1", "native": "B · native SDK", "v0": "C · baml v0"}
 
 # Metrics shown side by side in the A vs B table.
 COMPARE = [
@@ -53,8 +53,8 @@ with st.sidebar:
     sides = [side for side in runners.SIDES if st.checkbox(SIDE_NAME[side], value=True)]
     order = st.radio(
         "Within a scenario",
-        ["A then B", "B then A", "A and B concurrently"],
-        help="Sequential keeps CPU and loop-lag numbers independent; concurrent is for watching them race.",
+        ["in order (A, B, C)", "all at once"],
+        help="In order keeps CPU and loop-lag numbers independent; all at once is for watching them race.",
     )
 
     st.header("Rendering")
@@ -115,9 +115,7 @@ async def run_all() -> list[tuple[int, str, metrics.RunMetrics]]:
                 st.markdown(f"**{SIDE_NAME[side]}**")
                 status, slot = st.empty(), st.empty()
             jobs.append((side, runners.RunConfig(n, side, pr_text), status, slot))
-        if order == "B then A":
-            jobs.reverse()
-        if order == "A and B concurrently":
+        if order == "all at once":
             done = await asyncio.gather(*(run_one(cfg, status, slot) for _, cfg, status, slot in jobs))
         else:
             done = [await run_one(cfg, status, slot) for _, cfg, status, slot in jobs]
@@ -129,19 +127,20 @@ def comparison_table(results) -> pd.DataFrame:
     rows = [{"scenario": scenario_title(n), "side": side, **m.summary()} for n, side, m in results]
     df = pd.DataFrame(rows)
     wide = df.pivot(index="scenario", columns="side", values=COMPARE)
-    wide.columns = [f"{metric} · {'A' if side == 'baml' else 'B'}" for metric, side in wide.columns]
-    ordered = [f"{metric} · {x}" for metric in COMPARE for x in ("A", "B") if f"{metric} · {x}" in wide.columns]
+    wide.columns = [f"{metric} · {runners.SIDE_LETTER[side]}" for metric, side in wide.columns]
+    ordered = [f"{metric} · {x}" for metric in COMPARE for x in ("A", "B", "C") if f"{metric} · {x}" in wide.columns]
     return wide[ordered]
 
 
 # --------------------------------------------------------------------------- page
 
-st.title("Structured-output streaming: BAML vs native SDKs")
+st.title("Structured-output streaming: BAML v1 vs native SDKs vs BAML v0")
 st.caption(
     "Each scenario rebuilds the `gh pr view --json` object for BoundaryML/baml#5041 from a prose rendering of it. "
     "**A** streams `ExtractPullRequest` through BAML with the scenario's v1 client (schema via "
     "`ctx.output_format()`). **B** streams the same instructions through the provider's native Python SDK with "
-    "structured outputs, parsing partials with `jiter`."
+    "structured outputs, parsing partials with `jiter`. **C** streams the same function through BAML v0 "
+    "(`baml-py`) with the equivalent v0 `client<llm>`."
 )
 
 tab_run, tab_scenarios, tab_prompts, tab_seed = st.tabs(["Run", "Scenarios", "Prompts", "Seed data"])
@@ -152,7 +151,7 @@ with tab_run:
 
     results = st.session_state.get("results", [])
     if results:
-        st.header("A vs B")
+        st.header("A vs B vs C")
         st.dataframe(comparison_table(results), width="stretch")
         st.caption(
             "**first partial**: request → first yielded value. **gap**: time between consecutive partials. "
@@ -183,6 +182,7 @@ with tab_scenarios:
                     "representative": s.representative,
                     "model": s.model,
                     "native SDK (B)": s.native_sdk,
+                    "v0 client (C)": s.representative,
                     "env": "ok" if not s.missing_env() else "missing " + ", ".join(s.missing_env()),
                 }
                 for s in runners.SCENARIOS.values()
