@@ -34,6 +34,8 @@ For local development, `BOUNDARY_URL=http://127.0.0.1:8080` is supported, as are
 
 `BOUNDARY_URL` opts into cloud delivery and requires a nonempty `BOUNDARY_API_KEY`. A key alone does not change the destination. Without a URL, each host keeps its existing local/no-recording behavior. `BAML_TELEMETRY=off` disables recording and ignores cloud configuration. Invalid enabled configuration fails engine construction without printing the URL or key. Explicit programmatic recording destinations take precedence over the environment. Packed programs read these variables when run, not when built. WASM does not use this native delivery path.
 
+Configuring a cloud destination does not upload project source file contents. Existing local source capture is preserved.
+
 Construct `DeliveryConfig::new(endpoint.parse()?)` with an explicit BCS endpoint.
 The config retains a parsed `reqwest::Url`; startup still enforces HTTPS and
 rejects credentials, queries, and fragments in that base URL.

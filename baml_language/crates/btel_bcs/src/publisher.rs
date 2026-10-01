@@ -151,11 +151,6 @@ impl CloudPublisher {
     #[must_use]
     pub fn with_process(mut self, process: btel_recorder::ProcessRecording) -> Self {
         self.recording = self.recording.with_process(process);
-        // Source captures use the same bounded upload accounting as span captures.
-        let snapshots: Vec<_> = self.recording.take_snapshots().collect();
-        for snapshot in snapshots {
-            self.retain(snapshot);
-        }
         self
     }
 

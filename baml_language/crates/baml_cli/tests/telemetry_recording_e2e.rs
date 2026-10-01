@@ -193,7 +193,7 @@ async fn cloud_server() -> wiremock::MockServer {
     server
 }
 
-async fn assert_cloud_delivery(server: &wiremock::MockServer, host: &str, sources: bool) {
+async fn assert_cloud_delivery(server: &wiremock::MockServer, host: &str) {
     use prost::Message as _;
     use sha2::{Digest, Sha256};
     let requests = server.received_requests().await.unwrap();
@@ -212,8 +212,6 @@ async fn assert_cloud_delivery(server: &wiremock::MockServer, host: &str, source
         .collect();
     assert!(!prepares.is_empty());
     let mut recordings = 0;
-    let mut captured_sources = false;
-    let mut snapshots = 0;
     for request in requests.iter().filter(|request| request.method == "PUT") {
         assert!(request.headers.get("authorization").is_none());
         let envelope =
@@ -224,7 +222,10 @@ async fn assert_cloud_delivery(server: &wiremock::MockServer, host: &str, source
             let header = file.header.unwrap();
             assert_eq!(header.host.as_deref(), Some(host));
             assert!(header.command.is_empty());
-            captured_sources |= header.source_cas_id.is_some();
+            assert!(header.source_cas_id.is_none());
+            if host == "baml" {
+                assert_eq!(header.source_snapshot_id.as_ref().unwrap().len(), 32);
+            }
             let prepare = prepares
                 .iter()
                 .find(|prepare| {
@@ -239,31 +240,21 @@ async fn assert_cloud_delivery(server: &wiremock::MockServer, host: &str, source
             );
             recordings += 1;
         }
-        for object in envelope.cas_objects {
-            assert_eq!(object.blob_sha256, Sha256::digest(&object.blob).to_vec());
-            let snapshot =
-                btel_snapshot::decode_blob(&object.blob, &btel_snapshot::DecodeLimits::default())
-                    .unwrap();
-            assert_eq!(snapshot.id.as_bytes().as_slice(), object.snapshot_id);
-            snapshots += 1;
-        }
+        assert!(envelope.cas_objects.is_empty());
     }
     assert_eq!(recordings, prepares.len());
-    if sources {
-        assert!(captured_sources);
-        assert!(snapshots > 0);
-    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn cli_routes_recordings_and_sources_to_the_configured_data_plane() {
+async fn cli_routes_recordings_without_uploading_source_contents() {
+    const SOURCE: &str = "// local-source-content-only-5082\nfunction main() -> int { 7 }\n";
     let server = cloud_server().await;
     let base = format!("{}/tenant/", server.uri());
     tokio::task::spawn_blocking(move || {
         let temp = tempfile::tempdir().unwrap();
         let project = temp.path().join("project");
         std::fs::create_dir(&project).unwrap();
-        common::write_project(&project, "function main() -> int { 7 }\n");
+        common::write_project(&project, SOURCE);
         let home = home(temp.path());
         run(
             cli(&project, &home)
@@ -274,10 +265,45 @@ async fn cli_routes_recordings_and_sources_to_the_configured_data_plane() {
         );
         assert!(!project.join(RECORDINGS).exists());
         assert!(!home.join(RECORDINGS).exists());
+
+        run(cli(&project, &home).args(["run", "main"]), true);
+        let directory = std::fs::read_dir(project.join(RECORDINGS))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        let recording = btel_file::read_directory(&directory).unwrap();
+        let source_id = recording.files[0]
+            .header
+            .as_ref()
+            .unwrap()
+            .source_cas_id
+            .unwrap();
+        let mut digest = [0; 16];
+        digest[..8].copy_from_slice(&source_id.low.to_le_bytes());
+        digest[8..].copy_from_slice(&source_id.high.to_le_bytes());
+        let path = btel_file::cas_path(
+            &project.join(".baml/btel/cas"),
+            btel_snapshot::SnapshotId::from_bytes(digest),
+        );
+        let blob = std::fs::read(path).unwrap();
+        assert!(
+            blob.windows(SOURCE.len())
+                .any(|bytes| bytes == SOURCE.as_bytes())
+        );
     })
     .await
     .unwrap();
-    assert_cloud_delivery(&server, "baml", true).await;
+    assert_cloud_delivery(&server, "baml").await;
+    for request in server.received_requests().await.unwrap() {
+        assert!(
+            !request
+                .body
+                .windows(SOURCE.len())
+                .any(|bytes| bytes == SOURCE.as_bytes())
+        );
+    }
 }
 
 #[test]
@@ -362,5 +388,5 @@ async fn packed_programs_select_the_data_plane_at_run_time() {
     })
     .await
     .unwrap();
-    assert_cloud_delivery(&server, "pack", false).await;
+    assert_cloud_delivery(&server, "pack").await;
 }

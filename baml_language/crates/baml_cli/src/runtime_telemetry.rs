@@ -24,14 +24,14 @@ pub(crate) fn create_engine(
                     project_root,
                     btel_settings::publisher::RecordingConfig::default(),
                 )
+                .with_sources(sources)
             })
-            .with_host("baml")
-            .with_sources(sources),
+            .with_host("baml"),
     )
 }
 
 /// The session's `.baml` sources keyed by path relative to the project root,
-/// stored with each recording.
+/// stored with local recordings.
 pub(crate) fn session_sources(
     session: &crate::project_session::ProjectSession,
 ) -> Vec<(String, String)> {
