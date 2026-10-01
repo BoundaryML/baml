@@ -97,3 +97,78 @@ test "sap_parse_shape_failures_are_catchable_as_parse_errors" {
     };
     assert.equal(result, "parse-error")
 }
+
+// ─── enum variants match by `@description` ──────────────────────────────────
+//
+// The output format renders a variant as `<name>: <description>`, so a model
+// often answers with the description. That names the variant, in a scalar
+// field and in every element of a list alike.
+
+enum ParseCompanionsDay {
+    ONE @description("MONDAY"),
+    TWO @description("TUESDAY"),
+}
+
+class ParseCompanionsDayEntry {
+    day: ParseCompanionsDay,
+    note: string,
+}
+
+test "sap_parse_matches_an_enum_variant_by_its_description" {
+    let parsed = baml.sap.parse<ParseCompanionsDayEntry>(`{"day": "MONDAY", "note": "rest"}`);
+    assert.equal(parsed, ParseCompanionsDayEntry { day: ParseCompanionsDay.ONE, note: "rest" })
+}
+
+test "sap_parse_matches_an_enum_description_case_insensitively" {
+    assert.equal(baml.sap.parse<ParseCompanionsDay>(`Tuesday`), ParseCompanionsDay.TWO)
+}
+
+test "sap_parse_matches_a_rendered_enum_line" {
+    assert.equal(baml.sap.parse<ParseCompanionsDay>(`ONE: MONDAY`), ParseCompanionsDay.ONE)
+}
+
+test "sap_parse_keeps_list_elements_whose_enum_is_named_by_description" {
+    let parsed = baml.sap.parse<ParseCompanionsDayEntry[]>(
+        `[{"day": "MONDAY", "note": "rest"}, {"day": "TWO", "note": "run"}]`,
+    );
+    assert.equal(
+        parsed,
+        [
+            ParseCompanionsDayEntry { day: ParseCompanionsDay.ONE, note: "rest" },
+            ParseCompanionsDayEntry { day: ParseCompanionsDay.TWO, note: "run" },
+        ],
+    )
+}
+
+// The description the prompt shows is the `@description` followed by the
+// `///` docstring, and that rendered text is what the parser matches.
+
+enum ParseCompanionsMeal {
+    /// eaten in the morning
+    A,
+    /// eaten at noon
+    B @description("LUNCH"),
+}
+
+function ParseCompanionsParseMeal() -> ParseCompanionsMeal {
+    client: ParseCompanionsTestClient
+    prompt: `${ctx.output_format()}`
+}
+
+test "sap_parse_matches_an_enum_variant_by_its_docstring" {
+    assert.equal(baml.sap.parse<ParseCompanionsMeal>(`eaten in the morning`), ParseCompanionsMeal.A)
+}
+
+test "sap_parse_matches_the_description_and_docstring_as_rendered" {
+    assert.equal(baml.sap.parse<ParseCompanionsMeal>(`LUNCH eaten at noon`), ParseCompanionsMeal.B);
+    assert.equal(
+        baml.sap.parse<ParseCompanionsMeal>(`B: LUNCH eaten at noon`),
+        ParseCompanionsMeal.B,
+    )
+}
+
+test "sap_parse_matches_the_enum_lines_the_prompt_renders" {
+    let prompt = ParseCompanionsParseMeal@render_prompt().text();
+    assert.is_true(prompt.includes("- A: eaten in the morning"));
+    assert.is_true(prompt.includes("- B: LUNCH eaten at noon"))
+}

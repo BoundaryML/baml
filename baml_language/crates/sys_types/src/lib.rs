@@ -760,6 +760,34 @@ pub struct EnumVariantDefinition {
     pub alias: Option<String>,
 }
 
+impl EnumVariantDefinition {
+    /// The description the output format shows for this variant; see
+    /// [`rendered_enum_variant_description`].
+    pub fn rendered_description(&self) -> Option<String> {
+        rendered_enum_variant_description(self.description.as_deref(), self.docstring.as_deref())
+    }
+}
+
+/// The description the output format shows after an enum variant's name
+/// (`<name>: <description>`): its `@description` followed by its `///`
+/// docstring, each trimmed, joined by a space. `None` when both are blank.
+///
+/// The parser matches a model's answer against this same text, so the prompt
+/// and the parser cannot disagree about what a variant is called.
+pub fn rendered_enum_variant_description(
+    description: Option<&str>,
+    docstring: Option<&str>,
+) -> Option<String> {
+    let docs = [description, docstring]
+        .into_iter()
+        .flatten()
+        .map(str::trim)
+        .filter(|docs| !docs.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    (!docs.is_empty()).then_some(docs)
+}
+
 impl SysOpContext {
     /// Create an empty context (for testing or when no LLM functions exist).
     pub fn empty() -> Self {

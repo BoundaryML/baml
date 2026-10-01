@@ -212,12 +212,23 @@ fn string_match_strategy<'t, N: TypeIdent>(
     flags: &mut DeserializerConditions<'_, '_, 't, N>,
     allow_substring_match: bool,
 ) -> Option<&'t str> {
-    // Strategy 1: Try exact case-sensitive match
-    for (candidate, valid_values) in candidates {
-        if valid_values.iter().any(|v| v.as_ref() == value_str) {
-            // No flags since we found an exact match.
-            return Some(candidate);
-        }
+    // Strategy 1: Try exact case-sensitive match.
+    // A candidate's valid values are in priority order (an enum variant's rendered names come
+    // before its description), so the match placed earliest wins: an answer that is one
+    // variant's name names that variant, even when an earlier variant's description is the
+    // same text. Equal placements keep declaration order.
+    let exact_match = candidates
+        .iter()
+        .filter_map(|(candidate, valid_values)| {
+            valid_values
+                .iter()
+                .position(|v| v.as_ref() == value_str)
+                .map(|position| (position, *candidate))
+        })
+        .min_by_key(|(position, _)| *position);
+    if let Some((_, candidate)) = exact_match {
+        // No flags since we found an exact match.
+        return Some(candidate);
     }
 
     // Strategy 2: Try unaccented case-sensitive match.
