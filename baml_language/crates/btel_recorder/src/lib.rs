@@ -46,7 +46,6 @@ struct PendingMessages {
     definitions: proto::Definitions,
     aggregates: proto::AggregateBatch,
     clock_states: proto::ClockStateBatch,
-    usage: proto::UsageBatch,
     /// `ErrorBatch` body, encoded as each message arrives: a throw-heavy
     /// program sends one raise and one end per throw, and prost would
     /// otherwise recompute every nested length several times per file.
@@ -156,26 +155,6 @@ impl ConversionBuffer {
                 },
             );
         }
-    }
-
-    /// Usage entries are cold and unbounded in size (a model name), so they
-    /// stay out of the span encoder.
-    fn model_usage(&mut self, thread: TelemetryId, usage: &btel_records::ModelUsage) {
-        push_message(
-            &mut self.pending.usage.entries,
-            &mut self.pending_encoded_bytes,
-            1,
-            proto::ModelUsage {
-                node_id: usage.node.get(),
-                thread_id: thread.get(),
-                model: usage.model.as_deref().map(str::to_owned),
-                input_tokens: usage.input_tokens,
-                output_tokens: usage.output_tokens,
-                cache_read_tokens: usage.cache_read_tokens,
-                cache_write_tokens: usage.cache_write_tokens,
-                reasoning_tokens: usage.reasoning_tokens,
-            },
-        );
     }
 
     fn aggregate(&mut self, delta: AggregateDelta) {
@@ -323,7 +302,6 @@ impl ConversionBuffer {
                 thread,
                 Event::ThreadRunning(proto::ThreadRunning { at_ticks: at.get() }),
             ),
-            SpanRecord::ModelUsage(usage) => self.model_usage(thread, usage),
             SpanRecord::NetworkSpanAnnouncement(span) => self.event(
                 thread,
                 Event::NetworkAnnouncement(proto::NetworkAnnouncement {

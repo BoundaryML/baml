@@ -1019,7 +1019,7 @@ function invoke(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.ModelTu
     let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(render(c, input));
     let sent = ai.wire.send_as_with_wire<OaResponse>(req, "openai", c.id(), capture_wire = c.capture_wire);
     let turn = parse(sent.value);
-    ai.ModelTurn { ...turn, calls: [sent.call], _usage_target: sent.usage_target, model: c.model }
+    ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
 }
 
 // ---------------------------------------------------------------------------
@@ -1264,8 +1264,7 @@ function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.
     let limits = ai.LlmTimeoutOptions._resolve(c.timeout);
     let req = limits._apply(_request(c, input, true, preview = false));
     let started = baml.time.Instant.now();
-    let span = ai.wire.request_span();
-    let sse = baml.http.send_sse(req, $trace = span) catch_all (e) {
+    let sse = baml.http.send_sse(req) catch_all (e) {
         _ => _stream_open_failure(e),
     };
     let state = OaStreamState.new();
@@ -1283,8 +1282,6 @@ function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.
             }
         },
         require_terminal = "openai",
-        model = c.model,
-        usage_target = trace._usage_target_of(span.id()),
         timeout_options = limits,
         dispatched = started,
     );

@@ -21,7 +21,8 @@ message RecordingFile {
   // Minor 2. Exception evidence. One unwind's raise, links and end can be
   // in different files; readers join them by raise ID.
   ErrorBatch errors = 8;
-  // Minor 3. Tokens each model turn used.
+  // Minor 3. Tokens each model turn used. Only read now: since minor 7 a
+  // request's cost comes from its network span, and nothing writes this.
   UsageBatch usage = 9;
 }
 
@@ -576,6 +577,7 @@ enum ProcessStatus {
 }
 
 // Minor 3. Model usage, outside span sections: a model name has no bound.
+// Only read now: nothing writes it since minor 7.
 message UsageBatch {
   repeated ModelUsage entries = 1;
 }

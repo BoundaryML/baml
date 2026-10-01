@@ -16,7 +16,7 @@ use indexmap::IndexMap;
 
 use crate::{
     BexVm,
-    errors::{VmBamlError, VmInternalError},
+    errors::VmInternalError,
     package_baml::{NativeCallResult, NativeFunction, NativeFunctionResult},
 };
 
@@ -54,12 +54,6 @@ fn reservation_data(vm: &BexVm, value: Value) -> &ReservedSpanData {
     let instance = vm.as_instance(&value).expect("trace.ReservedSpan receiver");
     vm.as_rust_data::<ReservedSpanData>(&instance.load_field(0))
         .expect("trace.ReservedSpan handle")
-}
-
-fn span_id_data(vm: &BexVm, value: Value) -> SpanId {
-    let instance = vm.as_instance(&value).expect("trace.SpanId value");
-    *vm.as_rust_data::<SpanId>(&instance.load_field(0))
-        .expect("trace.SpanId handle")
 }
 
 fn mode_from_value(vm: &BexVm, value: Option<&Value>) -> Option<InvocationMode> {
@@ -307,39 +301,6 @@ impl BamlPackageTrace for PackageTraceImpl {
 
     fn current_span_id(vm: &mut BexVm) -> Option<Value> {
         vm.current_span_id().map(|id| alloc_id(vm, id))
-    }
-
-    fn _usage_target(vm: &mut BexVm) -> i64 {
-        vm.usage_target().map_or(0, |id| id.get().cast_signed())
-    }
-
-    fn _usage_target_of(vm: &mut BexVm, span: &Value) -> i64 {
-        span_id_data(vm, *span)
-            .local_in(vm.trace_scope)
-            .map_or(0, |id| id.get().cast_signed())
-    }
-
-    #[allow(clippy::too_many_arguments, reason = "mirrors ai.events.Usage")]
-    fn _record_usage(
-        vm: &mut BexVm,
-        target: i64,
-        model: Option<&bex_str::BexStr>,
-        input_tokens: i64,
-        output_tokens: i64,
-        cache_read_tokens: Option<i64>,
-        cache_write_tokens: Option<i64>,
-        reasoning_tokens: Option<i64>,
-    ) -> bool {
-        let tokens = |count: i64| u64::try_from(count).unwrap_or(0);
-        vm.record_model_usage(
-            target.cast_unsigned(),
-            model.map(|model| Box::from(model.as_str())),
-            tokens(input_tokens),
-            tokens(output_tokens),
-            cache_read_tokens.map(tokens),
-            cache_write_tokens.map(tokens),
-            reasoning_tokens.map(tokens),
-        )
     }
 }
 

@@ -558,8 +558,9 @@ async fn each_model_request_is_its_own_span() {
     let results = record_program(project.path(), source, &[], &[("main", 0)]).await;
     assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(10))]);
     let mut index = index(project.path());
-    // The request's network span, inside the stdlib's `baml.http.send`
-    // span, which carries no cost of its own.
+    // The request's network span, under the innermost span that made it:
+    // here the root call, since neither step is a span. The root carries no
+    // cost of its own.
     let requests = sql(
         &mut index,
         "SELECT s.span_type, s.span_name LIKE 'POST http://127.0.0.1:%/v1/messages',
@@ -571,7 +572,7 @@ async fn each_model_request_is_its_own_span() {
     let request = vec![
         json!("network_span"),
         json!(1),
-        json!("baml.http.send"),
+        json!("user.main"),
         Json::Null,
         json!(1),
         json!(0.00474),
@@ -677,15 +678,14 @@ async fn streamed_usage_keeps_the_cache_split() {
          JOIN spans grandparent ON grandparent.span_id = parent.parent_span_id
          WHERE s.temporary_projections IS NOT NULL",
     );
-    // The request's network span, in the stdlib's `baml.http.send_sse`
-    // span, in the caller's; the same tokens and price as the non-streamed
-    // turn above.
+    // The request's network span, directly in the caller's span; the same
+    // tokens and price as the non-streamed turn above.
     assert_eq!(
         usage.rows,
         vec![vec![
             json!("network_span"),
-            json!("baml.http.send_sse"),
             json!("user.Stream"),
+            json!("user.main"),
             json!("claude-opus-5-5"),
             json!(1),
             json!(900),
@@ -790,7 +790,8 @@ async fn openai_requests_are_priced_on_their_network_spans() {
          WHERE s.span_type = 'network_span' ORDER BY s.start_time",
     );
     // 1000 fresh input at $2/M, 200 cached at $0.20/M, 300 output at $10/M.
-    let priced = |path: &str, parent: &str| {
+    // Each request sits under the root call: no client function is a span.
+    let priced = |path: &str| {
         let host = usage.rows[0][0]
             .as_str()
             .unwrap()
@@ -799,7 +800,7 @@ async fn openai_requests_are_priced_on_their_network_spans() {
             .unwrap();
         vec![
             json!(format!("{host}/v1/{path}")),
-            json!(parent),
+            json!("user.main"),
             json!("gpt-6-sol-2026-08-01"),
             json!(1),
             json!(1000),
@@ -813,9 +814,9 @@ async fn openai_requests_are_priced_on_their_network_spans() {
     assert_eq!(
         usage.rows,
         vec![
-            priced("chat/completions", "baml.http.send"),
-            priced("chat/completions", "baml.http.send_sse"),
-            priced("responses", "baml.http.send_sse"),
+            priced("chat/completions"),
+            priced("chat/completions"),
+            priced("responses"),
         ]
     );
     assert_eq!(cost(&mut index), (json!(0.01512), json!(0.01512)));
@@ -838,10 +839,11 @@ fn cost(index: &mut baml_query_btel::Index) -> (Json, Json) {
     )
 }
 
-/// Model usage from the runner, panics, future names and sysop time, as
-/// the engine records them.
+/// Panics, future names and sysop time, as the engine records them. A model
+/// client that makes no HTTP request has no cost: cost comes only from the
+/// network spans of the requests it sends.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn recorded_usage_panics_names_and_sysop_time_reach_the_tables() {
+async fn panics_names_and_sysop_time_reach_the_tables() {
     let project = tempfile::tempdir().unwrap();
     let source = r#"
         client DefaultClient = openai.ResponsesClient.new(
@@ -915,24 +917,10 @@ async fn recorded_usage_panics_names_and_sysop_time_reach_the_tables() {
     let mut index = index(project.path());
     let usage = sql(
         &mut index,
-        "SELECT temporary_projections['model_name'], temporary_projections['input_tokens'],
-           temporary_projections['output_tokens'], temporary_projections['cache_read_tokens'],
-           temporary_projections['cache_write_tokens'], round(temporary_projections['cost'], 6)
-         FROM spans WHERE span_name = 'user.Step'",
+        "SELECT (SELECT count(*) FROM spans WHERE span_name = 'user.Step'),
+           (SELECT count(temporary_projections) FROM spans)",
     );
-    // 900 full-rate input at $4/M, 100 cache writes at 1.25x, 200 cache
-    // reads at $0.20/M, 30 output at $20/M.
-    assert_eq!(
-        usage.rows,
-        vec![vec![
-            json!("claude-opus-5-5"),
-            json!(900),
-            json!(30),
-            json!(200),
-            json!(100),
-            json!(0.00474)
-        ]]
-    );
+    assert_eq!(usage.rows, vec![vec![json!(1), json!(0)]]);
     let statuses = sql(
         &mut index,
         "SELECT span_name, status FROM spans WHERE span_name IN ('user.Boom', 'reader')

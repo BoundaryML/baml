@@ -347,13 +347,6 @@ impl TelemetryState {
         }
     }
 
-    /// Tokens one model turn used, charged to `node`: the span or thread
-    /// that was active when the call started.
-    #[cold]
-    pub fn record_model_usage(&mut self, usage: btel_records::ModelUsage) {
-        self.write_span(SpanRecord::ModelUsage(Box::new(usage)));
-    }
-
     /// Capture a point event without promoting its invocation to a span.
     ///
     /// # Safety

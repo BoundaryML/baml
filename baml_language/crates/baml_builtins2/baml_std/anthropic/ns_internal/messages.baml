@@ -904,7 +904,7 @@ function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(_request(c, input, false, preview = false));
     let sent = ai.wire.send_as_with_wire<Response>(req, "anthropic", c.id(), capture_wire = c.capture_wire);
     let turn = parse(sent.value);
-    ai.ModelTurn { ...turn, calls: [sent.call], _usage_target: sent.usage_target, model: c.model }
+    ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
 }
 
 // ---------------------------------------------------------------------------
@@ -1258,8 +1258,7 @@ function invoke_stream(c: root.Client, input: ai.ModelTurnInput) -> ai.stream.Tu
     let limits = ai.LlmTimeoutOptions._resolve(c.timeout);
     let req = limits._apply(_request(c, input, true, preview = false));
     let started = baml.time.Instant.now();
-    let span = ai.wire.request_span();
-    let sse = baml.http.send_sse(req, $trace = span) catch (e) {
+    let sse = baml.http.send_sse(req) catch (e) {
         baml.errors.Io => _stream_open_failure(e),
         baml.errors.Timeout => _stream_open_failure(e),
     };
@@ -1277,8 +1276,6 @@ function invoke_stream(c: root.Client, input: ai.ModelTurnInput) -> ai.stream.Tu
             }
         },
         require_terminal = "anthropic",
-        model = c.model,
-        usage_target = trace._usage_target_of(span.id()),
         timeout_options = limits,
         dispatched = started,
     );
