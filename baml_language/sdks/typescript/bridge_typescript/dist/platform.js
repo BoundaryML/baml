@@ -7,9 +7,12 @@
  */
 import { AsyncResource, AsyncLocalStorage } from 'node:async_hooks';
 import { _startHostCallExecution, _finishHostCallExecution, _discardHostCallArgs, _hostInvocationFrame } from './native.js';
+import { Invocation } from './invocation.js';
 const invocationFrames = new AsyncLocalStorage();
+export function getCurrentInvocation() { return invocationFrames.getStore(); }
+export function runWithInvocation(active, body) { return invocationFrames.run(active, body); }
 export function currentInvocationState() {
-    const key = invocationFrames.getStore()?.key;
+    const key = invocationFrames.getStore()?.state.key;
     return key === undefined ? undefined : ((BigInt(key.high >>> 0) << 32n) | BigInt(key.low >>> 0)).toString();
 }
 const callbackContexts = new Map();
@@ -51,7 +54,8 @@ export function runHostCallback(callId, args, callback, lease) {
             }
         };
         try {
-            const frame = _hostInvocationFrame(lease);
+            const [state, cancel] = _hostInvocationFrame(lease);
+            const frame = new Invocation(state, cancel);
             const completion = resource.runInAsyncScope(() => invocationFrames.run(frame, callback));
             if (completion) {
                 execution.completion = completion.finally(finish);

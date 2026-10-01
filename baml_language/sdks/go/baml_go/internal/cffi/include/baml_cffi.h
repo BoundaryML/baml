@@ -318,6 +318,13 @@ typedef void (*BamlHostCancel)(uint32_t callback_id);
 
 typedef void (*BamlRegisterHostCancelCallbackFn)(BamlHostCancel callback);
 
+typedef BamlCffiStatus (*BamlTraceSelectionFn)(uint64_t call_id,
+                                               uint64_t key,
+                                               struct BamlBuffer *out_selection,
+                                               uint64_t *out_reservation);
+
+typedef BamlCffiStatus (*BamlInvocationContextFn)(uint64_t key, struct BamlBuffer *out_context);
+
 /**
  * First version of the shared BAML C API.
  *
@@ -520,6 +527,16 @@ typedef struct BamlApiV1 {
    * Request cooperative cancellation; completion still reports actual exit.
    */
   BamlRegisterHostCancelCallbackFn register_host_cancel_callback;
+  /**
+   * Project generated trace options without admitting another invocation.
+   * The caller owns the returned buffer and optional reservation handle.
+   */
+  BamlTraceSelectionFn trace_selection;
+  /**
+   * Read a detached generated trace.Context; key zero reads empty context.
+   * The caller owns the returned buffer. This never admits an invocation.
+   */
+  BamlInvocationContextFn invocation_context;
 } BamlApiV1;
 
 typedef const struct BamlApiV1 *(*BamlGetApiV1Fn)(void);

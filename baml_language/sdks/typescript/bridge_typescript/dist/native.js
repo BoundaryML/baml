@@ -596,9 +596,8 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { BamlAudio, BamlCallContext, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, _discardHostCallArgs, _finishHostCallExecution, _getHostCallOrigin, _handleRefcount, _hostInvocationFrame, _liveHandleCount, _releaseWireHandle, _seedFunctionRefHandle, _seedGenericMediaHandle, _seedHeapHandle, _startHostCallExecution, cancelFunctionCall, completeHostCall, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, invocationClockNs, mintHostValueKey, newFunctionCall, registerHostCallable, registerHostValueReleaseCallback, registerUnhandledSpawnErrorCallback, releaseFunctionCall, releaseHostCallable, shutdownRuntime } = nativeBinding
+const { BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, _discardHostCallArgs, _finishHostCallExecution, _getHostCallOrigin, _handleRefcount, _hostInvocationFrame, _invocationContext, _isInvocationCancelled, _liveHandleCount, _releaseWireHandle, _seedFunctionRefHandle, _seedGenericMediaHandle, _seedHeapHandle, _startHostCallExecution, _traceSelection, _watchInvocationCancellation, cancelFunctionCall, completeHostCall, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, invocationClockNs, mintHostValueKey, newFunctionCall, registerHostCallable, registerHostValueReleaseCallback, registerUnhandledSpawnErrorCallback, releaseFunctionCall, releaseHostCallable, shutdownRuntime } = nativeBinding
 export { BamlAudio }
-export { BamlCallContext }
 export { BamlHandle }
 export { BamlImage }
 export { BamlPdf }
@@ -609,12 +608,16 @@ export { _finishHostCallExecution }
 export { _getHostCallOrigin }
 export { _handleRefcount }
 export { _hostInvocationFrame }
+export { _invocationContext }
+export { _isInvocationCancelled }
 export { _liveHandleCount }
 export { _releaseWireHandle }
 export { _seedFunctionRefHandle }
 export { _seedGenericMediaHandle }
 export { _seedHeapHandle }
 export { _startHostCallExecution }
+export { _traceSelection }
+export { _watchInvocationCancellation }
 export { cancelFunctionCall }
 export { completeHostCall }
 export { getBridgeRuntimeVersion }

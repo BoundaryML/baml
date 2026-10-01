@@ -356,7 +356,7 @@ fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<
         Ty::Resource => Err("unsupported type: resource handle".to_string()),
         Ty::PromptAst => Err("unsupported type: prompt AST".to_string()),
         Ty::Never => Err("unsupported type: never".to_string()),
-        Ty::RustType => Err("unsupported type: $rust_type handle".to_string()),
+        Ty::RustType => Ok(()),
     }
 }
 

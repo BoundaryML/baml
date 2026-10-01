@@ -14,9 +14,9 @@ import (
 )
 
 var (
-	_ func(baml_sdk.MethodSelfEdgesMethodSelfEdges, context.Context, string) (string, error)      = baml_sdk.MethodSelfEdgesMethodSelfEdges.ThrowError
-	_ func(baml_sdk.MethodSelfEdgesMethodSelfEdges, context.Context, string) error                = baml_sdk.MethodSelfEdgesMethodSelfEdges.Panic
-	_ func(baml_sdk.MethodSelfEdgesMethodSelfEdges, context.Context, int64) (baml_go.Null, error) = baml_sdk.MethodSelfEdgesMethodSelfEdges.SleepMs
+	_ func(baml_sdk.MethodSelfEdgesMethodSelfEdges, context.Context, string, ...baml_go.CallOption) (string, error)      = baml_sdk.MethodSelfEdgesMethodSelfEdges.ThrowError
+	_ func(baml_sdk.MethodSelfEdgesMethodSelfEdges, context.Context, string, ...baml_go.CallOption) error                = baml_sdk.MethodSelfEdgesMethodSelfEdges.Panic
+	_ func(baml_sdk.MethodSelfEdgesMethodSelfEdges, context.Context, int64, ...baml_go.CallOption) (baml_go.Null, error) = baml_sdk.MethodSelfEdgesMethodSelfEdges.SleepMs
 	_ func(
 		baml_sdk.MethodSelfEdgesMethodSelfEdges,
 		context.Context,
@@ -171,7 +171,7 @@ func Test_instance_never_method_has_error_only_signature_and_returns_panic(t *te
 	if err := json.Unmarshal([]byte(`{"round_trip":"edge"}`), &value); err != nil {
 		t.Fatal(err)
 	}
-	var panicMethod func(context.Context, string) error = value.Panic
+	var panicMethod func(context.Context, string, ...baml_go.CallOption) error = value.Panic
 	err := panicMethod(ctx, "boom")
 	if err == nil {
 		t.Fatal("Panic() returned nil")

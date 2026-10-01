@@ -6,20 +6,20 @@ using CsharpHostCallables;
 
 RequireRegistryIdle("startup");
 
-Func<long, CancellationToken, Task<long>> addTen = Functions.MakeAdder(10L);
-Require(await addTen(5L, CancellationToken.None) == 15L, "returned closure argument or result changed");
-Require(await addTen(7L, CancellationToken.None) == 17L, "returned closure was not reusable");
+var addTen = Functions.MakeAdder(10L);
+Require(await addTen.InvokeAsync(5L) == 15L, "returned closure argument or result changed");
+Require(await addTen.InvokeAsync(7L) == 17L, "returned closure was not reusable");
 Console.WriteLine("baml_closure_is_a_native_callable_with_host_language_arguments=ok");
-Func<long, string, CancellationToken, Task<ReturnedPerson>> buildPair = Functions.MakePairBuilder(30L);
-ReturnedPerson ada = await buildPair(12L, "Ada", CancellationToken.None);
+var buildPair = Functions.MakePairBuilder(30L);
+ReturnedPerson ada = await buildPair.InvokeAsync(12L, "Ada");
 Require(ada.Name == "Ada" && ada.Age == 42L, "returned closure structured result changed");
-ReturnedPerson grace = await buildPair(5L, "Grace", CancellationToken.None);
+ReturnedPerson grace = await buildPair.InvokeAsync(5L, "Grace");
 Require(grace.Name == "Grace" && grace.Age == 35L, "reused returned closure structured result changed");
 Console.WriteLine("baml_closure_decodes_multiple_args_and_structured_return_values=ok");
-Func<CancellationToken, Task<long>> nextValue = Functions.MakeCounter(40L);
+var nextValue = Functions.MakeCounter(40L);
 Require(
-    await nextValue(CancellationToken.None) == 41L
-        && await nextValue(CancellationToken.None) == 42L,
+    await nextValue.InvokeAsync() == 41L
+        && await nextValue.InvokeAsync() == 42L,
     "returned closure mutable capture changed");
 Console.WriteLine("baml_closure_is_reusable_and_retains_mutable_captures=ok");
 
@@ -77,8 +77,9 @@ await RequireDispatchIdleAfterCompletion("synchronous optional callback calls");
 
 int optionalCalls = 0;
 IReadOnlyList<string> optionals = await Functions.InvokeOptionalsAsync(
-    async (x, y, z, cancellationToken) =>
+    async (x, y, z) =>
     {
+        var cancellationToken = Invocation.Current!.CancellationToken;
         await Task.Yield();
         cancellationToken.ThrowIfCancellationRequested();
         Interlocked.Increment(ref optionalCalls);
@@ -100,8 +101,9 @@ var deferredStarted = new TaskCompletionSource(
 var releaseDeferred = new TaskCompletionSource(
     TaskCreationOptions.RunContinuationsAsynchronously);
 Task<long> deferredCall = Functions.InvokeDeferredAsync(
-    async (x, cancellationToken) =>
+    async (x) =>
     {
+        var cancellationToken = Invocation.Current!.CancellationToken;
         deferredStarted.TrySetResult();
         await releaseDeferred.Task.WaitAsync(cancellationToken);
         return x * 2;
@@ -131,8 +133,9 @@ await RequireDispatchIdleAfterCompletion("synchronous nominal callback call");
 
 IReadOnlyList<long> genericInput = Array.AsReadOnly([2L, 3L, 5L]);
 string genericListResult = await Functions.ApplyAsync<IReadOnlyList<long>, string>(
-    (values, cancellationToken) =>
+    (values) =>
     {
+        var cancellationToken = Invocation.Current!.CancellationToken;
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(string.Join(",", values));
     },
@@ -146,8 +149,9 @@ IReadOnlyDictionary<string, long> genericMapInput = new Dictionary<string, long>
     ["right"] = 13L,
 };
 long genericMapResult = await Functions.ApplyAsync<IReadOnlyDictionary<string, long>, long>(
-    (values, cancellationToken) =>
+    (values) =>
     {
+        var cancellationToken = Invocation.Current!.CancellationToken;
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(values["left"] + values["right"]);
     },
@@ -157,8 +161,9 @@ await RequireDispatchIdleAfterCompletion("generic map callback call");
 
 IReadOnlyList<string> genericOptionals =
     await Functions.InvokeGenericOptionalsAsync<long, string>(
-        async (value, fallback, cancellationToken) =>
-        {
+        async (value, fallback) =>
+    {
+        var cancellationToken = Invocation.Current!.CancellationToken;
             await Task.Yield();
             cancellationToken.ThrowIfCancellationRequested();
             return fallback.IsSet
@@ -176,8 +181,9 @@ await RequireDispatchIdleAfterCompletion("generic optional callback calls");
 
 long visited = 0L;
 long visitResult = await Functions.VisitAsync<long>(
-    (value, cancellationToken) =>
+    (value) =>
     {
+        var cancellationToken = Invocation.Current!.CancellationToken;
         cancellationToken.ThrowIfCancellationRequested();
         visited = value;
         return Task.CompletedTask;
@@ -186,7 +192,7 @@ long visitResult = await Functions.VisitAsync<long>(
 Require(visitResult == 1L && visited == 13L, "generic void callback changed");
 Require(
     await Functions.ProduceAsync<long>(
-        cancellationToken =>
+        () =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(17L);
@@ -196,21 +202,24 @@ await RequireDispatchIdleAfterCompletion("generic void and producer callback cal
 
 var callbackBox = new CallbackBox<long> { Value = 19L };
 string transformed = await callbackBox.TransformAsync<string>(
-    (value, cancellationToken) =>
+    (value) =>
     {
+        var cancellationToken = Invocation.Current!.CancellationToken;
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult($"box:{value}");
     });
 string staticApplied = await CallbackHost.ApplyAsync<long, string>(
-    (value, cancellationToken) =>
+    (value) =>
     {
+        var cancellationToken = Invocation.Current!.CancellationToken;
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult($"static:{value}");
     },
     23L);
 CallbackBox<long> returnedBox = await Functions.ApplyAsync<long, CallbackBox<long>>(
-    (value, cancellationToken) =>
+    (value) =>
     {
+        var cancellationToken = Invocation.Current!.CancellationToken;
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(new CallbackBox<long> { Value = value + 1L });
     },
@@ -243,7 +252,7 @@ using (var unrelatedCancellation = new CancellationTokenSource())
         unrelatedCancellation.Token);
     Exception restored = ExpectSynchronousFault(
         () => Functions.PropagateHostThrow(
-            (_, _) => Task.FromException<string>(original),
+            _ => Task.FromException<string>(original),
             9L));
     Require(
         ReferenceEquals(restored, original)
@@ -261,8 +270,9 @@ using (var caller = new CancellationTokenSource())
     var callbackCanceled = new TaskCompletionSource(
         TaskCreationOptions.RunContinuationsAsynchronously);
     Task<string> canceledCall = Functions.InvokeCancelableAsync(
-        async callbackToken =>
+        async () =>
         {
+            var callbackToken = Invocation.Current!.CancellationToken;
             callbackStarted.TrySetResult(callbackToken);
             try
             {
@@ -301,7 +311,7 @@ static OperationCanceledException CaptureUnrelatedCancellation(
 {
     try
     {
-        ThrowUnrelatedCancellation(cancellationToken);
+        ThrowUnrelatedCancellation(Invocation.Current!.CancellationToken);
     }
     catch (OperationCanceledException exception)
     {

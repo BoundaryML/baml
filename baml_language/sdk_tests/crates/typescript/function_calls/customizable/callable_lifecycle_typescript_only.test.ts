@@ -1,10 +1,11 @@
+import { CancelToken } from "./baml_sdk/baml/spawn/index.js";
 /** TypeScript-only callable lifecycle.
  * Node sync entries reject host callbacks. Promises use application-owned
  * AbortSignals; these assertions do not promise bridge-driven cancellation.
  * Native-blocking cases require an external process deadline.
  */
 import "./baml_sdk/index.js";
-import { BamlAbortError, BamlCallContext } from "@boundaryml/baml-bridge";
+import { BamlAbortError } from "@boundaryml/baml-bridge";
 import { describe, expect, it } from "vitest";
 import * as baml from "./baml_sdk/host_callable_tests/index.js";
 import { isTestRuntime } from "./test_runtime.js";
@@ -63,7 +64,7 @@ describe.runIf(isTestRuntime("node"))(
     // SDK_PARITY_LINT(skip): Node callback Promises can outlive an aborted SDK waiter
     it("late_callback_keeps_async_local_storage_after_abort_typescript_only", async () => {
       const request = new AsyncLocalStorage<string>();
-      const ctx = new BamlCallContext();
+      const ctx = CancelToken.new();
       const seen: Array<string | undefined> = [];
       let enter!: () => void;
       const entered = new Promise<void>((resolve) => {
@@ -89,13 +90,13 @@ describe.runIf(isTestRuntime("node"))(
         baml.call_int_callback_async(
           callback as unknown as (value: number) => number,
           1,
-          { $ctx: ctx },
+          { $baml: { cancel: ctx } },
         ),
       );
       const outcome = call.catch((error: unknown) => error);
       try {
         await entered;
-        ctx.abort();
+        ctx.cancel();
         expect(await outcome).toBeInstanceOf(BamlAbortError);
         release();
         await exited;
@@ -103,7 +104,7 @@ describe.runIf(isTestRuntime("node"))(
         expect(request.getStore()).toBeUndefined();
       } finally {
         release();
-        ctx.abort();
+        ctx.cancel();
         await outcome;
       }
     });
@@ -112,7 +113,7 @@ describe.runIf(isTestRuntime("node"))(
     it("cooperative_abort_cleans_up_retained_callback_typescript_only", async () => {
       // Use the existing async BAML entry with the retained native closure.
       // This must preserve its native handle rather than wrap a sync JS call.
-      const ctx = new BamlCallContext();
+      const ctx = CancelToken.new();
       const application = new AbortController();
       let enter!: () => void;
       const entered = new Promise<void>((resolve) => {
@@ -140,16 +141,16 @@ describe.runIf(isTestRuntime("node"))(
       const forward = await baml.make_callback_forwarder_async(
         callback as unknown as (value: number) => number,
       );
-      const call = baml.call_int_callback_async(forward, 1, { $ctx: ctx });
+      const call = baml.call_int_callback_async(forward, 1, { $baml: { cancel: ctx } });
       const outcome = call.catch((error: unknown) => error);
       try {
         await entered;
-        ctx.abort();
+        ctx.cancel();
         application.abort();
         expect(await outcome).toBeInstanceOf(BamlAbortError);
         await exited;
       } finally {
-        ctx.abort();
+        ctx.cancel();
         application.abort();
         await outcome;
       }
@@ -157,7 +158,7 @@ describe.runIf(isTestRuntime("node"))(
 
     // SDK_PARITY_LINT(skip): Node event loop, AsyncLocalStorage, or cooperative Promise cancellation
     it("repeated_cooperative_abort_does_not_interrupt_callback_cleanup_typescript_only", async () => {
-      const ctx = new BamlCallContext();
+      const ctx = CancelToken.new();
       const application = new AbortController();
       let enter!: () => void;
       const entered = new Promise<void>((resolve) => {
@@ -197,15 +198,15 @@ describe.runIf(isTestRuntime("node"))(
       const call = baml.call_int_callback_async(
         callback as unknown as (value: number) => number,
         1,
-        { $ctx: ctx },
+        { $baml: { cancel: ctx } },
       );
       const outcome = call.catch((error: unknown) => error);
       try {
         await entered;
-        ctx.abort();
+        ctx.cancel();
         application.abort();
         await cleaning;
-        ctx.abort();
+        ctx.cancel();
         application.abort();
         await nextTurn();
         expect(finished).toBe(false);
@@ -214,7 +215,7 @@ describe.runIf(isTestRuntime("node"))(
         await exited;
       } finally {
         release();
-        ctx.abort();
+        ctx.cancel();
         application.abort();
         await outcome;
       }
@@ -224,8 +225,8 @@ describe.runIf(isTestRuntime("node"))(
     it("pre_aborted_call_does_not_dispatch_callback_typescript_only", async () => {
       // Node has no callback Task factory. Its equivalent boundary is a
       // pre-aborted call context: callback must never run, and the next call works.
-      const ctx = new BamlCallContext();
-      ctx.abort();
+      const ctx = CancelToken.new();
+      ctx.cancel();
       const calls: number[] = [];
       await expect(
         baml.call_int_callback_async(
@@ -234,7 +235,7 @@ describe.runIf(isTestRuntime("node"))(
             return value;
           },
           1,
-          { $ctx: ctx },
+          { $baml: { cancel: ctx } },
         ),
       ).rejects.toBeInstanceOf(BamlAbortError);
       expect(calls).toEqual([]);
@@ -278,7 +279,7 @@ describe.runIf(isTestRuntime("node"))(
 
     // SDK_PARITY_LINT(skip): Node event loop, AsyncLocalStorage, or cooperative Promise cancellation
     it("cooperative_abort_allows_callback_cleanup_typescript_only", async () => {
-      const ctx = new BamlCallContext();
+      const ctx = CancelToken.new();
       const application = new AbortController();
       let enter!: () => void;
       const entered = new Promise<void>((resolve) => {
@@ -318,12 +319,12 @@ describe.runIf(isTestRuntime("node"))(
       const call = baml.call_int_callback_async(
         callback as unknown as (value: number) => number,
         7,
-        { $ctx: ctx },
+        { $baml: { cancel: ctx } },
       );
       const outcome = call.catch((error: unknown) => error);
       try {
         await entered;
-        ctx.abort();
+        ctx.cancel();
         application.abort();
         await cleaning;
         expect(finished).toBe(false);
@@ -333,7 +334,7 @@ describe.runIf(isTestRuntime("node"))(
         expect(await baml.call_int_callback_async((value) => value, 8)).toBe(8);
       } finally {
         release();
-        ctx.abort();
+        ctx.cancel();
         application.abort();
         await outcome;
       }
@@ -343,7 +344,7 @@ describe.runIf(isTestRuntime("node"))(
     it("promise_all_failure_with_explicit_sibling_abort_preserves_error_typescript_only", async () => {
       // Promise.all has no TaskGroup cancellation. Application code explicitly
       // aborts its sibling BAML context and cooperative callback signal.
-      const ctx = new BamlCallContext();
+      const ctx = CancelToken.new();
       const application = new AbortController();
       const failure = new Error("sibling failed");
       let enter!: () => void;
@@ -372,7 +373,7 @@ describe.runIf(isTestRuntime("node"))(
       const call = baml.call_int_callback_async(
         callback as unknown as (value: number) => number,
         7,
-        { $ctx: ctx },
+        { $baml: { cancel: ctx } },
       );
       const outcome = call.catch((error: unknown) => error);
       const failing = (async () => {
@@ -382,7 +383,7 @@ describe.runIf(isTestRuntime("node"))(
       try {
         await expect(Promise.all([call, failing])).rejects.toBe(failure);
       } finally {
-        ctx.abort();
+        ctx.cancel();
         application.abort();
       }
       expect(await outcome).toBeInstanceOf(BamlAbortError);

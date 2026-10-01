@@ -5,7 +5,6 @@ import builtins
 import typing
 __all__ = [
     "BamlAudio",
-    "BamlCallContext",
     "BamlImage",
     "BamlPdf",
     "BamlPyHandle",
@@ -52,44 +51,6 @@ class BamlAudio:
         """
     @classmethod
     def __get_pydantic_core_schema__(cls, _source_type: typing.Any, _handler: typing.Any) -> typing.Any: ...
-
-@typing.final
-class BamlCallContext:
-    r"""
-    A call context for cancelling BAML function calls.
-
-    Usage from Python:
-    ```python
-    ctx = BamlCallContext()
-    # Pass to call_function / call_function_sync:
-    result = await call_function(rt, "MyFunc", args, _ctx=ctx)
-    # Cancel from another task:
-    ctx.abort()
-    ```
-    """
-    @property
-    def aborted(self) -> builtins.bool:
-        r"""
-        Whether `abort()` has been called.
-        """
-    def __new__(cls) -> BamlCallContext: ...
-    def abort(self) -> None:
-        r"""
-        Cancel the associated function call.
-
-        If the function is still running, it will be interrupted at the next
-        cancellation check point (before HTTP calls, between retries, etc.).
-        Calling `abort()` multiple times is harmless.
-        """
-    def _attach_call_id(self, call_id: builtins.int) -> None:
-        r"""
-        Bind this controller to an in-flight CFFI call id for the duration of
-        one host call. Private runtime hook used by `baml_bridge`.
-        """
-    def _detach_call_id(self, call_id: builtins.int) -> None:
-        r"""
-        Remove a call-id binding installed by `_attach_call_id`.
-        """
 
 @typing.final
 class BamlImage:
@@ -256,6 +217,8 @@ def _handle_refcount(key: builtins.int) -> typing.Optional[builtins.int]:
     exactly-once imbalance on a shared engine-heap key, which row counts hide.
     """
 
+def _invocation_context(handle: typing.Optional[BamlPyHandle]) -> builtins.list[builtins.int]: ...
+
 def _invoke_host_callable(callable: typing.Any, args: typing.Sequence[builtins.int]) -> typing.Any:
     r"""
     Private Python scheduler entrypoints. Decoding, callable invocation and
@@ -300,6 +263,8 @@ def _seed_heap_handle(slab_key: builtins.int) -> tuple[builtins.int, builtins.in
     CFFI API — the identity-bearing, deduplicating arm. Two seeds of one
     `slab_key` share a key.
     """
+
+def _trace_selection(handle: BamlPyHandle, call_id: builtins.int) -> tuple[builtins.list[builtins.int], typing.Optional[BamlPyHandle]]: ...
 
 def cancel_function_call(call_id: builtins.int) -> builtins.bool: ...
 

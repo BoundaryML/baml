@@ -13,6 +13,8 @@ baml_version = { workspace = true }
 bex_project = { workspace = true }
 bridge_cffi = { workspace = true, default-features = false }
 bridge_ctypes = { workspace = true }
+prost = { workspace = true }
+futures = { workspace = true }
 sys_wasm = { workspace = true }
 js-sys = { workspace = true }
 serde-wasm-bindgen = { workspace = true }

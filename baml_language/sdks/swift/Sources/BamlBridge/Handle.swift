@@ -156,7 +156,12 @@ public final class BamlFunctionHandle: @unchecked Sendable {
 
     public func callRaw(
         args: [(String, (any BamlEncodable)?)],
+        baml: BamlInvocationOptions = .init()
     ) async throws -> BamlOutboundValue {
-        try await BamlRuntime.shared.callHandleRaw(handle.key, args: args)
+        try await BamlRuntime.shared.callHandleRaw(handle.key, args: args, baml: baml)
     }
+    public func callRawSync(args: [(String, (any BamlEncodable)?)], baml: BamlInvocationOptions = .init()) throws -> BamlOutboundValue {
+        try BamlRuntime.shared.callHandleRawSync(handle.key, args: args, baml: baml)
+    }
+
 }

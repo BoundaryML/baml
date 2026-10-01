@@ -96,6 +96,7 @@ pub(crate) static CALL_ALLOCATIONS: LazyLock<Arc<call_allocation::CallAllocation
 pub mod baml_to_host;
 pub mod buffer;
 pub mod call_allocation;
+pub mod control_projection;
 pub mod error;
 pub mod handle_cffi;
 mod identity;

@@ -1,9 +1,10 @@
+import { CancelToken } from "./baml_sdk/baml/spawn/index.js";
 /** Shared retained-callable and cancelled-waiter contracts.
  * No particular async closure API or callback cancellation mechanism is
  * required. Native-blocking regressions need an external process deadline.
  */
 import "./baml_sdk/index.js";
-import { BamlAbortError, BamlCallContext } from "@boundaryml/baml-bridge";
+import { BamlAbortError } from "@boundaryml/baml-bridge";
 import { describe, expect, it } from "vitest";
 import * as baml from "./baml_sdk/host_callable_tests/index.js";
 
@@ -35,7 +36,7 @@ describe("callable_lifecycle", () => {
   });
 
   it("cancelled_waiter_stays_cancelled_when_callback_returns_late", async () => {
-    const ctx = new BamlCallContext();
+    const ctx = CancelToken.new();
     let enter!: () => void;
     const entered = new Promise<void>((resolve) => {
       enter = resolve;
@@ -57,12 +58,12 @@ describe("callable_lifecycle", () => {
     const call = baml.call_int_callback_async(
       callback as unknown as (value: number) => number,
       1,
-      { $ctx: ctx },
+      { $baml: { cancel: ctx } },
     );
     const outcome = call.catch((error: unknown) => error);
     try {
       await entered;
-      ctx.abort();
+      ctx.cancel();
       const cancellation = await outcome;
       expect(cancellation).toBeInstanceOf(BamlAbortError);
       release();
@@ -72,7 +73,7 @@ describe("callable_lifecycle", () => {
       expect(await baml.call_int_callback_async((value) => value, 2)).toBe(2);
     } finally {
       release();
-      ctx.abort();
+      ctx.cancel();
       await outcome;
     }
   });

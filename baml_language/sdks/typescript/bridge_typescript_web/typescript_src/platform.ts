@@ -1,9 +1,16 @@
-import { _discardHostCallArgs, _hostInvocationFrame, _startHostCallExecution, completeHostCall, type BamlHandle } from './native.js';
+import { _discardHostCallArgs, _hostInvocationFrame, _startHostCallExecution, completeHostCall } from './native.js';
 import type { BamlPanic } from './shared/errors.js';
 
-let currentFrame: BamlHandle | undefined;
+import { Invocation } from './shared/invocation.js';
+let currentFrame: Invocation | undefined;
+export function getCurrentInvocation(): Invocation | undefined { return currentFrame; }
+export function runWithInvocation<T>(active: Invocation, body: () => T): T {
+  const previous = currentFrame;
+  currentFrame = active;
+  try { return body(); } finally { currentFrame = previous; }
+}
 export function currentInvocationState(): string | undefined {
-    const key = currentFrame?.key;
+    const key = currentFrame?.state.key;
     return key ? ((BigInt(key.high >>> 0) << 32n) | BigInt(key.low >>> 0)).toString() : undefined;
 }
 
@@ -23,7 +30,8 @@ export function runHostCallback(callId: number, args: Uint8Array, callback: () =
     return;
   }
   const previous = currentFrame;
-  currentFrame = _hostInvocationFrame(execution);
+  const [state, cancel] = _hostInvocationFrame(execution);
+  currentFrame = new Invocation(state, cancel);
   try { return callback(); }
   finally { currentFrame = previous; }
 }

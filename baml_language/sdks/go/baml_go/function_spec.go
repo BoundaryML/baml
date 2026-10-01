@@ -20,7 +20,7 @@ type FunctionSpec[TOut any] struct {
 // EventCallback is the Go callback surface for stream lifecycle events. Event
 // is an open, evolving BAML union, so the callback receives the canonical Value
 // instead of a lossy reflected Go shape.
-type EventCallback func(Value)
+type EventCallback func(context.Context, Value)
 
 // EventCallbackInput adapts an EventCallback to the ordinary host-callable ABI.
 func EventCallbackInput(callback EventCallback) Input {
@@ -34,7 +34,7 @@ func EventCallbackInput(callback EventCallback) Input {
 		if arguments.OptionalCount() != 0 {
 			return InvalidInput("unexpected stream event callback argument"), HostCallableOptionalCountError(0, arguments.OptionalCount())
 		}
-		callback(arguments.Required(0))
+		callback(arguments.Context(), arguments.Required(0))
 		return NullInput(Null{}), nil
 	})
 }
@@ -73,8 +73,8 @@ func (spec FunctionSpec[TOut]) BAMLInput() Input {
 // method without synthesizing another function binding.
 func (spec FunctionSpec[TOut]) Call(ctx context.Context, options ...CallOption) (TOut, error) {
 	arguments := map[string]Input{"self": spec.BAMLInput()}
-	ApplyCallOptions(arguments, nil, options...)
-	value, err := Call(ctx, "ai.FunctionSpec.call", arguments)
+	prepared := ApplyInvocationOptions(arguments, nil, options...)
+	value, err := CallWithPreparedOptions(ctx, "ai.FunctionSpec.call", arguments, prepared)
 	if err != nil {
 		var zero TOut
 		return zero, err
@@ -83,11 +83,11 @@ func (spec FunctionSpec[TOut]) Call(ctx context.Context, options ...CallOption) 
 }
 
 // Parse parses an existing model reply against this spec's output type.
-func (spec FunctionSpec[TOut]) Parse(ctx context.Context, json string) (TOut, error) {
+func (spec FunctionSpec[TOut]) Parse(ctx context.Context, json string, options ...CallOption) (TOut, error) {
 	value, err := Call(ctx, "ai.FunctionSpec.parse", map[string]Input{
 		"self": spec.BAMLInput(),
 		"json": String(json),
-	})
+	}, options...)
 	if err != nil {
 		var zero TOut
 		return zero, err
@@ -96,8 +96,8 @@ func (spec FunctionSpec[TOut]) Parse(ctx context.Context, json string) (TOut, er
 }
 
 // Prompt renders the portable provider-neutral prompt for this recipe.
-func (spec FunctionSpec[TOut]) Prompt(ctx context.Context) (Prompt, error) {
-	value, err := Call(ctx, "ai.FunctionSpec.prompt", map[string]Input{"self": spec.BAMLInput()})
+func (spec FunctionSpec[TOut]) Prompt(ctx context.Context, options ...CallOption) (Prompt, error) {
+	value, err := Call(ctx, "ai.FunctionSpec.prompt", map[string]Input{"self": spec.BAMLInput()}, options...)
 	if err != nil {
 		return Prompt{}, err
 	}
@@ -108,13 +108,12 @@ func (spec FunctionSpec[TOut]) Prompt(ctx context.Context) (Prompt, error) {
 // request models may decode this value explicitly when they expose that type.
 func (spec FunctionSpec[TOut]) BuildRequest(ctx context.Context, options ...CallOption) (Value, error) {
 	arguments := map[string]Input{"self": spec.BAMLInput()}
-	ApplyCallOptions(arguments, nil, options...)
-	return Call(ctx, "ai.FunctionSpec.build_request", arguments)
+	return CallWithPreparedOptions(ctx, "ai.FunctionSpec.build_request", arguments, ApplyInvocationOptions(arguments, nil, options...))
 }
 
 // Name returns the authored function identity carried by this spec.
-func (spec FunctionSpec[TOut]) Name(ctx context.Context) (string, error) {
-	value, err := Call(ctx, "ai.FunctionSpec.name", map[string]Input{"self": spec.BAMLInput()})
+func (spec FunctionSpec[TOut]) Name(ctx context.Context, options ...CallOption) (string, error) {
+	value, err := Call(ctx, "ai.FunctionSpec.name", map[string]Input{"self": spec.BAMLInput()}, options...)
 	if err != nil {
 		return "", err
 	}
@@ -122,8 +121,8 @@ func (spec FunctionSpec[TOut]) Name(ctx context.Context) (string, error) {
 }
 
 // Arguments returns the authored arguments bound into this spec.
-func (spec FunctionSpec[TOut]) Arguments(ctx context.Context) (map[string]any, error) {
-	value, err := Call(ctx, "ai.FunctionSpec.arguments", map[string]Input{"self": spec.BAMLInput()})
+func (spec FunctionSpec[TOut]) Arguments(ctx context.Context, options ...CallOption) (map[string]any, error) {
+	value, err := Call(ctx, "ai.FunctionSpec.arguments", map[string]Input{"self": spec.BAMLInput()}, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -139,8 +138,8 @@ func (spec FunctionSpec[TOut]) Arguments(ctx context.Context) (map[string]any, e
 }
 
 // OutputType returns the realized final-output type carried by this spec.
-func (spec FunctionSpec[TOut]) OutputType(ctx context.Context) (BAMLType, error) {
-	value, err := Call(ctx, "ai.FunctionSpec.output_type", map[string]Input{"self": spec.BAMLInput()})
+func (spec FunctionSpec[TOut]) OutputType(ctx context.Context, options ...CallOption) (BAMLType, error) {
+	value, err := Call(ctx, "ai.FunctionSpec.output_type", map[string]Input{"self": spec.BAMLInput()}, options...)
 	if err != nil {
 		return BAMLType{}, err
 	}
@@ -149,13 +148,13 @@ func (spec FunctionSpec[TOut]) OutputType(ctx context.Context) (BAMLType, error)
 
 // Tools returns the spec's toolbox as an opaque portable BAML value. A typed
 // Toolbox facade can decode this later without changing the FunctionSpec API.
-func (spec FunctionSpec[TOut]) Tools(ctx context.Context) (Value, error) {
-	return Call(ctx, "ai.FunctionSpec.tools", map[string]Input{"self": spec.BAMLInput()})
+func (spec FunctionSpec[TOut]) Tools(ctx context.Context, options ...CallOption) (Value, error) {
+	return Call(ctx, "ai.FunctionSpec.tools", map[string]Input{"self": spec.BAMLInput()}, options...)
 }
 
 // ClientID returns the identifier of the spec's bound default client.
-func (spec FunctionSpec[TOut]) ClientID(ctx context.Context) (string, error) {
-	value, err := Call(ctx, "ai.FunctionSpec.client_id", map[string]Input{"self": spec.BAMLInput()})
+func (spec FunctionSpec[TOut]) ClientID(ctx context.Context, options ...CallOption) (string, error) {
+	value, err := Call(ctx, "ai.FunctionSpec.client_id", map[string]Input{"self": spec.BAMLInput()}, options...)
 	if err != nil {
 		return "", err
 	}

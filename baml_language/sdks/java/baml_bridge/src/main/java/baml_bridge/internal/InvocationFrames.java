@@ -1,13 +1,21 @@
 package baml_bridge.internal;
 
 import baml_bridge.BamlHandle;
+import java.util.concurrent.Executor;
+import java.util.function.Function;
 
-/** Private transport carrier. Generated invocation bindings provide explicit capture. */
+/** Owned inheritance state; captured frames never reuse a callback identity. */
 public final class InvocationFrames {
-    public static final ThreadLocal<BamlHandle> CURRENT = new ThreadLocal<>();
-    private InvocationFrames() {}
-    public static long currentState() {
-        BamlHandle state = CURRENT.get();
-        return state == null ? 0 : state.key();
+    public record Frame(BamlHandle state, Object cancel) {
+        public <T> T run(java.util.function.Supplier<T> body) {
+            Frame prior = CURRENT.get(); CURRENT.set(this);
+            try { return body.get(); } finally { if (prior == null) CURRENT.remove(); else CURRENT.set(prior); }
+        }
+        public <T,R> Function<T,R> wrapFunction(Function<T,R> body) { return value -> run(() -> body.apply(value)); }
+        public Runnable wrapRunnable(Runnable body) { return () -> run(() -> { body.run(); return null; }); }
+        public Executor executor(Executor delegate) { return body -> delegate.execute(wrapRunnable(body)); }
     }
+    public static final ThreadLocal<Frame> CURRENT = new ThreadLocal<>();
+    private InvocationFrames() {}
+    public static long currentState() { Frame frame = CURRENT.get(); return frame == null ? 0 : frame.state().key(); }
 }

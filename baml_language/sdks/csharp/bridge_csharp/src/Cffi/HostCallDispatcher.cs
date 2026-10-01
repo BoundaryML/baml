@@ -90,11 +90,11 @@ internal static class HostCallDispatcher
     private static void StartWithoutSynchronizationContext(InvocationStart state)
     {
         SynchronizationContext? previous = SynchronizationContext.Current;
-        BamlSafeHandle? previousFrame = InvocationFrame.Current.Value;
+        BamlInvocationCapture? previousFrame = InvocationFrame.Current.Value;
         try
         {
             SynchronizationContext.SetSynchronizationContext(null);
-            InvocationFrame.Current.Value = state.Invocation.EffectiveState;
+            InvocationFrame.Current.Value = state.Invocation.Frame;
             state.Invocation.CancellationToken.ThrowIfCancellationRequested();
             state.Completion = state.Invocation.Callable.Descriptor.Invoke(
                 state.Invocation.Callable.Callback,

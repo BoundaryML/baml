@@ -328,7 +328,9 @@ inline const loaded_api& load_api() {
         table->invocation_clock_ns == nullptr ||
         table->release_function_call == nullptr ||
         table->register_host_dispatch_v2 == nullptr ||
-        table->register_host_cancel_callback == nullptr) {
+        table->register_host_cancel_callback == nullptr ||
+        table->trace_selection == nullptr ||
+        table->invocation_context == nullptr) {
       throw runtime_error(
           "BAML_RUNTIME_ABI_MISMATCH",
           "runtime ABI table contains a null required operation");

@@ -186,6 +186,15 @@ pub fn to_source_code_with_metadata(
         out.insert(init_ts_path(dir), content);
     }
 
+    out.insert(
+        PathBuf::from("_invocation.ts"),
+        include_str!("invocation_facade.ts").replace("__RUNTIME__", config.runtime_package),
+    );
+    let root = out
+        .get_mut(&PathBuf::from("index.ts"))
+        .expect("root module");
+    root.push_str("\nexport { invocation, invoke, invokeAsync } from \"./_invocation.js\";\nexport type { BamlOptions } from \"./_invocation.js\";\nexport * as trace from \"./vendor/trace/index.js\";\n");
+
     // Root-only data modules.
     out.insert(
         PathBuf::from("_inlinedbaml.ts"),

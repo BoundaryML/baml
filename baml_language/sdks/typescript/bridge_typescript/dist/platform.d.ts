@@ -6,6 +6,9 @@
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
 import type { BamlPanic } from './errors.js';
+import { Invocation } from './invocation.js';
+export declare function getCurrentInvocation(): Invocation | undefined;
+export declare function runWithInvocation<T>(active: Invocation, body: () => T): T;
 export declare function currentInvocationState(): string | undefined;
 /** Capture the SDK entry, rather than the lifetime of a registered callable. */
 export declare function captureCallbackContext(callId: bigint): () => void;

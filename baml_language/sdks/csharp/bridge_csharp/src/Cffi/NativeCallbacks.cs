@@ -155,6 +155,9 @@ internal static unsafe class NativeCallbacks
                 wire.HostEnvironment) ?? throw new InvalidDataException(diagnostic);
             invocation.EffectiveState = state;
             invocation.Controls = controls;
+            var ownedCancel = CloneControl(wire.Cancel, api);
+            var cancelValue = PrimitiveProtocol.DecodeCallResult(new global::BamlBridge.Cffi.V1.BamlOutboundResult { Ok = ownedCancel }.ToByteArray(), "<effective cancellation>", api);
+            invocation.Frame = new global::Baml.Generated.V1.BamlInvocationCapture(state.CloneOwned(), cancelValue, invocation.CancellationToken);
             state = null;
             controls = null;
             ThreadPool.UnsafeQueueUserWorkItem(
@@ -167,6 +170,32 @@ internal static unsafe class NativeCallbacks
             controls?.Dispose();
             if (wire is not null) HostCallDispatcher.QueueBoundaryException(api, wire.CallbackId, wire.HostEnvironment, error);
         }
+    }
+
+    private static global::BamlBridge.Cffi.V1.BamlOutboundValue CloneControl(global::BamlBridge.Cffi.V1.BamlOutboundValue value, NativeApi api)
+    {
+        var result = value.Clone(); var owners = new List<BamlSafeHandle>();
+        void Clone(global::BamlBridge.Cffi.V1.BamlOutboundValue item)
+        {
+            switch (item.ValueCase)
+            {
+                case global::BamlBridge.Cffi.V1.BamlOutboundValue.ValueOneofCase.HandleValue:
+                    if (item.HandleValue.HandleType is global::BamlBridge.Cffi.V1.BamlHandleType.HostValueCallable or global::BamlBridge.Cffi.V1.BamlHandleType.HostValueOpaque) break;
+                    ulong key = 0;
+                    if (api.Table->HandleClone(item.HandleValue.Key, &key) != BamlCffiStatus.Ok || key == 0) throw new InvalidDataException("Inactive invocation control handle.");
+                    owners.Add(api.OwnHandle(key)); item.HandleValue.Key = key; break;
+                case global::BamlBridge.Cffi.V1.BamlOutboundValue.ValueOneofCase.ClassValue:
+                    foreach (var field in item.ClassValue.Fields) Clone(field.Value); break;
+                case global::BamlBridge.Cffi.V1.BamlOutboundValue.ValueOneofCase.ListValue:
+                    foreach (var field in item.ListValue.Items) Clone(field); break;
+                case global::BamlBridge.Cffi.V1.BamlOutboundValue.ValueOneofCase.MapValue:
+                    foreach (var field in item.MapValue.Entries) Clone(field.Value); break;
+                case global::BamlBridge.Cffi.V1.BamlOutboundValue.ValueOneofCase.UnionVariantValue:
+                    Clone(item.UnionVariantValue.Value); break;
+            }
+        }
+        try { Clone(result); foreach (var owner in owners) owner.TransferOwnership(); return result; }
+        finally { foreach (var owner in owners) owner.Dispose(); }
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

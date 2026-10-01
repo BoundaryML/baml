@@ -6,7 +6,8 @@
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
 import { baml_bridge } from './proto/baml_cffi.js';
-import { BamlCallContext, HandleKey } from './native.js';
+import { HandleKey } from './native.js';
+import type { InvocationOptions, InvokeOptions } from './invocation.js';
 import { BamlType } from './wire_ty.js';
 /**
  * Error thrown when a host callable (a JS `function`) is passed to the
@@ -17,6 +18,7 @@ export declare class HostCallableSyncError extends Error {
 }
 export interface EncodeCallArgsOptions {
     callId: bigint;
+    baml?: InvocationOptions | null;
     syncMode?: boolean;
     functionName?: string;
     functionHandle?: HandleKey;
@@ -30,7 +32,7 @@ export interface EncodeCallArgsOptions {
     typeArgs?: Array<[string, baml_bridge.cffi.v1.IBamlTy | BamlType]>;
 }
 export interface BamlPromptCallOptions {
-    $ctx?: BamlCallContext;
+    $baml?: InvocationOptions | null;
 }
 /** Structural view returned by `BamlPrompt.messages()`. */
 export interface BamlPromptMessage {
@@ -84,6 +86,14 @@ export declare class BamlPrompt {
  * already registered, so we release them here.
  */
 export declare function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeCallArgsOptions): Buffer;
+interface InvocationSnapshot {
+    wire: baml_bridge.cffi.v1.IInvocationOptions;
+    cancel: unknown;
+    signal?: AbortSignal | null;
+    retained: unknown[];
+}
+export declare function encodedInvocation(bytes: Uint8Array): InvocationSnapshot | undefined;
+export declare function invokeTarget(target: string | ((...args: any[]) => unknown), args: Record<string, unknown>, options: InvokeOptions | undefined, asynchronous: boolean): unknown;
 /**
  * Decode a bare `BamlOutboundValue` to a JS value. Used for the host-callable
  * args path, where the engine sends a list-shaped `BamlOutboundValue` rather
@@ -112,4 +122,5 @@ export declare function decodeHostCall(data: Buffer | Uint8Array): {
  */
 export declare function decodeCallResult(data: Buffer | Uint8Array): unknown;
 export declare function makeHostCallableDispatch(userFn: (...args: unknown[]) => unknown): (callId: number, argsBytes: Buffer, execution?: object) => void;
+export {};
 //# sourceMappingURL=proto.d.ts.map

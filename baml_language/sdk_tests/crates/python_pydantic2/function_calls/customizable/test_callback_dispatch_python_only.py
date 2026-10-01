@@ -348,10 +348,10 @@ async def test_task_factory_failure_completes_dispatch_and_preserves_exception_p
 # SDK_PARITY_LINT(skip): Python task unwinding and ContextVar semantics
 @pytest.mark.asyncio
 async def test_cancelled_waiter_keeps_host_context_through_cleanup_python_only():
-    from baml_bridge import BamlCallContext
+    from baml_sdk.baml.spawn import CancelToken
 
     request = contextvars.ContextVar("request", default="missing")
-    ctx = BamlCallContext()
+    ctx = CancelToken.new()
     entered = asyncio.Event()
     release = asyncio.Event()
     exited = asyncio.Event()
@@ -371,12 +371,12 @@ async def test_cancelled_waiter_keeps_host_context_through_cleanup_python_only()
 
     token = request.set("original")
     try:
-        pending = asyncio.create_task(baml.call_int_callback_async(callback, 6, _ctx=ctx))
+        pending = asyncio.create_task(baml.call_int_callback_async(callback, 6, _baml={"cancel": ctx}))
     finally:
         request.reset(token)
     try:
         await asyncio.wait_for(entered.wait(), 3)
-        ctx.abort()
+        ctx.cancel()
         with pytest.raises(asyncio.CancelledError):
             await asyncio.wait_for(pending, 3)
         assert observed == []

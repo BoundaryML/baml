@@ -140,7 +140,7 @@ struct callback_frame {
   ~callback_frame() {
     if (!state && wire.effective_state() != 0)
       api().handle_release(wire.effective_state());
-    if (wire.has_cancel()) release_control_value(wire.cancel());
+    if (!state && wire.has_cancel()) release_control_value(wire.cancel());
   }
 };
 inline std::mutex callback_frames_mutex;
@@ -539,6 +539,7 @@ extern "C" inline void baml_cpp_host_dispatch_trampoline(const uint8_t* args,
     frame->wire = std::move(wire);
     frame->state = std::make_shared<baml::detail::invocation_state>(
         frame->wire.effective_state());
+    frame->state->cancel.Swap(frame->wire.mutable_cancel());
     std::vector<uint8_t> bytes;
     const auto& application = frame->wire.application_args();
     bytes.assign(application.begin(), application.end());

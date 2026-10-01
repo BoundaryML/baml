@@ -156,7 +156,7 @@ if (CanCreateLoopbackSockets())
     Task<TcpClient> peerAccept = systemListener.AcceptTcpClientAsync(networkTimeout.Token).AsTask();
     using Baml.Net.TcpStream outbound = await Baml.Net.TcpStream.ConnectAsync(
         $"127.0.0.1:{systemListenerPort}",
-        cancellationToken: networkTimeout.Token);
+        baml: new BamlOptions { CancellationToken = networkTimeout.Token });
     using TcpClient outboundPeer = await peerAccept;
     using NetworkStream outboundPeerStream = outboundPeer.GetStream();
     _ = await outbound.CloseAsync(networkTimeout.Token);
@@ -196,7 +196,7 @@ if (CanCreateLoopbackSockets())
         await udp.SendToAsync(
             Encoding.UTF8.GetBytes("datagram-out"),
             $"127.0.0.1:{udpPeerPort}",
-            cancellationToken: networkTimeout.Token) == "datagram-out".Length,
+            baml: new BamlOptions { CancellationToken = networkTimeout.Token }) == "datagram-out".Length,
         "UdpSocket.send_to returned the wrong byte count");
     UdpReceiveResult outboundDatagram = await udpPeer.ReceiveAsync(networkTimeout.Token);
     Require(
@@ -206,7 +206,7 @@ if (CanCreateLoopbackSockets())
         Encoding.UTF8.GetBytes("datagram-in"),
         new IPEndPoint(IPAddress.Loopback, bamlUdpPort),
         networkTimeout.Token);
-    Baml.Net.Datagram inboundDatagram = udp.RecvFrom(cancellationToken: networkTimeout.Token);
+    Baml.Net.Datagram inboundDatagram = udp.RecvFrom(baml: new BamlOptions { CancellationToken = networkTimeout.Token });
     Require(
         inboundDatagram.Data.Span.SequenceEqual(Encoding.UTF8.GetBytes("datagram-in"))
             && inboundDatagram.Addr.Contains($":{udpPeerPort}", StringComparison.Ordinal),
@@ -231,7 +231,7 @@ if (CanCreateLoopbackSockets())
             return Task.FromResult(servedResponse.Clone());
         },
         headerReadTimeout: Baml.Time.Duration.FromSeconds(2L),
-        cancellationToken: serveCancellation.Token);
+        baml: new BamlOptions { CancellationToken = serveCancellation.Token });
     using (System.Net.Http.HttpClient client = new())
     {
         using HttpResponseMessage served = await client.GetAsync(
@@ -268,7 +268,7 @@ if (CanCreateLoopbackSockets())
             Timeout = null,
             ConnectTimeout = null,
         },
-        cancellationToken: networkTimeout.Token);
+        baml: new BamlOptions { CancellationToken = networkTimeout.Token });
     string? firstEvent = await sse.NextAsync(networkTimeout.Token);
     Require(
         sse.Url == sseUrl

@@ -550,6 +550,8 @@ internal sealed class HostInvocation
 
     internal BamlSafeHandle? EffectiveState { get; set; }
 
+    internal Baml.Generated.V1.BamlInvocationCapture? Frame { get; set; }
+
     internal Baml.Proto.OutboundOwnershipScope? Controls { get; set; }
 
     internal void Cancel()
@@ -566,5 +568,5 @@ internal sealed class HostInvocation
 
 internal static class InvocationFrame
 {
-    internal static readonly AsyncLocal<BamlSafeHandle?> Current = new();
+    internal static readonly AsyncLocal<Baml.Generated.V1.BamlInvocationCapture?> Current = new();
 }

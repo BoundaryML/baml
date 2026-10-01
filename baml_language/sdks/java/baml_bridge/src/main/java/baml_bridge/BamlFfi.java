@@ -168,13 +168,32 @@ public final class BamlFfi {
     static native long nativeNewCallId();
     static native boolean nativeReleaseCallId(long callId);
     static native long nativeInvocationClockNs(long callId);
+    static native InvocationOptions.TracePayload nativeTraceSelection(long callId, long key);
+    static native byte[] nativeInvocationContext(long state);
+    public static Object currentTraceContext(BamlType descriptor) { return ProtoReader.decodeWithDesc(nativeInvocationContext(baml_bridge.internal.InvocationFrames.currentState()), descriptor, false); }
+    private static byte[] prepareInvocation(long callId, InvocationOptions options) {
+        options = options == null ? InvocationOptions.EMPTY : options;
+        Long timeout = options.timeoutMs();
+        if (timeout != null && (timeout < 0 || timeout > 2147483647L)) throw new IllegalArgumentException("timeoutMs must be between 0 and 2147483647");
+        var writer = new baml_bridge.internal.WireWriter();
+        writer.writeInt64(4, baml_bridge.internal.InvocationFrames.currentState());
+        writer.writeInt64(5, callId);
+        if (timeout != null) writer.writeInt64(3, Math.addExact(nativeInvocationClockNs(callId), Math.multiplyExact(timeout, 1000000L)));
+        if (options.trace() != null) {
+            var trace = nativeTraceSelection(callId, options.trace().key());
+            baml_bridge.internal.EncodingScope.own(trace.reservation(), 20);
+            writer.writeMessage(1, trace.bytes());
+        }
+        if (options.cancel() != null) writer.writeMessage(2, ProtoWriter.encodeInboundValue(options.cancel()));
+        return writer.toByteArray();
+    }
 
     /**
      * Cancel an in-flight function call by its {@code call_id}
      * ({@code bridge_cffi::cancel_function_call_by_id}). Returns {@code true}
      * when the runtime accepted the cancel, {@code false} otherwise (unknown /
      * already-completed id, id 0, or an uninitialized runtime). Never throws —
-     * both {@link BamlCallContext#abort()} and a host {@code future.cancel(true)}
+     * both {@link InvocationOptions#abort()} and a host {@code future.cancel(true)}
      * fire it and tolerate a {@code false}.
      */
     static native boolean nativeCancelFunctionCall(long callId);
@@ -273,6 +292,9 @@ public final class BamlFfi {
 
     public static Object callHandleSync(
             BamlHandle handle, String[] names, Object[] args, BamlType returnDesc) {
+        return callHandleSync(handle, names, args, returnDesc, null);
+    }
+    public static Object callHandleSync(BamlHandle handle, String[] names, Object[] args, BamlType returnDesc, InvocationOptions controls) {
         Objects.requireNonNull(handle, "handle");
         Objects.requireNonNull(names, "names");
         Objects.requireNonNull(args, "args");
@@ -284,10 +306,64 @@ public final class BamlFfi {
             throw new IllegalArgumentException("function handle argument names and values differ in length");
         }
         long callId = newCallId();
-        try {
-            byte[] request = ProtoWriter.encodeHandleCallFunctionArgs(handle.key(), names, args, callId);
-            return decodeResult(nativeCallSync(request), returnDesc);
+        try (var encoding = new baml_bridge.internal.EncodingScope()) {
+            byte[] request = ProtoWriter.encodeHandleCallFunctionArgs(handle.key(), names, args, callId, prepareInvocation(callId, controls));
+            byte[] response = nativeCallSync(request); encoding.submitted();
+            return decodeResult(response, returnDesc);
         } finally { nativeReleaseCallId(callId); }
+    }
+
+    public static CompletableFuture<Object> callHandleAsync(BamlHandle handle, String[] names, Object[] args, BamlType returnDesc, InvocationOptions controls) {
+        if (handle.handleType() != BamlHandle.FUNCTION_REF) throw new IllegalArgumentException("expected a live BAML callable");
+        long callId = newCallId();
+        CompletableFuture<byte[]> raw = new CompletableFuture<>();
+        PENDING.put(callId, raw);
+        CancellableCall result = new CancellableCall(callId);
+        try (var encoding = new baml_bridge.internal.EncodingScope()) { nativeCallAsync(callId, ProtoWriter.encodeHandleCallFunctionArgs(handle.key(), names, args, callId, prepareInvocation(callId, controls))); encoding.submitted(); }
+        catch (Throwable error) { nativeReleaseCallId(callId); PENDING.remove(callId); raw.completeExceptionally(error); }
+        raw.whenComplete((bytes, error) -> { if (error != null) result.completeExceptionally(error); else { try { result.complete(decodeResult(bytes, returnDesc)); } catch (Throwable failure) { result.completeExceptionally(mapAsyncFailure(failure)); } } });
+        return result;
+    }
+
+    public static DynamicTarget callableTarget(Object callable) {
+        if (callable == null || !Proxy.isProxyClass(callable.getClass()) || !(Proxy.getInvocationHandler(callable) instanceof ReturnedClosure owner)) throw new IllegalArgumentException("target must be a live returned BAML callable");
+        owner.handle().key(); return DynamicTarget.callable(owner.handle());
+    }
+    public static Object invoke(DynamicTarget target, Map<String,Object> arguments, BamlTypes types, InvocationOptions controls) {
+        String[] names = arguments.keySet().toArray(String[]::new);
+        Object[] values = java.util.Arrays.stream(names).map(arguments::get).toArray();
+        if (target.handle != null) { if (types != null && !types.isEmpty()) throw new IllegalArgumentException("specialized callable rejects type bindings"); return callHandleSync(target.handle, names, values, null, controls); }
+        return callSync(target.name, names, values, null, controls, types);
+    }
+    public static CompletableFuture<Object> invokeAsync(DynamicTarget target, Map<String,Object> arguments, BamlTypes types, InvocationOptions controls) {
+        String[] names = arguments.keySet().toArray(String[]::new);
+        Object[] values = java.util.Arrays.stream(names).map(arguments::get).toArray();
+        if (target.handle != null) { if (types != null && !types.isEmpty()) throw new IllegalArgumentException("specialized callable rejects type bindings"); return callHandleAsync(target.handle, names, values, null, controls); }
+        return callAsync(target.name, names, values, null, controls, types);
+    }
+
+    private record ReturnedClosure(BamlHandle handle, String[] names, BamlType returnDesc) implements InvocationHandler {
+        @Override public Object invoke(Object proxy, java.lang.reflect.Method method, Object[] arguments) {
+                    if (method.getDeclaringClass() == Object.class) {
+                        return switch (method.getName()) {
+                            case "toString" -> "BAML closure " + handle.key();
+                            case "hashCode" -> System.identityHashCode(proxy);
+                            case "equals" -> proxy == arguments[0];
+                            default -> throw new UnsupportedOperationException(method.toString());
+                        };
+                    }
+                    Object[] supplied = arguments == null ? new Object[0] : arguments;
+                    InvocationOptions controls = null;
+                    if (supplied.length == names.length + 1) { controls = (InvocationOptions) supplied[names.length]; supplied = java.util.Arrays.copyOf(supplied, names.length); }
+                    if (supplied.length != names.length) {
+                        throw new IllegalArgumentException(
+                                "BAML closure expected "
+                                        + names.length
+                                        + " arguments, received "
+                                        + supplied.length);
+                    }
+                    return method.getName().equals("callAsync") ? callHandleAsync(handle, names, supplied, returnDesc, controls) : callHandleSync(handle, names, supplied, returnDesc, controls);
+        }
     }
 
     public static <T> T returnedClosure(
@@ -301,26 +377,7 @@ public final class BamlFfi {
                     "Expected a returned BAML function handle, received "
                             + (value == null ? "null" : value.getClass().getName()));
         }
-        InvocationHandler handler =
-                (proxy, method, arguments) -> {
-                    if (method.getDeclaringClass() == Object.class) {
-                        return switch (method.getName()) {
-                            case "toString" -> "BAML closure " + handle.key();
-                            case "hashCode" -> System.identityHashCode(proxy);
-                            case "equals" -> proxy == arguments[0];
-                            default -> throw new UnsupportedOperationException(method.toString());
-                        };
-                    }
-                    Object[] supplied = arguments == null ? new Object[0] : arguments;
-                    if (supplied.length != names.length) {
-                        throw new IllegalArgumentException(
-                                "BAML closure expected "
-                                        + names.length
-                                        + " arguments, received "
-                                        + supplied.length);
-                    }
-                    return callHandleSync(handle, names, supplied, returnDesc);
-                };
+        InvocationHandler handler = new ReturnedClosure(handle, names, returnDesc);
         Object proxy =
                 Proxy.newProxyInstance(
                         callableType.getClassLoader(),
@@ -372,9 +429,9 @@ public final class BamlFfi {
 
     /**
      * As {@link #callSync(String, String[], Object[], BamlType)}, but bound to an
-     * optional {@link BamlCallContext} for cancellation: the minted
+     * optional {@link InvocationOptions} for cancellation: the minted
      * {@code call_id} is attached to {@code ctx} for the duration of the call and
-     * detached in a {@code finally}, so a concurrent {@link BamlCallContext#abort()}
+     * detached in a {@code finally}, so a concurrent {@link InvocationOptions#abort()}
      * (or an abort that already happened) cancels this call engine-side. A sync
      * cancellation surfaces as a {@link BamlPanic} whose {@code value()} is a
      * {@code baml.panics.Cancelled} (the async path remaps that to
@@ -382,13 +439,13 @@ public final class BamlFfi {
      * is exactly the four-arg behavior.
      */
     public static Object callSync(
-            String fqn, String[] names, Object[] args, BamlType returnDesc, BamlCallContext ctx) {
+            String fqn, String[] names, Object[] args, BamlType returnDesc, InvocationOptions ctx) {
         return callSync(fqn, names, args, returnDesc, ctx, null);
     }
 
     /**
      * Explicit-generics variant of
-     * {@link #callSync(String, String[], Object[], BamlType, BamlCallContext)}:
+     * {@link #callSync(String, String[], Object[], BamlType, InvocationOptions)}:
      * threads a {@link BamlTypes} bag of TypeVar bindings into
      * {@code CallFunctionArgs.type_args} so a generic function/method's TypeVars
      * are bound at the call. Reached from the generated explicit-generics
@@ -400,23 +457,17 @@ public final class BamlFfi {
             String[] names,
             Object[] args,
             BamlType returnDesc,
-            BamlCallContext ctx,
+            InvocationOptions ctx,
             BamlTypes typeArgs) {
         long callId = newCallId();
-        if (ctx != null) {
-            ctx.attach(callId);
-        }
-        try {
+        try (var encoding = new baml_bridge.internal.EncodingScope()) {
             byte[] request =
                     ProtoWriter.encodeNamedCallFunctionArgs(
-                            fqn, names, args, callId, typeArgs);
-            byte[] response = nativeCallSync(request);
+                            fqn, names, args, callId, typeArgs, prepareInvocation(callId, ctx));
+            byte[] response = nativeCallSync(request); encoding.submitted();
             return decodeResult(response, returnDesc);
         } finally {
             nativeReleaseCallId(callId);
-            if (ctx != null) {
-                ctx.detach(callId);
-            }
         }
     }
 
@@ -431,7 +482,7 @@ public final class BamlFfi {
     /**
      * Asynchronous sibling of
      * {@link #callSync(String, String[], Object[], BamlType)}. See
-     * {@link #callAsync(String, String[], Object[], BamlType, BamlCallContext)}.
+     * {@link #callAsync(String, String[], Object[], BamlType, InvocationOptions)}.
      */
     public static CompletableFuture<Object> callAsync(
             String fqn, String[] names, Object[] args, BamlType returnDesc) {
@@ -439,7 +490,7 @@ public final class BamlFfi {
     }
 
     /**
-     * The real async path, bound to an optional {@link BamlCallContext}. A
+     * The real async path, bound to an optional {@link InvocationOptions}. A
      * process-unique {@code call_id} is minted, a raw-bytes future registered in
      * {@link #PENDING}, and {@link #nativeCallAsync} spawns the engine call and
      * returns without blocking. When the engine completes it delivers the
@@ -463,13 +514,13 @@ public final class BamlFfi {
      * exceptionally with {@link BamlError} / {@link BamlPanic} unchanged.
      */
     public static CompletableFuture<Object> callAsync(
-            String fqn, String[] names, Object[] args, BamlType returnDesc, BamlCallContext ctx) {
+            String fqn, String[] names, Object[] args, BamlType returnDesc, InvocationOptions ctx) {
         return callAsync(fqn, names, args, returnDesc, ctx, null);
     }
 
     /**
      * Explicit-generics variant of
-     * {@link #callAsync(String, String[], Object[], BamlType, BamlCallContext)}:
+     * {@link #callAsync(String, String[], Object[], BamlType, InvocationOptions)}:
      * threads a {@link BamlTypes} bag of TypeVar bindings into
      * {@code CallFunctionArgs.type_args}. Reached from the generated
      * explicit-generics overloads; a {@code null} bag is exactly the five-arg
@@ -481,20 +532,17 @@ public final class BamlFfi {
             String[] names,
             Object[] args,
             BamlType returnDesc,
-            BamlCallContext ctx,
+            InvocationOptions ctx,
             BamlTypes typeArgs) {
         long callId = newCallId();
         CompletableFuture<byte[]> raw = new CompletableFuture<>();
         PENDING.put(callId, raw);
         CancellableCall result = new CancellableCall(callId);
-        if (ctx != null) {
-            ctx.attach(callId);
-        }
-        try {
+        try (var encoding = new baml_bridge.internal.EncodingScope()) {
             byte[] request =
                     ProtoWriter.encodeNamedCallFunctionArgs(
-                            fqn, names, args, callId, typeArgs);
-            nativeCallAsync(callId, request);
+                            fqn, names, args, callId, typeArgs, prepareInvocation(callId, ctx));
+            nativeCallAsync(callId, request); encoding.submitted();
         } catch (Throwable t) {
             nativeReleaseCallId(callId);
             // Arg-encode / JNI-glue failure before the engine took ownership of
@@ -513,9 +561,6 @@ public final class BamlFfi {
         // late engine envelope after a host cancel is harmlessly dropped.
         raw.whenComplete(
                 (bytes, err) -> {
-                    if (ctx != null) {
-                        ctx.detach(callId);
-                    }
                     if (err != null) {
                         result.completeExceptionally(err);
                     } else {
@@ -710,24 +755,25 @@ public final class BamlFfi {
      * dispatches may be concurrent). Never throws across the JNI boundary.
      */
     private static final class HostFrame {
-        final BamlHandle state;
+        final baml_bridge.internal.InvocationFrames.Frame active;
+        volatile java.util.concurrent.CompletableFuture<?> pending;
         final java.util.concurrent.atomic.AtomicBoolean cancelled = new java.util.concurrent.atomic.AtomicBoolean();
-        HostFrame(long key) { state = new BamlHandle(key, 19); }
+        HostFrame(long key, byte[] cancel) { active = new baml_bridge.internal.InvocationFrames.Frame(new BamlHandle(key, 19), ProtoReader.decodeValue(new baml_bridge.internal.WireReader(cancel), false)); }
     }
     private static final ConcurrentHashMap<Long, HostFrame> HOST_FRAMES = new ConcurrentHashMap<>();
 
     static void hostCancel(long callId) {
         HostFrame frame = HOST_FRAMES.get(callId);
-        if (frame != null) frame.cancelled.set(true);
+        if (frame != null) { frame.cancelled.set(true); var pending = frame.pending; if (pending != null) pending.cancel(true); }
     }
 
-    static void hostDispatch(long hostValueKey, long callId, byte[] bamlToHostCall, long effectiveState) {
-        HostFrame frame = new HostFrame(effectiveState);
+    static void hostDispatch(long hostValueKey, long callId, byte[] bamlToHostCall, long effectiveState, byte[] effectiveCancel) {
+        HostFrame frame = new HostFrame(effectiveState, effectiveCancel);
         HOST_FRAMES.put(callId, frame);
         try {
             HOST_DISPATCH_EXECUTOR.execute(() -> {
                 if (frame.cancelled.get()) { safeComplete(callId, true, EMPTY_PAYLOAD); return; }
-                baml_bridge.internal.InvocationFrames.CURRENT.set(frame.state);
+                baml_bridge.internal.InvocationFrames.CURRENT.set(frame.active);
                 try { runHostDispatch(hostValueKey, callId, bamlToHostCall); }
                 finally { baml_bridge.internal.InvocationFrames.CURRENT.remove(); }
             });
@@ -779,6 +825,8 @@ public final class BamlFfi {
         // CompletableFuture, then encode; anything else encodes immediately. No
         // typed async surface yet — this future-proofs the Object-typed slot.
         if (result instanceof CompletableFuture<?> future) {
+            HostFrame frame = HOST_FRAMES.get(callId);
+            if (frame != null) { frame.pending = future; if (frame.cancelled.get()) future.cancel(true); }
             future.whenComplete(
                     (value, err) -> {
                         if (err != null) {

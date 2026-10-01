@@ -294,6 +294,86 @@ fn render_name_ref(name: &Name, ctx: &TranslateCtx) -> TranslatedType {
     }
 }
 
+/// Returned engine functions carry invocation controls; application callbacks
+/// keep their application-only signatures.
+pub(crate) fn translate_return_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
+    match ty {
+        Ty::Function { params, ret, .. } => {
+            let result = translate_return_ty(ret, ctx);
+            let mut imports = result.imports;
+            let mut positional = Vec::new();
+            let mut optional = Vec::new();
+            for (index, param) in params.iter().enumerate() {
+                let translated = translate_ty(&param.ty, ctx);
+                imports.extend(translated.imports);
+                let name = param
+                    .name
+                    .as_ref()
+                    .map_or_else(|| format!("arg{index}"), |name| name.as_str().to_string());
+                if param.mode == CodegenFunctionParamMode::Optional {
+                    optional.push(format!(
+                        "{}?: {} | undefined",
+                        crate::leaf::option_field_name(&name),
+                        translated.expr
+                    ));
+                } else {
+                    let name = if name == "$opts" {
+                        "$opts_".to_string()
+                    } else {
+                        name
+                    };
+                    positional.push(format!("{name}: {}", translated.expr));
+                }
+            }
+            let up = "../".repeat(ctx.current_leaf.segments.len());
+            let prefix = if up.is_empty() { "./" } else { &up };
+            optional.push(format!(
+                "$baml?: import(\"{prefix}_invocation.js\").BamlOptions | null | undefined"
+            ));
+            positional.push(format!("$opts?: {{ {} }} | undefined", optional.join("; ")));
+            let args = positional.join(", ");
+            TranslatedType {
+                expr: format!(
+                    "{{ ({args}): {}; callAsync({args}): Promise<{}> }}",
+                    result.expr, result.expr
+                ),
+                imports,
+            }
+        }
+        Ty::List(inner) => {
+            let mut result = translate_return_ty(inner, ctx);
+            result.expr = format!("({})[]", result.expr);
+            result
+        }
+        Ty::Map { key, value, .. } => {
+            let key = translate_ty(key, ctx);
+            let value = translate_return_ty(value, ctx);
+            let mut imports = key.imports;
+            imports.extend(value.imports);
+            TranslatedType {
+                expr: format!("{{ [key in {}]: {} }}", key.expr, value.expr),
+                imports,
+            }
+        }
+        Ty::Union(items) => {
+            let mut imports = BTreeSet::new();
+            let parts: Vec<_> = items
+                .iter()
+                .map(|item| {
+                    let result = translate_return_ty(item, ctx);
+                    imports.extend(result.imports);
+                    result.expr
+                })
+                .collect();
+            TranslatedType {
+                expr: parts.join(" | "),
+                imports,
+            }
+        }
+        _ => translate_ty(ty, ctx),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use baml_base::Name as BaseName;

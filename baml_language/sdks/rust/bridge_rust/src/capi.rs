@@ -52,12 +52,15 @@ pub(crate) struct Api {
         unsafe extern "C" fn(*const u8, usize, *const c_char) -> Buffer,
     pub(crate) register_callback: unsafe extern "C" fn(CallbackFn),
     pub(crate) new_function_call: unsafe extern "C" fn() -> u64,
+    pub(crate) cancel_function_call: unsafe extern "C" fn(u64) -> i32,
     pub(crate) call_function: unsafe extern "C" fn(*const u8, usize, u32),
     pub(crate) handle_clone: unsafe extern "C" fn(u64, *mut u64) -> u32,
     pub(crate) handle_release: unsafe extern "C" fn(u64) -> u32,
     pub(crate) free_buffer: unsafe extern "C" fn(Buffer),
     pub(crate) register_host_dispatch_v2: unsafe extern "C" fn(HostDispatchV2),
     pub(crate) register_host_cancel_callback: unsafe extern "C" fn(HostCancelFn),
+    pub(crate) trace_selection: unsafe extern "C" fn(u64, u64, *mut Buffer, *mut u64) -> u32,
+    pub(crate) invocation_context: unsafe extern "C" fn(u64, *mut Buffer) -> u32,
     pub(crate) invocation_clock_ns: unsafe extern "C" fn(u64, *mut u64) -> u32,
     pub(crate) release_function_call: unsafe extern "C" fn(u64) -> i32,
     pub(crate) register_host_release_callback: unsafe extern "C" fn(HostReleaseFn),
@@ -81,7 +84,7 @@ impl Api {
     }
 
     /// Copy an engine-owned buffer's bytes out and free it exactly once.
-    fn copy_and_free(&self, buffer: Buffer) -> Vec<u8> {
+    pub(crate) fn copy_and_free(&self, buffer: Buffer) -> Vec<u8> {
         // SAFETY: the engine hands over an owned buffer of `len` bytes that
         // we must free exactly once; the bytes are copied before the free.
         #[expect(unsafe_code)]
@@ -178,6 +181,8 @@ struct BamlApiV1 {
     release_function_call: Option<unsafe extern "C" fn(u64) -> i32>,
     register_host_dispatch_v2: Option<unsafe extern "C" fn(HostDispatchV2)>,
     register_host_cancel_callback: Option<unsafe extern "C" fn(HostCancelFn)>,
+    trace_selection: Option<unsafe extern "C" fn(u64, u64, *mut Buffer, *mut u64) -> u32>,
+    invocation_context: Option<unsafe extern "C" fn(u64, *mut Buffer) -> u32>,
 }
 
 #[repr(C)]
@@ -265,7 +270,8 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     let register_callback = required_slot(table.register_callback, "register_callback", &path)?;
     let call_function = required_slot(table.call_function, "call_function", &path)?;
     let new_function_call = required_slot(table.new_function_call, "new_function_call", &path)?;
-    required_slot(table.cancel_function_call, "cancel_function_call", &path)?;
+    let cancel_function_call =
+        required_slot(table.cancel_function_call, "cancel_function_call", &path)?;
     required_slot(
         table.register_host_dispatch_callback,
         "register_host_dispatch_callback",
@@ -314,6 +320,9 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
         &path,
     )?;
 
+    let trace_selection = required_slot(table.trace_selection, "trace_selection", &path)?;
+    let invocation_context = required_slot(table.invocation_context, "invocation_context", &path)?;
+
     let api = Api {
         // Not part of BamlApiV1 (a legacy direct export); resolved directly.
         create_baml_runtime: sym(&library, b"create_baml_runtime\0")?,
@@ -321,12 +330,15 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
         initialize_runtime_from_blob_with_metadata,
         register_callback,
         new_function_call,
+        cancel_function_call,
         call_function,
         handle_clone,
         handle_release,
         free_buffer,
         register_host_dispatch_v2,
         register_host_cancel_callback,
+        trace_selection,
+        invocation_context,
         invocation_clock_ns,
         release_function_call,
         register_host_release_callback,

@@ -75,6 +75,8 @@ include = [
   "BamlReleaseFunctionCallFn",
   "BamlRegisterHostDispatchV2Fn",
   "BamlRegisterHostCancelCallbackFn",
+  "BamlTraceSelectionFn",
+  "BamlInvocationContextFn",
   "BamlHostReleaseCallback",
   "BamlUnhandledSpawnErrorCallback",
   "BamlVersionFn",
@@ -99,6 +101,8 @@ include = [
   "baml_get_api_v1",
 ]
 exclude = [
+  "trace_selection_ffi",
+  "invocation_context_ffi",
   "invocation_protocol_version",
   "invocation_clock_ns",
   "release_function_call",

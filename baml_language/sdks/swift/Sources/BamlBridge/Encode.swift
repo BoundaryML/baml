@@ -1,3 +1,4 @@
+import CBamlBridge
 import Foundation
 
 /// The BAML `null` type's Swift spelling. Swift has no untyped `nil`,
@@ -343,17 +344,31 @@ extension BamlIndirect: BamlEncodable where Value: BamlEncodable {
 func encodeCallArgs(
     _ args: [(String, (any BamlEncodable)?)],
     callId: UInt64,
-    callTarget: BamlBridge_Cffi_V1_CallFunctionArgs.OneOf_CallTarget
+    callTarget: BamlBridge_Cffi_V1_CallFunctionArgs.OneOf_CallTarget,
+    baml: BamlInvocationOptions = .init()
 ) throws -> Data {
     guard callId != 0 else { throw BamlDecodeError.unsupported("could not allocate invocation") }
-    do {
     var msg = BamlBridge_Cffi_V1_CallFunctionArgs()
+    do {
     msg.callID = callId
     msg.callTarget = callTarget
-    var invocation = BamlBridge_Cffi_V1_InvocationOptions()
-    invocation.hostEnvironment = callId
-    invocation.inheritedState = HostInvocationScope.state?.key ?? 0
-    msg.invocation = invocation
+    msg.invocation.inheritedState = HostInvocationScope.current?.state.key ?? 0
+    msg.invocation.hostEnvironment = callId
+    if let timeout = baml.timeoutMs {
+        guard timeout >= 0 && timeout <= Int64(Int32.max) else { throw BamlDecodeError.unsupported("timeoutMs must be between 0 and 2147483647") }
+        var clock: UInt64 = 0
+        guard BamlApi.invocationClockNs(callId, &clock) == BAML_CFFI_STATUS_OK.rawValue else { throw BamlDecodeError.unsupported("invalid call allocation") }
+        let (deadline, overflow) = clock.addingReportingOverflow(UInt64(timeout) * 1_000_000)
+        guard !overflow else { throw BamlDecodeError.unsupported("deadline overflow") }
+        msg.invocation.deadlineNs = deadline
+    }
+    if let trace = baml.trace {
+        var buffer = BamlBuffer(); var owner: UInt64 = 0
+        guard BamlApi.traceSelection(callId, trace.key, &buffer, &owner) == BAML_CFFI_STATUS_OK.rawValue else { throw BamlDecodeError.unsupported("invalid trace selection") }
+        do { msg.invocation.trace = try BamlBridge_Cffi_V1_TraceSelection(serializedBytes: BamlApi.takeBuffer(buffer)) }
+        catch { if owner != 0 { _ = BamlApi.handleRelease(owner) }; throw error }
+    }
+    if let cancel = baml.cancel { msg.invocation.cancel = cancel().raw }
     msg.kwargs = args.map { name, value in
         var entry = BamlBridge_Cffi_V1_InboundMapEntry()
         entry.stringKey = name
@@ -362,6 +377,18 @@ func encodeCallArgs(
     }
     return try msg.serializedData()
     } catch {
+        func release(_ value: BamlBridge_Cffi_V1_InboundValue) {
+            switch value.value {
+            case .handle(let handle): if handle.handleType != .hostValueCallable && handle.handleType != .hostValueOpaque { _ = BamlApi.handleRelease(handle.key) }
+            case .classValue(let cls): for field in cls.fields { release(field.value) }
+            case .listValue(let list): for item in list.values { release(item) }
+            case .mapValue(let map): for entry in map.entries { release(entry.value) }
+            default: break
+            }
+        }
+        if case .reservation(let owner)? = msg.invocation.trace.selection { _ = BamlApi.handleRelease(owner) }
+        if msg.invocation.hasCancel { release(msg.invocation.cancel) }
+        for entry in msg.kwargs { release(entry.value) }
         _ = BamlApi.releaseFunctionCall(callId)
         throw error
     }

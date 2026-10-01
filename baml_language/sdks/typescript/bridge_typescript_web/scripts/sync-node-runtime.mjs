@@ -7,7 +7,7 @@ const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const nodeRuntime = resolve(packageRoot, "../bridge_typescript/typescript_src");
 const shared = resolve(packageRoot, "typescript_src/shared");
 const distProto = resolve(packageRoot, "dist/shared/proto");
-const files = ["call_context.ts", "define_function.ts", "errors.ts", "function_spec.ts", "host_value_registry.ts", "proto.ts", "stream.ts", "typemap.ts", "wire_ty.ts"];
+const files = ["invocation.ts", "call_context.ts", "define_function.ts", "errors.ts", "function_spec.ts", "host_value_registry.ts", "proto.ts", "stream.ts", "typemap.ts", "wire_ty.ts"];
 
 rmSync(shared, { recursive: true, force: true });
 mkdirSync(shared, { recursive: true });
@@ -28,7 +28,8 @@ writeFileSync(
   resolve(shared, "platform.ts"),
   readFileSync(resolve(packageRoot, "typescript_src/platform.ts"), "utf8")
     .replaceAll("from './native.js'", "from '../native.js'")
-    .replaceAll("from './shared/errors.js'", "from './errors.js'"),
+    .replaceAll("from './shared/errors.js'", "from './errors.js'")
+    .replaceAll("from './shared/invocation.js'", "from './invocation.js'"),
 );
 for (const file of [...files, "platform.ts"]) {
   const source = readFileSync(resolve(shared, file), "utf8");

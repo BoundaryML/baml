@@ -302,6 +302,9 @@ pub(crate) enum GeneratorIdent {
     WriterParam,
     SetterValueParam,
     OptsParam,
+    BamlParam,
+    BamlOptions,
+    InvocationNamespace,
     EnsureRuntime,
     DetailNamespace,
 }
@@ -313,6 +316,9 @@ impl GeneratorIdent {
             GeneratorIdent::WriterParam => "w",
             GeneratorIdent::SetterValueParam => "v",
             GeneratorIdent::OptsParam => "opts",
+            GeneratorIdent::BamlParam => "baml",
+            GeneratorIdent::BamlOptions => "baml_options",
+            GeneratorIdent::InvocationNamespace => "invocation",
             GeneratorIdent::EnsureRuntime => "ensure_runtime",
             GeneratorIdent::DetailNamespace => "detail",
         }
@@ -326,12 +332,15 @@ const CALLABLE_RESERVED: &[GeneratorIdent] = &[
     GeneratorIdent::WriterParam,
     GeneratorIdent::SetterValueParam,
     GeneratorIdent::OptsParam,
+    GeneratorIdent::BamlParam,
 ];
 
 /// Tokens reserved in *namespace* scopes.
 const NAMESPACE_RESERVED: &[GeneratorIdent] = &[
     GeneratorIdent::EnsureRuntime,
     GeneratorIdent::DetailNamespace,
+    GeneratorIdent::BamlOptions,
+    GeneratorIdent::InvocationNamespace,
 ];
 
 fn reserved_in(scope_kind: CppNameKind, token: &str) -> bool {

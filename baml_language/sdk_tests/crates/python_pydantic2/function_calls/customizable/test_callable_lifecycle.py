@@ -7,7 +7,7 @@ of the shared contract. Callbacks may finish after their BAML waiter is gone.
 import asyncio
 
 import pytest
-from baml_bridge import BamlCallContext
+from baml_sdk.baml.spawn import CancelToken
 from baml_sdk import host_callable_tests as baml
 
 
@@ -44,7 +44,7 @@ async def test_returned_closure_preserves_callback_error_and_remains_reusable():
 
 @pytest.mark.asyncio
 async def test_cancelled_waiter_stays_cancelled_when_callback_returns_late():
-    controller = BamlCallContext()
+    controller = CancelToken.new()
     entered, release, exited = (asyncio.Event() for _ in range(3))
 
     async def callback(value):
@@ -59,11 +59,11 @@ async def test_cancelled_waiter_stays_cancelled_when_callback_returns_late():
         return value
 
     call = asyncio.create_task(
-        baml.call_int_callback_async(callback, 1, _ctx=controller)
+        baml.call_int_callback_async(callback, 1, _baml={"cancel": controller})
     )
     try:
         await asyncio.wait_for(entered.wait(), 3)
-        controller.abort()
+        controller.cancel()
         with pytest.raises(asyncio.CancelledError):
             await call
         release.set()
@@ -74,5 +74,5 @@ async def test_cancelled_waiter_stays_cancelled_when_callback_returns_late():
         assert await baml.call_int_callback_async(lambda value: value, 2) == 2
     finally:
         release.set()
-        controller.abort()
+        controller.cancel()
         await asyncio.gather(call, return_exceptions=True)

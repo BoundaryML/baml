@@ -139,6 +139,14 @@ fn to_source_code_internal(
     // Group symbols per package. BTreeMap/BTreeSet for deterministic
     // output independent of the pool's HashMap iteration order.
     let mut sink = UnionSink::default();
+    for (name, symbol) in pool {
+        if !matches!(symbol, Symbol::Function(_)) {
+            sink.reserved
+                .entry(route(name))
+                .or_default()
+                .insert(java_identifier(name.name().as_str()));
+        }
+    }
     // Typemap entries generated into Baml.java's static initializer:
     // (BAML FQN, Java binary name, per-kind payload). Field order is
     // carried explicitly because the JVM does not guarantee
@@ -396,6 +404,8 @@ fn to_source_code_internal(
     let anchor_body = format!(
         "/**\n * Runtime anchor for the generated SDK: loading this class registers\n * the type map (BAML FQN \u{2194} generated class, with field declaration\n * order) and initializes the BAML runtime from the embedded bytecode\n * resource (idempotent) \u{2014} the Java analog of Python's root-package\n * import side effect. Every generated binding holder forces this via\n * {{@link #ensure()}}.\n */\npublic final class {anchor_ident} {{\n    private {anchor_ident}() {{}}\n\n    static {{\n{registrations}        try (java.io.InputStream in = {anchor_ident}.class.getResourceAsStream(\"/baml_sdk/inlinedbaml.b64\")) {{\n            if (in == null) {{\n                throw new IllegalStateException(\n                        \"baml_sdk/inlinedbaml.b64 not found on the classpath \u{2014} is the generated resource root registered?\");\n            }}\n            byte[] bytecode = in.readAllBytes();\n            baml_bridge.BamlFfi.initFromBytecode(bytecode);\n        }} catch (java.io.IOException e) {{\n            throw new java.io.UncheckedIOException(\"failed to read embedded BAML bytecode\", e);\n        }}\n    }}\n\n    /** Forces class initialization (and thus runtime init). No-op afterwards. */\n    public static void ensure() {{}}\n}}\n"
     );
+    let anchor_body = anchor_body.replace("    public static void ensure() {}", "    public static void ensure() {}\n    public static Object invoke(Target target, java.util.Map<String,Object> arguments, baml_bridge.BamlTypes types, BamlOptions baml) { ensure(); return baml_bridge.BamlFfi.invoke(target.bridgeTarget(), arguments, types, baml); }\n    public static java.util.concurrent.CompletableFuture<Object> invokeAsync(Target target, java.util.Map<String,Object> arguments, baml_bridge.BamlTypes types, BamlOptions baml) { ensure(); return baml_bridge.BamlFfi.invokeAsync(target.bridgeTarget(), arguments, types, baml); }");
+    out.insert(java_file_path(&root, "Target"), with_package(&root, "public final class Target { private final baml_bridge.DynamicTarget target; private Target(baml_bridge.DynamicTarget target) { this.target = target; } public static Target named(String name) { return new Target(baml_bridge.DynamicTarget.named(name)); } public static Target callable(Object callable) { return new Target(baml_bridge.BamlFfi.callableTarget(callable)); } baml_bridge.DynamicTarget bridgeTarget() { return target; } }\n"));
     let anchor_body = if embedded_baml_toml.is_some() {
         anchor_body.replace(
             "            baml_bridge.BamlFfi.initFromBytecode(bytecode);",
@@ -410,6 +420,26 @@ fn to_source_code_internal(
         java_file_path(&root, anchor_ident),
         with_package(&root, &anchor_body),
     );
+
+    if pool
+        .keys()
+        .any(|name| name.to_string() == "baml.spawn.CancelToken")
+    {
+        out.insert(
+            java_file_path(&root, "BamlOptions"),
+            with_package(&root, include_str!("invocation_options.java")),
+        );
+        out.insert(
+            java_file_path(&root, "Invocation"),
+            with_package(&root, include_str!("invocation.java")),
+        );
+        let trace = PackagePath {
+            segments: vec!["vendor".into(), "trace".into()],
+        };
+        out.insert(java_file_path(&trace, "TraceSelection"), with_package(&trace, "public sealed interface TraceSelection permits Options, ReservedSpan { baml_bridge.BamlHandle bamlTraceHandle(); }\n"));
+    } else {
+        out.insert(java_file_path(&root, "BamlOptions"), with_package(&root, "public final class BamlOptions extends baml_bridge.InvocationOptions { private BamlOptions() { super(null, null, null); } public static BamlOptions empty() { return new BamlOptions(); } }\n"));
+    }
 
     // Compiled BAML bytecode as an embedded-bytecode text resource (base64
     // of an LZ4 frame), passed to the bridge as raw bytes and decoded

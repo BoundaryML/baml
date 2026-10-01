@@ -138,17 +138,24 @@ pub fn start_host_call_execution(execution: &External<HostExecutionLease>) -> Op
 #[napi(js_name = "_hostInvocationFrame", ts_args_type = "execution: object")]
 pub fn host_invocation_frame(
     execution: &External<HostExecutionLease>,
-) -> napi::Result<crate::handle::BamlHandle> {
+) -> napi::Result<(crate::handle::BamlHandle, Buffer)> {
     let state = execution.0.lock().unwrap();
     let frame = state
         .frame
         .as_ref()
         .ok_or_else(|| napi::Error::from_reason("callback already exited"))?;
     let key = crate::handle::handle_clone(frame.0.effective_state, "callback invocation capture")?;
-    Ok(crate::handle::BamlHandle::from_parts(
-        key,
-        BamlHandleType::InvocationState as i32,
-    ))
+    let invocation =
+        crate::handle::BamlHandle::from_parts(key, BamlHandleType::InvocationState as i32);
+    let cancel = bridge_cffi::control_projection::clone_outbound(
+        frame
+            .0
+            .cancel
+            .as_ref()
+            .ok_or_else(|| napi::Error::from_reason("callback has no effective token"))?,
+    )
+    .map_err(crate::errors::bridge_error_to_napi)?;
+    Ok((invocation, cancel.encode_to_vec().into()))
 }
 
 /// Close execution ownership only when the callback/Promise actually exits.

@@ -37,8 +37,17 @@ internal sealed class EncodedCallArguments : IDisposable
     private static void SetInvocation(CallFunctionArgs call)
     {
         call.Invocation ??= new InvocationOptions();
-        call.Invocation.InheritedState = InvocationFrame.Current.Value?.Key ?? 0;
+        call.Invocation.InheritedState = InvocationFrame.Current.Value?.State.Key ?? 0;
         call.Invocation.HostEnvironment = call.CallId;
+    }
+
+    internal void ApplyInvocation(global::Baml.Generated.V1.BamlInvocationPreparation prepared)
+    {
+        CallFunctionArgs call = CallFunctionArgs.Parser.ParseFrom(Bytes);
+        call.Invocation = prepared.Wire;
+        transfers.AddRange(prepared.Ownership.transfers);
+        prepared.Ownership.transfers.Clear();
+        Bytes = call.ToByteArray();
     }
 
     internal void SetBytes(byte[] bytes)

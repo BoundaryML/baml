@@ -16,87 +16,87 @@ import (
 // Go signature generated for every primitive and primitive literal currently
 // in scope, independently of runtime round-trip coverage.
 var (
-	_ func(context.Context) (int64, error)                      = baml_sdk.PrimitivesReturnInt
-	_ func(context.Context) (*big.Int, error)                   = baml_sdk.PrimitivesReturnBigint
-	_ func(context.Context) (float64, error)                    = baml_sdk.PrimitivesReturnFloat
-	_ func(context.Context) (string, error)                     = baml_sdk.PrimitivesReturnString
-	_ func(context.Context) (bool, error)                       = baml_sdk.PrimitivesReturnBool
-	_ func(context.Context) (baml_go.Null, error)               = baml_sdk.PrimitivesReturnNull
-	_ func(context.Context, int64) (int64, error)               = baml_sdk.PrimitivesRoundTripInt
-	_ func(context.Context, *big.Int) (*big.Int, error)         = baml_sdk.PrimitivesRoundTripBigint
-	_ func(context.Context, float64) (float64, error)           = baml_sdk.PrimitivesRoundTripFloat
-	_ func(context.Context, string) (string, error)             = baml_sdk.PrimitivesRoundTripString
-	_ func(context.Context, bool) (bool, error)                 = baml_sdk.PrimitivesRoundTripBool
-	_ func(context.Context, baml_go.Null) (baml_go.Null, error) = baml_sdk.PrimitivesRoundTripNull
-	_ func(context.Context, []byte) ([]byte, error)             = baml_sdk.PrimitivesRoundTripUint8Array
+	_ func(context.Context, ...baml_go.CallOption) (int64, error)                      = baml_sdk.PrimitivesReturnInt
+	_ func(context.Context, ...baml_go.CallOption) (*big.Int, error)                   = baml_sdk.PrimitivesReturnBigint
+	_ func(context.Context, ...baml_go.CallOption) (float64, error)                    = baml_sdk.PrimitivesReturnFloat
+	_ func(context.Context, ...baml_go.CallOption) (string, error)                     = baml_sdk.PrimitivesReturnString
+	_ func(context.Context, ...baml_go.CallOption) (bool, error)                       = baml_sdk.PrimitivesReturnBool
+	_ func(context.Context, ...baml_go.CallOption) (baml_go.Null, error)               = baml_sdk.PrimitivesReturnNull
+	_ func(context.Context, int64, ...baml_go.CallOption) (int64, error)               = baml_sdk.PrimitivesRoundTripInt
+	_ func(context.Context, *big.Int, ...baml_go.CallOption) (*big.Int, error)         = baml_sdk.PrimitivesRoundTripBigint
+	_ func(context.Context, float64, ...baml_go.CallOption) (float64, error)           = baml_sdk.PrimitivesRoundTripFloat
+	_ func(context.Context, string, ...baml_go.CallOption) (string, error)             = baml_sdk.PrimitivesRoundTripString
+	_ func(context.Context, bool, ...baml_go.CallOption) (bool, error)                 = baml_sdk.PrimitivesRoundTripBool
+	_ func(context.Context, baml_go.Null, ...baml_go.CallOption) (baml_go.Null, error) = baml_sdk.PrimitivesRoundTripNull
+	_ func(context.Context, []byte, ...baml_go.CallOption) ([]byte, error)             = baml_sdk.PrimitivesRoundTripUint8Array
 
-	_ func(context.Context) (int64, error)          = baml_sdk.LiteralsReturnLiteral42
-	_ func(context.Context) (int64, error)          = baml_sdk.LiteralsReturnLiteralNegOne
-	_ func(context.Context) (string, error)         = baml_sdk.LiteralsReturnLiteralDraft
-	_ func(context.Context) (string, error)         = baml_sdk.LiteralsReturnLiteralEscaped
-	_ func(context.Context) (bool, error)           = baml_sdk.LiteralsReturnLiteralTrue
-	_ func(context.Context) (bool, error)           = baml_sdk.LiteralsReturnLiteralFalse
-	_ func(context.Context, int64) (int64, error)   = baml_sdk.LiteralsRoundTripLiteral42
-	_ func(context.Context, string) (string, error) = baml_sdk.LiteralsRoundTripLiteralDraft
-	_ func(context.Context, string) (string, error) = baml_sdk.LiteralsRoundTripLiteralEscaped
-	_ func(context.Context, bool) (bool, error)     = baml_sdk.LiteralsRoundTripLiteralTrue
-	_ func(context.Context, bool) (bool, error)     = baml_sdk.LiteralsRoundTripLiteralFalse
+	_ func(context.Context, ...baml_go.CallOption) (int64, error)          = baml_sdk.LiteralsReturnLiteral42
+	_ func(context.Context, ...baml_go.CallOption) (int64, error)          = baml_sdk.LiteralsReturnLiteralNegOne
+	_ func(context.Context, ...baml_go.CallOption) (string, error)         = baml_sdk.LiteralsReturnLiteralDraft
+	_ func(context.Context, ...baml_go.CallOption) (string, error)         = baml_sdk.LiteralsReturnLiteralEscaped
+	_ func(context.Context, ...baml_go.CallOption) (bool, error)           = baml_sdk.LiteralsReturnLiteralTrue
+	_ func(context.Context, ...baml_go.CallOption) (bool, error)           = baml_sdk.LiteralsReturnLiteralFalse
+	_ func(context.Context, int64, ...baml_go.CallOption) (int64, error)   = baml_sdk.LiteralsRoundTripLiteral42
+	_ func(context.Context, string, ...baml_go.CallOption) (string, error) = baml_sdk.LiteralsRoundTripLiteralDraft
+	_ func(context.Context, string, ...baml_go.CallOption) (string, error) = baml_sdk.LiteralsRoundTripLiteralEscaped
+	_ func(context.Context, bool, ...baml_go.CallOption) (bool, error)     = baml_sdk.LiteralsRoundTripLiteralTrue
+	_ func(context.Context, bool, ...baml_go.CallOption) (bool, error)     = baml_sdk.LiteralsRoundTripLiteralFalse
 
-	_ func(context.Context) error = baml_sdk.VoidNoOp
+	_ func(context.Context, ...baml_go.CallOption) error = baml_sdk.VoidNoOp
 
-	_ func(context.Context, string) (string, error)                                                                                           = baml_sdk.GoCodegenLeftEcho
-	_ func(context.Context, string) (string, error)                                                                                           = baml_sdk.GoCodegenRightEcho
-	_ func(context.Context, string, int64, bool, string, string, string, string, string, string, string) (string, error)                      = baml_sdk.GoCodegenNestedReservedArgs
-	_ func(context.Context, *big.Int) (*big.Int, error)                                                                                       = baml_sdk.GoCodegenPrimitiveEdgesRoundTripLiteralBigint
-	_ func(context.Context, string, string, string, string, string, string, string, string, string, string) (string, error)                   = baml_sdk.GoCodegenPrimitiveEdgesProtectedLocalNames
-	_ func(context.Context, *big.Int, int64, float64, []byte, string, string) (*big.Int, error)                                               = baml_sdk.GoCodegenPrimitiveEdgesReservedTypeNames
-	_ func(context.Context, baml_sdk.GoCodegenPrimitiveEdgesWirePrimitives) (baml_sdk.GoCodegenPrimitiveEdgesWirePrimitives, error)           = baml_sdk.GoCodegenPrimitiveEdgesRoundTripWirePrimitives
-	_ func(context.Context, int64) (baml_sdk.ClassRefsOuter, error)                                                                           = baml_sdk.ClassRefsMakeOuter
-	_ func(context.Context, baml_sdk.ClassRefsOuter) (baml_sdk.ClassRefsOuter, error)                                                         = baml_sdk.ClassRefsRoundTripOuter
-	_ func(context.Context, *string) (*string, error)                                                                                         = baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalString
-	_ func(context.Context, *int64) (*int64, error)                                                                                           = baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalInt
-	_ func(context.Context, *big.Int) (*big.Int, error)                                                                                       = baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalBigint
-	_ func(context.Context, *float64) (*float64, error)                                                                                       = baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalFloat
-	_ func(context.Context, *bool) (*bool, error)                                                                                             = baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalBool
-	_ func(context.Context, *[]byte) (*[]byte, error)                                                                                         = baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalBytes
-	_ func(context.Context, *baml_sdk.GoCodegenPrimitiveEdgesWirePrimitives) (*baml_sdk.GoCodegenPrimitiveEdgesWirePrimitives, error)         = baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalClass
-	_ func(context.Context, baml_sdk.GoCodegenPrimitiveEdgesNullableWire) (baml_sdk.GoCodegenPrimitiveEdgesNullableWire, error)               = baml_sdk.GoCodegenPrimitiveEdgesRoundTripNullableWire
-	_ func(context.Context, []int64) ([]int64, error)                                                                                         = baml_sdk.ListsRoundTripInts
-	_ func(context.Context, []*string) ([]*string, error)                                                                                     = baml_sdk.ListsRoundTripOptionalStrings
-	_ func(context.Context, map[string]int64) (map[string]int64, error)                                                                       = baml_sdk.MapsRoundTripSimpleMap
-	_ func(context.Context, map[string]baml_sdk.MapsResume) (map[string]baml_sdk.MapsResume, error)                                           = baml_sdk.MapsRoundTripEnumKeyedMap
-	_ func(context.Context, map[string][]int64) (map[string][]int64, error)                                                                   = baml_sdk.MapsRoundTripListValuedMap
-	_ func(context.Context, baml_sdk.MapsMapContainer) (baml_sdk.MapsMapContainer, error)                                                     = baml_sdk.MapsRoundTripMapContainer
-	_ func(context.Context, *[]int64) (*[]int64, error)                                                                                       = baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalList
-	_ func(context.Context, *map[string]int64) (*map[string]int64, error)                                                                     = baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalMap
-	_ func(context.Context, *[]*string) (*[]*string, error)                                                                                   = baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalListOfOptional
-	_ func(context.Context, *string) (*string, error)                                                                                         = baml_sdk.GoCodegenPrimitiveEdgesRoundTripRepeatedNull
-	_ func(context.Context, baml_sdk.GoCodegenPrimitiveEdgesNullableContainers) (baml_sdk.GoCodegenPrimitiveEdgesNullableContainers, error)   = baml_sdk.GoCodegenPrimitiveEdgesRoundTripNullableContainers
-	_ func(context.Context, baml_sdk.GoCodegenPrimitiveEdgesContainerTree) (baml_sdk.GoCodegenPrimitiveEdgesContainerTree, error)             = baml_sdk.GoCodegenPrimitiveEdgesRoundTripContainerTree
-	_ func(context.Context, baml_sdk.GoCodegenPrimitiveEdgesContainerLeafMatrix) (baml_sdk.GoCodegenPrimitiveEdgesContainerLeafMatrix, error) = baml_sdk.GoCodegenPrimitiveEdgesRoundTripContainerLeafMatrix
+	_ func(context.Context, string, ...baml_go.CallOption) (string, error)                                                                                           = baml_sdk.GoCodegenLeftEcho
+	_ func(context.Context, string, ...baml_go.CallOption) (string, error)                                                                                           = baml_sdk.GoCodegenRightEcho
+	_ func(context.Context, string, int64, bool, string, string, string, string, string, string, string, ...baml_go.CallOption) (string, error)                      = baml_sdk.GoCodegenNestedReservedArgs
+	_ func(context.Context, *big.Int, ...baml_go.CallOption) (*big.Int, error)                                                                                       = baml_sdk.GoCodegenPrimitiveEdgesRoundTripLiteralBigint
+	_ func(context.Context, string, string, string, string, string, string, string, string, string, string, ...baml_go.CallOption) (string, error)                   = baml_sdk.GoCodegenPrimitiveEdgesProtectedLocalNames
+	_ func(context.Context, *big.Int, int64, float64, []byte, string, string, ...baml_go.CallOption) (*big.Int, error)                                               = baml_sdk.GoCodegenPrimitiveEdgesReservedTypeNames
+	_ func(context.Context, baml_sdk.GoCodegenPrimitiveEdgesWirePrimitives, ...baml_go.CallOption) (baml_sdk.GoCodegenPrimitiveEdgesWirePrimitives, error)           = baml_sdk.GoCodegenPrimitiveEdgesRoundTripWirePrimitives
+	_ func(context.Context, int64, ...baml_go.CallOption) (baml_sdk.ClassRefsOuter, error)                                                                           = baml_sdk.ClassRefsMakeOuter
+	_ func(context.Context, baml_sdk.ClassRefsOuter, ...baml_go.CallOption) (baml_sdk.ClassRefsOuter, error)                                                         = baml_sdk.ClassRefsRoundTripOuter
+	_ func(context.Context, *string, ...baml_go.CallOption) (*string, error)                                                                                         = baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalString
+	_ func(context.Context, *int64, ...baml_go.CallOption) (*int64, error)                                                                                           = baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalInt
+	_ func(context.Context, *big.Int, ...baml_go.CallOption) (*big.Int, error)                                                                                       = baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalBigint
+	_ func(context.Context, *float64, ...baml_go.CallOption) (*float64, error)                                                                                       = baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalFloat
+	_ func(context.Context, *bool, ...baml_go.CallOption) (*bool, error)                                                                                             = baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalBool
+	_ func(context.Context, *[]byte, ...baml_go.CallOption) (*[]byte, error)                                                                                         = baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalBytes
+	_ func(context.Context, *baml_sdk.GoCodegenPrimitiveEdgesWirePrimitives, ...baml_go.CallOption) (*baml_sdk.GoCodegenPrimitiveEdgesWirePrimitives, error)         = baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalClass
+	_ func(context.Context, baml_sdk.GoCodegenPrimitiveEdgesNullableWire, ...baml_go.CallOption) (baml_sdk.GoCodegenPrimitiveEdgesNullableWire, error)               = baml_sdk.GoCodegenPrimitiveEdgesRoundTripNullableWire
+	_ func(context.Context, []int64, ...baml_go.CallOption) ([]int64, error)                                                                                         = baml_sdk.ListsRoundTripInts
+	_ func(context.Context, []*string, ...baml_go.CallOption) ([]*string, error)                                                                                     = baml_sdk.ListsRoundTripOptionalStrings
+	_ func(context.Context, map[string]int64, ...baml_go.CallOption) (map[string]int64, error)                                                                       = baml_sdk.MapsRoundTripSimpleMap
+	_ func(context.Context, map[string]baml_sdk.MapsResume, ...baml_go.CallOption) (map[string]baml_sdk.MapsResume, error)                                           = baml_sdk.MapsRoundTripEnumKeyedMap
+	_ func(context.Context, map[string][]int64, ...baml_go.CallOption) (map[string][]int64, error)                                                                   = baml_sdk.MapsRoundTripListValuedMap
+	_ func(context.Context, baml_sdk.MapsMapContainer, ...baml_go.CallOption) (baml_sdk.MapsMapContainer, error)                                                     = baml_sdk.MapsRoundTripMapContainer
+	_ func(context.Context, *[]int64, ...baml_go.CallOption) (*[]int64, error)                                                                                       = baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalList
+	_ func(context.Context, *map[string]int64, ...baml_go.CallOption) (*map[string]int64, error)                                                                     = baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalMap
+	_ func(context.Context, *[]*string, ...baml_go.CallOption) (*[]*string, error)                                                                                   = baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalListOfOptional
+	_ func(context.Context, *string, ...baml_go.CallOption) (*string, error)                                                                                         = baml_sdk.GoCodegenPrimitiveEdgesRoundTripRepeatedNull
+	_ func(context.Context, baml_sdk.GoCodegenPrimitiveEdgesNullableContainers, ...baml_go.CallOption) (baml_sdk.GoCodegenPrimitiveEdgesNullableContainers, error)   = baml_sdk.GoCodegenPrimitiveEdgesRoundTripNullableContainers
+	_ func(context.Context, baml_sdk.GoCodegenPrimitiveEdgesContainerTree, ...baml_go.CallOption) (baml_sdk.GoCodegenPrimitiveEdgesContainerTree, error)             = baml_sdk.GoCodegenPrimitiveEdgesRoundTripContainerTree
+	_ func(context.Context, baml_sdk.GoCodegenPrimitiveEdgesContainerLeafMatrix, ...baml_go.CallOption) (baml_sdk.GoCodegenPrimitiveEdgesContainerLeafMatrix, error) = baml_sdk.GoCodegenPrimitiveEdgesRoundTripContainerLeafMatrix
 
-	_ func(context.Context, bool) (baml_sdk.EnumsSentiment, error)                                                                = baml_sdk.EnumsPickSentiment
-	_ func(context.Context) (baml_sdk.EnumsSentiment, error)                                                                      = baml_sdk.EnumsPickPositive
-	_ func(context.Context, baml_sdk.EnumsSentiment) (baml_sdk.EnumsSentiment, error)                                             = baml_sdk.EnumsRoundTripSentiment
-	_ func(context.Context, baml_sdk.EnumsSentiment) (baml_sdk.EnumsSentiment, error)                                             = baml_sdk.EnumsRoundTripSentimentPositive
-	_ func(context.Context, baml_sdk.EnumsEnums) (baml_sdk.EnumsEnums, error)                                                     = baml_sdk.EnumsRoundTripEnums
-	_ func(context.Context, baml_sdk.MapsSentiment) (baml_sdk.MapsSentiment, error)                                               = baml_sdk.MapsRoundTripSentiment
-	_ func(context.Context, baml_sdk.GoCodegenEnumEdgesResponseState) (baml_sdk.GoCodegenEnumEdgesResponseState, error)           = baml_sdk.GoCodegenEnumEdgesRoundTripState
-	_ func(context.Context, *baml_sdk.GoCodegenEnumEdgesResponseState) (*baml_sdk.GoCodegenEnumEdgesResponseState, error)         = baml_sdk.GoCodegenEnumEdgesRoundTripOptionalState
-	_ func(context.Context, baml_sdk.GoCodegenEnumEdgesEnumMatrix) (baml_sdk.GoCodegenEnumEdgesEnumMatrix, error)                 = baml_sdk.GoCodegenEnumEdgesRoundTripMatrix
-	_ func(context.Context, ...baml_sdk.GoCodegenEnumEdgesDefaultedStateOption) (baml_sdk.GoCodegenEnumEdgesResponseState, error) = baml_sdk.GoCodegenEnumEdgesDefaultedState
-	_ func(baml_sdk.GoCodegenEnumEdgesResponseState) baml_sdk.GoCodegenEnumEdgesDefaultedStateOption                              = baml_sdk.WithGoCodegenEnumEdgesDefaultedStateValue
+	_ func(context.Context, bool, ...baml_go.CallOption) (baml_sdk.EnumsSentiment, error)                                                        = baml_sdk.EnumsPickSentiment
+	_ func(context.Context, ...baml_go.CallOption) (baml_sdk.EnumsSentiment, error)                                                              = baml_sdk.EnumsPickPositive
+	_ func(context.Context, baml_sdk.EnumsSentiment, ...baml_go.CallOption) (baml_sdk.EnumsSentiment, error)                                     = baml_sdk.EnumsRoundTripSentiment
+	_ func(context.Context, baml_sdk.EnumsSentiment, ...baml_go.CallOption) (baml_sdk.EnumsSentiment, error)                                     = baml_sdk.EnumsRoundTripSentimentPositive
+	_ func(context.Context, baml_sdk.EnumsEnums, ...baml_go.CallOption) (baml_sdk.EnumsEnums, error)                                             = baml_sdk.EnumsRoundTripEnums
+	_ func(context.Context, baml_sdk.MapsSentiment, ...baml_go.CallOption) (baml_sdk.MapsSentiment, error)                                       = baml_sdk.MapsRoundTripSentiment
+	_ func(context.Context, baml_sdk.GoCodegenEnumEdgesResponseState, ...baml_go.CallOption) (baml_sdk.GoCodegenEnumEdgesResponseState, error)   = baml_sdk.GoCodegenEnumEdgesRoundTripState
+	_ func(context.Context, *baml_sdk.GoCodegenEnumEdgesResponseState, ...baml_go.CallOption) (*baml_sdk.GoCodegenEnumEdgesResponseState, error) = baml_sdk.GoCodegenEnumEdgesRoundTripOptionalState
+	_ func(context.Context, baml_sdk.GoCodegenEnumEdgesEnumMatrix, ...baml_go.CallOption) (baml_sdk.GoCodegenEnumEdgesEnumMatrix, error)         = baml_sdk.GoCodegenEnumEdgesRoundTripMatrix
+	_ func(context.Context, ...baml_sdk.GoCodegenEnumEdgesDefaultedStateOption) (baml_sdk.GoCodegenEnumEdgesResponseState, error)                = baml_sdk.GoCodegenEnumEdgesDefaultedState
+	_ func(baml_sdk.GoCodegenEnumEdgesResponseState) baml_sdk.GoCodegenEnumEdgesDefaultedStateOption                                             = baml_sdk.WithGoCodegenEnumEdgesDefaultedStateValue
 
-	_ func(context.Context, baml_sdk.AliasesStringList) (baml_sdk.AliasesStringList, error)                                 = baml_sdk.AliasesRoundTripStringList
-	_ func(context.Context, baml_sdk.GoCodegenAliasEdgesTextChain) (baml_sdk.GoCodegenAliasEdgesTextChain, error)           = baml_sdk.GoCodegenAliasEdgesRoundTripText
-	_ func(context.Context, *baml_sdk.GoCodegenAliasEdgesTextChain) (*baml_sdk.GoCodegenAliasEdgesTextChain, error)         = baml_sdk.GoCodegenAliasEdgesRoundTripOptionalText
-	_ func(context.Context, baml_sdk.GoCodegenAliasEdgesOptionalState) (baml_sdk.GoCodegenAliasEdgesOptionalState, error)   = baml_sdk.GoCodegenAliasEdgesRoundTripOptionalState
-	_ func(context.Context, baml_sdk.GoCodegenAliasEdgesBigNumber) (baml_sdk.GoCodegenAliasEdgesBigNumber, error)           = baml_sdk.GoCodegenAliasEdgesRoundTripOptionalBigNumber
-	_ func(context.Context, baml_sdk.GoCodegenAliasEdgesStates) (baml_sdk.GoCodegenAliasEdgesStates, error)                 = baml_sdk.GoCodegenAliasEdgesRoundTripStates
-	_ func(context.Context, baml_sdk.GoCodegenAliasEdgesStatesByKey) (baml_sdk.GoCodegenAliasEdgesStatesByKey, error)       = baml_sdk.GoCodegenAliasEdgesRoundTripStatesByKey
-	_ func(context.Context, baml_sdk.GoCodegenAliasEdgesOptionalStates) (baml_sdk.GoCodegenAliasEdgesOptionalStates, error) = baml_sdk.GoCodegenAliasEdgesRoundTripOptionalStates
-	_ func(context.Context, ...baml_sdk.GoCodegenAliasEdgesDefaultedStateOption) (baml_sdk.GoCodegenAliasEdgesState, error) = baml_sdk.GoCodegenAliasEdgesDefaultedState
-	_ func(baml_sdk.GoCodegenAliasEdgesState) baml_sdk.GoCodegenAliasEdgesDefaultedStateOption                              = baml_sdk.WithGoCodegenAliasEdgesDefaultedStateValue
+	_ func(context.Context, baml_sdk.AliasesStringList, ...baml_go.CallOption) (baml_sdk.AliasesStringList, error)                                 = baml_sdk.AliasesRoundTripStringList
+	_ func(context.Context, baml_sdk.GoCodegenAliasEdgesTextChain, ...baml_go.CallOption) (baml_sdk.GoCodegenAliasEdgesTextChain, error)           = baml_sdk.GoCodegenAliasEdgesRoundTripText
+	_ func(context.Context, *baml_sdk.GoCodegenAliasEdgesTextChain, ...baml_go.CallOption) (*baml_sdk.GoCodegenAliasEdgesTextChain, error)         = baml_sdk.GoCodegenAliasEdgesRoundTripOptionalText
+	_ func(context.Context, baml_sdk.GoCodegenAliasEdgesOptionalState, ...baml_go.CallOption) (baml_sdk.GoCodegenAliasEdgesOptionalState, error)   = baml_sdk.GoCodegenAliasEdgesRoundTripOptionalState
+	_ func(context.Context, baml_sdk.GoCodegenAliasEdgesBigNumber, ...baml_go.CallOption) (baml_sdk.GoCodegenAliasEdgesBigNumber, error)           = baml_sdk.GoCodegenAliasEdgesRoundTripOptionalBigNumber
+	_ func(context.Context, baml_sdk.GoCodegenAliasEdgesStates, ...baml_go.CallOption) (baml_sdk.GoCodegenAliasEdgesStates, error)                 = baml_sdk.GoCodegenAliasEdgesRoundTripStates
+	_ func(context.Context, baml_sdk.GoCodegenAliasEdgesStatesByKey, ...baml_go.CallOption) (baml_sdk.GoCodegenAliasEdgesStatesByKey, error)       = baml_sdk.GoCodegenAliasEdgesRoundTripStatesByKey
+	_ func(context.Context, baml_sdk.GoCodegenAliasEdgesOptionalStates, ...baml_go.CallOption) (baml_sdk.GoCodegenAliasEdgesOptionalStates, error) = baml_sdk.GoCodegenAliasEdgesRoundTripOptionalStates
+	_ func(context.Context, ...baml_sdk.GoCodegenAliasEdgesDefaultedStateOption) (baml_sdk.GoCodegenAliasEdgesState, error)                        = baml_sdk.GoCodegenAliasEdgesDefaultedState
+	_ func(baml_sdk.GoCodegenAliasEdgesState) baml_sdk.GoCodegenAliasEdgesDefaultedStateOption                                                     = baml_sdk.WithGoCodegenAliasEdgesDefaultedStateValue
 )
 
 var (
@@ -784,7 +784,7 @@ func Test_alias_package_scope_collisions_compile_and_run(t *testing.T) {
 
 func assertOptionalRoundTrip[T any](
 	t *testing.T,
-	roundTrip func(context.Context, *T) (*T, error),
+	roundTrip func(context.Context, *T, ...baml_go.CallOption) (*T, error),
 	want *T,
 ) {
 	t.Helper()

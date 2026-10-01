@@ -266,6 +266,20 @@ impl NameScope {
                 || generated_package_aliases.contains(candidate.name.as_ref())))
             || (matches!(self, Self::Class(_))
                 && is_protected_go_identifier(candidate.name.as_ref()))
+            || (matches!(self, Self::Package(name) if name.as_str() == "user")
+                && matches!(
+                    candidate.name.as_ref(),
+                    "BamlOptions"
+                        | "WithOptions"
+                        | "CallOption"
+                        | "Invoke"
+                        | "Target"
+                        | "Arguments"
+                        | "TypeBindings"
+                        | "Value"
+                        | "NamedTarget"
+                        | "FunctionTarget"
+                ))
         {
             candidate = candidate.with_trailing_underscore();
         }

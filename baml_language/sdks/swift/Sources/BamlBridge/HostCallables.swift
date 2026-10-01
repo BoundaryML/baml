@@ -214,10 +214,10 @@ private func completeHostCall(callId: UInt32, isError: Int32, payload: Data) {
 /// no-synchronous-re-entrancy rule is honored because the body runs
 /// on a detached Task).
 enum HostInvocationScope {
-    @TaskLocal static var state: BamlHandle?
+    @TaskLocal static var current: BamlInvocationCapture?
 }
 
-private func releaseControlValue(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) {
+func releaseControlValue(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) {
     switch value.value {
     case .handleValue(let handle):
         if handle.handleType != .hostValueCallable && handle.handleType != .hostValueOpaque {
@@ -233,12 +233,12 @@ private func releaseControlValue(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) 
 
 private final class HostInvocationFrame: @unchecked Sendable {
     let wire: BamlBridge_Cffi_V1_HostInvocation
-    let state: BamlHandle
+    let capture: BamlInvocationCapture
     init(_ wire: BamlBridge_Cffi_V1_HostInvocation) {
         self.wire = wire
-        state = BamlHandle(key: wire.effectiveState, handleType: .invocationState)
+        capture = BamlInvocationCapture(state: BamlHandle(key: wire.effectiveState, handleType: .invocationState), cancel: wire.cancel)
     }
-    deinit { if wire.hasCancel { releaseControlValue(wire.cancel) } }
+
 }
 
 private final class HostInvocationTasks: @unchecked Sendable {
@@ -248,7 +248,7 @@ private final class HostInvocationTasks: @unchecked Sendable {
     func launch(_ frame: HostInvocationFrame) {
         lock.lock()
         let task = Task.detached {
-            await HostInvocationScope.$state.withValue(frame.state) {
+            await HostInvocationScope.$current.withValue(frame.capture) {
                 await HostCallableRegistry.shared.dispatch(key: frame.wire.hostValueKey, callId: frame.wire.callbackID, argsData: frame.wire.applicationArgs)
             }
             self.remove(frame.wire.callbackID)

@@ -44,8 +44,8 @@ func (stream Stream[T]) BAMLInput() Input {
 }
 
 // Next yields one partial. done is true only for ai.stream.Done.
-func (stream Stream[T]) Next(ctx context.Context) (partial T, done bool, err error) {
-	value, err := Call(ctx, "ai.stream.Stream.next", map[string]Input{"self": stream.BAMLInput()})
+func (stream Stream[T]) Next(ctx context.Context, options ...CallOption) (partial T, done bool, err error) {
+	value, err := Call(ctx, "ai.stream.Stream.next", map[string]Input{"self": stream.BAMLInput()}, options...)
 	if err != nil {
 		return partial, false, err
 	}
@@ -61,8 +61,8 @@ func (stream Stream[T]) Next(ctx context.Context) (partial T, done bool, err err
 }
 
 // Final returns the settled stream value.
-func (stream Stream[T]) Final(ctx context.Context) (T, error) {
-	value, err := Call(ctx, "ai.stream.Stream.final", map[string]Input{"self": stream.BAMLInput()})
+func (stream Stream[T]) Final(ctx context.Context, options ...CallOption) (T, error) {
+	value, err := Call(ctx, "ai.stream.Stream.final", map[string]Input{"self": stream.BAMLInput()}, options...)
 	if err != nil {
 		var zero T
 		return zero, err

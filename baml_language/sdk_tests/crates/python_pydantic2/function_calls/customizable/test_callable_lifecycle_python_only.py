@@ -10,7 +10,8 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from baml_bridge import BamlCallContext, BamlCancelledError
+from baml_bridge import BamlCancelledError
+from baml_sdk.baml.spawn import CancelToken
 from baml_sdk import host_callable_tests as baml
 
 
@@ -122,7 +123,7 @@ async def test_closure_call_async_cancels_its_retained_callback_python_only():
 # SDK_PARITY_LINT(skip): Python callback cancellation under an explicit controller
 @pytest.mark.asyncio
 async def test_repeated_abort_does_not_interrupt_async_callback_cleanup_python_only():
-    controller = BamlCallContext()
+    controller = CancelToken.new()
     entered, cleaning, release, exited = (asyncio.Event() for _ in range(4))
 
     async def callback(value):
@@ -135,13 +136,13 @@ async def test_repeated_abort_does_not_interrupt_async_callback_cleanup_python_o
             exited.set()
 
     call = asyncio.create_task(
-        baml.call_int_callback_async(callback, 1, _ctx=controller)
+        baml.call_int_callback_async(callback, 1, _baml={"cancel": controller})
     )
     try:
         await asyncio.wait_for(entered.wait(), 3)
-        controller.abort()
+        controller.cancel()
         await asyncio.wait_for(cleaning.wait(), 3)
-        controller.abort()
+        controller.cancel()
         await asyncio.sleep(0)
         assert not exited.is_set()
         release.set()
@@ -156,7 +157,7 @@ async def test_repeated_abort_does_not_interrupt_async_callback_cleanup_python_o
 
 # SDK_PARITY_LINT(skip): Python cancellation on a bridge-owned callback loop
 def test_sync_entry_cancellation_reaches_async_callback_on_worker_loop_python_only():
-    controller = BamlCallContext()
+    controller = CancelToken.new()
     entered, exited = threading.Event(), threading.Event()
 
     async def callback(value):
@@ -167,11 +168,11 @@ def test_sync_entry_cancellation_reaches_async_callback_on_worker_loop_python_on
             exited.set()
 
     with ThreadPoolExecutor(max_workers=1) as pool:
-        call = pool.submit(baml.call_int_callback, callback, 1, _ctx=controller)
+        call = pool.submit(baml.call_int_callback, callback, 1, _baml={"cancel": controller})
         try:
             assert entered.wait(3)
         finally:
-            controller.abort()
+            controller.cancel()
         with pytest.raises(BamlCancelledError):
             call.result(timeout=3)
         assert exited.wait(3)

@@ -337,7 +337,63 @@ fn to_source_code_with_optional_metadata(
         }
     }
 
+    let has_invocation_types = analysis
+        .emitted
+        .iter()
+        .any(|name| name.to_string() == "baml.spawn.CancelToken")
+        && analysis
+            .emitted
+            .iter()
+            .any(|name| name.to_string() == "trace.Options");
+    let invocation_root = if has_invocation_types {
+        quote! {
+            mod _invocation;
+            pub use _invocation::BamlOptions;
+            pub use vendor::trace;
+            pub use ::baml_bridge::dynamic::{Target, Arguments, TypeBindings, Input, Type, Value};
+            pub fn invoke(target: Target, args: Arguments, types: TypeBindings, baml: impl ::std::convert::Into<BamlOptions>) -> ::std::result::Result<Value, ::baml_bridge::Error<Value>> {
+                crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
+                ::baml_bridge::dynamic::invoke(target, args, types, ::std::convert::Into::<BamlOptions>::into(baml).into())
+            }
+            pub async fn invoke_async(target: Target, args: Arguments, types: TypeBindings, baml: impl ::std::convert::Into<BamlOptions>) -> ::std::result::Result<Value, ::baml_bridge::Error<Value>> {
+                crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
+                ::baml_bridge::dynamic::invoke_async(target, args, types, ::std::convert::Into::<BamlOptions>::into(baml).into()).await
+            }
+            pub mod invocation {
+                #[derive(Clone)]
+                pub struct Invocation(::baml_bridge::host_value::Invocation);
+                pub fn current() -> ::std::option::Option<Invocation> { ::baml_bridge::host_value::Invocation::current().map(Invocation) }
+                impl Invocation {
+                    pub fn cancel(&self) -> crate::baml::spawn::CancelToken { self.0.cancel() }
+                    pub fn run<T>(&self, body: impl FnOnce() -> T) -> T { self.0.run(body) }
+                    pub fn scope<F: ::std::future::Future>(&self, future: F) -> impl ::std::future::Future<Output = F::Output> + use<F> { self.0.scope(future) }
+                }
+            }
+        }
+    } else {
+        // Minimal unit-test pools omit bundled stdlib declarations.
+        quote! { pub type BamlOptions = ::baml_bridge::invocation::InvocationOptions; }
+    };
+    if has_invocation_types {
+        let trace_leaf = vec!["vendor".to_string(), "trace".to_string()];
+        leaves.entry(trace_leaf).or_default().push(LeafItem {
+            rank: 0, source_file_path: String::new(), span_start: 0,
+            tokens: quote! {
+                #[derive(Debug, Clone)]
+                pub enum Selection { Options(Options), ReservedSpan(ReservedSpan) }
+                impl From<Options> for Selection { fn from(value: Options) -> Self { Self::Options(value) } }
+                impl From<ReservedSpan> for Selection { fn from(value: ReservedSpan) -> Self { Self::ReservedSpan(value) } }
+            },
+        });
+    }
     let mut files = HashMap::new();
+    if has_invocation_types {
+        files.insert(
+            PathBuf::from("src/_invocation.rs"),
+            FileContent::Text(include_str!("invocation_facade.rs").to_string()),
+        );
+    }
+
     files.insert(
         PathBuf::from("Cargo.toml"),
         FileContent::Text(render_manifest(options)),
@@ -391,6 +447,7 @@ fn to_source_code_with_optional_metadata(
                     mod _runtime;
 
                     pub use _runtime::init;
+                    #invocation_root
 
                     #(#mod_decls)*
                     #(#item_tokens)*
@@ -791,7 +848,7 @@ mod tests {
         let lib = text(&generated, "src/lib.rs");
         assert_eq!(
             lib.matches("#[allow(clippy::too_many_arguments)]").count(),
-            2,
+            4,
             "both sync and async wrappers need the generated-code allowance:\n{lib}"
         );
     }
@@ -816,7 +873,7 @@ mod tests {
         let lib = text(&generated, "src/lib.rs");
         assert_eq!(
             lib.matches("#[allow(clippy::too_many_arguments)]").count(),
-            4,
+            6,
             "the sync/async stream bindings and their options variants need the allowance:\n{lib}"
         );
     }
@@ -854,7 +911,7 @@ mod tests {
         // Exactly the sync + async bindings of `takes_one` carry the note;
         // `takes_none` has no arguments to mutate, so a count of 2 also
         // proves its absence there.
-        assert_eq!(lib.matches(note_head).count(), 2, "{lib}");
+        assert_eq!(lib.matches(note_head).count(), 4, "{lib}");
     }
 
     fn typevar(index: u32, name: &str) -> Ty {
@@ -933,7 +990,7 @@ mod tests {
                 "->::std::result::Result<T,::baml_bridge::Error<::core::convert::Infallible>>"
             )
             .count(),
-            2,
+            4,
             "return resolves to the type param on both bindings:\n{lib}"
         );
         // The concrete binding is sent explicitly, keyed by the TypeVar
@@ -942,7 +999,7 @@ mod tests {
             "::baml_bridge::encode::type_args(::std::vec![(\"T\",",
             "<Tas::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty()"
         );
-        assert_eq!(flat.matches(type_arg).count(), 2, "{lib}");
+        assert_eq!(flat.matches(type_arg).count(), 4, "{lib}");
     }
 
     #[test]
@@ -1230,7 +1287,7 @@ mod tests {
         );
         // `get` has no own params but still binds the class `T`:
         // 2 bindings each (sync + async) for `get` and `pair_with`.
-        assert_eq!(flat.matches("(\"T\",<Tas").count(), 4, "{lib}");
+        assert_eq!(flat.matches("(\"T\",<Tas").count(), 8, "{lib}");
     }
 
     #[test]
@@ -1265,7 +1322,7 @@ mod tests {
             "the static's own param instantiates the return:\n{lib}"
         );
         // Sync + async each bind exactly `V`; the class `T` is never sent.
-        assert_eq!(flat.matches("(\"V\",<Vas").count(), 2, "{lib}");
+        assert_eq!(flat.matches("(\"V\",<Vas").count(), 4, "{lib}");
         assert_eq!(flat.matches("(\"T\",<Tas").count(), 0, "{lib}");
     }
 

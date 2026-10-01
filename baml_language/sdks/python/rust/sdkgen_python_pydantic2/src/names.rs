@@ -224,7 +224,20 @@ impl PythonNames {
                     }
                 })
                 .collect();
-            for (entry, generated, reason) in allocate(entries, &[]) {
+            let reserved = if parent.is_empty() {
+                vec![
+                    "invocation",
+                    "_invocation_types",
+                    "trace",
+                    "BamlOptions",
+                    "Invocation",
+                    "invoke",
+                    "invoke_async",
+                ]
+            } else {
+                vec![]
+            };
+            for (entry, generated, reason) in allocate(entries, &reserved) {
                 let mut key = parent.clone();
                 key.push(entry.raw.clone());
                 self.module_segments.insert(key, generated.clone());
@@ -242,7 +255,7 @@ impl PythonNames {
                 .push((name, symbol));
         }
 
-        for (_leaf, mut symbols) in by_leaf {
+        for (leaf, mut symbols) in by_leaf {
             symbols.sort_by_key(|(name, _)| *name);
             let primaries = symbols
                 .iter()
@@ -267,7 +280,20 @@ impl PythonNames {
                 .collect();
 
             let mut used = HashSet::new();
-            for (entry, generated, reason) in allocate(primaries, &[]) {
+            let reserved = if leaf.segments.is_empty() {
+                vec![
+                    "_BamlOptions",
+                    "BamlOptions",
+                    "Invocation",
+                    "invocation",
+                    "invoke",
+                    "invoke_async",
+                    "trace",
+                ]
+            } else {
+                vec!["_BamlOptions"]
+            };
+            for (entry, generated, reason) in allocate(primaries, &reserved) {
                 used.insert(generated.clone());
                 let name = symbols
                     .iter()
@@ -471,7 +497,7 @@ impl PythonNames {
                     id: raw.clone(),
                     kind: "parameter".to_string(),
                     fqn: format!("{fqn}.{raw}"),
-                    protected: matches!(raw.as_str(), "_ctx" | "_types")
+                    protected: matches!(raw.as_str(), "_baml" | "_types")
                         .then_some(IdentifierRenameReason::HostControl),
                     raw,
                     report: is_reportable_user_fqn(fqn),
@@ -479,9 +505,9 @@ impl PythonNames {
             })
             .collect();
         let reserved = if instance {
-            vec!["self", "_ctx", "_types"]
+            vec!["self", "_baml", "_types"]
         } else {
-            vec!["_ctx", "_types"]
+            vec!["_baml", "_types"]
         };
         for (entry, generated, reason) in allocate(entries, &reserved) {
             self.param_names
@@ -526,6 +552,26 @@ impl PythonNames {
     }
 }
 
+/// Keep returned callable parameters separate from their host controls and
+/// Protocol receiver, using the same allocator as named function signatures.
+pub(crate) fn returned_param_names(names: impl Iterator<Item = String>) -> HashMap<String, String> {
+    let entries = names
+        .map(|raw| Entry {
+            id: raw.clone(),
+            kind: "parameter".into(),
+            fqn: raw.clone(),
+            protected: matches!(raw.as_str(), "_baml" | "_types")
+                .then_some(IdentifierRenameReason::HostControl),
+            raw,
+            report: false,
+        })
+        .collect();
+    allocate(entries, &["self", "_baml", "_types"])
+        .into_iter()
+        .map(|(entry, name, _)| (entry.raw, name))
+        .collect()
+}
+
 fn secondary_roles(function: &baml_sdkgen_types::Function) -> Vec<BindingRole> {
     let _ = function;
     vec![BindingRole::DirectAsync]
@@ -564,7 +610,7 @@ fn allocate(
     out
 }
 
-fn allocate_one(candidate: &str, used: &mut HashSet<String>) -> String {
+pub(crate) fn allocate_one(candidate: &str, used: &mut HashSet<String>) -> String {
     let mut generated = candidate.to_string();
     while used.contains(&generated) {
         generated.push('_');
@@ -594,7 +640,7 @@ pub(crate) fn is_python_identifier(value: &str) -> bool {
         && !is_python_keyword(value)
 }
 
-fn project_identifier(value: &str) -> (String, Option<IdentifierRenameReason>) {
+pub(crate) fn project_identifier(value: &str) -> (String, Option<IdentifierRenameReason>) {
     let mut generated = String::with_capacity(value.len().max(1));
     for (index, ch) in value.chars().enumerate() {
         if ch == '_' || ch.is_alphanumeric() && (index > 0 || ch.is_alphabetic()) {
@@ -710,5 +756,20 @@ mod tests {
         let (projected, reason) = project_field_identifier("_secret");
         assert_eq!(projected, "field_secret");
         assert_eq!(reason, Some(IdentifierRenameReason::FrameworkProtected));
+    }
+
+    #[test]
+    fn returned_callable_controls_preserve_authored_spellings() {
+        let names = returned_param_names(
+            ["_baml", "_baml_", "_types", "self", "class", "class_"]
+                .into_iter()
+                .map(String::from),
+        );
+        assert_eq!(names["_baml"], "_baml__");
+        assert_eq!(names["_baml_"], "_baml_");
+        assert_eq!(names["_types"], "_types_");
+        assert_eq!(names["self"], "self_");
+        assert_eq!(names["class"], "class__");
+        assert_eq!(names["class_"], "class_");
     }
 }

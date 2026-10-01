@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import enum
+import keyword
 import os
 import types as python_types
 import typing
@@ -768,6 +769,15 @@ def pydantic_instance_type_args(value: Any) -> List[Any]:
     return []
 
 
+class _EncodedCall(bytes):
+    """Keep borrowed invocation capabilities alive through native preparation."""
+
+    def __new__(cls, wire, retained):
+        value = super().__new__(cls, wire)
+        value._retained = retained
+        return value
+
+
 def encode_call_args(
     kwargs: Dict[str, Any],
     call_id: int,
@@ -775,6 +785,7 @@ def encode_call_args(
     *,
     function_name: Optional[str] = None,
     function_handle: Optional[int] = None,
+    _baml: Any = None,
 ) -> bytes:
     """Encode function keyword arguments as `CallFunctionArgs` protobuf.
 
@@ -792,14 +803,15 @@ def encode_call_args(
             raise ValueError("exactly one BAML call target may be set")
         args = baml_inbound_pb2.CallFunctionArgs()
         args.call_id = call_id
-        args.invocation.SetInParent()
-        args.invocation.host_environment = call_id
-        from ._dispatch import _current_invocation
+        from ._invocation import normalize
 
-        inherited = _current_invocation.get()
-        if inherited is not None:
-            # Retain through preparation; controls borrow, never drain this key.
-            args.invocation.inherited_state = inherited._key_for_invocation()
+        controls, cancel, retained = normalize(_baml, call_id)
+        args.invocation.CopyFrom(controls)
+        if cancel is not None:
+            _set_inbound_value(
+                args.invocation.cancel, cancel, kwarg_name="_baml.cancel",
+                registered=registered, cloned_handles=cloned_handles,
+            )
         if function_name is not None:
             args.function_name = function_name
         elif function_handle is not None:
@@ -821,7 +833,7 @@ def encode_call_args(
                     entry.type_definition.CopyFrom(wire_ty._definition)
                 else:
                     entry.type_value.CopyFrom(wire_ty)
-        return args.SerializeToString()
+        return _EncodedCall(args.SerializeToString(), retained)
     except BaseException:
         release_function_call(call_id)
         # Roll back any host callables registered before the failure.
@@ -1143,10 +1155,34 @@ def _decode_handle(
     return pyhandle
 
 
+def _returned_param_aliases(names: List[str]) -> Dict[str, str]:
+    """Mirror codegen's host-name allocation for callable wire parameters."""
+    protected = {"_baml", "_types"}
+    used = {"self", *protected}
+    aliases = {}
+    # Authored legal spellings win over projected or control spellings.
+    for raw in sorted(names, key=lambda name: (
+        not (name not in protected and name.isidentifier() and not keyword.iskeyword(name)),
+        name,
+    )):
+        name = "".join(
+            ch if ch == "_" or ch.isalnum() and (index > 0 or ch.isalpha()) else "_"
+            for index, ch in enumerate(raw)
+        ) or "_"
+        if keyword.iskeyword(name) or raw in protected:
+            name += "_"
+        while name in used:
+            name += "_"
+        used.add(name)
+        if name != raw:
+            aliases[name] = raw
+    return aliases
+
+
 class BamlClosure:
     """A reusable BAML callable with synchronous and asynchronous entry paths."""
 
-    __slots__ = ("_handle", "_required_names", "_optional_names")
+    __slots__ = ("_handle", "_required_names", "_optional_names", "_aliases")
 
     def __init__(self, handle: BamlPyHandle, function_ty: Any):
         mode = baml_type_pb2.BamlTyFunctionParamMode
@@ -1161,6 +1197,9 @@ class BamlClosure:
             for index, param in enumerate(function_ty.params)
             if param.mode == mode.BAML_TY_FUNCTION_PARAM_MODE_OPTIONAL
         ]
+        self._aliases = _returned_param_aliases(
+            self._required_names + self._optional_names
+        )
 
     def _to_pyhandle(self) -> BamlPyHandle:
         return self._handle
@@ -1168,6 +1207,9 @@ class BamlClosure:
     def _encode_args(
         self, args: Tuple[Any, ...], kwargs: Dict[str, Any]
     ) -> Tuple[int, bytes]:
+        options = kwargs.pop("_baml", None)
+        if "_types" in kwargs:
+            raise TypeError("specialized BAML callable handles do not accept _types")
         if len(args) > len(self._required_names):
             raise TypeError(
                 f"got {len(args)} positional arguments but this BAML closure "
@@ -1176,6 +1218,11 @@ class BamlClosure:
         values = dict(zip(self._required_names, args))
         allowed = set(self._required_names) | set(self._optional_names)
         for name, value in kwargs.items():
+            from . import UNSET
+
+            if value is UNSET:
+                continue
+            name = self._aliases.get(name, name)
             if name not in allowed:
                 raise TypeError(f"unexpected keyword argument {name!r}")
             if name in values:
@@ -1186,6 +1233,7 @@ class BamlClosure:
             values,
             call_id,
             function_handle=self._handle._key_for_call(),
+            _baml=options,
         )
         return call_id, args_proto
 

@@ -13,6 +13,8 @@ pub mod handle;
 #[cfg(target_arch = "wasm32")]
 pub mod host_value;
 #[cfg(target_arch = "wasm32")]
+pub mod invocation;
+#[cfg(target_arch = "wasm32")]
 pub mod media;
 #[cfg(target_arch = "wasm32")]
 pub mod runtime;

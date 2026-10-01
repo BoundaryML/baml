@@ -81,22 +81,22 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
             if item is not None:
                 return cast(TYield, item)
 
-    def next(self) -> TNext:
-        return self._call_sync("ai.stream.Stream.next")
+    def next(self, *, _baml: Any = None) -> TNext:
+        return self._call_sync("ai.stream.Stream.next", _baml=_baml)
 
-    async def next_async(self) -> TNext:
-        return await self._call_async("ai.stream.Stream.next")
+    async def next_async(self, *, _baml: Any = None) -> TNext:
+        return await self._call_async("ai.stream.Stream.next", _baml=_baml)
 
-    def final(self) -> TFinal:
-        return self._call_sync("ai.stream.Stream.final")
+    def final(self, *, _baml: Any = None) -> TFinal:
+        return self._call_sync("ai.stream.Stream.final", _baml=_baml)
 
-    async def final_async(self) -> TFinal:
-        return await self._call_async("ai.stream.Stream.final")
+    async def final_async(self, *, _baml: Any = None) -> TFinal:
+        return await self._call_async("ai.stream.Stream.final", _baml=_baml)
 
     # `proto.py` imports `BamlStream` at module load, so the call-path
     # imports (`get_runtime`, `encode_call_args`, `decode_call_result`)
     # have to be method-local to avoid a circular import.
-    def _call_sync(self, fqn: str) -> Any:
+    def _call_sync(self, fqn: str, *, _baml: Any = None) -> Any:
         from . import get_runtime
         from .baml_py import new_function_call
         from .proto import decode_call_result, encode_call_args
@@ -106,11 +106,12 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
             {"self": self},
             new_function_call(),
             function_name=fqn,
+            _baml=_baml,
         )
         result_bytes = rt.call_function_sync(args_proto)
         return decode_call_result(result_bytes)
 
-    async def _call_async(self, fqn: str) -> Any:
+    async def _call_async(self, fqn: str, *, _baml: Any = None) -> Any:
         from . import _decode_call_result_async, cancel_function_call, get_runtime
         from .baml_py import new_function_call
         from .proto import encode_call_args
@@ -121,6 +122,7 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
             {"self": self},
             call_id,
             function_name=fqn,
+            _baml=_baml,
         )
         try:
             result_bytes = await rt.call_function(args_proto)

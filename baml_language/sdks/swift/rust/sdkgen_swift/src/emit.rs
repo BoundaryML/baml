@@ -351,7 +351,17 @@ pub(crate) fn render_callable(
         ..
     } = &function.return_type
     {
-        Some(render_returned_callable(callable_params, ret, ctx)?)
+        Some(render_returned_callable(
+            callable_params,
+            ret,
+            ctx,
+            &format!("_BamlReturned_{:016x}", {
+                use std::hash::{Hash, Hasher};
+                let mut hash = std::collections::hash_map::DefaultHasher::new();
+                fqn.hash(&mut hash);
+                hash.finish()
+            }),
+        )?)
     } else {
         None
     };
@@ -364,7 +374,7 @@ pub(crate) fn render_callable(
         other => Some(translate_ty(other, ctx)?),
     };
 
-    let param_list = params
+    let application_param_list = params
         .iter()
         .map(|p| match p {
             Param::Required { name, ty } => format!("{name}: {ty}"),
@@ -376,6 +386,19 @@ pub(crate) fn render_callable(
         .collect::<Vec<_>>()
         .join(", ");
 
+    let mut control_name = "baml".to_string();
+    while function
+        .arguments
+        .iter()
+        .any(|arg| arg.name.as_str() == control_name)
+    {
+        control_name.push('_');
+    }
+    let param_list = if application_param_list.is_empty() {
+        format!("{control_name}: Baml.BamlOptions = .init()")
+    } else {
+        format!("{application_param_list}, {control_name}: Baml.BamlOptions = .init()")
+    };
     // Required args inline into the array literal; optional slots
     // append conditionally (`.unset` omits the kwarg, Python-style).
     // Instance methods pass the receiver as required kwarg 0.
@@ -447,20 +470,26 @@ pub(crate) fn render_callable(
     } else {
         "static "
     };
+    if fqn == "trace.current_context" {
+        let ret_ty = ret.as_ref()?;
+        return Some(format!(
+            "{doc}public {static_kw}func {fn_name}({param_list}) throws -> {ret_ty} {{ _ = Baml._initialized; return try BamlRuntime.shared.currentTraceContext() }}\n\n{doc}public {static_kw}func {async_name}({param_list}) async throws -> {ret_ty} {{ _ = Baml._initialized; return try BamlRuntime.shared.currentTraceContext() }}\n"
+        ));
+    }
     match &ret {
         Some(ret_ty) => {
-            if let Some((_, closure)) = &returned_callable {
+            if let Some((_, closure, definition)) = &returned_callable {
                 let _ = write!(
                     out,
-                    "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws -> {ret_ty} {{\n\
+                    "{definition}\n{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws -> {ret_ty} {{\n\
                      \t_ = Baml._initialized\n\
-                     {args_setup}\tlet _raw = try BamlRuntime.shared.callRawSync(\"{fqn}\", args: {args_expr})\n\
+                     {args_setup}\tlet _raw = try BamlRuntime.shared.callRawSync(\"{fqn}\", args: {args_expr}, baml: try {control_name}.lowered())\n\
                      \tlet _function = try BamlFunctionHandle.decode(_raw)\n\
                      {closure}\n\
                      }}\n\n\
                      {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws -> {ret_ty} {{\n\
                      \t_ = Baml._initialized\n\
-                     {args_setup}\tlet _raw = try await BamlRuntime.shared.callRaw(\"{fqn}\", args: {args_expr})\n\
+                     {args_setup}\tlet _raw = try await BamlRuntime.shared.callRaw(\"{fqn}\", args: {args_expr}, baml: try {control_name}.lowered())\n\
                      \tlet _function = try BamlFunctionHandle.decode(_raw)\n\
                      {closure}\n\
                      }}\n"
@@ -470,11 +499,11 @@ pub(crate) fn render_callable(
                     out,
                     "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws -> {ret_ty} {{\n\
                      \t_ = Baml._initialized\n\
-                     {args_setup}\treturn try BamlRuntime.shared.callSync(\"{fqn}\", args: {args_expr})\n\
+                     {args_setup}\treturn try BamlRuntime.shared.callSync(\"{fqn}\", args: {args_expr}, baml: try {control_name}.lowered())\n\
                      }}\n\n\
                      {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws -> {ret_ty} {{\n\
                      \t_ = Baml._initialized\n\
-                     {args_setup}\treturn try await BamlRuntime.shared.call(\"{fqn}\", args: {args_expr})\n\
+                     {args_setup}\treturn try await BamlRuntime.shared.call(\"{fqn}\", args: {args_expr}, baml: try {control_name}.lowered())\n\
                      }}\n"
                 );
             }
@@ -484,11 +513,11 @@ pub(crate) fn render_callable(
                 out,
                 "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws {{\n\
                  \t_ = Baml._initialized\n\
-                 {args_setup}\ttry BamlRuntime.shared.callSyncVoid(\"{fqn}\", args: {args_expr})\n\
+                 {args_setup}\ttry BamlRuntime.shared.callSyncVoid(\"{fqn}\", args: {args_expr}, baml: try {control_name}.lowered())\n\
                  }}\n\n\
                  {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws {{\n\
                  \t_ = Baml._initialized\n\
-                 {args_setup}\ttry await BamlRuntime.shared.callVoid(\"{fqn}\", args: {args_expr})\n\
+                 {args_setup}\ttry await BamlRuntime.shared.callVoid(\"{fqn}\", args: {args_expr}, baml: try {control_name}.lowered())\n\
                  }}\n"
             );
         }
@@ -713,71 +742,56 @@ fn render_returned_callable(
     params: &[baml_sdkgen_types::CallableParam],
     ret: &Ty,
     ctx: &TranslateCtx,
-) -> Option<(String, String)> {
-    let mut signature = Vec::with_capacity(params.len());
-    let mut required_args = Vec::new();
-    let mut optional_args = Vec::new();
+    name: &str,
+) -> Option<(String, String, String)> {
+    let mut signature = Vec::new();
+    let mut required = Vec::new();
+    let mut optional = Vec::new();
     for (index, param) in params.iter().enumerate() {
         let local = format!("_arg{index}");
-        let name = param.name.as_ref()?.as_str();
+        let wire_name = param.name.as_ref()?.as_str();
         match param.mode {
             baml_sdkgen_types::CodegenFunctionParamMode::Required => {
-                let ty = translate_ty(&param.ty, ctx)?;
-                signature.push(format!("{local}: {ty}"));
-                required_args.push(format!("(\"{name}\", {local})"));
+                signature.push(format!("_ {local}: {}", translate_ty(&param.ty, ctx)?));
+                required.push(format!("(\"{wire_name}\", {local})"));
             }
             baml_sdkgen_types::CodegenFunctionParamMode::Optional => {
-                let ty = translate_optional_arg_inner(&param.ty, ctx)?;
-                signature.push(format!("{local}: BamlOptional<{ty}>"));
-                optional_args.push((local, name.to_string()));
+                signature.push(format!(
+                    "_ {local}: BamlOptional<{}> = .unset",
+                    translate_optional_arg_inner(&param.ty, ctx)?
+                ));
+                optional.push(format!(
+                    "        {local}._appendIfSet(\"{wire_name}\", to: &args)\n"
+                ));
             }
         }
     }
-    let ret_ty = match ret {
-        Ty::Void | Ty::Never => "Swift.Void".to_string(),
-        other => translate_ty(other, ctx)?,
+    signature.push("baml: Baml.BamlOptions = .init()".into());
+    let ret_ty = if matches!(ret, Ty::Void | Ty::Never) {
+        "Swift.Void".into()
+    } else {
+        translate_ty(ret, ctx)?
     };
-    let closure_ty = format!(
-        "@Sendable ({}) async throws -> {ret_ty}",
-        signature
-            .iter()
-            .map(|entry| entry
-                .split_once(':')
-                .map_or(entry.as_str(), |(_, ty)| ty.trim()))
-            .collect::<Vec<_>>()
-            .join(", ")
+    let declarations = signature.join(", ");
+    let setup = format!(
+        "        {} args: [(Swift.String, (any BamlEncodable)?)] = [{}]\n{}",
+        if optional.is_empty() { "let" } else { "var" },
+        required.join(", "),
+        optional.join("")
     );
-    let closure_signature = if signature.is_empty() {
-        format!("() async throws -> {ret_ty}")
+    let decode = if matches!(ret, Ty::Void | Ty::Never) {
+        "        _ = result; return ()".into()
     } else {
-        format!("({}) async throws -> {ret_ty}", signature.join(", "))
+        format!("        return try {ret_ty}._bamlDecode(result)")
     };
-    let mut body = format!("\treturn {{ {closure_signature} in\n");
-    if optional_args.is_empty() {
-        let _ = writeln!(
-            body,
-            "\t\tlet _result = try await _function.callRaw(args: [{}])",
-            required_args.join(", ")
-        );
-    } else {
-        let _ = writeln!(
-            body,
-            "\t\tvar _args: [(Swift.String, (any BamlEncodable)?)] = [{}]",
-            required_args.join(", ")
-        );
-        for (local, name) in optional_args {
-            let _ = writeln!(body, "\t\t{local}._appendIfSet(\"{name}\", to: &_args)");
-        }
-        body.push_str("\t\tlet _result = try await _function.callRaw(args: _args)\n");
-    }
-    match ret {
-        Ty::Void | Ty::Never => body.push_str("\t\t_ = _result\n\t\treturn ()\n"),
-        _ => {
-            let _ = writeln!(body, "\t\treturn try {ret_ty}._bamlDecode(_result)");
-        }
-    }
-    body.push_str("\t}");
-    Some((closure_ty, body))
+    let definition = format!(
+        "public struct {name}: Sendable {{\n    private let function: BamlFunctionHandle\n    fileprivate init(_ function: BamlFunctionHandle) {{ self.function = function }}\n    public func callAsFunction({declarations}) async throws -> {ret_ty} {{\n{setup}        let result = try await function.callRaw(args: args, baml: try baml.lowered())\n{decode}\n    }}\n    public func callSync({declarations}) throws -> {ret_ty} {{\n{setup}        let result = try function.callRawSync(args: args, baml: try baml.lowered())\n{decode}\n    }}\n}}\n"
+    );
+    Some((
+        name.into(),
+        format!("\treturn {name}(_function)"),
+        definition,
+    ))
 }
 
 #[cfg(test)]
