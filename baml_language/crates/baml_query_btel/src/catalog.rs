@@ -3,15 +3,15 @@
 //! Each is a TEMP view over the internal tables, created on every query
 //! connection so its definition always matches this binary.
 //!
-//! IDs render as text. `process_id` is 32 hex digits. Spans (function calls
-//! and futures) are `<recording_id>:<n>`, unique across recordings, the pair
-//! `trace.SpanId` holds. Profiler nodes are 16 hex digits hashed from the
-//! function names on their path, so the same node has the same ID in every
-//! process. Timestamps are RFC 3339 UTC; durations are nanoseconds, NULL
+//! IDs render as text. `process_id` is 32 hex digits. Spans (function calls,
+//! futures and network requests) are `<recording_id>:<n>`, unique across
+//! recordings, the pair `trace.SpanId` holds. Profiler nodes are 16 hex
+//! digits hashed from the function names on their path, so the same node
+//! has the same ID in every process. Timestamps are RFC 3339 UTC; durations are nanoseconds, NULL
 //! when the clock evidence cannot support them. `input_args`,
-//! `output_value`, `error_value`, `context_metadata`, `status_history` and
-//! `temporary_projections` are BAML values: navigate them with `['key']` and
-//! `[index]`.
+//! `output_value`, `network_event_values`, `error_value`, `context_metadata`,
+//! `status_history` and `temporary_projections` are BAML values: navigate
+//! them with `['key']` and `[index]`.
 use serde::Serialize;
 
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -218,27 +218,29 @@ FROM main.profile_node n",
 
 const SPAN_STATUS_DOC: &str = "return, user_error, panic_error (a panic other than a cancellation), or cancel_error (cancelled, or unwound by baml.sys.exit)";
 
+const NETWORK_EVENTS_DOC: &str = "[{event_name, payload, timestamp}] in time order. connection: {status, headers}. data: a whole body, or one server-sent event as {event, data, id}; null when bodies are not recorded. end (the stream ended on the wire), await (the program finished reading), close (it closed the stream early) and drop: null. Other names are other protocols' events. network_event_values[0]['payload'] reads only that payload. NULL for functions and futures";
+
 pub const SPANS: Relation = Relation {
     name: "spans",
-    doc: "One row per completed span: a retained function call (LLM functions, $trace spans, promoted calls) or a future (a spawned future, or a host's root call).",
+    doc: "One row per completed span: a retained function call (LLM functions, $trace spans, promoted calls), a future (a spawned future, or a host's root call), or a network span (an HTTP request the runtime made).",
     columns: &[
         col("span_id", "text", "<recording_id>:<n>"),
-        col("span_type", "text", "function or future"),
+        col("span_type", "text", "function, future or network_span"),
         col(
             "span_name",
             "text",
-            "the function's fully qualified name; for a future its name, else the function it runs",
+            "the function's fully qualified name; for a future its name, else the function it runs; for a network span its method and URL, with query values hashed",
         ),
         col("process_id", "text", ""),
         col(
             "future_id",
             "text",
-            "the future a function span ran on; for a future, the future that spawned it",
+            "the future a function or network span ran on; for a future, the future that spawned it",
         ),
         col(
             "profiler_node_id",
             "text",
-            "its node in the process's profiler; NULL while a function on its path is unknown",
+            "its node in the process's profiler (for a network span, the function that made the request); NULL while a function on its path is unknown",
         ),
         col(
             "parent_span_id",
@@ -260,15 +262,26 @@ pub const SPANS: Relation = Relation {
         col("duration", "integer", "nanoseconds, start_time to end_time"),
         value(
             "input_args",
-            "captured arguments by name or position: input_args['customer'], input_args[0]; NULL for futures",
+            "captured arguments by name or position: input_args['customer'], input_args[0]; for a network span the request, {request: {method, url, headers, body}}; NULL for futures",
         ),
-        value("output_value", "captured return value of a span that returned"),
+        value(
+            "output_value",
+            "captured return value of a span that returned; NULL for a network span, whose response is in its events",
+        ),
+        value("network_event_values", NETWORK_EVENTS_DOC),
         value(
             "error_value",
             "the baml.errors.Context of a failed span: error_value['error'], error_value['stack_trace'], error_value['cause']",
         ),
-        col("context_distinct_id", "text", "entry-time identity; NULL when absent or unavailable"),
-        value("context_metadata", "entry-time metadata; explicit empty context is an empty map, unknown context is unavailable"),
+        col(
+            "context_distinct_id",
+            "text",
+            "entry-time identity; NULL when absent or unavailable",
+        ),
+        value(
+            "context_metadata",
+            "entry-time metadata; explicit empty context is an empty map, unknown context is unavailable",
+        ),
         value(
             "temporary_projections",
             "model usage of calls made directly in this span: model_name, model_calls (model turns), input_tokens (full-rate), output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens, cost (dollars; NULL for an unpriced model). NULL without model calls",
@@ -300,6 +313,7 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
   __btel_ref(1, c.inputs_cas, f.argument_names,
     c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS input_args,
   IIF(c.outcome = 1, __btel_ref(2, c.value_cas, NULL, 0), NULL) AS output_value,
+  NULL AS network_event_values,
   IIF(c.outcome IN (2, 3), __btel_ref(3, c.value_cas, NULL, 0), NULL) AS error_value,
   cx.distinct_id AS context_distinct_id,
   __btel_context_metadata(ec.state, ec.cas, cx.state) AS context_metadata,
@@ -346,6 +360,7 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
     e.shift, s.status, IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS duration,
   NULL AS input_args,
   NULL AS output_value,
+  NULL AS network_event_values,
   NULL AS error_value,
   cx.distinct_id AS context_distinct_id,
   __btel_context_metadata(ec.state, ec.cas, cx.state) AS context_metadata,
@@ -366,7 +381,49 @@ LEFT JOIN main.thread pt ON pt.rec = t.rec AND pt.thread_id = t.parent_id
 LEFT JOIN main.call pc ON pc.rec = t.rec AND pc.call_id = t.parent_id
 LEFT JOIN main.epoch e ON e.rec = t.rec AND e.epoch_id = t.epoch_id AND e.defined = 1
 LEFT JOIN main.epoch_state s ON s.rec = t.rec AND s.epoch_id = t.epoch_id
-WHERE t.outcome IS NOT NULL",
+WHERE t.outcome IS NOT NULL
+UNION ALL
+SELECT __btel_pubid(r.recording_id, n.span_id) AS span_id,
+  'network_span' AS span_type,
+  n.method || ' ' || n.url AS span_name,
+  lower(hex(COALESCE(r.process_id, r.recording_id))) AS process_id,
+  __btel_pubid(r.recording_id, n.thread_id) AS future_id,
+  __btel_hex(p.node_id) AS profiler_node_id,
+  __btel_pubid(r.recording_id, n.parent_id) AS parent_span_id,
+  CASE n.outcome WHEN 1 THEN 'return' WHEN 2 THEN IIF(n.panicked, 'panic_error', 'user_error')
+    WHEN 3 THEN 'cancel_error' END AS status,
+  NULL AS scheduled_time,
+  __btel_utc(n.started_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
+    e.multiplier, e.shift) AS start_time,
+  __btel_utc(n.completed_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
+    e.multiplier, e.shift) AS end_time,
+  __btel_duration(n.started_ticks, n.completed_ticks, e.multiplier, e.shift, s.status,
+    IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS duration,
+  -- The request is due while only the completion is indexed.
+  __btel_ref(2, n.request_cas, NULL, n.defined = 0) AS input_args,
+  NULL AS output_value,
+  (SELECT __btel_events(v.at_ticks, v.seq, v.name, __btel_utc(v.at_ticks,
+       IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns, e.multiplier, e.shift),
+       v.payload_cas)
+   FROM main.network_event v WHERE v.rec = n.rec AND v.span_id = n.span_id) AS network_event_values,
+  IIF(n.outcome IN (2, 3), __btel_ref(3, n.error_cas, NULL, 0), NULL) AS error_value,
+  cx.distinct_id AS context_distinct_id,
+  __btel_context_metadata(ec.state, ec.cas, cx.state) AS context_metadata,
+  NULL AS temporary_projections,
+  'other' AS span_reason,
+  n.rec AS __span_id_rec, n.span_id AS __span_id_key,
+  n.rec AS __future_id_rec, n.thread_id AS __future_id_key,
+  n.rec AS __parent_span_id_rec, n.parent_id AS __parent_span_id_key
+FROM main.network_span n
+JOIN main.recording r ON r.rec = n.rec
+-- The context of the frame that sent the request, from its announcement.
+JOIN main.event_context ec ON ec.rec = n.rec AND ec.node_id = n.span_id AND ec.slot = 0
+LEFT JOIN main.context_snapshot cx ON cx.cas = ec.cas
+LEFT JOIN main.call_path p ON p.rec = n.rec AND p.call_path_id = n.call_path_id
+LEFT JOIN main.thread t ON t.rec = n.rec AND t.thread_id = n.thread_id
+LEFT JOIN main.epoch e ON e.rec = n.rec AND e.epoch_id = t.epoch_id AND e.defined = 1
+LEFT JOIN main.epoch_state s ON s.rec = n.rec AND s.epoch_id = t.epoch_id
+WHERE n.outcome IS NOT NULL",
 };
 
 pub const SPAN_ANNOUNCEMENTS: Relation = Relation {
@@ -374,7 +431,7 @@ pub const SPAN_ANNOUNCEMENTS: Relation = Relation {
     doc: "One row per span known to have started, finished or not.",
     columns: &[
         col("span_id", "text", "<recording_id>:<n>"),
-        col("span_type", "text", "function or future"),
+        col("span_type", "text", "function, future or network_span"),
         col("span_name", "text", "as in spans"),
         col("process_id", "text", ""),
         col("future_id", "text", "as in spans"),
@@ -382,6 +439,10 @@ pub const SPAN_ANNOUNCEMENTS: Relation = Relation {
         col("parent_span_id", "text", "as in spans"),
         col("start_time", "text", "RFC 3339 UTC"),
         value("input_args", "as in spans"),
+        value(
+            "network_event_values",
+            "as in spans; an unfinished request's events so far",
+        ),
         col(
             "context_distinct_id",
             "text",
@@ -410,6 +471,7 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
     e.multiplier, e.shift) AS start_time,
   __btel_ref(1, c.inputs_cas, f.argument_names,
     c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS input_args,
+  NULL AS network_event_values,
   cx.distinct_id AS context_distinct_id,
   __btel_context_metadata(ec.state, ec.cas, cx.state) AS context_metadata,
   c.outcome IS NOT NULL AS is_complete,
@@ -438,6 +500,7 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
   __btel_utc(COALESCE(t.ran_ticks, t.started_ticks), IIF(e.conflict = 0, e.utc_ticks, NULL),
     e.utc_unix_ns, e.multiplier, e.shift) AS start_time,
   NULL AS input_args,
+  NULL AS network_event_values,
   cx.distinct_id AS context_distinct_id,
   __btel_context_metadata(ec.state, ec.cas, cx.state) AS context_metadata,
   t.outcome IS NOT NULL AS is_complete,
@@ -453,7 +516,37 @@ LEFT JOIN main.function_def sf ON sf.rec = t.rec AND sf.function_id = sp.callee_
 LEFT JOIN main.thread pt ON pt.rec = t.rec AND pt.thread_id = t.parent_id
 LEFT JOIN main.call pc ON pc.rec = t.rec AND pc.call_id = t.parent_id
 LEFT JOIN main.epoch e ON e.rec = t.rec AND e.epoch_id = t.epoch_id AND e.defined = 1
-WHERE t.defined = 1 OR t.announced = 1 OR t.outcome IS NOT NULL",
+WHERE t.defined = 1 OR t.announced = 1 OR t.outcome IS NOT NULL
+UNION ALL
+SELECT __btel_pubid(r.recording_id, n.span_id) AS span_id,
+  'network_span' AS span_type,
+  n.method || ' ' || n.url AS span_name,
+  lower(hex(COALESCE(r.process_id, r.recording_id))) AS process_id,
+  __btel_pubid(r.recording_id, n.thread_id) AS future_id,
+  __btel_hex(p.node_id) AS profiler_node_id,
+  __btel_pubid(r.recording_id, n.parent_id) AS parent_span_id,
+  __btel_utc(n.started_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
+    e.multiplier, e.shift) AS start_time,
+  __btel_ref(2, n.request_cas, NULL, n.defined = 0) AS input_args,
+  (SELECT __btel_events(v.at_ticks, v.seq, v.name, __btel_utc(v.at_ticks,
+       IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns, e.multiplier, e.shift),
+       v.payload_cas)
+   FROM main.network_event v WHERE v.rec = n.rec AND v.span_id = n.span_id) AS network_event_values,
+  cx.distinct_id AS context_distinct_id,
+  __btel_context_metadata(ec.state, ec.cas, cx.state) AS context_metadata,
+  n.outcome IS NOT NULL AS is_complete,
+  n.rec AS __span_id_rec, n.span_id AS __span_id_key,
+  n.rec AS __future_id_rec, n.thread_id AS __future_id_key,
+  n.rec AS __parent_span_id_rec, n.parent_id AS __parent_span_id_key
+FROM main.network_span n
+JOIN main.recording r ON r.rec = n.rec
+JOIN main.event_context ec ON ec.rec = n.rec AND ec.node_id = n.span_id AND ec.slot = 1
+LEFT JOIN main.context_snapshot cx ON cx.cas = ec.cas
+LEFT JOIN main.call_path p ON p.rec = n.rec AND p.call_path_id = n.call_path_id
+LEFT JOIN main.thread t ON t.rec = n.rec AND t.thread_id = n.thread_id
+LEFT JOIN main.epoch e ON e.rec = n.rec AND e.epoch_id = t.epoch_id AND e.defined = 1
+-- Events alone name a span, but say nothing else about it.
+WHERE n.defined = 1 OR n.outcome IS NOT NULL",
 };
 
 pub const RELATIONS: &[Relation] = &[PROCESSES, PROFILER, SPANS, SPAN_ANNOUNCEMENTS];

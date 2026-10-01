@@ -9,13 +9,13 @@
 //!   i64; otherwise NULL, with an issue row or overflow meaning explicit.
 //!   Reduced aggregate totals also keep an exact decimal copy.
 //! - `rec` is a surrogate key local to this database file.
-//! - A reference to a thread, call path, function or clock epoch whose
-//!   definition is not indexed yet gets a placeholder row (`defined = 0`, or
-//!   `function_def.state = 0`). Placeholders keep unresolved identities
+//! - A reference to a thread, call path, function, clock epoch or network
+//!   span whose definition is not indexed yet gets a placeholder row
+//!   (`defined = 0`, or `function_def.state = 0`). Placeholders keep unresolved identities
 //!   visible; they never make a thread a root or a path a top-level path.
 
 /// Physical layout of these tables. Change on any DDL change.
-pub const SCHEMA_VERSION: i64 = 14;
+pub const SCHEMA_VERSION: i64 = 15;
 /// Interpretation of evidence into rows. Change when reconciliation changes
 /// meaning without a DDL change; either mismatch rebuilds the index.
 pub const NORMALIZATION_VERSION: i64 = 1;
@@ -320,6 +320,50 @@ CREATE INDEX call_unreported_conflict ON call (rec) WHERE conflict = 1;
 CREATE INDEX call_pending ON call (rec)
   WHERE needs_announcement = 1 AND announced_sequence IS NULL;
 
+-- HTTP requests the runtime traced, merged from announcements, events and
+-- completions by span ID. Events and completions can arrive before the
+-- announcement, and in another thread's section; until it arrives the row
+-- is a placeholder (defined = 0).
+CREATE TABLE network_span (
+  rec INTEGER NOT NULL,
+  span_id BLOB NOT NULL,
+  defined INTEGER NOT NULL,
+  -- The announcing section's thread: its epoch times every tick of the span.
+  thread_id BLOB,
+  parent_id BLOB,
+  -- The frame that made the request; NULL outside any.
+  call_path_id INTEGER,
+  method TEXT,
+  -- Sanitized when recorded: query values and credentials hashed.
+  url TEXT,
+  request_cas BLOB,
+  started_ticks INTEGER,
+  completed_ticks INTEGER,
+  outcome INTEGER,
+  -- 1 when a panic ended it (outcome is errored).
+  panicked INTEGER NOT NULL DEFAULT 0,
+  error_cas BLOB,
+  -- Two announcements or two completions disagreed; the first is kept.
+  conflict INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (rec, span_id)
+) STRICT, WITHOUT ROWID;
+CREATE INDEX network_span_by_thread ON network_span (rec, thread_id);
+CREATE INDEX network_span_by_parent ON network_span (rec, parent_id);
+
+-- A network span's events: connection, data, end, await, close, drop, or
+-- another protocol's names.
+CREATE TABLE network_event (
+  rec INTEGER NOT NULL,
+  span_id BLOB NOT NULL,
+  -- Recording order: the file's sequence << 32, plus the event's position
+  -- among the file's network events.
+  seq INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  at_ticks INTEGER,
+  payload_cas BLOB,
+  PRIMARY KEY (rec, span_id, seq)
+) STRICT, WITHOUT ROWID;
+
 -- A folded recording's call paths summed by profiler node: its share of its
 -- process's profiler. Sums are NULL when unknown or too large for i64.
 CREATE TABLE profile_part (
@@ -395,6 +439,8 @@ pub const FACT_TABLES: &[&str] = &[
     "sysop",
     "model_usage",
     "call",
+    "network_span",
+    "network_event",
     "profile_part",
     "issue",
 ];
@@ -416,6 +462,8 @@ pub const ALL_TABLES: &[&str] = &[
     "sysop",
     "model_usage",
     "call",
+    "network_span",
+    "network_event",
     "profile_part",
     "profile_node",
     "profile_pending",

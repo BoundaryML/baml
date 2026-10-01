@@ -213,8 +213,8 @@ fn read_parts(tx: &Transaction<'_>, rec: i64) -> Result<FxHashMap<i64, Part>, Er
 }
 
 /// A recording whose end is indexed gets no more facts: store its part and
-/// keep only the paths spans read (each call's, and each thread's spawn and
-/// entry path). Its aggregate and sysop rows go.
+/// keep only the paths spans read (each call's and network span's, and each
+/// thread's spawn and entry path). Its aggregate and sysop rows go.
 pub(super) fn fold(tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
     let parts = part_of(tx, rec)?;
     tx.execute("DELETE FROM profile_part WHERE rec = ?1", [rec])?;
@@ -227,7 +227,9 @@ pub(super) fn fold(tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
            UNION SELECT spawn_call_path_id FROM thread
              WHERE rec = ?1 AND spawn_call_path_id IS NOT NULL
            UNION SELECT entry_call_path_id FROM thread
-             WHERE rec = ?1 AND entry_call_path_id IS NOT NULL)",
+             WHERE rec = ?1 AND entry_call_path_id IS NOT NULL
+           UNION SELECT call_path_id FROM network_span
+             WHERE rec = ?1 AND call_path_id IS NOT NULL)",
         [rec],
     )?;
     tx.execute("UPDATE recording SET folded = 1 WHERE rec = ?1", [rec])?;
