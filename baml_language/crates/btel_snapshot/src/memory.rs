@@ -2,7 +2,7 @@ use std::mem::size_of;
 
 use baml_type::{DeclarationName, Name, Package};
 
-use crate::{OwnedType, Snapshot, SnapshotObject, Storage, TypeIdentity};
+use crate::{OwnedType, Snapshot, TypeIdentity, pool::Storage};
 
 impl Snapshot {
     /// Conservative retained allocation bytes for this snapshot, including its
@@ -15,51 +15,43 @@ impl Snapshot {
     /// bigint values and bigint type literals are unaccountable. Bounded delivery
     /// must reject these snapshots, not treat `None` as zero or logical size.
     pub fn retained_bytes(&self) -> Option<usize> {
-        let s = &self.0;
-        if !s.bigints.is_empty() {
+        let storage: &Storage = &self.0;
+        let graph = &storage.graph;
+        if !graph.bigints.is_empty() {
             return None;
         }
-        let mut bytes = size_of::<Self>().checked_add(size_of::<Storage>())?;
-        macro_rules! arena {
-            ($($field:ident),+ $(,)?) => {
-                $(bytes = bytes.checked_add(capacity_bytes(&s.$field)?)?;)+
-            };
-        }
-        arena!(
-            values,
-            objects,
-            entries,
-            bytes,
-            strings,
-            bigints,
-            types,
-            string_hashes,
-            bigint_hashes,
-            type_leaves,
-            string_used,
-            bigint_used,
-            blobs,
-            members,
-            blob_children,
-            object_homes,
-            string_homes,
-            bigint_homes,
-        );
-        for string in &s.strings {
+        let mut bytes = size_of::<Self>().checked_add(storage.capacity_bytes())?;
+        for string in graph.strings.iter() {
             bytes = bytes.checked_add(string.retained_heap_bytes()?)?;
         }
-        for entry in &s.entries {
+        for entry in graph.entries.iter() {
             bytes = bytes.checked_add(entry.key.retained_heap_bytes()?)?;
         }
-        for object in &s.objects {
-            if let SnapshotObject::Declaration { name, .. } = object {
-                bytes = bytes.checked_add(declaration_bytes(name)?)?;
-            }
+        for name in graph.names.iter() {
+            bytes = bytes.checked_add(declaration_bytes(name)?)?;
         }
-        for ty in &s.types {
-            bytes = bytes.checked_add(type_bytes(ty)?)?;
+        for ty in graph.types.iter() {
+            bytes = bytes.checked_add(type_bytes(&ty.ty)?)?;
         }
         Some(bytes)
+    }
+}
+
+impl Snapshot {
+    /// Bytes the capture's items occupy in its arenas, without spare capacity
+    /// or the leaves' own backing.
+    pub fn live_arena_bytes(&self) -> usize {
+        let graph = &self.0.graph;
+        let shape = &self.0.shape;
+        size_of_val(&*graph.objects)
+            + size_of_val(&*graph.values)
+            + size_of_val(&*graph.entries)
+            + size_of_val(&*graph.bytes)
+            + size_of_val(&*graph.strings)
+            + size_of_val(&*graph.bigints)
+            + size_of_val(&*graph.types)
+            + size_of_val(&*graph.names)
+            + shape.live_bytes()
     }
 }
 
@@ -207,13 +199,12 @@ mod tests {
         let pool = SnapshotPool::new(1, Limits::default());
         let mut snapshot = scalar(&pool);
         let before = snapshot.retained_bytes().unwrap();
-        let old_capacity = snapshot.0.bytes.capacity();
-        snapshot.0.bytes.reserve(old_capacity + 4096);
-        assert_eq!(
-            snapshot.retained_bytes().unwrap() - before,
-            snapshot.0.bytes.capacity() - old_capacity,
-        );
-        assert!(before > snapshot.live_arena_bytes());
+        let Storage { graph, meter, .. } = &mut *snapshot.0;
+        let old_capacity = graph.bytes.capacity_bytes();
+        graph.bytes.reserve(old_capacity + 4096, meter);
+        let grown = graph.bytes.capacity_bytes() - old_capacity;
+        assert!(grown >= 4096);
+        assert_eq!(snapshot.retained_bytes().unwrap() - before, grown);
     }
 
     #[test]
@@ -222,14 +213,19 @@ mod tests {
         let source = bex_str::BexStr::from("a".repeat(100_000));
         let slice = source.substring(0, 100);
         let mut snapshot = scalar(&pool);
-        snapshot.0.strings.reserve(1);
-        snapshot.0.entries.reserve(1);
+        let Storage { graph, meter, .. } = &mut *snapshot.0;
+        graph.strings.reserve(1, meter);
+        graph.entries.reserve(1, meter);
         let before = snapshot.retained_bytes().unwrap();
-        snapshot.0.strings.push(slice.clone());
-        snapshot.0.entries.push(crate::MapEntry {
-            key: slice,
-            value: SnapshotValue::Null,
-        });
+        let Storage { graph, meter, .. } = &mut *snapshot.0;
+        graph.strings.push(slice.clone(), meter);
+        graph.entries.push(
+            crate::MapEntry {
+                key: slice,
+                value: SnapshotValue::Null,
+            },
+            meter,
+        );
         assert_eq!(
             snapshot.retained_bytes().unwrap() - before,
             2 * source.retained_heap_bytes().unwrap(),
@@ -281,14 +277,12 @@ mod tests {
         assert!(declaration_bytes(&declaration).unwrap() >= capacity * size_of::<Name>() + 3000);
         let pool = SnapshotPool::new(1, Limits::default());
         let mut snapshot = scalar(&pool);
-        snapshot.0.objects.reserve(1);
+        let Storage { graph, meter, .. } = &mut *snapshot.0;
+        graph.names.reserve(1, meter);
         let before = snapshot.retained_bytes().unwrap();
         let charge = declaration_bytes(&declaration).unwrap();
-        snapshot.0.objects.push(SnapshotObject::Declaration {
-            name: declaration,
-            tag: baml_type::typetag::TypeTag::of_static_index(0),
-            is_enum: false,
-        });
+        let Storage { graph, meter, .. } = &mut *snapshot.0;
+        graph.names.push(declaration, meter);
         assert_eq!(snapshot.retained_bytes().unwrap() - before, charge);
     }
 

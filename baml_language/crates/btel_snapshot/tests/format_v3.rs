@@ -21,14 +21,9 @@ fn hex(bytes: &[u8]) -> String {
 fn graph(pool: &SnapshotPool, arguments: bool) -> Snapshot {
     let mut b = pool.try_acquire().unwrap();
     let declaration = b.reserve_object().unwrap();
-    b.set_object(
-        declaration,
-        O::Declaration {
-            name: DeclarationName::Declared(TypeName::local("Golden".into())),
-            tag: TypeTag::from_i64(42),
-            is_enum: true,
-        },
-    );
+    let name = DeclarationName::Declared(TypeName::local("Golden".into()));
+    let object = b.declaration(&name, TypeTag::from_i64(42), true);
+    b.set_object(declaration, object);
     let type_start = b.type_start();
     let ty = b.push_type(RealizedTy::Int);
     let type_arguments = b.type_range(type_start);
@@ -40,13 +35,10 @@ fn graph(pool: &SnapshotPool, arguments: bool) -> Snapshot {
     b.push_value(V::Bool(false));
     b.push_value(V::Bool(true));
     let items = b.value_range(value_start);
-    let bytes = b.copy_bytes(b"abc");
     let mut objects = vec![declaration];
     for object in [
-        O::Uint8Array {
-            data: bytes,
-            original_len: 5,
-        },
+        // Five bytes that a limit kept out of the capture.
+        O::Uint8ArrayTruncated { original_len: 5 },
         O::List {
             element_type: ty,
             items,
@@ -125,8 +117,7 @@ fn graph(pool: &SnapshotPool, arguments: bool) -> Snapshot {
         let id = b.reserve_object().unwrap();
         b.set_object(id, O::Truncated(reason));
         objects.push(id);
-        let truncated = b.limited(reason);
-        b.push_value(truncated);
+        b.push_value(V::Truncated(reason));
     }
     for object in objects {
         b.push_value(V::Object(object));
@@ -211,15 +202,9 @@ fn cut_graph(pool: &SnapshotPool) -> Snapshot {
     let ty = b.push_type(RealizedTy::Int);
     let text = b.string(&"t".repeat(40).as_str().into()).unwrap();
     let note = b.string(&"n".repeat(40).as_str().into()).unwrap();
-    let data = b.copy_bytes(&[9; 40]);
+    let bytes = b.bytes(&[9; 40]);
     let array = b.reserve_object().unwrap();
-    b.set_object(
-        array,
-        O::Uint8Array {
-            data,
-            original_len: 40,
-        },
-    );
+    b.set_object(array, bytes);
     let map = b.reserve_object().unwrap();
     let entries_start = b.entry_start();
     b.entry(&"note".into(), V::String(note));

@@ -555,14 +555,8 @@ fn scalar(builder: &mut Builder, value: &External) -> Value {
         External::Bigint(value) => Value::Bigint(builder.bigint(&Arc::new(value.clone())).unwrap()),
         External::Uint8Array(value) => {
             let object = builder.reserve_object().unwrap();
-            let data = builder.copy_bytes(value);
-            builder.set_object(
-                object,
-                SnapshotObject::Uint8Array {
-                    data,
-                    original_len: value.len(),
-                },
-            );
+            let bytes = builder.bytes(value);
+            builder.set_object(object, bytes);
             Value::Object(object)
         }
         External::RustData(_) => {
@@ -717,14 +711,8 @@ fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> 
                 })
                 .unwrap();
             let declaration = b.reserve_object().unwrap();
-            b.set_object(
-                declaration,
-                SnapshotObject::Declaration {
-                    name: class.name.clone(),
-                    tag: class.type_tag,
-                    is_enum: false,
-                },
-            );
+            let named = b.declaration(&class.name, class.type_tag, false);
+            b.set_object(declaration, named);
             let start = b.entry_start();
             b.entry(&"value".into(), Value::Int(value));
             b.entry(
@@ -759,14 +747,8 @@ fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> 
                     _ => None,
                 })
                 .unwrap();
-            b.set_object(
-                object,
-                SnapshotObject::Declaration {
-                    name: enm.name.clone(),
-                    tag: enm.type_tag,
-                    is_enum: true,
-                },
-            );
+            let named = b.declaration(&enm.name, enm.type_tag, true);
+            b.set_object(object, named);
             Value::Enum {
                 declaration: object,
                 variant: 1,
@@ -828,14 +810,8 @@ fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> 
                 })
                 .unwrap();
             let declaration = b.reserve_object().unwrap();
-            b.set_object(
-                declaration,
-                SnapshotObject::Declaration {
-                    name: class.name.clone(),
-                    tag: class.type_tag,
-                    is_enum: false,
-                },
-            );
+            let named = b.declaration(&class.name, class.type_tag, false);
+            b.set_object(declaration, named);
             let start = b.type_start();
             b.push_type(RealizedTy::Int);
             let type_arguments = b.type_range(start);
@@ -1066,14 +1042,8 @@ fn one_field_instance(
     let mut b = pool.try_acquire().unwrap();
     let object = b.reserve_object().unwrap();
     let declaration = b.reserve_object().unwrap();
-    b.set_object(
-        declaration,
-        SnapshotObject::Declaration {
-            name: class.name.clone(),
-            tag: class.type_tag,
-            is_enum: false,
-        },
-    );
+    let named = b.declaration(&class.name, class.type_tag, false);
+    b.set_object(declaration, named);
     let value = scalar(&mut b, field);
     let start = b.entry_start();
     b.entry(&class.fields[0].name.as_str().into(), value);

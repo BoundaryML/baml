@@ -34,7 +34,7 @@ impl Scratch {
             }
         }
         if b.limits().max_depth.is_some_and(|max| depth > max) {
-            return b.limited(Limit::Depth);
+            return SnapshotValue::Truncated(Limit::Depth);
         }
         let ptr = match value.kind() {
             ValueKind::Null => return SnapshotValue::Null,
@@ -60,7 +60,7 @@ impl Scratch {
             Object::Variant(v) => {
                 let declaration = match self.add(b, Value::object(v.enm), depth + 1) {
                     SnapshotValue::Object(id) => id,
-                    SnapshotValue::Truncated(reason) => return b.limited(reason),
+                    SnapshotValue::Truncated(reason) => return SnapshotValue::Truncated(reason),
                     _ => unreachable!("enum declaration is an object"),
                 };
                 // SAFETY: enum declaration lives under the same heap permit.
@@ -83,7 +83,7 @@ impl Scratch {
                     *id
                 } else {
                     let Some(id) = b.reserve_object() else {
-                        return b.limited(Limit::Objects);
+                        return SnapshotValue::Truncated(Limit::Objects);
                     };
                     self.rust_seen.insert(identity, id);
                     // Media is the one host value captured by content. Others
@@ -99,7 +99,7 @@ impl Scratch {
             }
             _ => {
                 let Some(id) = b.reserve_object() else {
-                    return b.limited(Limit::Objects);
+                    return SnapshotValue::Truncated(Limit::Objects);
                 };
                 // Destination identity exists before children are visited.
                 self.work.push((id, ptr, depth));
@@ -124,9 +124,6 @@ impl Scratch {
                 let value = self.add(&mut b, *value, 0);
                 b.push_value(value);
             }
-            if count < args.len() {
-                b.limited(Limit::Values);
-            }
         } else if let Input::Value(value) = input {
             value_root = self.add(&mut b, value, 0);
         }
@@ -134,13 +131,7 @@ impl Scratch {
         while let Some((id, ptr, depth)) = self.work.pop() {
             // SAFETY: inherited heap permit, never relinquished during traversal.
             let object = match unsafe { ptr.get() } {
-                Object::Uint8Array(data) => {
-                    let data = data.lock();
-                    SnapshotObject::Uint8Array {
-                        data: b.copy_bytes(&data),
-                        original_len: data.len(),
-                    }
-                }
+                Object::Uint8Array(data) => b.bytes(&data.lock()),
                 Object::Array(data) => {
                     let element_type = b.push_type(owned_type(&data.element_ty));
                     let data = data.lock();
@@ -150,9 +141,6 @@ impl Scratch {
                     for value in data.iter().take(count) {
                         let value = self.add(&mut b, *value, depth + 1);
                         b.push_value(value);
-                    }
-                    if count < data.len() {
-                        b.limited(Limit::Values);
                     }
                     SnapshotObject::List {
                         element_type,
@@ -168,20 +156,13 @@ impl Scratch {
                     let count = data.len().min(b.remaining_entries());
                     b.reserve_entries(count);
                     for (key, value) in data.iter().take(count) {
-                        if !b.content(key.len(), !matches!(key, bex_str::BexStr::Inline { .. })) {
-                            break;
-                        }
                         let value = self.add(&mut b, *value, depth + 1);
                         b.entry(key, value);
-                    }
-                    let entries = b.entry_range(start);
-                    if entries.len() < data.len() {
-                        b.limited(Limit::Values);
                     }
                     SnapshotObject::Map {
                         key_type,
                         value_type,
-                        entries,
+                        entries: b.entry_range(start),
                         original_len: data.len(),
                     }
                 }
@@ -208,25 +189,18 @@ impl Scratch {
                     let count = instance.field_len().min(b.remaining_entries());
                     b.reserve_entries(count);
                     for (i, field) in class.fields.iter().enumerate().take(count) {
-                        if !b.content(field.name.len(), false) {
-                            break;
-                        }
                         let value = self.add(&mut b, instance.load_field(i), depth + 1);
                         b.entry(&field.name.as_str().into(), value);
-                    }
-                    let fields = b.entry_range(start);
-                    if fields.len() < instance.field_len() {
-                        b.limited(Limit::Values);
                     }
                     SnapshotObject::Instance {
                         type_arguments,
                         declaration,
-                        fields,
+                        fields: b.entry_range(start),
                         original_len: instance.field_len(),
                     }
                 }
-                Object::Class(class) => declaration(&mut b, &class.name, class.type_tag, false),
-                Object::Enum(enm) => declaration(&mut b, &enm.name, enm.type_tag, true),
+                Object::Class(class) => b.declaration(&class.name, class.type_tag, false),
+                Object::Enum(enm) => b.declaration(&enm.name, enm.type_tag, true),
                 Object::Cell(cell) => {
                     SnapshotObject::Cell(self.add(&mut b, cell.load(), depth + 1))
                 }
@@ -269,31 +243,6 @@ fn owned_type(ty: &bex_vm_types::RealizedTy) -> btel_snapshot::OwnedType {
         Some(name) => btel_snapshot::TypeIdentity::Resolved(name),
         None => btel_snapshot::TypeIdentity::Unresolved(head.tag()),
     })
-}
-fn declaration(
-    b: &mut Builder,
-    name: &baml_type::DeclarationName,
-    tag: baml_type::typetag::TypeTag,
-    is_enum: bool,
-) -> SnapshotObject {
-    let mut bytes = name.item_name().len();
-    if let Some(q) = name.declared() {
-        bytes += q.package().len();
-        bytes += q
-            .namespace()
-            .iter()
-            .map(baml_type::Name::len)
-            .sum::<usize>();
-    }
-    if b.content(bytes, false) {
-        SnapshotObject::Declaration {
-            name: name.clone(),
-            tag,
-            is_enum,
-        }
-    } else {
-        SnapshotObject::Truncated(Limit::Bytes)
-    }
 }
 /// A media value as the runtime holds it: its kind, MIME type and source, and
 /// loaded content as base64 text shared by handle. Reads no file and fetches
@@ -576,7 +525,17 @@ mod tests {
                 Input::FunctionArgs(&[Value::object(ptr)]),
             )
         };
-        assert!(snapshot.stats().limited);
+        // The list is at the depth limit, so what it holds is cut.
+        let Obj::List { items, .. } = captured_object(&snapshot, snapshot.roots()[0]) else {
+            panic!()
+        };
+        let items = snapshot.values(*items);
+        assert_eq!(items.len(), 8);
+        assert!(
+            items
+                .iter()
+                .all(|item| *item == Val::Truncated(Limit::Depth))
+        );
     }
     #[test]
     fn maps_instances_and_variants_keep_identity_and_fields_after_gc() {
@@ -707,7 +666,8 @@ mod tests {
         else {
             panic!()
         };
-        let baml_type::RealizedTy::Class(head, ..) = &snapshot.type_arguments(*type_arguments)[0]
+        let Some(baml_type::RealizedTy::Class(head, ..)) =
+            snapshot.type_arguments(*type_arguments).next()
         else {
             panic!("lost class type argument");
         };
@@ -720,7 +680,7 @@ mod tests {
         else {
             panic!()
         };
-        assert_eq!(name.item_name().as_str(), "TestClass");
+        assert_eq!(snapshot.name(*name).item_name().as_str(), "TestClass");
         assert_eq!(*tag, baml_type::typetag::TypeTag::from_i64(100));
         let fields = snapshot.entries(*fields);
         assert_eq!(fields[0].key.as_str(), "x");
@@ -806,7 +766,6 @@ mod tests {
             value = Value::object(vm.tlab.alloc_array(ty(), vec![value]));
         }
         let snapshot = capture(&[value]);
-        assert!(!snapshot.stats().limited);
         let mut node = snapshot.roots()[0];
         for _ in 0..256 {
             let Obj::List { items, .. } = captured_object(&snapshot, node) else {
@@ -814,11 +773,10 @@ mod tests {
             };
             node = snapshot.values(*items)[0];
         }
-        let Obj::Uint8Array { data, original_len } = captured_object(&snapshot, node) else {
+        let Obj::Uint8Array { data } = captured_object(&snapshot, node) else {
             panic!()
         };
-        assert_eq!(*original_len, 9 * 1024 * 1024);
-        assert_eq!(snapshot.bytes(*data).len(), *original_len);
+        assert_eq!(snapshot.bytes(*data).len(), 9 * 1024 * 1024);
         assert!(snapshot.bytes(*data).iter().all(|byte| *byte == 42));
     }
 

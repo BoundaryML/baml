@@ -198,14 +198,9 @@ impl TelemetryRecording {
             },
             sources: (!self.sources.is_empty())
                 .then(|| {
-                    let pool = btel_snapshot::SnapshotPool::new(
-                        1,
-                        btel_snapshot::Limits {
-                            max_bytes: Some(SOURCES_MAX_BYTES),
-                            ..btel_snapshot::Limits::default()
-                        },
-                    );
-                    btel_snapshot::string_map(&pool, &self.sources)
+                    let pool =
+                        btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+                    btel_snapshot::string_map(&pool, &self.sources, SOURCES_MAX_BYTES)
                 })
                 .flatten(),
             exit: Arc::clone(&self.exit),

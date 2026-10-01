@@ -45,13 +45,119 @@
 //! capture's own root blob always starts at the captured value.
 use rustc_hash::FxHashMap;
 
-use super::{
-    BigintId, BlobEntry, BlobIndex, CasId, Home, ObjectId, Range, SnapshotObject, SnapshotRoot,
-    SnapshotValue, Storage, StringId, grow,
+use crate::{
+    CasId,
+    arena::{Arena, Meter},
+    graph::{
+        BigintId, Graph, ObjectId, Range, SnapshotObject, SnapshotRoot, SnapshotValue, StringId,
+    },
     hash::{Absorb, Digest, Hasher},
+    pool::Storage,
     tags::HashDomain,
     walk::{self, Both, Length, Reference, Resolver, bigint_limb_bytes, infallible},
 };
+
+/// Position of a blob in its snapshot's blob table. Meaningless for any other
+/// snapshot.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct BlobIndex(pub(crate) u32);
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct BlobEntry {
+    pub(crate) id: CasId,
+    pub(crate) root: SnapshotRoot,
+    pub(crate) members: Range<ObjectId>,
+    pub(crate) children: Range<BlobIndex>,
+    pub(crate) encoded_len: u64,
+}
+/// Where other blobs find an object stored in a blob of its own.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Home {
+    pub(crate) blob: BlobIndex,
+    /// The object's local number there; zero is that blob's root.
+    pub(crate) node: u32,
+}
+
+/// The blobs a capture was shaped into.
+#[derive(Default)]
+pub(crate) struct Shape {
+    /// Children before parents; the last is the capture's root.
+    pub(crate) blobs: Arena<BlobEntry>,
+    /// Each blob's objects in blob-local order, concatenated.
+    pub(crate) members: Arena<ObjectId>,
+    /// Each blob's children in first-use order, concatenated.
+    pub(crate) children: Arena<BlobIndex>,
+    /// Per object, string and bigint: the blob other blobs find it in. Empty
+    /// when the capture is one blob.
+    object_homes: Arena<Option<Home>>,
+    string_homes: Arena<Option<BlobIndex>>,
+    bigint_homes: Arena<Option<BlobIndex>>,
+}
+impl Shape {
+    pub(crate) fn object_home(&self, id: ObjectId) -> Option<Home> {
+        self.object_homes.get(id.0 as usize).copied().flatten()
+    }
+    pub(crate) fn string_home(&self, id: StringId) -> Option<BlobIndex> {
+        self.string_homes.get(id.0 as usize).copied().flatten()
+    }
+    pub(crate) fn bigint_home(&self, id: BigintId) -> Option<BlobIndex> {
+        self.bigint_homes.get(id.0 as usize).copied().flatten()
+    }
+    /// Drop the shape and keep the capacity. Every arena is named, so none
+    /// can keep a previous capture's blobs.
+    pub(crate) fn clear(&mut self) {
+        let Self {
+            blobs,
+            members,
+            children,
+            object_homes,
+            string_homes,
+            bigint_homes,
+        } = self;
+        blobs.clear();
+        members.clear();
+        children.clear();
+        object_homes.clear();
+        string_homes.clear();
+        bigint_homes.clear();
+    }
+    /// Bytes its items occupy, without spare capacity.
+    pub(crate) fn live_bytes(&self) -> usize {
+        let Self {
+            blobs,
+            members,
+            children,
+            object_homes,
+            string_homes,
+            bigint_homes,
+        } = self;
+        size_of_val(&**blobs)
+            + size_of_val(&**members)
+            + size_of_val(&**children)
+            + size_of_val(&**object_homes)
+            + size_of_val(&**string_homes)
+            + size_of_val(&**bigint_homes)
+    }
+    pub(crate) fn capacity_bytes(&self) -> usize {
+        let Self {
+            blobs,
+            members,
+            children,
+            object_homes,
+            string_homes,
+            bigint_homes,
+        } = self;
+        [
+            blobs.capacity_bytes(),
+            members.capacity_bytes(),
+            children.capacity_bytes(),
+            object_homes.capacity_bytes(),
+            string_homes.capacity_bytes(),
+            bigint_homes.capacity_bytes(),
+        ]
+        .into_iter()
+        .fold(0, usize::saturating_add)
+    }
+}
 
 /// Where a capture is cut into blobs. The policy decides blob IDs, never
 /// whether a blob can be read.
@@ -122,78 +228,73 @@ impl Shaper {
         self.policy
     }
 
-    pub(crate) fn shape(&mut self, s: &mut Storage, root: SnapshotRoot) {
-        debug_assert!(s.blobs.is_empty(), "a capture is shaped once");
+    /// Shape a finished capture into blobs, the root blob last.
+    pub(crate) fn shape(&mut self, storage: &mut Storage, root: SnapshotRoot) {
+        let Storage {
+            graph,
+            shape,
+            meter,
+            ..
+        } = storage;
+        let graph: &Graph = graph;
+        debug_assert!(shape.blobs.is_empty(), "a capture is shaped once");
         self.local.clear();
-        self.local.resize(s.objects.len(), UNNUMBERED);
+        self.local.resize(graph.objects.len(), UNNUMBERED);
         self.slots.clear();
         self.ids.clear();
-        let bound = s.encoded_bound();
         match self.policy {
             ShapePolicy::Whole => {}
             ShapePolicy::Split {
                 unit_bytes,
                 leaf_bytes,
             } => {
-                if bound >= unit_bytes || s.largest_leaf as u64 >= leaf_bytes {
-                    self.cut(s, root, unit_bytes, leaf_bytes);
+                if may_cut(graph, root, unit_bytes, leaf_bytes) {
+                    self.cut(graph, shape, meter, root, unit_bytes, leaf_bytes);
                 } else {
                     #[cfg(debug_assertions)]
-                    self.check_nothing_to_cut(s, root, unit_bytes, leaf_bytes);
+                    self.check_nothing_to_cut(graph, root, unit_bytes, leaf_bytes);
                 }
             }
         }
-        let index = self.blob(s, root, 0..0);
+        let index = self.blob(graph, shape, meter, root, 0..0);
         debug_assert_eq!(
             index.0 as usize + 1,
-            s.blobs.len(),
+            shape.blobs.len(),
             "a capture's root blob holds its children, so it equals none of them"
         );
-        debug_assert!(
-            s.blobs.len() > 1 || s.blobs[0].encoded_len <= bound,
-            "a capture's size bound covers its blob"
-        );
         #[cfg(debug_assertions)]
-        Self::check_nothing_copied(s);
-    }
-
-    /// Only closed units are cut, so no object is in two blobs. Declarations
-    /// are, in every blob that names them.
-    #[cfg(debug_assertions)]
-    fn check_nothing_copied(s: &Storage) {
-        let mut held = vec![false; s.objects.len()];
-        for member in &s.members {
-            let object = &s.objects[member.0 as usize];
-            if !matches!(object, SnapshotObject::Declaration { .. }) {
-                assert!(
-                    !std::mem::replace(&mut held[member.0 as usize], true),
-                    "an object is stored in one blob of its capture"
-                );
-            }
-        }
+        check_nothing_copied(graph, shape);
     }
 
     /// The pass a capture under both thresholds skips would have cut nothing.
     #[cfg(debug_assertions)]
     fn check_nothing_to_cut(
         &mut self,
-        s: &Storage,
+        graph: &Graph,
         root: SnapshotRoot,
         unit_bytes: u64,
         leaf_bytes: u64,
     ) {
-        self.cuts.find(s, root, unit_bytes, leaf_bytes);
+        self.cuts.find(graph, root, unit_bytes, leaf_bytes);
         assert!(
             self.cuts.units.iter().all(|unit| !unit.cut)
                 && !self.cuts.strings.contains(&true)
                 && !self.cuts.bigints.contains(&true),
-            "a capture under the size bound has nothing to cut"
+            "a capture under the unit size has nothing to cut"
         );
     }
 
     /// Shape every blob below the capture's root blob, children first.
-    fn cut(&mut self, s: &mut Storage, root: SnapshotRoot, unit_bytes: u64, leaf_bytes: u64) {
-        self.cuts.find(s, root, unit_bytes, leaf_bytes);
+    fn cut(
+        &mut self,
+        graph: &Graph,
+        shape: &mut Shape,
+        meter: &Meter,
+        root: SnapshotRoot,
+        unit_bytes: u64,
+        leaf_bytes: u64,
+    ) {
+        self.cuts.find(graph, root, unit_bytes, leaf_bytes);
         // The root's own unit is the root blob, wherever its weight falls.
         let root_unit = match root {
             SnapshotRoot::Value(SnapshotValue::Object(id)) => {
@@ -222,39 +323,34 @@ impl Shaper {
         if !(cut_units || cut_strings || cut_bigints) {
             return;
         }
-        let pool = s
-            .owner
-            .as_ref()
-            .unwrap_or_else(|| unreachable!("builder storage has an owner"));
-        grow(&mut s.object_homes, s.objects.len(), pool, &mut s.charged);
-        s.object_homes.resize(s.objects.len(), None);
-        grow(&mut s.string_homes, s.strings.len(), pool, &mut s.charged);
-        s.string_homes.resize(s.strings.len(), None);
-        grow(&mut s.bigint_homes, s.bigints.len(), pool, &mut s.charged);
-        s.bigint_homes.resize(s.bigints.len(), None);
+        shape.object_homes.fill_to(graph.objects.len(), None, meter);
+        shape.string_homes.fill_to(graph.strings.len(), None, meter);
+        shape.bigint_homes.fill_to(graph.bigints.len(), None, meter);
 
         // Leaves reference nothing, so their blobs can come first.
-        for index in 0..s.strings.len() {
+        for index in 0..graph.strings.len() {
             if self.cuts.strings[index] {
                 let id = StringId(u32::try_from(index).expect("bounded strings"));
                 let leaf = SnapshotRoot::Value(SnapshotValue::String(id));
-                s.string_homes[index] = Some(self.blob(s, leaf, 0..0));
+                let home = self.blob(graph, shape, meter, leaf, 0..0);
+                shape.string_homes[index] = Some(home);
             }
         }
-        for index in 0..s.bigints.len() {
+        for index in 0..graph.bigints.len() {
             if self.cuts.bigints[index] {
                 let id = BigintId(u32::try_from(index).expect("bounded bigints"));
                 let leaf = SnapshotRoot::Value(SnapshotValue::Bigint(id));
-                s.bigint_homes[index] = Some(self.blob(s, leaf, 0..0));
+                let home = self.blob(graph, shape, meter, leaf, 0..0);
+                shape.bigint_homes[index] = Some(home);
             }
         }
         // Units complete after every unit they reference.
         for unit in 0..self.cuts.units.len() {
             let Unit { members, cut, .. } = self.cuts.units[unit].clone();
             if cut {
-                let start = self.cuts.start(s, members.clone());
+                let start = self.cuts.start(graph, members.clone());
                 let root = SnapshotRoot::Value(SnapshotValue::Object(start));
-                self.blob(s, root, members);
+                self.blob(graph, shape, meter, root, members);
             }
         }
     }
@@ -264,7 +360,9 @@ impl Shaper {
     /// through this one.
     fn blob(
         &mut self,
-        s: &mut Storage,
+        graph: &Graph,
+        shape: &mut Shape,
+        meter: &Meter,
         root: SnapshotRoot,
         unit: std::ops::Range<usize>,
     ) -> BlobIndex {
@@ -277,26 +375,25 @@ impl Shaper {
             cuts,
             policy: _,
         } = self;
-        slots.resize(s.blobs.len(), UNNUMBERED);
+        slots.resize(shape.blobs.len(), UNNUMBERED);
         order.clear();
         children.clear();
         let (mut h, content_bytes) = {
-            let s: &Storage = s;
             let mut numbering = Numbering {
-                s,
+                shape,
                 local: &mut *local,
                 order: &mut *order,
                 children: &mut *children,
                 slots: &mut *slots,
             };
             let mut visitor = Both(Hasher::new(HashDomain::Blob), Length::default());
-            infallible(walk::root(&mut visitor, &mut numbering, s, root));
+            infallible(walk::root(&mut visitor, &mut numbering, graph, root));
             // Hashing a definition numbers its new references, which extends
             // `order` with the objects to hash next.
             let mut next = 0;
             while let Some(&id) = numbering.order.get(next) {
-                let object = &s.objects[id.0 as usize];
-                infallible(walk::object(&mut visitor, &mut numbering, s, object));
+                let object = &graph.objects[id.0 as usize];
+                infallible(walk::object(&mut visitor, &mut numbering, graph, object));
                 next += 1;
             }
             let Both(h, Length(content_bytes)) = visitor;
@@ -305,7 +402,7 @@ impl Shaper {
         // The child table is complete only now; the ID covers it last.
         h.size(children.len());
         for child in children.iter() {
-            h.absorb(s.blobs[child.0 as usize].id.as_bytes());
+            h.absorb(shape.blobs[child.0 as usize].id.as_bytes());
         }
         h.size(order.len());
         let id = CasId::from_bytes(h.finish().0);
@@ -319,25 +416,22 @@ impl Shaper {
         let index = match ids.get(&id) {
             Some(index) => *index,
             None => {
-                let pool = s
-                    .owner
-                    .as_ref()
-                    .unwrap_or_else(|| unreachable!("builder storage has an owner"));
-                let index = BlobIndex(u32::try_from(s.blobs.len()).expect("bounded blob count"));
-                let members = Range::new(s.members.len(), order.len());
-                grow(&mut s.members, order.len(), pool, &mut s.charged);
-                s.members.extend_from_slice(order);
-                let child_range = Range::new(s.blob_children.len(), children.len());
-                grow(&mut s.blob_children, children.len(), pool, &mut s.charged);
-                s.blob_children.extend_from_slice(children);
-                grow(&mut s.blobs, 1, pool, &mut s.charged);
-                s.blobs.push(BlobEntry {
-                    id,
-                    root,
-                    members,
-                    children: child_range,
-                    encoded_len,
-                });
+                let index =
+                    BlobIndex(u32::try_from(shape.blobs.len()).expect("bounded blob count"));
+                let members = Range::new(shape.members.len(), order.len());
+                shape.members.extend_from_slice(order, meter);
+                let child_range = Range::new(shape.children.len(), children.len());
+                shape.children.extend_from_slice(children, meter);
+                shape.blobs.push(
+                    BlobEntry {
+                        id,
+                        root,
+                        members,
+                        children: child_range,
+                        encoded_len,
+                    },
+                    meter,
+                );
                 ids.insert(id, index);
                 index
             }
@@ -345,7 +439,7 @@ impl Shaper {
         for member in &cuts.members[unit] {
             let node = local[member.0 as usize];
             debug_assert_ne!(node, UNNUMBERED, "a cycle's root reaches every member");
-            s.object_homes[member.0 as usize] = Some(Home { blob: index, node });
+            shape.object_homes[member.0 as usize] = Some(Home { blob: index, node });
         }
         for member in order.iter() {
             local[member.0 as usize] = UNNUMBERED;
@@ -357,9 +451,56 @@ impl Shaper {
     }
 }
 
+/// Whether anything in the capture can reach a cut: a leaf at the leaf size,
+/// or content that as one blob reaches the unit size. No unit weighs more
+/// than the capture encodes to, so a capture under both is one blob without
+/// the pass that finds the units. Measuring stops at the unit size.
+fn may_cut(graph: &Graph, root: SnapshotRoot, unit_bytes: u64, leaf_bytes: u64) -> bool {
+    let large = |bytes: usize| bytes as u64 >= leaf_bytes;
+    if graph.strings.iter().any(|text| large(text.len()))
+        || graph
+            .bigints
+            .iter()
+            .any(|bigint| large(bigint_limb_bytes(&bigint.value)))
+    {
+        return true;
+    }
+    // Header, child and object counts, then the content.
+    let mut length = Length(HEADER_BYTES + 4 + 4);
+    infallible(walk::root(&mut length, &mut Unresolved, graph, root));
+    for object in graph.objects.iter() {
+        if length.0 >= unit_bytes {
+            break;
+        }
+        if let SnapshotObject::Uint8Array { data, .. } = object
+            && large(data.len())
+        {
+            return true;
+        }
+        infallible(walk::object(&mut length, &mut Unresolved, graph, object));
+    }
+    length.0 >= unit_bytes
+}
+
+/// Only closed units are cut, so no object is in two blobs. Declarations
+/// are, in every blob that names them.
+#[cfg(debug_assertions)]
+fn check_nothing_copied(graph: &Graph, shape: &Shape) {
+    let mut held = vec![false; graph.objects.len()];
+    for member in shape.members.iter() {
+        let object = &graph.objects[member.0 as usize];
+        if !matches!(object, SnapshotObject::Declaration { .. }) {
+            assert!(
+                !std::mem::replace(&mut held[member.0 as usize], true),
+                "an object is stored in one blob of its capture"
+            );
+        }
+    }
+}
+
 /// Numbers the members and children of the blob being shaped.
 struct Numbering<'a> {
-    s: &'a Storage,
+    shape: &'a Shape,
     local: &'a mut [u32],
     order: &'a mut Vec<ObjectId>,
     children: &'a mut Vec<BlobIndex>,
@@ -389,7 +530,7 @@ impl Resolver for Numbering<'_> {
         if number != UNNUMBERED {
             return Reference::Local(number);
         }
-        match self.s.object_home(id) {
+        match self.shape.object_home(id) {
             Some(Home { blob, node: 0 }) => Reference::Child(self.slot(blob)),
             Some(Home { blob, node }) => Reference::ChildNode {
                 slot: self.slot(blob),
@@ -399,10 +540,10 @@ impl Resolver for Numbering<'_> {
         }
     }
     fn string(&mut self, id: StringId) -> Option<u32> {
-        self.s.string_home(id).map(|blob| self.slot(blob))
+        self.shape.string_home(id).map(|blob| self.slot(blob))
     }
     fn bigint(&mut self, id: BigintId) -> Option<u32> {
-        self.s.bigint_home(id).map(|blob| self.slot(blob))
+        self.shape.bigint_home(id).map(|blob| self.slot(blob))
     }
 }
 
@@ -535,7 +676,7 @@ struct Cuts {
 }
 
 impl Cuts {
-    fn find(&mut self, s: &Storage, root: SnapshotRoot, unit_bytes: u64, leaf_bytes: u64) {
+    fn find(&mut self, s: &Graph, root: SnapshotRoot, unit_bytes: u64, leaf_bytes: u64) {
         self.nodes.clear();
         self.nodes.resize(s.objects.len(), FRESH);
         self.edges.clear();
@@ -578,7 +719,7 @@ impl Cuts {
     /// `from` references it, or the capture's root does.
     fn enter(
         &mut self,
-        s: &Storage,
+        s: &Graph,
         id: ObjectId,
         from: Option<ObjectId>,
         visited: &mut u32,
@@ -619,7 +760,7 @@ impl Cuts {
         self.path.push((id, 0));
     }
 
-    fn search(&mut self, s: &Storage, start: ObjectId, visited: &mut u32, leaf_bytes: u64) {
+    fn search(&mut self, s: &Graph, start: ObjectId, visited: &mut u32, leaf_bytes: u64) {
         self.enter(s, start, None, visited, leaf_bytes);
         while let Some(top) = self.path.last_mut() {
             let (id, next) = *top;
@@ -688,7 +829,7 @@ impl Cuts {
     /// Weigh every unit and cut the closed ones that reach the unit size. In
     /// the order the units completed, each follows the units it references,
     /// and an uncut one hands its region to the unit that discovered it.
-    fn decide(&mut self, s: &Storage, unit_bytes: u64, leaf_bytes: u64) {
+    fn decide(&mut self, s: &Graph, unit_bytes: u64, leaf_bytes: u64) {
         for unit in 0..self.units.len() {
             let Unit {
                 members,
@@ -728,8 +869,10 @@ impl Cuts {
             let closed = region.within(index, last);
             let cut = closed
                 && match &s.objects[first.0 as usize] {
-                    SnapshotObject::Declaration { .. } => false,
-                    SnapshotObject::Uint8Array { data, .. } => data.len() as u64 >= leaf_bytes,
+                    // It holds no content to store apart.
+                    SnapshotObject::Declaration { .. }
+                    | SnapshotObject::Uint8ArrayTruncated { .. } => false,
+                    SnapshotObject::Uint8Array { data } => data.len() as u64 >= leaf_bytes,
                     SnapshotObject::List { .. }
                     | SnapshotObject::Map { .. }
                     | SnapshotObject::Instance { .. }
@@ -754,7 +897,7 @@ impl Cuts {
 
     /// The object a cut unit's blob starts at: the one with the smallest
     /// digest of its own content, the first visited among equals.
-    fn start(&self, s: &Storage, members: std::ops::Range<usize>) -> ObjectId {
+    fn start(&self, s: &Graph, members: std::ops::Range<usize>) -> ObjectId {
         if let [only] = &self.members[members.clone()] {
             return *only;
         }
@@ -777,7 +920,7 @@ impl Cuts {
 /// Lists an object's references and marks the leaves cut where it holds them.
 /// Declarations are named, never referenced: they belong to no unit.
 struct Edges<'a> {
-    s: &'a Storage,
+    s: &'a Graph,
     leaf_bytes: u64,
     found: &'a mut Vec<ObjectId>,
     strings: &'a mut [bool],
@@ -797,7 +940,8 @@ impl Resolver for Edges<'_> {
         cut.then_some(0)
     }
     fn bigint(&mut self, id: BigintId) -> Option<u32> {
-        let cut = bigint_limb_bytes(&self.s.bigints[id.0 as usize]) as u64 >= self.leaf_bytes;
+        let limbs = bigint_limb_bytes(&self.s.bigints[id.0 as usize].value);
+        let cut = limbs as u64 >= self.leaf_bytes;
         self.bigints[id.0 as usize] |= cut;
         cut.then_some(0)
     }

@@ -912,7 +912,7 @@ fn build_inline(b: &mut btel_snapshot::Builder, value: &Inline) -> btel_snapshot
             let start = b.entry_start();
             b.reserve_entries(entries.len().min(b.remaining_entries()));
             for ((key, _), value) in entries.iter().zip(values) {
-                if b.remaining_entries() == 0 || !b.content(key.len(), false) {
+                if b.remaining_entries() == 0 {
                     break;
                 }
                 b.entry(&btel_snapshot::BexStr::from(key.as_str()), value);

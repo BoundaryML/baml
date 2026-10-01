@@ -11,12 +11,15 @@
 //! declarations are always written in place, and a blob's own root value is
 //! never a reference to another blob. Media content is written as a value.
 use baml_type::{DeclarationName, typetag::TypeTag};
+use bex_str::BexStr;
 use num_bigint::BigInt;
 
-use super::{
-    BexStr, BigintId, MapEntry, MediaSource, ObjectId, OwnedType, Range, SnapshotObject,
-    SnapshotRoot, SnapshotValue, Storage, StringId,
-    hash::{Absorb, Counter, Digest, Hasher, TypeLeaf},
+use crate::{
+    graph::{
+        BigintId, Graph, MapEntry, MediaSource, ObjectId, OwnedType, Range, SnapshotObject,
+        SnapshotRoot, SnapshotValue, StringId, TypeId,
+    },
+    hash::{self, Absorb, Counter, Digest, Hasher, TypeLeaf},
     tags::{self, MediaSourceTag, ObjectTag, RootTag, ValueTag},
 };
 
@@ -57,7 +60,8 @@ pub(crate) trait Visitor {
     fn index(&mut self, index: u32) -> Result<(), Self::Error>;
     /// A length that is data, not the size of what follows.
     fn length(&mut self, length: usize) -> Result<(), Self::Error>;
-    fn string(&mut self, text: &BexStr, digest: Digest) -> Result<(), Self::Error>;
+    /// A string as a value or a name. Its digest is the handle's own.
+    fn string(&mut self, text: &BexStr) -> Result<(), Self::Error>;
     /// A map key or field name.
     fn key(&mut self, text: &BexStr) -> Result<(), Self::Error>;
     fn bigint(&mut self, value: &BigInt, digest: Digest) -> Result<(), Self::Error>;
@@ -79,7 +83,7 @@ enum Place {
 pub(crate) fn root<V: Visitor, R: Resolver>(
     v: &mut V,
     r: &mut R,
-    s: &Storage,
+    s: &Graph,
     root: SnapshotRoot,
 ) -> Result<(), V::Error> {
     match root {
@@ -108,7 +112,7 @@ fn local<V: Visitor>(v: &mut V, number: u32) -> Result<(), V::Error> {
 fn value<V: Visitor, R: Resolver>(
     v: &mut V,
     r: &mut R,
-    s: &Storage,
+    s: &Graph,
     value: SnapshotValue,
     place: Place,
 ) -> Result<(), V::Error> {
@@ -136,7 +140,7 @@ fn value<V: Visitor, R: Resolver>(
                 Some(slot) => child(v, slot),
                 None => {
                     v.byte(ValueTag::String as u8)?;
-                    v.string(&s.strings[id.0 as usize], s.string_hashes[id.0 as usize])
+                    v.string(&s.strings[id.0 as usize])
                 }
             }
         }
@@ -149,7 +153,8 @@ fn value<V: Visitor, R: Resolver>(
                 Some(slot) => child(v, slot),
                 None => {
                     v.byte(ValueTag::Bigint as u8)?;
-                    v.bigint(&s.bigints[id.0 as usize], s.bigint_hashes[id.0 as usize])
+                    let bigint = &s.bigints[id.0 as usize];
+                    v.bigint(&bigint.value, bigint.digest)
                 }
             }
         }
@@ -170,7 +175,7 @@ fn value<V: Visitor, R: Resolver>(
         }
         SnapshotValue::Type(id) => {
             v.byte(ValueTag::Type as u8)?;
-            v.ty(&s.types[id.0 as usize], s.type_leaves[id.0 as usize])
+            ty(v, s, id)
         }
         SnapshotValue::Enum {
             declaration,
@@ -190,8 +195,13 @@ fn value<V: Visitor, R: Resolver>(
 }
 
 /// A string written in place, never in another blob.
-fn text<V: Visitor>(v: &mut V, s: &Storage, id: StringId) -> Result<(), V::Error> {
-    v.string(&s.strings[id.0 as usize], s.string_hashes[id.0 as usize])
+fn text<V: Visitor>(v: &mut V, s: &Graph, id: StringId) -> Result<(), V::Error> {
+    v.string(&s.strings[id.0 as usize])
+}
+
+fn ty<V: Visitor>(v: &mut V, s: &Graph, id: TypeId) -> Result<(), V::Error> {
+    let ty = &s.types[id.0 as usize];
+    v.ty(&ty.ty, ty.leaf)
 }
 
 /// Media content: its length, then its base64 text as a value, which a large
@@ -200,7 +210,7 @@ fn text<V: Visitor>(v: &mut V, s: &Storage, id: StringId) -> Result<(), V::Error
 fn payload<V: Visitor, R: Resolver>(
     v: &mut V,
     r: &mut R,
-    s: &Storage,
+    s: &Graph,
     data: StringId,
 ) -> Result<(), V::Error> {
     v.length(s.strings[data.0 as usize].len())?;
@@ -211,7 +221,7 @@ fn payload<V: Visitor, R: Resolver>(
 fn loaded<V: Visitor, R: Resolver>(
     v: &mut V,
     r: &mut R,
-    s: &Storage,
+    s: &Graph,
     data: Option<StringId>,
 ) -> Result<(), V::Error> {
     v.byte(u8::from(data.is_some()))?;
@@ -224,7 +234,7 @@ fn loaded<V: Visitor, R: Resolver>(
 fn values<V: Visitor, R: Resolver>(
     v: &mut V,
     r: &mut R,
-    s: &Storage,
+    s: &Graph,
     range: Range<SnapshotValue>,
 ) -> Result<(), V::Error> {
     v.begin_range(range.len())?;
@@ -237,7 +247,7 @@ fn values<V: Visitor, R: Resolver>(
 fn entries<V: Visitor, R: Resolver>(
     v: &mut V,
     r: &mut R,
-    s: &Storage,
+    s: &Graph,
     range: Range<MapEntry>,
 ) -> Result<(), V::Error> {
     v.begin_range(range.len())?;
@@ -251,16 +261,20 @@ fn entries<V: Visitor, R: Resolver>(
 pub(crate) fn object<V: Visitor, R: Resolver>(
     v: &mut V,
     r: &mut R,
-    s: &Storage,
+    s: &Graph,
     object: &SnapshotObject,
 ) -> Result<(), V::Error> {
-    let ty =
-        |v: &mut V, id: super::TypeId| v.ty(&s.types[id.0 as usize], s.type_leaves[id.0 as usize]);
     match object {
-        SnapshotObject::Uint8Array { data, original_len } => {
+        SnapshotObject::Uint8Array { data } => {
+            v.byte(ObjectTag::Uint8Array as u8)?;
+            v.length(data.len())?;
+            v.bytes(&s.bytes[data.range.indexes()], data.digest)
+        }
+        // The same object with no bytes captured: only the length says more.
+        SnapshotObject::Uint8ArrayTruncated { original_len } => {
             v.byte(ObjectTag::Uint8Array as u8)?;
             v.length(*original_len)?;
-            v.bytes(&s.bytes[data.range.indexes()], data.digest)
+            v.bytes(&[], hash::no_bytes())
         }
         SnapshotObject::List {
             element_type,
@@ -268,7 +282,7 @@ pub(crate) fn object<V: Visitor, R: Resolver>(
             original_len,
         } => {
             v.byte(ObjectTag::List as u8)?;
-            ty(v, *element_type)?;
+            ty(v, s, *element_type)?;
             v.length(*original_len)?;
             values(v, r, s, *items)
         }
@@ -279,8 +293,8 @@ pub(crate) fn object<V: Visitor, R: Resolver>(
             original_len,
         } => {
             v.byte(ObjectTag::Map as u8)?;
-            ty(v, *key_type)?;
-            ty(v, *value_type)?;
+            ty(v, s, *key_type)?;
+            ty(v, s, *value_type)?;
             v.length(*original_len)?;
             entries(v, r, s, *range)
         }
@@ -292,8 +306,8 @@ pub(crate) fn object<V: Visitor, R: Resolver>(
         } => {
             v.byte(ObjectTag::Instance as u8)?;
             v.begin_range(type_arguments.len())?;
-            for index in type_arguments.indexes() {
-                v.ty(&s.types[index], s.type_leaves[index])?;
+            for ty in &s.types[type_arguments.indexes()] {
+                v.ty(&ty.ty, ty.leaf)?;
             }
             v.index(r.member(*declaration))?;
             v.length(*original_len)?;
@@ -301,7 +315,7 @@ pub(crate) fn object<V: Visitor, R: Resolver>(
         }
         SnapshotObject::Declaration { name, tag, is_enum } => {
             v.byte(ObjectTag::Declaration as u8)?;
-            v.declaration(*tag, name)?;
+            v.declaration(*tag, &s.names[name.0 as usize])?;
             v.byte(u8::from(*is_enum))
         }
         SnapshotObject::Cell(inner) => {
@@ -377,8 +391,8 @@ impl Visitor for Hasher {
         self.size(length);
         Ok(())
     }
-    fn string(&mut self, _: &BexStr, digest: Digest) -> Result<(), Self::Error> {
-        self.digest(digest);
+    fn string(&mut self, text: &BexStr) -> Result<(), Self::Error> {
+        self.digest(hash::string(text));
         Ok(())
     }
     fn key(&mut self, text: &BexStr) -> Result<(), Self::Error> {
@@ -469,7 +483,7 @@ impl Visitor for Length {
         Ok(())
     }
     #[inline(always)]
-    fn string(&mut self, text: &BexStr, _: Digest) -> Result<(), Self::Error> {
+    fn string(&mut self, text: &BexStr) -> Result<(), Self::Error> {
         self.add(4);
         self.add(text.len());
         Ok(())
@@ -552,9 +566,9 @@ where
         self.0.length(length)
     }
     #[inline(always)]
-    fn string(&mut self, text: &BexStr, digest: Digest) -> Result<(), Self::Error> {
-        infallible(self.1.string(text, digest));
-        self.0.string(text, digest)
+    fn string(&mut self, text: &BexStr) -> Result<(), Self::Error> {
+        infallible(self.1.string(text));
+        self.0.string(text)
     }
     #[inline(always)]
     fn key(&mut self, text: &BexStr) -> Result<(), Self::Error> {

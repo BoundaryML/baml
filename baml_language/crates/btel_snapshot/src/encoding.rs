@@ -34,9 +34,10 @@ pub use btel_settings::snapshot::{BLOB_MAGIC, BLOB_VERSION};
 use num_bigint::BigInt;
 
 use crate::{
-    BexStr, BigintId, Blob, BlobIndex, Home, ObjectId, OwnedType, Storage, StringId,
+    BexStr, Blob,
+    graph::{BigintId, Graph, ObjectId, OwnedType, StringId},
     hash::{Digest, TypeLeaf},
-    shape::UNNUMBERED,
+    shape::{BlobIndex, Home, Shape, UNNUMBERED},
     tags,
     walk::{self, Reference, Resolver, Visitor},
 };
@@ -74,19 +75,20 @@ impl Blob<'_> {
     /// Stream this blob's canonical bytes without cloning owners or
     /// allocating an encoded payload. The writer chooses its own buffering.
     pub fn write(&self, scratch: &mut BlobScratch, w: &mut impl Write) -> io::Result<()> {
-        let s: &Storage = &self.snapshot.0;
+        let s = &self.snapshot.0.graph;
+        let shape = &self.snapshot.0.shape;
         let entry = self.entry();
-        let members = &s.members[entry.members.indexes()];
-        let children = &s.blob_children[entry.children.indexes()];
+        let members = &shape.members[entry.members.indexes()];
+        let children = &shape.children[entry.children.indexes()];
         w.write_all(&BLOB_MAGIC)?;
         BLOB_VERSION.serialize(w)?;
         w.write_all(entry.id.as_bytes())?;
         size(w, children.len())?;
         for child in children {
-            w.write_all(s.blobs[child.0 as usize].id.as_bytes())?;
+            w.write_all(shape.blobs[child.0 as usize].id.as_bytes())?;
         }
         size(w, members.len())?;
-        let mut stored = Stored::new(scratch, s, members, children);
+        let mut stored = Stored::new(scratch, s, shape, members, children);
         let mut writer = Writer(w);
         walk::root(&mut writer, &mut stored, s, entry.root)?;
         for id in members {
@@ -115,7 +117,7 @@ impl Blob<'_> {
 /// The numbers shaping gave this blob's members and children. Leaves the
 /// scratch clean when dropped, whether or not the write succeeded.
 struct Stored<'a> {
-    s: &'a Storage,
+    shape: &'a Shape,
     scratch: &'a mut BlobScratch,
     members: &'a [ObjectId],
     children: &'a [BlobIndex],
@@ -123,15 +125,16 @@ struct Stored<'a> {
 impl<'a> Stored<'a> {
     fn new(
         scratch: &'a mut BlobScratch,
-        s: &'a Storage,
+        graph: &Graph,
+        shape: &'a Shape,
         members: &'a [ObjectId],
         children: &'a [BlobIndex],
     ) -> Self {
-        if scratch.local.len() < s.objects.len() {
-            scratch.local.resize(s.objects.len(), UNNUMBERED);
+        if scratch.local.len() < graph.objects.len() {
+            scratch.local.resize(graph.objects.len(), UNNUMBERED);
         }
-        if scratch.slots.len() < s.blobs.len() {
-            scratch.slots.resize(s.blobs.len(), UNNUMBERED);
+        if scratch.slots.len() < shape.blobs.len() {
+            scratch.slots.resize(shape.blobs.len(), UNNUMBERED);
         }
         for (number, id) in members.iter().enumerate() {
             scratch.local[id.0 as usize] = u32::try_from(number).expect("bounded objects");
@@ -140,7 +143,7 @@ impl<'a> Stored<'a> {
             scratch.slots[child.0 as usize] = u32::try_from(slot).expect("bounded blob count");
         }
         Self {
-            s,
+            shape,
             scratch,
             members,
             children,
@@ -176,7 +179,7 @@ impl Resolver for Stored<'_> {
         if number != UNNUMBERED {
             return Reference::Local(number);
         }
-        match self.s.object_home(id) {
+        match self.shape.object_home(id) {
             Some(Home { blob, node: 0 }) => Reference::Child(self.slot(blob)),
             Some(Home { blob, node }) => Reference::ChildNode {
                 slot: self.slot(blob),
@@ -186,10 +189,10 @@ impl Resolver for Stored<'_> {
         }
     }
     fn string(&mut self, id: StringId) -> Option<u32> {
-        self.s.string_home(id).map(|blob| self.slot(blob))
+        self.shape.string_home(id).map(|blob| self.slot(blob))
     }
     fn bigint(&mut self, id: BigintId) -> Option<u32> {
-        self.s.bigint_home(id).map(|blob| self.slot(blob))
+        self.shape.bigint_home(id).map(|blob| self.slot(blob))
     }
 }
 
@@ -211,7 +214,7 @@ impl<W: Write> Visitor for Writer<'_, W> {
     fn length(&mut self, length: usize) -> io::Result<()> {
         original_len(self.0, length)
     }
-    fn string(&mut self, text: &BexStr, _: Digest) -> io::Result<()> {
+    fn string(&mut self, text: &BexStr) -> io::Result<()> {
         string(self.0, text)
     }
     fn key(&mut self, text: &BexStr) -> io::Result<()> {

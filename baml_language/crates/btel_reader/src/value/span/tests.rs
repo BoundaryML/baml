@@ -104,15 +104,9 @@ fn map(b: &mut Builder, entries: &[(&str, V)]) -> V {
 }
 
 fn bytes(b: &mut Builder, content: &[u8]) -> V {
-    let data = b.copy_bytes(content);
+    let object = b.bytes(content);
     let id = b.reserve_object().unwrap();
-    b.set_object(
-        id,
-        O::Uint8Array {
-            data,
-            original_len: content.len(),
-        },
-    );
+    b.set_object(id, object);
     V::Object(id)
 }
 

@@ -1,4 +1,18 @@
+use std::sync::Arc;
+
+use num_bigint::BigInt;
+
 use super::*;
+
+/// A byte array's object, and the handle that reads its bytes back.
+fn bytes(b: &mut Builder, content: &[u8]) -> (SnapshotObject, Uint8ArrayData) {
+    let object = b.bytes(content);
+    let SnapshotObject::Uint8Array { data } = &object else {
+        panic!("the bytes fit the arena")
+    };
+    let data = *data;
+    (object, data)
+}
 
 fn scalar(pool: &SnapshotPool, n: i64) -> Snapshot {
     pool.try_acquire()
@@ -49,15 +63,9 @@ fn unwind_releases_builder_and_large_allocations_are_not_retained() {
     );
     let mut b = pool.try_acquire().unwrap();
     let data = vec![9; 512 * 1024];
-    let range = b.copy_bytes(&data);
+    let (object, range) = bytes(&mut b, &data);
     let id = b.reserve_object().unwrap();
-    b.set_object(
-        id,
-        SnapshotObject::Uint8Array {
-            data: range,
-            original_len: data.len(),
-        },
-    );
+    b.set_object(id, object);
     let snapshot = b.finish_value(SnapshotValue::Object(id), &mut Shaper::default());
     assert_eq!(snapshot.bytes(range), data);
     assert!(pool.stats().allocated_bytes > data.len());
@@ -68,34 +76,42 @@ fn unwind_releases_builder_and_large_allocations_are_not_retained() {
     assert_eq!(snapshot.roots().len(), 1);
 }
 #[test]
-fn limits_are_explicit_and_recycled_handles_are_released() {
+fn limits_are_explicit_and_what_they_cut_shows_in_the_capture() {
     let pool = SnapshotPool::new(
         1,
         Limits {
             max_objects: Some(1),
-            max_values: None,
-            max_bytes: Some(3),
+            max_values: Some(2),
             max_depth: Some(2),
         },
     );
     let mut b = pool.try_acquire().unwrap();
-    let range = b.copy_bytes(b"abcde");
+    let (object, range) = bytes(&mut b, b"abcde");
     let id = b.reserve_object().unwrap();
+    b.set_object(id, object);
+    assert!(b.reserve_object().is_none());
+    assert_eq!(b.remaining_values(), 2);
+    let whole = b.finish_value(SnapshotValue::Object(id), &mut Shaper::default());
+    assert_eq!(whole.bytes(range), b"abcde");
+    let stats = whole.stats();
+    assert!(!stats.limited);
+    assert_eq!((stats.copied_bytes, stats.shared_bytes), (5, 0));
+    drop(whole);
+
+    // A storage that is used again keeps nothing of the capture before.
+    let mut b = pool.try_acquire().unwrap();
+    let held = "h".repeat(100);
+    let text = b.string(&held.as_str().into()).unwrap();
+    let id = b.reserve_object().unwrap();
+    // An object that names fewer items than its source had was cut.
     b.set_object(
         id,
-        SnapshotObject::Uint8Array {
-            data: range,
-            original_len: 5,
-        },
+        SnapshotObject::Cell(SnapshotValue::Truncated(Limit::Depth)),
     );
-    assert!(b.reserve_object().is_none());
-    let snapshot = b.finish_value(SnapshotValue::Object(id), &mut Shaper::default());
-    assert!(snapshot.stats().limited);
-    assert_eq!(snapshot.bytes(range), b"abc");
-    drop(snapshot);
-    let snapshot = scalar(&pool, 1);
-    assert!(!snapshot.stats().limited);
-    assert_eq!(snapshot.stats().copied_bytes, 0);
+    let cut = b.finish_value(SnapshotValue::String(text), &mut Shaper::default());
+    let stats = cut.stats();
+    assert!(stats.limited);
+    assert_eq!((stats.copied_bytes, stats.shared_bytes), (0, 100));
 }
 
 #[test]
@@ -109,19 +125,13 @@ fn growth_accounts_for_replacement_overlap_and_ignores_idle_budget() {
         },
     );
     let mut b = pool.try_acquire().unwrap();
-    let first = b.copy_bytes(&[7; 512]);
-    let second = b.copy_bytes(&[9; 513]);
+    let (_, first) = bytes(&mut b, &[7; 512]);
+    let (object, second) = bytes(&mut b, &[9; 513]);
     // Check immediately: later arena allocations can raise the live total.
     let growth_stats = pool.stats();
     assert!(growth_stats.peak_accounted_bytes >= growth_stats.allocated_bytes + 512);
     let id = b.reserve_object().unwrap();
-    b.set_object(
-        id,
-        SnapshotObject::Uint8Array {
-            data: second,
-            original_len: 513,
-        },
-    );
+    b.set_object(id, object);
     let snapshot = b.finish_value(SnapshotValue::Object(id), &mut Shaper::default());
     assert_eq!(snapshot.bytes(first), &[7; 512]);
     assert_eq!(snapshot.bytes(second), &[9; 513]);

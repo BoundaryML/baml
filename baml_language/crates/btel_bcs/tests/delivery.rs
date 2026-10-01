@@ -13,7 +13,7 @@ use btel_bcs::{
 };
 use btel_processor::{AggregateDelta, Publisher};
 use btel_recorder::{RecordingConfig, RecordingId, RecordingPublisher, SealedFile};
-use btel_snapshot::{Limits, Snapshot, SnapshotObject, SnapshotPool, SnapshotValue};
+use btel_snapshot::{Limits, Snapshot, SnapshotPool, SnapshotValue};
 use prost::Message;
 use sha2::{Digest, Sha256};
 use wiremock::{
@@ -77,15 +77,9 @@ fn scalar(pool: &SnapshotPool, value: i64) -> Snapshot {
 fn large(pool: &SnapshotPool) -> Snapshot {
     let mut builder = pool.try_acquire().unwrap();
     let bytes = vec![1; 64 * 1024];
-    let data = builder.copy_bytes(&bytes);
+    let object = builder.bytes(&bytes);
     let id = builder.reserve_object().unwrap();
-    builder.set_object(
-        id,
-        SnapshotObject::Uint8Array {
-            data,
-            original_len: bytes.len(),
-        },
-    );
+    builder.set_object(id, object);
     builder.finish_value(
         SnapshotValue::Object(id),
         &mut btel_snapshot::Shaper::default(),

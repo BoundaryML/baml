@@ -19,9 +19,10 @@
 use std::io::{self, Write};
 
 use borsh::BorshSerialize;
+use num_bigint::BigInt;
 use xxhash_rust::xxh3::Xxh3;
 
-use super::{BexStr, BigInt, OwnedType, TypeIdentity, tags::HashDomain};
+use super::{BexStr, OwnedType, TypeIdentity, tags::HashDomain};
 
 /// Content identity of one blob. A zero digest is a valid hash, never absence.
 #[repr(transparent)]
@@ -128,6 +129,10 @@ impl BorshSerialize for TypeIdentity {
 /// input keeps it apart from every other leaf.
 pub(crate) fn string(s: &BexStr) -> Digest {
     Digest(s.content_hash().to_le_bytes())
+}
+/// The digest of a `uint8array` with no content.
+pub(crate) fn no_bytes() -> Digest {
+    Hasher::new(HashDomain::Uint8Array).finish()
 }
 pub(crate) fn bigint(n: &BigInt) -> Digest {
     let mut h = Hasher::new(HashDomain::Bigint);

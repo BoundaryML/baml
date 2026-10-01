@@ -47,14 +47,8 @@ fn decode(bytes: &[u8]) -> Result<DecodedSnapshot, BlobError> {
 fn rich_snapshot(pool: &SnapshotPool) -> Snapshot {
     let mut b = pool.try_acquire().unwrap();
     let declaration = b.reserve_object().unwrap();
-    b.set_object(
-        declaration,
-        O::Declaration {
-            name: customer(),
-            tag: TypeTag::from_i64(42),
-            is_enum: false,
-        },
-    );
+    let object = b.declaration(&customer(), TypeTag::from_i64(42), false);
+    b.set_object(declaration, object);
     let list = b.reserve_object().unwrap();
     let cell = b.reserve_object().unwrap();
     let map = b.reserve_object().unwrap();
@@ -102,14 +96,8 @@ fn rich_snapshot(pool: &SnapshotPool) -> Snapshot {
             original_len: 2,
         },
     );
-    let data = b.copy_bytes(&[1, 2, 3]);
-    b.set_object(
-        bytes,
-        O::Uint8Array {
-            data,
-            original_len: 3,
-        },
-    );
+    let object = b.bytes(&[1, 2, 3]);
+    b.set_object(bytes, object);
     let types = b.type_start();
     b.push_type(int_type());
     let type_arguments = b.type_range(types);
@@ -237,18 +225,9 @@ fn every_value_kind_round_trips_with_verified_identity_and_preserved_graph() {
 
 #[test]
 fn value_roots_and_limited_captures_verify() {
-    let pool = SnapshotPool::new(
-        1,
-        Limits {
-            max_bytes: Some(2),
-            ..Limits::default()
-        },
-    );
-    let mut b = pool.try_acquire().unwrap();
-    let value = b
-        .string(&"too long".into())
-        .map_or(V::Truncated(crate::Limit::Bytes), V::String);
-    let snapshot = b.finish_value(value, &mut Shaper::default());
+    let pool = SnapshotPool::new(1, Limits::default());
+    let b = pool.try_acquire().unwrap();
+    let snapshot = b.finish_value(V::Truncated(crate::Limit::Bytes), &mut Shaper::default());
     assert!(snapshot.stats().limited);
     let decoded = decode(&encode(&snapshot)).unwrap();
     assert_eq!(

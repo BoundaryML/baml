@@ -1016,6 +1016,7 @@ mod tests {
         let sources = btel_snapshot::string_map(
             &pool,
             &[("main.baml".to_owned(), "function main() {}".to_owned())],
+            usize::MAX,
         )
         .unwrap();
         let id = sources.root_id();

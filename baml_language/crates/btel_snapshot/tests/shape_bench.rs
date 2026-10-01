@@ -68,7 +68,6 @@ fn map(b: &mut Builder, entries: &[(String, V)]) -> V {
     let start = b.entry_start();
     b.reserve_entries(entries.len());
     for (key, value) in entries {
-        b.content(key.len(), false);
         b.entry(&key.as_str().into(), *value);
     }
     let entries = b.entry_range(start);
@@ -86,14 +85,9 @@ fn map(b: &mut Builder, entries: &[(String, V)]) -> V {
 
 fn declaration(b: &mut Builder) -> ObjectId {
     let id = b.reserve_object().unwrap();
-    b.set_object(
-        id,
-        O::Declaration {
-            name: DeclarationName::Declared(TypeName::from_dotted_path("user.Customer")),
-            tag: TypeTag::from_i64(42),
-            is_enum: false,
-        },
-    );
+    let name = DeclarationName::Declared(TypeName::from_dotted_path("user.Customer"));
+    let object = b.declaration(&name, TypeTag::from_i64(42), false);
+    b.set_object(id, object);
     id
 }
 
@@ -117,7 +111,6 @@ fn record(b: &mut Builder, declaration: ObjectId, seed: i64) -> V {
     let start = b.entry_start();
     b.reserve_entries(fields.len());
     for (key, value) in &fields {
-        b.content(key.len(), false);
         b.entry(&key.as_str().into(), *value);
     }
     let fields = b.entry_range(start);

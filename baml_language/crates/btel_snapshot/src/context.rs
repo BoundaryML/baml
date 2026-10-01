@@ -70,7 +70,7 @@ pub fn capture_with_builder(
 }
 
 fn entry(builder: &mut Builder, key: &str, value: SnapshotValue) -> Option<()> {
-    if builder.remaining_entries() == 0 || !builder.content(key.len(), false) {
+    if builder.remaining_entries() == 0 {
         return None;
     }
     builder.entry(&key.into(), value);
@@ -180,10 +180,6 @@ mod tests {
             },
             Limits {
                 max_objects: Some(1),
-                ..Limits::default()
-            },
-            Limits {
-                max_bytes: Some(1),
                 ..Limits::default()
             },
             Limits {

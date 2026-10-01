@@ -69,15 +69,9 @@ fn map(b: &mut Builder, entries: &[(&str, V)]) -> V {
 }
 
 fn bytes(b: &mut Builder, content: &[u8]) -> V {
-    let data = b.copy_bytes(content);
+    let object = b.bytes(content);
     let id = b.reserve_object().unwrap();
-    b.set_object(
-        id,
-        O::Uint8Array {
-            data,
-            original_len: content.len(),
-        },
-    );
+    b.set_object(id, object);
     V::Object(id)
 }
 
@@ -489,16 +483,9 @@ fn keys_names_and_declarations_stay_in_the_blob_that_uses_them() {
     let long = "k".repeat(200);
     let snapshot = capture(&mut split(1 << 20, 64), |b| {
         let declaration = b.reserve_object().unwrap();
-        b.set_object(
-            declaration,
-            O::Declaration {
-                name: DeclarationName::Declared(TypeName::from_dotted_path(&format!(
-                    "user.{long}"
-                ))),
-                tag: TypeTag::from_i64(7),
-                is_enum: true,
-            },
-        );
+        let name = DeclarationName::Declared(TypeName::from_dotted_path(&format!("user.{long}")));
+        let object = b.declaration(&name, TypeTag::from_i64(7), true);
+        b.set_object(declaration, object);
         let name = b.string(&long.as_str().into()).unwrap();
         let function = b.reserve_object().unwrap();
         b.set_object(
