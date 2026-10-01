@@ -83,7 +83,7 @@ def make_renderer(slot):
         if not is_final and now - last[0] < min_gap:
             return
         last[0] = now
-        slot.json(plain, expanded=2)
+        slot.json(plain, expanded=True)
 
     return render
 
@@ -212,4 +212,4 @@ with tab_seed:
         st.code(pr_text, language="markdown")
     with right:
         st.subheader("JSON (ground truth)")
-        st.json(truth, expanded=1)
+        st.json(truth, expanded=True)
