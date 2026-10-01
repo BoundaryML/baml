@@ -637,6 +637,16 @@ async fn futures_record_when_they_were_scheduled_and_started() {
             ms
         }
 
+        class Flag {
+            set: bool,
+        }
+
+        // Sets `started` once it runs, then works until it is cancelled.
+        function until_cancelled(started: Flag) -> int {
+            started.set = true;
+            work(5000)
+        }
+
         function main(n: int) -> int {
             let one = baml.spawn.Limit.new(1);
             let first = spawn with one { work(200) };
@@ -646,10 +656,13 @@ async fn futures_record_when_they_were_scheduled_and_started() {
             let token = baml.spawn.CancelToken.new();
             let queued = spawn with one, token { work(1) };
             let _ = token.cancel();
-            // Cancelled while it runs.
+            // Cancelled while it runs: only once it has started.
             let stop = baml.spawn.CancelToken.new();
-            let running = spawn with stop { work(5000) };
-            baml.sys.sleep(baml.time.Duration.from_milliseconds(50));
+            let started = Flag { set: false };
+            let running = spawn with stop { until_cancelled(started) };
+            while (!started.set) {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(1));
+            }
             let _ = stop.cancel();
             (await baml.future.all_settled([first, second, queued, running])).length()
         }
@@ -744,18 +757,29 @@ async fn futures_record_when_they_were_scheduled_and_started() {
             ],
         ]
     );
-    // The `work` call the cancellation interrupted never finished.
+    // The calls the cancellation interrupted never finished.
     let interrupted = sql(
         &mut index,
-        "SELECT w.invocation_count, w.return_count, w.future_cancel_count, w.missing_count
-         FROM profiler w
-         JOIN profiler body ON body.profiler_node_id = w.parent_profiler_node_id
-         JOIN profiler future ON future.profiler_node_id = body.parent_profiler_node_id
-         WHERE w.function_name = 'user.work' AND future.function_name = '.<lambda(main, 3)>'",
+        "SELECT c.function_name, c.invocation_count, c.return_count, c.future_cancel_count,
+           c.missing_count
+         FROM profiler c
+         JOIN profiler p ON p.profiler_node_id = c.parent_profiler_node_id
+         WHERE c.function_name = 'user.until_cancelled'
+            OR (c.function_name = 'user.work' AND p.function_name = 'user.until_cancelled')
+         ORDER BY c.function_name",
     );
     assert_eq!(
         interrupted.rows,
-        vec![vec![json!(1), json!(0), json!(0), json!(1)]]
+        vec![
+            vec![
+                json!("user.until_cancelled"),
+                json!(1),
+                json!(0),
+                json!(0),
+                json!(1)
+            ],
+            vec![json!("user.work"), json!(1), json!(0), json!(0), json!(1)],
+        ]
     );
     // Only the run counts: `second`'s node holds its 100 ms, not the wait.
     let times = sql(
