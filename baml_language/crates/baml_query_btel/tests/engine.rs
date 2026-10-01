@@ -503,8 +503,9 @@ async fn concurrent_first_queries_share_one_index_without_duplicates() {
     assert_eq!(stats(&mut index(&path)), expected_stats(3, 0));
 }
 
-/// Each model request is a span of its own, so two calls made on one thread
-/// from different steps are two rows, each under the step that made it.
+/// Each model request is a network span of its own, priced from its
+/// response, so two calls made on one thread from different steps are two
+/// rows, each under the step that made it.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn each_model_request_is_its_own_span() {
     let project = tempfile::tempdir().unwrap();
@@ -557,19 +558,26 @@ async fn each_model_request_is_its_own_span() {
     let results = record_program(project.path(), source, &[], &[("main", 0)]).await;
     assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(10))]);
     let mut index = index(project.path());
+    // The request's network span, inside the stdlib's `baml.http.send`
+    // span, which carries no cost of its own.
     let requests = sql(
         &mut index,
-        "SELECT span_name, temporary_projections['model_calls'],
-           round(temporary_projections['cost'], 6)
-         FROM spans WHERE temporary_projections IS NOT NULL",
+        "SELECT s.span_type, s.span_name LIKE 'POST http://127.0.0.1:%/v1/messages',
+           parent.span_name, parent.temporary_projections,
+           s.temporary_projections['model_calls'], round(s.temporary_projections['cost'], 6)
+         FROM spans s JOIN spans parent ON parent.span_id = s.parent_span_id
+         WHERE s.temporary_projections IS NOT NULL",
     );
-    assert_eq!(
-        requests.rows,
-        vec![
-            vec![json!("baml.http.send"), json!(1), json!(0.00474)],
-            vec![json!("baml.http.send"), json!(1), json!(0.00474)],
-        ]
-    );
+    let request = vec![
+        json!("network_span"),
+        json!(1),
+        json!("baml.http.send"),
+        Json::Null,
+        json!(1),
+        json!(0.00474),
+    ];
+    assert_eq!(requests.rows, vec![request.clone(), request]);
+    assert_eq!(cost(&mut index), (json!(0.00948), json!(0.00948)));
     // Each request's call path leads up to the step that made it: a step's
     // cost is the sum over the requests below it.
     let steps = sql(
@@ -596,7 +604,8 @@ async fn each_model_request_is_its_own_span() {
 }
 
 /// A streamed turn is priced like a non-streamed one with the same tokens:
-/// its cache reads and writes reach `temporary_projections`.
+/// its cache reads and writes reach the network span's
+/// `temporary_projections`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn streamed_usage_keeps_the_cache_split() {
     let project = tempfile::tempdir().unwrap();
@@ -659,18 +668,22 @@ async fn streamed_usage_keeps_the_cache_split() {
     let mut index = index(project.path());
     let usage = sql(
         &mut index,
-        "SELECT s.span_name, parent.span_name, s.temporary_projections['model_name'],
-           s.temporary_projections['model_calls'], s.temporary_projections['input_tokens'],
-           s.temporary_projections['output_tokens'], s.temporary_projections['cache_read_tokens'],
+        "SELECT s.span_type, parent.span_name, grandparent.span_name,
+           s.temporary_projections['model_name'], s.temporary_projections['model_calls'],
+           s.temporary_projections['input_tokens'], s.temporary_projections['output_tokens'],
+           s.temporary_projections['cache_read_tokens'],
            s.temporary_projections['cache_write_tokens'], round(s.temporary_projections['cost'], 6)
          FROM spans s JOIN spans parent ON parent.span_id = s.parent_span_id
+         JOIN spans grandparent ON grandparent.span_id = parent.parent_span_id
          WHERE s.temporary_projections IS NOT NULL",
     );
-    // The request's own span, inside the caller's; the same tokens and price
-    // as the non-streamed turn below.
+    // The request's network span, in the stdlib's `baml.http.send_sse`
+    // span, in the caller's; the same tokens and price as the non-streamed
+    // turn above.
     assert_eq!(
         usage.rows,
         vec![vec![
+            json!("network_span"),
             json!("baml.http.send_sse"),
             json!("user.Stream"),
             json!("claude-opus-5-5"),
@@ -682,6 +695,147 @@ async fn streamed_usage_keeps_the_cache_split() {
             json!(0.00474)
         ]]
     );
+    assert_eq!(cost(&mut index), (json!(0.00474), json!(0.00474)));
+}
+
+/// `OpenAI` chat (a whole body, and a stream with `include_usage`) and a
+/// responses stream, through the stdlib clients: each request's network
+/// span is priced from the usage its response reported.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn openai_requests_are_priced_on_their_network_spans() {
+    let project = tempfile::tempdir().unwrap();
+    let source = r##"
+        class OpenAi {
+            server: baml.http.Server,
+            chat: string,
+            chat_stream: string[],
+            responses_stream: string[],
+
+            function handle(self, req: baml.http.ServerRequest) -> baml.http.Response {
+                if (req.url.includes("/chat/completions") && !req.body.includes("\"stream\":true")) {
+                    return baml.http.Response.new(200, { "content-type": "application/json" }, self.chat.to_utf8());
+                }
+                let events = if (req.url.includes("/responses")) { self.responses_stream } else { self.chat_stream };
+                let resp = baml.http.Response.new_streaming(200, { "content-type": "text/event-stream" });
+                spawn {
+                    for (let event in events) {
+                        resp.write((event + "\n\n").to_utf8());
+                    }
+                    resp.end();
+                    null
+                };
+                resp
+            }
+        }
+
+        function Echo(text: string) -> string {
+            client: "openai/gpt-4o-mini"
+            prompt: `Echo ${text}`
+        }
+
+        function Chat(base_url: string) -> string {
+            let cl = openai.ChatClient.new(model = "gpt-6-sol", api_key = "test-key", base_url = base_url);
+            ai.Agent.new(client = cl).run(Echo@spec("hi")).value
+        }
+
+        function ChatStream(base_url: string) -> string {
+            let cl = openai.ChatClient.new(model = "gpt-6-sol", api_key = "test-key", base_url = base_url);
+            ai.stream.from_spec<string>(Echo@spec("hi"), client = cl).final()
+        }
+
+        function ResponsesStream(base_url: string) -> string {
+            let cl = openai.ResponsesClient.new(model = "gpt-6-sol", api_key = "test-key", base_url = base_url);
+            ai.stream.from_spec<string>(Echo@spec("hi"), client = cl).final()
+        }
+
+        function main(n: int) -> int {
+            let usage = `"usage":{"prompt_tokens":1200,"completion_tokens":300,"total_tokens":1500,"prompt_tokens_details":{"cached_tokens":200},"completion_tokens_details":{"reasoning_tokens":100}}`;
+            let chunk = `{"id":"c","object":"chat.completion.chunk","model":"gpt-6-sol-2026-08-01",`;
+            let response = `"id":"r","model":"gpt-6-sol-2026-08-01","output":[{"type":"message","content":[{"type":"output_text","text":"short"}]}]`;
+            let server = OpenAi {
+                server: baml.http.Server.bind("127.0.0.1:0"),
+                chat: `{"id":"chatcmpl-1","object":"chat.completion","created":1,"model":"gpt-6-sol-2026-08-01","choices":[{"index":0,"message":{"role":"assistant","content":"short","refusal":null},"finish_reason":"stop"}],` + usage + `}`,
+                chat_stream: [
+                    "data: " + chunk + `"choices":[{"index":0,"delta":{"role":"assistant","content":"short"}}]}`,
+                    "data: " + chunk + `"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`,
+                    "data: " + chunk + `"choices":[],` + usage + `}`,
+                    "data: [DONE]",
+                ],
+                responses_stream: [
+                    "event: response.created\ndata: " + `{"type":"response.created","response":{"id":"r","status":"in_progress","model":"gpt-6-sol-2026-08-01"}}`,
+                    "event: response.output_text.delta\ndata: " + `{"type":"response.output_text.delta","item_id":"msg_1","delta":"short"}`,
+                    "event: response.completed\ndata: " + `{"type":"response.completed","response":{"status":"completed",` + response + `,"usage":{"input_tokens":1200,"input_tokens_details":{"cached_tokens":200},"output_tokens":300,"output_tokens_details":{"reasoning_tokens":100},"total_tokens":1500}}}`,
+                ],
+            };
+            let task = spawn { server.server.serve(server.handle) };
+            let url = "http://" + server.server.addr + "/v1";
+            let chat = Chat(url);
+            let streamed = ChatStream(url);
+            let responses = ResponsesStream(url);
+            task.cancel();
+            chat.length() + streamed.length() + responses.length()
+        }
+    "##;
+    let results = record_program(project.path(), source, &[], &[("main", 0)]).await;
+    assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(15))]);
+    let mut index = index(project.path());
+    let usage = sql(
+        &mut index,
+        "SELECT s.span_name, parent.span_name, s.temporary_projections['model_name'],
+           s.temporary_projections['model_calls'], s.temporary_projections['input_tokens'],
+           s.temporary_projections['output_tokens'], s.temporary_projections['cache_read_tokens'],
+           s.temporary_projections['cache_write_tokens'],
+           s.temporary_projections['reasoning_tokens'], round(s.temporary_projections['cost'], 6)
+         FROM spans s JOIN spans parent ON parent.span_id = s.parent_span_id
+         WHERE s.span_type = 'network_span' ORDER BY s.start_time",
+    );
+    // 1000 fresh input at $2/M, 200 cached at $0.20/M, 300 output at $10/M.
+    let priced = |path: &str, parent: &str| {
+        let host = usage.rows[0][0]
+            .as_str()
+            .unwrap()
+            .split("/v1/")
+            .next()
+            .unwrap();
+        vec![
+            json!(format!("{host}/v1/{path}")),
+            json!(parent),
+            json!("gpt-6-sol-2026-08-01"),
+            json!(1),
+            json!(1000),
+            json!(300),
+            json!(200),
+            Json::Null,
+            json!(100),
+            json!(0.00504),
+        ]
+    };
+    assert_eq!(
+        usage.rows,
+        vec![
+            priced("chat/completions", "baml.http.send"),
+            priced("chat/completions", "baml.http.send_sse"),
+            priced("responses", "baml.http.send_sse"),
+        ]
+    );
+    assert_eq!(cost(&mut index), (json!(0.01512), json!(0.01512)));
+}
+
+/// The cost summed over every span, and over network spans alone: equal
+/// when nothing is counted twice.
+fn cost(index: &mut baml_query_btel::Index) -> (Json, Json) {
+    let total = |index: &mut baml_query_btel::Index, filter: &str| {
+        sql(
+            index,
+            &format!("SELECT round(sum(temporary_projections['cost']), 6) FROM spans {filter}"),
+        )
+        .rows[0][0]
+            .clone()
+    };
+    (
+        total(index, ""),
+        total(index, "WHERE span_type = 'network_span'"),
+    )
 }
 
 /// Model usage from the runner, panics, future names and sysop time, as
