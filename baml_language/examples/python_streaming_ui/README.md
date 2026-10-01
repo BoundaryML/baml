@@ -8,11 +8,15 @@ A Streamlit app (plus a headless `bench.py`) for checking that structured-output
 
 ## Task
 
-`ExtractPullRequest -> PullRequest` asks the model to rebuild the `gh pr view --json` object for [BoundaryML/baml#5041](https://github.com/BoundaryML/baml/pull/5041) from a plaintext rendering of it. `PullRequest` in `baml_src/pull_request.prompt.baml` mirrors the gh JSON field for field, so each final result is scored against `data/pr_5041.json` ("field accuracy"). The reply is about 29K characters of JSON.
+The default workload is structured: `ExtractPullRequest -> PullRequest` asks the model to rebuild the `gh pr view --json` object for [BoundaryML/baml#5041](https://github.com/BoundaryML/baml/pull/5041) from a plaintext rendering of it. `PullRequest` in `baml_src/pull_request.prompt.baml` mirrors the gh JSON field for field, so each final result is scored against `data/pr_5041.json` ("field accuracy"). The reply is about 29K characters of JSON.
 
 - **A (baml):** `baml_sdk.ExtractPullRequest_stream_async(pr_text, scenario)`. The schema goes in the prompt via `${ctx.output_format()}`, a TS-style object literal rather than JSON Schema, and BAML parses partials engine-side.
 - **B (native SDK):** the same instructions through the provider's own SDK, using structured outputs with a Pydantic mirror of `PullRequest` (`stream_ui/models.py`). Partials come from `jiter` parsing the text so far.
 - **C (baml v0):** the same function in v0 syntax (`v0/baml_src`), streamed with `b.stream.ExtractPullRequest(..., baml_options={"client": ...})`. The clients are copied from the user's v0 config, except for two things this run needs. The `http` timeouts and retry policies are left out, because 6–10s request limits would cut off a one-minute extraction. Vertex authenticates with the test service account instead of gcloud impersonation.
+
+### String workload
+
+The sidebar's **Workload** radio (or `bench.py --workload string`) switches the task to `WriteNarrative -> string`: a roughly 1500-word narrative of the same PR. A and C stream the BAML function, and B streams plain text with no structured outputs, so its partials are just the text so far. There is no ground truth for this workload, so field accuracy is blank.
 
 ## Scenarios
 

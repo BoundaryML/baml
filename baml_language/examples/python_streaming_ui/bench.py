@@ -2,6 +2,7 @@
 
 uv run python bench.py                         # all six scenarios, A then B
 uv run python bench.py --scenario 1 4          # Bedrock and Google AI Studio only
+uv run python bench.py --workload string       # stream a long string instead of the PullRequest object
 uv run python bench.py --render json           # also pay json.dumps per partial, like a UI
 """
 
@@ -22,6 +23,7 @@ async def main() -> None:
         "--scenario", nargs="+", type=int, choices=sorted(runners.SCENARIOS), default=sorted(runners.SCENARIOS)
     )
     parser.add_argument("--side", nargs="+", choices=runners.SIDES, default=list(runners.SIDES))
+    parser.add_argument("--workload", choices=runners.WORKLOADS, default="structured")
     parser.add_argument("--render", choices=["none", "json"], default="none")
     parser.add_argument("--out", type=Path, help="write summaries as JSON lines")
     args = parser.parse_args()
@@ -33,8 +35,9 @@ async def main() -> None:
     rows = []
     for n in args.scenario:
         for side in args.side:
-            m = await metrics.measure(runners.RunConfig(n, side, pr_text), render=render, truth=truth)
-            row = {"scenario": n, "side": side, **m.summary()}
+            cfg = runners.RunConfig(n, side, pr_text, args.workload)
+            m = await metrics.measure(cfg, render=render, truth=truth if args.workload == "structured" else None)
+            row = {"scenario": n, "side": side, "workload": args.workload, **m.summary()}
             rows.append(row)
             print(json.dumps(row), flush=True)
     if args.out:

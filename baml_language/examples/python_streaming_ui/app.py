@@ -42,7 +42,15 @@ def scenario_title(n: int) -> str:
 
 # --------------------------------------------------------------------------- sidebar
 
+WORKLOAD_NAME = {
+    "structured": "structured object (`PullRequest`)",
+    "string": "`string` (a long narrative)",
+}
+
 with st.sidebar:
+    st.header("Workload")
+    workload = st.radio("Stream a", runners.WORKLOADS, format_func=WORKLOAD_NAME.get)
+
     st.header("Scenario")
     # One at a time: each scenario is three long streams.
     chosen = [st.selectbox("Run", sorted(runners.SCENARIOS), format_func=scenario_title)]
@@ -83,20 +91,24 @@ def make_renderer(slot):
         if not is_final and now - last[0] < min_gap:
             return
         last[0] = now
-        slot.json(plain, expanded=True)
+        if isinstance(plain, str):
+            slot.markdown(plain)
+        else:
+            slot.json(plain, expanded=True)
 
     return render
 
 
 async def run_one(cfg: runners.RunConfig, status, slot) -> metrics.RunMetrics:
     status.info("streaming…")
-    m = await metrics.measure(cfg, render=make_renderer(slot), truth=truth)
+    # Only the structured workload has a ground truth to score against.
+    m = await metrics.measure(cfg, render=make_renderer(slot), truth=truth if cfg.workload == "structured" else None)
     if m.error:
         status.error(m.error)
     else:
         status.success(
             f"{m.partials} partials · first {m.first_partial_s or 0:.2f}s · total {m.total_s:.2f}s"
-            f" · accuracy {m.accuracy:.2f}"
+            + (f" · accuracy {m.accuracy:.2f}" if m.accuracy is not None else "")
         )
     return m
 
@@ -113,7 +125,7 @@ async def run_all() -> list[tuple[int, str, metrics.RunMetrics]]:
             with columns[side]:
                 st.markdown(f"**{SIDE_NAME[side]}**")
                 status, slot = st.empty(), st.empty()
-            jobs.append((side, runners.RunConfig(n, side, pr_text), status, slot))
+            jobs.append((side, runners.RunConfig(n, side, pr_text, workload), status, slot))
         if order == "all at once":
             done = await asyncio.gather(*(run_one(cfg, status, slot) for _, cfg, status, slot in jobs))
         else:
@@ -133,24 +145,33 @@ def comparison_table(results) -> pd.DataFrame:
 
 # --------------------------------------------------------------------------- page
 
-st.title("Structured-output streaming: BAML v1 vs native SDKs vs BAML v0")
-st.caption(
-    "Each scenario rebuilds the `gh pr view --json` object for BoundaryML/baml#5041 from a prose rendering of it. "
-    "**A** streams `ExtractPullRequest` through BAML with the scenario's v1 client (schema via "
-    "`ctx.output_format()`). **B** streams the same instructions through the provider's native Python SDK with "
-    "structured outputs, parsing partials with `jiter`. **C** streams the same function through BAML v0 "
-    "(`baml-py`) with the equivalent v0 `client<llm>`."
-)
+st.title("Streaming: BAML v1 vs native SDKs vs BAML v0")
+if workload == "structured":
+    st.caption(
+        "Each scenario rebuilds the `gh pr view --json` object for BoundaryML/baml#5041 from a prose rendering of "
+        "it. **A** streams `ExtractPullRequest` through BAML with the scenario's v1 client (schema via "
+        "`ctx.output_format()`). **B** streams the same instructions through the provider's native Python SDK with "
+        "structured outputs, parsing partials with `jiter`. **C** streams the same function through BAML v0 "
+        "(`baml-py`) with the equivalent v0 `client<llm>`."
+    )
+else:
+    st.caption(
+        "Each scenario writes a long narrative of BoundaryML/baml#5041 from a prose rendering of it. **A** streams "
+        "`WriteNarrative -> string` through BAML with the scenario's v1 client. **B** streams the same "
+        "instructions as plain text through the provider's native Python SDK. **C** streams the same function "
+        "through BAML v0 (`baml-py`) with the equivalent v0 `client<llm>`."
+    )
 
 tab_run, tab_scenarios, tab_prompts, tab_seed = st.tabs(["Run", "Scenarios", "Prompts", "Seed data"])
 
 with tab_run:
     if st.button("Run", type="primary", disabled=not (chosen and sides)):
         st.session_state["results"] = asyncio.run(run_all())
+        st.session_state["results_workload"] = workload
 
     results = st.session_state.get("results", [])
     if results:
-        st.header("A vs B vs C")
+        st.header(f"A vs B vs C — {WORKLOAD_NAME[st.session_state['results_workload']]}")
         st.dataframe(comparison_table(results), width="stretch")
         st.caption(
             "**first partial**: request → first yielded value. **gap**: time between consecutive partials. "
@@ -194,16 +215,18 @@ with tab_prompts:
     left, right = st.columns(2)
     with left:
         st.subheader("A · BAML prompt")
-        st.caption("The schema is rendered by `ctx.output_format()` as a TypeScript-style object literal.")
+        if workload == "structured":
+            st.caption("The schema is rendered by `ctx.output_format()` as a TypeScript-style object literal.")
         try:
-            st.code(runners.baml_prompt(pr_text), language="markdown")
+            st.code(runners.baml_prompt(pr_text, workload), language="markdown")
         except Exception as e:
             st.error(f"{type(e).__name__}: {e}")
     with right:
         st.subheader("B · native SDK prompt")
-        st.code(runners.native_prompt(pr_text), language="markdown")
-        st.subheader("B · structured-output schema")
-        st.json(models.PullRequest.model_json_schema(), expanded=False)
+        st.code(runners.native_prompt(pr_text, workload), language="markdown")
+        if workload == "structured":
+            st.subheader("B · structured-output schema")
+            st.json(models.PullRequest.model_json_schema(), expanded=False)
 
 with tab_seed:
     left, right = st.columns(2)
