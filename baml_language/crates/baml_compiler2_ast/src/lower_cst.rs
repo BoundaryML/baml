@@ -1855,13 +1855,13 @@ fn lower_testset(node: &SyntaxNode) -> Option<TestRegistrationItem> {
 ///
 /// Lambda bodies are lowered from the original CST `BLOCK_EXPR` nodes.
 ///
-/// Derive the `$init_test_<key>` suffix from a file path.
+/// Derive the `$init_test_<key>` suffix from a file's root-relative path.
 ///
 /// Strips the extension and replaces every character that isn't a letter,
 /// digit, or `_` (notably the path separators and `.`, which would otherwise
 /// break the `.`-delimited namespace routing of function names). The result is
-/// stable across compilations and unique per file, e.g.
-/// `ns_arrays/arrays.baml` -> `ns_arrays_arrays`.
+/// stable across compilations, unique per file within its package, and free of
+/// the checkout's location, e.g. `ns_arrays/arrays.baml` -> `ns_arrays_arrays`.
 fn init_test_key_from_path(path: &std::path::Path) -> String {
     path.with_extension("")
         .to_string_lossy()

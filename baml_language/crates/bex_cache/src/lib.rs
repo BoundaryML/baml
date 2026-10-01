@@ -184,7 +184,11 @@ use sha2::{Digest, Sha256};
 /// declared after it in the manifest's per-file diagnostics rows. The type
 /// family lost `Void` (Borsh discriminant 22, now reserved) with it: a
 /// cached unit carrying the retired discriminant no longer decodes.
-pub const FORMAT_VERSION: u32 = 19;
+///
+/// Version 20: `Function::source_file` and the name of a file's `$init_test_…`
+/// function are root-relative for every non-stdlib root — a unit no longer
+/// carries the absolute path of the checkout it was compiled from.
+pub const FORMAT_VERSION: u32 = 20;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

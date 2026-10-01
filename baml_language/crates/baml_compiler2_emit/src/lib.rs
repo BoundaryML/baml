@@ -716,24 +716,24 @@ fn compute_function_metadata<'db>(
 ///
 /// `Function::source_file` is display/metadata-only (backtraces, event
 /// metadata, reflection locations) — never opened from disk — so stripping
-/// the root keeps serialized `Program`s location-independent (a cached or
-/// packed blob is byte-identical wherever the project lives) and backtraces
-/// machine-independent. Only `Workspace` roots are stripped: `Stdlib` and
-/// `Dependency` roots keep their paths verbatim, because their
-/// `<builtin>/…` unit paths are a wire contract
-/// (`bex_vm_types/src/link.rs` string-matches the prefix).
+/// the root keeps the checkout's location out of the unit: a cached or packed
+/// blob reads the same wherever the package lives (a dependency checked out
+/// under two paths is one package), and backtraces are machine-independent.
+/// A `Stdlib` root keeps its path verbatim: it is the virtual
+/// `<builtin>/<package>/…`, location-free already, and the `<builtin>/`
+/// prefix is the wire contract the traceback filter reads
+/// (`bex_vm_types::errors::BUILTIN_SOURCE_PREFIX`).
 fn relative_source_path(db: &dyn baml_compiler2_mir::Db, file: baml_base::SourceFile) -> String {
-    let path = file.path(db);
     let root = file.source_root(db);
     match root.kind(db) {
-        baml_base::SourceRootKind::Workspace => path
-            .strip_prefix(root.path(db))
-            .unwrap_or(&path)
-            .display()
-            .to_string(),
-        baml_base::SourceRootKind::Stdlib
+        baml_base::SourceRootKind::Workspace
         | baml_base::SourceRootKind::Dependency
-        | baml_base::SourceRootKind::Dynamic => path.display().to_string(),
+        | baml_base::SourceRootKind::Dynamic => {
+            baml_compiler2_hir::file_package::root_relative_path(db, file)
+                .display()
+                .to_string()
+        }
+        baml_base::SourceRootKind::Stdlib => file.path(db).display().to_string(),
     }
 }
 

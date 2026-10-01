@@ -160,7 +160,9 @@ pub struct FileAst {
 #[salsa::tracked(returns(ref))]
 pub fn file_ast(db: &dyn Db, file: SourceFile) -> FileAst {
     let tree = baml_compiler_parser::syntax_tree(db, file);
-    let path = file.path(db);
+    // Root-relative: the path names the file's `$init_test_…` function, which
+    // is part of the package's unit and must not carry the checkout's location.
+    let path = file_package::root_relative_path(db, file);
     let package = file_package::file_package(db, file);
     let test_owner = if package.namespace_path.is_empty() {
         "root".to_string()
