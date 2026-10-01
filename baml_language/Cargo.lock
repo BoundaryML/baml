@@ -3606,6 +3606,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "forked_aws_smithy_eventstream"
+version = "0.1.0"
+dependencies = [
+ "crc32fast",
+]
+
+[[package]]
 name = "forked_google_cloud_auth"
 version = "0.2.0"
 dependencies = [
@@ -7417,6 +7424,7 @@ dependencies = [
  "bex_heap",
  "bex_str",
  "bex_vm_types",
+ "forked_aws_smithy_eventstream",
  "indexmap",
  "num-bigint",
  "tokio",

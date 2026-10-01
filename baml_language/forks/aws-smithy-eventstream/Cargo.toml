@@ -1,0 +1,23 @@
+# A slim AWS event stream (`application/vnd.amazon.eventstream`) codec.
+#
+# Replaces `aws-smithy-eventstream` (and the `aws-smithy-types` tree it pulls
+# in) for BAML's use case: decoding Bedrock ConverseStream response frames.
+# The ConverseStream events themselves are modeled in BAML
+# (`baml_std/aws/ns_internal/bedrock.baml`). No Smithy, no async runtime, no
+# signing.
+[package]
+name = "forked_aws_smithy_eventstream"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+name = "aws_smithy_eventstream"
+
+[dependencies]
+crc32fast = { workspace = true }
+
+[lints]
+workspace = true

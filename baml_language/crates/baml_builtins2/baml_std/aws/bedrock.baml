@@ -169,12 +169,13 @@ class BedrockClient {
         }
     }
 
-    // NOTE: deliberately no `implements ai.stream.StreamingClient`.
-    // ConverseStream frames its response as binary
-    // `application/vnd.amazon.eventstream` (length-prefixed frames with a
-    // header block and a CRC), which `baml.http.fetch_sse` cannot consume —
-    // decoding it needs a new Rust transport. Absent the interface,
-    // `ai.stream.from_spec` raises `ai.errors.StreamingUnsupported` naming
-    // this client, which is exactly right. sys_llm never streamed Bedrock
-    // either, so nothing regresses (PLAN §6).
+    /// ConverseStream. Its binary `application/vnd.amazon.eventstream`
+    /// response is decoded natively by `baml.http.fetch_sse`.
+    implements ai.stream.StreamingClient {
+        function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
+            root.internal.invoke_stream(self, input) catch_all (e) {
+                _ => throw ai.errors.normalize_invoke(e),
+            }
+        }
+    }
 }
