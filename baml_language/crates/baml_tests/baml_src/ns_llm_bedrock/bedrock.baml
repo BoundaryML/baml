@@ -726,8 +726,8 @@ test "bedrock_tool_result_status_gating" {
 // ─── 7. cache points ─────────────────────────────────────────────────────────
 //
 // The engine emits `{"cachePoint":{"type":"default"}}`; sys_llm dropped the
-// feature entirely (research G4). Restored here as two client options, because
-// nothing populates `ai.PromptMessage.metadata` yet.
+// feature entirely (research G4). Restored here as two client options, plus a
+// per-message `cache_point` key in `ai.Role.metadata` (below).
 
 function bedrock_cache_points() -> string {
     let cl = aws.BedrockClient.new(
@@ -749,6 +749,131 @@ function bedrock_cache_points() -> string {
 
 test "bedrock_cache_points" {
     assert.equal(bedrock_cache_points(), "default|default|ABSENT|2|2")
+}
+
+// `role(...)` builds a metadata-less marker, so the checkpoint is authored by
+// interpolating the typed marker class directly. `true` is shorthand for the
+// default checkpoint.
+function BedrockCachedSystem(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${ai.Role { name: "system", metadata: { "cache_point": true } }}Be terse.
+        ${ai.Role { name: "user", metadata: { "cache_point": true } }}${question}
+    `
+}
+
+// An object value IS the cachePoint block; `false` asks for none.
+function BedrockCachedVerbatim(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${ai.Role { name: "system", metadata: { "cache_point": { "type": "default", "ttl": "1h" } } }}Be terse.
+        ${ai.Role { name: "user", metadata: { "cache_point": false } }}${question}
+    `
+}
+
+// System-only: the system blocks, checkpoint included, fold into the leading
+// user message.
+function BedrockCachedSystemOnly() -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${ai.Role { name: "system", metadata: { "cache_point": { "type": "default", "ttl": "1h" } } }}Be terse.
+    `
+}
+
+function BedrockCachedBadValue(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${ai.Role { name: "system", metadata: { "cache_point": "ephemeral" } }}Be terse.
+        ${role("user")}${question}
+    `
+}
+
+function _cache_client() -> aws.BedrockClient {
+    let cl = aws.BedrockClient.new(model = _model(), region = "us-east-1");
+    cl
+}
+
+// The checkpoint is its own block, placed right after the content of the
+// message whose marker carried it.
+function bedrock_cache_point_metadata() -> string {
+    let body = _body(_cache_client(), _turn_input(BedrockCachedSystem@spec("hi"), _empty_journal(), _no_tools()));
+    [
+        baml.json.path_or<string>(body, ".system[0].text", "ABSENT"),
+        baml.json.stringify(baml.json.path<json>(body, ".system[1]")),
+        baml.json.path_or<string>(body, ".messages[0].content[0].text", "ABSENT"),
+        baml.json.stringify(baml.json.path<json>(body, ".messages[0].content[1]")),
+        _array_len(body, ".system").to_string(),
+        _array_len(body, ".messages[0].content").to_string(),
+    ].join("|")
+}
+
+test "bedrock_cache_point_metadata" {
+    assert.equal(
+        bedrock_cache_point_metadata(),
+        `Be terse.|{"cachePoint":{"type":"default"}}|hi|{"cachePoint":{"type":"default"}}|2|2`,
+    )
+}
+
+function bedrock_cache_point_metadata_verbatim() -> string {
+    let body = _body(_cache_client(), _turn_input(BedrockCachedVerbatim@spec("hi"), _empty_journal(), _no_tools()));
+    [
+        baml.json.path_or<string>(body, ".system[1].cachePoint.type", "ABSENT"),
+        baml.json.path_or<string>(body, ".system[1].cachePoint.ttl", "ABSENT"),
+        _array_len(body, ".system").to_string(),
+        // `false` on the user marker: no checkpoint there
+        _array_len(body, ".messages[0].content").to_string(),
+    ].join("|")
+}
+
+test "bedrock_cache_point_metadata_verbatim" {
+    assert.equal(bedrock_cache_point_metadata_verbatim(), "default|1h|2|1")
+}
+
+function bedrock_cache_point_metadata_folds_with_system() -> string {
+    let body = _body(_cache_client(), _turn_input(BedrockCachedSystemOnly@spec(), _empty_journal(), _no_tools()));
+    [
+        `${_mentions(body, "system")}`,
+        baml.json.path_or<string>(body, ".messages[0].role", "ABSENT"),
+        baml.json.path_or<string>(body, ".messages[0].content[0].text", "ABSENT"),
+        baml.json.path_or<string>(body, ".messages[0].content[1].cachePoint.ttl", "ABSENT"),
+    ].join("|")
+}
+
+test "bedrock_cache_point_metadata_folds_with_system" {
+    assert.equal(bedrock_cache_point_metadata_folds_with_system(), "false|user|Be terse.|1h")
+}
+
+// A journal user turn carries the same key.
+function bedrock_cache_point_metadata_on_journal() -> string {
+    let turn = ai.events.UserMessage.new("and again");
+    turn.metadata = { "cache_point": { "type": "default", "ttl": "5m" } };
+    let log: ai.events.Event[] = [turn];
+    let body = _body(_cache_client(), _turn_input(BedrockUserOnly@spec("hi"), ai.Journal { log: log }, _no_tools()));
+    // prompt user + journal user merge into one message: [hi, and again, cachePoint]
+    [
+        baml.json.path_or<string>(body, ".messages[0].content[1].text", "ABSENT"),
+        baml.json.path_or<string>(body, ".messages[0].content[2].cachePoint.ttl", "ABSENT"),
+    ].join("|")
+}
+
+test "bedrock_cache_point_metadata_on_journal" {
+    assert.equal(bedrock_cache_point_metadata_on_journal(), "and again|5m")
+}
+
+// A value with no CachePointBlock reading is rejected before anything is sent,
+// rather than silently turning caching off.
+function bedrock_cache_point_metadata_rejects_non_object() -> string {
+    let input = _turn_input(BedrockCachedBadValue@spec("hi"), _empty_journal(), _no_tools());
+    let got = aws.internal.build_request(_cache_client(), input).url catch_all (e) {
+        _ => `${_failure_label(e)}: ${e.to_string()}`,
+    };
+    got
+}
+
+test "bedrock_cache_point_metadata_rejects_non_object" {
+    let got = bedrock_cache_point_metadata_rejects_non_object();
+    assert.contains(got, "InvalidRequest");
+    assert.contains(got, "cache_point")
 }
 
 // ─── 8. passthrough: additionalModelRequestFields + request_body ─────────────

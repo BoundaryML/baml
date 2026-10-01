@@ -124,8 +124,17 @@ class AudioBlock {
 /// A prompt-caching checkpoint. Everything *before* the checkpoint in the
 /// request is eligible for reuse on the next call. `"default"` is the only
 /// documented type.
+///
+/// This is the block the client's `cache_tools` option produces. A checkpoint
+/// authored as an object in `ai.Role.metadata` is carried verbatim instead
+/// (see `_cache_point`), which is why the content unions below hold theirs as
+/// an open JSON object.
 class CachePointBlock {
     type: string,
+}
+
+function _default_cache_point() -> map<string, baml.json.json> {
+    { "type": "default" }
 }
 
 class ToolUseBlock {
@@ -153,7 +162,7 @@ class ContentBlock {
     audio: AudioBlock?,
     toolUse: ToolUseBlock?,
     toolResult: ToolResultBlock?,
-    cachePoint: CachePointBlock?,
+    cachePoint: map<string, baml.json.json>?,
 
     function of_text(text: string) -> ContentBlock {
         ContentBlock { ..._empty_content_block(), text: text }
@@ -183,8 +192,8 @@ class ContentBlock {
         ContentBlock { ..._empty_content_block(), toolResult: tool_result }
     }
 
-    function of_cache_point() -> ContentBlock {
-        ContentBlock { ..._empty_content_block(), cachePoint: CachePointBlock { type: "default" } }
+    function of_cache_point(point: map<string, baml.json.json>) -> ContentBlock {
+        ContentBlock { ..._empty_content_block(), cachePoint: point }
     }
 }
 
@@ -206,14 +215,14 @@ function _empty_content_block() -> ContentBlock {
 /// `build_request/bedrock.rs:174-176`.
 class SystemContentBlock {
     text: string?,
-    cachePoint: CachePointBlock?,
+    cachePoint: map<string, baml.json.json>?,
 
     function of_text(text: string) -> SystemContentBlock {
         SystemContentBlock { text: text, cachePoint: null }
     }
 
-    function of_cache_point() -> SystemContentBlock {
-        SystemContentBlock { text: null, cachePoint: CachePointBlock { type: "default" } }
+    function of_cache_point(point: map<string, baml.json.json>) -> SystemContentBlock {
+        SystemContentBlock { text: null, cachePoint: point }
     }
 }
 
@@ -315,7 +324,7 @@ class ConverseRequest {
 // eight null members is not a union at all. So the serialized request is run
 // through `_prune_nulls` before it goes on the wire.
 //
-// Three keys are copied VERBATIM without recursing, because their values are
+// Four keys are copied VERBATIM without recursing, because their values are
 // authored elsewhere (by the user or by the model) and a `null` inside them is
 // meaningful data rather than an unset member:
 //
@@ -328,14 +337,16 @@ class ConverseRequest {
 //     silently become absent on every replay turn. `input` is the only key
 //     with that name in a Converse request body (the tool schema lives under
 //     `inputSchema.json`, itself already opaque), so a flat key test is
-//     enough.
+//     enough;
+//   * `cachePoint` — a checkpoint authored in `ai.Role.metadata`, promised
+//     verbatim by `_cache_point`.
 //
 // A `null` value is dropped before the key is even consulted, so a null blob
 // (no passthrough configured) still disappears.
 // ---------------------------------------------------------------------------
 
 function _is_opaque_key(key: string) -> bool {
-    key == "additionalModelRequestFields" || key == "json" || key == "input"
+    key == "additionalModelRequestFields" || key == "json" || key == "input" || key == "cachePoint"
 }
 
 function _prune_nulls(value: baml.json.json) -> baml.json.json {
@@ -627,24 +638,39 @@ function _prompt_system(message: ai.PromptMessage) -> SystemContentBlock[] {
     blocks
 }
 
-/// (internal) The per-message metadata key that requests a Bedrock prompt-caching
-/// checkpoint after the message's content.
+/// (internal) The prompt-caching checkpoint a message asks for through the `cache_point`
+/// key of its metadata, or null when it asks for none. The checkpoint goes
+/// after the message's content, so the cached prefix runs up to and including
+/// that message.
 ///
 /// The engine emits `{"cachePoint":{"type":"default"}}` whenever a message
-/// carries `cache_control` metadata
-/// (`engine/.../aws_client.rs:123-155`). BAML's neutral spelling of that is a
-/// `ai.PromptMessage.metadata` entry, and Bedrock's own name for the feature
-/// is a cache *point*, so the key is `cache_point` — any non-null value
-/// (`true` is the idiomatic one) turns the checkpoint on.
+/// carries `cache_control` metadata (`engine/.../aws_client.rs:123-155`).
+/// Here the key is Bedrock's own name for the feature, and its value is the
+/// `CachePointBlock` itself:
 ///
-/// NOTE: `ai.internal.make_role` currently builds every role marker with empty
-/// metadata, so nothing populates this yet from the prompt DSL. Until that
-/// lands, use the client's `cache_system_prompt` / `cache_tools` options,
-/// which do not depend on per-message metadata.
-function _wants_cache_point(metadata: map<string, baml.json.json>) -> bool {
+///   * an object is sent verbatim as the `cachePoint` member, so
+///     `${ai.Role { name: "system", metadata: { "cache_point": { "type":
+///     "default", "ttl": "1h" } } }}` reaches the wire as written;
+///   * `true` is shorthand for `{"type": "default"}`;
+///   * `false` or `null` asks for no checkpoint.
+///
+/// Anything else is rejected rather than guessed at: a string or a number has
+/// no `CachePointBlock` reading, and dropping it would silently turn caching
+/// off.
+function _cache_point(metadata: map<string, baml.json.json>) -> map<string, baml.json.json>? {
     match (metadata.get("cache_point")) {
-        null => false,
-        _ => true,
+        null => null,
+        let enabled: bool => {
+            if (enabled) {
+                _default_cache_point()
+            } else {
+                null
+            }
+        },
+        let point: map<string, baml.json.json> => point,
+        _ => throw _reject(
+            "Bedrock `cache_point` metadata must be `true` or a cachePoint object such as {\"type\": \"default\"}",
+        ),
     }
 }
 
@@ -678,8 +704,8 @@ function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> BedrockPromp
             for (let block in _prompt_system(message)) {
                 system.push(block);
             }
-            if (_wants_cache_point(message.metadata)) {
-                system.push(SystemContentBlock.of_cache_point());
+            if let point: map<string, baml.json.json> = _cache_point(message.metadata) {
+                system.push(SystemContentBlock.of_cache_point(point));
             }
             null
         } else {
@@ -688,8 +714,8 @@ function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> BedrockPromp
             // dropped: `content: []` is a ValidationException, and a lone
             // `cachePoint` with nothing to cache is no better.
             if (content.length() > 0) {
-                if (_wants_cache_point(message.metadata)) {
-                    content.push(ContentBlock.of_cache_point());
+                if let point: map<string, baml.json.json> = _cache_point(message.metadata) {
+                    content.push(ContentBlock.of_cache_point(point));
                 }
                 messages.push(Message { role: _conversation_role(message.role), content: content });
             }
@@ -769,8 +795,8 @@ function _lower_journal(
             let user: ai.events.UserMessage => {
                 let content = _lower_blocks(user.content, preview = preview);
                 if (content.length() > 0) {
-                    if (_wants_cache_point(user.metadata)) {
-                        content.push(ContentBlock.of_cache_point());
+                    if let point: map<string, baml.json.json> = _cache_point(user.metadata) {
+                        content.push(ContentBlock.of_cache_point(point));
                     }
                     pending.push(
                         PendingMessage {
@@ -952,8 +978,8 @@ function _system_as_user(system: SystemContentBlock[]) -> Message {
         if let text: string = block.text {
             content.push(ContentBlock.of_text(text));
             null
-        } else {
-            content.push(ContentBlock.of_cache_point());
+        } else if let point: map<string, baml.json.json> = block.cachePoint {
+            content.push(ContentBlock.of_cache_point(point));
             null
         };
     }
@@ -997,7 +1023,7 @@ function converse_request(
     let prompt = _lower_prompt(input.prompt(ai.internal.build_output_format(input.output_type)), preview = preview);
     let system = prompt.system;
     if (client.cache_system_prompt && system.length() > 0) {
-        system.push(SystemContentBlock.of_cache_point());
+        system.push(SystemContentBlock.of_cache_point(_default_cache_point()));
     }
     let messages = prompt.messages;
     let journal_messages = _lower_journal(
