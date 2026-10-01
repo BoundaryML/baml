@@ -141,7 +141,7 @@ nullable slot; **descriptor** = the typed `baml_bridge.BamlType` (or `null` = wi
 | `Ty::Primitive(Float)` | `Ty::Float` | `score float` | `double` | `java.lang.Double` | `BamlType.FLOAT` | :87 |
 | `Ty::Primitive(String)` | `Ty::String` | `name string` | `java.lang.String` | `java.lang.String` | `BamlType.STRING` | :88 |
 | `Ty::Primitive(Bool)` | `Ty::Bool` | `active bool` | `boolean` | `java.lang.Boolean` | `BamlType.BOOL` | :89 |
-| `Ty::Primitive(Null)` | `Ty::Null` | `null` in a union | `java.lang.Void` | `java.lang.Void` | `null` (wire-driven) | :91 |
+| `Ty::Primitive(Null)` | `Ty::Null` | `null` in a union | `java.lang.Void`; as a function return (`-> null`, the unit type) the method is `void`, and as a callback return the shape is `Runnable`/`Consumer`/`BiConsumer` | `java.lang.Void` | `null` (wire-driven) | :91 |
 | `Ty::Primitive(Uint8Array)` | `Ty::Uint8Array` | `data uint8array` | `byte[]` | `byte[]` | `null` (wire-driven) | :100 |
 | `Ty::Primitive(Image)` | `Ty::Media(Image)` | `photo image` | `baml_sdk.baml.media.Image` | (same) | `null` (wire-driven) | :102 |
 | `Ty::Primitive(Audio)` | `Ty::Media(Audio)` | `clip audio` | `baml_sdk.baml.media.Audio` | (same) | `null` (wire-driven) | :103 |

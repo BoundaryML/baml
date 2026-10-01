@@ -12,7 +12,7 @@ import (
 // Direct synchronous Go counterparts to Python test_cancellation.py. Go uses
 // context cancellation rather than a separate generated async API.
 func Test_sync_call_returns_null(t *testing.T) {
-	if _, err := baml_sdk.ThrowsTestSleepMs(context.Background(), 1); err != nil {
+	if err := baml_sdk.ThrowsTestSleepMs(context.Background(), 1); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -22,7 +22,7 @@ func Test_sync_cancel_via_context(t *testing.T) {
 	timer := time.AfterFunc(50*time.Millisecond, cancel)
 	defer timer.Stop()
 	start := time.Now()
-	_, err := baml_sdk.ThrowsTestSleepMs(ctx, 2000)
+	err := baml_sdk.ThrowsTestSleepMs(ctx, 2000)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancellation error = %v", err)
 	}

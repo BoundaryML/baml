@@ -1609,6 +1609,75 @@ fn run_execute_function_without_baml_toml_succeeds() {
     );
 }
 
+/// A unit return carries no information, so `baml run` prints nothing for it —
+/// however the unit type is spelled (`void`, `null`, an alias, `null | null`).
+/// The decision is the declared type's, not the returned value's: a type that
+/// merely admits the unit value (`int?`) still prints its `null`, and so does
+/// `-e`, whose synthetic main is declared `-> unknown`. JSON output always
+/// prints a document.
+#[test]
+fn run_prints_nothing_for_a_unit_return() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        r#"
+function as_void() -> void {
+}
+
+function as_null() -> null {
+  null
+}
+
+function optional_null() -> int? {
+  null
+}
+
+type Nothing = null
+
+function via_alias() -> Nothing {
+  null
+}
+
+function via_union() -> null | null {
+  null
+}
+"#,
+    );
+
+    let stdout_of = |args: &[&str]| {
+        let output = run_baml_cli(built, tmp.path(), args);
+        assert!(
+            output.status.success(),
+            "Expected exit 0 for `baml {}`, got: {:?}\nstdout: {}\nstderr: {}",
+            args.join(" "),
+            output.status.code(),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        String::from_utf8_lossy(&output.stdout).trim().to_owned()
+    };
+
+    assert_eq!(stdout_of(&["run", "as_void", "--from", "."]), "");
+    assert_eq!(stdout_of(&["run", "as_null", "--from", "."]), "");
+    assert_eq!(stdout_of(&["run", "via_alias", "--from", "."]), "");
+    assert_eq!(stdout_of(&["run", "via_union", "--from", "."]), "");
+    assert_eq!(stdout_of(&["run", "optional_null", "--from", "."]), "null");
+    assert_eq!(
+        stdout_of(&["run", "-e", "as_void()", "--from", "."]),
+        "null"
+    );
+    // JSON output is a document a consumer parses, so it prints one even for
+    // a unit return.
+    for target in ["as_void", "as_null", "via_union"] {
+        assert_eq!(
+            stdout_of(&["run", target, "--from", ".", "--output-format", "json"]),
+            "null",
+            "{target}"
+        );
+    }
+}
+
 /// Associated type projections that resolve to concrete value types must still
 /// produce stdout through `baml run`. This catches a real boundary bug where the
 /// VM metadata erased `(Class as Interface).Assoc` to `void`; dispatch treats

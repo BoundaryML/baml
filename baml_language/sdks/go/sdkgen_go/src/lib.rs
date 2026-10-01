@@ -1713,8 +1713,10 @@ fn supported_function_argument(
     }
 }
 
+/// A unit return (`-> void` / `-> null`) carries no information and a `never`
+/// return never arrives, so either is a Go function returning only `error`.
 fn function_returns_only_error(return_type: &Ty) -> bool {
-    matches!(return_type, Ty::Void | Ty::Never)
+    return_type.is_unit() || matches!(return_type, Ty::Never)
 }
 
 fn supported_wire_type(
@@ -2244,7 +2246,7 @@ fn render_functions(
             routed.go_name.wire().to_string()
         );
         out.push_str(")\n");
-        if matches!(function.return_type, Ty::Void) {
+        if function.return_type.is_unit() {
             let _ = writeln!(out, "\treturn {error_local}");
         } else if matches!(function.return_type, Ty::Never) {
             let _ = writeln!(out, "\tif {error_local} != nil {{");
@@ -6949,8 +6951,16 @@ mod tests {
             watchers: vec![],
             origin: origin(),
         };
+        // `null` spells the same unit type as `void`: a unit return is
+        // error-only, while a unit parameter still has a value to pass.
+        let null_name = Name::new(
+            BaseName::new("user"),
+            vec![],
+            BaseName::new("round_trip_null"),
+        );
         let pool = SymbolPool::from([
             (void_name, Symbol::Function(void_function)),
+            round_trip_function(null_name, "value", ty_null()),
             (bigint_name, Symbol::Function(bigint_function)),
             (never_name, Symbol::Function(never_function)),
         ]);
@@ -6966,6 +6976,12 @@ mod tests {
         assert!(
             functions
                 .contains("func NoOp(ctx_ context.Context, options_ ...baml_go.CallOption) error")
+        );
+        assert!(
+            functions.contains(
+                "func RoundTripNull(ctx_ context.Context, value baml_go.Null, options_ ...baml_go.CallOption) error"
+            ),
+            "{functions}"
         );
         assert!(functions.contains(
             "func AlwaysPanics(ctx_ context.Context, options_ ...baml_go.CallOption) error"

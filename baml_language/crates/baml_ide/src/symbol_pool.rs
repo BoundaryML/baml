@@ -122,6 +122,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         ),
     > = HashMap::new();
     let spelling = spelling(db);
+    let lang = baml_compiler2_hir::package::lang_roots(db);
 
     let mut pending_methods: Vec<PendingMethod> = Vec::new();
 
@@ -286,7 +287,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     let tir_ty = baml_compiler2_hir_ty::lower::reject_holes(
                         &ctx.lower_type_ref(type_refs, id),
                     );
-                    convert_tir_to_codegen_ty(spelling, &tir_ty, alias_map, recursive_aliases)
+                    convert_tir_to_codegen_ty(spelling, &tir_ty, alias_map, recursive_aliases, lang)
                 };
                 let method_defaults =
                     baml_compiler2_hir::signature::function_parameter_defaults(db, method_loc);
@@ -518,7 +519,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             let lower = |id| {
                 let tir_ty =
                     baml_compiler2_hir_ty::lower::reject_holes(&ctx.lower_type_ref(type_refs, id));
-                convert_tir_to_codegen_ty(spelling, &tir_ty, alias_map, recursive_aliases)
+                convert_tir_to_codegen_ty(spelling, &tir_ty, alias_map, recursive_aliases, lang)
             };
             let func_defaults =
                 baml_compiler2_hir::signature::function_parameter_defaults(db, func_loc);
@@ -627,6 +628,7 @@ fn resolve_type_ref(
         &tir_ty,
         alias_map,
         recursive_aliases,
+        baml_compiler2_hir::package::lang_roots(db),
     ))
 }
 
@@ -651,6 +653,7 @@ fn resolve_throws<'db>(
             ty,
             alias_map,
             recursive_aliases,
+            baml_compiler2_hir::package::lang_roots(db),
         )),
     }
 }
@@ -661,17 +664,42 @@ fn resolve_throws<'db>(
 /// symbol stores the separately resolved target, so alias chains survive all
 /// the way to generators. Canonicalization is centralized on `CodegenTy` and
 /// recursively normalizes every container.
+///
+/// The one exception is the unit type: any type equivalent to it — an alias
+/// of `void`/`null`, `null | null`, `never | null`, or `void` itself — becomes
+/// `Null`, so a generator's `is_unit` (which looks for `Null`) gives the same
+/// answer the checker does for the shorthand rules.
 fn convert_tir_to_codegen_ty(
     spelling: &Spelling,
     ty: &TirTy,
-    _alias_map: &HashMap<DeclName, TirTy>,
+    alias_map: &HashMap<DeclName, TirTy>,
     _recursive_aliases: &std::collections::HashSet<DeclName>,
+    lang: baml_base::LangRoots,
 ) -> cg::Ty {
-    convert_tir_leaf(spelling, ty).canonicalize()
+    let unit = UnitCtx(baml_type::unify::AliasEquivCtx {
+        aliases: alias_map,
+        lang,
+    });
+    convert_tir_leaf(spelling, ty, &unit).canonicalize()
 }
 
-fn convert_tir_leaf(spelling: &Spelling, ty: &TirTy) -> cg::Ty {
-    let convert = |ty: &TirTy| convert_tir_leaf(spelling, ty);
+/// Decides which types are the unit type, with the package's aliases in view.
+struct UnitCtx<'a>(baml_type::unify::AliasEquivCtx<'a>);
+
+impl UnitCtx<'_> {
+    fn is_unit(&self, ty: &TirTy) -> bool {
+        use baml_type::normalize::TypeContext;
+        matches!(ty, TirTy::Void) || self.0.equivalent(ty, &TirTy::Null)
+    }
+}
+
+fn convert_tir_leaf(spelling: &Spelling, ty: &TirTy, unit: &UnitCtx<'_>) -> cg::Ty {
+    let convert = |ty: &TirTy| convert_tir_leaf(spelling, ty, unit);
+    // Only an alias or a union can denote the unit type without being
+    // spelled `null`/`void`; everything else is decided by its own arm.
+    if matches!(ty, TirTy::TypeAlias(_) | TirTy::Union(_)) && unit.is_unit(ty) {
+        return cg::Ty::Null;
+    }
     match ty {
         TirTy::Int => cg::Ty::Int,
         TirTy::Bigint => cg::Ty::Bigint,
@@ -731,7 +759,7 @@ fn convert_tir_leaf(spelling: &Spelling, ty: &TirTy) -> cg::Ty {
         TirTy::Type => cg::Ty::Type,
         TirTy::Resource => cg::Ty::Resource,
         TirTy::PromptAst => cg::Ty::PromptAst,
-        TirTy::Void => cg::Ty::Void,
+        TirTy::Void => cg::Ty::Null,
         TirTy::TypeVar(name) => cg::Ty::TypeVar(name.clone()),
         TirTy::Unknown => cg::Ty::Unknown,
         TirTy::Never => cg::Ty::Never,
@@ -862,6 +890,50 @@ mod tests {
                 "{expected} must be a Function symbol",
             );
         }
+    }
+
+    /// The unit type reaches generators as `Null` however it is spelled, so a
+    /// generator's "returns nothing" form agrees with the checker's shorthand
+    /// rules: through an alias, a redundant union, or an uninhabited member.
+    #[test]
+    fn unit_equivalent_types_reach_generators_as_null() {
+        let root = Path::new("/tmp/unit_equivalent_codegen");
+        let mut db = ProjectDatabase::new();
+        db.workspace(root);
+        db.file(
+            root.join("main.baml").as_path(),
+            r##"
+type Nothing = null
+type NothingAgain = Nothing
+
+function via_alias() -> Nothing { null }
+function via_alias_chain() -> NothingAgain { null }
+function via_union() -> null | null { null }
+function via_never() -> never | null { null }
+function optional_int() -> int? { null }
+function callback(cb: (x: int) -> Nothing throws never) -> null { null }
+"##,
+        );
+
+        let pool = build_symbol_pool(&db);
+        let function = |name: &str| {
+            let key = pool
+                .keys()
+                .find(|key| key.name().as_str() == name)
+                .unwrap_or_else(|| panic!("{name} must be in the pool"));
+            match pool.get(key) {
+                Some(cg::Symbol::Function(function)) => function,
+                _ => panic!("{name} must be a function"),
+            }
+        };
+        for name in ["via_alias", "via_alias_chain", "via_union", "via_never"] {
+            assert_eq!(function(name).return_type, cg::Ty::Null, "{name}");
+        }
+        assert!(!function("optional_int").return_type.is_unit());
+        let cg::Ty::Function { ret, .. } = &function("callback").arguments[0].ty else {
+            panic!("callback must take a function");
+        };
+        assert_eq!(**ret, cg::Ty::Null);
     }
 
     #[test]

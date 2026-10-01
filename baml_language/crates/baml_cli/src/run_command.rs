@@ -1211,22 +1211,23 @@ impl RunArgs {
                 &rt,
                 async {
                     let value = call_result?;
-                    if !matches!(return_type, bex_engine::RuntimeTy::Void) {
-                        if let Err(e) = baml_exec::write_output_with_context(
-                            &engine,
-                            value,
-                            &return_type,
-                            output_format,
-                            &helper_context,
-                            || self.print_logs(logs.as_ref()),
-                        )
-                        .await
-                        {
-                            crate::reporter::print_error(format_args!(
-                                "failed to serialize output: {e}"
-                            ));
-                            return Ok(false);
-                        }
+                    // An expression always prints its value: the synthetic
+                    // main is declared `-> unknown`, so there is no unit
+                    // return type to elide the way a named target's is.
+                    if let Err(e) = baml_exec::write_output_with_context(
+                        &engine,
+                        value,
+                        &return_type,
+                        output_format,
+                        &helper_context,
+                        || self.print_logs(logs.as_ref()),
+                    )
+                    .await
+                    {
+                        crate::reporter::print_error(format_args!(
+                            "failed to serialize output: {e}"
+                        ));
+                        return Ok(false);
                     }
                     Ok(true)
                 },

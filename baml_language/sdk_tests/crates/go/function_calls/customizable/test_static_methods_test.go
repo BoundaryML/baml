@@ -129,7 +129,7 @@ func Test_static_method_errors_never_cancellation_and_collision_names(t *testing
 	timed, cancel := context.WithTimeout(ctx, 150*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	_, err = baml_sdk.StaticMethodEdgesEdgeSleepMs(timed, 2000)
+	err = baml_sdk.StaticMethodEdgesEdgeSleepMs(timed, 2000)
 	if err != timed.Err() || !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("cancellation = %v, want exact %v", err, timed.Err())
 	}

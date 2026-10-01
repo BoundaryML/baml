@@ -2322,6 +2322,34 @@ mod tests {
     }
 
     #[test]
+    fn unit_return_is_a_void_method() {
+        // `fn settle(x: null) -> null`: a unit return is a `void` method with
+        // no `return` and no `@Nullable`, and its async sibling completes with
+        // `java.lang.Void`. A unit *parameter* still has a value to pass, so it
+        // stays the boxed, nullable `Void`.
+        let mut pool = SymbolPool::new();
+        pool.insert(
+            name("user", &["unit"], "settle"),
+            Symbol::Function(method_fn("settle", ("x", t_null()), t_null(), 0)),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("unit/Fns.java")];
+        assert!(
+            file.contains(
+                "public static void settle(java.lang.@org.jspecify.annotations.Nullable Void x) {"
+            ),
+            "{file}"
+        );
+        assert!(
+            file.contains(
+                "public static java.util.concurrent.CompletableFuture<java.lang.Void> settle_async(java.lang.@org.jspecify.annotations.Nullable Void x) {"
+            ),
+            "{file}"
+        );
+        assert!(!file.contains("return (java.lang.Void)"), "{file}");
+    }
+
+    #[test]
     fn nullable_optional_setter_param_is_annotated() {
         use baml_sdkgen_types::{DefaultLiteral, FunctionArgumentDefault};
         // A nullable optional arg (`hint?: string?`) → its `$Opts` setter param

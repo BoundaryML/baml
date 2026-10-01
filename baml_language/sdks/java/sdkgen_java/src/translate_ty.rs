@@ -66,8 +66,19 @@ pub(crate) struct CallbackInterface {
     pub(crate) required: Vec<(String, String)>,
     /// Optional params folded into the `Opts` bag: `(BAML wire name, boxed java type)`.
     pub(crate) optionals: Vec<(String, String)>,
-    /// The boxed return type of the SAM.
-    pub(crate) ret: String,
+    /// What the SAM returns.
+    pub(crate) ret: CallbackReturn,
+}
+
+/// The result of a minted callback interface's SAM.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CallbackReturn {
+    /// The unit type: the SAM is a Java `void` method, like the
+    /// `java.util.function` shapes (`Runnable`, `Consumer`) a unit callback of
+    /// arity ≤ 2 takes.
+    Unit,
+    /// A value of this boxed Java type.
+    Value(String),
 }
 
 /// Collects the host-callable functional interfaces
@@ -714,7 +725,7 @@ fn translate_callable_profile(
         .any(|p| matches!(p.mode, CodegenFunctionParamMode::Optional));
     if !owning && !has_optional && params.len() <= 2 {
         // Plain arity-≤-2 all-required callable → a java.util.function shape.
-        let ret_is_unit = matches!(ret, Ty::Void);
+        let ret_is_unit = ret.is_unit();
         let p: Vec<String> = params
             .iter()
             .map(|p| translate_ty(&p.ty, TyPosition::Boxed, ctx, sink))
@@ -766,7 +777,11 @@ fn translate_callable_profile(
             }
         }
     }
-    let ret_ty = translate_ty(ret, TyPosition::Boxed, ctx, sink);
+    let ret_ty = if ret.is_unit() {
+        CallbackReturn::Unit
+    } else {
+        CallbackReturn::Value(translate_ty(ret, TyPosition::Boxed, ctx, sink))
+    };
     let base = callback_base_name(params, has_optional);
 
     let entries = sink.callbacks.entry(ctx.pkg.clone()).or_default();
@@ -1187,6 +1202,59 @@ mod tests {
     }
 
     #[test]
+    fn callable_returning_unit_is_a_consumer_under_either_spelling() {
+        // `null` and `void` spell one unit type, so `(int) -> null` is the
+        // same value-less callback as `(int) -> void`.
+        for unit in [void(), null()] {
+            let c = callable(
+                vec![CallableParam {
+                    name: Some(BaseName::new("x")),
+                    ty: int(),
+                    mode: CodegenFunctionParamMode::Required,
+                }],
+                unit.clone(),
+            );
+            assert_eq!(
+                tr(&c, TyPosition::TopLevel),
+                "java.util.function.Consumer<java.lang.Long>"
+            );
+            assert_eq!(
+                tr(&callable(vec![], unit), TyPosition::TopLevel),
+                "java.lang.Runnable"
+            );
+        }
+    }
+
+    /// A callback with no `java.util.function` shape still returns nothing when
+    /// its result is the unit type: the minted SAM is a `void` method, matching
+    /// `Runnable`/`Consumer`, so a host lambda needs no `return null;`.
+    #[test]
+    fn minted_unit_callback_is_a_void_method() {
+        let aliases = AliasTable::new();
+        let ctx = ctx_in(&aliases);
+        let mut sink = UnionSink::default();
+        let param = |name: &str| CallableParam {
+            name: Some(BaseName::new(name)),
+            ty: int(),
+            mode: CodegenFunctionParamMode::Required,
+        };
+        let f = callable(vec![param("a"), param("b"), param("c")], null());
+        translate_ty(&f, TyPosition::TopLevel, &ctx, &mut sink);
+        let pkg = PackagePath {
+            segments: vec!["callables".to_string()],
+        };
+        let iface = &sink.callbacks.get(&pkg).expect("interface registered")[0].1;
+        assert_eq!(iface.ret, CallbackReturn::Unit);
+        let source = crate::emit::render_callback_interface(iface);
+        assert!(source.contains("    void apply("), "{source}");
+        assert!(source.contains("return null;"), "{source}");
+        assert!(
+            source.contains("java.util.concurrent.CompletableFuture<java.lang.Void> callAsync("),
+            "{source}"
+        );
+    }
+
+    #[test]
     fn callable_with_optionals_mints_functional_interface() {
         // `(x: int, y?: int, z?: int) -> int` has no java.util.function shape, so
         // a `@FunctionalInterface` (`IntOptCallback`) is minted and recorded.
@@ -1234,7 +1302,10 @@ mod tests {
                 ("z".to_string(), "java.lang.Long".to_string()),
             ]
         );
-        assert_eq!(iface.ret, "java.lang.Long");
+        assert_eq!(
+            iface.ret,
+            CallbackReturn::Value("java.lang.Long".to_string())
+        );
 
         // The same signature reuses the interface (deduped, no second entry).
         let again = translate_ty(&f, TyPosition::TopLevel, &ctx, &mut sink);

@@ -707,6 +707,36 @@ mod injected_argument_tests {
     }
 
     #[test]
+    fn unit_return_is_a_void_function_under_either_spelling() {
+        // `null` and `void` spell one unit type: a function returning it is a
+        // C++ `void` function, never one returning `std::monostate`.
+        for unit in [Ty::Void, Ty::Null] {
+            let name = Name::new(BaseName::new("user"), vec![], BaseName::new("settle"));
+            let function = Function {
+                name: BaseName::new("settle"),
+                generic_params: vec![],
+                docstring: None,
+                arguments: vec![],
+                return_type: unit,
+                throws: None,
+                watchers: vec![],
+                origin: Origin {
+                    source_file_path: "unit.baml".to_string(),
+                    span_start: 0,
+                },
+            };
+            let files = to_source_code_with_bytecode(
+                &SymbolPool::from([(name, Symbol::Function(function))]),
+                &[],
+                &[],
+            );
+            let header = &files[&PathBuf::from("include/baml_sdk.h")];
+            assert!(header.contains("void settle("), "{header}");
+            assert!(!header.contains("std::monostate settle("), "{header}");
+        }
+    }
+
+    #[test]
     fn injected_callback_does_not_hide_callable() {
         let name = Name::new(
             BaseName::new("user"),
@@ -1226,7 +1256,7 @@ fn emit_callable(
         }
     }
     let ret = match &function.return_type {
-        Ty::Void => "void".to_string(),
+        ret if ret.is_unit() => "void".to_string(),
         Ty::Function { params, ret, .. } => {
             translate_callable_ty(pool, names, params, ret, emitted_types)?
                 .0
@@ -1327,7 +1357,7 @@ fn translate_callable_ty(
                 .unwrap_or_default(),
         );
     }
-    let ret_ty = if matches!(ret, Ty::Void) {
+    let ret_ty = if ret.is_unit() {
         "void".to_string()
     } else {
         match translate_ty(pool, names, ret, emitted_types, &BTreeSet::new()) {

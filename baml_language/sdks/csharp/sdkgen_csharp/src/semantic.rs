@@ -1116,7 +1116,7 @@ fn function_type_source(
         })
         .collect::<Vec<_>>();
 
-    let task = if matches!(ret, Ty::Void) {
+    let task = if ret.is_unit() {
         "global::System.Threading.Tasks.Task".to_string()
     } else {
         format!("global::System.Threading.Tasks.Task<{}>", project(ret))
@@ -1891,7 +1891,7 @@ fn require_supported_type_inner(
                 }
                 require_supported_type(&parameter.ty, model, path)?;
             }
-            if !matches!(ret.as_ref(), Ty::Void) {
+            if !ret.is_unit() {
                 require_supported_type(ret, model, path)?;
             }
             if !matches!(throws.as_ref(), Ty::Never | Ty::Void) && !is_host_callable_error(throws) {
@@ -2226,7 +2226,7 @@ fn collect_argument_type_closure(
         for parameter in params {
             collect_type_closure(&parameter.ty, model, types)?;
         }
-        if !matches!(ret.as_ref(), Ty::Void) {
+        if !ret.is_unit() {
             collect_type_closure(ret, model, types)?;
         }
         if !matches!(throws.as_ref(), Ty::Never | Ty::Void) && !is_host_callable_error(throws) {
@@ -2319,7 +2319,7 @@ fn collect_type_closure(
             for parameter in params {
                 collect_type_closure(&parameter.ty, model, types)?;
             }
-            if !matches!(ret.as_ref(), Ty::Void) {
+            if !ret.is_unit() {
                 collect_type_closure(ret, model, types)?;
             }
             if !matches!(throws.as_ref(), Ty::Never | Ty::Void) && !is_host_callable_error(throws) {
@@ -2670,7 +2670,7 @@ fn render_generic_host_callable_add(
         })
         .collect::<Vec<_>>()
         .join(", ");
-    let result = if matches!(ret.as_ref(), Ty::Void) {
+    let result = if ret.is_unit() {
         format!("{context}.VoidResult()")
     } else {
         format!("{context}.Result({})", type_token(ret))
@@ -3572,7 +3572,7 @@ fn render_function_codec(
         })
         .collect::<Vec<_>>()
         .join(", ");
-    let result = if matches!(ret, Ty::Void) {
+    let result = if ret.is_unit() {
         "context.VoidResult()".to_string()
     } else {
         format!("context.Result({})", render.type_field(ret))
@@ -3635,7 +3635,7 @@ fn render_function_codec(
             }
         })
         .collect::<String>();
-    let decode_result = if matches!(ret, Ty::Void) {
+    let decode_result = if ret.is_unit() {
         "                _ = await nativeFunction(arguments, global::Baml.Generated.V1.BamlInvocationPreparation.CurrentOptions?.CancellationToken ?? default).ConfigureAwait(false);\n".to_string()
     } else {
         format!(
@@ -6117,6 +6117,21 @@ mod tests {
     }
 
     #[test]
+    fn unit_returning_callback_is_a_plain_task_under_either_spelling() {
+        // `null` and `void` spell one unit type: a callback returning it is a
+        // value-less `Task`, never a `Task<BamlValue>`.
+        for unit in [Ty::Void, Ty::Null] {
+            let source = function_type_source(&[], &unit, |_| {
+                unreachable!("a unit result is never projected")
+            });
+            assert_eq!(
+                source,
+                "global::System.Func<global::System.Threading.Tasks.Task>"
+            );
+        }
+    }
+
+    #[test]
     fn returned_callable_decode_lambdas_preserve_task_shapes_and_optional_presence() {
         let source = returned_callable_codec_source();
         assert!(source.contains("public static class BamlProgram"));
@@ -6460,15 +6475,17 @@ fn render_returned_callable_wrappers(render: &RenderContext<'_>) -> String {
         }
         let name = render.returned_callable_name(&spec.ty);
         let delegate = render.type_source(&spec.ty);
-        let result = if matches!(ret.as_ref(), Ty::Void) {
-            "void".into()
+        // Same decision as `function_type_source`: a unit result is a plain `Task`.
+        let returns_unit = ret.is_unit();
+        let (result, task) = if returns_unit {
+            (
+                "void".to_string(),
+                "global::System.Threading.Tasks.Task".to_string(),
+            )
         } else {
-            render.type_source(ret)
-        };
-        let task = if result == "void" {
-            "global::System.Threading.Tasks.Task".into()
-        } else {
-            format!("global::System.Threading.Tasks.Task<{result}>")
+            let result = render.type_source(ret);
+            let task = format!("global::System.Threading.Tasks.Task<{result}>");
+            (result, task)
         };
         let mut parameters = params
             .iter()
@@ -6493,7 +6510,7 @@ fn render_returned_callable_wrappers(render: &RenderContext<'_>) -> String {
         } else {
             format!("{arguments}, baml")
         };
-        let return_kw = if result == "void" { "" } else { "return " };
+        let return_kw = if returns_unit { "" } else { "return " };
         output.push_str(&format!("    public sealed class {name} {{\n        private readonly {delegate} body;\n        internal {name}({delegate} body) {{ this.body = body; }}\n        internal static async global::System.Threading.Tasks.Task<{name}> FromAsync(global::System.Threading.Tasks.Task<{delegate}> task) => new(await task.ConfigureAwait(false));\n        public {result} Invoke({signature}) {{ {return_kw}InvokeAsync({sync_arguments}).GetAwaiter().GetResult(); }}\n        public {task} InvokeAsync({signature}) {{ using var prepared = global::Baml.Generated.V1.BamlInvocationPreparation.Begin(baml); return body({arguments}); }}\n    }}\n"));
     }
     output

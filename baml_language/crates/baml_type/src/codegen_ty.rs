@@ -75,6 +75,18 @@ impl CodegenTy {
     }
 }
 
+impl<N: Clone> CodegenTy<N> {
+    /// True if this is the unit type — the type with exactly one value, which
+    /// source spells `null` or `void`. A generator keys on this where the host
+    /// language has a dedicated "returns nothing" form (`void`, a lone `error`,
+    /// `Runnable`): a unit result carries no information, so a function or
+    /// callback returning it takes that form. A type that merely *admits* the
+    /// unit value (`int?`) is not unit.
+    pub fn is_unit(&self) -> bool {
+        matches!(self, Self::Null | Self::Void)
+    }
+}
+
 fn canonical_union(members: Box<[CodegenTy]>) -> CodegenTy {
     let mut canonical = Vec::new();
     for member in members {

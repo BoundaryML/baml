@@ -369,7 +369,8 @@ pub(crate) fn render_callable(
         // `never` (diverging: panic/exit) spells as a void function —
         // the call only ever returns by throwing (Python maps both
         // void and never to `None` the same way).
-        Ty::Void | Ty::Never => None,
+        Ty::Never => None,
+        ret if ret.is_unit() => None,
         Ty::Function { .. } => Some(returned_callable.as_ref()?.0.clone()),
         other => Some(translate_ty(other, ctx)?),
     };
@@ -720,7 +721,7 @@ fn render_callable_param(
     }
     let invoke = invoke_args.join(", ");
     let (ret_ty, wrapper_body) = match ret {
-        Ty::Void | Ty::Never => (
+        ret if ret.is_unit() || matches!(ret, Ty::Never) => (
             "Swift.Void".to_string(),
             format!("try await {name}({invoke})\n\t\treturn BamlNull()._bamlEncode()"),
         ),
@@ -767,7 +768,9 @@ fn render_returned_callable(
         }
     }
     signature.push("baml: Baml.BamlOptions = .init()".into());
-    let ret_ty = if matches!(ret, Ty::Void | Ty::Never) {
+    // A unit or `never` result carries nothing back to the host.
+    let returns_nothing = ret.is_unit() || matches!(ret, Ty::Never);
+    let ret_ty = if returns_nothing {
         "Swift.Void".into()
     } else {
         translate_ty(ret, ctx)?
@@ -779,7 +782,7 @@ fn render_returned_callable(
         required.join(", "),
         optional.join("")
     );
-    let decode = if matches!(ret, Ty::Void | Ty::Never) {
+    let decode = if returns_nothing {
         "        _ = result; return ()".into()
     } else {
         format!("        return try {ret_ty}._bamlDecode(result)")
