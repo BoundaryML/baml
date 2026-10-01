@@ -2,14 +2,18 @@
 //! snapshot-local indexes. Locks sample containers independently, not atomically.
 use bex_vm_types::{HeapPtr, Object, Value, ValueKind};
 use btel_snapshot::{
-    Builder, Description, Limit, ObjectId, Snapshot, SnapshotObject, SnapshotValue,
+    Builder, Description, Limit, ObjectId, OwnedType, Snapshot, SnapshotObject, SnapshotValue,
 };
 use rustc_hash::FxHashMap;
+
+use super::network::NetworkPayload;
 
 #[derive(Clone, Copy)]
 pub(super) enum Input<'a> {
     Value(Value),
     FunctionArgs(&'a [Value]),
+    /// Built from Rust values; no heap is involved.
+    Network(&'a NetworkPayload<'a>),
 }
 #[derive(Default)]
 pub(super) struct Scratch {
@@ -98,6 +102,9 @@ impl Scratch {
     /// SAFETY: source values are live under the caller's heap permit throughout.
     /// No collection, VM allocation, user code, future polling or I/O occurs here.
     pub(super) unsafe fn capture(&mut self, mut b: Builder, input: Input<'_>) -> Snapshot {
+        if let Input::Network(payload) = input {
+            return network(b, payload);
+        }
         self.seen.clear();
         self.rust_seen.clear();
         self.work.clear();
@@ -246,8 +253,122 @@ impl Scratch {
         match input {
             Input::Value(_) => b.finish_value(value_root),
             Input::FunctionArgs(args) => b.finish_args(args.len(), args_range),
+            Input::Network(_) => unreachable!("network payloads are built above"),
         }
     }
+}
+/// A traced request's payload. Every string, a body included, is capped at
+/// `BODY_CAPTURE_MAX_BYTES`; a longer one is recorded as truncated.
+fn network(mut b: Builder, payload: &NetworkPayload<'_>) -> Snapshot {
+    let root = match *payload {
+        NetworkPayload::Request {
+            method,
+            url,
+            headers,
+            body,
+        } => {
+            let headers = string_map(&mut b, headers);
+            let mut fields = vec![
+                ("method", text(&mut b, method)),
+                ("url", text(&mut b, url)),
+                ("headers", headers),
+            ];
+            if let Some(body) = body {
+                fields.push(("body", self::body(&mut b, body)));
+            }
+            let request = map(&mut b, OwnedType::Unknown, &fields);
+            map(&mut b, OwnedType::Unknown, &[("request", request)])
+        }
+        NetworkPayload::Connection { status, headers } => {
+            let headers = string_map(&mut b, headers);
+            let status = SnapshotValue::Int(i64::from(status));
+            map(
+                &mut b,
+                OwnedType::Unknown,
+                &[("status", status), ("headers", headers)],
+            )
+        }
+        NetworkPayload::Body(bytes) => body(&mut b, bytes),
+        NetworkPayload::SseEvent { event, data, id } => {
+            let fields = [
+                (
+                    "event",
+                    event.map_or(SnapshotValue::Null, |event| text(&mut b, event)),
+                ),
+                ("data", text(&mut b, data)),
+                ("id", id.map_or(SnapshotValue::Null, |id| text(&mut b, id))),
+            ];
+            map(&mut b, OwnedType::Unknown, &fields)
+        }
+    };
+    b.finish_value(root)
+}
+fn text(b: &mut Builder, text: &str) -> SnapshotValue {
+    if text.len() > btel_settings::network::BODY_CAPTURE_MAX_BYTES {
+        return b.limited(Limit::Bytes);
+    }
+    b.string(&text.into()).map_or(
+        SnapshotValue::Truncated(Limit::Bytes),
+        SnapshotValue::String,
+    )
+}
+fn body(b: &mut Builder, body: &[u8]) -> SnapshotValue {
+    if body.len() > btel_settings::network::BODY_CAPTURE_MAX_BYTES {
+        return b.limited(Limit::Bytes);
+    }
+    if let Ok(body) = std::str::from_utf8(body) {
+        return text(b, body);
+    }
+    let Some(id) = b.reserve_object() else {
+        return SnapshotValue::Truncated(Limit::Objects);
+    };
+    let data = b.copy_bytes(body);
+    b.set_object(
+        id,
+        SnapshotObject::Bytes {
+            data,
+            original_len: body.len(),
+        },
+    );
+    SnapshotValue::Object(id)
+}
+fn string_map(b: &mut Builder, entries: &[(String, String)]) -> SnapshotValue {
+    let fields = entries
+        .iter()
+        .map(|(key, value)| (key.as_str(), text(b, value)))
+        .collect::<Vec<_>>();
+    map(b, OwnedType::string(), &fields)
+}
+/// A string-keyed map of values already built: a map's entries are contiguous.
+fn map(b: &mut Builder, value_type: OwnedType, fields: &[(&str, SnapshotValue)]) -> SnapshotValue {
+    let Some(id) = b.reserve_object() else {
+        return SnapshotValue::Truncated(Limit::Objects);
+    };
+    let key_type = b.push_type(OwnedType::string());
+    let value_type = b.push_type(value_type);
+    let start = b.entry_start();
+    let count = fields.len().min(b.remaining_entries());
+    b.reserve_entries(count);
+    for (key, value) in &fields[..count] {
+        if !b.content(key.len(), false) {
+            break;
+        }
+        b.entry(&(*key).into(), *value);
+    }
+    let entries = b.entry_range(start);
+    if entries.len() < fields.len() {
+        b.limited(Limit::Values);
+    }
+    b.set_object(
+        id,
+        SnapshotObject::Map {
+            key_type,
+            value_type,
+            entries,
+            original_len: fields.len(),
+        },
+    );
+    SnapshotValue::Object(id)
 }
 // Preserve immutable type metadata; replace every VM type head with owned identity.
 fn owned_type(ty: &bex_vm_types::RealizedTy) -> btel_snapshot::OwnedType {
@@ -283,6 +404,28 @@ fn declaration(
 }
 fn describe(kind: Description) -> SnapshotObject {
     SnapshotObject::Descriptive { kind, name: None }
+}
+/// A network snapshot as JSON, to compare shapes in tests: bytes become an
+/// array of numbers, a truncated value names its limit.
+#[cfg(test)]
+pub(super) fn json(snapshot: &Snapshot, value: SnapshotValue) -> serde_json::Value {
+    match value {
+        SnapshotValue::Null => serde_json::Value::Null,
+        SnapshotValue::Int(value) => value.into(),
+        SnapshotValue::String(id) => snapshot.string(id).as_str().into(),
+        SnapshotValue::Truncated(limit) => format!("truncated: {limit:?}").into(),
+        SnapshotValue::Object(id) => match snapshot.object(id) {
+            SnapshotObject::Map { entries, .. } => snapshot
+                .entries(*entries)
+                .iter()
+                .map(|entry| (entry.key.as_str().to_owned(), json(snapshot, entry.value)))
+                .collect::<serde_json::Map<_, _>>()
+                .into(),
+            SnapshotObject::Bytes { data, .. } => snapshot.bytes(*data).into(),
+            object => panic!("not a network snapshot object: {object:?}"),
+        },
+        value => panic!("not a network snapshot value: {value:?}"),
+    }
 }
 #[cfg(test)]
 mod tests {
@@ -799,6 +942,94 @@ mod tests {
         let Val::String(id) = values[3] else { panic!() };
         drop(vm);
         assert_eq!(snapshot.string(id).as_str(), "shared immutable content");
+    }
+    #[test]
+    fn network_payloads_have_their_recorded_shapes() {
+        use serde_json::json;
+
+        use crate::telemetry::network::NetworkPayload;
+
+        let pool = btel_snapshot::SnapshotPool::new(4, btel_snapshot::Limits::default());
+        let capture = |payload: &NetworkPayload<'_>| network(pool.try_acquire().unwrap(), payload);
+        let shape = |payload: &NetworkPayload<'_>| {
+            let snapshot = capture(payload);
+            json(&snapshot, snapshot.value().unwrap())
+        };
+        let headers = vec![
+            ("content-type".to_owned(), "application/json".to_owned()),
+            (
+                "authorization".to_owned(),
+                "sha256:0123456789abcdef".to_owned(),
+            ),
+        ];
+        assert_eq!(
+            shape(&NetworkPayload::Request {
+                method: "POST",
+                url: "https://api.anthropic.com/v1/messages",
+                headers: &headers,
+                body: Some(br#"{"model":"claude"}"#),
+            }),
+            json!({"request": {
+                "method": "POST",
+                "url": "https://api.anthropic.com/v1/messages",
+                "headers": {
+                    "content-type": "application/json",
+                    "authorization": "sha256:0123456789abcdef",
+                },
+                "body": r#"{"model":"claude"}"#,
+            }})
+        );
+        // Bodies not recorded: no body at all, not an empty one.
+        assert_eq!(
+            shape(&NetworkPayload::Request {
+                method: "GET",
+                url: "https://example.com/",
+                headers: &[],
+                body: None,
+            }),
+            json!({"request": {"method": "GET", "url": "https://example.com/", "headers": {}}})
+        );
+        assert_eq!(
+            shape(&NetworkPayload::Connection {
+                status: 429,
+                headers: &headers[..1],
+            }),
+            json!({"status": 429, "headers": {"content-type": "application/json"}})
+        );
+        assert_eq!(
+            shape(&NetworkPayload::Body(b"plain text")),
+            json!("plain text")
+        );
+        assert_eq!(
+            shape(&NetworkPayload::Body(&[0xff, 0, 7])),
+            json!([255, 0, 7])
+        );
+        assert_eq!(
+            shape(&NetworkPayload::SseEvent {
+                event: Some("message_delta"),
+                data: r#"{"usage":{"output_tokens":30}}"#,
+                id: None,
+            }),
+            json!({
+                "event": "message_delta",
+                "data": r#"{"usage":{"output_tokens":30}}"#,
+                "id": null,
+            })
+        );
+        // Identical bodies are one CAS blob.
+        assert_eq!(
+            capture(&NetworkPayload::Body(b"same")).id(),
+            capture(&NetworkPayload::Body(b"same")).id()
+        );
+        let over = vec![b'a'; btel_settings::network::BODY_CAPTURE_MAX_BYTES + 1];
+        let truncated = capture(&NetworkPayload::Body(&over));
+        assert!(matches!(
+            truncated.value(),
+            Some(Val::Truncated(Limit::Bytes))
+        ));
+        assert!(truncated.stats().limited);
+        let at_cap = capture(&NetworkPayload::Body(&over[1..]));
+        assert!(!at_cap.stats().limited);
     }
     #[test]
     fn cell_cycles_and_distinct_opaque_objects_keep_identity_without_retaining_sources() {

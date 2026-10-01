@@ -31,6 +31,7 @@ use rustc_hash::FxHashMap;
 
 mod errors;
 pub(crate) use errors::{ErrorBook, LandingMatch};
+mod network;
 mod policy;
 pub use policy::{TelemetryPolicies, TelemetryPolicy};
 
@@ -379,6 +380,112 @@ impl TelemetryState {
             event_name,
             captured_data,
         });
+    }
+
+    /// Open a span for an HTTP request the runtime is about to send, whatever
+    /// the caller's `$trace` options: `None` at the `Low` auto level. Its
+    /// parent is the innermost span, its call path the innermost observed
+    /// frame's. It stays open until `close_network_span`.
+    pub fn open_network_span(
+        &mut self,
+        request: &sys_types::network::NetworkRequest,
+    ) -> Option<TelemetryId> {
+        if self.auto_level == AutoTelemetryLevel::Low {
+            return None;
+        }
+        self.start_thread();
+        let url = network::sanitize_url(&request.url);
+        let headers = network::sanitize_headers(&request.headers, network::Direction::Request);
+        #[cfg(all(not(test), not(target_arch = "wasm32")))]
+        self.prepare_context();
+        let captured_request = self.capture(snapshot::Input::Network(
+            &network::NetworkPayload::Request {
+                method: &request.method,
+                url: &url,
+                headers: &headers,
+                body: self.policies.http_bodies().then_some(&request.body[..]),
+            },
+        ));
+        let id = allocate_telemetry_id();
+        self.write_span(SpanRecord::NetworkSpanAnnouncement(Box::new(
+            btel_records::NetworkAnnouncement {
+                id,
+                parent_id: self.thread.active_id,
+                call_path: self.thread.active_call_path,
+                started_at: self.clock.read(),
+                method: request.method.as_str().into(),
+                url: url.into_boxed_str(),
+                request: captured_request,
+            },
+        )));
+        Some(id)
+    }
+
+    /// Record what happened to an open request at `at`, an instant the IO
+    /// side read from this run's clock. Its span may belong to another thread.
+    pub fn network_event(
+        &mut self,
+        span: TelemetryId,
+        at: ClockInstant,
+        event: &sys_types::network::NetworkEventKind,
+    ) {
+        use sys_types::network::NetworkEventKind;
+
+        self.start_thread();
+        let bodies = self.policies.http_bodies();
+        let payload = match event {
+            NetworkEventKind::Connection { status, headers } => {
+                let headers = network::sanitize_headers(headers, network::Direction::Response);
+                self.capture(snapshot::Input::Network(
+                    &network::NetworkPayload::Connection {
+                        status: *status,
+                        headers: &headers,
+                    },
+                ))
+            }
+            NetworkEventKind::Body(body) if bodies => self.capture(snapshot::Input::Network(
+                &network::NetworkPayload::Body(body),
+            )),
+            NetworkEventKind::SseEvent { event, data, id } if bodies => self.capture(
+                snapshot::Input::Network(&network::NetworkPayload::SseEvent {
+                    event: event.as_deref(),
+                    data,
+                    id: id.as_deref(),
+                }),
+            ),
+            _ => None,
+        };
+        self.write_span(SpanRecord::NetworkEvent(Box::new(
+            btel_records::NetworkEventRecord {
+                span,
+                name: network::event_name(event),
+                at,
+                payload,
+            },
+        )));
+    }
+
+    /// End an open request's span. An errored one captures its error.
+    ///
+    /// # Safety
+    /// `error` and its reachable objects must remain live under the heap permit.
+    pub unsafe fn close_network_span(
+        &mut self,
+        span: TelemetryId,
+        at: ClockInstant,
+        outcome: InvocationOutcome,
+        error: Option<Value>,
+    ) {
+        self.start_thread();
+        let error = error.and_then(|error| self.capture(snapshot::Input::Value(error)));
+        self.write_span(SpanRecord::NetworkSpanCompletion(Box::new(
+            btel_records::NetworkCompletion {
+                span,
+                completed_at: at,
+                outcome,
+                error,
+            },
+        )));
     }
 
     #[inline(always)]
@@ -1812,6 +1919,205 @@ mod tests {
             SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement { captured_value: Some(capture), .. }
             if matches!(capture.roots()[0], btel_snapshot::SnapshotValue::String(s) if capture.string(s).as_str() == "output"))));
         drop(state);
+    }
+
+    fn network_records(state: &TelemetryState) -> Vec<&VmSpanRecord> {
+        state
+            .span_records()
+            .iter()
+            .filter(|record| {
+                matches!(
+                    record,
+                    SpanRecord::NetworkSpanAnnouncement(_)
+                        | SpanRecord::NetworkEvent(_)
+                        | SpanRecord::NetworkSpanCompletion(_)
+                )
+            })
+            .collect()
+    }
+
+    fn shape(capture: Option<&btel_snapshot::Snapshot>) -> Option<serde_json::Value> {
+        capture.map(|snapshot| snapshot::json(snapshot, snapshot.value().unwrap()))
+    }
+
+    fn request() -> sys_types::network::NetworkRequest {
+        sys_types::network::NetworkRequest {
+            method: "POST".to_owned(),
+            url: "https://example.com/v1/messages?key=secret".to_owned(),
+            headers: vec![
+                ("Content-Type".to_owned(), "application/json".to_owned()),
+                ("X-Api-Key".to_owned(), "sk-secret".to_owned()),
+            ],
+            body: br#"{"model":"m"}"#.to_vec().into(),
+        }
+    }
+
+    #[test]
+    fn network_span_records_its_request_events_and_completion() {
+        use serde_json::json;
+        use sys_types::network::NetworkEventKind;
+
+        let function = function(FunctionKind::Bytecode, None);
+        let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+        // Made from inside a span: the span is its parent.
+        let frame = trace_entry(
+            &mut state,
+            &function,
+            Some(TraceConfig {
+                mode: Some(InvocationMode::Span),
+                ..TraceConfig::default()
+            }),
+        )
+        .unwrap();
+        let caller = frame.span_id().unwrap();
+        let call_path = state.active_call_path();
+        let span = state.open_network_span(&request()).unwrap();
+        // A request is not a frame: the caller stays the active span.
+        assert_eq!(state.active_id(), caller);
+        let at = ClockInstant::from_ticks;
+        state.network_event(
+            span,
+            at(10),
+            &NetworkEventKind::Connection {
+                status: 200,
+                headers: vec![
+                    ("Request-Id".to_owned(), "req_1".to_owned()),
+                    ("Set-Cookie".to_owned(), "session".to_owned()),
+                ],
+            },
+        );
+        state.network_event(
+            span,
+            at(11),
+            &NetworkEventKind::SseEvent {
+                event: Some("message_stop".to_owned()),
+                data: "{}".to_owned(),
+                id: None,
+            },
+        );
+        state.network_event(span, at(12), &NetworkEventKind::StreamEnd);
+        state.network_event(span, at(13), &NetworkEventKind::Await);
+        unsafe { state.close_network_span(span, at(13), InvocationOutcome::Ok, None) };
+        unsafe { state.complete_invocation(frame, &function, InvocationOutcome::Ok, None) };
+
+        let records = network_records(&state);
+        let [
+            SpanRecord::NetworkSpanAnnouncement(announcement),
+            SpanRecord::NetworkEvent(connection),
+            SpanRecord::NetworkEvent(data),
+            SpanRecord::NetworkEvent(end),
+            SpanRecord::NetworkEvent(read),
+            SpanRecord::NetworkSpanCompletion(completion),
+        ] = records.as_slice()
+        else {
+            panic!("unexpected network records: {records:?}");
+        };
+        let url = format!(
+            "https://example.com/v1/messages?key={}",
+            network::hash("secret")
+        );
+        assert_eq!(
+            (
+                announcement.id,
+                announcement.parent_id,
+                announcement.call_path
+            ),
+            (span, caller, call_path)
+        );
+        assert_eq!((&*announcement.method, &*announcement.url), ("POST", &*url));
+        assert_eq!(
+            shape(announcement.request.as_ref()),
+            Some(json!({"request": {
+                "method": "POST",
+                "url": url,
+                "headers": {
+                    "content-type": "application/json",
+                    "x-api-key": network::hash("sk-secret"),
+                },
+                "body": r#"{"model":"m"}"#,
+            }}))
+        );
+        for (event, name, ticks) in [
+            (connection, "connection", 10),
+            (data, "data", 11),
+            (end, "end", 12),
+            (read, "await", 13),
+        ] {
+            assert_eq!(
+                (event.span, event.name.as_str(), event.at),
+                (span, name, at(ticks))
+            );
+        }
+        assert_eq!(
+            shape(connection.payload.as_ref()),
+            Some(json!({"status": 200, "headers": {
+                "request-id": "req_1",
+                "set-cookie": network::hash("session"),
+            }}))
+        );
+        assert_eq!(
+            shape(data.payload.as_ref()),
+            Some(json!({"event": "message_stop", "data": "{}", "id": null}))
+        );
+        assert!(end.payload.is_none() && read.payload.is_none());
+        assert_eq!(
+            (completion.span, completion.completed_at, completion.outcome),
+            (span, at(13), InvocationOutcome::Ok)
+        );
+        assert!(completion.error.is_none());
+    }
+
+    #[test]
+    fn network_span_errors_bodies_off_and_low_level() {
+        use sys_types::network::NetworkEventKind;
+
+        let mut state = test_state(
+            Arc::new(TelemetryPolicies::new().with_http_bodies(false)),
+            test_clock(),
+        );
+        // Outside any frame: the thread is the parent.
+        let span = state.open_network_span(&request()).unwrap();
+        let at = ClockInstant::from_ticks;
+        state.network_event(
+            span,
+            at(5),
+            &NetworkEventKind::Body(b"secret".to_vec().into()),
+        );
+        unsafe {
+            state.close_network_span(span, at(6), InvocationOutcome::Errored, Some(Value::int(3)));
+        }
+        let records = network_records(&state);
+        let [
+            SpanRecord::NetworkSpanAnnouncement(announcement),
+            SpanRecord::NetworkEvent(data),
+            SpanRecord::NetworkSpanCompletion(completion),
+        ] = records.as_slice()
+        else {
+            panic!("unexpected network records: {records:?}");
+        };
+        assert_eq!(
+            (announcement.parent_id, announcement.call_path),
+            (state.thread.id, CallPathId::ROOT)
+        );
+        let captured = shape(announcement.request.as_ref()).unwrap();
+        assert!(captured["request"].get("body").is_none());
+        assert_eq!(captured["request"]["method"], "POST");
+        assert_eq!((data.name.as_str(), data.payload.is_none()), ("data", true));
+        assert_eq!(completion.outcome, InvocationOutcome::Errored);
+        assert!(matches!(
+            completion
+                .error
+                .as_ref()
+                .and_then(btel_snapshot::Snapshot::value),
+            Some(btel_snapshot::SnapshotValue::Int(3))
+        ));
+
+        let mut low = test_state(
+            Arc::new(TelemetryPolicies::with_auto_level(AutoTelemetryLevel::Low)),
+            test_clock(),
+        );
+        assert_eq!(low.open_network_span(&request()), None);
+        assert!(network_records(&low).is_empty());
     }
 
     fn function(kind: FunctionKind, body_meta: Option<FunctionMeta>) -> Function {

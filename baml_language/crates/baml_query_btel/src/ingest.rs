@@ -1227,6 +1227,12 @@ impl<'t> Applier<'t> {
                             // Log query projections are separate from call indexing.
                             let _ = tick(log.at_ticks);
                         }
+                        // Network spans are not indexed yet.
+                        Some(
+                            Event::NetworkAnnouncement(_)
+                            | Event::NetworkEvent(_)
+                            | Event::NetworkCompletion(_),
+                        ) => {}
                         None => {}
                     }
                 }

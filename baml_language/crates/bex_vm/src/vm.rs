@@ -518,6 +518,47 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn network_span_wrappers_record_through_the_vm_telemetry() {
+        use crate::telemetry::{ClockInstant, InvocationOutcome, SpanRecord};
+
+        let mut vm = test_vm(Vec::new());
+        let request = sys_types::network::NetworkRequest {
+            method: "GET".to_owned(),
+            url: "https://example.com/".to_owned(),
+            ..Default::default()
+        };
+        let span = vm.open_network_span(&request).unwrap();
+        vm.network_event(
+            span,
+            ClockInstant::from_ticks(1),
+            &sys_types::network::NetworkEventKind::Close,
+        );
+        // Bare test VMs have no error classes: the error is captured as is.
+        vm.close_network_span(
+            span,
+            ClockInstant::from_ticks(2),
+            InvocationOutcome::Errored,
+            Some(Value::int(9)),
+        );
+        let records = vm.telemetry.as_ref().unwrap().span_records();
+        assert!(matches!(
+            records,
+            [
+                SpanRecord::ThreadSpanAnnouncement { .. },
+                SpanRecord::NetworkSpanAnnouncement(announcement),
+                SpanRecord::NetworkEvent(close),
+                SpanRecord::NetworkSpanCompletion(completion),
+            ] if announcement.id == span
+                && &*announcement.url == "https://example.com/"
+                && close.name == btel_records::NetworkEventName::Close
+                && completion.error.as_ref().and_then(btel_snapshot::Snapshot::value)
+                    == Some(btel_snapshot::SnapshotValue::Int(9))
+        ));
+        vm.telemetry = None;
+        assert_eq!(vm.open_network_span(&request), None);
+    }
+
+    #[test]
     fn hidden_native_execution_has_only_thread_events() {
         use crate::telemetry::{InvocationOutcome, SpanRecord};
 
@@ -6920,6 +6961,51 @@ impl BexVm {
         if let Some(telemetry) = self.telemetry.as_mut() {
             telemetry.record_sysop_time(elapsed);
         }
+    }
+
+    /// Open a span for an HTTP request about to be sent. `None` when
+    /// telemetry is off or at its `Low` auto level.
+    pub fn open_network_span(
+        &mut self,
+        request: &sys_types::network::NetworkRequest,
+    ) -> Option<btel_types::TelemetryId> {
+        self.telemetry.as_ref()?;
+        let context = self.current_context().clone();
+        let state = self.telemetry.as_mut()?;
+        state.set_context(context);
+        state.open_network_span(request)
+    }
+
+    /// Record an event of an open request, at an instant the IO side read.
+    pub fn network_event(
+        &mut self,
+        span: btel_types::TelemetryId,
+        at: ClockInstant,
+        event: &sys_types::network::NetworkEventKind,
+    ) {
+        if let Some(telemetry) = self.telemetry.as_mut() {
+            telemetry.network_event(span, at, event);
+        }
+    }
+
+    /// End an open request's span. An `error` is the thrown value: its span
+    /// records the `baml.errors.Context` a handler would bind, as a function
+    /// span does.
+    pub fn close_network_span(
+        &mut self,
+        span: btel_types::TelemetryId,
+        at: ClockInstant,
+        outcome: InvocationOutcome,
+        error: Option<Value>,
+    ) {
+        if self.telemetry.is_none() {
+            return;
+        }
+        let error = error.map(|error| self.error_context_value(error, &[], Value::NULL));
+        let state = self.telemetry.as_mut().unwrap();
+        // SAFETY: the engine calls this under the heap permit; neither the
+        // context allocation above nor capture collects.
+        unsafe { state.close_network_span(span, at, outcome, error) };
     }
 
     /// The node model usage recorded now belongs to: the innermost span, or

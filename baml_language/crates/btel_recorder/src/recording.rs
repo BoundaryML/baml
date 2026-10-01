@@ -384,17 +384,14 @@ impl RecordingBuilder {
         if self.span_credit == 0 {
             terminal(self.admit_spans());
         }
-        if let SpanRecord::Log {
-            event_name: Some(name),
-            ..
-        } = record
-        {
-            // Preserve the outstanding fixed-record reservation after a
-            // variable-length name; later completion writes use that credit.
+        let strings = string_bytes(record);
+        if strings != 0 {
+            // Preserve the outstanding fixed-record reservation after
+            // variable-length strings; later completion writes use that credit.
             let bytes = self
                 .span_credit
                 .checked_mul(encoding::MAX_EVENT_BYTES)
-                .and_then(|bytes| bytes.checked_add(name.len()))
+                .and_then(|bytes| bytes.checked_add(strings))
                 .ok_or(RecordingError::EncodingTooLarge);
             let bytes = terminal(bytes);
             terminal(self.reserve_encoding(bytes));
@@ -449,6 +446,21 @@ impl RecordingBuilder {
     pub fn flush_if_due(&mut self, now: Instant) -> Result<Option<SealedFile>, RecordingError> {
         self.clear_batch();
         self.service(now, false)
+    }
+}
+
+/// Bytes of a record's strings, beyond the fixed per-event bound.
+fn string_bytes(record: &SpanRecord<Snapshot, Snapshot>) -> usize {
+    match record {
+        SpanRecord::Log {
+            event_name: Some(name),
+            ..
+        } => name.len(),
+        SpanRecord::NetworkSpanAnnouncement(span) => {
+            span.method.len().saturating_add(span.url.len())
+        }
+        SpanRecord::NetworkEvent(event) => event.name.as_str().len(),
+        _ => 0,
     }
 }
 
