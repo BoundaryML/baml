@@ -56,7 +56,8 @@ pub enum Unavailable {
     CellCycle,
     /// A blob the value continues in cannot be read: its CAS diagnostic code.
     Blob(&'static str),
-    /// The value continues in more blobs than one operation may read.
+    /// The value continues in more blobs, or more bytes of them, than one
+    /// operation may read.
     BlobBudget,
 }
 
@@ -320,6 +321,8 @@ pub struct Presented {
     pub kind: Kind,
     /// Why part of a structured value is marked unavailable in its rendering.
     pub incomplete: Option<Unavailable>,
+    /// Whether a render limit cut part of a structured value's rendering.
+    pub cut: bool,
 }
 
 /// Convert a navigation result to its SQL presentation. Leaves become native
@@ -334,11 +337,13 @@ pub fn to_scalar(
         scalar,
         kind,
         incomplete: None,
+        cut: false,
     };
     let rendered = |rendered: Rendered| Presented {
         scalar: Scalar::Text(rendered.json.to_string()),
         kind: Kind::Json,
         incomplete: rendered.incomplete,
+        cut: rendered.cut,
     };
     let found = match nav {
         Nav::Missing => return whole(Scalar::Null, Kind::Missing),
@@ -355,9 +360,14 @@ pub fn to_scalar(
         Found::Float(f) if f.is_finite() => whole(Scalar::Real(*f), Kind::Float),
         Found::Float(f) => whole(Scalar::Text(non_finite(*f).into()), Kind::Float),
         Found::String(s) => whole(Scalar::Text(s.to_string()), Kind::String),
-        Found::Bigint(n) => whole(Scalar::Text(n.to_string()), Kind::Bigint),
+        Found::Bigint(n) if n.bits() <= limits.max_bigint_bits => {
+            whole(Scalar::Text(n.to_string()), Kind::Bigint)
+        }
         Found::Enum { name, .. } => whole(Scalar::Text(name.to_string()), Kind::Enum),
-        Found::Object(_) | Found::Type(_) => rendered(render_value(source, found, limits)),
+        // A number too long to print presents as its cut rendering.
+        Found::Bigint(_) | Found::Object(_) | Found::Type(_) => {
+            rendered(render_value(source, found, limits))
+        }
     }
 }
 
@@ -575,24 +585,40 @@ pub fn is_null(nav: &Nav) -> Option<bool> {
     }
 }
 
-/// Bounds for whole-value rendering.
+/// Bounds for whole-value rendering. A rendering holds at most `max_nodes`
+/// values and `max_text_bytes` of text, however large the value is and
+/// however often it reaches the same blob.
 #[derive(Clone, Copy, Debug)]
 pub struct RenderLimits {
     pub max_depth: usize,
+    /// Values rendered. An object reached at the limit ends there, marked.
     pub max_nodes: usize,
+    /// Text written: strings, keys, names and inline byte data, counted each
+    /// time they appear. Text that does not fit leaves a marker in its place,
+    /// and a key that does not fit ends its object.
+    pub max_text_bytes: usize,
     /// Byte data rendered as base64 per object; longer data reports length.
     pub max_bytes_inline: usize,
+    /// Bits of the longest bigint printed: printing takes time quadratic in
+    /// them. A longer one is cut.
+    pub max_bigint_bits: u64,
     /// Blobs read for one value beyond the one it starts in, for navigation
     /// and for rendering each.
     pub max_blobs: usize,
+    /// Encoded bytes of the blobs read for one rendering. No blob is read
+    /// once this many are held, so the last one read may pass it.
+    pub max_blob_bytes: u64,
 }
 impl Default for RenderLimits {
     fn default() -> Self {
         Self {
             max_depth: 64,
             max_nodes: 100_000,
+            max_text_bytes: 16 << 20,
             max_bytes_inline: 4096,
+            max_bigint_bits: 1 << 17,
             max_blobs: 1024,
+            max_blob_bytes: 64 << 20,
         }
     }
 }
@@ -603,6 +629,8 @@ pub struct Rendered {
     pub json: Json,
     /// The first reason met in output order.
     pub incomplete: Option<Unavailable>,
+    /// Whether a render limit cut part of it, leaving a `$truncated` marker.
+    pub cut: bool,
 }
 
 /// Render the argument root: `{name: value}` when names match the slots,
@@ -617,6 +645,7 @@ pub fn render_arguments(
         return Rendered {
             json: envelope("$unavailable", Json::from(Unavailable::WrongRoot.code())),
             incomplete: Some(Unavailable::WrongRoot),
+            cut: false,
         };
     };
     let span = Span::load(
@@ -624,6 +653,7 @@ pub fn render_arguments(
         slots.iter().map(|slot| (snapshot, slot)),
         Examine::Structure,
         limits.max_blobs,
+        limits.max_blob_bytes,
     );
     let mut renderer = Renderer::new(&span, limits);
     let json = match names.filter(|names| names.slots.len() == slots.len()) {
@@ -631,23 +661,28 @@ pub fn render_arguments(
             let mut map = Map::new();
             for (slot, value) in names.slots.iter().zip(slots) {
                 let name = slot.name.clone().unwrap_or_default();
+                if !renderer.entry(&name) {
+                    renderer.end_early(&mut map);
+                    break;
+                }
                 map.insert(name, renderer.value(snapshot, value, 1));
             }
             Json::Object(map)
         }
-        _ => envelope(
-            "$args",
-            Json::Array(
-                slots
-                    .iter()
-                    .map(|value| renderer.value(snapshot, value, 1))
-                    .collect(),
-            ),
-        ),
+        _ => {
+            let (rendered, whole) = renderer.sequence(snapshot, slots, 1);
+            let mut map = Map::new();
+            map.insert("$args".into(), Json::Array(rendered));
+            if !whole {
+                renderer.end_early(&mut map);
+            }
+            Json::Object(map)
+        }
     };
     Rendered {
         json,
         incomplete: renderer.incomplete,
+        cut: renderer.cut,
     }
 }
 
@@ -658,7 +693,10 @@ pub fn render_arguments(
 /// reason's code. Media is described, never rendered:
 /// `{"$media": kind, "mime", "url" | "file", "base64_len"}`, with
 /// `base64_len` present when the value holds content, and its content is not
-/// read. This is a display format, not a lossless serialization.
+/// read. A part past a render limit is `$truncated` with `render_depth` or
+/// `render_size`: alone in place of a value or a piece of text, or beside
+/// what an object rendered before it ended. This is a display format, not a
+/// lossless serialization.
 pub fn render_value(
     source: &(impl BlobSource + ?Sized),
     found: &Located,
@@ -670,12 +708,14 @@ pub fn render_value(
         [(found.blob(), &value)],
         Examine::Structure,
         limits.max_blobs,
+        limits.max_blob_bytes,
     );
     let mut renderer = Renderer::new(&span, limits);
     let json = renderer.value(found.blob(), &value, 0);
     Rendered {
         json,
         incomplete: renderer.incomplete,
+        cut: renderer.cut,
     }
 }
 
@@ -684,6 +724,10 @@ fn envelope(key: &str, value: Json) -> Json {
     map.insert(key.into(), value);
     Json::Object(map)
 }
+
+/// Why a render limit cut a part: its nesting, or the rendering's size.
+const RENDER_DEPTH: &str = "render_depth";
+const RENDER_SIZE: &str = "render_size";
 
 fn limit_label(limit: Limit) -> &'static str {
     match limit {
@@ -717,7 +761,10 @@ struct Renderer<'a> {
     /// Label of each shared object already printed with its `$id`.
     rendered: HashMap<(CasId, NodeId), u32>,
     nodes: usize,
+    /// Bytes of text written, never past the limit.
+    text_bytes: usize,
     incomplete: Option<Unavailable>,
+    cut: bool,
 }
 
 impl<'a> Renderer<'a> {
@@ -727,7 +774,9 @@ impl<'a> Renderer<'a> {
             limits,
             rendered: HashMap::new(),
             nodes: 0,
+            text_bytes: 0,
             incomplete: None,
+            cut: false,
         }
     }
 
@@ -736,11 +785,67 @@ impl<'a> Renderer<'a> {
         envelope("$unavailable", Json::from(reason.code()))
     }
 
-    fn declaration_name(blob: &DecodedSnapshot, id: NodeId) -> Json {
-        match blob.object(id) {
-            DecodedObject::Declaration { name, .. } => {
-                Json::from(name.0.display_name().to_string())
+    /// What a part cut by a render limit leaves in its place.
+    fn truncated(&mut self, limit: &'static str) -> Json {
+        self.cut = true;
+        envelope("$truncated", Json::from(limit))
+    }
+
+    /// Mark an object that ended before all of it was rendered.
+    fn end_early(&mut self, object: &mut Map<String, Json>) {
+        self.cut = true;
+        object.insert("$truncated".into(), Json::from(RENDER_SIZE));
+    }
+
+    /// Whether the node limit leaves no room to start another value.
+    fn full(&self) -> bool {
+        self.nodes >= self.limits.max_nodes
+    }
+
+    /// Take `len` bytes from the text limit, if that much is left.
+    fn take_text(&mut self, len: usize) -> bool {
+        let fits = len <= self.limits.max_text_bytes - self.text_bytes;
+        if fits {
+            self.text_bytes += len;
+        }
+        fits
+    }
+
+    fn text(&mut self, text: &str) -> Json {
+        if self.take_text(text.len()) {
+            Json::from(text)
+        } else {
+            self.truncated(RENDER_SIZE)
+        }
+    }
+
+    /// Whether an entry under `key` may start. An object ends at the first
+    /// one that may not.
+    fn entry(&mut self, key: &str) -> bool {
+        !self.full() && self.take_text(key.len())
+    }
+
+    /// Render `values` in order until the node limit is reached, and whether
+    /// every one was rendered.
+    fn sequence(
+        &mut self,
+        blob: &'a DecodedSnapshot,
+        values: &'a [DecodedValue],
+        depth: usize,
+    ) -> (Vec<Json>, bool) {
+        let mut rendered = Vec::new();
+        for value in values {
+            if self.full() {
+                return (rendered, false);
             }
+            rendered.push(self.value(blob, value, depth));
+        }
+        (rendered, true)
+    }
+
+    fn declaration_name(&mut self, blob: &DecodedSnapshot, id: NodeId) -> Json {
+        match blob.object(id) {
+            DecodedObject::Declaration { name, .. } => self.text(name.0.display_name().as_ref()),
             DecodedObject::Uint8Array { .. }
             | DecodedObject::List { .. }
             | DecodedObject::Map { .. }
@@ -756,7 +861,7 @@ impl<'a> Renderer<'a> {
     fn value(&mut self, blob: &'a DecodedSnapshot, value: &'a DecodedValue, depth: usize) -> Json {
         self.nodes += 1;
         if self.nodes > self.limits.max_nodes {
-            return envelope("$truncated", Json::from("render_size"));
+            return self.truncated(RENDER_SIZE);
         }
         match value {
             DecodedValue::Null => Json::Null,
@@ -767,20 +872,28 @@ impl<'a> Renderer<'a> {
                 || envelope("$float", Json::from(non_finite(*f))),
                 Json::Number,
             ),
-            DecodedValue::String(s) => Json::from(s.to_string()),
-            DecodedValue::Bigint(n) => envelope("$bigint", Json::from(n.to_string())),
-            DecodedValue::Type(ty) => envelope(
-                "$type",
-                ty.decoded
-                    .as_ref()
-                    .map_or(Json::Null, |ty| Json::from(ty.to_string())),
-            ),
+            DecodedValue::String(s) => self.text(s),
+            DecodedValue::Bigint(n) => {
+                let digits = if n.bits() <= self.limits.max_bigint_bits {
+                    self.text(&n.to_string())
+                } else {
+                    self.truncated(RENDER_SIZE)
+                };
+                envelope("$bigint", digits)
+            }
+            DecodedValue::Type(ty) => {
+                let ty = match &ty.decoded {
+                    Some(ty) => self.text(&ty.to_string()),
+                    None => Json::Null,
+                };
+                envelope("$type", ty)
+            }
             DecodedValue::Enum {
                 declaration, name, ..
             } => {
                 let mut map = Map::new();
-                map.insert("$enum".into(), Self::declaration_name(blob, *declaration));
-                map.insert("$variant".into(), Json::from(name.to_string()));
+                map.insert("$enum".into(), self.declaration_name(blob, *declaration));
+                map.insert("$variant".into(), self.text(name));
                 Json::Object(map)
             }
             DecodedValue::Truncated(limit) => {
@@ -809,7 +922,7 @@ impl<'a> Renderer<'a> {
         }
         // A truncated visit prints no `$id`, so it must not take the label.
         if depth >= self.limits.max_depth {
-            return envelope("$truncated", Json::from("render_depth"));
+            return self.truncated(RENDER_DEPTH);
         }
         // Labels count up in output order, so a capture renders the same way
         // in every process.
@@ -828,16 +941,16 @@ impl<'a> Renderer<'a> {
                 original_len,
                 ..
             } => {
-                let rendered = items
-                    .iter()
-                    .map(|v| self.value(blob, v, depth + 1))
-                    .collect();
-                if shared.is_none() && items.len() as u64 == *original_len {
+                let (rendered, whole) = self.sequence(blob, items, depth + 1);
+                if shared.is_none() && whole && items.len() as u64 == *original_len {
                     return Json::Array(rendered);
                 }
                 map.insert("$list".into(), Json::Array(rendered));
                 if items.len() as u64 != *original_len {
                     map.insert("$original_len".into(), Json::from(*original_len));
+                }
+                if !whole {
+                    self.end_early(&mut map);
                 }
             }
             DecodedObject::Map {
@@ -846,10 +959,16 @@ impl<'a> Renderer<'a> {
                 ..
             } => {
                 let mut inner = Map::new();
+                let mut whole = true;
                 for (key, value) in entries {
+                    if !self.entry(key) {
+                        whole = false;
+                        break;
+                    }
                     inner.insert(key.to_string(), self.value(blob, value, depth + 1));
                 }
                 let plain = shared.is_none()
+                    && whole
                     && entries.len() as u64 == *original_len
                     && !entries.iter().any(|(key, _)| key.starts_with('$'));
                 if plain {
@@ -859,6 +978,9 @@ impl<'a> Renderer<'a> {
                 if entries.len() as u64 != *original_len {
                     map.insert("$original_len".into(), Json::from(*original_len));
                 }
+                if !whole {
+                    self.end_early(&mut map);
+                }
             }
             DecodedObject::Instance {
                 declaration,
@@ -866,9 +988,14 @@ impl<'a> Renderer<'a> {
                 original_len,
                 ..
             } => {
-                map.insert("$class".into(), Self::declaration_name(blob, *declaration));
+                map.insert("$class".into(), self.declaration_name(blob, *declaration));
                 let mut inner = Map::new();
+                let mut whole = true;
                 for (key, value) in fields {
+                    if !self.entry(key) {
+                        whole = false;
+                        break;
+                    }
                     inner.insert(key.to_string(), self.value(blob, value, depth + 1));
                 }
                 if inner.keys().any(|key| key.starts_with('$')) {
@@ -879,14 +1006,15 @@ impl<'a> Renderer<'a> {
                 if fields.len() as u64 != *original_len {
                     map.insert("$original_len".into(), Json::from(*original_len));
                 }
+                if !whole {
+                    self.end_early(&mut map);
+                }
             }
             DecodedObject::Uint8Array { data, original_len } => {
                 use base64::Engine as _;
                 if data.len() <= self.limits.max_bytes_inline {
-                    map.insert(
-                        "$bytes".into(),
-                        Json::from(base64::engine::general_purpose::STANDARD.encode(data)),
-                    );
+                    let encoded = base64::engine::general_purpose::STANDARD.encode(data);
+                    map.insert("$bytes".into(), self.text(&encoded));
                 } else {
                     map.insert("$bytes".into(), Json::Null);
                 }
@@ -903,7 +1031,7 @@ impl<'a> Renderer<'a> {
                         "$class_type"
                     }
                     .into(),
-                    Json::from(name.0.display_name().to_string()),
+                    self.text(name.0.display_name().as_ref()),
                 );
             }
             DecodedObject::Cell(value) => {
@@ -919,21 +1047,22 @@ impl<'a> Renderer<'a> {
             DecodedObject::Descriptive { kind, name } => {
                 map.insert("$opaque".into(), Json::from(description_label(*kind)));
                 if let Some(name) = name {
-                    map.insert("$name".into(), Json::from(name.to_string()));
+                    map.insert("$name".into(), self.text(name));
                 }
             }
             DecodedObject::Media(media) => {
                 map.insert("$media".into(), Json::from(media.kind.tag_str()));
-                map.insert(
-                    "mime".into(),
-                    media.mime_type.as_deref().map_or(Json::Null, Json::from),
-                );
+                let mime = match media.mime_type.as_deref() {
+                    Some(mime) => self.text(mime),
+                    None => Json::Null,
+                };
+                map.insert("mime".into(), mime);
                 match &media.source {
                     DecodedMediaSource::Url { url, .. } => {
-                        map.insert("url".into(), Json::from(&**url));
+                        map.insert("url".into(), self.text(url));
                     }
                     DecodedMediaSource::File { path, .. } => {
-                        map.insert("file".into(), Json::from(&**path));
+                        map.insert("file".into(), self.text(path));
                     }
                     DecodedMediaSource::Base64 { .. } => {}
                 }

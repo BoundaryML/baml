@@ -6,8 +6,8 @@
 //! path reads only the blobs it crosses; rendering or comparing a whole value
 //! reads every blob it reaches, within the render and comparison limits.
 //! Within one query, hydration outcomes (including missing and corrupt
-//! blobs) are memoized under entry and byte limits; the next query starts
-//! empty and can find a blob that arrived in between.
+//! blobs) and presented results are memoized under entry and byte limits;
+//! the next query starts empty and can find a blob that arrived in between.
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     sync::{Arc, Mutex},
@@ -41,7 +41,10 @@ pub struct ValueLimits {
     /// Approximate encoded bytes of cached snapshots.
     pub max_cached_bytes: u64,
     /// Navigation results kept for render/kind pairs and repeated paths.
+    /// All are forgotten when another would pass this or the byte limit.
     pub max_cached_results: usize,
+    /// Bytes of those results' handles and text.
+    pub max_cached_result_bytes: usize,
     pub render: RenderLimits,
     pub comparison: equality::Limits,
 }
@@ -51,6 +54,7 @@ impl Default for ValueLimits {
             max_cached_blobs: 4096,
             max_cached_bytes: 256 << 20,
             max_cached_results: 16_384,
+            max_cached_result_bytes: 64 << 20,
             render: RenderLimits::default(),
             comparison: equality::Limits::default(),
         }
@@ -73,6 +77,7 @@ struct CacheState {
     blobs: HashMap<[u8; 16], Result<Arc<DecodedSnapshot>, CasUnavailable>>,
     blob_bytes: u64,
     results: HashMap<Vec<u8>, (Scalar, Kind)>,
+    result_bytes: usize,
     unavailable_seen: HashSet<Vec<u8>>,
     metrics: ValueMetrics,
 }
@@ -95,6 +100,7 @@ impl QueryContext {
                 blobs: HashMap::new(),
                 blob_bytes: 0,
                 results: HashMap::new(),
+                result_bytes: 0,
                 unavailable_seen: HashSet::new(),
                 metrics: ValueMetrics::default(),
             }),
@@ -195,13 +201,34 @@ impl QueryContext {
                 if let Some(reason) = presented.incomplete {
                     self.note(handle, reason.code());
                 }
+                if presented.cut {
+                    let mut key = handle.to_vec();
+                    key.extend_from_slice(b"\xffrender");
+                    self.note(&key, RENDER_LIMIT);
+                }
                 (presented.scalar, presented.kind)
             }
             None => (Scalar::Null, Kind::Unavailable),
         };
+        let bytes = handle.len()
+            + match &result.0 {
+                Scalar::Text(text) => text.len(),
+                Scalar::Null | Scalar::Integer(_) | Scalar::Real(_) => 0,
+            };
         let mut state = self.state.lock().expect("value state");
-        if state.results.len() < self.limits.max_cached_results {
-            state.results.insert(handle.to_vec(), result.clone());
+        // The newest result stays, so the kind asked next finds its rendering.
+        if state.results.len() >= self.limits.max_cached_results
+            || state.result_bytes.saturating_add(bytes) > self.limits.max_cached_result_bytes
+        {
+            state.results.clear();
+            state.result_bytes = 0;
+        }
+        if state
+            .results
+            .insert(handle.to_vec(), result.clone())
+            .is_none()
+        {
+            state.result_bytes += bytes;
         }
         Ok(result)
     }
@@ -283,6 +310,8 @@ impl BlobSource for QueryContext {
 const PENDING: &str = "capture_pending";
 /// Structured ordering and opaque-value equality are unsupported.
 const COMPARISON_UNSUPPORTED: &str = "comparison_unsupported";
+/// Code of a rendering cut by its depth, node or text limit.
+const RENDER_LIMIT: &str = "render_limit";
 
 /// Compare two leaves; an unanswerable comparison involving a structured
 /// value is reported rather than left as an unexplained NULL.

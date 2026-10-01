@@ -27,6 +27,9 @@ pub struct Limits {
     pub max_bytes: usize,
     /// Blobs read for one comparison beyond the ones its operands start in.
     pub max_blobs: usize,
+    /// Encoded bytes of those blobs. No blob is read once this many are held,
+    /// so the last one read may pass it.
+    pub max_blob_bytes: u64,
 }
 
 impl Default for Limits {
@@ -36,6 +39,7 @@ impl Default for Limits {
             max_nodes: 100_000,
             max_bytes: 16 << 20,
             max_blobs: 1024,
+            max_blob_bytes: 64 << 20,
         }
     }
 }
@@ -525,6 +529,7 @@ pub fn captured(
         from_left.values().into_iter().chain(from_right.values()),
         Examine::Content,
         limits.max_blobs,
+        limits.max_blob_bytes,
     );
     let mut builder = Builder::new(limits, &span);
     let a = builder.captured(&from_left, left.names)?;
@@ -548,6 +553,7 @@ pub fn json(
         from_left.values(),
         Examine::Content,
         limits.max_blobs,
+        limits.max_blob_bytes,
     );
     let mut builder = Builder::new(limits, &span);
     let a = builder.captured(&from_left, left.names)?;

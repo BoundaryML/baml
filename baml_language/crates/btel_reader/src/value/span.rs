@@ -273,21 +273,25 @@ pub(super) struct Span {
     /// by everything of their type, so they are not counted.
     references: HashMap<(CasId, NodeId), u32>,
     blobs_left: usize,
+    bytes_left: u64,
 }
 
 impl Span {
     /// Read what `starts` reach, entering at most `max_blobs` blobs beyond
-    /// the ones the starts are in.
+    /// the ones the starts are in, and none once those hold `max_blob_bytes`
+    /// encoded bytes.
     pub(super) fn load<'a>(
         source: &(impl BlobSource + ?Sized),
         starts: impl IntoIterator<Item = (&'a Arc<DecodedSnapshot>, &'a DecodedValue)>,
         examine: Examine,
         max_blobs: usize,
+        max_blob_bytes: u64,
     ) -> Self {
         let mut span = Self {
             blobs: HashMap::new(),
             references: HashMap::new(),
             blobs_left: max_blobs,
+            bytes_left: max_blob_bytes,
         };
         let mut pending = Vec::new();
         for (blob, value) in starts {
@@ -385,7 +389,16 @@ impl Span {
         if let Some(known) = self.blobs.get(&id) {
             return known.clone();
         }
-        let read = load(source, id, &mut self.blobs_left);
+        // A blob's size is known once it is read, so the last one read may
+        // pass the limit.
+        let read = if self.bytes_left == 0 {
+            Err(Unavailable::BlobBudget)
+        } else {
+            load(source, id, &mut self.blobs_left)
+        };
+        if let Ok(blob) = &read {
+            self.bytes_left = self.bytes_left.saturating_sub(blob.encoded_len);
+        }
         self.blobs.insert(id, read.clone());
         read
     }

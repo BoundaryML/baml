@@ -33,6 +33,7 @@ impl Blobs {
             let mut bytes = Vec::new();
             blob.write(&mut scratch, &mut bytes).unwrap();
             let decoded = Arc::new(decode_blob(&bytes, &DecodeLimits::default()).unwrap());
+            assert_eq!(decoded.encoded_len, bytes.len() as u64);
             self.0.insert(blob.id(), Ok(Arc::clone(&decoded)));
             root = Some(decoded);
         }
@@ -272,6 +273,7 @@ fn media_is_described_without_its_content_and_compared_by_it() {
             "link": {"$media": "image", "mime": "image/png", "url": "https://example.test/cat.png"},
         }),
         incomplete: None,
+        cut: false,
     };
     for root in [&split, &whole] {
         assert_eq!(rendered(&blobs, root, &RenderLimits::default()), expected);
@@ -487,6 +489,151 @@ fn one_operation_reads_a_bounded_number_of_blobs() {
 }
 
 #[test]
+fn one_operation_reads_a_bounded_size_of_blobs() {
+    let mut blobs = Blobs::default();
+    let root = blobs.store(&capture(&mut cut(), |b| {
+        let items: Vec<_> = ["a", "b", "c"]
+            .into_iter()
+            .map(|letter| text(b, &letter.repeat(100)))
+            .collect();
+        list(b, &items)
+    }));
+    let item = blobs.0[&root.children[0]].as_ref().unwrap().encoded_len;
+    let render = |max_blob_bytes| {
+        let limits = RenderLimits {
+            max_blob_bytes,
+            ..RenderLimits::default()
+        };
+        rendered(&blobs, &root, &limits)
+    };
+    let unread = json!({"$unavailable": "value_blob_budget"});
+    assert_eq!(render(0).json, json!([unread, unread, unread]));
+    assert_eq!(render(item).json, json!(["a".repeat(100), unread, unread]));
+    // A blob's size is known once it is read, so the one that reaches the
+    // limit is the last.
+    let bounded = render(item + 1);
+    assert_eq!(
+        bounded.json,
+        json!(["a".repeat(100), "b".repeat(100), unread])
+    );
+    assert_eq!(bounded.incomplete, Some(Unavailable::BlobBudget));
+    assert_eq!(render(2 * item + 1).incomplete, None);
+
+    let whole = at(&blobs, &root, &[]);
+    let captured = equality::Captured {
+        nav: &whole,
+        names: None,
+    };
+    let equal = |max_blob_bytes| {
+        let limits = equality::Limits {
+            max_blob_bytes,
+            ..equality::Limits::default()
+        };
+        equality::captured(&blobs, captured, CmpOp::Eq, captured, &limits)
+    };
+    assert_eq!(
+        equal(2 * item),
+        Err(equality::Error::Evidence(Unavailable::BlobBudget))
+    );
+    assert_eq!(equal(2 * item + 1), Ok(Some(true)));
+}
+
+#[test]
+fn a_rendering_is_bounded_however_often_it_reaches_one_blob() {
+    let mut blobs = Blobs::default();
+    let capture = capture(&mut cut(), |b| {
+        let note = text(b, &"n".repeat(100));
+        list(b, &[note; 50])
+    });
+    assert_eq!(capture.blobs().count(), 2, "the text is stored once");
+    let root = blobs.store(&capture);
+    let whole = rendered(&blobs, &root, &RenderLimits::default());
+    assert_eq!(whole.json, json!(vec!["n".repeat(100); 50]));
+    assert!(!whole.cut);
+
+    let limits = RenderLimits {
+        max_text_bytes: 250,
+        ..RenderLimits::default()
+    };
+    let bounded = rendered(&blobs, &root, &limits);
+    let mut expected = vec![json!("n".repeat(100)); 2];
+    expected.resize(50, json!({"$truncated": "render_size"}));
+    assert_eq!(bounded.json, json!(expected));
+    assert!(bounded.cut);
+    assert_eq!(bounded.incomplete, None, "a cut is not missing evidence");
+}
+
+#[test]
+fn text_that_does_not_fit_is_cut_and_a_key_that_does_not_fit_ends_its_object() {
+    let mut blobs = Blobs::default();
+    let root = blobs.store(&capture(&mut cut(), |b| {
+        let note = text(b, &"n".repeat(100));
+        let yes = text(b, "yes");
+        map(b, &[("note", note), ("ok", yes)])
+    }));
+    let render = |max_text_bytes| {
+        let limits = RenderLimits {
+            max_text_bytes,
+            ..RenderLimits::default()
+        };
+        rendered(&blobs, &root, &limits)
+    };
+    // `note`, `ok` and `yes` fit, so smaller text after the cut still shows.
+    let cut = render(9);
+    assert_eq!(
+        cut.json,
+        json!({"note": {"$truncated": "render_size"}, "ok": "yes"})
+    );
+    assert!(cut.cut);
+    assert_eq!(
+        render(5).json,
+        json!({
+            "$map": {"note": {"$truncated": "render_size"}},
+            "$truncated": "render_size",
+        })
+    );
+    assert_eq!(
+        render(0).json,
+        json!({"$map": {}, "$truncated": "render_size"})
+    );
+}
+
+#[test]
+fn objects_end_where_the_node_limit_is_reached() {
+    let mut blobs = Blobs::default();
+    let root = blobs.store(&capture(&mut cut(), |b| {
+        let first = list(b, &[V::Int(1), V::Int(2), V::Int(3)]);
+        let second = list(b, &[V::Int(4)]);
+        let pair = map(b, &[("a", V::Int(5)), ("b", V::Int(6))]);
+        list(b, &[first, second, pair])
+    }));
+    let render = |max_nodes| {
+        let limits = RenderLimits {
+            max_nodes,
+            ..RenderLimits::default()
+        };
+        rendered(&blobs, &root, &limits)
+    };
+    let whole = render(10);
+    assert_eq!(whole.json, json!([[1, 2, 3], [4], {"a": 5, "b": 6}]));
+    assert!(!whole.cut);
+    // Each object still open is marked once, and nothing after it is visited.
+    let cut = render(4);
+    assert_eq!(
+        cut.json,
+        json!({
+            "$list": [{"$list": [1, 2], "$truncated": "render_size"}],
+            "$truncated": "render_size",
+        })
+    );
+    assert!(cut.cut);
+    assert_eq!(
+        render(9).json,
+        json!([[1, 2, 3], [4], {"$map": {"a": 5}, "$truncated": "render_size"}])
+    );
+}
+
+#[test]
 fn a_child_is_read_only_as_what_it_holds() {
     let mut blobs = Blobs::default();
     let arguments = {
@@ -501,6 +648,7 @@ fn a_child_is_read_only_as_what_it_holds() {
     let parent = |id: u8, children: Vec<CasId>, value: DecodedValue| {
         Arc::new(DecodedSnapshot {
             id: CasId::from_bytes([id; 16]),
+            encoded_len: 0,
             children,
             root: DecodedRoot::Value(DecodedValue::Object(NodeId(0))),
             objects: vec![DecodedObject::Cell(value)],
@@ -528,7 +676,7 @@ fn a_child_is_read_only_as_what_it_holds() {
     for root in [as_value, past_the_end, chained] {
         assert_eq!(at(&blobs, &root, &[]), Nav::Unavailable(broken));
         let cell = DecodedValue::Object(NodeId(0));
-        let span = Span::load(&blobs, [(&root, &cell)], Examine::Structure, 16);
+        let span = Span::load(&blobs, [(&root, &cell)], Examine::Structure, 16, u64::MAX);
         let DecodedObject::Cell(inner) = root.object(NodeId(0)) else {
             unreachable!()
         };

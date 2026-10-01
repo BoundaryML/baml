@@ -20,6 +20,7 @@ impl BlobSource for NoBlobs {
 fn snapshot(root: DecodedValue, objects: Vec<DecodedObject>) -> DecodedSnapshot {
     DecodedSnapshot {
         id: CasId::from_bytes([0; 16]),
+        encoded_len: 0,
         children: Vec::new(),
         root: DecodedRoot::Value(root),
         objects,

@@ -111,6 +111,26 @@ async fn structured_comparisons_use_captured_content_across_blobs_and_queries() 
     );
     assert_eq!(independent.rows, vec![vec![json!(3)]]);
     assert_eq!(independent.outcome.status, Status::Complete);
+    // A rendering cut by its limits says so.
+    let cut = sql(
+        &mut unrendered,
+        "SELECT output_value FROM spans WHERE span_name = 'user.Extract'",
+    );
+    assert_eq!(cut.rows[0][0], json!({"$truncated": "render_depth"}));
+    assert_eq!(cut.outcome.status, Status::Incomplete);
+    assert_eq!(cut.outcome.diagnostics[0].code, "render_limit");
+    // Results are kept for a query under a byte limit too. The newest stays,
+    // so each kind still finds its rendering; the two equal outputs no longer
+    // share one.
+    let select = "SELECT output_value FROM spans WHERE span_name = 'user.Extract'";
+    let kept = sql(&mut index, select);
+    let mut small = baml_query_btel::IndexOptions::default();
+    small.values.max_cached_result_bytes = 0;
+    let mut forgetful = baml_query_btel::Index::open(layout.clone(), small).unwrap();
+    let forgotten = sql(&mut forgetful, select);
+    assert_eq!(forgotten.rows, kept.rows);
+    assert_eq!(kept.outcome.query.values.result_cache_hits, 4);
+    assert_eq!(forgotten.outcome.query.values.result_cache_hits, 3);
     options.values.comparison.max_nodes = 1;
     let mut bounded = baml_query_btel::Index::open(layout, options).unwrap();
     let limited = sql(

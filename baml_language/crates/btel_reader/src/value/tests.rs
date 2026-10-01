@@ -95,6 +95,7 @@ fn snapshot() -> Arc<DecodedSnapshot> {
     ];
     Arc::new(DecodedSnapshot {
         id: CasId::from_bytes([0; 16]),
+        encoded_len: 0,
         children: Vec::new(),
         root: DecodedRoot::FunctionArgs {
             parameter_count: 2,
@@ -342,6 +343,7 @@ fn shared_labels_follow_output_order_and_skip_truncated_visits() {
     // map 1 directly.
     let snap = Arc::new(DecodedSnapshot {
         id: CasId::from_bytes([0; 16]),
+        encoded_len: 0,
         children: Vec::new(),
         root: DecodedRoot::FunctionArgs {
             parameter_count: 3,
@@ -379,6 +381,86 @@ fn shared_labels_follow_output_order_and_skip_truncated_visits() {
     assert_eq!(args["deep"][1], json!({"$id": 0, "$map": {"v": 1}}));
     assert_eq!(args["a"], json!({"$ref": 0}));
     assert_eq!(args["b"], json!({"$id": 1, "$map": {"v": 0}}));
+}
+
+#[test]
+fn a_number_too_long_to_show_is_cut() {
+    // 4001 bits print as 1205 digits.
+    let number = BigInt::from(1) << 4000_u32;
+    let digits = number.to_string();
+    assert_eq!(digits.len(), 1205);
+    let snap = Arc::new(DecodedSnapshot {
+        id: CasId::from_bytes([0; 16]),
+        encoded_len: 0,
+        children: Vec::new(),
+        root: DecodedRoot::FunctionArgs {
+            parameter_count: 1,
+            slots: vec![DecodedValue::Bigint(Arc::new(number))],
+        },
+        objects: Vec::new(),
+    });
+    let render = |max_text_bytes| {
+        let limits = RenderLimits {
+            max_text_bytes,
+            ..RenderLimits::default()
+        };
+        render_arguments(&Blobs::default(), &snap, None, &limits)
+    };
+    let whole = render(1205);
+    assert_eq!(whole.json, json!({"$args": [{"$bigint": digits}]}));
+    assert!(!whole.cut);
+    let cut = render(1204);
+    assert_eq!(
+        cut.json,
+        json!({"$args": [{"$bigint": {"$truncated": "render_size"}}]})
+    );
+    assert!(cut.cut);
+
+    // Printing takes time quadratic in a number's length, so one past the
+    // limit is not printed at all, alone or inside a value.
+    let present = |max_bigint_bits| {
+        let limits = RenderLimits {
+            max_bigint_bits,
+            ..RenderLimits::default()
+        };
+        let found = nav(&snap, None, &["0"]);
+        (
+            to_scalar(&Blobs::default(), &found, None, &limits),
+            render_arguments(&Blobs::default(), &snap, None, &limits),
+        )
+    };
+    let (alone, inside) = present(4001);
+    assert_eq!(
+        (alone.scalar, alone.kind, alone.cut),
+        (Scalar::Text(digits.clone()), Kind::Bigint, false)
+    );
+    assert_eq!(inside.json, json!({"$args": [{"$bigint": digits}]}));
+    let (alone, inside) = present(4000);
+    let cut = json!({"$bigint": {"$truncated": "render_size"}});
+    assert_eq!(
+        (alone.scalar, alone.kind, alone.cut),
+        (Scalar::Text(cut.to_string()), Kind::Json, true)
+    );
+    assert_eq!(inside.json, json!({"$args": [cut]}));
+    assert!(inside.cut);
+}
+
+#[test]
+fn arguments_end_where_the_node_limit_is_reached() {
+    let snap = snapshot();
+    let limits = RenderLimits {
+        max_nodes: 0,
+        ..RenderLimits::default()
+    };
+    let named = render_arguments(&Blobs::default(), &snap, Some(&names()), &limits);
+    assert_eq!(named.json, json!({"$truncated": "render_size"}));
+    assert!(named.cut);
+    let positional = render_arguments(&Blobs::default(), &snap, None, &limits);
+    assert_eq!(
+        positional.json,
+        json!({"$args": [], "$truncated": "render_size"})
+    );
+    assert!(positional.cut);
 }
 
 #[test]

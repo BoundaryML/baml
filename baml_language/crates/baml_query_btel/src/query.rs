@@ -267,9 +267,12 @@ fn diagnostic_message(code: &str) -> &'static str {
         "comparison_limit" => {
             "comparison exceeded its depth, node or byte limit; compare a smaller subtree"
         }
+        "render_limit" => {
+            "the value is larger than one rendering may be and is shown in part; read a smaller part of it"
+        }
         "value_cycle" => "a cycle of cells does not resolve to a captured logical value",
         "value_blob_budget" => {
-            "the value continues in more CAS blobs than one operation may read; read a smaller part of it"
+            "the value continues in more CAS blobs, or larger ones, than one operation may read; read a smaller part of it"
         }
         _ => "evidence unavailable",
     }

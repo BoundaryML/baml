@@ -270,6 +270,8 @@ pub enum DecodedRoot {
 #[derive(Clone, Debug, PartialEq)]
 pub struct DecodedSnapshot {
     pub id: CasId,
+    /// Bytes of the blob this was decoded from.
+    pub encoded_len: u64,
     pub children: Vec<CasId>,
     pub root: DecodedRoot,
     pub objects: Vec<DecodedObject>,
@@ -307,6 +309,7 @@ pub fn decode_blob(bytes: &[u8], limits: &DecodeLimits) -> Result<DecodedSnapsho
 }
 
 fn decode(r: &mut Reader<'_, '_>) -> Result<DecodedSnapshot, BlobError> {
+    let encoded_len = r.input.len() as u64;
     if r.take(8).map_err(|_| BlobError::Magic)? != crate::BLOB_MAGIC {
         return Err(BlobError::Magic);
     }
@@ -399,6 +402,7 @@ fn decode(r: &mut Reader<'_, '_>) -> Result<DecodedSnapshot, BlobError> {
     }
     let snapshot = DecodedSnapshot {
         id: declared,
+        encoded_len,
         children,
         root,
         objects,
