@@ -803,3 +803,30 @@ async fn recorded_usage_panics_names_and_sysop_time_reach_the_tables() {
         ]
     );
 }
+
+/// COUNT over a value inside a capture counts the rows where it IS NOT NULL,
+/// and COUNT(DISTINCT ...) counts distinct values. COUNT(column) still counts
+/// captured values without reading them.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn count_over_a_value_skips_missing_keys() {
+    let project = tempfile::tempdir().unwrap();
+    record(project.path(), &[(1, "ann"), (7, "bob"), (1, "ann")]).await;
+    let mut index = index(project.path());
+    let counts = sql(
+        &mut index,
+        "SELECT COUNT(*), COUNT(input_args['customer']['name']), COUNT(input_args['missing']),
+           COUNT(DISTINCT input_args['customer']['name'])
+         FROM spans WHERE span_name = 'user.Extract'",
+    );
+    assert_eq!(
+        counts.rows,
+        vec![vec![json!(3), json!(3), json!(0), json!(2)]]
+    );
+    // The same rows as IS NOT NULL.
+    let not_null = sql(
+        &mut index,
+        "SELECT COUNT(*) FROM spans
+         WHERE span_name = 'user.Extract' AND input_args['missing'] IS NOT NULL",
+    );
+    assert_eq!(not_null.rows, vec![vec![json!(0)]]);
+}

@@ -16,11 +16,11 @@
 //! rejected with an explanation.
 use sqlparser::{
     ast::{
-        AccessExpr, BinaryOperator, CastKind, Expr, Function, FunctionArg, FunctionArgExpr,
-        FunctionArgumentList, FunctionArguments, GroupByExpr, Ident, JoinConstraint, JoinOperator,
-        ObjectName, ObjectNamePart, OrderBy, OrderByKind, Query, Select, SelectItem,
-        SelectItemQualifiedWildcardKind, SetExpr, Statement, Subscript, TableFactor,
-        TableWithJoins, UnaryOperator, Value, WildcardAdditionalOptions, WindowType,
+        AccessExpr, BinaryOperator, CastKind, DuplicateTreatment, Expr, Function, FunctionArg,
+        FunctionArgExpr, FunctionArgumentList, FunctionArguments, GroupByExpr, Ident,
+        JoinConstraint, JoinOperator, ObjectName, ObjectNamePart, OrderBy, OrderByKind, Query,
+        Select, SelectItem, SelectItemQualifiedWildcardKind, SetExpr, Statement, Subscript,
+        TableFactor, TableWithJoins, UnaryOperator, Value, WildcardAdditionalOptions, WindowType,
     },
     dialect::{GenericDialect, PostgreSqlDialect},
     parser::Parser,
@@ -1470,16 +1470,27 @@ impl Translator {
                 if !list.clauses.is_empty() {
                     return err("function argument clauses are not supported");
                 }
+                // COUNT(DISTINCT ...) compares values, so it reads them.
+                let distinct =
+                    matches!(list.duplicate_treatment, Some(DuplicateTreatment::Distinct));
                 for arg in &mut list.args {
                     match arg {
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => {
-                            if counts_handles {
-                                // COUNT(output) counts captured values.
-                                self.raw(expr)?;
-                            } else {
-                                self.scalar(expr)?;
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))
+                            if counts_handles && !distinct =>
+                        {
+                            // COUNT(output) counts captured values without
+                            // reading them. A value inside one counts where
+                            // it IS NOT NULL: not a missing key, not a null,
+                            // not one that could not be read.
+                            if self.raw(expr)? == Kind::Value && is_call(expr, "__btel_nav") {
+                                let handle = take(expr);
+                                *expr = call(
+                                    "NULLIF",
+                                    vec![call("__btel_is_null", vec![handle]), integer(1)],
+                                );
                             }
                         }
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => self.scalar(expr)?,
                         FunctionArg::Unnamed(FunctionArgExpr::Wildcard) => {}
                         _ => return err("named or qualified-wildcard arguments are not supported"),
                     }
@@ -1575,6 +1586,13 @@ fn parse_expr(text: &str) -> Result<Expr, SqlError> {
         .try_with_sql(text)
         .and_then(|mut parser| parser.parse_expr())
         .map_err(|error| SqlError(format!("id filter rewrite: {error}")))
+}
+
+/// Whether `expr` calls the function `name`, as `call` builds it.
+fn is_call(expr: &Expr, name: &str) -> bool {
+    matches!(expr, Expr::Function(function)
+        if matches!(function.name.0.as_slice(),
+            [ObjectNamePart::Identifier(ident)] if ident.value == name))
 }
 
 fn take(expr: &mut Expr) -> Expr {

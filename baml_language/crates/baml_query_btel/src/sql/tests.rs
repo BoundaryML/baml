@@ -201,6 +201,26 @@ fn wildcards_expand_so_values_render() {
 }
 
 #[test]
+fn count_reads_a_value_inside_a_capture_but_not_the_capture() {
+    let t = ok(
+        "SELECT COUNT(output_value), COUNT(input_args['k']), COUNT(DISTINCT input_args['k']) FROM spans",
+    );
+    assert!(t.sql.contains("COUNT(output_value)"), "{}", t.sql);
+    assert!(
+        t.sql
+            .contains("COUNT(NULLIF(__btel_is_null(__btel_nav(input_args, 'k')), 1))"),
+        "{}",
+        t.sql
+    );
+    assert!(
+        t.sql
+            .contains("COUNT(DISTINCT __btel_render(__btel_nav(input_args, 'k')))"),
+        "{}",
+        t.sql
+    );
+}
+
+#[test]
 fn values_in_scalar_positions_are_rendered() {
     let t = ok(
         "SELECT span_name, COUNT(output_value), MAX(output_value['score']) FROM spans GROUP BY input_args['kind'] ORDER BY output_value['score']",
