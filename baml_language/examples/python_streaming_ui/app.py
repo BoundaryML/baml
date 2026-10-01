@@ -43,10 +43,9 @@ def scenario_title(n: int) -> str:
 # --------------------------------------------------------------------------- sidebar
 
 with st.sidebar:
-    st.header("Scenarios")
-    chosen = st.multiselect(
-        "Run", sorted(runners.SCENARIOS), default=sorted(runners.SCENARIOS), format_func=scenario_title
-    )
+    st.header("Scenario")
+    # One at a time: each scenario is three long streams.
+    chosen = [st.selectbox("Run", sorted(runners.SCENARIOS), format_func=scenario_title)]
     for n in chosen:
         if missing := runners.SCENARIOS[n].missing_env():
             st.warning(f"{n}: missing {', '.join(missing)}")
