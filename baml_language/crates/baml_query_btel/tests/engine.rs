@@ -815,12 +815,12 @@ async fn count_over_a_value_skips_missing_keys() {
     let counts = sql(
         &mut index,
         "SELECT COUNT(*), COUNT(input_args['customer']['name']), COUNT(input_args['missing']),
-           COUNT(DISTINCT input_args['customer']['name'])
+           COUNT((input_args['missing'])), COUNT(DISTINCT input_args['customer']['name'])
          FROM spans WHERE span_name = 'user.Extract'",
     );
     assert_eq!(
         counts.rows,
-        vec![vec![json!(3), json!(3), json!(0), json!(2)]]
+        vec![vec![json!(3), json!(3), json!(0), json!(0), json!(2)]]
     );
     // The same rows as IS NOT NULL.
     let not_null = sql(

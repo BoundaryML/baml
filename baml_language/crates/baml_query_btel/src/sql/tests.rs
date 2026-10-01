@@ -203,7 +203,14 @@ fn wildcards_expand_so_values_render() {
 #[test]
 fn count_reads_a_value_inside_a_capture_but_not_the_capture() {
     let t = ok(
-        "SELECT COUNT(output_value), COUNT(input_args['k']), COUNT(DISTINCT input_args['k']) FROM spans",
+        "SELECT COUNT(output_value), COUNT(input_args['k']), COUNT(DISTINCT input_args['k']),
+           COUNT((input_args['p'])) FROM spans",
+    );
+    assert!(
+        t.sql
+            .contains("COUNT(NULLIF(__btel_is_null((__btel_nav(input_args, 'p'))), 1))"),
+        "{}",
+        t.sql
     );
     assert!(t.sql.contains("COUNT(output_value)"), "{}", t.sql);
     assert!(

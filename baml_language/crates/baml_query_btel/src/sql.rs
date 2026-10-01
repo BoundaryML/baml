@@ -1588,11 +1588,15 @@ fn parse_expr(text: &str) -> Result<Expr, SqlError> {
         .map_err(|error| SqlError(format!("id filter rewrite: {error}")))
 }
 
-/// Whether `expr` calls the function `name`, as `call` builds it.
+/// Whether `expr` calls the function `name`, as `call` builds it, inside
+/// any parentheses.
 fn is_call(expr: &Expr, name: &str) -> bool {
-    matches!(expr, Expr::Function(function)
-        if matches!(function.name.0.as_slice(),
-            [ObjectNamePart::Identifier(ident)] if ident.value == name))
+    match expr {
+        Expr::Nested(inner) => is_call(inner, name),
+        Expr::Function(function) => matches!(function.name.0.as_slice(),
+            [ObjectNamePart::Identifier(ident)] if ident.value == name),
+        _ => false,
+    }
 }
 
 fn take(expr: &mut Expr) -> Expr {
