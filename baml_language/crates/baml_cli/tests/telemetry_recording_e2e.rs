@@ -241,7 +241,9 @@ async fn assert_cloud_delivery(server: &wiremock::MockServer, host: &str, source
         }
         for object in envelope.cas_objects {
             assert_eq!(object.blob_sha256, Sha256::digest(&object.blob).to_vec());
-            let snapshot = btel_snapshot::decode_blob(&object.blob, &Default::default()).unwrap();
+            let snapshot =
+                btel_snapshot::decode_blob(&object.blob, &btel_snapshot::DecodeLimits::default())
+                    .unwrap();
             assert_eq!(snapshot.id.as_bytes().as_slice(), object.snapshot_id);
             snapshots += 1;
         }

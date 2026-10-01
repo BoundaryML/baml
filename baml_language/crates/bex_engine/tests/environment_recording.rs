@@ -23,7 +23,10 @@ async fn native_engines_select_environment_and_preserve_explicit_destinations() 
                 vec![],
                 None,
                 btel_settings::clock::DEFAULT_MODE,
-                TelemetryRecording::local_files_in(local.path(), Default::default()),
+                TelemetryRecording::local_files_in(
+                    local.path(),
+                    btel_recorder::RecordingConfig::default(),
+                ),
             )
             .unwrap()
         } else {
