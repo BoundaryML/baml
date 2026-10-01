@@ -38,7 +38,7 @@ fn capture_at(
     thread: btel_types::TelemetryId,
     call_path: CallPathId,
 ) {
-    let snapshot = pool.try_acquire().unwrap().finish_value(
+    let snapshot = pool.try_acquire().unwrap().finish(
         SnapshotValue::Int(value),
         &mut btel_snapshot::Shaper::default(),
     );
@@ -380,28 +380,17 @@ async fn lost_recording_replays_metadata_and_reoffers_cas_without_replaying_even
 /// A list of `count` distinct strings, each in a blob of its own.
 fn cut_list(pool: &SnapshotPool, count: usize) -> Snapshot {
     let mut b = pool.try_acquire().unwrap();
-    let element_type = b.push_type(btel_snapshot::OwnedType::string());
-    let start = b.value_start();
-    for index in 0..count {
+    let element_type = b.leaves().ty(btel_snapshot::OwnedType::string());
+    let list = b.list(element_type, 0..count, |leaves, index| {
         let text = format!("{index}-{}", "x".repeat(100));
-        let id = b.string(&text.as_str().into()).unwrap();
-        b.push_value(SnapshotValue::String(id));
-    }
-    let items = b.value_range(start);
-    let list = b.reserve_object().unwrap();
-    b.set_object(
-        list,
-        btel_snapshot::SnapshotObject::List {
-            element_type,
-            items,
-            original_len: count,
-        },
-    );
+        leaves.string_value(&text.as_str().into())
+    });
+    let list = b.leaves().object(list).unwrap();
     let mut shaper = btel_snapshot::Shaper::new(btel_snapshot::ShapePolicy::Split {
         unit_bytes: 1 << 20,
         leaf_bytes: 64,
     });
-    b.finish_value(SnapshotValue::Object(list), &mut shaper)
+    b.finish(SnapshotValue::Object(list), &mut shaper)
 }
 
 #[tokio::test]

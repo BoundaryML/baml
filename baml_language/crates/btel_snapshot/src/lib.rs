@@ -27,7 +27,7 @@ mod snapshot;
 mod tags;
 mod walk;
 
-pub use build::{Builder, string_map};
+pub use build::{Builder, Leaves, Reserved, string_map};
 pub use decode::{
     BlobError, ChildIndex, DecodeLimits, DecodedMedia, DecodedMediaSource, DecodedName,
     DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, Entries, MediaPayload, NodeId,

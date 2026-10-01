@@ -38,65 +38,37 @@ impl std::io::Write for Counter {
 }
 
 fn text(b: &mut Builder, content: &str) -> V {
-    V::String(b.string(&content.into()).unwrap())
+    b.leaves().string_value(&content.into())
+}
+
+fn object(b: &mut Builder, object: O) -> V {
+    V::Object(b.leaves().object(object).unwrap())
 }
 
 fn list(b: &mut Builder, items: &[V]) -> V {
-    let id = b.reserve_object().unwrap();
-    let element_type = b.push_type(RealizedTy::Unknown);
-    let start = b.value_start();
-    b.reserve_values(items.len());
-    for item in items {
-        b.push_value(*item);
-    }
-    let items = b.value_range(start);
-    b.set_object(
-        id,
-        O::List {
-            element_type,
-            items,
-            original_len: items.len(),
-        },
-    );
-    V::Object(id)
+    let element_type = b.leaves().ty(RealizedTy::Unknown);
+    let list = b.list(element_type, items.iter(), |_, item| *item);
+    object(b, list)
 }
 
 fn map(b: &mut Builder, entries: &[(String, V)]) -> V {
-    let id = b.reserve_object().unwrap();
-    let key_type = b.push_type(RealizedTy::String);
-    let value_type = b.push_type(RealizedTy::String);
-    let start = b.entry_start();
-    b.reserve_entries(entries.len());
-    for (key, value) in entries {
-        b.entry(&key.as_str().into(), *value);
-    }
-    let entries = b.entry_range(start);
-    b.set_object(
-        id,
-        O::Map {
-            key_type,
-            value_type,
-            entries,
-            original_len: entries.len(),
-        },
-    );
-    V::Object(id)
+    let key_type = b.leaves().ty(RealizedTy::String);
+    let value_type = b.leaves().ty(RealizedTy::String);
+    let map = b.map(key_type, value_type, entries.iter(), |_, (key, value)| {
+        (key.as_str().into(), *value)
+    });
+    object(b, map)
 }
 
 fn declaration(b: &mut Builder) -> ObjectId {
-    let id = b.reserve_object().unwrap();
     let name = DeclarationName::Declared(TypeName::from_dotted_path("user.Customer"));
-    let object = b.declaration(&name, TypeTag::from_i64(42), false);
-    b.set_object(id, object);
-    id
+    let declaration = b.declaration(&name, TypeTag::from_i64(42), false);
+    b.leaves().object(declaration).unwrap()
 }
 
 /// A class instance the size of a typical LLM function input: eight short
 /// strings, an int, a bool and a list of three ints.
 fn record(b: &mut Builder, declaration: ObjectId, seed: i64) -> V {
-    let id = b.reserve_object().unwrap();
-    let start = b.type_start();
-    let type_arguments = b.type_range(start);
     let mut fields = Vec::with_capacity(11);
     for index in 0..8 {
         fields.push((
@@ -108,22 +80,10 @@ fn record(b: &mut Builder, declaration: ObjectId, seed: i64) -> V {
     fields.push(("active".to_owned(), V::Bool(true)));
     let scores = list(b, &[V::Int(1), V::Int(2), V::Int(3)]);
     fields.push(("scores".to_owned(), scores));
-    let start = b.entry_start();
-    b.reserve_entries(fields.len());
-    for (key, value) in &fields {
-        b.entry(&key.as_str().into(), *value);
-    }
-    let fields = b.entry_range(start);
-    b.set_object(
-        id,
-        O::Instance {
-            type_arguments,
-            declaration,
-            fields,
-            original_len: fields.len(),
-        },
-    );
-    V::Object(id)
+    let record = b.instance(declaration, [], fields.iter(), |_, (key, value)| {
+        (key.as_str().into(), *value)
+    });
+    object(b, record)
 }
 
 type Workload = Box<dyn Fn(&mut Builder) -> V>;
@@ -188,9 +148,7 @@ fn workloads() -> Vec<(&'static str, Workload)> {
             Box::new(|b: &mut Builder| {
                 let mut next = V::Int(0);
                 for _ in 0..10_000 {
-                    let id = b.reserve_object().unwrap();
-                    b.set_object(id, O::Cell(next));
-                    next = V::Object(id);
+                    next = object(b, O::Cell(next));
                 }
                 next
             }),
@@ -200,9 +158,7 @@ fn workloads() -> Vec<(&'static str, Workload)> {
             Box::new(|b: &mut Builder| {
                 let mut next = V::Int(0);
                 for _ in 0..100_000 {
-                    let id = b.reserve_object().unwrap();
-                    b.set_object(id, O::Cell(next));
-                    next = V::Object(id);
+                    next = object(b, O::Cell(next));
                 }
                 next
             }),
@@ -279,7 +235,7 @@ fn shape_bench() {
                 let root = build(&mut b);
                 build_times.push(started.elapsed());
                 let started = Instant::now();
-                let snapshot = b.finish_value(root, &mut shaper);
+                let snapshot = b.finish(root, &mut shaper);
                 shape_times.push(started.elapsed());
                 let started = Instant::now();
                 bytes = write_all(&snapshot, &mut scratch);

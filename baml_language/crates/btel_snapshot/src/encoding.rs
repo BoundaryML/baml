@@ -265,29 +265,26 @@ mod tests {
         let pool = SnapshotPool::new(1, Limits::default());
         let mut b = pool.try_acquire().unwrap();
         // Reserved first, referenced second: it is numbered second.
-        let later = b.reserve_object().unwrap();
-        let cycle = b.reserve_object().unwrap();
-        b.set_object(later, O::Cell(V::Null));
-        b.set_object(cycle, O::Cell(V::Object(cycle)));
-        let text = b.string(&"content".into()).unwrap();
+        let later = b.leaves().object(O::Cell(V::Null)).unwrap();
+        let cycle = b.leaves().reserve().unwrap();
+        let cycle_id = cycle.id();
+        b.fill(cycle, O::Cell(V::Object(cycle_id)));
+        let text = b.leaves().string_value(&"content".into());
         let bigint = b
-            .bigint(&std::sync::Arc::new(num_bigint::BigInt::from(-123)))
-            .unwrap();
-        let start = b.value_start();
+            .leaves()
+            .bigint(&std::sync::Arc::new(num_bigint::BigInt::from(-123)));
         let nan = 0x7ff8_0000_0000_1234;
-        for v in [
+        let slots = [
             V::Null,
             V::OmittedArg,
-            V::String(text),
+            text,
             V::Float(f64::from_bits(nan)),
-            V::Bigint(bigint),
-            V::Object(cycle),
+            bigint,
+            V::Object(cycle_id),
             V::Object(later),
-        ] {
-            b.push_value(v);
-        }
-        let args = b.value_range(start);
-        let snapshot = b.finish_args(7, args, &mut Shaper::default());
+        ];
+        let args = b.arguments(slots.into_iter(), |_, value| value);
+        let snapshot = b.finish(args, &mut Shaper::default());
         assert_eq!(snapshot.blobs().len(), 1);
         let bytes = root_blob(&snapshot);
         let mut r = bytes.as_slice();
@@ -328,17 +325,15 @@ mod tests {
         let pool = SnapshotPool::new(2, Limits::default());
         let make = |reuse| {
             let mut b = pool.try_acquire().unwrap();
-            let first = b.string(&"same".into()).unwrap();
+            let first = b.leaves().string(&"same".into()).unwrap();
             let second = if reuse {
                 first
             } else {
-                b.string(&"same".into()).unwrap()
+                b.leaves().string(&"same".into()).unwrap()
             };
-            let start = b.value_start();
-            b.push_value(V::String(first));
-            b.push_value(V::String(second));
-            let args = b.value_range(start);
-            b.finish_args(2, args, &mut Shaper::default())
+            let slots = [V::String(first), V::String(second)];
+            let args = b.arguments(slots.into_iter(), |_, value| value);
+            b.finish(args, &mut Shaper::default())
         };
         let a = make(true);
         let b = make(false);

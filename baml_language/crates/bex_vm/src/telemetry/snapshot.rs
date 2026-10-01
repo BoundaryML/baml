@@ -2,8 +2,8 @@
 //! snapshot-local indexes. Locks sample containers independently, not atomically.
 use bex_vm_types::{HeapPtr, MediaContent, MediaValue, Object, Value, ValueKind};
 use btel_snapshot::{
-    Builder, Description, Limit, MediaSource, ObjectId, Shaper, Snapshot, SnapshotObject,
-    SnapshotValue,
+    Builder, Description, Leaves, Limit, MediaSource, ObjectId, Reserved, Shaper, Snapshot,
+    SnapshotObject, SnapshotRoot, SnapshotValue,
 };
 use rustc_hash::FxHashMap;
 
@@ -17,7 +17,8 @@ pub(super) struct Scratch {
     // Heap addresses are construction-only. Leaf entries reuse storage, not identity.
     seen: FxHashMap<HeapPtr, SnapshotValue>,
     rust_seen: FxHashMap<usize, ObjectId>,
-    work: Vec<(ObjectId, HeapPtr, usize)>,
+    /// Objects named already, whose content is still to be captured.
+    work: Vec<(Reserved, HeapPtr, usize)>,
     shaper: Shaper,
 }
 impl Scratch {
@@ -27,13 +28,15 @@ impl Scratch {
     pub(super) fn shaper(&mut self) -> &mut Shaper {
         &mut self.shaper
     }
-    fn add(&mut self, b: &mut Builder, value: Value, depth: usize) -> SnapshotValue {
+    /// The value as the capture holds it. An object gets its identity here
+    /// and its content later, so that what it holds can name it.
+    fn add(&mut self, leaves: &mut Leaves<'_>, value: Value, depth: usize) -> SnapshotValue {
         if let Some(ptr) = value.as_object_ptr() {
             if let Some(value) = self.seen.get(&ptr) {
                 return *value;
             }
         }
-        if b.limits().max_depth.is_some_and(|max| depth > max) {
+        if leaves.limits().max_depth.is_some_and(|max| depth > max) {
             return SnapshotValue::Truncated(Limit::Depth);
         }
         let ptr = match value.kind() {
@@ -48,17 +51,11 @@ impl Scratch {
             // Boxes are an execution detail, not snapshot identity. No work item
             // or memo-table entry for floats, even when every source box differs.
             Object::Float(v) => return SnapshotValue::Float(*v),
-            Object::String(s) => b.string(s).map_or(
-                SnapshotValue::Truncated(Limit::Bytes),
-                SnapshotValue::String,
-            ),
-            Object::Bigint(n) => b.bigint(n).map_or(
-                SnapshotValue::Truncated(Limit::Bytes),
-                SnapshotValue::Bigint,
-            ),
-            Object::Type(value) => SnapshotValue::Type(b.push_type(owned_type(&value.ty))),
+            Object::String(s) => leaves.string_value(s),
+            Object::Bigint(n) => leaves.bigint(n),
+            Object::Type(value) => SnapshotValue::Type(leaves.ty(owned_type(&value.ty))),
             Object::Variant(v) => {
-                let declaration = match self.add(b, Value::object(v.enm), depth + 1) {
+                let declaration = match self.add(leaves, Value::object(v.enm), depth + 1) {
                     SnapshotValue::Object(id) => id,
                     SnapshotValue::Truncated(reason) => return SnapshotValue::Truncated(reason),
                     _ => unreachable!("enum declaration is an object"),
@@ -67,8 +64,7 @@ impl Scratch {
                 let Object::Enum(enm) = (unsafe { v.enm.get() }) else {
                     unreachable!("variant enum")
                 };
-                let name = b.string(&enm.variants[v.index].name.as_str().into());
-                match name {
+                match leaves.string(&enm.variants[v.index].name.as_str().into()) {
                     Some(name) => SnapshotValue::Enum {
                         declaration,
                         variant: u32::try_from(v.index).expect("enum variant index"),
@@ -82,28 +78,27 @@ impl Scratch {
                 let id = if let Some(id) = self.rust_seen.get(&identity) {
                     *id
                 } else {
-                    let Some(id) = b.reserve_object() else {
-                        return SnapshotValue::Truncated(Limit::Objects);
-                    };
-                    self.rust_seen.insert(identity, id);
                     // Media is the one host value captured by content. Others
                     // hold keys and cipher state, and stay opaque.
                     let object = match data.downcast_ref::<MediaValue>() {
-                        Some(value) => media(b, value),
+                        Some(value) => media(leaves, value),
                         None => SnapshotObject::NonSnapshotableValue {},
                     };
-                    b.set_object(id, object);
+                    let Some(id) = leaves.object(object) else {
+                        return SnapshotValue::Truncated(Limit::Objects);
+                    };
+                    self.rust_seen.insert(identity, id);
                     id
                 };
                 SnapshotValue::Object(id)
             }
             _ => {
-                let Some(id) = b.reserve_object() else {
+                let Some(slot) = leaves.reserve() else {
                     return SnapshotValue::Truncated(Limit::Objects);
                 };
-                // Destination identity exists before children are visited.
-                self.work.push((id, ptr, depth));
-                SnapshotValue::Object(id)
+                let value = SnapshotValue::Object(slot.id());
+                self.work.push((slot, ptr, depth));
+                value
             }
         };
         self.seen.insert(ptr, result);
@@ -115,98 +110,62 @@ impl Scratch {
         self.seen.clear();
         self.rust_seen.clear();
         self.work.clear();
-        let mut value_root = SnapshotValue::Null;
-        let args_start = b.value_start();
-        if let Input::FunctionArgs(args) = input {
-            let count = args.len().min(b.remaining_values());
-            b.reserve_values(count);
-            for value in args.iter().take(count) {
-                let value = self.add(&mut b, *value, 0);
-                b.push_value(value);
+        let root = match input {
+            Input::FunctionArgs(args) => {
+                b.arguments(args.iter(), |leaves, value| self.add(leaves, *value, 0))
             }
-        } else if let Input::Value(value) = input {
-            value_root = self.add(&mut b, value, 0);
-        }
-        let args_range = b.value_range(args_start);
-        while let Some((id, ptr, depth)) = self.work.pop() {
+            Input::Value(value) => SnapshotRoot::Value(self.add(&mut b.leaves(), value, 0)),
+        };
+        while let Some((slot, ptr, depth)) = self.work.pop() {
             // SAFETY: inherited heap permit, never relinquished during traversal.
             let object = match unsafe { ptr.get() } {
                 Object::Uint8Array(data) => b.bytes(&data.lock()),
                 Object::Array(data) => {
-                    let element_type = b.push_type(owned_type(&data.element_ty));
+                    let element_type = b.leaves().ty(owned_type(&data.element_ty));
                     let data = data.lock();
-                    let start = b.value_start();
-                    let count = data.len().min(b.remaining_values());
-                    b.reserve_values(count);
-                    for value in data.iter().take(count) {
-                        let value = self.add(&mut b, *value, depth + 1);
-                        b.push_value(value);
-                    }
-                    SnapshotObject::List {
-                        element_type,
-                        items: b.value_range(start),
-                        original_len: data.len(),
-                    }
+                    b.list(element_type, data.iter(), |leaves, value| {
+                        self.add(leaves, *value, depth + 1)
+                    })
                 }
                 Object::Map(data) => {
-                    let key_type = b.push_type(owned_type(&data.key_ty));
-                    let value_type = b.push_type(owned_type(&data.value_ty));
+                    let key_type = b.leaves().ty(owned_type(&data.key_ty));
+                    let value_type = b.leaves().ty(owned_type(&data.value_ty));
                     let data = data.lock();
-                    let start = b.entry_start();
-                    let count = data.len().min(b.remaining_entries());
-                    b.reserve_entries(count);
-                    for (key, value) in data.iter().take(count) {
-                        let value = self.add(&mut b, *value, depth + 1);
-                        b.entry(key, value);
-                    }
-                    SnapshotObject::Map {
-                        key_type,
-                        value_type,
-                        entries: b.entry_range(start),
-                        original_len: data.len(),
-                    }
+                    b.map(key_type, value_type, data.iter(), |leaves, (key, value)| {
+                        (key.clone(), self.add(leaves, *value, depth + 1))
+                    })
                 }
                 Object::Instance(instance) => {
-                    let types_start = b.type_start();
-                    for ty in &instance.class_type_args {
-                        b.push_type(owned_type(ty));
-                    }
-                    let type_arguments = b.type_range(types_start);
-                    let declaration =
-                        match self.add(&mut b, Value::object(instance.class), depth + 1) {
-                            SnapshotValue::Object(id) => id,
-                            SnapshotValue::Truncated(reason) => {
-                                b.set_object(id, SnapshotObject::Truncated(reason));
-                                continue;
-                            }
-                            _ => unreachable!("class declaration is an object"),
-                        };
-                    // SAFETY: class lives under the same heap permit.
-                    let Object::Class(class) = (unsafe { instance.class.get() }) else {
-                        unreachable!("instance class")
-                    };
-                    let start = b.entry_start();
-                    let count = instance.field_len().min(b.remaining_entries());
-                    b.reserve_entries(count);
-                    for (i, field) in class.fields.iter().enumerate().take(count) {
-                        let value = self.add(&mut b, instance.load_field(i), depth + 1);
-                        b.entry(&field.name.as_str().into(), value);
-                    }
-                    SnapshotObject::Instance {
-                        type_arguments,
-                        declaration,
-                        fields: b.entry_range(start),
-                        original_len: instance.field_len(),
+                    let class = Value::object(instance.class);
+                    match self.add(&mut b.leaves(), class, depth + 1) {
+                        SnapshotValue::Object(declaration) => {
+                            // SAFETY: class lives under the same heap permit.
+                            let Object::Class(class) = (unsafe { instance.class.get() }) else {
+                                unreachable!("instance class")
+                            };
+                            b.instance(
+                                declaration,
+                                instance.class_type_args.iter().map(owned_type),
+                                (0..instance.field_len()).zip(&class.fields),
+                                |leaves, (at, field)| {
+                                    let value =
+                                        self.add(leaves, instance.load_field(at), depth + 1);
+                                    (field.name.as_str().into(), value)
+                                },
+                            )
+                        }
+                        SnapshotValue::Truncated(reason) => SnapshotObject::Truncated(reason),
+                        _ => unreachable!("class declaration is an object"),
                     }
                 }
                 Object::Class(class) => b.declaration(&class.name, class.type_tag, false),
                 Object::Enum(enm) => b.declaration(&enm.name, enm.type_tag, true),
                 Object::Cell(cell) => {
-                    SnapshotObject::Cell(self.add(&mut b, cell.load(), depth + 1))
+                    SnapshotObject::Cell(self.add(&mut b.leaves(), cell.load(), depth + 1))
                 }
                 Object::Function(f) => SnapshotObject::Descriptive {
                     kind: Description::Function,
-                    name: b.string(&f.name.as_str().into()),
+                    name: b.leaves().string(&f.name.as_str().into()),
                 },
                 Object::Closure(_) => describe(Description::Closure),
                 Object::BoundMethod(_) => describe(Description::BoundMethod),
@@ -226,15 +185,12 @@ impl Scratch {
                 | Object::Variant(_)
                 | Object::RustData(_) => unreachable!("inline value queued as object"),
             };
-            b.set_object(id, object);
+            b.fill(slot, object);
         }
         self.seen.clear();
         self.rust_seen.clear();
         self.work.clear();
-        match input {
-            Input::Value(_) => b.finish_value(value_root, &mut self.shaper),
-            Input::FunctionArgs(args) => b.finish_args(args.len(), args_range, &mut self.shaper),
-        }
+        b.finish(root, &mut self.shaper)
     }
 }
 // Preserve immutable type metadata; replace every VM type head with owned identity.
@@ -247,29 +203,29 @@ fn owned_type(ty: &bex_vm_types::RealizedTy) -> btel_snapshot::OwnedType {
 /// A media value as the runtime holds it: its kind, MIME type and source, and
 /// loaded content as base64 text shared by handle. Reads no file and fetches
 /// nothing. A part past the byte limit truncates the whole object.
-fn media(b: &mut Builder, value: &MediaValue) -> SnapshotObject {
+fn media(leaves: &mut Leaves<'_>, value: &MediaValue) -> SnapshotObject {
     let Ok(mime_type) = value.read_mime_type(|mime| {
-        mime.map(|mime| b.string(&mime.into()).ok_or(()))
+        mime.map(|mime| leaves.string(&mime.into()).ok_or(()))
             .transpose()
     }) else {
         return SnapshotObject::Truncated(Limit::Bytes);
     };
     let source = value.read_content(|content| {
-        let loaded = |b: &mut Builder, data: Option<&bex_str::BexStr>| match data {
-            Some(data) => b.string(data).map(Some),
+        let loaded = |leaves: &mut Leaves<'_>, data: Option<&bex_str::BexStr>| match data {
+            Some(data) => leaves.string(data).map(Some),
             None => Some(None),
         };
         Some(match content {
             MediaContent::Url { url, base64_data } => MediaSource::Url {
-                url: b.string(&url.as_str().into())?,
-                data: loaded(b, base64_data.as_ref())?,
+                url: leaves.string(&url.as_str().into())?,
+                data: loaded(leaves, base64_data.as_ref())?,
             },
             MediaContent::File { file, base64_data } => MediaSource::File {
-                path: b.string(&file.as_str().into())?,
-                data: loaded(b, base64_data.as_ref())?,
+                path: leaves.string(&file.as_str().into())?,
+                data: loaded(leaves, base64_data.as_ref())?,
             },
             MediaContent::Base64 { base64_data } => MediaSource::Base64 {
-                data: b.string(base64_data)?,
+                data: leaves.string(base64_data)?,
             },
         })
     });

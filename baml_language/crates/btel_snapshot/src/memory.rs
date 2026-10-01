@@ -191,7 +191,7 @@ mod tests {
     fn scalar(pool: &SnapshotPool) -> Snapshot {
         pool.try_acquire()
             .unwrap()
-            .finish_value(SnapshotValue::Null, &mut crate::Shaper::default())
+            .finish(SnapshotValue::Null, &mut crate::Shaper::default())
     }
 
     #[test]
@@ -236,12 +236,12 @@ mod tests {
     fn refuses_bigints_even_when_logical_value_is_small() {
         let pool = SnapshotPool::new(1, Limits::default());
         let mut builder = pool.try_acquire().unwrap();
-        let id = builder
-            .bigint(&std::sync::Arc::new(num_bigint::BigInt::from(0)))
-            .unwrap();
+        let value = builder
+            .leaves()
+            .bigint(&std::sync::Arc::new(num_bigint::BigInt::from(0)));
         assert!(
             builder
-                .finish_value(SnapshotValue::Bigint(id), &mut crate::Shaper::default())
+                .finish(value, &mut crate::Shaper::default())
                 .retained_bytes()
                 .is_none()
         );

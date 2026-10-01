@@ -402,7 +402,7 @@ fn root_blob(snapshot: &btel_snapshot::Snapshot) -> Vec<u8> {
 }
 
 fn snapshot(pool: &btel_snapshot::SnapshotPool, n: i64) -> btel_snapshot::Snapshot {
-    pool.try_acquire().unwrap().finish_value(
+    pool.try_acquire().unwrap().finish(
         btel_snapshot::SnapshotValue::Int(n),
         &mut btel_snapshot::Shaper::default(),
     )
@@ -468,32 +468,19 @@ fn cas_is_shared_across_recordings_and_atomic_under_concurrent_writers() {
 
 /// A list of three strings, two of them large enough for blobs of their own.
 fn cut_snapshot(pool: &btel_snapshot::SnapshotPool) -> btel_snapshot::Snapshot {
-    use btel_snapshot::{SnapshotObject, SnapshotValue};
+    use btel_snapshot::SnapshotValue;
     let mut b = pool.try_acquire().unwrap();
-    let element_type = b.push_type(btel_snapshot::OwnedType::string());
-    let items: Vec<_> = ["a".repeat(100), "small".to_owned(), "b".repeat(100)]
-        .iter()
-        .map(|text| SnapshotValue::String(b.string(&text.as_str().into()).unwrap()))
-        .collect();
-    let list = b.reserve_object().unwrap();
-    let start = b.value_start();
-    for item in items {
-        b.push_value(item);
-    }
-    let items = b.value_range(start);
-    b.set_object(
-        list,
-        SnapshotObject::List {
-            element_type,
-            items,
-            original_len: 3,
-        },
-    );
+    let element_type = b.leaves().ty(btel_snapshot::OwnedType::string());
+    let texts = ["a".repeat(100), "small".to_owned(), "b".repeat(100)];
+    let list = b.list(element_type, texts.iter(), |leaves, text| {
+        leaves.string_value(&text.as_str().into())
+    });
+    let list = b.leaves().object(list).unwrap();
     let mut shaper = btel_snapshot::Shaper::new(btel_snapshot::ShapePolicy::Split {
         unit_bytes: 1 << 20,
         leaf_bytes: 64,
     });
-    b.finish_value(SnapshotValue::Object(list), &mut shaper)
+    b.finish(SnapshotValue::Object(list), &mut shaper)
 }
 
 #[test]

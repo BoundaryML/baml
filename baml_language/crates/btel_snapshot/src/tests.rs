@@ -17,7 +17,7 @@ fn bytes(b: &mut Builder, content: &[u8]) -> (SnapshotObject, Uint8ArrayData) {
 fn scalar(pool: &SnapshotPool, n: i64) -> Snapshot {
     pool.try_acquire()
         .unwrap()
-        .finish_value(SnapshotValue::Int(n), &mut Shaper::default())
+        .finish(SnapshotValue::Int(n), &mut Shaper::default())
 }
 #[test]
 fn capacity_counts_owners_across_threads_and_reuse_has_no_stale_values() {
@@ -42,8 +42,10 @@ fn immutable_leaves_and_pool_survive_the_original_owners() {
     let weak = Arc::downgrade(&leaf);
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
-    let id = b.bigint(&leaf).unwrap();
-    let snapshot = b.finish_value(SnapshotValue::Bigint(id), &mut Shaper::default());
+    let SnapshotValue::Bigint(id) = b.leaves().bigint(&leaf) else {
+        panic!("the bigint is held")
+    };
+    let snapshot = b.finish(SnapshotValue::Bigint(id), &mut Shaper::default());
     drop(leaf);
     drop(pool);
     assert!(weak.upgrade().is_some());
@@ -64,9 +66,8 @@ fn unwind_releases_builder_and_large_allocations_are_not_retained() {
     let mut b = pool.try_acquire().unwrap();
     let data = vec![9; 512 * 1024];
     let (object, range) = bytes(&mut b, &data);
-    let id = b.reserve_object().unwrap();
-    b.set_object(id, object);
-    let snapshot = b.finish_value(SnapshotValue::Object(id), &mut Shaper::default());
+    let id = b.leaves().object(object).unwrap();
+    let snapshot = b.finish(SnapshotValue::Object(id), &mut Shaper::default());
     assert_eq!(snapshot.bytes(range), data);
     assert!(pool.stats().allocated_bytes > data.len());
     drop(snapshot);
@@ -87,11 +88,18 @@ fn limits_are_explicit_and_what_they_cut_shows_in_the_capture() {
     );
     let mut b = pool.try_acquire().unwrap();
     let (object, range) = bytes(&mut b, b"abcde");
-    let id = b.reserve_object().unwrap();
-    b.set_object(id, object);
-    assert!(b.reserve_object().is_none());
-    assert_eq!(b.remaining_values(), 2);
-    let whole = b.finish_value(SnapshotValue::Object(id), &mut Shaper::default());
+    let id = b.leaves().object(object).unwrap();
+    assert!(b.leaves().reserve().is_none());
+    // A list takes the items the value limit allows and records how many
+    // its source had.
+    let ty = b.leaves().ty(baml_type::RealizedTy::Int);
+    let list = b.list(ty, [1, 2, 3].into_iter(), |_, n| SnapshotValue::Int(n));
+    assert!(list.is_cut());
+    assert!(matches!(
+        list,
+        SnapshotObject::List { items, original_len: 3, .. } if items.len() == 2
+    ));
+    let whole = b.finish(SnapshotValue::Object(id), &mut Shaper::default());
     assert_eq!(whole.bytes(range), b"abcde");
     let stats = whole.stats();
     assert!(!stats.limited);
@@ -101,14 +109,12 @@ fn limits_are_explicit_and_what_they_cut_shows_in_the_capture() {
     // A storage that is used again keeps nothing of the capture before.
     let mut b = pool.try_acquire().unwrap();
     let held = "h".repeat(100);
-    let text = b.string(&held.as_str().into()).unwrap();
-    let id = b.reserve_object().unwrap();
-    // An object that names fewer items than its source had was cut.
-    b.set_object(
-        id,
-        SnapshotObject::Cell(SnapshotValue::Truncated(Limit::Depth)),
-    );
-    let cut = b.finish_value(SnapshotValue::String(text), &mut Shaper::default());
+    let text = b.leaves().string_value(&held.as_str().into());
+    // A cut value anywhere in the capture marks it.
+    b.leaves()
+        .object(SnapshotObject::Cell(SnapshotValue::Truncated(Limit::Depth)))
+        .unwrap();
+    let cut = b.finish(text, &mut Shaper::default());
     let stats = cut.stats();
     assert!(stats.limited);
     assert_eq!((stats.copied_bytes, stats.shared_bytes), (0, 100));
@@ -130,9 +136,8 @@ fn growth_accounts_for_replacement_overlap_and_ignores_idle_budget() {
     // Check immediately: later arena allocations can raise the live total.
     let growth_stats = pool.stats();
     assert!(growth_stats.peak_accounted_bytes >= growth_stats.allocated_bytes + 512);
-    let id = b.reserve_object().unwrap();
-    b.set_object(id, object);
-    let snapshot = b.finish_value(SnapshotValue::Object(id), &mut Shaper::default());
+    let id = b.leaves().object(object).unwrap();
+    let snapshot = b.finish(SnapshotValue::Object(id), &mut Shaper::default());
     assert_eq!(snapshot.bytes(first), &[7; 512]);
     assert_eq!(snapshot.bytes(second), &[9; 513]);
     let stats = pool.stats();
@@ -157,12 +162,14 @@ fn idle_budget_is_total_not_per_buffer_and_relocation_preserves_owners() {
     let leaf = Arc::new(BigInt::from(99));
     let weak = Arc::downgrade(&leaf);
     let mut b = pool.try_acquire().unwrap();
-    let root = b.bigint(&leaf).unwrap();
+    let SnapshotValue::Bigint(root) = b.leaves().bigint(&leaf) else {
+        panic!("the bigint is held")
+    };
     // Move initialized Arc owners during arena growth; indices stay valid.
     for _ in 0..256 {
-        b.bigint(&leaf).unwrap();
+        b.leaves().bigint(&leaf);
     }
-    let a = b.finish_value(SnapshotValue::Bigint(root), &mut Shaper::default());
+    let a = b.finish(SnapshotValue::Bigint(root), &mut Shaper::default());
     let b = scalar(&pool, 2);
     let c = scalar(&pool, 3);
     assert_eq!(**a.bigint(root), BigInt::from(99));
@@ -187,7 +194,7 @@ fn content_ids_include_value_kinds_omissions_and_leaf_contents() {
     let id = |v| {
         pool.try_acquire()
             .unwrap()
-            .finish_value(v, &mut Shaper::default())
+            .finish(v, &mut Shaper::default())
             .root_id()
     };
     let values = [
@@ -204,8 +211,8 @@ fn content_ids_include_value_kinds_omissions_and_leaf_contents() {
     assert_eq!(ids.len(), values.len());
     let string_id = |s: &BexStr| {
         let mut b = pool.try_acquire().unwrap();
-        let value = b.string(s).unwrap();
-        b.finish_value(SnapshotValue::String(value), &mut Shaper::default())
+        let value = b.leaves().string(s).unwrap();
+        b.finish(SnapshotValue::String(value), &mut Shaper::default())
             .root_id()
     };
     let rope = BexStr::concat("a".repeat(60).into(), "b".repeat(60).into());
@@ -214,9 +221,8 @@ fn content_ids_include_value_kinds_omissions_and_leaf_contents() {
     assert_ne!(string_id(&flat), string_id(&"different".into()));
     let big_id = |n| {
         let mut b = pool.try_acquire().unwrap();
-        let value = b.bigint(&Arc::new(BigInt::from(n))).unwrap();
-        b.finish_value(SnapshotValue::Bigint(value), &mut Shaper::default())
-            .root_id()
+        let value = b.leaves().bigint(&Arc::new(BigInt::from(n)));
+        b.finish(value, &mut Shaper::default()).root_id()
     };
     assert_ne!(big_id(1), big_id(-1));
     assert_ne!(big_id(1), id(SnapshotValue::Int(1)));
@@ -227,30 +233,17 @@ fn graph_hashes_preserve_cycles_aliases_and_reset_on_reuse() {
     let pool = SnapshotPool::new(1, Limits::default());
     let make = |distinct: bool| {
         let mut b = pool.try_acquire().unwrap();
-        let root = b.reserve_object().unwrap();
-        let first = b.reserve_object().unwrap();
-        let second = if distinct {
-            b.reserve_object().unwrap()
-        } else {
-            first
-        };
-        b.set_object(first, SnapshotObject::Cell(SnapshotValue::Object(root)));
-        b.set_object(second, SnapshotObject::Cell(SnapshotValue::Object(root)));
-        let ty = b.push_type(baml_type::RealizedTy::Int);
-        let start = b.value_start();
-        b.push_value(SnapshotValue::Object(first));
-        b.push_value(SnapshotValue::Object(second));
-        let items = b.value_range(start);
-        b.set_object(
-            root,
-            SnapshotObject::List {
-                element_type: ty,
-                items,
-                original_len: 2,
-            },
-        );
-        b.finish_value(SnapshotValue::Object(root), &mut Shaper::default())
-            .root_id()
+        let slot = b.leaves().reserve().unwrap();
+        let root = SnapshotValue::Object(slot.id());
+        let cell = |b: &mut Builder| b.leaves().object(SnapshotObject::Cell(root)).unwrap();
+        let first = cell(&mut b);
+        let second = if distinct { cell(&mut b) } else { first };
+        let ty = b.leaves().ty(baml_type::RealizedTy::Int);
+        let list = b.list(ty, [first, second].into_iter(), |_, id| {
+            SnapshotValue::Object(id)
+        });
+        b.fill(slot, list);
+        b.finish(root, &mut Shaper::default()).root_id()
     };
     let aliased = make(false);
     let separate = make(true);
@@ -277,31 +270,28 @@ fn blobs_ignore_discovery_order_unreachable_objects_and_reused_scratch() {
     // reserved in either order and optionally beside an unreachable object.
     let capture = |reverse: bool, stray: bool, shaper: &mut Shaper| {
         let mut b = pool.try_acquire().unwrap();
-        let ty = b.push_type(baml_type::RealizedTy::Int);
+        let ty = b.leaves().ty(baml_type::RealizedTy::Int);
         if stray {
-            let unreachable = b.reserve_object().unwrap();
-            b.set_object(unreachable, SnapshotObject::Cell(SnapshotValue::Int(9)));
+            b.leaves()
+                .object(SnapshotObject::Cell(SnapshotValue::Int(9)))
+                .unwrap();
         }
-        let mut ids = [(); 3].map(|()| b.reserve_object().unwrap());
+        let mut slots = [(); 3].map(|()| b.leaves().reserve().unwrap());
         if reverse {
-            ids.reverse();
+            slots.reverse();
         }
-        let [list, first, second] = ids;
-        b.set_object(first, SnapshotObject::Cell(SnapshotValue::Int(1)));
-        b.set_object(second, SnapshotObject::Cell(SnapshotValue::Object(first)));
-        let start = b.value_start();
-        b.push_value(SnapshotValue::Object(first));
-        b.push_value(SnapshotValue::Object(second));
-        let items = b.value_range(start);
-        b.set_object(
-            list,
-            SnapshotObject::List {
-                element_type: ty,
-                items,
-                original_len: 2,
-            },
+        let [list, first, second] = slots;
+        let (root, first_id, second_id) = (list.id(), first.id(), second.id());
+        b.fill(first, SnapshotObject::Cell(SnapshotValue::Int(1)));
+        b.fill(
+            second,
+            SnapshotObject::Cell(SnapshotValue::Object(first_id)),
         );
-        let snapshot = b.finish_value(SnapshotValue::Object(list), shaper);
+        let items = b.list(ty, [first_id, second_id].into_iter(), |_, id| {
+            SnapshotValue::Object(id)
+        });
+        b.fill(list, items);
+        let snapshot = b.finish(SnapshotValue::Object(root), shaper);
         assert_eq!(snapshot.blobs().len(), 1);
         (snapshot.root_id(), root_blob_bytes(&snapshot))
     };

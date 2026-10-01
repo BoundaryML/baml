@@ -52,62 +52,40 @@ fn capture(shaper: &mut Shaper, build: impl FnOnce(&mut Builder) -> V) -> Snapsh
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
     let root = build(&mut b);
-    b.finish_value(root, shaper)
+    b.finish(root, shaper)
 }
 
 fn text(b: &mut Builder, content: &str) -> V {
-    V::String(b.string(&content.into()).unwrap())
+    b.leaves().string_value(&content.into())
+}
+
+/// An object whose content is known when it is made.
+fn object(b: &mut Builder, object: O) -> V {
+    V::Object(b.leaves().object(object).unwrap())
+}
+
+fn list_of(b: &mut Builder, items: &[V]) -> O {
+    let element_type = b.leaves().ty(RealizedTy::Unknown);
+    b.list(element_type, items.iter(), |_, item| *item)
 }
 
 fn list(b: &mut Builder, items: &[V]) -> V {
-    let id = b.reserve_object().unwrap();
-    fill(b, id, items);
-    V::Object(id)
-}
-
-fn fill(b: &mut Builder, id: btel_snapshot::ObjectId, items: &[V]) {
-    let element_type = b.push_type(RealizedTy::Unknown);
-    let start = b.value_start();
-    for item in items {
-        b.push_value(*item);
-    }
-    let items = b.value_range(start);
-    b.set_object(
-        id,
-        O::List {
-            element_type,
-            items,
-            original_len: items.len(),
-        },
-    );
+    let list = list_of(b, items);
+    object(b, list)
 }
 
 fn map(b: &mut Builder, entries: &[(&str, V)]) -> V {
-    let id = b.reserve_object().unwrap();
-    let key_type = b.push_type(RealizedTy::String);
-    let value_type = b.push_type(RealizedTy::Unknown);
-    let start = b.entry_start();
-    for (key, value) in entries {
-        b.entry(&(*key).into(), *value);
-    }
-    let entries = b.entry_range(start);
-    b.set_object(
-        id,
-        O::Map {
-            key_type,
-            value_type,
-            entries,
-            original_len: entries.len(),
-        },
-    );
-    V::Object(id)
+    let key_type = b.leaves().ty(RealizedTy::String);
+    let value_type = b.leaves().ty(RealizedTy::Unknown);
+    let map = b.map(key_type, value_type, entries.iter(), |_, (key, value)| {
+        ((*key).into(), *value)
+    });
+    object(b, map)
 }
 
 fn bytes(b: &mut Builder, content: &[u8]) -> V {
-    let object = b.bytes(content);
-    let id = b.reserve_object().unwrap();
-    b.set_object(id, object);
-    V::Object(id)
+    let bytes = b.bytes(content);
+    object(b, bytes)
 }
 
 /// `{note, order: {sku, photo, tags: [..]}, count}` with a note, a photo and
@@ -211,20 +189,21 @@ fn a_value_reads_the_same_however_it_is_stored() {
 /// `{photo, link}`: an image whose base64 `content` is stored alone under
 /// [`cut`], and one that only names its URL.
 fn album(b: &mut Builder, content: &str) -> V {
-    let data = b.string(&content.into()).unwrap();
-    let url = b.string(&"https://example.test/cat.png".into()).unwrap();
+    let data = b.leaves().string(&content.into()).unwrap();
+    let url = b
+        .leaves()
+        .string(&"https://example.test/cat.png".into())
+        .unwrap();
     let media = |b: &mut Builder, source| {
-        let mime_type = b.string(&"image/png".into());
-        let id = b.reserve_object().unwrap();
-        b.set_object(
-            id,
+        let mime_type = b.leaves().string(&"image/png".into());
+        object(
+            b,
             O::Media {
                 kind: baml_type::MediaKind::Image,
                 mime_type,
                 source,
             },
-        );
-        V::Object(id)
+        )
     };
     let photo = media(b, btel_snapshot::MediaSource::Base64 { data });
     let link = media(b, btel_snapshot::MediaSource::Url { url, data: None });
@@ -339,13 +318,16 @@ fn media_content_is_read_from_its_blob_and_checked_against_its_length() {
 
 /// Two lists that hold each other, each with text of its own.
 fn ring(b: &mut Builder) -> V {
-    let first = b.reserve_object().unwrap();
-    let second = b.reserve_object().unwrap();
+    let first_slot = b.leaves().reserve().unwrap();
+    let second_slot = b.leaves().reserve().unwrap();
+    let (first, second) = (V::Object(first_slot.id()), V::Object(second_slot.id()));
     let text_first = text(b, &"a".repeat(30));
     let text_second = text(b, &"b".repeat(30));
-    fill(b, first, &[V::Object(second), text_first]);
-    fill(b, second, &[V::Object(first), text_second]);
-    list(b, &[V::Object(first), V::Object(second)])
+    let items = list_of(b, &[second, text_first]);
+    b.fill(first_slot, items);
+    let items = list_of(b, &[first, text_second]);
+    b.fill(second_slot, items);
+    list(b, &[first, second])
 }
 
 #[test]
@@ -633,10 +615,8 @@ fn a_child_is_read_only_as_what_it_holds() {
     let arguments = {
         let pool = SnapshotPool::new(1, Limits::default());
         let mut b = pool.try_acquire().unwrap();
-        let start = b.value_start();
-        b.push_value(V::Int(1));
-        let slots = b.value_range(start);
-        blobs.store(&b.finish_args(1, slots, &mut Shaper::default()))
+        let root = b.arguments(std::iter::once(V::Int(1)), |_, value| value);
+        blobs.store(&b.finish(root, &mut Shaper::default()))
     };
     let small = blobs.store(&capture(&mut Shaper::default(), |b| list(b, &[V::Int(1)])));
     let parent = |id: u8, children: Vec<CasId>, value: DecodedValue| {

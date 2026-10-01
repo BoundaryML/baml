@@ -38,7 +38,7 @@ mod tests {
         let snapshot = |n| {
             pool.try_acquire()
                 .unwrap()
-                .finish_value(SnapshotValue::Int(n), &mut btel_snapshot::Shaper::default())
+                .finish(SnapshotValue::Int(n), &mut btel_snapshot::Shaper::default())
         };
         let mut processor = CaptureProcessor::default();
         for n in 0..btel_settings::snapshot::RECENT_CAPTURE_IDS {

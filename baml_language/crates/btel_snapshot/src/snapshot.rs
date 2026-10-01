@@ -209,29 +209,8 @@ impl Snapshot {
         stats.limited = self.roots().iter().any(cut)
             || graph.values.iter().any(cut)
             || graph.entries.iter().any(|entry| cut(&entry.value))
-            || graph.objects.iter().any(|object| match object {
-                SnapshotObject::Uint8ArrayTruncated { .. } | SnapshotObject::Truncated(_) => true,
-                SnapshotObject::List {
-                    items,
-                    original_len,
-                    ..
-                } => items.len() != *original_len,
-                SnapshotObject::Map {
-                    entries,
-                    original_len,
-                    ..
-                }
-                | SnapshotObject::Instance {
-                    fields: entries,
-                    original_len,
-                    ..
-                } => entries.len() != *original_len,
-                SnapshotObject::Cell(value) => cut(value),
-                SnapshotObject::Uint8Array { .. }
-                | SnapshotObject::Declaration { .. }
-                | SnapshotObject::NonSnapshotableValue {}
-                | SnapshotObject::Descriptive { .. }
-                | SnapshotObject::Media { .. } => false,
+            || graph.objects.iter().any(|object| {
+                object.is_cut() || matches!(object, SnapshotObject::Cell(value) if cut(value))
             });
         stats
     }

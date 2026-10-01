@@ -46,111 +46,88 @@ fn decode(bytes: &[u8]) -> Result<DecodedSnapshot, BlobError> {
 /// tests of its own.
 fn rich_snapshot(pool: &SnapshotPool) -> Snapshot {
     let mut b = pool.try_acquire().unwrap();
-    let declaration = b.reserve_object().unwrap();
-    let object = b.declaration(&customer(), TypeTag::from_i64(42), false);
-    b.set_object(declaration, object);
-    let list = b.reserve_object().unwrap();
-    let cell = b.reserve_object().unwrap();
-    let map = b.reserve_object().unwrap();
-    let bytes = b.reserve_object().unwrap();
-    let instance = b.reserve_object().unwrap();
-    let function = b.reserve_object().unwrap();
-    let opaque = b.reserve_object().unwrap();
-    let truncated = b.reserve_object().unwrap();
+    let declaration = b.declaration(&customer(), TypeTag::from_i64(42), false);
+    let declaration = b.leaves().object(declaration).unwrap();
 
-    let element_type = b.push_type(RealizedTy::List(Box::new(int_type())));
-    let start = b.value_start();
-    for v in [
+    // The list contains itself: a cycle through a container.
+    let list_slot = b.leaves().reserve().unwrap();
+    let list = list_slot.id();
+    let element_type = b.leaves().ty(RealizedTy::List(Box::new(int_type())));
+    let items = [
         V::Int(-7),
         V::Float(f64::from_bits(0x7ff8_0000_0000_1234)),
         V::Bool(true),
-    ] {
-        b.push_value(v);
-    }
-    // The list contains itself: a cycle through a container.
-    b.push_value(V::Object(list));
-    let items = b.value_range(start);
-    b.set_object(
-        list,
-        O::List {
-            element_type,
-            items,
-            original_len: 9,
-        },
-    );
-    b.set_object(cell, O::Cell(V::Object(cell)));
+        V::Object(list),
+    ];
+    let mut object = b.list(element_type, items.into_iter(), |_, item| item);
+    // As a limit leaves a list whose source had nine items.
+    let O::List { original_len, .. } = &mut object else {
+        panic!("expected a list")
+    };
+    *original_len = 9;
+    b.fill(list_slot, object);
+    let cell_slot = b.leaves().reserve().unwrap();
+    let cell = cell_slot.id();
+    b.fill(cell_slot, O::Cell(V::Object(cell)));
 
-    let key = b.push_type(RealizedTy::String);
-    let value = b.push_type(int_type());
-    let text = b.string(&"hello λ".into()).unwrap();
-    let start = b.entry_start();
-    b.entry(&"greeting".into(), V::String(text));
-    b.entry(&"list".into(), V::Object(list));
-    let entries = b.entry_range(start);
-    b.set_object(
-        map,
-        O::Map {
-            key_type: key,
-            value_type: value,
-            entries,
-            original_len: 2,
-        },
-    );
-    let object = b.bytes(&[1, 2, 3]);
-    b.set_object(bytes, object);
-    let types = b.type_start();
-    b.push_type(int_type());
-    let type_arguments = b.type_range(types);
-    let big = b.bigint(&Arc::new(BigInt::from(-1) << 100)).unwrap();
-    let variant = b.string(&"Active".into()).unwrap();
-    let ty_value = b.push_type(int_type());
-    let start = b.entry_start();
-    b.entry(&"name".into(), V::String(text));
-    b.entry(&"map".into(), V::Object(map));
-    b.entry(&"shared".into(), V::Object(list));
-    b.entry(&"bytes".into(), V::Object(bytes));
-    b.entry(&"big".into(), V::Bigint(big));
-    b.entry(&"null".into(), V::Null);
-    b.entry(
-        &"status".into(),
-        V::Enum {
-            declaration,
-            variant: 1,
-            name: variant,
-        },
-    );
-    b.entry(&"type".into(), V::Type(ty_value));
-    b.entry(&"cell".into(), V::Object(cell));
-    b.entry(&"function".into(), V::Object(function));
-    b.entry(&"host".into(), V::Object(opaque));
-    b.entry(&"cut".into(), V::Object(truncated));
-    b.entry(&"depth".into(), V::Truncated(crate::Limit::Depth));
-    let fields = b.entry_range(start);
-    b.set_object(
-        instance,
-        O::Instance {
-            type_arguments,
-            declaration,
-            fields,
-            original_len: 13,
-        },
-    );
-    let name = b.string(&"user.Extract".into()).unwrap();
-    b.set_object(
-        function,
-        O::Descriptive {
+    let key = b.leaves().ty(RealizedTy::String);
+    let value = b.leaves().ty(int_type());
+    let text = b.leaves().string(&"hello λ".into()).unwrap();
+    let entries = [("greeting", V::String(text)), ("list", V::Object(list))];
+    let map = b.map(key, value, entries.into_iter(), |_, (key, value)| {
+        (key.into(), value)
+    });
+    let map = b.leaves().object(map).unwrap();
+    let bytes = b.bytes(&[1, 2, 3]);
+    let bytes = b.leaves().object(bytes).unwrap();
+    let big = b.leaves().bigint(&Arc::new(BigInt::from(-1) << 100));
+    let variant = b.leaves().string(&"Active".into()).unwrap();
+    let ty_value = b.leaves().ty(int_type());
+    let name = b.leaves().string(&"user.Extract".into()).unwrap();
+    let function = b
+        .leaves()
+        .object(O::Descriptive {
             kind: crate::Description::Function,
             name: Some(name),
-        },
+        })
+        .unwrap();
+    let opaque = b.leaves().object(O::NonSnapshotableValue {}).unwrap();
+    let truncated = b
+        .leaves()
+        .object(O::Truncated(crate::Limit::Bytes))
+        .unwrap();
+    let fields = [
+        ("name", V::String(text)),
+        ("map", V::Object(map)),
+        ("shared", V::Object(list)),
+        ("bytes", V::Object(bytes)),
+        ("big", big),
+        ("null", V::Null),
+        (
+            "status",
+            V::Enum {
+                declaration,
+                variant: 1,
+                name: variant,
+            },
+        ),
+        ("type", V::Type(ty_value)),
+        ("cell", V::Object(cell)),
+        ("function", V::Object(function)),
+        ("host", V::Object(opaque)),
+        ("cut", V::Object(truncated)),
+        ("depth", V::Truncated(crate::Limit::Depth)),
+    ];
+    let instance = b.instance(
+        declaration,
+        [int_type()],
+        fields.into_iter(),
+        |_, (key, value)| (key.into(), value),
     );
-    b.set_object(opaque, O::NonSnapshotableValue {});
-    b.set_object(truncated, O::Truncated(crate::Limit::Bytes));
-    let start = b.value_start();
-    b.push_value(V::Object(instance));
-    b.push_value(V::OmittedArg);
-    b.push_value(V::Object(list));
-    let slots = b.value_range(start);
-    b.finish_args(3, slots, &mut Shaper::default())
+    let instance = b.leaves().object(instance).unwrap();
+    let slots = [V::Object(instance), V::OmittedArg, V::Object(list)];
+    let root = b.arguments(slots.into_iter(), |_, slot| slot);
+    b.finish(root, &mut Shaper::default())
 }
 
 #[test]
@@ -227,7 +204,7 @@ fn every_value_kind_round_trips_with_verified_identity_and_preserved_graph() {
 fn value_roots_and_limited_captures_verify() {
     let pool = SnapshotPool::new(1, Limits::default());
     let b = pool.try_acquire().unwrap();
-    let snapshot = b.finish_value(V::Truncated(crate::Limit::Bytes), &mut Shaper::default());
+    let snapshot = b.finish(V::Truncated(crate::Limit::Bytes), &mut Shaper::default());
     assert!(snapshot.stats().limited);
     let decoded = decode(&encode(&snapshot)).unwrap();
     assert_eq!(
@@ -238,7 +215,7 @@ fn value_roots_and_limited_captures_verify() {
     let empty = pool
         .try_acquire()
         .unwrap()
-        .finish_value(V::Null, &mut Shaper::default());
+        .finish(V::Null, &mut Shaper::default());
     assert_eq!(decode(&encode(&empty)).unwrap().id, empty.root_id());
 }
 
@@ -357,8 +334,8 @@ fn on_large_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
 fn type_blob(ty: OwnedType) -> Vec<u8> {
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
-    let id = b.push_type(ty);
-    encode(&b.finish_value(V::Type(id), &mut Shaper::default()))
+    let id = b.leaves().ty(ty);
+    encode(&b.finish(V::Type(id), &mut Shaper::default()))
 }
 
 #[test]
@@ -432,14 +409,10 @@ fn one_helper_thread_measures_every_large_description_in_a_blob() {
         let pool = SnapshotPool::new(1, Limits::default());
         let mut b = pool.try_acquire().unwrap();
         let types: Vec<_> = (0..3)
-            .map(|extra| b.push_type(nested_list(SHALLOW_TYPE_BYTES + extra)))
+            .map(|extra| b.leaves().ty(nested_list(SHALLOW_TYPE_BYTES + extra)))
             .collect();
-        let start = b.value_start();
-        for ty in types {
-            b.push_value(V::Type(ty));
-        }
-        let slots = b.value_range(start);
-        encode(&b.finish_args(3, slots, &mut Shaper::default()))
+        let root = b.arguments(types.into_iter(), |_, ty| V::Type(ty));
+        encode(&b.finish(root, &mut Shaper::default()))
     });
     let (decoded, helpers) = std::thread::Builder::new()
         .stack_size(2 << 20)
@@ -465,24 +438,13 @@ fn map_entry_keys_hash_like_the_producer() {
     // Keys and values from separate entry ranges must verify independently.
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
-    let map = b.reserve_object().unwrap();
-    let key = b.push_type(int_type());
-    let value = b.push_type(int_type());
-    let start = b.entry_start();
-    for (k, v) in [("b", 2), ("a", 1)] {
-        b.entry(&k.into(), V::Int(v));
-    }
-    let entries = b.entry_range(start);
-    b.set_object(
-        map,
-        O::Map {
-            key_type: key,
-            value_type: value,
-            entries,
-            original_len: 2,
-        },
-    );
-    let snapshot = b.finish_value(V::Object(map), &mut Shaper::default());
+    let key = b.leaves().ty(int_type());
+    let value = b.leaves().ty(int_type());
+    let map = b.map(key, value, [("b", 2), ("a", 1)].into_iter(), |_, (k, v)| {
+        (k.into(), V::Int(v))
+    });
+    let map = b.leaves().object(map).unwrap();
+    let snapshot = b.finish(V::Object(map), &mut Shaper::default());
     let decoded = decode(&encode(&snapshot)).unwrap();
     let DecodedObject::Map { entries, .. } = decoded.object(NodeId(0)) else {
         panic!("map")
@@ -633,7 +595,7 @@ fn references_to_other_blobs_follow_first_use_and_never_replace_a_root() {
 fn media_round_trips_each_source_with_its_content() {
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
-    let string = |b: &mut crate::Builder, text: &str| b.string(&text.into()).unwrap();
+    let string = |b: &mut crate::Builder, text: &str| b.leaves().string(&text.into()).unwrap();
     let (mime, url, path, data) = (
         string(&mut b, "image/png"),
         string(&mut b, "https://example.test/a.png"),
@@ -659,28 +621,25 @@ fn media_round_trips_each_source_with_its_content() {
         (Some(mime), crate::MediaSource::File { path, data: None }),
         (Some(mime), crate::MediaSource::Base64 { data }),
     ];
-    let start = b.value_start();
-    for (index, (mime_type, source)) in sources.into_iter().enumerate() {
-        let id = b.reserve_object().unwrap();
-        let kind = [
-            baml_type::MediaKind::Image,
-            baml_type::MediaKind::Audio,
-            baml_type::MediaKind::Video,
-            baml_type::MediaKind::Pdf,
-            baml_type::MediaKind::Generic,
-        ][index];
-        b.set_object(
-            id,
-            O::Media {
+    let kinds = [
+        baml_type::MediaKind::Image,
+        baml_type::MediaKind::Audio,
+        baml_type::MediaKind::Video,
+        baml_type::MediaKind::Pdf,
+        baml_type::MediaKind::Generic,
+    ];
+    let root = b.arguments(
+        kinds.into_iter().zip(sources),
+        |leaves, (kind, (mime_type, source))| {
+            let media = O::Media {
                 kind,
                 mime_type,
                 source,
-            },
-        );
-        b.push_value(V::Object(id));
-    }
-    let slots = b.value_range(start);
-    let decoded = decode(&encode(&b.finish_args(5, slots, &mut Shaper::default()))).unwrap();
+            };
+            V::Object(leaves.object(media).unwrap())
+        },
+    );
+    let decoded = decode(&encode(&b.finish(root, &mut Shaper::default()))).unwrap();
     let inline = || MediaPayload::Inline("UklGRg==".into());
     let expected = [
         (

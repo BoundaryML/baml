@@ -894,7 +894,7 @@ fn thread_heavy_files_seal_near_the_encoded_target() {
 fn snapshot() -> btel_snapshot::Snapshot {
     let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
     let b = pool.try_acquire().unwrap();
-    b.finish_value(
+    b.finish(
         btel_snapshot::SnapshotValue::Int(42),
         &mut btel_snapshot::Shaper::default(),
     )
@@ -905,7 +905,7 @@ fn captures_move_after_chunk_recycle_and_duplicates_release_before_file_flush() 
     use btel_snapshot::{Limits, SnapshotPool, SnapshotValue};
     let snapshots = SnapshotPool::new(2, Limits::default());
     let make = || {
-        snapshots.try_acquire().unwrap().finish_value(
+        snapshots.try_acquire().unwrap().finish(
             SnapshotValue::Int(42),
             &mut btel_snapshot::Shaper::default(),
         )
@@ -988,7 +988,7 @@ fn snapshot_receiver_panic_releases_pending_owners() {
         let snapshot = pool
             .try_acquire()
             .unwrap()
-            .finish_value(SnapshotValue::Int(n), &mut btel_snapshot::Shaper::default());
+            .finish(SnapshotValue::Int(n), &mut btel_snapshot::Shaper::default());
         p.span(
             thread,
             &mut SpanRecord::FunctionSpanAnnouncement {

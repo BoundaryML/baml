@@ -185,6 +185,36 @@ pub enum SnapshotObject {
     },
     Truncated(Limit),
 }
+impl SnapshotObject {
+    /// Whether a limit kept part of the object itself out of the capture.
+    /// The values it holds may be cut without the object being.
+    pub fn is_cut(&self) -> bool {
+        match self {
+            Self::Uint8ArrayTruncated { .. } | Self::Truncated(_) => true,
+            Self::List {
+                items,
+                original_len,
+                ..
+            } => items.len() != *original_len,
+            Self::Map {
+                entries,
+                original_len,
+                ..
+            }
+            | Self::Instance {
+                fields: entries,
+                original_len,
+                ..
+            } => entries.len() != *original_len,
+            Self::Uint8Array { .. }
+            | Self::Declaration { .. }
+            | Self::Cell(_)
+            | Self::NonSnapshotableValue {}
+            | Self::Descriptive { .. }
+            | Self::Media { .. } => false,
+        }
+    }
+}
 /// Where a media value's content comes from, as the runtime holds it. `data`
 /// is the base64 text of content already loaded from the URL or file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -220,6 +250,11 @@ pub struct FunctionArgs {
 pub enum SnapshotRoot {
     Value(SnapshotValue),
     FunctionArgs(FunctionArgs),
+}
+impl From<SnapshotValue> for SnapshotRoot {
+    fn from(value: SnapshotValue) -> Self {
+        Self::Value(value)
+    }
 }
 
 /// A captured bigint and the digest of its content, found once.

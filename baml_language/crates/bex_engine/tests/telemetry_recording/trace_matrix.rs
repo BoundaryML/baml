@@ -532,16 +532,13 @@ fn snapshot(args: bool, values: &[External]) -> Snapshot {
 }
 
 fn finish(mut builder: Builder, args: bool, roots: &[Value]) -> Snapshot {
+    let mut shaper = btel_snapshot::Shaper::default();
     if args {
-        let start = builder.value_start();
-        for root in roots {
-            builder.push_value(*root);
-        }
-        let slots = builder.value_range(start);
-        builder.finish_args(roots.len(), slots, &mut btel_snapshot::Shaper::default())
+        let root = builder.arguments(roots.iter(), |_, root| *root);
+        builder.finish(root, &mut shaper)
     } else {
         assert_eq!(roots.len(), 1);
-        builder.finish_value(roots[0], &mut btel_snapshot::Shaper::default())
+        builder.finish(roots[0], &mut shaper)
     }
 }
 
@@ -551,18 +548,15 @@ fn scalar(builder: &mut Builder, value: &External) -> Value {
         External::Bool(value) => Value::Bool(*value),
         External::Int(value) => Value::Int(*value),
         External::Float(value) => Value::Float(*value),
-        External::String(value) => Value::String(builder.string(value).unwrap()),
-        External::Bigint(value) => Value::Bigint(builder.bigint(&Arc::new(value.clone())).unwrap()),
+        External::String(value) => builder.leaves().string_value(value),
+        External::Bigint(value) => builder.leaves().bigint(&Arc::new(value.clone())),
         External::Uint8Array(value) => {
-            let object = builder.reserve_object().unwrap();
             let bytes = builder.bytes(value);
-            builder.set_object(object, bytes);
-            Value::Object(object)
+            Value::Object(builder.leaves().object(bytes).unwrap())
         }
         External::RustData(_) => {
-            let object = builder.reserve_object().unwrap();
-            builder.set_object(object, SnapshotObject::NonSnapshotableValue {});
-            Value::Object(object)
+            let opaque = SnapshotObject::NonSnapshotableValue {};
+            Value::Object(builder.leaves().object(opaque).unwrap())
         }
         _ => panic!("expected a scalar fixture value"),
     }
@@ -692,48 +686,38 @@ async fn scalar_values(program: &Program) {
 fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> Snapshot {
     use baml_type::RealizedTy;
     use bex_vm_types::Object;
-    use btel_snapshot::Range;
 
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
-    let object = b.reserve_object().unwrap();
+    let class = |suffix: &str| {
+        program
+            .objects
+            .0
+            .iter()
+            .find_map(|object| match object {
+                Object::Class(class) if class.name.display_name().ends_with(suffix) => Some(class),
+                _ => None,
+            })
+            .unwrap()
+    };
+    let field =
+        |_: &mut btel_snapshot::Leaves<'_>, (key, value): (&str, Value)| (key.into(), value);
     let root = match scenario {
         "cycle" | "node" => {
-            let class = program
-                .objects
-                .0
-                .iter()
-                .find_map(|object| match object {
-                    Object::Class(class) if class.name.display_name().ends_with("MatrixNode") => {
-                        Some(class)
-                    }
-                    _ => None,
-                })
-                .unwrap();
-            let declaration = b.reserve_object().unwrap();
+            let class = class("MatrixNode");
             let named = b.declaration(&class.name, class.type_tag, false);
-            b.set_object(declaration, named);
-            let start = b.entry_start();
-            b.entry(&"value".into(), Value::Int(value));
-            b.entry(
-                &"next".into(),
-                if scenario == "cycle" {
-                    Value::Object(object)
-                } else {
-                    Value::Null
-                },
-            );
-            let fields = b.entry_range(start);
-            b.set_object(
-                object,
-                SnapshotObject::Instance {
-                    type_arguments: Range::empty(),
-                    declaration,
-                    fields,
-                    original_len: 2,
-                },
-            );
-            Value::Object(object)
+            let declaration = b.leaves().object(named).unwrap();
+            let slot = b.leaves().reserve().unwrap();
+            let object = Value::Object(slot.id());
+            let next = if scenario == "cycle" {
+                object
+            } else {
+                Value::Null
+            };
+            let fields = [("value", Value::Int(value)), ("next", next)];
+            let instance = b.instance(declaration, [], fields.into_iter(), field);
+            b.fill(slot, instance);
+            object
         }
         "enum" => {
             let enm = program
@@ -748,106 +732,43 @@ fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> 
                 })
                 .unwrap();
             let named = b.declaration(&enm.name, enm.type_tag, true);
-            b.set_object(object, named);
             Value::Enum {
-                declaration: object,
+                declaration: b.leaves().object(named).unwrap(),
                 variant: 1,
-                name: b.string(&"Second".into()).unwrap(),
+                name: b.leaves().string(&"Second".into()).unwrap(),
             }
         }
         "aliases" => {
-            let shared = b.reserve_object().unwrap();
-            let outer_type = b.push_type(RealizedTy::List(Box::new(RealizedTy::Int)));
-            let inner_type = b.push_type(RealizedTy::Int);
-            let start = b.value_start();
-            b.push_value(Value::Object(shared));
-            b.push_value(Value::Object(shared));
-            let items = b.value_range(start);
-            b.set_object(
-                object,
-                SnapshotObject::List {
-                    element_type: outer_type,
-                    items,
-                    original_len: 2,
-                },
-            );
-            let start = b.value_start();
-            b.push_value(Value::Int(1));
-            b.push_value(Value::Int(2));
-            let items = b.value_range(start);
-            b.set_object(
-                shared,
-                SnapshotObject::List {
-                    element_type: inner_type,
-                    items,
-                    original_len: 2,
-                },
-            );
-            Value::Object(object)
+            let outer_type = b.leaves().ty(RealizedTy::List(Box::new(RealizedTy::Int)));
+            let inner_type = b.leaves().ty(RealizedTy::Int);
+            let shared = b.list(inner_type, [1, 2].into_iter(), |_, n| Value::Int(n));
+            let shared = Value::Object(b.leaves().object(shared).unwrap());
+            let outer = b.list(outer_type, [shared, shared].into_iter(), |_, item| item);
+            Value::Object(b.leaves().object(outer).unwrap())
         }
         "empty_array" => {
-            let element_type = b.push_type(RealizedTy::Int);
-            b.set_object(
-                object,
-                SnapshotObject::List {
-                    element_type,
-                    items: Range::empty(),
-                    original_len: 0,
-                },
-            );
-            Value::Object(object)
+            let element_type = b.leaves().ty(RealizedTy::Int);
+            let empty = b.list(element_type, std::iter::empty(), |_, item| item);
+            Value::Object(b.leaves().object(empty).unwrap())
         }
         "generic" => {
-            let class = program
-                .objects
-                .0
-                .iter()
-                .find_map(|object| match object {
-                    Object::Class(class) if class.name.display_name().ends_with("MatrixBox") => {
-                        Some(class)
-                    }
-                    _ => None,
-                })
-                .unwrap();
-            let declaration = b.reserve_object().unwrap();
+            let class = class("MatrixBox");
             let named = b.declaration(&class.name, class.type_tag, false);
-            b.set_object(declaration, named);
-            let start = b.type_start();
-            b.push_type(RealizedTy::Int);
-            let type_arguments = b.type_range(start);
-            let start = b.entry_start();
-            b.entry(&"value".into(), Value::Int(7));
-            let fields = b.entry_range(start);
-            b.set_object(
-                object,
-                SnapshotObject::Instance {
-                    type_arguments,
-                    declaration,
-                    fields,
-                    original_len: 1,
-                },
-            );
-            Value::Object(object)
+            let declaration = b.leaves().object(named).unwrap();
+            let fields = [("value", Value::Int(7))];
+            let instance = b.instance(declaration, [RealizedTy::Int], fields.into_iter(), field);
+            Value::Object(b.leaves().object(instance).unwrap())
         }
         "map" => {
-            let key_type = b.push_type(RealizedTy::String);
-            let value_type = b.push_type(RealizedTy::Int);
-            let start = b.entry_start();
-            if value != 0 {
-                b.entry(&"first".into(), Value::Int(1));
-                b.entry(&"second".into(), Value::Int(2));
-            }
-            let entries = b.entry_range(start);
-            b.set_object(
-                object,
-                SnapshotObject::Map {
-                    key_type,
-                    value_type,
-                    entries,
-                    original_len: if value == 0 { 0 } else { 2 },
-                },
-            );
-            Value::Object(object)
+            let key_type = b.leaves().ty(RealizedTy::String);
+            let value_type = b.leaves().ty(RealizedTy::Int);
+            let entries: &[(&str, Value)] = if value == 0 {
+                &[]
+            } else {
+                &[("first", Value::Int(1)), ("second", Value::Int(2))]
+            };
+            let map = b.map(key_type, value_type, entries.iter().copied(), field);
+            Value::Object(b.leaves().object(map).unwrap())
         }
         _ => unreachable!(),
     };
@@ -1040,23 +961,13 @@ fn one_field_instance(
     assert_eq!(class.fields.len(), 1);
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
-    let object = b.reserve_object().unwrap();
-    let declaration = b.reserve_object().unwrap();
     let named = b.declaration(&class.name, class.type_tag, false);
-    b.set_object(declaration, named);
+    let declaration = b.leaves().object(named).unwrap();
     let value = scalar(&mut b, field);
-    let start = b.entry_start();
-    b.entry(&class.fields[0].name.as_str().into(), value);
-    let fields = b.entry_range(start);
-    b.set_object(
-        object,
-        SnapshotObject::Instance {
-            type_arguments: btel_snapshot::Range::empty(),
-            declaration,
-            fields,
-            original_len: 1,
-        },
-    );
+    let instance = b.instance(declaration, [], std::iter::once(value), |_, value| {
+        (class.fields[0].name.as_str().into(), value)
+    });
+    let object = b.leaves().object(instance).unwrap();
     let mut roots = vec![Value::Object(object)];
     roots.extend(additional_args.iter().map(|value| scalar(&mut b, value)));
     finish(b, args, &roots)

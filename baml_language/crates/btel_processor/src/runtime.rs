@@ -683,6 +683,12 @@ mod tests {
 
     use super::*;
 
+    /// The capture of a call with no arguments.
+    fn no_arguments(mut builder: btel_snapshot::Builder) -> btel_snapshot::Snapshot {
+        let root = builder.arguments(std::iter::empty(), |_, value| value);
+        builder.finish(root, &mut btel_snapshot::Shaper::default())
+    }
+
     fn config() -> Config {
         Config {
             chunk_capacity: NonZeroUsize::new(8).unwrap(),
@@ -716,11 +722,7 @@ mod tests {
             parent_id: id,
             call_path: btel_types::CallPathId::ROOT,
             entered_at: btel_types::ClockInstant::from_ticks(1),
-            captured_inputs: Some(runtime.acquire_snapshot().unwrap().finish_args(
-                0,
-                btel_snapshot::Range::empty(),
-                &mut btel_snapshot::Shaper::default(),
-            )),
+            captured_inputs: Some(no_arguments(runtime.acquire_snapshot().unwrap())),
         }
     }
 
@@ -784,11 +786,7 @@ mod tests {
         let (mut runtime, pool) = manual_runtime();
         Arc::get_mut(&mut runtime).unwrap().snapshots =
             btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
-        let held = runtime.acquire_snapshot().unwrap().finish_args(
-            0,
-            btel_snapshot::Range::empty(),
-            &mut btel_snapshot::Shaper::default(),
-        );
+        let held = no_arguments(runtime.acquire_snapshot().unwrap());
         let id = allocate_telemetry_id();
         let _scope = runtime.enter();
         runtime.write_span(
@@ -1061,11 +1059,7 @@ mod tests {
                     parent_id: thread_id,
                     call_path: btel_types::CallPathId::ROOT,
                     entered_at: btel_types::ClockInstant::from_ticks(1),
-                    captured_inputs: Some(runtime.acquire_snapshot().unwrap().finish_args(
-                        0,
-                        btel_snapshot::Range::empty(),
-                        &mut btel_snapshot::Shaper::default(),
-                    )),
+                    captured_inputs: Some(no_arguments(runtime.acquire_snapshot().unwrap())),
                 },
             );
             drop(nested);

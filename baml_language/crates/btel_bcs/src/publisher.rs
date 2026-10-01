@@ -719,39 +719,24 @@ mod tests {
         let snapshot = pool
             .try_acquire()
             .unwrap()
-            .finish_value(SnapshotValue::Int(value), &mut Shaper::default());
+            .finish(SnapshotValue::Int(value), &mut Shaper::default());
         offer(publisher, snapshot);
     }
 
     /// A list of `count` distinct strings, each in a blob of its own.
     fn cut_list(pool: &SnapshotPool, seed: i64, count: usize) -> Snapshot {
         let mut b = pool.try_acquire().unwrap();
-        let element_type = b.push_type(btel_snapshot::OwnedType::string());
-        let items: Vec<_> = (0..count)
-            .map(|index| {
-                let text = format!("{seed}-{index}-{}", "x".repeat(100));
-                SnapshotValue::String(b.string(&text.as_str().into()).unwrap())
-            })
-            .collect();
-        let list = b.reserve_object().unwrap();
-        let start = b.value_start();
-        for item in items {
-            b.push_value(item);
-        }
-        let items = b.value_range(start);
-        b.set_object(
-            list,
-            btel_snapshot::SnapshotObject::List {
-                element_type,
-                items,
-                original_len: items.len(),
-            },
-        );
+        let element_type = b.leaves().ty(btel_snapshot::OwnedType::string());
+        let list = b.list(element_type, 0..count, |leaves, index| {
+            let text = format!("{seed}-{index}-{}", "x".repeat(100));
+            leaves.string_value(&text.as_str().into())
+        });
+        let list = b.leaves().object(list).unwrap();
         let mut shaper = Shaper::new(ShapePolicy::Split {
             unit_bytes: 1 << 20,
             leaf_bytes: 64,
         });
-        b.finish_value(SnapshotValue::Object(list), &mut shaper)
+        b.finish(SnapshotValue::Object(list), &mut shaper)
     }
 
     #[test]
@@ -761,7 +746,7 @@ mod tests {
         let snapshot = pool
             .try_acquire()
             .unwrap()
-            .finish_value(SnapshotValue::Int(1), &mut Shaper::default());
+            .finish(SnapshotValue::Int(1), &mut Shaper::default());
         let expected = snapshot.retained_bytes().unwrap();
         let id = snapshot.root_id();
         let thread = allocate_telemetry_id();
@@ -781,7 +766,7 @@ mod tests {
         let next = pool
             .try_acquire()
             .unwrap()
-            .finish_value(SnapshotValue::Int(2), &mut Shaper::default());
+            .finish(SnapshotValue::Int(2), &mut Shaper::default());
         let SpanRecord::FunctionSpanAnnouncement {
             captured_inputs, ..
         } = &mut record
@@ -930,30 +915,19 @@ mod tests {
         assert_eq!(pool.stats().in_use, 1);
         // A list sharing two strings: only the third and the list itself.
         let mut b = pool.try_acquire().unwrap();
-        let element_type = b.push_type(btel_snapshot::OwnedType::string());
-        let start = b.value_start();
-        for index in [0, 1, 7] {
+        let element_type = b.leaves().ty(btel_snapshot::OwnedType::string());
+        let list = b.list(element_type, [0, 1, 7].into_iter(), |leaves, index| {
             let text = format!("1-{index}-{}", "x".repeat(100));
-            let id = b.string(&text.as_str().into()).unwrap();
-            b.push_value(SnapshotValue::String(id));
-        }
-        let items = b.value_range(start);
-        let list = b.reserve_object().unwrap();
-        b.set_object(
-            list,
-            btel_snapshot::SnapshotObject::List {
-                element_type,
-                items,
-                original_len: 3,
-            },
-        );
+            leaves.string_value(&text.as_str().into())
+        });
+        let list = b.leaves().object(list).unwrap();
         let mut shaper = Shaper::new(ShapePolicy::Split {
             unit_bytes: 1 << 20,
             leaf_bytes: 64,
         });
         offer(
             &mut publisher,
-            b.finish_value(SnapshotValue::Object(list), &mut shaper),
+            b.finish(SnapshotValue::Object(list), &mut shaper),
         );
         assert_eq!(publisher.queue.len(), 6);
         assert_eq!(publisher.owners.len(), 2);
@@ -980,27 +954,17 @@ mod tests {
         .unwrap();
         let pool = SnapshotPool::new(2, Limits::default());
         let mut b = pool.try_acquire().unwrap();
-        let element_type = b.push_type(btel_snapshot::OwnedType::string());
-        let start = b.value_start();
-        for text in ["small".repeat(20), "large".repeat(2000)] {
-            let id = b.string(&text.as_str().into()).unwrap();
-            b.push_value(SnapshotValue::String(id));
-        }
-        let items = b.value_range(start);
-        let list = b.reserve_object().unwrap();
-        b.set_object(
-            list,
-            btel_snapshot::SnapshotObject::List {
-                element_type,
-                items,
-                original_len: 2,
-            },
-        );
+        let element_type = b.leaves().ty(btel_snapshot::OwnedType::string());
+        let texts = ["small".repeat(20), "large".repeat(2000)];
+        let list = b.list(element_type, texts.iter(), |leaves, text| {
+            leaves.string_value(&text.as_str().into())
+        });
+        let list = b.leaves().object(list).unwrap();
         let mut shaper = Shaper::new(ShapePolicy::Split {
             unit_bytes: 1 << 20,
             leaf_bytes: 64,
         });
-        let snapshot = b.finish_value(SnapshotValue::Object(list), &mut shaper);
+        let snapshot = b.finish(SnapshotValue::Object(list), &mut shaper);
         assert_eq!(snapshot.blobs().len(), 3);
         offer(&mut publisher, snapshot);
         assert_eq!(delivery.handle().loss_count(), 1);
@@ -1350,7 +1314,7 @@ mod tests {
         let snapshot = pool
             .try_acquire()
             .unwrap()
-            .finish_value(SnapshotValue::Int(0), &mut Shaper::default());
+            .finish(SnapshotValue::Int(0), &mut Shaper::default());
         let candidates: Vec<_> = [5_u8, 12, 8, 100, 15]
             .into_iter()
             .map(|encoded_len| Candidate {

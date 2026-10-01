@@ -870,7 +870,7 @@ pub(crate) fn inline_handle(value: &Inline) -> Vec<u8> {
     let mut builder = pool.try_acquire().expect("a fresh pool has a slot");
     let root = build_inline(&mut builder, value);
     let mut whole = btel_snapshot::Shaper::new(btel_snapshot::ShapePolicy::Whole);
-    let snapshot = builder.finish_value(root, &mut whole);
+    let snapshot = builder.finish(root, &mut whole);
     let mut blob = Vec::new();
     snapshot
         .root_blob()
@@ -887,74 +887,36 @@ pub(crate) fn inline_handle(value: &Inline) -> Vec<u8> {
     .encode()
 }
 
-/// Children first: each container's values form one contiguous range.
+/// Children first: a container's items are written in one run.
 fn build_inline(b: &mut btel_snapshot::Builder, value: &Inline) -> btel_snapshot::SnapshotValue {
-    use btel_snapshot::{Limit, OwnedType, SnapshotObject, SnapshotValue};
-    let text = |b: &mut btel_snapshot::Builder, text: &str| {
-        b.string(&btel_snapshot::BexStr::from(text)).map_or(
-            SnapshotValue::Truncated(Limit::Bytes),
-            SnapshotValue::String,
-        )
-    };
-    match value {
-        Inline::Null => SnapshotValue::Null,
-        Inline::Int(n) => SnapshotValue::Int(*n),
-        Inline::Float(f) => SnapshotValue::Float(*f),
-        Inline::Text(t) => text(b, t),
+    use btel_snapshot::{BexStr, Limit, OwnedType, SnapshotValue};
+    let object = match value {
+        Inline::Null => return SnapshotValue::Null,
+        Inline::Int(n) => return SnapshotValue::Int(*n),
+        Inline::Float(f) => return SnapshotValue::Float(*f),
+        Inline::Text(text) => return b.leaves().string_value(&BexStr::from(text.as_str())),
         Inline::Map(entries) => {
             let values: Vec<SnapshotValue> =
                 entries.iter().map(|(_, v)| build_inline(b, v)).collect();
-            let Some(id) = b.reserve_object() else {
-                return SnapshotValue::Truncated(Limit::Objects);
-            };
-            let key_type = b.push_type(OwnedType::string());
-            let value_type = b.push_type(OwnedType::unknown());
-            let start = b.entry_start();
-            b.reserve_entries(entries.len().min(b.remaining_entries()));
-            for ((key, _), value) in entries.iter().zip(values) {
-                if b.remaining_entries() == 0 {
-                    break;
-                }
-                b.entry(&btel_snapshot::BexStr::from(key.as_str()), value);
-            }
-            let range = b.entry_range(start);
-            b.set_object(
-                id,
-                SnapshotObject::Map {
-                    key_type,
-                    value_type,
-                    entries: range,
-                    original_len: entries.len(),
-                },
-            );
-            SnapshotValue::Object(id)
+            let key_type = b.leaves().ty(OwnedType::string());
+            let value_type = b.leaves().ty(OwnedType::unknown());
+            b.map(
+                key_type,
+                value_type,
+                entries.iter().zip(values),
+                |_, ((key, _), value)| (BexStr::from(key.as_str()), value),
+            )
         }
         Inline::List(items) => {
             let values: Vec<SnapshotValue> = items.iter().map(|v| build_inline(b, v)).collect();
-            let Some(id) = b.reserve_object() else {
-                return SnapshotValue::Truncated(Limit::Objects);
-            };
-            let element_type = b.push_type(OwnedType::unknown());
-            let start = b.value_start();
-            b.reserve_values(values.len().min(b.remaining_values()));
-            for value in values {
-                if b.remaining_values() == 0 {
-                    break;
-                }
-                b.push_value(value);
-            }
-            let range = b.value_range(start);
-            b.set_object(
-                id,
-                SnapshotObject::List {
-                    element_type,
-                    items: range,
-                    original_len: items.len(),
-                },
-            );
-            SnapshotValue::Object(id)
+            let element_type = b.leaves().ty(OwnedType::unknown());
+            b.list(element_type, values.into_iter(), |_, value| value)
         }
-    }
+    };
+    b.leaves().object(object).map_or(
+        SnapshotValue::Truncated(Limit::Objects),
+        SnapshotValue::Object,
+    )
 }
 
 /// Model usage summed per span: `(model, input, output, cache_read,

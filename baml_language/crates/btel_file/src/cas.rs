@@ -139,7 +139,7 @@ mod tests {
         let snapshot = |n| {
             pool.try_acquire()
                 .unwrap()
-                .finish_value(SnapshotValue::Int(n), &mut btel_snapshot::Shaper::default())
+                .finish(SnapshotValue::Int(n), &mut btel_snapshot::Shaper::default())
         };
         let mut writer = CasWriter::new(root.path().to_owned());
         let capacity = btel_settings::local_files::KNOWN_BLOB_IDS;
@@ -168,7 +168,7 @@ mod tests {
         let snapshot = |n| {
             pool.try_acquire()
                 .unwrap()
-                .finish_value(SnapshotValue::Int(n), &mut btel_snapshot::Shaper::default())
+                .finish(SnapshotValue::Int(n), &mut btel_snapshot::Shaper::default())
         };
         let mut writer = CasWriter::new(root.path().to_owned());
         let first = snapshot(1);

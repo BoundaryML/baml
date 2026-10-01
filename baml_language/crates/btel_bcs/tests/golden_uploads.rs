@@ -72,7 +72,7 @@ fn sources(pool: &SnapshotPool, count: usize) -> (SealedFile, Vec<Snapshot>) {
         ..AggregateDelta::default()
     });
     for index in 0..count {
-        let snapshot = pool.try_acquire().unwrap().finish_value(
+        let snapshot = pool.try_acquire().unwrap().finish(
             SnapshotValue::Int(10 + i64::try_from(index).unwrap()),
             &mut btel_snapshot::Shaper::default(),
         );

@@ -6,8 +6,8 @@ use std::{fmt::Write as _, sync::Arc};
 
 use baml_type::{DeclarationName, RealizedTy, TaggedTypeName, TypeName, typetag::TypeTag};
 use btel_snapshot::{
-    BlobScratch, Description, Limit, Limits, ShapePolicy, Shaper, Snapshot, SnapshotObject as O,
-    SnapshotPool, SnapshotValue as V, TypeIdentity,
+    BlobScratch, Description, Leaves, Limit, Limits, ShapePolicy, Shaper, Snapshot,
+    SnapshotObject as O, SnapshotPool, SnapshotRoot, SnapshotValue as V, TypeIdentity,
 };
 
 fn hex(bytes: &[u8]) -> String {
@@ -20,51 +20,30 @@ fn hex(bytes: &[u8]) -> String {
 
 fn graph(pool: &SnapshotPool, arguments: bool) -> Snapshot {
     let mut b = pool.try_acquire().unwrap();
-    let declaration = b.reserve_object().unwrap();
     let name = DeclarationName::Declared(TypeName::local("Golden".into()));
-    let object = b.declaration(&name, TypeTag::from_i64(42), true);
-    b.set_object(declaration, object);
-    let type_start = b.type_start();
-    let ty = b.push_type(RealizedTy::Int);
-    let type_arguments = b.type_range(type_start);
-    let text = b.string(&"value".into()).unwrap();
-    let entries_start = b.entry_start();
-    b.entry(&"field".into(), V::Int(7));
-    let entries = b.entry_range(entries_start);
-    let value_start = b.value_start();
-    b.push_value(V::Bool(false));
-    b.push_value(V::Bool(true));
-    let items = b.value_range(value_start);
+    let declaration = b.declaration(&name, TypeTag::from_i64(42), true);
+    let declaration = b.leaves().object(declaration).unwrap();
+    let ty = b.leaves().ty(RealizedTy::Int);
+    let text = b.leaves().string(&"value".into()).unwrap();
+    let field = |_: &mut Leaves<'_>, ()| ("field".into(), V::Int(7));
+    let list = b.list(ty, [false, true].into_iter(), |_, flag| V::Bool(flag));
+    let map = b.map(ty, ty, std::iter::once(()), field);
+    let instance = b.instance(declaration, [RealizedTy::Int], std::iter::once(()), field);
     let mut objects = vec![declaration];
     for object in [
         // Five bytes that a limit kept out of the capture.
         O::Uint8ArrayTruncated { original_len: 5 },
-        O::List {
-            element_type: ty,
-            items,
-            original_len: 2,
-        },
-        O::Map {
-            key_type: ty,
-            value_type: ty,
-            entries,
-            original_len: 1,
-        },
-        O::Instance {
-            type_arguments,
-            declaration,
-            fields: entries,
-            original_len: 1,
-        },
+        list,
+        map,
+        instance,
         O::NonSnapshotableValue {},
     ] {
-        let id = b.reserve_object().unwrap();
-        b.set_object(id, object);
-        objects.push(id);
+        objects.push(b.leaves().object(object).unwrap());
     }
-    let cycle = b.reserve_object().unwrap();
-    b.set_object(cycle, O::Cell(V::Object(cycle)));
-    objects.push(cycle);
+    let cycle = b.leaves().reserve().unwrap();
+    objects.push(cycle.id());
+    let itself = V::Object(cycle.id());
+    b.fill(cycle, O::Cell(itself));
     for (index, kind) in [
         Description::Function,
         Description::Closure,
@@ -82,18 +61,13 @@ fn graph(pool: &SnapshotPool, arguments: bool) -> Snapshot {
     .into_iter()
     .enumerate()
     {
-        let id = b.reserve_object().unwrap();
-        b.set_object(
-            id,
-            O::Descriptive {
-                kind,
-                name: (index % 2 == 0).then_some(text),
-            },
-        );
-        objects.push(id);
+        let described = O::Descriptive {
+            kind,
+            name: (index % 2 == 0).then_some(text),
+        };
+        objects.push(b.leaves().object(described).unwrap());
     }
-    let root_start = b.value_start();
-    for value in [
+    let mut values = vec![
         V::Null,
         V::OmittedArg,
         V::Bool(true),
@@ -106,38 +80,29 @@ fn graph(pool: &SnapshotPool, arguments: bool) -> Snapshot {
             variant: 2,
             name: text,
         },
-    ] {
-        b.push_value(value);
-    }
+    ];
     for integer in [-123, 0, 123] {
-        let id = b.bigint(&Arc::new(integer.into())).unwrap();
-        b.push_value(V::Bigint(id));
+        values.push(b.leaves().bigint(&Arc::new(integer.into())));
     }
     for reason in [Limit::Values, Limit::Objects, Limit::Bytes, Limit::Depth] {
-        let id = b.reserve_object().unwrap();
-        b.set_object(id, O::Truncated(reason));
-        objects.push(id);
-        b.push_value(V::Truncated(reason));
+        objects.push(b.leaves().object(O::Truncated(reason)).unwrap());
+        values.push(V::Truncated(reason));
     }
-    for object in objects {
-        b.push_value(V::Object(object));
-    }
-    let slots = b.value_range(root_start);
-    // The value root is a list of the same values. Unreachable from the
-    // argument root, it is not part of that blob.
-    let everything = b.reserve_object().unwrap();
-    b.set_object(
-        everything,
-        O::List {
-            element_type: ty,
-            items: slots,
-            original_len: slots.len(),
-        },
-    );
+    values.extend(objects.into_iter().map(V::Object));
+    let mut shaper = Shaper::default();
     if arguments {
-        b.finish_args(slots.len() + 1, slots, &mut Shaper::default())
+        let mut root = b.arguments(values.into_iter(), |_, value| value);
+        // As a limit leaves the arguments of a call that had one more.
+        let SnapshotRoot::FunctionArgs(slots) = &mut root else {
+            panic!("expected arguments")
+        };
+        slots.parameter_count += 1;
+        b.finish(root, &mut shaper)
     } else {
-        b.finish_value(V::Object(everything), &mut Shaper::default())
+        // The value root is a list of the same values.
+        let everything = b.list(ty, values.into_iter(), |_, value| value);
+        let everything = b.leaves().object(everything).unwrap();
+        b.finish(V::Object(everything), &mut shaper)
     }
 }
 
@@ -199,60 +164,44 @@ fn nominal_identity_tags_preserve_v3_bytes() {
 /// the root of their blob and once inside it.
 fn cut_graph(pool: &SnapshotPool) -> Snapshot {
     let mut b = pool.try_acquire().unwrap();
-    let ty = b.push_type(RealizedTy::Int);
-    let text = b.string(&"t".repeat(40).as_str().into()).unwrap();
-    let note = b.string(&"n".repeat(40).as_str().into()).unwrap();
+    let ty = b.leaves().ty(RealizedTy::Int);
+    let text = b.leaves().string_value(&"t".repeat(40).as_str().into());
+    let note = b.leaves().string_value(&"n".repeat(40).as_str().into());
     let bytes = b.bytes(&[9; 40]);
-    let array = b.reserve_object().unwrap();
-    b.set_object(array, bytes);
-    let map = b.reserve_object().unwrap();
-    let entries_start = b.entry_start();
-    b.entry(&"note".into(), V::String(note));
-    b.entry(&"padding".into(), V::Int(1));
-    b.entry(&"more padding".into(), V::Int(2));
-    let entries = b.entry_range(entries_start);
-    b.set_object(
-        map,
-        O::Map {
-            key_type: ty,
-            value_type: ty,
-            entries,
-            original_len: 3,
-        },
-    );
-    let [first, second] = [(); 2].map(|()| b.reserve_object().unwrap());
-    for (list, other, label) in [(first, second, "first"), (second, first, "second")] {
-        let label = b.string(&label.repeat(4).as_str().into()).unwrap();
-        let start = b.value_start();
-        b.push_value(V::Object(other));
-        b.push_value(V::String(label));
-        let items = b.value_range(start);
-        b.set_object(
-            list,
-            O::List {
-                element_type: ty,
-                items,
-                original_len: 2,
-            },
-        );
+    let array = b.leaves().object(bytes).unwrap();
+    let entries = [
+        ("note", note),
+        ("padding", V::Int(1)),
+        ("more padding", V::Int(2)),
+    ];
+    let map = b.map(ty, ty, entries.into_iter(), |_, (key, value)| {
+        (key.into(), value)
+    });
+    let map = b.leaves().object(map).unwrap();
+    let [first_slot, second_slot] = [(); 2].map(|()| b.leaves().reserve().unwrap());
+    let (first, second) = (first_slot.id(), second_slot.id());
+    for (slot, other, label) in [
+        (first_slot, second, "first"),
+        (second_slot, first, "second"),
+    ] {
+        let label = b.leaves().string_value(&label.repeat(4).as_str().into());
+        let list = b.list(ty, [V::Object(other), label].into_iter(), |_, item| item);
+        b.fill(slot, list);
     }
-    let start = b.value_start();
-    for value in [
-        V::String(text),
+    let slots = [
+        text,
         V::Object(first),
         V::Object(map),
         V::Object(second),
         V::Object(array),
-        V::String(text),
-    ] {
-        b.push_value(value);
-    }
-    let slots = b.value_range(start);
+        text,
+    ];
+    let root = b.arguments(slots.into_iter(), |_, slot| slot);
     let mut shaper = Shaper::new(ShapePolicy::Split {
         unit_bytes: 64,
         leaf_bytes: 32,
     });
-    b.finish_args(6, slots, &mut shaper)
+    b.finish(root, &mut shaper)
 }
 
 /// One line of hex per blob, children first.
@@ -300,14 +249,19 @@ fn media_graph(pool: &SnapshotPool) -> Snapshot {
     use baml_type::MediaKind;
     use btel_snapshot::MediaSource;
     let mut b = pool.try_acquire().unwrap();
-    let ty = b.push_type(RealizedTy::Unknown);
-    let mime = b.string(&"image/png".into()).unwrap();
-    let url = b.string(&"https://example.test/a.png".into()).unwrap();
-    let path = b.string(&"/data/b.png".into()).unwrap();
-    let short = b.string(&"iVBORw==".into()).unwrap();
-    let long = b.string(&"iVBORw0K".repeat(6).as_str().into()).unwrap();
-    let start = b.value_start();
-    for (kind, mime_type, source) in [
+    let ty = b.leaves().ty(RealizedTy::Unknown);
+    let mime = b.leaves().string(&"image/png".into()).unwrap();
+    let url = b
+        .leaves()
+        .string(&"https://example.test/a.png".into())
+        .unwrap();
+    let path = b.leaves().string(&"/data/b.png".into()).unwrap();
+    let short = b.leaves().string(&"iVBORw==".into()).unwrap();
+    let long = b
+        .leaves()
+        .string(&"iVBORw0K".repeat(6).as_str().into())
+        .unwrap();
+    let sources = [
         (
             MediaKind::Image,
             Some(mime),
@@ -340,33 +294,25 @@ fn media_graph(pool: &SnapshotPool) -> Snapshot {
             MediaSource::Base64 { data: short },
         ),
         (MediaKind::Image, None, MediaSource::Base64 { data: long }),
-    ] {
-        let id = b.reserve_object().unwrap();
-        b.set_object(
-            id,
-            O::Media {
+    ];
+    let list = b.list(
+        ty,
+        sources.into_iter(),
+        |leaves, (kind, mime_type, source)| {
+            let media = O::Media {
                 kind,
                 mime_type,
                 source,
-            },
-        );
-        b.push_value(V::Object(id));
-    }
-    let items = b.value_range(start);
-    let list = b.reserve_object().unwrap();
-    b.set_object(
-        list,
-        O::List {
-            element_type: ty,
-            items,
-            original_len: items.len(),
+            };
+            V::Object(leaves.object(media).unwrap())
         },
     );
+    let list = b.leaves().object(list).unwrap();
     let mut shaper = Shaper::new(ShapePolicy::Split {
         unit_bytes: 1 << 20,
         leaf_bytes: 32,
     });
-    b.finish_value(V::Object(list), &mut shaper)
+    b.finish(V::Object(list), &mut shaper)
 }
 
 #[test]

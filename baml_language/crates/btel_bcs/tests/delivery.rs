@@ -68,7 +68,7 @@ fn files(count: usize) -> Vec<SealedFile> {
 }
 
 fn scalar(pool: &SnapshotPool, value: i64) -> Snapshot {
-    pool.try_acquire().unwrap().finish_value(
+    pool.try_acquire().unwrap().finish(
         SnapshotValue::Int(value),
         &mut btel_snapshot::Shaper::default(),
     )
@@ -78,9 +78,8 @@ fn large(pool: &SnapshotPool) -> Snapshot {
     let mut builder = pool.try_acquire().unwrap();
     let bytes = vec![1; 64 * 1024];
     let object = builder.bytes(&bytes);
-    let id = builder.reserve_object().unwrap();
-    builder.set_object(id, object);
-    builder.finish_value(
+    let id = builder.leaves().object(object).unwrap();
+    builder.finish(
         SnapshotValue::Object(id),
         &mut btel_snapshot::Shaper::default(),
     )

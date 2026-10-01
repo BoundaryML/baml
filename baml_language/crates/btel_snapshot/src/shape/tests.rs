@@ -17,62 +17,40 @@ fn capture(shaper: &mut Shaper, build: impl FnOnce(&mut Builder) -> V) -> Snapsh
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
     let root = build(&mut b);
-    b.finish_value(root, shaper)
+    b.finish(root, shaper)
 }
 
 fn text(b: &mut Builder, content: &str) -> V {
-    V::String(b.string(&content.into()).unwrap())
+    b.leaves().string_value(&content.into())
+}
+
+/// An object whose content is known when it is made.
+fn object(b: &mut Builder, object: O) -> V {
+    V::Object(b.leaves().object(object).unwrap())
+}
+
+fn list_of(b: &mut Builder, items: &[V]) -> O {
+    let element_type = b.leaves().ty(RealizedTy::Unknown);
+    b.list(element_type, items.iter(), |_, item| *item)
 }
 
 fn list(b: &mut Builder, items: &[V]) -> V {
-    let id = b.reserve_object().unwrap();
-    fill(b, id, items);
-    V::Object(id)
-}
-
-fn fill(b: &mut Builder, id: crate::ObjectId, items: &[V]) {
-    let element_type = b.push_type(RealizedTy::Unknown);
-    let start = b.value_start();
-    for item in items {
-        b.push_value(*item);
-    }
-    let items = b.value_range(start);
-    b.set_object(
-        id,
-        O::List {
-            element_type,
-            items,
-            original_len: items.len(),
-        },
-    );
+    let list = list_of(b, items);
+    object(b, list)
 }
 
 fn map(b: &mut Builder, entries: &[(&str, V)]) -> V {
-    let id = b.reserve_object().unwrap();
-    let key_type = b.push_type(RealizedTy::String);
-    let value_type = b.push_type(RealizedTy::Unknown);
-    let start = b.entry_start();
-    for (key, value) in entries {
-        b.entry(&(*key).into(), *value);
-    }
-    let entries = b.entry_range(start);
-    b.set_object(
-        id,
-        O::Map {
-            key_type,
-            value_type,
-            entries,
-            original_len: entries.len(),
-        },
-    );
-    V::Object(id)
+    let key_type = b.leaves().ty(RealizedTy::String);
+    let value_type = b.leaves().ty(RealizedTy::Unknown);
+    let map = b.map(key_type, value_type, entries.iter(), |_, (key, value)| {
+        ((*key).into(), *value)
+    });
+    object(b, map)
 }
 
 fn bytes(b: &mut Builder, content: &[u8]) -> V {
-    let object = b.bytes(content);
-    let id = b.reserve_object().unwrap();
-    b.set_object(id, object);
-    V::Object(id)
+    let bytes = b.bytes(content);
+    object(b, bytes)
 }
 
 /// Every blob's bytes, children first, each checked against what shaping
@@ -178,13 +156,16 @@ fn a_cut_value_is_the_blob_that_capturing_it_alone_produces() {
 
 /// Two lists that hold each other, each with text of its own.
 fn ring(b: &mut Builder) -> (V, V) {
-    let first = b.reserve_object().unwrap();
-    let second = b.reserve_object().unwrap();
+    let first_slot = b.leaves().reserve().unwrap();
+    let second_slot = b.leaves().reserve().unwrap();
+    let (first, second) = (V::Object(first_slot.id()), V::Object(second_slot.id()));
     let text_first = text(b, &"a".repeat(30));
     let text_second = text(b, &"b".repeat(30));
-    fill(b, first, &[V::Object(second), text_first]);
-    fill(b, second, &[V::Object(first), text_second]);
-    (V::Object(first), V::Object(second))
+    let list = list_of(b, &[second, text_first]);
+    b.fill(first_slot, list);
+    let list = list_of(b, &[first, text_second]);
+    b.fill(second_slot, list);
+    (first, second)
 }
 
 #[test]
@@ -282,11 +263,9 @@ fn a_million_objects_in_a_chain_shape_on_a_small_stack() {
             let mut b = pool.try_acquire().unwrap();
             let mut next = V::Null;
             for _ in 0..1_000_000 {
-                let id = b.reserve_object().unwrap();
-                b.set_object(id, O::Cell(next));
-                next = V::Object(id);
+                next = V::Object(b.leaves().object(O::Cell(next)).unwrap());
             }
-            let snapshot = b.finish_value(next, &mut split(64 << 10, 16 << 10));
+            let snapshot = b.finish(next, &mut split(64 << 10, 16 << 10));
             let mut scratch = BlobScratch::default();
             let mut total = 0;
             for blob in snapshot.blobs() {
@@ -381,12 +360,9 @@ fn what_the_root_names_twice_is_cut_and_what_it_names_inside_a_value_is_not() {
         let note = text(&mut b, "note");
         let part = list(&mut b, &[note]);
         let parcel = parcel(&mut b, "a", part);
-        let start = b.value_start();
-        for value in [parcel, if inside { part } else { parcel }] {
-            b.push_value(value);
-        }
-        let slots = b.value_range(start);
-        written(&b.finish_args(2, slots, &mut shaper))
+        let slots = [parcel, if inside { part } else { parcel }];
+        let root = b.arguments(slots.into_iter(), |_, value| value);
+        written(&b.finish(root, &mut shaper))
     };
     let twice = arguments(false);
     assert_eq!(twice.len(), 2);
@@ -405,11 +381,16 @@ fn what_the_root_names_twice_is_cut_and_what_it_names_inside_a_value_is_not() {
 /// starting at `root`.
 fn graph(shaper: &mut Shaper, labels: &[String], links: &[Vec<usize>], root: usize) -> Snapshot {
     capture(shaper, |b| {
-        let ids: Vec<_> = labels.iter().map(|_| b.reserve_object().unwrap()).collect();
-        for (at, label) in labels.iter().enumerate() {
-            let mut items = vec![text(b, label)];
+        let slots: Vec<_> = labels
+            .iter()
+            .map(|_| b.leaves().reserve().unwrap())
+            .collect();
+        let ids: Vec<_> = slots.iter().map(crate::Reserved::id).collect();
+        for (at, slot) in slots.into_iter().enumerate() {
+            let mut items = vec![text(b, &labels[at])];
             items.extend(links[at].iter().map(|to| V::Object(ids[*to])));
-            fill(b, ids[at], &items);
+            let list = list_of(b, &items);
+            b.fill(slot, list);
         }
         V::Object(ids[root])
     })
@@ -482,14 +463,12 @@ fn every_blob_is_what_capturing_its_value_alone_produces_and_holds_nothing_anoth
 fn keys_names_and_declarations_stay_in_the_blob_that_uses_them() {
     let long = "k".repeat(200);
     let snapshot = capture(&mut split(1 << 20, 64), |b| {
-        let declaration = b.reserve_object().unwrap();
         let name = DeclarationName::Declared(TypeName::from_dotted_path(&format!("user.{long}")));
-        let object = b.declaration(&name, TypeTag::from_i64(7), true);
-        b.set_object(declaration, object);
-        let name = b.string(&long.as_str().into()).unwrap();
-        let function = b.reserve_object().unwrap();
-        b.set_object(
-            function,
+        let declaration = b.declaration(&name, TypeTag::from_i64(7), true);
+        let declaration = b.leaves().object(declaration).unwrap();
+        let name = b.leaves().string(&long.as_str().into()).unwrap();
+        let function = object(
+            b,
             O::Descriptive {
                 kind: crate::Description::Function,
                 name: Some(name),
@@ -503,11 +482,7 @@ fn keys_names_and_declarations_stay_in_the_blob_that_uses_them() {
         };
         map(
             b,
-            &[
-                (&long, value),
-                ("variant", variant),
-                ("function", V::Object(function)),
-            ],
+            &[(&long, value), ("variant", variant), ("function", function)],
         )
     });
     let blobs = written(&snapshot);
@@ -594,12 +569,9 @@ fn argument_slots_name_cut_values_and_scratch_is_clean_between_captures() {
         let mut b = pool.try_acquire().unwrap();
         let large = text(&mut b, &"argument".repeat(20));
         let order = order(&mut b);
-        let start = b.value_start();
-        for value in [large, V::OmittedArg, order, large] {
-            b.push_value(value);
-        }
-        let slots = b.value_range(start);
-        b.finish_args(4, slots, shaper)
+        let slots = [large, V::OmittedArg, order, large];
+        let root = b.arguments(slots.into_iter(), |_, value| value);
+        b.finish(root, shaper)
     };
     let first = written(&arguments(&mut shaper));
     // Another capture in between must leave nothing behind.
@@ -626,17 +598,15 @@ fn argument_slots_name_cut_values_and_scratch_is_clean_between_captures() {
 }
 
 fn media(b: &mut Builder, source: crate::MediaSource) -> V {
-    let mime_type = b.string(&"image/png".into());
-    let id = b.reserve_object().unwrap();
-    b.set_object(
-        id,
+    let mime_type = b.leaves().string(&"image/png".into());
+    object(
+        b,
         O::Media {
             kind: baml_type::MediaKind::Image,
             mime_type,
             source,
         },
-    );
-    V::Object(id)
+    )
 }
 
 #[test]
@@ -644,8 +614,11 @@ fn media_content_past_the_leaf_size_is_one_blob_its_media_objects_name() {
     let content = "iVBORw0K".repeat(8);
     let mut shaper = split(1 << 20, 32);
     let snapshot = capture(&mut shaper, |b| {
-        let data = b.string(&content.as_str().into()).unwrap();
-        let url = b.string(&"https://example.test/cat.png".into()).unwrap();
+        let data = b.leaves().string(&content.as_str().into()).unwrap();
+        let url = b
+            .leaves()
+            .string(&"https://example.test/cat.png".into())
+            .unwrap();
         let inline = media(b, crate::MediaSource::Base64 { data });
         let fetched = media(
             b,
