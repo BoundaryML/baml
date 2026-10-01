@@ -55,6 +55,8 @@ for this test; keep its `threads-required` setting aligned with
 
 ## Running tests
 
+The six-model live provider matrix checks a bare `hello world` through normal and streamed calls in the `llm_providers::live` group. See [Live LLM provider tests](baml_src/ns_llm_providers/README.md) for the command using Infisical's `dev-llm-provider-tests` environment. The default offline profile excludes this group.
+
 ```bash
 # Run compiler tests (the runtime corpus is owned by baml_cli)
 cargo nextest run -p baml_tests

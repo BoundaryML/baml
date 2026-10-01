@@ -1,3 +1,6 @@
+// Live provider matrix; excluded by the default offline profile.
+// See README.md for the Infisical command.
+
 function HelloWorld() -> string {
     client: "openai/gpt-4o-mini"
     prompt: `
@@ -21,7 +24,7 @@ function check_hello_world(client: ai.Client) -> void {
     );
 }
 
-test "BedrockHaiku45" {
+function check_BedrockHaiku45() -> void {
     check_hello_world(
         aws.BedrockClient.new(
             model = "global.anthropic.claude-haiku-4-5-20251001-v1:0",
@@ -34,7 +37,7 @@ test "BedrockHaiku45" {
     )
 }
 
-test "BedrockGptOss20b" {
+function check_BedrockGptOss20b() -> void {
     check_hello_world(
         openai.ResponsesClient.new(
             model = "openai.gpt-oss-20b",
@@ -47,7 +50,7 @@ test "BedrockGptOss20b" {
     )
 }
 
-test "AzureGpt5MiniLow" {
+function check_AzureGpt5MiniLow() -> void {
     let key = baml.env.get_or_panic("AZURE_OPENAI_API_KEY");
     check_hello_world(
         openai.ResponsesClient.new(
@@ -61,7 +64,7 @@ test "AzureGpt5MiniLow" {
     )
 }
 
-test "Gemini31FlashLiteMinimal" {
+function check_Gemini31FlashLiteMinimal() -> void {
     check_hello_world(
         google.GeminiClient.new(
             model = "gemini-3.1-flash-lite",
@@ -71,7 +74,7 @@ test "Gemini31FlashLiteMinimal" {
     )
 }
 
-test "VertexGeminiFlashLiteLow" {
+function check_VertexGeminiFlashLiteLow() -> void {
     check_hello_world(
         google.VertexClient.new(
             model = "gemini-3.5-flash-lite",
@@ -82,7 +85,7 @@ test "VertexGeminiFlashLiteLow" {
     )
 }
 
-test "VertexLlama4ScoutRouter" {
+function check_VertexLlama4ScoutRouter() -> void {
     let token = baml.env.get("VERTEX_ACCESS_TOKEN")
         ?? google.internal.gcp_access_token(
             baml.env.get("GOOGLE_APPLICATION_CREDENTIALS_CONTENT"),
@@ -98,4 +101,25 @@ test "VertexLlama4ScoutRouter" {
             max_tokens = 256,
         ),
     )
+}
+
+testset "live" with testing.Sequential() {
+    test "BedrockHaiku45" {
+        check_BedrockHaiku45()
+    }
+    test "BedrockGptOss20b" {
+        check_BedrockGptOss20b()
+    }
+    test "AzureGpt5MiniLow" {
+        check_AzureGpt5MiniLow()
+    }
+    test "Gemini31FlashLiteMinimal" {
+        check_Gemini31FlashLiteMinimal()
+    }
+    test "VertexGeminiFlashLiteLow" {
+        check_VertexGeminiFlashLiteLow()
+    }
+    test "VertexLlama4ScoutRouter" {
+        check_VertexLlama4ScoutRouter()
+    }
 }
