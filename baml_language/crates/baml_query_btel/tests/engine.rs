@@ -13,9 +13,10 @@ fn rows(result: &baml_query_btel::QueryResult) -> Vec<Vec<Json>> {
     result.rows.clone()
 }
 
-/// Every completed invocation per function, once the process ended.
+/// Every completed invocation per function, once the process ended. A
+/// future's own node shares its function's name, so only functions count.
 const STATS_SQL: &str = "SELECT function_name, SUM(invocation_count) AS n FROM profiler
-     GROUP BY function_name ORDER BY n DESC";
+     WHERE node_type = 'function' GROUP BY function_name ORDER BY n DESC";
 
 /// Completed spans per name: retained calls and futures, while recording.
 const SPANS_SQL: &str =
@@ -107,7 +108,7 @@ async fn population_outcomes_include_timing_only_calls_and_recursive_errors() {
     let result = sql(
         &mut index,
         "SELECT function_name, SUM(invocation_count), SUM(return_count), SUM(error_count),
-           SUM(user_error_count), SUM(panic_error_count), SUM(cancel_error_count),
+           SUM(nonpanic_error_count), SUM(panic_error_count), SUM(future_cancel_count),
            SUM(missing_count)
          FROM profiler GROUP BY function_name ORDER BY function_name",
     );
@@ -621,4 +622,162 @@ async fn recorded_usage_panics_names_and_sysop_time_reach_the_tables() {
             vec![json!(1), json!(1), json!(0)],
         ]
     );
+}
+
+/// A future spawned behind a full `Limit` is scheduled when it is spawned and
+/// starts when it is admitted: its span and its profiler node count only the
+/// time it ran. A cancellation is the future's own outcome; a function it
+/// interrupted never finished, so it is missing.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn futures_record_when_they_were_scheduled_and_started() {
+    let project = tempfile::tempdir().unwrap();
+    let source = r##"
+        function work(ms: int) -> int {
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(ms));
+            ms
+        }
+
+        function main(n: int) -> int {
+            let one = baml.spawn.Limit.new(1);
+            let first = spawn with one { work(200) };
+            // Waits for `first` to finish.
+            let second = spawn with one { work(100) };
+            // Cancelled while it waits.
+            let token = baml.spawn.CancelToken.new();
+            let queued = spawn with one, token { work(1) };
+            let _ = token.cancel();
+            // Cancelled while it runs.
+            let stop = baml.spawn.CancelToken.new();
+            let running = spawn with stop { work(5000) };
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(50));
+            let _ = stop.cancel();
+            (await baml.future.all_settled([first, second, queued, running])).length()
+        }
+    "##;
+    let results = record_program(project.path(), source, &[], &[("main", 0)]).await;
+    assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(4))]);
+    let mut index = index(project.path());
+    let futures = sql(
+        &mut index,
+        "SELECT span_name, status, scheduled_time, start_time, end_time, duration
+         FROM spans WHERE span_type = 'future' AND span_name LIKE '.<lambda(main, %'
+         ORDER BY span_name",
+    )
+    .rows;
+    let [first, second, queued, running] = futures.as_slice() else {
+        panic!("four futures: {futures:?}");
+    };
+    let status: Vec<&Json> = futures.iter().map(|row| &row[1]).collect();
+    assert_eq!(
+        status,
+        [
+            &json!("return"),
+            &json!("return"),
+            &json!("cancel_error"),
+            &json!("cancel_error")
+        ]
+    );
+    let text = |row: &[Json], column: usize| row[column].as_str().unwrap().to_owned();
+    let nanos = |row: &[Json]| row[5].as_i64().unwrap();
+    // `second` was scheduled at once and started once `first` was done; its
+    // duration is its own 100 ms run, not the 200 ms wait before it.
+    assert!(text(second, 2) < text(second, 3));
+    assert!(text(second, 3) >= text(first, 4));
+    assert!(nanos(second) >= 100_000_000, "{second:?}");
+    assert!(nanos(second) < nanos(first), "{first:?} {second:?}");
+    // `queued` never ran: it starts when it was cancelled.
+    assert!(text(queued, 2) <= text(queued, 3));
+    assert!(nanos(queued) < nanos(first) / 2);
+    assert!(text(running, 2) <= text(running, 3));
+    // A function span has no scheduled time.
+    let functions = sql(
+        &mut index,
+        "SELECT count(*) FROM spans WHERE span_type = 'function' AND scheduled_time IS NOT NULL",
+    );
+    assert_eq!(functions.rows, vec![vec![json!(0)]]);
+
+    let nodes = sql(
+        &mut index,
+        "SELECT node_type, function_name, invocation_count, return_count, future_cancel_count,
+           error_count, missing_count
+         FROM profiler WHERE function_name LIKE '.<lambda(main, %' AND node_type = 'future'
+         ORDER BY function_name",
+    );
+    assert_eq!(
+        nodes.rows,
+        vec![
+            vec![
+                json!("future"),
+                json!(".<lambda(main, 0)>"),
+                json!(1),
+                json!(1),
+                json!(0),
+                json!(0),
+                json!(0)
+            ],
+            vec![
+                json!("future"),
+                json!(".<lambda(main, 1)>"),
+                json!(1),
+                json!(1),
+                json!(0),
+                json!(0),
+                json!(0)
+            ],
+            vec![
+                json!("future"),
+                json!(".<lambda(main, 2)>"),
+                json!(1),
+                json!(0),
+                json!(1),
+                json!(0),
+                json!(0)
+            ],
+            vec![
+                json!("future"),
+                json!(".<lambda(main, 3)>"),
+                json!(1),
+                json!(0),
+                json!(1),
+                json!(0),
+                json!(0)
+            ],
+        ]
+    );
+    // The `work` call the cancellation interrupted never finished.
+    let interrupted = sql(
+        &mut index,
+        "SELECT w.invocation_count, w.return_count, w.future_cancel_count, w.missing_count
+         FROM profiler w
+         JOIN profiler body ON body.profiler_node_id = w.parent_profiler_node_id
+         JOIN profiler future ON future.profiler_node_id = body.parent_profiler_node_id
+         WHERE w.function_name = 'user.work' AND future.function_name = '.<lambda(main, 3)>'",
+    );
+    assert_eq!(
+        interrupted.rows,
+        vec![vec![json!(1), json!(0), json!(0), json!(1)]]
+    );
+    // Only the run counts: `second`'s node holds its 100 ms, not the wait.
+    let times = sql(
+        &mut index,
+        "SELECT total_time FROM profiler
+         WHERE node_type = 'future' AND function_name IN ('.<lambda(main, 0)>', '.<lambda(main, 1)>')
+         ORDER BY function_name",
+    );
+    let first_ns = times.rows[0][0].as_i64().unwrap();
+    let second_ns = times.rows[1][0].as_i64().unwrap();
+    assert!(
+        second_ns >= 100_000_000 && second_ns < first_ns,
+        "{first_ns} vs {second_ns}"
+    );
+    // Every node adds up.
+    let unbalanced = sql(
+        &mut index,
+        "SELECT count(*) FROM profiler
+         WHERE invocation_count != return_count + error_count + future_cancel_count + missing_count
+            OR error_count != panic_error_count + nonpanic_error_count
+            OR (node_type = 'function' AND future_cancel_count != 0)
+            OR (node_type = 'future' AND missing_count != 0)",
+    );
+    assert_eq!(unbalanced.rows, vec![vec![json!(0)]]);
 }

@@ -1106,6 +1106,21 @@ impl<'t> Applier<'t> {
                                 )?
                                 .execute(params![self.rec, id(section.thread_id)])?;
                         }
+                        Some(Event::ThreadRunning(running)) => {
+                            // The first time it began running wins.
+                            self.tx
+                                .prepare_cached(
+                                    "INSERT INTO thread (rec, thread_id, defined, ran_ticks)
+                                     VALUES (?1, ?2, 0, ?3)
+                                     ON CONFLICT (rec, thread_id)
+                                     DO UPDATE SET ran_ticks = COALESCE(ran_ticks, excluded.ran_ticks)",
+                                )?
+                                .execute(params![
+                                    self.rec,
+                                    id(section.thread_id),
+                                    tick(running.at_ticks)
+                                ])?;
+                        }
                         Some(Event::ThreadCompletion(done)) => {
                             let completed = tick(done.completed_at_ticks);
                             // Keep a completion even before its definition.

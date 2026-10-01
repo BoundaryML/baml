@@ -151,8 +151,12 @@ pub struct ThreadTelemetry {
     id: TelemetryId,
     parent_id: Option<TelemetryId>,
     spawn_call_path: CallPathId,
+    /// When the thread was created: for a spawned future, when it was
+    /// scheduled, before it waited to be admitted.
     started_at: ClockInstant,
     started: bool,
+    /// A spawned future's body began running (`ThreadSpanRunning` written).
+    running: bool,
     completed: bool,
     name: Option<btel_records::ThreadName>,
 }
@@ -238,6 +242,7 @@ impl TelemetryState {
                 spawn_call_path: CallPathId::ROOT,
                 started_at,
                 started: false,
+                running: false,
                 completed: false,
                 name: None,
             },
@@ -295,6 +300,20 @@ impl TelemetryState {
     pub fn set_thread_name(&mut self, name: &str) {
         assert!(!self.thread.started, "telemetry thread already started");
         self.thread.name = Some(Arc::new(Box::from(name)));
+    }
+
+    /// A spawned future's body starts running now, after waiting to be
+    /// admitted. Returns that instant the first time; `None` after that and
+    /// for a root thread, which runs from the start.
+    pub fn mark_running(&mut self) -> Option<ClockInstant> {
+        if self.thread.running || self.thread.parent_id.is_none() {
+            return None;
+        }
+        self.thread.running = true;
+        self.start_thread();
+        let at = self.clock.read();
+        self.write_span(SpanRecord::ThreadSpanRunning { at });
+        Some(at)
     }
 
     pub fn start_thread(&mut self) {

@@ -145,14 +145,19 @@ pub const PROFILER: Relation = Relation {
             "NULL for a top-level call",
         ),
         col(
+            "node_type",
+            "text",
+            "future for a spawned future (its children are what it ran), else function",
+        ),
+        col(
             "function_name",
             "text",
-            "fully qualified, package included; NULL when not recorded",
+            "fully qualified, package included; for a future, the function it runs. NULL when not recorded",
         ),
         col(
             "total_time",
             "integer",
-            "nanoseconds in completed invocations; direct recursion counted once",
+            "nanoseconds in completed invocations; direct recursion counted once. A future's runs from when it began running, not from when it was scheduled",
         ),
         col(
             "self_time",
@@ -172,25 +177,29 @@ pub const PROFILER: Relation = Relation {
         col(
             "invocation_count",
             "integer",
-            "return_count + error_count + missing_count",
+            "return_count + error_count + future_cancel_count + missing_count",
         ),
         col("return_count", "integer", ""),
         col(
+            "future_cancel_count",
+            "integer",
+            "futures cancelled (or unwound by baml.sys.exit); 0 for a function",
+        ),
+        col(
             "error_count",
             "integer",
-            "panic_error_count + user_error_count + cancel_error_count",
+            "panic_error_count + nonpanic_error_count",
         ),
         col(
             "panic_error_count",
             "integer",
             "ended by a panic (cancellations excluded); NULL for recordings from before panics were recorded",
         ),
-        col("user_error_count", "integer", ""),
-        col("cancel_error_count", "integer", ""),
+        col("nonpanic_error_count", "integer", "ended by a thrown error"),
         col(
             "missing_count",
             "integer",
-            "started but never finished; 0 for an ended process",
+            "functions that never finished: interrupted by a cancellation or baml.sys.exit; 0 for a future",
         ),
     ],
     view: "
@@ -198,11 +207,12 @@ CREATE TEMP VIEW profiler AS
 SELECT __btel_hex(n.node_id) AS profiler_node_id,
   lower(hex(n.process_id)) AS process_id,
   __btel_hex(n.parent_node_id) AS parent_profiler_node_id,
+  n.node_type,
   n.function_name,
   n.total_ns AS total_time, n.self_ns AS self_time,
   n.io_total_ns AS io_total_time, n.io_self_ns AS io_self_time,
-  n.invocation_count, n.return_count, n.error_count, n.panic_error_count,
-  n.user_error_count, n.cancel_error_count, n.missing_count
+  n.invocation_count, n.return_count, n.future_cancel_count, n.error_count,
+  n.panic_error_count, n.nonpanic_error_count, n.missing_count
 FROM main.profile_node n",
 };
 
@@ -236,9 +246,18 @@ pub const SPANS: Relation = Relation {
             "the enclosing span; NULL for a root call",
         ),
         col("status", "text", SPAN_STATUS_DOC),
-        col("start_time", "text", "RFC 3339 UTC"),
+        col(
+            "scheduled_time",
+            "text",
+            "RFC 3339 UTC; futures only: when it was spawned, before it waited to start (a Limit). NULL for a function, and for futures recorded before this was recorded",
+        ),
+        col(
+            "start_time",
+            "text",
+            "RFC 3339 UTC; for a future, when it began running (when it was cancelled, if it never ran)",
+        ),
         col("end_time", "text", "RFC 3339 UTC"),
-        col("duration", "integer", "nanoseconds"),
+        col("duration", "integer", "nanoseconds, start_time to end_time"),
         value(
             "input_args",
             "captured arguments by name or position: input_args['customer'], input_args[0]; NULL for futures",
@@ -271,6 +290,7 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
   __btel_pubid(r.recording_id, c.parent_id) AS parent_span_id,
   CASE c.outcome WHEN 1 THEN 'return' WHEN 2 THEN IIF(c.panicked, 'panic_error', 'user_error')
     WHEN 3 THEN 'cancel_error' END AS status,
+  NULL AS scheduled_time,
   __btel_utc(c.entered_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
     e.multiplier, e.shift) AS start_time,
   __btel_utc(c.exited_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
@@ -311,12 +331,17 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
   __btel_pubid(r.recording_id, t.parent_id) AS parent_span_id,
   CASE t.outcome WHEN 1 THEN 'return' WHEN 2 THEN IIF(t.panicked, 'panic_error', 'user_error')
     WHEN 3 THEN 'cancel_error' END AS status,
-  __btel_utc(t.started_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
-    e.multiplier, e.shift) AS start_time,
+  -- A root future runs at once; a spawned one records when it began running
+  -- (format minor 6), and before that only when it was scheduled.
+  IIF(t.ran_ticks IS NOT NULL OR t.parent_id IS NULL,
+    __btel_utc(t.started_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
+      e.multiplier, e.shift), NULL) AS scheduled_time,
+  __btel_utc(COALESCE(t.ran_ticks, t.started_ticks), IIF(e.conflict = 0, e.utc_ticks, NULL),
+    e.utc_unix_ns, e.multiplier, e.shift) AS start_time,
   __btel_utc(t.completed_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
     e.multiplier, e.shift) AS end_time,
-  __btel_duration(t.started_ticks, t.completed_ticks, e.multiplier, e.shift, s.status,
-    IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS duration,
+  __btel_duration(COALESCE(t.ran_ticks, t.started_ticks), t.completed_ticks, e.multiplier,
+    e.shift, s.status, IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS duration,
   NULL AS input_args,
   NULL AS output_value,
   NULL AS error_value,
@@ -401,8 +426,8 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
   __btel_hex(COALESCE(sp.node_id, (SELECT ep.node_id FROM main.call_path ep
      WHERE ep.rec = t.rec AND ep.call_path_id = t.entry_call_path_id))) AS profiler_node_id,
   __btel_pubid(r.recording_id, t.parent_id) AS parent_span_id,
-  __btel_utc(t.started_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
-    e.multiplier, e.shift) AS start_time,
+  __btel_utc(COALESCE(t.ran_ticks, t.started_ticks), IIF(e.conflict = 0, e.utc_ticks, NULL),
+    e.utc_unix_ns, e.multiplier, e.shift) AS start_time,
   NULL AS input_args,
   NULL AS context_distinct_id,
   __btel_empty_map() AS context_metadata,

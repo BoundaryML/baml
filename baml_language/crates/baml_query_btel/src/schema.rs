@@ -15,7 +15,7 @@
 //!   visible; they never make a thread a root or a path a top-level path.
 
 /// Physical layout of these tables. Change on any DDL change.
-pub const SCHEMA_VERSION: i64 = 12;
+pub const SCHEMA_VERSION: i64 = 13;
 /// Interpretation of evidence into rows. Change when reconciliation changes
 /// meaning without a DDL change; either mismatch rebuilds the index.
 pub const NORMALIZATION_VERSION: i64 = 1;
@@ -165,9 +165,13 @@ CREATE TABLE thread (
   defined INTEGER NOT NULL,
   parent_id BLOB,
   spawn_call_path_id INTEGER,
+  -- When it was created: for a spawned future, when it was scheduled.
   started_ticks INTEGER,
   epoch_id BLOB,
   announced INTEGER NOT NULL DEFAULT 0,
+  -- When a spawned future's body began running (or it was cancelled before
+  -- it ran); NULL for a root thread and for recordings before format minor 6.
+  ran_ticks INTEGER,
   completed_ticks INTEGER,
   outcome INTEGER,
   -- 1 when a panic ended it (outcome is errored).
@@ -316,6 +320,8 @@ CREATE TABLE profile_node (
   process_id BLOB NOT NULL,
   node_id INTEGER NOT NULL,
   parent_node_id INTEGER,
+  -- 'future' for a spawned future's node (its spawn edge), else 'function'.
+  node_type TEXT NOT NULL,
   function_name TEXT,
   total_ns INTEGER,
   self_ns INTEGER,
@@ -323,10 +329,10 @@ CREATE TABLE profile_node (
   io_self_ns INTEGER,
   invocation_count INTEGER,
   return_count INTEGER,
+  future_cancel_count INTEGER,
   error_count INTEGER,
   panic_error_count INTEGER,
-  user_error_count INTEGER,
-  cancel_error_count INTEGER,
+  nonpanic_error_count INTEGER,
   missing_count INTEGER,
   PRIMARY KEY (process_id, node_id)
 ) STRICT, WITHOUT ROWID;
