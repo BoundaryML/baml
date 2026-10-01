@@ -306,7 +306,7 @@ impl TelemetryState {
     /// admitted. Returns that instant the first time; `None` after that and
     /// for a root thread, which runs from the start.
     pub fn mark_running(&mut self) -> Option<ClockInstant> {
-        if self.thread.running || self.thread.parent_id.is_none() {
+        if !self.is_waiting() {
             return None;
         }
         self.thread.running = true;
@@ -314,6 +314,11 @@ impl TelemetryState {
         let at = self.clock.read();
         self.write_span(SpanRecord::ThreadSpanRunning { at });
         Some(at)
+    }
+
+    /// A spawned future whose body has not begun running.
+    pub fn is_waiting(&self) -> bool {
+        self.thread.parent_id.is_some() && !self.thread.running
     }
 
     pub fn start_thread(&mut self) {
@@ -1011,13 +1016,19 @@ impl TelemetryState {
         }
         self.start_thread();
         self.thread.completed = true;
+        let completed_at = self.clock.read();
+        if self.is_waiting() {
+            // Cancelled before it ran: it starts and ends at the same instant.
+            self.thread.running = true;
+            self.write_span(SpanRecord::ThreadSpanRunning { at: completed_at });
+        }
         self.write_span(SpanRecord::ThreadSpanCompletion {
             id: self.thread.id,
             parent_id: self.thread.parent_id,
             spawn_call_path: self.thread.spawn_call_path,
             clock: Arc::clone(&self.clock),
             started_at: self.thread.started_at,
-            completed_at: self.clock.read(),
+            completed_at,
             outcome,
             name: self.thread.name.clone(),
         });
@@ -2657,10 +2668,12 @@ mod tests {
         child
             .span_records
             .retain(|record| !matches!(record, SpanRecord::ThreadSpanAnnouncement { .. }));
+        // It ended without running: it began running when it completed.
         assert!(
-            matches!(child.span_records(), [SpanRecord::ThreadSpanCompletion {
-            id, parent_id: Some(parent_id), spawn_call_path, clock, outcome: InvocationOutcome::Errored, ..
-        }] if *id == child_id && *parent_id == context.parent_id
+            matches!(child.span_records(), [SpanRecord::ThreadSpanRunning { at }, SpanRecord::ThreadSpanCompletion {
+            id, parent_id: Some(parent_id), spawn_call_path, clock, outcome: InvocationOutcome::Errored,
+            completed_at, ..
+        }] if *id == child_id && *parent_id == context.parent_id && at == completed_at
             && *spawn_call_path == context.spawn_call_path && Arc::ptr_eq(clock, &context.clock))
         );
     }

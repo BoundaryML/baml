@@ -698,9 +698,10 @@ async fn futures_record_when_they_were_scheduled_and_started() {
     assert!(text(second, 3) >= text(first, 4));
     assert!(nanos(second) >= 100_000_000, "{second:?}");
     assert!(nanos(second) < nanos(first), "{first:?} {second:?}");
-    // `queued` never ran: it starts when it was cancelled.
+    // `queued` never ran: it starts and ends when it was cancelled.
     assert!(text(queued, 2) <= text(queued, 3));
-    assert!(nanos(queued) < nanos(first) / 2);
+    assert_eq!(text(queued, 3), text(queued, 4));
+    assert_eq!(nanos(queued), 0);
     assert!(text(running, 2) <= text(running, 3));
     // A function span has no scheduled time.
     let functions = sql(

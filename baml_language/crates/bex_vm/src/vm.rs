@@ -7060,6 +7060,10 @@ impl BexVm {
         else {
             return;
         };
+        self.restamp_entry(at);
+    }
+
+    fn restamp_entry(&mut self, at: btel_types::ClockInstant) {
         for frame in &mut self.frames {
             if let Frame::Bytecode(frame) = frame
                 && let Some(telemetry) = &mut frame.telemetry
@@ -7080,8 +7084,12 @@ impl BexVm {
         if self.telemetry.is_none() {
             return;
         }
-        // A future cancelled before it ran starts and ends now.
-        self.restamp_entry_as_running();
+        // A future cancelled before it ran: its entry frame starts now, and
+        // `complete_thread` marks it running at the instant it completes.
+        if let Some(telemetry) = self.telemetry.as_ref().filter(|t| t.is_waiting()) {
+            let at = telemetry.clock().read();
+            self.restamp_entry(at);
+        }
         self.finish_pending_telemetry_wait();
         // Engine-side cancellation can terminate a suspended VM without an
         // exception value on its stack. Capture the same panic value that the
