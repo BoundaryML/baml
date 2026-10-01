@@ -82,6 +82,11 @@ skip-integ-tests = [  ]
 
 [dev-dependencies]
 baml_tests = { workspace = true }
+btel_bcs = { workspace = true }
+btel_recorder = { workspace = true }
+btel_snapshot = { workspace = true }
+prost = { workspace = true }
+wiremock = { workspace = true }
 btel_file = { workspace = true }
 insta = { workspace = true }
 tempfile = { workspace = true }

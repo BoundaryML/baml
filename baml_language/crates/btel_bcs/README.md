@@ -22,6 +22,18 @@ from the engine level: the former engine-level spelling `auto` is replaced by
 
 ## Transport
 
+Native BAML engines, `baml run`, `baml test`, the language server, and packed programs can select a data plane at runtime:
+
+```sh
+export BOUNDARY_URL=https://your-data-plane.example
+export BOUNDARY_API_KEY=your-api-key
+baml run main
+```
+
+For local development, `BOUNDARY_URL=http://127.0.0.1:8080` is supported, as are `localhost` and IPv6 loopback. Non-loopback endpoints require HTTPS. A base-path prefix is preserved. The base URL must not contain credentials, a query, or a fragment. The API key is sent as a bearer credential on prepare and heartbeat requests, never on presigned PUTs.
+
+`BOUNDARY_URL` opts into cloud delivery and requires a nonempty `BOUNDARY_API_KEY`. A key alone does not change the destination. Without a URL, each host keeps its existing local/no-recording behavior. `BAML_TELEMETRY=off` disables recording and ignores cloud configuration. Invalid enabled configuration fails engine construction without printing the URL or key. Explicit programmatic recording destinations take precedence over the environment. Packed programs read these variables when run, not when built. WASM does not use this native delivery path.
+
 Construct `DeliveryConfig::new(endpoint.parse()?)` with an explicit BCS endpoint.
 The config retains a parsed `reqwest::Url`; startup still enforces HTTPS and
 rejects credentials, queries, and fragments in that base URL.

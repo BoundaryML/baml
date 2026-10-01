@@ -1484,9 +1484,11 @@ impl BexEngine {
 
     /// Create a new engine with the given program.
     ///
-    /// Reads `BAML_TELEMETRY` once: `off`, `low`, `medium` (default), or `high`.
+    /// Reads `BAML_TELEMETRY`: `off`, `low`, `medium` (default), or `high`.
     /// Levels apply only to functions requesting auto (no explicit policy).
     /// Invalid values fail construction. `off` starts no telemetry workers or clock.
+    /// Native engines also select cloud recording when `BOUNDARY_URL` and
+    /// `BOUNDARY_API_KEY` are configured.
     ///
     /// The engine creates a unified heap containing compile-time objects
     /// (functions, classes, enums). Each function call creates a VM that
@@ -1571,6 +1573,11 @@ impl BexEngine {
     ) -> Result<Self, EngineError> {
         let auto_telemetry_level = btel_settings::mode::from_env()
             .map_err(|error| EngineError::Other(error.to_string()))?;
+        #[cfg(not(target_arch = "wasm32"))]
+        let recording = match recording {
+            None if auto_telemetry_level.is_some() => TelemetryRecording::from_env()?,
+            recording => recording,
+        };
         raise_fd_soft_limit();
         let argv: Arc<[String]> = Arc::from(argv);
         let process_euid = ProcessEuid::current();

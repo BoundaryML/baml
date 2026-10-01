@@ -18,12 +18,15 @@ pub(crate) fn create_engine(
         argv,
         Some(bex_project::runtime_compiler()),
         btel_settings::clock::DEFAULT_MODE,
-        TelemetryRecording::local_files(
-            project_root,
-            btel_settings::publisher::RecordingConfig::default(),
-        )
-        .with_host("baml")
-        .with_sources(sources),
+        TelemetryRecording::from_env()?
+            .unwrap_or_else(|| {
+                TelemetryRecording::local_files(
+                    project_root,
+                    btel_settings::publisher::RecordingConfig::default(),
+                )
+            })
+            .with_host("baml")
+            .with_sources(sources),
     )
 }
 

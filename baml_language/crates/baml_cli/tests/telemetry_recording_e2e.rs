@@ -16,7 +16,9 @@ fn cli(cwd: &Path, home: &Path) -> Command {
         .env("BAML_CLI_ALLOW_DIRECT", "1")
         .env("BAML_AGENT_SKILL_CHECK", "off")
         .env("BAML_CACHE_DIR", home.join("cache"))
-        .env("BAML_TELEMETRY", "medium");
+        .env("BAML_TELEMETRY", "medium")
+        .env_remove("BOUNDARY_URL")
+        .env_remove("BOUNDARY_API_KEY");
     command
 }
 
@@ -155,7 +157,9 @@ fn packed_modes_write_to_user_home_even_when_launched_in_another_project() {
             .current_dir(&launch)
             .env("HOME", &home)
             .env("USERPROFILE", &home)
-            .env("BAML_TELEMETRY", "medium");
+            .env("BAML_TELEMETRY", "medium")
+            .env_remove("BOUNDARY_URL")
+            .env_remove("BOUNDARY_API_KEY");
         if index == 1 {
             command.arg("main");
         }
@@ -167,4 +171,194 @@ fn packed_modes_write_to_user_home_even_when_launched_in_another_project() {
     assert!(!source.join(RECORDINGS).exists());
     assert!(!launch.join(RECORDINGS).exists());
     assert!(!temp.path().join(RECORDINGS).exists());
+}
+
+#[path = "../../btel_bcs/tests/support/mod.rs"]
+mod cloud_protocol;
+
+async fn cloud_server() -> wiremock::MockServer {
+    use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers::method};
+    let server = MockServer::start().await;
+    let base = server.uri();
+    Mock::given(method("POST"))
+        .respond_with(move |request: &Request| {
+            ResponseTemplate::new(200).set_body_json(cloud_protocol::response(request, &base, &[]))
+        })
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&server)
+        .await;
+    server
+}
+
+async fn assert_cloud_delivery(server: &wiremock::MockServer, host: &str, sources: bool) {
+    use prost::Message as _;
+    use sha2::{Digest, Sha256};
+    let requests = server.received_requests().await.unwrap();
+    let prepares: Vec<btel_bcs::wire::PrepareUploadsRequest> = requests
+        .iter()
+        .filter(|request| request.method == "POST")
+        .map(|request| {
+            assert!(request.url.path().starts_with("/tenant/v1/recordings/"));
+            assert!(request.url.path().ends_with("/uploads:prepare"));
+            assert_eq!(
+                request.headers.get("authorization").unwrap(),
+                "Bearer test-cloud-key"
+            );
+            serde_json::from_slice(&request.body).unwrap()
+        })
+        .collect();
+    assert!(!prepares.is_empty());
+    let mut recordings = 0;
+    let mut captured_sources = false;
+    let mut snapshots = 0;
+    for request in requests.iter().filter(|request| request.method == "PUT") {
+        assert!(request.headers.get("authorization").is_none());
+        let envelope =
+            btel_bcs::proto::CloudUploadEnvelope::decode(request.body.as_slice()).unwrap();
+        assert_eq!(envelope.format_version, 1);
+        if let Some(bytes) = envelope.recording_file {
+            let file = btel_recorder::proto::RecordingFile::decode(bytes.as_slice()).unwrap();
+            let header = file.header.unwrap();
+            assert_eq!(header.host.as_deref(), Some(host));
+            assert!(header.command.is_empty());
+            captured_sources |= header.source_cas_id.is_some();
+            let prepare = prepares
+                .iter()
+                .find(|prepare| {
+                    prepare.recording.recording_file_sequence == file.sequence
+                        && prepare.recording.recording_id == hex::encode(&header.recording_id)
+                })
+                .unwrap();
+            assert_eq!(prepare.recording.encoded_length, bytes.len() as u64);
+            assert_eq!(
+                prepare.recording.sha256,
+                hex::encode(Sha256::digest(&bytes))
+            );
+            recordings += 1;
+        }
+        for object in envelope.cas_objects {
+            assert_eq!(object.blob_sha256, Sha256::digest(&object.blob).to_vec());
+            let snapshot = btel_snapshot::decode_blob(&object.blob, &Default::default()).unwrap();
+            assert_eq!(snapshot.id.as_bytes().as_slice(), object.snapshot_id);
+            snapshots += 1;
+        }
+    }
+    assert_eq!(recordings, prepares.len());
+    if sources {
+        assert!(captured_sources);
+        assert!(snapshots > 0);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn cli_routes_recordings_and_sources_to_the_configured_data_plane() {
+    let server = cloud_server().await;
+    let base = format!("{}/tenant/", server.uri());
+    tokio::task::spawn_blocking(move || {
+        let temp = tempfile::tempdir().unwrap();
+        let project = temp.path().join("project");
+        std::fs::create_dir(&project).unwrap();
+        common::write_project(&project, "function main() -> int { 7 }\n");
+        let home = home(temp.path());
+        run(
+            cli(&project, &home)
+                .args(["run", "main"])
+                .env("BOUNDARY_URL", &base)
+                .env("BOUNDARY_API_KEY", "test-cloud-key"),
+            true,
+        );
+        assert!(!project.join(RECORDINGS).exists());
+        assert!(!home.join(RECORDINGS).exists());
+    })
+    .await
+    .unwrap();
+    assert_cloud_delivery(&server, "baml", true).await;
+}
+
+#[test]
+fn cloud_configuration_is_opt_in_and_telemetry_off_ignores_it() {
+    let temp = tempfile::tempdir().unwrap();
+    let project = temp.path().join("project");
+    std::fs::create_dir(&project).unwrap();
+    common::write_project(&project, "function main() -> int { 7 }\n");
+    let home = home(temp.path());
+    run(
+        cli(&project, &home)
+            .args(["run", "main"])
+            .env("BOUNDARY_API_KEY", "existing-key"),
+        true,
+    );
+    assert_recordings(&project, 1);
+    run(
+        cli(&project, &home)
+            .args(["run", "main"])
+            .env("BOUNDARY_URL", "invalid-private-url")
+            .env("BOUNDARY_API_KEY", "private-key")
+            .env("BAML_TELEMETRY", "off"),
+        true,
+    );
+    assert_recordings(&project, 1);
+    for key in [None, Some("private-key")] {
+        let mut command = cli(&project, &home);
+        command
+            .args(["run", "main"])
+            .env("BOUNDARY_URL", "invalid-private-url");
+        if let Some(key) = key {
+            command.env("BOUNDARY_API_KEY", key);
+        }
+        let output = command.output().unwrap();
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("invalid cloud telemetry configuration"),
+            "{stderr}"
+        );
+        assert!(!stderr.contains("invalid-private-url"));
+        assert!(!stderr.contains("private-key"));
+    }
+    assert_recordings(&project, 1);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn packed_programs_select_the_data_plane_at_run_time() {
+    let server = cloud_server().await;
+    let base = format!("{}/tenant/", server.uri());
+    tokio::task::spawn_blocking(move || {
+        let _built = common::ensure_built();
+        let temp = tempfile::tempdir().unwrap();
+        let project = temp.path().join("project");
+        std::fs::create_dir(&project).unwrap();
+        common::write_project(&project, "function main() -> int { 7 }\n");
+        let home = home(temp.path());
+        for (index, target) in [vec!["main"], vec!["-f", "main"]].iter().enumerate() {
+            let binary = temp.path().join(format!("cloud-packed-{index}"));
+            run(
+                cli(&project, &home)
+                    .args(["pack", "-o"])
+                    .arg(&binary)
+                    .args(target),
+                true,
+            );
+            let mut command = Command::new(&binary);
+            command
+                .current_dir(temp.path())
+                .env("HOME", &home)
+                .env("USERPROFILE", &home)
+                .env("BAML_TELEMETRY", "medium")
+                .env("BOUNDARY_URL", &base)
+                .env("BOUNDARY_API_KEY", "test-cloud-key");
+            if index == 1 {
+                command.arg("main");
+            }
+            run(&mut command, true);
+        }
+        assert!(!project.join(RECORDINGS).exists());
+        assert!(!home.join(RECORDINGS).exists());
+    })
+    .await
+    .unwrap();
+    assert_cloud_delivery(&server, "pack", false).await;
 }

@@ -111,7 +111,7 @@ impl DeliveryConfig {
             .ok_or(DeliveryError::InvalidConfig)
     }
 
-    fn validate(&self) -> Result<(), DeliveryError> {
+    pub(crate) fn validate(&self) -> Result<(), DeliveryError> {
         let base = &self.prepare_base_url;
         validate_url(base, self.allow_http).map_err(|_| DeliveryError::InvalidConfig)?;
         if base.query().is_some() || base.as_str().len() > 8192 {

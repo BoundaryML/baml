@@ -534,7 +534,8 @@ impl RuntimeRegistry {
 }
 
 /// `recording_root` is the project root whose `.baml/btel` receives this
-/// engine's telemetry recording (`BAML_TELEMETRY=off` disables it); `None`
+/// engine's local telemetry recording. `BOUNDARY_URL` selects cloud delivery;
+/// `BAML_TELEMETRY=off` disables recording. Without a root or cloud destination,
 /// records nothing.
 pub fn construct_engine_candidate(
     program: bex_vm_types::Program,
@@ -549,11 +550,15 @@ pub fn construct_engine_candidate(
             Vec::new(),
             Some(bex_project::runtime_compiler()),
             btel_settings::clock::DEFAULT_MODE,
-            bex_engine::TelemetryRecording::local_files(
-                root,
-                btel_settings::publisher::RecordingConfig::default(),
-            )
-            .with_host("lsp"),
+            bex_engine::TelemetryRecording::from_env()
+                .map_err(RuntimeError::Engine)?
+                .unwrap_or_else(|| {
+                    bex_engine::TelemetryRecording::local_files(
+                        root,
+                        btel_settings::publisher::RecordingConfig::default(),
+                    )
+                })
+                .with_host("lsp"),
         ),
         None => BexEngine::new_with_runtime_compiler(
             program,

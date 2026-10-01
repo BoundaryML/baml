@@ -5,6 +5,7 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
+mod configuration;
 pub mod delivery;
 pub mod liveness;
 mod metadata;

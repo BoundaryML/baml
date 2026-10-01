@@ -73,15 +73,28 @@ fn main() -> ExitCode {
         }
     };
 
+    let recording = match bex_engine::TelemetryRecording::from_env() {
+        Ok(recording) => recording
+            .unwrap_or_else(|| {
+                bex_engine::TelemetryRecording::user_files(
+                    btel_settings::publisher::RecordingConfig::default(),
+                )
+            })
+            .with_host("pack"),
+        Err(error) => {
+            print_error(error);
+            return ExitCode::FAILURE;
+        }
+    };
     match envelope.mode {
-        PackMode::Single => run_single(envelope),
-        PackMode::Subcommand => run_subcommand(envelope),
+        PackMode::Single => run_single(envelope, recording),
+        PackMode::Subcommand => run_subcommand(envelope, recording),
     }
 }
 
 /// Single-target dispatch: the binary acts like a one-shot CLI; flags on
 /// the binary bind directly to the target's parameters.
-fn run_single(envelope: PackEnvelope) -> ExitCode {
+fn run_single(envelope: PackEnvelope, recording: bex_engine::TelemetryRecording) -> ExitCode {
     debug_assert_eq!(
         envelope.targets.len(),
         1,
@@ -97,10 +110,7 @@ fn run_single(envelope: PackEnvelope) -> ExitCode {
         argv.clone(),
         Some(bex_project::runtime_compiler()),
         btel_settings::clock::DEFAULT_MODE,
-        bex_engine::TelemetryRecording::user_files(
-            btel_settings::publisher::RecordingConfig::default(),
-        )
-        .with_host("pack"),
+        recording,
     ) {
         Ok(e) => Arc::new(e),
         Err(e) => {
@@ -153,7 +163,7 @@ fn run_single(envelope: PackEnvelope) -> ExitCode {
 
 /// Multi-subcommand dispatch: the binary acts like a multi-tool, with
 /// one subcommand per packed function.
-fn run_subcommand(envelope: PackEnvelope) -> ExitCode {
+fn run_subcommand(envelope: PackEnvelope, recording: bex_engine::TelemetryRecording) -> ExitCode {
     // `argv[1]` is the user's subcommand token after parsing; rebuild
     // os-level argv first so we can pass the trailing tokens to clap.
     let mut os_args = std::env::args();
@@ -176,10 +186,7 @@ fn run_subcommand(envelope: PackEnvelope) -> ExitCode {
         bootstrap_argv,
         Some(bex_project::runtime_compiler()),
         btel_settings::clock::DEFAULT_MODE,
-        bex_engine::TelemetryRecording::user_files(
-            btel_settings::publisher::RecordingConfig::default(),
-        )
-        .with_host("pack"),
+        recording,
     ) {
         Ok(e) => e,
         Err(e) => {

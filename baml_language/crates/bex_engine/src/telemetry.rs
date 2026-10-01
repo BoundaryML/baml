@@ -77,6 +77,31 @@ impl RecordingDelivery {
 }
 
 impl TelemetryRecording {
+    /// Select the cloud destination configured by `BOUNDARY_URL` and
+    /// `BOUNDARY_API_KEY`. Returns `None` without a URL or when telemetry is
+    /// disabled, allowing the host to keep its usual local recording policy.
+    /// No worker starts until engine construction.
+    pub fn from_env() -> Result<Option<Self>, EngineError> {
+        if btel_settings::mode::from_env()
+            .map_err(|error| EngineError::Other(error.to_string()))?
+            .is_none()
+        {
+            return Ok(None);
+        }
+        let delivery = btel_bcs::delivery::DeliveryConfig::from_env().map_err(|_| {
+            EngineError::Other(
+                "invalid cloud telemetry configuration: BOUNDARY_URL must be HTTPS (or loopback HTTP), without credentials, query or fragment, and BOUNDARY_API_KEY must be nonempty".to_owned(),
+            )
+        })?;
+        Ok(delivery.map(|delivery| {
+            Self::cloud(
+                RecordingConfig::default(),
+                btel_bcs::CloudPublisherConfig::default(),
+                delivery,
+            )
+        }))
+    }
+
     /// Deliver through the proposed BCS prepare protocol and presigned PUTs.
     /// No worker starts until engine construction. There is no durable spool.
     pub fn cloud(
@@ -390,7 +415,8 @@ impl BexEngine {
     }
 
     /// Configure encoded-file delivery before initialization executes. Existing
-    /// constructors run the diagnostic processor without creating a recording.
+    /// constructors select cloud recording from the environment when configured.
+    /// An explicit recording takes precedence over the environment.
     /// `BAML_TELEMETRY=off` disables it even when a recording is supplied.
     pub fn new_with_telemetry_recording(
         program: bex_vm_types::Program,
