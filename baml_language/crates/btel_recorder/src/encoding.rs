@@ -95,6 +95,12 @@ impl EncodedSpans {
                 match other {
                     Event::ThreadAnnouncement(m) => leaf(&mut self.bytes, 1, &m),
                     Event::ThreadCompletion(m) => leaf(&mut self.bytes, 2, &m),
+                    Event::ThreadRunning(m) => {
+                        self.required_minor = self
+                            .required_minor
+                            .max(btel_settings::encoding::THREAD_RUNNING_FORMAT_MINOR);
+                        leaf(&mut self.bytes, 7, &m);
+                    }
                     Event::FunctionAnnouncement(m) => leaf(&mut self.bytes, 3, &m),
                     _ => unreachable!(),
                 }

@@ -29,3 +29,6 @@ pub const FORMAT_MINOR: u32 = 3;
 pub const CONTEXT_FORMAT_MINOR: u32 = 4;
 /// Structured logs share span sections and the existing CAS encoding.
 pub const LOG_FORMAT_MINOR: u32 = 5;
+/// Spawned futures record when their body began running (`ThreadRunning`),
+/// apart from when they were scheduled.
+pub const THREAD_RUNNING_FORMAT_MINOR: u32 = 6;

@@ -135,6 +135,10 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         clock: Arc<ClockEpoch>,
         name: Option<ThreadName>,
     },
+    /// A spawned future's body began running, after waiting to be admitted
+    /// (a `Limit`, the heap permit). Its announcement carries when it was
+    /// scheduled. A future cancelled before it ran records its cancellation.
+    ThreadSpanRunning { at: ClockInstant },
     /// Completes an identified thread node; clock ownership keeps it here.
     ThreadSpanCompletion {
         id: TelemetryId,
@@ -1210,6 +1214,7 @@ impl<C> SpanRecord<C, C> {
             | Self::ContextReferenced { .. }
             | Self::ThreadSpanAnnouncement { .. }
             | Self::ThreadSpanCompletion { .. }
+            | Self::ThreadSpanRunning { .. }
             | Self::ModelUsage(_)
             | Self::CallPathDefined { .. }
             | Self::ErrorRaiseOrigin { .. }

@@ -66,7 +66,8 @@ fn completion_sql(count: usize) -> String {
 /// Calling contexts of an ended process.
 const PROFILER_SQL: &str = "
 SELECT profiler_node_id, parent_profiler_node_id, function_name, invocation_count,
-  return_count, error_count, cancel_error_count, total_time, self_time, io_total_time
+  return_count, error_count, future_cancel_count + missing_count, total_time, self_time,
+  io_total_time, node_type
 FROM profiler WHERE process_id = ?1";
 
 /// Refused rather than queued: the UI's polling retries it.
@@ -544,7 +545,11 @@ fn call_paths(rows: &[Vec<Value>]) -> Vec<Value> {
                 "fqn": row[2],
                 "kind": null,
                 "origin": null,
-                "edgeKind": if row[1].is_null() { "root" } else { "call" },
+                "edgeKind": match (row[1].is_null(), row[10].as_str()) {
+                    (true, _) => "root",
+                    (false, Some("future")) => "spawn",
+                    (false, _) => "call",
+                },
                 "callSiteFile": null,
                 "callSiteLine": null,
                 "callSiteStart": null,
@@ -554,7 +559,7 @@ fn call_paths(rows: &[Vec<Value>]) -> Vec<Value> {
                 "callsSelected": null,
                 "completedCalls": row[3],
                 "completedOk": row[4],
-                "completedError": row[5].as_i64().zip(row[6].as_i64()).map(|(e, c)| e - c),
+                "completedError": row[5],
                 "completedCancelled": row[6],
                 "outcomeState": "recorded",
                 "inclusiveNs": row[7],

@@ -5224,6 +5224,8 @@ impl BexEngine {
                 }
                 return;
             };
+            // Admitted: the body runs from here, not from the spawn.
+            permit.vm.mark_telemetry_running();
 
             match engine
                 .run_thread_event_loop(return_type, None, permit, call_id, log_capture, true)

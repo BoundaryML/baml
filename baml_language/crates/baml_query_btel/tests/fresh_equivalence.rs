@@ -524,7 +524,7 @@ fn late_and_conflicting_evidence_indexes_identically() {
     assert!(
         profile
             .iter()
-            .any(|row| row[3] == Value::Text("user.Callee".into())),
+            .any(|row| row[4] == Value::Text("user.Callee".into())),
         "{profile:?}"
     );
     assert_same(&fresh, &incremental);
