@@ -210,12 +210,16 @@ impl LocalDelivery {
                 .unwrap_or_else(|_| {
                     Err(LocalDeliveryError("telemetry file writer panicked".into()))
                 });
+                // Report a failure before any sender can see it. A sender's
+                // error stops the publisher, and that fails the recording
+                // (unwinding the application's producers) unless `on_failure`
+                // already disabled it.
+                if let Err(error) = &outcome {
+                    on_failure(error);
+                }
                 let _ = worker_result.set(outcome);
                 // Retain the result before releasing queued files and blocked sends.
                 drop(receiver);
-                if let Some(Err(error)) = worker_result.get() {
-                    on_failure(error);
-                }
             })?;
         Ok(Self {
             directory,
