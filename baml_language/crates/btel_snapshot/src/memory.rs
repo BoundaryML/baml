@@ -36,7 +36,6 @@ impl Snapshot {
             string_hashes,
             bigint_hashes,
             type_leaves,
-            referenced,
             string_used,
             bigint_used,
             blobs,

@@ -339,15 +339,9 @@ struct Storage {
     /// The largest leaf as the leaf size measures it: a string's or byte
     /// array's length, a bigint's limb bytes.
     largest_leaf: usize,
-    /// Per object, string and bigint: whether a value has used it yet.
-    referenced: Vec<bool>,
+    /// Per string and bigint: whether a value has used it yet.
     string_used: Vec<bool>,
     bigint_used: Vec<bool>,
-    /// Whether a value or cell references some object a second time: the
-    /// capture shares or cycles through it. References to a declaration
-    /// through the values of its type never count; every blob carries the
-    /// declarations it names.
-    shared: bool,
     string_hashes: Vec<hash::Digest>,
     bigint_hashes: Vec<hash::Digest>,
     type_leaves: Vec<hash::TypeLeaf>,
@@ -386,15 +380,6 @@ impl Storage {
             .saturating_add(self.reuse_bytes as u64)
             .saturating_add(ROOT_BOUND)
     }
-    /// A value or cell references `id`.
-    fn reference(&mut self, id: ObjectId) {
-        let referenced = &mut self.referenced[id.0 as usize];
-        if *referenced {
-            self.shared = true;
-        } else {
-            *referenced = true;
-        }
-    }
     /// A value is written: note what it references and what its encoding
     /// adds beyond the leaf content already counted (its tag, numbers and
     /// lengths, as `encoding` writes them).
@@ -403,10 +388,7 @@ impl Storage {
             SnapshotValue::Null | SnapshotValue::OmittedArg => 1,
             SnapshotValue::Bool(_) | SnapshotValue::Truncated(_) => 2,
             SnapshotValue::Int(_) | SnapshotValue::Float(_) => 9,
-            SnapshotValue::Object(id) => {
-                self.reference(id);
-                5
-            }
+            SnapshotValue::Object(_) => 5,
             SnapshotValue::String(id) => {
                 self.use_string(id);
                 5
@@ -633,7 +615,6 @@ impl Snapshot {
             + std::mem::size_of_val(self.0.string_hashes.as_slice())
             + std::mem::size_of_val(self.0.bigint_hashes.as_slice())
             + std::mem::size_of_val(self.0.type_leaves.as_slice())
-            + std::mem::size_of_val(self.0.referenced.as_slice())
             + std::mem::size_of_val(self.0.string_used.as_slice())
             + std::mem::size_of_val(self.0.bigint_used.as_slice())
             + std::mem::size_of_val(self.0.blobs.as_slice())
@@ -705,10 +686,8 @@ impl SnapshotPool {
                 type_bytes: 0,
                 reuse_bytes: 0,
                 largest_leaf: 0,
-                referenced: Vec::new(),
                 string_used: Vec::new(),
                 bigint_used: Vec::new(),
-                shared: false,
                 string_hashes: Vec::new(),
                 bigint_hashes: Vec::new(),
                 type_leaves: Vec::new(),
@@ -865,13 +844,6 @@ impl Builder {
         grow(&mut s.objects, 1, s.owner.as_ref().unwrap(), &mut s.charged);
         s.objects.push(SnapshotObject::Truncated(Limit::Objects));
         s.unset_objects += 1;
-        grow(
-            &mut s.referenced,
-            1,
-            s.owner.as_ref().unwrap(),
-            &mut s.charged,
-        );
-        s.referenced.push(false);
         Some(id)
     }
     /// The object's encoding beyond its content, keys, types and values is
@@ -1167,10 +1139,8 @@ fn recycle(mut storage: Box<Storage>) {
         type_bytes,
         reuse_bytes,
         largest_leaf,
-        referenced,
         string_used,
         bigint_used,
-        shared,
         string_hashes,
         bigint_hashes,
         type_leaves,
@@ -1198,10 +1168,8 @@ fn recycle(mut storage: Box<Storage>) {
     *type_bytes = 0;
     *reuse_bytes = 0;
     *largest_leaf = 0;
-    referenced.clear();
     string_used.clear();
     bigint_used.clear();
-    *shared = false;
     string_hashes.clear();
     bigint_hashes.clear();
     type_leaves.clear();

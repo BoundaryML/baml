@@ -10,34 +10,39 @@
 //!
 //! # Where a capture is cut
 //!
-//! The blob for a value is what capturing that value alone would produce, so
-//! whether a value gets a blob of its own depends only on what it reaches:
+//! The blob for a value is what capturing that value alone would produce, and
+//! no object is stored in two blobs of one capture:
 //!
 //! - Objects that reach each other (a cycle) are one unit and never separate.
-//! - A unit's weight is the encoded size of its objects plus the weight of
-//!   every unit they reference, counted once per reference, or
-//!   [`REFERENCE_WEIGHT`] for a referenced unit that is cut. Counting per
-//!   reference keeps the weight a function of the value alone.
-//! - A unit is cut when its weight reaches the policy's unit size. A string,
-//!   bigint or `uint8array` is cut when its content reaches the leaf size; a
-//!   `uint8array` never by its weight.
+//! - A unit's region is what it reaches without entering a cut unit, and its
+//!   weight is the encoded size of that region, each object once, plus
+//!   [`REFERENCE_WEIGHT`] for every reference to a cut unit.
+//! - A unit is closed when no object of its region, other than its own, is
+//!   referenced from outside the region. Only a closed unit is cut, and it is
+//!   when its weight reaches the policy's unit size. Its blob is its region,
+//!   and no other blob holds any of it.
+//! - A string, bigint or `uint8array` is cut when its content reaches the
+//!   leaf size; a `uint8array` never by its weight.
 //! - Declarations are never cut, and an instance or enum value naming one adds
 //!   nothing to the weight: every blob carries the declarations it names.
 //!
-//! Finding the units costs a pass over every object, which most captures do
-//! not need: without a shared object every unit's weight is at most the
-//! capture's encoded size, so a capture whose size bound is under the unit
-//! size and whose largest leaf is under the leaf size is one blob without
-//! the pass. The result is the same either way.
+//! So a value that shares an object with the rest of the capture stays in
+//! the blob of whatever holds both, however large the value is: sharing costs
+//! a cut, never a copy. Whether a value is cut therefore depends on the
+//! capture. What its blob holds does not: every reference to the inside of a
+//! cut unit comes from its own region, in any capture that reaches it.
 //!
-//! A blob holds its unit and everything that unit reaches without crossing a
-//! cut. Objects below the threshold that several blobs reach are copied into
-//! each. A cut cycle's blob starts at the member with the smallest
+//! Finding the units costs a pass over every object, which most captures do
+//! not need: with nothing cut, no unit weighs more than the capture encodes
+//! to, so a capture whose size bound is under the unit size and whose largest
+//! leaf is under the leaf size is one blob without the pass.
+//!
+//! A cut cycle's blob starts at the member with the smallest
 //! [`HashDomain::CycleRoot`] digest, so captures that reach the cycle from
 //! outside produce the same blob, unless several members share that digest:
 //! the first visited then starts it, and the blob can differ between
-//! captures. Other blobs name its other members by blob and local number. A capture's own root blob always starts at the
-//! captured value.
+//! captures. Other blobs name its other members by blob and local number. A
+//! capture's own root blob always starts at the captured value.
 use rustc_hash::FxHashMap;
 
 use super::{
@@ -130,7 +135,7 @@ impl Shaper {
                 unit_bytes,
                 leaf_bytes,
             } => {
-                if s.shared || bound >= unit_bytes || s.largest_leaf as u64 >= leaf_bytes {
+                if bound >= unit_bytes || s.largest_leaf as u64 >= leaf_bytes {
                     self.cut(s, root, unit_bytes, leaf_bytes);
                 } else {
                     #[cfg(debug_assertions)]
@@ -148,6 +153,24 @@ impl Shaper {
             s.blobs.len() > 1 || s.blobs[0].encoded_len <= bound,
             "a capture's size bound covers its blob"
         );
+        #[cfg(debug_assertions)]
+        Self::check_nothing_copied(s);
+    }
+
+    /// Only closed units are cut, so no object is in two blobs. Declarations
+    /// are, in every blob that names them.
+    #[cfg(debug_assertions)]
+    fn check_nothing_copied(s: &Storage) {
+        let mut held = vec![false; s.objects.len()];
+        for member in &s.members {
+            let object = &s.objects[member.0 as usize];
+            if !matches!(object, SnapshotObject::Declaration { .. }) {
+                assert!(
+                    !std::mem::replace(&mut held[member.0 as usize], true),
+                    "an object is stored in one blob of its capture"
+                );
+            }
+        }
     }
 
     /// The pass a capture under both thresholds skips would have cut nothing.
@@ -403,14 +426,50 @@ impl Resolver for Unresolved {
 /// Objects that reach each other, found together.
 #[derive(Clone, Debug)]
 struct Unit {
-    /// Range of [`Cuts::members`].
+    /// Range of [`Cuts::members`]. The first visited is the last listed.
     members: std::ops::Range<usize>,
+    /// The encoded size of its region.
     weight: u64,
     cut: bool,
+    /// What the uncut units discovered from its objects bring to its region.
+    inner: Bounds,
 }
 
 const UNVISITED: u32 = u32::MAX;
 const NO_UNIT: u32 = u32::MAX;
+const NO_PARENT: u32 = u32::MAX;
+/// As the last referrer: the capture's root references the object.
+const OUTSIDE: u32 = u32::MAX;
+
+/// The discovery numbers that decide whether part of a capture is closed.
+#[derive(Clone, Copy, Debug)]
+struct Bounds {
+    /// The least and the greatest number of an object that references one of
+    /// the part's objects, [`OUTSIDE`] as the greatest when the root does.
+    first_referrer: u32,
+    last_referrer: u32,
+    /// The least number of an uncut object the part references.
+    first_target: u32,
+}
+impl Bounds {
+    const NONE: Self = Self {
+        first_referrer: u32::MAX,
+        last_referrer: 0,
+        first_target: u32::MAX,
+    };
+
+    fn join(&mut self, other: Self) {
+        self.first_referrer = self.first_referrer.min(other.first_referrer);
+        self.last_referrer = self.last_referrer.max(other.last_referrer);
+        self.first_target = self.first_target.min(other.first_target);
+    }
+
+    /// Whether every referrer and target was discovered by the visit that
+    /// took the numbers `first..=last`.
+    fn within(self, first: u32, last: u32) -> bool {
+        self.first_referrer >= first && self.last_referrer <= last && self.first_target >= first
+    }
+}
 
 /// One object's state during the search, kept together for locality.
 #[derive(Clone, Copy)]
@@ -420,26 +479,44 @@ struct Node {
     lowlink: u32,
     /// Its unit, [`NO_UNIT`] until that completes.
     unit: u32,
-    /// Its encoded size plus what its completed references weigh.
-    weight: u64,
+    /// The last number its visit gave out: it discovered `index..=last`.
+    last: u32,
+    /// The object whose reference discovered it, [`NO_PARENT`] when the
+    /// capture's root did.
+    parent: u32,
+    /// The least and the greatest number of an object that references it,
+    /// [`OUTSIDE`] as the greatest when the root does.
+    first_referrer: u32,
+    last_referrer: u32,
     /// Its range of [`Cuts::edges`].
     first_edge: u32,
     edge_count: u32,
+    /// Its encoded size.
+    size: u64,
 }
 const FRESH: Node = Node {
     index: UNVISITED,
     lowlink: 0,
     unit: NO_UNIT,
-    weight: 0,
+    last: 0,
+    parent: NO_PARENT,
+    first_referrer: u32::MAX,
+    last_referrer: 0,
     first_edge: 0,
     edge_count: 0,
+    size: 0,
 };
 
 /// Which values of one capture get blobs of their own.
 ///
 /// One depth-first pass (Tarjan's algorithm, without recursion) finds the
-/// units in an order where each follows every unit it references, and adds
-/// up weights as units complete.
+/// units in an order where each follows every unit it references, and numbers
+/// the objects in the order it discovers them. An object's visit discovers a
+/// run of numbers, and a closed unit's region is exactly what its first
+/// object's visit discovered outside cut units. So a unit is closed when
+/// nothing in that run references an uncut object numbered before it, and
+/// nothing numbered outside it references an object of the run. Both need
+/// every reference, so the cuts are decided once the pass is done.
 #[derive(Default)]
 struct Cuts {
     nodes: Vec<Node>,
@@ -487,14 +564,26 @@ impl Cuts {
         let mut visited = 0;
         for at in 0..roots {
             let start = self.edges[at];
-            if self.nodes[start.0 as usize].index == UNVISITED {
-                self.search(s, start, &mut visited, unit_bytes, leaf_bytes);
+            let node = &mut self.nodes[start.0 as usize];
+            if node.index == UNVISITED {
+                self.search(s, start, &mut visited, leaf_bytes);
+            } else {
+                node.last_referrer = OUTSIDE;
             }
         }
+        self.decide(s, unit_bytes, leaf_bytes);
     }
 
     /// First visit: number the object, measure it and list its references.
-    fn enter(&mut self, s: &Storage, id: ObjectId, visited: &mut u32, leaf_bytes: u64) {
+    /// `from` references it, or the capture's root does.
+    fn enter(
+        &mut self,
+        s: &Storage,
+        id: ObjectId,
+        from: Option<ObjectId>,
+        visited: &mut u32,
+        leaf_bytes: u64,
+    ) {
         let at = id.0 as usize;
         let start = self.edges.len();
         let mut length = Length::default();
@@ -506,42 +595,37 @@ impl Cuts {
             bigints: &mut self.bigints,
         };
         infallible(walk::object(&mut length, &mut edges, s, &s.objects[at]));
+        let (parent, first_referrer, last_referrer) = match from {
+            Some(parent) => {
+                let referrer = self.nodes[parent.0 as usize].index;
+                (parent.0, referrer, referrer)
+            }
+            None => (NO_PARENT, u32::MAX, OUTSIDE),
+        };
         self.nodes[at] = Node {
             index: *visited,
             lowlink: *visited,
             unit: NO_UNIT,
-            weight: length.0,
+            last: *visited,
+            parent,
+            first_referrer,
+            last_referrer,
             first_edge: u32::try_from(start).expect("bounded references"),
             edge_count: u32::try_from(self.edges.len() - start).expect("bounded references"),
+            size: length.0,
         };
         *visited += 1;
         self.stack.push(id);
         self.path.push((id, 0));
     }
 
-    /// What a reference to a completed unit adds to the referrer's weight.
-    fn reference_weight(&self, unit: u32) -> u64 {
-        let unit = &self.units[unit as usize];
-        if unit.cut {
-            REFERENCE_WEIGHT
-        } else {
-            unit.weight
-        }
-    }
-
-    fn search(
-        &mut self,
-        s: &Storage,
-        start: ObjectId,
-        visited: &mut u32,
-        unit_bytes: u64,
-        leaf_bytes: u64,
-    ) {
-        self.enter(s, start, visited, leaf_bytes);
+    fn search(&mut self, s: &Storage, start: ObjectId, visited: &mut u32, leaf_bytes: u64) {
+        self.enter(s, start, None, visited, leaf_bytes);
         while let Some(top) = self.path.last_mut() {
             let (id, next) = *top;
             let at = id.0 as usize;
             let Node {
+                index,
                 first_edge,
                 edge_count,
                 ..
@@ -549,73 +633,123 @@ impl Cuts {
             if next < edge_count {
                 top.1 = next + 1;
                 let target = self.edges[(first_edge + next) as usize];
-                let to = self.nodes[target.0 as usize];
+                let to = &mut self.nodes[target.0 as usize];
                 if to.index == UNVISITED {
-                    self.enter(s, target, visited, leaf_bytes);
-                } else if to.unit == NO_UNIT {
+                    self.enter(s, target, Some(id), visited, leaf_bytes);
+                    continue;
+                }
+                to.first_referrer = to.first_referrer.min(index);
+                to.last_referrer = to.last_referrer.max(index);
+                if to.unit == NO_UNIT {
                     // Still on the stack: part of this object's unit.
+                    let reached = to.index;
                     let node = &mut self.nodes[at];
-                    node.lowlink = node.lowlink.min(to.index);
-                } else {
-                    let weight = self.reference_weight(to.unit);
-                    let node = &mut self.nodes[at];
-                    node.weight = node.weight.saturating_add(weight);
+                    node.lowlink = node.lowlink.min(reached);
                 }
                 continue;
             }
             self.path.pop();
-            if self.nodes[at].lowlink == self.nodes[at].index {
-                self.complete(s, id, unit_bytes, leaf_bytes);
+            self.nodes[at].last = *visited - 1;
+            if self.nodes[at].lowlink == index {
+                self.complete(id);
             }
             if let Some((parent, _)) = self.path.last() {
-                let parent = parent.0 as usize;
-                let child = self.nodes[at];
-                let node = &mut self.nodes[parent];
-                node.lowlink = node.lowlink.min(child.lowlink);
-                if child.unit != NO_UNIT {
-                    let weight = self.reference_weight(child.unit);
-                    self.nodes[parent].weight = self.nodes[parent].weight.saturating_add(weight);
-                }
+                let lowlink = self.nodes[at].lowlink;
+                let node = &mut self.nodes[parent.0 as usize];
+                node.lowlink = node.lowlink.min(lowlink);
             }
         }
     }
 
     /// `first` was the first of its unit to be visited, and the unit's other
     /// objects are above it on the stack.
-    fn complete(&mut self, s: &Storage, first: ObjectId, unit_bytes: u64, leaf_bytes: u64) {
+    fn complete(&mut self, first: ObjectId) {
         let unit = u32::try_from(self.units.len()).expect("bounded objects");
         let start = self.members.len();
-        let mut weight = 0_u64;
         loop {
             let member = self
                 .stack
                 .pop()
                 .unwrap_or_else(|| unreachable!("a unit's first object is on the stack"));
-            let node = &mut self.nodes[member.0 as usize];
-            node.unit = unit;
+            self.nodes[member.0 as usize].unit = unit;
             self.members.push(member);
-            weight = weight.saturating_add(node.weight);
             if member == first {
                 break;
             }
         }
-        let cut = match &s.objects[first.0 as usize] {
-            SnapshotObject::Declaration { .. } => false,
-            SnapshotObject::Uint8Array { data, .. } => data.len() as u64 >= leaf_bytes,
-            SnapshotObject::List { .. }
-            | SnapshotObject::Map { .. }
-            | SnapshotObject::Instance { .. }
-            | SnapshotObject::Cell(_)
-            | SnapshotObject::NonSnapshotableValue {}
-            | SnapshotObject::Descriptive { .. }
-            | SnapshotObject::Media { .. }
-            | SnapshotObject::Truncated(_) => weight >= unit_bytes,
-        };
         self.units.push(Unit {
             members: start..self.members.len(),
-            weight,
-            cut,
+            weight: 0,
+            cut: false,
+            inner: Bounds::NONE,
         });
+    }
+
+    /// Weigh every unit and cut the closed ones that reach the unit size. In
+    /// the order the units completed, each follows the units it references,
+    /// and an uncut one hands its region to the unit that discovered it.
+    fn decide(&mut self, s: &Storage, unit_bytes: u64, leaf_bytes: u64) {
+        for unit in 0..self.units.len() {
+            let Unit {
+                members,
+                mut weight,
+                inner,
+                cut: _,
+            } = self.units[unit].clone();
+            let first = self.members[members.end - 1];
+            let Node {
+                index,
+                last,
+                parent,
+                ..
+            } = self.nodes[first.0 as usize];
+            // The unit's own objects may be referenced from anywhere. What
+            // references them matters to the region that holds the unit.
+            let mut region = inner;
+            let mut own = Bounds::NONE;
+            for member in &self.members[members] {
+                let node = self.nodes[member.0 as usize];
+                weight = weight.saturating_add(node.size);
+                own.first_referrer = own.first_referrer.min(node.first_referrer);
+                own.last_referrer = own.last_referrer.max(node.last_referrer);
+                let edges = node.first_edge as usize..(node.first_edge + node.edge_count) as usize;
+                for target in &self.edges[edges] {
+                    let to = self.nodes[target.0 as usize];
+                    if to.unit as usize == unit {
+                        continue;
+                    }
+                    if self.units[to.unit as usize].cut {
+                        weight = weight.saturating_add(REFERENCE_WEIGHT);
+                    } else {
+                        region.first_target = region.first_target.min(to.index);
+                    }
+                }
+            }
+            let closed = region.within(index, last);
+            let cut = closed
+                && match &s.objects[first.0 as usize] {
+                    SnapshotObject::Declaration { .. } => false,
+                    SnapshotObject::Uint8Array { data, .. } => data.len() as u64 >= leaf_bytes,
+                    SnapshotObject::List { .. }
+                    | SnapshotObject::Map { .. }
+                    | SnapshotObject::Instance { .. }
+                    | SnapshotObject::Cell(_)
+                    | SnapshotObject::NonSnapshotableValue {}
+                    | SnapshotObject::Descriptive { .. }
+                    | SnapshotObject::Media { .. }
+                    | SnapshotObject::Truncated(_) => weight >= unit_bytes,
+                };
+            self.units[unit].weight = weight;
+            self.units[unit].cut = cut;
+            if !cut && parent != NO_PARENT {
+                let holder = self.nodes[parent as usize].unit as usize;
+                debug_assert!(holder > unit, "a unit completes before what discovered it");
+                region.join(own);
+                let holder = &mut self.units[holder];
+                holder.weight = holder.weight.saturating_add(weight);
+                holder.inner.join(region);
+            }
+        }
     }
 
     /// The object a cut unit's blob starts at: the one with the smallest

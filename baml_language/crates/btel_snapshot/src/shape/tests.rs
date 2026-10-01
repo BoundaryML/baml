@@ -322,11 +322,11 @@ impl std::io::Write for Counter {
 }
 
 #[test]
-fn values_reached_many_ways_are_stored_once_per_blob() {
+fn a_value_reached_many_ways_weighs_once() {
     // Each level holds the next twice: forty levels reach the last one along
-    // 2^40 paths.
+    // 2^40 paths, and together they are a few hundred bytes.
     let levels = 40;
-    let snapshot = capture(&mut split(1024, 4096), |b| {
+    let snapshot = capture(&mut split(4096, 4096), |b| {
         let mut next = text(b, &"leaf".repeat(25));
         for _ in 0..levels {
             next = list(b, &[next, next]);
@@ -334,11 +334,154 @@ fn values_reached_many_ways_are_stored_once_per_blob() {
         next
     });
     let blobs = written(&snapshot);
-    let total: usize = blobs.iter().map(|(encoded, _)| encoded.len()).sum();
-    let objects: usize = blobs.iter().map(|(_, blob)| blob.objects.len()).sum();
-    assert_eq!(objects, levels, "each level is stored in one blob");
-    assert!(blobs.len() > 1 && blobs.len() <= levels);
-    assert!(total < 8 << 10, "{total} bytes");
+    assert_eq!(blobs.len(), 1);
+    assert_eq!(blobs[0].1.objects.len(), levels);
+    assert!(blobs[0].0.len() < 4096, "{} bytes", blobs[0].0.len());
+}
+
+/// A map large enough for a blob of its own, holding `extra`.
+fn parcel(b: &mut Builder, letter: &str, extra: V) -> V {
+    let body = text(b, &letter.repeat(300));
+    map(b, &[("body", body), ("extra", extra)])
+}
+
+#[test]
+fn a_value_that_shares_a_part_with_the_capture_is_not_cut() {
+    let mut shaper = split(256, 1024);
+    let parcels = |shaper: &mut Shaper, shared: Option<usize>| {
+        written(&capture(shaper, |b| {
+            let extra = shared.map(|length| {
+                let note = text(b, &"n".repeat(length));
+                list(b, &[note])
+            });
+            let parcels = ["a", "b", "c"].map(|letter| parcel(b, letter, extra.unwrap_or(V::Null)));
+            list(b, &parcels)
+        }))
+    };
+    // Alone, each parcel is cut.
+    assert_eq!(parcels(&mut shaper, None).len(), 4);
+
+    // A note they all hold belongs to no one of them, so they stay with the
+    // list that holds them all, and the note is stored once.
+    let together = parcels(&mut shaper, Some(8));
+    assert_eq!(together.len(), 1);
+    assert_eq!(together[0].1.objects.len(), 5);
+
+    // A note large enough for a blob of its own leaves each parcel closed.
+    let apart = parcels(&mut shaper, Some(300));
+    assert_eq!(apart.len(), 5);
+    let (note, root) = (&apart[0].1, &apart[4].1);
+    assert_eq!(root.children.len(), 3);
+    for (_, parcel) in &apart[1..4] {
+        assert_eq!(parcel.children, [note.id]);
+        assert_eq!(parcel.objects.len(), 1);
+    }
+}
+
+#[test]
+fn what_the_root_names_twice_is_cut_and_what_it_names_inside_a_value_is_not() {
+    let mut shaper = split(256, 1024);
+    let pool = SnapshotPool::new(1, Limits::default());
+    let mut arguments = |inside: bool| {
+        let mut b = pool.try_acquire().unwrap();
+        let note = text(&mut b, "note");
+        let part = list(&mut b, &[note]);
+        let parcel = parcel(&mut b, "a", part);
+        let start = b.value_start();
+        for value in [parcel, if inside { part } else { parcel }] {
+            b.push_value(value);
+        }
+        let slots = b.value_range(start);
+        written(&b.finish_args(2, slots, &mut shaper))
+    };
+    let twice = arguments(false);
+    assert_eq!(twice.len(), 2);
+    let DecodedRoot::FunctionArgs { slots, .. } = &twice[1].1.root else {
+        panic!("expected arguments")
+    };
+    assert_eq!(slots[0], DecodedValue::External(crate::ChildIndex(0)));
+    assert_eq!(slots[1], slots[0]);
+
+    let inside = arguments(true);
+    assert_eq!(inside.len(), 1);
+    assert_eq!(inside[0].1.objects.len(), 2);
+}
+
+/// Lists that hold a label and each other as `links` says, the capture
+/// starting at `root`.
+fn graph(shaper: &mut Shaper, labels: &[String], links: &[Vec<usize>], root: usize) -> Snapshot {
+    capture(shaper, |b| {
+        let ids: Vec<_> = labels.iter().map(|_| b.reserve_object().unwrap()).collect();
+        for (at, label) in labels.iter().enumerate() {
+            let mut items = vec![text(b, label)];
+            items.extend(links[at].iter().map(|to| V::Object(ids[*to])));
+            fill(b, ids[at], &items);
+        }
+        V::Object(ids[root])
+    })
+}
+
+#[test]
+fn every_blob_is_what_capturing_its_value_alone_produces_and_holds_nothing_another_does() {
+    // A small generator: the test must not depend on what a library draws.
+    let mut state = 0x9E37_79B9_7F4A_7C15_u64;
+    let mut draw = |below: usize| {
+        state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        usize::try_from(state >> 33).unwrap() % below
+    };
+    let mut shaper = split(200, 4096);
+    let mut cut = 0;
+    for _ in 0..200 {
+        let count = 2 + draw(40);
+        let labels: Vec<String> = (0..count)
+            .map(|at| format!("value {at:>3} {}", "x".repeat(draw(120))))
+            .collect();
+        // Mostly later values, so that most graphs are deep, with a few
+        // references back for sharing and cycles.
+        let links: Vec<Vec<usize>> = (0..count)
+            .map(|at| {
+                (0..draw(4))
+                    .map(|_| {
+                        if draw(10) == 0 {
+                            draw(count)
+                        } else {
+                            (at + 1 + draw(3)).min(count - 1)
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
+        let mut reached = vec![false; count];
+        let mut pending = vec![0];
+        while let Some(at) = pending.pop() {
+            if !std::mem::replace(&mut reached[at], true) {
+                pending.extend(&links[at]);
+            }
+        }
+        let alone: Vec<Vec<u8>> = (0..count)
+            .map(|root| {
+                let blobs = written(&graph(&mut shaper, &labels, &links, root));
+                blobs.into_iter().next_back().unwrap().0
+            })
+            .collect();
+        let blobs = written(&graph(&mut shaper, &labels, &links, 0));
+        let objects: usize = blobs.iter().map(|(_, blob)| blob.objects.len()).sum();
+        assert_eq!(
+            objects,
+            reached.iter().filter(|reached| **reached).count(),
+            "each value is in one blob: {links:?}"
+        );
+        for (encoded, _) in &blobs {
+            assert!(
+                alone.contains(encoded),
+                "a blob no value produces: {links:?}"
+            );
+        }
+        cut += blobs.len() - 1;
+    }
+    assert!(cut > 100, "the graphs are cut often enough to test: {cut}");
 }
 
 #[test]

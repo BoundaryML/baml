@@ -156,6 +156,14 @@ fn workloads() -> Vec<(&'static str, Workload)> {
             }),
         ),
         (
+            "records-2000",
+            Box::new(|b: &mut Builder| {
+                let declaration = declaration(b);
+                let items: Vec<_> = (0..2000).map(|seed| record(b, declaration, seed)).collect();
+                list(b, &items)
+            }),
+        ),
+        (
             "payload-64k",
             Box::new(move |b: &mut Builder| text(b, &payload)),
         ),
@@ -187,6 +195,18 @@ fn workloads() -> Vec<(&'static str, Workload)> {
             Box::new(|b: &mut Builder| {
                 let mut next = V::Int(0);
                 for _ in 0..10_000 {
+                    let id = b.reserve_object().unwrap();
+                    b.set_object(id, O::Cell(next));
+                    next = V::Object(id);
+                }
+                next
+            }),
+        ),
+        (
+            "cells-100k",
+            Box::new(|b: &mut Builder| {
+                let mut next = V::Int(0);
+                for _ in 0..100_000 {
                     let id = b.reserve_object().unwrap();
                     b.set_object(id, O::Cell(next));
                     next = V::Object(id);

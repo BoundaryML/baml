@@ -19,7 +19,8 @@ pub const COPY_HASH_BATCH_BYTES: usize = 16 * 1024;
 /// a blob can be read: changing them costs dedup against blobs cut the old
 /// way, not a format bump.
 ///
-/// A value whose encoded weight reaches this gets a blob of its own.
+/// A value whose encoded size reaches this gets a blob of its own, unless
+/// the rest of the capture references a part of it.
 pub const SPLIT_UNIT_BYTES: u64 = 64 * 1024;
 /// A string or bigint value, or a `uint8array`, whose content (a bigint's
 /// encoded limbs) reaches this gets a blob of its own, unless it is the
