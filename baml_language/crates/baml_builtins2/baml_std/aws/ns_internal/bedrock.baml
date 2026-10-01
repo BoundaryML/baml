@@ -121,22 +121,6 @@ class AudioBlock {
     source: MediaSource,
 }
 
-/// A prompt-caching checkpoint. Everything *before* the checkpoint in the
-/// request is eligible for reuse on the next call. `"default"` is the only
-/// documented type.
-///
-/// This is the block the client's `cache_tools` option produces. A checkpoint
-/// authored as an object in `ai.Role.metadata` is carried verbatim instead
-/// (see `_cache_point`), which is why the content unions below hold theirs as
-/// an open JSON object.
-class CachePointBlock {
-    type: string,
-}
-
-function _default_cache_point() -> map<string, baml.json.json> {
-    { "type": "default" }
-}
-
 class ToolUseBlock {
     toolUseId: string,
     name: string,
@@ -266,18 +250,12 @@ class ToolSpec {
     inputSchema: ToolInputSchema,
 }
 
-/// The `Tool` union: a `toolSpec`, or a `cachePoint` terminating the cacheable
-/// tool prefix.
+/// The `Tool` union. `toolSpec` is the only member this client sends.
 class ToolEntry {
     toolSpec: ToolSpec?,
-    cachePoint: CachePointBlock?,
 
     function of_spec(spec: ToolSpec) -> ToolEntry {
-        ToolEntry { toolSpec: spec, cachePoint: null }
-    }
-
-    function of_cache_point() -> ToolEntry {
-        ToolEntry { toolSpec: null, cachePoint: CachePointBlock { type: "default" } }
+        ToolEntry { toolSpec: spec }
     }
 }
 
@@ -646,7 +624,7 @@ function _prompt_system(message: ai.PromptMessage) -> SystemContentBlock[] {
 /// The engine emits `{"cachePoint":{"type":"default"}}` whenever a message
 /// carries `cache_control` metadata (`engine/.../aws_client.rs:123-155`).
 /// Here the key is Bedrock's own name for the feature, and its value is the
-/// `CachePointBlock` itself:
+/// `cachePoint` block itself:
 ///
 ///   * an object is sent verbatim as the `cachePoint` member, so
 ///     `${ai.Role { name: "system", metadata: { "cache_point": { "type":
@@ -655,14 +633,14 @@ function _prompt_system(message: ai.PromptMessage) -> SystemContentBlock[] {
 ///   * `false` or `null` asks for no checkpoint.
 ///
 /// Anything else is rejected rather than guessed at: a string or a number has
-/// no `CachePointBlock` reading, and dropping it would silently turn caching
+/// no `cachePoint` reading, and dropping it would silently turn caching
 /// off.
 function _cache_point(metadata: map<string, baml.json.json>) -> map<string, baml.json.json>? {
     match (metadata.get("cache_point")) {
         null => null,
         let enabled: bool => {
             if (enabled) {
-                _default_cache_point()
+                { "type": "default" }
             } else {
                 null
             }
@@ -894,11 +872,7 @@ function _tool_choice(choice: string) -> ToolChoice {
     }
 }
 
-function _tool_config(
-    toolbox: ai.tools.Toolbox,
-    tool_choice: string?,
-    cache_tools: bool,
-) -> ToolConfig? {
+function _tool_config(toolbox: ai.tools.Toolbox, tool_choice: string?) -> ToolConfig? {
     if (toolbox.is_empty()) {
         return null;
     }
@@ -913,9 +887,6 @@ function _tool_config(
                 },
             ),
         );
-    }
-    if (cache_tools) {
-        entries.push(ToolEntry.of_cache_point());
     }
     // `toolChoice` is omitted unless the caller asked for one: it is optional
     // in the API, `auto` is the default, and several Bedrock model families
@@ -1022,9 +993,6 @@ function converse_request(
 ) -> ConverseRequest {
     let prompt = _lower_prompt(input.prompt(ai.internal.build_output_format(input.output_type)), preview = preview);
     let system = prompt.system;
-    if (client.cache_system_prompt && system.length() > 0) {
-        system.push(SystemContentBlock.of_cache_point(_default_cache_point()));
-    }
     let messages = prompt.messages;
     let journal_messages = _lower_journal(
         ai.wire.degrade_tool_media(
@@ -1074,7 +1042,7 @@ function converse_request(
         messages: wire_messages,
         system: wire_system,
         inferenceConfig: _inference_config(client),
-        toolConfig: _tool_config(input.toolbox, client.tool_choice, client.cache_tools),
+        toolConfig: _tool_config(input.toolbox, client.tool_choice),
         additionalModelRequestFields: client.additional_model_request_fields,
     }
 }

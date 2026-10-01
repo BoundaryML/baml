@@ -726,30 +726,8 @@ test "bedrock_tool_result_status_gating" {
 // ─── 7. cache points ─────────────────────────────────────────────────────────
 //
 // The engine emits `{"cachePoint":{"type":"default"}}`; sys_llm dropped the
-// feature entirely (research G4). Restored here as two client options, plus a
-// per-message `cache_point` key in `ai.Role.metadata` (below).
-
-function bedrock_cache_points() -> string {
-    let cl = aws.BedrockClient.new(
-        model = _model(),
-        region = "us-east-1",
-        cache_system_prompt = true,
-        cache_tools = true,
-    );
-    let body = _body(cl, _turn_input(BedrockEcho@spec("hi"), _empty_journal(), _weather_tools()));
-    [
-        baml.json.path<string>(body, ".system[1].cachePoint.type"),
-        baml.json.path<string>(body, ".toolConfig.tools[1].cachePoint.type"),
-        // the cachePoint entry is a bare union member: no toolSpec beside it
-        baml.json.path_or<string>(body, ".toolConfig.tools[1].toolSpec.name", "ABSENT"),
-        _array_len(body, ".toolConfig.tools").to_string(),
-        _array_len(body, ".system").to_string(),
-    ].join("|")
-}
-
-test "bedrock_cache_points" {
-    assert.equal(bedrock_cache_points(), "default|default|ABSENT|2|2")
-}
+// feature entirely (research G4). Restored here as a per-message `cache_point`
+// key in `ai.Role.metadata`.
 
 // `role(...)` builds a metadata-less marker, so the checkpoint is authored by
 // interpolating the typed marker class directly. `true` is shorthand for the
@@ -860,7 +838,7 @@ test "bedrock_cache_point_metadata_on_journal" {
     assert.equal(bedrock_cache_point_metadata_on_journal(), "and again|5m")
 }
 
-// A value with no CachePointBlock reading is rejected before anything is sent,
+// A value with no cachePoint reading is rejected before anything is sent,
 // rather than silently turning caching off.
 function bedrock_cache_point_metadata_rejects_non_object() -> string {
     let input = _turn_input(BedrockCachedBadValue@spec("hi"), _empty_journal(), _no_tools());

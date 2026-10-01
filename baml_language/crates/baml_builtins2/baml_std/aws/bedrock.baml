@@ -64,19 +64,6 @@ class BedrockClient {
     /// the result text, which carries the tool's error message.
     tool_choice: string?,
 
-    // --- prompt caching -----------------------------------------------------
-    /// Append a `cachePoint` after the system content, making the system
-    /// prompt reusable across calls. Per-message checkpoints come from the
-    /// `cache_point` key of `ai.Role.metadata` instead: `${ai.Role { name:
-    /// "system", metadata: { "cache_point": true } }}` appends the default
-    /// `cachePoint` after that message's content, and an object value
-    /// (`{ "type": "default", "ttl": "1h" }`) is sent as the `cachePoint`
-    /// verbatim.
-    cache_system_prompt: bool,
-    /// Append a `cachePoint` after the tool list, making the tool definitions
-    /// reusable across calls.
-    cache_tools: bool,
-
     // --- passthrough (PLAN P0.3) --------------------------------------------
     /// `additionalModelRequestFields`: model-specific parameters Converse has
     /// no first-class field for, e.g. `{"top_k": 50}` or
@@ -115,8 +102,6 @@ class BedrockClient {
         top_p: float? = null,
         stop_sequences: string[]? = null,
         tool_choice: string? = null,
-        cache_system_prompt: bool = false,
-        cache_tools: bool = false,
         additional_model_request_fields: baml.json.json? = null,
         request_body: baml.json.json? = null,
         headers: map<string, string>? = null,
@@ -136,8 +121,6 @@ class BedrockClient {
             top_p: top_p,
             stop_sequences: stop_sequences,
             tool_choice: tool_choice,
-            cache_system_prompt: cache_system_prompt,
-            cache_tools: cache_tools,
             additional_model_request_fields: additional_model_request_fields,
             request_body: request_body,
             headers: headers,
