@@ -134,7 +134,6 @@ pub extern "C" fn call_function(encoded_args: *const u8, length: usize, id: u32)
 }
 
 fn call_function_inner(encoded_args: *const u8, length: usize, id: u32) -> Result<(), BridgeError> {
-    let runtime = get_runtime()?;
     let bytes: &[u8] = if encoded_args.is_null() || length == 0 {
         &[]
     } else {
@@ -143,10 +142,10 @@ fn call_function_inner(encoded_args: *const u8, length: usize, id: u32) -> Resul
     };
     // Pin the target before yielding to the executor: the SDK may release the
     // callable's key as soon as this returns.
-    let prepared = crate::prepare_call(bytes)?;
+    let request = crate::decode_invocation_request(bytes)?;
 
     get_tokio_runtime()?.spawn(async move {
-        let encoded = AssertUnwindSafe(crate::invoke_prepared(runtime, prepared))
+        let encoded = AssertUnwindSafe(crate::execute_invocation(request))
             .catch_unwind()
             .await;
 

@@ -192,6 +192,11 @@ const ordinaryHandleFinalizer = new FinalizationRegistry<bigint>((key) => {
   }
 });
 
+/** Release one owned wire reference that never reached a host wrapper. */
+export function _releaseWireHandle(key: HandleKey): void {
+  releaseWasmHandle(keyToBigint(key));
+}
+
 export class BamlHandle {
   private readonly rawKey: bigint;
   private readonly finalizerToken: object | undefined;

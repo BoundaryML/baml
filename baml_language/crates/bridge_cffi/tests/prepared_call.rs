@@ -1,4 +1,4 @@
-//! `prepare_call` pins a handle target while the SDK's key is still live, so
+//! `decode_invocation_request` pins a handle target while the SDK's key is still live, so
 //! the SDK releasing that key between an adapter returning and its executor
 //! running the call cannot invalidate the call.
 
@@ -51,15 +51,36 @@ async fn prepared_handle_call_survives_release_of_its_key() {
         )]),
     )
     .unwrap();
-    let runtime = bridge_cffi::get_runtime().unwrap();
 
-    // The callable reaches the host as a handle-table key the SDK now owns.
-    let prepared = bridge_cffi::prepare_call(&call_args(
+    // A request cancelled after bridge preparation must reach the same
+    // admission gate, without executing the target.
+    let request = bridge_cffi::decode_invocation_request(&call_args(
         CallTarget::FunctionName("make_adder".to_string()),
         ("base", 40),
     ))
     .unwrap();
-    let bytes = bridge_cffi::invoke_prepared(runtime.clone(), prepared).await;
+    assert!(bridge_cffi::cancel_function_call_by_id(
+        request.host_call_id()
+    ));
+    let bytes = bridge_cffi::execute_invocation(request).await;
+    let envelope = BamlOutboundResult::decode(bytes.as_slice()).unwrap();
+    let Some(baml_outbound_result::Result::Panic(panic)) = envelope.result else {
+        panic!("expected cancellation before admission");
+    };
+    let Some(baml_outbound_value::Value::ClassValue(class)) =
+        panic.value.and_then(|value| value.value)
+    else {
+        panic!("expected the structured cancellation panic");
+    };
+    assert_eq!(class.name, "baml.panics.Cancelled");
+
+    // The callable reaches the host as a handle-table key the SDK now owns.
+    let request = bridge_cffi::decode_invocation_request(&call_args(
+        CallTarget::FunctionName("make_adder".to_string()),
+        ("base", 40),
+    ))
+    .unwrap();
+    let bytes = bridge_cffi::execute_invocation(request).await;
     let baml_outbound_value::Value::HandleValue(handle) = ok_value(&bytes) else {
         panic!("expected the callable as a handle");
     };
@@ -67,7 +88,7 @@ async fn prepared_handle_call_survives_release_of_its_key() {
     // Prepare the call through that key, then release it before invoking:
     // the window between `call_function` returning and its task running.
     // A closure's parameters are unnamed on the wire, so they go by position.
-    let prepared = bridge_cffi::prepare_call(&call_args(
+    let request = bridge_cffi::decode_invocation_request(&call_args(
         CallTarget::FunctionHandle(handle.key),
         ("arg0", 2),
     ))
@@ -75,7 +96,7 @@ async fn prepared_handle_call_survives_release_of_its_key() {
     assert!(HANDLE_TABLE.release(handle.key));
     assert!(HANDLE_TABLE.resolve(handle.key).is_none());
 
-    let bytes = bridge_cffi::invoke_prepared(runtime, prepared).await;
+    let bytes = bridge_cffi::execute_invocation(request).await;
     assert_eq!(ok_value(&bytes), baml_outbound_value::Value::IntValue(42));
 
     bridge_cffi::shutdown_runtime(None).await.unwrap();

@@ -2,7 +2,15 @@ use bex_events::ids::BoundaryId;
 use indexmap::IndexMap;
 use sys_types::{CallId, CancellationToken};
 
-use crate::logger::TraceLogger;
+use crate::{invocation::InvocationDeadline, logger::TraceLogger, thread::TaskCancel};
+
+/// Retained cancellation inputs and absolute deadline for callback/re-entry,
+/// independent of the parent's waiter or active-call registration.
+#[derive(Clone)]
+pub struct InheritedInvocationState {
+    pub(crate) engine_id: bex_events::ids::EngineId,
+    pub(crate) cancellation: TaskCancel,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BoundaryContext {
@@ -33,6 +41,14 @@ pub struct FunctionCallContext {
     pub boundary: BoundaryContext,
     pub logger: TraceLogger,
     pub cancel: CancellationToken,
+    /// Actual generated `baml.spawn.CancelToken` handles, including composites.
+    pub cancel_tokens: Vec<bex_external_types::Handle>,
+    pub inherited_state: Option<InheritedInvocationState>,
+    // A relative timeout is consumed at the first runtime binding boundary.
+    // All subsequent preparation/execution paths carry only `deadline`.
+    pub(crate) timeout: Option<std::time::Duration>,
+    pub(crate) deadline: Option<InvocationDeadline>,
+    pub(crate) bound_runtime: Option<bex_events::ids::EngineId>,
 
     /// Named `TypeVar` bindings for a generic call. Each entry is
     /// `TypeVar name -> concrete type`; insertion order is the callee's De
@@ -54,6 +70,9 @@ pub struct FunctionCallContextBuilder {
     boundary: BoundaryContext,
     logger: TraceLogger,
     cancel: Option<CancellationToken>,
+    cancel_tokens: Vec<bex_external_types::Handle>,
+    inherited_state: Option<InheritedInvocationState>,
+    timeout: Option<std::time::Duration>,
 
     type_args: Option<IndexMap<String, baml_type::RuntimeTy>>,
     type_defs: Option<IndexMap<String, bex_vm_types::types::PortableTypeDef>>,
@@ -67,6 +86,9 @@ impl FunctionCallContextBuilder {
             boundary,
             logger: TraceLogger::disabled(),
             cancel: None,
+            cancel_tokens: Vec::new(),
+            inherited_state: None,
+            timeout: None,
             type_args: None,
             type_defs: None,
         }
@@ -79,6 +101,11 @@ impl FunctionCallContextBuilder {
             boundary: self.boundary,
             logger: self.logger,
             cancel: self.cancel.unwrap_or_default(),
+            cancel_tokens: self.cancel_tokens,
+            inherited_state: self.inherited_state,
+            timeout: self.timeout,
+            deadline: None,
+            bound_runtime: None,
 
             type_args: self.type_args.unwrap_or_default(),
             type_defs: self.type_defs.unwrap_or_default(),
@@ -119,5 +146,46 @@ impl FunctionCallContextBuilder {
     pub fn with_cancel_token(mut self, cancel: CancellationToken) -> Self {
         self.cancel = Some(cancel);
         self
+    }
+
+    #[must_use]
+    pub fn with_cancel_tokens(mut self, tokens: Vec<bex_external_types::Handle>) -> Self {
+        self.cancel_tokens = tokens;
+        self
+    }
+
+    #[must_use]
+    pub fn with_inherited_state(mut self, state: InheritedInvocationState) -> Self {
+        self.inherited_state = Some(state);
+        self
+    }
+
+    #[must_use]
+    pub fn with_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+}
+
+impl FunctionCallContext {
+    pub(crate) fn bind_timeout(
+        &mut self,
+        runtime: bex_events::ids::EngineId,
+    ) -> Result<(), crate::EngineError> {
+        if self.bound_runtime.is_some_and(|owner| owner != runtime)
+            || self
+                .inherited_state
+                .as_ref()
+                .is_some_and(|state| state.engine_id != runtime)
+        {
+            return Err(crate::EngineError::TypeMismatch {
+                message: "invocation context belongs to a different runtime".into(),
+            });
+        }
+        self.bound_runtime = Some(runtime);
+        if let Some(timeout) = self.timeout.take() {
+            self.deadline = Some(InvocationDeadline::after(timeout)?);
+        }
+        Ok(())
     }
 }

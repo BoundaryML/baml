@@ -63,8 +63,11 @@ impl CancelTokenState {
 /// holding the state. Returns `None` if the value is not a well-formed
 /// `CancelToken` instance (including the `OmittedArg` sentinel for an omitted
 /// optional argument).
-fn cancel_token_members(vm: &BexVm, value: Value) -> Option<Vec<CancellationToken>> {
+pub fn cancel_token_members(vm: &BexVm, value: Value) -> Option<Vec<CancellationToken>> {
     let instance = vm.as_instance(&value).ok()?;
+    if instance.class != vm.resolve_class("baml.spawn.CancelToken") {
+        return None;
+    }
     let handle = instance.load_field(0);
     let state = vm.as_rust_data::<CancelTokenState>(&handle).ok()?;
     Some(state.tokens().cloned().collect())

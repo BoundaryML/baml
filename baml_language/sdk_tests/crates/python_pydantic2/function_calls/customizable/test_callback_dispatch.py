@@ -86,3 +86,48 @@ async def test_repeated_dispatches_invoke_callback_in_order():
 
     assert await baml.call_repeatedly_async(callback, 3) == ["0", "1", "2"]
     assert calls == [0, 1, 2]
+
+
+@pytest.mark.asyncio
+async def test_cancelled_waiter_does_not_end_host_execution():
+    from baml_bridge import BamlCallContext
+
+    for late_error in (False, True):
+        ctx = BamlCallContext()
+        entered = asyncio.Event()
+        release = asyncio.Event()
+        exited = asyncio.Event()
+        exits = []
+
+        async def callback(value):
+            entered.set()
+            try:
+                await release.wait()
+            except asyncio.CancelledError:
+                # Cooperative cancellation still has to unwind host cleanup.
+                await release.wait()
+            finally:
+                exits.append(value)
+                exited.set()
+            if late_error:
+                raise ValueError("late host failure")
+            return value + 1
+
+        pending = asyncio.create_task(baml.call_int_callback_async(callback, 6, _ctx=ctx))
+        try:
+            await asyncio.wait_for(entered.wait(), 3)
+            ctx.abort()
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(pending, 3)
+            assert not exited.is_set()
+            release.set()
+            await asyncio.wait_for(exited.wait(), 3)
+            await asyncio.sleep(0)  # Let the adapter observe actual host exit.
+            assert exits == [6]
+            assert pending.cancelled()
+            assert await baml.call_int_callback_async(lambda value: value + 1, 7) == 8
+        finally:
+            release.set()
+            if not pending.done():
+                pending.cancel()
+            await asyncio.gather(pending, return_exceptions=True)

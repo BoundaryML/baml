@@ -33,23 +33,22 @@ use jni::{
 /// `BamlOutboundResult` envelope rather than thrown, so the returned bytes
 /// decode + raise uniformly on the Java side. Argument decoding, target
 /// pinning and the `catch_unwind` + engine error handling all live in
-/// `bridge_cffi::prepare_call` / `bridge_cffi::invoke_prepared`.
+/// `bridge_cffi::decode_invocation_request` / `bridge_cffi::execute_invocation`.
 fn call_sync_to_bytes(args_proto: &[u8]) -> Vec<u8> {
-    let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
-        let runtime = bridge_cffi::get_runtime()?;
-        let prepared = bridge_cffi::prepare_call(args_proto)?;
+    let request = (|| -> Result<_, bridge_cffi::BridgeError> {
+        let request = bridge_cffi::decode_invocation_request(args_proto)?;
         let rt = bridge_cffi::get_tokio_runtime()?;
-        Ok((runtime, prepared, rt))
+        Ok((request, rt))
     })();
 
-    let (runtime, prepared, rt) = match prepared {
+    let (request, rt) = match request {
         Ok(v) => v,
         Err(e) => return bridge_cffi::error_to_outbound(e),
     };
 
     // Block on the shared multi-thread tokio runtime, like the pyo3 sync path
     // (`rt.block_on(...)`). Returns the encoded `BamlOutboundResult` bytes.
-    rt.block_on(bridge_cffi::invoke_prepared(runtime, prepared))
+    rt.block_on(bridge_cffi::execute_invocation(request))
 }
 
 /// `baml_bridge.BamlFfi.nativeInitFromBytecode(byte[] bytecode, String metadata, String runtimeVersion, String toolchainVersion)`.
@@ -298,14 +297,13 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallAsync<'local>(
 /// encoded into the same envelope and delivered immediately, so they decode +
 /// raise identically to a sync pre-call failure.
 fn spawn_async_call(call_id: u64, args_proto: Vec<u8>) {
-    let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
-        let runtime = bridge_cffi::get_runtime()?;
-        let prepared = bridge_cffi::prepare_call(&args_proto)?;
+    let request = (|| -> Result<_, bridge_cffi::BridgeError> {
+        let request = bridge_cffi::decode_invocation_request(&args_proto)?;
         let rt = bridge_cffi::get_tokio_runtime()?;
-        Ok((runtime, prepared, rt))
+        Ok((request, rt))
     })();
 
-    let (runtime, prepared, rt) = match prepared {
+    let (request, rt) = match request {
         Ok(v) => v,
         Err(e) => {
             // Same envelope bytes the sync path returns, delivered on this
@@ -318,10 +316,10 @@ fn spawn_async_call(call_id: u64, args_proto: Vec<u8>) {
     rt.spawn(async move {
         // Inner task so a panic during result *encoding* is caught (via the
         // JoinError) and still delivered as an SdkPanic envelope, rather than
-        // silently dropping the task and hanging the future. `invoke_prepared`
+        // silently dropping the task and hanging the future. `execute_invocation`
         // already turns an engine-call panic into that envelope itself; this
         // guards the rarer encode-time panic, exactly as the C-ABI path does.
-        let inner = tokio::spawn(bridge_cffi::invoke_prepared(runtime, prepared));
+        let inner = tokio::spawn(bridge_cffi::execute_invocation(request));
         let bytes = match inner.await {
             Ok(bytes) => bytes,
             Err(join_err) => encode_task_failure(join_err),

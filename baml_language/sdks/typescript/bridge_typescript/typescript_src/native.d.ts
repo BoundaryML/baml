@@ -136,6 +136,9 @@ export declare class BamlVideo {
 
 export declare function _discardHostCallArgs(args: Buffer): void
 
+/** Close execution ownership only when the callback/Promise actually exits. */
+export declare function _finishHostCallExecution(execution: object): void
+
 /** Private adapter lookup; the C ABI and dispatch payload stay unchanged. */
 export declare function _getHostCallOrigin(callId: number): string | null
 
@@ -152,6 +155,9 @@ export declare function _handleRefcount(key: HandleKey): number | null
  */
 export declare function _liveHandleCount(): number
 
+/** Release one owned wire reference that never reached a host wrapper. */
+export declare function _releaseWireHandle(key: HandleKey): void
+
 /**
  * Test-only: seed a `FunctionRef` entry into `HANDLE_TABLE`, returning
  * `[key, handleType]` so test code can construct a `BamlHandle`.
@@ -167,6 +173,9 @@ export declare function _seedGenericMediaHandle(): [HandleKey, number]
  * Two seeds of one `slabKey` share a key.
  */
 export declare function _seedHeapHandle(slabKey: number): [HandleKey, number]
+
+/** Claim actual JS execution atomically against waiter retirement. */
+export declare function _startHostCallExecution(execution: object): string | null
 
 export declare function cancelFunctionCall(callId: string): boolean
 
@@ -241,7 +250,7 @@ export declare function newFunctionCall(): string
  * the napi call scope and be invoked from any thread (the engine's tokio
  * runtime calls into this entry point from a worker thread).
  */
-export declare function registerHostCallable(callable: (callId: number, argsBytes: Buffer) => void): HandleKey
+export declare function registerHostCallable(callable: (callId: number, argsBytes: Buffer, execution: object) => void): HandleKey
 
 /**
  * Install the TS-side release callback. First-call-wins; subsequent

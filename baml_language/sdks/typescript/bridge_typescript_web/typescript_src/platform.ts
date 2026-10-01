@@ -7,8 +7,8 @@ export function captureCallbackContext(_callId: bigint): () => void {
   return () => {};
 }
 
-export function runHostCallback(_callId: number, _args: Uint8Array, callback: () => void): void {
-  callback();
+export function runHostCallback(_callId: number, _args: Uint8Array, callback: () => void | Promise<void>, _execution?: object): void | Promise<void> {
+  return callback();
 }
 
 export function handleExitPanic(_code: number, fallbackPanic: BamlPanic): never {

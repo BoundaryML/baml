@@ -1,6 +1,6 @@
 import type { BamlPanic } from './errors.js';
 import { AsyncResource } from 'node:async_hooks';
-import { _getHostCallOrigin, _discardHostCallArgs } from './native.js';
+import { _startHostCallExecution, _finishHostCallExecution } from './native.js';
 
 const callbackContexts = new Map<string, AsyncResource>();
 
@@ -15,24 +15,53 @@ export function captureCallbackContext(callId: bigint): () => void {
     };
 }
 
-/** Each dispatch gets a child resource so enterWith cannot mutate the entry. */
-export function runHostCallback(callId: number, args: Buffer, callback: () => void): void {
-    const origin = _getHostCallOrigin(callId);
+// Retain Promise executions even after their BAML entry removes its waiter.
+// This also owns the callback/arguments and causal context through real exit.
+const activeHostExecutions = new Map<number, {
+    resource: AsyncResource;
+    callback: () => void | Promise<void>;
+    args: Buffer;
+    lease: object;
+    completion?: Promise<void>;
+}>();
+
+/** Each execution owns a child context through Promise settlement/cleanup. */
+export function runHostCallback(
+    callId: number, args: Buffer, callback: () => void | Promise<void>, lease?: object,
+): void | Promise<void> {
+    if (!lease) throw new Error("native host dispatch has no execution lease");
+    const origin = _startHostCallExecution(lease);
     if (origin === null || origin === undefined) {
-        _discardHostCallArgs(args);
-        return; // The engine cancelled this queued dispatch before it started.
+        _finishHostCallExecution(lease);
+        return; // Cancellation won before this queued execution started.
     }
-    const invoke = () => {
-        const dispatch = new AsyncResource('BamlHostCallback', { requireManualDestroy: true });
+    const invoke = (): void | Promise<void> => {
+        const resource = new AsyncResource('BamlHostCallback', { requireManualDestroy: true });
+        const execution = { resource, callback, args, lease, completion: undefined as Promise<void> | undefined };
+        activeHostExecutions.set(callId, execution);
+        const finish = () => {
+            activeHostExecutions.delete(callId);
+            try {
+                resource.emitDestroy();
+            } finally {
+                _finishHostCallExecution(lease);
+            }
+        };
         try {
-            dispatch.runInAsyncScope(callback);
-        } finally {
-            dispatch.emitDestroy();
+            const completion = resource.runInAsyncScope(callback);
+            if (completion) {
+                execution.completion = completion.finally(finish);
+                return execution.completion;
+            }
+        } catch (error) {
+            finish();
+            throw error;
         }
+        finish();
     };
     const entry = callbackContexts.get(origin);
-    if (entry) entry.runInAsyncScope(invoke);
-    else invoke(); // Raw native callers do not install an SDK entry context.
+    if (entry) return entry.runInAsyncScope(invoke);
+    return invoke(); // Raw native callers do not install an SDK entry context.
 }
 
 export const supportsSyncStreamPulls = true;

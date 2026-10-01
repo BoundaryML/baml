@@ -16,6 +16,7 @@ import {
     registerHostCallable,
     releaseHostCallable,
     completeHostCall,
+    _releaseWireHandle,
     getRuntime,
     newFunctionCall,
 } from './native.js';
@@ -517,6 +518,7 @@ function parseHexBigint(s: string): bigint {
 function decodeValueHolder(
     holder: baml_bridge.cffi.v1.IBamlOutboundValue,
     typeMap: BamlTypeMap,
+    ownership?: Set<baml_bridge.cffi.v1.IBamlOutboundHandle>,
 ): unknown {
     if (holder.nullValue != null) return null;
     if (holder.stringValue != null) return holder.stringValue;
@@ -530,7 +532,7 @@ function decodeValueHolder(
     if (holder.tyDefValue) return BamlType._fromWire(holder.tyDefValue);
     if (holder.tyValue) return BamlType._fromWire({ root: holder.tyValue });
     if (holder.classValue) {
-        return decodeClass(holder.classValue, typeMap);
+        return decodeClass(holder.classValue, typeMap, ownership);
     }
     if (holder.enumValue) {
         return decodeEnum(holder.enumValue, typeMap);
@@ -557,19 +559,19 @@ function decodeValueHolder(
         }
     }
     if (holder.listValue) {
-        return (holder.listValue.items || []).map(item => decodeValueHolder(item, typeMap));
+        return (holder.listValue.items || []).map(item => decodeValueHolder(item, typeMap, ownership));
     }
     if (holder.mapValue) {
         const obj: Record<string, unknown> = Object.create(null);
         for (const entry of holder.mapValue.entries || []) {
             if (entry.key != null && entry.value) {
-                obj[entry.key] = decodeValueHolder(entry.value, typeMap);
+                obj[entry.key] = decodeValueHolder(entry.value, typeMap, ownership);
             }
         }
         return obj;
     }
     if (holder.unionVariantValue && holder.unionVariantValue.value) {
-        return decodeValueHolder(holder.unionVariantValue.value, typeMap);
+        return decodeValueHolder(holder.unionVariantValue.value, typeMap, ownership);
     }
     // handle_value: pass the protobufjs Long directly as the key — BamlHandle's
     // constructor accepts { low, high } which is layout-compatible with Long.
@@ -581,6 +583,9 @@ function decodeValueHolder(
             throw new BamlError('decoded handle has HANDLE_UNSPECIFIED handle_type');
         }
         const handle = new BamlHandle(holder.handleValue.key, ht);
+        // The base wrapper owns this occurrence, even if its typed wrapper or
+        // an enclosing class constructor subsequently throws.
+        ownership?.delete(holder.handleValue);
         if (ht === BamlHandleType.FUNCTION_REF) {
             return decodeBamlClosure(handle, holder.handleValue.ty?.function);
         }
@@ -697,11 +702,12 @@ function decodeBamlClosure(
 function decodeClass(
     classValue: baml_bridge.cffi.v1.IBamlValueClass,
     typeMap: BamlTypeMap,
+    ownership?: Set<baml_bridge.cffi.v1.IBamlOutboundHandle>,
 ): unknown {
     const fieldDict: Record<string, unknown> = {};
     for (const entry of classValue.fields || []) {
         if (entry.key != null && entry.value) {
-            fieldDict[entry.key] = decodeValueHolder(entry.value, typeMap);
+            fieldDict[entry.key] = decodeValueHolder(entry.value, typeMap, ownership);
         }
     }
     const fqn = classValue.name ?? '';
@@ -789,6 +795,27 @@ export function decodeOutboundValue(data: Buffer | Uint8Array): unknown {
     return decodeValueHolder(msg, getTypeMap());
 }
 
+function collectHostCallHandles(
+    holder: baml_bridge.cffi.v1.IBamlOutboundValue,
+    ownership: Set<baml_bridge.cffi.v1.IBamlOutboundHandle>,
+): void {
+    if (holder.handleValue) {
+        const ht = holder.handleValue.handleType;
+        if (ht !== BamlHandleType.HOST_VALUE_CALLABLE && ht !== BamlHandleType.HOST_VALUE_OPAQUE) {
+            ownership.add(holder.handleValue);
+        }
+    } else if (holder.listValue) {
+        for (const item of holder.listValue.items ?? []) collectHostCallHandles(item, ownership);
+    } else if (holder.mapValue || holder.classValue) {
+        const entries = holder.mapValue?.entries ?? holder.classValue?.fields ?? [];
+        for (const entry of entries) {
+            if (entry.value) collectHostCallHandles(entry.value, ownership);
+        }
+    } else if (holder.unionVariantValue?.value) {
+        collectHostCallHandles(holder.unionVariantValue.value, ownership);
+    }
+}
+
 /**
  * Decode the engine→host `BamlToHostCall`. The engine has already resolved the
  * call against the callee's declared params and dropped omitted optionals, so
@@ -796,23 +823,39 @@ export function decodeOutboundValue(data: Buffer | Uint8Array): unknown {
  * into the required positional run and the supplied optionals (keyed by
  * `argName`) using each arg's `isOptionalArg` flag.
  */
-function decodeHostCall(data: Buffer | Uint8Array): {
+export function decodeHostCall(data: Buffer | Uint8Array): {
     positional: unknown[];
     optional: Record<string, unknown>;
 } {
     const msg = BamlToHostCall.decode(data instanceof Buffer ? data : Buffer.from(data));
-    const typeMap = getTypeMap();
-    const positional: unknown[] = [];
-    const optional: Record<string, unknown> = {};
+    // Track wire objects rather than numeric keys: repeated keys carry one
+    // separately owned reference per decoded protobuf occurrence.
+    const ownership = new Set<baml_bridge.cffi.v1.IBamlOutboundHandle>();
     for (const arg of msg.args ?? []) {
-        const value = arg.value ? decodeValueHolder(arg.value, typeMap) : undefined;
-        if (arg.isOptionalArg) {
-            optional[arg.argName ?? ''] = value;
-        } else {
-            positional.push(value);
+        if (arg.value) collectHostCallHandles(arg.value, ownership);
+    }
+    try {
+        const typeMap = getTypeMap();
+        const positional: unknown[] = [];
+        const optional: Record<string, unknown> = {};
+        for (const arg of msg.args ?? []) {
+            const value = arg.value ? decodeValueHolder(arg.value, typeMap, ownership) : undefined;
+            if (arg.isOptionalArg) {
+                optional[arg.argName ?? ''] = value;
+            } else {
+                positional.push(value);
+            }
+        }
+        return { positional, optional };
+    } finally {
+        for (const handle of ownership) {
+            try {
+                _releaseWireHandle(handle.key as HandleKey);
+            } catch {
+                // Cleanup must preserve the original decode failure.
+            }
         }
     }
-    return { positional, optional };
 }
 
 /**
@@ -984,16 +1027,19 @@ export function decodeCallResult(data: Buffer | Uint8Array): unknown {
 // through a JS-side wrapper. Node's tsfn model makes the wrapper natural.
 
 export function makeHostCallableDispatch(userFn: (...args: unknown[]) => unknown) {
-    return (callId: number, argsBytes: Buffer): void => {
+    return (callId: number, argsBytes: Buffer, execution?: object): void => {
         try {
-            runHostCallback(callId, argsBytes, () => dispatchHostCallable(userFn, callId, argsBytes));
+            const completion = runHostCallback(callId, argsBytes, () => dispatchHostCallable(userFn, callId, argsBytes), execution);
+            if (completion) {
+                void completion.catch((error) => completeHostCallLastResort(callId, error));
+            }
         } catch (err) {
             completeHostCallLastResort(callId, err);
         }
     };
 }
 
-function dispatchHostCallable(userFn: (...args: unknown[]) => unknown, callId: number, argsBytes: Buffer): void {
+function dispatchHostCallable(userFn: (...args: unknown[]) => unknown, callId: number, argsBytes: Buffer): void | Promise<void> {
     // Every reachable exit from this wrapper must complete `callId`
     // exactly once — if it doesn't, the engine awaits the in-flight call
     // forever (there is no timeout). The outer try/catch is a last-resort
@@ -1032,7 +1078,7 @@ function dispatchHostCallable(userFn: (...args: unknown[]) => unknown, callId: n
             // collapses to a single settlement, so the call completes
             // exactly once. The handlers only call the defended send*
             // helpers (they can't throw synchronously).
-            Promise.resolve(result).then(
+            return Promise.resolve(result).then(
                 (resolved) => sendHostCallableResult(callId, resolved),
                 (err) => sendHostCallableError(callId, err)
             );

@@ -90,45 +90,53 @@ fn source_vfs_root() -> vfs::VfsPath {
     vfs::VfsPath::new(vfs::MemoryFS::new())
 }
 
-struct ActiveCallRoute {
+struct PreparedCallRoute {
     runtime: Weak<dyn Bex>,
 }
 
-static ACTIVE_CALL_RUNTIMES: LazyLock<Mutex<HashMap<u64, Arc<ActiveCallRoute>>>> =
+static PREPARED_CALL_RUNTIMES: LazyLock<Mutex<HashMap<u64, Arc<PreparedCallRoute>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-fn active_call_runtimes() -> MutexGuard<'static, HashMap<u64, Arc<ActiveCallRoute>>> {
-    ACTIVE_CALL_RUNTIMES
+fn prepared_call_runtimes() -> MutexGuard<'static, HashMap<u64, Arc<PreparedCallRoute>>> {
+    PREPARED_CALL_RUNTIMES
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
 }
 
-pub(crate) struct ActiveCallRouteGuard {
+pub(crate) struct PreparedCallRouteGuard {
     call_id: u64,
-    route: Arc<ActiveCallRoute>,
+    route: Arc<PreparedCallRoute>,
 }
 
-impl Drop for ActiveCallRouteGuard {
+impl Drop for PreparedCallRouteGuard {
     fn drop(&mut self) {
-        let mut routes = active_call_runtimes();
+        let mut routes = prepared_call_runtimes();
         if routes
             .get(&self.call_id)
             .is_some_and(|current| Arc::ptr_eq(current, &self.route))
         {
             routes.remove(&self.call_id);
         }
+        drop(routes);
+        if let Some(runtime) = self.route.runtime.upgrade() {
+            runtime.release_prepared_call(bex_project::CallId(self.call_id));
+        }
     }
 }
 
-pub(crate) fn register_active_call_runtime(
+pub(crate) fn register_prepared_call_runtime(
     call_id: u64,
     runtime: &Arc<dyn Bex>,
-) -> ActiveCallRouteGuard {
-    let route = Arc::new(ActiveCallRoute {
+) -> Result<PreparedCallRouteGuard, BridgeError> {
+    let route = Arc::new(PreparedCallRoute {
         runtime: Arc::downgrade(runtime),
     });
-    active_call_runtimes().insert(call_id, Arc::clone(&route));
-    ActiveCallRouteGuard { call_id, route }
+    let mut routes = prepared_call_runtimes();
+    if routes.contains_key(&call_id) {
+        return Err(BridgeError::DuplicateCallId(call_id));
+    }
+    routes.insert(call_id, Arc::clone(&route));
+    Ok(PreparedCallRouteGuard { call_id, route })
 }
 
 pub mod baml_to_host;
@@ -138,8 +146,8 @@ pub mod handle_cffi;
 mod identity;
 
 pub use baml_to_host::{
-    PreparedCall, error_to_outbound, invoke_prepared, prepare_call, result_to_outbound,
-    unhandled_spawn_error_to_outbound,
+    InvocationRequest, decode_invocation_request, error_to_outbound, execute_invocation,
+    result_to_outbound, unhandled_spawn_error_to_outbound,
 };
 pub use bridge_ctypes::baml_bridge;
 pub use buffer::{Buffer, free_buffer};
@@ -459,7 +467,7 @@ pub fn cancel_function_call_by_id(id: u64) -> bool {
     if id == 0 {
         return false;
     }
-    let originating_runtime = active_call_runtimes()
+    let originating_runtime = prepared_call_runtimes()
         .get(&id)
         .and_then(|route| route.runtime.upgrade());
     originating_runtime

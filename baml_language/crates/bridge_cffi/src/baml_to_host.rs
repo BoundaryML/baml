@@ -3,8 +3,8 @@
 //! `BamlOutboundResult` envelope.
 //!
 //! The whole classify-and-encode lives here, in the bridge — not in bex.
-//! Every adapter (the C ABI, Wasm, PyO3, napi, JNI) calls [`prepare_call`] and
-//! then [`invoke_prepared`], so argument decoding, target pinning, the
+//! Every adapter (the C ABI, Wasm, PyO3, napi, JNI) calls [`decode_invocation_request`] and
+//! then [`execute_invocation`], so argument decoding, target pinning, the
 //! `catch_unwind` → `SdkPanic` boundary and the error/panic routing are
 //! defined exactly once. Every result — ok value, thrown error, panic, and
 //! pre-call host-boundary failure — leaves the bridge as one envelope; there is
@@ -311,20 +311,24 @@ pub fn panic_to_outbound(panic_info: &(dyn std::any::Any + Send)) -> Vec<u8> {
     .encode_to_vec()
 }
 
-/// A decoded `CallFunctionArgs` whose target is already pinned.
+/// Adapter input with an owning runtime and a pinned callable target.
+///
+/// This is a request, not the engine's fully bound `PreparedInvocation`.
 ///
 /// Every adapter yields to an executor between decoding a call and running
 /// it. The SDK may release the callable's handle-table key in that gap, so a
 /// handle target is resolved to its heap [`Handle`](bex_project::Handle) here,
-/// while the key is known to be live, and the prepared call keeps that pin
+/// while the key is known to be live, and the request keeps that pin
 /// until the engine has run it.
-pub struct PreparedCall {
-    target: PreparedTarget,
+pub struct InvocationRequest {
+    runtime: Arc<dyn Bex>,
+    _route: crate::PreparedCallRouteGuard,
+    target: InvocationTarget,
     args: BexArgs,
     context: FunctionCallContext,
 }
 
-impl PreparedCall {
+impl InvocationRequest {
     /// Identity of the SDK entry, used by adapters to route callbacks to that
     /// entry's execution environment. The target remains pinned and private.
     pub fn host_call_id(&self) -> u64 {
@@ -332,17 +336,22 @@ impl PreparedCall {
     }
 }
 
-enum PreparedTarget {
+enum InvocationTarget {
     Named(String),
     Callable(bex_project::Handle),
 }
 
-/// Decode `CallFunctionArgs` bytes into a [`PreparedCall`].
-pub fn prepare_call(bytes: &[u8]) -> Result<PreparedCall, BridgeError> {
+/// Decode and retain an SDK request without starting runtime execution.
+///
+/// The engine resolves named targets and finishes argument/type preparation
+/// before constructing its own `PreparedInvocation` and attempting admission.
+pub fn decode_invocation_request(bytes: &[u8]) -> Result<InvocationRequest, BridgeError> {
+    let runtime = crate::get_runtime()?;
     let call = CallFunctionArgs::decode(bytes).map_err(bridge_ctypes::CtypesError::from)?;
     if call.call_id == 0 {
         return Err(BridgeError::InvalidCallId);
     }
+    let route = crate::register_prepared_call_runtime(call.call_id, &runtime)?;
     let target = call.call_target.ok_or(BridgeError::MissingCallTarget)?;
     if matches!(target, CallTarget::FunctionHandle(_)) && !call.type_args.is_empty() {
         return Err(BridgeError::FunctionHandleTypeArgs);
@@ -352,10 +361,11 @@ pub fn prepare_call(bytes: &[u8]) -> Result<PreparedCall, BridgeError> {
         .with_type_args(type_args.type_args)
         .with_type_defs(type_args.type_defs)
         .build();
+    let context = runtime.bind_invocation_context(context)?;
     let kwargs = kwargs_to_bex_values(call.kwargs, &HANDLE_TABLE)?;
 
     let (target, args) = match target {
-        CallTarget::FunctionName(name) => (PreparedTarget::Named(name), kwargs.into()),
+        CallTarget::FunctionName(name) => (InvocationTarget::Named(name), kwargs.into()),
         CallTarget::FunctionHandle(key) => {
             let entry = HANDLE_TABLE.resolve(key).ok_or_else(|| {
                 BridgeError::Internal("callable handle is no longer live".to_string())
@@ -380,17 +390,19 @@ pub fn prepare_call(bytes: &[u8]) -> Result<PreparedCall, BridgeError> {
                 )
             });
             let args = partition_callable_args(key, params, kwargs.into_iter().collect())?;
-            (PreparedTarget::Callable(heap_handle.clone()), args)
+            (InvocationTarget::Callable(heap_handle.clone()), args)
         }
     };
-    Ok(PreparedCall {
+    Ok(InvocationRequest {
+        runtime,
+        _route: route,
         target,
         args,
         context,
     })
 }
 
-/// Run a [`PreparedCall`] and encode the result as `BamlOutboundResult` bytes.
+/// Run an [`InvocationRequest`] and encode the result as `BamlOutboundResult` bytes.
 ///
 /// The `catch_unwind` boundary wraps the engine call so a Rust panic surfaces
 /// as a `baml.panics.SdkPanic` ⇒ `BamlOutboundPanic` (a catchable `BamlPanic`
@@ -399,17 +411,21 @@ pub fn prepare_call(bytes: &[u8]) -> Result<PreparedCall, BridgeError> {
 /// point keeps its own outer `catch_unwind` for that (encoding via
 /// [`panic_to_outbound`]), and the PyO3 glue lets it become pyo3's
 /// `PanicException`.
-pub async fn invoke_prepared(runtime: Arc<dyn Bex>, call: PreparedCall) -> Vec<u8> {
+pub async fn execute_invocation(call: InvocationRequest) -> Vec<u8> {
     let options = CffiHandleTableOptions::for_wire();
-    let _route = crate::register_active_call_runtime(call.context.host_call_id.0, &runtime);
+    let InvocationRequest {
+        runtime,
+        _route,
+        target,
+        args,
+        context,
+    } = call;
 
     let caught = AssertUnwindSafe(async move {
-        match call.target {
-            PreparedTarget::Named(name) => {
-                runtime.call_function(&name, call.args, call.context).await
-            }
-            PreparedTarget::Callable(handle) => {
-                runtime.call_callable(handle, call.args, call.context).await
+        match target {
+            InvocationTarget::Named(name) => runtime.call_function(&name, args, context).await,
+            InvocationTarget::Callable(handle) => {
+                runtime.call_callable(handle, args, context).await
             }
         }
     })

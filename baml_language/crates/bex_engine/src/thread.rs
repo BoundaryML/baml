@@ -26,14 +26,16 @@ use tokio_util::sync::CancellationToken;
 pub struct TaskCancel {
     own: CancellationToken,
     linked: Arc<[CancellationToken]>,
+    deadline: Option<crate::invocation::InvocationDeadline>,
 }
 
 impl TaskCancel {
-    /// A root call's: cancelled through the host's token alone.
+    /// A root VM's private cancellation authority, before inputs are attached.
     pub fn root(own: CancellationToken) -> Self {
         Self {
             own,
             linked: Arc::from([]),
+            deadline: None,
         }
     }
 
@@ -43,6 +45,7 @@ impl TaskCancel {
         Self {
             own: CancellationToken::new(),
             linked: linked.into_iter().collect(),
+            deadline: None,
         }
     }
 
@@ -52,6 +55,7 @@ impl TaskCancel {
         Self {
             own: self.own.child_token(),
             linked: self.linked.iter().cloned().chain(linked).collect(),
+            deadline: self.deadline,
         }
     }
 
@@ -67,14 +71,39 @@ impl TaskCancel {
 
     pub fn is_cancelled(&self) -> bool {
         self.tokens().any(CancellationToken::is_cancelled)
+            || self
+                .deadline
+                .is_some_and(crate::invocation::InvocationDeadline::is_expired)
+    }
+
+    pub(crate) fn with_deadline(
+        mut self,
+        deadline: Option<crate::invocation::InvocationDeadline>,
+    ) -> Self {
+        self.deadline = deadline;
+        self
+    }
+
+    pub(crate) fn deadline(&self) -> Option<crate::invocation::InvocationDeadline> {
+        self.deadline
     }
 
     /// Completes once any token that cancels the task has fired.
     pub async fn cancelled(&self) {
-        if self.linked.is_empty() {
-            return self.own.cancelled().await;
+        let sources = async {
+            if self.linked.is_empty() {
+                self.own.cancelled().await;
+            } else {
+                futures::future::select_all(self.tokens().map(|token| Box::pin(token.cancelled())))
+                    .await;
+            }
+        };
+        match self.deadline {
+            Some(deadline) => {
+                tokio::select! { () = sources => {}, () = deadline.elapsed() => {} }
+            }
+            None => sources.await,
         }
-        futures::future::select_all(self.tokens().map(|token| Box::pin(token.cancelled()))).await;
     }
 
     /// Cancel the task and, through its own token, its descendants.

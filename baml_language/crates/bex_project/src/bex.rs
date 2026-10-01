@@ -14,6 +14,11 @@ pub struct BexRunResult {
 /// Core runtime API: call functions and introspect parameters.
 #[async_trait]
 pub trait Bex: Send + Sync {
+    /// Freeze relative controls before argument binding or adapter queueing.
+    fn bind_invocation_context(
+        &self,
+        context: FunctionCallContext,
+    ) -> Result<FunctionCallContext, RuntimeError>;
     /// Execute a function by name. Returns a fully owned value (no Handle variants).
     async fn call_function(
         self: Arc<Self>,
@@ -54,6 +59,10 @@ pub trait Bex: Send + Sync {
 
     fn cancel_function_call(&self, call_id: CallId) -> Result<(), RuntimeError>;
 
+    /// Release pending cancellation when bridge preparation is abandoned.
+    /// Active execution owns its own registration and is never released here.
+    fn release_prepared_call(&self, call_id: CallId);
+
     fn set_unhandled_spawn_error_handler(&self, handler: Option<UnhandledSpawnErrorHandler>);
 
     /// Wait for in-flight calls and spawned work, report unreachable
@@ -71,6 +80,12 @@ pub trait Bex: Send + Sync {
 
 #[async_trait]
 impl Bex for BexEngine {
+    fn bind_invocation_context(
+        &self,
+        context: FunctionCallContext,
+    ) -> Result<FunctionCallContext, RuntimeError> {
+        BexEngine::bind_invocation_context(self, context).map_err(RuntimeError::from)
+    }
     /// Resolve named `BexArgs` into the positional `Vec<BexExternalValue>` that
     /// `BexEngine::call_function` expects, using the engine's parameter metadata.
     async fn call_function(
@@ -105,6 +120,7 @@ impl Bex for BexEngine {
         }: BexArgs,
         call_ctx: FunctionCallContext,
     ) -> Result<BexRunResult, RuntimeError> {
+        let call_ctx = BexEngine::bind_invocation_context(&self, call_ctx)?;
         let params = self
             .function_params(function_name)
             .map_err(RuntimeError::from)?;
@@ -172,6 +188,10 @@ impl Bex for BexEngine {
 
     fn cancel_function_call(&self, call_id: CallId) -> Result<(), RuntimeError> {
         BexEngine::cancel_function_call(self, call_id).map_err(RuntimeError::from)
+    }
+
+    fn release_prepared_call(&self, call_id: CallId) {
+        BexEngine::release_prepared_call(self, call_id);
     }
 
     fn set_unhandled_spawn_error_handler(&self, handler: Option<UnhandledSpawnErrorHandler>) {

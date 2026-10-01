@@ -8,8 +8,8 @@
 import type { BamlPanic } from './errors.js';
 /** Capture the SDK entry, rather than the lifetime of a registered callable. */
 export declare function captureCallbackContext(callId: bigint): () => void;
-/** Each dispatch gets a child resource so enterWith cannot mutate the entry. */
-export declare function runHostCallback(callId: number, args: Buffer, callback: () => void): void;
+/** Each execution owns a child context through Promise settlement/cleanup. */
+export declare function runHostCallback(callId: number, args: Buffer, callback: () => void | Promise<void>, lease?: object): void | Promise<void>;
 export declare const supportsSyncStreamPulls = true;
 export declare function handleExitPanic(code: number, _fallbackPanic: BamlPanic): never;
 //# sourceMappingURL=platform.d.ts.map

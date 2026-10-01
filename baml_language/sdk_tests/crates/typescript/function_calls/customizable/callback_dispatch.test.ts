@@ -4,6 +4,7 @@
  * Casts only admit Promise results omitted by current generated callback types.
  */
 import "./baml_sdk/index.js";
+import { BamlCallContext, BamlAbortError } from "@boundaryml/baml-bridge";
 import { describe, expect, it } from "vitest";
 import * as baml from "./baml_sdk/host_callable_tests/index.js";
 
@@ -83,5 +84,46 @@ describe("callback_dispatch", () => {
       "2",
     ]);
     expect(calls).toEqual([0, 1, 2]);
+  });
+  it("cancelled_waiter_does_not_end_host_execution", async () => {
+    for (const outcome of ["return", "throw"]) {
+      const ctx = new BamlCallContext();
+      let markEntered!: () => void;
+      const entered = new Promise<void>((resolve) => { markEntered = resolve; });
+      let release!: () => void;
+      const released = new Promise<void>((resolve) => { release = resolve; });
+      let markExited!: () => void;
+      const exited = new Promise<void>((resolve) => { markExited = resolve; });
+      const exits: number[] = [];
+      const callback = async (value: number) => {
+        markEntered();
+        try {
+          await released;
+        } finally {
+          exits.push(value);
+          markExited();
+        }
+        if (outcome === "throw") throw new Error("late host failure");
+        return value + 1;
+      };
+      const pending = baml.call_int_callback_async(
+        callback as unknown as (value: number) => number, 6, { $ctx: ctx },
+      );
+      try {
+        await entered;
+        ctx.abort();
+        await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
+        expect(exits).toEqual([]);
+        release();
+        await exited;
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        expect(exits).toEqual([6]);
+        await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
+        expect(await baml.call_int_callback_async((value) => value + 1, 7)).toBe(8);
+      } finally {
+        release();
+        await pending.catch(() => {});
+      }
+    }
   });
 });

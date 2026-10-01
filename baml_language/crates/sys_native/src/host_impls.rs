@@ -59,7 +59,7 @@ impl io::IoNamespaceHost for NativeSysOps {
         // forwards the throw via `OpError.host_thrown` (set by
         // `host_dispatch::complete_with_throw` on the bridge side).
         _type_arg_1: RuntimeTy,
-        _ctx: &SysOpContext,
+        ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         // Extract the HostValueArc from the incoming handle and confirm
         // it's a callable. Only `HostValueKind::Callable` is dispatchable —
@@ -149,16 +149,15 @@ impl io::IoNamespaceHost for NativeSysOps {
         // already-failed call) and must NOT build an `InflightGuard` (its drop
         // would evict the other call's entry). `result` already carries the
         // collision error, so the `match result` below returns it.
-        let guard = if host_dispatch::insert_for_call(call_id, origin_call_id, completion) {
-            // RAII guard that evicts this call's in-flight table entry on drop.
-            // Moved into the async future below so that if the engine drops the
-            // future on cancellation (the `tokio::select!` cancel arm), the
-            // dangling entry is removed — no leak, and a late
-            // `complete_host_call` for this id hits the benign unknown-id path.
-            // On normal completion the entry is already gone (taken by
-            // `complete_host_call`), so the guard's `take` is a no-op. The guard
-            // carries only the `Copy` `call_id`. No wall-clock timeout: see the
-            // module docs.
+        let guard = if host_dispatch::insert_with_resources(
+            call_id,
+            origin_call_id,
+            completion,
+            Box::new((ctx.clone(), host_arc.clone(), positional, optional)),
+        ) {
+            // The sysop future owns result delivery. If cancelled, its guard
+            // retires the waiter; a bridge execution lease independently keeps
+            // context and borrowed argument owners alive through actual exit.
             let guard = host_dispatch::InflightGuard::new(call_id);
 
             // Fire the dispatch callback. If no bridge has registered, fail

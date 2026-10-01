@@ -4,16 +4,19 @@
  * Native-blocking cases require an external process deadline.
  */
 import "./baml_sdk/index.js";
+import { BamlCallContext, BamlAbortError } from "@boundaryml/baml-bridge";
 import { describe, expect, it } from "vitest";
 import * as baml from "./baml_sdk/host_callable_tests/index.js";
 import { isTestRuntime } from "./test_runtime.js";
 
 // Computed, ignored imports keep Node builtins out of the browser bundle.
 let AsyncLocalStorage: typeof import("node:async_hooks").AsyncLocalStorage;
+let createHook: typeof import("node:async_hooks").createHook;
+let executionAsyncId: typeof import("node:async_hooks").executionAsyncId;
 let nextTurn: typeof import("node:timers/promises").setImmediate;
 let threadId: number;
 if (isTestRuntime("node")) {
-  ({ AsyncLocalStorage } = await import(
+  ({ AsyncLocalStorage, createHook, executionAsyncId } = await import(
     /* @vite-ignore */ ["node", "async_hooks"].join(":")
   ));
   ({ setImmediate: nextTurn } = await import(
@@ -311,6 +314,57 @@ describe.runIf(isTestRuntime("node"))(
         ).toEqual(["0", "1", "2"]);
         expect(request.getStore()).toBe("caller");
       });
+    });
+    // SDK_PARITY_LINT(skip): Node AsyncResource destruction and AsyncLocalStorage
+    it("cancelled_waiter_keeps_host_resource_until_promise_exit_typescript_only", async () => {
+      const request = new AsyncLocalStorage<string>();
+      const ctx = new BamlCallContext();
+      const resources = new Set<number>();
+      const destroyed = new Set<number>();
+      const hook = createHook({
+        init(id, type) { if (type === "BamlHostCallback") resources.add(id); },
+        destroy(id) { if (resources.has(id)) destroyed.add(id); },
+      }).enable();
+      let markEntered!: () => void;
+      const entered = new Promise<void>((resolve) => { markEntered = resolve; });
+      let release!: () => void;
+      const released = new Promise<void>((resolve) => { release = resolve; });
+      let resourceId = -1;
+      let cleanedUp = false;
+      const callback = async (value: number) => {
+        resourceId = executionAsyncId();
+        expect(request.getStore()).toBe("original");
+        markEntered();
+        try {
+          await released;
+          return value;
+        } finally {
+          expect(request.getStore()).toBe("original");
+          cleanedUp = true;
+        }
+      };
+      const pending = request.run("original", () => baml.call_int_callback_async(
+        callback as unknown as (value: number) => number, 6, { $ctx: ctx },
+      ));
+      try {
+        await entered;
+        expect(resources.has(resourceId)).toBe(true);
+        ctx.abort();
+        await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
+        await nextTurn();
+        expect(cleanedUp).toBe(false);
+        expect(destroyed.has(resourceId)).toBe(false);
+        release();
+        await nextTurn();
+        await nextTurn();
+        expect(cleanedUp).toBe(true);
+        expect(destroyed.has(resourceId)).toBe(true);
+      } finally {
+        release();
+        await pending.catch(() => {});
+        await nextTurn();
+        hook.disable();
+      }
     });
   },
 );

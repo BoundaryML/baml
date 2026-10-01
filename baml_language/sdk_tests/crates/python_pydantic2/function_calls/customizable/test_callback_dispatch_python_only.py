@@ -343,3 +343,50 @@ async def test_task_factory_failure_completes_dispatch_and_preserves_exception_p
         loop.set_task_factory(previous_factory)
     assert await baml.call_int_callback_async(callback, 8) == 8
     assert called == [8]
+
+
+# SDK_PARITY_LINT(skip): Python task unwinding and ContextVar semantics
+@pytest.mark.asyncio
+async def test_cancelled_waiter_keeps_host_context_through_cleanup_python_only():
+    from baml_bridge import BamlCallContext
+
+    request = contextvars.ContextVar("request", default="missing")
+    ctx = BamlCallContext()
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    exited = asyncio.Event()
+    observed = []
+
+    async def callback(value):
+        assert request.get() == "original"
+        entered.set()
+        try:
+            await release.wait()
+        finally:
+            # Keep unwinding past BAML's cancellation outcome.
+            await release.wait()
+            observed.append(request.get())
+            exited.set()
+        return value
+
+    token = request.set("original")
+    try:
+        pending = asyncio.create_task(baml.call_int_callback_async(callback, 6, _ctx=ctx))
+    finally:
+        request.reset(token)
+    try:
+        await asyncio.wait_for(entered.wait(), 3)
+        ctx.abort()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(pending, 3)
+        assert observed == []
+        assert request.get() == "missing"
+        release.set()
+        await asyncio.wait_for(exited.wait(), 3)
+        await asyncio.sleep(0)
+        assert observed == ["original"]
+    finally:
+        release.set()
+        if not pending.done():
+            pending.cancel()
+        await asyncio.gather(pending, return_exceptions=True)

@@ -6,7 +6,7 @@
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
 import { AsyncResource } from 'node:async_hooks';
-import { _getHostCallOrigin, _discardHostCallArgs } from './native.js';
+import { _startHostCallExecution, _finishHostCallExecution } from './native.js';
 const callbackContexts = new Map();
 /** Capture the SDK entry, rather than the lifetime of a registered callable. */
 export function captureCallbackContext(callId) {
@@ -18,27 +18,48 @@ export function captureCallbackContext(callId) {
         entry.emitDestroy();
     };
 }
-/** Each dispatch gets a child resource so enterWith cannot mutate the entry. */
-export function runHostCallback(callId, args, callback) {
-    const origin = _getHostCallOrigin(callId);
+// Retain Promise executions even after their BAML entry removes its waiter.
+// This also owns the callback/arguments and causal context through real exit.
+const activeHostExecutions = new Map();
+/** Each execution owns a child context through Promise settlement/cleanup. */
+export function runHostCallback(callId, args, callback, lease) {
+    if (!lease)
+        throw new Error("native host dispatch has no execution lease");
+    const origin = _startHostCallExecution(lease);
     if (origin === null || origin === undefined) {
-        _discardHostCallArgs(args);
-        return; // The engine cancelled this queued dispatch before it started.
+        _finishHostCallExecution(lease);
+        return; // Cancellation won before this queued execution started.
     }
     const invoke = () => {
-        const dispatch = new AsyncResource('BamlHostCallback', { requireManualDestroy: true });
+        const resource = new AsyncResource('BamlHostCallback', { requireManualDestroy: true });
+        const execution = { resource, callback, args, lease, completion: undefined };
+        activeHostExecutions.set(callId, execution);
+        const finish = () => {
+            activeHostExecutions.delete(callId);
+            try {
+                resource.emitDestroy();
+            }
+            finally {
+                _finishHostCallExecution(lease);
+            }
+        };
         try {
-            dispatch.runInAsyncScope(callback);
+            const completion = resource.runInAsyncScope(callback);
+            if (completion) {
+                execution.completion = completion.finally(finish);
+                return execution.completion;
+            }
         }
-        finally {
-            dispatch.emitDestroy();
+        catch (error) {
+            finish();
+            throw error;
         }
+        finish();
     };
     const entry = callbackContexts.get(origin);
     if (entry)
-        entry.runInAsyncScope(invoke);
-    else
-        invoke(); // Raw native callers do not install an SDK entry context.
+        return entry.runInAsyncScope(invoke);
+    return invoke(); // Raw native callers do not install an SDK entry context.
 }
 export const supportsSyncStreamPulls = true;
 export function handleExitPanic(code, _fallbackPanic) {

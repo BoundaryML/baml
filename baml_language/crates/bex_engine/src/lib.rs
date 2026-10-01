@@ -74,6 +74,7 @@ mod function_call_context;
 mod future;
 pub use future::LeakedFuture;
 mod inbound_config;
+mod invocation;
 pub mod logger;
 #[cfg(not(target_arch = "wasm32"))]
 mod telemetry;
@@ -119,9 +120,11 @@ use bex_vm_types::{
 // Re-export CancellationToken for callers.
 pub use function_call_context::{
     BoundaryContext, BoundaryStorageContext, FunctionCallContext, FunctionCallContextBuilder,
+    InheritedInvocationState,
 };
 pub use inbound_config::{InboundUnionAmbiguityPolicy, register_inbound_union_ambiguity_policy};
 use indexmap::IndexMap;
+use invocation::PreparedInvocation;
 pub use sys_types::{CallId, ClassDefinition, ClassFieldDefinition};
 use sys_types::{OpError, SysOpResult};
 use telemetry_state::EngineTelemetry;
@@ -372,7 +375,7 @@ enum CallableArgs {
 /// site cannot leak entries.
 #[derive(Clone)]
 struct ActiveCall {
-    cancel: CancellationToken,
+    cancel: TaskCancel,
     pending: bool,
 }
 
@@ -463,8 +466,8 @@ impl RootCallWork {
     fn register(
         engine: Arc<BexEngine>,
         call_id: CallId,
-        cancel: CancellationToken,
-    ) -> Result<(Self, CancellationToken), EngineError> {
+        cancel: TaskCancel,
+    ) -> Result<Self, EngineError> {
         let lifecycle = engine
             .lifecycle
             .lock()
@@ -476,36 +479,38 @@ impl RootCallWork {
             .active_calls
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let cancel = match map.get_mut(&call_id) {
+        match map.get(&call_id) {
             Some(existing) if existing.pending => {
-                existing.pending = false;
-                existing.cancel.clone()
+                map.remove(&call_id);
+                return Err(cancelled_unhandled_throw());
             }
             Some(_) => return Err(EngineError::DuplicateCallId { call_id }),
-            None => {
-                map.insert(
-                    call_id,
-                    ActiveCall {
-                        cancel: cancel.clone(),
-                        pending: false,
-                    },
-                );
-                cancel
-            }
-        };
+            None => {}
+        }
+        if cancel.is_cancelled() {
+            return Err(cancelled_unhandled_throw());
+        }
+        // This insert is the commit point. Cancellation routed by call ID
+        // holds this same lock, so it either leaves a pending request above
+        // or observes and cancels this admitted invocation.
         let work_guard = engine.bex_work.register_work();
+        map.insert(
+            call_id,
+            ActiveCall {
+                cancel,
+                pending: false,
+            },
+        );
         drop(map);
         drop(lifecycle);
+        let registration = Self {
+            work_guard,
+            engine,
+            call_id,
+        };
         #[cfg(not(target_arch = "wasm32"))]
-        engine.ensure_idle_gc_worker();
-        Ok((
-            Self {
-                work_guard,
-                engine,
-                call_id,
-            },
-            cancel,
-        ))
+        registration.engine.ensure_idle_gc_worker();
+        Ok(registration)
     }
 
     fn reserve_cancelled(engine: &BexEngine, call_id: CallId) {
@@ -520,7 +525,7 @@ impl RootCallWork {
         match map.get(&call_id) {
             Some(existing) => existing.cancel.cancel(),
             None if *lifecycle == EngineLifecycle::Running => {
-                let cancel = CancellationToken::new();
+                let cancel = TaskCancel::detached([]);
                 cancel.cancel();
                 map.insert(
                     call_id,
@@ -3033,36 +3038,16 @@ impl BexEngine {
         self: &Arc<Self>,
         function_name: &str,
         args: Vec<BexExternalValue>,
-        FunctionCallContext {
-            host_call_id,
-            boundary,
-            logger,
-            cancel,
-
-            type_args,
-            type_defs,
-        }: FunctionCallContext,
+        mut call_ctx: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
+        call_ctx.bind_timeout(self.engine_id)?;
         let args = args
             .into_iter()
             .map(|arg| BexCallArg::Provided(Box::new(arg)))
             .collect();
-        self.call_function_bound_args_with_outcome(
-            function_name,
-            args,
-            FunctionCallContext {
-                host_call_id,
-                boundary,
-                logger,
-                cancel,
-
-                type_args,
-                type_defs,
-            },
-            copy_objects,
-        )
-        .await
+        self.call_function_bound_args_with_outcome(function_name, args, call_ctx, copy_objects)
+            .await
     }
 
     pub async fn call_function_bound_args(
@@ -3081,9 +3066,10 @@ impl BexEngine {
         self: &Arc<Self>,
         function_name: &str,
         args: Vec<BexCallArg>,
-        call_ctx: FunctionCallContext,
+        mut call_ctx: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
+        call_ctx.bind_timeout(self.engine_id)?;
         let (function, kind) = self.lookup_function(function_name)?;
         self.call_resolved_with_trace(function, kind, function_name, args, call_ctx, copy_objects)
             .await
@@ -3104,26 +3090,17 @@ impl BexEngine {
             boundary,
             logger,
             cancel,
+            cancel_tokens,
+            inherited_state,
+            timeout: _,
+            deadline,
+            bound_runtime: _,
 
             type_args,
             type_defs,
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
-        // Register this host call so `cancel_function_call(host_call_id)` can
-        // target it. The RAII guard removes the entry on drop (including
-        // panic unwind). Insertion and guard construction are atomic, so a
-        // panic here cannot leak registry entries.
-        let (call_work, cancel) = RootCallWork::register(Arc::clone(self), host_call_id, cancel)?;
-
-        // Fail fast if already cancelled — guarantees pre-cancelled IDs
-        // always produce a `baml.panics.Cancelled` panic regardless of
-        // function contents.
-        if cancel.is_cancelled() {
-            return Err(cancelled_unhandled_throw());
-        }
-        Box::pin(self.collect_before_call(&call_work.work_guard)).await;
-
         if matches!(kind, bex_vm_types::FunctionKind::NativeUnresolved) {
             return Err(EngineError::NotInvokableAsEntry {
                 name: function_name.to_string(),
@@ -3143,7 +3120,15 @@ impl BexEngine {
         // Tagged capabilities are live engine values. Acquire the heap permit
         // before generic inference so their type arguments come from the
         // rooted object, never from host-echoed descriptive metadata.
-        let mut thread = self.new_root_thread(cancel.clone()).await;
+        let mut thread = self.new_root_thread(CancellationToken::new()).await;
+        self.prepare_cancellation(
+            &mut thread,
+            Some(function_index),
+            cancel,
+            &cancel_tokens,
+            inherited_state,
+            deadline,
+        )?;
 
         // `type_args` is the unified `TypeVar -> concrete` binding map for a
         // generic call (01pt3). It already holds the host's explicit `_types=`
@@ -3463,7 +3448,7 @@ impl BexEngine {
                 BexCallArg::OmittedDefault => Ok(Value::OMITTED_ARG),
             })
             .collect::<Result<Vec<_>, _>>()?;
-        self.run_entry_point(
+        self.prepare_entry_point(
             thread,
             function_index,
             vm_args,
@@ -3476,7 +3461,9 @@ impl BexEngine {
             boundary,
             logger,
             copy_objects,
-        )
+        )?
+        .admit()?
+        .execute()
         .await
     }
 
@@ -3512,14 +3499,14 @@ impl BexEngine {
         inactive.acquire().await
     }
 
-    /// Shared entry-point core: set the VM's entry frame, run the thread event
-    /// loop, and extract the root value. Used by both the named-function path
-    /// and the closure path; the callers differ only in how they resolve the
-    /// entry pointer and its `return`/`throws` types.
+    /// Finish preparation for every executable entry without setting a VM
+    /// frame, registering active execution or running application code.
+    /// Named functions and callable targets differ only in target resolution
+    /// and argument binding; both admit and execute this same prepared state.
     #[expect(clippy::too_many_arguments)]
-    async fn run_entry_point(
+    fn prepare_entry_point(
         self: &Arc<Self>,
-        mut thread: ActiveHeapPermit<BexThread>,
+        thread: ActiveHeapPermit<BexThread>,
         entry_ptr: HeapPtr,
         vm_args: Vec<Value>,
         type_args: indexmap::IndexMap<String, RuntimeTy>,
@@ -3533,7 +3520,7 @@ impl BexEngine {
         logger: TraceLogger,
 
         copy_objects: bool,
-    ) -> Result<BexCallResult, EngineError> {
+    ) -> Result<PreparedInvocation, EngineError> {
         // Finish fallible host type narrowing before setting the entry frame.
         let mut runtime_named_objects = indexmap::IndexMap::new();
         for type_value in type_values.values() {
@@ -3586,59 +3573,20 @@ impl BexEngine {
             })?;
             type_args.insert(name, realized);
         }
-        // Entry, execution and explicit finalization share one producer until
-        // the task actually suspends. VM method scopes nest inside this poll.
-        let execution = async {
-            thread
-                .vm
-                .set_entry_point_with_type_values(entry_ptr, &vm_args, type_args, type_values);
-            let log_capture = logger.is_enabled().then(|| LogCaptureContext {
-                boundary_id: boundary.boundary_id,
-                logger: logger.clone(),
-            });
-            self.run_thread_event_loop_inner(
-                return_type,
-                throws_type,
-                thread,
-                host_call_id,
-                log_capture,
-                copy_objects,
-            )
-            .await
-        };
-        #[cfg(not(target_arch = "wasm32"))]
-        let result = match &self.telemetry {
-            Some(telemetry) => telemetry.runtime.scope(execution).await,
-            None => execution.await,
-        };
-        #[cfg(target_arch = "wasm32")]
-        let result = execution.await;
-
-        // Flush any host-value releases queued during this call. The root
-        // thread's `ActiveHeapPermit` was consumed by `run_thread_event_loop`
-        // (taken by value) and has been dropped by the time it returns, so we
-        // hold no heap permit here and the host release callbacks run safely
-        // off the parked-permit window. This makes release prompt even when a
-        // GC never ran during the call.
-        bex_external_types::host_value::host_release_dispatch::drain();
-
-        // active_calls cleanup is done by RootCallWork on drop.
-        //
-        // Keep genuine engine errors intact. Cancellation is surfaced as a
-        // `baml.panics.Cancelled` panic — either raised by the VM's `Await`
-        // opcode, or synthesized by engine safepoints (see
-        // `cancelled_unhandled_throw`).
-        match result {
-            Ok(ThreadOutcome::RootValue(value)) => Ok(BexCallResult { value: Ok(value) }),
-            Ok(ThreadOutcome::SettledChild(_)) => Ok(BexCallResult {
-                // Root threads should never produce SettledChild; treat as an
-                // engine invariant violation rather than silently returning Null.
-                value: Err(EngineError::Other(
-                    "BEP-034: root thread terminated as SettledChild".to_string(),
-                )),
-            }),
-            Err(err) => Ok(BexCallResult { value: Err(err) }),
-        }
+        Ok(PreparedInvocation {
+            runtime: Arc::clone(self),
+            thread,
+            entry_ptr,
+            vm_args,
+            type_args,
+            type_values,
+            return_type,
+            throws_type,
+            host_call_id,
+            boundary,
+            logger,
+            copy_objects,
+        })
     }
 
     /// Invoke a callable value — a raw function, a BAML closure (with captures),
@@ -3708,23 +3656,25 @@ impl BexEngine {
         self: &Arc<Self>,
         handle: bex_external_types::Handle,
         args: CallableArgs,
-        FunctionCallContext {
+        mut call_ctx: FunctionCallContext,
+        copy_objects: bool,
+    ) -> Result<BexCallResult, EngineError> {
+        call_ctx.bind_timeout(self.engine_id)?;
+        let FunctionCallContext {
             host_call_id,
             boundary,
             logger,
             cancel,
+            cancel_tokens,
+            inherited_state,
+            timeout: _,
+            deadline,
+            bound_runtime: _,
 
             type_args: _,
             type_defs: _,
-        }: FunctionCallContext,
-        copy_objects: bool,
-    ) -> Result<BexCallResult, EngineError> {
-        let (call_work, cancel) = RootCallWork::register(Arc::clone(self), host_call_id, cancel)?;
-        if cancel.is_cancelled() {
-            return Err(cancelled_unhandled_throw());
-        }
-        Box::pin(self.collect_before_call(&call_work.work_guard)).await;
-        let mut thread = self.new_root_thread(cancel.clone()).await;
+        } = call_ctx;
+        let mut thread = self.new_root_thread(CancellationToken::new()).await;
 
         // Resolve the handle to the live heap object. The handle keeps it rooted.
         let entry_ptr = self
@@ -3827,6 +3777,15 @@ impl BexEngine {
                     });
                 }
             };
+
+        self.prepare_cancellation(
+            &mut thread,
+            func_ptr,
+            cancel,
+            &cancel_tokens,
+            inherited_state,
+            deadline,
+        )?;
 
         // Read the inner function's metadata. `param_types` carries declared
         // parameter types (including `self` for methods) for type-directed
@@ -4058,7 +4017,7 @@ impl BexEngine {
             seed_wire_type_args.insert(name.clone(), wire_ty);
             seed_live_type_args.insert(name, live_ty);
         }
-        self.run_entry_point(
+        self.prepare_entry_point(
             thread,
             entry,
             vm_args,
@@ -4071,8 +4030,96 @@ impl BexEngine {
             boundary,
             logger,
             copy_objects,
-        )
+        )?
+        .admit()?
+        .execute()
         .await
+    }
+
+    /// Bind invocation controls to this runtime exactly once. SDK request
+    /// decoding and named argument binding use this before yielding or doing
+    /// preparation; later entry paths preserve the same absolute deadline.
+    pub fn bind_invocation_context(
+        &self,
+        mut context: FunctionCallContext,
+    ) -> Result<FunctionCallContext, EngineError> {
+        context.bind_timeout(self.engine_id)?;
+        Ok(context)
+    }
+
+    /// Capture the complete cancellation source set of an admitted invocation.
+    /// The snapshot stays valid through callbacks that outlive the parent waiter.
+    pub fn invocation_state(
+        &self,
+        call_id: CallId,
+    ) -> Result<InheritedInvocationState, EngineError> {
+        let calls = self
+            .active_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let call = calls
+            .get(&call_id)
+            .filter(|call| !call.pending)
+            .ok_or(EngineError::FunctionCallNotFound { call_id })?;
+        Ok(InheritedInvocationState {
+            engine_id: self.engine_id,
+            cancellation: call.cancel.clone(),
+        })
+    }
+
+    fn prepare_cancellation(
+        &self,
+        thread: &mut ActiveHeapPermit<BexThread>,
+        function: Option<HeapPtr>,
+        explicit: CancellationToken,
+        tokens: &[bex_external_types::Handle],
+        inherited: Option<InheritedInvocationState>,
+        mut deadline: Option<invocation::InvocationDeadline>,
+    ) -> Result<(), EngineError> {
+        let mut sources = vec![explicit];
+        for token in tokens {
+            let ptr = self.resolve_handle(thread.proof(), token).ok_or_else(|| {
+                EngineError::TypeMismatch {
+                    message: "cancel token belongs to a different runtime or is no longer live"
+                        .into(),
+                }
+            })?;
+            sources.extend(
+                bex_vm::package_baml::cancel_token_members(&thread.vm, Value::object(ptr))
+                    .ok_or_else(|| EngineError::TypeMismatch {
+                        message: "cancel token must be a generated baml.spawn.CancelToken".into(),
+                    })?,
+            );
+        }
+        if let Some(inherited) = inherited {
+            if inherited.engine_id != self.engine_id {
+                return Err(EngineError::TypeMismatch {
+                    message: "inherited invocation state belongs to a different runtime".into(),
+                });
+            }
+            // Resolve by function identity, so aliases/callable methods have
+            // the same exemption and user functions cannot acquire it by name.
+            let control = function.is_some_and(|function| {
+                ["new", "any", "cancel", "is_cancelled"]
+                    .iter()
+                    .any(|method| {
+                        self.resolved_function_names
+                            .get(&format!("baml.spawn.CancelToken.{method}"))
+                            .is_some_and(|(ptr, _)| *ptr == function)
+                    })
+            });
+            if !control {
+                sources.extend(inherited.cancellation.tokens().cloned());
+                if let Some(parent_deadline) = inherited.cancellation.deadline() {
+                    deadline =
+                        Some(deadline.map_or(parent_deadline, |own| own.earliest(parent_deadline)));
+                }
+            }
+        }
+        // No forwarding tasks and no authority over input tokens. Each root
+        // owns only the fresh token that call-ID cancellation may fire.
+        thread.cancel = TaskCancel::detached(sources).with_deadline(deadline);
+        Ok(())
     }
 
     /// Cancel a function call by its ID.
@@ -4083,6 +4130,18 @@ impl BexEngine {
     pub fn cancel_function_call(&self, call_id: CallId) -> Result<(), EngineError> {
         RootCallWork::reserve_cancelled(self, call_id);
         Ok(())
+    }
+
+    /// Discard a pending request for a bridge invocation that never admitted.
+    /// An active invocation is exclusively owned by its admission guard.
+    pub fn release_prepared_call(&self, call_id: CallId) {
+        let mut calls = self
+            .active_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if calls.get(&call_id).is_some_and(|call| call.pending) {
+            calls.remove(&call_id);
+        }
     }
 
     fn validate_bound_args(
@@ -5616,6 +5675,7 @@ impl BexEngine {
                                 &runtime_type_overlay,
                                 call_id,
                                 &op_cancel,
+                                thread.vm_thread_cancel(),
                                 thread.proof(),
                                 runtime_schema_overlay.as_ref(),
                                 network
@@ -6067,6 +6127,7 @@ impl BexEngine {
         runtime_type_overlay: &RuntimeTypeOverlay,
         call_id: CallId,
         cancel: &CancellationToken,
+        invocation_cancel: &TaskCancel,
         permit: bex_heap::PermitProof<'_>,
         runtime_schema: Option<&RuntimeSchemaOverlay>,
         network: Option<sys_types::network::NetworkContext>,
@@ -6095,7 +6156,14 @@ impl BexEngine {
         }
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
-        let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
+        let spawner = Arc::new(InvocationSpawner {
+            runtime: Arc::clone(self),
+            inherited: InheritedInvocationState {
+                engine_id: self.engine_id,
+                cancellation: invocation_cancel.clone(),
+            },
+        });
+        let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), spawner);
         ctx.network = network;
         if let Some(runtime_schema) = runtime_schema {
             let mut classes = ctx.class_definitions.as_ref().clone();
@@ -7048,6 +7116,55 @@ impl sys_types::VmSpawner for BexEngine {
         )
         .await
         .map_err(|e| Box::new(e) as Box<dyn Send + Sync + 'static>)
+    }
+}
+
+/// Sys-op callbacks retain invocation state even after their BAML waiter exits.
+struct InvocationSpawner {
+    runtime: Arc<BexEngine>,
+    inherited: InheritedInvocationState,
+}
+
+#[async_trait]
+impl sys_types::VmSpawner for InvocationSpawner {
+    async fn spawn_with_function(
+        self: Arc<Self>,
+        function_name: String,
+        args: Vec<BexExternalValue>,
+        cancel: CancellationToken,
+    ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
+        self.runtime
+            .call_function(
+                &function_name,
+                args,
+                FunctionCallContextBuilder::new(sys_types::CallId::next())
+                    .with_cancel_token(cancel)
+                    .with_inherited_state(self.inherited.clone())
+                    .build(),
+                true,
+            )
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn Send + Sync + 'static>)
+    }
+
+    async fn spawn_with_callable(
+        self: Arc<Self>,
+        callable: bex_external_types::Handle,
+        args: Vec<BexExternalValue>,
+        cancel: CancellationToken,
+    ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
+        self.runtime
+            .call_callable(
+                callable,
+                args,
+                FunctionCallContextBuilder::new(sys_types::CallId::next())
+                    .with_cancel_token(cancel)
+                    .with_inherited_state(self.inherited.clone())
+                    .build(),
+                true,
+            )
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn Send + Sync + 'static>)
     }
 }
 
