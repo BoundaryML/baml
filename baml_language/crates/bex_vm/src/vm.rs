@@ -533,27 +533,45 @@ pub(crate) mod tests {
             ClockInstant::from_ticks(1),
             &sys_types::network::NetworkEventKind::Close,
         );
-        // Bare test VMs have no error classes: the error is captured as is.
+        // Bare test VMs have no error classes: the error is captured as is,
+        // but never quoting the raw URL or its query.
+        let raw = "https://example.com/v1?key=secret";
+        let message = format!("failed for url ({raw}), query key=secret");
+        let error = vm.tlab.alloc_string(message.as_str());
         vm.close_network_span(
             span,
             ClockInstant::from_ticks(2),
             InvocationOutcome::Errored,
-            Some(Value::int(9)),
+            Some(Value::object(error)),
+            &[raw],
         );
         let records = vm.telemetry.as_ref().unwrap().span_records();
-        assert!(matches!(
-            records,
-            [
-                SpanRecord::ThreadSpanAnnouncement { .. },
-                SpanRecord::NetworkSpanAnnouncement(announcement),
-                SpanRecord::NetworkEvent(close),
-                SpanRecord::NetworkSpanCompletion(completion),
-            ] if announcement.id == span
-                && &*announcement.url == "https://example.com/"
-                && close.name == btel_records::NetworkEventName::Close
-                && completion.error.as_ref().and_then(btel_snapshot::Snapshot::value)
-                    == Some(btel_snapshot::SnapshotValue::Int(9))
-        ));
+        let [
+            SpanRecord::ThreadSpanAnnouncement { .. },
+            SpanRecord::NetworkSpanAnnouncement(announcement),
+            SpanRecord::NetworkEvent(close),
+            SpanRecord::NetworkSpanCompletion(completion),
+        ] = records
+        else {
+            panic!("unexpected records: {records:?}");
+        };
+        assert_eq!(announcement.id, span);
+        assert_eq!(&*announcement.url, "https://example.com/");
+        assert_eq!(close.name, btel_records::NetworkEventName::Close);
+        let captured = completion.error.as_ref().unwrap();
+        let Some(btel_snapshot::SnapshotValue::String(text)) = captured.value() else {
+            panic!("the error is a string");
+        };
+        let hashed = crate::telemetry::network_hash_for_tests("secret");
+        assert_eq!(
+            captured.string(text).as_str(),
+            format!("failed for url (https://example.com/v1?key={hashed}), query key={hashed}")
+        );
+        // The program's value is untouched.
+        assert_eq!(
+            vm.as_string(&Value::object(error)).unwrap().as_str(),
+            message
+        );
         vm.telemetry = None;
         assert_eq!(vm.open_network_span(&request), None);
     }
@@ -6990,13 +7008,15 @@ impl BexVm {
 
     /// End an open request's span. An `error` is the thrown value: its span
     /// records the `baml.errors.Context` a handler would bind, as a function
-    /// span does.
+    /// span does, with each of `raw_urls` it quotes sanitized. The value the
+    /// program sees is unchanged.
     pub fn close_network_span(
         &mut self,
         span: btel_types::TelemetryId,
         at: ClockInstant,
         outcome: InvocationOutcome,
         error: Option<Value>,
+        raw_urls: &[&str],
     ) {
         if self.telemetry.is_none() {
             return;
@@ -7005,7 +7025,7 @@ impl BexVm {
         let state = self.telemetry.as_mut().unwrap();
         // SAFETY: the engine calls this under the heap permit; neither the
         // context allocation above nor capture collects.
-        unsafe { state.close_network_span(span, at, outcome, error) };
+        unsafe { state.close_network_span(span, at, outcome, error, raw_urls) };
     }
 
     /// The node model usage recorded now belongs to: the innermost span, or

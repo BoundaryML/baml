@@ -25,17 +25,27 @@ use crate::{BexEngine, thread::BexThread};
 
 /// What an HTTP sys-op does to a network span.
 pub(crate) enum NetworkOp {
-    /// `_send`, `_fetch` or `_send_sse` opened `span`; its IO side reports
-    /// through `context`.
+    /// `_send`, `_fetch` or `_send_sse` opened `span` for a request to
+    /// `url`, as sent; its IO side reports through `context`.
     Opened {
         span: TelemetryId,
         context: NetworkContext,
+        url: String,
     },
-    /// `Response.text`/`bytes` or `SseStream.next`/`close` on `traced` data.
+    /// `Response.text`/`bytes` or `SseStream.next`/`close` on `traced` data,
+    /// whose response came from `url`.
     Reads {
         operation: SysOp,
         traced: Arc<dyn Any + Send + Sync>,
+        url: Option<String>,
     },
+}
+
+/// A span that ends with the error being thrown. Its error is captured
+/// without the raw `urls` it may quote: they become the sanitized URLs.
+pub(crate) struct NetworkClose {
+    span: TelemetryId,
+    urls: Vec<String>,
 }
 
 impl NetworkOp {
@@ -47,10 +57,16 @@ impl NetworkOp {
     }
 
     /// The span a failed or cancelled op ends, if it is still open.
-    pub(crate) fn span_to_close(&self) -> Option<TelemetryId> {
+    pub(crate) fn span_to_close(&self) -> Option<NetworkClose> {
         match self {
-            Self::Opened { span, .. } => Some(*span),
-            Self::Reads { traced, .. } => take_span(traced),
+            Self::Opened { span, url, .. } => Some(NetworkClose {
+                span: *span,
+                urls: vec![url.clone()],
+            }),
+            Self::Reads { traced, url, .. } => Some(NetworkClose {
+                span: take_span(traced)?,
+                urls: url.iter().cloned().collect(),
+            }),
         }
     }
 }
@@ -89,15 +105,14 @@ impl BexEngine {
                         now: Arc::new(move || clock.read().get()),
                         sink: Arc::clone(&telemetry.network),
                     },
+                    url: request.url,
                 })
             }
             SysOp::BamlHttpResponseText | SysOp::BamlHttpResponseBytes => {
-                traced_field(&thread.vm, *args.first()?, "_body")
-                    .map(|traced| NetworkOp::Reads { operation, traced })
+                reads(&thread.vm, operation, *args.first()?, "_body")
             }
             SysOp::BamlHttpSseStreamNext | SysOp::BamlHttpSseStreamClose => {
-                traced_field(&thread.vm, *args.first()?, "_handle")
-                    .map(|traced| NetworkOp::Reads { operation, traced })
+                reads(&thread.vm, operation, *args.first()?, "_handle")
             }
             _ => None,
         }
@@ -105,6 +120,9 @@ impl BexEngine {
 
     /// Write the events the IO side queued, whatever thread's span they
     /// belong to. Called after every sys-op, before its result reaches the VM.
+    /// Events still queued when the engine shuts down are not written: a
+    /// last drain onto the root thread belongs in `shutdown`, with the GC
+    /// `drop` hook (see `NetworkTraced`).
     pub(crate) fn drain_network_events(&self, vm: &mut BexVm) {
         let Some(telemetry) = &self.telemetry else {
             return;
@@ -126,10 +144,12 @@ impl BexEngine {
         match op {
             NetworkOp::Opened { span, .. } => {
                 if !carries(result, *span) {
-                    vm.close_network_span(*span, at, InvocationOutcome::Ok, None);
+                    vm.close_network_span(*span, at, InvocationOutcome::Ok, None, &[]);
                 }
             }
-            NetworkOp::Reads { operation, traced } => {
+            NetworkOp::Reads {
+                operation, traced, ..
+            } => {
                 let end = match operation {
                     SysOp::BamlHttpSseStreamClose => NetworkEventKind::Close,
                     // A stream is read to its end when `next()` finds it done.
@@ -140,22 +160,27 @@ impl BexEngine {
                 };
                 if let Some(span) = take_span(traced) {
                     vm.network_event(span, at, &end);
-                    vm.close_network_span(span, at, InvocationOutcome::Ok, None);
+                    vm.close_network_span(span, at, InvocationOutcome::Ok, None, &[]);
                 }
             }
         }
     }
 
-    /// End the span of the sys-op whose error `value` is being thrown.
+    /// End the span of the sys-op whose error `value` is being thrown. The
+    /// program keeps the error as it is; the capture does not quote the raw
+    /// request URL.
     pub(crate) fn close_network_on_throw(thread: &mut BexThread, value: Value) {
-        let Some(span) = thread.network_close.take() else {
+        let Some(close) = thread.network_close.take() else {
             return;
         };
         let Some(at) = now(&thread.vm) else {
             return;
         };
         let outcome = thread.vm.telemetry_outcome_for_exception(value);
-        thread.vm.close_network_span(span, at, outcome, Some(value));
+        let urls: Vec<&str> = close.urls.iter().map(String::as_str).collect();
+        thread
+            .vm
+            .close_network_span(close.span, at, outcome, Some(value), &urls);
     }
 }
 
@@ -205,16 +230,29 @@ fn carries(result: &BexExternalValue, span: TelemetryId) -> bool {
     })
 }
 
-/// A traced `$rust_type` field of an instance, by name.
-fn traced_field(vm: &BexVm, value: Value, name: &str) -> Option<Arc<dyn Any + Send + Sync>> {
+/// A read on a `Response` or `SseStream` whose `field` is traced data.
+fn reads(vm: &BexVm, operation: SysOp, receiver: Value, field: &str) -> Option<NetworkOp> {
+    let data = instance_field(vm, receiver, field)?.as_object_ptr()?;
+    let Object::RustData(data) = vm.get_object(data) else {
+        return None;
+    };
+    NetworkTraced::of(data.as_ref())?;
+    let url = instance_field(vm, receiver, "url")
+        .and_then(|url| vm.as_string(&url).ok())
+        .map(|url| url.as_str().to_owned());
+    Some(NetworkOp::Reads {
+        operation,
+        traced: Arc::clone(data),
+        url,
+    })
+}
+
+/// An instance's field, by name.
+fn instance_field(vm: &BexVm, value: Value, name: &str) -> Option<Value> {
     let instance = vm.as_instance(&value).ok()?;
     let Object::Class(class) = vm.get_object(instance.class) else {
         return None;
     };
     let index = class.fields.iter().position(|field| field.name == name)?;
-    let field = instance.try_load_field(index)?;
-    let Object::RustData(data) = vm.get_object(field.as_object_ptr()?) else {
-        return None;
-    };
-    NetworkTraced::of(data.as_ref()).map(|_| Arc::clone(data))
+    instance.try_load_field(index)
 }

@@ -465,7 +465,9 @@ impl TelemetryState {
         )));
     }
 
-    /// End an open request's span. An errored one captures its error.
+    /// End an open request's span. An errored one captures its error; where
+    /// the error's text quotes one of `raw_urls` (the URLs the request went
+    /// to, as sent), the capture has the sanitized URL instead.
     ///
     /// # Safety
     /// `error` and its reachable objects must remain live under the heap permit.
@@ -475,9 +477,20 @@ impl TelemetryState {
         at: ClockInstant,
         outcome: InvocationOutcome,
         error: Option<Value>,
+        raw_urls: &[&str],
     ) {
         self.start_thread();
-        let error = error.and_then(|error| self.capture(snapshot::Input::Value(error)));
+        let error = error.and_then(|error| {
+            let mut rewrites: Vec<_> = raw_urls
+                .iter()
+                .flat_map(|url| network::url_rewrites(url))
+                .collect();
+            rewrites.sort_by_key(|(from, _)| std::cmp::Reverse(from.len()));
+            self.capture_scratch.rewrites = rewrites;
+            let captured = self.capture(snapshot::Input::Value(error));
+            self.capture_scratch.rewrites.clear();
+            captured
+        });
         self.write_span(SpanRecord::NetworkSpanCompletion(Box::new(
             btel_records::NetworkCompletion {
                 span,
@@ -1415,6 +1428,12 @@ fn default_mode(function: &Function, policy: TelemetryPolicy) -> InvocationMode 
     }
 }
 
+/// `sha256:` and the hex digits a sanitized value has in place of `value`.
+#[cfg(test)]
+pub(crate) fn network_hash_for_tests(value: &str) -> String {
+    network::hash(value)
+}
+
 #[cfg(test)]
 thread_local! {
     /// Unit tests keep records locally; this makes their VMs build raises
@@ -1997,7 +2016,7 @@ mod tests {
         );
         state.network_event(span, at(12), &NetworkEventKind::StreamEnd);
         state.network_event(span, at(13), &NetworkEventKind::Await);
-        unsafe { state.close_network_span(span, at(13), InvocationOutcome::Ok, None) };
+        unsafe { state.close_network_span(span, at(13), InvocationOutcome::Ok, None, &[]) };
         unsafe { state.complete_invocation(frame, &function, InvocationOutcome::Ok, None) };
 
         let records = network_records(&state);
@@ -2084,7 +2103,13 @@ mod tests {
             &NetworkEventKind::Body(b"secret".to_vec().into()),
         );
         unsafe {
-            state.close_network_span(span, at(6), InvocationOutcome::Errored, Some(Value::int(3)));
+            state.close_network_span(
+                span,
+                at(6),
+                InvocationOutcome::Errored,
+                Some(Value::int(3)),
+                &[],
+            );
         }
         let records = network_records(&state);
         let [

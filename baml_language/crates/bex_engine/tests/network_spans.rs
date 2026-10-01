@@ -61,11 +61,13 @@ const SOURCE: &str = r##"
         let ok = baml.http.send(request(base, "/ok")).text();
         let bytes = baml.http.send(request(base, "/bytes")).bytes();
         let missing = baml.http.send(request(base, "/missing")).text();
+        // The program sees the error as `reqwest` wrote it, raw URL included.
         let refused = {
             baml.http.send(request("http://127.0.0.1:1", "/refused"));
             "sent"
         } catch (e) {
-            _ => "refused"
+            baml.errors.Io => if (e.message.includes("key=sk-query")) { "refused" } else { "redacted" },
+            _ => "other"
         };
 
         let sse = baml.http.send_sse(request(base, "/sse"));
@@ -331,17 +333,16 @@ async fn each_request_records_its_span_events_and_end() {
     assert_eq!(load(span.event("data").payload_cas_id), json!("not here"));
     assert_eq!(outcome(span), ok);
 
-    // A transport error ends the span errored, with the error a handler sees.
+    // A transport error ends the span errored, with the error a handler
+    // sees, quoting the sanitized URL where the program's quotes the raw one.
     let span = &spans["refused"];
     assert!(span.events.is_empty());
     assert_eq!(outcome(span), (proto::InvocationOutcome::Errored, false));
     let error = load(span.completion.as_ref().unwrap().error_cas_id);
-    assert!(
-        error["error"]["message"]
-            .as_str()
-            .is_some_and(|message| message.contains("HTTP send failed")),
-        "{error}"
-    );
+    let message = error["error"]["message"].as_str().unwrap_or_default();
+    assert!(message.contains("HTTP send failed"), "{error}");
+    let sanitized = &span.announcement.as_ref().unwrap().url;
+    assert!(message.contains(&format!("({sanitized})")), "{error}");
 
     // A stream read to its end: one data per event, its end, then the read.
     let span = &spans["sse"];
@@ -370,9 +371,8 @@ async fn each_request_records_its_span_events_and_end() {
     assert!(span.events.is_empty());
     assert_eq!(outcome(span), (proto::InvocationOutcome::Cancelled, false));
 
-    // No header or URL secret reached the disk. The one exception is the
-    // transport error's own message, which names the URL as `reqwest` wrote
-    // it: the span records the error the program saw.
+    // No header, cookie or URL secret reached the disk: not the recording,
+    // not the CAS, not the transport error's message.
     let mut files = Vec::new();
     files_under(directory.path(), &mut files);
     let holding = |secret: &str| {
@@ -386,10 +386,10 @@ async fn each_request_records_its_span_events_and_end() {
             })
             .count()
     };
-    assert_eq!(holding("sk-header"), 0);
-    assert_eq!(holding("sk-cookie"), 0);
-    assert!(error.to_string().contains("sk-query"));
-    assert_eq!(holding("sk-query"), 1);
+    assert!(!files.is_empty());
+    for secret in ["sk-query", "sk-header", "sk-cookie"] {
+        assert_eq!(holding(secret), 0, "{secret} reached the disk");
+    }
 }
 
 /// `BAML_TELEMETRY_HTTP_BODIES=off` keeps bodies out of the recording; their

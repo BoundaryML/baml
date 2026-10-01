@@ -100,7 +100,7 @@ pub struct BexThread {
     pub escaped_outcome: Option<bex_vm::telemetry::InvocationOutcome>,
     /// The network span the failing sys-op ends: closed with the thrown
     /// value once the engine has built it.
-    pub(crate) network_close: Option<bex_vm::telemetry::TelemetryId>,
+    pub(crate) network_close: Option<crate::telemetry_network::NetworkClose>,
 }
 
 impl BexThread {

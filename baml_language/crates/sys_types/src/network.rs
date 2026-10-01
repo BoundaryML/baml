@@ -118,6 +118,10 @@ impl std::fmt::Debug for NetworkContext {
 /// or a stream. The IO side stores it behind this one concrete type, because
 /// `dyn Any` cannot be downcast to a trait: the engine finds the span on it
 /// without knowing the IO side's types, and closes it once.
+///
+/// Data collected without being read leaves its span open. A `Drop` impl
+/// here is where its `drop` event, and a marker to close the span, will be
+/// queued for the next drain.
 pub struct NetworkTraced {
     network: NetworkContext,
     data: Arc<dyn Any + Send + Sync>,
