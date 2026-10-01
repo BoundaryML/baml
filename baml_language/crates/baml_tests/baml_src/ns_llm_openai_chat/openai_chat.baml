@@ -1010,6 +1010,28 @@ test "chat_sse_decodes_text_and_usage" {
     )
 }
 
+// A streamed turn reports the cache split a non-streamed one does:
+// prompt_tokens counts the cached share too.
+function chat_sse_usage_splits_the_cache() -> string {
+    root.llm_mock.mock_sse_serve(
+        [
+            root.llm_mock.sse_data(`{"id":"c","model":"gpt-4o-mini","choices":[{"index":0,"delta":{"role":"assistant","content":"pong"},"finish_reason":"stop"}]}`),
+            root.llm_mock.sse_data(`{"id":"c","choices":[],"usage":{"prompt_tokens":1000,"completion_tokens":20,"prompt_tokens_details":{"cached_tokens":800},"completion_tokens_details":{"reasoning_tokens":5}}}`),
+            root.llm_mock.sse_data(`[DONE]`),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = openai.ChatClient.new(api_key = "k", base_url = mock.base_url());
+            let u = cl.invoke_stream(_chat_input("Say pong.")).final_turn().usage;
+            `${u?.input_tokens ?? -1}/${u?.cached_input_tokens ?? -1}/${u?.cache_write_input_tokens ?? -1}/${u?.uncached_input_tokens ?? -1}/${u?.output_tokens ?? -1}/${u?.reasoning_tokens ?? -1}`
+        },
+    )
+}
+
+test "chat_sse_usage_splits_the_cache" {
+    // input/cached/cache writes/uncached/output/reasoning
+    assert.equal(chat_sse_usage_splits_the_cache(), "1000/800/-1/200/20/5")
+}
+
 // The total request deadline remains active after visible deltas arrive and
 // aborts a stalled streaming body with the same typed Timeout as invoke().
 function chat_stream_total_timeout_after_delta() -> string {

@@ -177,6 +177,14 @@ function _usage_target() -> int throws never {
     $rust_function
 }
 
+/// (internal) A span as a target for `_record_usage`, like `_usage_target`:
+/// the span an HTTP request ran in, so the tokens its reply reports belong
+/// to that request. 0 for a span of another runtime.
+//baml:mut_vm
+function _usage_target_of(span: SpanId) -> int throws never {
+    $rust_function
+}
+
 /// (internal) Record the tokens one model turn used against a target from
 /// `_usage_target`. `input_tokens` excludes cache reads and writes. Returns
 /// whether anything was recorded.

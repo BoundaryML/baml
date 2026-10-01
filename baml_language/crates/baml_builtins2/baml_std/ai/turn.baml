@@ -28,6 +28,10 @@ class ModelTurn {
     // Every HTTP exchange behind this turn, oldest first: failed legs from
     // retry/fallback wrappers, then the selected call (selected: true).
     calls: root.events.LLMCall[],
+    // (internal) The span of the HTTP request that answered
+    // (`ai.wire.request_span`), which `usage` is recorded against; null when
+    // the client made no request, and usage goes to the caller's span.
+    _usage_target: int?,
 
     /// The terminal Text block — the final candidate the runner parses.
     function terminal_text(self) -> string? {

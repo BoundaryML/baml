@@ -654,6 +654,58 @@ test "anthropic_stream_text" {
     assert.contains(got, "stream=true")
 }
 
+// A streamed turn reports the cache split a non-streamed one does: input
+// excludes both cache counts, which arrive in message_start.
+function anthropic_stream_usage_splits_the_cache() -> string {
+    let events = [
+        root.llm_mock.sse_event(
+            "message_start",
+            `{"type":"message_start","message":{"id":"m","model":"claude-haiku-4-5","usage":{"input_tokens":5,"cache_read_input_tokens":2,"cache_creation_input_tokens":3}}}`,
+        ),
+        root.llm_mock.sse_event(
+            "content_block_start",
+            `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
+        ),
+        root.llm_mock.sse_event(
+            "content_block_delta",
+            `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"pong"}}`,
+        ),
+        root.llm_mock.sse_event(
+            "message_delta",
+            `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":7,"output_tokens_details":{"thinking_tokens":4}}}`,
+        ),
+        root.llm_mock.sse_event("message_stop", `{"type":"message_stop"}`),
+    ];
+    root.llm_mock.mock_sse_serve(
+        events,
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = anthropic.Client.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let spec = AnthMockAsk@spec("Say pong.");
+            let u = cl
+                .invoke_stream(
+                ai.ModelTurnInput {
+                    prompt: spec.prompt_template,
+                    journal: ai.Journal { log: [] },
+                    toolbox: spec.tools(),
+                    output_type: spec.output_type(),
+                },
+                )
+                .final_turn()
+                .usage;
+            `${u?.input_tokens ?? -1}/${u?.cached_input_tokens ?? -1}/${u?.cache_write_input_tokens ?? -1}/${u?.uncached_input_tokens ?? -1}/${u?.output_tokens ?? -1}/${u?.reasoning_tokens ?? -1}`
+        },
+    )
+}
+
+test "anthropic_stream_usage_splits_the_cache" {
+    // input/cached/cache writes/uncached/output/reasoning
+    assert.equal(anthropic_stream_usage_splits_the_cache(), "5/2/3/5/7/4")
+}
+
 function anthropic_stream_time_to_first_token_timeout_ms() -> string {
     root.llm_mock.mock_sse_serve(
         [
@@ -816,8 +868,8 @@ test "anthropic_stream_http_error_500" {
 // Typed SSE decode below the TurnStream: content_block_start names the tool,
 // input_json_delta assembles its arguments, thinking/signature deltas are kept
 // out of the answer text, and cache tokens survive to the end of the turn.
-// ai.stream.Event cannot carry any of this yet (PLAN §6), so the decoder
-// folds it into AnthStreamState — which is exactly what this asserts.
+// ai.stream.Event cannot carry tool calls or thinking yet (PLAN §6), so the
+// decoder folds them into AnthStreamState; token counts ride on TurnMeta.
 function anthropic_decode_tool_stream() -> string {
     let state = anthropic.internal.AnthStreamState.new();
     let batch = anth_batch(
@@ -843,7 +895,9 @@ function anthropic_decode_tool_stream() -> string {
                 null
             },
             let m: ai.stream.TurnMeta => {
-                seen.push(`meta:${m.stop_reason ?? "-"}/${m.input_tokens ?? -1}/${m.output_tokens ?? -1}`);
+                seen.push(
+                    `meta:${m.stop_reason ?? "-"}/${m.input_tokens ?? -1}/${m.output_tokens ?? -1}/${m.cached_input_tokens ?? -1}/${m.cache_write_input_tokens ?? -1}/${m.uncached_input_tokens ?? -1}/${m.reasoning_tokens ?? -1}`,
+                );
                 null
             },
             let d: ai.stream.TurnDone => {
@@ -861,9 +915,6 @@ function anthropic_decode_tool_stream() -> string {
         `thinking=${state.thinking}`,
         `signature=${state.signature}`,
         `calls=${calls.join(";")}`,
-        `cache_read=${state.cache_read_input_tokens ?? -1}`,
-        `cache_create=${state.cache_creation_input_tokens ?? -1}`,
-        `reasoning=${state.reasoning_tokens ?? -1}`,
         `raw_stop=${state.stop_reason_raw ?? "-"}`,
         `model=${state.model ?? "-"}`,
     ].join("|")
@@ -871,15 +922,15 @@ function anthropic_decode_tool_stream() -> string {
 
 test "anthropic_decode_tool_stream" {
     let got = anthropic_decode_tool_stream();
-    assert.contains(got, "events=meta:-/11/-1,text:Hel,text:lo,meta:ToolUse/-1/42,done|");
+    // stop/input/output/cached/cache writes/uncached/reasoning, per event
+    assert.contains(
+        got,
+        "events=meta:-/11/-1/7/3/11/-1,text:Hel,text:lo,meta:ToolUse/-1/42/9/-1/-1/13,done|",
+    );
     // thinking never becomes answer text
     assert.contains(got, "thinking=hmm|");
     assert.contains(got, "signature=sig1|");
     assert.contains(got, "calls=toolu_1/anth_weather/{\"city\":\"SF\"}|");
-    assert.contains(got, "cache_read=9|");
-    assert.contains(got, "cache_create=3|");
-    // extended-thinking token count folds alongside the cache counters
-    assert.contains(got, "reasoning=13|");
     assert.contains(got, "raw_stop=tool_use|");
     assert.contains(got, "model=claude-haiku-4-5")
 }

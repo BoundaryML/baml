@@ -624,6 +624,45 @@ test "oai_stream_text" {
     assert.contains(got, `"stream":true`)
 }
 
+// A streamed turn reports the cache split a non-streamed one does:
+// input_tokens counts the cached share too.
+function oai_stream_usage_splits_the_cache() -> string {
+    let completed = `{"type":"response.completed","response":{"status":"completed","model":"gpt-4o-mini","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}],"usage":{"input_tokens":100,"output_tokens":5,"input_tokens_details":{"cached_tokens":40},"output_tokens_details":{"reasoning_tokens":2}}}}`;
+    root.llm_mock.mock_sse_serve(
+        [
+            root.llm_mock.sse_data(
+                `{"type":"response.output_text.delta","item_id":"msg_1","delta":"pong"}`,
+            ),
+            root.llm_mock.sse_data(completed),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let spec = OaiEcho@spec("Say pong.");
+            let u = cl
+                .invoke_stream(
+                ai.ModelTurnInput {
+                    prompt: spec.prompt_template,
+                    journal: ai.Journal { log: [] },
+                    toolbox: spec.tools(),
+                    output_type: spec.output_type(),
+                },
+                )
+                .final_turn()
+                .usage;
+            `${u?.input_tokens ?? -1}/${u?.cached_input_tokens ?? -1}/${u?.cache_write_input_tokens ?? -1}/${u?.uncached_input_tokens ?? -1}/${u?.output_tokens ?? -1}/${u?.reasoning_tokens ?? -1}`
+        },
+    )
+}
+
+test "oai_stream_usage_splits_the_cache" {
+    // input/cached/cache writes/uncached/output/reasoning
+    assert.equal(oai_stream_usage_splits_the_cache(), "100/40/-1/60/5/2")
+}
+
 // One streamed run to completion, as a plain call so a `catch_all` at the call
 // site is unambiguous.
 function _oai_stream_final(cl: openai.ResponsesClient) -> string {

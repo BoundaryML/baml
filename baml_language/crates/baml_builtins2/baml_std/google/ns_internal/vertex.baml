@@ -374,7 +374,12 @@ function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.Mod
             request_timeout_ms = c.request_timeout_ms,
         );
         let turn = anthropic.internal.parse(sent.value);
-        return ai.ModelTurn { ...turn, calls: [sent.call], model: c.model };
+        return ai.ModelTurn {
+            ...turn,
+            calls: [sent.call],
+            _usage_target: sent.usage_target,
+            model: c.model,
+        };
     }
     let seq = input.journal.entries().length();
     let sent = ai.wire.send_as_with_wire<root.internal.GmResponse>(
@@ -385,7 +390,7 @@ function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.Mod
         request_timeout_ms = c.request_timeout_ms,
     );
     let turn = root.internal.parse(sent.value, seq, provider = "vertex");
-    ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
+    ai.ModelTurn { ...turn, calls: [sent.call], _usage_target: sent.usage_target, model: c.model }
 }
 
 function _vertex_decode_batch(batch: string) -> ai.stream.Event[] {
@@ -402,9 +407,11 @@ function vertex_invoke_stream(
 ) -> ai.stream.TurnStream {
     let req = _vertex_request(c, input, true, preview = false);
     let started = baml.time.Instant.now();
+    let span = ai.wire.request_span();
     let sse = root.internal._gm_open_sse(
         req,
         "vertex",
+        span,
         request_timeout_ms = c.request_timeout_ms,
         time_to_first_token_timeout_ms = c.time_to_first_token_timeout_ms,
     );
@@ -423,6 +430,7 @@ function vertex_invoke_stream(
             },
             require_terminal = "vertex",
             model = c.model,
+            usage_target = trace._usage_target_of(span.id()),
         )
     } else {
         ai.stream.TurnStream.from_sse(
@@ -434,6 +442,7 @@ function vertex_invoke_stream(
             },
             require_terminal = "vertex",
             model = c.model,
+            usage_target = trace._usage_target_of(span.id()),
         )
     };
     let call = ai.events.LLMCall {

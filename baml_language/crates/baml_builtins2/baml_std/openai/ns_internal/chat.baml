@@ -1380,7 +1380,12 @@ function _chat_send(
     request_timeout_ms: int? = null,
 ) -> ai.ModelTurn {
     let started = baml.time.Instant.now();
-    let response = baml.http.send(request, timeout = baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0)) catch_all (e) {
+    let span = ai.wire.request_span();
+    let response = baml.http.send(
+        request,
+        timeout = baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
+        $trace = span,
+    ) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw ai.errors.NetworkFailure { status_code: null,
@@ -1446,7 +1451,12 @@ function _chat_send(
         selected: true,
         sse_responses: null,
     };
-    ai.ModelTurn { ...turn, calls: [call], model: decoded.model }
+    ai.ModelTurn {
+        ...turn,
+        calls: [call],
+        _usage_target: trace._usage_target_of(span.id()),
+        model: decoded.model,
+    }
 }
 
 /// The one internal entry point: render, send, normalize — one model turn.
@@ -1605,6 +1615,13 @@ class ChatStreamDecoder {
                                     stop_reason: null,
                                     input_tokens: usage.prompt_tokens,
                                     output_tokens: usage.completion_tokens,
+                                    cached_input_tokens: usage.prompt_tokens_details?.cached_tokens,
+                                    // prompt_tokens counts the cached share too.
+                                    uncached_input_tokens: ai.internal.uncached_input_tokens(
+                                        usage.prompt_tokens,
+                                        usage.prompt_tokens_details?.cached_tokens,
+                                    ),
+                                    reasoning_tokens: usage.completion_tokens_details?.reasoning_tokens,
                                 },
                             );
                         }
@@ -1678,10 +1695,12 @@ function chat_invoke_stream(
     let request = chat_render(compat, params, input, true);
     let decoder = ChatStreamDecoder.new(provider = compat.provider);
     let started = baml.time.Instant.now();
+    let span = ai.wire.request_span();
     let sse = baml.http.fetch_sse(
         request,
         timeout = baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
         first_event_timeout = baml.time.Duration.from_milliseconds(time_to_first_token_timeout_ms ?? 0),
+        $trace = span,
     ) catch_all (e) {
         _ => _chat_stream_open_failure(compat.provider, e),
     };
@@ -1699,6 +1718,7 @@ function chat_invoke_stream(
         },
         require_terminal = compat.provider,
         model = params.model,
+        usage_target = trace._usage_target_of(span.id()),
     );
     let call = ai.events.LLMCall {
         client_name: chat_client_id(compat, params),

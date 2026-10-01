@@ -261,10 +261,11 @@ class Agent {
             if let ui: int = u.uncached_input_tokens {
                 total.uncached_input_tokens = (total.uncached_input_tokens ?? 0) + ui;
             }
-            // Recorded against the span running this call (the LLM function's,
-            // or the thread's), so baml query can price every turn.
+            // Recorded against the HTTP request that answered, or, for a
+            // client that made none, the span running this call (the LLM
+            // function's, or the thread's), so baml query can price every turn.
             let _ = trace._record_usage(
-                trace._usage_target(),
+                turn._usage_target ?? trace._usage_target(),
                 turn.model,
                 u.uncached_input_tokens ?? u.input_tokens,
                 u.output_tokens,

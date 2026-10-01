@@ -989,6 +989,7 @@ function _gm_route_sse_open(
 function _gm_open_sse(
     req: baml.http.Request,
     provider: string,
+    span: trace.ReservedSpan,
     request_timeout_ms: int? = null,
     time_to_first_token_timeout_ms: int? = null,
 ) -> baml.http.SseStream {
@@ -997,6 +998,7 @@ function _gm_open_sse(
             req,
             timeout = baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
             first_event_timeout = baml.time.Duration.from_milliseconds(time_to_first_token_timeout_ms ?? 0),
+            $trace = span,
         )
     })
 }
@@ -1068,6 +1070,13 @@ function _gm_decode_batch(batch: string, provider: string) -> ai.stream.Event[] 
                         stop_reason: stop,
                         input_tokens: usage?.promptTokenCount,
                         output_tokens: usage?.candidatesTokenCount,
+                        cached_input_tokens: usage?.cachedContentTokenCount,
+                        // promptTokenCount counts the cached share too.
+                        uncached_input_tokens: ai.internal.uncached_input_tokens(
+                            usage?.promptTokenCount,
+                            usage?.cachedContentTokenCount,
+                        ),
+                        reasoning_tokens: usage?.thoughtsTokenCount,
                     },
                 );
                 null
@@ -1150,7 +1159,7 @@ function gemini_invoke(c: root.GeminiClient, input: ai.ModelTurnInput) -> ai.Mod
     let req = render(c, input);
     let sent = ai.wire.send_as_with_wire<GmResponse>(req, "google", c.id(), capture_wire = c.capture_wire);
     let turn = parse(sent.value, seq);
-    ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
+    ai.ModelTurn { ...turn, calls: [sent.call], _usage_target: sent.usage_target, model: c.model }
 }
 
 function _decode_batch(batch: string) -> ai.stream.Event[] {
@@ -1165,7 +1174,8 @@ function gemini_invoke_stream(
 ) -> ai.stream.TurnStream {
     let req = _request(c, input, true);
     let started = baml.time.Instant.now();
-    let sse = _gm_open_sse(req, "google");
+    let span = ai.wire.request_span();
+    let sse = _gm_open_sse(req, "google", span);
     // Strict termination: the `finishReason` fragment decodes as TurnDone, so
     // a connection that closes before it is a truncated turn, not an answer.
     let stream = ai.stream.TurnStream.from_sse(
@@ -1177,6 +1187,7 @@ function gemini_invoke_stream(
         },
         require_terminal = "google",
         model = c.model,
+        usage_target = trace._usage_target_of(span.id()),
     );
     let call = ai.events.LLMCall {
         client_name: c.id(),
