@@ -494,6 +494,74 @@ mod tests {
         );
     }
     #[test]
+    fn a_value_too_large_to_hold_whole_is_captured_as_truncated() {
+        let mut vm = crate::vm::tests::test_vm(Vec::new());
+        let string =
+            |vm: &mut crate::BexVm, length| Value::object(vm.tlab.alloc_string("s".repeat(length)));
+        let bigint = |vm: &mut crate::BexVm, bits: u32| {
+            Value::object(
+                vm.tlab
+                    .alloc_bigint(num_bigint::BigInt::from(1) << (bits - 1)),
+            )
+        };
+        let bytes = |vm: &mut crate::BexVm, length| {
+            Value::object(vm.tlab.alloc_uint8array(vec![7; length]))
+        };
+        let image = |vm: &mut crate::BexVm, length: usize| {
+            let media: Arc<dyn std::any::Any + Send + Sync> = MediaValue::from_base64(
+                baml_type::MediaKind::Image,
+                bex_str::BexStr::from("A".repeat(length)),
+                None,
+            );
+            Value::object(vm.tlab.alloc_rust_data(media))
+        };
+        // Each kind at the limit, then just over it.
+        let values = [
+            string(&mut vm, 64),
+            string(&mut vm, 65),
+            bigint(&mut vm, 64 * 8),
+            bigint(&mut vm, 64 * 8 + 1),
+            bytes(&mut vm, 64),
+            bytes(&mut vm, 65),
+            image(&mut vm, 64),
+            image(&mut vm, 65),
+        ];
+        let pool = btel_snapshot::SnapshotPool::new(
+            1,
+            btel_snapshot::Limits {
+                max_leaf_bytes: 64,
+                ..Default::default()
+            },
+        );
+        // SAFETY: the values stay live and nothing collects during capture.
+        let snapshot = unsafe {
+            Scratch::default().capture(pool.try_acquire().unwrap(), Input::FunctionArgs(&values))
+        };
+        drop(vm);
+        let roots = snapshot.roots();
+        assert!(matches!(roots[0], Val::String(_)));
+        assert_eq!(roots[1], Val::Truncated(Limit::Bytes));
+        assert!(matches!(roots[2], Val::Bigint(_)));
+        assert_eq!(roots[3], Val::Truncated(Limit::Bytes));
+        let Obj::Uint8Array { data } = captured_object(&snapshot, roots[4]) else {
+            panic!("the bytes at the limit are held")
+        };
+        assert_eq!(snapshot.bytes(*data), [7; 64]);
+        // The length stays; none of the content does.
+        assert!(matches!(
+            captured_object(&snapshot, roots[5]),
+            Obj::Uint8ArrayTruncated { original_len: 65 }
+        ));
+        assert!(matches!(
+            captured_object(&snapshot, roots[6]),
+            Obj::Media { .. }
+        ));
+        assert!(matches!(
+            captured_object(&snapshot, roots[7]),
+            Obj::Truncated(Limit::Bytes)
+        ));
+    }
+    #[test]
     fn maps_instances_and_variants_keep_identity_and_fields_after_gc() {
         let mut vm = crate::vm::tests::test_vm(Vec::new());
         let class_ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {

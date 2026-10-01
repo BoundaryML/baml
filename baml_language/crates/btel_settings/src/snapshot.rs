@@ -27,6 +27,13 @@ pub const SPLIT_UNIT_BYTES: u64 = 64 * 1024;
 /// captured value itself. Map keys and names are always written in place.
 pub const SPLIT_LEAF_BYTES: u64 = 16 * 1024;
 
+/// The one size a capture is cut for. A string, a bigint (its encoded limbs),
+/// a `uint8array` or a media value's content over this is captured as
+/// truncated: it cannot be split, and whatever stores or sends it holds it
+/// whole. A map entry whose key is over it is left out. Everything else is
+/// captured however large it is.
+pub const MAX_LEAF_BYTES: usize = 1 << 30;
+
 /// Bounded processor-local whole-snapshot combining window, not a delivery ledger.
 pub const RECENT_CAPTURE_IDS: usize = 4096;
 

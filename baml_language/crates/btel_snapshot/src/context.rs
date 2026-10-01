@@ -187,4 +187,35 @@ mod tests {
             assert!(pool.try_acquire().is_some());
         }
     }
+
+    #[test]
+    fn a_string_over_the_leaf_limit_declines_the_context() {
+        let pool = SnapshotPool::new(
+            1,
+            Limits {
+                max_leaf_bytes: 16,
+                ..Limits::default()
+            },
+        );
+        assert!(capture(&context(), &pool).is_some());
+        let long = "x".repeat(17);
+        // As a metadata value, as a metadata key, and as the identity.
+        for patch in [
+            ContextPatch {
+                metadata: [("text".into(), Some(ContextValue::String(long.clone())))].into(),
+                distinct_id: None,
+            },
+            ContextPatch {
+                metadata: [(long.clone(), Some(ContextValue::Int(1)))].into(),
+                distinct_id: None,
+            },
+            ContextPatch {
+                metadata: [].into(),
+                distinct_id: Some(long),
+            },
+        ] {
+            assert!(capture(&context().with_patch(&patch), &pool).is_none());
+            assert!(pool.try_acquire().is_some());
+        }
+    }
 }

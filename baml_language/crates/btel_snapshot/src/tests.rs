@@ -84,6 +84,7 @@ fn limits_are_explicit_and_what_they_cut_shows_in_the_capture() {
             max_objects: Some(1),
             max_values: Some(2),
             max_depth: Some(2),
+            ..Limits::default()
         },
     );
     let mut b = pool.try_acquire().unwrap();
@@ -118,6 +119,90 @@ fn limits_are_explicit_and_what_they_cut_shows_in_the_capture() {
     let stats = cut.stats();
     assert!(stats.limited);
     assert_eq!((stats.copied_bytes, stats.shared_bytes), (0, 100));
+}
+
+#[test]
+fn a_leaf_over_the_leaf_limit_is_cut_and_nothing_else_is() {
+    let limits = Limits::default();
+    assert_eq!(
+        limits.max_leaf_bytes,
+        btel_settings::snapshot::MAX_LEAF_BYTES
+    );
+    assert_eq!(
+        (limits.max_values, limits.max_objects, limits.max_depth),
+        (None, None, None)
+    );
+    let pool = SnapshotPool::new(
+        1,
+        Limits {
+            max_leaf_bytes: 8,
+            ..limits
+        },
+    );
+    let mut b = pool.try_acquire().unwrap();
+    let ty = b.leaves().ty(baml_type::RealizedTy::Int);
+    // Each kind at the limit, then just over it. A bigint is measured as the
+    // blob writes it, in limbs of eight bytes.
+    let at = BexStr::from("12345678");
+    let over = BexStr::from("123456789");
+    let kept = [
+        b.leaves().string_value(&at),
+        b.leaves().bigint(&Arc::new(BigInt::from(u64::MAX))),
+    ];
+    assert!(matches!(
+        kept,
+        [SnapshotValue::String(_), SnapshotValue::Bigint(_)]
+    ));
+    let (whole, range) = bytes(&mut b, b"abcdefgh");
+    assert!(!whole.is_cut());
+    assert!(b.leaves().string(&over).is_none());
+    let cut = [
+        b.leaves().string_value(&over),
+        b.leaves().bigint(&Arc::new(BigInt::from(u64::MAX) + 1)),
+    ];
+    assert_eq!(cut, [SnapshotValue::Truncated(Limit::Bytes); 2]);
+    // A byte array over the limit keeps its length and none of its content.
+    let none = b.bytes(b"abcdefghi");
+    assert!(matches!(
+        none,
+        SnapshotObject::Uint8ArrayTruncated { original_len: 9 }
+    ));
+    // Only one leaf's size counts: any number that each fit are all kept.
+    let many = b.list(ty, (0..64).map(|_| &at), |leaves, text| {
+        leaves.string_value(text)
+    });
+    assert!(!many.is_cut());
+    let many = b.leaves().object(many).unwrap();
+    // A key is written with its entry, so the entry goes with it, and what
+    // the entry held is in no blob.
+    let dropped = b.leaves().object(whole).unwrap();
+    let entries = [
+        (at.clone(), SnapshotValue::Object(many)),
+        (over, SnapshotValue::Object(dropped)),
+        ("after".into(), SnapshotValue::Int(1)),
+    ];
+    let map = b.map(ty, ty, entries.into_iter(), |_, entry| entry);
+    assert!(map.is_cut());
+    assert!(matches!(
+        map,
+        SnapshotObject::Map { entries, original_len: 3, .. } if entries.len() == 2
+    ));
+    let map = b.leaves().object(map).unwrap();
+    let snapshot = b.finish(SnapshotValue::Object(map), &mut Shaper::default());
+    assert!(snapshot.stats().limited);
+    assert_eq!(snapshot.bytes(range), b"abcdefgh");
+    assert_eq!(snapshot.0.graph.bytes.len(), 8, "nothing else was copied");
+    let SnapshotObject::Map { entries, .. } = snapshot.object(map) else {
+        unreachable!("the root is the map")
+    };
+    let keys: Vec<_> = snapshot
+        .entries(*entries)
+        .iter()
+        .map(|entry| entry.key.as_str())
+        .collect();
+    assert_eq!(keys, ["12345678", "after"]);
+    let decoded = decode_blob(&root_blob_bytes(&snapshot), &DecodeLimits::default()).unwrap();
+    assert_eq!(decoded.id, snapshot.root_id());
 }
 
 #[test]

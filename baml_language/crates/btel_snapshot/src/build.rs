@@ -28,6 +28,7 @@ use crate::{
     hash::{self, Absorb as _},
     pool::{Lease, Limits, Storage},
     tags,
+    walk::bigint_limb_bytes,
 };
 
 /// The most items an arena indexed by `u32` holds.
@@ -61,10 +62,10 @@ impl Leaves<'_> {
     pub fn limits(&self) -> Limits {
         self.limits
     }
-    /// Hold a string by handle, for an object that names it. `None` when no
-    /// more strings can be numbered.
+    /// Hold a string by handle, for an object that names it. `None` when it
+    /// is over the leaf limit, or no more strings can be numbered.
     pub fn string(&mut self, text: &BexStr) -> Option<StringId> {
-        if self.strings.len() >= ARENA_ITEMS {
+        if !self.limits.holds_leaf(text.len()) || self.strings.len() >= ARENA_ITEMS {
             return None;
         }
         let id = StringId(u32::try_from(self.strings.len()).expect("bounded strings"));
@@ -78,9 +79,10 @@ impl Leaves<'_> {
             SnapshotValue::String,
         )
     }
-    /// A bigint as a value, held by handle: truncated when it cannot be.
+    /// A bigint as a value, held by handle: truncated when it is over the
+    /// leaf limit, before any of it is hashed, or cannot be numbered.
     pub fn bigint(&mut self, value: &Arc<BigInt>) -> SnapshotValue {
-        if self.bigints.len() >= ARENA_ITEMS {
+        if !self.limits.holds_leaf(bigint_limb_bytes(value)) || self.bigints.len() >= ARENA_ITEMS {
             return SnapshotValue::Truncated(Limit::Bytes);
         }
         let id = crate::BigintId(u32::try_from(self.bigints.len()).expect("bounded bigints"));
@@ -205,7 +207,9 @@ impl Builder {
         }
         Range::new(start, values.len() - start)
     }
-    /// One run of entries: as many of `source` as the value limit allows.
+    /// One run of entries: as many of `source` as the value limit allows. A
+    /// key is written where its entry is, so an entry whose key is over the
+    /// leaf limit is left out, and the count says the container is cut.
     fn entries<T>(
         &mut self,
         source: impl ExactSizeIterator<Item = T>,
@@ -223,7 +227,9 @@ impl Builder {
         entries.reserve(count, meter);
         for item in source.take(count) {
             let (key, value) = convert(&mut leaves, item);
-            entries.push(MapEntry { key, value }, meter);
+            if leaves.limits.holds_leaf(key.len()) {
+                entries.push(MapEntry { key, value }, meter);
+            }
         }
         Range::new(start, entries.len() - start)
     }
@@ -242,6 +248,7 @@ impl Builder {
         }
     }
     /// A map of the keys and values `convert` makes of each item of `source`.
+    /// An entry whose key is over the leaf limit is left out.
     pub fn map<T>(
         &mut self,
         key_type: TypeId,
@@ -281,10 +288,18 @@ impl Builder {
         }
     }
     /// A `uint8array`: its bytes, copied and hashed on the way, or only its
-    /// length when the arena cannot index them all.
+    /// length when it is over the leaf limit or the arena cannot index them
+    /// all.
     pub fn bytes(&mut self, bytes: &[u8]) -> SnapshotObject {
-        let Storage { graph, meter, .. } = &mut *self.0;
-        if bytes.len() > ARENA_ITEMS.saturating_sub(graph.bytes.len()) {
+        let Storage {
+            graph,
+            meter,
+            limits,
+            ..
+        } = &mut *self.0;
+        if !limits.holds_leaf(bytes.len())
+            || bytes.len() > ARENA_ITEMS.saturating_sub(graph.bytes.len())
+        {
             return SnapshotObject::Uint8ArrayTruncated {
                 original_len: bytes.len(),
             };

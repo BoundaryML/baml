@@ -12,14 +12,37 @@ use std::{
 use crate::arena::Counters;
 use crate::{Builder, arena::Meter, graph::Graph, shape::Shape};
 
-/// Optional capture policies, separate from pooling. Value limits apply to
-/// each value/entry arena. None has no policy limit, subject to the checked
-/// u32 index range. Object traversal is iterative.
-#[derive(Clone, Copy, Debug, Default)]
+/// Capture policies, separate from pooling. Value limits apply to each
+/// value/entry arena. None has no policy limit, subject to the checked u32
+/// index range. Object traversal is iterative.
+#[derive(Clone, Copy, Debug)]
 pub struct Limits {
     pub max_values: Option<usize>,
     pub max_objects: Option<usize>,
     pub max_depth: Option<usize>,
+    /// The content of one string, bigint (as its encoded limbs) or
+    /// `uint8array`. A larger one is captured as truncated, with none of its
+    /// content, and a map entry with a larger key is left out. Never absent:
+    /// a blob writes these lengths in 32 bits.
+    pub max_leaf_bytes: usize,
+}
+impl Default for Limits {
+    /// The limits captures are made with: only
+    /// [`MAX_LEAF_BYTES`](btel_settings::snapshot::MAX_LEAF_BYTES).
+    fn default() -> Self {
+        Self {
+            max_values: None,
+            max_objects: None,
+            max_depth: None,
+            max_leaf_bytes: btel_settings::snapshot::MAX_LEAF_BYTES,
+        }
+    }
+}
+impl Limits {
+    /// Whether a leaf with `bytes` of content is captured.
+    pub(crate) fn holds_leaf(&self, bytes: usize) -> bool {
+        bytes <= self.max_leaf_bytes
+    }
 }
 #[derive(Clone, Copy, Debug)]
 pub struct PoolConfig {
@@ -140,6 +163,7 @@ impl SnapshotPool {
             [limits.max_values, limits.max_objects]
                 .into_iter()
                 .flatten()
+                .chain([limits.max_leaf_bytes])
                 .all(|n| n < u32::MAX as usize)
         );
         Self(Arc::new(Pool {
