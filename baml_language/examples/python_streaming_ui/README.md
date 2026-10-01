@@ -43,7 +43,7 @@ Run A and B one after the other (the default) when comparing CPU and loop lag. T
 
 ## Setup
 
-The app builds `baml_bridge` from this checkout in release mode, and generates `baml_sdk` with a matching `baml-cli`. Scenario 1 needs Bedrock streaming from PR #5047.
+The app builds `baml_bridge` from this checkout in release mode, and generates `baml_sdk` with a matching `baml-cli`.
 
 ```bash
 cd baml_language
@@ -74,7 +74,7 @@ uv run python seed.py          # BoundaryML/baml#5041
 uv run python seed.py 1234     # another PR
 ```
 
-## Known issues this surfaced (2026-09-30)
+## Issues this surfaced (2026-09-30)
 
 ### Native SDK side (B)
 
@@ -84,15 +84,12 @@ uv run python seed.py 1234     # another PR
 
 ### BAML v0 side (C)
 
-- **v0 streams the replies that break v1.** In scenarios 1, 3, 4, 5 and 6, v0 finishes with 0.92–0.97 field accuracy, including the fenced and prose-prefixed replies that fail side A. So the v1 failure below is a regression from v0.
+- **v0 streamed the replies that used to break v1.** In scenarios 1, 3, 4, 5 and 6, v0 finishes with 0.92–0.97 field accuracy, including the fenced and prose-prefixed replies that failed side A before #5060.
 - **Scenario 2 (Mantle `gpt-oss-20b`):** v0 appears to parse gpt-oss's reasoning text ("Construct JSON with data…") as the reply, and fails validation with 13 required fields missing.
 
 ### BAML v1 side (A)
 
-- **A structured stream fails if the reply starts with anything but JSON.** The non-streaming call parses these replies fine, but `ExtractPullRequest_stream` fails on its first partial with `LlmClient: <root>: Expected user.PullRequest, got String("…", Incomplete)` instead of holding the partial back until the JSON starts. In the A vs B runs this blocked side A for:
-  - scenario 1 (Bedrock Haiku 4.5, `` ```json `` fence);
-  - scenario 4 (Gemini 3.1 Flash-Lite, fence);
-  - scenario 5 (Vertex Gemini, fence);
-  - scenario 6 (Llama 4 Scout, which opens with "Here…").
+- **Fixed in #5060: a structured stream failed if the reply started with anything but JSON.** `ExtractPullRequest_stream` failed on its first partial with `LlmClient: <root>: Expected user.PullRequest, got String("…", Incomplete)` when the reply opened with a `` ```json `` fence (scenarios 1, 4 and 5) or with prose (scenario 6). The stream now skips a partial that doesn't parse yet, as v0 does, and side A completes in all six scenarios.
+- **v1 repeats partials.** About 14–22% of side A's partials are identical to the one before. v0 skips those.
 - **A required `int`/`bool` field holds back every partial until it arrives.** A class like `{ a: string, n: int }` yields 1 partial where `{ a: string, b: string }` yields ~40, because the class has no partial value until `n` exists. Put scalar fields first, or make them optional, if the UI should fill in progressively.
 - **A client handle can't cross into an `ai.Client` parameter.** Passing a client returned by a BAML function back into `Fn(..., llm=client)` fails with `host value type anthropic.Client is not a member of declared union ai.Client | null`. So `ExtractPullRequest` takes a scenario number and builds the client in BAML (`baml_src/scenarios.baml`).
