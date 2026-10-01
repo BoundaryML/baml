@@ -187,6 +187,11 @@ fn spans(files: &[proto::RecordingFile]) -> BTreeMap<String, Span> {
             }
         }
     }
+    // One span's events can be written by different VM threads, into
+    // different sections: order them by time, as `baml query` does.
+    for span in spans.values_mut() {
+        span.events.sort_by_key(|event| event.at_ticks);
+    }
     // Keyed by path, the part of each request's URL that differs.
     spans
         .into_values()
