@@ -128,7 +128,7 @@ fn fresh_query_processes_index_once_and_then_only_new_files() {
     let (code, outcomes) = query(
         project.path(),
         "SELECT SUM(invocation_count), SUM(return_count), SUM(error_count),
-           SUM(panic_error_count), SUM(cancel_error_count), SUM(missing_count)
+           SUM(panic_error_count), SUM(future_cancel_count), SUM(missing_count)
          FROM profiler WHERE function_name = 'user.Leaf'",
     );
     assert_eq!(code, 0);

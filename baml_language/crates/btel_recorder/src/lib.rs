@@ -319,6 +319,10 @@ impl ConversionBuffer {
                 // A raise that never ended cannot claim anything after its thread.
                 self.unwinds.clear_thread(thread);
             }
+            SpanRecord::ThreadSpanRunning { at } => self.event(
+                thread,
+                Event::ThreadRunning(proto::ThreadRunning { at_ticks: at.get() }),
+            ),
             SpanRecord::ModelUsage(usage) => self.model_usage(thread, usage),
             SpanRecord::ErrorRaiseOrigin { raise_id, origin } => {
                 self.error_raise_origin(thread, *raise_id, *origin);

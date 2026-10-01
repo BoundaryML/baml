@@ -117,6 +117,10 @@ impl Part {
     }
 }
 
+/// `thread.outcome`, as the wire's `InvocationOutcome`.
+const ERRORED: i64 = 2;
+const CANCELLED: i64 = 3;
+
 fn add(sum: &mut Option<u128>, value: Option<i64>) {
     *sum = sum
         .zip(value.and_then(|v| u128::try_from(v).ok()))
@@ -305,10 +309,11 @@ fn build(tx: &Transaction<'_>, process: &[u8]) -> Result<(), Error> {
     let fits = |value: Option<i128>| value.and_then(|v| i64::try_from(v).ok());
     let count = |value: Option<u128>| value.and_then(|v| i64::try_from(v).ok());
     let mut insert = tx.prepare_cached(
-        "INSERT INTO profile_node (process_id, node_id, parent_node_id, function_name, total_ns,
-           self_ns, io_total_ns, io_self_ns, invocation_count, return_count, error_count,
-           panic_error_count, user_error_count, cancel_error_count, missing_count)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 0)",
+        "INSERT INTO profile_node (process_id, node_id, parent_node_id, node_type, function_name,
+           total_ns, self_ns, io_total_ns, io_self_ns, invocation_count, return_count,
+           future_cancel_count, error_count, panic_error_count, nonpanic_error_count,
+           missing_count)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
     )?;
     for id in ids {
         let node = &nodes[&id];
@@ -320,19 +325,28 @@ fn build(tx: &Transaction<'_>, process: &[u8]) -> Result<(), Error> {
             .total_ns
             .zip(children_total)
             .map(|(total, kids)| (total - kids).max(0));
-        let failed = node.errored.zip(node.cancelled).map(|(e, c)| e + c);
+        // Only a spawn edge leads to a future; every other node is a function.
+        let future = !node.synchronous && node.parent.is_some();
         let returned = node
             .invocations
-            .zip(failed)
-            .and_then(|(n, f)| n.checked_sub(f));
-        let user = node
+            .zip(node.errored.zip(node.cancelled))
+            .and_then(|(n, (e, c))| n.checked_sub(e + c));
+        let nonpanic = node
             .errored
             .zip(node.panicked)
             .and_then(|(e, p)| e.checked_sub(p));
+        // A cancellation ends a future. A function it interrupted (or that
+        // baml.sys.exit unwound) never finished: it is missing.
+        let (future_cancel, missing) = if future {
+            (node.cancelled, Some(0))
+        } else {
+            (Some(0), node.cancelled)
+        };
         insert.execute(params![
             process,
             id,
             node.parent,
+            if future { "future" } else { "function" },
             node.name,
             fits(node.total_ns),
             fits(self_ns),
@@ -340,10 +354,11 @@ fn build(tx: &Transaction<'_>, process: &[u8]) -> Result<(), Error> {
             fits(node.io_self_ns),
             count(node.invocations),
             count(returned),
-            count(failed),
+            count(future_cancel),
+            count(node.errored),
             count(node.panicked),
-            count(user),
-            count(node.cancelled)
+            count(nonpanic),
+            count(missing)
         ])?;
     }
     Ok(())
@@ -423,6 +438,46 @@ fn part_of(tx: &Transaction<'_>, rec: i64) -> Result<FxHashMap<i64, Part>, Error
         };
         if let Entry::Vacant(entry) = samples.entry(node) {
             entry.insert(row.get(0)?);
+        }
+        parts
+            .entry(node)
+            .or_insert_with(|| Part::new(None, false, None))
+            .add_path(&facts);
+    }
+    drop(rows);
+    // A spawned future's own node, reached by its spawn edge: one invocation
+    // per completed future, timed from when it began running. A hidden
+    // spawn has no spawn edge, and adds nothing here.
+    let mut futures = tx.prepare_cached(
+        "SELECT sp.node_id, sp.call_path_id, t.epoch_id, t.outcome, t.panicked,
+           t.completed_ticks - COALESCE(t.ran_ticks, t.started_ticks)
+         FROM thread t
+         JOIN call_path sp ON sp.rec = t.rec AND sp.call_path_id = t.spawn_call_path_id
+         WHERE t.rec = ?1 AND t.outcome IS NOT NULL AND sp.edge = 2 AND sp.node_id IS NOT NULL",
+    )?;
+    let mut rows = futures.query([rec])?;
+    while let Some(row) = rows.next()? {
+        let node: i64 = row.get(0)?;
+        let clock = match row.get_ref(2)? {
+            ValueRef::Blob(epoch) => clocks.get(epoch).copied().unwrap_or(unknown),
+            _ => unknown,
+        };
+        let outcome: i64 = row.get(3)?;
+        let panicked: bool = row.get(4)?;
+        let facts = PathFacts {
+            clock,
+            normal: Some(Counts {
+                calls: Some(1),
+                errored: Some(i64::from(outcome == ERRORED)),
+                cancelled: Some(i64::from(outcome == CANCELLED)),
+                panicked: Some(i64::from(outcome == ERRORED && panicked)),
+                duration_ticks: row.get::<_, Option<i64>>(5)?.filter(|ticks| *ticks >= 0),
+            }),
+            reentry: None,
+            sysop: None,
+        };
+        if let Entry::Vacant(entry) = samples.entry(node) {
+            entry.insert(row.get(1)?);
         }
         parts
             .entry(node)

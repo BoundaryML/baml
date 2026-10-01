@@ -7037,6 +7037,42 @@ impl BexVm {
     /// Finalize every still-open observed invocation and then the logical
     /// thread. The engine calls this exactly once when it chooses a terminal
     /// outcome (including cancellation races and explicit process exit).
+    /// A spawned future's body starts running now, after waiting to be
+    /// admitted. Its entry frame was entered when it was spawned, so that
+    /// invocation is restamped to start now too: the wait is the future's,
+    /// not its body's.
+    pub fn mark_telemetry_running(&mut self) {
+        if self.telemetry.is_none() {
+            return;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        self.stop_disabled_telemetry();
+        #[cfg(not(target_arch = "wasm32"))]
+        let _telemetry_scope = self.telemetry.as_ref().map(TelemetryState::execution_scope);
+        self.restamp_entry_as_running();
+    }
+
+    fn restamp_entry_as_running(&mut self) {
+        let Some(at) = self
+            .telemetry
+            .as_mut()
+            .and_then(TelemetryState::mark_running)
+        else {
+            return;
+        };
+        self.restamp_entry(at);
+    }
+
+    fn restamp_entry(&mut self, at: btel_types::ClockInstant) {
+        for frame in &mut self.frames {
+            if let Frame::Bytecode(frame) = frame
+                && let Some(telemetry) = &mut frame.telemetry
+            {
+                telemetry.entered_at = at;
+            }
+        }
+    }
+
     pub fn finish_telemetry(&mut self, outcome: InvocationOutcome) {
         if self.telemetry.is_none() {
             return;
@@ -7047,6 +7083,12 @@ impl BexVm {
         let _telemetry_scope = self.telemetry.as_ref().map(TelemetryState::execution_scope);
         if self.telemetry.is_none() {
             return;
+        }
+        // A future cancelled before it ran: its entry frame starts now, and
+        // `complete_thread` marks it running at the instant it completes.
+        if let Some(telemetry) = self.telemetry.as_ref().filter(|t| t.is_waiting()) {
+            let at = telemetry.clock().read();
+            self.restamp_entry(at);
         }
         self.finish_pending_telemetry_wait();
         // Engine-side cancellation can terminate a suspended VM without an

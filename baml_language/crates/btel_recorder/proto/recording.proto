@@ -307,6 +307,7 @@ message SpanEvent {
     FunctionCompletion function_completion = 4;
     FunctionCompletion late_function_completion = 5;
     LogEvent log = 6;            // Minor 5. Not a function invocation/completion.
+    ThreadRunning thread_running = 7; // Minor 6. Only for a spawned future.
   }
 }
 
@@ -330,6 +331,13 @@ enum LogLevel {
 
 // Explicit occurrence; immutable start fields live in ThreadDefinition.
 message ThreadAnnouncement {}
+
+// A spawned future's body began running, after waiting to be admitted; its
+// ThreadDefinition.started_at_ticks is when it was scheduled. A future
+// cancelled before it ran records its cancellation instead.
+message ThreadRunning {
+  fixed64 at_ticks = 1;
+}
 
 message ThreadCompletion {
   fixed64 completed_at_ticks = 1;

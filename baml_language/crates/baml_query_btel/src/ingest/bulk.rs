@@ -227,6 +227,7 @@ const THREAD_HAS_COMPLETED_TICKS: u16 = 1 << 5;
 const THREAD_COMPLETION_CONFLICT: u16 = 1 << 6;
 const THREAD_CONFLICT: u16 = 1 << 7;
 const THREAD_PANICKED: u16 = 1 << 8;
+const THREAD_RAN: u16 = 1 << 9;
 
 /// A thread: its first definition and first completion, or a placeholder,
 /// and its derived entry path. Packed like `PathRow`.
@@ -237,6 +238,8 @@ struct ThreadRow {
     epoch: u64,
     completed_ticks: i64,
     outcome: i64,
+    /// When a spawned future began running, with `THREAD_RAN`.
+    ran: i64,
     spawn_path: u32,
     /// Its first top-level synchronous path; 0 when it has none.
     entry_path: u32,
@@ -284,6 +287,16 @@ impl ThreadRow {
                 self.outcome,
             )
         })
+    }
+
+    /// The first time it began running; a later one is ignored.
+    fn ran(&mut self, ticks: Option<i64>) {
+        if let Some(ticks) = ticks
+            && !self.has(THREAD_RAN)
+        {
+            self.ran = ticks;
+            self.set(THREAD_RAN, true);
+        }
     }
 
     fn complete(&mut self, ticks: Option<i64>, outcome: i64, panicked: bool) {
@@ -582,6 +595,11 @@ impl Bulk {
                             self.threads
                                 .row(section.thread_id)
                                 .set(THREAD_ANNOUNCED, true);
+                        }
+                        Some(Event::ThreadRunning(running)) => {
+                            self.threads
+                                .row(section.thread_id)
+                                .ran(tick(running.at_ticks));
                         }
                         Some(Event::ThreadCompletion(done)) => {
                             let completed = tick(done.completed_at_ticks);
@@ -1031,21 +1049,66 @@ impl Bulk {
             };
             parts
                 .entry(*node)
-                .or_insert_with(|| {
-                    let parent = (def.parent != 0)
-                        .then(|| nodes.get(&def.parent).copied())
-                        .flatten();
-                    let name = self
-                        .functions
-                        .get(&def.callee)
-                        .filter(|function| function.state == 2)
-                        .and_then(|function| function.metadata.as_ref())
-                        .map(|meta| meta.wire.fqn.clone());
-                    Part::new(parent, def.edge == 1, name)
-                })
+                .or_insert_with(|| self.part(nodes, *path))
+                .add_path(&facts);
+        }
+        // A spawned future's own node, reached by its spawn edge: one
+        // invocation per completed future, timed from when it began running,
+        // as `profile::part_of` adds them.
+        for (thread, row) in self.threads.iter() {
+            let (Some(def), Some((completed, outcome))) = (row.def(), row.completion()) else {
+                continue;
+            };
+            let spawn = self.paths.get(&def.spawn_path).and_then(PathRow::def);
+            let Some(node) = nodes.get(&def.spawn_path).copied() else {
+                continue;
+            };
+            if spawn.is_none_or(|path| path.edge != 2) {
+                continue;
+            }
+            let started = if row.has(THREAD_RAN) {
+                Some(row.ran)
+            } else {
+                def.started
+            };
+            let facts = PathFacts {
+                clock: clock_of(*thread),
+                normal: Some(Counts {
+                    calls: Some(1),
+                    errored: Some(i64::from(outcome == 2)),
+                    cancelled: Some(i64::from(outcome == 3)),
+                    panicked: Some(i64::from(outcome == 2 && row.has(THREAD_PANICKED))),
+                    duration_ticks: completed
+                        .zip(started)
+                        .map(|(end, start)| end - start)
+                        .filter(|ticks| *ticks >= 0),
+                }),
+                reentry: None,
+                sysop: None,
+            };
+            parts
+                .entry(node)
+                .or_insert_with(|| self.part(nodes, def.spawn_path))
                 .add_path(&facts);
         }
         parts
+    }
+
+    /// A node's empty part, described by one of its paths.
+    fn part(&self, nodes: &FxHashMap<u32, i64>, path: u32) -> Part {
+        let Some(def) = self.paths.get(&path).and_then(PathRow::def) else {
+            return Part::new(None, false, None);
+        };
+        let parent = (def.parent != 0)
+            .then(|| nodes.get(&def.parent).copied())
+            .flatten();
+        let name = self
+            .functions
+            .get(&def.callee)
+            .filter(|function| function.state == 2)
+            .and_then(|function| function.metadata.as_ref())
+            .map(|meta| meta.wire.fqn.clone());
+        Part::new(parent, def.edge == 1, name)
     }
 
     /// An aggregate node's counts, as its `aggregate` row would store them.
@@ -1302,9 +1365,9 @@ impl Bulk {
         insert_rows(
             tx,
             "thread (rec, thread_id, defined, parent_id, spawn_call_path_id, started_ticks,
-               epoch_id, announced, completed_ticks, outcome, panicked, name,
+               epoch_id, announced, ran_ticks, completed_ticks, outcome, panicked, name,
                completion_conflict, conflict, entry_call_path_id)",
-            15,
+            16,
             &ids,
             |b, thread| {
                 let row = &self.threads[&thread];
@@ -1318,6 +1381,7 @@ impl Bulk {
                 b.bind(def.and_then(|d| d.started))?;
                 b.bind(def.map(|d| id(d.epoch)))?;
                 b.bind(row.has(THREAD_ANNOUNCED))?;
+                b.bind(row.has(THREAD_RAN).then_some(row.ran))?;
                 b.bind(completion.and_then(|(ticks, _)| ticks))?;
                 b.bind(completion.map(|(_, outcome)| outcome))?;
                 b.bind(row.has(THREAD_PANICKED))?;

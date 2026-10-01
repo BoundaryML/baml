@@ -231,8 +231,8 @@ fn rows(index: &mut Index, sql: &str) -> Vec<Vec<Json>> {
 
 /// Each node by its path of function names and edges, for readable rows.
 const PROFILE: &str = "SELECT n.function_name, p.function_name, n.invocation_count,
-    n.return_count, n.error_count, n.panic_error_count, n.user_error_count,
-    n.cancel_error_count, n.missing_count, n.total_time, n.self_time, n.io_self_time,
+    n.return_count, n.error_count, n.panic_error_count, n.nonpanic_error_count,
+    n.future_cancel_count, n.missing_count, n.total_time, n.self_time, n.io_self_time,
     n.io_total_time
   FROM profiler n LEFT JOIN profiler p ON p.profiler_node_id = n.parent_profiler_node_id
   ORDER BY n.total_time DESC, n.invocation_count DESC";
@@ -271,7 +271,7 @@ fn the_profiler_merges_call_sites_and_counts_every_outcome() {
             ..Default::default()
         },
     );
-    let a = |name, parent: Json, n, ok, err, panic, user, cancel, total, own, io, io_all| {
+    let a = |name, parent: Json, n, ok, err, panic, nonpanic, missing, total, own, io, io_all| {
         vec![
             json!(name),
             parent,
@@ -279,9 +279,9 @@ fn the_profiler_merges_call_sites_and_counts_every_outcome() {
             json!(ok),
             json!(err),
             json!(panic),
-            json!(user),
-            json!(cancel),
+            json!(nonpanic),
             json!(0),
+            json!(missing),
             json!(total),
             json!(own),
             json!(io),
@@ -293,7 +293,8 @@ fn the_profiler_merges_call_sites_and_counts_every_outcome() {
         vec![
             // 100 minus its synchronous callees (10 + 30); the spawned B's 50
             // runs beside it.
-            a("user.A", Json::Null, 15, 9, 6, 1, 2, 3, 100, 60, 7, 12),
+            // Its 3 cancelled invocations never finished: missing, not errors.
+            a("user.A", Json::Null, 15, 9, 3, 1, 2, 3, 100, 60, 7, 12),
             a("user.B", json!("user.A"), 1, 1, 0, 0, 0, 0, 50, 50, 0, 0),
             // Two call sites, one node.
             a("user.B", json!("user.A"), 3, 2, 1, 1, 0, 0, 30, 30, 5, 5),
@@ -392,7 +393,7 @@ fn unknown_counts_and_times_are_null_never_guessed() {
         rows(
             &mut index,
             "SELECT function_name, invocation_count, return_count, error_count,
-               panic_error_count, user_error_count, total_time
+               panic_error_count, nonpanic_error_count, total_time
              FROM profiler ORDER BY function_name"
         ),
         vec![
