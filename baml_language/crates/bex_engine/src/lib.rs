@@ -82,6 +82,7 @@ mod thread;
 pub use btel_types::ProcessStatus;
 #[cfg(not(target_arch = "wasm32"))]
 pub use telemetry::TelemetryRecording;
+mod telemetry_network;
 mod telemetry_state;
 pub mod trace_heap;
 mod trace_value_encode;
@@ -1741,11 +1742,15 @@ impl BexEngine {
                         None,
                     ),
                 };
+                let http_bodies = btel_settings::network::bodies_from_env()
+                    .map_err(|error| EngineError::Other(error.to_string()))?;
                 Ok::<_, EngineError>(EngineTelemetry {
-                    policies: Arc::new(bex_vm::telemetry::TelemetryPolicies::with_auto_level(
-                        auto_level,
-                    )),
+                    policies: Arc::new(
+                        bex_vm::telemetry::TelemetryPolicies::with_auto_level(auto_level)
+                            .with_http_bodies(http_bodies),
+                    ),
                     clock: btel_clock::ClockRuntime::new(clock_mode),
+                    network: Arc::default(),
                     #[cfg(not(target_arch = "wasm32"))]
                     recording_id,
                     #[cfg(not(target_arch = "wasm32"))]
@@ -4761,6 +4766,7 @@ impl BexEngine {
         } else {
             materialized
         };
+        Self::close_network_on_throw(thread, vm_value);
         if vm_value != materialized {
             throw_kind = bex_vm::errors::ThrowKind::Fresh;
         }
@@ -5595,6 +5601,7 @@ impl BexEngine {
                                 None
                             };
 
+                        let network = self.network_before(thread, operation, &args);
                         // A synchronous sysop does its work inside the call below.
                         let sys_op_started = thread.vm.telemetry_clock().map(|clock| clock.read());
                         let sys_op_result = if let Some(request) = runtime_compile_request {
@@ -5611,6 +5618,9 @@ impl BexEngine {
                                 &op_cancel,
                                 thread.proof(),
                                 runtime_schema_overlay.as_ref(),
+                                network
+                                    .as_ref()
+                                    .and_then(telemetry_network::NetworkOp::context),
                             )
                         };
 
@@ -5640,6 +5650,10 @@ impl BexEngine {
                                         // The op is abandoned: stop it, and give
                                         // the ops that follow a clean token.
                                         thread.vm_thread_abort_sysop();
+                                        self.drain_network_events(&mut thread.vm);
+                                        thread.network_close = network
+                                            .as_ref()
+                                            .and_then(telemetry_network::NetworkOp::span_to_close);
                                         if let Some(outcome) = self
                                             .inject_cancellation(
                                                 thread,
@@ -5657,6 +5671,16 @@ impl BexEngine {
                                 }
                             }
                         };
+                        self.drain_network_events(&mut thread.vm);
+                        if let Some(network) = &network {
+                            match &outcome {
+                                Ok(external) => {
+                                    Self::network_after_ok(&mut thread.vm, network, external);
+                                }
+                                // Ended in `inject_sysop_throw`, with the thrown value.
+                                Err(_) => thread.network_close = network.span_to_close(),
+                            }
+                        }
 
                         match outcome {
                             Ok(external) => {
@@ -6045,6 +6069,7 @@ impl BexEngine {
         cancel: &CancellationToken,
         permit: bex_heap::PermitProof<'_>,
         runtime_schema: Option<&RuntimeSchemaOverlay>,
+        network: Option<sys_types::network::NetworkContext>,
     ) -> SysOpResult {
         fn check(op: SysOp, err: &OpError) {
             if let sys_types::OpErrorPayload::Vm(kind) = &err.payload {
@@ -6071,6 +6096,7 @@ impl BexEngine {
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
         let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
+        ctx.network = network;
         if let Some(runtime_schema) = runtime_schema {
             let mut classes = ctx.class_definitions.as_ref().clone();
             classes.extend(runtime_schema.classes.clone());
