@@ -24,11 +24,10 @@ function AnthMockAsk(question: string) -> string {
 // The SYSTEM message carries an Anthropic cache breakpoint (that is where the
 // marker below puts the `cache_control` metadata, and what
 // `anthropic_cache_control_placement` asserts: `system_cc=ephemeral`,
-// `user_cc=-`). `role(...)` builds a metadata-less marker, so the directive is
-// authored by interpolating the typed marker class directly.
+// `user_cc=-`).
 function AnthMockCached(question: string) -> string {
     client: "anthropic/claude-haiku-4-5"
-    prompt: `${ai.Role { name: "system", metadata: { "cache_control": { "type": "ephemeral" } } }}Follow the rules.${role("user")}${question}`
+    prompt: `${role("system", metadata = { "cache_control": { "type": "ephemeral" } })}Follow the rules.${role("user")}${question}`
 }
 
 // An assistant-first prompt with NO system content: the shape that used to

@@ -78,7 +78,13 @@ class Prompt {
 function prompt(
     // No `throws` clause: the callback's effect is inferred per call site
     // (rule 5); whatever a template expression throws is wrapped below.
-    body: (role: (string) -> root.Role throws never, ctx: root.Context) -> baml.TaggedString,
+    body: (
+        role: (
+            name: string,
+            metadata?: baml.json.json,
+        ) -> root.Role throws baml.errors.InvalidArgument,
+        ctx: root.Context,
+    ) -> baml.TaggedString,
 ) -> (root.Context) -> Prompt throws root.errors.PromptRenderError {
     let render = (ctx: root.Context) -> {
         let tagged = body(root.internal.make_role, ctx) catch_all (e) {
