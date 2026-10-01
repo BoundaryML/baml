@@ -52,8 +52,8 @@ with st.sidebar:
     sides = [side for side in runners.SIDES if st.checkbox(SIDE_NAME[side], value=True)]
     order = st.radio(
         "Within a scenario",
-        ["in order (A, B, C)", "all at once"],
-        help="In order keeps CPU and loop-lag numbers independent; all at once is for watching them race.",
+        ["all at once", "in order (A, B, C)"],
+        help="All at once is for watching them race; in order keeps CPU and loop-lag numbers independent.",
     )
 
     st.header("Rendering")

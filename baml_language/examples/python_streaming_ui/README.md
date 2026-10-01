@@ -39,7 +39,7 @@ The client settings mirror the representatives in `sdk_tests/fixtures/llm_provid
 - **loop lag p95/max**: how late a 5 ms asyncio timer fires while streaming. If the stream blocks the event loop, the UI freezes.
 - **field accuracy**: share of ground-truth JSON leaves reproduced exactly.
 
-Run A and B one after the other (the default) when comparing CPU and loop lag. The concurrent mode is for watching them race.
+The app runs A, B and C all at once by default, so you can watch them race. Switch to "in order" when comparing CPU and loop lag, since those are measured per process and the sides would share them.
 
 ## Setup
 
