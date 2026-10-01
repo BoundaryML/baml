@@ -1348,6 +1348,7 @@ function bedrock_stream_text() -> string {
             while (true) {
                 match (stream.next()) {
                     let d: ai.stream.Done => break,
+                    let reset: ai.stream.TurnReset => { deltas = []; null },
                     let chunk: string[] => {
                         deltas = deltas.concat(chunk);
                         null
@@ -1422,8 +1423,8 @@ function bedrock_stream_truncated() -> string {
     )
 }
 
-test "bedrock_stream_truncated" {
-    assert.equal(bedrock_stream_truncated(), "NetworkFailure")
+test "bedrock_stream_clean_eof_accepts_partial" {
+    assert.equal(bedrock_stream_truncated(), "pong")
 }
 
 // A modeled exception frame mid-stream fails the turn with the identity the

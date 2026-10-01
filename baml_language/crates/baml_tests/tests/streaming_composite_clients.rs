@@ -95,7 +95,7 @@ async fn retry_reopens_after_pre_delta_disconnect() {
 }
 
 #[tokio::test]
-async fn retry_does_not_reopen_after_visible_prefix() {
+async fn retry_accepts_clean_eof_after_visible_prefix() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/responses"))
@@ -136,11 +136,10 @@ async fn retry_does_not_reopen_after_visible_prefix() {
             let first = match (stream.next()) {{
                 let batch: string[] => batch.join(""),
                 let done: ai.stream.Done => "done",
+                let reset: ai.stream.TurnReset => "reset",
             }};
-            let second = stream.next() catch (e) {{
-                let network: ai.errors.NetworkFailure => `NetworkFailure:${{network.raw_body ?? ""}}`,
-            }};
-            `${{first}}|${{second.to_string()}}`
+            let turn = stream.final_turn();
+            `${{first}}|${{turn.terminal_text() ?? ""}}`
         }}
         "#,
         leaf = response_client("Leaf", "retry-leaf", &server.uri()),
@@ -149,9 +148,7 @@ async fn retry_does_not_reopen_after_visible_prefix() {
     let output = baml_test!(&source);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String(
-            "prefix|NetworkFailure:prefix".to_string().into()
-        ))
+        Ok(BexExternalValue::String("prefix|prefix".to_string().into()))
     );
     let requests = server
         .received_requests()
@@ -160,7 +157,7 @@ async fn retry_does_not_reopen_after_visible_prefix() {
     assert_eq!(
         requests.len(),
         1,
-        "a visible prefix forbids replaying the request"
+        "clean EOF after decoded output must not replay the request"
     );
 }
 

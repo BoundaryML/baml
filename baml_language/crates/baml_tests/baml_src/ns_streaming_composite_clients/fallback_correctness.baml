@@ -777,8 +777,10 @@ function fallback_idle_timeout_after_text_case() -> string {
         let primary = openai.ResponsesClient.new(
             api_key = "test-key",
             base_url = `http://${server.addr}`,
-            idle_timeout = baml.time.Duration.from_milliseconds(300),
-            request_timeout = baml.time.Duration.from_milliseconds(5000),
+            options = baml.ai.LlmClientOptions.new()
+                .with_idle_timeout(baml.time.Duration.from_milliseconds(300))
+                .with_request_timeout(baml.time.Duration.from_milliseconds(5000)),
+
         );
         let chain = ai.clients.Fallback { members: [primary, fallback_leaf(backup.base_url())] };
         let stream = ai.stream.from_spec<string>(CompositeStreamSpec@spec(), client = chain);
