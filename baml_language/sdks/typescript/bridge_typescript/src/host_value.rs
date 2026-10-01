@@ -41,17 +41,103 @@
 //! heap-teardown semantics owned by the engine/heap layer; it is left to that
 //! layer rather than worked around here.
 
-use std::sync::{Arc, LazyLock, OnceLock};
+use std::{
+    collections::HashSet,
+    sync::{Arc, LazyLock, Mutex, OnceLock},
+};
 
+use bridge_ctypes::baml_bridge::cffi::{
+    BamlHandleType, BamlOutboundValue, BamlToHostCall, baml_outbound_value::Value as OutboundValue,
+};
 use napi::{
     Status,
     bindgen_prelude::{Buffer, FnArgs, Function},
     threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
 };
 use napi_derive::napi;
+use prost::Message;
 use sys_native::{OpError, SysOp, VmInternalError};
 
 use crate::handle::HandleKey;
+
+static SYNC_CALLS: LazyLock<Mutex<HashSet<u64>>> = LazyLock::new(Mutex::default);
+
+/// A native closure can hide host callbacks from the JS encoder's sync guard.
+/// Track the issuing entry so dispatch can reject before queuing blocked JS.
+pub(crate) struct SyncCallGuard(u64);
+
+impl SyncCallGuard {
+    pub(crate) fn new(call_id: u64) -> Self {
+        SYNC_CALLS.lock().unwrap().insert(call_id);
+        Self(call_id)
+    }
+}
+
+impl Drop for SyncCallGuard {
+    fn drop(&mut self) {
+        SYNC_CALLS.lock().unwrap().remove(&self.0);
+    }
+}
+
+/// Private adapter lookup; the C ABI and dispatch payload stay unchanged.
+#[napi(js_name = "_getHostCallOrigin")]
+pub fn get_host_call_origin(call_id: u32) -> Option<String> {
+    sys_native::host_dispatch::origin_call_id(call_id).map(|origin| origin.0.to_string())
+}
+
+/// Release wire owners of a queued callback cancelled before JS execution.
+/// Borrowed host keys belong to HostValueArc, not the native handle table.
+fn discard_host_call_args(args: &[u8]) {
+    fn discard(value: BamlOutboundValue) {
+        match value.value {
+            Some(OutboundValue::HandleValue(handle)) => {
+                if handle.handle_type != BamlHandleType::HostValueCallable as i32
+                    && handle.handle_type != BamlHandleType::HostValueOpaque as i32
+                {
+                    let _ = bridge_cffi::handle_cffi::release_handle(handle.key);
+                }
+            }
+            Some(OutboundValue::ListValue(list)) => {
+                for value in list.items {
+                    discard(value);
+                }
+            }
+            Some(OutboundValue::MapValue(map)) => {
+                for entry in map.entries {
+                    if let Some(value) = entry.value {
+                        discard(value);
+                    }
+                }
+            }
+            Some(OutboundValue::ClassValue(class)) => {
+                for field in class.fields {
+                    if let Some(value) = field.value {
+                        discard(value);
+                    }
+                }
+            }
+            Some(OutboundValue::UnionVariantValue(union)) => {
+                if let Some(value) = union.value {
+                    discard(*value);
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Ok(call) = BamlToHostCall::decode(args) {
+        for arg in call.args {
+            if let Some(value) = arg.value {
+                discard(value);
+            }
+        }
+    }
+    bex_project::host_release_dispatch::drain();
+}
+
+#[napi(js_name = "_discardHostCallArgs")]
+pub fn discard_host_call_args_from_js(args: Buffer) {
+    discard_host_call_args(&args);
+}
 
 /// Args the Rust-side dispatch forwards to the JS dispatch wrapper.
 ///
@@ -320,6 +406,34 @@ pub extern "C" fn host_dispatch_callback(
     args: *const u8,
     length: usize,
 ) {
+    let Some(origin) = sys_native::host_dispatch::origin_call_id(call_id) else {
+        // args owns wire handle references even after the waiter disappears.
+        if !args.is_null() {
+            // SAFETY: the same engine-owned slice contract as the copy below.
+            discard_host_call_args(unsafe { std::slice::from_raw_parts(args, length) });
+        }
+        return;
+    };
+    let is_sync = SYNC_CALLS.lock().unwrap().contains(&origin.0);
+    if is_sync {
+        if !args.is_null() {
+            // SAFETY: args is valid for this callback's duration.
+            discard_host_call_args(unsafe { std::slice::from_raw_parts(args, length) });
+        }
+        sys_native::host_dispatch::complete_with_error(
+            call_id,
+            OpError::new(
+                SysOp::BamlHostCallHostValue,
+                VmInternalError::BridgeFailure {
+                    message: "host callables are only supported on the async call path; \
+                              use the async API instead of synchronously invoking a \
+                              returned closure that retains a host callback"
+                        .to_string(),
+                },
+            ),
+        );
+        return;
+    }
     // Copy the wire bytes into a Vec — the dispatch task may outlive the
     // caller's stack frame (the tsfn schedules onto libuv asynchronously),
     // and we need a `'static` slice anyway.
@@ -349,6 +463,7 @@ pub extern "C" fn host_dispatch_callback(
         }
     };
     let Some(tsfn) = tsfn else {
+        discard_host_call_args(&bytes);
         send_dispatch_error_no_callable(call_id, host_value_key);
         return;
     };
@@ -361,6 +476,10 @@ pub extern "C" fn host_dispatch_callback(
         ThreadsafeFunctionCallMode::NonBlocking,
     );
     if status != Status::Ok {
+        if !args.is_null() {
+            // SAFETY: the engine-owned slice is valid until this callback returns.
+            discard_host_call_args(unsafe { std::slice::from_raw_parts(args, length) });
+        }
         send_dispatch_error_tsfn_status(call_id, status);
     }
 }

@@ -72,6 +72,7 @@ impl BamlRuntime {
         // catch_unwind -> SdkPanic boundary and error/panic routing) lives in
         // bridge_cffi; we just return the encoded envelope bytes for the TS
         // decoder to surface.
+        let _sync_call = crate::host_value::SyncCallGuard::new(prepared.host_call_id());
         let bytes = rt.block_on(bridge_cffi::invoke_prepared(runtime, prepared));
 
         Ok(Buffer::from(bytes))
