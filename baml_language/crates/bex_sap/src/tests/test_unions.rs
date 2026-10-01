@@ -113,11 +113,11 @@ test_deserializer!(
             RESPOND_TO_USER @alias("RespondToUserAPI")
         }
         enum UIType {
-            CompanyBadge,
-            Markdown,
-            NumericalSlider,
-            BarGraph,
-            ScatterPlot
+            CompanyBadge @description("Company badge UI type"),
+            Markdown @description("Markdown text UI type"),
+            NumericalSlider @description("Numerical slider UI type"),
+            BarGraph @description("Bar graph UI type"),
+            ScatterPlot @description("Scatter plot UI type")
         }
         class AssistantAPI {
             action: AssistantType,

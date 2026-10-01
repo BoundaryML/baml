@@ -97,3 +97,45 @@ test "sap_parse_shape_failures_are_catchable_as_parse_errors" {
     };
     assert.equal(result, "parse-error")
 }
+
+// ─── enum variants match by `@description` ──────────────────────────────────
+//
+// The output format renders a variant as `<name>: <description>`, so a model
+// often answers with the description. That names the variant, in a scalar
+// field and in every element of a list alike.
+
+enum ParseCompanionsDay {
+    ONE @description("MONDAY"),
+    TWO @description("TUESDAY"),
+}
+
+class ParseCompanionsDayEntry {
+    day: ParseCompanionsDay,
+    note: string,
+}
+
+test "sap_parse_matches_an_enum_variant_by_its_description" {
+    let parsed = baml.sap.parse<ParseCompanionsDayEntry>(`{"day": "MONDAY", "note": "rest"}`);
+    assert.equal(parsed, ParseCompanionsDayEntry { day: ParseCompanionsDay.ONE, note: "rest" })
+}
+
+test "sap_parse_matches_an_enum_description_case_insensitively" {
+    assert.equal(baml.sap.parse<ParseCompanionsDay>(`Tuesday`), ParseCompanionsDay.TWO)
+}
+
+test "sap_parse_matches_a_rendered_enum_line" {
+    assert.equal(baml.sap.parse<ParseCompanionsDay>(`ONE: MONDAY`), ParseCompanionsDay.ONE)
+}
+
+test "sap_parse_keeps_list_elements_whose_enum_is_named_by_description" {
+    let parsed = baml.sap.parse<ParseCompanionsDayEntry[]>(
+        `[{"day": "MONDAY", "note": "rest"}, {"day": "TWO", "note": "run"}]`,
+    );
+    assert.equal(
+        parsed,
+        [
+            ParseCompanionsDayEntry { day: ParseCompanionsDay.ONE, note: "rest" },
+            ParseCompanionsDayEntry { day: ParseCompanionsDay.TWO, note: "run" },
+        ],
+    )
+}

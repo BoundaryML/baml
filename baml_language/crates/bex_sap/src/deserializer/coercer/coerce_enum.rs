@@ -12,20 +12,44 @@ use crate::{
     sap_model::{AnnotatedEnumVariant, EnumTy, EnumVariantTy, TyResolvedRef, TypeIdent, TypeValue},
 };
 
+/// The strings that match one enum variant.
+///
+/// The rendered names come first: the aliases when any exist (the original name is then
+/// excluded), otherwise the name itself. A variant with a non-blank `@description` also
+/// matches the description alone and each `<rendered name>: <description>` line, which is how
+/// the output format shows the variant to the model.
+fn variant_match_candidates<'t>(v: &'t AnnotatedEnumVariant<'t>) -> Vec<Cow<'t, str>> {
+    let rendered_names: Vec<&'t str> = if v.aliases.is_empty() {
+        vec![v.name.trim()]
+    } else {
+        v.aliases.iter().map(|a| a.trim()).collect()
+    };
+    let description = v
+        .description
+        .as_deref()
+        .map(str::trim)
+        .filter(|d| !d.is_empty());
+
+    let mut candidates: Vec<Cow<'t, str>> =
+        rendered_names.iter().copied().map(Cow::Borrowed).collect();
+    if let Some(description) = description {
+        candidates.push(Cow::Borrowed(description));
+        candidates.extend(
+            rendered_names
+                .iter()
+                .map(|name| Cow::Owned(format!("{name}: {description}"))),
+        );
+    }
+    candidates
+}
+
 /// Produces a list of (name, candidates) tuples for each enum variant.
-/// When aliases exist, only aliases are used as candidates (original name excluded).
-/// When no aliases, the name itself is the sole candidate.
-fn enum_match_candidates<'t, N: TypeIdent>(ty: &'t EnumTy<'t, N>) -> Vec<(&'t str, Vec<&'t str>)> {
+fn enum_match_candidates<'t, N: TypeIdent>(
+    ty: &'t EnumTy<'t, N>,
+) -> Vec<(&'t str, Vec<Cow<'t, str>>)> {
     ty.variants
         .iter()
-        .map(|v| {
-            let candidates = if v.aliases.is_empty() {
-                vec![v.name.trim()]
-            } else {
-                v.aliases.iter().map(|a| a.trim()).collect()
-            };
-            (v.name.as_ref(), candidates)
-        })
+        .map(|v| (v.name.as_ref(), variant_match_candidates(v)))
         .collect()
 }
 
@@ -34,7 +58,8 @@ where
     't: 's,
     's: 'v,
 {
-    /// Strict: does not use aliases, just the name.
+    /// Strict: only an exact rendered name (the aliases, or the name when there are none);
+    /// descriptions are left to `coerce`.
     fn try_cast(
         _ctx: &ParsingContext<'s, 'v, 't, N>,
         enum_ty: &'t Self,
@@ -48,7 +73,7 @@ where
 
         // assumes no name or alias can have the same value as another name or alias
         // When aliases exist, only aliases are valid for matching (name is excluded)
-        for AnnotatedEnumVariant { name, aliases } in &enum_ty.variants {
+        for AnnotatedEnumVariant { name, aliases, .. } in &enum_ty.variants {
             let matches = if aliases.is_empty() {
                 name == s
             } else {
@@ -119,14 +144,9 @@ impl<'s, 'v, 't, N: TypeIdent> EnumTy<'t, N> {
 /// Produces match candidates for a single enum variant.
 fn enum_variant_match_candidates<'t, N: TypeIdent>(
     ty: &'t EnumVariantTy<'t, N>,
-) -> Vec<(&'t str, Vec<&'t str>)> {
+) -> Vec<(&'t str, Vec<Cow<'t, str>>)> {
     let v = &ty.value;
-    let candidates = if v.aliases.is_empty() {
-        vec![v.name.trim()]
-    } else {
-        v.aliases.iter().map(|a| a.trim()).collect()
-    };
-    vec![(v.name.as_ref(), candidates)]
+    vec![(v.name.as_ref(), variant_match_candidates(v))]
 }
 
 impl<'s, 'v, 't, N: TypeIdent + 't> TypeCoercer<'s, 'v, 't, N> for EnumVariantTy<'t, N>
@@ -144,7 +164,7 @@ where
             return None;
         };
 
-        let AnnotatedEnumVariant { name, aliases } = &ev_ty.value;
+        let AnnotatedEnumVariant { name, aliases, .. } = &ev_ty.value;
         let matches = if aliases.is_empty() {
             name == s
         } else {

@@ -48,6 +48,7 @@ macro_rules! baml_ty {
             value: $crate::sap_model::AnnotatedEnumVariant {
                 name: ::std::borrow::Cow::Borrowed(stringify!($variant_name)),
                 aliases: ::std::vec::Vec::new(),
+                description: ::std::option::Option::None,
             },
         }))
     };
@@ -196,7 +197,7 @@ macro_rules! __baml_db_item {
     };
     {$types:ident =>
         enum $name:ident {
-            $($variant:ident $(@alias($alias:literal))*),+$(,)?
+            $($variant:ident $(@alias($alias:literal))* $(@description($description:literal))?),+$(,)?
         }
         $($rest:tt)*
     } => {
@@ -206,6 +207,7 @@ macro_rules! __baml_db_item {
                 $($crate::sap_model::AnnotatedEnumVariant {
                     name: ::std::borrow::Cow::Borrowed(stringify!($variant)),
                     aliases: vec![$(::std::borrow::Cow::Borrowed($alias)),*],
+                    description: ::std::option::Option::None$(.or(::std::option::Option::Some(::std::borrow::Cow::Borrowed($description))))?,
                 }),+
             ],
         }));

@@ -198,8 +198,8 @@ test_deserializer!(
     baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -212,8 +212,8 @@ test_deserializer!(
     baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -226,8 +226,8 @@ test_deserializer!(
     baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -240,8 +240,8 @@ test_deserializer!(
     baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -254,8 +254,8 @@ test_deserializer!(
     baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -268,8 +268,8 @@ test_deserializer!(
     baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -282,8 +282,8 @@ test_deserializer!(
     baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -296,8 +296,8 @@ test_deserializer!(
     baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -310,8 +310,8 @@ test_deserializer!(
     baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -324,8 +324,8 @@ test_deserializer!(
     baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -338,8 +338,8 @@ test_deserializer!(
     baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -353,8 +353,8 @@ test_failing_deserializer!(
     baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     }
@@ -366,8 +366,8 @@ test_deserializer!(
     baml_ty!([Category]),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -384,8 +384,8 @@ test_deserializer!(
     baml_ty!([Category]),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -447,7 +447,172 @@ offers and urgency ($^{$_{Ω}$rel}$), which are common traits of spam messages. 
     "SPAM"
 );
 
-// test_enum_from_string is skipped because it uses `res.meta_mut().streaming_behavior.done = true`
+// Upstream marks the target `@stream.done`; that only shapes partial parses, and this is a
+// complete one.
+test_deserializer!(
+    test_enum_from_string,
+    " `k5`\n\nThe category \"k5: User is excited\" is designed to identify and classify user inputs that express strong positive emotions, enthusiasm, or anticipation. This classification applies when the language used by the user conveys an eagerness or thrill about something they are experiencing or expecting.\n\n### Characteristics of Excitement\n- **Emotional Expressions:** The use of exclamation marks, emphatic words like \"amazing,\" \"incredible,\" or \"fantastic.\"\n- **Positive Language:** Use of positive adjectives and adverbs such as \"can't wait,\" \"thrilled,\" \"excited,\" or \"elated.\"\n- **Anticipation:** Statements that show looking forward to an event, result, or item.\n  \n### Examples\n- *\"I can’t wait for the concert tonight! It's going to be amazing!\"*\n- *\"This new game release has me super excited. I've been waiting months for this!\"*\n\n### Long Description:\nWhen a user demonstrates excitement in their communication, it generally reflects an emotional high, eagerness, or intense positivity regarding whatever they are discussing. This could pertain to events like attending a sports game or concert, receiving positive news or achievements, encountering something novel and stimulating (like a new gadget or experience), or anticipating something eagerly awaited.\n\nThe user’s input might include dynamic language that conveys an elevated state of anticipation or satisfaction with an imminent or forthcoming occurrence. Often associated with increased energy levels in the text itself—through phrases like \"so excited!\" or actions (\"counting down until\") — this category taps into the positive psychology aspects, depicting a scenario where the user feels joyous eagerness and anticipatory pleasure.\n\nUnderstanding excitement is crucial because it can drive engagement, motivation, and personal enthusiasm which might influence decision-making and behavior. Recognizing exciting expressions helps in tailoring responses or actions that resonate with the user's emotional state, maintaining an enthusiastic interaction, and potentially amplifying positive outcomes.",
+    baml_ty!(MessageType),
+    baml_db! {
+        enum MessageType {
+            SPAM @alias("k5"),
+            NOT_SPAM @alias("k6")
+        }
+    },
+    "SPAM"
+);
+
+// ============================================================================
+// Matching a variant by its `@description`
+//
+// The output format renders a variant as `<name>: <description>`, so models
+// answer with the description alone, or with the whole rendered line.
+// ============================================================================
+
+fn described_category_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        enum Category {
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
+            THREE @alias("NUMBER THREE")
+        }
+    }
+}
+
+test_deserializer!(
+    description_only,
+    r#"The description of enum value une"#,
+    baml_ty!(Category),
+    described_category_db(),
+    "ONE"
+);
+
+test_deserializer!(
+    description_only_quoted,
+    r#""The description of enum value deux""#,
+    baml_ty!(Category),
+    described_category_db(),
+    "TWO"
+);
+
+test_deserializer!(
+    description_only_case_insensitive,
+    r#"the description of enum value DEUX"#,
+    baml_ty!(Category),
+    described_category_db(),
+    "TWO"
+);
+
+test_deserializer!(
+    description_only_with_surrounding_text,
+    r#"I would pick: The description of enum value deux."#,
+    baml_ty!(Category),
+    described_category_db(),
+    "TWO"
+);
+
+test_deserializer!(
+    description_only_list,
+    r#"["The description of enum value une", "k-2-3.1_1", "NUMBER THREE"]"#,
+    baml_ty!([Category]),
+    described_category_db(),
+    ["ONE", "TWO", "THREE"]
+);
+
+// An alias replaces the name, with or without a description alongside it.
+test_failing_deserializer!(
+    description_does_not_restore_aliased_name,
+    r#"ONE"#,
+    baml_ty!(Category),
+    described_category_db()
+);
+
+fn day_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        enum Day {
+            ONE @description("MONDAY"),
+            TWO @description("TUESDAY"),
+            // Blank descriptions are not match candidates.
+            THREE @description("  ")
+        }
+        class DayEntry {
+            day: Day,
+            note: string,
+        }
+    }
+}
+
+test_deserializer!(
+    description_only_unaliased,
+    r#"MONDAY"#,
+    baml_ty!(Day),
+    day_db(),
+    "ONE"
+);
+
+test_deserializer!(
+    description_only_unaliased_case_insensitive,
+    r#"Tuesday"#,
+    baml_ty!(Day),
+    day_db(),
+    "TWO"
+);
+
+// The name still matches when the variant has a description.
+test_deserializer!(
+    name_with_description,
+    r#"TWO"#,
+    baml_ty!(Day),
+    day_db(),
+    "TWO"
+);
+
+test_deserializer!(
+    rendered_line_with_description,
+    r#"ONE: MONDAY"#,
+    baml_ty!(Day),
+    day_db(),
+    "ONE"
+);
+
+test_failing_deserializer!(
+    blank_description_is_not_a_candidate,
+    r#""#,
+    baml_ty!(Day),
+    day_db()
+);
+
+test_deserializer!(
+    description_in_class_field,
+    r#"{"day": "MONDAY", "note": "rest"}"#,
+    baml_ty!(DayEntry),
+    day_db(),
+    {"day": "ONE", "note": "rest"}
+);
+
+// Every element survives: one named by its description, one by its name.
+test_deserializer!(
+    description_in_list_of_classes,
+    r#"[{"day": "MONDAY", "note": "rest"}, {"day": "TWO", "note": "run"}]"#,
+    baml_ty!([DayEntry]),
+    day_db(),
+    [{"day": "ONE", "note": "rest"}, {"day": "TWO", "note": "run"}]
+);
+
+test_deserializer!(
+    description_for_enum_variant_type,
+    r#"MONDAY"#,
+    Ty::Resolved(TyResolved::EnumVariant(EnumVariantTy {
+        name: "Day",
+        value: AnnotatedEnumVariant {
+            name: "ONE".into(),
+            aliases: vec![],
+            description: Some("MONDAY".into()),
+        },
+    })),
+    day_db(),
+    "ONE"
+);
 
 // ============================================================================
 // Enum atomic streaming behavior
