@@ -668,9 +668,9 @@ function _cache_point(metadata: map<string, baml.json.json>) -> map<string, baml
             }
         },
         let point: map<string, baml.json.json> => point,
-        _ => throw _reject(
-            "Bedrock `cache_point` metadata must be `true` or a cachePoint object such as {\"type\": \"default\"}",
-        ),
+        _ => {
+            throw _reject("Bedrock `cache_point` metadata must be `true` or a cachePoint object")
+        },
     }
 }
 
