@@ -1,3 +1,29 @@
+/// Optional native transport deadlines. Null/non-positive values are unbounded.
+class RequestOptions {
+    request_timeout: root.time.Duration?,
+    connect_timeout: root.time.Duration?,
+
+    function new() -> RequestOptions throws never {
+        RequestOptions { request_timeout: null, connect_timeout: null }
+    }
+
+    function with_request_timeout(
+        self,
+        request_timeout: root.time.Duration?,
+    ) -> RequestOptions throws never {
+        self.request_timeout = request_timeout;
+        self
+    }
+
+    function with_connect_timeout(
+        self,
+        connect_timeout: root.time.Duration?,
+    ) -> RequestOptions throws never {
+        self.connect_timeout = connect_timeout;
+        self
+    }
+}
+
 /// An HTTP request — outgoing (built for `baml.http.send`/`fetch_sse`) or
 /// incoming (passed to an `http.Server` handler).
 ///
@@ -134,17 +160,17 @@ function _timeout_nanos(timeout: root.time.Duration?) -> bigint throws never {
 
 /// Sends a GET request to `url` and returns the response.
 ///
-/// `timeout` is the total deadline for the request (connection + response
+/// `options.request_timeout` is the total deadline for the request (connection + response
 /// headers + body). `null` (the default) imposes no deadline. On expiry this
 /// throws `baml.errors.Timeout`.
 function fetch(
     url: string,
-    timeout: root.time.Duration? = null,
-    connect_timeout: root.time.Duration? = null,
+    options: RequestOptions? = null,
 ) -> Response throws root.errors.Io | root.errors.Timeout {
+    let opts = options ?? RequestOptions.new();
     // Thin wrapper resolving the default: `$rust_io_function` sys-ops don't fill
     // omitted args, so `fetch` forwards to the all-required `_fetch` sys-op.
-    _fetch(url, _timeout_nanos(timeout), _timeout_nanos(connect_timeout))
+    _fetch(url, _timeout_nanos(opts.request_timeout), _timeout_nanos(opts.connect_timeout))
 }
 
 function _fetch(
@@ -157,23 +183,23 @@ function _fetch(
 
 /// Sends an HTTP request and returns the response.
 ///
-/// `timeout` is the total deadline for the request, as in `fetch`. `null` (the
+/// `options.request_timeout` is the total deadline for the request, as in `fetch`. `null` (the
 /// default) imposes no deadline.
 ///
-/// `connect_timeout` bounds connection establishment (including TLS), independently of the total deadline.
+/// `options.connect_timeout` bounds connection establishment (including TLS), independently of the total deadline.
 /// Null/non-positive is unbounded. Native transports enforce this option.
 ///
 /// # Throws
 ///
 /// - `InvalidArgument` if `request.method` is not a valid HTTP method.
 /// - `Io` if the request cannot be sent or the response cannot be read.
-/// - `Timeout` if `timeout` elapses first.
+/// - `Timeout` if `options.request_timeout` elapses first.
 function send(
     request: Request,
-    timeout: root.time.Duration? = null,
-    connect_timeout: root.time.Duration? = null,
+    options: RequestOptions? = null,
 ) -> Response throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
-    _send(request, _timeout_nanos(timeout), _timeout_nanos(connect_timeout))
+    let opts = options ?? RequestOptions.new();
+    _send(request, _timeout_nanos(opts.request_timeout), _timeout_nanos(opts.connect_timeout))
 }
 
 function _send(
@@ -186,31 +212,31 @@ function _send(
 
 /// Sends an HTTP request and returns a Server-Sent Events stream for streaming responses.
 ///
-/// On native transports, `timeout` covers the request and streaming body.
+/// On native transports, `options.request_timeout` covers the request and streaming body.
 /// `first_event_timeout` starts after open and ends on the first parsed event.
 /// `idle_timeout` bounds the gap between parsed SSE events after the first event.
 /// Null/non-positive is unbounded; browser/Wasm does not enforce these fields.
 ///
-/// `connect_timeout` bounds connection establishment (including TLS), independently of the total deadline.
+/// `options.connect_timeout` bounds connection establishment (including TLS), independently of the total deadline.
 /// Null/non-positive is unbounded. Native transports enforce this option.
 ///
 /// # Throws
 ///
 /// - `InvalidArgument` if `request.method` is not a valid HTTP method.
 /// - `Io` if the request cannot be sent or the stream cannot be opened.
-/// - `Timeout` if `timeout` or `first_event_timeout` elapses first.
+/// - `Timeout` if `options.request_timeout` or `first_event_timeout` elapses first.
 function fetch_sse(
     request: Request,
-    timeout: root.time.Duration? = null,
+    options: RequestOptions? = null,
     first_event_timeout: root.time.Duration? = null,
-    connect_timeout: root.time.Duration? = null,
     idle_timeout: root.time.Duration? = null,
 ) -> SseStream throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
+    let opts = options ?? RequestOptions.new();
     _fetch_sse(
         request,
-        _timeout_nanos(timeout),
+        _timeout_nanos(opts.request_timeout),
         _timeout_nanos(first_event_timeout),
-        _timeout_nanos(connect_timeout),
+        _timeout_nanos(opts.connect_timeout),
         _timeout_nanos(idle_timeout),
     )
 }

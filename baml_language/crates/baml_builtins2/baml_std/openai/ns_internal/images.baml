@@ -411,6 +411,8 @@ function images_invoke(c: root.ImageClient, input: ai.ModelTurnInput) -> ai.Mode
         "openai-images",
         c.id(),
         capture_wire = c.capture_wire,
+        request_timeout = c.options.request_timeout,
+        connect_timeout = c.options.connect_timeout,
     );
     let turn = images_parse(c, sent.value);
     ai.ModelTurn { ...turn, calls: [sent.call] }

@@ -468,6 +468,8 @@ function gateway_images_invoke(
         "ai-gateway-images",
         _gw_images_client_id(c),
         capture_wire = c.capture_wire,
+        request_timeout = c.options.request_timeout,
+        connect_timeout = c.options.connect_timeout,
     );
     let turn = gateway_images_parse(c, sent.value);
     ai.ModelTurn { ...turn, calls: [sent.call] }

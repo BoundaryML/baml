@@ -68,12 +68,8 @@ class GeminiClient {
     // Sent as `safetySettings`.
     safety_settings: SafetySetting[]?,
 
-    // Native HTTP budgets. Null/non-positive is unbounded. Duration options
-    // take precedence over the legacy millisecond options when both are set.
-    connect_timeout: baml.time.Duration?,
-    request_timeout: baml.time.Duration?,
-    time_to_first_token_timeout: baml.time.Duration?,
-    idle_timeout: baml.time.Duration?,
+    /// Shared native HTTP deadlines; these override legacy millisecond fields.
+    options: baml.ai.LlmClientOptions,
     // Record request/response bodies (and raw SSE events) on the LLMCall wire
     // records delivered through on_event. Status, headers, and timing are
     // always recorded; this flag only gates the bodies.
@@ -97,10 +93,7 @@ class GeminiClient {
         response_modalities: string[]? = null,
         safety_settings: SafetySetting[]? = null,
         capture_wire: bool = true,
-        connect_timeout: baml.time.Duration? = null,
-        request_timeout: baml.time.Duration? = null,
-        time_to_first_token_timeout: baml.time.Duration? = null,
-        idle_timeout: baml.time.Duration? = null,
+        options: baml.ai.LlmClientOptions? = null,
     ) -> GeminiClient {
         GeminiClient {
             model: model,
@@ -116,11 +109,8 @@ class GeminiClient {
             stop_sequences: stop_sequences,
             response_modalities: response_modalities,
             safety_settings: safety_settings,
-            connect_timeout: connect_timeout,
-            request_timeout: request_timeout,
-            time_to_first_token_timeout: time_to_first_token_timeout,
-            idle_timeout: idle_timeout,
             capture_wire: capture_wire,
+            options: options ?? baml.ai.LlmClientOptions.new(),
         }
     }
 

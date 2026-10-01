@@ -125,7 +125,10 @@ function _resolve_media_content(
         // A remote fetch gets a bounded deadline (the default is unbounded).
         // Preserve Timeout for the invocation boundary; other transport errors
         // become a typed, classified NetworkFailure.
-        let response = baml.http.fetch(media_url, timeout = baml.time.Duration.from_seconds(30)) catch_all (e) {
+        let response = baml.http.fetch(
+            media_url,
+            options = baml.http.RequestOptions.new().with_request_timeout(baml.time.Duration.from_seconds(30)),
+        ) catch_all (e) {
             let timeout: baml.errors.Timeout => throw timeout,
             _ => {
                 throw root.errors.NetworkFailure { status_code: null,

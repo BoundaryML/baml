@@ -63,12 +63,8 @@ class ResponsesClient {
     headers: map<string, string>?,
     /// Extra URL query parameters, percent-encoded onto the endpoint.
     query_params: map<string, string>?,
-    // Native HTTP budgets. Null/non-positive is unbounded. Duration options
-    // take precedence over the legacy millisecond options when both are set.
-    connect_timeout: baml.time.Duration?,
-    request_timeout: baml.time.Duration?,
-    time_to_first_token_timeout: baml.time.Duration?,
-    idle_timeout: baml.time.Duration?,
+    /// Shared native HTTP deadlines; these override legacy millisecond fields.
+    options: baml.ai.LlmClientOptions,
     // Record request/response bodies (and raw SSE events) on the LLMCall wire
     // records delivered through on_event. Status, headers, and timing are
     // always recorded; this flag only gates the bodies.
@@ -95,10 +91,7 @@ class ResponsesClient {
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
         capture_wire: bool = true,
-        connect_timeout: baml.time.Duration? = null,
-        request_timeout: baml.time.Duration? = null,
-        time_to_first_token_timeout: baml.time.Duration? = null,
-        idle_timeout: baml.time.Duration? = null,
+        options: baml.ai.LlmClientOptions? = null,
     ) -> ResponsesClient {
         ResponsesClient {
             model: model,
@@ -117,11 +110,8 @@ class ResponsesClient {
             request_body: request_body,
             headers: headers,
             query_params: query_params,
-            connect_timeout: connect_timeout,
-            request_timeout: request_timeout,
-            time_to_first_token_timeout: time_to_first_token_timeout,
-            idle_timeout: idle_timeout,
             capture_wire: capture_wire,
+            options: options ?? baml.ai.LlmClientOptions.new(),
         }
     }
 

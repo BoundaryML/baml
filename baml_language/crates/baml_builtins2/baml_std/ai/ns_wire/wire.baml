@@ -118,7 +118,12 @@ function send_as<T>(
         let milliseconds: int => baml.time.Duration.from_milliseconds(milliseconds),
         null => null,
     };
-    let resp = baml.http.send(req, timeout = request_timeout ?? timeout, connect_timeout = connect_timeout) catch_all (e) {
+    let resp = baml.http.send(
+        req,
+        options = baml.http.RequestOptions.new()
+            .with_request_timeout(request_timeout ?? timeout)
+            .with_connect_timeout(connect_timeout),
+    ) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw root.errors.NetworkFailure { status_code: null,
@@ -176,7 +181,12 @@ function send_as_with_wire<T>(
         let milliseconds: int => baml.time.Duration.from_milliseconds(milliseconds),
         null => null,
     };
-    let resp = baml.http.send(req, timeout = request_timeout ?? timeout, connect_timeout = connect_timeout) catch_all (e) {
+    let resp = baml.http.send(
+        req,
+        options = baml.http.RequestOptions.new()
+            .with_request_timeout(request_timeout ?? timeout)
+            .with_connect_timeout(connect_timeout),
+    ) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw root.errors.NetworkFailure { status_code: null,

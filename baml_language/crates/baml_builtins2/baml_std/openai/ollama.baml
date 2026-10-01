@@ -29,11 +29,8 @@ class OllamaClient {
     // Record request/response bodies (and raw SSE events) on the LLMCall wire
     // records delivered through on_event. Status, headers, and timing are
     // always recorded; this flag only gates the bodies.
-    // Native HTTP budgets. Null/non-positive is unbounded; browser/Wasm does not enforce these fields.
-    connect_timeout: baml.time.Duration?,
-    request_timeout: baml.time.Duration?,
-    time_to_first_token_timeout: baml.time.Duration?,
-    idle_timeout: baml.time.Duration?,
+    /// Shared native HTTP deadlines. Null/non-positive values are unbounded.
+    options: baml.ai.LlmClientOptions,
     capture_wire: bool,
 
     /// Creates a client. Construction reads no environment variable, so
@@ -52,10 +49,7 @@ class OllamaClient {
         stop: string[]? = null,
         seed: int? = null,
         capture_wire: bool = true,
-        connect_timeout: baml.time.Duration? = null,
-        request_timeout: baml.time.Duration? = null,
-        time_to_first_token_timeout: baml.time.Duration? = null,
-        idle_timeout: baml.time.Duration? = null,
+        options: baml.ai.LlmClientOptions? = null,
     ) -> OllamaClient {
         OllamaClient {
             model: model,
@@ -69,11 +63,8 @@ class OllamaClient {
             top_p: top_p,
             stop: stop,
             seed: seed,
-            connect_timeout: connect_timeout,
-            request_timeout: request_timeout,
-            time_to_first_token_timeout: time_to_first_token_timeout,
-            idle_timeout: idle_timeout,
             capture_wire: capture_wire,
+            options: options ?? baml.ai.LlmClientOptions.new(),
         }
     }
 
@@ -142,8 +133,8 @@ class OllamaClient {
                 self.params(),
                 input,
                 capture_wire = self.capture_wire,
-                connect_timeout = self.connect_timeout,
-                request_timeout = self.request_timeout,
+                connect_timeout = self.options.connect_timeout,
+                request_timeout = self.options.request_timeout,
             ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }
@@ -157,10 +148,10 @@ class OllamaClient {
                 self.params(),
                 input,
                 capture_wire = self.capture_wire,
-                connect_timeout = self.connect_timeout,
-                request_timeout = self.request_timeout,
-                time_to_first_token_timeout = self.time_to_first_token_timeout,
-                idle_timeout = self.idle_timeout,
+                connect_timeout = self.options.connect_timeout,
+                request_timeout = self.options.request_timeout,
+                time_to_first_token_timeout = self.options.time_to_first_token_timeout,
+                idle_timeout = self.options.idle_timeout,
             ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }

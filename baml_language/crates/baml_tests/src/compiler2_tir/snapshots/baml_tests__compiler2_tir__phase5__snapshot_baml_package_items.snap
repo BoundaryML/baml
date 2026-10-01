@@ -32,6 +32,8 @@ namespace baml:
   function _to_string_default<T>
   function _trunc_to_int
   function deep_copy<T>
+namespace baml.ai:
+  class LlmClientOptions { methods: [new, with_request_timeout, with_connect_timeout, with_time_to_first_token_timeout, with_idle_timeout] }
 namespace baml.crypto:
   type Aead
   class Aes128GcmSiv { methods: [new] }
@@ -147,6 +149,7 @@ namespace baml.host:
   function call_host_value<T, E>
 namespace baml.http:
   class Request { methods: [] }
+  class RequestOptions { methods: [new, with_request_timeout, with_connect_timeout] }
   class Response { methods: [text, bytes, ok, new, new_streaming, write, end] }
   class Server { methods: [bind, serve, _serve] }
   class SseStream { methods: [next, close] }

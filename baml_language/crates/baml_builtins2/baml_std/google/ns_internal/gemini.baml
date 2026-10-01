@@ -999,10 +999,13 @@ function _gm_open_sse(
     _gm_route_sse_open(provider, () -> {
         baml.http.fetch_sse(
             req,
-            timeout = request_timeout ?? baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
+            options = baml.http.RequestOptions.new()
+                .with_request_timeout(
+                    request_timeout ?? baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
+                )
+                .with_connect_timeout(connect_timeout),
             first_event_timeout = time_to_first_token_timeout
                 ?? baml.time.Duration.from_milliseconds(time_to_first_token_timeout_ms ?? 0),
-            connect_timeout = connect_timeout,
             idle_timeout = idle_timeout,
         )
     })
@@ -1160,8 +1163,8 @@ function gemini_invoke(c: root.GeminiClient, input: ai.ModelTurnInput) -> ai.Mod
         "google",
         c.id(),
         capture_wire = c.capture_wire,
-        request_timeout = c.request_timeout,
-        connect_timeout = c.connect_timeout,
+        request_timeout = c.options.request_timeout,
+        connect_timeout = c.options.connect_timeout,
     );
     let turn = parse(sent.value, seq);
     ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
@@ -1182,10 +1185,10 @@ function gemini_invoke_stream(
     let sse = _gm_open_sse(
         req,
         "google",
-        request_timeout = c.request_timeout,
-        time_to_first_token_timeout = c.time_to_first_token_timeout,
-        connect_timeout = c.connect_timeout,
-        idle_timeout = c.idle_timeout,
+        request_timeout = c.options.request_timeout,
+        time_to_first_token_timeout = c.options.time_to_first_token_timeout,
+        connect_timeout = c.options.connect_timeout,
+        idle_timeout = c.options.idle_timeout,
     );
     // Strict termination: the `finishReason` fragment decodes as TurnDone, so
     // a connection that closes before it is a truncated turn, not an answer.

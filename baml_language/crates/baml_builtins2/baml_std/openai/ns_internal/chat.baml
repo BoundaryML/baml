@@ -1384,8 +1384,11 @@ function _chat_send(
     let started = baml.time.Instant.now();
     let response = baml.http.send(
         request,
-        timeout = request_timeout ?? baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
-        connect_timeout = connect_timeout,
+        options = baml.http.RequestOptions.new()
+            .with_request_timeout(
+                request_timeout ?? baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
+            )
+            .with_connect_timeout(connect_timeout),
     ) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
@@ -1694,11 +1697,14 @@ function chat_invoke_stream(
     let started = baml.time.Instant.now();
     let sse = baml.http.fetch_sse(
         request,
-        timeout = request_timeout ?? baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
         first_event_timeout = time_to_first_token_timeout
             ?? baml.time.Duration.from_milliseconds(time_to_first_token_timeout_ms ?? 0),
-        connect_timeout = connect_timeout,
         idle_timeout = idle_timeout,
+        options = baml.http.RequestOptions.new()
+            .with_request_timeout(
+                request_timeout ?? baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
+            )
+            .with_connect_timeout(connect_timeout),
     ) catch_all (e) {
         _ => _chat_stream_open_failure(compat.provider, e),
     };

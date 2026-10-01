@@ -8,73 +8,95 @@ function duration_options() -> bool {
     let duration = baml.time.Duration.from_milliseconds(1500);
     let clients = [
         openai.ResponsesClient.new(
-            connect_timeout = duration,
-            request_timeout = duration,
-            time_to_first_token_timeout = duration,
-            idle_timeout = duration,
+            options = baml.ai.LlmClientOptions.new()
+                .with_connect_timeout(duration)
+                .with_request_timeout(duration)
+                .with_time_to_first_token_timeout(duration)
+                .with_idle_timeout(duration),
+
         ),
         openai.ChatClient.new(
-            connect_timeout = duration,
-            request_timeout = duration,
-            time_to_first_token_timeout = duration,
-            idle_timeout = duration,
+            options = baml.ai.LlmClientOptions.new()
+                .with_connect_timeout(duration)
+                .with_request_timeout(duration)
+                .with_time_to_first_token_timeout(duration)
+                .with_idle_timeout(duration),
+
         ),
         openai.GenericClient.new(
             model = "offline",
-            connect_timeout = duration,
-            request_timeout = duration,
-            time_to_first_token_timeout = duration,
-            idle_timeout = duration,
+            options = baml.ai.LlmClientOptions.new()
+                .with_connect_timeout(duration)
+                .with_request_timeout(duration)
+                .with_time_to_first_token_timeout(duration)
+                .with_idle_timeout(duration),
+
         ),
         openai.AzureClient.new(
             model = "offline",
-            connect_timeout = duration,
-            request_timeout = duration,
-            time_to_first_token_timeout = duration,
-            idle_timeout = duration,
+            options = baml.ai.LlmClientOptions.new()
+                .with_connect_timeout(duration)
+                .with_request_timeout(duration)
+                .with_time_to_first_token_timeout(duration)
+                .with_idle_timeout(duration),
+
         ),
         openai.OpenRouterClient.new(
             model = "offline",
-            connect_timeout = duration,
-            request_timeout = duration,
-            time_to_first_token_timeout = duration,
-            idle_timeout = duration,
+            options = baml.ai.LlmClientOptions.new()
+                .with_connect_timeout(duration)
+                .with_request_timeout(duration)
+                .with_time_to_first_token_timeout(duration)
+                .with_idle_timeout(duration),
+
         ),
         openai.OllamaClient.new(
             model = "offline",
-            connect_timeout = duration,
-            request_timeout = duration,
-            time_to_first_token_timeout = duration,
-            idle_timeout = duration,
+            options = baml.ai.LlmClientOptions.new()
+                .with_connect_timeout(duration)
+                .with_request_timeout(duration)
+                .with_time_to_first_token_timeout(duration)
+                .with_idle_timeout(duration),
+
         ),
         anthropic.Client.new(
-            connect_timeout = duration,
-            request_timeout = duration,
-            time_to_first_token_timeout = duration,
-            idle_timeout = duration,
+            options = baml.ai.LlmClientOptions.new()
+                .with_connect_timeout(duration)
+                .with_request_timeout(duration)
+                .with_time_to_first_token_timeout(duration)
+                .with_idle_timeout(duration),
+
         ),
         google.GeminiClient.new(
-            connect_timeout = duration,
-            request_timeout = duration,
-            time_to_first_token_timeout = duration,
-            idle_timeout = duration,
+            options = baml.ai.LlmClientOptions.new()
+                .with_connect_timeout(duration)
+                .with_request_timeout(duration)
+                .with_time_to_first_token_timeout(duration)
+                .with_idle_timeout(duration),
+
         ),
         google.VertexClient.new(
-            connect_timeout = duration,
-            request_timeout = duration,
-            time_to_first_token_timeout = duration,
-            idle_timeout = duration,
+            options = baml.ai.LlmClientOptions.new()
+                .with_connect_timeout(duration)
+                .with_request_timeout(duration)
+                .with_time_to_first_token_timeout(duration)
+                .with_idle_timeout(duration),
+
         ),
         aws.BedrockClient.new(
             model = "offline",
             region = "us-east-1",
-            connect_timeout = duration,
-            request_timeout = duration,
+            options = baml.ai.LlmClientOptions.new().with_connect_timeout(duration).with_request_timeout(
+                duration,
+            ),
+
         ),
         typesafeai.Client.new(
             model = "offline",
-            connect_timeout = duration,
-            request_timeout = duration,
+            options = baml.ai.LlmClientOptions.new().with_connect_timeout(duration).with_request_timeout(
+                duration,
+            ),
+
         ),
     ];
     assert.equal(clients.length(), 11);
@@ -94,8 +116,10 @@ function responses_duration_request_timeout() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
                 request_timeout_ms = 5000,
-                request_timeout = baml.time.Duration.from_milliseconds(100),
-                connect_timeout = baml.time.Duration.from_milliseconds(1000),
+                options = baml.ai.LlmClientOptions.new()
+                    .with_request_timeout(baml.time.Duration.from_milliseconds(100))
+                    .with_connect_timeout(baml.time.Duration.from_milliseconds(1000)),
+
             );
             let spec = TimeoutSpec@spec();
             cl.invoke(
@@ -133,34 +157,44 @@ function shared_chat_duration_deadlines() -> bool {
                 openai.ChatClient.new(
                     api_key = "test-key",
                     base_url = mock.base_url(),
-                    request_timeout = deadline,
-                    connect_timeout = connect,
+                    options = baml.ai.LlmClientOptions.new()
+                        .with_request_timeout(deadline)
+                        .with_connect_timeout(connect),
+
                 ),
                 openai.GenericClient.new(
                     model = "offline",
                     base_url = mock.base_url(),
-                    request_timeout = deadline,
-                    connect_timeout = connect,
+                    options = baml.ai.LlmClientOptions.new()
+                        .with_request_timeout(deadline)
+                        .with_connect_timeout(connect),
+
                 ),
                 openai.AzureClient.new(
                     model = "offline",
                     api_key = "test-key",
                     base_url = mock.base_url(),
-                    request_timeout = deadline,
-                    connect_timeout = connect,
+                    options = baml.ai.LlmClientOptions.new()
+                        .with_request_timeout(deadline)
+                        .with_connect_timeout(connect),
+
                 ),
                 openai.OpenRouterClient.new(
                     model = "offline",
                     api_key = "test-key",
                     base_url = mock.base_url(),
-                    request_timeout = deadline,
-                    connect_timeout = connect,
+                    options = baml.ai.LlmClientOptions.new()
+                        .with_request_timeout(deadline)
+                        .with_connect_timeout(connect),
+
                 ),
                 openai.OllamaClient.new(
                     model = "offline",
                     base_url = mock.base_url(),
-                    request_timeout = deadline,
-                    connect_timeout = connect,
+                    options = baml.ai.LlmClientOptions.new()
+                        .with_request_timeout(deadline)
+                        .with_connect_timeout(connect),
+
                 ),
             ];
             let spec = TimeoutSpec@spec();
@@ -190,4 +224,52 @@ function shared_chat_duration_deadlines() -> bool {
 
 test "all_shared_chat_clients_forward_request_deadlines" {
     assert.is_true(shared_chat_duration_deadlines())
+}
+
+test "request_options_mutators_and_defaults" {
+    let options = baml.http.RequestOptions.new();
+    assert.equal(options.request_timeout, null);
+    assert.equal(options.connect_timeout, null);
+    let duration = baml.time.Duration.from_milliseconds(1500);
+    let configured = options.with_request_timeout(duration).with_connect_timeout(duration);
+    assert.equal(configured.request_timeout, duration);
+    assert.equal(configured.connect_timeout, duration);
+    let cleared = configured.with_request_timeout(null).with_connect_timeout(null);
+    assert.equal(cleared.request_timeout, null);
+    assert.equal(cleared.connect_timeout, null);
+}
+
+test "llm_client_options_mutators_and_defaults" {
+    let options = baml.ai.LlmClientOptions.new();
+    assert.equal(options.request_timeout, null);
+    assert.equal(options.connect_timeout, null);
+    assert.equal(options.time_to_first_token_timeout, null);
+    assert.equal(options.idle_timeout, null);
+    let duration = baml.time.Duration.from_milliseconds(1500);
+    let configured = options.with_request_timeout(duration)
+        .with_connect_timeout(duration)
+        .with_time_to_first_token_timeout(duration)
+        .with_idle_timeout(duration);
+    assert.equal(configured.request_timeout, duration);
+    assert.equal(configured.connect_timeout, duration);
+    assert.equal(configured.time_to_first_token_timeout, duration);
+    assert.equal(configured.idle_timeout, duration);
+    let cleared = configured.with_request_timeout(null)
+        .with_connect_timeout(null)
+        .with_time_to_first_token_timeout(null)
+        .with_idle_timeout(null);
+    assert.equal(cleared.request_timeout, null);
+    assert.equal(cleared.connect_timeout, null);
+    assert.equal(cleared.time_to_first_token_timeout, null);
+    assert.equal(cleared.idle_timeout, null);
+    let first = openai.ResponsesClient.new();
+    let second = openai.ResponsesClient.new();
+    let _ = first.options.with_request_timeout(duration);
+    assert.equal(second.options.request_timeout, null);
+    let extra_clients = [
+        openai.ImageClient.new(options = options),
+        vercel.AiGatewayImageClient.new(options = options),
+        claude_code.ClaudeCodeClient.new(options = options),
+    ];
+    assert.equal(extra_clients.length(), 3);
 }

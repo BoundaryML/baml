@@ -1399,8 +1399,8 @@ function invoke(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.Mode
         "aws-bedrock",
         client.id(),
         capture_wire = client.capture_wire,
-        request_timeout = client.request_timeout,
-        connect_timeout = client.connect_timeout,
+        request_timeout = client.options.request_timeout,
+        connect_timeout = client.options.connect_timeout,
     );
     let turn = parse_response(sent.value);
     ai.ModelTurn { ...turn, calls: [sent.call], model: client.model }
@@ -1706,7 +1706,14 @@ function invoke_stream(
 ) -> ai.stream.TurnStream {
     let request = sign(client, build_request(client, input, preview = false, stream = true));
     let started = baml.time.Instant.now();
-    let sse = baml.http.fetch_sse(request) catch (e) {
+    let sse = baml.http.fetch_sse(
+        request,
+        options = baml.http.RequestOptions.new()
+            .with_request_timeout(client.options.request_timeout)
+            .with_connect_timeout(client.options.connect_timeout),
+        first_event_timeout = client.options.time_to_first_token_timeout,
+        idle_timeout = client.options.idle_timeout,
+    ) catch (e) {
         baml.errors.Io => _stream_open_failure(e),
         baml.errors.Timeout => _stream_open_failure(e),
     };

@@ -72,6 +72,7 @@ class ImageClient {
     // through on_event. Status, headers, and timing are always recorded; this
     // flag only gates the bodies.
     capture_wire: bool,
+    options: baml.ai.LlmClientOptions,
 
     /// Creates a client. Construction reads no environment variable, so
     /// declaring one is always safe; credentials and endpoints resolve when a
@@ -94,6 +95,7 @@ class ImageClient {
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
         capture_wire: bool = true,
+        options: baml.ai.LlmClientOptions? = null,
     ) -> ImageClient {
         ImageClient {
             model: model,
@@ -113,6 +115,7 @@ class ImageClient {
             headers: headers,
             query_params: query_params,
             capture_wire: capture_wire,
+            options: options ?? baml.ai.LlmClientOptions.new(),
         }
     }
 

@@ -16,6 +16,8 @@ class ClaudeCodeClient {
     // here: the transport is a local process, there is no HTTP request or
     // response to record, and this client never fabricates wire records.
     capture_wire: bool,
+    /// HTTP deadlines are accepted for API consistency but do not apply to this local-process transport.
+    options: baml.ai.LlmClientOptions,
 
     /// Creates a client. Construction reads no environment variable, so
     /// declaring one is always safe; credentials and endpoints resolve when a
@@ -29,6 +31,7 @@ class ClaudeCodeClient {
         harness_tools: string[] = [],
         mcp_servers: map<string, json>? = null,
         capture_wire: bool = true,
+        options: baml.ai.LlmClientOptions? = null,
     ) -> ClaudeCodeClient {
         let servers: map<string, json> = {};
         ClaudeCodeClient {
@@ -40,6 +43,7 @@ class ClaudeCodeClient {
             harness_tools: harness_tools,
             mcp_servers: mcp_servers ?? servers,
             capture_wire: capture_wire,
+            options: options ?? baml.ai.LlmClientOptions.new(),
         }
     }
 

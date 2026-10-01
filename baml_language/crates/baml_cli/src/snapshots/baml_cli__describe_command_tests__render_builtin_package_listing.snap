@@ -20,6 +20,7 @@ class            baml.Null                        <builtin>/baml/null.baml:2
 interface        baml.Sortable                    <builtin>/baml/sortable.baml:22
 class            baml.String                      <builtin>/baml/string.baml:17
 class            baml.Uint8Array                  <builtin>/baml/uint8array.baml:14
+class            baml.ai.LlmClientOptions         <builtin>/baml/ns_ai/options.baml:2
 class            baml.crypto.Aes256GcmSiv         <builtin>/baml/ns_crypto/aes_gcm_siv.baml:24
 class            baml.crypto.Aes128GcmSiv         <builtin>/baml/ns_crypto/aes_gcm_siv.baml:101
 class            baml.crypto.ChaCha20Poly1305     <builtin>/baml/ns_crypto/chacha20poly1305.baml:34
@@ -107,12 +108,13 @@ class            baml.glob.Glob                   <builtin>/baml/ns_glob/glob.ba
 function         baml.glob.new                    <builtin>/baml/ns_glob/glob.baml:41
 function         baml.host.call_host_value        <builtin>/baml/ns_host/host.baml:20
 class            baml.host.Value                  <builtin>/baml/ns_host/host.baml:26
-class            baml.http.Request                <builtin>/baml/ns_http/http.baml:8
-class            baml.http.Response               <builtin>/baml/ns_http/http.baml:16
-class            baml.http.SseStream              <builtin>/baml/ns_http/http.baml:103
-function         baml.http.fetch                  <builtin>/baml/ns_http/http.baml:140
-function         baml.http.send                   <builtin>/baml/ns_http/http.baml:171
-function         baml.http.fetch_sse              <builtin>/baml/ns_http/http.baml:202
+class            baml.http.RequestOptions         <builtin>/baml/ns_http/http.baml:2
+class            baml.http.Request                <builtin>/baml/ns_http/http.baml:34
+class            baml.http.Response               <builtin>/baml/ns_http/http.baml:42
+class            baml.http.SseStream              <builtin>/baml/ns_http/http.baml:129
+function         baml.http.fetch                  <builtin>/baml/ns_http/http.baml:166
+function         baml.http.send                   <builtin>/baml/ns_http/http.baml:197
+function         baml.http.fetch_sse              <builtin>/baml/ns_http/http.baml:228
 class            baml.http.Server                 <builtin>/baml/ns_http/server.baml:10
 type             baml.http.WsAccept               <builtin>/baml/ns_http/server.baml:148
 function         baml.http.reject_websocket       <builtin>/baml/ns_http/server.baml:156

@@ -61,7 +61,6 @@ async fn http_fetch_and_text() {
     function main() -> string {
         load_const "{URI}/data"
         load_const <omitted>
-        load_const <omitted>
         call baml.http.fetch
         sys_op baml.http.Response.text
         return
@@ -103,7 +102,6 @@ async fn foreign_class_field_access_compiles_correctly() {
     function main() -> int {
         load_const "{URI}/test"
         load_const <omitted>
-        load_const <omitted>
         call baml.http.fetch
         load_field .status_code
         return
@@ -133,7 +131,6 @@ async fn http_response_ok_true() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> bool {
         load_const "{URI}/ok"
-        load_const <omitted>
         load_const <omitted>
         call baml.http.fetch
         call baml.http.Response.ok
@@ -165,7 +162,6 @@ async fn http_response_ok_false() {
     function main() -> bool {
         load_const "{URI}/notfound"
         load_const <omitted>
-        load_const <omitted>
         call baml.http.fetch
         call baml.http.Response.ok
         return
@@ -196,7 +192,6 @@ async fn http_response_url() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> string {
         load_const "{URI}/endpoint"
-        load_const <omitted>
         load_const <omitted>
         call baml.http.fetch
         load_field .url
@@ -263,7 +258,7 @@ async fn http_fetch_timeout_fires() {
             function main() -> string {{
                 let response = baml.http.fetch(
                     "http://{addr}/",
-                    timeout = baml.time.Duration.from_milliseconds(100n),
+                    options = baml.http.RequestOptions.new().with_request_timeout(baml.time.Duration.from_milliseconds(100n)),
                 );
                 response.text()
             }}
@@ -305,7 +300,6 @@ async fn http_response_text_consumed() {
     function main() -> string {
         load_const "{URI}/once"
         load_const <omitted>
-        load_const <omitted>
         call baml.http.fetch
         store_var response
         load_var response
@@ -336,7 +330,7 @@ async fn http_connect_timeout_includes_tls_handshake() {
     let output = baml_test!(&format!(
         r#"
         function main() -> string {{
-            baml.http.fetch("https://{addr}", connect_timeout = baml.time.Duration.from_milliseconds(100)) catch_all (e) {{
+            baml.http.fetch("https://{addr}", options = baml.http.RequestOptions.new().with_connect_timeout(baml.time.Duration.from_milliseconds(100))) catch_all (e) {{
                 let t: baml.errors.Timeout => {{ return "timeout"; }},
                 _ => {{ return "wrong error"; }},
             }};
@@ -369,7 +363,7 @@ async fn http_sse_idle_deadline_after_first_event() {
         function main() -> string {{
             let stream = baml.http.fetch_sse(
                 baml.http.Request {{ method: "GET", url: "http://{addr}", headers: {{}}, body: "" }},
-                connect_timeout = baml.time.Duration.from_milliseconds(1000),
+                options = baml.http.RequestOptions.new().with_connect_timeout(baml.time.Duration.from_milliseconds(1000)),
                 idle_timeout = baml.time.Duration.from_milliseconds(100),
             );
             let first = stream.next();
