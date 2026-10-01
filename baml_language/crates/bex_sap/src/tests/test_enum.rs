@@ -527,6 +527,33 @@ test_failing_deserializer!(
     described_category_db()
 );
 
+fn colliding_description_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        enum Rank {
+            FIRST @description("SECOND"),
+            SECOND
+        }
+    }
+}
+
+// A variant's name outranks another variant's description of the same text, whichever is
+// declared first.
+test_deserializer!(
+    name_outranks_another_variants_description,
+    r#"SECOND"#,
+    baml_ty!(Rank),
+    colliding_description_db(),
+    "SECOND"
+);
+
+test_deserializer!(
+    name_outranks_another_variants_description_case_insensitive,
+    r#"second"#,
+    baml_ty!(Rank),
+    colliding_description_db(),
+    "SECOND"
+);
+
 fn day_db() -> TypeRefDb<'static, &'static str> {
     baml_db! {
         enum Day {
