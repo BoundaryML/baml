@@ -139,3 +139,36 @@ test "sap_parse_keeps_list_elements_whose_enum_is_named_by_description" {
         ],
     )
 }
+
+// The description the prompt shows is the `@description` followed by the
+// `///` docstring, and that rendered text is what the parser matches.
+
+enum ParseCompanionsMeal {
+    /// eaten in the morning
+    A,
+    /// eaten at noon
+    B @description("LUNCH"),
+}
+
+function ParseCompanionsParseMeal() -> ParseCompanionsMeal {
+    client: ParseCompanionsTestClient
+    prompt: `${ctx.output_format()}`
+}
+
+test "sap_parse_matches_an_enum_variant_by_its_docstring" {
+    assert.equal(baml.sap.parse<ParseCompanionsMeal>(`eaten in the morning`), ParseCompanionsMeal.A)
+}
+
+test "sap_parse_matches_the_description_and_docstring_as_rendered" {
+    assert.equal(baml.sap.parse<ParseCompanionsMeal>(`LUNCH eaten at noon`), ParseCompanionsMeal.B);
+    assert.equal(
+        baml.sap.parse<ParseCompanionsMeal>(`B: LUNCH eaten at noon`),
+        ParseCompanionsMeal.B,
+    )
+}
+
+test "sap_parse_matches_the_enum_lines_the_prompt_renders" {
+    let prompt = ParseCompanionsParseMeal@render_prompt().text();
+    assert.is_true(prompt.includes("- A: eaten in the morning"));
+    assert.is_true(prompt.includes("- B: LUNCH eaten at noon"))
+}

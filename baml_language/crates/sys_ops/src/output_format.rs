@@ -765,16 +765,11 @@ impl OutputFormatContent {
                 RenderSetting::Always(p) => p.as_str(),
                 RenderSetting::Never => "",
             };
-            let docs = [&v.description, &v.docstring]
-                .into_iter()
-                .flatten()
-                .map(|docs| docs.trim())
-                .filter(|docs| !docs.is_empty())
-                .collect::<Vec<_>>()
-                .join(" ");
-            let line = if docs.is_empty() {
-                format!("{prefix}{value_name}")
-            } else {
+            let docs = ::sys_types::rendered_enum_variant_description(
+                v.description.as_deref(),
+                v.docstring.as_deref(),
+            );
+            let line = if let Some(docs) = docs {
                 // Continuation lines align under the value text (legacy
                 // renderer behavior; keeps multi-line descriptions visually
                 // attached to their value). The indent is the configured
@@ -787,6 +782,8 @@ impl OutputFormatContent {
                     "{prefix}{value_name}: {}",
                     docs.replace('\r', "").replace('\n', &format!("\n{indent}"))
                 )
+            } else {
+                format!("{prefix}{value_name}")
             };
             result.push('\n');
             result.push_str(&line);

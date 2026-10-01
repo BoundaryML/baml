@@ -272,7 +272,7 @@ impl TypeCtx {
             .map(|variant| AnnotatedEnumVariant {
                 name: variant.name.as_str().into(),
                 aliases: variant.alias.iter().map(|a| a.as_str().into()).collect(),
-                description: variant.description.as_deref().map(Into::into),
+                description: variant.rendered_description().map(Into::into),
             })
             .collect();
 
@@ -396,7 +396,7 @@ impl TypeCtx {
                             .iter()
                             .map(|a| a.as_str().into())
                             .collect(),
-                        description: variant_def.description.as_deref().map(Into::into),
+                        description: variant_def.rendered_description().map(Into::into),
                     },
                 };
                 Ty::Resolved(TyResolved::EnumVariant(enum_variant_ty))

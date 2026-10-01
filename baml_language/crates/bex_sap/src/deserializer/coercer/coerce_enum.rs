@@ -15,7 +15,7 @@ use crate::{
 /// The strings that match one enum variant.
 ///
 /// The rendered names come first: the aliases when any exist (the original name is then
-/// excluded), otherwise the name itself. A variant with a non-blank `@description` also
+/// excluded), otherwise the name itself. A variant with a non-blank description also
 /// matches the description alone and each `<rendered name>: <description>` line, which is how
 /// the output format shows the variant to the model.
 fn variant_match_candidates<'t>(v: &'t AnnotatedEnumVariant<'t>) -> Vec<Cow<'t, str>> {

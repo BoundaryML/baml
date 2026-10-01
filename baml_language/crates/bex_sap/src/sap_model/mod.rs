@@ -830,9 +830,9 @@ pub struct AnnotatedEnumVariant<'t> {
     /// Aliases for the variant name.
     /// If any are present, the real name is not used for matching.
     pub aliases: Vec<Cow<'t, str>>,
-    /// `@description` of the variant. The output format renders a variant as
-    /// `<name>: <description>`, so a model may answer with the description alone or with the
-    /// whole rendered line; both match the variant.
+    /// The description the output format renders for the variant, as `<name>: <description>`:
+    /// its `@description` and `///` docstring. A model may answer with the description alone
+    /// or with the whole rendered line; both match the variant.
     pub description: Option<Cow<'t, str>>,
 }
 
