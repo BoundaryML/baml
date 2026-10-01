@@ -43,7 +43,7 @@ use std::{
 };
 
 use once_cell::sync::{Lazy, OnceCell};
-use sys_types::{BexExternalValue, CompletionHandle, OpError, SysOp, VmInternalError};
+use sys_types::{BexExternalValue, CallId, CompletionHandle, OpError, SysOp, VmInternalError};
 
 /// C-compatible dispatch callback installed by the host bridge.
 ///
@@ -107,8 +107,15 @@ pub fn fire_dispatch(host_value_key: u64, call_id: u32, args: &[u8]) -> bool {
 // In-flight call table
 // ============================================================================
 
-static TABLE: Lazy<RwLock<HashMap<u32, CompletionHandle>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
+struct InflightCall {
+    completion: CompletionHandle,
+    /// The SDK entry that issued this dispatch, independent of the callable's
+    /// registration or lifetime. A retained callable may enter under a new ID.
+    origin: CallId,
+    on_cancel: Option<Box<dyn FnOnce() + Send + Sync>>,
+}
+
+static TABLE: Lazy<RwLock<HashMap<u32, InflightCall>>> = Lazy::new(|| RwLock::new(HashMap::new()));
 
 static NEXT_CALL_ID: AtomicU32 = AtomicU32::new(1);
 
@@ -163,6 +170,14 @@ pub fn next_call_id() -> u32 {
 /// it.
 #[must_use]
 pub fn insert(call_id: u32, completion: CompletionHandle) -> bool {
+    insert_for_call(call_id, CallId(0), completion)
+}
+
+/// Register the dispatch together with its originating SDK call. The origin
+/// shares the completion's cancellation lifetime; no separate routing table
+/// can retain an evicted call. `insert` supports callers without an SDK entry.
+#[must_use]
+pub fn insert_for_call(call_id: u32, origin: CallId, completion: CompletionHandle) -> bool {
     let mut table = TABLE.write().unwrap();
     let collision = table.contains_key(&call_id);
     debug_assert!(
@@ -186,8 +201,41 @@ pub fn insert(call_id: u32, completion: CompletionHandle) -> bool {
         )));
         return false;
     }
-    table.insert(call_id, completion);
+    table.insert(
+        call_id,
+        InflightCall {
+            completion,
+            origin,
+            on_cancel: None,
+        },
+    );
     true
+}
+
+/// Read the issuing SDK call while a dispatch is still in flight. Bridges use
+/// this to select the call's execution environment, never the callable's.
+pub fn origin_call_id(call_id: u32) -> Option<CallId> {
+    TABLE.read().unwrap().get(&call_id).map(|call| call.origin)
+}
+
+/// Attach host execution cancellation to this dispatch's existing lifetime.
+/// Returns false if completion or cancellation already removed the dispatch.
+/// The hook runs once on guard eviction, outside the table lock; successful
+/// completion removes it without invoking it. No C ABI changes are required.
+pub fn set_cancellation_hook(call_id: u32, hook: impl FnOnce() + Send + Sync + 'static) -> bool {
+    let mut hook: Option<Box<dyn FnOnce() + Send + Sync>> = Some(Box::new(hook));
+    let installed = {
+        let mut table = TABLE.write().unwrap();
+        if let Some(call) = table.get_mut(&call_id) {
+            std::mem::swap(&mut call.on_cancel, &mut hook);
+            true
+        } else {
+            false
+        }
+    };
+    // Dropping a hook may release host owners. Never do it under the lock.
+    drop(hook);
+    installed
 }
 
 /// Remove and return the `CompletionHandle` for the given call id, if any.
@@ -196,7 +244,8 @@ pub fn insert(call_id: u32, completion: CompletionHandle) -> bool {
 /// completion racing a cancellation, or by [`InflightGuard`]'s drop after the
 /// call already completed normally.
 pub fn take(call_id: u32) -> Option<CompletionHandle> {
-    TABLE.write().unwrap().remove(&call_id)
+    let removed = TABLE.write().unwrap().remove(&call_id);
+    removed.map(|call| call.completion)
 }
 
 /// RAII guard that evicts an in-flight call's table entry when dropped.
@@ -204,14 +253,13 @@ pub fn take(call_id: u32) -> Option<CompletionHandle> {
 /// Owned by the sysop's async future (the `host_impls` `call_host_value` impl).
 /// It carries only the `call_id` (a `Copy` `u32`), never the
 /// `CompletionHandle` — that handle lives in the table and is owned by whoever
-/// `take`s it. On drop the guard calls [`take`], which:
+/// `take`s it. On drop the guard removes any remaining entry, then:
 ///
 /// * **After normal completion** is a no-op: `complete_host_call` already
-///   `take`-and-fired the handle, so the entry is gone and `take` returns
-///   `None`.
-/// * **On cancellation** removes the still-present entry. Dropping the removed
-///   `CompletionHandle` closes the oneshot sender, so the host's later
-///   `complete_host_call` for that id hits the benign unknown-id path. No leak.
+///   `take`-and-fired the handle, so the entry is gone.
+/// * **On cancellation** invokes the registered host execution hook outside
+///   the table lock. Dropping the removed `CompletionHandle` closes the
+///   oneshot sender, so a later host completion hits the benign unknown-id path.
 pub struct InflightGuard {
     call_id: u32,
 }
@@ -227,7 +275,12 @@ impl Drop for InflightGuard {
     fn drop(&mut self) {
         // Evict the entry if it is still present (cancellation). After normal
         // completion the entry is already gone, so this is a no-op.
-        let _ = take(self.call_id);
+        let removed = TABLE.write().unwrap().remove(&self.call_id);
+        if let Some(mut call) = removed
+            && let Some(on_cancel) = call.on_cancel.take()
+        {
+            on_cancel();
+        }
     }
 }
 
@@ -272,7 +325,7 @@ pub fn complete_with_throw(call_id: u32, value: BexExternalValue) {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::{collections::HashSet, sync::Arc};
 
     use sys_types::{SysOp, SysOpResult};
 
@@ -291,6 +344,74 @@ mod tests {
             let id = next_call_id();
             assert_ne!(id, 0, "minted call id must never be the reserved 0");
             assert!(seen.insert(id), "minted call id {id} was handed out twice");
+        }
+    }
+
+    #[test]
+    fn origin_is_scoped_to_one_dispatch_and_evicted_on_cancel() {
+        let (_result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let call_id = next_call_id();
+        let origin = CallId(9876);
+        assert!(insert_for_call(call_id, origin, completion));
+        assert_eq!(origin_call_id(call_id), Some(origin));
+        drop(InflightGuard::new(call_id));
+        assert_eq!(origin_call_id(call_id), None);
+    }
+
+    #[test]
+    fn cancellation_hook_runs_once_after_eviction_without_table_lock() {
+        let (_result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let call_id = next_call_id();
+        assert!(insert_for_call(call_id, CallId(42), completion));
+        let cancelled = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let observed = Arc::clone(&cancelled);
+        assert!(set_cancellation_hook(call_id, move || {
+            assert_eq!(origin_call_id(call_id), None);
+            observed.fetch_add(1, Ordering::SeqCst);
+        }));
+        drop(InflightGuard::new(call_id));
+        drop(InflightGuard::new(call_id));
+        assert_eq!(cancelled.load(Ordering::SeqCst), 1);
+        assert!(!set_cancellation_hook(call_id, || panic!(
+            "already evicted"
+        )));
+    }
+
+    #[test]
+    fn normal_completion_does_not_cancel_host_execution() {
+        let (_result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let call_id = next_call_id();
+        assert!(insert(call_id, completion));
+        assert!(set_cancellation_hook(call_id, || panic!(
+            "completed call cancelled"
+        )));
+        complete_with_value(call_id, BexExternalValue::Null);
+        drop(InflightGuard::new(call_id));
+        assert_eq!(origin_call_id(call_id), None);
+    }
+
+    #[test]
+    fn completion_racing_cancellation_selects_one_terminal_owner() {
+        for _ in 0..64 {
+            let (_result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+            let call_id = next_call_id();
+            assert!(insert(call_id, completion));
+            let cancelled = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let observed = Arc::clone(&cancelled);
+            assert!(set_cancellation_hook(call_id, move || {
+                observed.fetch_add(1, Ordering::SeqCst);
+            }));
+            let barrier = Arc::new(std::sync::Barrier::new(2));
+            let cancel_barrier = Arc::clone(&barrier);
+            let worker = std::thread::spawn(move || {
+                cancel_barrier.wait();
+                drop(InflightGuard::new(call_id));
+            });
+            barrier.wait();
+            let completed = take(call_id).is_some();
+            worker.join().unwrap();
+            assert_eq!(cancelled.load(Ordering::SeqCst), usize::from(!completed));
+            assert_eq!(origin_call_id(call_id), None);
         }
     }
 

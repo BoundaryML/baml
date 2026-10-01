@@ -324,6 +324,14 @@ pub struct PreparedCall {
     context: FunctionCallContext,
 }
 
+impl PreparedCall {
+    /// Identity of the SDK entry, used by adapters to route callbacks to that
+    /// entry's execution environment. The target remains pinned and private.
+    pub fn host_call_id(&self) -> u64 {
+        self.context.host_call_id.0
+    }
+}
+
 enum PreparedTarget {
     Named(String),
     Callable(bex_project::Handle),

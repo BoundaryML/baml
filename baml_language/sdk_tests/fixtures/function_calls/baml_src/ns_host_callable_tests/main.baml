@@ -225,6 +225,16 @@ function make_counter(start: int) -> () -> int throws never {
     }
 }
 
+// Retain a host callback in a returned BAML closure. Registration does not
+// invoke the callback; the later caller supplies its execution environment.
+function make_callback_forwarder(
+    callback: (int) -> int throws baml.errors.HostCallable,
+) -> (value: int) -> int throws baml.errors.HostCallable {
+    return (value: int) -> int throws baml.errors.HostCallable {
+        callback(value)
+    }
+}
+
 // ─── Optional args × host callables (the combination) ───────────────────────
 //
 // These exercise the intersection of two surfaces that were each covered

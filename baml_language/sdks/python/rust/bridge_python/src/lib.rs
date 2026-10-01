@@ -4,6 +4,7 @@
 //! but powered by `bex_engine` (via `bridge_cffi`) instead of `baml-runtime`.
 
 mod baml_call_context;
+mod callback_dispatch;
 mod errors;
 pub mod host_value;
 mod media;
@@ -87,6 +88,11 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(host_value::register_host_callable))?;
     m.add_wrapped(wrap_pyfunction!(host_value::release_host_callable))?;
     m.add_wrapped(wrap_pyfunction!(host_value::lookup_host_value))?;
+    m.add_wrapped(wrap_pyfunction!(host_value::_invoke_host_callable))?;
+    m.add_wrapped(wrap_pyfunction!(host_value::_complete_host_call_success))?;
+    m.add_wrapped(wrap_pyfunction!(host_value::_complete_host_call_error))?;
+    m.add_wrapped(wrap_pyfunction!(host_value::_register_host_call_execution))?;
+    m.add_wrapped(wrap_pyfunction!(host_value::_discard_host_call_args))?;
 
     // Wire the bridge_cffi C entry points to this bridge's per-process
     // Python host-value registry. First-call-wins inside bridge_cffi, so

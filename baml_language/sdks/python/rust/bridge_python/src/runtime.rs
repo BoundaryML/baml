@@ -11,7 +11,10 @@ use pyo3_stub_gen::{
     inventory::submit,
 };
 
-use crate::errors::{bridge_error_to_sdk_panic, py_sdk_panic};
+use crate::{
+    callback_dispatch::{DispatchScope, SyncMessage},
+    errors::{bridge_error_to_sdk_panic, py_sdk_panic},
+};
 
 /// The main BAML runtime. A zero-sized handle: the single source of truth for
 /// the `Arc<dyn Bex>` singleton is `bridge_cffi`, fetched via
@@ -105,10 +108,16 @@ impl BamlRuntime {
             Ok((runtime, prepared))
         })();
 
+        let environment = match &prepared {
+            Ok((_, call)) => Some(DispatchScope::asynchronous(py, call.host_call_id())?),
+            Err(_) => None,
+        };
+
         // The whole Result -> BamlOutboundResult translation (incl. the
         // catch_unwind -> SdkPanic boundary) lives in bridge_cffi; we just
         // return the encoded envelope bytes for Python to decode + raise.
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let _environment = environment;
             let bytes = match prepared {
                 Ok((runtime, prepared)) => bridge_cffi::invoke_prepared(runtime, prepared).await,
                 Err(e) => bridge_cffi::error_to_outbound(e),
@@ -142,8 +151,41 @@ impl BamlRuntime {
 
         // Same shared invoke_prepared as the async + C-ABI paths — returns the
         // encoded BamlOutboundResult envelope bytes.
-        let bytes = py.detach(|| rt.block_on(bridge_cffi::invoke_prepared(runtime, prepared)));
-        Ok(bytes)
+        let call_id = prepared.host_call_id();
+        let (sender, mut receiver) = std::sync::mpsc::channel();
+        let _environment = DispatchScope::synchronous(call_id, sender.clone())?;
+        let task = rt.spawn(bridge_cffi::invoke_prepared(runtime, prepared));
+        // Observe panics/cancellation of the engine task as well as normal
+        // results; a producer disappearing must never strand the caller queue.
+        rt.spawn(async move {
+            let bytes = match task.await {
+                Ok(bytes) => bytes,
+                Err(error) => bridge_cffi::error_to_outbound(bridge_cffi::BridgeError::Internal(
+                    format!("BAML execution task failed: {error}"),
+                )),
+            };
+            let _ = sender.send(SyncMessage::Finished(bytes));
+        });
+        loop {
+            let message = py.detach({
+                let receiver = &mut receiver;
+                move || receiver.recv_timeout(std::time::Duration::from_millis(100))
+            });
+            if let Err(error) = py.check_signals() {
+                bridge_cffi::cancel_function_call_by_id(call_id);
+                return Err(error);
+            }
+            match message {
+                Ok(SyncMessage::Dispatch(dispatch)) => crate::host_value::dispatch_sync(dispatch),
+                Ok(SyncMessage::Finished(bytes)) => return Ok(bytes),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err(py_sdk_panic(
+                        "BAML callback queue disconnected before completion",
+                    ));
+                }
+            }
+        }
     }
 }
 

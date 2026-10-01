@@ -14,10 +14,9 @@
 //! 2. Decodes the `BamlOutboundValue` args into Python values via
 //!    `baml_bridge.proto._decode_value_holder` (already a list shape).
 //! 3. Invokes the callable. If the return is a coroutine, runs it to
-//!    completion on a fresh `asyncio` event loop. The dispatch runs on a
-//!    spawned tokio task (see [`host_dispatch_callback`]), so blocking that
-//!    task to drive the coroutine to completion does not stall the engine,
-//!    which concurrently awaits the call's completion.
+//!    completion on the originating SDK entry's application loop (async
+//!    entry) or a bridge-owned loop with copied application context (sync
+//!    entry). Synchronous callbacks run on the originating Python thread.
 //! 4. Encodes the result into `InboundValue` bytes via
 //!    `baml_bridge.proto.encode_call_args`-style serialization, then calls
 //!    `bridge_cffi::complete_host_call(call_id, 0, ptr, len)`.
@@ -45,8 +44,9 @@ use std::sync::LazyLock;
 
 use bridge_cffi::complete_host_call;
 use bridge_ctypes::baml_bridge::cffi::{
-    BamlHandle, BamlHandleType, BamlTy, BamlTyClass, InboundClassValue, InboundMapEntry,
-    InboundValue, baml_ty::Ty as BamlTyVariant, inbound_map_entry::Key as InboundMapKey,
+    BamlHandle, BamlHandleType, BamlOutboundValue, BamlToHostCall, BamlTy, BamlTyClass,
+    InboundClassValue, InboundMapEntry, InboundValue, baml_outbound_value::Value as OutboundValue,
+    baml_ty::Ty as BamlTyVariant, inbound_map_entry::Key as InboundMapKey,
     inbound_value::Value as InboundValueVariant,
 };
 use prost::Message;
@@ -190,17 +190,18 @@ pub fn release_host_callable(host_value_key: u64) {
 /// `args` is a protobuf-encoded `BamlOutboundValue` whose variant is a
 /// `BamlValueList` (see `sys_native::host_impls::call_host_value` —
 /// args are wrapped as `BexExternalValue::Array` before encoding).
-#[expect(
-    clippy::not_unsafe_ptr_arg_deref,
-    reason = "C ABI entry point: pointer validity is the caller's contract, documented \
-              alongside the registered HostDispatchFn signature in bridge_cffi"
-)]
 pub extern "C" fn host_dispatch_callback(
     host_value_key: u64,
     call_id: u32,
     args: *const u8,
     length: usize,
 ) {
+    catch_dispatch_panic(call_id, || {
+        dispatch_host_callable(host_value_key, call_id, args, length);
+    });
+}
+
+fn dispatch_host_callable(host_value_key: u64, call_id: u32, args: *const u8, length: usize) {
     // Copy the wire bytes into a Vec — the dispatch task may outlive the
     // caller's stack frame, and we need a `'static` slice anyway.
     let bytes: Vec<u8> = if length == 0 || args.is_null() {
@@ -211,26 +212,10 @@ pub extern "C" fn host_dispatch_callback(
         unsafe { std::slice::from_raw_parts(args, length) }.to_vec()
     };
 
-    // We're called on a tokio worker from the engine's sysop dispatch (see
-    // `sys_native::host_dispatch::fire_dispatch`). Spawn a task so the
-    // dispatch callback returns promptly and the engine can continue
-    // making progress on other work while Python runs.
-    //
-    // The Python encode/decode and the user callable invocation happen
-    // inside this task with the GIL held. Async user callables are run
-    // to completion on a freshly-created asyncio loop inside the task —
-    // we do not currently integrate with a Python event loop running
-    // concurrently in another thread.
-    // Resolve the callable *before* spawning so a missing entry (or a
-    // poisoned registry mutex) surfaces as `BridgeFailure` — an
-    // infrastructure fault — instead of an opaque `HostCallable` wrapping
-    // a `PyKeyError`. The bridge knowing about a handle the dispatcher
-    // can no longer find is a bug in the bridge, not a user error.
-    // Mirrors `bridge_typescript::host_dispatch_callback`'s pre-spawn lookup.
-    //
-    // The `Py<PyAny>` is `Send + Sync` and survives moving into the
-    // spawned task without holding the GIL; it's only re-attached inside
-    // `dispatch_in_python` to invoke the callable.
+    // Resolve registration before handing execution to the SDK entry's queue
+    // or application loop. Registration holds only the callable, never its
+    // parent, thread, Context or loop. Missing registry entries are bridge
+    // failures rather than user-code exceptions.
     let callable: Py<PyAny> = match Python::attach(|py| -> Result<Py<PyAny>, String> {
         let table = REGISTRY
             .lock()
@@ -244,45 +229,16 @@ pub extern "C" fn host_dispatch_callback(
     }) {
         Ok(c) => c,
         Err(message) => {
+            discard_host_call_args(&bytes);
             send_dispatch_bridge_failure(call_id, message);
             return;
         }
     };
 
-    let Ok(handle) = tokio::runtime::Handle::try_current() else {
-        // No tokio runtime is active — complete synchronously with an
-        // error so the engine doesn't wedge on the in-flight call table.
-        // This is an infrastructure fault (the bridge can't even schedule
-        // the dispatch), not a user error → BridgeFailure → SdkPanic.
-        send_dispatch_bridge_failure(
-            call_id,
-            "host_dispatch_callback called outside a tokio runtime context".to_string(),
-        );
-        return;
-    };
-    handle.spawn(async move {
-        // A Rust-level *panic* (not a `PyErr`) inside `dispatch_in_python`
-        // would unwind out of this task and silently drop the in-flight
-        // `call_id`, leaving the engine awaiting it forever (there is no
-        // timeout). Catch the unwind and complete the call with an error so
-        // the engine always makes progress. `AssertUnwindSafe` is sound here:
-        // on a caught panic we touch no state that the panic could have left
-        // logically inconsistent — we only read `call_id` (a `Copy` `u32`)
-        // and emit a fresh error payload. The normal `PyErr` path inside
-        // `dispatch_in_python` is unaffected: it returns `Err(_)` and
-        // completes the call itself, so `catch_unwind` sees `Ok(())`.
-        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            dispatch_in_python(callable, call_id, bytes);
-        }));
-        if let Err(panic) = outcome {
-            let detail = panic_message(&panic);
-            // A caught Rust-level panic in the dispatch task is a bridge
-            // bug, not a user-callable exception → BridgeFailure → SdkPanic.
-            send_dispatch_bridge_failure(
-                call_id,
-                format!("host callable dispatch panicked: {detail}"),
-            );
-        }
+    crate::callback_dispatch::route(crate::callback_dispatch::Dispatch {
+        callable,
+        call_id,
+        args: bytes,
     });
 }
 
@@ -299,35 +255,187 @@ fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
     }
 }
 
-/// Synchronous (under-GIL) helper called from the dispatch task. The
-/// `callable` was resolved from the registry before the spawn so its
-/// presence is guaranteed (missing-key faults surface as `BridgeFailure`
-/// earlier in `host_dispatch_callback`).
-fn dispatch_in_python(callable: Py<PyAny>, call_id: u32, args_bytes: Vec<u8>) {
-    let result = Python::attach(|py| -> PyResult<Vec<u8>> {
-        // Decode the engine-side `BamlToHostCall` into the callable's
-        // positional args + supplied-optional kwargs.
-        let (positional, kwargs) = decode_args(py, &args_bytes)?;
-
-        // Invoke the user callable: required args positionally, supplied
-        // optionals by keyword. Omitted optionals are absent, so the callable's
-        // own defaults apply.
-        let result_obj = callable.call(py, &positional, Some(&kwargs))?;
-
-        // If the callable returned a coroutine (async function), run it to
-        // completion on a fresh asyncio loop. Sync callables fall through.
-        let final_result = run_if_coroutine(py, result_obj)?;
-
-        // Encode the result as an `InboundValue` via `baml_bridge.proto`.
-        encode_result_inbound(py, final_result)
+/// Service a sync entry's dispatch on its calling Python thread. An async
+/// result runs on a bridge-owned loop with the caller's current Context copied
+/// explicitly; the caller may already be blocking an application loop.
+pub(crate) fn dispatch_sync(dispatch: crate::callback_dispatch::Dispatch) {
+    let call_id = dispatch.call_id;
+    if sys_native::host_dispatch::origin_call_id(call_id).is_none() {
+        discard_host_call_args(&dispatch.args);
+        return;
+    }
+    catch_dispatch_panic(call_id, || {
+        let result = Python::attach(|py| -> PyResult<Option<Vec<u8>>> {
+            let value = _invoke_host_callable(py, dispatch.callable, dispatch.args)?;
+            let is_coroutine: bool = PyModule::import(py, "asyncio")?
+                .getattr("iscoroutine")?
+                .call1((value.bind(py),))?
+                .extract()?;
+            if !is_coroutine {
+                return encode_result_inbound(py, value).map(Some);
+            }
+            let context = PyModule::import(py, "contextvars")?
+                .getattr("copy_context")?
+                .call0()?
+                .unbind();
+            let rt = bridge_cffi::get_tokio_runtime()
+                .map_err(crate::errors::bridge_error_to_sdk_panic)?;
+            rt.spawn_blocking(move || {
+                catch_dispatch_panic(call_id, || {
+                    let result = Python::attach(|py| -> PyResult<Vec<u8>> {
+                        let runner = PyModule::import(py, "baml_bridge._dispatch")?
+                            .getattr("_run_sync_coroutine")?;
+                        let value = context
+                            .bind(py)
+                            .call_method1("run", (runner, call_id, value.bind(py)))?
+                            .unbind();
+                        encode_result_inbound(py, value)
+                    });
+                    complete_dispatch_result(call_id, result);
+                })
+            });
+            Ok(None)
+        });
+        match result {
+            Ok(None) => {}
+            Ok(Some(bytes)) => send_dispatch_success(call_id, &bytes),
+            Err(error) => Python::attach(|py| send_dispatch_error_from_pyerr(call_id, py, &error)),
+        }
     });
+}
 
+fn catch_dispatch_panic(call_id: u32, action: impl FnOnce()) {
+    if let Err(panic) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(action)) {
+        send_dispatch_bridge_failure(
+            call_id,
+            format!("host callable dispatch panicked: {}", panic_message(&panic)),
+        );
+    }
+}
+
+fn complete_dispatch_result(call_id: u32, result: PyResult<Vec<u8>>) {
     match result {
         Ok(bytes) => send_dispatch_success(call_id, &bytes),
-        Err(py_err) => Python::attach(|py| {
-            send_dispatch_error_from_pyerr(call_id, py, &py_err);
-        }),
+        Err(error) => Python::attach(|py| send_dispatch_error_from_pyerr(call_id, py, &error)),
     }
+}
+
+/// Private Python scheduler entrypoints. Decoding, callable invocation and
+/// result encoding run on the selected Python thread, with the original error
+/// object preserved by the existing host-value transport.
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn _invoke_host_callable(
+    py: Python<'_>,
+    callable: Py<PyAny>,
+    args: Vec<u8>,
+) -> PyResult<Py<PyAny>> {
+    let (positional, kwargs) = decode_args(py, &args)?;
+    callable.call(py, &positional, Some(&kwargs))
+}
+
+/// Connect cancellation to the task's actual owning loop. If cancellation
+/// already removed this dispatch, Python must not start its body. The hook
+/// keeps the loop alive independently of the SDK entry's environment guard.
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn _register_host_call_execution(
+    py: Python<'_>,
+    call_id: u32,
+    event_loop: Py<PyAny>,
+) -> PyResult<bool> {
+    let cancel = PyModule::import(py, "baml_bridge._dispatch")?
+        .getattr("_cancel_dispatch")?
+        .unbind();
+    Ok(sys_native::host_dispatch::set_cancellation_hook(
+        call_id,
+        move || {
+            catch_dispatch_panic(call_id, || {
+                Python::attach(|py| {
+                    if let Err(error) = event_loop
+                        .bind(py)
+                        .call_method1("call_soon_threadsafe", (cancel.bind(py), call_id))
+                    {
+                        // A closed application loop cannot service cancellation;
+                        // eviction has already ended the engine's waiter.
+                        log::warn!("could not cancel Python host call {call_id}: {error}");
+                    }
+                });
+            });
+        },
+    ))
+}
+
+/// Release wire owners of callbacks that never started, without materializing
+/// application classes or invoking Python validators. Host-owned keys are
+/// borrowed metadata and belong to the engine's HostValueArc, not HANDLE_TABLE.
+pub(crate) fn discard_host_call_args(args: &[u8]) {
+    fn discard(value: BamlOutboundValue) {
+        match value.value {
+            Some(OutboundValue::HandleValue(handle)) => {
+                if handle.handle_type != BamlHandleType::HostValueCallable as i32
+                    && handle.handle_type != BamlHandleType::HostValueOpaque as i32
+                {
+                    let _ = bridge_cffi::handle_cffi::release_handle(handle.key);
+                }
+            }
+            Some(OutboundValue::ListValue(list)) => {
+                for value in list.items {
+                    discard(value);
+                }
+            }
+            Some(OutboundValue::MapValue(map)) => {
+                for entry in map.entries {
+                    if let Some(value) = entry.value {
+                        discard(value);
+                    }
+                }
+            }
+            Some(OutboundValue::ClassValue(class)) => {
+                for field in class.fields {
+                    if let Some(value) = field.value {
+                        discard(value);
+                    }
+                }
+            }
+            Some(OutboundValue::UnionVariantValue(union)) => {
+                if let Some(value) = union.value {
+                    discard(*value);
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Ok(call) = BamlToHostCall::decode(args) {
+        for arg in call.args {
+            if let Some(value) = arg.value {
+                discard(value);
+            }
+        }
+    }
+    bex_project::host_release_dispatch::drain();
+}
+
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn _discard_host_call_args(args: Vec<u8>) {
+    discard_host_call_args(&args);
+}
+
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn _complete_host_call_success(py: Python<'_>, call_id: u32, value: Py<PyAny>) {
+    catch_dispatch_panic(call_id, || {
+        complete_dispatch_result(call_id, encode_result_inbound(py, value));
+    });
+}
+
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn _complete_host_call_error(py: Python<'_>, call_id: u32, error: Py<PyAny>) {
+    catch_dispatch_panic(call_id, || {
+        send_dispatch_error_from_pyerr(call_id, py, &pyo3::PyErr::from_value(error.into_bound(py)));
+    });
 }
 
 /// Decode the protobuf `BamlToHostCall` into the callable's positional args
@@ -365,40 +473,6 @@ fn decode_args<'py>(
     let positional = PyTuple::new(py, positional_items)?;
 
     Ok((positional, kwargs))
-}
-
-/// If `value` is a coroutine, run it to completion on a fresh asyncio loop
-/// and return the resolved result. Otherwise return `value` unchanged.
-fn run_if_coroutine(py: Python<'_>, value: Py<PyAny>) -> PyResult<Py<PyAny>> {
-    let bound = value.bind(py);
-    let asyncio = PyModule::import(py, "asyncio")?;
-    let is_coro: bool = asyncio.getattr("iscoroutine")?.call1((bound,))?.extract()?;
-    if !is_coro {
-        return Ok(value);
-    }
-    // Run the coroutine to completion on a new event loop in the current
-    // thread. The bridge is on a tokio worker — Python sees a fresh loop
-    // dedicated to this dispatch only.
-    let new_loop = asyncio.getattr("new_event_loop")?.call0()?;
-    let set_event_loop = asyncio.getattr("set_event_loop")?;
-    let result = (|| -> PyResult<Py<PyAny>> {
-        // Install the fresh loop as this thread's current loop for the run.
-        // Coroutines (and libraries they use) commonly reach for the ambient
-        // loop via `asyncio.get_event_loop()`/`ensure_future()`; on a non-main
-        // thread with no loop set that raises "no current event loop in thread"
-        // or binds work to an unrelated loop. Installing it first makes the
-        // running loop and the thread's current loop agree.
-        set_event_loop.call1((&new_loop,))?;
-        Ok(new_loop
-            .call_method1("run_until_complete", (bound,))?
-            .unbind())
-    })();
-    // Close the loop and clear it as the thread's current loop regardless of
-    // success/error. tokio reuses worker threads, so a leftover (now-closed)
-    // current loop would poison the next dispatch that lands on this thread.
-    let _ = new_loop.call_method0("close");
-    let _ = set_event_loop.call1((py.None(),));
-    result
 }
 
 /// Encode `value` as an `InboundValue` protobuf using
@@ -493,6 +567,13 @@ fn build_host_callable_inbound(
     ];
     if let Some(tb) = traceback {
         fields.push(string_field("traceback", tb));
+    } else {
+        // Nullable is still a required field. Synthetic cancellation errors
+        // (e.g. a task cancelled before first execution) have no traceback.
+        fields.push(InboundMapEntry {
+            key: Some(InboundMapKey::StringKey("traceback".to_owned())),
+            value: Some(InboundValue::default()),
+        });
     }
     fields.push(handle_field);
     InboundValue {
@@ -511,13 +592,13 @@ fn build_host_callable_inbound(
 /// Complete an in-flight host call with `VmInternalError::BridgeFailure` —
 /// the engine surfaces this as `baml.panics.SdkPanic` to the host SDK.
 ///
-/// Use for *bridge-layer* faults: no tokio runtime when the dispatch fires,
+/// Use for *bridge-layer* faults: unavailable callback execution environment,
 /// a caught Rust panic inside the dispatch task, or a missing registry
 /// entry (the engine knows about a handle the bridge no longer has). These
 /// are infrastructure bugs, not user-code exceptions, so they must not
 /// surface as catchable `BamlError(HostCallable(...))`. Mirrors the
 /// `send_dispatch_error_*` family in `bridge_typescript`.
-fn send_dispatch_bridge_failure(call_id: u32, message: String) {
+pub(crate) fn send_dispatch_bridge_failure(call_id: u32, message: String) {
     sys_native::host_dispatch::complete_with_error(
         call_id,
         sys_native::OpError::new(
