@@ -192,6 +192,7 @@ pub fn release_host_callable(host_value_key: u64) {
 pub(crate) struct HostExecutionLease {
     call_id: u32,
     args: Option<Vec<u8>>,
+    frame: Option<Box<bridge_ctypes::OwnedHostInvocation>>,
     execution: Option<sys_native::host_dispatch::HostExecutionGuard>,
 }
 
@@ -199,11 +200,13 @@ impl HostExecutionLease {
     fn new(
         call_id: u32,
         args: Vec<u8>,
+        frame: bridge_ctypes::OwnedHostInvocation,
         execution: sys_native::host_dispatch::HostExecutionGuard,
     ) -> Self {
         Self {
             call_id,
             args: Some(args),
+            frame: Some(Box::new(frame)),
             execution: Some(execution),
         }
     }
@@ -219,10 +222,24 @@ impl HostExecutionLease {
         true
     }
 
+    fn frame(&self) -> PyResult<crate::py_handle::BamlPyHandle> {
+        let frame = self
+            .frame
+            .as_ref()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("callback already exited"))?;
+        let key =
+            crate::py_handle::handle_clone(frame.0.effective_state, "callback invocation capture")?;
+        Ok(crate::py_handle::BamlPyHandle::new(
+            key,
+            BamlHandleType::InvocationState as u64,
+        ))
+    }
+
     fn finish(&mut self) {
         if let Some(args) = self.args.take() {
             discard_host_call_args(&args);
         }
+        drop(self.frame.take());
         drop(self.execution.take());
     }
 }
@@ -235,21 +252,33 @@ impl Drop for HostExecutionLease {
 
 /// Dispatch a BAML→host call into Python.
 ///
-/// `args` is a protobuf-encoded `BamlOutboundValue` whose variant is a
-/// `BamlValueList` (see `sys_native::host_impls::call_host_value` —
-/// args are wrapped as `BexExternalValue::Array` before encoding).
-pub extern "C" fn host_dispatch_callback(
+/// The borrowed V2 `HostInvocation` carries application arguments, effective
+/// invocation state, cancellation, the absolute deadline, and host context.
+pub(crate) extern "C" fn host_dispatch_callback(request: *const u8, length: usize) {
+    if request.is_null() || length > isize::MAX as usize {
+        return;
+    }
+    // SAFETY: V2 dispatch borrows runtime-owned bytes for this call.
+    let bytes = unsafe { std::slice::from_raw_parts(request, length) };
+    let frame = match bridge_cffi::invocation_protocol::decode_host_invocation(bytes) {
+        Ok(frame) => bridge_ctypes::OwnedHostInvocation(frame),
+        Err(_) => return,
+    };
+    let call_id = frame.0.callback_id;
+    let key = frame.0.host_value_key;
+    let args = frame.0.application_args.clone();
+    catch_dispatch_panic(call_id, || {
+        dispatch_host_callable(key, call_id, args.as_ptr(), args.len(), frame)
+    });
+}
+
+fn dispatch_host_callable(
     host_value_key: u64,
     call_id: u32,
     args: *const u8,
     length: usize,
+    frame: bridge_ctypes::OwnedHostInvocation,
 ) {
-    catch_dispatch_panic(call_id, || {
-        dispatch_host_callable(host_value_key, call_id, args, length);
-    });
-}
-
-fn dispatch_host_callable(host_value_key: u64, call_id: u32, args: *const u8, length: usize) {
     // Copy the wire bytes into a Vec — the dispatch task may outlive the
     // caller's stack frame, and we need a `'static` slice anyway.
     let bytes: Vec<u8> = if length == 0 || args.is_null() {
@@ -262,6 +291,7 @@ fn dispatch_host_callable(host_value_key: u64, call_id: u32, args: *const u8, le
 
     let Some(execution) = sys_native::host_dispatch::retain_execution(call_id) else {
         discard_host_call_args(&bytes);
+        sys_native::host_dispatch::finish_abi_execution(call_id);
         return;
     };
 
@@ -291,7 +321,7 @@ fn dispatch_host_callable(host_value_key: u64, call_id: u32, args: *const u8, le
     crate::callback_dispatch::route(crate::callback_dispatch::Dispatch {
         callable,
         call_id,
-        execution: HostExecutionLease::new(call_id, bytes.clone(), execution),
+        execution: HostExecutionLease::new(call_id, bytes.clone(), frame, execution),
         args: bytes,
     });
 }
@@ -320,7 +350,11 @@ pub(crate) fn dispatch_sync(dispatch: crate::callback_dispatch::Dispatch) {
     }
     catch_dispatch_panic(call_id, || {
         let result = Python::attach(|py| -> PyResult<Option<Vec<u8>>> {
-            let value = _invoke_host_callable(py, dispatch.callable, dispatch.args)?;
+            let frame = execution.as_ref().unwrap().frame()?;
+            let value = PyModule::import(py, "baml_bridge._dispatch")?
+                .getattr("_invoke_with_frame")?
+                .call1((dispatch.callable, dispatch.args, frame))?
+                .unbind();
             let is_coroutine: bool = PyModule::import(py, "asyncio")?
                 .getattr("iscoroutine")?
                 .call1((value.bind(py),))?

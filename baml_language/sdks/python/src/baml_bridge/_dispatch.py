@@ -6,6 +6,7 @@ when the BAML caller stops waiting. Registration stores no loop or Context.
 """
 
 import asyncio
+from contextvars import ContextVar
 
 from .baml_py import (
     _complete_host_call_error,
@@ -16,6 +17,26 @@ from .baml_py import (
 
 
 _active_dispatches = {}
+_current_invocation = ContextVar("baml_invocation", default=None)
+
+
+def _invoke_with_frame(callback, args, frame):
+    token = _current_invocation.set(frame)
+    try:
+        result = _invoke_host_callable(callback, args)
+    finally:
+        _current_invocation.reset(token)
+    if asyncio.iscoroutine(result):
+
+        async def run():
+            token = _current_invocation.set(frame)
+            try:
+                return await result
+            finally:
+                _current_invocation.reset(token)
+
+        return run()
+    return result
 
 
 def _start_dispatch(callback, call_id, args, execution):
@@ -62,7 +83,7 @@ async def _dispatch(callback, call_id, args, execution):
     if not execution.start():
         return
     try:
-        result = _invoke_host_callable(callback, args)
+        result = _invoke_with_frame(callback, args, execution.frame())
         if asyncio.iscoroutine(result):
             result = await result
     except BaseException as error:

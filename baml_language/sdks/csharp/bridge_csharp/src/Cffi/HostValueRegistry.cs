@@ -114,7 +114,7 @@ internal sealed class HostValueRegistry
         functionCallId = NativeApi.RequireFunctionCallIdentifier(functionCallId);
         lock (gate)
         {
-            if (!operations.TryAdd(functionCallId, new Operation(cancellationToken)))
+            if (!operations.TryAdd(functionCallId, new Operation(cancellationToken, ExecutionContext.Capture())))
             {
                 throw new BamlProtocolException(
                     "A native function-call identifier was unexpectedly reused.",
@@ -155,7 +155,8 @@ internal sealed class HostValueRegistry
         ulong hostKey,
         uint hostCallId,
         byte[] arguments,
-        out string? diagnostic)
+        out string? diagnostic,
+        ulong? hostEnvironment = null)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         diagnostic = null;
@@ -187,7 +188,7 @@ internal sealed class HostValueRegistry
             }
 
             entry.ActiveLeases = checked(entry.ActiveLeases + 1);
-            ulong functionCallId = entry.ParentFunctionCallId;
+            ulong functionCallId = hostEnvironment ?? entry.ParentFunctionCallId;
             CancellationToken callerToken = operations.TryGetValue(
                 functionCallId,
                 out Operation? operation)
@@ -201,12 +202,19 @@ internal sealed class HostValueRegistry
                 functionCallId,
                 arguments,
                 entry.Callable!,
-                entry.ExecutionContext,
+                hostEnvironment.HasValue ? operation?.ExecutionContext : entry.ExecutionContext,
                 cancellation);
             invocations.Add(hostCallId, invocation);
         }
 
         return invocation;
+    }
+
+    internal void CancelInvocation(uint callbackId)
+    {
+        HostInvocation? invocation;
+        lock (gate) { invocations.TryGetValue(callbackId, out invocation); }
+        invocation?.Cancel();
     }
 
     internal void CompleteInvocation(HostInvocation invocation)
@@ -442,9 +450,11 @@ internal sealed class HostValueRegistry
         internal int ActiveLeases { get; set; }
     }
 
-    private sealed class Operation(CancellationToken cancellationToken)
+    private sealed class Operation(CancellationToken cancellationToken, ExecutionContext? executionContext)
     {
         internal CancellationToken CancellationToken { get; } = cancellationToken;
+
+        internal ExecutionContext? ExecutionContext { get; } = executionContext;
     }
 
     private enum EntryKind
@@ -536,5 +546,23 @@ internal sealed class HostInvocation
 
     internal void Complete() => registry.CompleteInvocation(this);
 
-    internal void DisposeCancellation() => cancellation.Dispose();
+    internal BamlSafeHandle? EffectiveState { get; set; }
+
+    internal Baml.Proto.OutboundOwnershipScope? Controls { get; set; }
+
+    internal void Cancel()
+    {
+        try { cancellation.Cancel(); } catch (ObjectDisposedException) { }
+    }
+
+    internal void DisposeCancellation()
+    {
+        cancellation.Dispose();
+        Controls?.Dispose();
+    }
+}
+
+internal static class InvocationFrame
+{
+    internal static readonly AsyncLocal<BamlSafeHandle?> Current = new();
 }

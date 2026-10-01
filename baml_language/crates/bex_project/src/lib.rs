@@ -20,8 +20,8 @@ pub use bex_engine::BexCallResult;
 pub use bex_engine::configure_workerd_runtime;
 pub use bex_engine::{
     BexEngine, CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext, FunctionCallContextBuilder,
-    InboundUnionAmbiguityPolicy, UnhandledSpawnError, UnhandledSpawnErrorHandler,
-    is_cancelled_engine_error,
+    InboundUnionAmbiguityPolicy, InheritedInvocationState, InvocationCapture, UnhandledSpawnError,
+    UnhandledSpawnErrorHandler, is_cancelled_engine_error,
     logger::{TraceLogDrainReport, TraceLogMetadata, TraceLogger},
     register_inbound_union_ambiguity_policy,
 };
@@ -32,7 +32,10 @@ pub use bex_external_types::{
     TaggedHeapHandleKind, TypeDefRef, WeakHeapRef, host_release_dispatch, js_number_to_i64,
     runtime_ty_structurally_equal, selected_arm_equal, try_convert_rust_data, validate_host_return,
 };
-pub use bex_vm_types::{HeapPtr, Program};
+pub use bex_vm_types::{
+    HeapPtr, Program,
+    trace::{ReservedSpanData, TraceOptionsData},
+};
 use indexmap::IndexMap;
 pub use sys_ops::SysOps;
 pub use sys_types::{CallId, CancellationToken};

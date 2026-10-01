@@ -11,12 +11,12 @@
 // Decodes the BamlOutboundResult envelope → TS objects (call results), and
 // bare BamlOutboundValue bytes → TS objects (host-callable args).
 import { baml_bridge } from './proto/baml_cffi.js';
-import { BamlHandle, BamlImage, BamlAudio, BamlVideo, BamlPdf, registerHostCallable, releaseHostCallable, completeHostCall, _releaseWireHandle, getRuntime, newFunctionCall, } from './native.js';
+import { BamlHandle, BamlImage, BamlAudio, BamlVideo, BamlPdf, registerHostCallable, releaseHostCallable, completeHostCall, _releaseWireHandle, getRuntime, newFunctionCall, releaseFunctionCall, } from './native.js';
 import { attachCallContext } from './call_context.js';
 import { BamlStream } from './stream.js';
 import { BamlFunctionSpec } from './function_spec.js';
 import { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInvalidArgumentError, BamlPanic } from './errors.js';
-import { handleExitPanic, runHostCallback } from './platform.js';
+import { handleExitPanic, runHostCallback, currentInvocationState } from './platform.js';
 import { registerHostOpaque, releaseHostOpaque, tryRehydrateHostValueByKey, } from './host_value_registry.js';
 import { getTypeMap } from './typemap.js';
 import { BamlType, BamlTypeMetadataRow, lowerTypeToWireTy, outboundTyToBamlTypeToken, } from './wire_ty.js';
@@ -398,6 +398,7 @@ export function encodeCallArgs(kwargs, options) {
             typeArgs,
             functionName: options.functionName,
             functionHandle: options.functionHandle,
+            invocation: { inheritedState: currentInvocationState(), hostEnvironment: callId.toString() },
         });
         return Buffer.from(CallFunctionArgs.encode(msg).finish());
     }
@@ -407,6 +408,7 @@ export function encodeCallArgs(kwargs, options) {
         // life of the process — the call never reaches the engine, so the
         // engine would never release them.
         rollbackHostCallables(ctx.registered);
+        releaseFunctionCall(callId.toString());
         throw err;
     }
 }

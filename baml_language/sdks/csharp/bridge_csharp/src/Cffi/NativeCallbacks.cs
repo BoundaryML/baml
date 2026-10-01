@@ -4,6 +4,7 @@ using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 
 using Baml.Proto;
+using Google.Protobuf;
 
 namespace Baml.Cffi;
 
@@ -38,7 +39,8 @@ internal static unsafe class NativeCallbacks
         cleanupApi = api;
         api.Table->RegisterCallback(&OnResult);
         api.Table->RegisterHostReleaseCallback(&OnHostRelease);
-        api.Table->RegisterHostDispatchCallback(&OnHostDispatchV1);
+        api.Table->RegisterHostDispatchV2(&OnHostDispatchV2);
+        api.Table->RegisterHostCancelCallback(&OnHostCancel);
     }
 
     internal static (uint Id, Task<byte[]> Task) AddPending()
@@ -122,6 +124,48 @@ internal static unsafe class NativeCallbacks
                     _ = removed.TrySetException(protocolError);
                 }
             }
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnHostCancel(uint callbackId)
+    {
+        try { HostValueRegistry.Shared.CancelInvocation(callbackId); } catch { }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnHostDispatchV2(byte* content, nuint length)
+    {
+        NativeApi? api = Volatile.Read(ref cleanupApi);
+        if (api is null) return;
+        global::BamlBridge.Cffi.V1.HostInvocation? wire = null;
+        BamlSafeHandle? state = null;
+        OutboundOwnershipScope? controls = null;
+        try
+        {
+            if (length > int.MaxValue || (length != 0 && content is null))
+                throw new InvalidDataException("Invalid host invocation buffer.");
+            wire = global::BamlBridge.Cffi.V1.HostInvocation.Parser.ParseFrom(new ReadOnlySpan<byte>(content, (int)length));
+            state = api.OwnHandle(wire.EffectiveState);
+            controls = OutboundOwnershipScope.Create(new global::BamlBridge.Cffi.V1.BamlOutboundResult { Ok = wire.Cancel }, api);
+            if (wire.CallbackId == 0 || wire.HostValueKey == 0 || wire.Cancel is null)
+                throw new InvalidDataException("Incomplete host invocation controls.");
+            HostInvocation invocation = HostValueRegistry.Shared.TryStartInvocation(
+                wire.HostValueKey, wire.CallbackId, wire.ApplicationArgs.ToByteArray(), out string? diagnostic,
+                wire.HostEnvironment) ?? throw new InvalidDataException(diagnostic);
+            invocation.EffectiveState = state;
+            invocation.Controls = controls;
+            state = null;
+            controls = null;
+            ThreadPool.UnsafeQueueUserWorkItem(
+                static work => _ = HostCallDispatcher.ExecuteAsync(work.Api, work.Invocation),
+                new HostDispatchWork(api, invocation), preferLocal: false);
+        }
+        catch (Exception error)
+        {
+            state?.Dispose();
+            controls?.Dispose();
+            if (wire is not null) HostCallDispatcher.QueueBoundaryException(api, wire.CallbackId, wire.HostEnvironment, error);
         }
     }
 

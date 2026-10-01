@@ -234,6 +234,24 @@ class BamlToHostCall(_message.Message):
     args: _containers.RepeatedCompositeFieldContainer[BamlToHostArg]
     def __init__(self, args: _Optional[_Iterable[_Union[BamlToHostArg, _Mapping]]] = ...) -> None: ...
 
+class HostInvocation(_message.Message):
+    __slots__ = ("host_value_key", "callback_id", "application_args", "effective_state", "host_environment", "cancel", "deadline_ns")
+    HOST_VALUE_KEY_FIELD_NUMBER: _ClassVar[int]
+    CALLBACK_ID_FIELD_NUMBER: _ClassVar[int]
+    APPLICATION_ARGS_FIELD_NUMBER: _ClassVar[int]
+    EFFECTIVE_STATE_FIELD_NUMBER: _ClassVar[int]
+    HOST_ENVIRONMENT_FIELD_NUMBER: _ClassVar[int]
+    CANCEL_FIELD_NUMBER: _ClassVar[int]
+    DEADLINE_NS_FIELD_NUMBER: _ClassVar[int]
+    host_value_key: int
+    callback_id: int
+    application_args: bytes
+    effective_state: int
+    host_environment: int
+    cancel: BamlOutboundValue
+    deadline_ns: int
+    def __init__(self, host_value_key: _Optional[int] = ..., callback_id: _Optional[int] = ..., application_args: _Optional[bytes] = ..., effective_state: _Optional[int] = ..., host_environment: _Optional[int] = ..., cancel: _Optional[_Union[BamlOutboundValue, _Mapping]] = ..., deadline_ns: _Optional[int] = ...) -> None: ...
+
 class BamlToHostArg(_message.Message):
     __slots__ = ("value", "arg_name", "is_optional_arg")
     VALUE_FIELD_NUMBER: _ClassVar[int]

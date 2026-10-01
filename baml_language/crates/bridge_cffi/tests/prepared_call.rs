@@ -16,6 +16,7 @@ fn call_args(target: CallTarget, arg: (&str, i64)) -> Vec<u8> {
     CallFunctionArgs {
         call_id: bridge_cffi::new_function_call_id(),
         call_target: Some(target),
+        invocation: Some(Default::default()),
         kwargs: vec![InboundMapEntry {
             key: Some(Key::StringKey(arg.0.to_string())),
             value: Some(InboundValue {

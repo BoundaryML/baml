@@ -14,6 +14,8 @@ pub struct BexRunResult {
 /// Core runtime API: call functions and introspect parameters.
 #[async_trait]
 pub trait Bex: Send + Sync {
+    /// Nanoseconds in this runtime's fixed monotonic invocation clock domain.
+    fn invocation_clock_ns(&self) -> Result<u64, RuntimeError>;
     /// Freeze relative controls before argument binding or adapter queueing.
     fn bind_invocation_context(
         &self,
@@ -80,6 +82,9 @@ pub trait Bex: Send + Sync {
 
 #[async_trait]
 impl Bex for BexEngine {
+    fn invocation_clock_ns(&self) -> Result<u64, RuntimeError> {
+        BexEngine::invocation_clock_ns(self).map_err(RuntimeError::from)
+    }
     fn bind_invocation_context(
         &self,
         context: FunctionCallContext,

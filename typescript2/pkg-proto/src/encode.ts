@@ -164,6 +164,8 @@ export function encodeCallArgs(
     // Generic TypeVar bindings (`type_args`) — unused by this playground
     // encoder, which only sends positional kwargs.
     typeArgs: [],
+    callTarget: undefined,
+    invocation: { trace: undefined, cancel: undefined, deadlineNs: undefined, inheritedState: 0, hostEnvironment: 0 },
   };
 
   return CallFunctionArgs.encode(args).finish();

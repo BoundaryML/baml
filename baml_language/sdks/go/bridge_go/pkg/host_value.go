@@ -36,9 +36,11 @@ package pkg
 import "C"
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"reflect"
+	"runtime"
 	"runtime/debug"
 	"sync"
 	"sync/atomic"
@@ -191,7 +193,7 @@ func bamlHostDispatch(hostValueKey C.uint64_t, callID C.uint32_t, args *C.uint8_
 //
 // Panics, arity mismatches, and conversion failures are caught and surfaced as
 // `baml.errors.HostCallable` values carrying Go error metadata.
-func runHostCallable(fn reflect.Value, callID uint32, argsBytes []byte) {
+func runHostCallable(fn reflect.Value, callID uint32, argsBytes []byte, invocationContexts ...context.Context) {
 	defer func() {
 		if r := recover(); r != nil {
 			// Best-effort: capture the goroutine's stack trace so the host
@@ -242,7 +244,15 @@ func runHostCallable(fn reflect.Value, callID uint32, argsBytes []byte) {
 	// DynamicClass, DynamicUnion, BamlHandle); we then coerce each to the
 	// declared parameter type.
 	fnType := fn.Type()
-	expectedNumArgs := fnType.NumIn()
+	contextOffset := 0
+	var callbackContext context.Context = context.Background()
+	if len(invocationContexts) != 0 {
+		callbackContext = invocationContexts[0]
+	}
+	if fnType.NumIn() > 0 && fnType.In(0) == reflect.TypeOf((*context.Context)(nil)).Elem() {
+		contextOffset = 1
+	}
+	expectedNumArgs := fnType.NumIn() - contextOffset
 	if fnType.IsVariadic() {
 		// Variadic: at least NumIn-1 fixed args; trailing variadic slice
 		// may be absent or any length.
@@ -259,7 +269,10 @@ func runHostCallable(fn reflect.Value, callID uint32, argsBytes []byte) {
 		return
 	}
 
-	in := make([]reflect.Value, len(rawArgs))
+	in := make([]reflect.Value, len(rawArgs)+contextOffset)
+	if contextOffset != 0 {
+		in[0] = reflect.ValueOf(callbackContext)
+	}
 	for i, raw := range rawArgs {
 		decoded, err := outboundToGo(raw)
 		if err != nil {
@@ -269,12 +282,12 @@ func runHostCallable(fn reflect.Value, callID uint32, argsBytes []byte) {
 		}
 		// Figure out the declared param type for this slot.
 		var paramType reflect.Type
-		if fnType.IsVariadic() && i >= fnType.NumIn()-1 {
+		if fnType.IsVariadic() && i+contextOffset >= fnType.NumIn()-1 {
 			// Inside the variadic slice — declared element type is
 			// `fnType.In(NumIn-1).Elem()`.
 			paramType = fnType.In(fnType.NumIn() - 1).Elem()
 		} else {
-			paramType = fnType.In(i)
+			paramType = fnType.In(i + contextOffset)
 		}
 		conv, ok := coerceToType(decoded, paramType)
 		if !ok {
@@ -282,7 +295,12 @@ func runHostCallable(fn reflect.Value, callID uint32, argsBytes []byte) {
 				fmt.Sprintf("host callable arg %d: cannot convert %T to %s", i, decoded, paramType))
 			return
 		}
-		in[i] = conv
+		in[i+contextOffset] = conv
+	}
+
+	if err := callbackContext.Err(); err != nil {
+		sendHostCallableError(callID, "Cancelled", err.Error())
+		return
 	}
 
 	// Invoke. The Call panics on arity / type mismatch, which we already
@@ -696,4 +714,78 @@ func completeCallSafely(callID uint32, className, message, traceback string) {
 		}
 	}()
 	sendHostCallableError(callID, className, message, withTraceback(traceback))
+}
+
+type invocationStateContextKey struct{}
+type callbackInvocationFrame struct {
+	state  uint64
+	cancel *pb.BamlOutboundValue
+}
+
+var hostInvocationCancellations sync.Map
+
+//export bamlHostDispatchV2
+func bamlHostDispatchV2(request *C.uint8_t, length C.size_t) {
+	if request == nil || length > C.size_t(math.MaxInt32) {
+		return
+	}
+	var envelope pb.HostInvocation
+	if err := proto.Unmarshal(C.GoBytes(unsafe.Pointer(request), C.int(length)), &envelope); err != nil {
+		return
+	}
+	id := envelope.CallbackId
+	frame := &callbackInvocationFrame{state: envelope.EffectiveState, cancel: envelope.Cancel}
+	runtime.SetFinalizer(frame, func(frame *callbackInvocationFrame) {
+		_ = cffi.ReleaseHandle(frame.state)
+		releaseCallbackValue(frame.cancel)
+	})
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), invocationStateContextKey{}, frame))
+	hostInvocationCancellations.Store(id, cancel)
+	hostValues.mu.Lock()
+	fn, ok := hostValues.table[envelope.HostValueKey]
+	hostValues.mu.Unlock()
+	if !ok {
+		cancel()
+		hostInvocationCancellations.Delete(id)
+		sendHostCallableError(id, "KeyError", "host callable is no longer registered")
+		return
+	}
+	go func() {
+		defer hostInvocationCancellations.Delete(id)
+		runHostCallable(fn, id, envelope.ApplicationArgs, ctx)
+		runtime.KeepAlive(frame)
+	}()
+}
+
+//export bamlHostCancel
+func bamlHostCancel(id C.uint32_t) {
+	if cancel, ok := hostInvocationCancellations.Load(uint32(id)); ok {
+		cancel.(context.CancelFunc)()
+	}
+}
+
+func releaseCallbackValue(value *pb.BamlOutboundValue) {
+	if value == nil {
+		return
+	}
+	switch v := value.Value.(type) {
+	case *pb.BamlOutboundValue_HandleValue:
+		if v.HandleValue.HandleType != pb.BamlHandleType_HOST_VALUE_CALLABLE && v.HandleValue.HandleType != pb.BamlHandleType_HOST_VALUE_OPAQUE {
+			_ = cffi.ReleaseHandle(v.HandleValue.Key)
+		}
+	case *pb.BamlOutboundValue_ListValue:
+		for _, child := range v.ListValue.Items {
+			releaseCallbackValue(child)
+		}
+	case *pb.BamlOutboundValue_MapValue:
+		for _, entry := range v.MapValue.Entries {
+			releaseCallbackValue(entry.Value)
+		}
+	case *pb.BamlOutboundValue_ClassValue:
+		for _, entry := range v.ClassValue.Fields {
+			releaseCallbackValue(entry.Value)
+		}
+	case *pb.BamlOutboundValue_UnionVariantValue:
+		releaseCallbackValue(v.UnionVariantValue.Value)
+	}
 }

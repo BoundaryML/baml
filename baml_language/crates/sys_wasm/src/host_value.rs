@@ -97,6 +97,8 @@ use crate::send_wrapper::SendWrapper;
 // most one entry across the whole process. Only the *dispatch callback* is
 // per-runtime (see `WasmHost`).
 
+type HostExecution = (Box<dyn Send + Sync>, Option<SendWrapper<Function>>);
+
 thread_local! {
     /// `u64 → user JS callable`. Populated by [`register_host_callable`] from
     /// the JS encoder; removed by [`host_release_callback`] when the Rust
@@ -112,6 +114,9 @@ thread_local! {
     /// before firing `host_dispatch`; removed by [`complete_host_call`] when
     /// the JS dispatch wrapper completes the invocation. Call ids are globally
     /// unique, so a completion can never resolve a different runtime's call.
+    static HOST_CANCEL_CALLBACK: RefCell<Option<SendWrapper<Function>>> = const { RefCell::new(None) };
+    static EXECUTIONS: RefCell<HashMap<u32, HostExecution>> = RefCell::new(HashMap::new());
+
     static IN_FLIGHT: RefCell<HashMap<u32, InFlightHostCall>> = RefCell::new(HashMap::new());
 
     /// Process-global key minter. Globally unique so release-by-key routing is
@@ -177,12 +182,21 @@ fn next_key() -> u64 {
 fn next_call_id() -> u32 {
     NEXT_CALL_ID.with(|cell| {
         let mut next = cell.borrow_mut();
-        loop {
-            let id = *next;
-            *next = next.wrapping_add(1);
-            if id != 0 {
-                return id;
-            }
+        let id = *next;
+        *next = next.checked_add(1).unwrap_or(0);
+        id
+    })
+}
+
+#[wasm_bindgen(js_name = registerHostCancelCallback)]
+pub fn register_host_cancel_callback(callback: Function) -> bool {
+    HOST_CANCEL_CALLBACK.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if slot.is_some() {
+            false
+        } else {
+            *slot = Some(SendWrapper::new(callback));
+            true
         }
     })
 }
@@ -207,7 +221,9 @@ fn next_call_id() -> u32 {
 /// evict it.
 #[must_use]
 fn insert_in_flight(call_id: u32, operation: SysOp, completion: CompletionHandle) -> bool {
-    let collision = IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id));
+    let collision = call_id == 0
+        || IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id))
+        || EXECUTIONS.with(|cell| cell.borrow().contains_key(&call_id));
     if collision {
         log::error!(
             "host-call id {call_id} collided with a live in-flight entry; \
@@ -251,7 +267,17 @@ struct WasmInflightGuard {
 
 impl Drop for WasmInflightGuard {
     fn drop(&mut self) {
-        let _ = IN_FLIGHT.with(|cell| cell.borrow_mut().remove(&self.call_id));
+        let retired = IN_FLIGHT.with(|cell| cell.borrow_mut().remove(&self.call_id));
+        if retired.is_some() {
+            let callback = EXECUTIONS.with(|cell| {
+                cell.borrow()
+                    .get(&self.call_id)
+                    .and_then(|(_, callback)| callback.clone())
+            });
+            if let Some(callback) = callback {
+                let _ = callback.call1(&JsValue::NULL, &JsValue::from(self.call_id));
+            }
+        }
     }
 }
 
@@ -401,8 +427,15 @@ pub fn test_sync_pending_host_callable_error(key: u64) -> String {
 /// completion.
 #[wasm_bindgen(js_name = completeHostCall)]
 pub fn complete_host_call(call_id: u32, is_error: i32, content: &[u8]) -> bool {
+    // Actual exit retires execution independently of waiter delivery.
+    let _execution = EXECUTIONS.with(|cell| cell.borrow_mut().remove(&call_id));
     let completion = IN_FLIGHT.with(|cell| cell.borrow_mut().remove(&call_id));
     let Some(in_flight) = completion else {
+        // Late payloads still transfer wire owners, including host-owned values.
+        if let Ok(inbound) = InboundValue::decode(content) {
+            drop(inbound_to_external(inbound, &HANDLE_TABLE));
+        }
+        host_release_dispatch::drain();
         log::warn!("completeHostCall for unknown call id {call_id}");
         return false;
     };
@@ -599,6 +632,23 @@ impl WasmHost {
         positional: &[BexExternalValue],
         optional: &IndexMap<String, BexExternalValue>,
     ) -> SysOpOutput<BexExternalValue> {
+        self.call_registered_callable_with_context(
+            originating_sysop,
+            callable,
+            positional,
+            optional,
+            None,
+        )
+    }
+
+    fn call_registered_callable_with_context(
+        &self,
+        originating_sysop: SysOp,
+        callable: &HostValueArc,
+        positional: &[BexExternalValue],
+        optional: &IndexMap<String, BexExternalValue>,
+        ctx: Option<&SysOpContext>,
+    ) -> SysOpOutput<BexExternalValue> {
         let sync_mode = web_sync_mode_active();
         if sync_mode && !matches!(originating_sysop, SysOp::BamlFsRead) {
             return SysOpOutput::err(web_sync_failure(
@@ -608,19 +658,62 @@ impl WasmHost {
         }
 
         let options = CffiHandleTableOptions::for_wire();
-        let encoded = match bridge_ctypes::build_to_host_call(positional, optional, &options) {
-            Ok(to_host_call) => to_host_call.encode_to_vec(),
-            Err(error) => {
-                return SysOpOutput::err(sys_types::VmInternalError::BridgeFailure {
-                    message: format!("failed to encode host-call arguments: {error}"),
-                });
-            }
-        };
-
+        let mut encoded_args = bridge_ctypes::OwnedHostArguments(Some(
+            match bridge_ctypes::build_to_host_call(positional, optional, &options) {
+                Ok(to_host_call) => to_host_call,
+                Err(error) => {
+                    return SysOpOutput::err(sys_types::VmInternalError::BridgeFailure {
+                        message: format!("failed to encode host-call arguments: {error}"),
+                    });
+                }
+            },
+        ));
+        let application_args = encoded_args.0.as_ref().unwrap().encode_to_vec();
         let call_id = next_call_id();
+        let mut frame = match ctx {
+            Some(ctx) => {
+                let Some(capture) = ctx.spawner.capture_invocation() else {
+                    return SysOpOutput::err(sys_types::VmInternalError::BridgeFailure {
+                        message: "host dispatch requires effective invocation state".into(),
+                    });
+                };
+                match bridge_ctypes::build_host_invocation(
+                    capture,
+                    callable.key,
+                    call_id,
+                    application_args.clone(),
+                ) {
+                    Ok(frame) => Some(bridge_ctypes::OwnedHostInvocation(frame)),
+                    Err(error) => {
+                        return SysOpOutput::err(sys_types::VmInternalError::BridgeFailure {
+                            message: error.to_string(),
+                        });
+                    }
+                }
+            }
+            None => None,
+        };
+        let encoded = frame
+            .as_ref()
+            .map_or(application_args, |frame| frame.0.encode_to_vec());
         let (result, completion) = SysOpResult::pending(originating_sysop);
         let inserted = insert_in_flight(call_id, originating_sysop, completion);
         if inserted {
+            let callback = HOST_CANCEL_CALLBACK.with(|slot| slot.borrow().clone());
+            EXECUTIONS.with(|cell| {
+                cell.borrow_mut().insert(
+                    call_id,
+                    (
+                        Box::new((
+                            ctx.cloned(),
+                            HostValueArc::intern(callable.key, callable.kind),
+                            positional.to_vec(),
+                            optional.clone(),
+                        )),
+                        callback,
+                    ),
+                )
+            });
             let call_id_js = JsValue::from_f64(f64::from(call_id));
             let args_js = js_sys::Uint8Array::new_with_length(
                 encoded
@@ -639,7 +732,11 @@ impl WasmHost {
                     });
                     match registered {
                         Some(registered) => {
-                            registered.call2(&JsValue::NULL, &call_id_js, &args_js.into())
+                            if frame.is_some() {
+                                registered.call1(&JsValue::NULL, &args_js.into())
+                            } else {
+                                registered.call2(&JsValue::NULL, &call_id_js, &args_js.into())
+                            }
                         }
                         None => Err(JsValue::from_str(&format!(
                             "host callable key {} is not registered",
@@ -649,11 +746,23 @@ impl WasmHost {
                 }
                 WasmHostDispatch::RuntimeCallback(host_dispatch) => {
                     let key_js = JsValue::from(callable.key);
-                    host_dispatch.call3(&JsValue::NULL, &key_js, &call_id_js, &args_js.into())
+                    if frame.is_some() {
+                        host_dispatch.call1(&JsValue::NULL, &args_js.into())
+                    } else {
+                        host_dispatch.call3(&JsValue::NULL, &key_js, &call_id_js, &args_js.into())
+                    }
                 }
             };
 
+            if dispatched.is_ok() {
+                if let Some(frame) = frame.as_mut() {
+                    frame.handoff();
+                }
+                encoded_args.0 = None;
+            }
             if let Err(error) = dispatched {
+                let execution = EXECUTIONS.with(|cell| cell.borrow_mut().remove(&call_id));
+                drop(execution);
                 let popped = IN_FLIGHT.with(|cell| cell.borrow_mut().remove(&call_id));
                 if let Some(in_flight) = popped {
                     let message = error.as_string().unwrap_or_else(|| format!("{error:?}"));
@@ -693,7 +802,7 @@ impl io::IoNamespaceHost for WasmHost {
         args: Vec<BexExternalValue>,
         type_arg_0: ::sys_types::SapTy,
         _type_arg_1: ::sys_types::SapTy,
-        _ctx: &SysOpContext,
+        ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         // Extract the HostValueArc from the incoming handle. Only
         // compiler-synthesized wrapper closures reach this sysop and they
@@ -738,11 +847,12 @@ impl io::IoNamespaceHost for WasmHost {
             }
         };
         validate_host_output(
-            self.call_registered_callable(
+            self.call_registered_callable_with_context(
                 SysOp::BamlHostCallHostValue,
                 host_arc.as_ref(),
                 &positional,
                 &optional,
+                Some(ctx),
             ),
             expected_wire_ty(&type_arg_0),
         )

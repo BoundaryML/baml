@@ -16,7 +16,7 @@ mod platform;
 
 use std::{
     collections::HashMap,
-    sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError, Weak},
+    sync::{Arc, LazyLock},
 };
 
 use bex_project::Bex;
@@ -90,60 +90,16 @@ fn source_vfs_root() -> vfs::VfsPath {
     vfs::VfsPath::new(vfs::MemoryFS::new())
 }
 
-struct PreparedCallRoute {
-    runtime: Weak<dyn Bex>,
-}
-
-static PREPARED_CALL_RUNTIMES: LazyLock<Mutex<HashMap<u64, Arc<PreparedCallRoute>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
-
-fn prepared_call_runtimes() -> MutexGuard<'static, HashMap<u64, Arc<PreparedCallRoute>>> {
-    PREPARED_CALL_RUNTIMES
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-}
-
-pub(crate) struct PreparedCallRouteGuard {
-    call_id: u64,
-    route: Arc<PreparedCallRoute>,
-}
-
-impl Drop for PreparedCallRouteGuard {
-    fn drop(&mut self) {
-        let mut routes = prepared_call_runtimes();
-        if routes
-            .get(&self.call_id)
-            .is_some_and(|current| Arc::ptr_eq(current, &self.route))
-        {
-            routes.remove(&self.call_id);
-        }
-        drop(routes);
-        if let Some(runtime) = self.route.runtime.upgrade() {
-            runtime.release_prepared_call(bex_project::CallId(self.call_id));
-        }
-    }
-}
-
-pub(crate) fn register_prepared_call_runtime(
-    call_id: u64,
-    runtime: &Arc<dyn Bex>,
-) -> Result<PreparedCallRouteGuard, BridgeError> {
-    let route = Arc::new(PreparedCallRoute {
-        runtime: Arc::downgrade(runtime),
-    });
-    let mut routes = prepared_call_runtimes();
-    if routes.contains_key(&call_id) {
-        return Err(BridgeError::DuplicateCallId(call_id));
-    }
-    routes.insert(call_id, Arc::clone(&route));
-    Ok(PreparedCallRouteGuard { call_id, route })
-}
+pub(crate) static CALL_ALLOCATIONS: LazyLock<Arc<call_allocation::CallAllocationTable>> =
+    LazyLock::new(|| Arc::new(call_allocation::CallAllocationTable::default()));
 
 pub mod baml_to_host;
 pub mod buffer;
+pub mod call_allocation;
 pub mod error;
 pub mod handle_cffi;
 mod identity;
+pub mod invocation_protocol;
 
 pub use baml_to_host::{
     InvocationRequest, decode_invocation_request, error_to_outbound, execute_invocation,
@@ -448,9 +404,32 @@ pub fn initialize_runtime_from_blob(
     )
 }
 
-/// Allocate a new process-unique function-call ID.
+/// Allocate and retain a call against the installed runtime. Zero is failure.
 pub fn new_function_call_id() -> u64 {
-    bex_project::CallId::next().0
+    allocate_function_call().unwrap_or(0)
+}
+
+/// Allocate a runtime-bound call while preserving the startup error for
+/// exception-capable bindings. The native ABI represents failure as zero.
+pub fn allocate_function_call() -> Result<u64, BridgeError> {
+    CALL_ALLOCATIONS.allocate(get_runtime()?)
+}
+
+pub fn invocation_clock_by_id(id: u64) -> Result<u64, BridgeError> {
+    CALL_ALLOCATIONS.clock_ns(id)
+}
+
+pub fn release_function_call_by_id(id: u64) -> bool {
+    CALL_ALLOCATIONS.release(id)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn release_function_call(id: u64) -> i32 {
+    if release_function_call_by_id(id) {
+        0
+    } else {
+        1
+    }
 }
 
 /// Build a function-call context builder for a CFFI-owned call id.
@@ -464,21 +443,7 @@ pub fn function_call_context_builder(
 ///
 /// Returns true on success, false if the runtime is not initialized.
 pub fn cancel_function_call_by_id(id: u64) -> bool {
-    if id == 0 {
-        return false;
-    }
-    let originating_runtime = prepared_call_runtimes()
-        .get(&id)
-        .and_then(|route| route.runtime.upgrade());
-    originating_runtime
-        .map(Ok)
-        .unwrap_or_else(get_runtime)
-        .and_then(|runtime| {
-            runtime
-                .cancel_function_call(bex_project::CallId(id))
-                .map_err(BridgeError::from)
-        })
-        .is_ok()
+    CALL_ALLOCATIONS.cancel(id)
 }
 
 /// Allocate a new process-unique function-call ID.

@@ -26,6 +26,8 @@
 #include <baml_cffi.h>
 
 #include <array>
+#include <atomic>
+#include <climits>
 #include <cstdint>
 #include <exception>
 #include <functional>
@@ -49,9 +51,9 @@
 #include <typeinfo>
 #endif
 
-extern "C" inline void baml_cpp_host_dispatch_trampoline(
-    uint64_t host_value_key, uint32_t call_id, const uint8_t* args,
-    size_t length);
+extern "C" inline void baml_cpp_host_dispatch_trampoline(const uint8_t* request,
+                                                         size_t length);
+extern "C" inline void baml_cpp_host_cancel_trampoline(uint32_t callback_id);
 extern "C" inline void baml_cpp_host_release_trampoline(
     uint64_t host_value_key);
 
@@ -121,7 +123,8 @@ class host_value_registry {
   };
 
   host_value_registry() {
-    api().register_host_dispatch_callback(&baml_cpp_host_dispatch_trampoline);
+    api().register_host_dispatch_v2(&baml_cpp_host_dispatch_trampoline);
+    api().register_host_cancel_callback(&baml_cpp_host_cancel_trampoline);
     api().register_host_release_callback(&baml_cpp_host_release_trampoline);
   }
 
@@ -129,6 +132,20 @@ class host_value_registry {
   std::unordered_map<uint64_t, entry> table_;
   uint64_t next_key_ = 1;
 };
+
+struct callback_frame {
+  pb::HostInvocation wire;
+  std::shared_ptr<invocation_state> state;
+  std::atomic<bool> cancelled{false};
+  ~callback_frame() {
+    if (!state && wire.effective_state() != 0)
+      api().handle_release(wire.effective_state());
+    if (wire.has_cancel()) release_control_value(wire.cancel());
+  }
+};
+inline std::mutex callback_frames_mutex;
+inline std::unordered_map<uint32_t, std::weak_ptr<callback_frame>>
+    callback_frames;
 
 // ---------------------------------------------------------------------------
 // Wire helpers
@@ -492,9 +509,15 @@ void encode_callable(pb::InboundValue& value_msg, std::function<R(Ps...)> fn,
 }  // namespace detail
 }  // namespace baml
 
-extern "C" inline void baml_cpp_host_dispatch_trampoline(
-    uint64_t host_value_key, uint32_t call_id, const uint8_t* args,
-    size_t length) {
+extern "C" inline void baml_cpp_host_dispatch_trampoline(const uint8_t* args,
+                                                         size_t length) {
+  baml::detail::pb::HostInvocation wire;
+  if (length > static_cast<size_t>(INT_MAX) ||
+      !wire.ParseFromArray(args, static_cast<int>(length)))
+    return;
+  const uint64_t host_value_key = wire.host_value_key();
+  const uint32_t call_id = wire.callback_id();
+  std::shared_ptr<baml::detail::callback_frame> frame;
   // Bridge-layer faults (not user exceptions) also complete through
   // complete_host_call -- the C ABI's only completion channel -- as a
   // HostCallable error whose _handle carries a synthesized baml::error
@@ -512,10 +535,13 @@ extern "C" inline void baml_cpp_host_dispatch_trampoline(
   // bytes.assign can throw bad_alloc, the registry lock can throw, and the
   // std::thread constructor throws system_error under thread exhaustion.
   try {
+    frame = std::make_shared<baml::detail::callback_frame>();
+    frame->wire = std::move(wire);
+    frame->state = std::make_shared<baml::detail::invocation_state>(
+        frame->wire.effective_state());
     std::vector<uint8_t> bytes;
-    if (args != nullptr && length != 0) {
-      bytes.assign(args, args + length);
-    }
+    const auto& application = frame->wire.application_args();
+    bytes.assign(application.begin(), application.end());
     auto dispatcher =
         baml::detail::host_value_registry::instance().find_dispatcher(
             host_value_key);
@@ -529,23 +555,51 @@ extern "C" inline void baml_cpp_host_dispatch_trampoline(
     // callable runs on its own thread (the analog of Python's spawned
     // tokio task). run_host_callable completes the call on every exit
     // path.
+    {
+      std::lock_guard<std::mutex> lock(baml::detail::callback_frames_mutex);
+      baml::detail::callback_frames.emplace(call_id, frame);
+    }
     std::thread([dispatcher = std::move(dispatcher), bridge_failure, call_id,
-                 bytes = std::move(bytes)]() mutable {
+                 frame, bytes = std::move(bytes)]() mutable {
+      baml::detail::current_invocation_state = frame->state;
       try {
-        dispatcher(call_id, std::move(bytes));
+        if (frame->cancelled.load())
+          baml::detail::complete_host_error(call_id, "");
+        else
+          dispatcher(call_id, std::move(bytes));
       } catch (...) {
         bridge_failure(
             "host callable dispatch failed outside the user callable");
       }
+      baml::detail::current_invocation_state.reset();
+      std::lock_guard<std::mutex> lock(baml::detail::callback_frames_mutex);
+      baml::detail::callback_frames.erase(call_id);
     }).detach();
   } catch (...) {
+    if (!frame) {
+      baml::detail::api().handle_release(wire.effective_state());
+      if (wire.has_cancel()) baml::detail::release_control_value(wire.cancel());
+    }
     try {
+      {
+        std::lock_guard<std::mutex> lock(baml::detail::callback_frames_mutex);
+        baml::detail::callback_frames.erase(call_id);
+      }
       bridge_failure("host callable dispatch could not be spawned");
     } catch (...) {
-      // Even the failure path failed (e.g. allocation): swallowing is all
-      // the ABI permits -- that call hangs rather than the process
-      // hitting UB.
+      // A value-less failure still reports actual host exit without allocating.
+      baml::detail::api().complete_host_call(call_id, 1, nullptr, 0);
     }
+  }
+}
+
+extern "C" inline void baml_cpp_host_cancel_trampoline(uint32_t callback_id) {
+  try {
+    std::lock_guard<std::mutex> lock(baml::detail::callback_frames_mutex);
+    auto it = baml::detail::callback_frames.find(callback_id);
+    if (it != baml::detail::callback_frames.end())
+      if (auto frame = it->second.lock()) frame->cancelled.store(true);
+  } catch (...) {
   }
 }
 

@@ -13,9 +13,10 @@ use bex_project::HostValueArc;
 use host_value::retain_host_callable;
 pub use host_value::{
     WasmHost, complete_host_call, mint_host_value_key, register_host_callable,
-    register_host_value_release_callback, release_host_callable, test_fire_host_release,
-    test_host_callable_count, test_host_release_callback_installed, test_in_flight_host_call_count,
-    test_missing_host_callable_error, test_sync_pending_host_callable_error, with_web_sync_mode,
+    register_host_cancel_callback, register_host_value_release_callback, release_host_callable,
+    test_fire_host_release, test_host_callable_count, test_host_release_callback_installed,
+    test_in_flight_host_call_count, test_missing_host_callable_error,
+    test_sync_pending_host_callable_error, with_web_sync_mode,
 };
 #[doc(hidden)]
 pub use send_wrapper::{SendFuture, SendWrapper};

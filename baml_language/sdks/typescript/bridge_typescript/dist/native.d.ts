@@ -156,6 +156,8 @@ export declare function _getHostCallOrigin(callId: number): string | null
  */
 export declare function _handleRefcount(key: HandleKey): number | null
 
+export declare function _hostInvocationFrame(execution: object): BamlHandle
+
 /**
  * Test-only: the number of live `HANDLE_TABLE` rows (a refcounted engine-heap
  * row counts once however many owners it has).
@@ -231,6 +233,8 @@ export interface HandleKey {
   high: number
 }
 
+export declare function invocationClockNs(callId: string): string
+
 /**
  * Mint a fresh host-value key, drawing from the shared callable+opaque
  * counter so the engine sees one globally-unique keyspace. Returned to
@@ -288,6 +292,8 @@ export declare function registerHostCallable(callable: (callId: number, argsByte
 export declare function registerHostValueReleaseCallback(callback: (key: HandleKey) => void): void
 
 export declare function registerUnhandledSpawnErrorCallback(callback: (errorBytes: Buffer, cancelled: boolean) => void): void
+
+export declare function releaseFunctionCall(callId: string): boolean
 
 /**
  * Release a host callable the inbound encoder registered but never handed to

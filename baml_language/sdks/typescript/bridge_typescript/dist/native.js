@@ -596,7 +596,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { BamlAudio, BamlCallContext, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, _discardHostCallArgs, _finishHostCallExecution, _getHostCallOrigin, _handleRefcount, _liveHandleCount, _releaseWireHandle, _seedFunctionRefHandle, _seedGenericMediaHandle, _seedHeapHandle, _startHostCallExecution, cancelFunctionCall, completeHostCall, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, mintHostValueKey, newFunctionCall, registerHostCallable, registerHostValueReleaseCallback, registerUnhandledSpawnErrorCallback, releaseHostCallable, shutdownRuntime } = nativeBinding
+const { BamlAudio, BamlCallContext, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, _discardHostCallArgs, _finishHostCallExecution, _getHostCallOrigin, _handleRefcount, _hostInvocationFrame, _liveHandleCount, _releaseWireHandle, _seedFunctionRefHandle, _seedGenericMediaHandle, _seedHeapHandle, _startHostCallExecution, cancelFunctionCall, completeHostCall, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, invocationClockNs, mintHostValueKey, newFunctionCall, registerHostCallable, registerHostValueReleaseCallback, registerUnhandledSpawnErrorCallback, releaseFunctionCall, releaseHostCallable, shutdownRuntime } = nativeBinding
 export { BamlAudio }
 export { BamlCallContext }
 export { BamlHandle }
@@ -608,6 +608,7 @@ export { _discardHostCallArgs }
 export { _finishHostCallExecution }
 export { _getHostCallOrigin }
 export { _handleRefcount }
+export { _hostInvocationFrame }
 export { _liveHandleCount }
 export { _releaseWireHandle }
 export { _seedFunctionRefHandle }
@@ -620,10 +621,12 @@ export { getBridgeRuntimeVersion }
 export { getRuntime }
 export { getToolchainVersion }
 export { getVersion }
+export { invocationClockNs }
 export { mintHostValueKey }
 export { newFunctionCall }
 export { registerHostCallable }
 export { registerHostValueReleaseCallback }
 export { registerUnhandledSpawnErrorCallback }
+export { releaseFunctionCall }
 export { releaseHostCallable }
 export { shutdownRuntime }

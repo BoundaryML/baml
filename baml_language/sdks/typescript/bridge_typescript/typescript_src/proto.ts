@@ -19,12 +19,13 @@ import {
     _releaseWireHandle,
     getRuntime,
     newFunctionCall,
+    releaseFunctionCall,
 } from './native.js';
 import { attachCallContext } from './call_context.js';
 import { BamlStream } from './stream.js';
 import { BamlFunctionSpec } from './function_spec.js';
 import { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInvalidArgumentError, BamlPanic, type BamlErrorDetail } from './errors.js';
-import { handleExitPanic, runHostCallback } from './platform.js';
+import { handleExitPanic, runHostCallback, currentInvocationState } from './platform.js';
 import {
     registerHostOpaque,
     releaseHostOpaque,
@@ -473,6 +474,7 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
             typeArgs,
             functionName: options.functionName,
             functionHandle: options.functionHandle,
+            invocation: { inheritedState: currentInvocationState(), hostEnvironment: callId.toString() },
         });
         return Buffer.from(CallFunctionArgs.encode(msg).finish());
     } catch (err) {
@@ -481,6 +483,7 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
         // life of the process — the call never reaches the engine, so the
         // engine would never release them.
         rollbackHostCallables(ctx.registered);
+        releaseFunctionCall(callId.toString());
         throw err;
     }
 }

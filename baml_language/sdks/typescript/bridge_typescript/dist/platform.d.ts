@@ -6,6 +6,7 @@
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
 import type { BamlPanic } from './errors.js';
+export declare function currentInvocationState(): string | undefined;
 /** Capture the SDK entry, rather than the lifetime of a registered callable. */
 export declare function captureCallbackContext(callId: bigint): () => void;
 /** Each execution owns a child context through Promise settlement/cleanup. */

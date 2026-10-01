@@ -123,9 +123,9 @@ impl io::IoNamespaceHost for NativeSysOps {
                 });
             }
         };
-        let encoded: Vec<u8> =
+        let mut encoded_args = bridge_ctypes::OwnedHostArguments(Some(
             match bridge_ctypes::build_to_host_call(&positional, &optional, &options) {
-                Ok(to_host_call) => to_host_call.encode_to_vec(),
+                Ok(to_host_call) => to_host_call,
                 Err(e) => {
                     // Arg encoding is bridge-side serialization, not a
                     // host-language error. A failure here means the engine
@@ -136,10 +136,28 @@ impl io::IoNamespaceHost for NativeSysOps {
                         message: format!("failed to encode host-call arguments: {e}"),
                     });
                 }
-            };
+            },
+        ));
+        let encoded = encoded_args.0.as_ref().unwrap().encode_to_vec();
 
         // Allocate a fresh call id and create a CompletionHandle.
         let call_id = host_dispatch::next_call_id();
+        let Some(capture) = ctx.spawner.capture_invocation() else {
+            return SysOpOutput::err(VmInternalError::BridgeFailure {
+                message: "host dispatch requires an effective invocation frame".into(),
+            });
+        };
+        let mut frame = bridge_ctypes::OwnedHostInvocation(
+            match bridge_ctypes::build_host_invocation(capture, host_arc.key, call_id, encoded) {
+                Ok(envelope) => envelope,
+                Err(error) => {
+                    return SysOpOutput::err(VmInternalError::BridgeFailure {
+                        message: error.to_string(),
+                    });
+                }
+            },
+        );
+        let envelope = frame.0.encode_to_vec();
         let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
 
         // On a (2^32-wrap) id collision `insert` returns `false` after failing
@@ -153,7 +171,7 @@ impl io::IoNamespaceHost for NativeSysOps {
             call_id,
             origin_call_id,
             completion,
-            Box::new((ctx.clone(), host_arc.clone(), positional, optional)),
+            Box::new((ctx.clone(), host_arc, positional, optional)),
         ) {
             // The sysop future owns result delivery. If cancelled, its guard
             // retires the waiter; a bridge execution lease independently keeps
@@ -170,16 +188,21 @@ impl io::IoNamespaceHost for NativeSysOps {
             // fast-fail missing-callable cases before this point — but the
             // engine-side contract has to be self-enforcing for any new
             // bridge that doesn't pre-check.)
-            if !host_dispatch::fire_dispatch(host_arc.key, call_id, &encoded) {
-                if let Some(c) = host_dispatch::take(call_id) {
-                    c.complete(Err(OpError::new(
+            host_dispatch::retain_abi_execution(call_id);
+            if !host_dispatch::fire_dispatch_v2(&envelope) {
+                host_dispatch::complete_with_error(
+                    call_id,
+                    OpError::new(
                         SysOp::BamlHostCallHostValue,
                         sys_types::VmInternalError::BridgeFailure {
                             message: "no host bridge registered for host-value dispatch"
                                 .to_string(),
                         },
-                    )));
-                }
+                    ),
+                );
+            } else {
+                frame.handoff();
+                encoded_args.0 = None;
             }
             Some(guard)
         } else {

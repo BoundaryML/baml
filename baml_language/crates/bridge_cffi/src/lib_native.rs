@@ -35,8 +35,8 @@ pub use ffi::{
         baml_media_url,
     },
     host_value::{
-        HostDispatchFn, complete_host_call, register_host_dispatch_callback,
-        register_host_release_callback,
+        HostDispatchFn, complete_host_call, register_host_cancel_callback,
+        register_host_dispatch_callback, register_host_dispatch_v2, register_host_release_callback,
     },
     runtime::{
         BamlBridgeInfoV1, create_baml_runtime, destroy_baml_runtime,
@@ -157,4 +157,29 @@ fn call_function_inner(encoded_args: *const u8, length: usize, id: u32) -> Resul
     });
 
     Ok(())
+}
+
+/// Reports the fixed native invocation contract. Wire messages are unversioned.
+#[unsafe(no_mangle)]
+pub extern "C" fn invocation_protocol_version() -> u32 {
+    1
+}
+
+/// Read the original runtime clock. The output is untouched on failure.
+/// # Safety
+/// `out_now` must point to writable u64 storage unless null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn invocation_clock_ns(call_id: u64, out_now: *mut u64) -> BamlCffiStatus {
+    if out_now.is_null() {
+        return BamlCffiStatus::UnexpectedNullptr;
+    }
+    match crate::invocation_clock_by_id(call_id) {
+        Ok(now) => {
+            unsafe {
+                out_now.write(now);
+            }
+            BamlCffiStatus::Ok
+        }
+        Err(_) => BamlCffiStatus::InvalidHandle,
+    }
 }

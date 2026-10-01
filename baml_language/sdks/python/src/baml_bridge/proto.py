@@ -31,6 +31,7 @@ from .baml_py import (
     cancel_function_call,
     get_runtime as _get_runtime,
     new_function_call,
+    release_function_call,
     register_host_callable,
     _release_wire_handle,
     release_host_callable,
@@ -784,13 +785,21 @@ def encode_call_args(
     """
     if call_id == 0:
         raise ValueError("call_id must be a nonzero uint64")
-    if function_name is not None and function_handle is not None:
-        raise ValueError("exactly one BAML call target may be set")
     registered: List[int] = []
     cloned_handles: List[int] = []
     try:
+        if function_name is not None and function_handle is not None:
+            raise ValueError("exactly one BAML call target may be set")
         args = baml_inbound_pb2.CallFunctionArgs()
         args.call_id = call_id
+        args.invocation.SetInParent()
+        args.invocation.host_environment = call_id
+        from ._dispatch import _current_invocation
+
+        inherited = _current_invocation.get()
+        if inherited is not None:
+            # Retain through preparation; controls borrow, never drain this key.
+            args.invocation.inherited_state = inherited._key_for_invocation()
         if function_name is not None:
             args.function_name = function_name
         elif function_handle is not None:
@@ -814,6 +823,7 @@ def encode_call_args(
                     entry.type_value.CopyFrom(wire_ty)
         return args.SerializeToString()
     except BaseException:
+        release_function_call(call_id)
         # Roll back any host callables registered before the failure.
         for key in registered:
             try:

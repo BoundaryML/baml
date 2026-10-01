@@ -8,11 +8,13 @@ import (
 	"math"
 	"math/big"
 	"os"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/boundaryml/baml-go/internal/cffi"
 	"google.golang.org/protobuf/proto"
@@ -385,6 +387,12 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 	if engineCallID == 0 {
 		return Value{}, errors.New("BAML returned an invalid zero call ID")
 	}
+	defer nativeReleaseFunctionCall(engineCallID)
+	defer runtime.KeepAlive(ctx)
+	options, err := invocationOptions(ctx, engineCallID)
+	if err != nil {
+		return Value{}, err
+	}
 	call := &pendingCall{result: make(chan []byte, 1)}
 	callbackID := reservePendingCall(call)
 
@@ -393,6 +401,7 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 		args,
 		typeArgs,
 		namedCallTarget(function),
+		options,
 	)
 	if err != nil {
 		pendingCalls.Delete(callbackID)
@@ -430,6 +439,12 @@ func callHandle(ctx context.Context, handleKey uint64, args map[string]Input) (V
 	if engineCallID == 0 {
 		return Value{}, errors.New("BAML returned an invalid zero call ID")
 	}
+	defer nativeReleaseFunctionCall(engineCallID)
+	defer runtime.KeepAlive(ctx)
+	options, err := invocationOptions(ctx, engineCallID)
+	if err != nil {
+		return Value{}, err
+	}
 	call := &pendingCall{result: make(chan []byte, 1)}
 	callbackID := reservePendingCall(call)
 	encoded, transaction, err := encodeCallForDispatchWithTargetAndTypeArgs(
@@ -437,6 +452,7 @@ func callHandle(ctx context.Context, handleKey uint64, args map[string]Input) (V
 		args,
 		nil,
 		handleCallTarget(handleKey),
+		options,
 	)
 	if err != nil {
 		pendingCalls.Delete(callbackID)
@@ -523,6 +539,7 @@ func encodeCallForDispatchWithTargetAndTypeArgs(
 	args map[string]Input,
 	typeArgs []TypeArgument,
 	target *callTarget,
+	options ...*cffi.InvocationOptions,
 ) ([]byte, *inputTransaction, error) {
 	transaction := &inputTransaction{}
 	failed := true
@@ -574,9 +591,13 @@ func encodeCallForDispatchWithTargetAndTypeArgs(
 	}
 
 	callArgs := &cffi.CallFunctionArgs{
-		CallId:   callID,
-		Kwargs:   kwargs,
-		TypeArgs: encodedTypeArgs,
+		CallId:     callID,
+		Kwargs:     kwargs,
+		TypeArgs:   encodedTypeArgs,
+		Invocation: &cffi.InvocationOptions{HostEnvironment: callID},
+	}
+	if len(options) != 0 {
+		callArgs.Invocation = options[0]
 	}
 	if target != nil && target.functionName != nil {
 		callArgs.CallTarget = &cffi.CallFunctionArgs_FunctionName{FunctionName: *target.functionName}
@@ -775,4 +796,27 @@ func outboundFailureIdentity(value *cffi.BamlOutboundValue) (string, string) {
 // when the bridge unexpectedly receives an ok result arm.
 func UnexpectedNeverReturn(function string) error {
 	return fmt.Errorf("BAML never-returning function %q returned successfully", function)
+}
+
+func invocationOptions(ctx context.Context, id uint64) (*cffi.InvocationOptions, error) {
+	options := &cffi.InvocationOptions{HostEnvironment: id}
+	if carrier, ok := ctx.Value(invocationStateContextKey{}).(*invocationStateCarrier); ok {
+		options.InheritedState = carrier.state
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		now, err := nativeInvocationClockNs(id)
+		if err != nil {
+			return nil, err
+		}
+		remaining := time.Until(deadline)
+		absolute := now
+		if remaining > 0 {
+			if uint64(remaining) > math.MaxUint64-now {
+				return nil, errors.New("BAML deadline overflows invocation clock")
+			}
+			absolute += uint64(remaining)
+		}
+		options.DeadlineNs = &absolute
+	}
+	return options, nil
 }

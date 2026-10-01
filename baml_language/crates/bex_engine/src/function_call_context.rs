@@ -2,7 +2,11 @@ use bex_events::ids::BoundaryId;
 use indexmap::IndexMap;
 use sys_types::{CallId, CancellationToken};
 
-use crate::{invocation::InvocationDeadline, logger::TraceLogger, thread::TaskCancel};
+use crate::{
+    invocation::{InvocationClock, InvocationDeadline},
+    logger::TraceLogger,
+    thread::TaskCancel,
+};
 
 /// Retained cancellation inputs and absolute deadline for callback/re-entry,
 /// independent of the parent's waiter or active-call registration.
@@ -10,6 +14,29 @@ use crate::{invocation::InvocationDeadline, logger::TraceLogger, thread::TaskCan
 pub struct InheritedInvocationState {
     pub(crate) engine_id: bex_events::ids::EngineId,
     pub(crate) cancellation: TaskCancel,
+    pub(crate) context: btel_types::context::Context,
+    pub(crate) telemetry: Option<bex_vm::telemetry::ThreadSpawnContext>,
+    pub(crate) host_environment: u64,
+}
+
+/// Engine-owned immutable callback frame and its concrete token projection.
+#[derive(Clone)]
+pub struct InvocationCapture {
+    pub runtime: std::sync::Arc<crate::BexEngine>,
+    pub state: InheritedInvocationState,
+    pub cancel: Option<bex_external_types::BexExternalValue>,
+}
+
+impl InvocationCapture {
+    pub fn host_environment(&self) -> u64 {
+        self.state.host_environment
+    }
+    pub fn deadline_ns(&self) -> Option<u64> {
+        self.state
+            .cancellation
+            .deadline()
+            .and_then(|deadline| self.runtime.invocation_deadline_ns(deadline))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -42,11 +69,15 @@ pub struct FunctionCallContext {
     pub logger: TraceLogger,
     pub cancel: CancellationToken,
     /// Actual generated `baml.spawn.CancelToken` handles, including composites.
-    pub cancel_tokens: Vec<bex_external_types::Handle>,
+    pub cancel_tokens: Vec<bex_external_types::BexExternalValue>,
     pub inherited_state: Option<InheritedInvocationState>,
+    pub trace_options: Option<bex_vm_types::trace::TraceOptionsData>,
+    pub trace_reservation: Option<std::sync::Arc<bex_vm_types::trace::ReservedSpanData>>,
+    pub host_environment: u64,
     // A relative timeout is consumed at the first runtime binding boundary.
     // All subsequent preparation/execution paths carry only `deadline`.
     pub(crate) timeout: Option<std::time::Duration>,
+    pub(crate) deadline_ns: Option<u64>,
     pub(crate) deadline: Option<InvocationDeadline>,
     pub(crate) bound_runtime: Option<bex_events::ids::EngineId>,
 
@@ -70,9 +101,13 @@ pub struct FunctionCallContextBuilder {
     boundary: BoundaryContext,
     logger: TraceLogger,
     cancel: Option<CancellationToken>,
-    cancel_tokens: Vec<bex_external_types::Handle>,
+    cancel_tokens: Vec<bex_external_types::BexExternalValue>,
     inherited_state: Option<InheritedInvocationState>,
+    trace_options: Option<bex_vm_types::trace::TraceOptionsData>,
+    trace_reservation: Option<std::sync::Arc<bex_vm_types::trace::ReservedSpanData>>,
+    host_environment: u64,
     timeout: Option<std::time::Duration>,
+    deadline_ns: Option<u64>,
 
     type_args: Option<IndexMap<String, baml_type::RuntimeTy>>,
     type_defs: Option<IndexMap<String, bex_vm_types::types::PortableTypeDef>>,
@@ -88,7 +123,11 @@ impl FunctionCallContextBuilder {
             cancel: None,
             cancel_tokens: Vec::new(),
             inherited_state: None,
+            trace_options: None,
+            trace_reservation: None,
+            host_environment: 0,
             timeout: None,
+            deadline_ns: None,
             type_args: None,
             type_defs: None,
         }
@@ -103,7 +142,11 @@ impl FunctionCallContextBuilder {
             cancel: self.cancel.unwrap_or_default(),
             cancel_tokens: self.cancel_tokens,
             inherited_state: self.inherited_state,
+            trace_options: self.trace_options,
+            trace_reservation: self.trace_reservation,
+            host_environment: self.host_environment,
             timeout: self.timeout,
+            deadline_ns: self.deadline_ns,
             deadline: None,
             bound_runtime: None,
 
@@ -150,6 +193,15 @@ impl FunctionCallContextBuilder {
 
     #[must_use]
     pub fn with_cancel_tokens(mut self, tokens: Vec<bex_external_types::Handle>) -> Self {
+        self.cancel_tokens = tokens
+            .into_iter()
+            .map(bex_external_types::BexExternalValue::Handle)
+            .collect();
+        self
+    }
+
+    #[must_use]
+    pub fn with_cancel_values(mut self, tokens: Vec<bex_external_types::BexExternalValue>) -> Self {
         self.cancel_tokens = tokens;
         self
     }
@@ -165,12 +217,43 @@ impl FunctionCallContextBuilder {
         self.timeout = Some(timeout);
         self
     }
+
+    /// Absolute deadline in the owning runtime's invocation clock domain.
+    #[must_use]
+    pub fn with_deadline_ns(mut self, deadline_ns: u64) -> Self {
+        self.deadline_ns = Some(deadline_ns);
+        self
+    }
+
+    #[must_use]
+    pub fn with_trace_options(mut self, options: bex_vm_types::trace::TraceOptionsData) -> Self {
+        self.trace_options = Some(options);
+        self.trace_reservation = None;
+        self
+    }
+
+    #[must_use]
+    pub fn with_trace_reservation(
+        mut self,
+        reservation: std::sync::Arc<bex_vm_types::trace::ReservedSpanData>,
+    ) -> Self {
+        self.trace_reservation = Some(reservation);
+        self.trace_options = None;
+        self
+    }
+
+    #[must_use]
+    pub fn with_host_environment(mut self, environment: u64) -> Self {
+        self.host_environment = environment;
+        self
+    }
 }
 
 impl FunctionCallContext {
     pub(crate) fn bind_timeout(
         &mut self,
         runtime: bex_events::ids::EngineId,
+        clock: InvocationClock,
     ) -> Result<(), crate::EngineError> {
         if self.bound_runtime.is_some_and(|owner| owner != runtime)
             || self
@@ -185,6 +268,10 @@ impl FunctionCallContext {
         self.bound_runtime = Some(runtime);
         if let Some(timeout) = self.timeout.take() {
             self.deadline = Some(InvocationDeadline::after(timeout)?);
+        }
+        if let Some(deadline_ns) = self.deadline_ns.take() {
+            let absolute = clock.deadline(deadline_ns)?;
+            self.deadline = Some(self.deadline.map_or(absolute, |own| own.earliest(absolute)));
         }
         Ok(())
     }

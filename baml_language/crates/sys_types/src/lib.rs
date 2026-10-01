@@ -142,7 +142,11 @@ impl CallId {
     /// bridges (e.g. Python) when multiple overlapping calls can occur.
     #[inline]
     pub fn next() -> Self {
-        CallId(NEXT_CALL_ID.fetch_add(1, Ordering::Relaxed))
+        CallId(
+            NEXT_CALL_ID
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+                .unwrap_or(0),
+        )
     }
 }
 
@@ -564,6 +568,11 @@ pub type SysOpFn = Arc<
 pub trait VmSpawner<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>>:
     Send + Sync
 {
+    /// Engine-owned callback frame. Transport layers may downcast it through
+    /// the runtime facade; application SDK packages never participate here.
+    fn capture_invocation(&self) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
+        None
+    }
     /// Spawn a a new VM with the given function name and arguments.
     ///
     /// Generally just calls `BexEngine::call_function`.

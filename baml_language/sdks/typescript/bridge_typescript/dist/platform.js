@@ -5,8 +5,13 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
-import { AsyncResource } from 'node:async_hooks';
-import { _startHostCallExecution, _finishHostCallExecution } from './native.js';
+import { AsyncResource, AsyncLocalStorage } from 'node:async_hooks';
+import { _startHostCallExecution, _finishHostCallExecution, _discardHostCallArgs, _hostInvocationFrame } from './native.js';
+const invocationFrames = new AsyncLocalStorage();
+export function currentInvocationState() {
+    const key = invocationFrames.getStore()?.key;
+    return key === undefined ? undefined : ((BigInt(key.high >>> 0) << 32n) | BigInt(key.low >>> 0)).toString();
+}
 const callbackContexts = new Map();
 /** Capture the SDK entry, rather than the lifetime of a registered callable. */
 export function captureCallbackContext(callId) {
@@ -23,8 +28,10 @@ export function captureCallbackContext(callId) {
 const activeHostExecutions = new Map();
 /** Each execution owns a child context through Promise settlement/cleanup. */
 export function runHostCallback(callId, args, callback, lease) {
-    if (!lease)
-        throw new Error("native host dispatch has no execution lease");
+    if (!lease) {
+        _discardHostCallArgs(args);
+        return;
+    }
     const origin = _startHostCallExecution(lease);
     if (origin === null || origin === undefined) {
         _finishHostCallExecution(lease);
@@ -44,7 +51,8 @@ export function runHostCallback(callId, args, callback, lease) {
             }
         };
         try {
-            const completion = resource.runInAsyncScope(callback);
+            const frame = _hostInvocationFrame(lease);
+            const completion = resource.runInAsyncScope(() => invocationFrames.run(frame, callback));
             if (completion) {
                 execution.completion = completion.finally(finish);
                 return execution.completion;

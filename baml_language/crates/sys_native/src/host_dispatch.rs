@@ -57,6 +57,26 @@ pub type HostDispatchFn =
 
 static HOST_DISPATCH_FN: OnceCell<HostDispatchFn> = OnceCell::new();
 
+pub type HostDispatchV2 = extern "C" fn(request: *const u8, length: usize);
+pub type HostCancelFn = extern "C" fn(callback_id: u32);
+static HOST_DISPATCH_V2: OnceCell<HostDispatchV2> = OnceCell::new();
+static HOST_CANCEL_FN: OnceCell<HostCancelFn> = OnceCell::new();
+pub fn set_dispatch_v2(callback: HostDispatchV2) {
+    let _ = HOST_DISPATCH_V2.set(callback);
+}
+pub fn set_cancel_fn(callback: HostCancelFn) {
+    let _ = HOST_CANCEL_FN.set(callback);
+}
+pub fn fire_dispatch_v2(request: &[u8]) -> bool {
+    match HOST_DISPATCH_V2.get() {
+        Some(callback) => {
+            callback(request.as_ptr(), request.len());
+            true
+        }
+        None => false,
+    }
+}
+
 /// Install the dispatch callback. First-call-wins; subsequent calls are
 /// silently ignored (consistent with `register_callback` semantics).
 pub fn set_dispatch_fn(f: HostDispatchFn) {
@@ -108,6 +128,7 @@ struct InflightCall {
     origin: CallId,
     on_cancel: Option<Box<dyn FnOnce() + Send + Sync>>,
     execution: Option<HostExecutionPhase>,
+    abi_execution: bool,
     // Includes the owning invocation context and original argument/callable
     // owners. Wire host keys are borrowed and cannot keep those owners alive.
     resources: Option<Box<dyn Send + Sync>>,
@@ -123,12 +144,9 @@ static NEXT_CALL_ID: AtomicU32 = AtomicU32::new(1);
 
 /// Allocate a nonzero candidate ID. Insertion rejects collisions after wrap.
 pub fn next_call_id() -> u32 {
-    loop {
-        let id = NEXT_CALL_ID.fetch_add(1, Ordering::Relaxed);
-        if id != 0 {
-            return id;
-        }
-    }
+    NEXT_CALL_ID
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+        .unwrap_or(0)
 }
 
 /// Register a completion for a fresh ID. The complete live set includes host
@@ -167,13 +185,7 @@ pub fn insert_with_resources(
     resources: Box<dyn Send + Sync>,
 ) -> bool {
     let mut table = TABLE.write().unwrap();
-    let collision = table.contains_key(&call_id);
-    debug_assert!(
-        !collision,
-        "host-call id {call_id} collided with a live in-flight entry; the u32 \
-         call-id space wrapped while an entry was still pending (this should be \
-         impossible now that cancelled calls are evicted via InflightGuard)"
-    );
+    let collision = call_id == 0 || table.contains_key(&call_id);
     if collision {
         // Release builds strip the assert above, so guard at runtime too.
         drop(table);
@@ -196,6 +208,7 @@ pub fn insert_with_resources(
             origin,
             on_cancel: None,
             execution: None,
+            abi_execution: false,
             resources: Some(resources),
         },
     );
@@ -219,11 +232,32 @@ pub fn origin_call_id(call_id: u32) -> Option<CallId> {
 pub fn retain_execution(call_id: u32) -> Option<HostExecutionGuard> {
     let mut table = TABLE.write().unwrap();
     let call = table.get_mut(&call_id)?;
-    if call.completion.is_none() || call.execution.is_some() {
+    if call.completion.is_none() || (call.execution.is_some() && !call.abi_execution) {
         return None;
     }
     call.execution = Some(HostExecutionPhase::Queued);
+    call.abi_execution = false;
     Some(HostExecutionGuard(Some(call_id)))
+}
+
+/// C ABI adapters report exit through `complete_host_call`, rather than a
+/// Rust guard. Pin their resources before dispatch even if the waiter retires.
+pub fn retain_abi_execution(call_id: u32) {
+    if let Some(call) = TABLE.write().unwrap().get_mut(&call_id) {
+        call.execution = Some(HostExecutionPhase::Running);
+        call.abi_execution = true;
+    }
+}
+
+pub fn finish_abi_execution(call_id: u32) {
+    let owned = TABLE
+        .read()
+        .unwrap()
+        .get(&call_id)
+        .is_some_and(|call| call.abi_execution);
+    if owned {
+        finish_execution(call_id);
+    }
 }
 
 pub struct HostExecutionGuard(Option<u32>);
@@ -385,7 +419,13 @@ impl Drop for InflightGuard {
         };
         // Only the delivery path ends here. A running host execution remains
         // independently owned until its actual exit, including during cleanup.
+        let cancelled = completion.is_some();
         drop((completion, removed));
+        if cancelled {
+            if let Some(callback) = HOST_CANCEL_FN.get() {
+                callback(self.call_id);
+            }
+        }
         if let Some(on_cancel) = hook {
             on_cancel();
         }
@@ -399,6 +439,7 @@ pub fn complete_with_value(call_id: u32, value: BexExternalValue) {
     } else {
         tracing::debug!("complete_host_call for unknown call id {call_id}");
     }
+    finish_abi_execution(call_id);
 }
 
 /// Complete an in-flight call with an error.
@@ -408,6 +449,7 @@ pub fn complete_with_error(call_id: u32, err: OpError) {
     } else {
         tracing::debug!("complete_host_call(error) for unknown call id {call_id}");
     }
+    finish_abi_execution(call_id);
 }
 
 /// Complete an in-flight host-callable call with a *thrown value* — the
@@ -429,6 +471,7 @@ pub fn complete_with_throw(call_id: u32, value: BexExternalValue) {
     } else {
         tracing::debug!("complete_host_call(throw) for unknown call id {call_id}");
     }
+    finish_abi_execution(call_id);
 }
 
 #[cfg(test)]

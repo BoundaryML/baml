@@ -29,7 +29,7 @@ fn init() {
     // Node host-value registry. First-call-wins inside bridge_cffi, so
     // repeated module loads (rare under napi-rs, which loads each addon
     // once per Node process) are harmless.
-    bridge_cffi::register_host_dispatch_callback(host_value::host_dispatch_callback);
+    bridge_cffi::register_host_dispatch_v2(host_value::host_dispatch_callback);
     bridge_cffi::register_host_release_callback(host_value::host_release_callback);
 }
 
@@ -69,4 +69,22 @@ pub fn cancel_function_call(call_id: String) -> napi::Result<bool> {
         )
     })?;
     Ok(bridge_cffi::cancel_function_call_by_id(id))
+}
+
+#[napi(js_name = "releaseFunctionCall")]
+pub fn release_function_call(call_id: String) -> napi::Result<bool> {
+    let id = call_id
+        .parse::<u64>()
+        .map_err(|_| napi::Error::from_reason("invalid call ID"))?;
+    Ok(bridge_cffi::release_function_call_by_id(id))
+}
+
+#[napi(js_name = "invocationClockNs")]
+pub fn invocation_clock_ns(call_id: String) -> napi::Result<String> {
+    let id = call_id
+        .parse::<u64>()
+        .map_err(|_| napi::Error::from_reason("invalid call ID"))?;
+    bridge_cffi::invocation_clock_by_id(id)
+        .map(|value| value.to_string())
+        .map_err(errors::bridge_error_to_napi)
 }

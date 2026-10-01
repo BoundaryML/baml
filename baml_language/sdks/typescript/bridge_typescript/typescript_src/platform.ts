@@ -1,6 +1,12 @@
 import type { BamlPanic } from './errors.js';
-import { AsyncResource } from 'node:async_hooks';
-import { _startHostCallExecution, _finishHostCallExecution } from './native.js';
+import { AsyncResource, AsyncLocalStorage } from 'node:async_hooks';
+import { _startHostCallExecution, _finishHostCallExecution, _discardHostCallArgs, _hostInvocationFrame, type BamlHandle } from './native.js';
+
+const invocationFrames = new AsyncLocalStorage<BamlHandle>();
+export function currentInvocationState(): string | undefined {
+    const key = invocationFrames.getStore()?.key;
+    return key === undefined ? undefined : ((BigInt(key.high >>> 0) << 32n) | BigInt(key.low >>> 0)).toString();
+}
 
 const callbackContexts = new Map<string, AsyncResource>();
 
@@ -29,7 +35,7 @@ const activeHostExecutions = new Map<number, {
 export function runHostCallback(
     callId: number, args: Buffer, callback: () => void | Promise<void>, lease?: object,
 ): void | Promise<void> {
-    if (!lease) throw new Error("native host dispatch has no execution lease");
+    if (!lease) { _discardHostCallArgs(args); return; }
     const origin = _startHostCallExecution(lease);
     if (origin === null || origin === undefined) {
         _finishHostCallExecution(lease);
@@ -48,7 +54,8 @@ export function runHostCallback(
             }
         };
         try {
-            const completion = resource.runInAsyncScope(callback);
+            const frame = _hostInvocationFrame(lease);
+            const completion = resource.runInAsyncScope(() => invocationFrames.run(frame, callback));
             if (completion) {
                 execution.completion = completion.finally(finish);
                 return execution.completion;

@@ -266,7 +266,9 @@ pub fn error_to_outbound(err: BridgeError) -> Vec<u8> {
         | BridgeError::FunctionHandleTypeArgs
         | BridgeError::FunctionNotFound { .. }
         | BridgeError::MissingArgument { .. }
-        | BridgeError::InvalidCallId) => infra_error_arm(
+        | BridgeError::InvalidCallId
+        | BridgeError::UnknownCallAllocation(_)
+        | BridgeError::InvocationProtocol(_)) => infra_error_arm(
             message_instance(INVALID_ARGUMENT_CLASS, err.to_string()),
             &options,
         ),
@@ -322,7 +324,7 @@ pub fn panic_to_outbound(panic_info: &(dyn std::any::Any + Send)) -> Vec<u8> {
 /// until the engine has run it.
 pub struct InvocationRequest {
     runtime: Arc<dyn Bex>,
-    _route: crate::PreparedCallRouteGuard,
+    _allocation: crate::call_allocation::SubmittedCall,
     target: InvocationTarget,
     args: BexArgs,
     context: FunctionCallContext,
@@ -341,28 +343,151 @@ enum InvocationTarget {
     Callable(bex_project::Handle),
 }
 
+/// Input values transfer their wire owners at submission, even if controls or
+/// preparation fail before value decoding. Borrowed control/target keys do not.
+struct UnconsumedRequestValues(CallFunctionArgs);
+impl Drop for UnconsumedRequestValues {
+    fn drop(&mut self) {
+        for entry in std::mem::take(&mut self.0.kwargs) {
+            if let Some(value) = entry.value {
+                drop(bridge_ctypes::inbound_to_external(value, &HANDLE_TABLE));
+            }
+        }
+        if let Some(cancel) = self
+            .0
+            .invocation
+            .as_mut()
+            .and_then(|options| options.cancel.take())
+        {
+            drop(bridge_ctypes::inbound_to_external(cancel, &HANDLE_TABLE));
+        }
+    }
+}
+
 /// Decode and retain an SDK request without starting runtime execution.
 ///
 /// The engine resolves named targets and finishes argument/type preparation
 /// before constructing its own `PreparedInvocation` and attempting admission.
 pub fn decode_invocation_request(bytes: &[u8]) -> Result<InvocationRequest, BridgeError> {
-    let runtime = crate::get_runtime()?;
-    let call = CallFunctionArgs::decode(bytes).map_err(bridge_ctypes::CtypesError::from)?;
-    if call.call_id == 0 {
+    // Identify and consume the allocation before control validation. Every
+    // preparation failure then retires its original runtime through this lease.
+    let mut identity = CallFunctionArgs::default();
+    // Keep the parsed prefix on failure so a malformed trailing field cannot
+    // strand an identified allocation or already-decoded argument owners.
+    let decoded = identity
+        .merge(bytes)
+        .map_err(bridge_ctypes::CtypesError::from);
+    let mut unconsumed = UnconsumedRequestValues(identity);
+    if unconsumed.0.call_id == 0 {
+        decoded?;
         return Err(BridgeError::InvalidCallId);
     }
-    let route = crate::register_prepared_call_runtime(call.call_id, &runtime)?;
+    let allocation = crate::CALL_ALLOCATIONS.submit(unconsumed.0.call_id)?;
+    decoded?;
+    let runtime = allocation.owner().clone();
+    let call = crate::invocation_protocol::decode_call(bytes)?;
     let target = call.call_target.ok_or(BridgeError::MissingCallTarget)?;
     if matches!(target, CallTarget::FunctionHandle(_)) && !call.type_args.is_empty() {
         return Err(BridgeError::FunctionHandleTypeArgs);
     }
     let type_args = bridge_ctypes::proto_ty_args_to_named(&call.type_args)?;
-    let context = crate::function_call_context_builder(bex_project::CallId(call.call_id))
+    let mut builder = allocation
+        .context_builder()
         .with_type_args(type_args.type_args)
-        .with_type_defs(type_args.type_defs)
-        .build();
-    let context = runtime.bind_invocation_context(context)?;
-    let kwargs = kwargs_to_bex_values(call.kwargs, &HANDLE_TABLE)?;
+        .with_type_defs(type_args.type_defs);
+    let controls = call.invocation.expect("validated controls");
+    builder = builder.with_host_environment(controls.host_environment);
+    if let Some(deadline) = controls.deadline_ns {
+        builder = builder.with_deadline_ns(deadline);
+    }
+    if controls.inherited_state != 0 {
+        let entry = HANDLE_TABLE
+            .resolve(controls.inherited_state)
+            .ok_or_else(|| {
+                BridgeError::InvocationProtocol("inherited state is no longer live".into())
+            })?;
+        let CffiHandleTableEntry::InvocationState(state) = &*entry else {
+            return Err(BridgeError::InvocationProtocol(
+                "inherited state needs an invocation-state handle".into(),
+            ));
+        };
+        if !Arc::ptr_eq(&runtime, &state.owner) {
+            return Err(BridgeError::InvocationProtocol(
+                "inherited state belongs to a different runtime".into(),
+            ));
+        }
+        builder = builder.with_inherited_state(state.state.clone());
+    }
+    if let Some(cancel) = unconsumed
+        .0
+        .invocation
+        .as_mut()
+        .and_then(|options| options.cancel.take())
+    {
+        let value = bridge_ctypes::inbound_to_external(cancel, &HANDLE_TABLE)?;
+        builder = builder.with_cancel_values(vec![value]);
+    }
+    if let Some(trace) = controls.trace {
+        use bridge_ctypes::baml_bridge::cffi::{
+            TraceMode, trace_metadata_value::Value, trace_selection::Selection,
+        };
+        match trace.selection.expect("validated trace selection") {
+            Selection::Reservation(key) => {
+                let entry = HANDLE_TABLE.resolve(key).ok_or_else(|| {
+                    BridgeError::InvocationProtocol("trace reservation is no longer live".into())
+                })?;
+                let CffiHandleTableEntry::TraceReservation(reservation) = &*entry else {
+                    return Err(BridgeError::InvocationProtocol(
+                        "trace reservation needs a reservation handle".into(),
+                    ));
+                };
+                if !Arc::ptr_eq(&runtime, &reservation.owner) {
+                    return Err(BridgeError::InvocationProtocol(
+                        "trace reservation belongs to a different runtime".into(),
+                    ));
+                }
+                builder = builder.with_trace_reservation(reservation.reservation.clone());
+            }
+            Selection::Options(options) => {
+                use btel_types::context::{ContextPatch, ContextValue};
+                let patch = ContextPatch {
+                    distinct_id: options.distinct_id,
+                    metadata: options
+                        .metadata
+                        .into_iter()
+                        .map(|(key, value)| {
+                            (
+                                key,
+                                match value.value.expect("validated metadata") {
+                                    Value::StringValue(value) => Some(ContextValue::String(value)),
+                                    Value::IntValue(value) => Some(ContextValue::Int(value)),
+                                    Value::FloatValue(value) => Some(ContextValue::Float(value)),
+                                    Value::BoolValue(value) => Some(ContextValue::Bool(value)),
+                                    Value::Remove(_) => None,
+                                },
+                            )
+                        })
+                        .collect(),
+                };
+                builder = builder.with_trace_options(bex_project::TraceOptionsData {
+                    mode: options.mode.map(|mode| {
+                        match TraceMode::try_from(mode).expect("validated trace mode") {
+                            TraceMode::Hidden => btel_types::InvocationMode::Hidden,
+                            TraceMode::Timing => btel_types::InvocationMode::Timing,
+                            TraceMode::Span => btel_types::InvocationMode::Span,
+                            TraceMode::Unspecified => unreachable!("validated trace mode"),
+                        }
+                    }),
+                    inputs: options.inputs,
+                    output: options.output,
+                    error: options.error,
+                    context: (!patch.is_empty()).then(|| Arc::new(patch)),
+                });
+            }
+        }
+    }
+    let context = runtime.bind_invocation_context(builder.build())?;
+    let kwargs = kwargs_to_bex_values(std::mem::take(&mut unconsumed.0.kwargs), &HANDLE_TABLE)?;
 
     let (target, args) = match target {
         CallTarget::FunctionName(name) => (InvocationTarget::Named(name), kwargs.into()),
@@ -395,7 +520,7 @@ pub fn decode_invocation_request(bytes: &[u8]) -> Result<InvocationRequest, Brid
     };
     Ok(InvocationRequest {
         runtime,
-        _route: route,
+        _allocation: allocation,
         target,
         args,
         context,
@@ -415,7 +540,7 @@ pub async fn execute_invocation(call: InvocationRequest) -> Vec<u8> {
     let options = CffiHandleTableOptions::for_wire();
     let InvocationRequest {
         runtime,
-        _route,
+        _allocation,
         target,
         args,
         context,

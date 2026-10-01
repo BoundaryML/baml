@@ -43,14 +43,12 @@ header = """#ifndef BAML_CFFI_H
 #  endif
 #endif"""
 
-trailer = """/* Size of the original required V1 prefix. Future V1 fields may only follow it. */
+trailer = """/* ABI revision 3 requires every invocation operation below. */
 #define BAML_API_V1_MIN_SIZE \\
-  (offsetof(BamlApiV1, register_bridge) + sizeof(((BamlApiV1 *)0)->register_bridge))
+  (offsetof(BamlApiV1, register_host_cancel_callback) + sizeof(((BamlApiV1 *)0)->register_host_cancel_callback))
 
 /*
- * Validate the original V1 prefix without rejecting a runtime that appended
- * fields. Consumers must perform an equivalent end-of-field check before
- * reading any future appended field.
+ * Validate the complete revision-3 table while permitting appended fields.
  */
 static inline bool baml_api_v1_is_compatible(const BamlApiV1 *api) {
   return api != NULL && api->abi_version == BAML_API_V1_ABI_VERSION &&
@@ -70,6 +68,13 @@ include = [
   "BamlBridgeInfoV1",
   "BamlResultCallback",
   "BamlHostDispatchCallback",
+  "BamlHostDispatchV2",
+  "BamlHostCancel",
+  "BamlInvocationProtocolVersionFn",
+  "BamlInvocationClockNsFn",
+  "BamlReleaseFunctionCallFn",
+  "BamlRegisterHostDispatchV2Fn",
+  "BamlRegisterHostCancelCallbackFn",
   "BamlHostReleaseCallback",
   "BamlUnhandledSpawnErrorCallback",
   "BamlVersionFn",
@@ -94,6 +99,11 @@ include = [
   "baml_get_api_v1",
 ]
 exclude = [
+  "invocation_protocol_version",
+  "invocation_clock_ns",
+  "release_function_call",
+  "register_host_dispatch_v2",
+  "register_host_cancel_callback",
   "call_function",
   "new_function_call",
   "cancel_function_call",

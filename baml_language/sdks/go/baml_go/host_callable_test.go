@@ -1,6 +1,7 @@
 package baml_go
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"runtime"
@@ -342,5 +343,101 @@ func TestFailureResultReleasesOnlyOpaqueHostIdentityAfterFormatting(t *testing.T
 	unregisterHostValue(callableKey)
 	if got := registeredHostValueCount(); got != baseline {
 		t.Fatalf("registry did not return to baseline: got %d, want %d", got, baseline)
+	}
+}
+
+func TestHostInvocationCarriesStateAndCancellationUntilActualExit(t *testing.T) {
+	previousComplete, previousRelease := completeNativeHostCall, releaseOutboundHandle
+	t.Cleanup(func() { completeNativeHostCall, releaseOutboundHandle = previousComplete, previousRelease })
+	completed := make(chan struct{}, 1)
+	completeNativeHostCall = func(_ uint32, _ bool, _ []byte) { completed <- struct{}{} }
+	releaseOutboundHandle = func(uint64) {}
+	entered := make(chan HostCallArguments, 1)
+	exit := make(chan struct{})
+	key := registerHostValue(hostValue{callable: func(arguments HostCallArguments) (Input, error) {
+		entered <- arguments
+		<-exit
+		return String("done"), nil
+	}})
+	t.Cleanup(func() { unregisterHostValue(key) })
+	payload, err := proto.Marshal(&cffi.HostInvocation{HostValueKey: key, CallbackId: 707, EffectiveState: 1234,
+		ApplicationArgs: marshalHostDispatch(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dispatchHostInvocation(payload)
+	var arguments HostCallArguments
+	select {
+	case arguments = <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("callback did not enter")
+	}
+	ctx := arguments.Context()
+	options, err := invocationOptions(ctx, 5678)
+	if err != nil || options.InheritedState != 1234 || options.HostEnvironment != 5678 {
+		t.Fatalf("re-entry options = %v, %v", options, err)
+	}
+	encoded, transaction, err := encodeCallForDispatchWithTargetAndTypeArgs(5678, nil, nil, namedCallTarget("identity"), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	transaction.rollback()
+	var request cffi.CallFunctionArgs
+	if err := proto.Unmarshal(encoded, &request); err != nil {
+		t.Fatal(err)
+	}
+	if !proto.Equal(request.Invocation, options) {
+		t.Fatalf("lost invocation controls: %v", request.Invocation)
+	}
+	cancelHostInvocation(707)
+	select {
+	case <-ctx.Done():
+	case <-time.After(time.Second):
+		t.Fatal("cancellation did not reach callback context")
+	}
+	select {
+	case <-completed:
+		t.Fatal("cancellation completed a still-running callback")
+	default:
+	}
+	close(exit)
+	select {
+	case <-completed:
+	case <-time.After(time.Second):
+		t.Fatal("actual exit did not complete callback")
+	}
+	cancelHostInvocation(707)
+}
+
+func TestHostInvocationCapturedContextSurvivesNormalCompletion(t *testing.T) {
+	previousComplete, previousRelease := completeNativeHostCall, releaseOutboundHandle
+	t.Cleanup(func() { completeNativeHostCall, releaseOutboundHandle = previousComplete, previousRelease })
+	completed := make(chan struct{}, 1)
+	completeNativeHostCall = func(_ uint32, _ bool, _ []byte) { completed <- struct{}{} }
+	releaseOutboundHandle = func(uint64) {}
+	captured := make(chan context.Context, 1)
+	key := registerHostValue(hostValue{callable: func(arguments HostCallArguments) (Input, error) {
+		captured <- arguments.Context()
+		return String("done"), nil
+	}})
+	t.Cleanup(func() { unregisterHostValue(key) })
+	payload, err := proto.Marshal(&cffi.HostInvocation{HostValueKey: key, CallbackId: 708, EffectiveState: 4321,
+		ApplicationArgs: marshalHostDispatch(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dispatchHostInvocation(payload)
+	ctx := <-captured
+	select {
+	case <-completed:
+	case <-time.After(time.Second):
+		t.Fatal("callback did not complete")
+	}
+	if err := ctx.Err(); err != nil {
+		t.Fatalf("normal completion cancelled captured context: %v", err)
+	}
+	options, err := invocationOptions(ctx, 9876)
+	if err != nil || options.InheritedState != 4321 {
+		t.Fatalf("captured state = %v, %v", options, err)
 	}
 }

@@ -26,6 +26,39 @@ pub(crate) struct InvocationDeadline {
     at: Instant,
 }
 
+/// One clock domain per runtime, shared by all host entries and callbacks.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct InvocationClock {
+    epoch: Instant,
+}
+
+impl InvocationClock {
+    pub(crate) fn new() -> Self {
+        Self {
+            epoch: Instant::now(),
+        }
+    }
+
+    pub(crate) fn now_ns(self) -> Result<u64, EngineError> {
+        u64::try_from(self.epoch.elapsed().as_nanos()).map_err(|_| EngineError::TypeMismatch {
+            message: "runtime monotonic clock exceeds the invocation protocol's range".into(),
+        })
+    }
+
+    pub(crate) fn deadline_ns(self, deadline: InvocationDeadline) -> Option<u64> {
+        u64::try_from(deadline.at.saturating_duration_since(self.epoch).as_nanos()).ok()
+    }
+
+    pub(crate) fn deadline(self, deadline_ns: u64) -> Result<InvocationDeadline, EngineError> {
+        self.epoch
+            .checked_add(std::time::Duration::from_nanos(deadline_ns))
+            .map(|at| InvocationDeadline { at })
+            .ok_or_else(|| EngineError::TypeMismatch {
+                message: "invocation deadline exceeds the monotonic clock's range".into(),
+            })
+    }
+}
+
 impl InvocationDeadline {
     pub(crate) fn after(timeout: std::time::Duration) -> Result<Self, EngineError> {
         Instant::now()
@@ -142,9 +175,18 @@ impl ActiveInvocation {
         } = self;
 
         let execution = async {
+            if let Some(reservation) = thread.entry_reservation.take() {
+                let id = reservation.attach(runtime.trace_scope).map_err(|error| {
+                    EngineError::TypeMismatch {
+                        message: format!("invalid trace reservation: {error:?}"),
+                    }
+                })?;
+                thread.vm.set_entry_trace(&reservation.options, Some(id));
+            }
             thread
                 .vm
                 .set_entry_point_with_type_values(entry_ptr, &vm_args, type_args, type_values);
+            runtime.record_invocation_frame(host_call_id, &thread);
             // Entry setup roots the target, arguments and type values before
             // parking. GC may execute finalizers, so it belongs after admission.
             drop(vm_args);
@@ -243,7 +285,9 @@ mod tests {
         mut context: crate::FunctionCallContext,
         value: Value,
     ) -> PreparedInvocation {
-        context.bind_timeout(engine.engine_id).unwrap();
+        context
+            .bind_timeout(engine.engine_id, engine.invocation_clock)
+            .unwrap();
         let mut thread = engine.new_root_thread(CancellationToken::new()).await;
         let (entry, _) = engine.lookup_function("main").unwrap();
         engine
@@ -365,7 +409,7 @@ mod tests {
         for _ in 0..32 {
             let id = CallId::next();
             let input = CancellationToken::new();
-            let effective = crate::thread::TaskCancel::detached([input.clone()]);
+            let effective = crate::thread::TaskCancel::detached([input.clone().into()]);
             let barrier = Arc::new(std::sync::Barrier::new(2));
             let admitting = {
                 let engine = Arc::clone(&engine);
@@ -454,9 +498,13 @@ mod tests {
         let mut context = crate::FunctionCallContextBuilder::new(CallId::next())
             .with_timeout(std::time::Duration::from_secs(5))
             .build();
-        context.bind_timeout(engine.engine_id).unwrap();
+        context
+            .bind_timeout(engine.engine_id, engine.invocation_clock)
+            .unwrap();
         tokio::time::advance(std::time::Duration::from_secs(3)).await;
-        context.bind_timeout(engine.engine_id).unwrap();
+        context
+            .bind_timeout(engine.engine_id, engine.invocation_clock)
+            .unwrap();
         tokio::time::advance(std::time::Duration::from_secs(2)).await;
         assert!(context.deadline.unwrap().is_expired());
     }
@@ -488,6 +536,7 @@ mod tests {
         .unwrap();
         let spawner = Arc::new(crate::InvocationSpawner {
             runtime: Arc::clone(&engine),
+            cancel: None,
             inherited: engine
                 .invocation_state(active.prepared.host_call_id)
                 .unwrap(),

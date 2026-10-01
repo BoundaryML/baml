@@ -17,10 +17,12 @@ __all__ = [
     "get_runtime",
     "get_toolchain_version",
     "get_version",
+    "invocation_clock_ns",
     "lookup_host_value",
     "new_function_call",
     "register_host_callable",
     "register_unhandled_spawn_error_callback",
+    "release_function_call",
     "release_host_callable",
     "shutdown_runtime",
 ]
@@ -150,6 +152,7 @@ class BamlPyHandle:
         r"""
         Clone this handle for inbound wire ownership.
         """
+    def _key_for_invocation(self) -> builtins.int: ...
     def _key_for_call(self) -> builtins.int:
         r"""
         Borrow this handle key as a call target without transferring ownership.
@@ -316,6 +319,8 @@ def get_toolchain_version() -> builtins.str: ...
 
 def get_version() -> builtins.str: ...
 
+def invocation_clock_ns(call_id: builtins.int) -> builtins.int: ...
+
 def lookup_host_value(handle: BamlPyHandle) -> typing.Optional[typing.Any]:
     r"""
     Look up the host-registered Python object referenced by a
@@ -344,6 +349,8 @@ def register_host_callable(callable: typing.Any) -> builtins.int:
     """
 
 def register_unhandled_spawn_error_callback(callback: typing.Any) -> None: ...
+
+def release_function_call(call_id: builtins.int) -> builtins.bool: ...
 
 def release_host_callable(host_value_key: builtins.int) -> None:
     r"""

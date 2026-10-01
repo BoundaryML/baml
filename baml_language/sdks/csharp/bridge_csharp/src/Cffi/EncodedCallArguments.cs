@@ -22,6 +22,7 @@ internal sealed class EncodedCallArguments : IDisposable
     {
         CallFunctionArgs call = CallFunctionArgs.Parser.ParseFrom(Bytes);
         call.FunctionName = functionName;
+        SetInvocation(call);
         Bytes = call.ToByteArray();
     }
 
@@ -29,7 +30,15 @@ internal sealed class EncodedCallArguments : IDisposable
     {
         CallFunctionArgs call = CallFunctionArgs.Parser.ParseFrom(Bytes);
         call.FunctionHandle = functionHandle;
+        SetInvocation(call);
         Bytes = call.ToByteArray();
+    }
+
+    private static void SetInvocation(CallFunctionArgs call)
+    {
+        call.Invocation ??= new InvocationOptions();
+        call.Invocation.InheritedState = InvocationFrame.Current.Value?.Key ?? 0;
+        call.Invocation.HostEnvironment = call.CallId;
     }
 
     internal void SetBytes(byte[] bytes)
