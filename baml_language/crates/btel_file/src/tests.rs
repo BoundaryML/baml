@@ -1,4 +1,9 @@
-use std::{cell::RefCell, num::NonZeroUsize, time::Duration};
+use std::{
+    cell::RefCell,
+    num::NonZeroUsize,
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
 
 use btel_processor::{AggregateDelta, Publisher};
 use btel_recorder::{RecordingConfig, RecordingPublisher, proto};
@@ -209,6 +214,61 @@ fn full_queue_waits_for_capacity_and_unblocks_on_writer_failure() {
             assert_eq!(*seen.lock().unwrap(), [1, 2, 3]);
         }
     }
+}
+
+/// A sender's error stops the publisher, which fails the recording unless it
+/// was already disabled: so `on_failure` runs before a blocked send returns.
+#[test]
+fn writer_failure_is_reported_before_a_blocked_send_returns() {
+    let root = tempfile::tempdir().unwrap();
+    let (entered, started) = mpsc::channel();
+    let (release, released) = mpsc::channel();
+    let send_returned = Arc::new(AtomicBool::new(false));
+    let returned = Arc::clone(&send_returned);
+    let (reported, report) = mpsc::channel();
+    let mut first = true;
+    let mut sink = LocalDelivery::start(
+        root.path().to_owned(),
+        LocalDeliveryConfig {
+            queue_files: NonZeroUsize::new(1).unwrap(),
+        },
+        move |_file| {
+            if first {
+                first = false;
+                entered.send(()).unwrap();
+                released.recv_timeout(Duration::from_secs(5)).unwrap();
+            }
+            Err(LocalDeliveryError("injected disk failure".into()))
+        },
+        move |_| {
+            // Long enough for a send released early to return.
+            std::thread::sleep(Duration::from_millis(200));
+            reported.send(returned.load(Ordering::SeqCst)).unwrap();
+        },
+    )
+    .unwrap();
+    let sender = sink.take_handle();
+    let mut files = files(RecordingId::generate(), 3).into_iter();
+    sender.send(files.next().unwrap()).unwrap();
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    sender.send(files.next().unwrap()).unwrap();
+    let third = files.next().unwrap();
+    let flag = Arc::clone(&send_returned);
+    let pending = std::thread::spawn(move || {
+        let result = sender.send(third);
+        flag.store(true, Ordering::SeqCst);
+        result
+    });
+    // Let the third send block on the full queue, then fail the writer.
+    std::thread::sleep(Duration::from_millis(50));
+    release.send(()).unwrap();
+    let returned_before_report = report.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert!(
+        !returned_before_report,
+        "a blocked send returned before on_failure ran"
+    );
+    assert!(pending.join().unwrap().is_err());
+    assert!(sink.finish().is_err());
 }
 
 #[test]
