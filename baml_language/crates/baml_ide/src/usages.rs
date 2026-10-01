@@ -50,6 +50,7 @@ use baml_compiler2_hir::{
         BindingId, ExprMetadataKey, ExprMetadataScope, FileSemanticIndex, PathResolution,
     },
 };
+use baml_compiler2_hir_ty::extern_loc::DefinitionRef;
 use rowan::NodeOrToken;
 use text_size::{TextRange, TextSize};
 
@@ -121,10 +122,14 @@ fn workspace_search_files(
 fn find_item_usages(
     db: &dyn baml_compiler2_hir::Db,
     current_file: SourceFile,
-    def: Definition<'_>,
+    def: DefinitionRef<'_>,
 ) -> Vec<Location> {
-    let Some(name) = definition_name(db, def) else {
-        return Vec::new();
+    let name = match def {
+        DeclRef::Source(def) => match definition_name(db, def) {
+            Some(name) => name,
+            None => return Vec::new(),
+        },
+        DeclRef::External(def) => def.name(db),
     };
     let name_text = name.as_str();
 
@@ -147,10 +152,18 @@ fn find_item_usages(
             }
 
             // Confirm this token resolves to the same definition.
-            let resolved = resolve_name_at(db, sf, tok.text_range().start(), &name);
-            let same = match resolved {
-                ResolvedName::Item(here) | ResolvedName::Builtin(here) => here == def,
-                ResolvedName::Local { .. } | ResolvedName::Unknown => false,
+            let same = match def {
+                DeclRef::Source(def) => {
+                    match resolve_name_at(db, sf, tok.text_range().start(), &name) {
+                        ResolvedName::Item(here) | ResolvedName::Builtin(here) => here == def,
+                        ResolvedName::Local { .. } | ResolvedName::Unknown => false,
+                    }
+                }
+                // A row is named through a package path or a recorded member
+                // resolution — the roads `symbol_at` walks.
+                DeclRef::External(_) => {
+                    symbol_at(db, sf, tok.text_range().start()) == Some(SymbolTarget::Item(def))
+                }
             };
             if same {
                 results.push(Location {

@@ -16,13 +16,14 @@ use bex_vm_types::Object;
 
 /// Collect the pool indices of every `Object::GenericFunction` whose type
 /// arguments reach a head with `fq_name`'s tag. An emitted program's heads
-/// are tag-only until the loader binds them, so mentions are found by
-/// identity rather than by rendered name.
+/// carry the tag the linker assigned their declaration, so mentions are
+/// found by identity rather than by rendered name.
 fn generic_function_indices_mentioning(
     program: &bex_vm_types::Program,
     fq_name: &str,
 ) -> Vec<usize> {
-    let needle = baml_type::typetag::TypeTag::of_head(fq_name);
+    let needle = baml_tests::engine::declared_type_tag(program, fq_name)
+        .unwrap_or_else(|| panic!("`{fq_name}` should be declared"));
     let mut indices = Vec::new();
     for i in 0..program.objects.len() {
         if let Some(Object::GenericFunction(gf)) = program.objects.get(i) {

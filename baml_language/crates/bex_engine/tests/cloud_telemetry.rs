@@ -12,6 +12,7 @@ use btel_bcs::{delivery::DeliveryConfig, proto::CloudUploadEnvelope};
 use btel_recorder::{RecordingConfig, proto};
 use prost::Message as _;
 use serde_json::{Value, json};
+use sys_native::SysOpsExt;
 use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers::method};
 
 #[path = "../../btel_bcs/tests/support/mod.rs"]
@@ -20,9 +21,103 @@ mod cloud_protocol;
 mod prepare_requests;
 #[path = "support/telemetry.rs"]
 mod telemetry;
+#[path = "support/trace_context.rs"]
+mod trace_context;
 
 const SOURCE: &str =
     include_str!("../../baml_tests/baml_src/ns_cloud_telemetry/cloud_telemetry.baml");
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressure() {
+    let server = MockServer::start().await;
+    let base = server.uri();
+    Mock::given(method("POST"))
+        .respond_with(move |request: &Request| {
+            ResponseTemplate::new(200).set_body_json(cloud_protocol::response(request, &base, &[]))
+        })
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&server)
+        .await;
+    let program = baml_db::testing::compile_source(trace_context::SOURCE);
+    let engine = Arc::new(
+        BexEngine::new_with_telemetry_recording(
+            program,
+            Arc::new(sys_native::SysOps::native()),
+            vec![],
+            None,
+            btel_clock::ClockMode::Monotonic,
+            TelemetryRecording::cloud(
+                RecordingConfig::default(),
+                btel_bcs::CloudPublisherConfig {
+                    snapshot_target: 1,
+                    max_pending_snapshots: 1,
+                    inline_target_bytes: 1024 * 1024,
+                    ..btel_bcs::CloudPublisherConfig::default()
+                },
+                DeliveryConfig {
+                    allow_http: true,
+                    max_pending_snapshots: 1,
+                    max_candidates: 1,
+                    max_targets: 2,
+                    max_pending_plans: 1,
+                    ..DeliveryConfig::new(server.uri().parse().unwrap())
+                },
+            ),
+        )
+        .unwrap(),
+    );
+    tokio::time::timeout(Duration::from_secs(20), async {
+        let context = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
+        assert_eq!(
+            engine
+                .call_function(
+                    "context_record",
+                    vec![BexExternalValue::Bool(true)],
+                    context,
+                    true
+                )
+                .await
+                .unwrap(),
+            BexExternalValue::Int(14)
+        );
+        let context = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
+        assert!(
+            engine
+                .call_function("context_failure", vec![], context, true)
+                .await
+                .is_err()
+        );
+        engine.shutdown().await;
+    })
+    .await
+    .expect("context selectors must remain deliverable with one retained snapshot");
+    assert_eq!(engine.telemetry_result(), Some(Ok(())));
+    let mut files = Vec::new();
+    let mut snapshots = std::collections::BTreeMap::new();
+    for request in server
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .filter(|request| request.method == "PUT")
+    {
+        let envelope = CloudUploadEnvelope::decode(request.body.as_slice()).unwrap();
+        if let Some(bytes) = envelope.recording_file {
+            files.push(proto::RecordingFile::decode(bytes.as_slice()).unwrap());
+        }
+        for object in envelope.cas_objects {
+            let snapshot =
+                btel_snapshot::decode_blob(&object.blob, &btel_snapshot::DecodeLimits::default())
+                    .unwrap();
+            assert_eq!(snapshot.id.as_bytes().as_slice(), object.snapshot_id);
+            snapshots.insert(*snapshot.id.as_bytes(), snapshot);
+        }
+    }
+    trace_context::assert_leaf_contexts(&files, &snapshots, 3);
+}
 
 fn engine(server: &MockServer, flush_interval_duration: Duration) -> Arc<BexEngine> {
     telemetry::recording_engine(

@@ -2,19 +2,23 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 // Object safety through an erased `Self` (an interface-existential): a
-// method dispatches on an erased `Self` iff exactly one of its parameters is
-// typed `Self` and that parameter comes first — the `self` receiver being just
-// such a parameter — and `Self` occurs nowhere else (a bare `-> Self` is
-// fine). `self` is only the sugar that lets `Pairable.pair(a, 1)` be written
-// `a.pair(1)`; a method without it is a static, which an instance does not
-// have. A union is no relaxation in argument position: `Self?` and
+// method dispatches on an erased `Self` iff exactly one of its REQUIRED
+// parameters is typed `Self`, wherever it is declared — the `self` receiver
+// being just such a parameter — and `Self` occurs nowhere else (a bare
+// `-> Self` is fine). `self` is only the sugar that lets `Pairable.pair(a, 1)`
+// be written `a.pair(1)`; a method without it is a static, which an instance
+// does not have. A union is no relaxation in argument position: `Self?` and
 // `Self | int` each name the implementor, so they are second `Self`
-// parameters, not covariant widenings.
+// parameters, not covariant widenings. A defaulted `Self` parameter is one a
+// call may omit, so it is no dispatch source either.
 interface Pairable {
     function pair(x: Self, y: int) -> int throws never;
     function both(x: Self, y: Self) -> int throws never;
     function later(n: int, x: Self) -> int throws never;
     function make(n: int) -> Self throws never;
+    function opt(n: int, x: Self = (Self as Pairable).make(1)) -> int throws never {
+        n
+    }
     function twice(self, other: Self) -> int throws never;
     function maybe(self, other: Self?) -> int throws never;
     function eithered(self, other: Self | int) -> int throws never;
@@ -69,8 +73,10 @@ function through_existential(a: Pairable, b: Pairable) -> int throws never {
     let on_instance = a.pair(1);
     // error: two `Self` parameters
     let two_selfs = Pairable.both(a, b);
-    // error: the `Self` parameter is not first — nothing to dispatch from
-    let not_first = Pairable.later(1, a);
+    // legal: one `Self`, second — dispatched from `a`
+    let later = Pairable.later(1, a);
+    // error: the one `Self` parameter has a default, so a call may omit it
+    let optional_param = Pairable.opt(1, x = a);
     // error: no `Self` parameter at all
     let no_self = Pairable.make(1);
     // error: `self` plus another `Self`
@@ -84,7 +90,7 @@ function through_existential(a: Pairable, b: Pairable) -> int throws never {
     let nested = a.boxed();
     // legal: bare `-> Self`
     let legal = a.clone();
-    dispatched
+    dispatched + later
 }
 
 function concrete(a: P, b: P) -> int throws never {
@@ -97,4 +103,6 @@ function concrete(a: P, b: P) -> int throws never {
         + a.clone().v
         + a.maybe(b)
         + a.eithered(b)
+        + P.opt(1)
+        + P.opt(1, x = a)
 }

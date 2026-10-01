@@ -125,7 +125,11 @@ pub(crate) fn display_instruction(
         .and_then(|m| m.operand.as_ref());
 
     let metadata = match instruction {
-        Instruction::LoadConst(index) | Instruction::LoadCurrentPackage(index) => {
+        Instruction::LoadCurrentPackage(ordinal) => operand_meta.map_or_else(
+            || format!("(package {ordinal})"),
+            |meta| format!("({})", meta.as_str()),
+        ),
+        Instruction::LoadConst(index) => {
             // Prefer resolved_constants (runtime), fall back to constants (compile-time)
             if let Some(value) = function.bytecode.resolved_constants.get(*index) {
                 format!("({})", display_value(*value))
@@ -145,8 +149,12 @@ pub(crate) fn display_instruction(
             display_global_ref(*function, globals, objects, compile_time_globals)
         }
         Instruction::MakeGenericFunctionFromValue { .. } => String::new(),
-        Instruction::VirtualCall { nargs, ntypeargs } => {
-            format!("nargs={nargs} ntypeargs={ntypeargs}")
+        Instruction::VirtualCall {
+            nargs,
+            ntypeargs,
+            self_arg,
+        } => {
+            format!("nargs={nargs} ntypeargs={ntypeargs} self_arg={self_arg}")
         }
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
@@ -197,10 +205,10 @@ pub(crate) fn display_instruction(
             format!("(table {table_idx})")
         }
         Instruction::DenseTag(table_idx) => {
-            if let Some(table) = function.bytecode.match_hash_tables.get(*table_idx) {
+            if let Some(table) = function.bytecode.switch_tables.get(*table_idx) {
                 format!("({})", table.key_names.join(", "))
             } else {
-                format!("(hash table {table_idx})")
+                format!("(switch table {table_idx})")
             }
         }
         Instruction::Pop(_)
@@ -936,8 +944,12 @@ fn display_instruction_textual(
         Instruction::CallIndirect => "call_indirect".to_string(),
         Instruction::SetCallTrace => "set_call_trace".to_string(),
 
-        Instruction::VirtualCall { nargs, ntypeargs } => {
-            format!("virtual_call nargs={nargs} ntypeargs={ntypeargs}")
+        Instruction::VirtualCall {
+            nargs,
+            ntypeargs,
+            self_arg,
+        } => {
+            format!("virtual_call nargs={nargs} ntypeargs={ntypeargs} self_arg={self_arg}")
         }
 
         Instruction::SysOp(_) => format!("sys_op {}", meta_str(&"")),
@@ -973,7 +985,7 @@ fn display_instruction_textual(
         Instruction::DenseTag(table_idx) => {
             let names = function
                 .bytecode
-                .match_hash_tables
+                .switch_tables
                 .get(*table_idx)
                 .map(|t| t.key_names.join(", "))
                 .unwrap_or_default();
@@ -1450,7 +1462,8 @@ pub fn display_compact_bytecode(
             OpCode::VirtualCall => {
                 let nargs = read_u16(code, &mut pc);
                 let ntypeargs = read_u16(code, &mut pc);
-                writeln!(f, "nargs={nargs} ntypeargs={ntypeargs}")?;
+                let self_arg = read_u16(code, &mut pc);
+                writeln!(f, "nargs={nargs} ntypeargs={ntypeargs} self_arg={self_arg}")?;
             }
 
             OpCode::MakeClosure => {

@@ -485,28 +485,6 @@ fn ticks_u64(value: i64) -> u64 {
     u64::try_from(value).unwrap_or(0)
 }
 
-/// Unix milliseconds at `ticks`, from a clock's UTC anchor and conversion
-/// as the index stores them (`__btel_unix_ms`).
-pub(crate) fn unix_ms(
-    ticks: i64,
-    anchor_ticks: i64,
-    anchor_ns: i64,
-    multiplier: i64,
-    shift: i64,
-) -> Option<i64> {
-    let anchor = UtcAnchor {
-        ticks: ticks_u64(anchor_ticks),
-        unix_ns: i128::from(anchor_ns),
-    };
-    let conversion = Conversion {
-        multiplier: ticks_u64(multiplier),
-        shift: u32::try_from(shift).unwrap_or(u32::MAX),
-    };
-    anchor
-        .unix_ns_at(conversion, ticks_u64(ticks))
-        .and_then(|ns| i64::try_from(ns.div_euclid(1_000_000)).ok())
-}
-
 /// `<recording hex>:<prefix><n>`, as `__btel_pubid` and `__btel_sid` write
 /// it: `(recording id, n)`.
 fn public_id(value: ValueRef<'_>, prefix: &str) -> Option<(Vec<u8>, u64)> {
@@ -646,18 +624,6 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
         Ok(anchor
             .unix_ns_at(conversion, ticks_u64(ticks))
             .and_then(format_unix_ns))
-    })?;
-    conn.create_scalar_function("__btel_unix_ms", 5, pure, |ctx| {
-        let (Some(ticks), Some(anchor_ticks), Some(anchor_ns), Some(multiplier), Some(shift)) = (
-            opt_i64(ctx, 0)?,
-            opt_i64(ctx, 1)?,
-            opt_i64(ctx, 2)?,
-            opt_i64(ctx, 3)?,
-            opt_i64(ctx, 4)?,
-        ) else {
-            return Ok(None);
-        };
-        Ok(unix_ms(ticks, anchor_ticks, anchor_ns, multiplier, shift))
     })?;
     conn.create_aggregate_function("__btel_sum", 1, pure, CheckedSum)?;
 
@@ -1045,17 +1011,6 @@ fn utc_text(ns: Option<i64>) -> Option<String> {
 
 fn register_final_tables(conn: &Connection) -> rusqlite::Result<()> {
     let pure = FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC;
-    // `(parent node, function name, edge)`: NULL until the name is known.
-    conn.create_scalar_function("__btel_node", 3, pure, |ctx| {
-        let Some(name) = ctx.get::<Option<String>>(1)? else {
-            return Ok(None);
-        };
-        Ok(Some(node_hash(
-            opt_i64(ctx, 0)?,
-            &name,
-            opt_i64(ctx, 2)?.unwrap_or(0),
-        )))
-    })?;
     // A node's public ID: 16 hex digits.
     conn.create_scalar_function("__btel_hex", 1, pure, |ctx| {
         Ok(opt_i64(ctx, 0)?.map(|n| format!("{:016x}", n.cast_unsigned())))

@@ -16,6 +16,44 @@ use btel_types::{
     InvocationOutcome, TelemetryId,
 };
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ContextReference {
+    Unavailable,
+    Empty,
+    Snapshot(btel_snapshot::SnapshotId),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LogLevel {
+    Info,
+    Debug,
+    Warn,
+    Error,
+}
+
+impl LogLevel {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Info => "info",
+            Self::Debug => "debug",
+            Self::Warn => "warn",
+            Self::Error => "error",
+        }
+    }
+}
+
+impl<I, V> SpanRecord<I, V> {
+    pub fn is_context_observation(&self) -> bool {
+        matches!(
+            self,
+            Self::ThreadSpanAnnouncement { .. }
+                | Self::ThreadSpanCompletion { .. }
+                | Self::FunctionSpanAnnouncement { .. }
+                | Self::Log { .. }
+        ) || self.completion().is_some()
+    }
+}
+
 /// Frequent anonymous measurements with a 32-byte slot budget.
 /// Records transfer ownership rather than implicitly duplicating publication.
 ///
@@ -66,6 +104,28 @@ pub type ThreadName = Arc<Box<str>>;
 pub enum SpanRecord<InputCapture, ValueCapture> {
     /// This ring needs its own thread context; the Timing ring's is independent.
     ThreadSelected { thread_id: TelemetryId },
+    /// Execution context for subsequent observations in this chunk and thread.
+    /// None means unavailable. Producers must repeat selection in every chunk
+    /// and after a thread switch; the publisher never inherits across chunks.
+    ContextSelected {
+        captured_context: Option<InputCapture>,
+    },
+    /// Reselect an already handed-off snapshot without recapturing its values.
+    /// The reference does not imply that delivery of the blob succeeded.
+    ContextReferenced { id: btel_snapshot::SnapshotId },
+    /// An explicitly empty execution context, distinct from an unavailable one.
+    ContextCleared,
+    /// A point observation with context selected by the surrounding run.
+    /// Capture ownership is identical to input/output snapshots.
+    Log {
+        parent_id: TelemetryId,
+        function: FunctionId,
+        pc: u32,
+        at: ClockInstant,
+        level: LogLevel,
+        event_name: Option<Arc<str>>,
+        captured_data: Option<ValueCapture>,
+    },
     /// Optional early thread identity; its retained clock exceeds a Timing slot.
     ThreadSpanAnnouncement {
         id: TelemetryId,
@@ -1107,6 +1167,8 @@ impl<C> SpanRecord<C, C> {
     /// Transfer the exclusive capture owner; record destruction handles everything else.
     pub fn take_capture(&mut self) -> Option<C> {
         match self {
+            Self::Log { captured_data, .. } => captured_data.take(),
+            Self::ContextSelected { captured_context } => captured_context.take(),
             Self::FunctionSpanAnnouncement {
                 captured_inputs, ..
             } => captured_inputs.take(),
@@ -1144,6 +1206,8 @@ impl<C> SpanRecord<C, C> {
                 captured_value.take()
             }
             Self::ThreadSelected { .. }
+            | Self::ContextCleared
+            | Self::ContextReferenced { .. }
             | Self::ThreadSpanAnnouncement { .. }
             | Self::ThreadSpanCompletion { .. }
             | Self::ModelUsage(_)

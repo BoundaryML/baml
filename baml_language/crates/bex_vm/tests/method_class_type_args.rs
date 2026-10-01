@@ -70,22 +70,12 @@ fn inject_function(
         runtime_package: bex_vm_types::HeapPtr::null(),
     };
     let fn_obj_idx = program.add_object(Object::Function(Box::new(func)));
-    let global_slot = program.globals.len();
-    program
-        .function_indices
-        .insert(fn_name.to_string(), fn_obj_idx);
     program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));
-    program
-        .function_global_indices
-        .insert(fn_name.to_string(), global_slot);
     fn_obj_idx
 }
 
-/// Run a named function to completion and return the result + VM.
-fn run_fn(program: Program, fn_name: &str) -> (Value, BexVm) {
-    let function_index = program.function_index(fn_name).unwrap_or_else(|| {
-        panic!("function {fn_name:?} not found");
-    });
+/// Run the function at `function_index` to completion and return the result + VM.
+fn run_fn(program: Program, function_index: usize) -> (Value, BexVm) {
     let mut vm =
         BexVm::from_program(program, Arc::new(AtomicBool::new(false))).expect("from_program");
     let function_ptr = vm.heap.compile_time_ptr(function_index);
@@ -118,13 +108,14 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
         stream_done: false,
         type_tag: baml_type::typetag::TypeTag::from_i64(100),
         has_cleanup: false,
+        methods: indexmap::IndexMap::new(),
         generic_param_count: 0,
-        owner: bex_vm_types::HeapPtr::null(),
+        owner: bex_vm_types::types::Owner::anonymous(),
     })));
 
     // Function: push RuntimeTy::int() as a type arg, then AllocInstance with ntypeargs=1.
     let fn_name = "user.test_alloc_typearg";
-    inject_function(
+    let function_index = inject_function(
         &mut program,
         fn_name,
         0,
@@ -141,7 +132,7 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
         ))],
     );
 
-    let (result, vm) = run_fn(program, fn_name);
+    let (result, vm) = run_fn(program, function_index);
 
     let Some(inst_ptr) = result.as_object_ptr() else {
         panic!("expected Object, got {result:?}");
@@ -173,12 +164,13 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
         stream_done: false,
         type_tag: baml_type::typetag::TypeTag::from_i64(101),
         has_cleanup: false,
+        methods: indexmap::IndexMap::new(),
         generic_param_count: 0,
-        owner: bex_vm_types::HeapPtr::null(),
+        owner: bex_vm_types::types::Owner::anonymous(),
     })));
 
     let fn_name = "user.test_mono_alloc";
-    inject_function(
+    let function_index = inject_function(
         &mut program,
         fn_name,
         0,
@@ -192,7 +184,7 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
         vec![],
     );
 
-    let (result, vm) = run_fn(program, fn_name);
+    let (result, vm) = run_fn(program, function_index);
     let Some(inst_ptr) = result.as_object_ptr() else {
         panic!("expected Object, got {result:?}");
     };
@@ -220,7 +212,7 @@ fn method_frame_type_args_seeded_with_class_type_args() {
 
     // Method body: LoadType(TypeArgRef(0)) + Return.
     let fn_name = "user.method_body";
-    inject_function(
+    let function_index = inject_function(
         &mut program,
         fn_name,
         0,
@@ -228,7 +220,6 @@ fn method_frame_type_args_seeded_with_class_type_args() {
         vec![ConstValue::Type(TyTemplate::TypeArgRef(0))],
     );
 
-    let function_index = program.function_index(fn_name).expect("fn not found");
     let mut vm =
         BexVm::from_program(program, Arc::new(AtomicBool::new(false))).expect("from_program");
     let function_ptr = vm.heap.compile_time_ptr(function_index);
@@ -273,7 +264,7 @@ fn method_frame_type_args_seeded_with_class_type_args() {
 fn method_frame_type_args_seeded_string() {
     let mut program = compile_source(STUB_SOURCE);
     let fn_name = "user.method_body_str";
-    inject_function(
+    let function_index = inject_function(
         &mut program,
         fn_name,
         0,
@@ -281,7 +272,6 @@ fn method_frame_type_args_seeded_string() {
         vec![ConstValue::Type(TyTemplate::TypeArgRef(0))],
     );
 
-    let function_index = program.function_index(fn_name).expect("fn not found");
     let mut vm =
         BexVm::from_program(program, Arc::new(AtomicBool::new(false))).expect("from_program");
     let function_ptr = vm.heap.compile_time_ptr(function_index);
@@ -334,7 +324,8 @@ function f() -> string[] {
 }
 "#,
     );
-    let (result, vm) = run_fn(program, "user.f");
+    let f = program.rendered_callables()["user.f"].object.raw();
+    let (result, vm) = run_fn(program, f);
     let ptr = result
         .as_object_ptr()
         .expect("map result should be an array object");

@@ -45,7 +45,7 @@ async fn net_connect_and_read() {
         load_const 1024
         load_type baml.io.Read
         load_const "read"
-        virtual_call nargs=2 ntypeargs=0
+        virtual_call nargs=2 ntypeargs=0 self_arg=0
         return
     }
     "#);
@@ -74,7 +74,7 @@ async fn net_connect_failure() {
         load_const 1024
         load_type baml.io.Read
         load_const "read"
-        virtual_call nargs=2 ntypeargs=0
+        virtual_call nargs=2 ntypeargs=0 self_arg=0
         return
     }
     "#);
@@ -145,13 +145,13 @@ async fn net_multiple_reads() {
         load_const 1024
         load_type baml.io.Read
         load_const "read"
-        virtual_call nargs=2 ntypeargs=0
+        virtual_call nargs=2 ntypeargs=0 self_arg=0
         store_var first
         load_var sock
         load_const 1024
         load_type baml.io.Read
         load_const "read"
-        virtual_call nargs=2 ntypeargs=0
+        virtual_call nargs=2 ntypeargs=0 self_arg=0
         store_var second
         load_var first
         return

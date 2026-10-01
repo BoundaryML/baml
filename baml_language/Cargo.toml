@@ -76,6 +76,8 @@ btel_snapshot = { path = "crates/btel_snapshot" }
 bex_str = { path = "crates/bex_str" }
 baml_base = { path = "crates/baml_base" }
 baml_artifact = { path = "crates/baml_artifact" }
+baml_linker = { path = "crates/baml_linker" }
+baml_linker_types = { path = "crates/baml_linker_types" }
 baml_type = { path = "crates/baml_type" }
 baml_type_runtime = { path = "crates/baml_type_runtime" }
 baml_type_macros = { path = "crates/baml_type_macros" }
@@ -152,13 +154,15 @@ anyhow = { version = "1" }
 async-trait = "0.1"
 askama = { version = "0.14.0" }
 # Slim, reqwest/serde-based replacements for the AWS SDK + Google Cloud auth
-# crates, living in `forks/`. They cover only what BAML needs (Bedrock Converse,
-# AWS credential sources, and Google Cloud OAuth2 tokens for Vertex AI) without
+# crates, living in `forks/`. They cover only what BAML needs (Bedrock Converse
+# and ConverseStream, AWS credential sources, and Google Cloud OAuth2 tokens
+# for Vertex AI) without
 # the Smithy runtime or the google-cloud-rust client stack. See
 # `forks/*/Cargo.toml`. The dependency keys keep the upstream crate names so
 # call sites import them unchanged; the `package` is the `forked_*` crate.
 aws-config = { path = "forks/aws-config", package = "forked_aws_config" }
 aws-sigv4 = { path = "forks/aws-sigv4", package = "forked_aws_sigv4" }
+aws-smithy-eventstream = { path = "forks/aws-smithy-eventstream", package = "forked_aws_smithy_eventstream" }
 google-cloud-auth = { path = "forks/google-cloud-auth", package = "forked_google_cloud_auth" }
 axum = { version = "0.8.4", default-features = false, features = [ "http1", "matched-path", "original-uri", "query", "tokio", "ws" ] }
 bitflags = "2"
@@ -235,6 +239,7 @@ fancy-regex = { version = "0.19" }
 # gitignore-aware directory walking (workspace project discovery in the LSP)
 ignore = { version = "0.4" }
 base64 = "0.22"
+crc32fast = "1.5"
 # LZ4 frames compress the bytecode that generated SDKs embed.
 lz4_flex = { version = "0.13" }
 mime_guess = "2"

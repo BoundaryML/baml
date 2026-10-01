@@ -195,8 +195,16 @@ pub enum VmInternalError {
     #[error(transparent)]
     FunctionIdExhausted(#[from] btel_types::FunctionIdExhausted),
 
+    /// The program breaks the executable format's laws; refused before
+    /// anything of it is loaded. See [`crate::Program::validate`].
+    #[error(transparent)]
+    InvalidProgram(#[from] crate::types::InvalidProgram),
+
     #[error("invalid argument count: expected {expected}, got {got}")]
     InvalidArgumentCount { expected: usize, got: usize },
+
+    #[error("invalid structured log envelope: {0}")]
+    InvalidLogEvent(&'static str),
 
     #[error("unexpected empty eval stack")]
     UnexpectedEmptyStack,

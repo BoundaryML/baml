@@ -1142,7 +1142,8 @@ fn build_shape<'db>(
     let Some(def) = def else {
         return format!("{} {}", sym.kind.as_str(), sym.name);
     };
-    let type_info = type_info_for_definition(db, viewer, def);
+    let type_info =
+        type_info_for_definition(db, viewer, baml_compiler2_hir::loc::DeclRef::Source(def));
     // The canonical block (fields-only for classes), without fences/docstring/hint.
     type_info.to_describe_block()
 }
@@ -1840,7 +1841,8 @@ fn resolve_type_for_item(
 ) -> Option<String> {
     use crate::info::TypeInfo;
 
-    let type_info = type_info_for_definition(db, viewer, def?);
+    let type_info =
+        type_info_for_definition(db, viewer, baml_compiler2_hir::loc::DeclRef::Source(def?));
     match type_info {
         TypeInfo::Function {
             params,

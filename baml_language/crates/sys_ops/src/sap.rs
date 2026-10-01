@@ -93,24 +93,36 @@ pub fn execute_sap_parse_final(
     ))
 }
 
+/// Parses the text received so far as a partial value, or `None` for no yield.
+///
+/// Text that doesn't parse as the target type yet is not an error here: a reply
+/// that opens with a ```` ```json ```` fence or with prose before the JSON can't
+/// be coerced until the JSON starts. As in BAML v0, the stream skips that
+/// partial and waits for more text; [`execute_sap_parse_final`] still reports a
+/// reply that never parses.
 pub fn execute_sap_parse_partial(
     json: &str,
     sap: &SapParseCache,
     _ctx: &::sys_types::SysOpContext,
 ) -> Result<Option<bex_external_types::BexExternalValue>, LlmOpError> {
-    // === Jsonish ===
-    let jsonish_options = ::bex_sap::jsonish::ParseOptions::default();
-    let jsonish = ::bex_sap::jsonish::parse(json, jsonish_options, false)
-        .map_err(LlmOpError::JsonishError)?;
-
-    // === SAP parsing (a partial is the same type, parsed from the text so far) ===
+    // An unresolvable target type is a schema bug, not an incomplete reply.
     let parse_ctx = ::bex_sap::deserializer::coercer::ParsingContext::new(sap.db());
     let target = sap
         .ty_resolved()
         .map_err(|err| parse_ctx.error_type_resolution(err))
         .map_err(LlmOpError::SapError)?;
-    let parsed = ::bex_sap::sap_model::TyResolvedRef::coerce(&parse_ctx, target, &jsonish)
-        .map_err(LlmOpError::SapError)?;
+
+    // === Jsonish ===
+    let jsonish_options = ::bex_sap::jsonish::ParseOptions::default();
+    let Ok(jsonish) = ::bex_sap::jsonish::parse(json, jsonish_options, false) else {
+        return Ok(None);
+    };
+
+    // === SAP parsing (a partial is the same type, parsed from the text so far) ===
+    let Ok(parsed) = ::bex_sap::sap_model::TyResolvedRef::coerce(&parse_ctx, target, &jsonish)
+    else {
+        return Ok(None);
+    };
     // === Convert back to baml ===
     match parsed {
         Some(parsed) => {

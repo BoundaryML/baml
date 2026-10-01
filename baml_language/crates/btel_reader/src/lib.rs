@@ -8,6 +8,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 pub mod cas;
+pub mod context;
 pub mod discovery;
 pub mod evidence;
 pub mod file;

@@ -868,8 +868,9 @@ fn build_group(
             stream_done: false,
             type_tag,
             has_cleanup: false,
+            methods: IndexMap::new(),
             generic_param_count: 0,
-            owner: HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let ty = bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(ptr, type_tag),

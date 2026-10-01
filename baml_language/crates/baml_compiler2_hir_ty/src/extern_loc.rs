@@ -26,7 +26,10 @@
 use std::borrow::Cow;
 
 use baml_base::{Name, SourceRoot};
-use baml_compiler2_hir::loc::{ClassLoc, DeclRef, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc};
+use baml_compiler2_hir::{
+    contributions::Definition,
+    loc::{ClassLoc, DeclRef, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc, TypeAliasLoc},
+};
 use baml_type::{
     DeclName, ParamTy,
     interned::{ClosedInterface, ClosedTy},
@@ -51,8 +54,98 @@ pub type ClassRef<'db> = DeclRef<ClassLoc<'db>, ExternClassLoc<'db>>;
 pub type EnumRef<'db> = DeclRef<EnumLoc<'db>, ExternEnumLoc<'db>>;
 /// An interface, wherever it is declared.
 pub type InterfaceRef<'db> = DeclRef<InterfaceLoc<'db>, ExternInterfaceLoc<'db>>;
+/// A type alias, wherever it is declared. An alias is transparent (its
+/// name is a spelling device, never an identity — `TYPE_SYSTEM.md`), so the
+/// ref identifies the DECLARATION for enumeration and value reads only.
+pub type AliasRef<'db> = DeclRef<TypeAliasLoc<'db>, ExternTypeAliasLoc<'db>>;
 /// An `implements` block, wherever it is declared.
 pub type ImplRef<'db> = DeclRef<ImplLoc<'db>, ExternImplLoc<'db>>;
+
+/// A top-level declaration, wherever it is declared: the provenance-total
+/// twin of hir's [`Definition`] — a source item, or a served package's row by
+/// the identity of its defining declaration.
+pub type DefinitionRef<'db> = DeclRef<Definition<'db>, ExternDefinition<'db>>;
+
+/// A declaration served from a package interface, by the identity of its
+/// row — the External twin of [`Definition`]. A `let` has no row
+/// (`ExportedLet` is out of scope), so none is representable here.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ExternDefinition<'db> {
+    Class(ExternClassLoc<'db>),
+    Enum(ExternEnumLoc<'db>),
+    Interface(ExternInterfaceLoc<'db>),
+    TypeAlias(ExternTypeAliasLoc<'db>),
+    Function(ExternFunctionLoc<'db>),
+}
+
+impl std::fmt::Debug for ExternDefinition<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Class(_) => f.write_str("ExternDefinition::Class(..)"),
+            Self::Enum(_) => f.write_str("ExternDefinition::Enum(..)"),
+            Self::Interface(_) => f.write_str("ExternDefinition::Interface(..)"),
+            Self::TypeAlias(_) => f.write_str("ExternDefinition::TypeAlias(..)"),
+            Self::Function(_) => f.write_str("ExternDefinition::Function(..)"),
+        }
+    }
+}
+
+impl<'db> ExternDefinition<'db> {
+    /// The declaration's item name.
+    pub fn name(self, db: &'db dyn baml_compiler2_hir::Db) -> Name {
+        match self {
+            Self::Class(loc) => loc.head(db).name().clone(),
+            Self::Enum(loc) => loc.head(db).name().clone(),
+            Self::Interface(loc) => loc.head(db).name().clone(),
+            Self::TypeAlias(loc) => loc.head(db).name().clone(),
+            Self::Function(loc) => extern_function_row(db, loc).name.clone(),
+        }
+    }
+
+    /// The declaration the definition lives under: a type's own head; a
+    /// function's item head (its owning class or interface for a method).
+    /// The root is the defining package, the namespace where it is declared.
+    pub fn declared_at(self, db: &'db dyn baml_compiler2_hir::Db) -> DeclName {
+        match self {
+            Self::Class(loc) => loc.head(db).clone(),
+            Self::Enum(loc) => loc.head(db).clone(),
+            Self::Interface(loc) => loc.head(db).clone(),
+            Self::TypeAlias(loc) => loc.head(db).clone(),
+            Self::Function(loc) => match &extern_function_row(db, loc).target {
+                ExternalCallTarget::Free { function } => function.clone(),
+                ExternalCallTarget::Method { class, .. } => class.clone(),
+                ExternalCallTarget::Interface { interface, .. } => interface.clone(),
+            },
+        }
+    }
+}
+
+/// The declaration a served package exports at `namespace.name`, by the
+/// identity of its DEFINING row (a re-export names it in another package):
+/// a type row of any kind, else the free function. `None` when `root` is not
+/// served from its interface or exports no such name.
+pub fn extern_definition_named<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    root: SourceRoot,
+    namespace: &[Name],
+    name: &Name,
+) -> Option<ExternDefinition<'db>> {
+    if !served(db, root) {
+        return None;
+    }
+    let head = crate::package_interface::defining_head(
+        db,
+        DeclName::in_root(root, namespace.to_vec(), name.clone()),
+    );
+    extern_class_loc(db, &head)
+        .map(ExternDefinition::Class)
+        .or_else(|| extern_enum_loc(db, &head).map(ExternDefinition::Enum))
+        .or_else(|| extern_interface_loc(db, &head).map(ExternDefinition::Interface))
+        .or_else(|| extern_alias_loc(db, &head).map(ExternDefinition::TypeAlias))
+        .or_else(|| {
+            extern_function_named(db, root, namespace, name).map(ExternDefinition::Function)
+        })
+}
 
 // ── Type rows ────────────────────────────────────────────────────────────────
 //
@@ -82,6 +175,13 @@ pub struct ExternInterfaceLoc<'db> {
     pub head: DeclName,
 }
 
+/// The identity of an exported type-alias row.
+#[salsa::interned]
+pub struct ExternTypeAliasLoc<'db> {
+    #[returns(ref)]
+    pub head: DeclName,
+}
+
 impl std::fmt::Debug for ExternClassLoc<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "ExternClassLoc(..)")
@@ -97,6 +197,12 @@ impl std::fmt::Debug for ExternEnumLoc<'_> {
 impl std::fmt::Debug for ExternInterfaceLoc<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "ExternInterfaceLoc(..)")
+    }
+}
+
+impl std::fmt::Debug for ExternTypeAliasLoc<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ExternTypeAliasLoc(..)")
     }
 }
 
@@ -219,8 +325,25 @@ pub fn extern_interface_row<'db>(
     }
 }
 
+/// The value the alias row `alias` names — already resolved by the
+/// exporter (one level, as `crate::lower::type_alias_value` resolves a
+/// source alias). TOTAL, as [`extern_function_row`].
+pub fn extern_alias_row<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    alias: ExternTypeAliasLoc<'db>,
+) -> &'db baml_type::Ty {
+    let head = alias.head(db);
+    match type_row_at(db, head) {
+        Some(ExportedType::TypeAlias { qtn: _, resolved }) => resolved,
+        Some(
+            ExportedType::Class { .. } | ExportedType::Enum { .. } | ExportedType::Interface { .. },
+        )
+        | None => no_type_row(db, "type alias", head),
+    }
+}
+
 /// The class `head` names, if its package exports one.
-fn extern_class_loc<'db>(
+pub(crate) fn extern_class_loc<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     head: &DeclName,
 ) -> Option<ExternClassLoc<'db>> {
@@ -229,7 +352,7 @@ fn extern_class_loc<'db>(
 }
 
 /// The enum `head` names, if its package exports one.
-fn extern_enum_loc<'db>(
+pub(crate) fn extern_enum_loc<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     head: &DeclName,
 ) -> Option<ExternEnumLoc<'db>> {
@@ -238,12 +361,21 @@ fn extern_enum_loc<'db>(
 }
 
 /// The interface `head` names, if its package exports one.
-fn extern_interface_loc<'db>(
+pub(crate) fn extern_interface_loc<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     head: &DeclName,
 ) -> Option<ExternInterfaceLoc<'db>> {
     matches!(type_row_at(db, head)?, ExportedType::Interface { .. })
         .then(|| ExternInterfaceLoc::new(db, head.clone()))
+}
+
+/// The type alias `head` names, if its package exports one.
+pub(crate) fn extern_alias_loc<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    head: &DeclName,
+) -> Option<ExternTypeAliasLoc<'db>> {
+    matches!(type_row_at(db, head)?, ExportedType::TypeAlias { .. })
+        .then(|| ExternTypeAliasLoc::new(db, head.clone()))
 }
 
 /// `extern_class_loc` for a package served from its interface.
@@ -268,6 +400,14 @@ pub fn mounted_interface_loc<'db>(
     head: &DeclName,
 ) -> Option<ExternInterfaceLoc<'db>> {
     served(db, head.root()).then(|| extern_interface_loc(db, head))?
+}
+
+/// `extern_alias_loc` for a package served from its interface.
+pub fn mounted_alias_loc<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    head: &DeclName,
+) -> Option<ExternTypeAliasLoc<'db>> {
+    served(db, head.root()).then(|| extern_alias_loc(db, head))?
 }
 
 // ── Impl identity ────────────────────────────────────────────────────────────
@@ -844,19 +984,16 @@ pub fn mounted_interface_method<'db>(
     served(db, interface.root()).then(|| extern_interface_method(db, interface, name))?
 }
 
-/// The free function `namespace.name` of `root`, if exported.
+/// The free function `namespace.name` of `root`, if exported — by the
+/// identity of its defining row, which a re-export names in another package.
 pub fn extern_function_named<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     root: SourceRoot,
     namespace: &[Name],
     name: &Name,
 ) -> Option<ExternFunctionLoc<'db>> {
-    mint_declared(
-        db,
-        ExternalCallTarget::Free {
-            function: DeclName::in_root(root, namespace.to_vec(), name.clone()),
-        },
-    )
+    let function = crate::package_interface::exported_function_head(db, root, namespace, name)?;
+    mint_declared(db, ExternalCallTarget::Free { function })
 }
 
 /// The inherent method `name` of the exported class `class`, if any.

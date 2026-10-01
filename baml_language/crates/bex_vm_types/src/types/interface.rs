@@ -8,9 +8,10 @@ pub struct InterfaceDef {
     // Signature
     pub name: baml_type::TypeName,
 
-    /// This interface's head identity, content-addressed from its
-    /// fully-qualified name at emit time — the identity a `TypeHead` referring
-    /// to this interface compares by.
+    /// This interface's head identity — assigned by the linker (`CLASS_BASE +`
+    /// its object index in the image) or minted fresh by the grafter; in a
+    /// unit, its own object operand — the identity a `TypeHead` referring to
+    /// this interface compares by.
     ///
     /// Interfaces have no dispatch tag: an interface is an existential, so no
     /// *value* is ever "of" an interface in the sense `TypeTag` reports. This is
@@ -29,10 +30,10 @@ pub struct InterfaceDef {
     pub fields: Vec<InterfaceFieldDef>,
     pub methods: Vec<InterfaceMethodDef>,
 
-    /// Runtime package that declared this interface; null for a static
-    /// declaration. A member back-edge: reaching the interface keeps its
-    /// package alive, the same ownership shape ``Class::owner``
-    /// gives classes and enums. This is a GC edge, never serialized.
+    /// The package that owns this declaration (a static package's is
+    /// assigned at load; nothing mints an interface anonymously). A member
+    /// back-edge: reaching the interface keeps its package alive. This is a
+    /// GC edge, never serialized.
     #[borsh(skip)]
     pub owner: HeapPtr,
 }
@@ -81,7 +82,7 @@ pub struct InterfaceMethodDef {
 /// those args/assoc* — the runtime twin of a `T: Iface<Args, Assoc = …>`
 /// predicate instantiated with the impl substitutions (rustc). Bounds are
 /// interfaces, not types, so an intersection of bounds is a *set* of these.
-#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub struct InterfaceBound {
     pub interface: crate::TypeHead,
     pub args: Vec<crate::TyTemplate>,

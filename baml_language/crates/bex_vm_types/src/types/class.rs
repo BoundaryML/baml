@@ -1,7 +1,9 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 
-use crate::{AtomicValueSlot, CleanupLatch, HeapPtr, RuntimeTy, Value, types::TypeValue};
+use crate::{
+    AtomicValueSlot, CleanupLatch, HeapPtr, ObjectIndex, RuntimeTy, Value, types::TypeValue,
+};
 
 /// A field within a runtime class, carrying type and schema metadata.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
@@ -63,9 +65,11 @@ pub struct Class {
     /// the whole object is complete.
     pub stream_done: bool,
 
-    /// This class's head identity, content-addressed from its fully-qualified
-    /// name at emit time. Both the `TypeTag` instruction's jump-table dispatch
-    /// value and the identity a `TypeHead` referring to this class compares by.
+    /// This class's head identity: assigned by the linker (`CLASS_BASE +` the
+    /// class's object index in the image) or, for a runtime-created class,
+    /// minted fresh by the grafter; in a unit it holds the class's own object
+    /// operand. Both the `TypeTag` instruction's jump-table dispatch value and
+    /// the identity a `TypeHead` referring to this class compares by.
     pub type_tag: baml_type::typetag::TypeTag,
 
     /// BEP-042: `true` if this class defines a magic `cleanup(self) -> void`
@@ -82,12 +86,36 @@ pub struct Class {
     /// (bound by the receiver, never by name). Set at emit time.
     pub generic_param_count: usize,
 
-    /// The runtime package that owns this declaration, or null for a
-    /// compile-time one. A GC edge: reaching the class keeps its package — and
-    /// so its globals and dependencies — alive. Mirrors `InterfaceDef::owner`
-    /// and `TypeAliasDef::owner`.
+    /// What this declaration belongs to: its package (a static package's is
+    /// assigned at load), or nothing — a class minted through `reflect`,
+    /// which then holds its own witness rules. See [`Owner`](super::Owner).
     #[borsh(skip)]
-    pub owner: HeapPtr,
+    pub owner: super::Owner,
+
+    /// The class's inherent methods (static and instance, natives included),
+    /// by name, in declaration order. Impl-provided methods are not here:
+    /// they are reached through the impl rules. A class created at run time
+    /// through `reflect` has an empty table.
+    ///
+    /// This is the class's method surface by identity — how a package's
+    /// export table names a method (`FnPath::Method`), and how a consumer
+    /// binds one without a rendered spelling.
+    pub methods: IndexMap<baml_type::Name, ClassMethodDef>,
+}
+
+/// One inherent method of a [`Class`]: the pooled function on the wire, bound
+/// to a pointer at load — exactly as an interface's
+/// [`InterfaceMethodDef::default`](super::InterfaceMethodDef::default) becomes
+/// its `default_fn`.
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
+pub struct ClassMethodDef {
+    /// The method's function object, relocated by the linker like any other
+    /// cross-object operand (see `relink::visit_object_operands`).
+    pub function: ObjectIndex,
+    /// The loaded function: null until the pool is bound. Never serialized —
+    /// pointers are runtime-only. A GC edge like `default_fn`.
+    #[borsh(skip)]
+    pub function_ptr: HeapPtr,
 }
 
 impl std::fmt::Display for Class {

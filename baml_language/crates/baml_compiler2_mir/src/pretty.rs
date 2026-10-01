@@ -24,9 +24,51 @@ use std::fmt::{self, Write};
 
 use crate::{
     AggregateKind, BasicBlock, BuiltinKind, Constant, IntrinsicOp, Local, LocalDecl, LogLevel,
-    MirFunction, MirFunctionBody, MirFunctionKind, Operand, Rvalue, Statement, StatementKind,
-    Terminator,
+    MirFunction, MirFunctionBody, MirFunctionKind, Operand, RuntimeTy, Rvalue, Statement,
+    StatementKind, SwitchKey, Terminator, TyTemplate, TyTemplateInterface,
 };
+
+/// MIR's heads are identities; a dump names them as the program spells them.
+/// The one place a MIR type becomes text.
+struct Names<'a>(&'a baml_compiler2_hir::package::Spelling);
+
+impl<'a> Names<'a> {
+    fn of(db: &'a dyn crate::Db) -> Self {
+        Self(baml_compiler2_hir::package::spelling(db))
+    }
+
+    fn ty(&self, ty: &RuntimeTy) -> baml_type::RuntimeTy {
+        ty.map_heads(&mut |decl| self.0.wire(decl))
+    }
+
+    fn template(&self, template: &TyTemplate) -> baml_type::TyTemplate {
+        template.map_heads(&mut |decl| self.0.wire(decl))
+    }
+
+    fn templates(&self, templates: &[TyTemplate]) -> String {
+        templates
+            .iter()
+            .map(|template| self.template(template).to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    fn interface(&self, interface: &TyTemplateInterface) -> baml_type::TyTemplateInterface {
+        baml_type::TyTemplateInterface {
+            name: self.0.wire(&interface.name),
+            generics: interface
+                .generics
+                .iter()
+                .map(|generic| self.template(generic))
+                .collect(),
+            associated_types: interface
+                .associated_types
+                .iter()
+                .map(|(name, binding)| (name.clone(), self.template(binding)))
+                .collect(),
+        }
+    }
+}
 
 /// Pretty print a MIR function.
 pub fn display_function(db: &dyn crate::Db, func: &MirFunction<'_>) -> String {
@@ -78,7 +120,7 @@ fn write_bytecode_function(
         // Guard against missing locals in error recovery cases
         if i < body.locals.len() {
             let local = &body.locals[i];
-            write_local_decl_inline(f, Local(i), local)?;
+            write_local_decl_inline(f, db, Local(i), local)?;
         } else {
             write!(f, "_{i}: <missing>")?;
         }
@@ -88,7 +130,7 @@ fn write_bytecode_function(
     write!(f, ")")?;
     if !body.locals.is_empty() {
         let ret = &body.locals[0];
-        write!(f, " -> {}", ret.ty)?;
+        write!(f, " -> {}", Names::of(db).ty(&ret.ty))?;
     }
     writeln!(f, " {{")?;
     write_body(f, db, body, func.arity)?;
@@ -121,7 +163,7 @@ fn write_body(
 ) -> fmt::Result {
     writeln!(f, "    // Locals:")?;
     for (i, local) in body.locals.iter().enumerate() {
-        write!(f, "    let _{i}: {}", local.ty)?;
+        write!(f, "    let _{i}: {}", Names::of(db).ty(&local.ty))?;
         if let Some(name) = &local.name {
             write!(f, " // {name}")?;
         }
@@ -146,11 +188,17 @@ fn write_body(
     Ok(())
 }
 
-fn write_local_decl_inline(f: &mut impl Write, id: Local, decl: &LocalDecl) -> fmt::Result {
+fn write_local_decl_inline(
+    f: &mut impl Write,
+    db: &dyn crate::Db,
+    id: Local,
+    decl: &LocalDecl,
+) -> fmt::Result {
+    let ty = Names::of(db).ty(&decl.ty);
     if let Some(name) = &decl.name {
-        write!(f, "{name}: {}", decl.ty)
+        write!(f, "{name}: {ty}")
     } else {
-        write!(f, "{id}: {}", decl.ty)
+        write!(f, "{id}: {ty}")
     }
 }
 
@@ -207,7 +255,11 @@ fn write_statement(f: &mut impl Write, db: &dyn crate::Db, stmt: &Statement<'_>)
             value,
         } => {
             write_operand(f, db, receiver)?;
-            write!(f, ".{field}#{field_index} as {iface} = ")?;
+            write!(
+                f,
+                ".{field}#{field_index} as {} = ",
+                Names::of(db).interface(iface)
+            )?;
             write_operand(f, db, value)?;
             write!(f, ";")
         }
@@ -272,14 +324,18 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
         }
         Terminator::NarrowBind {
             source,
-            ty_template,
+            test,
             destination,
             then_block,
             else_block,
         } => {
             write!(f, "{destination} = narrow_bind ")?;
             write_operand(f, db, source)?;
-            write!(f, " as {ty_template:?} -> [{then_block}, {else_block}];")
+            write!(
+                f,
+                " as {:?} -> [{then_block}, {else_block}];",
+                Names::of(db).template(&test.template(db))
+            )
         }
         Terminator::Switch {
             discriminant,
@@ -289,20 +345,22 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
             arm_names,
         } => {
             // Build name lookup for symbolic display
-            let name_map: std::collections::HashMap<i64, &str> =
-                arm_names.iter().map(|(v, n)| (*v, n.as_str())).collect();
+            let name_map: std::collections::HashMap<SwitchKey<'_>, &str> =
+                arm_names.iter().map(|(k, n)| (*k, n.as_str())).collect();
 
             write!(f, "switch ")?;
             write_operand(f, db, discriminant)?;
             write!(f, " [")?;
-            for (i, (val, target)) in arms.iter().enumerate() {
+            for (i, (key, target)) in arms.iter().enumerate() {
                 if i > 0 {
                     write!(f, ", ")?;
                 }
-                if let Some(name) = name_map.get(val) {
-                    write!(f, "{name}: {target}")?;
-                } else {
-                    write!(f, "{val}: {target}")?;
+                match (name_map.get(key), key) {
+                    (Some(name), _) => write!(f, "{name}: {target}")?,
+                    (None, SwitchKey::Int(val)) => write!(f, "{val}: {target}")?,
+                    (None, SwitchKey::Class(class)) => {
+                        write!(f, "{}: {target}", crate::class_link_name(db, *class))?;
+                    }
                 }
             }
             if *exhaustive {
@@ -355,12 +413,17 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
             method,
             args,
             ntypeargs,
+            self_arg,
             destination,
             target,
             unwind,
             ..
         } => {
-            write!(f, "{destination} = virtual_call {method} as {iface}")?;
+            write!(
+                f,
+                "{destination} = virtual_call {method} as {}",
+                Names::of(db).interface(iface)
+            )?;
             if *ntypeargs > 0 {
                 write!(f, "<")?;
                 for (i, arg) in args.iter().take(*ntypeargs).enumerate() {
@@ -380,7 +443,13 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
                 write_operand(f, db, arg)?;
                 wrote_arg = true;
             }
-            write!(f, ") -> [{target}")?;
+            write!(f, ")")?;
+            // The receiver position is the norm; only a dispatch elsewhere
+            // is worth a word.
+            if *self_arg != 0 {
+                write!(f, " self_arg={self_arg}")?;
+            }
+            write!(f, " -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
             }
@@ -500,7 +569,11 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
             field,
         } => {
             write_operand(f, db, receiver)?;
-            write!(f, ".{field}#{field_index} as {iface}")
+            write!(
+                f,
+                ".{field}#{field_index} as {}",
+                Names::of(db).interface(iface)
+            )
         }
         Rvalue::BinaryOp { op, left, right } => {
             write_operand(f, db, left)?;
@@ -521,7 +594,7 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
             }
             // Show the emitted element-type template so MIR snapshots can catch a
             // wrong array element type (not just the later bytecode `load_type`).
-            write!(f, "]: {element_template}[]")
+            write!(f, "]: {}[]", Names::of(db).template(element_template))
         }
         Rvalue::Uint8Array(bytes) => write!(f, "b\"<{} bytes>\"", bytes.len()),
         Rvalue::Map(key_template, value_template, entries) => {
@@ -534,29 +607,24 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
                 write!(f, ": ")?;
                 write_operand(f, db, value)?;
             }
-            write!(f, " }}: map<{key_template}, {value_template}>")
+            write!(
+                f,
+                " }}: map<{}, {}>",
+                Names::of(db).template(key_template),
+                Names::of(db).template(value_template)
+            )
         }
         Rvalue::Aggregate { kind, fields } => {
             match kind {
                 AggregateKind::Array => write!(f, "array")?,
                 AggregateKind::Class {
-                    name,
+                    class,
                     type_arg_templates,
                 } => {
-                    write!(f, "{name}")?;
+                    write!(f, "{}", crate::lower::class_link_name(db, *class))?;
                     if !type_arg_templates.is_empty() {
-                        write!(f, "<")?;
-                        for (i, t) in type_arg_templates.iter().enumerate() {
-                            if i > 0 {
-                                write!(f, ", ")?;
-                            }
-                            write!(f, "{t}")?;
-                        }
-                        write!(f, ">")?;
+                        write!(f, "<{}>", Names::of(db).templates(type_arg_templates))?;
                     }
-                }
-                AggregateKind::EnumVariant { enum_name, variant } => {
-                    write!(f, "{enum_name}::{variant}")?;
                 }
             }
             write!(f, " {{ ")?;
@@ -577,13 +645,10 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
         Rvalue::Len(place) => {
             write!(f, "len({place})")
         }
-        Rvalue::IsType {
-            operand,
-            ty_template,
-        } => {
+        Rvalue::IsType { operand, test } => {
             write!(f, "is_type(")?;
             write_operand(f, db, operand)?;
-            write!(f, ", {ty_template})")
+            write!(f, ", {})", Names::of(db).template(&test.template(db)))
         }
         Rvalue::IsTypeTag { operand, tag } => {
             write!(f, "is_type_tag(")?;
@@ -623,9 +688,14 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
             receiver,
             type_args,
         } => {
-            write!(f, "make_virtual_bound_method {iface:?}.{method}")?;
+            let names = Names::of(db);
+            write!(
+                f,
+                "make_virtual_bound_method {}.{method}",
+                names.interface(iface)
+            )?;
             if !type_args.is_empty() {
-                write!(f, "<{type_args:?}>")?;
+                write!(f, "<{}>", names.templates(type_args))?;
             }
             write!(f, "(")?;
             write_operand(f, db, receiver)?;
@@ -637,7 +707,12 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
             method,
             type_args,
         } => {
-            write!(f, "make_virtual_function ({self_ty} as {iface:?}).{method}")?;
+            write!(
+                f,
+                "make_virtual_function ({} as {}).{method}",
+                Names::of(db).template(self_ty),
+                Names::of(db).interface(iface)
+            )?;
             if !type_args.is_empty() {
                 write!(f, "<")?;
                 for (index, arg) in type_args.iter().enumerate() {
@@ -651,7 +726,7 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
             Ok(())
         }
         Rvalue::LoadType(template) => {
-            write!(f, "load_type({template})")
+            write!(f, "load_type({})", Names::of(db).template(template))
         }
         Rvalue::CurrentPackage(package) => {
             write!(f, "current_package({package})")
@@ -660,12 +735,11 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
             func,
             type_arg_templates,
         } => {
-            let args: Vec<String> = type_arg_templates.iter().map(ToString::to_string).collect();
             write!(
                 f,
                 "make_generic_function {}<{}>",
                 crate::lower::function_link_name(db, *func),
-                args.join(", ")
+                Names::of(db).templates(type_arg_templates)
             )
         }
         Rvalue::MakeGenericFunctionFromValue {
@@ -674,8 +748,7 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
         } => {
             write!(f, "make_generic_function_from_value(")?;
             write_operand(f, db, value)?;
-            let args: Vec<String> = type_arg_templates.iter().map(ToString::to_string).collect();
-            write!(f, ")<{}>", args.join(", "))
+            write!(f, ")<{}>", Names::of(db).templates(type_arg_templates))
         }
     }
 }
@@ -739,7 +812,11 @@ fn write_constant(f: &mut impl Write, db: &dyn crate::Db, constant: &Constant<'_
             )
         }
         Constant::GenericFunction { func, type_args } => {
-            let args: Vec<String> = type_args.iter().map(ToString::to_string).collect();
+            let spelling = Names::of(db);
+            let args: Vec<String> = type_args
+                .iter()
+                .map(|ty| ty.map_heads(&mut |decl| spelling.0.wire(decl)).to_string())
+                .collect();
             write!(
                 f,
                 "const fn {}<{}>",
@@ -747,10 +824,16 @@ fn write_constant(f: &mut impl Write, db: &dyn crate::Db, constant: &Constant<'_
                 args.join(", ")
             )
         }
-        Constant::EnumVariant { enum_ref, variant } => write!(
-            f,
-            "const {}.{variant}",
-            crate::lower::enum_link_name(db, *enum_ref)
-        ),
+        Constant::EnumVariant { enum_ref, index } => {
+            let variants = baml_compiler2_hir_ty::layout::enum_variants(db, *enum_ref);
+            let variant = variants
+                .get(usize::try_from(*index).expect("u32 fits usize"))
+                .map_or_else(|| format!("#{index}"), ToString::to_string);
+            write!(
+                f,
+                "const {}.{variant}",
+                crate::lower::enum_link_name(db, *enum_ref)
+            )
+        }
     }
 }

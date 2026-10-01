@@ -1,8 +1,8 @@
 //! The prefix-accelerated compile helpers must be a *substitute*, not an
 //! approximation.
 //!
-//! `baml_tests::stdlib_prefix` skips re-deriving the stdlib by splicing in a slice
-//! built at build time. That is only legitimate while the spliced result is
+//! `baml_tests::stdlib_prefix` skips re-deriving the stdlib by linking in its
+//! packages' outputs built at build time. That is only legitimate while the spliced result is
 //! indistinguishable from an honest compile, so this oracle compiles the same
 //! sources both ways and compares the serialized `Program`s byte for byte, at
 //! every optimization level the artifact carries.
@@ -17,8 +17,8 @@
 use std::{collections::HashSet, path::Path};
 
 use baml_compiler_diagnostics::Severity;
-use baml_compiler2_emit::{OptLevel, generate_project_bytecode_with_opt};
-use baml_db::{ProjectDatabase, collect_diagnostics, testing};
+use baml_compiler2_emit::OptLevel;
+use baml_db::{ProjectDatabase, collect_diagnostics, compile_program, testing};
 use baml_tests::{
     engine::TestDbExt,
     stdlib_prefix::{check_user_files, prefix},
@@ -109,7 +109,7 @@ fn honest_bytes(opt: OptLevel) -> Vec<u8> {
         db.file(*path, content);
     }
     testing::assert_no_diagnostic_errors(&db);
-    let program = generate_project_bytecode_with_opt(&db, package, opt).expect("honest compile");
+    let program = compile_program(&db, package, opt).expect("honest compile");
     borsh::to_vec(&program).expect("serialize honest program")
 }
 
@@ -126,8 +126,8 @@ fn prefixed_compile_is_byte_identical_at_every_opt_level() {
         assert_eq!(
             honest.len(),
             fast.len(),
-            "{opt:?}: prefixed program is {} bytes, honest is {} — the spliced stdlib slice no \
-             longer matches what these sources compile to",
+            "{opt:?}: prefixed program is {} bytes, honest is {} — the served stdlib packages no \
+             longer match what these sources compile to",
             fast.len(),
             honest.len(),
         );

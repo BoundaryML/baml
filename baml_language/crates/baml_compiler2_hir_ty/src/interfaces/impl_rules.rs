@@ -1153,26 +1153,26 @@ pub fn validate_impl_signatures<'db>(
                 }
             }
 
+            let bounds: TypeVarBoundsMap = facts
+                .generic_params
+                .iter()
+                .map(|(param, bounds)| {
+                    (
+                        param.clone(),
+                        bounds
+                            .iter()
+                            .map(baml_type::interned::ClosedInterface::to_plain)
+                            .collect(),
+                    )
+                })
+                .collect();
+            let ctx = crate::facts::Facts::with_bounds(db, bounds.into_iter().collect());
             // E0125: mounted interface exports carry their transitive
             // `requires` closure in symbolic form. Realize that closure with
             // this impl's receiver and interface arguments, normalize any
             // `Self.member` projections through the same fact oracle as the
             // source-interface path, then ask the shared membership oracle.
             if validate_requires {
-                let bounds: TypeVarBoundsMap = facts
-                    .generic_params
-                    .iter()
-                    .map(|(param, bounds)| {
-                        (
-                            param.clone(),
-                            bounds
-                                .iter()
-                                .map(baml_type::interned::ClosedInterface::to_plain)
-                                .collect(),
-                        )
-                    })
-                    .collect();
-                let ctx = crate::facts::Facts::with_bounds(db, bounds.into_iter().collect());
                 for required in crate::impls::direct_requires_closure_plain(
                     db,
                     &interface,
@@ -1196,6 +1196,41 @@ pub fn validate_impl_signatures<'db>(
                                 required,
                             },
                             ImplDiagnosticLocation::InterfaceTarget,
+                        ));
+                    }
+                }
+            }
+            // An explicit `type Name = V` binding must implement the
+            // interface's declared bound for `Name` — the check the
+            // source-interface path runs below, here over the header's
+            // realized bindings and the exported row's bound, through the
+            // same fact oracle.
+            let realized_pins: Vec<(Name, baml_type::Ty)> = facts
+                .associated_types
+                .iter()
+                .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                .collect();
+            let target_iface = baml_type::Interface {
+                name: interface.name.clone(),
+                generics: interface.generics.clone(),
+                associated_types: realized_pins.clone().into(),
+            };
+            for binding in &block.associated_type_bindings {
+                let Some((_, binding_ty)) = realized_pins.iter().find(|(n, _)| *n == binding.name)
+                else {
+                    continue;
+                };
+                let normalized = baml_type::normalize::normalize(binding_ty, &ctx);
+                for bound in ctx.associated_type_bound(&target_iface, binding.name.clone()) {
+                    if !normalized_arg_implements_bound(&ctx, &normalized, &bound) {
+                        diags.push((
+                            TirTypeError::AssociatedTypeBindingViolatesBound {
+                                interface: interface.name.clone(),
+                                name: binding.name.clone(),
+                                binding: binding_ty.clone(),
+                                bound,
+                            },
+                            ImplDiagnosticLocation::AssociatedBinding(binding.name.clone()),
                         ));
                     }
                 }

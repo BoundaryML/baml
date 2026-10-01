@@ -840,10 +840,9 @@ enum PendingDiag<'db> {
     },
     /// An item projection's `Self` slot, judged once inference resolves it:
     /// erased (existential/union) `Self` is admitted only where the method
-    /// can dispatch on it — its one `Self`-typed parameter, which must be
-    /// the first argument (the VM reads `Self` from the first value
-    /// argument). Pushed for EVERY item projection; a concrete or typevar
-    /// slot passes silently.
+    /// can dispatch on it — its one required `Self`-typed parameter, whose
+    /// argument the VM reads `Self` from. Pushed for EVERY item projection;
+    /// a concrete or typevar slot passes silently.
     ItemProjectionSelfSlot {
         expr: ExprId,
         var: Ty,
@@ -6428,6 +6427,12 @@ impl<'db> InferenceContext<'db> {
         member: &baml_type::Name,
     ) -> Option<crate::method_resolution::InterfaceMember<'db>> {
         let (target, self_ty) = self.default_receiver_target()?;
+        // BUG: only a SOURCE interface's default is reachable here. An impl
+        // of a MOUNTED interface cannot delegate to that interface's default
+        // body (`default.m()` reports E0003, unresolved name), although the
+        // exported row carries the method and the runtime loader binds a
+        // mounted default body (`DeclPath::InterfaceBody(BodyKey::Default)`
+        // at the mount's dependency slot) — resolve the member from the row.
         let Some(baml_compiler2_hir::contributions::Definition::Interface(interface)) =
             self.facts.definition_of(&target.name)
         else {
@@ -7135,11 +7140,11 @@ impl<'db> InferenceContext<'db> {
         // (the inferred spelling only pins `Self` through the arguments):
         // an ERASED `Self` — an interface-existential or a union — is
         // admitted only where the one-`Self` rule lets the call dispatch on
-        // it (`callable_self_dispatch`): the one `Self`-typed parameter, in
-        // first position, from whose runtime type the VM derives `Self`.
-        // The receiver is not special here — `self` is just such a
-        // parameter. An UNRESOLVED `Self` is a hard error: rustc's E0790,
-        // whose fix is the fully-qualified spelling.
+        // it (`callable_self_dispatch`): the one required `Self`-typed
+        // parameter, wherever it is declared, from whose runtime type the VM
+        // derives `Self`. The receiver is not special here — `self` is just
+        // such a parameter. An UNRESOLVED `Self` is a hard error: rustc's
+        // E0790, whose fix is the fully-qualified spelling.
         let dispatch = crate::callable::callable_self_dispatch(self.db, method);
         let iface_ref = InferInterface::new(
             iface_qtn,
@@ -11906,10 +11911,10 @@ impl<'db> InferenceContext<'db> {
                                 },
                                 expr,
                             ),
-                            // A CALL dispatches off the first argument's
-                            // runtime type; a reified value has no
-                            // resolution moment.
-                            crate::callable::SelfDispatch::OnParam(0) if value_position => (
+                            // A CALL dispatches off the `Self`-typed
+                            // argument's runtime type; a reified value has
+                            // no resolution moment.
+                            crate::callable::SelfDispatch::OnParam(_) if value_position => (
                                 TirTypeError::ErasedSelfMethodValue {
                                     interface_name,
                                     method_name: member,
@@ -11917,16 +11922,7 @@ impl<'db> InferenceContext<'db> {
                                 },
                                 expr,
                             ),
-                            crate::callable::SelfDispatch::OnParam(0) => continue,
-                            crate::callable::SelfDispatch::OnParam(index) => (
-                                TirTypeError::SelfDispatchParamNotFirst {
-                                    interface_name,
-                                    method_name: member,
-                                    index,
-                                    self_ty: self.materialize_ty(&slot),
-                                },
-                                expr,
-                            ),
+                            crate::callable::SelfDispatch::OnParam(_) => continue,
                         }
                     }
                     PendingDiag::UninferredCtorParam { expr, var, name } => {

@@ -72,17 +72,27 @@ pub fn display_user_functions(program: &Program) -> String {
     display_user_functions_with_options(program, false)
 }
 
+/// The object index of the callable rendered `name`, from the package
+/// tables — a test's entry point by name, the way a host names one.
+pub fn function_index(program: &Program, name: &str) -> Option<usize> {
+    program
+        .rendered_callables()
+        .get(name)
+        .map(|callable| callable.object.raw())
+}
+
 /// The program's named functions plus its interface bodies, as
-/// `(fq name, object index)` pairs. Bodies are anonymous (in no name map), so
-/// they are enumerated straight off the object pool — their `Function::name`
-/// display field is exactly the spelling bytecode snapshots show.
+/// `(fq name, object index)` pairs. Named callables come from the package
+/// tables' rendered view; bodies are anonymous (in no table), so they are
+/// enumerated straight off the object pool — their `Function::name` display
+/// field is exactly the spelling bytecode snapshots show.
 pub fn named_and_interface_body_functions(
     program: &Program,
-) -> impl Iterator<Item = (&String, usize)> {
+) -> impl Iterator<Item = (String, usize)> + '_ {
     program
-        .function_indices
-        .iter()
-        .map(|(name, &idx)| (name, idx))
+        .rendered_callables()
+        .into_iter()
+        .map(|(name, callable)| (name, callable.object.raw()))
         .chain(
             program
                 .objects
@@ -90,7 +100,7 @@ pub fn named_and_interface_body_functions(
                 .enumerate()
                 .filter_map(|(idx, obj)| match obj {
                     bex_vm_types::Object::Function(f) if f.is_interface_body => {
-                        Some((&f.name, idx))
+                        Some((f.name.clone(), idx))
                     }
                     _ => None,
                 }),
@@ -159,7 +169,25 @@ pub fn bound_pool(program: &Program) -> bex_heap::BexHeap {
     }
     let mut heap = bex_heap::BexHeap::build_unsealed_default(objects);
     heap.bind_type_heads();
+    heap.assert_switch_tables_dispatch();
     heap
+}
+
+/// The tag the linker assigned to the class, enum, interface, or alias
+/// `program` declares as `fq_name`, or `None` if it declares none. Every head
+/// in the program that names the declaration carries exactly this tag, so a
+/// type position is checked by identity rather than by rendered name.
+pub fn declared_type_tag(program: &Program, fq_name: &str) -> Option<baml_type::typetag::TypeTag> {
+    program.objects.iter().find_map(|object| {
+        let (name, tag) = match object {
+            Object::Class(class) => (class.name.declared()?.render_dotted(false), class.type_tag),
+            Object::Enum(enm) => (enm.name.declared()?.render_dotted(false), enm.type_tag),
+            Object::Interface(iface) => (iface.name.render_dotted(false), iface.type_tag),
+            Object::TypeAlias(alias) => (alias.name.render_dotted(false), alias.type_tag),
+            _ => return None,
+        };
+        (name == fq_name).then_some(tag)
+    })
 }
 
 /// Read the function at pool index `idx` out of a heap built by
@@ -184,7 +212,7 @@ pub fn display_user_functions_bound(program: &Program) -> String {
             if !f.origin.is_user_callable() {
                 return None;
             }
-            let display_name = name.strip_prefix("user.").unwrap_or(name).to_owned();
+            let display_name = name.strip_prefix("user.").unwrap_or(&name).to_owned();
             Some((display_name, f))
         })
         .collect();
@@ -198,13 +226,14 @@ pub fn display_user_functions_bound(program: &Program) -> String {
 /// Test code passes bare names (`"main"`), so we try both the bare name and the
 /// `"user.<name>"` qualified form, returning whichever is present.
 fn resolve_entry_name(program: &Program, entry: &str) -> String {
+    let callables = program.rendered_callables();
     // Try exact match first.
-    if program.function_index(entry).is_some() {
+    if callables.contains_key(entry) {
         return entry.to_owned();
     }
     // Try with "user." prefix (compiler2 qualifies user functions).
     let qualified = format!("user.{entry}");
-    if program.function_indices.contains_key(qualified.as_str()) {
+    if callables.contains_key(qualified.as_str()) {
         return qualified;
     }
     panic!("function '{entry}' not found in program (tried '{entry}' and 'user.{entry}')")
@@ -218,7 +247,9 @@ fn resolve_args(
 ) -> Vec<BexCallArg> {
     let resolved_entry = resolve_entry_name(program, entry);
     let function_idx = program
-        .function_index(&resolved_entry)
+        .rendered_callables()
+        .get(resolved_entry.as_str())
+        .map(|callable| callable.object.raw())
         .unwrap_or_else(|| panic!("function '{entry}' not found in program"));
 
     let function = match program.objects.get(function_idx) {

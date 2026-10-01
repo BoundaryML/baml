@@ -15,7 +15,7 @@
 //!   visible; they never make a thread a root or a path a top-level path.
 
 /// Physical layout of these tables. Change on any DDL change.
-pub const SCHEMA_VERSION: i64 = 11;
+pub const SCHEMA_VERSION: i64 = 12;
 /// Interpretation of evidence into rows. Change when reconciliation changes
 /// meaning without a DDL change; either mismatch rebuilds the index.
 pub const NORMALIZATION_VERSION: i64 = 1;
@@ -60,7 +60,10 @@ CREATE TABLE recording (
   process_end_status INTEGER,
   process_end_ns INTEGER,
   -- Newest modification time of an applied file, Unix nanoseconds.
-  updated_ns INTEGER
+  updated_ns INTEGER,
+  -- 1 once its end is indexed: its paths are summed in profile_part, and
+  -- only the paths spans read remain, with no aggregate or sysop rows.
+  folded INTEGER NOT NULL DEFAULT 0
 ) STRICT;
 CREATE INDEX recording_by_process ON recording (process_id);
 
@@ -146,28 +149,15 @@ CREATE TABLE call_path (
   caller_pc INTEGER,
   callee_function_id BLOB,
   edge INTEGER,
-  -- Distance from a top-level path (0), once every ancestor is defined.
-  depth INTEGER,
   -- The profiler node: a hash of the function names from the top-level
   -- path down, with each edge kind. NULL until every ancestor's function is
   -- known; cleared and recomputed when one of them changes.
   node_id INTEGER,
-  -- Sum of synchronous children's normal-node duration totals: a child
-  -- adds its total when it is defined, then each later delta, in the same
-  -- transaction. Reentry and spawn time are excluded. NULL means overflow;
-  -- nanoseconds and clock validity are still evaluated at query time.
-  direct_child_ticks INTEGER DEFAULT 0,
   conflict INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (rec, call_path_id)
 ) STRICT, WITHOUT ROWID;
--- Covers the executions view's entry-function lookup: without statistics,
--- SQLite otherwise prefers scanning the recording's primary-key range.
-CREATE INDEX call_path_by_thread
-  ON call_path (rec, thread_id, parent_call_path_id, edge, callee_function_id);
 -- Paths still waiting for a profiler node.
 CREATE INDEX call_path_unnoded ON call_path (rec) WHERE node_id IS NULL;
--- Paths still waiting for a depth: resolution touches only these.
-CREATE INDEX call_path_undepthed ON call_path (rec) WHERE depth IS NULL;
 
 CREATE TABLE thread (
   rec INTEGER NOT NULL,
@@ -186,23 +176,13 @@ CREATE TABLE thread (
   name TEXT,
   -- A second completion disagreed with the first (which is kept).
   completion_conflict INTEGER NOT NULL DEFAULT 0,
-  -- The execution (root thread) this thread belongs to, once resolvable.
-  root_id BLOB,
   conflict INTEGER NOT NULL DEFAULT 0,
-  -- A root's start in Unix milliseconds, stored so the newest root calls
-  -- are an index read.
-  started_ms INTEGER,
-  -- Set when the start or its clock may have changed since `started_ms`.
-  start_pending INTEGER NOT NULL DEFAULT 1,
+  -- The thread's first top-level synchronous path: the function a root
+  -- future ran, which names it when nothing else does.
+  entry_call_path_id INTEGER,
   PRIMARY KEY (rec, thread_id)
 ) STRICT, WITHOUT ROWID;
-CREATE INDEX thread_by_root ON thread (rec, root_id);
 CREATE INDEX thread_by_parent ON thread (rec, parent_id);
-CREATE INDEX root_by_start ON thread (started_ms) WHERE defined = 1 AND parent_id IS NULL;
-CREATE INDEX thread_start_pending ON thread (rec) WHERE start_pending = 1;
--- Threads still waiting for their execution: root resolution after each
--- transaction touches only these, not the recording's history.
-CREATE INDEX thread_unresolved ON thread (rec) WHERE root_id IS NULL;
 
 CREATE TABLE epoch (
   rec INTEGER NOT NULL,
@@ -312,6 +292,23 @@ CREATE INDEX call_unreported_conflict ON call (rec) WHERE conflict = 1;
 CREATE INDEX call_pending ON call (rec)
   WHERE needs_announcement = 1 AND announced_sequence IS NULL;
 
+-- A folded recording's call paths summed by profiler node: its share of its
+-- process's profiler. Sums are NULL when unknown or too large for i64.
+CREATE TABLE profile_part (
+  rec INTEGER NOT NULL,
+  node_id INTEGER NOT NULL,
+  parent_node_id INTEGER,
+  synchronous INTEGER NOT NULL,
+  function_name TEXT,
+  total_ns INTEGER,
+  io_self_ns INTEGER,
+  invocation_count INTEGER,
+  errored_count INTEGER,
+  cancelled_count INTEGER,
+  panicked_count INTEGER,
+  PRIMARY KEY (rec, node_id)
+) STRICT, WITHOUT ROWID;
+
 -- The profiler of each ended process: one row per calling-context node,
 -- merged over every recording of the process in this index. Rebuilt when a
 -- process's recordings change after its end was indexed.
@@ -367,6 +364,7 @@ pub const FACT_TABLES: &[&str] = &[
     "sysop",
     "model_usage",
     "call",
+    "profile_part",
     "issue",
 ];
 
@@ -385,6 +383,8 @@ pub const ALL_TABLES: &[&str] = &[
     "sysop",
     "model_usage",
     "call",
+    "profile_part",
     "profile_node",
+    "profile_pending",
     "issue",
 ];

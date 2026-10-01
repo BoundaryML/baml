@@ -1400,11 +1400,16 @@ mod tests {
     use baml_type::{DeclarationName, Freshness, TypeName};
     use sys_types::{DefKey, SapTy as RuntimeTy};
 
-    /// Build a lane key for a test declaration: a compiled declaration's
-    /// identity is the content-addressed tag of its qualified name.
+    /// Build a lane key for a test declaration: any tag distinct per name
+    /// will do, and the name's hash as a static-image index is one.
     fn key(name: &TypeName) -> DefKey {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        name.render_dotted(false).hash(&mut hasher);
         DefKey::new(
-            baml_type::typetag::TypeTag::of_head(&name.render_dotted(false)),
+            baml_type::typetag::TypeTag::of_static_index(
+                (hasher.finish() & ((1 << 40) - 1)) as usize,
+            ),
             DeclarationName::Declared(name.clone()),
         )
     }

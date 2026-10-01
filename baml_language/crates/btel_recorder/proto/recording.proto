@@ -26,10 +26,12 @@ message RecordingFile {
 }
 
 message RecordingHeader {
-  uint32 format_major = 1;       // Exactly 1.
+  uint32 format_major = 1;       // Exactly 2.
   uint32 format_minor = 2;       // Additive optional fields only. 1 adds argument layouts;
                                  // 2 adds source maps and error evidence; 3 adds process
                                  // identity, panics, future names, sysop time and usage.
+                                 // 4 adds execution-context runs.
+                                 // 5 adds structured log observations.
   bytes recording_id = 3;       // Exactly 16 random bytes, not all zero.
   optional bytes source_snapshot_id = 4; // Exactly 32 bytes when supplied; not identity.
   // Minor 3. The OS process that ran this engine. Every engine of one
@@ -288,6 +290,13 @@ message SpanBatch {
 message ThreadSection {
   uint64 thread_id = 1;        // Nonzero; context applies only within this section.
   repeated SpanEvent events = 2;
+  // Minor 4. Execution context for this consecutive run of events. Absence
+  // means unavailable, never empty. Every section is independently interpretable;
+  // nothing inherits from an earlier section or file.
+  oneof context {
+    SnapshotId context_cas_id = 3;
+    bool empty_context = 4;    // Must be true when selected.
+  }
 }
 
 message SpanEvent {
@@ -297,7 +306,26 @@ message SpanEvent {
     FunctionAnnouncement function_announcement = 3;
     FunctionCompletion function_completion = 4;
     FunctionCompletion late_function_completion = 5;
+    LogEvent log = 6;            // Minor 5. Not a function invocation/completion.
   }
+}
+
+message LogEvent {
+  uint64 parent_id = 1;         // Innermost observed span, otherwise the thread.
+  uint64 function_id = 2;       // Actual emitting function, including hidden calls.
+  uint32 pc = 3;                // Compact bytecode offset in that function.
+  fixed64 at_ticks = 4;
+  LogLevel level = 5;
+  optional string event_name = 6; // Absent is unnamed; an empty string remains present.
+  SnapshotId data_cas_id = 7;    // May be unavailable; null data is a captured value.
+}
+
+enum LogLevel {
+  LOG_LEVEL_UNSPECIFIED = 0;
+  LOG_LEVEL_INFO = 1;
+  LOG_LEVEL_DEBUG = 2;
+  LOG_LEVEL_WARN = 3;
+  LOG_LEVEL_ERROR = 4;
 }
 
 // Explicit occurrence; immutable start fields live in ThreadDefinition.

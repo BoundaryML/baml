@@ -2,7 +2,7 @@
 //!
 //! These utilities panic on compile errors, so they are appropriate for test
 //! code only. Production callers should use [`crate::collect_diagnostics`] and
-//! [`baml_compiler2_emit::generate_project_bytecode_with_opt`] directly.
+//! [`crate::compile_program`] directly.
 //!
 //! # These are for white-box tests, not behavior tests
 //!
@@ -21,17 +21,17 @@
 //! The stdlib is the same ~50 files on every compile, so re-deriving it per
 //! test is pure waste — and under `cargo nextest`, which runs each test in its
 //! own process, no in-process cache can amortize it. The fix is a
-//! [`StdlibPrefix`]: the stdlib's typed interfaces plus its bytecode slice,
-//! built once per toolchain by a build script (see `baml_tests::stdlib_prefix`)
-//! and handed to the compile helpers.
+//! [`StdlibPrefix`]: the stdlib's typed interfaces plus each of its packages'
+//! compiled output, built once per toolchain by a build script (see
+//! `baml_tests::stdlib_prefix`) and handed to the compile helpers.
 //!
 //! - [`compile_source`] and friends derive everything honestly. They are the
 //!   reference implementation, and the control arm the equivalence oracle in
 //!   `baml_tests` compares the fast path against. They are not deprecated.
-//! - [`compile_source_with_prefix`] and friends splice a prefix in. The output
-//!   is **byte-identical** to the honest path (pinned by that oracle) because
-//!   the stdlib *sources* stay in the database — only its interface derivation
-//!   and bytecode lowering are skipped.
+//! - [`compile_source_with_prefix`] and friends link the prefix's stdlib
+//!   packages in. The output is **byte-identical** to the honest path (pinned
+//!   by that oracle) because the stdlib *sources* stay in the database — only
+//!   its interface derivation and its packages' emit are skipped.
 //!
 //! Keeping the sources is load-bearing, not incidental. A database that mounts
 //! the stdlib as a source-less precompiled package (what
@@ -47,12 +47,13 @@ use std::path::Path;
 use baml_base::{Name, SourceFile, SourceRoot, SourceRootKind};
 use baml_compiler_diagnostics::{Diagnostic, Severity};
 pub use baml_compiler2_emit::OptLevel;
-use baml_compiler2_emit::{
-    generate_project_bytecode_with_opt, generate_project_bytecode_with_stdlib,
-};
 use bex_vm_types::Program;
 
-use crate::{ProjectDatabase, SourceRootSpec, collect_diagnostics, stdlib_prefix::StdlibPrefix};
+use crate::{
+    ProjectDatabase, SourceRootSpec, collect_diagnostics,
+    program::{compile_program, compile_program_with},
+    stdlib_prefix::StdlibPrefix,
+};
 
 /// A fresh database with the stdlib installed and one empty, unnamed
 /// `Workspace` root (path `.`).
@@ -120,8 +121,7 @@ pub fn compile_source_with_opt(source: &str, opt: OptLevel) -> Program {
     db.add_or_update_file_in(root, Path::new("test.baml"), source);
     assert_no_diagnostic_errors(&db);
 
-    generate_project_bytecode_with_opt(&db, root, opt)
-        .expect("generate_project_bytecode should succeed for valid test source")
+    compile_program(&db, root, opt).expect("compile_program should succeed for valid test source")
 }
 
 /// Set up a test database whose stdlib interface derivation is served from
@@ -225,8 +225,9 @@ pub fn assert_no_user_diagnostic_errors(db: &ProjectDatabase) {
 ///
 /// # Panics
 ///
-/// If `opt` differs from the level `prefix` was built at: the spliced program
-/// must be lowered the same way as the user code emitted on top of it.
+/// If `opt` differs from the level `prefix` was built at: the stdlib packages
+/// it serves and the user package linked with them must be lowered the same
+/// way.
 pub fn compile_source_with_prefix(prefix: &StdlibPrefix, source: &str, opt: OptLevel) -> Program {
     compile_multi_file_with_prefix(prefix, &[("test.baml", source)], opt)
 }
@@ -241,7 +242,7 @@ pub fn compile_multi_file_with_prefix(
     assert_eq!(
         prefix.opt, opt,
         "stdlib prefix was lowered at {:?} but the caller asked to compile at {opt:?}; \
-         the spliced prefix and the user code emitted on top of it must agree",
+         the served stdlib packages and the user package linked with them must agree",
         prefix.opt
     );
     let (mut db, root) = workspace_db_with_prefix(prefix);
@@ -253,8 +254,8 @@ pub fn compile_multi_file_with_prefix(
     );
     assert_no_user_diagnostic_errors(&db);
 
-    generate_project_bytecode_with_stdlib(&db, root, opt, &prefix.program)
-        .expect("generate_project_bytecode should succeed for valid test source")
+    compile_program_with(&db, root, opt, prefix)
+        .expect("compile_program should succeed for valid test source")
 }
 
 /// Compile multiple BAML files at the given relative paths in one project.
@@ -270,8 +271,8 @@ pub fn compile_multi_file(files: &[(&str, &str)]) -> Program {
     );
     assert_no_diagnostic_errors(&db);
 
-    generate_project_bytecode_with_opt(&db, root, OptLevel::One)
-        .expect("generate_project_bytecode should succeed for valid test source")
+    compile_program(&db, root, OptLevel::One)
+        .expect("compile_program should succeed for valid test source")
 }
 
 // ── Root-aware fixture builders ─────────────────────────────────────────────

@@ -59,9 +59,8 @@ async fn call_any_rejects_a_return_outside_inferred_r() {
     // Preserve `lie`'s declared `string` signature while deliberately making
     // its bytecode return an `int`. This models a faulty dynamic/host callee
     // without allowing another boundary to reject the value first.
-    let lie_idx = program
-        .function_index("user.lie")
-        .expect("user.lie should exist");
+    let lie_idx =
+        baml_tests::engine::function_index(&program, "user.lie").expect("user.lie should exist");
     let Object::Function(lie) = program
         .objects
         .get_mut(lie_idx)

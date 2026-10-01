@@ -3,6 +3,7 @@
 //! The generated trait hierarchy is built from `baml_std/reflect`, so every
 //! `$rust_function` declared by the package requires a Rust implementation.
 
+mod graft;
 pub(crate) mod reflect;
 pub(crate) mod runtime_class_builder;
 mod type_class;

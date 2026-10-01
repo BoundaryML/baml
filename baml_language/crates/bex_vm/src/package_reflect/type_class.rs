@@ -1142,7 +1142,7 @@ fn render_witness_sources(
     let Object::Class(class) = vm.get_object(class_ptr) else {
         return;
     };
-    for rule_ptr in vm.dynamic_dispatch.rules_for_class(class_ptr) {
+    for &rule_ptr in class.owner.witnesses() {
         let Object::ImplRule(rule) = vm.get_object(rule_ptr) else {
             continue;
         };
@@ -1209,11 +1209,10 @@ fn expanded_type_value_nominals(
         .chain(&enum_ptrs)
         .filter(|ptr| !vm.heap.is_compile_time_ptr(**ptr))
         .filter_map(|ptr| match vm.get_object(*ptr) {
-            Object::Class(class) => Some(class.owner),
-            Object::Enum(enm) => Some(enm.owner),
+            Object::Class(class) => class.owner.package(),
+            Object::Enum(enm) => enm.owner.package(),
             _ => None,
         })
-        .filter(|owner| !owner.is_null())
         .collect::<indexmap::IndexSet<_>>();
     for owner in owners {
         let Object::Package(package) = vm.get_object(owner) else {
@@ -1436,17 +1435,24 @@ mod renderability_tests {
 
     fn empty_package() -> bex_vm_types::types::Package {
         bex_vm_types::types::Package {
-            exported_names: Vec::new(),
+            name: baml_type::Name::default(),
+            edges: indexmap::IndexMap::new(),
             classes: indexmap::IndexMap::new(),
             enums: indexmap::IndexMap::new(),
             interfaces: indexmap::IndexMap::new(),
             impl_rules: indexmap::IndexMap::new(),
-            functions: indexmap::IndexMap::new(),
             type_aliases: indexmap::IndexMap::new(),
-            interface_blob: Vec::new(),
+            globals: indexmap::IndexMap::new(),
+            slots: bex_vm_types::types::Slots::Own {
+                cells: Box::new([]),
+                initialized: true,
+            },
+            objects: bex_vm_types::types::Objects::Own(Box::new([])),
+            surface: bex_vm_types::types::ExportSurface::Projected,
+            init: None,
             test_init: None,
-            mounted_types: indexmap::IndexMap::new(),
-            kind: bex_vm_types::types::PackageKind::default(),
+            diagnostics: Vec::new(),
+            session: None,
         }
     }
 
@@ -1467,8 +1473,9 @@ mod renderability_tests {
             stream_done: false,
             type_tag,
             has_cleanup: false,
+            methods: IndexMap::new(),
             generic_param_count: 0,
-            owner,
+            owner: bex_vm_types::types::Owner::Package(owner),
         })));
         (ptr, type_tag)
     }
@@ -1529,9 +1536,8 @@ mod renderability_tests {
     fn full_realized_type_family_has_an_explicit_renderability_classification() {
         // Heads never reach the classifier — it matches on variant shape alone —
         // so an unresolved one is the honest stand-in for "some declaration".
-        let name = bex_vm_types::TypeHead::of_name(&baml_type::TypeName::local(
-            baml_type::Name::new("Example"),
-        ));
+        let name =
+            bex_vm_types::TypeHead::unresolved_operand(bex_vm_types::ObjectIndex::from_raw(0));
         let non_data = vec![
             bex_vm_types::RealizedTy::Uint8Array,
             bex_vm_types::RealizedTy::EnumVariant(name, baml_type::Name::new("VALUE")),

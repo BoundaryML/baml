@@ -210,10 +210,14 @@ function mock_json_serve<T, E>(
 
 // A streaming fake provider. `events` are SSE event texts WITHOUT the trailing
 // blank line, e.g. "event: message_start\ndata: {…}" or just "data: {…}"; the
-// blank-line delimiter is appended per event.
+// blank-line delimiter is appended per event. `frames`, when set, replaces
+// `events` with raw binary chunks (AWS event-stream frames; see
+// `mock_eventstream_serve`), served under `content_type`.
 class MockSseServer {
     server: baml.http.Server,
     events: string[],
+    frames: uint8array[],
+    content_type: string,
     first_event_delay: baml.time.Duration,
     // Gap between event writes. `write` backpressures until the previous chunk
     // is on the wire, and the sleep keeps events in separate socket reads.
@@ -240,17 +244,24 @@ class MockSseServer {
             headers: req.headers,
             body: req.body,
         });
-        let resp = baml.http.Response.new_streaming(200, { "content-type": "text/event-stream" });
-        let events = self.events;
+        let resp = baml.http.Response.new_streaming(200, { "content-type": self.content_type });
+        let chunks: uint8array[] = self.frames;
+        if (chunks.length() == 0) {
+            for (let event in self.events) {
+                if (event.length() > 0) {
+                    chunks.push((event + "\n\n").to_utf8());
+                }
+            }
+        }
         let delay = self.chunk_delay;
         let first_event_delay = self.first_event_delay;
         // The writes run in a `spawn` because hyper only reads the response body
         // after the handler returns (see `Response.new_streaming`).
         spawn {
             baml.sys.sleep(first_event_delay);
-            for (let event in events) {
-                if (event.length() > 0) {
-                    resp.write((event + "\n\n").to_utf8()) catch (e) {
+            for (let chunk in chunks) {
+                if (chunk.length() > 0) {
+                    resp.write(chunk) catch (e) {
                         // A request-timeout test intentionally drops the client
                         // while this producer is still replaying later events.
                         baml.errors.Io => {
@@ -282,6 +293,8 @@ function mock_sse_serve<T, E>(
     let mock = MockSseServer {
         server: baml.http.Server.bind("127.0.0.1:0"),
         events: events,
+        frames: [],
+        content_type: "text/event-stream",
         first_event_delay: baml.time.Duration.from_milliseconds(first_event_delay_ms),
         chunk_delay: baml.time.Duration.from_milliseconds(chunk_delay_ms),
         requests: [],
@@ -289,6 +302,96 @@ function mock_sse_serve<T, E>(
     let task = spawn { mock.server.serve(mock.handle) };
     defer { task.cancel(); }
     body(mock)
+}
+
+// Runs `body` against a mock serving binary AWS event-stream `frames`
+// (Bedrock ConverseStream), one frame per write. Build frames with
+// `eventstream_event` / `eventstream_exception`.
+function mock_eventstream_serve<T, E>(
+    frames: uint8array[],
+    body: (mock: MockSseServer) -> T throws E,
+    chunk_delay_ms: int = 10,
+) -> T throws E | baml.errors.Io {
+    let mock = MockSseServer {
+        server: baml.http.Server.bind("127.0.0.1:0"),
+        events: [],
+        frames: frames,
+        content_type: "application/vnd.amazon.eventstream",
+        first_event_delay: baml.time.Duration.from_milliseconds(0),
+        chunk_delay: baml.time.Duration.from_milliseconds(chunk_delay_ms),
+        requests: [],
+    };
+    let task = spawn { mock.server.serve(mock.handle) };
+    defer { task.cancel(); }
+    body(mock)
+}
+
+// ─── AWS event-stream frame construction ─────────────────────────────────────
+//
+// total_len u32 | headers_len u32 | prelude_crc u32 | headers | payload |
+// message_crc u32, big-endian, CRC32 (IEEE). Headers here are all strings
+// (value type 7: u16 length + UTF-8).
+
+function _crc32(bytes: int[]) -> int {
+    let crc = 0xFFFFFFFF;
+    for (let b in bytes) {
+        crc = crc ^ b;
+        let i = 0;
+        while (i < 8) {
+            if ((crc & 1) == 1) {
+                crc = (crc >> 1) ^ 0xEDB88320;
+            } else {
+                crc = crc >> 1;
+            }
+            i += 1;
+        }
+    }
+    crc ^ 0xFFFFFFFF
+}
+
+function _be(value: int, width: int) -> int[] {
+    let out: int[] = [];
+    let shift = (width - 1) * 8;
+    while (shift >= 0) {
+        out.push((value >> shift) & 0xFF);
+        shift -= 8;
+    }
+    out
+}
+
+// One frame with the given string headers, in order.
+function eventstream_frame(header_names: string[], header_values: string[], payload: string) -> uint8array {
+    let headers: int[] = [];
+    let i = 0;
+    while (i < header_names.length()) {
+        let name = header_names.at(i) ?? "";
+        let value = (header_values.at(i) ?? "").to_utf8().to_array();
+        headers = headers.concat([name.length()]).concat(name.to_utf8().to_array());
+        headers = headers.concat([7]).concat(_be(value.length(), 2)).concat(value);
+        i += 1;
+    }
+    let body = payload.to_utf8().to_array();
+    let prelude = _be(16 + headers.length() + body.length(), 4).concat(_be(headers.length(), 4));
+    let message = prelude.concat(_be(_crc32(prelude), 4)).concat(headers).concat(body);
+    uint8array.from_array(message.concat(_be(_crc32(message), 4)))
+}
+
+// A ConverseStream event frame, e.g. ("contentBlockDelta", `{"delta":{"text":"Hi"}}`).
+function eventstream_event(event_type: string, payload: string) -> uint8array {
+    eventstream_frame(
+        [":event-type", ":content-type", ":message-type"],
+        [event_type, "application/json", "event"],
+        payload,
+    )
+}
+
+// A modeled ConverseStream exception frame, e.g. ("throttlingException", "slow down").
+function eventstream_exception(exception_type: string, message: string) -> uint8array {
+    eventstream_frame(
+        [":exception-type", ":content-type", ":message-type"],
+        [exception_type, "application/json", "exception"],
+        baml.json.stringify(baml.json.to_json({ "message": message })),
+    )
 }
 
 // ─── SSE event construction ──────────────────────────────────────────────────

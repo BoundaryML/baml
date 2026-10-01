@@ -18,9 +18,9 @@ class            reflect.Signature                <builtin>/reflect/reflect.baml
 class            reflect.InvalidArgumentError     <builtin>/reflect/reflect.baml:247
 class            reflect.CompileArtifact          <builtin>/reflect/reflect.baml:254
 class            reflect.Package                  <builtin>/reflect/reflect.baml:259
-class            reflect.Session                  <builtin>/reflect/reflect.baml:383
-function         reflect.signature                <builtin>/reflect/reflect.baml:467
-function         reflect.call_any                 <builtin>/reflect/reflect.baml:484
+class            reflect.Session                  <builtin>/reflect/reflect.baml:388
+function         reflect.signature                <builtin>/reflect/reflect.baml:472
+function         reflect.call_any                 <builtin>/reflect/reflect.baml:489
 class            reflect.Type                     <builtin>/reflect/type.baml:8
 class            reflect.array.Type               <builtin>/reflect/ns_array/array.baml:2
 class            reflect.class.Field              <builtin>/reflect/ns_class/class.baml:7

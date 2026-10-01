@@ -551,7 +551,7 @@ fn reconcile(
             tx.execute(
                 "UPDATE recording SET indexed_sequence = 0, terminal_sequence = NULL,
                    source_snapshot_id = NULL, indexed_bytes = 0, format_minor = 0,
-                   generation = generation + 1, process_id = NULL, baml_version = NULL, host = NULL, command = NULL, process_started_ns = NULL, source_cas = NULL, process_end_status = NULL, process_end_ns = NULL
+                   generation = generation + 1, process_id = NULL, baml_version = NULL, host = NULL, command = NULL, process_started_ns = NULL, source_cas = NULL, process_end_status = NULL, process_end_ns = NULL, folded = 0
                  WHERE rec = ?1",
                 [rec_key],
             )?;
@@ -640,6 +640,12 @@ fn reconcile(
             }
         }
         applier.finish()?;
+        if group
+            .iter()
+            .any(|c| matches!(c, Candidate::Read(_, read) if read.file.end.is_some()))
+        {
+            profile::fold(&tx, rec_key)?;
+        }
         if (first_transaction && rebuild) || group.iter().any(|c| matches!(c, Candidate::Read(..)))
         {
             mark_profile_pending(&tx, rec_key)?;
@@ -784,12 +790,12 @@ fn apply_fresh<'p>(
         tx.execute(
             "UPDATE recording SET indexed_sequence = 0, terminal_sequence = NULL,
                source_snapshot_id = NULL, indexed_bytes = 0, format_minor = 0,
-               generation = generation + 1, process_id = NULL, baml_version = NULL, host = NULL, command = NULL, process_started_ns = NULL, source_cas = NULL, process_end_status = NULL, process_end_ns = NULL
+               generation = generation + 1, process_id = NULL, baml_version = NULL, host = NULL, command = NULL, process_started_ns = NULL, source_cas = NULL, process_end_status = NULL, process_end_ns = NULL, folded = 0
              WHERE rec = ?1",
             [rec],
         )?;
     }
-    merged.write(&tx, rec)?;
+    merged.write(&tx, rec, applied.last().is_some_and(|file| file.end))?;
     let mut terminal = None;
     let mut source_snapshot = None;
     for file in &applied {
@@ -960,12 +966,9 @@ struct Applier<'t> {
     /// Epoch definitions already reconciled in this transaction.
     epochs_seen: HashMap<u64, Vec<u8>>,
     references: References,
-    touched_threads: bool,
-    touched_paths: bool,
-    /// Synchronous children newly defined in this transaction, to their
-    /// parent: each adds its whole normal-node total to its parent's child
-    /// time once, and its later deltas after that.
-    defined_children: HashMap<u32, u32>,
+    /// Top-level synchronous paths defined in this transaction, by thread:
+    /// candidates for the thread's entry path.
+    entries: Vec<(u64, u32)>,
     /// Sysop count and ticks per call path in this transaction.
     sysops: HashMap<u32, (u128, u128)>,
     /// Functions whose metadata replaced an "unavailable" observation: the
@@ -981,9 +984,7 @@ impl<'t> Applier<'t> {
             aggregates: HashMap::new(),
             epochs_seen: HashMap::new(),
             references: References::default(),
-            touched_threads: false,
-            touched_paths: false,
-            defined_children: HashMap::new(),
+            entries: Vec::new(),
             sysops: HashMap::new(),
             renamed_functions: HashSet::new(),
         }
@@ -1192,6 +1193,10 @@ impl<'t> Applier<'t> {
                         }
                         Some(Event::LateFunctionCompletion(done)) => {
                             self.completion(sequence, section.thread_id, done, true, &mut tick)?;
+                        }
+                        Some(Event::Log(log)) => {
+                            // Log query projections are separate from call indexing.
+                            let _ = tick(log.at_ticks);
                         }
                         None => {}
                     }
@@ -1409,7 +1414,6 @@ impl<'t> Applier<'t> {
     }
 
     fn call_path(&mut self, sequence: u64, path: &proto::CallPathDefinition) -> Result<(), Error> {
-        self.touched_paths = true;
         self.references.threads.insert(path.thread_id);
         self.references.functions.insert(path.callee_function_id);
         self.references
@@ -1436,12 +1440,11 @@ impl<'t> Applier<'t> {
                  VALUES (?1, ?2, 1, ?3, ?4, ?5, ?6, ?7, ?8)",
             )?
             .execute(values)?;
-        let defines_child =
-            path.edge == proto::CallPathEdge::Synchronous as i32 && path.parent_call_path_id != 0;
+        let entry =
+            path.edge == proto::CallPathEdge::Synchronous as i32 && path.parent_call_path_id == 0;
         if inserted > 0 {
-            if defines_child {
-                self.defined_children
-                    .insert(path.call_path_id, path.parent_call_path_id);
+            if entry {
+                self.entries.push((path.thread_id, path.call_path_id));
             }
             return Ok(());
         }
@@ -1455,9 +1458,8 @@ impl<'t> Applier<'t> {
             )?
             .execute(values)?;
         if upgraded > 0 {
-            if defines_child {
-                self.defined_children
-                    .insert(path.call_path_id, path.parent_call_path_id);
+            if entry {
+                self.entries.push((path.thread_id, path.call_path_id));
             }
             return Ok(());
         }
@@ -1491,7 +1493,6 @@ impl<'t> Applier<'t> {
         thread: &proto::ThreadDefinition,
         started: Option<i64>,
     ) -> Result<(), Error> {
-        self.touched_threads = true;
         self.references.epochs.insert(thread.clock_epoch_id);
         if thread.spawn_call_path_id != 0 {
             self.references.paths.insert(thread.spawn_call_path_id);
@@ -1529,7 +1530,7 @@ impl<'t> Applier<'t> {
             .tx
             .prepare_cached(
                 "UPDATE thread SET defined = 1, parent_id = ?3, spawn_call_path_id = ?4,
-                   started_ticks = ?5, epoch_id = ?6, start_pending = 1
+                   started_ticks = ?5, epoch_id = ?6
                  WHERE rec = ?1 AND thread_id = ?2 AND defined = 0",
             )?
             .execute(values)?;
@@ -1600,9 +1601,6 @@ impl<'t> Applier<'t> {
         } else {
             0
         };
-        if inserted > 0 || upgraded > 0 {
-            restart_epoch(self.tx, self.rec, epoch.epoch_id)?;
-        }
         if inserted == 0 && upgraded == 0 {
             let previous: Vec<u8> = self
                 .tx
@@ -1614,7 +1612,6 @@ impl<'t> Applier<'t> {
                         "UPDATE epoch SET conflict = 1 WHERE rec = ?1 AND epoch_id = ?2",
                     )?
                     .execute(params![self.rec, id(epoch.epoch_id)])?;
-                restart_epoch(self.tx, self.rec, epoch.epoch_id)?;
                 self.issue(
                     sequence,
                     "clock_epoch_conflict",
@@ -1627,7 +1624,7 @@ impl<'t> Applier<'t> {
     }
 
     /// Flush reduced totals, add placeholders for undefined references,
-    /// report new call conflicts, resolve execution roots and path depths.
+    /// report new call conflicts, record entry paths and resolve nodes.
     fn finish(self) -> Result<(), Error> {
         for (node, delta) in &self.aggregates {
             let node = i64::try_from(*node).expect("validated 33-bit node");
@@ -1751,6 +1748,14 @@ impl<'t> Applier<'t> {
         for epoch in &self.references.epochs {
             placeholder.execute(params![self.rec, id(*epoch)])?;
         }
+        // The lowest defined top-level path wins, whatever order files arrive in.
+        let mut entry = self.tx.prepare_cached(
+            "UPDATE thread SET entry_call_path_id = MIN(COALESCE(entry_call_path_id, ?3), ?3)
+             WHERE rec = ?1 AND thread_id = ?2",
+        )?;
+        for (thread, path) in &self.entries {
+            entry.execute(params![self.rec, id(*thread), i64::from(*path)])?;
+        }
         let conflicts: Vec<(Vec<u8>, Option<i64>)> = self
             .tx
             .prepare_cached(
@@ -1775,130 +1780,103 @@ impl<'t> Applier<'t> {
                  WHERE rec = ?1 AND conflict = 1",
             )?
             .execute([self.rec])?;
-        if self.touched_threads || !self.references.threads.is_empty() {
-            resolve_roots(self.tx, self.rec)?;
-        }
-        resolve_starts(self.tx, self.rec)?;
-        if self.touched_paths {
-            resolve_depths(self.tx, self.rec)?;
-        }
-        self.add_child_time()?;
         forget_nodes(self.tx, self.rec, &self.renamed_functions)?;
         resolve_nodes(self.tx, self.rec)?;
         Ok(())
-    }
-
-    /// Add this transaction's evidence to parents' child time: the whole
-    /// normal-node total of each newly defined synchronous child, and the
-    /// normal-node delta of each child defined earlier. Every child's total
-    /// is counted once, whichever order its definition and deltas arrive in,
-    /// so the checked sum matches summing every child from scratch. Runs
-    /// after the totals are flushed and parent placeholders exist.
-    fn add_child_time(&self) -> Result<(), Error> {
-        let mut additions: HashMap<u32, Option<i64>> = HashMap::new();
-        let mut add = |parent: u32, ticks: Option<i64>| {
-            let sum = additions.entry(parent).or_insert(Some(0));
-            *sum = sum.zip(ticks).and_then(|(a, b)| a.checked_add(b));
-        };
-        let mut total = self
-            .tx
-            .prepare_cached("SELECT duration_ticks FROM aggregate WHERE rec = ?1 AND node = ?2")?;
-        for (child, parent) in &self.defined_children {
-            let ticks: Option<Option<i64>> = total
-                .query_row(params![self.rec, i64::from(*child) * 2], |r| r.get(0))
-                .optional()?;
-            add(*parent, ticks.unwrap_or(Some(0)));
-        }
-        let mut parent_of = self.tx.prepare_cached(
-            "SELECT parent_call_path_id FROM call_path
-             WHERE rec = ?1 AND call_path_id = ?2 AND defined = 1 AND edge = 1
-               AND parent_call_path_id != 0",
-        )?;
-        for (node, delta) in &self.aggregates {
-            let (child, reentry) = evidence::split_node(*node);
-            if reentry || self.defined_children.contains_key(&child) {
-                continue;
-            }
-            let parent: Option<i64> = parent_of
-                .query_row(params![self.rec, i64::from(child)], |r| r.get(0))
-                .optional()?;
-            if let Some(parent) = parent.and_then(|p| u32::try_from(p).ok()) {
-                add(parent, i64::try_from(delta.duration).ok());
-            }
-        }
-        let mut current = self.tx.prepare_cached(
-            "SELECT direct_child_ticks FROM call_path WHERE rec = ?1 AND call_path_id = ?2",
-        )?;
-        let mut update = self.tx.prepare_cached(
-            "UPDATE call_path SET direct_child_ticks = ?3 WHERE rec = ?1 AND call_path_id = ?2",
-        )?;
-        for (parent, ticks) in additions {
-            let Some(existing) = current
-                .query_row(params![self.rec, i64::from(parent)], |r| {
-                    r.get::<_, Option<i64>>(0)
-                })
-                .optional()?
-            else {
-                continue;
-            };
-            let sum = existing.zip(ticks).and_then(|(a, b)| a.checked_add(b));
-            update.execute(params![self.rec, i64::from(parent), sum])?;
-        }
-        Ok(())
-    }
-}
-
-/// Give each defined path its distance from a top-level path, repairing
-/// paths whose ancestors arrived in later files. Placeholder, conflicted or
-/// cyclic ancestry leaves `depth` NULL.
-fn resolve_depths(tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
-    tx.prepare_cached(
-        "UPDATE call_path INDEXED BY call_path_undepthed SET depth = 0
-         WHERE rec = ?1 AND depth IS NULL AND defined = 1 AND parent_call_path_id = 0",
-    )?
-    .execute([rec])?;
-    loop {
-        let changed = tx
-            .prepare_cached(
-                "UPDATE call_path INDEXED BY call_path_undepthed SET depth = (
-                   SELECT p.depth + 1 FROM call_path p
-                   WHERE p.rec = call_path.rec AND p.call_path_id = call_path.parent_call_path_id)
-                 WHERE rec = ?1 AND depth IS NULL AND defined = 1 AND parent_call_path_id != 0
-                   AND EXISTS (SELECT 1 FROM call_path p WHERE p.rec = call_path.rec
-                     AND p.call_path_id = call_path.parent_call_path_id AND p.depth IS NOT NULL)",
-            )?
-            .execute([rec])?;
-        if changed == 0 {
-            return Ok(());
-        }
     }
 }
 
 /// Give each defined path its profiler node once its function and every
 /// ancestor's are known. A function known only as unavailable is named by
-/// its ID until its metadata arrives (`forget_nodes`).
+/// its ID until its metadata arrives (`forget_nodes`). The waiting paths
+/// are resolved in memory, like `bulk::Bulk::resolve_nodes`: SQL would need
+/// a pass per level of the call tree, each rescanning every waiting path.
 pub(super) fn resolve_nodes(tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
-    loop {
-        let changed = tx
-            .prepare_cached(
-                "UPDATE call_path INDEXED BY call_path_unnoded SET node_id = __btel_node(
-                   (SELECT p.node_id FROM call_path p
-                    WHERE p.rec = call_path.rec AND p.call_path_id = call_path.parent_call_path_id),
-                   (SELECT IIF(f.state = 2, f.fqn, '#' || hex(f.function_id)) FROM function_def f
-                    WHERE f.rec = call_path.rec AND f.function_id = call_path.callee_function_id),
-                   call_path.edge)
-                 WHERE rec = ?1 AND node_id IS NULL AND defined = 1
-                   AND (parent_call_path_id = 0 OR EXISTS (SELECT 1 FROM call_path p
-                     WHERE p.rec = call_path.rec AND p.call_path_id = call_path.parent_call_path_id
-                       AND p.node_id IS NOT NULL))
-                   AND EXISTS (SELECT 1 FROM function_def f WHERE f.rec = call_path.rec
-                     AND f.function_id = call_path.callee_function_id AND f.state >= 1)",
-            )?
-            .execute([rec])?;
-        if changed == 0 {
-            return Ok(());
+    // Defined paths without a node: parent path, callee and edge.
+    let mut waiting: HashMap<i64, (i64, Vec<u8>, i64)> = HashMap::new();
+    let mut rows = tx.prepare_cached(
+        "SELECT call_path_id, parent_call_path_id, callee_function_id, edge
+         FROM call_path INDEXED BY call_path_unnoded
+         WHERE rec = ?1 AND node_id IS NULL AND defined = 1",
+    )?;
+    let mut query = rows.query([rec])?;
+    while let Some(row) = query.next()? {
+        let edge: Option<i64> = row.get(3)?;
+        waiting.insert(row.get(0)?, (row.get(1)?, row.get(2)?, edge.unwrap_or(0)));
+    }
+    drop(query);
+    if waiting.is_empty() {
+        return Ok(());
+    }
+    // Profiler names of the functions known so far.
+    let names: HashMap<Vec<u8>, String> = tx
+        .prepare_cached(
+            "SELECT function_id, IIF(state = 2, fqn, '#' || hex(function_id))
+             FROM function_def WHERE rec = ?1 AND state >= 1",
+        )?
+        .query_map([rec], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .filter_map(|row| match row {
+            Ok((id, Some(name))) => Some(Ok((id, name))),
+            Ok((_, None)) => None,
+            Err(error) => Some(Err(error)),
+        })
+        .collect::<Result<_, _>>()?;
+    let mut stored =
+        tx.prepare_cached("SELECT node_id FROM call_path WHERE rec = ?1 AND call_path_id = ?2")?;
+    let mut nodes: HashMap<i64, Option<i64>> = HashMap::new();
+    let mut chain = Vec::new();
+    let mut on_chain = HashSet::new();
+    let starts: Vec<i64> = waiting.keys().copied().collect();
+    for start in starts {
+        let mut current = start;
+        on_chain.clear();
+        // Walk up to a known node, a top-level path, or a gap: `None` is
+        // the top level, `Some(None)` a gap.
+        let mut parent_node: Option<Option<i64>> = loop {
+            if let Some(known) = nodes.get(&current) {
+                break Some(*known);
+            }
+            let Some(&(parent, _, _)) = waiting.get(&current) else {
+                // Already noded, a placeholder, or never referenced: read
+                // once, however many waiting children share it.
+                let node: Option<Option<i64>> = stored
+                    .query_row(params![rec, current], |r| r.get(0))
+                    .optional()?;
+                nodes.insert(current, node.flatten());
+                break Some(node.flatten());
+            };
+            if !on_chain.insert(current) {
+                break Some(None);
+            }
+            chain.push(current);
+            if parent == 0 {
+                break None;
+            }
+            current = parent;
+        };
+        // Resolve downward.
+        while let Some(path) = chain.pop() {
+            let (_, callee, edge) = &waiting[&path];
+            let node = match parent_node {
+                Some(None) => None,
+                parent => names
+                    .get(callee)
+                    .map(|name| crate::functions::node_hash(parent.flatten(), name, *edge)),
+            };
+            nodes.insert(path, node);
+            parent_node = Some(node);
         }
     }
+    let mut update = tx
+        .prepare_cached("UPDATE call_path SET node_id = ?3 WHERE rec = ?1 AND call_path_id = ?2")?;
+    for (path, node) in nodes {
+        if let Some(node) = node
+            && waiting.contains_key(&path)
+        {
+            update.execute(params![rec, path, node])?;
+        }
+    }
+    Ok(())
 }
 
 /// Functions whose metadata replaced an ID placeholder: the nodes of their
@@ -1939,74 +1917,6 @@ fn forget_nodes(tx: &Transaction<'_>, rec: i64, functions: &HashSet<u64>) -> Res
             )?
             .execute([rec])?;
         if changed == 0 {
-            return Ok(());
-        }
-    }
-}
-
-/// Attach threads to their execution: roots are defined threads without a parent;
-/// a spawned thread's parent is a thread or a retained call on a thread.
-/// Repairs threads whose parents arrived in later files. `INDEXED BY` keeps
-/// each pass to unresolved threads; preparing fails if the index cannot serve.
-/// Store the start of each root written or re-clocked since the last pass,
-/// in Unix milliseconds from its clock.
-pub(super) fn resolve_starts(tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
-    tx.prepare_cached(
-        "UPDATE thread INDEXED BY thread_start_pending SET start_pending = 0,
-           started_ms = IIF(defined = 1 AND parent_id IS NULL,
-             (SELECT __btel_unix_ms(thread.started_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL),
-                e.utc_unix_ns, e.multiplier, e.shift)
-              FROM epoch e
-              WHERE e.rec = thread.rec AND e.epoch_id = thread.epoch_id AND e.defined = 1),
-             NULL)
-         WHERE rec = ?1 AND start_pending = 1",
-    )?
-    .execute([rec])?;
-    Ok(())
-}
-
-/// A clock was defined or found conflicting: its roots' starts change.
-fn restart_epoch(tx: &Transaction<'_>, rec: i64, epoch: u64) -> Result<(), Error> {
-    tx.prepare_cached(
-        "UPDATE thread SET start_pending = 1
-         WHERE rec = ?1 AND epoch_id = ?2 AND defined = 1 AND parent_id IS NULL
-           AND start_pending = 0",
-    )?
-    .execute(params![rec, id(epoch)])?;
-    Ok(())
-}
-
-fn resolve_roots(tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
-    // Only a defined thread without a parent is a root: a placeholder's
-    // missing parent is unknown, not absent.
-    tx.prepare_cached(
-        "UPDATE thread INDEXED BY thread_unresolved SET root_id = thread_id
-         WHERE rec = ?1 AND root_id IS NULL AND parent_id IS NULL AND defined = 1",
-    )?
-    .execute([rec])?;
-    loop {
-        let via_thread = tx
-            .prepare_cached(
-                "UPDATE thread INDEXED BY thread_unresolved SET root_id = (SELECT p.root_id FROM thread p
-                   WHERE p.rec = thread.rec AND p.thread_id = thread.parent_id)
-                 WHERE rec = ?1 AND root_id IS NULL AND parent_id IS NOT NULL
-                   AND EXISTS (SELECT 1 FROM thread p WHERE p.rec = thread.rec
-                     AND p.thread_id = thread.parent_id AND p.root_id IS NOT NULL)",
-            )?
-            .execute([rec])?;
-        let via_call = tx
-            .prepare_cached(
-                "UPDATE thread INDEXED BY thread_unresolved SET root_id = (SELECT pt.root_id FROM call c
-                   JOIN thread pt ON pt.rec = c.rec AND pt.thread_id = c.thread_id
-                   WHERE c.rec = thread.rec AND c.call_id = thread.parent_id)
-                 WHERE rec = ?1 AND root_id IS NULL AND parent_id IS NOT NULL
-                   AND EXISTS (SELECT 1 FROM call c
-                     JOIN thread pt ON pt.rec = c.rec AND pt.thread_id = c.thread_id
-                     WHERE c.rec = thread.rec AND c.call_id = thread.parent_id
-                       AND pt.root_id IS NOT NULL)",
-            )?
-            .execute([rec])?;
-        if via_thread == 0 && via_call == 0 {
             return Ok(());
         }
     }

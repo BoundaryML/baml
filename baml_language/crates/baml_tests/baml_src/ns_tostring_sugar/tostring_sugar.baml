@@ -191,3 +191,28 @@ function captured_root_to_string_fn() -> string {
 test "captured_root_to_string" {
     assert.equal(captured_root_to_string_fn(), "Point { x: 1, y: 2 }")
 }
+
+// `.to_string()` on an interface-EXISTENTIAL receiver whose interfaces say
+// nothing about `to_string` is the sugar (`string.from`), exactly as on any
+// other receiver: the value's concrete type renders. Regression: this used
+// to compile into a virtual call keyed on the receiver's own interface,
+// which the VM refused at run time ("interface `Shape` declares no method
+// `to_string`") — dead on canary until the arm was executed.
+interface Shape {
+    function sides(self) -> int throws never;
+}
+
+class Square {
+    size: int,
+    implements Shape {
+        function sides(self) -> int throws never { 4 }
+    }
+}
+
+function existential_to_string_fn(shape: Shape) -> string throws never {
+    `${shape.sides()}:${shape.to_string()}`
+}
+
+test "existential_receiver_to_string_is_the_sugar" {
+    assert.equal(existential_to_string_fn(Square { size: 2 }), "4:Square { size: 2 }")
+}

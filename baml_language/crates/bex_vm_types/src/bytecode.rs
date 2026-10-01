@@ -67,52 +67,233 @@ impl JumpTableData {
 }
 
 // ============================================================================
-// Perfect Hash Table Data Structure
+// Switch Table
 // ============================================================================
 
-/// Compile-time minimal perfect hash table for O(1) type dispatch.
+/// A sparse switch's dispatch table: what `Instruction::DenseTag` remaps a
+/// value through, to the dense `[0, K-1]` index of the arm it selects — the
+/// index the jump table that follows dispatches on.
 ///
-/// Used by `Instruction::DenseTag` to remap a sparse type tag to a dense
-/// `[0, K-1]` index for jump table dispatch. The hash function is:
-///
-///   `h(tag) = ((tag as u64).wrapping_mul(multiply) >> shift) & mask`
-///
-/// Each entry stores the expected tag for verification — if the runtime tag
-/// doesn't match, the value is not in the match and dispatch falls to default.
-///
-/// The hash constants are found by brute-force search at compile time.
-/// For K ≤ 20 arms, the search completes in microseconds.
-///
-/// References:
-/// - Neumann & Göbbert, "Improving Switch Statement Performance with Hashing
-///   Optimized at Compile Time"
-/// - Dietz 1992, "Coding Multiway Branches Using Customized Hash Functions"
-/// - Proposed for LLVM (issue #96971), Roslyn (#66604), Go (#34381)
+/// A unit states the switch by its keys. Whoever lays the unit into an image
+/// assigns the keys' tags and solves the table for them
+/// ([`SwitchDispatch::solved`]), and solving cannot fail: the answer is a
+/// perfect hash when the bounded search finds one, and the keys in order
+/// otherwise.
 #[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
-pub struct MatchHashTable {
-    /// Multiplicative hash constant, found at compile time.
-    pub multiply: u64,
-    /// Right-shift amount applied after multiplication.
-    pub shift: u8,
-    /// Bitmask applied after shift. Always `table_size - 1` (power of 2).
-    pub mask: u8,
-    /// Verification + dispatch entries. `entries[h(tag)]` contains:
-    /// - `expected_tag`: the type tag that should hash to this slot
-    /// - `dense_index`: the dense arm index `[0, K-1]` for jump table dispatch
-    ///   Unused slots have `expected_tag = i64::MIN` (sentinel).
-    pub entries: Vec<MatchHashEntry>,
-    /// Human-readable names for keys in arm order (display only).
+pub struct SwitchTable {
+    /// How a value reaches its arm.
+    pub dispatch: SwitchDispatch,
+    /// Human-readable names for the keys in arm order (display only).
     /// `key_names[i]` is the name for the i-th arm (e.g. "int", "`MyClass`").
     pub key_names: Vec<String>,
 }
 
-/// Single entry in a [`MatchHashTable`].
+/// How a [`SwitchTable`] dispatches.
 #[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
-pub struct MatchHashEntry {
-    /// The type tag expected at this slot (for verification).
-    pub expected_tag: i64,
-    /// Dense arm index `[0, K-1]` — fed into the subsequent jump table.
-    pub dense_index: u8,
+pub enum SwitchDispatch {
+    /// The switch's keys in arm order, as the compiler states them: `keys[i]`
+    /// selects arm `i`. A unit's form and only a unit's — a key that names a
+    /// declaration has no value until the declaration is laid into an image,
+    /// so no image holds such a table.
+    Keys(Vec<SwitchKey>),
+    /// A perfect hash over the keys' values: `slots[h(value)]` is the one key
+    /// that hashes there, if any, where
+    ///
+    ///   `h(value) = ((value as u64).wrapping_mul(multiply) >> shift) & (slots.len() - 1)`
+    ///
+    /// `slots.len()` is a power of two and `shift` is below 64. The
+    /// multiply-shift family of Neumann & Göbbert, "Improving Switch
+    /// Statement Performance with Hashing Optimized at Compile Time", and
+    /// Dietz 1992, "Coding Multiway Branches Using Customized Hash
+    /// Functions"; proposed for LLVM (#96971), Roslyn (#66604), and Go
+    /// (#34381).
+    Hash {
+        multiply: u64,
+        shift: u8,
+        slots: Vec<Option<SwitchEntry>>,
+    },
+    /// The keys by strictly ascending value, searched by bisection.
+    Sorted(Vec<SwitchEntry>),
+}
+
+/// One key of a solved [`SwitchTable`]: the value that selects an arm.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct SwitchEntry {
+    /// The key's value: a type tag, or the integer an arm matches.
+    pub value: i64,
+    /// The dense index of the arm the key selects.
+    pub arm: u32,
+}
+
+/// One key of a switch, as the compiler states it.
+///
+/// The compiler never knows a declared head's tag: a declaration arm is "the
+/// tag of *this* declaration", by the same object operand every other
+/// reference to the declaration carries, relocated like every other operand
+/// and materialized by whoever assigns the declaration's tag. A primitive
+/// kind's tag is a fixed constant nothing declares, so it is stated directly,
+/// as is the integer an integer arm matches.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
+pub enum SwitchKey {
+    /// A fixed value: a kind tag (`typetag::INT`, `ENUM`, ...) or an
+    /// integer.
+    Kind(i64),
+    /// The tag assigned to the declaration at this object operand — any
+    /// declared head. What a switch can dispatch on is what the `TypeTag`
+    /// instruction reports for a value: an instance reports its class's tag,
+    /// while an enum value reports the shared `ENUM` kind tag, so today's
+    /// compiler keys class arms this way and enum arms by kind.
+    Declaration(ObjectIndex),
+}
+
+impl SwitchTable {
+    /// A table stating its keys: the form a unit carries.
+    #[must_use]
+    pub fn of_keys(keys: Vec<SwitchKey>, key_names: Vec<String>) -> Self {
+        Self {
+            dispatch: SwitchDispatch::Keys(keys),
+            key_names,
+        }
+    }
+
+    /// The arm `value` selects, `None` when no key is `value`.
+    ///
+    /// # Panics
+    ///
+    /// On a table that states only its keys, or a solved one that is not
+    /// [dispatchable](SwitchDispatch::is_dispatchable): the loader refuses an
+    /// image holding either.
+    #[inline]
+    #[must_use]
+    pub fn arm_of(&self, value: i64) -> Option<u32> {
+        match &self.dispatch {
+            SwitchDispatch::Hash {
+                multiply,
+                shift,
+                slots,
+            } => {
+                let hashed = value.cast_unsigned().wrapping_mul(*multiply) >> shift;
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "masked to the slot count on the next line"
+                )]
+                let slot = hashed as usize & (slots.len() - 1);
+                slots[slot]
+                    .filter(|entry| entry.value == value)
+                    .map(|entry| entry.arm)
+            }
+            SwitchDispatch::Sorted(entries) => entries
+                .binary_search_by_key(&value, |entry| entry.value)
+                .ok()
+                .map(|found| entries[found].arm),
+            SwitchDispatch::Keys(_) => {
+                unreachable!("an image holds no switch table that states only its keys")
+            }
+        }
+    }
+}
+
+impl SwitchDispatch {
+    /// The most keys the hash search is run for. With 256 slots the chance
+    /// that one `(multiply, shift)` pair separates `K` arbitrary values is
+    /// about `exp(-K² / 512)`: over the search's 640 000 pairs that is an
+    /// expected hundred-odd solutions at 64 keys, and fewer than three at 80.
+    /// A wider switch is sorted without searching.
+    pub const HASHED_KEYS: usize = 64;
+
+    /// The most slots a hash is searched over.
+    pub const HASH_SLOTS: usize = 256;
+
+    /// The dispatch for `keys`, in arm order: `tag_of` answers each
+    /// [`SwitchKey::Declaration`] with the tag its declaration was assigned.
+    ///
+    /// Total. Searches for constants `(multiply, shift)` that send every
+    /// value to a slot of its own, over each power-of-two slot count from the
+    /// tightest one up to [`Self::HASH_SLOTS`] and smallest first, and sorts
+    /// the keys when there are more than [`Self::HASHED_KEYS`] of them or the
+    /// search finds no constants. Which of the two a switch gets depends on
+    /// the values alone, so a build is reproducible; a program never fails to
+    /// link over where its declarations landed.
+    ///
+    /// Arms match in order, so of two keys with one value the later selects
+    /// nothing and is left out.
+    #[must_use]
+    pub fn solved(
+        keys: &[SwitchKey],
+        tag_of: impl Fn(ObjectIndex) -> baml_type::typetag::TypeTag,
+    ) -> Self {
+        let mut entries: Vec<SwitchEntry> = Vec::with_capacity(keys.len());
+        for (arm, key) in keys.iter().enumerate() {
+            let value = match *key {
+                SwitchKey::Kind(value) => value,
+                SwitchKey::Declaration(declaration) => tag_of(declaration).as_i64(),
+            };
+            if entries.iter().all(|entry| entry.value != value) {
+                entries.push(SwitchEntry {
+                    value,
+                    arm: u32::try_from(arm)
+                        .unwrap_or_else(|_| unreachable!("a switch has fewer than 2^32 arms")),
+                });
+            }
+        }
+        if let Some(hash) = Self::hashed(&entries) {
+            return hash;
+        }
+        entries.sort_unstable_by_key(|entry| entry.value);
+        Self::Sorted(entries)
+    }
+
+    /// The multiply-shift search behind [`Self::solved`], over distinct
+    /// values: `None` when the keys are too many to search for or no
+    /// constants within the search bounds separate them.
+    fn hashed(entries: &[SwitchEntry]) -> Option<Self> {
+        if entries.is_empty() || entries.len() > Self::HASHED_KEYS {
+            return None;
+        }
+        let mut slot_count = entries.len().next_power_of_two();
+        while slot_count <= Self::HASH_SLOTS {
+            let mask = slot_count - 1;
+            let mut taken = vec![false; slot_count];
+            for multiply in 1u64..10_000 {
+                for shift in 0u8..64 {
+                    #[expect(clippy::cast_possible_truncation, reason = "masked to the slot count")]
+                    let slot_of = |entry: &SwitchEntry| {
+                        (entry.value.cast_unsigned().wrapping_mul(multiply) >> shift) as usize
+                            & mask
+                    };
+                    taken.fill(false);
+                    let separated = entries
+                        .iter()
+                        .all(|entry| !std::mem::replace(&mut taken[slot_of(entry)], true));
+                    if !separated {
+                        continue;
+                    }
+                    let mut slots = vec![None; slot_count];
+                    for entry in entries {
+                        slots[slot_of(entry)] = Some(*entry);
+                    }
+                    return Some(Self::Hash {
+                        multiply,
+                        shift,
+                        slots,
+                    });
+                }
+            }
+            slot_count *= 2;
+        }
+        None
+    }
+
+    /// Whether [`SwitchTable::arm_of`] can answer through this dispatch: it
+    /// is solved, and holds the shape its variant states.
+    #[must_use]
+    pub fn is_dispatchable(&self) -> bool {
+        match self {
+            Self::Keys(_) => false,
+            Self::Hash { shift, slots, .. } => slots.len().is_power_of_two() && *shift < 64,
+            Self::Sorted(entries) => entries.windows(2).all(|pair| pair[0].value < pair[1].value),
+        }
+    }
 }
 
 /// One field copy performed by `Instruction::InitSpread`.
@@ -558,25 +739,32 @@ pub enum Instruction {
     /// type-args-below-value-args order:
     ///
     /// ```text
-    /// [m_targ_0, ..., m_targ_{ntypeargs-1}, val_arg_0 (receiver), ..., val_arg_{nargs-1}, iface_type, method_name]
+    /// [m_targ_0, ..., m_targ_{ntypeargs-1}, val_arg_0, ..., val_arg_{nargs-1}, iface_type, method_name]
     /// ```
     ///
     /// The VM pops `method_name` (a `String`) and `iface_type` (an `Object::Type`
     /// holding the — possibly parameterized — interface), then the `ntypeargs`
     /// method-level type args (sitting below the value args, as in `Call`),
-    /// leaving the `nargs` value args (receiver first). It reads `Self` from the
-    /// receiver's runtime concrete type, resolves `<Self as iface_type>::method_name`,
+    /// leaving the `nargs` value args in the method's declared parameter order.
+    /// It reads `Self` from the runtime concrete type of `val_arg_{self_arg}` —
+    /// the method's one `Self`-typed parameter, the `self` receiver being the
+    /// common case at `self_arg = 0` — resolves `<Self as iface_type>::method_name`,
     /// and calls it like `Call`, seeding `frame.type_args` with the resolved impl's
     /// type args (its own generics for a provided
     /// method, `[Self, interface args..]` for an adopted default — associated
     /// types are not frame slots) followed by these method-level type args. `nargs` is
     /// the resolved method's arity.
     VirtualCall {
-        /// Number of value arguments (including the receiver as the first).
+        /// Number of value arguments, in the method's declared parameter order.
         nargs: u16,
         /// Number of leading method-level type arguments (`Object::Type` values),
         /// below the value args. Zero for a non-generic method.
         ntypeargs: u16,
+        /// Index (in `0..nargs`) of the value argument whose runtime concrete
+        /// type is `Self`. The checker admits an erased `Self` only for a
+        /// method with exactly one required `Self`-typed parameter, and this
+        /// is that parameter's declared position.
+        self_arg: u16,
     },
 
     /// Throw the value on top of the stack.
@@ -654,18 +842,15 @@ pub enum Instruction {
     /// Later `LoadType(TypeArgRef(slot))` reproduces the same type and defs.
     BindType(usize),
 
-    /// Remap a sparse type tag to a dense index via perfect hash lookup.
+    /// Remap a sparse value to the dense index of its arm.
     ///
-    /// Pops the type tag (from a preceding `TypeTag` instruction), computes
-    /// `h(tag) = ((tag as u64).wrapping_mul(M) >> S) & mask`, verifies the
-    /// entry's expected tag, and pushes the dense arm index. On verification
-    /// failure (tag not in the match), pushes `-1` as a sentinel — the
-    /// subsequent `JumpTable`'s default arm handles this.
+    /// Pops the switched value (a type tag from a preceding `TypeTag`
+    /// instruction, or an integer) and pushes the dense index of the arm it
+    /// selects in the [`SwitchTable`] at this operand
+    /// ([`SwitchTable::arm_of`]). A value no key matches pushes `-1`, which
+    /// the subsequent `JumpTable`'s default arm handles.
     ///
-    /// Design rationale: perfect hashing replaces O(log K) `BinarySearch` with
-    /// O(1) dispatch for sparse ≥4-arm `TypeTag` switches. Memory per match
-    /// site scales with K (arms) not N (total classes). See [`MatchHashTable`]
-    /// for algorithm references.
+    /// Memory per switch scales with K (arms), not N (total classes).
     DenseTag(usize),
 
     /// If the caught value is a panic instance (`baml.panics.*`), re-throw it
@@ -857,9 +1042,10 @@ pub enum Instruction {
     /// (`CPython` `STORE_FAST_STORE_FAST`.)
     StoreVar2(usize, usize),
 
-    /// Reify the package selected lexically by the compiler. The operand is a
-    /// constant-pool string naming the static package; a dynamic function's
-    /// runtime owner takes precedence.
+    /// Reify the package lexically enclosing the call site. In a unit the
+    /// operand is a placeholder — the package is the unit's own; the linker
+    /// writes the package's ordinal in the executable, which the static VM
+    /// reads. A dynamic function's runtime owner takes precedence.
     LoadCurrentPackage(usize),
 
     /// Pop the condition on both edges and branch when true.
@@ -1036,10 +1222,10 @@ pub enum OpCode {
     AwaitAny,
 
     // ── Appended out of group order to preserve discriminants ──
-    // Virtual interface-method call: u16 nargs + u16 ntypeargs (5 bytes). The
-    // interface type (`Object::Type`) and method-name string are pushed above the
-    // args and popped first; the callee is resolved at runtime from the receiver's
-    // `Self`.
+    // Virtual interface-method call: u16 nargs + u16 ntypeargs + u16 self_arg
+    // (7 bytes). The interface type (`Object::Type`) and method-name string are
+    // pushed above the args and popped first; the callee is resolved at runtime
+    // from the `Self` of value argument `self_arg`.
     VirtualCall,
 
     // Re-raise an existing exception without replacing its cause or stack trace.
@@ -1212,9 +1398,11 @@ impl OpCode {
             | Self::JumpIfFalseOrPop
             | Self::JumpIfTrueOrPop
             | Self::JumpIfNotNullOrPop
-            | Self::VirtualCall
             | Self::VirtualLoadField
             | Self::VirtualStoreField => 5,
+
+            // 7-byte: opcode + u16 nargs + u16 ntypeargs + u16 self_arg
+            Self::VirtualCall => 7,
 
             Self::LoadCurrentPackage => 5,
 
@@ -1711,8 +1899,15 @@ impl std::fmt::Display for Instruction {
             Instruction::CallIndirect => f.write_str("CALL_INDIRECT"),
             Instruction::SetCallTrace => f.write_str("SET_CALL_TRACE"),
 
-            Instruction::VirtualCall { nargs, ntypeargs } => {
-                write!(f, "VIRTUAL_CALL nargs={nargs} ntypeargs={ntypeargs}")
+            Instruction::VirtualCall {
+                nargs,
+                ntypeargs,
+                self_arg,
+            } => {
+                write!(
+                    f,
+                    "VIRTUAL_CALL nargs={nargs} ntypeargs={ntypeargs} self_arg={self_arg}"
+                )
             }
 
             Instruction::Throw => f.write_str("THROW"),
@@ -2061,9 +2256,9 @@ pub struct Bytecode {
     /// Class initialization programs used by `InitInstance`.
     pub class_init_plans: Vec<ClassInitPlan>,
 
-    /// Perfect hash tables for sparse `TypeTag` switch dispatch.
-    /// Indexed by `DenseTag` instruction operand.
-    pub match_hash_tables: Vec<MatchHashTable>,
+    /// Dispatch tables for sparse switches, indexed by the `DenseTag`
+    /// instruction's operand.
+    pub switch_tables: Vec<SwitchTable>,
 
     /// Line table mapping bytecode PCs to source spans.
     ///
@@ -2113,7 +2308,7 @@ impl Bytecode {
             jump_tables: Vec::new(),
             field_copy_sets: Vec::new(),
             class_init_plans: Vec::new(),
-            match_hash_tables: Vec::new(),
+            switch_tables: Vec::new(),
             line_table: Vec::new(),
             meta: Vec::new(),
             exception_table: Vec::new(),
@@ -2359,10 +2554,19 @@ impl Bytecode {
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
                 }
 
-                // ── VirtualCall: u16 nargs, u16 ntypeargs ────────────
-                Instruction::VirtualCall { nargs, ntypeargs } => {
+                // ── VirtualCall: u16 nargs, u16 ntypeargs, u16 self_arg ──
+                Instruction::VirtualCall {
+                    nargs,
+                    ntypeargs,
+                    self_arg,
+                } => {
+                    debug_assert!(
+                        self_arg < nargs,
+                        "virtual call dispatches on value argument {self_arg} of {nargs}"
+                    );
                     code.extend_from_slice(&nargs.to_le_bytes());
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
+                    code.extend_from_slice(&self_arg.to_le_bytes());
                 }
 
                 // ── ObjectIndex operand → u32 ───────────────────────
@@ -2788,7 +2992,7 @@ mod compact_tests {
             jump_tables: Vec::new(),
             field_copy_sets: Vec::new(),
             class_init_plans: Vec::new(),
-            match_hash_tables: Vec::new(),
+            switch_tables: Vec::new(),
             line_table: Vec::new(),
             meta,
             exception_table: Vec::new(),
@@ -2796,6 +3000,210 @@ mod compact_tests {
             handler_context_table: Vec::new(),
             compact: None,
         }
+    }
+
+    fn kinds(values: &[i64]) -> Vec<SwitchKey> {
+        values.iter().copied().map(SwitchKey::Kind).collect()
+    }
+
+    fn solved_kinds(values: &[i64]) -> SwitchTable {
+        SwitchTable {
+            dispatch: SwitchDispatch::solved(&kinds(values), |_| {
+                unreachable!("a switch of kind keys names no declaration")
+            }),
+            key_names: Vec::new(),
+        }
+    }
+
+    /// Every key selects its arm, in arm order, and nothing else selects any.
+    fn assert_dispatches(table: &SwitchTable, values: &[i64], strangers: &[i64]) {
+        assert!(table.dispatch.is_dispatchable());
+        for (arm, &value) in values.iter().enumerate() {
+            assert_eq!(
+                table.arm_of(value),
+                Some(u32::try_from(arm).unwrap()),
+                "key {value} selects arm {arm}"
+            );
+        }
+        for &stranger in strangers {
+            assert_eq!(table.arm_of(stranger), None, "{stranger} is no key");
+        }
+    }
+
+    #[test]
+    fn a_few_sparse_keys_are_hashed() {
+        let values = [1, 100, 5_000, 70_000, 900_000];
+        let table = solved_kinds(&values);
+        assert!(matches!(table.dispatch, SwitchDispatch::Hash { .. }));
+        assert_dispatches(&table, &values, &[0, 2, -1, 99, i64::MAX]);
+    }
+
+    /// A vacant slot holds no key. The lowest integer is a value like any
+    /// other: it selects an arm only when an arm matches it.
+    #[test]
+    fn a_vacant_slot_matches_no_value() {
+        let values = [1, 100, 5_000, 70_000, 900_000];
+        let table = solved_kinds(&values);
+        let SwitchDispatch::Hash { slots, .. } = &table.dispatch else {
+            panic!("five sparse keys are hashed");
+        };
+        assert!(
+            slots.iter().any(Option::is_none),
+            "five keys leave a power-of-two table with vacant slots"
+        );
+        assert_eq!(table.arm_of(i64::MIN), None);
+
+        let with_lowest = [1, 100, i64::MIN, 70_000, 900_000];
+        assert_dispatches(&solved_kinds(&with_lowest), &with_lowest, &[0, 5_000]);
+    }
+
+    /// `count` distinct indices below `range` with no structure to them, drawn
+    /// in order from a fixed sequence (`SplitMix64` from state zero).
+    fn scattered(count: usize, range: u64) -> Vec<usize> {
+        let mut state = 0u64;
+        let mut indices = Vec::with_capacity(count);
+        while indices.len() < count {
+            state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut mixed = state;
+            mixed = (mixed ^ (mixed >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            mixed = (mixed ^ (mixed >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            mixed ^= mixed >> 31;
+            let index = usize::try_from(mixed % range).expect("the range fits usize");
+            if !indices.contains(&index) {
+                indices.push(index);
+            }
+        }
+        indices
+    }
+
+    /// Sixty-four keys with no structure, the tags a switch over classes
+    /// scattered through an image has. No constants separate them within 128
+    /// slots; the search goes on to 256 and finds some.
+    #[test]
+    fn sixty_four_scattered_keys_are_hashed_over_more_slots() {
+        let base = baml_type::typetag::TypeTag::of_static_index(0).as_i64();
+        let values: Vec<i64> = scattered(64, 3_000)
+            .into_iter()
+            .map(|index| base + i64::try_from(index).unwrap())
+            .collect();
+        let table = solved_kinds(&values);
+        let SwitchDispatch::Hash { slots, .. } = &table.dispatch else {
+            panic!("sixty-four keys are within the search's reach");
+        };
+        assert_eq!(slots.len(), 256);
+        let strangers: Vec<i64> = (0..3_000)
+            .map(|index| base + index)
+            .filter(|value| !values.contains(value))
+            .collect();
+        assert_dispatches(&table, &values, &strangers);
+    }
+
+    /// Past [`SwitchDispatch::HASHED_KEYS`] no search is run.
+    #[test]
+    fn a_wide_switch_is_sorted() {
+        let values: Vec<i64> = (0..300i64).map(|arm| (arm * 7_919 + 3) % 100_003).collect();
+        assert!(values.len() > SwitchDispatch::HASHED_KEYS);
+        let table = solved_kinds(&values);
+        assert!(matches!(table.dispatch, SwitchDispatch::Sorted(_)));
+        assert_dispatches(&table, &values, &[-1, 100_003, 1]);
+    }
+
+    /// A key set no constants within the search bounds separate. Four keys
+    /// differ in their top two bits alone, so a window that tells them apart
+    /// sits at the top of the product; there, `0` and `1` both read as zero,
+    /// because a multiplier below ten thousand cannot carry `1` that high.
+    /// Every other window reads the four as one value. The switch is sorted,
+    /// and dispatches all the same.
+    #[test]
+    fn keys_the_search_cannot_separate_are_sorted() {
+        let values = [0, 1 << 62, i64::MIN, (3u64 << 62).cast_signed(), 1];
+        let table = solved_kinds(&values);
+        assert!(matches!(table.dispatch, SwitchDispatch::Sorted(_)));
+        assert_dispatches(&table, &values, &[2, -1, i64::MAX]);
+    }
+
+    #[test]
+    fn arms_match_in_order_so_a_repeated_key_selects_the_first() {
+        let table = solved_kinds(&[10, 2_000, 10, 300_000, 2_000]);
+        assert_eq!(table.arm_of(10), Some(0));
+        assert_eq!(table.arm_of(2_000), Some(1));
+        assert_eq!(table.arm_of(300_000), Some(3));
+    }
+
+    #[test]
+    fn a_switch_without_keys_selects_nothing() {
+        let table = solved_kinds(&[]);
+        assert!(table.dispatch.is_dispatchable());
+        assert_eq!(table.arm_of(0), None);
+    }
+
+    #[test]
+    fn a_declaration_key_is_solved_over_its_assigned_tag() {
+        let keys = [
+            SwitchKey::Kind(baml_type::typetag::INT),
+            SwitchKey::Declaration(ObjectIndex::from_raw(41)),
+            SwitchKey::Declaration(ObjectIndex::from_raw(7)),
+        ];
+        let tag_of = |declaration: ObjectIndex| {
+            baml_type::typetag::TypeTag::of_static_index(declaration.raw())
+        };
+        let table = SwitchTable {
+            dispatch: SwitchDispatch::solved(&keys, tag_of),
+            key_names: Vec::new(),
+        };
+        assert_eq!(table.arm_of(baml_type::typetag::INT), Some(0));
+        assert_eq!(
+            table.arm_of(tag_of(ObjectIndex::from_raw(41)).as_i64()),
+            Some(1)
+        );
+        assert_eq!(
+            table.arm_of(tag_of(ObjectIndex::from_raw(7)).as_i64()),
+            Some(2)
+        );
+        assert_eq!(
+            table.arm_of(tag_of(ObjectIndex::from_raw(8)).as_i64()),
+            None
+        );
+    }
+
+    #[test]
+    fn only_a_solved_table_of_its_stated_shape_dispatches() {
+        let entry = |value| Some(SwitchEntry { value, arm: 0 });
+        assert!(!SwitchDispatch::Keys(kinds(&[1, 2])).is_dispatchable());
+        assert!(
+            !SwitchDispatch::Hash {
+                multiply: 1,
+                shift: 0,
+                slots: vec![entry(1), None, entry(2)],
+            }
+            .is_dispatchable(),
+            "three slots are no power of two"
+        );
+        assert!(
+            !SwitchDispatch::Hash {
+                multiply: 1,
+                shift: 64,
+                slots: vec![entry(1), None],
+            }
+            .is_dispatchable(),
+            "a shift of the whole width reads nothing"
+        );
+        assert!(
+            !SwitchDispatch::Hash {
+                multiply: 1,
+                shift: 0,
+                slots: Vec::new(),
+            }
+            .is_dispatchable()
+        );
+        assert!(
+            !SwitchDispatch::Sorted(vec![
+                SwitchEntry { value: 2, arm: 0 },
+                SwitchEntry { value: 1, arm: 1 },
+            ])
+            .is_dispatchable(),
+            "bisection needs ascending keys"
+        );
     }
 
     #[test]
@@ -3001,6 +3409,26 @@ mod compact_tests {
     }
 
     #[test]
+    fn encode_virtual_call_operands() {
+        let instruction = Instruction::VirtualCall {
+            nargs: 3,
+            ntypeargs: 1,
+            self_arg: 2,
+        };
+        let bc = make_bytecode(vec![instruction], vec![]);
+        let compact = bc.lower_to_compact();
+        assert_eq!(compact.code.len(), OpCode::VirtualCall.encoded_size());
+        assert_eq!(compact.code[0], OpCode::VirtualCall as u8);
+        assert_eq!(u16::from_le_bytes([compact.code[1], compact.code[2]]), 3);
+        assert_eq!(u16::from_le_bytes([compact.code[3], compact.code[4]]), 1);
+        assert_eq!(u16::from_le_bytes([compact.code[5], compact.code[6]]), 2);
+        assert_eq!(
+            instruction.to_string(),
+            "VIRTUAL_CALL nargs=3 ntypeargs=1 self_arg=2"
+        );
+    }
+
+    #[test]
     fn encode_init_instance_operand() {
         let bc = make_bytecode(vec![Instruction::InitInstance(7)], vec![]);
         let compact = bc.lower_to_compact();
@@ -3084,7 +3512,7 @@ mod compact_tests {
             jump_tables: Vec::new(),
             field_copy_sets: Vec::new(),
             class_init_plans: Vec::new(),
-            match_hash_tables: Vec::new(),
+            switch_tables: Vec::new(),
             line_table: vec![
                 LineTableEntry {
                     pc: 0,
@@ -3126,7 +3554,7 @@ mod compact_tests {
             jump_tables: Vec::new(),
             field_copy_sets: Vec::new(),
             class_init_plans: Vec::new(),
-            match_hash_tables: Vec::new(),
+            switch_tables: Vec::new(),
             line_table: Vec::new(),
             meta: vec![InstructionMeta { operand: None }; 3],
             exception_table: vec![ExceptionTableEntry {

@@ -22,20 +22,23 @@ fn package(db: &ProjectDatabase) -> baml_db::SourceRoot {
 
 /// Lower the project to bytecode and return the `Program` for inspection.
 fn compile_program(db: &ProjectDatabase) -> bex_vm_types::Program {
-    baml_compiler2_emit::generate_project_bytecode(db, package(db))
+    baml_db::compile_program(db, package(db), baml_compiler2_emit::OptLevel::Two)
         .expect("should compile to bytecode")
 }
 
 /// An error-bearing program (here, an unresolved parameter type) produces
 /// inference-only `Unknown` types. The in-process / runtime-eval entry point
 /// (`ProjectDatabase::get_bytecode`) must gate on a clean diagnostic pass and
-/// return a recoverable `LoweringError`, not panic at the convert boundary.
+/// return a recoverable `CompileProgramError`, not panic at the convert
+/// boundary.
 #[test]
 fn error_bearing_program_returns_recoverable_error() {
     let db = db_with("function f(a: NonexistentType) -> int { 0 }");
     match db.get_bytecode(package(&db)) {
-        Ok(_) => panic!("expected a LoweringError for an error-bearing program"),
-        Err(baml_compiler2_emit::LoweringError::ProjectHasErrors { error_count }) => {
+        Ok(_) => panic!("expected a CompileProgramError for an error-bearing program"),
+        Err(baml_db::CompileProgramError::Emit(
+            baml_compiler2_emit::LoweringError::ProjectHasErrors { error_count },
+        )) => {
             assert!(error_count > 0, "expected a positive error count");
         }
         Err(other) => panic!("expected ProjectHasErrors, got: {other}"),
@@ -60,15 +63,16 @@ fn thrown_parameter_named_like_a_catch_binding_is_not_a_rethrow() {
     );
     baml_db::testing::assert_no_diagnostic_errors(&db);
     let program = compile_program(&db);
-    let idx = program
-        .function_index("user.f")
-        .expect("user.f should be compiled");
+    let idx =
+        baml_tests::engine::function_index(&program, "user.f").expect("user.f should be compiled");
     let Some(bex_vm_types::Object::Function(func)) = program.objects.get(idx) else {
         panic!("user.f should resolve to a function object");
     };
-    // An emitted program's heads are tag-only until the loader binds them, so
-    // the throws type is checked by identity rather than by rendered name.
-    let expected = baml_type::typetag::TypeTag::of_head("user.MyError");
+    // An emitted program's heads carry the tag the linker assigned their
+    // declaration, so the throws type is checked by identity rather than by
+    // rendered name.
+    let expected = baml_tests::engine::declared_type_tag(&program, "user.MyError")
+        .expect("user.MyError should be declared");
     let mut found = false;
     func.throws_type.visit_heads(&mut |head| {
         if head.tag() == expected {

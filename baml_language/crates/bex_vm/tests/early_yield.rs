@@ -53,8 +53,11 @@ fn spin_source() -> String {
 fn make_vm(park_requested: Arc<AtomicBool>) -> BexVm {
     let program = compile_source(&spin_source());
     let function_index = program
-        .function_index(SPIN_FUNCTION)
-        .unwrap_or_else(|| panic!("function {SPIN_FUNCTION} not found in compiled program"));
+        .rendered_callables()
+        .get(SPIN_FUNCTION)
+        .unwrap_or_else(|| panic!("function {SPIN_FUNCTION} not found in compiled program"))
+        .object
+        .raw();
     let mut vm = BexVm::from_program(program, Arc::clone(&park_requested)).expect("from_program");
     // Override the default interval with a small one for fast tests.
     vm.early_yield =

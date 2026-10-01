@@ -48,6 +48,7 @@ tokio = { workspace = true, features = [ "sync", "rt", "macros", "time" ] }
 wasm-bindgen-futures = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+btel_reader = { workspace = true }
 btel_file = { workspace = true, features = [ "test-support" ] }
 btel_snapshot = { workspace = true }
 

@@ -20,6 +20,7 @@ use baml_compiler2_hir::{
     scope::{FileScopeId, ScopeKind},
     semantic_index::{BindingId, BindingKind, FileSemanticIndex},
 };
+use baml_compiler2_hir_ty::extern_loc::{DefinitionRef, ExternDefinition, extern_definition_named};
 use text_size::{TextRange, TextSize};
 
 use crate::syntax;
@@ -44,9 +45,11 @@ pub struct Location {
 /// readers (`class_data`, source maps) without re-resolving names.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SymbolTarget<'db> {
-    /// A top-level item (class, function, enum, type alias, …), user-defined
-    /// or builtin.
-    Item(Definition<'db>),
+    /// A top-level item (class, function, enum, type alias, …): a source
+    /// definition, user-defined or builtin, or a served package's row by the
+    /// identity of its defining declaration — which has no source and no
+    /// location in this database.
+    Item(DefinitionRef<'db>),
     /// A local binding (let, parameter, pattern, or catch binding).
     Local {
         /// The function whose body arena owns the binding.
@@ -152,7 +155,9 @@ pub fn symbol_at(
     // (tagged form), never a same-spelled local or item.
     if let Some(position) = template_position_at(db, file, offset) {
         return match position {
-            TemplatePosition::Driver(func) => Some(SymbolTarget::Item(Definition::Function(func))),
+            TemplatePosition::Driver(func) => Some(SymbolTarget::Item(DeclRef::Source(
+                Definition::Function(func),
+            ))),
             TemplatePosition::DefaultText => None,
         };
     }
@@ -162,7 +167,9 @@ pub fn symbol_at(
     }
 
     match resolve_name_at(db, file, offset, &name) {
-        ResolvedName::Item(def) | ResolvedName::Builtin(def) => Some(SymbolTarget::Item(def)),
+        ResolvedName::Item(def) | ResolvedName::Builtin(def) => {
+            Some(SymbolTarget::Item(DeclRef::Source(def)))
+        }
         // A local that `local_at` did not find has no recoverable binding
         // identity; member resolution cannot apply to a scope name either.
         ResolvedName::Local { .. } => None,
@@ -185,9 +192,30 @@ fn qualified_item_at<'db>(
         return None;
     }
     match baml_compiler2_hir::resolve::resolve_path_at(db, file, offset, &chain, None) {
-        ResolvedName::Item(def) | ResolvedName::Builtin(def) => Some(SymbolTarget::Item(def)),
-        ResolvedName::Local { .. } | ResolvedName::Unknown => None,
+        ResolvedName::Item(def) | ResolvedName::Builtin(def) => {
+            Some(SymbolTarget::Item(DeclRef::Source(def)))
+        }
+        ResolvedName::Local { .. } => None,
+        // A source package's items resolve above; a SERVED package's are rows.
+        ResolvedName::Unknown => served_item_at(db, file, &chain),
     }
+}
+
+/// A dotted name whose first segment is a package `file`'s package reaches,
+/// naming a declaration a SERVED package exports (`app.Widget`,
+/// `app.util.make`): the row's defining identity. `None` for anything the
+/// served lane does not export — a source package's items resolve through
+/// [`baml_compiler2_hir::resolve::resolve_path_at`].
+fn served_item_at<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    file: SourceFile,
+    chain: &[Name],
+) -> Option<SymbolTarget<'db>> {
+    let (package, path) = chain.split_first()?;
+    let (name, namespace) = path.split_last()?;
+    let root = baml_compiler2_hir::package::accessible_package(db, file.source_root(db), package)?;
+    let definition = extern_definition_named(db, root, namespace, name)?;
+    Some(SymbolTarget::Item(DeclRef::External(definition)))
 }
 
 /// The verdict for a token that occupies a recorded member span.
@@ -349,9 +377,10 @@ fn member_position_at(
                         None,
                     ) {
                         ResolvedName::Item(def) | ResolvedName::Builtin(def) => {
-                            Some(SymbolTarget::Item(def))
+                            Some(SymbolTarget::Item(DeclRef::Source(def)))
                         }
-                        ResolvedName::Local { .. } | ResolvedName::Unknown => None,
+                        ResolvedName::Local { .. } => None,
+                        ResolvedName::Unknown => served_item_at(db, file, &segments[..=idx]),
                     }
                 }
             }
@@ -1416,16 +1445,15 @@ pub(crate) fn member_resolution_target<'db>(
         }
         MemberResolution::Free {
             func: DeclRef::Source(func),
-        } => Some(SymbolTarget::Item(Definition::Function(*func))),
-        // BUG: a served package's free function has no symbol — no hover,
-        // goto, or references — because it is a top-level ITEM and `Item`
-        // carries source definitions only. Closed when the definition lane
-        // gains its provenance-total ref (PR-4's `DefinitionRef`), which
-        // also gives served type names a target. Pinned by
-        // `mounted_package_tests::a_mounted_free_function_has_no_symbol_yet`.
+        } => Some(SymbolTarget::Item(DeclRef::Source(Definition::Function(
+            *func,
+        )))),
+        // A served package's free function: the row's defining identity.
         MemberResolution::Free {
-            func: DeclRef::External(_),
-        } => None,
+            func: DeclRef::External(func),
+        } => Some(SymbolTarget::Item(DeclRef::External(
+            ExternDefinition::Function(*func),
+        ))),
         MemberResolution::Method {
             callee: MethodCallee::Inherent(func) | MethodCallee::Concrete { func, .. },
             ..
@@ -1516,9 +1544,8 @@ fn constructor_field_at<'db>(
 }
 
 /// The class a constructor literal's type names, in whichever lane serves
-/// it: a served package's row — never its link stub, which would give the
-/// field a second identity split from the `Field { External }` every member
-/// access produces — else the source class.
+/// it: a served package's row — the one identity every member access's
+/// `Field { External }` shares — else the source class.
 pub(crate) fn constructed_class<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     qtn: &baml_type::DeclName,
@@ -1541,10 +1568,12 @@ pub fn target_definition<'db>(
     target: SymbolTarget<'db>,
 ) -> Option<Location> {
     match target {
-        SymbolTarget::Item(def) => {
+        SymbolTarget::Item(DeclRef::Source(def)) => {
             let (file, range) = syntax::definition_span(db, def)?;
             Some(Location { file, range })
         }
+        // A row has no `SourceFile` and no span in this database.
+        SymbolTarget::Item(DeclRef::External(_)) => None,
         SymbolTarget::Local { func, binding, .. } => {
             let file = func.file(db);
             match binding.kind {

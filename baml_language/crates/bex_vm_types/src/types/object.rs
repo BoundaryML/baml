@@ -135,6 +135,72 @@ const _: () = assert!(
 );
 
 impl Object {
+    /// The tag under which this object can head a nominal type, or `None`
+    /// when it is not a declaration.
+    #[must_use]
+    pub fn declaration_tag(&self) -> Option<baml_type::typetag::TypeTag> {
+        match self {
+            Object::Class(class) => Some(class.type_tag),
+            Object::Enum(enm) => Some(enm.type_tag),
+            Object::Interface(interface) => Some(interface.type_tag),
+            Object::TypeAlias(alias) => Some(alias.type_tag),
+            Object::Function(_)
+            | Object::GenericFunction(_)
+            | Object::String(_)
+            | Object::Bigint(_)
+            | Object::Uint8Array(_)
+            | Object::Type(_)
+            | Object::Package(_)
+            | Object::ImplRule(_)
+            | Object::Instance(_)
+            | Object::Variant(_)
+            | Object::Closure(_)
+            | Object::BoundMethod(_)
+            | Object::HostClosure(_)
+            | Object::Cell(_)
+            | Object::Array(_)
+            | Object::Map(_)
+            | Object::Float(_)
+            | Object::Future(_)
+            | Object::RustData(_) => None,
+            #[cfg(feature = "heap_debug")]
+            Object::Sentinel(_) => None,
+        }
+    }
+
+    /// Give a declaration the tag it heads types by; `false` when this
+    /// object is not a declaration and nothing was assigned.
+    pub fn assign_declaration_tag(&mut self, tag: baml_type::typetag::TypeTag) -> bool {
+        match self {
+            Object::Class(class) => class.type_tag = tag,
+            Object::Enum(enm) => enm.type_tag = tag,
+            Object::Interface(interface) => interface.type_tag = tag,
+            Object::TypeAlias(alias) => alias.type_tag = tag,
+            Object::Function(_)
+            | Object::GenericFunction(_)
+            | Object::String(_)
+            | Object::Bigint(_)
+            | Object::Uint8Array(_)
+            | Object::Type(_)
+            | Object::Package(_)
+            | Object::ImplRule(_)
+            | Object::Instance(_)
+            | Object::Variant(_)
+            | Object::Closure(_)
+            | Object::BoundMethod(_)
+            | Object::HostClosure(_)
+            | Object::Cell(_)
+            | Object::Array(_)
+            | Object::Map(_)
+            | Object::Float(_)
+            | Object::Future(_)
+            | Object::RustData(_) => return false,
+            #[cfg(feature = "heap_debug")]
+            Object::Sentinel(_) => return false,
+        }
+        true
+    }
+
     /// The inner [`Package`] if this is an [`Object::Package`].
     #[inline]
     pub fn as_package(&self) -> Option<&Package> {
@@ -169,7 +235,6 @@ impl Object {
 enum ObjectWire {
     Function(Box<Function>),
     Interface(Box<InterfaceDef>),
-    Package(Box<Package>),
     ImplRule(Box<RuntimeImplRule>),
     Class(Box<Class>),
     Instance(Instance),
@@ -215,7 +280,12 @@ impl BorshSerialize for Object {
         let proxy = match self {
             Self::Function(v) => ObjectWire::Function(v.clone()),
             Self::Interface(v) => ObjectWire::Interface(v.clone()),
-            Self::Package(v) => ObjectWire::Package(v.clone()),
+            Self::Package(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "a package object has no wire form; `ProgramPackage` is its wire twin",
+                ));
+            }
             Self::ImplRule(v) => ObjectWire::ImplRule(v.clone()),
             Self::Class(v) => ObjectWire::Class(v.clone()),
             Self::Instance(v) => ObjectWire::Instance(v.clone()),
@@ -271,7 +341,6 @@ impl BorshDeserialize for Object {
         Ok(match proxy {
             ObjectWire::Function(v) => Self::Function(v),
             ObjectWire::Interface(v) => Self::Interface(v),
-            ObjectWire::Package(v) => Self::Package(v),
             ObjectWire::ImplRule(v) => Self::ImplRule(v),
             ObjectWire::Class(v) => Self::Class(v),
             ObjectWire::Instance(v) => Self::Instance(v),

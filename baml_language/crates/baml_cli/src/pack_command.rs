@@ -30,7 +30,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_db::{ProjectDatabase, baml_compiler_diagnostics::Severity, baml_compiler2_emit};
+use baml_db::{ProjectDatabase, baml_compiler_diagnostics::Severity};
 use baml_exec::{OutputFormat, PACK_SECTION_NAME, PackEnvelope, validate_help_param};
 use bex_engine::BexEngine;
 use bex_vm_types::types::Program;
@@ -271,7 +271,7 @@ impl PackArgs {
             // cache seam — always a cold compile, same as `baml run --file`.
             let (db, package, needs_format_hint) = self.load_standalone(file)?;
             check_diagnostics(&db, "cannot pack: compilation errors found", reporter)?;
-            let program = baml_compiler2_emit::generate_project_bytecode(&db, package)
+            let program = crate::bytecode_cache::compile_program(&db, package, None)
                 .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
             return Ok((db, program, needs_format_hint));
         }
@@ -280,8 +280,8 @@ impl PackArgs {
 
     /// Project-mode load + compile through the bytecode cache — the same warm
     /// flow as `baml run` (`run_command::load_and_compile`): whole-program hit
-    /// when nothing changed, per-file unit reuse on a dirty edit, full compile
-    /// otherwise. Pack shares run/check's exact cache key space, so a pack
+    /// when nothing changed, served packages plus a fresh user package on an
+    /// edit. Pack shares run/check's exact cache key space, so a pack
     /// right after a run (or a
     /// re-pack) serves the identical `Program`. The packaged bytecode is
     /// target-independent (the `--target` triple only selects the host binary
@@ -309,10 +309,10 @@ impl PackArgs {
             return Ok((session.db, program, needs_format_hint));
         }
 
-        // Seed the stdlib typed interface and prepare the per-file reuse plan —
+        // Seed the stdlib typed interface and install the served check rows —
         // the same warm-database setup run/check/test use.
         let warmth = session.warm_prep();
-        let (reuse_plan, stdlib_interface_hit) = (warmth.reuse_plan, warmth.stdlib_interface_hit);
+        let (served, stdlib_interface_hit) = (warmth.served, warmth.stdlib_interface_hit);
         let db = &session.db;
         let package = session.package;
         let cache = &session.cache;
@@ -322,11 +322,11 @@ impl PackArgs {
         // to `check` and `generate`.
         //
         // With a cache, gate diagnostics through the incremental collector: it
-        // checks only the reuse plan's dirty files and serves clean files from
-        // their cached blobs, returning the fresh per-file blobs to persist.
-        // Without a cache, run the honest full check (no blobs to store).
+        // serves the check rows of an unchanged project and checks every file
+        // otherwise, returning the fresh per-file blobs to persist. Without a
+        // cache, run the honest full check (no blobs to store).
         let fresh_diagnostics = if let Some(ctx) = cache {
-            let incremental = ctx.collect_diagnostics_incremental(db, package, reuse_plan.as_ref());
+            let incremental = ctx.collect_diagnostics_incremental(db, package, served.as_ref());
             bail_on_error_diagnostics(
                 db,
                 &incremental.merged,
@@ -339,26 +339,21 @@ impl PackArgs {
             None
         };
 
-        let compiled = crate::bytecode_cache::compile_program_artifacts(
-            db,
-            package,
-            cache.as_ref(),
-            reuse_plan.as_ref(),
-        )
-        .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
+        let program = crate::bytecode_cache::compile_program(db, package, cache.as_ref())
+            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
         if let Some(ctx) = cache {
             let fresh = fresh_diagnostics
                 .as_ref()
                 .expect("a cache is present, so fresh diagnostics were computed");
             ctx.verify_and_store(
                 &session,
-                &compiled,
+                &program,
                 fresh,
-                reuse_plan.as_ref(),
+                served.as_ref(),
                 stdlib_interface_hit,
             )?;
         }
-        Ok((session.db, compiled.program, needs_format_hint))
+        Ok((session.db, program, needs_format_hint))
     }
 
     fn load_standalone(
