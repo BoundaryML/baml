@@ -58,6 +58,26 @@ function resolve(
     }
 }
 
+/// What a reliability wrapper may try again after: a typed failure, or a
+/// member's own deadline.
+type Retryable = root.errors.Failure | baml.errors.Timeout;
+
+/// (internal) The safety gate shared by Retry and Fallback, streaming or not.
+/// A typed failure passes only when replaying it is safe. A `baml.errors.Timeout`
+/// always passes: a member raises it for its own deadline (`request_timeout_ms`,
+/// `time_to_first_token_timeout_ms`, or a `baml.future.with_timeout` it applies
+/// itself), which is a failed attempt like a transport failure, and legacy
+/// clients retried and failed over on it too. A caller's deadline never reaches
+/// this gate: it cancels the members, and every wrapper re-throws
+/// `baml.panics.Cancelled`. When no attempt or member is left, the original
+/// `Timeout` propagates unchanged.
+function _may_try_again(cause: Retryable) -> bool {
+    match (cause) {
+        let failure: root.errors.Failure => failure.retry_safety() == root.errors.RetrySafety.Safe,
+        baml.errors.Timeout => true,
+    }
+}
+
 /// The default judgment: a request the provider rejected does not become
 /// valid by resending.
 function default_retry_judgment(f: root.errors.Failure) -> bool {
@@ -81,7 +101,7 @@ class Backoff {
 
     /// The delay before attempt N (first retry is attempt 1). A
     /// `ai.errors.RateLimited.retry_after_ms` hint overrides the computed value.
-    function delay_ms(self, attempt: int, f: root.errors.Failure) -> int {
+    function delay_ms(self, attempt: int, f: Retryable) -> int {
         let hinted = match (f) {
             let r: root.errors.RateLimited => r.retry_after_ms,
             _ => null,
@@ -106,11 +126,12 @@ class Backoff {
 
 // Streaming retries use the same safety judgment and backoff as invoke, but a
 // new stream may be opened only before the first text delta is returned.
-/// (internal) Map a classified failure to a failed-leg wire record (`selected: false`).
-/// Timing is best-effort: a failed leg's start was never measured, so it is
-/// null — never fabricated. `client_name` falls back to the failure's own
-/// provider when the wrapper does not know the member's id.
-function _failed_leg_call(client_name: string?, f: root.errors.Failure) -> root.events.LLMCall {
+/// (internal) Map a classified failure or a member timeout to a failed-leg wire
+/// record (`selected: false`). Timing is best-effort: a failed leg's start was
+/// never measured, so it is null — never fabricated. `client_name` falls back
+/// to the failure's own provider when the wrapper does not know the member's
+/// id; a timeout carries no provider, so it reports `"unknown"`.
+function _failed_leg_call(client_name: string?, f: Retryable) -> root.events.LLMCall {
     let provider = match (f) {
         let e: root.errors.RateLimited => e.provider,
         let e: root.errors.NetworkFailure => e.provider,
@@ -177,17 +198,12 @@ class Retry {
         failed: root.events.LLMCall[],
     ) -> root.ModelTurn {
         self.inner.invoke(input) catch_all (e) {
-            let f: root.errors.Failure => {
-                // the safety gate is not overridable; the judgment is
-                if (
-                    remaining > 1
-                        && f.retry_safety() == root.errors.RetrySafety.Safe
-                        && self.retry_if(f)
-                ) {
-                    failed.push(_failed_leg_call(self.inner.id(), f));
+            let cause: Retryable => {
+                if (remaining > 1 && self._wants_retry(cause)) {
+                    failed.push(_failed_leg_call(self.inner.id(), cause));
                     let attempt = self.max_attempts - remaining + 1;
                     let _ = baml.sys.sleep(
-                        baml.time.Duration.from_milliseconds(self.backoff.delay_ms(attempt, f)),
+                        baml.time.Duration.from_milliseconds(self.backoff.delay_ms(attempt, cause)),
                     ) catch_all (se) {
                         _ => null,
                     };
@@ -198,6 +214,16 @@ class Retry {
             },
             _ => throw e, // untyped failures are never retried
         }
+    }
+
+    /// The safety gate is not overridable; the judgment is. `retry_if` judges
+    /// typed failures; a member timeout passes the gate and is always retried.
+    function _wants_retry(self, cause: Retryable) -> bool {
+        _may_try_again(cause)
+            && match (cause) {
+                let failure: root.errors.Failure => self.retry_if(failure),
+                baml.errors.Timeout => true,
+            }
     }
 
     implements root.Client {
@@ -237,19 +263,13 @@ class Retry {
                     },
                 }
             };
-            let retry = (failure: root.errors.Failure) -> bool {
-                if (failure is root.errors.StreamingUnsupported) {
+            let retry = (cause: Retryable) -> bool {
+                if (cause is root.errors.StreamingUnsupported) {
                     false
-                } else if (
-                    remaining > 1
-                        && failure.retry_safety() == root.errors.RetrySafety.Safe
-                        && self.retry_if(failure)
-                ) {
+                } else if (remaining > 1 && self._wants_retry(cause)) {
                     let attempt = self.max_attempts - remaining + 1;
                     let _ = baml.sys.sleep(
-                        baml.time.Duration.from_milliseconds(
-                            self.backoff.delay_ms(attempt, failure),
-                        ),
+                        baml.time.Duration.from_milliseconds(self.backoff.delay_ms(attempt, cause)),
                     ) catch_all (e) {
                         let cancelled: baml.panics.Cancelled => throw cancelled,
                         _ => null,
@@ -395,7 +415,8 @@ class RoundRobin {
 }
 
 /// Streaming fallback advances in member order only for a typed, safely
-/// retryable failure that occurs before the first text delta is returned.
+/// retryable failure or a member timeout that occurs before the first text
+/// delta is returned.
 class Fallback {
     members: root.Client[],
 
@@ -408,12 +429,9 @@ class Fallback {
         match (self.members.at(index)) {
             let c: root.Client => {
                 c.invoke(input) catch_all (e) {
-                    let f: root.errors.Failure => {
-                        if (
-                            index + 1 < self.members.length()
-                                && f.retry_safety() == root.errors.RetrySafety.Safe
-                        ) {
-                            failed.push(_failed_leg_call(c.id(), f));
+                    let cause: Retryable => {
+                        if (index + 1 < self.members.length() && _may_try_again(cause)) {
+                            failed.push(_failed_leg_call(c.id(), cause));
                             self._try(input, index + 1, failed)
                         } else {
                             throw e
@@ -494,11 +512,8 @@ class Fallback {
                     },
                 }
             };
-            let advance = (failure: root.errors.Failure) -> bool {
-                if (
-                    index + 1 < self.members.length()
-                        && failure.retry_safety() == root.errors.RetrySafety.Safe
-                ) {
+            let advance = (cause: Retryable) -> bool {
+                if (index + 1 < self.members.length() && _may_try_again(cause)) {
                     index += 1;
                     true
                 } else {
@@ -525,13 +540,13 @@ class Fallback {
 }
 
 /// Pulls one selected stream through a reliability policy. A typed, safely
-/// retryable failure may replace the selected stream only before the first text
-/// delta has been returned. Once any delta is visible, every later failure is
-/// terminal: replaying would duplicate a prefix and there is no resumable-stream
-/// contract at the client boundary.
+/// retryable failure or a member timeout may replace the selected stream only
+/// before the first text delta has been returned. Once any delta is visible,
+/// every later failure is terminal: replaying would duplicate a prefix and
+/// there is no resumable-stream contract at the client boundary.
 class StreamRelay {
     open: () -> root.stream.TurnStream throws root.errors.InvokeError,
-    retry: (root.errors.Failure) -> bool throws root.errors.InvokeError,
+    retry: (Retryable) -> bool throws root.errors.InvokeError,
     current: root.stream.TurnStream?,
     emitted: bool,
     // Deltas from the current stream's last batch not yet re-emitted:
@@ -555,18 +570,14 @@ class StreamRelay {
 
     function recover(self, error: root.errors.RaisedInClient) -> void {
         match (root.errors.normalize_invoke(error)) {
-            let timeout: baml.errors.Timeout => {
-                self.close_current();
-                throw timeout
-            },
-            let failure: root.errors.Failure => {
-                if (!self.emitted && self.retry(failure)) {
-                    self.calls.push(_failed_leg_call(null, failure));
+            let cause: Retryable => {
+                if (!self.emitted && self.retry(cause)) {
+                    self.calls.push(_failed_leg_call(null, cause));
                     self.close_current();
                     self.current = null;
                 } else {
                     self.close_current();
-                    throw failure
+                    throw cause
                 }
             },
             let unknown_error: baml.errors.UnknownError => {
