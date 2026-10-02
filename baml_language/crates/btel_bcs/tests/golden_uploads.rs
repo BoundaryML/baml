@@ -260,7 +260,6 @@ async fn check_case(case: &str) {
                 max_candidates: 8,
                 max_targets: 8,
                 max_recording_body_bytes: 4096,
-                max_cas_body_bytes: 4096,
                 request_timeout: Duration::from_secs(2),
                 max_attempts: 1,
                 ..DeliveryConfig::new(server.uri().parse().unwrap())

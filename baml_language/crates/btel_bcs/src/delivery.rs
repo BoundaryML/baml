@@ -46,7 +46,9 @@ impl fmt::Display for DeliveryError {
 impl std::error::Error for DeliveryError {}
 
 /// Limits reserve retained owners and both sides of serialization before admission.
-/// HTTP is opt-in for local tests; production endpoints must use HTTPS.
+/// No capture or blob is refused for its size: one plan that needs more than
+/// the whole CAS reservation waits until nothing else holds any, then goes
+/// alone. HTTP is opt-in for local tests; production endpoints must use HTTPS.
 #[derive(Clone)]
 pub struct DeliveryConfig {
     pub prepare_base_url: Url,
@@ -56,6 +58,7 @@ pub struct DeliveryConfig {
     /// capture. A capture spanning plans counts once per plan.
     pub max_pending_snapshots: usize,
     pub recording_reserved_bytes: usize,
+    /// Memory for the captures and CAS bodies of the plans admitted together.
     pub cas_reserved_bytes: usize,
     pub max_request_bytes: usize,
     pub max_response_bytes: usize,
@@ -63,7 +66,6 @@ pub struct DeliveryConfig {
     pub max_candidates: usize,
     pub max_targets: usize,
     pub max_recording_body_bytes: usize,
-    pub max_cas_body_bytes: usize,
     pub request_timeout: Duration,
     pub retry_delay: Duration,
     /// Initial attempt plus retries. Nonretryable HTTP and invalid plans drop immediately.
@@ -86,7 +88,6 @@ impl DeliveryConfig {
             max_candidates: 32,
             max_targets: 33,
             max_recording_body_bytes: 8 * 1024 * 1024,
-            max_cas_body_bytes: 8 * 1024 * 1024,
             request_timeout: Duration::from_secs(10),
             retry_delay: Duration::from_millis(200),
             max_attempts: 4,
@@ -135,7 +136,6 @@ impl DeliveryConfig {
             || self.max_request_bytes == 0
             || self.max_response_bytes == 0
             || self.max_recording_body_bytes == 0
-            || self.max_cas_body_bytes == 0
         {
             return Err(DeliveryError::InvalidConfig);
         }
@@ -273,9 +273,7 @@ impl Window {
                     encoded_len: blob.encoded_len(),
                 });
             }
-            window
-                .sizes
-                .push(snapshot.retained_bytes().ok_or(DeliveryError::Capacity)?);
+            window.sizes.push(snapshot.retained_bytes());
             window.releases.push(true);
             window.owners.push(Arc::new(snapshot));
         }
@@ -516,13 +514,25 @@ impl BcsDeliveryHandle {
             .and_then(|v| v.checked_add(proposal_bytes))
             .and_then(|v| v.checked_add(metadata_bytes))
             .ok_or(DeliveryError::Capacity)?;
-        let cas = config
-            .max_cas_body_bytes
-            .checked_mul(cas_targets)
-            .and_then(|v| v.checked_mul(2))
+        // A CAS body is as long as its blobs, and coexists with its envelope
+        // while that is encoded.
+        let bodies = request
+            .proposed_uploads
+            .iter()
+            .filter(|p| p.kind != UploadKind::Recording)
+            .flat_map(|p| &p.candidate_indices)
+            .try_fold(0_usize, |sum, &index| {
+                usize::try_from(candidates[index as usize].encoded_len)
+                    .ok()
+                    .and_then(|len| len.checked_add(CAS_OBJECT_OVERHEAD_BYTES))
+                    .and_then(|len| sum.checked_add(len))
+            })
+            .ok_or(DeliveryError::Capacity)?;
+        let cas = bodies
+            .checked_mul(2)
             .and_then(|v| v.checked_add(retained))
             .ok_or(DeliveryError::Capacity)?;
-        if recording > config.recording_reserved_bytes || cas > config.cas_reserved_bytes {
+        if recording > config.recording_reserved_bytes {
             return Err(DeliveryError::Capacity);
         }
         let mut state = self.shared.state.lock().unwrap();
@@ -554,7 +564,9 @@ impl BcsDeliveryHandle {
                     recording,
                     config.recording_reserved_bytes,
                 )
-                || !fits(state.cas_bytes, cas, config.cas_reserved_bytes)
+                // What exceeds the whole reservation goes alone.
+                || !(state.cas_bytes == 0
+                    || fits(state.cas_bytes, cas, config.cas_reserved_bytes))
             {
                 state = self.shared.capacity.wait(state).unwrap();
                 continue;
@@ -696,6 +708,11 @@ impl Drop for BcsDelivery {
     }
 }
 
+/// A blob's share of an upload envelope beyond its bytes: the object's
+/// identity, version, digest and lengths, and the envelope's plan and upload
+/// identifiers.
+const CAS_OBJECT_OVERHEAD_BYTES: usize = 512;
+
 struct LimitedWriter {
     bytes: Vec<u8>,
     limit: usize,
@@ -707,6 +724,15 @@ impl LimitedWriter {
             bytes: Vec::new(),
             limit,
         }
+    }
+    /// For exactly `len` bytes, allocated at once. A length that cannot be
+    /// allocated is a loss, not an abort.
+    fn exact(len: usize) -> Result<Self, DeliveryError> {
+        let mut bytes = Vec::new();
+        bytes
+            .try_reserve_exact(len)
+            .map_err(|_| DeliveryError::Capacity)?;
+        Ok(Self { bytes, limit: len })
     }
 }
 
@@ -933,10 +959,10 @@ async fn assemble(
             if target.expires_at_unix_ms <= horizon || response.expires_at_unix_ms <= horizon {
                 return Err(DeliveryError::Expired);
             }
-            let limit = if target.kind == UploadKind::Recording {
-                config.max_recording_body_bytes
-            } else {
-                config.max_cas_body_bytes
+            // A CAS body is as long as its blobs, which admission reserved.
+            let limit = match target.kind {
+                UploadKind::Recording => config.max_recording_body_bytes,
+                UploadKind::CasBatch | UploadKind::CasObject => usize::MAX,
             };
             let mut envelope = CloudUploadEnvelope {
                 format_version: 1,
@@ -954,7 +980,11 @@ async fn assemble(
                 if std::mem::replace(&mut taken[index as usize], true) {
                     return Err(DeliveryError::InvalidPlan);
                 }
-                let mut writer = LimitedWriter::new(limit - envelope.encoded_len());
+                let len = usize::try_from(candidate.encoded_len)
+                    .ok()
+                    .filter(|&len| len <= limit - envelope.encoded_len())
+                    .ok_or(DeliveryError::Capacity)?;
+                let mut writer = LimitedWriter::exact(len)?;
                 window.owners[candidate.owner as usize]
                     .blob(candidate.blob)
                     .write(&mut scratch, &mut writer)
@@ -963,16 +993,21 @@ async fn assemble(
                     snapshot_id: candidate.id.as_bytes().to_vec(),
                     snapshot_format_version: btel_settings::snapshot::BLOB_VERSION,
                     blob_sha256: Sha256::digest(&writer.bytes).to_vec(),
-                    blob: writer.bytes.into_boxed_slice().into_vec(),
+                    blob: writer.bytes,
                 };
                 envelope.cas_objects.push(object);
                 if envelope.encoded_len() > limit {
                     return Err(DeliveryError::Capacity);
                 }
             }
-            let body = Bytes::from(envelope.encode_to_vec());
+            let mut body = Vec::new();
+            body.try_reserve_exact(envelope.encoded_len())
+                .map_err(|_| DeliveryError::Capacity)?;
+            envelope
+                .encode(&mut body)
+                .map_err(|_| DeliveryError::Encoding)?;
             drop(envelope);
-            Ok(body)
+            Ok(Bytes::from(body))
         })();
         let body = match body {
             Ok(body) => body,

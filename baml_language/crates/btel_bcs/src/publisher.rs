@@ -29,7 +29,8 @@ pub struct CloudPublisherConfig {
     /// Hard count of captures held across the queue and staged files, not
     /// per batch.
     pub max_pending_snapshots: usize,
-    /// Hard sum of `Snapshot::retained_bytes` across those captures.
+    /// Sum of `Snapshot::retained_bytes` across those captures. No capture
+    /// is refused for its size: one larger than all of this is held alone.
     /// Recording buffers have separate delivery limits; bookkeeping is
     /// count-bounded.
     pub max_retained_bytes: usize,
@@ -53,17 +54,15 @@ impl Default for CloudPublisherConfig {
     }
 }
 
-/// A blob's share of an upload envelope beyond its bytes: the object's
-/// identity, version, digest and lengths, and the envelope's plan and upload
-/// identifiers. Serialization enforces the exact limit.
-const CAS_OBJECT_OVERHEAD_BYTES: u64 = 512;
-
 /// Owns cloud-specific candidate bookkeeping; HTTP runs on the delivery worker.
 ///
 /// Candidates are blobs. A capture's blobs join a queue, children first, and
 /// each sealed file takes the queue's head, so one capture may span several
 /// files and plans. The capture is held until its last blob leaves. The queue
-/// and staged files share hard capture count/byte budgets. A record can seal
+/// and staged files share capture count/byte budgets. A capture is never
+/// refused for its size: before one that does not fit, what is held is sent,
+/// waiting on delivery's admission, and one larger than the byte budget is
+/// then held alone. A record can seal
 /// a file but cannot deliver it until input chunks are recycled. Staging is
 /// additionally bounded by delivery's plan and recording-byte limits. Neither
 /// sealing nor staging releases a capture; only delivery or terminal cleanup
@@ -100,7 +99,7 @@ pub struct CloudPublisher {
     retained_snapshots: usize,
     retained_bytes: usize,
     staged_recording_bytes: usize,
-    preflight_size: Option<(CasId, Option<usize>)>,
+    preflight_size: Option<(CasId, usize)>,
     failure: Option<DeliveryError>,
     delivery: BcsDeliveryHandle,
 }
@@ -132,7 +131,20 @@ enum Seal {
     Now,
     /// Seal files only to carry the blobs the end file cannot take.
     Carriers,
+    /// Seal files only to carry every queued blob.
+    Drain,
     End,
+}
+
+/// How much of the queue goes in files that carry nothing else.
+#[derive(Clone, Copy)]
+enum Carry {
+    /// While a file's worth of blobs waits, or more than one file takes.
+    Pressure,
+    /// Until one more file takes the rest.
+    Overflow,
+    /// All of it.
+    Everything,
 }
 
 impl CloudPublisher {
@@ -256,30 +268,44 @@ impl CloudPublisher {
         }
     }
 
-    /// Queue the capture's blobs that were not offered recently. A blob too
-    /// large for any upload body is a counted loss; the rest still go.
+    /// Whether a capture retaining `size` may be held: within both budgets,
+    /// or alone, however large it is.
+    fn has_room(&self, size: usize) -> bool {
+        self.retained_snapshots < self.config.max_pending_snapshots
+            && (self.retained_snapshots == 0
+                || self
+                    .retained_bytes
+                    .checked_add(size)
+                    .is_some_and(|total| total <= self.config.max_retained_bytes))
+    }
+
+    /// Send what is held until a capture retaining `size` may be: the open
+    /// file with the queue's head, then files carrying the rest. Delivery's
+    /// admission is the wait.
+    fn make_room(&mut self, size: usize) {
+        self.service(Instant::now(), Seal::Now);
+        while self.failure.is_none() && !self.has_room(size) && !self.queue.is_empty() {
+            let waiting = self.queue.len();
+            self.service(Instant::now(), Seal::Drain);
+            if self.queue.len() == waiting {
+                break;
+            }
+        }
+    }
+
+    /// Queue the capture's blobs that were not offered recently, whatever
+    /// their size. A capture is lost only when it has no room and arrived
+    /// without the chance to make any (`before_detached_span`).
     fn retain(&mut self, snapshot: Snapshot) {
         let preflight = self.preflight_size.take();
         if self.failure.is_some() {
             return;
         }
-        let limit = self.delivery.config().max_cas_body_bytes as u64;
-        let mut refused = 0;
-        let mut blobs = Vec::new();
-        for blob in snapshot.blobs() {
-            if self.already_offered(blob.id()) {
-                continue;
-            }
-            if blob.encoded_len().saturating_add(CAS_OBJECT_OVERHEAD_BYTES) > limit {
-                refused += 1;
-                continue;
-            }
-            blobs.push((blob.index(), blob.id(), blob.encoded_len()));
-        }
-        for _ in 0..refused {
-            self.delivery
-                .record_payload_loss(DeliveryError::Capacity, false);
-        }
+        let blobs: Vec<_> = snapshot
+            .blobs()
+            .filter(|blob| !self.already_offered(blob.id()))
+            .map(|blob| (blob.index(), blob.id(), blob.encoded_len()))
+            .collect();
         if blobs.is_empty() {
             return;
         }
@@ -287,19 +313,7 @@ impl CloudPublisher {
             Some((id, size)) if id == snapshot.root_id() => size,
             Some(_) | None => snapshot.retained_bytes(),
         };
-        let Some(size) = size else {
-            self.delivery
-                .record_payload_loss(DeliveryError::Capacity, false);
-            return;
-        };
-        let Some(total) = self.retained_bytes.checked_add(size) else {
-            self.delivery
-                .record_payload_loss(DeliveryError::Capacity, false);
-            return;
-        };
-        if total > self.config.max_retained_bytes
-            || self.retained_snapshots >= self.config.max_pending_snapshots
-        {
+        if !self.has_room(size) {
             self.delivery
                 .record_payload_loss(DeliveryError::Capacity, false);
             return;
@@ -322,17 +336,37 @@ impl CloudPublisher {
             });
         }
         self.retained_snapshots += 1;
-        self.retained_bytes = total;
+        self.retained_bytes += size;
         self.queued_bytes += size;
     }
 
-    /// Take the queue's head for one file: at most a plan's worth of blobs.
+    /// How many of the queue's blobs the next file takes: a plan's worth,
+    /// cut short where their bytes pass a quarter of delivery's CAS
+    /// reservation, which a blob is charged against twice over while its
+    /// body is built, and again in its capture. The first blob always goes,
+    /// whatever its size.
+    fn window_len(&self) -> usize {
+        let config = self.delivery.config();
+        let limit = (config.cas_reserved_bytes / 4) as u64;
+        let mut bytes = 0_u64;
+        self.queue
+            .iter()
+            .take(config.max_candidates)
+            .enumerate()
+            .take_while(|(index, queued)| {
+                bytes = bytes.saturating_add(queued.encoded_len);
+                *index == 0 || bytes <= limit
+            })
+            .count()
+    }
+
+    /// Take the queue's head for one file.
     fn take_window(&mut self) -> Window {
         let mut window = Window::default();
         let mut current: Option<(u64, u32)> = None;
-        for _ in 0..self.delivery.config().max_candidates {
+        for _ in 0..self.window_len() {
             let Some(queued) = self.queue.pop_front() else {
-                break;
+                unreachable!("a window is no longer than the queue")
             };
             let at = usize::try_from(queued.owner - self.first_owner).expect("owner in queue");
             let owner_index = match current {
@@ -417,11 +451,18 @@ impl CloudPublisher {
         self.staged.push(PendingFile { file, window });
     }
 
-    /// Seal files with nothing but queued blobs while at least `waiting`
-    /// blobs wait and staging has room.
-    fn carry(&mut self, waiting: usize) {
+    /// Seal files with nothing but queued blobs, as far as `carry` asks and
+    /// staging has room.
+    fn carry(&mut self, carry: Carry) {
         while self.failure.is_none()
-            && self.queue.len() >= waiting.max(1)
+            && match carry {
+                Carry::Pressure => {
+                    self.queue.len() >= self.config.candidate_target
+                        || self.window_len() < self.queue.len()
+                }
+                Carry::Overflow => self.window_len() < self.queue.len(),
+                Carry::Everything => !self.queue.is_empty(),
+            }
             && self.staged.len() < self.delivery.config().max_pending_plans
         {
             let sealed = self.recording.flush_carrier();
@@ -442,7 +483,7 @@ impl CloudPublisher {
         {
             let sealed = self.recording.flush_recording();
             self.stage(sealed);
-            self.carry(self.config.candidate_target);
+            self.carry(Carry::Pressure);
         }
     }
 
@@ -462,14 +503,15 @@ impl CloudPublisher {
                 Seal::IfDue => {
                     let sealed = self.recording.flush_if_due(now);
                     self.stage(sealed);
-                    self.carry(self.config.candidate_target);
+                    self.carry(Carry::Pressure);
                 }
                 Seal::Now => {
                     let sealed = self.recording.flush_recording();
                     self.stage(sealed);
-                    self.carry(self.config.candidate_target);
+                    self.carry(Carry::Pressure);
                 }
-                Seal::Carriers => self.carry(self.delivery.config().max_candidates + 1),
+                Seal::Carriers => self.carry(Carry::Overflow),
+                Seal::Drain => self.carry(Carry::Everything),
                 Seal::End => {
                     let sealed = self.recording.end_recording();
                     self.stage(sealed);
@@ -521,12 +563,8 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
             {
                 let size = snapshot.retained_bytes();
                 self.preflight_size = Some((snapshot.root_id(), size));
-                if self.retained_snapshots >= self.config.max_pending_snapshots
-                    || size.is_some_and(|bytes| {
-                        self.retained_bytes.saturating_add(bytes) > self.config.max_retained_bytes
-                    })
-                {
-                    self.service(Instant::now(), Seal::Now);
+                if !self.has_room(size) {
+                    self.make_room(size);
                 }
             }
         }
@@ -610,16 +648,16 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
         self.service(Instant::now(), Seal::Now);
     }
 
-    /// Input is exhausted. Queued blobs beyond what one file takes ship in
-    /// carrier files first; then the last file takes the rest and carries
+    /// Input is exhausted. Queued blobs beyond what one file takes, by count
+    /// or by bytes, ship in carrier files first; then the last file takes the
+    /// rest and carries
     /// `RecordingEnd` once every observed clock epoch settled (see
     /// `RecordingBuilder::end_recording`). It is submitted after every earlier
     /// file, but uploads run concurrently and earlier files or blobs may still
     /// be lost: the end declares the file count, not their arrival. A failed
     /// recording submits nothing more.
     fn finish(&mut self) {
-        let plan = self.delivery.config().max_candidates;
-        while self.failure.is_none() && self.queue.len() > plan {
+        while self.failure.is_none() && self.window_len() < self.queue.len() {
             let waiting = self.queue.len();
             self.service(Instant::now(), Seal::Carriers);
             if self.queue.len() == waiting {
@@ -747,7 +785,7 @@ mod tests {
             .try_acquire()
             .unwrap()
             .finish(SnapshotValue::Int(1), &mut Shaper::default());
-        let expected = snapshot.retained_bytes().unwrap();
+        let expected = snapshot.retained_bytes();
         let id = snapshot.root_id();
         let thread = allocate_telemetry_id();
         let mut record = SpanRecord::FunctionSpanAnnouncement {
@@ -758,7 +796,7 @@ mod tests {
             captured_inputs: Some(snapshot),
         };
         publisher.before_detached_span(&record);
-        assert_eq!(publisher.preflight_size, Some((id, Some(expected))));
+        assert_eq!(publisher.preflight_size, Some((id, expected)));
         publisher.span(thread, &mut record);
         assert_eq!(publisher.preflight_size, None);
         assert_eq!(publisher.retained_bytes, expected);
@@ -934,15 +972,60 @@ mod tests {
         assert_eq!(publisher.owners[1].queued, 2);
     }
 
+    /// A list of strings of these lengths, each in a blob of its own.
+    fn cut_strings(pool: &SnapshotPool, lengths: &[usize]) -> Snapshot {
+        let mut b = pool.try_acquire().unwrap();
+        let element_type = b.leaves().ty(btel_snapshot::OwnedType::string());
+        let list = b.list(
+            element_type,
+            lengths.iter().enumerate(),
+            |leaves, (index, length)| {
+                let text = format!("{index}-{}", "x".repeat(*length));
+                leaves.string_value(&text.as_str().into())
+            },
+        );
+        let list = b.leaves().object(list).unwrap();
+        let mut shaper = Shaper::new(ShapePolicy::Split {
+            unit_bytes: 1 << 20,
+            leaf_bytes: 64,
+        });
+        b.finish(SnapshotValue::Object(list), &mut shaper)
+    }
+
     #[test]
-    fn a_blob_too_large_for_an_upload_body_is_refused_alone() {
+    fn a_capture_larger_than_the_byte_budget_is_held_alone_with_every_blob() {
+        let (delivery, mut publisher) = publisher(CloudPublisherConfig {
+            retained_bytes_target: 1,
+            max_retained_bytes: 1,
+            ..CloudPublisherConfig::default()
+        });
+        let pool = SnapshotPool::new(2, Limits::default());
+        let snapshot = cut_strings(&pool, &[100, 10_000]);
+        assert!(snapshot.retained_bytes() > publisher.config.max_retained_bytes);
+        offer(&mut publisher, snapshot);
+        assert_eq!(delivery.handle().loss_count(), 0);
+        assert_eq!(publisher.retained_snapshots, 1);
+        // Byte pressure sealed a file at once; it took all three blobs.
+        assert_eq!(publisher.staged.len(), 1);
+        assert_eq!(publisher.staged[0].window.candidates.len(), 3);
+        assert!(publisher.queue.is_empty());
+        // While it is held and cannot be sent, the next capture has no room.
+        offer(&mut publisher, cut_strings(&pool, &[200]));
+        assert_eq!(delivery.handle().loss_count(), 1);
+        assert_eq!(publisher.retained_snapshots, 1);
+        assert!(!delivery.handle().is_disabled());
+    }
+
+    #[test]
+    fn a_window_is_cut_by_bytes_and_always_takes_a_blob() {
         let delivery = BcsDelivery::new(
             DeliveryConfig {
                 allow_http: true,
-                max_cas_body_bytes: 4096,
+                // A window takes a quarter of this.
+                cas_reserved_bytes: 4 * 1024,
                 ..DeliveryConfig::new("http://127.0.0.1:1".parse().unwrap())
             },
-            |_| panic!("an oversized blob must not disable delivery"),
+            |_| {},
         )
         .unwrap();
         let mut publisher = CloudPublisher::new(
@@ -953,24 +1036,32 @@ mod tests {
         )
         .unwrap();
         let pool = SnapshotPool::new(2, Limits::default());
-        let mut b = pool.try_acquire().unwrap();
-        let element_type = b.leaves().ty(btel_snapshot::OwnedType::string());
-        let texts = ["small".repeat(20), "large".repeat(2000)];
-        let list = b.list(element_type, texts.iter(), |leaves, text| {
-            leaves.string_value(&text.as_str().into())
-        });
-        let list = b.leaves().object(list).unwrap();
-        let mut shaper = Shaper::new(ShapePolicy::Split {
-            unit_bytes: 1 << 20,
-            leaf_bytes: 64,
-        });
-        let snapshot = b.finish(SnapshotValue::Object(list), &mut shaper);
-        assert_eq!(snapshot.blobs().len(), 3);
+        let snapshot = cut_strings(&pool, &[600, 600, 3000, 100, 100]);
+        let lengths: Vec<_> = snapshot.blobs().map(|blob| blob.encoded_len()).collect();
+        assert_eq!(lengths.len(), 6);
         offer(&mut publisher, snapshot);
-        assert_eq!(delivery.handle().loss_count(), 1);
-        assert_eq!(publisher.queue.len(), 2);
-        assert_eq!(publisher.retained_snapshots, 1);
-        assert!(!delivery.handle().is_disabled());
+        assert!(publisher.staged.is_empty());
+        let mut windows = Vec::new();
+        while !publisher.queue.is_empty() {
+            let window = publisher.take_window();
+            windows.push(
+                window
+                    .candidates
+                    .iter()
+                    .map(|candidate| candidate.encoded_len)
+                    .collect::<Vec<_>>(),
+            );
+        }
+        // Two blobs that do not fit together, one too large for any window,
+        // and the rest in one.
+        assert_eq!(
+            windows.iter().map(Vec::len).collect::<Vec<_>>(),
+            [1, 1, 1, 3]
+        );
+        assert_eq!(windows.concat(), lengths);
+        assert!(windows[2][0] > 1024);
+        assert!(windows[3].iter().sum::<u64>() <= 1024);
+        assert!(publisher.owners.is_empty());
     }
 
     #[test]

@@ -472,3 +472,125 @@ async fn a_capture_spanning_plans_delivers_every_blob_once_and_ends_last() {
     }
     assert_eq!(uploaded, wanted);
 }
+
+/// Lists of two strings of `length`, distinct per `seed`: two leaf blobs and
+/// a root.
+fn two_strings(pool: &SnapshotPool, seed: usize, length: usize) -> Snapshot {
+    let mut b = pool.try_acquire().unwrap();
+    let element_type = b.leaves().ty(btel_snapshot::OwnedType::string());
+    let list = b.list(element_type, 0..2, |leaves, index| {
+        let text = format!("{seed}-{index}-{}", "x".repeat(length));
+        leaves.string_value(&text.as_str().into())
+    });
+    let list = b.leaves().object(list).unwrap();
+    b.finish(
+        SnapshotValue::Object(list),
+        &mut btel_snapshot::Shaper::default(),
+    )
+}
+
+#[tokio::test]
+async fn captures_over_every_byte_budget_are_sent_whole_and_none_is_dropped() {
+    let server = MockServer::start().await;
+    let base = server.uri();
+    Mock::given(method("POST"))
+        .respond_with(move |request: &Request| {
+            ResponseTemplate::new(200).set_body_json(support::response(request, &base, &[]))
+        })
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&server)
+        .await;
+    let delivery = BcsDelivery::new(
+        DeliveryConfig {
+            allow_http: true,
+            // Less than one of the blobs below: every window is cut to one
+            // of them, and its plan is admitted alone.
+            cas_reserved_bytes: 16 * 1024,
+            ..DeliveryConfig::new(server.uri().parse().unwrap())
+        },
+        |_| panic!("a large capture must not disable delivery"),
+    )
+    .unwrap();
+    let mut publisher = CloudPublisher::new(
+        RecordingId::generate(),
+        RecordingConfig {
+            flush_interval_duration: Duration::from_secs(60),
+            ..RecordingConfig::default()
+        },
+        CloudPublisherConfig {
+            // Less than any capture retains.
+            max_retained_bytes: 1,
+            retained_bytes_target: 1,
+            ..CloudPublisherConfig::default()
+        },
+        delivery.handle(),
+    )
+    .unwrap();
+    let pool = SnapshotPool::new(
+        btel_settings::snapshot::MIN_SNAPSHOT_SLOTS,
+        Limits::default(),
+    );
+    let mut expected = std::collections::HashMap::new();
+    let mut scratch = btel_snapshot::BlobScratch::default();
+    let mut captures: Vec<_> = (0..3)
+        .map(|seed| two_strings(&pool, seed, 64 * 1024))
+        .collect();
+    // A bigint's memory is an estimate; its capture is offered all the same.
+    let mut b = pool.try_acquire().unwrap();
+    let big = b.leaves().bigint(&std::sync::Arc::new(
+        num_bigint::BigInt::from(7) << 4096_u32,
+    ));
+    captures.push(b.finish(big, &mut btel_snapshot::Shaper::default()));
+    for snapshot in &captures {
+        for blob in snapshot.blobs() {
+            let mut bytes = Vec::new();
+            blob.write(&mut scratch, &mut bytes).unwrap();
+            expected.insert(blob.id(), bytes);
+        }
+    }
+    assert_eq!(expected.len(), 3 * 3 + 1);
+    // As the processor hands over detached records: the publisher may send
+    // what it holds before each.
+    publisher.before_batch(captures.len());
+    publisher.before_span_chunk(captures.len());
+    let thread = allocate_telemetry_id();
+    for snapshot in captures {
+        let mut record = SpanRecord::<Snapshot, Snapshot>::FunctionSpanAnnouncement {
+            id: allocate_telemetry_id(),
+            parent_id: thread,
+            call_path: CallPathId::ROOT,
+            entered_at: ClockInstant::from_ticks(1),
+            captured_inputs: Some(snapshot),
+        };
+        publisher.before_detached_span(&record);
+        publisher.span(thread, &mut record);
+        publisher.after_detached_span();
+    }
+    publisher.after_batch(4);
+    publisher.finish();
+    let handle = delivery.handle();
+    assert_eq!(finish(delivery).await, Ok(()));
+    assert_eq!(handle.loss_count(), 0);
+    assert_eq!(pool.stats().in_use, 0);
+    let requests = server.received_requests().await.unwrap();
+    let mut uploaded = std::collections::HashMap::new();
+    for request in requests.iter().filter(|r| r.method == "PUT") {
+        let envelope = CloudUploadEnvelope::decode(request.body.as_slice()).unwrap();
+        for object in envelope.cas_objects {
+            let id = btel_snapshot::CasId::from_bytes(object.snapshot_id.try_into().unwrap());
+            assert!(
+                uploaded.insert(id, object.blob).is_none(),
+                "a blob is uploaded once"
+            );
+        }
+    }
+    assert_eq!(uploaded, expected);
+    // Every blob but a root is larger than a window, and a root does not
+    // fit beside one: each plan carries a single blob.
+    for request in prepare_requests(&requests) {
+        assert!(request.candidates.len() <= 1, "a window is cut by bytes");
+    }
+}

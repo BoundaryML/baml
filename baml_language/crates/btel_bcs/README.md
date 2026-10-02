@@ -124,17 +124,25 @@ values across processor batches; a blob offered recently is not queued again,
 and a capture with nothing new to offer is released at once. A window seals at
 a record boundary when it reaches the recording-byte target, 16 queued blobs,
 or 4 MiB of retained capture storage. A single capture may exceed a soft
-target. Each sealed file takes the head of the queue, at most one plan's worth
-of blobs; while 16 or more blobs still wait, further files are sealed to carry
-them, and at the end the last file takes what remains. A blob larger than an
-upload body is refused when its capture is retained, as a counted loss; the
-capture's other blobs still go. The non-sliding timer starts at the first
-event, using `RecordingConfig::flush_interval_duration`; idle expiry and
+target. Each sealed file takes the head of the queue: at most one plan's worth
+of blobs, cut short where their bytes pass a quarter of delivery's CAS
+reservation, and always at least one blob. While 16 or more blobs still wait,
+or more than one file takes, further files are sealed to carry them, and at
+the end the last file takes what remains. The non-sliding timer starts at the
+first event, using `RecordingConfig::flush_interval_duration`; idle expiry and
 explicit shutdown also seal pending data.
+
+Nothing is refused for its size. A blob is uploaded however large it is: the
+only size a capture is cut for is `btel_settings::snapshot::MAX_LEAF_BYTES`,
+when it is made. Upload bodies are built in memory, so a blob costs its
+capture and twice its length while its body is encoded.
 
 Sealed windows are staged until processor input chunks have been recycled.
 The queue and staged windows together retain at most 32 captures and 8 MiB of
 capture storage by default; a capture is held until its last blob leaves.
+Before a capture that does not fit, the publisher sends what it holds,
+waiting on delivery's admission, and a capture larger than the whole byte
+budget is then held alone.
 Staged recording files are separately bounded by delivery's plan/recording-byte
 limits. Construction validates that publisher and delivery capture limits leave
 headroom in the minimum VM pool. No network I/O runs on the processor.
@@ -146,7 +154,9 @@ reservations after serialization releases the captures, not after their PUTs
 finish. Immutable upload bodies remain byte-budgeted until
 delivery completes. Delivery admission waits for temporary plan, byte, or
 owner-slot saturation. Failure, closure, and released capacity wake waiting
-submitters. An individual group that can never fit fails before waiting.
+submitters. A group whose recording can never fit fails before waiting; one
+whose captures and CAS bodies exceed the whole CAS reservation waits until no
+other group holds any of it, then is admitted alone.
 Callers must recycle input chunks before entering admission.
 
 Cloud processing moves one chunk into reusable owned storage and recycles its
@@ -163,8 +173,8 @@ observable without stopping later telemetry.
 
 Blob IDs use bounded recent deduplication. Loss makes affected content
 eligible to be offered again; reaching the history limit evicts old entries.
-Placement thresholds use each blob's exact encoded length; output encoding has
-independent hard limits.
+Placement thresholds use each blob's exact encoded length. A recording body
+has a hard limit; a CAS body is as long as its blobs.
 
 Unacknowledged recording metadata is replayed in later files, without replaying
 spans or aggregates. Its journal is bounded; prolonged outages can evict old
@@ -175,10 +185,9 @@ of complete history after arbitrary outages.
 
 Snapshot accounting conservatively charges arena capacities and shared backing.
 It excludes the preexisting shared pool and allocator metadata. Bigint values
-and bigint type literals currently have no safe retained-capacity bound through
-`num-bigint`'s public API. Unsupported payloads are discarded instead of
-silently violating the budget. This does not change local recording or BAML
-execution.
+and bigint type literals are charged their limbs: `num-bigint`'s public API
+does not show spare capacity, so for them the figure is a close estimate, not
+a bound. This does not change local recording or BAML execution.
 
 ## Optional liveness
 

@@ -1846,6 +1846,7 @@ dependencies = [
  "bytes",
  "futures",
  "hex",
+ "num-bigint",
  "prost",
  "prost-build",
  "protoc-bin-vendored",
