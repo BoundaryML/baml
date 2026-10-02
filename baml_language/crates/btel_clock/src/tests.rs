@@ -68,9 +68,19 @@ fn detector_accounts_for_sampling_scale_error_and_the_accuracy_target() {
         epoch.assess(sample(30_000_000_000, 300_000, 100), origin),
         TimingStatus::Valid
     );
-    // But an uncertainty budget growing with time must not hide >1 ms drift.
+    // NTP slews the reference, so 2 ms over five minutes (7 ppm) is drift,
+    // not a fault: a run that long used to lose every duration.
     assert_eq!(
         epoch.assess(sample(300_000_000_000, 2_000_000, 100), origin),
+        TimingStatus::Valid
+    );
+    // But drift beyond MAX_DRIFT_PPB is: 60 ms over five minutes (200 ppm).
+    assert_eq!(
+        epoch.assess(sample(300_000_000_000, 60_000_000, 100), origin),
+        TimingStatus::Discontinuity
+    );
+    assert_eq!(
+        epoch.assess(sample(300_000_000_000, -60_000_000, 100), origin),
         TimingStatus::Discontinuity
     );
     assert_eq!(
@@ -121,6 +131,74 @@ fn restore_invalidates_active_intervals_but_keeps_completed_mappings() {
     assert!(completed.duration(completed_start, completed_start).is_ok());
     assert_eq!(fresh.status(), TimingStatus::Valid);
     active.finish_thread();
+}
+
+#[test]
+fn only_runs_whose_threads_all_finished_report_a_settled_status() {
+    let runtime = ClockRuntime::new(ClockMode::Monotonic);
+    let never_attached = runtime.start_run();
+    assert_eq!(never_attached.settled_status(), None);
+
+    let run = runtime.start_run();
+    run.attach_thread();
+    // A child attaches while its parent is attached; one finished thread is
+    // not a settled run.
+    run.attach_thread();
+    run.finish_thread();
+    assert_eq!(run.settled_status(), None);
+    run.finish_thread();
+    let settled = run.settled_status().expect("every thread finished");
+    runtime.reset_after_restore();
+    assert_eq!(run.status(), settled);
+    assert_eq!(run.settled_status(), Some(settled));
+
+    // An invalid run is still unsettled while a thread remains attached.
+    let invalid = runtime.start_run();
+    invalid.attach_thread();
+    runtime.reset_after_restore();
+    assert_eq!(invalid.status(), TimingStatus::Restored);
+    assert_eq!(invalid.settled_status(), None);
+    invalid.finish_thread();
+    assert_eq!(invalid.settled_status(), Some(TimingStatus::Restored));
+}
+
+#[test]
+fn a_settled_status_survives_restores_racing_the_last_thread() {
+    let runtime = Arc::new(ClockRuntime::new(ClockMode::Monotonic));
+    for _ in 0..200 {
+        let epoch = runtime.start_run();
+        epoch.attach_thread();
+        let restore = {
+            let runtime = Arc::clone(&runtime);
+            std::thread::spawn(move || drop(runtime.reset_after_restore()))
+        };
+        let finish = {
+            let epoch = Arc::clone(&epoch);
+            std::thread::spawn(move || epoch.finish_thread())
+        };
+        let observed = loop {
+            if let Some(status) = epoch.settled_status() {
+                break status;
+            }
+            std::hint::spin_loop();
+        };
+        restore.join().unwrap();
+        finish.join().unwrap();
+        assert_eq!(epoch.status(), observed);
+    }
+}
+
+#[test]
+fn validating_a_settled_run_leaves_its_status() {
+    let runtime = ClockRuntime::new(ClockMode::Monotonic);
+    let epoch = runtime.start_run();
+    epoch.attach_thread();
+    epoch.finish_thread();
+    let settled = epoch.settled_status().expect("every thread finished");
+    // The same backward jump that invalidates an active run below.
+    epoch.last_checked_tick.store(u64::MAX, Ordering::Relaxed);
+    runtime.validate(&epoch, true);
+    assert_eq!(epoch.status(), settled);
 }
 
 #[test]

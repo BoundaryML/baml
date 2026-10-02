@@ -45,6 +45,7 @@ pub(crate) mod resolve;
 pub(crate) use resolve::ImplResolver;
 pub(crate) mod root;
 mod spawn;
+pub use spawn::{SpawnLaunch, plan_body, spawn_launch};
 mod stack_trace;
 mod string;
 mod sys;
@@ -347,6 +348,10 @@ const VM_NATIVE_PACKAGES: &[(&str, NativeResolver)] = &[
         "reflect.",
         <crate::package_reflect::PackageReflectImpl as crate::package_reflect::BamlPackageReflect>::get_native_fn,
     ),
+    (
+        "trace.",
+        <crate::package_trace::PackageTraceImpl as crate::package_trace::BamlPackageTrace>::get_native_fn,
+    ),
 ];
 
 /// Resolves native function pointers for `NativeUnresolved` functions at load.
@@ -425,6 +430,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 param_types: function.param_types,
                 param_has_default: function.param_has_default,
                 display_type_params: function.display_type_params,
+                type_param_names: function.type_param_names,
                 generic_param_bounds: function.generic_param_bounds,
                 display_param_types: function.display_param_types,
                 display_return_type: function.display_return_type,

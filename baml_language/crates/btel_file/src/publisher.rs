@@ -63,8 +63,14 @@ fn terminal<T, E: Send + 'static>(result: Result<T, E>) -> T {
 }
 
 impl Publisher<Snapshot, Snapshot> for LocalPublisher {
+    const ERROR_EVIDENCE: bool = true;
+
     fn aggregate(&mut self, delta: AggregateDelta) {
         self.builder.aggregate(delta);
+    }
+
+    fn sysop_time(&mut self, path: btel_types::CallPathId, elapsed: btel_types::ClockDuration) {
+        self.builder.sysop_time(path, elapsed);
     }
 
     fn span(&mut self, thread: TelemetryId, record: &mut SpanRecord<Snapshot, Snapshot>) {
@@ -99,11 +105,16 @@ impl Publisher<Snapshot, Snapshot> for LocalPublisher {
 
     fn flush(&mut self) {
         self.snapshots();
-        let file = terminal(self.builder.finish_recording());
+        let file = terminal(self.builder.flush_recording());
         self.deliver(file);
     }
 
+    /// Input is exhausted. The last file carries `RecordingEnd` once every
+    /// observed clock epoch settled (see `RecordingBuilder::end_recording`).
+    /// It follows every accepted file and snapshot on the same queue.
     fn finish(&mut self) {
-        self.flush();
+        self.snapshots();
+        let file = terminal(self.builder.end_recording());
+        self.deliver(file);
     }
 }

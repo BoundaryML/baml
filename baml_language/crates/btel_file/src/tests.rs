@@ -1,4 +1,9 @@
-use std::{cell::RefCell, num::NonZeroUsize, time::Duration};
+use std::{
+    cell::RefCell,
+    num::NonZeroUsize,
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
 
 use btel_processor::{AggregateDelta, Publisher};
 use btel_recorder::{RecordingConfig, RecordingPublisher, proto};
@@ -7,6 +12,18 @@ use prost::Message;
 
 use super::*;
 
+fn delta() -> AggregateDelta {
+    AggregateDelta {
+        node: CallPathNodeId::new(CallPathId::new_non_root(7).unwrap(), false),
+        count: 1,
+        total_duration: ClockDuration::from_ticks(3),
+        total_self_await: AwaitDuration::ZERO,
+        errored: 0,
+        cancelled: 0,
+        ..Default::default()
+    }
+}
+
 fn files(id: RecordingId, count: usize) -> Vec<SealedFile> {
     let output = RefCell::new(Vec::new());
     let mut publisher = RecordingPublisher::new(id, RecordingConfig::default(), |f| {
@@ -14,12 +31,7 @@ fn files(id: RecordingId, count: usize) -> Vec<SealedFile> {
     })
     .unwrap();
     for _ in 0..count {
-        publisher.aggregate(AggregateDelta {
-            node: CallPathNodeId::new(CallPathId::new_non_root(7).unwrap(), false),
-            count: 1,
-            total_duration: ClockDuration::from_ticks(3),
-            total_io_duration: AwaitDuration::ZERO,
-        });
+        publisher.aggregate(delta());
         publisher.flush();
     }
     drop(publisher);
@@ -32,8 +44,27 @@ fn local_publisher_finishes_encoding_before_disk_drain() {
     let id = RecordingId::generate();
     let (entered, started) = mpsc::channel();
     let (release, released) = mpsc::channel();
-    let expected = files(id, 1).pop().unwrap();
-    let expected_bytes = expected.bytes().to_vec();
+    // Finishing seals the pending window as the terminal file.
+    let expected_bytes = {
+        let output = RefCell::new(Vec::new());
+        let mut publisher = RecordingPublisher::new(id, RecordingConfig::default(), |f| {
+            output.borrow_mut().push(f);
+        })
+        .unwrap();
+        publisher.aggregate(delta());
+        publisher.finish();
+        drop(publisher);
+        let [file] = <[SealedFile; 1]>::try_from(output.into_inner())
+            .ok()
+            .unwrap();
+        assert!(
+            proto::RecordingFile::decode(file.bytes())
+                .unwrap()
+                .end
+                .is_some()
+        );
+        file.bytes().to_vec()
+    };
     let sink = LocalDelivery::start(
         root.path().to_owned(),
         LocalDeliveryConfig::default(),
@@ -49,12 +80,7 @@ fn local_publisher_finishes_encoding_before_disk_drain() {
     let builder = btel_recorder::RecordingBuilder::new(id, RecordingConfig::default()).unwrap();
     let mut publisher = LocalPublisher::new(builder, sink);
     let sink = publisher.delivery().unwrap().clone();
-    publisher.aggregate(AggregateDelta {
-        node: CallPathNodeId::new(CallPathId::new_non_root(7).unwrap(), false),
-        count: 1,
-        total_duration: ClockDuration::from_ticks(3),
-        total_io_duration: AwaitDuration::ZERO,
-    });
+    publisher.aggregate(delta());
     publisher.finish();
     started.recv_timeout(Duration::from_secs(5)).unwrap();
     assert_eq!(sink.result(), None);
@@ -62,6 +88,33 @@ fn local_publisher_finishes_encoding_before_disk_drain() {
     release.send(()).unwrap();
     sink.finish().unwrap();
     assert_eq!(sink.result(), Some(Ok(())));
+}
+
+#[test]
+fn local_recording_ends_after_its_flushed_data_and_only_once() {
+    let root = tempfile::tempdir().unwrap();
+    let id = RecordingId::generate();
+    let delivery = LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).unwrap();
+    let builder = btel_recorder::RecordingBuilder::new(id, RecordingConfig::default()).unwrap();
+    let mut publisher = LocalPublisher::new(builder, delivery);
+    let sink = publisher.delivery().unwrap().clone();
+    publisher.aggregate(delta());
+    publisher.flush();
+    publisher.finish();
+    publisher.finish();
+    drop(publisher);
+    sink.finish().unwrap();
+    let read = read_directory(sink.directory()).unwrap();
+    assert_eq!(
+        read.files
+            .iter()
+            .map(|f| (f.sequence, f.end.is_some()))
+            .collect::<Vec<_>>(),
+        [(1, false), (2, true)],
+        "the data file stays unsealed; the end is its own last file"
+    );
+    assert!(read.has_recording_end);
+    assert!(!read.issues.contains(&ReadIssue::FilesAfterRecordingEnd));
 }
 
 #[test]
@@ -161,6 +214,61 @@ fn full_queue_waits_for_capacity_and_unblocks_on_writer_failure() {
             assert_eq!(*seen.lock().unwrap(), [1, 2, 3]);
         }
     }
+}
+
+/// A sender's error stops the publisher, which fails the recording unless it
+/// was already disabled: so `on_failure` runs before a blocked send returns.
+#[test]
+fn writer_failure_is_reported_before_a_blocked_send_returns() {
+    let root = tempfile::tempdir().unwrap();
+    let (entered, started) = mpsc::channel();
+    let (release, released) = mpsc::channel();
+    let send_returned = Arc::new(AtomicBool::new(false));
+    let returned = Arc::clone(&send_returned);
+    let (reported, report) = mpsc::channel();
+    let mut first = true;
+    let mut sink = LocalDelivery::start(
+        root.path().to_owned(),
+        LocalDeliveryConfig {
+            queue_files: NonZeroUsize::new(1).unwrap(),
+        },
+        move |_file| {
+            if first {
+                first = false;
+                entered.send(()).unwrap();
+                released.recv_timeout(Duration::from_secs(5)).unwrap();
+            }
+            Err(LocalDeliveryError("injected disk failure".into()))
+        },
+        move |_| {
+            // Long enough for a send released early to return.
+            std::thread::sleep(Duration::from_millis(200));
+            reported.send(returned.load(Ordering::SeqCst)).unwrap();
+        },
+    )
+    .unwrap();
+    let sender = sink.take_handle();
+    let mut files = files(RecordingId::generate(), 3).into_iter();
+    sender.send(files.next().unwrap()).unwrap();
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    sender.send(files.next().unwrap()).unwrap();
+    let third = files.next().unwrap();
+    let flag = Arc::clone(&send_returned);
+    let pending = std::thread::spawn(move || {
+        let result = sender.send(third);
+        flag.store(true, Ordering::SeqCst);
+        result
+    });
+    // Let the third send block on the full queue, then fail the writer.
+    std::thread::sleep(Duration::from_millis(50));
+    release.send(()).unwrap();
+    let returned_before_report = report.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert!(
+        !returned_before_report,
+        "a blocked send returned before on_failure ran"
+    );
+    assert!(pending.join().unwrap().is_err());
+    assert!(sink.finish().is_err());
 }
 
 #[test]

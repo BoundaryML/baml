@@ -15,8 +15,11 @@ fn log_event_source_uses_unknown_column_and_real_offsets() {
 
     let program = compile_source(source);
     let entry_index = program
-        .function_index("user.main")
-        .expect("user.main function emitted");
+        .rendered_callables()
+        .get("user.main")
+        .expect("user.main function emitted")
+        .object
+        .raw();
     let mut vm =
         BexVm::from_program(program, Arc::new(AtomicBool::new(false))).expect("from_program");
     let entry_ptr = vm.heap.compile_time_ptr(entry_index);
@@ -24,12 +27,15 @@ fn log_event_source_uses_unknown_column_and_real_offsets() {
 
     for _ in 0..MAX_EXEC_CALLS {
         match vm.exec().expect("exec") {
-            VmExecState::Event {
+            VmExecState::Log {
+                level,
                 event_name,
+                data,
                 source_location,
-                ..
             } => {
-                assert_eq!(event_name, "$baml_log");
+                assert_eq!(level, bex_vm::telemetry::LogLevel::Info);
+                assert_eq!(event_name, None);
+                assert_eq!(vm.as_string(&data).unwrap().as_str(), "offset-probe");
                 let source_location =
                     source_location.expect("log event should carry source location");
 

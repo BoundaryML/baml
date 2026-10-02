@@ -365,7 +365,7 @@ function reports_unexpected_diagnostics(outcome: root.engine.Outcome) -> bool th
 }
 
 test "verify: compiling case with passing test agrees" {
-    assert.equal(verify_passing(), root.engine.Agrees {  })
+    assert.equal(verify_passing(), root.engine.Agrees {})
 }
 
 test "verify: failing test is reported by name with a reason" {
@@ -385,7 +385,7 @@ test "verify: missing test is reported with what is defined" {
 }
 
 test "verify: expected rejection agrees" {
-    assert.equal(verify_expected_rejection(), root.engine.Agrees {  })
+    assert.equal(verify_expected_rejection(), root.engine.Agrees {})
 }
 
 test "verify: wrong code reports both code lists" {
@@ -402,11 +402,11 @@ test "verify: a compiling key on a rejected case reports the diagnostics" {
 
 test "verify: regions are bytes, not characters" {
     assert.is_true(multibyte_offsets_differ());
-    assert.equal(verify_region_after_multibyte(), root.engine.Agrees {  })
+    assert.equal(verify_region_after_multibyte(), root.engine.Agrees {})
 }
 
 test "verify: rejected key on compiling case is unexpected compile" {
-    assert.equal(verify_unexpected_compile(), root.engine.UnexpectedCompile {  })
+    assert.equal(verify_unexpected_compile(), root.engine.UnexpectedCompile {})
 }
 
 // ─── conformance of a report to a status ─────────────────────────────────────
@@ -435,19 +435,19 @@ function accepts() -> root.engine.Status throws never {
 
 function nothing_conforms_when_nothing_was_produced() -> bool throws never {
     let empty = report_of([]);
-    !root.engine.conforms(root.engine.Verified {  }, empty)
+    !root.engine.conforms(root.engine.Verified {}, empty)
         && !root.engine.conforms(accepts(), empty)
         && !root.engine.conforms(root.engine.SpecOnly { gap: "G-000" }, empty)
 }
 
 function verified_needs_every_case_to_agree() -> bool throws never {
     root.engine.conforms(
-        root.engine.Verified {  },
-        report_of([root.engine.Agrees {  }, root.engine.Agrees {  }]),
+        root.engine.Verified {},
+        report_of([root.engine.Agrees {}, root.engine.Agrees {}]),
     )
         && !root.engine.conforms(
-            root.engine.Verified {  },
-            report_of([root.engine.Agrees {  }, root.engine.UnexpectedCompile {  }]),
+            root.engine.Verified {},
+            report_of([root.engine.Agrees {}, root.engine.UnexpectedCompile {}]),
         )
 }
 
@@ -455,21 +455,21 @@ function divergence_needs_every_case_to_contradict_as_declared() -> bool throws 
     let other = root.engine.OtherCodes { expected: ["E0068"], codes: ["E0001"], messages: [] };
     root.engine.conforms(
         accepts(),
-        report_of([root.engine.UnexpectedCompile {  }, root.engine.UnexpectedCompile {  }]),
+        report_of([root.engine.UnexpectedCompile {}, root.engine.UnexpectedCompile {}]),
     )
         && !root.engine.conforms(
             accepts(),
-            report_of([root.engine.UnexpectedCompile {  }, root.engine.Agrees {  }]),
+            report_of([root.engine.UnexpectedCompile {}, root.engine.Agrees {}]),
         )
         && !root.engine.conforms(accepts(), report_of([other, other]))
 }
 
 function spec_only_needs_every_case_to_disagree() -> bool throws never {
     let gap = root.engine.SpecOnly { gap: "G-000" };
-    root.engine.conforms(gap, report_of([root.engine.UnexpectedCompile {  }]))
+    root.engine.conforms(gap, report_of([root.engine.UnexpectedCompile {}]))
         && !root.engine.conforms(
             gap,
-            report_of([root.engine.UnexpectedCompile {  }, root.engine.Agrees {  }]),
+            report_of([root.engine.UnexpectedCompile {}, root.engine.Agrees {}]),
         )
 }
 

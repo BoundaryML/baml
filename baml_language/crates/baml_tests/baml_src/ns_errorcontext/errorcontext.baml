@@ -1,9 +1,9 @@
 // BEP-042 Part 3 — `Context` cause-chain tests.
 //
-// Cause is computed lazily at the throw funnel: a throw whose PC lies in a
+// Every catch lands its error with a `Context`. A new throw whose PC lies in a
 // handler body chains onto that handler's caught error (`vm.rs`
-// `find_cause_context` + the handler-body extent on `ExceptionTableEntry`,
-// built from the catch region's `handler_body` blocks).
+// `find_cause_context` over each function's handler-context table); a caught
+// error raised again carries its own context, trace and cause intact.
 //
 // Test functions use a unique `ec_<test>_` prefix because the corpus shares
 // one namespace. Some tests use `..._check() -> bool` helpers instead of
@@ -532,4 +532,187 @@ test "structural error rendering enforces depth and node budgets" {
     assert.contains(wide, "…");
     assert.equal(wide.split("…").length(), 2);
     assert.is_true(wide.length() < 2000)
+}
+
+// ─── a_rethrow_carries_its_own_context ───────────────────────────────────────
+// A caught error raised again carries the context it was caught with. An equal
+// value thrown elsewhere in the meantime (the same string literal, the same
+// throw site, an equal int) is a different error: it neither replaces the
+// rethrown error's trace nor becomes its cause.
+
+function ec_last_line(ctx: baml.errors.Context) -> int {
+    let frames = ctx.stack_trace.frames;
+    frames[frames.length() - 1].line
+}
+
+function ec_last_function(ctx: baml.errors.Context) -> string {
+    let frames = ctx.stack_trace.frames;
+    frames[frames.length() - 1].function_name
+}
+
+function ec_cause_error(ctx: baml.errors.Context) -> string {
+    match (ctx.cause) {
+        null => "none",
+        let c: baml.errors.Context => `${c.error}`,
+    }
+}
+
+function ec_same_literal_rethrow() -> string {
+    let first = -1;
+    {
+        {
+            throw "same"
+        } catch (e, ctx) {
+            _ => {
+                first = ec_last_line(ctx);
+                { throw "same" } catch (e2) { _ => {} }
+                throw e
+            }
+        }
+    } catch (e, ctx) {
+        _ => `same line: ${ec_last_line(ctx) == first}, cause: ${ec_cause_error(ctx)}`,
+    }
+}
+
+test "a rethrow keeps its trace when the same literal is thrown again" {
+    assert.equal(ec_same_literal_rethrow(), "same line: true, cause: none")
+}
+
+function ec_throw_same() -> void throws string {
+    throw "same"
+}
+
+function ec_same_site_rethrow() -> string {
+    {
+        ec_throw_same() catch (e, ctx) {
+            _ => {
+                ec_throw_same() catch (e2) { _ => {} }
+                throw e
+            }
+        };
+        "not thrown"
+    } catch (e, ctx) {
+        _ => `cause: ${ec_cause_error(ctx)}`,
+    }
+}
+
+test "a rethrow does not become its own cause when its site throws again" {
+    assert.equal(ec_same_site_rethrow(), "cause: none")
+}
+
+// A closure capturing the caught error keeps it in a cell; throwing it is
+// still a rethrow.
+function ec_captured_rethrow() -> string {
+    let first = -1;
+    {
+        {
+            throw "captured"
+        } catch (e, ctx) {
+            _ => {
+                first = ec_last_line(ctx);
+                let peek = () -> string { e };
+                let _ = peek();
+                throw e
+            }
+        }
+    } catch (e, ctx) {
+        _ => `same line: ${ec_last_line(ctx) == first}, cause: ${ec_cause_error(ctx)}`,
+    }
+}
+
+test "a rethrow keeps its trace when a closure captures the caught error" {
+    assert.equal(ec_captured_rethrow(), "same line: true, cause: none")
+}
+
+function ec_throw_one() -> void throws int {
+    throw 1
+}
+
+function ec_equal_int_rethrow() -> bool {
+    {
+        ec_throw_one() catch (e) {
+            _ => {
+                { throw 1 } catch (e2) { _ => {} }
+                throw e
+            }
+        };
+        false
+    } catch (e, ctx) {
+        _ => ec_last_function(ctx).ends_with("ec_throw_one"),
+    }
+}
+
+test "a rethrow keeps its trace when an equal int is thrown elsewhere" {
+    assert.is_true(ec_equal_int_rethrow())
+}
+
+// ─── a_throw_in_any_catch_arm_chains_to_the_caught_error ─────────────────────
+// Every catch lands its error with a context, bound or not, so a new error
+// thrown while handling it takes it as its cause.
+
+function ec_unbound_context_chain() -> string {
+    {
+        {
+            throw "inner"
+        } catch (e) {
+            _ => {
+                throw "outer"
+            }
+        }
+    } catch (e, ctx) {
+        _ => ec_cause_error(ctx),
+    }
+}
+
+test "a throw in a catch that binds no context chains to the caught error" {
+    assert.equal(ec_unbound_context_chain(), "inner")
+}
+
+// A binding reassigned before its `throw` no longer holds the caught error, so
+// throwing it is a new error, during handling of the caught one.
+
+function ec_throw_named(name: string) -> void throws string {
+    throw name
+}
+
+function ec_reassigned_rethrow() -> string {
+    {
+        ec_throw_named("caught") catch (e) {
+            _ => {
+                e = "replacement";
+                throw e
+            }
+        };
+        "not thrown"
+    } catch (e, ctx) {
+        _ => `${ctx.error} caused by ${ec_cause_error(ctx)}`,
+    }
+}
+
+test "throwing a reassigned catch binding is a new error" {
+    assert.equal(ec_reassigned_rethrow(), "replacement caused by caught")
+}
+
+// A lambda's locals are its own: a throw inside one, called while an error is
+// handled, is a new error during that handling, never a rethrow.
+
+function ec_lambda_throw_chain() -> string {
+    {
+        ec_throw_named("caught") catch (e) {
+            _ => {
+                let fail = () -> void throws string {
+                    let own = "from lambda";
+                    throw own
+                };
+                fail()
+            }
+        };
+        "not thrown"
+    } catch (e, ctx) {
+        _ => `${ctx.error} caused by ${ec_cause_error(ctx)}`,
+    }
+}
+
+test "a throw inside a lambda during handling chains to the caught error" {
+    assert.equal(ec_lambda_throw_chain(), "from lambda caused by caught")
 }

@@ -198,6 +198,10 @@ enum Event {
         message: String,
         span: Span,
     },
+    AmbiguousUnion {
+        span: Span,
+        groupings: Vec<String>,
+    },
     /// Use of a removed language feature (E0098), e.g. legacy `type_builder`
     /// blocks or `dynamic class`/`dynamic enum` definitions (BEP-066).
     RemovedFeature {
@@ -246,6 +250,12 @@ pub(crate) struct Parser<'a> {
     /// `ARRAY_PATTERN` so nested patterns regain normal destructure
     /// parsing. Counter so nested conditions nest correctly.
     suppress_destructure_pattern_depth: u32,
+    /// True while parsing an undelimited function return or throws operand.
+    /// Parenthesized operands clear it; nested functions establish their own scope.
+    function_union_operand: bool,
+    /// Token indices of ambiguous pipes in the current outermost undelimited
+    /// function type, reported with explicit groupings once it is parsed.
+    ambiguous_pipes: Vec<usize>,
 }
 
 impl<'a> Parser<'a> {
@@ -262,6 +272,8 @@ impl<'a> Parser<'a> {
             suppress_object_literal_depth: 0,
             allow_object_literal_before_for_body_depth: 0,
             suppress_destructure_pattern_depth: 0,
+            function_union_operand: false,
+            ambiguous_pipes: Vec::new(),
         }
     }
 
@@ -1939,6 +1951,9 @@ impl<'a> Parser<'a> {
                 Event::SyntaxHint { message, span } => {
                     errors.push(ParseError::InvalidSyntax { message, span });
                 }
+                Event::AmbiguousUnion { span, groupings } => {
+                    errors.push(ParseError::AmbiguousUnion { span, groupings });
+                }
                 Event::RemovedFeature { message, span } => {
                     errors.push(ParseError::RemovedFeature { message, span });
                 }
@@ -2987,11 +3002,11 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a type expression. When `consume_union` is `false`, top-level
-    /// `|` is left for the caller (used by pattern atoms, where `|` belongs
-    /// to `UNION_PATTERN`).
+    /// `|` is left for the caller (used by pattern atoms, where a pipe outside
+    /// a function return/throws operand belongs to `UNION_PATTERN`).
     pub(crate) fn parse_type_with(&mut self, consume_union: bool) {
         self.with_node(SyntaxKind::TYPE_EXPR, |p| {
-            p.parse_type_primary(consume_union);
+            p.parse_type_primary();
 
             if p.pending_greaters > 0 {
                 // Don't parse modifiers until we've used all
@@ -3009,8 +3024,29 @@ impl<'a> Parser<'a> {
                     p.bump();
                 } else if consume_union && p.at(TokenKind::Pipe) {
                     // Union type: string | int | "user" | "assistant"
+                    let ambiguous_pipe = (p.function_union_operand
+                        && p.pipe_starts_function_type())
+                    .then(|| p.skip_trivia_and_comments_from(p.current));
                     p.bump();
-                    p.parse_type_primary(consume_union);
+                    let errors_before_member = p.events.len();
+                    p.parse_type_primary();
+                    // Both ownership branches are syntax-complete here: the
+                    // previous operand can finish the first function, and the
+                    // member can also be a function inside its return/throws
+                    // union. A malformed member is diagnosed by the parser
+                    // instead of gaining a second ambiguity diagnostic.
+                    if let Some(pipe) = ambiguous_pipe
+                        && !p.events[errors_before_member..].iter().any(|event| {
+                            matches!(
+                                event,
+                                Event::UnexpectedToken { .. }
+                                    | Event::SyntaxHint { .. }
+                                    | Event::RemovedFeature { .. }
+                            )
+                        })
+                    {
+                        p.ambiguous_pipes.push(pipe);
+                    }
                 } else {
                     break;
                 }
@@ -3018,7 +3054,7 @@ impl<'a> Parser<'a> {
         });
     }
 
-    fn parse_type_primary(&mut self, consume_union: bool) {
+    fn parse_type_primary(&mut self) {
         // `unreflect(expr)` parses as a type atom everywhere so the removed
         // inline spelling still recovers cleanly. Its legality is decided at
         // CST→AST lowering: only the whole right-hand side of a body-level
@@ -3049,7 +3085,7 @@ impl<'a> Parser<'a> {
             self.error_here("a function type cannot declare generic parameters".to_string());
             self.parse_generic_param_list();
             if self.at(TokenKind::LParen) {
-                self.parse_paren_or_function_type(consume_union);
+                self.parse_paren_or_function_type();
             } else {
                 self.error_unexpected_token("function type parameter list".to_string());
             }
@@ -3121,7 +3157,7 @@ impl<'a> Parser<'a> {
 
             // Consume dot-separated path segments (e.g., baml.http.Request).
             // `spawn`/`await` are reserved keywords but valid as namespace
-            // segments after a `.` (e.g. `baml.spawn.Params` in a type
+            // segments after a `.` (e.g. `baml.spawn.Plan` in a type
             // annotation), mirroring `parse_path_or_ident`'s segment set.
             while self.at(TokenKind::Dot) {
                 self.bump(); // dot
@@ -3157,7 +3193,7 @@ impl<'a> Parser<'a> {
             } else {
                 // We parse the contents as function type parameters (which can be either
                 // `name: type` or just `type`), then check for `->` to determine which case.
-                self.parse_paren_or_function_type(consume_union);
+                self.parse_paren_or_function_type();
             }
         } else {
             self.error_unexpected_token("type".to_string());
@@ -3222,10 +3258,72 @@ impl<'a> Parser<'a> {
     /// - Function type: `(x: int, y: int) -> bool` or `(int, int) -> bool`
     ///
     /// The key distinguisher is the presence of `->` after the closing `)`.
-    fn parse_paren_or_function_type(&mut self, consume_union: bool) {
+    fn parse_paren_or_function_type(&mut self) {
+        // An outermost function type collects the ambiguous pipes of its
+        // operands and reports them with groupings of the whole expression.
+        let expr_start = self.skip_trivia_and_comments_from(self.current);
+        let enclosing_pipes =
+            (!self.function_union_operand).then(|| std::mem::take(&mut self.ambiguous_pipes));
+        self.parse_paren_or_function_type_inner();
+        if let Some(enclosing_pipes) = enclosing_pipes {
+            let pipes = std::mem::replace(&mut self.ambiguous_pipes, enclosing_pipes);
+            if !pipes.is_empty() {
+                // Nested members finish first; report in source order.
+                let mut pipes = pipes;
+                pipes.sort_unstable();
+                self.report_ambiguous_unions(expr_start, &pipes);
+            }
+        }
+    }
+
+    /// Emit E0175 for each pipe, with two explicit groupings of the
+    /// expression spanning `start` up to the current token.
+    fn report_ambiguous_unions(&mut self, start: usize, pipes: &[usize]) {
+        let tokens = self.tokens;
+        let mut sig = Vec::new();
+        let mut pipe_positions = vec![0; pipes.len()];
+        let mut i = start;
+        while i < self.current {
+            let next = self.skip_trivia_and_comments_from(i);
+            if next >= self.current {
+                break;
+            }
+            if let Some(slot) = pipes.iter().position(|&pipe| pipe == next) {
+                pipe_positions[slot] = sig.len();
+            }
+            let token = &tokens[next];
+            // A `>>` whose second half closes an enclosing generic.
+            let (kind, text) = if next + 1 == self.current
+                && self.pending_greaters > 0
+                && token.kind == TokenKind::GreaterGreater
+            {
+                (TokenKind::Greater, ">")
+            } else {
+                (token.kind, token.text.as_str())
+            };
+            sig.push(crate::function_union::SigToken {
+                kind,
+                text,
+                space_before: next != i,
+            });
+            i = next + 1;
+        }
+        let groupings = crate::function_union::groupings(&sig, &pipe_positions);
+        for (&pipe, groupings) in pipes.iter().zip(groupings) {
+            self.events.push(Event::AmbiguousUnion {
+                span: tokens[pipe].span,
+                groupings: groupings.map(Vec::from).unwrap_or_default(),
+            });
+        }
+    }
+
+    fn parse_paren_or_function_type_inner(&mut self) {
         // We'll parse the content first, then decide based on whether `->` follows.
         // For function types, we wrap in FUNCTION_TYPE; for parens, we just have the inner type.
 
+        // Pipes within a parameter list or parenthesized operand do not
+        // compete with the enclosing function's return/throws boundary.
+        let enclosing_function_operand = std::mem::replace(&mut self.function_union_operand, false);
         self.bump(); // (
 
         // Track whether any parameter had a name (which would make it invalid as parenthesized type)
@@ -3253,20 +3351,27 @@ impl<'a> Parser<'a> {
         }
 
         self.expect(TokenKind::RParen);
+        self.function_union_operand = enclosing_function_operand;
 
         // Now check for `->` to determine if this is a function type
         if self.at(TokenKind::Arrow) {
             // This is a function type: wrap everything in FUNCTION_TYPE node
             // Note: The tokens are already emitted, we just need to parse the return type
             self.bump(); // ->
-            // Forward `consume_union` so that pattern-atom callers (which
-            // pass `false`) leave a trailing `|` to the surrounding
-            // `UNION_PATTERN` instead of swallowing it into the return type.
-            self.parse_type_with(consume_union); // return type
+            // Bare return unions are owned by the function even in pattern
+            // position. A pipe followed by another function head is reported
+            // as ambiguous instead of silently choosing this grouping.
+            let enclosing_function_operand =
+                std::mem::replace(&mut self.function_union_operand, true);
+            self.parse_type(); // return type
+            self.function_union_operand = enclosing_function_operand;
             if self.at(TokenKind::Throws) {
                 self.with_node(SyntaxKind::THROWS_CLAUSE, |p| {
                     p.bump(); // throws
+                    let enclosing_function_operand =
+                        std::mem::replace(&mut p.function_union_operand, true);
                     p.parse_type();
+                    p.function_union_operand = enclosing_function_operand;
                 });
             }
         // The caller's with_node(TYPE_EXPR) will wrap this appropriately
@@ -3305,6 +3410,7 @@ impl<'a> Parser<'a> {
         if is_named {
             // Named parameter: `name: type`
             self.with_node(SyntaxKind::FUNCTION_TYPE_PARAM, |p| {
+                p.reject_reserved_trace_parameter();
                 p.bump(); // name
                 p.eat(TokenKind::Question); // optional parameter marker: `name?: T`
                 p.expect(TokenKind::Colon);
@@ -4260,8 +4366,18 @@ impl<'a> Parser<'a> {
         });
     }
 
+    fn reject_reserved_trace_parameter(&mut self) {
+        if self.current().is_some_and(|token| token.text == "$trace") {
+            self.error_here(
+                "`$trace` is reserved for invocation tracing and cannot be declared as a parameter"
+                    .to_string(),
+            );
+        }
+    }
+
     fn parse_parameter(&mut self) {
         self.with_node(SyntaxKind::PARAMETER, |p| {
+            p.reject_reserved_trace_parameter();
             // Check if this is a 'self' parameter (no type annotation allowed)
             let is_self = p.current().map(|t| t.text == "self").unwrap_or(false);
 
@@ -4545,6 +4661,7 @@ impl<'a> Parser<'a> {
     /// Parse a single lambda parameter with an optional type annotation.
     fn parse_lambda_parameter(&mut self) {
         self.with_node(SyntaxKind::PARAMETER, |p| {
+            p.reject_reserved_trace_parameter();
             // Parameter name
             if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
                 p.bump();
@@ -5087,8 +5204,9 @@ impl<'a> Parser<'a> {
             // followed by `->` (function type) or `[` / `?` (array / optional
             // suffix on a paren'd type, e.g. `(int | string)[]`).
             //
-            // Function-type paren keeps `|` for the surrounding `UNION_PATTERN`
-            // (so `(int) -> int | string` parses as `Or([fn, string])`).
+            // A bare return/throws union belongs to the function even here;
+            // a pipe between explicitly delimited functions remains pattern
+            // alternation in the surrounding `UNION_PATTERN`.
             // Paren-type-suffix paren consumes `|` because the whole
             // expression is unambiguously one type — `(int | string)[] | float`
             // parses as the union type `(int | string)[] | float`.
@@ -5246,6 +5364,60 @@ impl<'a> Parser<'a> {
                 _ => {}
             }
             i += 1;
+        }
+    }
+
+    /// At a return/throws union pipe, test the two structural ownership
+    /// options without resolving names: the pipe can stay in the operand, or
+    /// end the current function before a syntactic function-type member.
+    /// Repeated whole-type parentheses on the right do not settle ownership
+    /// of the pipe on the left.
+    fn pipe_starts_function_type(&self) -> bool {
+        debug_assert!(self.at(TokenKind::Pipe));
+        let mut start = 1;
+        loop {
+            if self.peek(start).map(|token| token.kind) != Some(TokenKind::LParen) {
+                return false;
+            }
+            let Some(end) = self.matching_paren_after_pipe(start) else {
+                return false;
+            };
+            if self.peek(end + 1).map(|token| token.kind) == Some(TokenKind::Arrow) {
+                return true;
+            }
+            // `((C) -> D)` is a grouped function, whereas `(C | D)` is
+            // merely a grouped union. Peel one exact wrapper at a time.
+            let inner_start = start + 1;
+            if self.peek(inner_start).map(|token| token.kind) != Some(TokenKind::LParen) {
+                return false;
+            }
+            // An inner function may have a return and throws clause, so the
+            // closing paren alone cannot prove it fills the whole wrapper.
+            // The parser will validate the member after this shape probe.
+            start = inner_start;
+        }
+    }
+
+    fn matching_paren_after_pipe(&self, start: usize) -> Option<usize> {
+        let mut stack = vec![TokenKind::RParen];
+        let mut index = start + 1;
+        loop {
+            let kind = self.peek(index)?.kind;
+            match kind {
+                TokenKind::LParen => stack.push(TokenKind::RParen),
+                TokenKind::LBracket => stack.push(TokenKind::RBracket),
+                TokenKind::LBrace => stack.push(TokenKind::RBrace),
+                close @ (TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace) => {
+                    if stack.pop() != Some(close) {
+                        return None;
+                    }
+                    if stack.is_empty() {
+                        return Some(index);
+                    }
+                }
+                _ => {}
+            }
+            index += 1;
         }
     }
 
@@ -5407,7 +5579,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::Arrow
                 | TokenKind::FatArrow
                 // `spawn`/`await` are valid namespace segments inside type
-                // args (`foo<baml.spawn.Params<T, E>>(x)`), mirroring
+                // args (`foo<baml.spawn.Plan<T, E>>(x)`), mirroring
                 // the type-path parser's segment set.
                 | TokenKind::Spawn
                 | TokenKind::Await
@@ -6453,6 +6625,7 @@ impl<'a> Parser<'a> {
                 }
                 Event::UnexpectedToken { .. }
                 | Event::SyntaxHint { .. }
+                | Event::AmbiguousUnion { .. }
                 | Event::RemovedFeature { .. } => {}
             }
         }
@@ -6517,6 +6690,7 @@ impl<'a> Parser<'a> {
                 }
                 Event::UnexpectedToken { .. }
                 | Event::SyntaxHint { .. }
+                | Event::AmbiguousUnion { .. }
                 | Event::RemovedFeature { .. } => {}
             }
         }
@@ -6659,10 +6833,9 @@ impl<'a> Parser<'a> {
 
     /// Parse `spawn name_expr? (with expr (, expr)*)? { body }`. The name
     /// expression is optional and is parsed until we see `with` or `{`. The
-    /// optional `with` clause (BEP-034 spawn options) is a comma-separated
-    /// list of expressions; in v1 the only accepted form is a single
-    /// `baml.spawn.options(...)` call, enforced later in TIR. The body is
-    /// always a brace-delimited block.
+    /// optional `with` clause is a comma-separated list of
+    /// `baml.spawn.Modifier` values (BEP-040), applied left to right. The body
+    /// is always a brace-delimited block.
     fn parse_spawn_expr(&mut self) {
         self.with_node(SyntaxKind::SPAWN_EXPR, |p| {
             p.bump(); // `spawn`
@@ -7009,7 +7182,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::Arrow
                 | TokenKind::FatArrow
                 // `spawn`/`await` are valid namespace segments inside type
-                // args (`foo<baml.spawn.Params<T, E>>(x)`), mirroring
+                // args (`foo<baml.spawn.Plan<T, E>>(x)`), mirroring
                 // the type-path parser's segment set.
                 | TokenKind::Spawn
                 | TokenKind::Await
@@ -7158,6 +7331,9 @@ impl<'a> Parser<'a> {
     /// Parse type arguments in a type context: `<Type, Assoc = Type, ...>`.
     fn parse_type_args(&mut self) {
         self.type_args_depth += 1;
+        // A pipe inside `<...>` cannot end the surrounding function. Nested
+        // function types parsed as arguments establish their own context.
+        let enclosing_function_operand = std::mem::replace(&mut self.function_union_operand, false);
         self.with_node(SyntaxKind::TYPE_ARGS, |p| {
             p.expect(TokenKind::Less);
 
@@ -7176,6 +7352,7 @@ impl<'a> Parser<'a> {
 
             p.expect_greater();
         });
+        self.function_union_operand = enclosing_function_operand;
         self.type_args_depth -= 1;
 
         // If we just exited the outermost generic and have pending '>', report error.
@@ -10630,6 +10807,269 @@ type Callback = (value: int) -> string throws Foo
         );
     }
 
+    #[test]
+    fn function_union_boundaries_are_ambiguous_in_types_and_patterns() {
+        // The thirteen syntax-shape candidates in if-let-2.md. The rightmost
+        // `| (` is the competing function/union boundary in each form.
+        let ambiguous = [
+            "(A) -> B | (C) -> D",
+            "(A) -> B? | (C) -> D",
+            "(A) -> B[] | (C) -> D",
+            "(A) -> Box<B> | (C) -> D",
+            "(A | B) -> C | (D) -> E",
+            "(A) -> (B | C) | (D) -> E",
+            "(A) -> B | (C | D) -> E",
+            "(A) -> B | ((C) -> D)",
+            "(A) -> B | (C) -> D throws E",
+            "(A) -> B throws E | (C) -> D",
+            "(A) -> B throws E | (C) -> D throws F",
+            "(A) -> B | C throws E | (D) -> F",
+            "(A) -> B throws E | F | (C) -> D throws G",
+        ];
+        for form in ambiguous {
+            for source in [
+                format!("type T = {form}\n"),
+                format!("function Demo(x: any) -> int {{ match (x) {{ {form} => 1, _ => 0 }} }}"),
+            ] {
+                let (root, errors) = parse_source(&source);
+                assert_eq!(root.text().to_string(), source, "{form}");
+                assert_eq!(errors.len(), 1, "{form}: {errors:#?}");
+                let ParseError::AmbiguousUnion { span, groupings } = &errors[0] else {
+                    panic!("{form}: expected ambiguous union, got {errors:#?}");
+                };
+                // Each grouping resolves the ambiguity in the same position.
+                assert_eq!(groupings.len(), 2, "{form}: {groupings:?}");
+                assert_ne!(groupings[0], groupings[1], "{form}");
+                for grouping in groupings {
+                    let (_, errors) = parse_source(&source.replacen(form, grouping, 1));
+                    assert_no_errors(&errors);
+                }
+                let start: usize = span.range.start().into();
+                let end: usize = span.range.end().into();
+                assert_eq!(&source[start..end], "|", "{form}");
+                assert_eq!(
+                    start,
+                    source.find(form).unwrap() + form.rfind("| (").unwrap(),
+                    "{form}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn ambiguous_union_groupings_parenthesize_the_whole_expression() {
+        let cases = [
+            (
+                "(A) -> B | (C) -> D",
+                vec![["(A) -> (B | (C) -> D)", "((A) -> B) | ((C) -> D)"]],
+            ),
+            (
+                "(A | B) -> Box<C> | (D) -> E",
+                vec![[
+                    "(A | B) -> (Box<C> | (D) -> E)",
+                    "((A | B) -> Box<C>) | ((D) -> E)",
+                ]],
+            ),
+            (
+                "(A) -> B | ((C) -> D)",
+                vec![["(A) -> (B | ((C) -> D))", "((A) -> B) | ((C) -> D)"]],
+            ),
+            (
+                "(A) -> B | (C) -> D throws E",
+                vec![[
+                    "(A) -> (B | (C) -> D throws E)",
+                    "((A) -> B) | ((C) -> D throws E)",
+                ]],
+            ),
+            (
+                "(A) -> B | C throws E | (D) -> F",
+                vec![[
+                    "(A) -> B | C throws (E | (D) -> F)",
+                    "((A) -> B | C throws E) | ((D) -> F)",
+                ]],
+            ),
+            (
+                "(x: A, y?: map<string, B>) -> B | /* gap */ (C) -> D | (E) -> F",
+                vec![
+                    [
+                        "(x: A, y?: map<string, B>) -> (B | (C) -> (D | (E) -> F))",
+                        "((x: A, y?: map<string, B>) -> B) | ((C) -> (D | (E) -> F))",
+                    ],
+                    [
+                        "(x: A, y?: map<string, B>) -> (B | (C) -> (D | (E) -> F))",
+                        "(x: A, y?: map<string, B>) -> (B | ((C) -> D) | (E) -> F)",
+                    ],
+                ],
+            ),
+            (
+                "Box<(A) -> B | (C) -> Box<D>>",
+                vec![["(A) -> (B | (C) -> Box<D>)", "((A) -> B) | ((C) -> Box<D>)"]],
+            ),
+        ];
+        for (form, expected) in cases {
+            let (_, errors) = parse_source(&format!("type T = {form}\n"));
+            let actual: Vec<_> = errors
+                .iter()
+                .map(|error| match error {
+                    ParseError::AmbiguousUnion { groupings, .. } => groupings.clone(),
+                    other => panic!("{form}: unexpected error {other:?}"),
+                })
+                .collect();
+            assert_eq!(actual, expected, "{form}");
+        }
+    }
+
+    #[test]
+    fn function_union_controls_keep_their_explicit_groupings() {
+        let return_and_throws = [
+            "(A) -> B | C",
+            "(A) -> B | C throws E | F",
+            "(A) -> B throws C | D",
+            "(A) -> B | C | D",
+            "(A) -> (B | (C) -> D)",
+            "(A) -> B throws (E | (C) -> D)",
+            "(A | B) -> C",
+            "(A) -> B | Callback",
+        ];
+        for form in return_and_throws {
+            let (_, errors) = parse_source(&format!("type T = {form}\n"));
+            assert_no_errors(&errors);
+            let (root, errors) = parse_source(&format!(
+                "function Demo(x: any) -> int {{ match (x) {{ {form} => 1, _ => 0 }} }}"
+            ));
+            assert_no_errors(&errors);
+            let first_arm = root
+                .descendants()
+                .find(|n| n.kind() == SyntaxKind::MATCH_ARM)
+                .unwrap();
+            let pattern = first_arm
+                .children()
+                .find(|n| n.kind() == SyntaxKind::PATTERN)
+                .unwrap();
+            assert_eq!(
+                child_kinds(&pattern),
+                vec![SyntaxKind::TYPE_PATTERN],
+                "{form}"
+            );
+        }
+
+        for form in [
+            "((A) -> B) | ((C) -> D)",
+            "((A) -> B throws E) | ((C) -> D throws F)",
+            "((A) -> B) | (C) -> D",
+        ] {
+            let (_, errors) = parse_source(&format!("type T = {form}\n"));
+            assert_no_errors(&errors);
+            let (root, errors) = parse_source(&format!(
+                "function Demo(x: any) -> int {{ match (x) {{ {form} => 1, _ => 0 }} }}"
+            ));
+            assert_no_errors(&errors);
+            let first_arm = root
+                .descendants()
+                .find(|n| n.kind() == SyntaxKind::MATCH_ARM)
+                .unwrap();
+            let pattern = first_arm
+                .children()
+                .find(|n| n.kind() == SyntaxKind::PATTERN)
+                .unwrap();
+            let union = pattern
+                .children()
+                .find(|n| n.kind() == SyntaxKind::UNION_PATTERN);
+            assert!(
+                union.is_some(),
+                "explicit sibling functions must lower to pattern alternation: {form}"
+            );
+        }
+    }
+
+    #[test]
+    fn b_1681_reported_if_let_spelling_matches_parenthesized_control() {
+        for form in [
+            "(ScratchStep, image) -> MouseClickAction | ScratchNoAction throws unknown",
+            "(ScratchStep, image) -> (MouseClickAction | ScratchNoAction) throws unknown",
+        ] {
+            let source = format!(
+                "function Demo(x: unknown) -> int {{ if let action: {form} = x {{ 1 }} else {{ 0 }} }}"
+            );
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+            assert_eq!(root.text().to_string(), source);
+        }
+    }
+
+    #[test]
+    fn each_ambiguous_pipe_is_labeled_even_with_comments() {
+        let form = "(A) -> B | /* gap */ (C) -> D | (E) -> F";
+        let source = format!("type T = {form}\n");
+        let (_, errors) = parse_source(&source);
+        let mut spans: Vec<_> = errors
+            .iter()
+            .map(|error| match error {
+                ParseError::AmbiguousUnion { span, .. } => {
+                    let start: usize = span.range.start().into();
+                    let end: usize = span.range.end().into();
+                    assert_eq!(&source[start..end], "|");
+                    start
+                }
+                other => panic!("unexpected error: {other:?}"),
+            })
+            .collect();
+        spans.sort_unstable();
+        assert_eq!(
+            spans,
+            source
+                .match_indices('|')
+                .map(|(index, _)| index)
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn ambiguous_function_unions_are_diagnosed_in_pattern_entry_points() {
+        let form = "(A) -> B | (C) -> D";
+        let cases = [
+            format!("function Demo(x: unknown) -> int {{ if x is {form} {{ 1 }} else {{ 0 }} }}"),
+            format!(
+                "function Demo(x: unknown) -> int {{ if let v: {form} = x {{ 1 }} else {{ 0 }} }}"
+            ),
+            format!(
+                "function Demo(x: unknown) -> int {{ while let v: {form} = x {{ break; }} 0 }}"
+            ),
+            format!(
+                "function Demo(x: unknown) -> int {{ match (x) {{ Box {{ value: {form} }} => 1, _ => 0 }} }}"
+            ),
+        ];
+        for source in cases {
+            let (_, errors) = parse_source(&source);
+            assert_eq!(errors.len(), 1, "{source}: {errors:#?}");
+            assert!(
+                matches!(errors[0], ParseError::AmbiguousUnion { .. }),
+                "{source}: {errors:#?}"
+            );
+        }
+    }
+
+    #[test]
+    fn generic_argument_boundaries_do_not_inherit_outer_function_ambiguity() {
+        for form in [
+            "(A) -> Box<B | (C) -> D>",
+            "(A) -> Box<map<string, B | (C) -> D>>",
+        ] {
+            let (_, errors) = parse_source(&format!("type T = {form}\n"));
+            assert_no_errors(&errors);
+            let (_, errors) = parse_source(&format!(
+                "function Demo(x: unknown) -> int {{ match (x) {{ {form} => 1, _ => 0 }} }}"
+            ));
+            assert_no_errors(&errors);
+        }
+
+        // Clearing the outer context must not hide ambiguity in a function
+        // type that is itself an argument to the generic.
+        let (_, errors) = parse_source("type T = Box<(A) -> B | (C) -> D>\n");
+        assert_eq!(errors.len(), 1, "{errors:#?}");
+        assert!(matches!(errors[0], ParseError::AmbiguousUnion { .. }));
+    }
+
     // ============ Pattern parsing ============
 
     /// Find the first `PATTERN` node directly under any `LET_STMT` in the tree.
@@ -11767,6 +12207,25 @@ function Demo() -> int {
                 .any(|node| node.kind() == SyntaxKind::OBJECT_LITERAL),
             "the loop body must not be reinterpreted as `x {{}}`"
         );
+    }
+
+    #[test]
+    fn trace_is_reserved_for_call_arguments() {
+        for source in [
+            "function Bad($trace: int) -> int { 1 }",
+            "function Bad() -> int { let f = ($trace: int) -> int { 1 }; 1 }",
+            "function Bad(f: ($trace: int) -> int) -> int { 1 }",
+        ] {
+            let (_, errors) = parse_source(source);
+            assert!(
+                errors.iter().any(|error| format!("{error:?}")
+                    .contains("`$trace` is reserved for invocation tracing")),
+                "{source}: {errors:?}"
+            );
+        }
+        let (_, errors) =
+            parse_source("function Good() -> int { Target(1, $trace = trace.hidden()) }");
+        assert_no_errors(&errors);
     }
 
     #[test]

@@ -3,4 +3,12 @@ source: crates/baml_ide/src/describe.rs
 expression: "project.format_description(&descs[0])"
 ---
 function deep_copy  (baml.deep_copy)  core.baml:11
+/// Returns a deep copy of `value`: nested arrays, maps, and class instances
+/// are cloned recursively.
+///
+/// Sharing and cycles survive the copy. Two references to the same nested
+/// object still point at one copied object afterward, rather than becoming
+/// independent copies. `Future` is the exception — a future is a handle onto
+/// live async state the runtime owns, not a value with contents to clone, so a
+/// future nested inside `value` is shared, not duplicated.
 shape: function deep_copy(value: T) -> T throws never

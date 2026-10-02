@@ -277,8 +277,12 @@ impl RunCtx<'_> {
     }
 }
 
-fn finish_engine(ctx: &RunCtx<'_>, reporter: &Reporter) -> usize {
-    crate::shutdown::shutdown_engine(ctx.rt, ctx.engine, reporter);
+fn finish_engine(
+    ctx: &RunCtx<'_>,
+    reporter: &Reporter,
+    status: bex_engine::ProcessStatus,
+) -> usize {
+    crate::shutdown::shutdown_engine(ctx.rt, ctx.engine, reporter, status);
     ctx.unhandled_spawn_failures.load(Ordering::SeqCst)
 }
 
@@ -322,7 +326,12 @@ impl TestArgs {
         let cached_engine = cached_program.and_then(|program| {
             // Bytecode-cache hit: the Program carries the in-VM test registry,
             // so the database (typecheck, HIR discovery, emit) is skipped.
-            match crate::runtime_telemetry::create_engine(program, Vec::new(), session.root()) {
+            match crate::runtime_telemetry::create_engine(
+                program,
+                Vec::new(),
+                session.root(),
+                crate::runtime_telemetry::session_sources(&session),
+            ) {
                 Ok(engine) => Some(Arc::new(engine)),
                 Err(error) => {
                     crate::bytecode_cache::cache_debug(format_args!(
@@ -337,21 +346,19 @@ impl TestArgs {
             hit
         } else {
             let warmth = session.warm_prep();
-            let (reuse_plan, stdlib_interface_hit) =
-                (warmth.reuse_plan, warmth.stdlib_interface_hit);
+            let (served, stdlib_interface_hit) = (warmth.served, warmth.stdlib_interface_hit);
             let db = &session.db;
             let package = session.package;
             let cache = &session.cache;
             // ── 2. Diagnostics ─────────────────────────────────────────────
             // Keep `baml test` quiet during the compile phase. `baml check`
             // and `baml generate` own the compile/count progress lines. With a
-            // cache, gate through the incremental collector (narrow to the reuse
-            // plan's dirty files, serve clean files from their cached blobs, and
+            // cache, gate through the incremental collector (serve the check
+            // rows of an unchanged project, check every file otherwise, and
             // carry the fresh per-file blobs into the manifest); without one,
             // run the honest full check. The merged set is byte-identical.
             let (diagnostics, fresh_diagnostics) = if let Some(ctx) = cache {
-                let incremental =
-                    ctx.collect_diagnostics_incremental(db, package, reuse_plan.as_ref());
+                let incremental = ctx.collect_diagnostics_incremental(db, package, served.as_ref());
                 (incremental.merged, Some(incremental.fresh_by_file))
             } else {
                 (baml_db::collect_diagnostics(db), None)
@@ -373,22 +380,17 @@ impl TestArgs {
             }
 
             // 3. Compile + engine + runtime
-            let compiled = crate::bytecode_cache::compile_program_artifacts(
-                db,
-                package,
-                cache.as_ref(),
-                reuse_plan.as_ref(),
-            )
-            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
+            let program = crate::bytecode_cache::compile_program(db, package, cache.as_ref())
+                .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
             if let Some(ctx) = cache {
                 let fresh = fresh_diagnostics
                     .as_ref()
                     .expect("a cache is present, so fresh diagnostics were computed");
                 ctx.verify_and_store(
                     &session,
-                    &compiled,
+                    &program,
                     fresh,
-                    reuse_plan.as_ref(),
+                    served.as_ref(),
                     stdlib_interface_hit,
                 )?;
             }
@@ -398,8 +400,7 @@ impl TestArgs {
                 "stdlib interface: {} honest derivation(s) this process",
                 baml_db::baml_compiler2_hir_ty::package_interface::stdlib_honest_derivations()
             ));
-            // Warm-incremental evidence: with the diagnostics cache serving clean
-            // files this counts only the dirty files' scopes.
+            // Warm evidence: with the check rows served this is 0.
             crate::bytecode_cache::cache_debug(format_args!(
                 "body inferences: {} this process",
                 baml_db::baml_compiler2_hir_ty::infer::body_inferences()
@@ -407,9 +408,10 @@ impl TestArgs {
 
             Arc::new(
                 crate::runtime_telemetry::create_engine(
-                    compiled.program,
+                    program,
                     Vec::new(),
                     session.root(),
+                    crate::runtime_telemetry::session_sources(&session),
                 )
                 .map_err(|e| anyhow!("failed to create engine: {e:?}"))?,
             )
@@ -444,30 +446,31 @@ impl TestArgs {
         // `run_filtered` / `list_filtered`.
         reporter.spin("Discovering", "tests");
         let discovery_started = std::time::Instant::now();
-        let registry =
-            match rt.block_on(engine.collect_tests("user", CallId::next(), cancel.clone())) {
-                Ok(BexExternalValue::Null) => None,
-                Ok(handle @ BexExternalValue::Handle(_)) => Some(handle),
-                Ok(other) => {
-                    reporter.warning(format_args!(
-                        "unexpected collect_tests result: {}",
-                        other.type_name()
-                    ));
-                    None
-                }
-                Err(e) => {
-                    // A failure resolving the registry (vs. a project with no
-                    // tests, which returns Null) is a real error — don't silently
-                    // continue as if there were no testset tests.
-                    reporter.abandon();
-                    crate::reporter::print_error(format_args!("testset discovery failed: {e}"));
-                    return Ok(if finish_engine(&run_ctx, &reporter) != 0 {
+        let registry = match rt.block_on(engine.collect_tests(CallId::next(), cancel.clone())) {
+            Ok(BexExternalValue::Null) => None,
+            Ok(handle @ BexExternalValue::Handle(_)) => Some(handle),
+            Ok(other) => {
+                reporter.warning(format_args!(
+                    "unexpected collect_tests result: {}",
+                    other.type_name()
+                ));
+                None
+            }
+            Err(e) => {
+                // A failure resolving the registry (vs. a project with no
+                // tests, which returns Null) is a real error — don't silently
+                // continue as if there were no testset tests.
+                reporter.abandon();
+                crate::reporter::print_error(format_args!("testset discovery failed: {e}"));
+                return Ok(
+                    if finish_engine(&run_ctx, &reporter, bex_engine::ProcessStatus::Error) != 0 {
                         crate::ExitCode::TestFailure
                     } else {
                         crate::ExitCode::Other
-                    });
-                }
-            };
+                    },
+                );
+            }
+        };
 
         crate::reporter::print_verbose(format_args!(
             "discovered tests in {:.2?} (test registry: {})",
@@ -487,17 +490,21 @@ impl TestArgs {
                     Err(e) => {
                         reporter.abandon();
                         crate::reporter::print_error(format_args!("failed to list tests: {e}"));
-                        return Ok(if finish_engine(&run_ctx, &reporter) != 0 {
-                            crate::ExitCode::TestFailure
-                        } else {
-                            crate::ExitCode::Other
-                        });
+                        return Ok(
+                            if finish_engine(&run_ctx, &reporter, bex_engine::ProcessStatus::Error)
+                                != 0
+                            {
+                                crate::ExitCode::TestFailure
+                            } else {
+                                crate::ExitCode::Other
+                            },
+                        );
                     }
                 },
                 None => Vec::new(),
             };
 
-            if finish_engine(&run_ctx, &reporter) != 0 {
+            if finish_engine(&run_ctx, &reporter, bex_engine::ProcessStatus::Success) != 0 {
                 return Ok(crate::ExitCode::TestFailure);
             }
 
@@ -570,7 +577,12 @@ impl TestArgs {
             }
         }
 
-        let unhandled_spawn_failure_count = finish_engine(&run_ctx, &reporter);
+        let status = if failed == 0 {
+            bex_engine::ProcessStatus::Success
+        } else {
+            bex_engine::ProcessStatus::Error
+        };
+        let unhandled_spawn_failure_count = finish_engine(&run_ctx, &reporter, status);
         if unhandled_spawn_failure_count != 0 {
             failed += unhandled_spawn_failure_count;
             total += unhandled_spawn_failure_count;

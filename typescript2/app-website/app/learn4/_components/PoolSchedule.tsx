@@ -1,11 +1,12 @@
+// biome-ignore-all lint/style/useFilenamingConvention: Keep the existing module path.
 'use client';
 
 import { useState } from 'react';
 import { useAnimateInView } from '../../learn3/_lib/use-animate-in-view';
 
 /**
- * Six tasks through a TaskGroup with limit = 2: two run, the rest queue
- * FIFO and start as slots free up. Timeline per task: queued (amber) until
+ * Six tasks through a spawn Limit of 2: two run, the rest wait
+ * and start as slots free up. Timeline per task: queued (amber) until
  * its start time, then a fill, then a check. CSS delays only; replay
  * remounts. Illustrative timing — every task takes one tick.
  */
@@ -20,12 +21,12 @@ export function PoolSchedule() {
     <div className={`l4-pool${holdClass}`} ref={ref}>
       <div className="l4-pool-head">
         <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[#8A8580]">
-          TaskGroup.new(2) · six spawns
+          Limit.new(2) · six spawns
         </span>
         <button
-          type="button"
           className="l2-btn"
           onClick={() => setRunId((n) => n + 1)}
+          type="button"
         >
           Run again ↻
         </button>
@@ -36,7 +37,7 @@ export function PoolSchedule() {
           const start = 0.3 + wait;
           return (
             // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length, order-stable
-            <div key={i} className="l4-pool-row">
+            <div className="l4-pool-row" key={i}>
               <span className="l4-pool-name font-mono">shard-{i}</span>
               <span className="l4-pool-track">
                 <span

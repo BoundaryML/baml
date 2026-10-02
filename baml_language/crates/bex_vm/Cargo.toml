@@ -18,8 +18,10 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_artifact = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
+baml_linker_types = { workspace = true }
 baml_type = { workspace = true }
 bex_heap = { workspace = true }
 bex_str = { workspace = true }
@@ -31,6 +33,7 @@ btel_settings = { workspace = true }
 btel_snapshot = { workspace = true }
 btel_types = { workspace = true }
 sys_regex = { workspace = true }
+sys_types = { workspace = true }
 aes-gcm-siv = { workspace = true }
 base64 = { workspace = true }
 chacha20poly1305 = { workspace = true }

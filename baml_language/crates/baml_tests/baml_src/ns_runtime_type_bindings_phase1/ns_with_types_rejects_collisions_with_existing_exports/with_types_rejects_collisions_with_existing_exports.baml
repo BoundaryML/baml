@@ -14,7 +14,13 @@ function main() -> string {
             `,
         },
     );
-    let alias_collision = base.with_types({ "ExistingAlias": dynamic_t }) catch (e) {
+    // A non-recursive alias has no runtime object, so the view is built and
+    // the collision surfaces where the view's exports are read: the compile
+    // of a package mounting it.
+    let alias_collision = reflect.Package.compile(
+        { "consumer.baml": "" },
+        packages = { "app": base.with_types({ "ExistingAlias": dynamic_t }) },
+    ) catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code
     };
     let function_collision = base.with_types({ "ExistingFunction": dynamic_t }) catch (e) {

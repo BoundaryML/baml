@@ -64,7 +64,7 @@ fn inlined_binary_prefixes_do_not_spill_call_results() {
         ("prefix_nested", 7),
         ("prefix_call_arg", 6),
     ] {
-        let index = program.function_index(&format!("user.{name}")).unwrap();
+        let index = baml_tests::engine::function_index(&program, &format!("user.{name}")).unwrap();
         let Some(Object::Function(function)) = program.objects.get(index) else {
             panic!("expected function {name}");
         };

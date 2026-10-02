@@ -815,6 +815,7 @@ fn emit_class_trait(
     if let Some(first) = entries.first() {
         writeln!(out, "/// Generated from `{}`", first.builtin.source_file).unwrap();
     }
+    emit_native_naming_allowance(out);
     writeln!(out, "pub trait {trait_name} {{").unwrap();
 
     for entry in entries {
@@ -823,7 +824,7 @@ fn emit_class_trait(
     out.push('\n');
 
     for entry in entries {
-        emit_glue_method(out, &entry.rust_method_name, entry.builtin);
+        emit_glue_method(out, trait_name, &entry.rust_method_name, entry.builtin);
     }
 
     writeln!(
@@ -835,7 +836,7 @@ fn emit_class_trait(
     for entry in entries {
         writeln!(
             out,
-            "            {:?} => Some(Self::__glue_{}),",
+            "            {:?} => Some(<Self as {trait_name}>::__glue_{}),",
             entry.baml_method_name, entry.rust_method_name
         )
         .unwrap();
@@ -865,6 +866,7 @@ fn emit_namespace_trait(out: &mut String, namespace_prefix: &str, node: &Namespa
         )));
     }
 
+    emit_native_naming_allowance(out);
     if supertraits.is_empty() {
         writeln!(out, "pub trait {trait_name} {{").unwrap();
     } else {
@@ -879,7 +881,7 @@ fn emit_namespace_trait(out: &mut String, namespace_prefix: &str, node: &Namespa
     if !node.free_fns.is_empty() {
         out.push('\n');
         for entry in &node.free_fns {
-            emit_glue_method(out, &entry.rust_method_name, entry.builtin);
+            emit_glue_method(out, &trait_name, &entry.rust_method_name, entry.builtin);
         }
     }
 
@@ -917,7 +919,7 @@ fn emit_namespace_trait(out: &mut String, namespace_prefix: &str, node: &Namespa
             for entry in &node.free_fns {
                 writeln!(
                     out,
-                    "                {:?} => Some(Self::__glue_{}),",
+                    "                {:?} => Some(<Self as {trait_name}>::__glue_{}),",
                     entry.baml_method_name, entry.rust_method_name
                 )
                 .unwrap();
@@ -935,7 +937,7 @@ fn emit_namespace_trait(out: &mut String, namespace_prefix: &str, node: &Namespa
             let rust_name = &entry.rust_method_name;
             writeln!(
                 out,
-                "            {baml_name:?} => Some(Self::__glue_{rust_name}),",
+                "            {baml_name:?} => Some(<Self as {trait_name}>::__glue_{rust_name}),",
             )
             .unwrap();
         }
@@ -962,6 +964,7 @@ fn emit_root_trait(out: &mut String, root: &NamespaceNode, package: &str) {
         supertraits.push(namespace_trait_name(ns_name));
     }
 
+    emit_native_naming_allowance(out);
     if supertraits.is_empty() {
         writeln!(out, "pub trait {trait_name} {{").unwrap();
     } else {
@@ -976,7 +979,7 @@ fn emit_root_trait(out: &mut String, root: &NamespaceNode, package: &str) {
     if !root.free_fns.is_empty() {
         out.push('\n');
         for entry in &root.free_fns {
-            emit_glue_method(out, &entry.rust_method_name, entry.builtin);
+            emit_glue_method(out, &trait_name, &entry.rust_method_name, entry.builtin);
         }
     }
 
@@ -1014,7 +1017,7 @@ fn emit_root_trait(out: &mut String, root: &NamespaceNode, package: &str) {
             let rust_name = &entry.rust_method_name;
             writeln!(
                 out,
-                "                {baml_name:?} => Some(Self::__glue_{rust_name}),",
+                "                {baml_name:?} => Some(<Self as {trait_name}>::__glue_{rust_name}),",
             )
             .unwrap();
         }
@@ -1031,6 +1034,12 @@ fn emit_root_trait(out: &mut String, root: &NamespaceNode, package: &str) {
 // ============================================================================
 // Method emission helpers
 // ============================================================================
+
+fn emit_native_naming_allowance(out: &mut String) {
+    out.push_str(
+        "#[allow(clippy::used_underscore_items, reason = \"native method names preserve BAML internal API names and generated dispatch glue\")]\n",
+    );
+}
 
 fn emit_required_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
     if b.may_yield {
@@ -1065,7 +1074,7 @@ fn emit_required_method(out: &mut String, method_name: &str, b: &NativeBuiltin) 
     }
 }
 
-fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
+fn emit_glue_method(out: &mut String, trait_name: &str, method_name: &str, b: &NativeBuiltin) {
     let glue_name = format!("__glue_{method_name}");
     // When the receiver is `&mut self`, parameter extractions run BEFORE the
     // mutable receiver extraction. If any parameter borrows VM state shared-ly
@@ -1109,7 +1118,11 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
         out.push_str("        let __result: Result<NativeCallResult, VmRustFnError> = (|| {\n");
         emit_arg_extractions_indented(out, b, "            ", needs_owned, arraymap_needs_owned);
         let call_args = call_arg_list(b, needs_owned, arraymap_needs_owned);
-        writeln!(out, "            Ok(Self::{method_name}(vm, {call_args}))").unwrap();
+        writeln!(
+            out,
+            "            Ok(<Self as {trait_name}>::{method_name}(vm, {call_args}))"
+        )
+        .unwrap();
         out.push_str("        })();\n");
         out.push_str("        match __result {\n");
         out.push_str("            Ok(r) => r,\n");
@@ -1138,10 +1151,18 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
 
     match b.vm_usage {
         VmUsage::MutRef | VmUsage::Ref => {
-            write!(out, "{binding}Self::{method_name}(vm, {call_args}){suffix}").unwrap();
+            write!(
+                out,
+                "{binding}<Self as {trait_name}>::{method_name}(vm, {call_args}){suffix}"
+            )
+            .unwrap();
         }
         VmUsage::None => {
-            write!(out, "{binding}Self::{method_name}({call_args}){suffix}").unwrap();
+            write!(
+                out,
+                "{binding}<Self as {trait_name}>::{method_name}({call_args}){suffix}"
+            )
+            .unwrap();
         }
     }
 
@@ -1255,16 +1276,28 @@ fn constructor_media_namespace(b: &NativeBuiltin) -> &str {
 
 fn emit_single_extraction_indented(
     out: &mut String,
-    name: &str,
+    param: &crate::types::Param,
     idx: usize,
-    ty: &BamlType,
     indent: &str,
     needs_owned: bool,
     arraymap_needs_owned: bool,
 ) {
+    let name = rust_field_ident(&param.name).to_string();
+    if param.empty_map_default {
+        assert!(
+            matches!(param.ty, BamlType::Map(_, _)),
+            "empty map default needs a map parameter"
+        );
+        writeln!(
+            out,
+            "{indent}let {name} = if args[{idx}].is_omitted() {{ indexmap::IndexMap::new() }} else {{ vm.as_map(&args[{idx}])?.to_index_map() }};"
+        )
+        .unwrap();
+        return;
+    }
     let rhs = extraction_expr(
         &format!("&args[{idx}]"),
-        ty,
+        &param.ty,
         false,
         needs_owned,
         arraymap_needs_owned,
@@ -1417,78 +1450,39 @@ fn emit_arg_extractions_indented(
     needs_owned: bool,
     arraymap_needs_owned: bool,
 ) {
-    if let Some(recv) = &b.receiver {
-        if recv.receiver_type.is_static() {
-            // Static methods: no receiver
-            for (i, p) in b.params.iter().enumerate() {
-                let arg_idx = i;
-                emit_single_extraction_indented(
-                    out,
-                    &rust_field_ident(&p.name).to_string(),
-                    arg_idx,
-                    &p.ty,
-                    indent,
-                    needs_owned,
-                    arraymap_needs_owned,
-                );
-            }
-        } else if recv.receiver_type.is_mut() {
-            for (i, p) in b.params.iter().enumerate() {
-                let arg_idx = i + 1;
-                emit_single_extraction_indented(
-                    out,
-                    &rust_field_ident(&p.name).to_string(),
-                    arg_idx,
-                    &p.ty,
-                    indent,
-                    needs_owned,
-                    arraymap_needs_owned,
-                );
-            }
-            let recv_name = receiver_param_name(recv);
-            emit_mut_receiver_extraction_indented(
-                out,
-                &recv_name,
-                recv,
-                indent,
-                matches!(b.vm_usage, VmUsage::MutRef) && b.may_yield,
-            );
-        } else {
-            let recv_name = receiver_param_name(recv);
-            emit_immut_receiver_extraction_indented(
-                out,
-                &recv_name,
-                0,
-                recv,
-                indent,
-                needs_owned,
-                arraymap_needs_owned,
-            );
-            for (i, p) in b.params.iter().enumerate() {
-                let arg_idx = i + 1;
-                emit_single_extraction_indented(
-                    out,
-                    &rust_field_ident(&p.name).to_string(),
-                    arg_idx,
-                    &p.ty,
-                    indent,
-                    needs_owned,
-                    arraymap_needs_owned,
-                );
-            }
-        }
-    } else {
-        for (i, p) in b.params.iter().enumerate() {
-            emit_single_extraction_indented(
-                out,
-                &rust_field_ident(&p.name).to_string(),
-                i,
-                &p.ty,
-                indent,
-                needs_owned,
-                arraymap_needs_owned,
-            );
-        }
+    let receiver = b
+        .receiver
+        .as_ref()
+        .filter(|recv| !recv.receiver_type.is_static());
+    if let Some(recv) = receiver.filter(|recv| !recv.receiver_type.is_mut()) {
+        emit_immut_receiver_extraction_indented(
+            out,
+            &receiver_param_name(recv),
+            0,
+            recv,
+            indent,
+            needs_owned,
+            arraymap_needs_owned,
+        );
+    }
+    for (i, param) in b.params.iter().enumerate() {
+        emit_single_extraction_indented(
+            out,
+            param,
+            i + usize::from(receiver.is_some()),
+            indent,
+            needs_owned,
+            arraymap_needs_owned,
+        );
+    }
+    if let Some(recv) = receiver.filter(|recv| recv.receiver_type.is_mut()) {
+        emit_mut_receiver_extraction_indented(
+            out,
+            &receiver_param_name(recv),
+            recv,
+            indent,
+            matches!(b.vm_usage, VmUsage::MutRef) && b.may_yield,
+        );
     }
 }
 
@@ -2265,6 +2259,18 @@ fn media_kind_expr(class_name: &str) -> String {
 mod tests {
     use super::*;
     use crate::extract::{extract_native_builtins, extract_native_builtins_for};
+
+    #[test]
+    fn trace_free_functions_and_class_methods_use_qualified_dispatch() {
+        let (builtins, _, classes) = extract_native_builtins_for("trace").unwrap();
+        let output = generate_native_trait_for("trace", &builtins, &classes);
+        for owner in ["BamlPackageTrace", "BamlClassOptions"] {
+            assert!(output.contains(&format!("<Self as {owner}>::_span(vm,")));
+            assert!(output.contains(&format!("Some(<Self as {owner}>::__glue__span)")));
+        }
+        assert!(!output.contains("Self::_span("));
+        assert!(!output.contains("Some(Self::__glue__span)"));
+    }
 
     #[test]
     fn test_camel_to_snake() {

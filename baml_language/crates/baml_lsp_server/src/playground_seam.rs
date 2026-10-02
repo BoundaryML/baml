@@ -726,8 +726,10 @@ impl PlaygroundSeam {
         // against this root: the process serves every project at once and
         // never changes directory.
         let sys_ops = Arc::new(self.platform.for_root(root));
+        // Playground runs record to the project's `.baml/btel`, like `baml run`.
+        let recording_root = root.to_path_buf();
         let candidate = tokio::task::spawn_blocking(move || {
-            construct_engine_candidate(*program, sys_ops, revision)
+            construct_engine_candidate(*program, sys_ops, revision, Some(&recording_root))
         })
         .await;
         let candidate = match candidate {
@@ -828,26 +830,19 @@ impl PlaygroundSeam {
     pub async fn collect_tests(self: &Arc<Self>, root: &Path) {
         let root_path = root.to_path_buf();
         let runtimes = Arc::clone(&self.runtimes);
-        // The ticket and the root's package name come from one owner
-        // continuation: `collect_tests` addresses the engine by package, and
-        // that must be the package the engine was emitted for.
+        // The ticket comes from one owner continuation: the engine collects
+        // the tests of the package it was emitted for, so the ticket alone
+        // addresses them.
         let begun = self
             .call(move |state| {
                 let revision = state.revision();
-                let package = state
-                    .roots()
-                    .workspace_roots()
-                    .find(|entry| entry.path == root_path)?
-                    .spelling
-                    .to_string();
-                let ticket = runtimes
+                runtimes
                     .existing(&root_path)?
-                    .begin_test_collection(revision)?;
-                Some((ticket, package))
+                    .begin_test_collection(revision)
             })
             .await
             .flatten();
-        let Some((ticket, package)) = begun else {
+        let Some(ticket) = begun else {
             tracing::debug!("collect_tests: no current engine for {}", root.display());
             return;
         };
@@ -856,8 +851,7 @@ impl PlaygroundSeam {
         let runtime = self.runtimes.runtime(root);
         let project = root.to_string_lossy().into_owned();
         tokio::spawn(async move {
-            seam.run_test_collection(&runtime, ticket, project, package)
-                .await;
+            seam.run_test_collection(&runtime, ticket, project).await;
         });
     }
 
@@ -866,17 +860,13 @@ impl PlaygroundSeam {
         runtime: &ProjectRuntime,
         ticket: CollectionTicket,
         project: String,
-        package: String,
     ) {
         let call_id = sys_types::CallId::next();
         let generation = ticket.generation;
         let engine = Arc::clone(&ticket.engine);
         let cancel = ticket.cancel.clone();
 
-        let registry = match engine
-            .collect_tests(&package, call_id, cancel.clone())
-            .await
-        {
+        let registry = match engine.collect_tests(call_id, cancel.clone()).await {
             Ok(registry) => registry,
             Err(error) => {
                 // A stale or cancelled collection emits nothing; a failure for
@@ -936,6 +926,15 @@ impl PlaygroundSeam {
     /// Expand one lazy test set in place and re-push the tree. Fire-and-forget
     /// from the wire's perspective: the result arrives as a
     /// `TestCollectionResult` notification.
+    /// Source identity of `project`'s installed program, if one is built.
+    pub fn installed_source_snapshot(&self, project: &str) -> Option<[u8; 32]> {
+        let root = std::fs::canonicalize(project).ok()?;
+        self.runtimes
+            .existing(&root)
+            .or_else(|| self.runtimes.existing(Path::new(project)))?
+            .installed_source_snapshot()
+    }
+
     pub async fn expand_test_set(self: &Arc<Self>, project: &str, generation: u64, name: &str) {
         let lease = match self.lease_registry(project, generation).await {
             Ok(lease) => lease,

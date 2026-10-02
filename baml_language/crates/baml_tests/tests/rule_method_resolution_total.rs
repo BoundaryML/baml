@@ -38,7 +38,7 @@ fn strip_provided_greet(program: &mut Program) {
         packages, objects, ..
     } = program;
     let rule = packages
-        .values_mut()
+        .iter_mut()
         .flat_map(|pkg| pkg.impl_rules.values_mut().flatten())
         .find(|rule| {
             objects[rule.interface_head]

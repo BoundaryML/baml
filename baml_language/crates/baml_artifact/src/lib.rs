@@ -5,8 +5,12 @@
 //! the release metadata check at bridge startup useful while adding an ABI
 //! check that runs even when generated metadata is unavailable.
 
-use std::fmt;
+use std::{
+    fmt,
+    io::{Read as _, Write as _},
+};
 
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use borsh::{BorshDeserialize, BorshSerialize};
 use sha2::{Digest, Sha256};
 
@@ -47,7 +51,27 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// Version 10 combines that layout with the runtime-ID instruction and serialized
 /// function capture-policy removals from the runtime foundation branch (versions
 /// 8 and 9 there). Artifacts from either pre-merge layout must be rejected.
-pub const FORMAT_VERSION: u32 = 10;
+///
+/// Version 11 adds `Bytecode::shield_table` (the PC ranges of `defer` bodies,
+/// which run shielded from cancellation), and changes what the `Spawn` opcode
+/// yields: the VM now pushes a `baml.spawn.Plan` for the engine to start,
+/// where it used to push a pre-allocated `UnscheduledFuture`, and `Spawn`
+/// moved to the end of the `Instruction` and `OpCode` enums (after
+/// `SetCallTrace`), which changes its serialized discriminant. The same
+/// version covers the `Object`/`ObjectType` lattice losing `UnscheduledFuture`
+/// from the middle of the enum, which renumbers the Borsh discriminants of
+/// every variant declared after it, and `Rethrow`/`ThrowIfPanic` popping the
+/// caught error's context under its value, with every exception-table entry
+/// naming a context slot.
+///
+/// Version 12: `Object::Class` gained `methods` (its inherent methods by name,
+/// each an `ObjectIndex` bound to a pointer at load), `ProgramPackage` gained
+/// `globals` (its own function and `let` slots by declaration path), `init`,
+/// and `name`, and `Program::packages` became a `Vec` (a package's identity in
+/// the executable is its position; its name is display metadata), so every
+/// serialized program changed shape. The identity-keyed unit format that
+/// produces them (`baml_linker_types`) rides the same version.
+pub const FORMAT_VERSION: u32 = 12;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.
@@ -171,6 +195,54 @@ pub enum Error {
     Encode { kind: ArtifactKind, message: String },
     #[error("failed to decode {kind}: {message}")]
     Decode { kind: ArtifactKind, message: String },
+    #[error("failed to decode embedded {kind}: {message}")]
+    Embedded { kind: ArtifactKind, message: String },
+}
+
+/// Encode an artifact for embedding as a single-line string literal in
+/// generated SDK source: an LZ4 frame, then standard padded base64.
+/// [`decode_embedded`] reverses this; bridges call it so host languages never
+/// decode the payload themselves. The encoding cannot begin with [`MAGIC`], so
+/// bridges can accept either form.
+pub fn encode_embedded(artifact: &[u8]) -> String {
+    let mut encoder = lz4_flex::frame::FrameEncoder::new(Vec::new());
+    encoder
+        .write_all(artifact)
+        .expect("writing to a Vec cannot fail");
+    BASE64.encode(encoder.finish().expect("writing to a Vec cannot fail"))
+}
+
+/// Largest artifact [`decode_embedded`] will inflate. Generated programs are a
+/// few MB; the cap keeps a malformed, highly compressible payload from
+/// allocating unbounded memory before artifact validation can reject it.
+pub const MAX_EMBEDDED_ARTIFACT_BYTES: u64 = 512 * 1024 * 1024;
+
+/// Decode an [`encode_embedded`] payload back into the artifact bytes.
+pub fn decode_embedded(kind: ArtifactKind, encoded: &[u8]) -> Result<Vec<u8>, Error> {
+    decode_embedded_within(kind, encoded, MAX_EMBEDDED_ARTIFACT_BYTES)
+}
+
+fn decode_embedded_within(
+    kind: ArtifactKind,
+    encoded: &[u8],
+    max_artifact_bytes: u64,
+) -> Result<Vec<u8>, Error> {
+    let embedded_error = |message: String| Error::Embedded { kind, message };
+    let compressed = BASE64
+        .decode(encoded)
+        .map_err(|error| embedded_error(format!("invalid base64: {error}")))?;
+    let mut artifact = Vec::new();
+    // Read one byte past the cap so an oversized artifact is detectable.
+    lz4_flex::frame::FrameDecoder::new(compressed.as_slice())
+        .take(max_artifact_bytes.saturating_add(1))
+        .read_to_end(&mut artifact)
+        .map_err(|error| embedded_error(format!("invalid LZ4 frame: {error}")))?;
+    if artifact.len() as u64 > max_artifact_bytes {
+        return Err(embedded_error(format!(
+            "decoded artifact exceeds {max_artifact_bytes} bytes"
+        )));
+    }
+    Ok(artifact)
 }
 
 /// Serialize `value` and wrap it in a versioned artifact envelope.
@@ -275,6 +347,16 @@ pub fn decode<T: BorshDeserialize>(kind: ArtifactKind, bytes: &[u8]) -> Result<T
     })
 }
 
+/// The sha256 of an artifact's validated payload — the identity of WHAT the
+/// artifact carries, independent of the envelope (whose own hash is bound to
+/// the build fingerprint). Two artifacts of one payload written by two builds
+/// share it; a consumer that read the payload and a linker that holds the
+/// artifact compute the same value.
+pub fn payload_digest(kind: ArtifactKind, bytes: &[u8]) -> Result<[u8; 32], Error> {
+    let payload = decode_payload(kind, bytes)?;
+    Ok(Sha256::digest(payload).into())
+}
+
 /// Validate an artifact and borrow its raw payload.
 pub fn decode_payload(kind: ArtifactKind, bytes: &[u8]) -> Result<&[u8], Error> {
     if bytes.len() < PREFIX_LEN {
@@ -365,6 +447,58 @@ pub fn decode_payload(kind: ArtifactKind, bytes: &[u8]) -> Result<&[u8], Error> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn payload_digest_is_the_payload_hash_alone() {
+        let payload = borsh::to_vec(&vec![1_u32, 2, 3]).unwrap();
+        let artifact = encode(ArtifactKind::Program, &vec![1_u32, 2, 3]).unwrap();
+        let expected: [u8; 32] = Sha256::digest(&payload).into();
+        assert_eq!(
+            payload_digest(ArtifactKind::Program, &artifact).unwrap(),
+            expected
+        );
+        assert!(payload_digest(ArtifactKind::Program, &[]).is_err());
+    }
+
+    #[test]
+    fn embedded_encoding_round_trips() {
+        let artifact = encode(ArtifactKind::Program, &vec![7_u32; 1024]).unwrap();
+        let encoded = encode_embedded(&artifact);
+        assert!(encoded.len() < artifact.len());
+        assert!(!encoded.contains('\n'));
+        assert!(!encoded.as_bytes().starts_with(MAGIC));
+        let restored = decode_embedded(ArtifactKind::Program, encoded.as_bytes()).unwrap();
+        assert_eq!(restored, artifact);
+        let decoded: Vec<u32> = decode(ArtifactKind::Program, &restored).unwrap();
+        assert_eq!(decoded, vec![7_u32; 1024]);
+    }
+
+    #[test]
+    fn oversized_embedded_artifacts_are_rejected() {
+        let artifact = encode(ArtifactKind::Program, &vec![0_u8; 4096]).unwrap();
+        let encoded = encode_embedded(&artifact);
+        let limit = artifact.len() as u64;
+        assert_eq!(
+            decode_embedded_within(ArtifactKind::Program, encoded.as_bytes(), limit).unwrap(),
+            artifact
+        );
+        let error = decode_embedded_within(ArtifactKind::Program, encoded.as_bytes(), limit - 1)
+            .unwrap_err();
+        assert!(
+            matches!(&error, Error::Embedded { message, .. } if message.contains("exceeds")),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn corrupt_embedded_payloads_are_embedded_errors() {
+        let encoded = encode_embedded(&encode(ArtifactKind::Program, &vec![1_u32; 64]).unwrap());
+        for corrupt in ["not base64!", &encoded[..(encoded.len() / 2) & !3]] {
+            let corrupt = corrupt.as_bytes();
+            let error = decode_embedded(ArtifactKind::Program, corrupt).unwrap_err();
+            assert!(matches!(error, Error::Embedded { .. }), "{error}");
+        }
+    }
 
     #[test]
     fn round_trips_payload() {

@@ -1,5 +1,5 @@
 import "./baml_sdk/index.js";
-import { BamlAbortError, BamlCallContext, BamlError, BamlPanic, initializeRuntimeFromBytecode } from "@boundaryml/baml-bridge";
+import { BamlAbortError, BamlCallContext, BamlError, BamlPanic, initializeRuntimeFromBlob } from "@boundaryml/baml-bridge";
 import { describe, expect, it } from "vitest";
 import { BYTECODE } from "./baml_sdk/_inlinedbaml.js";
 import {
@@ -227,7 +227,7 @@ describe("function_calls — generated SDK host callables", () => {
 
     const pending = call_with_callback_async(callback, 9);
     await wasDispatched;
-    initializeRuntimeFromBytecode(BYTECODE);
+    initializeRuntimeFromBlob(BYTECODE);
     resolveResult("after-replacement");
     await expect(pending).resolves.toBe("after-replacement");
   });
@@ -263,7 +263,7 @@ describe("function_calls — generated SDK host callables", () => {
 
     const pending = call_with_callback_async(callback, 12, { $ctx: ctx });
     await wasDispatched;
-    initializeRuntimeFromBytecode(BYTECODE);
+    initializeRuntimeFromBlob(BYTECODE);
     ctx.abort();
     await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
     settle("late after replacement");

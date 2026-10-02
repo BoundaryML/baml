@@ -72,6 +72,11 @@ class GeminiClient {
     // records delivered through on_event. Status, headers, and timing are
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
+    // The deadlines of one request attempt: a Duration is the end-to-end
+    // total; ai.LlmTimeoutOptions also sets the connect, first-token and
+    // stream-token limits. Null is the default: 5 minutes total, 10 seconds
+    // to connect. Browser/Wasm does not enforce the transport limits.
+    timeout: baml.time.Duration | ai.LlmTimeoutOptions | null,
 
     /// Creates a client. Construction reads no environment variable, so
     /// declaring one is always safe; credentials and endpoints resolve when a
@@ -91,6 +96,7 @@ class GeminiClient {
         response_modalities: string[]? = null,
         safety_settings: SafetySetting[]? = null,
         capture_wire: bool = true,
+        timeout: baml.time.Duration | ai.LlmTimeoutOptions | null = null,
     ) -> GeminiClient {
         GeminiClient {
             model: model,
@@ -107,6 +113,7 @@ class GeminiClient {
             response_modalities: response_modalities,
             safety_settings: safety_settings,
             capture_wire: capture_wire,
+            timeout: timeout,
         }
     }
 

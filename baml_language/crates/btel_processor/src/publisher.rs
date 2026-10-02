@@ -23,8 +23,20 @@ pub trait Publisher<I, V> {
     /// allocation before visiting records or publishing aggregate deltas.
     /// Unvisited captures remain owned by the span buffer, not by delivery.
     const DETACH_RECORDS: bool = false;
+    /// Whether producers should build exception-path evidence for this
+    /// publisher. Only recording publishers read it; the VM skips building
+    /// raises otherwise, so a run without a recording pays nothing extra.
+    const ERROR_EVIDENCE: bool = false;
 
     fn aggregate(&mut self, delta: AggregateDelta);
+    /// One sysop's time, charged to the innermost observed call path. Not
+    /// combined here: sysops are rare next to completions.
+    fn sysop_time(
+        &mut self,
+        _call_path: btel_types::CallPathId,
+        _elapsed: btel_types::ClockDuration,
+    ) {
+    }
     /// Called after each aggregate only on the detached path, without input
     /// allocations held, including cache evictions and final cache flushing.
     fn after_detached_aggregate(&mut self) {}
@@ -50,6 +62,10 @@ pub trait Publisher<I, V> {
     fn max_chunks_per_batch(&self) -> usize {
         btel_settings::processor::UNLIMITED_PUBLISHER_BATCH
     }
+    /// Called at most once, after admission closed, no producer is bound and
+    /// every published chunk was consumed: no further input can arrive. Never
+    /// called after the pool is disabled or failed. Recording publishers end
+    /// their recording here; `flush` never does.
     fn finish(&mut self) {
         self.flush();
     }

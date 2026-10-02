@@ -22,7 +22,7 @@ use web_time::{SystemTime, UNIX_EPOCH};
 mod calibration;
 pub use btel_settings::clock::ClockMode;
 use btel_settings::clock::{
-    ACCURACY_TARGET_NS, DISCONTINUITY_MARGIN_NS, MAX_SAMPLE_UNCERTAINTY_NS,
+    ACCURACY_TARGET_NS, DISCONTINUITY_MARGIN_NS, MAX_DRIFT_PPB, MAX_SAMPLE_UNCERTAINTY_NS,
     VALIDATION_INTERVAL_DURATION,
 };
 use calibration::{Calibrated, Probe, probe};
@@ -299,6 +299,28 @@ impl ClockEpoch {
         }
     }
 
+    /// Cold lifecycle query for recording finality, never called by producers.
+    /// `Some` once every attached thread has finished: children attach while
+    /// their parent is still attached, so a settled run cannot gain threads.
+    /// Restore, mode changes and faults skip settled runs under the same lock,
+    /// so the returned status cannot change afterwards.
+    pub fn settled_status(&self) -> Option<TimingStatus> {
+        // Unsettled runs may be validating; never contend with their probes.
+        if !self.is_settled() {
+            return None;
+        }
+        let _guard = self
+            .validation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Some(self.status())
+    }
+
+    fn is_settled(&self) -> bool {
+        self.active_threads.load(Ordering::Acquire) == 0
+            && self.has_finished.load(Ordering::Acquire)
+    }
+
     fn invalidate(&self, reason: TimingStatus) {
         let _ = self.status.compare_exchange(
             TimingStatus::Valid as u8,
@@ -320,6 +342,10 @@ impl ClockEpoch {
         let Ok(_guard) = self.validation.try_lock() else {
             return self.status();
         };
+        // A settled run's status was final when `settled_status` read it.
+        if self.is_settled() {
+            return self.status();
+        }
         let sample = probe(&self.clock, &self.reference, self.resolution);
         let status = self.assess(sample, ClockInstant::from_ticks(previous));
         if status != TimingStatus::Valid {
@@ -361,12 +387,22 @@ impl ClockEpoch {
         );
         let scale_error =
             narrow(u128::from(elapsed) * u128::from(self.metadata.rate_error.0) / 1_000_000_000);
+        // NTP slews the reference, so an epoch's calibrated rate drifts from
+        // it by a few ppm: both tests allow MAX_DRIFT_PPB of the elapsed time.
+        let drift = narrow(u128::from(elapsed) * u128::from(MAX_DRIFT_PPB) / 1_000_000_000);
         let tolerance = DISCONTINUITY_MARGIN_NS
             .saturating_add(sampling)
-            .saturating_add(scale_error);
-        // A growing scale-error allowance must not silently accept a known
-        // >1 ms origin error. Both tests subtract the measurement uncertainty.
-        if discrepancy > tolerance || discrepancy > ACCURACY_TARGET_NS.saturating_add(sampling) {
+            .saturating_add(scale_error)
+            .saturating_add(drift);
+        // A growing scale-error allowance must not silently accept an origin
+        // error beyond the accuracy target and that drift. Both tests subtract
+        // the measurement uncertainty.
+        if discrepancy > tolerance
+            || discrepancy
+                > ACCURACY_TARGET_NS
+                    .saturating_add(sampling)
+                    .saturating_add(drift)
+        {
             TimingStatus::Discontinuity
         } else {
             TimingStatus::Valid
@@ -458,9 +494,12 @@ impl ClockRuntime {
 
     fn invalidate_active(state: &RuntimeState, reason: TimingStatus) {
         for epoch in state.epochs.iter().filter_map(Weak::upgrade) {
-            if epoch.active_threads.load(Ordering::Acquire) != 0
-                || !epoch.has_finished.load(Ordering::Acquire)
-            {
+            // Decide and invalidate atomically with respect to `settled_status`.
+            let _guard = epoch
+                .validation
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if !epoch.is_settled() {
                 epoch.invalidate(reason);
             }
         }

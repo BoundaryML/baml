@@ -15,8 +15,8 @@ __all__ = [
     "HostSpanManager",
     "cancel_function_call",
     "flush_events",
-    "get_runtime",
     "get_bridge_runtime_version",
+    "get_runtime",
     "get_toolchain_version",
     "get_version",
     "lookup_host_value",
@@ -179,7 +179,7 @@ class BamlRuntime:
         * `files` - Map of filename to file content
         """
     @staticmethod
-    def initialize_runtime_from_bytecode(bytecode: typing.Sequence[builtins.int], embedded_baml_toml: typing.Optional[builtins.str] = None) -> BamlRuntime:
+    def initialize_runtime_from_blob(bytecode: typing.Sequence[builtins.int], embedded_baml_toml: typing.Optional[builtins.str] = None) -> BamlRuntime:
         r"""
         Initialize the process-global runtime from serialized BAML bytecode.
 
@@ -197,6 +197,7 @@ class BamlRuntime:
         r"""
         Call a BAML function synchronously (blocking).
         """
+
 @typing.final
 class BamlVideo:
     @staticmethod
@@ -222,7 +223,6 @@ class BamlVideo:
         """
     @classmethod
     def __get_pydantic_core_schema__(cls, _source_type: typing.Any, _handler: typing.Any) -> typing.Any: ...
-
 
 @typing.final
 class FunctionResult:
@@ -276,6 +276,24 @@ class HostSpanManager:
         Number of active spans (call depth).
         """
 
+def _handle_refcount(key: builtins.int) -> typing.Optional[builtins.int]:
+    r"""
+    Test-only: the outstanding ownership count of a live key — the releases it
+    still owes — or `None` for a dead/unknown key. Lets an audit see an
+    exactly-once imbalance on a shared engine-heap key, which row counts hide.
+    """
+
+def _live_handle_count() -> builtins.int:
+    r"""
+    Test-only: return the number of live ordinary HANDLE_TABLE rows (a
+    refcounted engine-heap row counts once however many owners it has).
+    """
+
+def _release_wire_handle(key: builtins.int) -> None:
+    r"""
+    Release a handle cloned for wire ownership when encoding aborts before the
+    engine can consume it.
+    """
 
 def _seed_function_ref_handle(global_index: builtins.int) -> tuple[builtins.int, builtins.int]:
     r"""
@@ -296,25 +314,6 @@ def _seed_heap_handle(slab_key: builtins.int) -> tuple[builtins.int, builtins.in
     `slab_key` share a key.
     """
 
-def _release_wire_handle(key: builtins.int) -> None:
-    r"""
-    Release a handle cloned for wire ownership when encoding aborts before the
-    engine can consume it.
-    """
-
-def _live_handle_count() -> builtins.int:
-    r"""
-    Test-only: return the number of live ordinary HANDLE_TABLE rows (a
-    refcounted engine-heap row counts once however many owners it has).
-    """
-
-def _handle_refcount(key: builtins.int) -> typing.Optional[builtins.int]:
-    r"""
-    Test-only: the outstanding ownership count of a live key — the releases it
-    still owes — or `None` for a dead/unknown key. Lets an audit see an
-    exactly-once imbalance on a shared engine-heap key, which row counts hide.
-    """
-
 def cancel_function_call(call_id: builtins.int) -> builtins.bool: ...
 
 def flush_events() -> None:
@@ -322,6 +321,8 @@ def flush_events() -> None:
     No-op: tracing has been removed. Kept as a live symbol for ABI stability
     (SDK `atexit` + `__all__` reference it).
     """
+
+def get_bridge_runtime_version() -> builtins.str: ...
 
 def get_runtime() -> BamlRuntime:
     r"""
@@ -333,9 +334,9 @@ def get_runtime() -> BamlRuntime:
     site.
     """
 
-def get_version() -> builtins.str: ...
 def get_toolchain_version() -> builtins.str: ...
-def get_bridge_runtime_version() -> builtins.str: ...
+
+def get_version() -> builtins.str: ...
 
 def lookup_host_value(handle: BamlPyHandle) -> typing.Optional[typing.Any]:
     r"""
@@ -380,4 +381,13 @@ def release_host_callable(host_value_key: builtins.int) -> None:
     registered during a failed encode.
     """
 
-def shutdown_runtime() -> None: ...
+def shutdown_runtime(timeout: typing.Optional[builtins.float] = None) -> None:
+    r"""
+    Shut down the BAML runtime: wait for in-flight calls and spawned work,
+    report errors nothing observed, and release the runtime.
+
+    `timeout` (seconds) bounds the wait: once it passes, work still running is
+    cancelled and then abandoned. Without one the wait lasts as long as the
+    work does, as Python's own exit waits for non-daemon threads. Either way,
+    Ctrl+C ends it with `KeyboardInterrupt`.
+    """

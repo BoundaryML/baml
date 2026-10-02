@@ -42,7 +42,7 @@ fn role_and_metadata(message: &PromptAst) -> (&str, &serde_json::Value) {
 fn collect_media_kinds(ast: &PromptAst, out: &mut Vec<baml_base::MediaKind>) {
     fn collect_content(content: &PromptAstSimple, out: &mut Vec<baml_base::MediaKind>) {
         match content {
-            PromptAstSimple::String(_) => {}
+            PromptAstSimple::String(_) | PromptAstSimple::CacheDelimiter(_) => {}
             PromptAstSimple::Media(media) => out.push(media.kind),
             PromptAstSimple::Multiple(parts) => {
                 for part in parts {

@@ -31,7 +31,7 @@ static void TestBytecodeInitRejectsGarbage() {
   bool threw = false;
   try {
     const std::string v = baml::version();
-    baml::initialize_runtime_from_bytecode(garbage, sizeof(garbage), v.c_str());
+    baml::initialize_runtime_from_blob(garbage, sizeof(garbage), v.c_str());
   } catch (const baml::error&) {
     threw = true;
   }

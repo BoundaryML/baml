@@ -304,9 +304,9 @@ pub fn canonicalize_lossy(path: &Path) -> PathBuf {
 /// rebuilding it from components would rejoin them with the platform
 /// separator, and on Windows that rewrites the virtual `<builtin>/pkg/…`
 /// paths to `<builtin>\pkg\…` — breaking every consumer of the `<builtin>/`
-/// prefix contract (the compiler's builtin-syntax gate, emit's builtin
-/// filter, `bex_vm_types::link`), which must see the same spelling on every
-/// platform.
+/// prefix contract (the compiler's builtin-syntax gate, emit's builtin-file
+/// test, the project content hash, the CLI's relative user paths), which
+/// must see the same spelling on every platform.
 fn lexically_normalize(path: &Path) -> PathBuf {
     let needs_normalization = path.components().any(|component| {
         matches!(
@@ -532,6 +532,34 @@ impl ProjectDatabase {
             })
             .collect();
         self.stdlib_prelude = Arc::from(prelude);
+
+        // A precompiled root's blob is validated here, with every language
+        // package installed and recorded: its dependency table locates its
+        // siblings under their fixed names, which no root's edge table shows
+        // until the layout is complete. A compiler-built blob that does not
+        // bind is a compiler bug, never a stale cache: fail loud.
+        for package in &layout.packages {
+            let root = roots[package.name];
+            let Some(bytes) = root.interface(self) else {
+                continue;
+            };
+            let wire =
+                Self::decode_interface(SourceRootKind::Stdlib, bytes).unwrap_or_else(|err| {
+                    panic!(
+                        "cannot install the stdlib source root for `{}`: {err}",
+                        package.name
+                    )
+                });
+            if let Err(error) =
+                baml_compiler2_hir_ty::package_interface::import_interface(self, root, &wire)
+            {
+                panic!(
+                    "cannot install the stdlib source root for `{}`: invalid package interface: \
+                     {error}",
+                    package.name
+                );
+            }
+        }
     }
 
     /// The prelude edges every non-`Stdlib` root carries (empty until the
@@ -611,11 +639,16 @@ impl ProjectDatabase {
         Arc::make_mut(&mut self.roots_by_path).insert(path, root);
 
         // A served-from-interface root's blob must be a faithful export of
-        // the root it now is: every head it spells names the root itself or
-        // a package reached by one of its edges, and every row is the row
-        // its key exports it as (`import_interface`). A blob that fails
-        // either is not mountable here, and the root does not stay.
-        if let Some(wire) = wire_interface
+        // the root it now is: every slot of its dependency table binds
+        // through the root's edges, and every row is the row its key exports
+        // it as (`import_interface`). A blob that fails either is not
+        // mountable here, and the root does not stay. A precompiled stdlib
+        // root is validated by `install_stdlib` once the whole layout exists
+        // instead: its blob reaches the language packages under their fixed
+        // names, which the edge table only carries after the installer has
+        // recorded them.
+        if kind != SourceRootKind::Stdlib
+            && let Some(wire) = wire_interface
             && let Err(error) =
                 baml_compiler2_hir_ty::package_interface::import_interface(self, root, &wire)
         {
@@ -709,21 +742,17 @@ impl ProjectDatabase {
     }
 
     /// A served-from-interface root's bytes must decode: a precompiled stdlib
-    /// package is raw `borsh(PackageInterface)`, anything else a versioned
-    /// `baml_artifact`.
+    /// package is raw `borsh(WireInterface)`, anything else a versioned
+    /// `baml_artifact` — the same distinction `interface_digest` hashes by.
     fn decode_interface(
         kind: SourceRootKind,
         bytes: &[u8],
-    ) -> Result<
-        baml_compiler2_hir_ty::package_interface::PackageInterface<baml_type::TypeName>,
-        SourceRootError,
-    > {
-        use baml_compiler2_hir_ty::package_interface::PackageInterface;
+    ) -> Result<baml_compiler2_hir_ty::package_interface::WireInterface, SourceRootError> {
+        use baml_compiler2_hir_ty::package_interface::WireInterface;
         let decoded = if kind == SourceRootKind::Stdlib {
-            borsh::from_slice::<PackageInterface<baml_type::TypeName>>(bytes)
-                .map_err(|error| error.to_string())
+            borsh::from_slice::<WireInterface>(bytes).map_err(|error| error.to_string())
         } else {
-            baml_artifact::decode::<PackageInterface<baml_type::TypeName>>(
+            baml_artifact::decode::<WireInterface>(
                 baml_artifact::ArtifactKind::PackageInterface,
                 bytes,
             )
@@ -839,6 +868,13 @@ impl ProjectDatabase {
     /// leaves the file attributed to the wrong package.
     fn upsert_file(&mut self, root: SourceRoot, path: &Path, text: &str) -> (SourceFile, bool) {
         let path = canonicalize_lossy(path);
+        // A served root is its interface alone: consumers read its items from
+        // the interface, so a file under it would be read by nothing.
+        debug_assert!(
+            root.interface(self).is_none(),
+            "a served root has no files: `{}`",
+            path.display()
+        );
 
         if let Some(&existing) = self.file_map.get(&path) {
             // Skip the setter when the text is unchanged: a Salsa set always
@@ -1065,7 +1101,7 @@ impl ProjectDatabase {
 
     /// Seed per-file throw facts from a previous compile of identical file
     /// content (bytecode-cache per-file reuse); keys are full source-file path
-    /// strings.
+    /// strings, heads are located by edge path from the file's own package.
     ///
     /// This mutates the always-present `SeededThrowFacts` input (created in
     /// `new`) through its Salsa setter, so it bumps the revision and correctly
@@ -1075,7 +1111,7 @@ impl ProjectDatabase {
         &mut self,
         by_path: BTreeMap<
             String,
-            Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>,
+            Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::PathName>>,
         >,
     ) {
         let seeds = self.seeded_throw_facts.unwrap_or_else(|| {
@@ -1113,7 +1149,7 @@ impl ProjectDatabase {
     /// infers honestly.
     pub fn set_seeded_callable_throws(
         &mut self,
-        by_path: BTreeMap<String, BTreeMap<u32, baml_type::Ty<baml_type::TypeName>>>,
+        by_path: BTreeMap<String, BTreeMap<u32, baml_type::Ty<baml_type::PathName>>>,
     ) {
         let seeds = self.seeded_callable_throws.unwrap_or_else(|| {
             unreachable!("SeededCallableThrows input is created in ProjectDatabase::new")
@@ -1129,7 +1165,7 @@ impl ProjectDatabase {
     pub fn get_bytecode(
         &self,
         root: SourceRoot,
-    ) -> Result<bex_vm_types::Program, baml_compiler2_emit::LoweringError> {
+    ) -> Result<bex_vm_types::Program, crate::program::CompileProgramError> {
         // Bytecode generation lowers types through the runtime-conversion
         // boundary (`ResolvedAliases::convert`), which deliberately panics on
         // inference-only `Unknown`/`Error` types. Those are legitimate
@@ -1137,7 +1173,7 @@ impl ProjectDatabase {
         // attempt codegen on an error-bearing project: surface the failure as a
         // recoverable `LoweringError`. The diagnostics themselves are reported
         // through the normal check path. (CLI commands gate before calling
-        // `generate_project_bytecode` directly; this protects the in-process /
+        // `compile_program` directly; this protects the in-process /
         // runtime-eval callers that go through `get_bytecode`.) The filter is
         // the emitted WORLD's files, not the root's own: emit lowers the root
         // plus its dependency closure, and an error left in a dependency
@@ -1157,7 +1193,9 @@ impl ProjectDatabase {
             })
             .count();
         if error_count > 0 {
-            return Err(baml_compiler2_emit::LoweringError::ProjectHasErrors { error_count });
+            return Err(crate::program::CompileProgramError::Emit(
+                baml_compiler2_emit::LoweringError::ProjectHasErrors { error_count },
+            ));
         }
         self.get_bytecode_unchecked(root)
     }
@@ -1173,8 +1211,8 @@ impl ProjectDatabase {
     pub fn get_bytecode_unchecked(
         &self,
         root: SourceRoot,
-    ) -> Result<bex_vm_types::Program, baml_compiler2_emit::LoweringError> {
-        baml_compiler2_emit::generate_project_bytecode(self, root)
+    ) -> Result<bex_vm_types::Program, crate::program::CompileProgramError> {
+        crate::program::compile_program(self, root, baml_compiler2_emit::OptLevel::Two)
     }
 }
 
@@ -1533,9 +1571,9 @@ mod tests {
     #[test]
     fn virtual_paths_are_stored_byte_for_byte_as_spelled() {
         // The `<builtin>/` prefix is a wire contract read by string
-        // comparison (the compiler's builtin-syntax gate, emit's builtin
-        // filter, `bex_vm_types::link`), so the stored spelling must keep its
-        // forward slashes on every platform. Rebuilding the path from
+        // comparison (the compiler's builtin-syntax gate), so the stored
+        // spelling must keep its forward slashes on every platform. Rebuilding
+        // the path from
         // components would rejoin with `\` on Windows; the byte-level
         // assertions here are what a component-wise `Path` comparison would
         // miss.
@@ -1639,12 +1677,19 @@ mod tests {
         ));
         let blob = baml_artifact::encode(
             baml_artifact::ArtifactKind::PackageInterface,
-            &baml_compiler2_hir_ty::package_interface::PackageInterface::<baml_type::TypeName> {
-                types: std::iter::empty().collect(),
-                functions: std::iter::empty().collect(),
-                throw_sets: baml_compiler2_hir_ty::package_interface::FunctionThrowSets::default(),
-                namespaces: std::collections::BTreeSet::default(),
-                impls: Vec::default(),
+            &baml_compiler2_hir_ty::package_interface::WireInterface {
+                dependencies: Vec::new(),
+                rows: baml_compiler2_hir_ty::package_interface::PackageInterface::<
+                    baml_type::WireName,
+                > {
+                    types: std::iter::empty().collect(),
+                    functions: std::iter::empty().collect(),
+                    throw_sets:
+                        baml_compiler2_hir_ty::package_interface::FunctionThrowSets::default(),
+                    namespaces: std::collections::BTreeSet::default(),
+                    impls: Vec::default(),
+                    reexports: indexmap::IndexMap::default(),
+                },
             },
         )
         .unwrap();

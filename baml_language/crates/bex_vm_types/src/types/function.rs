@@ -221,6 +221,13 @@ pub struct Function {
     /// `(box: #0) -> #0.Item`.
     pub display_type_params: Vec<String>,
 
+    /// The name of each type-argument slot in a call's frame
+    /// (`frame.type_args`), in slot order: an owner's type parameters (an
+    /// interface method's `Self` first), then the function's own; a lambda's
+    /// are its enclosing frame's. Telemetry records a call's type arguments
+    /// by these names.
+    pub type_param_names: Vec<String>,
+
     /// Interface bounds for each De Bruijn type-argument slot.  Unlike
     /// `display_type_params`, this is executable metadata: the VM substitutes
     /// the actual call-frame types and rejects a failing bound before entering
@@ -253,10 +260,9 @@ pub struct Function {
     /// An interface body is pooled and slotted like any function —
     /// statically resolved
     /// calls stay direct `Call(GlobalIndex)` — but it is not itself a logical
-    /// item, so it has no name anywhere: bodies are excluded from
-    /// `Program::function_indices` / `function_global_indices` and every
-    /// runtime name scan skips them; compile boundaries recover a body's
-    /// coordinates structurally (Pass-1 slot replay + the globals array).
+    /// item, so it has no name anywhere: bodies enter no package table, so no
+    /// rendered view of the executable names them, and every runtime name
+    /// scan skips them.
     /// [`Self::name`] on an interface body is display-only (traces,
     /// snapshots).
     pub is_interface_body: bool,
@@ -465,6 +471,22 @@ impl Function {
 }
 
 impl Function {
+    /// Names for the argument slots telemetry captures: `arity` slots, with a
+    /// method's `self` receiver first. Only declaration names are used; `None`
+    /// when they do not name every slot, e.g. synthesized bodies.
+    pub fn telemetry_argument_layout(&self) -> Option<btel_types::ArgumentLayout> {
+        (self.param_names.len() == self.arity).then(|| btel_types::ArgumentLayout {
+            slots: self
+                .param_names
+                .iter()
+                .map(|name| btel_types::ArgumentSlot {
+                    receiver: name == "self",
+                    name: Some(name.clone()),
+                })
+                .collect(),
+        })
+    }
+
     /// Copy metadata while the registered function is live and protected from GC.
     /// No runtime heap references escape in the returned value.
     pub fn runtime_metadata(&self) -> Option<btel_types::FunctionMetadata> {
@@ -505,6 +527,34 @@ impl Function {
             definition_key: Some(btel_types::DefinitionKey(format!("function:{fqn}"))),
             package_name,
             namespace,
+            argument_layout: self.telemetry_argument_layout(),
+            source_map: self.telemetry_source_map(),
+        })
+    }
+
+    /// The executed (compact) code's line table, in the byte-offset PCs that
+    /// call paths and error evidence record. `None` before lowering and for
+    /// functions without bytecode. Out-of-range values saturate, and the
+    /// reader rejects them.
+    pub fn telemetry_source_map(&self) -> Option<btel_types::SourceMap> {
+        if !matches!(self.kind, FunctionKind::Bytecode) {
+            return None;
+        }
+        let compact = self.bytecode.compact.as_ref()?;
+        let clamp = |value: usize| u32::try_from(value).unwrap_or(u32::MAX);
+        Some(btel_types::SourceMap {
+            code_bytes: clamp(compact.code.len()),
+            entries: compact
+                .line_table
+                .iter()
+                .map(|entry| btel_types::SourceMapEntry {
+                    pc: clamp(entry.pc),
+                    file_id: entry.span.file_id.as_u32(),
+                    start: entry.span.range.start().into(),
+                    end: entry.span.range.end().into(),
+                    line: clamp(entry.line),
+                })
+                .collect(),
         })
     }
 }

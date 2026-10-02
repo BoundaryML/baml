@@ -162,27 +162,27 @@ test "chat_openai_request_shape" {
     )
 }
 
-function chat_request_timeout_ms() -> string {
+function chat_request_timeout() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_chat_ok_body())],
         (mock: root.llm_mock.MockJsonServer) -> {
             let cl = openai.ChatClient.new(
                 api_key = "k",
                 base_url = mock.base_url(),
-                request_timeout_ms = 20,
+                timeout = baml.time.Duration.from_milliseconds(20),
             );
             let outcome = `turn:${cl.invoke(_chat_input("hi")).terminal_text() ?? ""}` catch_all (e) {
-                let timeout: baml.errors.Timeout => "Timeout",
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.timeout_type}`,
                 _ => `other:${e.to_string()}`,
             };
-            `${cl.request_timeout_ms ?? -1}|${outcome}`
+            `${outcome}`
         },
         response_delay_ms = 200,
     )
 }
 
-test "chat_request_timeout_ms" {
-    assert.equal(chat_request_timeout_ms(), "20|Timeout")
+test "chat_request_timeout" {
+    assert.equal(chat_request_timeout(), "Timeout:timeout")
 }
 
 // The prompt text itself survives role splitting.
@@ -539,27 +539,27 @@ test "issue_4589_responses_preserves_omitted_nested_optional_class" {
     )
 }
 
-function chat_generic_request_timeout_ms() -> string {
+function chat_generic_request_timeout() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_chat_ok_body())],
         (mock: root.llm_mock.MockJsonServer) -> {
             let cl = openai.GenericClient.new(
                 model = "qwen3",
                 base_url = mock.base_url(),
-                request_timeout_ms = 20,
+                timeout = baml.time.Duration.from_milliseconds(20),
             );
             let outcome = `turn:${cl.invoke(_chat_input("hi")).terminal_text() ?? ""}` catch_all (e) {
-                let timeout: baml.errors.Timeout => "Timeout",
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.timeout_type}`,
                 _ => `other:${e.to_string()}`,
             };
-            `${cl.request_timeout_ms ?? -1}|${outcome}`
+            `${outcome}`
         },
         response_delay_ms = 200,
     )
 }
 
-test "chat_generic_request_timeout_ms" {
-    assert.equal(chat_generic_request_timeout_ms(), "20|Timeout")
+test "chat_generic_request_timeout" {
+    assert.equal(chat_generic_request_timeout(), "Timeout:timeout")
 }
 
 // An unset base_url is a hard error, not a silent fallback to api.openai.com.
@@ -936,7 +936,7 @@ test "chat_classifies_http_errors" {
     )
 }
 
-// The same discipline on the streaming path: `fetch_sse` reports a non-2xx as an
+// The same discipline on the streaming path: `send_sse` reports a non-2xx as an
 // opaque Io error, and the client recovers the status from it rather than
 // blanket-wrapping every stream failure as retry-safe.
 function chat_stream_classifies_http_errors() -> string {
@@ -1010,6 +1010,28 @@ test "chat_sse_decodes_text_and_usage" {
     )
 }
 
+// A streamed turn reports the cache split a non-streamed one does:
+// prompt_tokens counts the cached share too.
+function chat_sse_usage_splits_the_cache() -> string {
+    root.llm_mock.mock_sse_serve(
+        [
+            root.llm_mock.sse_data(`{"id":"c","model":"gpt-4o-mini","choices":[{"index":0,"delta":{"role":"assistant","content":"pong"},"finish_reason":"stop"}]}`),
+            root.llm_mock.sse_data(`{"id":"c","choices":[],"usage":{"prompt_tokens":1000,"completion_tokens":20,"prompt_tokens_details":{"cached_tokens":800},"completion_tokens_details":{"reasoning_tokens":5}}}`),
+            root.llm_mock.sse_data(`[DONE]`),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = openai.ChatClient.new(api_key = "k", base_url = mock.base_url());
+            let u = cl.invoke_stream(_chat_input("Say pong.")).final_turn().usage;
+            `${u?.input_tokens ?? -1}/${u?.cached_input_tokens ?? -1}/${u?.cache_write_input_tokens ?? -1}/${u?.uncached_input_tokens ?? -1}/${u?.output_tokens ?? -1}/${u?.reasoning_tokens ?? -1}`
+        },
+    )
+}
+
+test "chat_sse_usage_splits_the_cache" {
+    // input/cached/cache writes/uncached/output/reasoning
+    assert.equal(chat_sse_usage_splits_the_cache(), "1000/800/-1/200/20/5")
+}
+
 // The total request deadline remains active after visible deltas arrive and
 // aborts a stalled streaming body with the same typed Timeout as invoke().
 function chat_stream_total_timeout_after_delta() -> string {
@@ -1025,7 +1047,7 @@ function chat_stream_total_timeout_after_delta() -> string {
             let cl = openai.ChatClient.new(
                 api_key = "k",
                 base_url = mock.base_url(),
-                request_timeout_ms = 10000,
+                timeout = baml.time.Duration.from_milliseconds(10000),
             );
             let stream = cl.invoke_stream(_chat_input("hi"));
             let first = match (stream.next()) {
@@ -1033,17 +1055,17 @@ function chat_stream_total_timeout_after_delta() -> string {
                 let done: ai.stream.Done => "Done",
             };
             let outcome = `${stream.final_turn().terminal_text() ?? ""}` catch_all (e) {
-                let timeout: baml.errors.Timeout => "Timeout",
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.timeout_type}`,
                 _ => `other:${e.to_string()}`,
             };
-            `${cl.request_timeout_ms ?? -1}|${first}|${outcome}`
+            `${first}|${outcome}`
         },
         chunk_delay_ms = 60000,
     )
 }
 
 test "chat_stream_total_timeout_after_delta" {
-    assert.equal(chat_stream_total_timeout_after_delta(), "10000|po|Timeout")
+    assert.equal(chat_stream_total_timeout_after_delta(), "po|Timeout:timeout")
 }
 
 // SSE comment/heartbeat bytes are transport keepalives, not tokens: they must
@@ -1061,21 +1083,23 @@ function chat_stream_heartbeat_does_not_clear_ttft() -> string {
             let cl = openai.ChatClient.new(
                 api_key = "k",
                 base_url = mock.base_url(),
-                request_timeout_ms = 15000,
-                time_to_first_token_timeout_ms = 20,
+                timeout = ai.LlmTimeoutOptions {
+                    timeout: baml.time.Duration.from_milliseconds(15000),
+                    first_token_timeout: baml.time.Duration.from_milliseconds(20),
+                },
             );
             let outcome = `${cl.invoke_stream(_chat_input("hi")).final_turn().terminal_text() ?? ""}` catch_all (e) {
-                let timeout: baml.errors.Timeout => `Timeout:${timeout.duration_ms ?? -1}`,
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.timeout_type}:${timeout.duration?.to_milliseconds() ?? -1n}`,
                 _ => `other:${e.to_string()}`,
             };
-            `${cl.time_to_first_token_timeout_ms ?? -1}|${outcome}`
+            `${outcome}`
         },
         chunk_delay_ms = 10000,
     )
 }
 
 test "chat_stream_heartbeat_does_not_clear_ttft" {
-    assert.equal(chat_stream_heartbeat_does_not_clear_ttft(), "20|Timeout:20")
+    assert.equal(chat_stream_heartbeat_does_not_clear_ttft(), "Timeout:first_token_timeout:20")
 }
 
 // `stream_options` is first-party OpenAI only: a compatible server that does not
@@ -1099,7 +1123,7 @@ test "chat_generic_omits_stream_options" {
     assert.equal(chat_generic_omits_stream_options(), "ok|model,messages,stream")
 }
 
-function chat_generic_stream_time_to_first_token_timeout_ms() -> string {
+function chat_generic_stream_first_token_timeout() -> string {
     root.llm_mock.mock_sse_serve(
         [
             root.llm_mock.sse_data(`{"choices":[{"index":0,"delta":{"content":"ok"}}]}`),
@@ -1111,21 +1135,23 @@ function chat_generic_stream_time_to_first_token_timeout_ms() -> string {
             let cl = openai.GenericClient.new(
                 model = "qwen3",
                 base_url = mock.base_url(),
-                request_timeout_ms = 15000,
-                time_to_first_token_timeout_ms = 20,
+                timeout = ai.LlmTimeoutOptions {
+                    timeout: baml.time.Duration.from_milliseconds(15000),
+                    first_token_timeout: baml.time.Duration.from_milliseconds(20),
+                },
             );
             let outcome = `${cl.invoke_stream(_chat_input("hi")).final_turn().terminal_text() ?? ""}` catch_all (e) {
-                let timeout: baml.errors.Timeout => `Timeout:${timeout.duration_ms ?? -1}`,
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.timeout_type}:${timeout.duration?.to_milliseconds() ?? -1n}`,
                 _ => `other:${e.to_string()}`,
             };
-            `${cl.time_to_first_token_timeout_ms ?? -1}|${outcome}`
+            `${outcome}`
         },
         first_event_delay_ms = 10000,
     )
 }
 
-test "chat_generic_stream_time_to_first_token_timeout_ms" {
-    assert.equal(chat_generic_stream_time_to_first_token_timeout_ms(), "20|Timeout:20")
+test "chat_generic_stream_first_token_timeout" {
+    assert.equal(chat_generic_stream_first_token_timeout(), "Timeout:first_token_timeout:20")
 }
 
 // The opposite case: the mock sends the first event right away and the TTFT
@@ -1141,19 +1167,19 @@ function chat_generic_stream_ttft_allows_prompt_first_event() -> string {
             let cl = openai.GenericClient.new(
                 model = "qwen3",
                 base_url = mock.base_url(),
-                time_to_first_token_timeout_ms = 60000,
+                timeout = ai.LlmTimeoutOptions { first_token_timeout: baml.time.Duration.from_milliseconds(60000) },
             );
             let outcome = `${cl.invoke_stream(_chat_input("hi")).final_turn().terminal_text() ?? ""}` catch_all (e) {
-                let timeout: baml.errors.Timeout => `Timeout:${timeout.duration_ms ?? -1}`,
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.timeout_type}:${timeout.duration?.to_milliseconds() ?? -1n}`,
                 _ => `other:${e.to_string()}`,
             };
-            `${cl.time_to_first_token_timeout_ms ?? -1}|${outcome}`
+            `${outcome}`
         },
     )
 }
 
 test "chat_generic_stream_ttft_allows_prompt_first_event" {
-    assert.equal(chat_generic_stream_ttft_allows_prompt_first_event(), "60000|ok")
+    assert.equal(chat_generic_stream_ttft_allows_prompt_first_event(), "ok")
 }
 
 // Streamed tool calls arrive as id/name once and argument fragments after.
@@ -1177,7 +1203,7 @@ function chat_sse_assembles_tool_calls() -> string {
                 headers: { "content-type": "application/json" },
                 body: `{"stream":true}`,
             };
-            let sse = baml.http.fetch_sse(request);
+            let sse = baml.http.send_sse(request);
             let stops: string[] = [];
             while (true) {
                 match (sse.next()) {

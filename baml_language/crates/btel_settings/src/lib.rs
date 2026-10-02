@@ -74,6 +74,7 @@ pub mod identity;
 pub mod layout;
 pub mod local_files;
 pub mod mode;
+pub mod network;
 pub mod policy;
 pub mod processor;
 pub mod publisher;

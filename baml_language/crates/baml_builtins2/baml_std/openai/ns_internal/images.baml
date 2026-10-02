@@ -405,7 +405,8 @@ function images_parse(c: root.ImageClient, resp: OaImagesResponse) -> ai.ModelTu
 /// deltas) cannot carry, so `openai.ImageClient` deliberately does not implement
 /// ai.stream.StreamingClient.
 function images_invoke(c: root.ImageClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
-    let req = images_render(c, input);
+    // No streaming here: only the two transport deadlines apply.
+    let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(images_render(c, input));
     let sent = ai.wire.send_as_with_wire<OaImagesResponse>(
         req,
         "openai-images",

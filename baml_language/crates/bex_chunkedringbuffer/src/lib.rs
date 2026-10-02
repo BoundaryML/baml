@@ -524,6 +524,26 @@ pub struct Producer<T, S> {
     _thread_bound: PhantomData<Rc<()>>,
 }
 impl<T, S> Producer<T, S> {
+    pub fn span_remaining(&self) -> usize {
+        self.shared.config.chunk_capacity.get() - self.span.as_ref().map_or(0, Vec::len)
+    }
+
+    pub fn span_is_empty(&self) -> bool {
+        self.span.is_none()
+    }
+
+    /// Keep selectors and their observation together. False means the configured
+    /// chunk cannot hold the group; no existing records are changed.
+    pub fn prepare_span_group(&mut self, records: usize) -> bool {
+        if records > self.shared.config.chunk_capacity.get() {
+            return false;
+        }
+        if self.span_remaining() < records {
+            self.seal_span();
+        }
+        true
+    }
+
     pub fn id(&self) -> ProducerId {
         self.id
     }

@@ -575,6 +575,43 @@ test "google_stream_decode" {
     )
 }
 
+// A streamed turn reports the cache split a non-streamed one does:
+// promptTokenCount counts the cached share too.
+function google_stream_usage_splits_the_cache() -> string {
+    root.llm_mock.mock_sse_serve(
+        [
+            root.llm_mock.sse_data(
+                `{"candidates":[{"content":{"role":"model","parts":[{"text":"pong"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":5,"cachedContentTokenCount":60,"thoughtsTokenCount":3}}`,
+            ),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = google.GeminiClient.new(
+                model = "gemini-2.5-flash",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let spec = GoogleEcho@spec("Say pong.");
+            let u = cl
+                .invoke_stream(
+                ai.ModelTurnInput {
+                    prompt: spec.prompt_template,
+                    journal: ai.Journal { log: [] },
+                    toolbox: spec.tools(),
+                    output_type: spec.output_type(),
+                },
+                )
+                .final_turn()
+                .usage;
+            `${u?.input_tokens ?? -1}/${u?.cached_input_tokens ?? -1}/${u?.cache_write_input_tokens ?? -1}/${u?.uncached_input_tokens ?? -1}/${u?.output_tokens ?? -1}/${u?.reasoning_tokens ?? -1}`
+        },
+    )
+}
+
+test "google_stream_usage_splits_the_cache" {
+    // input/cached/cache writes/uncached/output/reasoning
+    assert.equal(google_stream_usage_splits_the_cache(), "100/60/-1/40/5/3")
+}
+
 // Gemini's SSE has no terminal sentinel: the `finishReason` fragment IS the
 // end of the turn. Both stream call sites therefore pass `require_terminal`, so
 // a connection cut mid-answer raises instead of handing the caller a silently
@@ -749,7 +786,7 @@ test "vertex_request_shape" {
     )
 }
 
-function vertex_request_timeout_ms() -> string {
+function vertex_request_timeout() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_canned_turn())],
         (mock: root.llm_mock.MockJsonServer) -> {
@@ -764,20 +801,20 @@ function vertex_request_timeout_ms() -> string {
                 model = "gemini-2.5-flash",
                 api_key = "express-key",
                 base_url = mock.base_url(),
-                request_timeout_ms = 20,
+                timeout = baml.time.Duration.from_milliseconds(20),
             );
             let outcome = `turn:${cl.invoke(input).terminal_text() ?? ""}` catch_all (e) {
-                let timeout: baml.errors.Timeout => "Timeout",
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.timeout_type}`,
                 _ => `other:${e.to_string()}`,
             };
-            `${cl.request_timeout_ms ?? -1}|${outcome}`
+            `${outcome}`
         },
         response_delay_ms = 200,
     )
 }
 
-test "vertex_request_timeout_ms" {
-    assert.equal(vertex_request_timeout_ms(), "20|Timeout")
+test "vertex_request_timeout" {
+    assert.equal(vertex_request_timeout(), "Timeout:timeout")
 }
 
 // Claude on Vertex goes to the anthropic publisher's `:rawPredict` with the
@@ -924,7 +961,7 @@ test "vertex_stream_decode" {
     )
 }
 
-function vertex_stream_time_to_first_token_timeout_ms() -> string {
+function vertex_stream_first_token_timeout() -> string {
     root.llm_mock.mock_sse_serve(
         [root.llm_mock.sse_data(`{"candidates":[{"content":{"parts":[{"text":"pong"}]},"finishReason":"STOP"}]}`)],
         (mock: root.llm_mock.MockSseServer) -> {
@@ -934,25 +971,29 @@ function vertex_stream_time_to_first_token_timeout_ms() -> string {
                 model = "gemini-2.5-flash",
                 api_key = "express-key",
                 base_url = mock.base_url(),
-                request_timeout_ms = 15000,
-                time_to_first_token_timeout_ms = 20,
+                timeout = ai.LlmTimeoutOptions {
+                    timeout: baml.time.Duration.from_milliseconds(15000),
+                    first_token_timeout: baml.time.Duration.from_milliseconds(20),
+                },
             );
-            let stream = ai.stream.from_spec<string>(
+            // Opening the stream is inside the catch: the first-token clock
+            // starts at dispatch, so a slow connect can spend the 20ms before
+            // the response opens, and the timeout is then thrown at open.
+            let outcome = ai.stream.from_spec<string>(
                 GoogleEcho@spec("Say pong."),
                 client = cl,
-            );
-            let outcome = stream.final() catch_all (e) {
-                let timeout: baml.errors.Timeout => `Timeout:${timeout.duration_ms ?? -1}`,
+            ).final() catch_all (e) {
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.timeout_type}:${timeout.duration?.to_milliseconds() ?? -1n}`,
                 _ => `other:${e.to_string()}`,
             };
-            `${cl.time_to_first_token_timeout_ms ?? -1}|${outcome}`
+            `${outcome}`
         },
         first_event_delay_ms = 10000,
     )
 }
 
-test "vertex_stream_time_to_first_token_timeout_ms" {
-    assert.equal(vertex_stream_time_to_first_token_timeout_ms(), "20|Timeout:20")
+test "vertex_stream_first_token_timeout" {
+    assert.equal(vertex_stream_first_token_timeout(), "Timeout:first_token_timeout:20")
 }
 
 // ─── error taxonomy ──────────────────────────────────────────────────────────

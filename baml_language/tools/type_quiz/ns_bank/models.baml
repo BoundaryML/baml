@@ -211,7 +211,7 @@ function bivariant(k: root.algebra.Knowledge) -> root.algebra.Knowledge throws n
         root.algebra.Relation.Super => root.algebra.Relation.Equiv,
         root.algebra.Relation.Equiv => root.algebra.Relation.Equiv,
         root.algebra.Relation.Unrelated => root.algebra.Relation.Unrelated,
-        root.algebra.Undecided => root.algebra.Undecided {  },
+        root.algebra.Undecided => root.algebra.Undecided {},
     }
 }
 

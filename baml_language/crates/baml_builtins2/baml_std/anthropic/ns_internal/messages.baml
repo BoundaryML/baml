@@ -888,6 +888,9 @@ function parse(resp: Response) -> ai.ModelTurn {
                 cached_input_tokens: u.cache_read_input_tokens,
                 // Extended thinking: the reasoning share of output_tokens.
                 reasoning_tokens: u.output_tokens_details?.thinking_tokens,
+                cache_write_input_tokens: u.cache_creation_input_tokens,
+                // Anthropic's input_tokens already excludes both cache counts.
+                uncached_input_tokens: u.input_tokens,
             }
         },
         null => null,
@@ -898,16 +901,10 @@ function parse(resp: Response) -> ai.ModelTurn {
 
 /// The one internal entry point: render, send, normalize — one model turn.
 function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
-    let req = _request(c, input, false, preview = false);
-    let sent = ai.wire.send_as_with_wire<Response>(
-        req,
-        "anthropic",
-        c.id(),
-        capture_wire = c.capture_wire,
-        request_timeout_ms = c.request_timeout_ms,
-    );
+    let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(_request(c, input, false, preview = false));
+    let sent = ai.wire.send_as_with_wire<Response>(req, "anthropic", c.id(), capture_wire = c.capture_wire);
     let turn = parse(sent.value);
-    ai.ModelTurn { ...turn, calls: [sent.call] }
+    ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
 }
 
 // ---------------------------------------------------------------------------
@@ -929,6 +926,23 @@ class AnthStreamUsage {
     cache_read_input_tokens: int?,
     cache_creation_input_tokens: int?,
     output_tokens_details: AnthOutputTokensDetails?,
+}
+
+/// One event's usage, with the meanings a non-streamed turn's usage has.
+function _anth_stream_meta(
+    stop: ai.content.StopReason?,
+    usage: AnthStreamUsage?,
+) -> ai.stream.TurnMeta {
+    ai.stream.TurnMeta {
+        stop_reason: stop,
+        input_tokens: usage?.input_tokens,
+        output_tokens: usage?.output_tokens,
+        cached_input_tokens: usage?.cache_read_input_tokens,
+        cache_write_input_tokens: usage?.cache_creation_input_tokens,
+        // Anthropic's input_tokens already excludes both cache counts.
+        uncached_input_tokens: usage?.input_tokens,
+        reasoning_tokens: usage?.output_tokens_details?.thinking_tokens,
+    }
 }
 
 class AnthStreamDelta {
@@ -983,19 +997,13 @@ class AnthStreamToolCall {
 }
 
 /// What a stream carried that `ai.stream.Event` cannot yet express:
-/// tool calls, extended thinking, cache-token counts and the raw stop reason.
-/// The decoder folds them here so nothing is silently dropped; wiring them to
-/// the consumer needs the stdlib extensions listed in the workstream report.
+/// tool calls, extended thinking and the raw stop reason. The decoder folds
+/// them here so nothing is silently dropped; wiring them to the consumer
+/// needs the stdlib extensions listed in the workstream report.
 class AnthStreamState {
     thinking: string,
     signature: string,
     tool_calls: AnthStreamToolCall[],
-    cache_read_input_tokens: int?,
-    cache_creation_input_tokens: int?,
-    // usage.output_tokens_details.thinking_tokens, folded the same way the
-    // cache counters are: ai.stream.TurnMeta has no reasoning slot, so the
-    // non-streaming path's Usage.reasoning_tokens has no streaming twin yet.
-    reasoning_tokens: int?,
     stop_reason_raw: string?,
     model: string?,
 
@@ -1004,9 +1012,6 @@ class AnthStreamState {
             thinking: "",
             signature: "",
             tool_calls: [],
-            cache_read_input_tokens: null,
-            cache_creation_input_tokens: null,
-            reasoning_tokens: null,
             stop_reason_raw: null,
             model: null,
         }
@@ -1097,27 +1102,8 @@ function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[
                     "message_start" => {
                         if let message: AnthStreamMessage = event.message {
                             state.model = message.model;
-                            if let usage: AnthStreamUsage = message.usage {
-                                state.cache_read_input_tokens
-                                    = usage.cache_read_input_tokens ?? state.cache_read_input_tokens;
-                                state.cache_creation_input_tokens
-                                    = usage.cache_creation_input_tokens
-                                        ?? state.cache_creation_input_tokens;
-                                state.reasoning_tokens
-                                    = usage.output_tokens_details?.thinking_tokens
-                                        ?? state.reasoning_tokens;
-                            }
-                            null
-                        } else {
-                            null
-                        };
-                        out.push(
-                            ai.stream.TurnMeta {
-                                stop_reason: null,
-                                input_tokens: event.message?.usage?.input_tokens,
-                                output_tokens: event.message?.usage?.output_tokens,
-                            },
-                        );
+                        }
+                        out.push(_anth_stream_meta(null, event.message?.usage));
                         null
                     },
                     "content_block_start" => {
@@ -1137,6 +1123,9 @@ function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[
                                 },
                                 "thinking" => {
                                     state.thinking = `${state.thinking}${block.thinking ?? ""}`;
+                                    if ((block.thinking ?? "") != "") {
+                                        out.push(ai.stream.ContentSeen {});
+                                    }
                                     null
                                 },
                                 _ => {
@@ -1169,12 +1158,19 @@ function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[
                                     if let call: AnthStreamToolCall = _anth_stream_call_at(state, event.index) {
                                         call.args_json = `${call.args_json}${d.partial_json ?? ""}`;
                                     }
+                                    // Tool input is content with no TextDelta.
+                                    if ((d.partial_json ?? "") != "") {
+                                        out.push(ai.stream.ContentSeen {});
+                                    }
                                     null
                                 },
                                 "thinking_delta" => {
                                     // Deliberately NOT a TextDelta: thinking is not part
                                     // of the answer the parser will see.
                                     state.thinking = `${state.thinking}${d.thinking ?? ""}`;
+                                    if ((d.thinking ?? "") != "") {
+                                        out.push(ai.stream.ContentSeen {});
+                                    }
                                     null
                                 },
                                 "signature_delta" => {
@@ -1190,16 +1186,6 @@ function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[
                         null
                     },
                     "message_delta" => {
-                        if let usage: AnthStreamUsage = event.usage {
-                            state.cache_read_input_tokens
-                                = usage.cache_read_input_tokens ?? state.cache_read_input_tokens;
-                            state.cache_creation_input_tokens
-                                = usage.cache_creation_input_tokens
-                                    ?? state.cache_creation_input_tokens;
-                            state.reasoning_tokens
-                                = usage.output_tokens_details?.thinking_tokens
-                                    ?? state.reasoning_tokens;
-                        }
                         let stop: ai.content.StopReason? = match (event.delta?.stop_reason) {
                             null => null,
                             let s: string => {
@@ -1207,17 +1193,11 @@ function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[
                                 _stop_reason(s)
                             },
                         };
-                        out.push(
-                            ai.stream.TurnMeta {
-                                stop_reason: stop,
-                                input_tokens: event.usage?.input_tokens,
-                                output_tokens: event.usage?.output_tokens,
-                            },
-                        );
+                        out.push(_anth_stream_meta(stop, event.usage));
                         null
                     },
                     "message_stop" => {
-                        out.push(ai.stream.TurnDone {  });
+                        out.push(ai.stream.TurnDone {});
                         null
                     },
                     // content_block_stop and ping carry nothing to fold.
@@ -1235,7 +1215,7 @@ function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[
     out
 }
 
-/// (internal) `fetch_sse` fails a non-2xx status itself, throwing baml.errors.Io with the
+/// (internal) `send_sse` fails a non-2xx status itself, throwing baml.errors.Io with the
 /// status and body in its message ("SSE request failed with status 401: …").
 /// Recover the status and route it through the SAME classifier the non-streaming
 /// path uses: a 400 or 401 must never come back as a retry-safe NetworkFailure,
@@ -1275,13 +1255,10 @@ function _stream_open_failure(error: baml.errors.Io | baml.errors.Timeout) -> ne
 /// The streaming entry point: the same request as `invoke` with
 /// `stream: true`, wrapped in an ai.TurnStream over the SSE connection.
 function invoke_stream(c: root.Client, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-    let req = _request(c, input, true, preview = false);
+    let limits = ai.LlmTimeoutOptions._resolve(c.timeout);
+    let req = limits._apply(_request(c, input, true, preview = false));
     let started = baml.time.Instant.now();
-    let sse = baml.http.fetch_sse(
-        req,
-        timeout = baml.time.Duration.from_milliseconds(c.request_timeout_ms ?? 0),
-        first_event_timeout = baml.time.Duration.from_milliseconds(c.time_to_first_token_timeout_ms ?? 0),
-    ) catch (e) {
+    let sse = baml.http.send_sse(req) catch (e) {
         baml.errors.Io => _stream_open_failure(e),
         baml.errors.Timeout => _stream_open_failure(e),
     };
@@ -1299,6 +1276,8 @@ function invoke_stream(c: root.Client, input: ai.ModelTurnInput) -> ai.stream.Tu
             }
         },
         require_terminal = "anthropic",
+        timeout_options = limits,
+        dispatched = started,
     );
     let call = ai.events.LLMCall {
         client_name: c.id(),

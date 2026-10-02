@@ -29,7 +29,7 @@ use std::{cell::UnsafeCell, collections::HashMap};
 
 use bex_vm_types::{
     FutureRead, HeapPtr, Object, Value,
-    types::{Future, PackageKind},
+    types::{Future, Objects, Slots},
 };
 
 use crate::{
@@ -312,7 +312,7 @@ impl BexHeap {
                             future_id: future.id(),
                             value,
                             trace: future.error_trace(),
-                            cancelled: future.cancel_requested(),
+                            cancelled: future.was_cancelled(),
                         });
                     }
                 }
@@ -666,43 +666,23 @@ impl BexHeap {
                     worklist.push(ptr);
                 }
             }
-            Object::UnscheduledFuture(future) => {
-                if let Some(name_ptr) = future.name {
-                    worklist.push(name_ptr);
-                }
-                if let Some(config_ptr) = future.config {
-                    worklist.push(config_ptr);
-                }
-                worklist.push(future.closure);
-            }
             Object::Package(package) => {
                 worklist.extend(package.classes.values().copied());
                 worklist.extend(package.enums.values().copied());
                 worklist.extend(package.interfaces.values().copied());
-                worklist.extend(package.functions.values().copied());
                 worklist.extend(package.type_aliases.values().copied());
-                worklist.extend(package.mounted_types.values().copied());
+                worklist.extend(package.edges.values().map(|edge| edge.target));
+                worklist.extend(package.init);
                 worklist.extend(package.test_init);
                 for (interface, rules) in &package.impl_rules {
                     worklist.push(*interface);
                     worklist.extend(rules.iter().copied());
                 }
-                match &package.kind {
-                    PackageKind::Static => {}
-                    PackageKind::Runtime(runtime) | PackageKind::Session { runtime, .. } => {
-                        worklist.extend(runtime.objects.iter().copied());
-                        worklist.extend(runtime.object_names.values().copied());
-                        worklist.extend(runtime.type_values.values().copied());
-                        worklist.extend(runtime.dependencies.iter().copied());
-                        worklist.extend(runtime.dependency_names.values().copied());
-                        worklist.extend(runtime.init);
-                        worklist.extend(
-                            runtime
-                                .globals
-                                .iter()
-                                .filter_map(|slot| slot.load().as_object_ptr()),
-                        );
-                    }
+                if let Slots::Own { cells, .. } = &package.slots {
+                    worklist.extend(cells.iter().filter_map(|slot| slot.load().as_object_ptr()));
+                }
+                if let Objects::Own(objects) = &package.objects {
+                    worklist.extend(objects.iter().copied());
                 }
             }
             Object::Function(function) => {
@@ -726,16 +706,19 @@ impl BexHeap {
             // every object kind; what these two arms add is the back-edge to the
             // package that owns them, so reaching a member keeps its package —
             // and so its globals and dependencies — alive.
+            // A class's inherent method bodies are direct pointers, like an
+            // interface's default bodies.
             Object::Class(class) => {
-                if !class.owner.as_ptr().is_null() {
-                    worklist.push(class.owner);
-                }
+                trace_owner(&class.owner, worklist);
+                worklist.extend(
+                    class
+                        .methods
+                        .values()
+                        .map(|method| method.function_ptr)
+                        .filter(|ptr| !ptr.as_ptr().is_null()),
+                );
             }
-            Object::Enum(enm) => {
-                if !enm.owner.as_ptr().is_null() {
-                    worklist.push(enm.owner);
-                }
-            }
+            Object::Enum(enm) => trace_owner(&enm.owner, worklist),
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -904,39 +887,37 @@ impl BexHeap {
                     self.fixup_value(value, forwarding);
                 }
             }
-            Object::UnscheduledFuture(future) => {
-                if let Some(name_ptr) = &mut future.name
-                    && let Some(&new_ptr) = forwarding.get(name_ptr)
-                {
-                    *name_ptr = new_ptr;
-                }
-                if let Some(config_ptr) = &mut future.config
-                    && let Some(&new_ptr) = forwarding.get(config_ptr)
-                {
-                    *config_ptr = new_ptr;
-                }
-                if let Some(&new_ptr) = forwarding.get(&future.closure) {
-                    future.closure = new_ptr;
-                }
-            }
             Object::Package(package) => {
                 for ptr in package
                     .classes
                     .values_mut()
                     .chain(package.enums.values_mut())
                     .chain(package.interfaces.values_mut())
-                    .chain(package.functions.values_mut())
                     .chain(package.type_aliases.values_mut())
-                    .chain(package.mounted_types.values_mut())
+                    .chain(package.edges.values_mut().map(|edge| &mut edge.target))
                 {
                     if let Some(&new_ptr) = forwarding.get(ptr) {
                         *ptr = new_ptr;
                     }
                 }
-                if let Some(ptr) = &mut package.test_init
-                    && let Some(&new_ptr) = forwarding.get(ptr)
-                {
-                    *ptr = new_ptr;
+                for ptr in package.init.iter_mut().chain(package.test_init.iter_mut()) {
+                    if let Some(&new_ptr) = forwarding.get(ptr) {
+                        *ptr = new_ptr;
+                    }
+                }
+                if let Slots::Own { cells, .. } = &package.slots {
+                    for slot in cells.iter() {
+                        let mut value = slot.load();
+                        self.fixup_value(&mut value, forwarding);
+                        slot.store(value);
+                    }
+                }
+                if let Objects::Own(objects) = &mut package.objects {
+                    for ptr in objects.iter_mut() {
+                        if let Some(&new_ptr) = forwarding.get(ptr) {
+                            *ptr = new_ptr;
+                        }
+                    }
                 }
                 let old_rules = std::mem::take(&mut package.impl_rules);
                 package.impl_rules = old_rules
@@ -950,54 +931,6 @@ impl BexHeap {
                         (interface, rules)
                     })
                     .collect();
-                match &mut package.kind {
-                    PackageKind::Static => {}
-                    PackageKind::Runtime(runtime) | PackageKind::Session { runtime, .. } => {
-                        for ptr in runtime.objects.iter_mut() {
-                            if let Some(&new_ptr) = forwarding.get(ptr) {
-                                *ptr = new_ptr;
-                            }
-                        }
-                        for ptr in runtime.object_names.values_mut() {
-                            if let Some(&new_ptr) = forwarding.get(ptr) {
-                                *ptr = new_ptr;
-                            }
-                        }
-                        // Keyed by the declaration each value names, so the keys
-                        // move too — rebuilt through the forwarding map rather than
-                        // mutated in place, as `impl_rules` above is.
-                        let old_type_values = std::mem::take(&mut runtime.type_values);
-                        runtime.type_values = old_type_values
-                            .into_iter()
-                            .map(|(declaration, value)| {
-                                (
-                                    forwarding.get(&declaration).copied().unwrap_or(declaration),
-                                    forwarding.get(&value).copied().unwrap_or(value),
-                                )
-                            })
-                            .collect();
-                        for ptr in runtime.dependencies.iter_mut() {
-                            if let Some(&new_ptr) = forwarding.get(ptr) {
-                                *ptr = new_ptr;
-                            }
-                        }
-                        for ptr in runtime.dependency_names.values_mut() {
-                            if let Some(&new_ptr) = forwarding.get(ptr) {
-                                *ptr = new_ptr;
-                            }
-                        }
-                        if let Some(ptr) = &mut runtime.init
-                            && let Some(&new_ptr) = forwarding.get(ptr)
-                        {
-                            *ptr = new_ptr;
-                        }
-                        for slot in &runtime.globals {
-                            let mut value = slot.load();
-                            self.fixup_value(&mut value, forwarding);
-                            slot.store(value);
-                        }
-                    }
-                }
             }
             Object::Function(function) => {
                 if let Some(&new_ptr) = forwarding.get(&function.runtime_package) {
@@ -1017,15 +950,14 @@ impl BexHeap {
             // Owner back-edges; heads are repointed for every object kind
             // below, by the same walk that traced them.
             Object::Class(class) => {
-                if let Some(&new_ptr) = forwarding.get(&class.owner) {
-                    class.owner = new_ptr;
+                forward_owner(&mut class.owner, forwarding);
+                for method in class.methods.values_mut() {
+                    if let Some(&new_ptr) = forwarding.get(&method.function_ptr) {
+                        method.function_ptr = new_ptr;
+                    }
                 }
             }
-            Object::Enum(enm) => {
-                if let Some(&new_ptr) = forwarding.get(&enm.owner) {
-                    enm.owner = new_ptr;
-                }
-            }
+            Object::Enum(enm) => forward_owner(&mut enm.owner, forwarding),
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -1310,30 +1242,14 @@ impl BexHeap {
                     worklist.push(ptr);
                 }
             }
-            Object::UnscheduledFuture(future) => {
-                if let Some(name_ptr) = future.name
-                    && self.generation_of(name_ptr).is_young()
-                {
-                    worklist.push(name_ptr);
-                }
-                if let Some(config_ptr) = future.config
-                    && self.generation_of(config_ptr).is_young()
-                {
-                    worklist.push(config_ptr);
-                }
-                if self.generation_of(future.closure).is_young() {
-                    worklist.push(future.closure);
-                }
-            }
             Object::Package(package) => {
                 let refs = package
                     .classes
                     .values()
                     .chain(package.enums.values())
                     .chain(package.interfaces.values())
-                    .chain(package.functions.values())
                     .chain(package.type_aliases.values())
-                    .chain(package.mounted_types.values())
+                    .chain(package.edges.values().map(|edge| &edge.target))
                     .copied();
                 worklist.extend(refs.filter(|ptr| self.generation_of(*ptr).is_young()));
                 worklist.extend(
@@ -1345,38 +1261,28 @@ impl BexHeap {
                         })
                         .filter(|ptr| self.generation_of(*ptr).is_young()),
                 );
-                if let Some(ptr) = package.test_init
-                    && self.generation_of(ptr).is_young()
-                {
-                    worklist.push(ptr);
+                worklist.extend(
+                    package
+                        .init
+                        .into_iter()
+                        .chain(package.test_init)
+                        .filter(|ptr| self.generation_of(*ptr).is_young()),
+                );
+                if let Slots::Own { cells, .. } = &package.slots {
+                    worklist.extend(
+                        cells
+                            .iter()
+                            .filter_map(|slot| slot.load().as_object_ptr())
+                            .filter(|ptr| self.generation_of(*ptr).is_young()),
+                    );
                 }
-                match &package.kind {
-                    PackageKind::Static => {}
-                    PackageKind::Runtime(runtime) | PackageKind::Session { runtime, .. } => {
-                        worklist.extend(
-                            runtime
-                                .objects
-                                .iter()
-                                .chain(runtime.object_names.values())
-                                .chain(runtime.type_values.values())
-                                .chain(runtime.dependencies.iter())
-                                .chain(runtime.dependency_names.values())
-                                .copied()
-                                .filter(|ptr| self.generation_of(*ptr).is_young()),
-                        );
-                        if let Some(ptr) = runtime.init
-                            && self.generation_of(ptr).is_young()
-                        {
-                            worklist.push(ptr);
-                        }
-                        worklist.extend(
-                            runtime
-                                .globals
-                                .iter()
-                                .filter_map(|slot| slot.load().as_object_ptr())
-                                .filter(|ptr| self.generation_of(*ptr).is_young()),
-                        );
-                    }
+                if let Objects::Own(objects) = &package.objects {
+                    worklist.extend(
+                        objects
+                            .iter()
+                            .copied()
+                            .filter(|ptr| self.generation_of(*ptr).is_young()),
+                    );
                 }
             }
             Object::Function(function) => {
@@ -1405,14 +1311,23 @@ impl BexHeap {
             }
             // Owner back-edges; heads are scanned for every object kind below.
             Object::Class(class) => {
-                if !class.owner.as_ptr().is_null() && self.generation_of(class.owner).is_young() {
-                    worklist.push(class.owner);
-                }
+                worklist.extend(
+                    owner_edges(&class.owner).filter(|ptr| self.generation_of(*ptr).is_young()),
+                );
+                worklist.extend(
+                    class
+                        .methods
+                        .values()
+                        .map(|method| method.function_ptr)
+                        .filter(|ptr| {
+                            !ptr.as_ptr().is_null() && self.generation_of(*ptr).is_young()
+                        }),
+                );
             }
             Object::Enum(enm) => {
-                if !enm.owner.as_ptr().is_null() && self.generation_of(enm.owner).is_young() {
-                    worklist.push(enm.owner);
-                }
+                worklist.extend(
+                    owner_edges(&enm.owner).filter(|ptr| self.generation_of(*ptr).is_young()),
+                );
             }
             // Primitives/leaf variants have no heap references.
             #[cfg(feature = "heap_debug")]
@@ -1686,6 +1601,32 @@ impl BexHeap {
     }
 }
 
+/// The heap edges a declaration's [`Owner`](bex_vm_types::types::Owner)
+/// carries: its package, or the witness rules an anonymous declaration holds.
+fn owner_edges(owner: &bex_vm_types::types::Owner) -> impl Iterator<Item = HeapPtr> + '_ {
+    match owner {
+        bex_vm_types::types::Owner::Package(package) => std::slice::from_ref(package).iter(),
+        bex_vm_types::types::Owner::Anonymous { witnesses } => witnesses.iter(),
+    }
+    .copied()
+}
+
+fn trace_owner(owner: &bex_vm_types::types::Owner, worklist: &mut Vec<HeapPtr>) {
+    worklist.extend(owner_edges(owner));
+}
+
+fn forward_owner(owner: &mut bex_vm_types::types::Owner, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    let edges: &mut dyn Iterator<Item = &mut HeapPtr> = match owner {
+        bex_vm_types::types::Owner::Package(package) => &mut std::iter::once(package),
+        bex_vm_types::types::Owner::Anonymous { witnesses } => &mut witnesses.iter_mut(),
+    };
+    for ptr in edges {
+        if let Some(&new_ptr) = forwarding.get(ptr) {
+            *ptr = new_ptr;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -1835,7 +1776,7 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         }))];
         let debug = HeapDebuggerConfig {
             enabled: true,
@@ -1887,8 +1828,9 @@ mod tests {
             stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(100),
             has_cleanup: false,
+            methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         }))];
         let debug = HeapDebuggerConfig {
             enabled: true,
@@ -2506,8 +2448,9 @@ mod tests {
             stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(0),
             has_cleanup: false,
+            methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let field_str = tlab.alloc_string("field_value".to_string());
         let inst_ptr =
@@ -2550,7 +2493,7 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let var_ptr = tlab.alloc_variant(enum_ptr, 1);
 
@@ -2640,32 +2583,6 @@ mod tests {
             panic!("not cell")
         };
         assert_eq!(c.load(), Value::int(42));
-    }
-
-    #[test]
-    fn test_gc_traces_unscheduled_spawn_closure() {
-        use bex_vm_types::UnscheduledFuture;
-
-        let heap = BexHeap::new(vec![]);
-        let mut tlab = Tlab::new(Arc::clone(&heap));
-
-        // The closure pointer is just a dummy String for tracing
-        // purposes — the GC only needs a valid HeapPtr to walk.
-        let closure = tlab.alloc_string("closure-stand-in".to_string());
-        let name = tlab.alloc_string("spawn-name".to_string());
-        let future_ptr = tlab.alloc(Object::UnscheduledFuture(Box::new(UnscheduledFuture {
-            closure,
-            name: Some(name),
-            config: None,
-            returns: RealizedTy::int(),
-            throws: RealizedTy::never(),
-        })));
-
-        let roots = vec![future_ptr];
-        let (stats, _new_roots, _) = unsafe { heap.collect_garbage(&roots) };
-
-        // future + closure + name
-        assert_eq!(stats.live_count, 3);
     }
 
     #[test]
@@ -2780,8 +2697,9 @@ mod tests {
             stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(42),
             has_cleanup: false,
+            methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
@@ -2807,7 +2725,7 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
@@ -2858,7 +2776,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             type_tag,
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let type_ptr = tlab.alloc_type(TypeValue::new(RealizedTy::Enum(TypeHead::new(
             enum_ptr, type_tag,
@@ -2922,8 +2840,9 @@ mod tests {
             stream_done: false,
             type_tag,
             has_cleanup: false,
+            methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let type_ptr = tlab.alloc_type(TypeValue::new(RealizedTy::Class(
             TypeHead::new(class_ptr, type_tag),
@@ -3296,7 +3215,7 @@ mod tests {
     fn test_tracing_and_fixup_consistency_all_variants() {
         use baml_type::{Name, TypeName};
         use bex_vm_types::{
-            Class, Enum, UnscheduledFuture,
+            Class, Enum,
             types::{Cell, Closure, Instance, Variant},
         };
 
@@ -3309,7 +3228,6 @@ mod tests {
         let leaf_for_map = tlab.alloc_string("in_map".to_string());
         let leaf_for_closure_cap = tlab.alloc_string("closure_cap".to_string());
         let leaf_for_cell = tlab.alloc_string("cell_value".to_string());
-        let leaf_for_future = tlab.alloc_string("future_arg".to_string());
 
         // A function stand-in (Class acts as a leaf here, needed by Closure).
         let leaf_func = tlab.alloc_string("func_placeholder".to_string());
@@ -3339,17 +3257,6 @@ mod tests {
         // --- Container: Object::Cell ---
         let cell_container = tlab.alloc(Object::Cell(Cell::new(Value::object(leaf_for_cell))));
 
-        // --- Container: Object::UnscheduledFuture ---
-        // After BEP-034 phase D′ the spawn case is all that's left;
-        // the closure pointer stands in as the traced HeapPtr.
-        let future_container = tlab.alloc(Object::UnscheduledFuture(Box::new(UnscheduledFuture {
-            closure: leaf_for_future,
-            name: None,
-            config: None,
-            returns: RealizedTy::int(),
-            throws: RealizedTy::never(),
-        })));
-
         // --- Container: Object::Instance ---
         // Instance requires a class pointer.
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
@@ -3362,8 +3269,9 @@ mod tests {
             stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(0),
             has_cleanup: false,
+            methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let instance_container = tlab.alloc(Object::Instance(Instance::new(
             class_ptr,
@@ -3380,7 +3288,7 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let variant_container = tlab.alloc(Object::Variant(Variant {
             enm: enum_ptr,
@@ -3394,7 +3302,6 @@ mod tests {
             map_container,
             closure_container,
             cell_container,
-            future_container,
             instance_container,
             variant_container,
         ];
@@ -3402,11 +3309,11 @@ mod tests {
         let (stats, new_roots, _fwd) = unsafe { heap.collect_garbage(&roots) };
 
         // All transitively reachable objects must survive.
-        // Containers: Array, Map, Closure, Cell, Future, Instance, Variant = 7
+        // Containers: Array, Map, Closure, Cell, Instance, Variant = 6
         // Leaves referenced by containers (some shared):
         //   leaf_for_array, leaf_for_map, leaf_for_closure_cap, leaf_func,
-        //   leaf_for_cell, leaf_for_future, leaf_string, class_ptr, enum_ptr = 9
-        // Total = 7 + 9 = 16, but >= 11 is the conservative bound.
+        //   leaf_for_cell, leaf_string, class_ptr, enum_ptr = 8
+        // Total = 6 + 8 = 14, but >= 11 is the conservative bound.
         assert!(
             stats.live_count >= 11,
             "expected at least 11 live objects; got {}",
@@ -3463,19 +3370,9 @@ mod tests {
         };
         assert_eq!(s, "cell_value");
 
-        // Future: closure HeapPtr should be the (forwarded) leaf string
-        // we used as a stand-in for the spawn-body closure.
-        let Object::UnscheduledFuture(pending) = (unsafe { new_roots[4].get() }) else {
-            panic!("new_roots[4] not UnscheduledFuture")
-        };
-        let Object::String(s) = (unsafe { pending.closure.get() }) else {
-            panic!("future closure leaf not String")
-        };
-        assert_eq!(s, "future_arg");
-
         // Instance: fields[0] should be the (forwarded) leaf string.
-        let Object::Instance(inst) = (unsafe { new_roots[5].get() }) else {
-            panic!("new_roots[5] not Instance")
+        let Object::Instance(inst) = (unsafe { new_roots[4].get() }) else {
+            panic!("new_roots[4] not Instance")
         };
         let Some(inst_leaf) = inst.fields.first().and_then(|v| v.load().as_object_ptr()) else {
             panic!("instance.fields[0] not Object")
@@ -3486,8 +3383,8 @@ mod tests {
         assert_eq!(s, "leaf_string");
 
         // Variant: enm should be a valid Enum.
-        let Object::Variant(var) = (unsafe { new_roots[6].get() }) else {
-            panic!("new_roots[6] not Variant")
+        let Object::Variant(var) = (unsafe { new_roots[5].get() }) else {
+            panic!("new_roots[5] not Variant")
         };
         let Object::Enum(e) = (unsafe { var.enm.get() }) else {
             panic!("variant.enm not Enum")

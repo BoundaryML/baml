@@ -255,6 +255,12 @@ class Agent {
             if let rt: int = u.reasoning_tokens {
                 total.reasoning_tokens = (total.reasoning_tokens ?? 0) + rt;
             }
+            if let cw: int = u.cache_write_input_tokens {
+                total.cache_write_input_tokens = (total.cache_write_input_tokens ?? 0) + cw;
+            }
+            if let ui: int = u.uncached_input_tokens {
+                total.uncached_input_tokens = (total.uncached_input_tokens ?? 0) + ui;
+            }
         }
         // every attempt commits: the journal is the complete record
         let batch: root.events.Event[] = [root.events.AssistantMessage { content: turn.content, client_id: c.id() }];
@@ -340,6 +346,8 @@ class Agent {
                 output_tokens: 0,
                 cached_input_tokens: null,
                 reasoning_tokens: null,
+                cache_write_input_tokens: null,
+                uncached_input_tokens: null,
             };
             // the futility breaker: identical repeated failures stop the run
             let fail_counts: map<string, int> = {};

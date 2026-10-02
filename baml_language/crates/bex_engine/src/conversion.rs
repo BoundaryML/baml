@@ -106,39 +106,23 @@ enum InboundDeclarationKind {
     Enum,
 }
 
-/// The host proxy kind for a live stdlib capability.
-///
-/// A declaration's display name is never an identity: in particular,
-/// `user.ai.FunctionSpec` displays as `ai.FunctionSpec`, and a runtime package
-/// may compile that same local spelling again under a fresh head. Trust only
-/// the exact stdlib declaration spelling together with the content-addressed
-/// tag emitted for that spelling. Runtime-created heads are rejected by the
-/// tag check before their name is inspected.
+/// The host proxy kind for a live stdlib capability: the class IS the
+/// stdlib's own declaration, by identity. A declaration's display name is
+/// never an identity — a user package spelled `ai`, or a runtime package
+/// compiling the same local spelling under a fresh head, renders the same
+/// name — so nothing here reads one.
 fn trusted_stdlib_capability_kind(
+    stdlib_heads: &bex_vm::package_load::StdlibHeads,
     class: &bex_vm_types::Class,
 ) -> Option<bex_external_types::TaggedHeapHandleKind> {
-    if class.type_tag.is_dynamic() {
-        return None;
-    }
-
-    let name = class.name.declared()?;
-    let (qualified_name, kind) = match (
-        name.package().as_str(),
-        name.namespace().as_slice(),
-        name.name().as_str(),
-    ) {
-        ("ai", [], "FunctionSpec") => (
-            baml_type::qualified_name::AI_FUNCTION_SPEC,
-            bex_external_types::TaggedHeapHandleKind::FunctionSpec,
-        ),
-        ("ai", [namespace], "Stream") if namespace.as_str() == "stream" => (
-            baml_type::qualified_name::AI_STREAM_STREAM,
-            bex_external_types::TaggedHeapHandleKind::Stream,
-        ),
-        _ => return None,
-    };
-
-    (class.type_tag == baml_type::typetag::TypeTag::of_head(qualified_name)).then_some(kind)
+    Some(match stdlib_heads.capability(class.type_tag)? {
+        bex_vm::package_load::StdlibCapability::FunctionSpec => {
+            bex_external_types::TaggedHeapHandleKind::FunctionSpec
+        }
+        bex_vm::package_load::StdlibCapability::Stream => {
+            bex_external_types::TaggedHeapHandleKind::Stream
+        }
+    })
 }
 
 #[derive(Clone, Copy)]
@@ -327,11 +311,10 @@ fn portable_type_def(
         .iter()
         .chain(&enum_ptrs)
         .filter_map(|ptr| match unsafe { ptr.get() } {
-            Object::Class(class) => Some(class.owner),
-            Object::Enum(enm) => Some(enm.owner),
+            Object::Class(class) => class.owner.package(),
+            Object::Enum(enm) => enm.owner.package(),
             _ => None,
         })
-        .filter(|owner| !owner.is_null())
         .collect::<Vec<_>>();
     owners.dedup();
     for owner in owners {
@@ -708,7 +691,7 @@ impl BexEngine {
                 // selects the host proxy; the wire `ty` is annotation-only.
                 // Method generic substitution must recover the instance's
                 // TypeHead/class_type_args after resolving this handle.
-                let capability_kind = trusted_stdlib_capability_kind(class);
+                let capability_kind = trusted_stdlib_capability_kind(&self.stdlib_heads, class);
                 if let Some(kind) = capability_kind {
                     let handle = self.heap.create_handle(ptr);
                     let ty = RuntimeTy::Class(
@@ -871,9 +854,6 @@ impl BexEngine {
             }),
             Object::Future(_) => Err(EngineError::CannotConvert {
                 type_name: "future".to_string(),
-            }),
-            Object::UnscheduledFuture(_) => Err(EngineError::CannotConvert {
-                type_name: "unscheduled_future".to_string(),
             }),
             Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
             // Identity never crosses as *data* (BEP-066 H-4): no mint, digest
@@ -4092,7 +4072,6 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                 | Object::Class(_)
                 | Object::Enum(_)
                 | Object::Future(_)
-                | Object::UnscheduledFuture(_)
                 | Object::RustData(_)
                 | Object::Type(_) => None,
                 #[cfg(feature = "heap_debug")]
@@ -5594,7 +5573,7 @@ mod union_container_selection_tests {
             alias: None,
             docstring: None,
             other: indexmap::IndexMap::new(),
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"));
         let broad = RuntimeTy::Enum(mood);
@@ -5630,8 +5609,9 @@ mod union_container_selection_tests {
                 stream_done: false,
                 type_tag,
                 has_cleanup: false,
+                methods: indexmap::IndexMap::new(),
                 generic_param_count: 0,
-                owner: bex_vm_types::HeapPtr::null(),
+                owner: bex_vm_types::types::Owner::anonymous(),
             })))
         }
 
@@ -5648,7 +5628,7 @@ mod union_container_selection_tests {
         let done_class = alloc_class(
             &mut tlab,
             DeclarationName::Declared(done_name.clone()),
-            baml_type::typetag::TypeTag::of_head(&done_name.render_dotted(false)),
+            baml_type::typetag::TypeTag::of_static_index(0),
         );
         let done_value = Value::object(tlab.alloc_instance(done_class, Vec::new()));
 

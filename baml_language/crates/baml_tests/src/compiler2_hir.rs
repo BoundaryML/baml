@@ -2162,6 +2162,57 @@ function foo(user: User) -> string {
         );
     }
 
+    /// A `//baml:` directive between an item's `///` doc and its declaration
+    /// is part of the declaration, not a comment: the doc stays attached.
+    /// Every documented native in the stdlib has this shape (`/// …`, then
+    /// `//baml:mut_self`, then `function push(…)`). An ordinary `// …` line
+    /// there still detaches the doc.
+    #[test]
+    fn a_directive_between_doc_and_declaration_keeps_the_doc() {
+        let mut db = make_db();
+        let src = r##"/// Directed.
+//baml:vm
+function directed(x: int) -> int { x }
+
+/// Before.
+//baml:vm
+/// After.
+function spanning(x: int) -> int { x }
+
+/// Detached.
+// an ordinary comment
+function detached(x: int) -> int { x }
+
+class Holder {
+  n int
+
+  /// The method's own doc.
+  //baml:mut_self
+  function method(self) -> int { 1 }
+}
+"##;
+        let file = db.file("directives.baml", src);
+        let doc = |loc| {
+            baml_compiler2_hir::item_data::function_data(&db, loc)
+                .docstring
+                .clone()
+        };
+
+        assert_eq!(
+            doc(find_function_loc(&db, file, "directed")).as_deref(),
+            Some("Directed.")
+        );
+        assert_eq!(
+            doc(find_function_loc(&db, file, "spanning")).as_deref(),
+            Some("Before.\nAfter.")
+        );
+        assert_eq!(doc(find_function_loc(&db, file, "detached")), None);
+        assert_eq!(
+            doc(find_method_loc(&db, file, "Holder", "method")).as_deref(),
+            Some("The method's own doc.")
+        );
+    }
+
     /// Every item kind's name span (and the config kinds' full spans) must
     /// slice to exactly the identifier written in source, and the docstrings
     /// added for type aliases and free `implements … for …` blocks must
@@ -2295,7 +2346,7 @@ function target() -> int { 1 }
 mod item_layer {
     use baml_artifact::ArtifactKind;
     use baml_base::Name;
-    use baml_compiler2_hir_ty::package_interface::PackageInterface;
+    use baml_compiler2_hir_ty::package_interface::WireInterface;
     use baml_db::ProjectDatabase;
 
     use crate::engine::TestDbExt;
@@ -2373,10 +2424,10 @@ mod item_layer {
         let interface = baml_compiler2_hir_ty::package_interface::export_interface(&db, package_id);
         let artifact = baml_artifact::encode(ArtifactKind::PackageInterface, &interface)
             .expect("package interface encodes");
-        let decoded: PackageInterface<baml_type::TypeName> =
+        let decoded: WireInterface =
             baml_artifact::decode(ArtifactKind::PackageInterface, &artifact)
                 .expect("current package interface decodes");
-        let declaration_order: Vec<_> = decoded.types[&Vec::<Name>::new()]
+        let declaration_order: Vec<_> = decoded.rows.types[&Vec::<Name>::new()]
             .keys()
             .map(Name::as_str)
             .collect();
@@ -2389,10 +2440,7 @@ mod item_layer {
         )
         .expect("legacy package interface envelope encodes");
         assert!(matches!(
-            baml_artifact::decode::<PackageInterface<baml_type::TypeName>>(
-                ArtifactKind::PackageInterface,
-                &legacy
-            ),
+            baml_artifact::decode::<WireInterface>(ArtifactKind::PackageInterface, &legacy),
             Err(baml_artifact::Error::Incompatible {
                 artifact_format: 1,
                 runtime_format: baml_artifact::FORMAT_VERSION,

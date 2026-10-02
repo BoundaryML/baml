@@ -28,6 +28,10 @@ pub type StructuredMessage = (String, Arc<PromptAstSimple>, serde_json::Value);
 pub enum PromptAstSimple {
     String(String),
     Media(std::sync::Arc<MediaValue>),
+    /// A `${cache(args)}` marker: everything before it is the prefix a
+    /// provider may cache. It carries the author's `args` untouched and holds
+    /// no text, so a client that does not send it loses nothing.
+    CacheDelimiter(serde_json::Value),
     Multiple(Vec<std::sync::Arc<PromptAstSimple>>),
 }
 
@@ -152,11 +156,13 @@ impl PromptAst {
 impl PromptAstSimple {
     /// Best-effort readable text for a content chunk. Strings render verbatim;
     /// media renders via its `Display` placeholder (e.g. `image::url(...)`);
+    /// a cache delimiter renders as nothing;
     /// `Multiple` concatenates its parts in document order.
     pub fn to_text(&self) -> String {
         match self {
             PromptAstSimple::String(s) => s.clone(),
             PromptAstSimple::Media(media) => media.to_string(),
+            PromptAstSimple::CacheDelimiter(_) => String::new(),
             PromptAstSimple::Multiple(items) => items.iter().map(|item| item.to_text()).collect(),
         }
     }
@@ -171,7 +177,9 @@ impl PromptAstSimple {
         let mut queue = VecDeque::from([self]);
         while let Some(current) = queue.pop_front() {
             match &*current {
-                PromptAstSimple::String(_) | PromptAstSimple::Media(_) => {
+                PromptAstSimple::String(_)
+                | PromptAstSimple::Media(_)
+                | PromptAstSimple::CacheDelimiter(_) => {
                     result.push(current);
                 }
                 PromptAstSimple::Multiple(multiple) => {
@@ -413,6 +421,23 @@ mod tests {
                 "render_text leaked Rust Debug noise {noise:?}: {rendered}"
             );
         }
+    }
+
+    #[test]
+    fn cache_delimiter_keeps_its_neighbours_apart_and_renders_as_nothing() {
+        let args = serde_json::json!({ "type": "default" });
+        let content = Arc::new(PromptAstSimple::Multiple(vec![
+            Arc::new(PromptAstSimple::String("stable".to_string())),
+            Arc::new(PromptAstSimple::CacheDelimiter(args.clone())),
+            Arc::new(PromptAstSimple::String(" suffix".to_string())),
+        ]))
+        .merge_adjacent();
+        let PromptAstSimple::Multiple(parts) = content.as_ref() else {
+            panic!("expected the delimiter to keep three parts, got {content:?}");
+        };
+        assert_eq!(parts.len(), 3);
+        assert_eq!(*parts[1], PromptAstSimple::CacheDelimiter(args));
+        assert_eq!(content.to_text(), "stable suffix");
     }
 
     #[test]

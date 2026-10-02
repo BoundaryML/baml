@@ -106,17 +106,10 @@ function credential_sources(cred: root.Credential?, canonical_env: string?) -> s
 
 /// Send, classify non-2xx via `ai.errors.classify_http`, decode the body as T.
 /// T = json-shaped envelope class; unknown fields are ignored by the decoder.
-/// A null or non-positive timeout preserves the transport's unbounded default.
-function send_as<T>(
-    req: baml.http.Request,
-    provider: string,
-    request_timeout_ms: int? = null,
-) -> T {
-    let timeout = match (request_timeout_ms) {
-        let milliseconds: int => baml.time.Duration.from_milliseconds(milliseconds),
-        null => null,
-    };
-    let resp = baml.http.send(req, timeout = timeout) catch_all (e) {
+/// The request runs under its own `timeout` and `connect_timeout` (see
+/// `baml.http.Request`); a client puts its `ai.LlmTimeoutOptions` there.
+function send_as<T>(req: baml.http.Request, provider: string) -> T {
+    let resp = baml.http.send(req) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw root.errors.NetworkFailure { status_code: null,
@@ -165,14 +158,9 @@ function send_as_with_wire<T>(
     provider: string,
     client_name: string,
     capture_wire: bool = true,
-    request_timeout_ms: int? = null,
 ) -> SentAs<T> {
     let started = baml.time.Instant.now();
-    let timeout = match (request_timeout_ms) {
-        let milliseconds: int => baml.time.Duration.from_milliseconds(milliseconds),
-        null => null,
-    };
-    let resp = baml.http.send(req, timeout = timeout) catch_all (e) {
+    let resp = baml.http.send(req) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw root.errors.NetworkFailure { status_code: null,
@@ -426,18 +414,115 @@ function merge_request_body(base: baml.json.json, overrides: baml.json.json?) ->
 /// A rendered prompt message's parts as content blocks: a `string` part is
 /// `Text`, a media part is `Media` with null provenance. The rendered prompt
 /// then lowers through the same path as the journal's turns.
+///
+/// A `root.CacheDelimiter` is dropped, and the text on either side of it is
+/// joined back into one `Text` block, so a client that lowers these blocks
+/// sends exactly what it would send for the same prompt without the
+/// `${cache(...)}`. A client whose wire has a cache marker lowers
+/// `prompt_parts(message)` instead.
 function prompt_blocks(message: root.PromptMessage) -> root.content.Block[] {
     let out: root.content.Block[] = [];
+    // True right after a dropped delimiter: text that follows continues the
+    // `Text` block before the delimiter rather than starting a new one.
+    let rejoin = false;
     for (let part in message.parts) {
         match (part) {
             let text: string => {
-                out.push(root.content.Text { text: text });
+                let joined = false;
+                if (rejoin) {
+                    if let last: root.content.Text = out.at(out.length() - 1) {
+                        last.text = `${last.text}${text}`;
+                        joined = true;
+                    }
+                }
+                if (!joined) {
+                    out.push(root.content.Text { text: text });
+                }
+                rejoin = false;
                 null
             },
             let media: root.MediaPart => {
                 out.push(
                     root.content.Media { media: media, provider_id: null, revised_prompt: null },
                 );
+                rejoin = false;
+                null
+            },
+            let delimiter: root.CacheDelimiter => {
+                rejoin = true;
+                null
+            },
+        };
+    }
+    out
+}
+
+/// A rendered prompt message's parts for a client that SENDS cache delimiters:
+/// the same parts as `message.parts`, with each delimiter made a clean
+/// boundary between two content blocks.
+///
+///   * Text directly before a delimiter is end-trimmed and text directly after
+///     one is start-trimmed, and a part left empty is dropped — the treatment
+///     text around a media part already gets. The marker sits between two
+///     blocks on the wire, so the whitespace that separated them in the
+///     template has no block to belong to.
+///   * A delimiter whose `args` is null is removed and the text around it is
+///     joined, untrimmed: there is nothing to send for it, so it is as if it
+///     had not been written.
+///
+/// What the caller does with a delimiter is its own business (a sibling block,
+/// a field on the block before); the positions and `args` are as written.
+function prompt_parts(message: root.PromptMessage) -> root.PromptPart[] {
+    let out: root.PromptPart[] = [];
+    // True right after a delimiter that is kept: the next text is start-trimmed.
+    let trim_next = false;
+    // True right after a delimiter that is removed: the next text continues
+    // the text before it.
+    let rejoin = false;
+    for (let part in message.parts) {
+        match (part) {
+            let text: string => {
+                let piece = if (trim_next) {
+                    text.trim_start()
+                } else {
+                    text
+                };
+                let joined = false;
+                if (rejoin) {
+                    if let last: string = out.at(out.length() - 1) {
+                        let _ = out.pop();
+                        out.push(`${last}${piece}`);
+                        joined = true;
+                    }
+                }
+                if (!joined && piece != "") {
+                    out.push(piece);
+                }
+                trim_next = false;
+                rejoin = false;
+                null
+            },
+            let media: root.MediaPart => {
+                out.push(media);
+                trim_next = false;
+                rejoin = false;
+                null
+            },
+            let delimiter: root.CacheDelimiter => {
+                if (delimiter.args == null) {
+                    rejoin = !trim_next;
+                } else {
+                    if let last: string = out.at(out.length() - 1) {
+                        let _ = out.pop();
+                        let trimmed = last.trim_end();
+                        if (trimmed != "") {
+                            out.push(trimmed);
+                        }
+                    }
+                    out.push(delimiter);
+                    trim_next = true;
+                    rejoin = false;
+                }
                 null
             },
         };

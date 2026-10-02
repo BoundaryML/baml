@@ -897,7 +897,7 @@ const spawnExpression: Rule = {
         },
         {
           key: 'spawn-with-clause',
-          scope: 'meta.spawn.options.baml',
+          scope: 'meta.spawn.modifiers.baml',
           begin: String.raw`\b(with)\b`,
           beginCaptures: {
             '1': { scope: 'keyword.operator.with.baml' },

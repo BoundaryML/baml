@@ -6,16 +6,17 @@ use std::{
     rc::Rc,
     sync::{
         Arc, Mutex, OnceLock, Weak,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 
 use bex_chunkedringbuffer::{
     ChunkPool, Config, Producer, SetupError, Stats, TransportFailed, WorkerSlot,
 };
-use btel_records::{SpanRecord, TimingRecord};
+use btel_records::{FutureErrorLink, FutureErrorLookup, SpanRecord, TimingRecord};
 use btel_snapshot::Snapshot;
 use btel_types::TelemetryId;
+use rustc_hash::FxHashMap;
 
 use crate::{NoSinkPublisher, Processor, Publisher};
 
@@ -73,6 +74,7 @@ struct Binding {
     // Silent invocations and chunk publication leave these unchanged.
     timing_thread: Option<TelemetryId>,
     span_thread: Option<TelemetryId>,
+    span_context: Option<btel_records::ContextReference>,
 }
 
 impl Drop for Binding {
@@ -101,6 +103,67 @@ pub struct TelemetryRuntime {
     pool: Pool,
     worker: Mutex<Option<std::thread::JoinHandle<()>>>,
     result: Arc<RuntimeStatus>,
+    /// The publisher asked for exception-path evidence. Fixed at startup.
+    error_evidence: bool,
+    /// Failed futures' escaping raises, shared by every VM of this engine.
+    /// Exception path only; see `FutureErrorLinks`.
+    future_errors: Mutex<FutureErrorLinks>,
+    /// Set when `finish` starts. A task that shutdown stopped waiting for can
+    /// still run afterwards; it then sees recording as disabled.
+    finished: AtomicBool,
+}
+
+/// Bounded, engine-scoped map from a failed future to the raise that failed
+/// it. Written before the future wakes its awaiters; reading never removes
+/// an entry, so every await of that future finds it. The oldest entry is
+/// evicted when full; a lookup that misses an evicted future says so.
+pub struct FutureErrorLinks {
+    links: FxHashMap<u64, FutureErrorLink>,
+    order: std::collections::VecDeque<u64>,
+    capacity: usize,
+    /// Highest evicted future key; misses at or below it may be evictions.
+    evicted_through: Option<u64>,
+}
+
+impl FutureErrorLinks {
+    pub fn new(capacity: usize) -> Self {
+        Self {
+            links: FxHashMap::default(),
+            order: std::collections::VecDeque::new(),
+            capacity: capacity.max(1),
+            evicted_through: None,
+        }
+    }
+
+    pub fn insert(&mut self, future: u64, link: FutureErrorLink) {
+        if self.links.insert(future, link).is_some() {
+            return;
+        }
+        self.order.push_back(future);
+        while self.order.len() > self.capacity {
+            let evicted = self.order.pop_front().expect("over capacity");
+            self.links.remove(&evicted);
+            self.evicted_through = Some(self.evicted_through.map_or(evicted, |e| e.max(evicted)));
+        }
+    }
+
+    pub fn get(&self, future: u64) -> FutureErrorLookup {
+        match self.links.get(&future) {
+            Some(link) => FutureErrorLookup::Found(*link),
+            None if self.evicted_through.is_some_and(|e| future <= e) => {
+                FutureErrorLookup::PossiblyEvicted
+            }
+            None => FutureErrorLookup::Missing,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.links.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.links.is_empty()
+    }
 }
 
 impl TelemetryRuntime {
@@ -161,10 +224,16 @@ impl TelemetryRuntime {
         let id = NEXT_RUNTIME
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
             .expect("telemetry runtime identity space exhausted");
-        let snapshots = btel_snapshot::SnapshotPool::new(
-            config.max_producers.get() + btel_settings::snapshot::MIN_SNAPSHOT_SLOTS,
-            btel_snapshot::Limits::default(),
-        );
+        // A producer can own a function's input and type-argument captures
+        // while acquiring its context capture.
+        let snapshot_slots = config
+            .max_producers
+            .get()
+            .checked_mul(3)
+            .and_then(|slots| slots.checked_add(btel_settings::snapshot::MIN_SNAPSHOT_SLOTS))
+            .ok_or_else(|| std::io::Error::other("snapshot slot count overflow"))?;
+        let snapshots =
+            btel_snapshot::SnapshotPool::new(snapshot_slots, btel_snapshot::Limits::default());
         let pool = Pool::new(config).map_err(|e| std::io::Error::other(format!("{e:?}")))?;
         let publisher = make(RecordingControl {
             pool: pool.clone(),
@@ -228,7 +297,38 @@ impl TelemetryRuntime {
             pool,
             worker: Mutex::new(Some(worker)),
             result,
+            error_evidence: P::ERROR_EVIDENCE,
+            future_errors: Mutex::new(FutureErrorLinks::new(
+                btel_settings::processor::FUTURE_ERROR_LINKS,
+            )),
+            finished: AtomicBool::new(false),
         }))
+    }
+
+    /// Whether producers should build exception-path evidence: the publisher
+    /// records it and recording has not been disabled.
+    #[inline]
+    pub fn wants_error_evidence(&self) -> bool {
+        self.error_evidence && !self.is_disabled()
+    }
+
+    /// Store a failed future's escaping raise. Exception path only.
+    pub fn link_future_error(&self, future: u64, link: FutureErrorLink) {
+        if !self.wants_error_evidence() {
+            return;
+        }
+        self.future_errors
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(future, link);
+    }
+
+    /// The raise that failed `future`, for a failed await. Never removes it.
+    pub fn future_error(&self, future: u64) -> FutureErrorLookup {
+        self.future_errors
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(future)
     }
 
     /// Bind on the current OS thread for a synchronous VM operation. The scope
@@ -259,7 +359,7 @@ impl TelemetryRuntime {
                 match self.pool.reserve_worker() {
                     Ok(worker) => break worker,
                     Err(SetupError::ProducerLimit) => std::hint::spin_loop(),
-                    Err(SetupError::Disabled) => return false,
+                    Err(SetupError::Disabled | SetupError::Closed) => return false,
                     Err(_) => {
                         self.pool.fail();
                         std::panic::panic_any(TransportFailed);
@@ -278,6 +378,7 @@ impl TelemetryRuntime {
                 owner: Arc::downgrade(self),
                 timing_thread: None,
                 span_thread: None,
+                span_context: None,
             });
             true
         });
@@ -288,10 +389,12 @@ impl TelemetryRuntime {
         }
     }
 
+    /// `None` once admission has closed, like `Self::is_disabled`: a late task
+    /// that raced `finish` records nothing rather than failing the recording.
     fn bind_worker(&self, worker: &WorkerSlot) -> Option<Producer<TimingRecord, Span>> {
         match self.pool.bind_worker(worker) {
             Ok(producer) => Some(producer),
-            Err(SetupError::Disabled) => None,
+            Err(SetupError::Disabled | SetupError::Closed) => None,
             Err(_) => {
                 self.pool.fail();
                 std::panic::panic_any(TransportFailed);
@@ -302,7 +405,7 @@ impl TelemetryRuntime {
     /// Capture-only admission. Publish private records before waiting: they may
     /// own every available snapshot. Never hold a TLS borrow while spinning.
     pub fn acquire_snapshot(&self) -> Option<btel_snapshot::Builder> {
-        if self.pool.is_disabled() {
+        if self.is_disabled() {
             return None;
         }
         if let Some(builder) = self.snapshots.try_acquire() {
@@ -321,7 +424,7 @@ impl TelemetryRuntime {
             }
         });
         let result = loop {
-            if self.pool.is_disabled() {
+            if self.is_disabled() {
                 break None;
             }
             if self.pool.is_failed() {
@@ -345,8 +448,9 @@ impl TelemetryRuntime {
         self.snapshot_wait_nanos.load(Ordering::Relaxed)
     }
 
+    /// Recording was abandoned, or `finish` has started and a task is late.
     pub fn is_disabled(&self) -> bool {
-        self.pool.is_disabled()
+        self.pool.is_disabled() || self.finished.load(Ordering::Acquire)
     }
 
     #[inline]
@@ -376,27 +480,123 @@ impl TelemetryRuntime {
 
     #[inline]
     pub fn write_span(&self, thread: TelemetryId, record: Span) {
+        self.write_span_with_context(
+            thread,
+            btel_records::ContextReference::Unavailable,
+            None,
+            record,
+        );
+    }
+
+    /// Tiny chunks unable to hold the selector group still record observations,
+    /// but report unavailable context. True means the context was handed off.
+    pub fn write_span_with_context(
+        &self,
+        thread: TelemetryId,
+        context: btel_records::ContextReference,
+        mut snapshot: Option<btel_snapshot::Snapshot>,
+        record: Span,
+    ) -> bool {
         BINDINGS.with_borrow_mut(|bindings| {
             let Some(binding) = bindings.iter_mut().rev().find(|b| b.runtime == self.id) else {
                 assert!(
                     self.is_disabled(),
                     "telemetry emission outside execution scope"
                 );
-                return;
+                return false;
             };
             let Some(producer) = binding.producer.as_mut() else {
                 assert!(
                     self.is_disabled(),
                     "telemetry emission outside execution scope"
                 );
-                return;
+                return false;
             };
+            if producer.span_is_empty() || binding.span_thread != Some(thread) {
+                binding.span_context = None;
+            }
+            if !record.is_context_observation() && snapshot.is_none() {
+                use btel_records::ContextReference;
+
+                if binding.span_thread != Some(thread) {
+                    producer.write_span(SpanRecord::ThreadSelected { thread_id: thread });
+                    binding.span_thread = Some(thread);
+                }
+                match &record {
+                    SpanRecord::ContextSelected { captured_context } => {
+                        binding.span_context = Some(
+                            captured_context
+                                .as_ref()
+                                .map_or(ContextReference::Unavailable, |snapshot| {
+                                    ContextReference::Snapshot(snapshot.id())
+                                }),
+                        );
+                    }
+                    SpanRecord::ContextReferenced { id } => {
+                        binding.span_context = Some(ContextReference::Snapshot(*id));
+                    }
+                    SpanRecord::ContextCleared => {
+                        binding.span_context = Some(ContextReference::Empty);
+                    }
+                    _ => {}
+                }
+                producer.write_span(record);
+                return true;
+            }
+            let select_thread = binding.span_thread != Some(thread);
+            let select_context = snapshot.is_some()
+                || binding
+                    .span_context
+                    .is_some_and(|selected| selected != context)
+                || (binding.span_context.is_none()
+                    && context != btel_records::ContextReference::Unavailable);
+            let required = 1 + usize::from(select_thread) + usize::from(select_context);
+            if !producer.prepare_span_group(required) {
+                if select_thread {
+                    producer.write_span(SpanRecord::ThreadSelected { thread_id: thread });
+                    binding.span_thread = Some(thread);
+                }
+                producer.write_span(record);
+                binding.span_context = None;
+                return false;
+            }
+            let select_context = select_context
+                || (producer.span_is_empty()
+                    && context != btel_records::ContextReference::Unavailable);
+            assert!(
+                producer.prepare_span_group(
+                    1 + usize::from(select_thread) + usize::from(select_context)
+                ),
+                "a newly sealed chunk must fit the admitted selector group"
+            );
             if binding.span_thread != Some(thread) {
                 producer.write_span(SpanRecord::ThreadSelected { thread_id: thread });
                 binding.span_thread = Some(thread);
             }
+            if select_context {
+                use btel_records::ContextReference;
+                let marker = match context {
+                    ContextReference::Empty => SpanRecord::ContextCleared,
+                    ContextReference::Unavailable => SpanRecord::ContextSelected {
+                        captured_context: None,
+                    },
+                    ContextReference::Snapshot(id) => {
+                        if let Some(snapshot) = snapshot.take() {
+                            debug_assert_eq!(id, snapshot.id());
+                            SpanRecord::ContextSelected {
+                                captured_context: Some(snapshot),
+                            }
+                        } else {
+                            SpanRecord::ContextReferenced { id }
+                        }
+                    }
+                };
+                producer.write_span(marker);
+            }
+            binding.span_context = Some(context);
             producer.write_span(record);
-        });
+            true
+        })
     }
 
     /// Stop admission, drain published chunks, seal the publisher, and join.
@@ -404,6 +604,7 @@ impl TelemetryRuntime {
     /// permit on this thread. Blocking; async hosts should use `spawn_blocking`.
     /// Repeated/concurrent calls return the same terminal result.
     pub fn finish(&self) -> Result<(), RuntimeError> {
+        self.finished.store(true, Ordering::Release);
         self.pool.close_admission();
         let mut worker = self
             .worker
@@ -503,6 +704,9 @@ mod tests {
             pool: pool.clone(),
             worker: Mutex::new(None),
             result: Arc::new(RuntimeStatus::default()),
+            error_evidence: true,
+            future_errors: Mutex::new(FutureErrorLinks::new(4)),
+            finished: AtomicBool::new(false),
         });
         (runtime, pool)
     }
@@ -519,6 +723,7 @@ mod tests {
                     .unwrap()
                     .finish_args(0, btel_snapshot::Range::empty()),
             ),
+            captured_type_args: None,
         }
     }
 
@@ -596,6 +801,7 @@ mod tests {
                 call_path: btel_types::CallPathId::ROOT,
                 entered_at: btel_types::ClockInstant::from_ticks(1),
                 captured_inputs: None,
+                captured_type_args: None,
             },
         );
         std::thread::scope(|scope| {
@@ -622,6 +828,37 @@ mod tests {
     }
 
     #[test]
+    fn tasks_that_run_after_admission_closes_record_nothing() {
+        let (runtime, pool) = manual_runtime();
+        let id = allocate_telemetry_id();
+        std::thread::scope(|scope| {
+            // A thread that bound before shutdown and one that never did.
+            let (bound_tx, bound_rx) = std::sync::mpsc::channel();
+            let (closed_tx, closed_rx) = std::sync::mpsc::channel::<()>();
+            let runtime = &runtime;
+            let bound = scope.spawn(move || {
+                drop(runtime.enter());
+                bound_tx.send(()).unwrap();
+                closed_rx.recv().unwrap();
+                let late = runtime.enter();
+                assert!(!late.active);
+                runtime.write_span(id, SpanRecord::ThreadSelected { thread_id: id });
+            });
+            bound_rx.recv().unwrap();
+            // No worker here, so `finish` reports that; only admission matters.
+            let _ = runtime.finish();
+            closed_tx.send(()).unwrap();
+            bound.join().unwrap();
+            scope
+                .spawn(|| assert!(!runtime.enter().active))
+                .join()
+                .unwrap();
+        });
+        assert!(!pool.is_failed(), "a late task must not fail the recording");
+        assert_eq!(pool.stats().active_producers, 0);
+    }
+
+    #[test]
     fn selectors_follow_emitted_records_independently_per_stream() {
         use btel_types::{AwaitDuration, CallPathId, ClockInstant, InvocationOutcome};
         let (runtime, pool) = manual_runtime();
@@ -642,6 +879,7 @@ mod tests {
             call_path: CallPathId::ROOT,
             entered_at: ClockInstant::from_ticks(1),
             captured_inputs: None,
+            captured_type_args: None,
         };
         {
             let _poll = runtime.enter();
@@ -679,6 +917,7 @@ mod tests {
                         TimingRecord::FunctionTimingCompletion { .. } => {
                             timings.push(timing_current.expect("timing context"));
                         }
+                        TimingRecord::SysOpTime { .. } => unreachable!(),
                     }
                 }
             },
@@ -832,6 +1071,7 @@ mod tests {
                             .unwrap()
                             .finish_args(0, btel_snapshot::Range::empty()),
                     ),
+                    captured_type_args: None,
                 },
             );
             drop(nested);

@@ -45,8 +45,8 @@ pub(crate) struct Api {
         unsafe extern "C" fn(*const c_char, *const c_char) -> *const c_void,
     /// Returns a status buffer: empty on success, otherwise a UTF-8 error
     /// message. Read it with [`Api::take_status`].
-    pub(crate) initialize_runtime_from_bytecode: unsafe extern "C" fn(*const u8, usize) -> Buffer,
-    pub(crate) initialize_runtime_from_bytecode_with_metadata:
+    pub(crate) initialize_runtime_from_blob: unsafe extern "C" fn(*const u8, usize) -> Buffer,
+    pub(crate) initialize_runtime_from_blob_with_metadata:
         unsafe extern "C" fn(*const u8, usize, *const c_char) -> Buffer,
     pub(crate) register_callback: unsafe extern "C" fn(CallbackFn),
     pub(crate) new_function_call: unsafe extern "C" fn() -> u64,
@@ -139,7 +139,7 @@ struct BamlApiV1 {
     abi_version: u32,
     struct_size: usize,
     version: Option<unsafe extern "C" fn() -> Buffer>,
-    initialize_runtime_from_bytecode: Option<unsafe extern "C" fn(*const u8, usize) -> Buffer>,
+    initialize_runtime_from_blob: Option<unsafe extern "C" fn(*const u8, usize) -> Buffer>,
     free_buffer: Option<unsafe extern "C" fn(Buffer)>,
     register_callback: Option<unsafe extern "C" fn(CallbackFn)>,
     call_function: Option<unsafe extern "C" fn(*const u8, usize, u32)>,
@@ -166,7 +166,7 @@ struct BamlApiV1 {
     register_unhandled_spawn_error_callback:
         Option<unsafe extern "C" fn(extern "C" fn(*const c_char, usize, i32))>,
     shutdown_runtime: Option<unsafe extern "C" fn() -> Buffer>,
-    initialize_runtime_from_bytecode_with_metadata:
+    initialize_runtime_from_blob_with_metadata:
         Option<unsafe extern "C" fn(*const u8, usize, *const c_char) -> Buffer>,
 }
 
@@ -241,14 +241,14 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     }
 
     let version = required_slot(table.version, "version", &path)?;
-    let initialize_runtime_from_bytecode = required_slot(
-        table.initialize_runtime_from_bytecode,
-        "initialize_runtime_from_bytecode",
+    let initialize_runtime_from_blob = required_slot(
+        table.initialize_runtime_from_blob,
+        "initialize_runtime_from_blob",
         &path,
     )?;
-    let initialize_runtime_from_bytecode_with_metadata = required_slot(
-        table.initialize_runtime_from_bytecode_with_metadata,
-        "initialize_runtime_from_bytecode_with_metadata",
+    let initialize_runtime_from_blob_with_metadata = required_slot(
+        table.initialize_runtime_from_blob_with_metadata,
+        "initialize_runtime_from_blob_with_metadata",
         &path,
     )?;
     let free_buffer = required_slot(table.free_buffer, "free_buffer", &path)?;
@@ -287,8 +287,8 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     let api = Api {
         // Not part of BamlApiV1 (a legacy direct export); resolved directly.
         create_baml_runtime: sym(&library, b"create_baml_runtime\0")?,
-        initialize_runtime_from_bytecode,
-        initialize_runtime_from_bytecode_with_metadata,
+        initialize_runtime_from_blob,
+        initialize_runtime_from_blob_with_metadata,
         register_callback,
         new_function_call,
         call_function,

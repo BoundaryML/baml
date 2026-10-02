@@ -2,8 +2,9 @@
 //!
 //! Containers reserve five bytes for their protobuf length and backpatch by
 //! index, so Vec relocation is safe. Non-minimal varints preserve the protobuf
-//! schema; no whole-buffer shift or nested sizing pass is required. Current
-//! event bodies contain only bounded scalars, so their lengths fit one byte.
+//! schema; no whole-buffer shift or nested sizing pass is required. Span
+//! bodies have one-byte lengths; events with strings (logs, network spans)
+//! use a full container prefix.
 use std::mem::MaybeUninit;
 
 #[cfg(test)]
@@ -14,6 +15,9 @@ use prost::{Message, encoding::uint64};
 
 use crate::proto::span_event::Event;
 
+#[cfg(test)]
+mod context_tests;
+
 const VARINT_PAYLOAD_BITS: u32 = 7;
 const VARINT_CONTINUATION_BIT: u8 = 1 << VARINT_PAYLOAD_BITS;
 const VARINT_PAYLOAD_MASK: u8 = VARINT_CONTINUATION_BIT - 1;
@@ -23,8 +27,32 @@ pub(crate) struct EncodedSpans {
     bytes: Vec<u8>,
     thread: Option<TelemetryId>,
     section_length: usize,
+    context: Option<crate::proto::thread_section::Context>,
+    selected_context: Option<(TelemetryId, Option<crate::proto::thread_section::Context>)>,
+    required_minor: u32,
 }
 impl EncodedSpans {
+    pub(crate) fn select_context(
+        &mut self,
+        thread: TelemetryId,
+        context: Option<crate::proto::thread_section::Context>,
+    ) {
+        self.selected_context = Some((thread, context));
+        // The selector may own a CAS snapshot. Materialize its section now so
+        // capture pressure can seal and deliver it before the next observation.
+        if self.thread != Some(thread) || self.context != context {
+            self.select(thread, context);
+        }
+    }
+
+    pub(crate) fn begin_chunk(&mut self) {
+        self.selected_context = None;
+    }
+
+    pub(crate) fn format_minor(&self) -> u32 {
+        btel_settings::encoding::FORMAT_MINOR.max(self.required_minor)
+    }
+
     pub(crate) fn len(&self) -> usize {
         self.bytes.len()
     }
@@ -42,18 +70,50 @@ impl EncodedSpans {
 
     #[inline]
     pub(crate) fn event(&mut self, thread: TelemetryId, event: Event) {
-        if self.thread != Some(thread) {
-            self.select(thread);
+        if self
+            .selected_context
+            .is_some_and(|(selected, _)| selected != thread)
+        {
+            self.selected_context = None;
+        }
+        let context = self.selected_context.and_then(|(_, context)| context);
+        if self.thread != Some(thread) || self.context != context {
+            self.select(thread, context);
         }
         match event {
             Event::FunctionCompletion(m) => self.completion(4, &m),
             Event::LateFunctionCompletion(m) => self.completion(5, &m),
+            Event::Log(message) => {
+                self.require(btel_settings::encoding::LOG_FORMAT_MINOR);
+                self.variable(6, &message);
+            }
+            Event::NetworkAnnouncement(message) => {
+                self.require(btel_settings::encoding::NETWORK_FORMAT_MINOR);
+                self.variable(8, &message);
+            }
+            Event::NetworkEvent(message) => {
+                self.require(btel_settings::encoding::NETWORK_FORMAT_MINOR);
+                self.variable(9, &message);
+            }
             other => {
                 let length = begin(&mut self.bytes, 2, 1);
                 match other {
                     Event::ThreadAnnouncement(m) => leaf(&mut self.bytes, 1, &m),
                     Event::ThreadCompletion(m) => leaf(&mut self.bytes, 2, &m),
-                    Event::FunctionAnnouncement(m) => leaf(&mut self.bytes, 3, &m),
+                    Event::ThreadRunning(m) => {
+                        self.require(btel_settings::encoding::THREAD_RUNNING_FORMAT_MINOR);
+                        leaf(&mut self.bytes, 7, &m);
+                    }
+                    Event::FunctionAnnouncement(m) => {
+                        if m.type_args_cas_id.is_some() {
+                            self.require(btel_settings::encoding::TYPE_ARGS_FORMAT_MINOR);
+                        }
+                        leaf(&mut self.bytes, 3, &m);
+                    }
+                    Event::NetworkCompletion(m) => {
+                        self.require(btel_settings::encoding::NETWORK_FORMAT_MINOR);
+                        leaf(&mut self.bytes, 10, &m);
+                    }
                     _ => unreachable!(),
                 }
                 end_short(&mut self.bytes, length);
@@ -61,12 +121,24 @@ impl EncodedSpans {
         }
     }
 
+    fn require(&mut self, minor: u32) {
+        self.required_minor = self.required_minor.max(minor);
+    }
+
+    /// An event with strings, under a full-width length prefix.
+    fn variable<M: Message>(&mut self, tag: u32, message: &M) {
+        let length = begin(&mut self.bytes, 2, LENGTH_BYTES);
+        prost::encoding::message::encode(tag, message, &mut self.bytes);
+        end_container(&mut self.bytes, length);
+    }
+
     #[inline]
     #[allow(unsafe_code)]
     fn completion(&mut self, tag: u8, message: &crate::proto::FunctionCompletion) {
         // Maximum protobuf body: 3*(tag+10-byte varint), 3*(tag+fixed64),
         // one tag+5-byte uint32 = 66 bytes, plus two tag/length pairs = 70.
-        // Optional CAS message adds tag+length+2*(tag+fixed64) = 20 bytes.
+        // Optional CAS message adds tag+length+2*(tag+fixed64) = 20 bytes, and
+        // the panic flag tag+1 = 2 bytes.
         // Indexing stays checked; only publishing initialized bytes is unsafe.
         let start = self.bytes.len();
         let region = &mut self.bytes.spare_capacity_mut()[..MAX_COMPLETION_BYTES];
@@ -90,6 +162,7 @@ impl EncodedSpans {
             writer.fixed64(0x11, id.high);
             writer.region[prefix].write(u8::try_from(writer.len - prefix - 1).unwrap());
         }
+        writer.varint(0x48, u64::from(message.panicked));
         let length = writer.len;
         writer.region[1].write(u8::try_from(length - 2).expect("bounded completion"));
         writer.region[3].write(u8::try_from(length - 4).expect("bounded completion"));
@@ -100,7 +173,11 @@ impl EncodedSpans {
         }
     }
 
-    fn select(&mut self, thread: TelemetryId) {
+    fn select(
+        &mut self,
+        thread: TelemetryId,
+        context: Option<crate::proto::thread_section::Context>,
+    ) {
         if self.thread.is_some() {
             end_container(&mut self.bytes, self.section_length);
         } else {
@@ -109,7 +186,22 @@ impl EncodedSpans {
         }
         self.section_length = begin(&mut self.bytes, 1, LENGTH_BYTES);
         uint64::encode(1, &thread.get(), &mut self.bytes);
+        if let Some(context) = context {
+            use crate::proto::thread_section::Context;
+            match context {
+                Context::ContextCasId(id) => {
+                    prost::encoding::message::encode(3, &id, &mut self.bytes);
+                }
+                Context::EmptyContext(empty) => {
+                    prost::encoding::bool::encode(4, &empty, &mut self.bytes);
+                }
+            }
+            self.required_minor = self
+                .required_minor
+                .max(btel_settings::encoding::CONTEXT_FORMAT_MINOR);
+        }
         self.thread = Some(thread);
+        self.context = context;
     }
 
     pub(crate) fn finish(&mut self) -> Vec<u8> {
@@ -117,6 +209,7 @@ impl EncodedSpans {
             end_container(&mut self.bytes, self.section_length);
             end_container(&mut self.bytes, 1);
         }
+        self.required_minor = 0;
         std::mem::take(&mut self.bytes)
     }
 }
@@ -231,12 +324,14 @@ mod tests {
                 low: u64::MAX,
                 high: u64::MAX,
             }),
+            panicked: true,
         };
         let events = vec![
             Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
             Event::ThreadCompletion(proto::ThreadCompletion {
                 completed_at_ticks: u64::MAX,
-                outcome: proto::InvocationOutcome::Cancelled as i32,
+                outcome: proto::InvocationOutcome::Errored as i32,
+                panicked: true,
             }),
             Event::FunctionAnnouncement(proto::FunctionAnnouncement {
                 id: u64::MAX,
@@ -247,18 +342,54 @@ mod tests {
                     low: u64::MAX,
                     high: u64::MAX,
                 }),
+                type_args_cas_id: Some(proto::SnapshotId {
+                    low: u64::MAX,
+                    high: u64::MAX,
+                }),
             }),
             Event::FunctionCompletion(proto::FunctionCompletion {
                 completion_flags: 11,
                 ..completion
             }),
             Event::LateFunctionCompletion(completion),
+            // Network events' strings reserve their own bytes; the rest fits.
+            Event::NetworkAnnouncement(proto::NetworkAnnouncement {
+                id: u64::MAX,
+                parent_id: u64::MAX,
+                call_path_id: u32::MAX,
+                started_at_ticks: u64::MAX,
+                method: String::new(),
+                url: String::new(),
+                request_cas_id: Some(proto::SnapshotId {
+                    low: u64::MAX,
+                    high: u64::MAX,
+                }),
+            }),
+            Event::NetworkEvent(proto::NetworkEvent {
+                span_id: u64::MAX,
+                name: String::new(),
+                at_ticks: u64::MAX,
+                payload_cas_id: Some(proto::SnapshotId {
+                    low: u64::MAX,
+                    high: u64::MAX,
+                }),
+            }),
+            Event::NetworkCompletion(proto::NetworkCompletion {
+                span_id: u64::MAX,
+                completed_at_ticks: u64::MAX,
+                outcome: proto::InvocationOutcome::Errored as i32,
+                panicked: true,
+                error_cas_id: Some(proto::SnapshotId {
+                    low: u64::MAX,
+                    high: u64::MAX,
+                }),
+            }),
         ];
         let mut encoded = EncodedSpans::default();
         for event in &events {
             encoded.reserve(encoded.len() + MAX_EVENT_BYTES);
             let capacity = encoded.capacity();
-            encoded.event(thread, *event);
+            encoded.event(thread, event.clone());
             assert_eq!(
                 encoded.capacity(),
                 capacity,
@@ -277,6 +408,7 @@ mod tests {
             file.spans.unwrap().sections,
             vec![proto::ThreadSection {
                 thread_id: thread.get(),
+                context: None,
                 events: events
                     .into_iter()
                     .map(|event| proto::SpanEvent { event: Some(event) })
@@ -298,7 +430,7 @@ mod equivalence_tests {
             .into_iter()
             .chain((1..64).flat_map(|bit| [(1_u64 << bit) - 1, 1_u64 << bit]));
         for value in values {
-            for field in 0..10 {
+            for field in 0..11 {
                 let mut message = proto::FunctionCompletion::default();
                 match field {
                     0 => message.id = value,
@@ -320,6 +452,7 @@ mod equivalence_tests {
                             high: value,
                         });
                     }
+                    9 => message.panicked = value != 0,
                     _ => {
                         message.value_cas_id = Some(proto::SnapshotId {
                             low: value,
@@ -333,7 +466,10 @@ mod equivalence_tests {
                 ] {
                     let expected = crate::proto::ThreadSection {
                         thread_id: thread.get(),
-                        events: vec![crate::proto::SpanEvent { event: Some(event) }],
+                        context: None,
+                        events: vec![crate::proto::SpanEvent {
+                            event: Some(event.clone()),
+                        }],
                     }
                     .encode_to_vec();
                     let mut writer = EncodedSpans::default();

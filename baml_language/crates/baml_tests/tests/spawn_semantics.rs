@@ -84,7 +84,7 @@ async fn never_awaited_detached_spawn_error_does_not_replace_call_result() {
     let program = compile_source_with_opt(
         r#"
         function main() -> string {
-            let f = spawn with baml.spawn.options(detach = true) {
+            let f = spawn with baml.spawn.Root.new() {
                 throw baml.errors.Io { message: "boom" }
             };
             baml.sys.sleep(baml.time.Duration.from_milliseconds(250n));
@@ -120,7 +120,7 @@ async fn racing_never_awaited_spawn_error_does_not_replace_call_result() {
     assert_eq!(value, BexExternalValue::String("done".into()));
 }
 
-/// B-650 SDK-hang regression: a `detach = true` spawn that NEVER settles (an
+/// B-650 SDK-hang regression: a `Root` spawn that NEVER settles (an
 /// infinite sleep, standing in for the SDK's detached `server.serve(...)`) must
 /// NOT block the root's completion. A detached spawn is decoupled from its
 /// spawner and outlives the run, so root completion does not join it. Before
@@ -133,7 +133,7 @@ async fn detached_infinite_spawn_does_not_block_root_completion() {
     let program = compile_source_with_opt(
         r#"
         function main() -> string {
-            let f = spawn with baml.spawn.options(detach = true) {
+            let f = spawn with baml.spawn.Root.new() {
                 baml.sys.sleep(baml.time.Duration.from_milliseconds(600000n));
                 "never"
             };
@@ -186,7 +186,7 @@ async fn detached_delayed_throw_is_not_waited_and_root_returns_cleanly() {
     let program = compile_source_with_opt(
         r#"
         function main() -> string {
-            let f = spawn with baml.spawn.options(detach = true) {
+            let f = spawn with baml.spawn.Root.new() {
                 baml.sys.sleep(baml.time.Duration.from_milliseconds(200n));
                 throw baml.errors.Io { message: "boom" }
             };
@@ -220,7 +220,7 @@ async fn serve_then_fetch_then_cancel_does_not_hang() {
         function main() -> int {
             let server = baml.http.Server.bind("127.0.0.1:0");
             let task = spawn {
-                server.serve((req: baml.http.Request) -> baml.http.Response {
+                server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
                     baml.http.Response.new(503, { }, "down".to_utf8())
                 })
             };

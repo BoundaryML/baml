@@ -18,8 +18,8 @@
 
 use std::path::{Path, PathBuf};
 
-use baml_compiler2_emit::generate_project_bytecode;
-use baml_db::{ProjectDatabase, discover_baml_files};
+use baml_compiler2_emit::OptLevel;
+use baml_db::{ProjectDatabase, compile_program, discover_baml_files};
 use baml_tests::engine::TestDbExt;
 use divan::{Bencher, black_box};
 
@@ -72,7 +72,8 @@ fn compile(db: &ProjectDatabase) {
     let package = db
         .workspace_root()
         .unwrap_or_else(|| unreachable!("`build_db` adds one workspace root"));
-    let program = generate_project_bytecode(db, package).expect("benchmark compilation failed");
+    let program =
+        compile_program(db, package, OptLevel::Two).expect("benchmark compilation failed");
     black_box(program);
 }
 

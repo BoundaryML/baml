@@ -47,7 +47,7 @@ async fn unhandled_spawn_error_reaches_registered_bridge_callback() {
         )
         .await
         .unwrap();
-    bridge_cffi::shutdown_runtime().await.unwrap();
+    bridge_cffi::shutdown_runtime(None).await.unwrap();
 
     let reported = REPORTED.lock().unwrap();
     assert_eq!(reported.len(), 1);

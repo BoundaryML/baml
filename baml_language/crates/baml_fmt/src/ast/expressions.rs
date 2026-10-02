@@ -4108,8 +4108,13 @@ impl ObjectInitializer {
     /// Returns `None` if it can never be single-lined.
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
         // Name { field1: v1, field2: v2 }
-        let mut len = self.name.single_line_width(input)? + const { " {  }".len() };
         let (_, open_trailing) = input.trivia.get_for_range_split(self.open_brace.span());
+        let mut len = self.name.single_line_width(input)?
+            + if self.has_content(input) {
+                const { " {  }".len() }
+            } else {
+                const { " {}".len() }
+            };
         len += open_trailing.try_squished_len(input.input)?;
         for (i, (field, comma)) in self.fields.iter().enumerate() {
             let (fld_leading, fld_trailing) = input.trivia.get_for_element(field);
@@ -4147,10 +4152,15 @@ impl ObjectInitializer {
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the object initializer on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        // An empty literal renders as `Name {}`: the padding spaces surround
+        // members or an interior comment, and there is neither.
+        let has_content = self.has_content(printer);
         printer.print(&self.name, Shape::unlimited_single_line());
         printer.print_str(" ");
         printer.print_raw_token(&self.open_brace);
-        printer.print_str(" ");
+        if has_content {
+            printer.print_str(" ");
+        }
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_brace.span());
         printer.try_print_trivia_single_line_squished(open_trailing)?;
 
@@ -4188,7 +4198,9 @@ impl ObjectInitializer {
         }
         let (close_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
         printer.try_print_trivia_single_line_squished(close_leading)?;
-        printer.print_str(" ");
+        if has_content {
+            printer.print_str(" ");
+        }
         printer.print_raw_token(&self.close_brace);
 
         if printer.output.len() > shape.width {
@@ -4196,6 +4208,17 @@ impl ObjectInitializer {
         } else {
             Some(PrintInfo::default_single_line())
         }
+    }
+
+    /// Whether anything sits between the braces on a single line: a member,
+    /// or an interior comment (the only trivia that prints there). An empty
+    /// literal takes no interior padding, as an empty map does.
+    fn has_content(&self, input: &Printer<'_>) -> bool {
+        let (_, open_trailing) = input.trivia.get_for_range_split(self.open_brace.span());
+        let (close_leading, _) = input.trivia.get_for_range_split(self.close_brace.span());
+        !self.fields.is_empty()
+            || open_trailing.iter().any(EmittableTrivia::is_comment)
+            || close_leading.iter().any(EmittableTrivia::is_comment)
     }
 }
 
@@ -5318,7 +5341,7 @@ impl Printable for LambdaExpr {
 }
 
 /// The `with` options clause of a [`SpawnExpr`]: the keyword and its
-/// comma-separated expressions (in v1 a single `baml.spawn.options(...)`
+/// comma-separated expressions (each a `baml.spawn.Modifier` value
 /// call).
 pub type SpawnWithClause = (t::With, Vec<(Expression, Option<t::Comma>)>);
 
@@ -5560,7 +5583,7 @@ impl PrintMultiLine for SpawnExpr {
     /// opens right after it, closing at the outer indent.
     ///
     /// ```baml
-    /// spawn with baml.spawn.options(group = g) {
+    /// spawn with limit {
     ///     compute()
     /// }
     /// ```

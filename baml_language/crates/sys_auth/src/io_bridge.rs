@@ -159,12 +159,16 @@ impl BamlAuthIo {
             url: url.to_string(),
             headers: header_map,
             body,
+            timeout: None,
+            connect_timeout: None,
         };
         let resp = self
             .io
             .http__send(
                 request,
                 Arc::new(num_bigint::BigInt::from(CREDENTIAL_REQUEST_TIMEOUT_NANOS)),
+                // No separate connect limit: the total above bounds it.
+                Arc::new(num_bigint::BigInt::from(0)),
             )
             .await
             .map_err(|e| e.to_string())?;

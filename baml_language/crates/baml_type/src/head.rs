@@ -75,6 +75,19 @@ impl TaggedTypeName {
         Self { tag, name }
     }
 
+    /// A spelling with no identity yet: what a boundary that has only a name
+    /// (a host's wire type) hands the engine, which resolves it to a
+    /// declaration before anything compares it. Its tag is
+    /// [`UNKNOWN`](crate::typetag::UNKNOWN) — no head — so it must be
+    /// resolved, never used as a key.
+    #[must_use]
+    pub fn spelled(name: crate::TypeName) -> Self {
+        Self {
+            tag: crate::typetag::TypeTag::from_i64(crate::typetag::UNKNOWN),
+            name: crate::DeclarationName::Declared(name),
+        }
+    }
+
     /// This head's identity.
     #[must_use]
     pub fn tag(&self) -> crate::typetag::TypeTag {

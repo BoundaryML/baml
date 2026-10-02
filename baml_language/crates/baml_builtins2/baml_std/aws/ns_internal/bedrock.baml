@@ -19,12 +19,10 @@
 //      percent-encoded so an ARN or an inference-profile id stays one path
 //      segment (`/` -> %2F, `:` -> %3A).
 //
-// Streaming is deliberately absent: ConverseStream frames responses as binary
-// `application/vnd.amazon.eventstream`, which `baml.http.fetch_sse` cannot
-// consume. `root.BedrockClient` therefore does not implement
-// `ai.stream.StreamingClient`, and asking for a stream raises
-// `ai.errors.StreamingUnsupported`. sys_llm never streamed Bedrock either, so
-// this is zero regression (PLAN §6).
+// Streaming goes through ConverseStream (`/converse-stream`). Its
+// binary `application/vnd.amazon.eventstream` frames are decoded natively by
+// `baml.http.send_sse`, which surfaces each frame as an SSE event named by its
+// `:event-type` header, so the decoder below only sees JSON payloads.
 
 // ---------------------------------------------------------------------------
 // 1. Model-id path encoding
@@ -67,9 +65,15 @@ function encode_path_label(value: string) -> string {
     out.join("")
 }
 
-/// The Converse request path for a model id, inference-profile id, or ARN.
-function converse_model_path(model_id: string) -> string {
-    `/model/${encode_path_label(model_id)}/converse`
+/// The Converse request path for a model id, inference-profile id, or ARN;
+/// with `stream`, the ConverseStream path.
+function converse_model_path(model_id: string, stream: bool = false) -> string {
+    let action = if (stream) {
+        "converse-stream"
+    } else {
+        "converse"
+    };
+    `/model/${encode_path_label(model_id)}/${action}`
 }
 
 // ---------------------------------------------------------------------------
@@ -124,6 +128,13 @@ class CachePointBlock {
     type: string,
 }
 
+/// (internal) The checkpoint the client's own `cache_system_prompt` option
+/// places, as the JSON a content block's `cachePoint` member carries.
+function _default_cache_point() -> baml.json.json {
+    let point: baml.json.json = { "type": "default" };
+    point
+}
+
 class ToolUseBlock {
     toolUseId: string,
     name: string,
@@ -149,7 +160,9 @@ class ContentBlock {
     audio: AudioBlock?,
     toolUse: ToolUseBlock?,
     toolResult: ToolResultBlock?,
-    cachePoint: CachePointBlock?,
+    // `baml.json.json`, not `CachePointBlock`: a `${cache(args)}` in the
+    // prompt supplies this value and it goes on the wire as written.
+    cachePoint: baml.json.json?,
 
     function of_text(text: string) -> ContentBlock {
         ContentBlock { ..._empty_content_block(), text: text }
@@ -180,7 +193,12 @@ class ContentBlock {
     }
 
     function of_cache_point() -> ContentBlock {
-        ContentBlock { ..._empty_content_block(), cachePoint: CachePointBlock { type: "default" } }
+        ContentBlock.of_cache_delimiter(_default_cache_point())
+    }
+
+    /// A `cachePoint` block carrying `args` exactly as the prompt wrote it.
+    function of_cache_delimiter(args: baml.json.json) -> ContentBlock {
+        ContentBlock { ..._empty_content_block(), cachePoint: args }
     }
 }
 
@@ -202,14 +220,20 @@ function _empty_content_block() -> ContentBlock {
 /// `build_request/bedrock.rs:174-176`.
 class SystemContentBlock {
     text: string?,
-    cachePoint: CachePointBlock?,
+    // See `ContentBlock.cachePoint`.
+    cachePoint: baml.json.json?,
 
     function of_text(text: string) -> SystemContentBlock {
         SystemContentBlock { text: text, cachePoint: null }
     }
 
     function of_cache_point() -> SystemContentBlock {
-        SystemContentBlock { text: null, cachePoint: CachePointBlock { type: "default" } }
+        SystemContentBlock.of_cache_delimiter(_default_cache_point())
+    }
+
+    /// A `cachePoint` block carrying `args` exactly as the prompt wrote it.
+    function of_cache_delimiter(args: baml.json.json) -> SystemContentBlock {
+        SystemContentBlock { text: null, cachePoint: args }
     }
 }
 
@@ -311,13 +335,15 @@ class ConverseRequest {
 // eight null members is not a union at all. So the serialized request is run
 // through `_prune_nulls` before it goes on the wire.
 //
-// Three keys are copied VERBATIM without recursing, because their values are
+// Four keys are copied VERBATIM without recursing, because their values are
 // authored elsewhere (by the user or by the model) and a `null` inside them is
 // meaningful data rather than an unset member:
 //
 //   * `additionalModelRequestFields` — the model-specific parameter blob;
 //   * `json` — a tool's `inputSchema.json` (a JSON Schema may legitimately
 //     say `{"default": null}`);
+//   * `cachePoint` — the `args` of a `${cache(args)}` in the prompt, which
+//     this client sends as written;
 //   * `input` — a replayed `toolUse.input`, i.e. the arguments the MODEL
 //     authored for a tool call. Pruning them rewrites history: a tool whose
 //     schema has nullable parameters would see its explicit `"filter": null`
@@ -331,7 +357,7 @@ class ConverseRequest {
 // ---------------------------------------------------------------------------
 
 function _is_opaque_key(key: string) -> bool {
-    key == "additionalModelRequestFields" || key == "json" || key == "input"
+    key == "additionalModelRequestFields" || key == "json" || key == "input" || key == "cachePoint"
 }
 
 function _prune_nulls(value: baml.json.json) -> baml.json.json {
@@ -605,7 +631,7 @@ function _lower_blocks(blocks: ai.content.Block[], preview: bool = false) -> Con
 /// rather than silently dropped (`build_request/bedrock.rs:174-176`).
 function _prompt_system(message: ai.PromptMessage) -> SystemContentBlock[] {
     let blocks: SystemContentBlock[] = [];
-    for (let part in message.parts) {
+    for (let part in ai.wire.prompt_parts(message)) {
         match (part) {
             let text: string => {
                 // Blank text is dropped here too: Converse rejects an empty
@@ -615,12 +641,78 @@ function _prompt_system(message: ai.PromptMessage) -> SystemContentBlock[] {
                 }
                 null
             },
-            _ => {
+            let delimiter: ai.CacheDelimiter => {
+                if (
+                    _takes_cache_point(blocks.at(blocks.length() - 1)?.cachePoint, blocks.length(), delimiter)
+                ) {
+                    blocks.push(SystemContentBlock.of_cache_delimiter(delimiter.args));
+                }
+                null
+            },
+            let media: ai.MediaPart => {
                 throw _reject("Bedrock system messages do not support media content")
             },
         };
     }
     blocks
+}
+
+/// (internal) Whether a `${cache(args)}` becomes a `cachePoint` block at this
+/// position. `lowered` is how many blocks its message has produced so far and
+/// `previous` is the `cachePoint` member of the last of them.
+///
+///   * Nothing lowered yet: there is no content before the delimiter to cache,
+///     and a `cachePoint` that leads a message is a ValidationException.
+///   * The last block is already a `cachePoint`: two in a row mark the same
+///     prefix, and each one counts against the four a request may carry.
+///   * `cache(null)`: there is no value to embed, and a null member is dropped
+///     from the body, which would leave an empty block behind.
+///     (`ai.wire.prompt_parts` already removes these; this is the backstop.)
+function _takes_cache_point(
+    previous: baml.json.json?,
+    lowered: int,
+    delimiter: ai.CacheDelimiter,
+) -> bool {
+    if (lowered == 0 || previous != null) {
+        return false;
+    }
+    delimiter.args != null
+}
+
+/// (internal) One non-system prompt message as Converse content blocks. Text
+/// and media lower exactly as they do for a journal turn; a `${cache(args)}`
+/// becomes a `cachePoint` block at the position it was written, with `args`
+/// embedded as written, and the text on either side of it is trimmed where it
+/// faces the checkpoint (`ai.wire.prompt_parts`).
+function _prompt_content(message: ai.PromptMessage, preview: bool = false) -> ContentBlock[] {
+    let content: ContentBlock[] = [];
+    for (let part in ai.wire.prompt_parts(message)) {
+        match (part) {
+            let text: string => {
+                let block = ai.content.Text { text: text };
+                if let lowered: ContentBlock = _lower_block(block, preview = preview) {
+                    content.push(lowered);
+                }
+                null
+            },
+            let delimiter: ai.CacheDelimiter => {
+                if (
+                    _takes_cache_point(content.at(content.length() - 1)?.cachePoint, content.length(), delimiter)
+                ) {
+                    content.push(ContentBlock.of_cache_delimiter(delimiter.args));
+                }
+                null
+            },
+            let media: ai.MediaPart => {
+                let block = ai.content.Media { media: media, provider_id: null, revised_prompt: null };
+                if let lowered: ContentBlock = _lower_block(block, preview = preview) {
+                    content.push(lowered);
+                }
+                null
+            },
+        };
+    }
+    content
 }
 
 /// (internal) The per-message metadata key that requests a Bedrock prompt-caching
@@ -679,7 +771,7 @@ function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> BedrockPromp
             }
             null
         } else {
-            let content = _lower_blocks(ai.wire.prompt_blocks(message), preview = preview);
+            let content = _prompt_content(message, preview = preview);
             // A message that lowered to nothing (all-whitespace text) is
             // dropped: `content: []` is a ValidationException, and a lone
             // `cachePoint` with nothing to cache is no better.
@@ -949,7 +1041,9 @@ function _system_as_user(system: SystemContentBlock[]) -> Message {
             content.push(ContentBlock.of_text(text));
             null
         } else {
-            content.push(ContentBlock.of_cache_point());
+            // A system block is `text` or `cachePoint`; the checkpoint moves
+            // with the content it followed, value intact.
+            content.push(ContentBlock { ..._empty_content_block(), cachePoint: block.cachePoint });
             null
         };
     }
@@ -1052,8 +1146,12 @@ function converse_request(
 /// The Converse endpoint for this client: the `endpoint_url` override when set
 /// (which bypasses region resolution entirely), else
 /// `https://bedrock-runtime.<region>.amazonaws.com`.
-function converse_url(client: root.BedrockClient, preview: bool = false) -> string {
-    let path = converse_model_path(client.model);
+function converse_url(
+    client: root.BedrockClient,
+    preview: bool = false,
+    stream: bool = false,
+) -> string {
+    let path = converse_model_path(client.model, stream = stream);
     if let endpoint: string = client.resolved_endpoint_url() {
         // A trailing slash on the override would double up with the path.
         let base = if (endpoint.ends_with("/")) {
@@ -1144,17 +1242,26 @@ function _apply_query(url: string, params: map<string, string>?) -> string {
 /// -> `request_body` passthrough merged in, plus the user's headers and query
 /// parameters. Signing must come after this and nothing may touch the request
 /// afterwards, so this is the seam request-shape tests assert on.
+///
+/// `stream` targets ConverseStream: same body, the `/converse-stream` path,
+/// and an event-stream `accept`.
 function build_request(
     client: root.BedrockClient,
     input: ai.ModelTurnInput,
     preview: bool = false,
+    stream: bool = false,
 ) -> baml.http.Request {
     let body = _prune_nulls(baml.json.to_json(converse_request(client, input, preview = preview)));
     let merged = ai.wire.merge_request_body(body, client.request_body);
+    let accept = if (stream) {
+        "application/vnd.amazon.eventstream"
+    } else {
+        "application/json"
+    };
     baml.http.Request {
         method: "POST",
-        url: _apply_query(converse_url(client, preview = preview), client.query_params),
-        headers: _merge_headers({ "content-type": "application/json", "accept": "application/json" }, client.headers),
+        url: _apply_query(converse_url(client, preview = preview, stream = stream), client.query_params),
+        headers: _merge_headers({ "content-type": "application/json", "accept": accept }, client.headers),
         body: baml.json.stringify(merged),
     }
 }
@@ -1361,6 +1468,9 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
                 // Converse reports no separate reasoning-token count; the
                 // thinking tokens are already inside outputTokens.
                 reasoning_tokens: null,
+                cache_write_input_tokens: reported.cacheWriteInputTokens,
+                // inputTokens excludes both cache counts.
+                uncached_input_tokens: reported.inputTokens,
             }
         },
     };
@@ -1373,7 +1483,9 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
 // ---------------------------------------------------------------------------
 
 function invoke(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
-    let request = sign(client, build_request(client, input, preview = false));
+    let request = ai.LlmTimeoutOptions._resolve(client.timeout)._apply(
+        sign(client, build_request(client, input, preview = false)),
+    );
     let sent = ai.wire.send_as_with_wire<ConverseResponse>(
         request,
         "aws-bedrock",
@@ -1381,5 +1493,365 @@ function invoke(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.Mode
         capture_wire = client.capture_wire,
     );
     let turn = parse_response(sent.value);
-    ai.ModelTurn { ...turn, calls: [sent.call] }
+    ai.ModelTurn { ...turn, calls: [sent.call], model: client.model }
+}
+
+// ---------------------------------------------------------------------------
+// 11. Streaming: ConverseStream
+//
+// `baml.http.send_sse` decodes the binary event stream and hands over one SSE
+// event per frame: `event` is the `:event-type` header and `data` the JSON
+// payload. A modeled exception frame arrives as `exception:<type>` and an
+// unmodeled error as `error:<code>` (see `StreamDecoder` in sys_types/src/sse.rs;
+// the frame codec is the `aws-smithy-eventstream` fork,
+// forks/aws-smithy-eventstream).
+//
+// Event order: messageStart, then per content block contentBlockStart? /
+// contentBlockDelta* / contentBlockStop, then messageStop (stopReason), then
+// metadata (usage). `metadata` is always last, so it is the terminal event.
+// ---------------------------------------------------------------------------
+
+// The ConverseStream event model, ported from `aws-sdk-bedrockruntime`'s
+// `ConverseStreamOutput` (1.106.0) with the SDK's wire keys. As with the
+// Converse response classes above, Smithy unions are classes with one optional
+// field per member and Smithy string enums are plain strings, so a member or
+// value Bedrock adds later decodes instead of failing. `trace` (guardrail and
+// prompt-router traces) stays opaque JSON: nothing here reads it.
+
+/// `messageStart`.
+class MessageStartEvent {
+    /// `"assistant"` or `"user"`.
+    role: string?,
+}
+
+class ToolUseBlockStart {
+    toolUseId: string?,
+    name: string?,
+}
+
+/// Union: which kind of content block is starting.
+class ContentBlockStart {
+    toolUse: ToolUseBlockStart?,
+}
+
+/// `contentBlockStart`: sent before a tool-use block (text blocks start with
+/// their first delta).
+class ContentBlockStartEvent {
+    start: ContentBlockStart?,
+    contentBlockIndex: int?,
+}
+
+class ToolUseBlockDelta {
+    /// A fragment of the tool input's JSON text.
+    input: string?,
+}
+
+/// Union: one reasoning fragment.
+class ReasoningContentBlockDelta {
+    text: string?,
+    /// Base64: thinking the provider redacted.
+    redactedContent: string?,
+    signature: string?,
+}
+
+class CitationSourceContentDelta {
+    text: string?,
+}
+
+class DocumentCharLocation {
+    documentIndex: int?,
+    start: int?,
+    end: int?,
+}
+
+class DocumentPageLocation {
+    documentIndex: int?,
+    start: int?,
+    end: int?,
+}
+
+class DocumentChunkLocation {
+    documentIndex: int?,
+    start: int?,
+    end: int?,
+}
+
+/// Union: where in a source document a citation points.
+class CitationLocation {
+    documentChar: DocumentCharLocation?,
+    documentPage: DocumentPageLocation?,
+    documentChunk: DocumentChunkLocation?,
+}
+
+class CitationsDelta {
+    title: string?,
+    sourceContent: CitationSourceContentDelta[]?,
+    location: CitationLocation?,
+}
+
+/// Union: one incremental piece of a content block.
+class ContentBlockDelta {
+    text: string?,
+    toolUse: ToolUseBlockDelta?,
+    reasoningContent: ReasoningContentBlockDelta?,
+    citation: CitationsDelta?,
+}
+
+/// `contentBlockDelta`.
+class ContentBlockDeltaEvent {
+    delta: ContentBlockDelta?,
+    contentBlockIndex: int?,
+}
+
+/// `contentBlockStop`.
+class ContentBlockStopEvent {
+    contentBlockIndex: int?,
+}
+
+/// `messageStop`.
+class MessageStopEvent {
+    /// See `stop_reason` for the values.
+    stopReason: string?,
+    additionalModelResponseFields: baml.json.json?,
+}
+
+class ConverseStreamMetrics {
+    latencyMs: int?,
+}
+
+class PerformanceConfiguration {
+    /// `"standard"` or `"optimized"`.
+    latency: string?,
+}
+
+/// `metadata`: always the last event of a turn.
+class ConverseStreamMetadataEvent {
+    usage: ConverseUsage?,
+    metrics: ConverseStreamMetrics?,
+    trace: baml.json.json?,
+    performanceConfig: PerformanceConfiguration?,
+}
+
+/// One ConverseStream event: the SDK's `ConverseStreamOutput`, keyed on the
+/// wire by the `:event-type` header rather than by JSON.
+type ConverseStreamEvent = MessageStartEvent
+    | ContentBlockStartEvent
+    | ContentBlockDeltaEvent
+    | ContentBlockStopEvent
+    | MessageStopEvent
+    | ConverseStreamMetadataEvent;
+
+/// Decode one event payload by its `:event-type`; `null` for an event type
+/// this model does not know.
+function decode_stream_event(event_type: string, data: string) -> ConverseStreamEvent? {
+    match (event_type) {
+        "messageStart" => baml.json.from_string<MessageStartEvent>(data),
+        "contentBlockStart" => baml.json.from_string<ContentBlockStartEvent>(data),
+        "contentBlockDelta" => baml.json.from_string<ContentBlockDeltaEvent>(data),
+        "contentBlockStop" => baml.json.from_string<ContentBlockStopEvent>(data),
+        "messageStop" => baml.json.from_string<MessageStopEvent>(data),
+        "metadata" => baml.json.from_string<ConverseStreamMetadataEvent>(data),
+        _ => null,
+    }
+}
+
+// The exceptions a ConverseStream can send mid-stream (`:message-type`
+// `exception`), keyed by `:exception-type`.
+
+class InternalServerException {
+    message: string?,
+}
+
+class ModelStreamErrorException {
+    message: string?,
+    /// The status the model itself failed with.
+    originalStatusCode: int?,
+    originalMessage: string?,
+}
+
+class ValidationException {
+    message: string?,
+}
+
+class ThrottlingException {
+    message: string?,
+}
+
+class ServiceUnavailableException {
+    message: string?,
+}
+
+/// (internal) The HTTP status Bedrock documents for each ConverseStream
+/// exception, so a mid-stream failure classifies (and retries) exactly like
+/// the same failure on `invoke`.
+function _stream_exception_status(exception_type: string) -> int {
+    match (exception_type) {
+        "throttlingException" => 429,
+        "serviceUnavailableException" => 503,
+        "internalServerException" => 500,
+        "modelStreamErrorException" => 424,
+        "modelTimeoutException" => 408,
+        "validationException" => 400,
+        "accessDeniedException" => 403,
+        "resourceNotFoundException" => 404,
+        _ => 500,
+    }
+}
+
+/// One `SseStream.next()` batch -> the stream events it contains. Tool-use and
+/// reasoning deltas are skipped: streaming runs no tool loop, and the
+/// non-streaming path does not surface reasoning as text either.
+function decode_stream_batch(batch: string) -> ai.stream.Event[] {
+    let out: ai.stream.Event[] = [];
+    for (let raw in ai.stream.decode_sse_batch(batch)) {
+        let name = raw.event ?? "";
+        let data = raw.data ?? "";
+        if (name.starts_with("exception:")) {
+            let exception_type = name.slice(10, name.length());
+            throw ai.errors.classify_http("aws-bedrock", _stream_exception_status(exception_type), data);
+        }
+        if (name.starts_with("error:")) {
+            throw ai.errors.classify_http("aws-bedrock", 500, `${name.slice(6, name.length())}: ${data}`);
+        }
+        match (decode_stream_event(name, data)) {
+            let event: ContentBlockDeltaEvent => {
+                if let text: string = event.delta?.text {
+                    out.push(ai.stream.TextDelta { text: text });
+                } else if (
+                    (event.delta?.toolUse?.input ?? "") != ""
+                        || (event.delta?.reasoningContent?.text ?? "") != ""
+                ) {
+                    // Tool input and reasoning are content with no TextDelta.
+                    out.push(ai.stream.ContentSeen {});
+                }
+                null
+            },
+            let event: MessageStopEvent => {
+                if let raw_stop: string = event.stopReason {
+                    if (_is_malformed_stop(raw_stop)) {
+                        throw ai.errors.ParseFailed { provider: "aws-bedrock", raw_output: data }
+                    }
+                    out.push(
+                        ai.stream.TurnMeta {
+                            stop_reason: stop_reason(raw_stop),
+                            input_tokens: null,
+                            output_tokens: null,
+                        },
+                    );
+                }
+                null
+            },
+            let event: ConverseStreamMetadataEvent => {
+                out.push(
+                    ai.stream.TurnMeta {
+                        stop_reason: null,
+                        input_tokens: event.usage?.inputTokens,
+                        output_tokens: event.usage?.outputTokens,
+                    },
+                );
+                out.push(ai.stream.TurnDone {});
+                null
+            },
+            // messageStart, contentBlockStart, contentBlockStop, and event
+            // types this model does not know (null).
+            _ => null,
+        };
+    }
+    out
+}
+
+/// (internal) `send_sse` fails a non-2xx status itself ("SSE request failed
+/// with status 403: …"). Route the status through the classifier the
+/// non-streaming path uses, so a 4xx is never a retry-safe NetworkFailure.
+function _stream_open_failure(error: baml.errors.Io | baml.errors.Timeout) -> never {
+    match (error) {
+        let timeout: baml.errors.Timeout => throw timeout,
+        let io: baml.errors.Io => {
+            let prefix = "SSE request failed with status ";
+            let message = io.message;
+            if (message.starts_with(prefix)) {
+                let rest = message.slice(prefix.length(), message.length());
+                if let separator: int = rest.index_of(":") {
+                    let status = baml.Int.parse(rest.slice(0, separator)) catch_all (e) {
+                        _ => 0,
+                    };
+                    if (status > 0) {
+                        throw ai.errors.classify_http(
+                            "aws-bedrock",
+                            status,
+                            rest.slice(separator + 1, rest.length()).trim(),
+                        );
+                    }
+                }
+            }
+            throw ai.errors.NetworkFailure {
+                status_code: null,
+                provider: "aws-bedrock",
+                detail: `transport failed before a response arrived: ${message}`,
+                raw_body: null,
+            }
+        },
+    }
+}
+
+/// The streaming entry point: the signed ConverseStream request, wrapped in a
+/// TurnStream over the decoded event stream.
+function invoke_stream(
+    client: root.BedrockClient,
+    input: ai.ModelTurnInput,
+) -> ai.stream.TurnStream {
+    let limits = ai.LlmTimeoutOptions._resolve(client.timeout);
+    let request = limits._apply(sign(client, build_request(client, input, preview = false, stream = true)));
+    let started = baml.time.Instant.now();
+    let sse = baml.http.send_sse(request) catch (e) {
+        baml.errors.Io => _stream_open_failure(e),
+        baml.errors.Timeout => _stream_open_failure(e),
+    };
+    // `metadata` is ConverseStream's explicit last event, decoded as TurnDone:
+    // a connection that closes before it is a truncated turn, not a complete
+    // one.
+    let stream = ai.stream.TurnStream.from_sse(
+        sse,
+        (batch: string) -> {
+            decode_stream_batch(batch) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        },
+        require_terminal = "aws-bedrock",
+        timeout_options = limits,
+        dispatched = started,
+    );
+    let call = ai.events.LLMCall {
+        client_name: client.id(),
+        provider: "aws-bedrock",
+        timing: ai.events.Timing {
+            start_time_utc_ms: started.to_timestamp_milliseconds(),
+            duration_ms: null,
+            ttft_ms: null,
+        },
+        http_request: if (client.capture_wire) {
+            baml.http.Request {
+                method: request.method,
+                url: ai.wire.redact_url_secrets(request.url),
+                headers: ai.wire.redact_request_headers(request.headers),
+                body: request.body,
+            }
+        } else {
+            null
+        },
+        http_response: ai.events.HttpResponse { status: sse.status_code, headers: sse.headers, body: null },
+        usage: null,
+        selected: true,
+        sse_responses: if (client.capture_wire) {
+            []
+        } else {
+            null
+        },
+    };
+    stream._calls = [call];
+    stream._wire_call = call;
+    stream._call_started = started;
+    stream._ttft_from = baml.time.Instant.now();
+    stream._capture_sse = client.capture_wire;
+    stream
 }

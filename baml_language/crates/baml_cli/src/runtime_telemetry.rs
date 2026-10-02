@@ -10,6 +10,7 @@ pub(crate) fn create_engine(
     program: bex_vm_types::Program,
     argv: Vec<String>,
     project_root: &Path,
+    sources: Vec<(String, String)>,
 ) -> Result<BexEngine, EngineError> {
     BexEngine::new_with_telemetry_recording(
         program,
@@ -17,9 +18,31 @@ pub(crate) fn create_engine(
         argv,
         Some(bex_project::runtime_compiler()),
         btel_settings::clock::DEFAULT_MODE,
-        TelemetryRecording::local_files(
-            project_root,
-            btel_settings::publisher::RecordingConfig::default(),
-        ),
+        TelemetryRecording::from_boundary_env()
+            .unwrap_or_else(|| {
+                TelemetryRecording::local_files(
+                    project_root,
+                    btel_settings::publisher::RecordingConfig::default(),
+                )
+            })
+            .with_host("baml")
+            .with_sources(sources),
     )
+}
+
+/// The session's `.baml` sources keyed by path relative to the project root,
+/// stored with each recording.
+pub(crate) fn session_sources(
+    session: &crate::project_session::ProjectSession,
+) -> Vec<(String, String)> {
+    let root = session.root();
+    session
+        .resolved
+        .files
+        .iter()
+        .map(|(path, content)| {
+            let path = path.strip_prefix(root).unwrap_or(path);
+            (path.to_string_lossy().into_owned(), content.clone())
+        })
+        .collect()
 }

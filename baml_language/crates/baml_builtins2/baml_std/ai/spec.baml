@@ -27,15 +27,34 @@ type Selector = root.clients.Selector;
 /// Provider-neutral media retained inside a rendered prompt.
 type MediaPart = baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf;
 
+/// A position in a prompt: everything before it is the prefix a provider may
+/// cache. `${cache(args)}` in an LLM function's `prompt:` puts one where it is
+/// written, and `args` rides along untouched. A client that has a cache marker
+/// on its wire sends one there, carrying `args` exactly as written; every other
+/// client drops the delimiter and sends the prompt as if it were not there.
+///
+/// `args` is the provider's own cache object. On `aws.BedrockClient` it becomes
+/// the `cachePoint` block:
+///
+///     ${cache({ "type": "default" })}
+///     ${cache({ "type": "default", "ttl": "1h" })}
+///
+/// Outside an LLM function's `prompt:` there is no bare `cache`; interpolate
+/// the value itself, `${ai.CacheDelimiter { args: ... }}`.
+class CacheDelimiter {
+    args: baml.json.json,
+}
+
 /// One structural part of a rendered prompt message.
-type PromptPart = string | MediaPart;
+type PromptPart = string | MediaPart | CacheDelimiter;
 
 /// A single chat message in a rendered prompt.
 class PromptMessage {
     /// The chat role, e.g. "system", "user", or "assistant". Empty for
     /// role-less content.
     role: string,
-    /// The message's rendered text. Media parts use a readable placeholder.
+    /// The message's rendered text. Media parts use a readable placeholder;
+    /// a cache delimiter contributes nothing.
     content: string,
     /// Ordered structural content. Provider clients use this instead of the
     /// readable `content` projection so media survives prompt rendering.
@@ -78,7 +97,10 @@ class Prompt {
 function prompt(
     // No `throws` clause: the callback's effect is inferred per call site
     // (rule 5); whatever a template expression throws is wrapped below.
-    body: (role: (string) -> root.Role throws never, ctx: root.Context) -> baml.TaggedString,
+    body: (
+        role: (name: string, metadata?: map<string, baml.json.json>) -> root.Role throws never,
+        ctx: root.Context,
+    ) -> baml.TaggedString,
 ) -> (root.Context) -> Prompt throws root.errors.PromptRenderError {
     let render = (ctx: root.Context) -> {
         let tagged = body(root.internal.make_role, ctx) catch_all (e) {

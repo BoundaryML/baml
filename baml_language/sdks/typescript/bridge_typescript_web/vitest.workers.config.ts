@@ -15,6 +15,7 @@ export default defineConfig({
     },
   },
   test: {
+    env: { BAML_TEST_RUNTIME: "workers" },
     include: ["tests/*.test.ts"],
   },
 });

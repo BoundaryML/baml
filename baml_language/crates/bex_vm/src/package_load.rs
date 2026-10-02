@@ -19,35 +19,13 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use baml_type::Name;
+use baml_type::{MediaKind, Name};
 use bex_heap::{BexHeap, Generation};
 use bex_vm_types::{
-    GlobalIndex, HeapPtr, Object, ObjectIndex,
-    types::{
-        LocalName, MethodImpl, Package, PackageKind, ProgramImplRule, ProgramPackage,
-        RuntimeImplRule,
-    },
+    HeapPtr, Object, ObjectIndex, TypeHead,
+    types::{LocalName, MethodImpl, Package, ProgramImplRule, ProgramPackage, RuntimeImplRule},
 };
 use indexmap::IndexMap;
-
-impl crate::BexVm {
-    /// A private package that owns a runtime-created class and its impl
-    /// rules. The dynamic dispatch table only *finds* a witness; ownership is
-    /// what keeps the rule objects alive exactly as long as the class, through
-    /// the same `Class::owner` edge a compiled class has to its package. The
-    /// package is never installed under a name or rooted on its own: it lives
-    /// while something still reaches the class.
-    pub(crate) fn alloc_private_type_owner(&mut self) -> HeapPtr {
-        use bex_heap::TlabHolder;
-        self.tlab_mut().alloc(Object::Package(Box::new(Package {
-            kind: PackageKind::Runtime(Box::new(bex_vm_types::types::RuntimePackage {
-                initialized: true,
-                ..Default::default()
-            })),
-            ..Default::default()
-        })))
-    }
-}
 
 /// One anonymous-class witness in the dynamic dispatch table.
 ///
@@ -56,8 +34,8 @@ impl crate::BexVm {
 /// `rule` is the heap `Object::ImplRule` the resolver borrows — the one
 /// authoritative copy, so the collector's fixup of that object is what keeps
 /// the rule's own `interface_head`/`methods[].fqn` pointers current. The
-/// class keeps its rules alive through its private owner package
-/// (`BexVm::alloc_private_type_owner`).
+/// class keeps its rules alive itself, as the witnesses of its
+/// [`Owner::Anonymous`](bex_vm_types::types::Owner::Anonymous).
 #[derive(Clone, Copy, Debug)]
 pub struct DynRuleEntry {
     pub class: HeapPtr,
@@ -66,11 +44,12 @@ pub struct DynRuleEntry {
 
 /// Engine-local side tables for runtime-created nominal definitions.
 ///
-/// Anonymous typebuilder classes have no owning package to hold their impl
-/// rules, so this is where their witnesses live — keyed by the interface's
-/// `Object::Interface` pointer, the same key every package's `impl_rules` map
-/// uses. It is a *findability* index only: nothing here is a GC root, and every
-/// entry is dropped the moment its class is collected.
+/// Anonymous typebuilder classes belong to no package whose `impl_rules` the
+/// resolver could walk, so this is where their witnesses are FOUND — keyed by
+/// the interface's `Object::Interface` pointer, the same key every package's
+/// `impl_rules` map uses. It is a *findability* index only: the class holds
+/// its rules, nothing here is a GC root, and every entry is dropped the moment
+/// its class is collected.
 #[derive(Default, Debug)]
 pub struct DynDispatchTables {
     impl_rules: RwLock<IndexMap<HeapPtr, Vec<DynRuleEntry>>>,
@@ -245,10 +224,10 @@ fn placeholder() -> Object {
 /// `ProgramPackage` stay valid.
 fn reserve_package_slots(
     compile_time_objects: &mut Vec<Object>,
-    packages: &IndexMap<Name, ProgramPackage>,
-) -> IndexMap<Name, PackageSlots> {
-    let mut layout = IndexMap::new();
-    for (name, pkg) in packages {
+    packages: &[ProgramPackage],
+) -> Vec<PackageSlots> {
+    let mut layout = Vec::with_capacity(packages.len());
+    for pkg in packages {
         let mut impl_rule_slots = IndexMap::new();
         for (iface_idx, rules) in &pkg.impl_rules {
             let slots: Vec<usize> = rules
@@ -263,19 +242,16 @@ fn reserve_package_slots(
         }
         let package_slot = compile_time_objects.len();
         compile_time_objects.push(placeholder());
-        layout.insert(
-            name.clone(),
-            PackageSlots {
-                package_slot,
-                impl_rule_slots,
-            },
-        );
+        layout.push(PackageSlots {
+            package_slot,
+            impl_rule_slots,
+        });
     }
     layout
 }
 
-/// The loaded program's package tables: every package by name, plus the
-/// program-wide impl-rule index derived from them.
+/// The loaded program's package tables: every package by ordinal, the root
+/// among them, plus the program-wide impl-rule index derived from them.
 ///
 /// The two are built together and kept together because the second is a *view*
 /// over the first — pairing an index with any other package set would answer
@@ -295,59 +271,78 @@ fn reserve_package_slots(
 /// checker accepts, and the VM then fails to find the rule. Indexing every
 /// package's rules once, at load, makes that whole failure class
 /// unrepresentable: resolution asks one question of one complete table.
+///
+/// # Compile-time pointers only, immutable after load
+///
+/// Every pointer here is into the static image: the load pass writes package
+/// and impl-rule slots it reserved in the compile-time pool, and nothing
+/// writes afterwards — the engine shares the index as a plain `Arc`, with no
+/// interior mutability. The static region is never moved and never
+/// collected, so the index is neither a root nor traced and cannot dangle.
+/// That is also why a runtime package NEVER enters it: a moving pointer here
+/// would need rooting (pinning the package forever) or tracing (a fourth
+/// forwarding site). Runtime packages are reached through the edges that
+/// own them — an artifact's pins, a package's edges, a value's
+/// owner — and their impl rules through their own `Package::impl_rules` and
+/// the swept dynamic dispatch table, which the resolver chains with this
+/// index. A runtime loader binds the prelude through the root's edges.
+///
+/// # Names resolve from the root
+///
+/// No spelling identifies a package program-wide: a name reaches a package
+/// only through some package's edge table, and a host's names — the run
+/// entry point, a fixed stdlib class, a wire type name — resolve from the
+/// root's viewpoint ([`Self::accessible`]), exactly as the compiler resolves
+/// the root's own source.
 #[derive(Default)]
 pub struct PackageIndex {
-    /// Package name → its `Object::Package` pointer.
-    by_name: IndexMap<Name, HeapPtr>,
+    /// Every package's `Object::Package` pointer, by executable ordinal.
+    packages: Vec<HeapPtr>,
+    /// The root package's pointer — null only for the empty index of a VM
+    /// with no executable, where nothing resolves.
+    root: HeapPtr,
     /// Canonical `Object::Interface` pointer → every `Object::ImplRule` of that
     /// interface in the program, in package-load order.
     impl_rules: IndexMap<HeapPtr, Vec<HeapPtr>>,
-    /// Static image object symbols used by the runtime linker.
-    objects_by_name: HashMap<String, HeapPtr>,
-    /// Static image global symbols used by the runtime linker.
-    globals_by_name: HashMap<String, GlobalIndex>,
 }
 
 impl PackageIndex {
-    pub fn install_image_symbols(
-        &mut self,
-        objects_by_name: HashMap<String, HeapPtr>,
-        globals_by_name: HashMap<String, GlobalIndex>,
-    ) {
-        self.objects_by_name = objects_by_name;
-        self.globals_by_name = globals_by_name;
+    /// The `Object::Package` pointer of the package at `ordinal` in the
+    /// executable — the position `LoadCurrentPackage` carries.
+    pub fn package_at(&self, ordinal: usize) -> Option<HeapPtr> {
+        self.packages.get(ordinal).copied()
     }
 
-    pub fn object_by_name(&self, name: &str) -> Option<HeapPtr> {
-        self.objects_by_name
-            .get(name)
-            .copied()
-            .or_else(|| lookup_type_by_fqn(self, name))
+    /// The root package — the one the executable was compiled for.
+    pub fn root(&self) -> HeapPtr {
+        self.root
     }
 
-    pub fn global_by_name(&self, name: &str) -> Option<GlobalIndex> {
-        self.globals_by_name.get(name).copied()
-    }
-    /// The `Object::Package` pointer for `name`, if the package is loaded.
-    pub fn package_ptr(&self, name: &Name) -> Option<HeapPtr> {
-        self.by_name.get(name).copied()
+    /// The package the root spells as `name`: itself by its own name, else
+    /// the package the root's edge `name` reaches. The one way a
+    /// host-supplied name becomes a package.
+    pub fn accessible(&self, name: &Name) -> Option<HeapPtr> {
+        if self.root.is_null() {
+            return None;
+        }
+        // SAFETY: the index holds compile-time package objects.
+        #[expect(unsafe_code, reason = "deref a compile-time package pointer")]
+        let root = (unsafe { self.root.get() }).as_package()?;
+        root.accessible(self.root, name)
     }
 
-    /// Every loaded package's `Object::Package` pointer.
-    pub fn package_ptrs(&self) -> impl Iterator<Item = HeapPtr> + '_ {
-        self.by_name.values().copied()
-    }
-
-    /// The canonical static package name for a package pointer.
-    pub fn package_name(&self, package: HeapPtr) -> Option<&Name> {
-        self.by_name
+    /// Whether `package` is one of the language packages the root reaches
+    /// under a fixed name — the prelude every package reaches without
+    /// declaring an edge to it.
+    pub fn is_prelude(&self, package: HeapPtr) -> bool {
+        baml_builtins2::stdlib_package_names()
             .iter()
-            .find_map(|(name, &ptr)| (ptr == package).then_some(name))
+            .any(|name| self.accessible(&Name::new(name)) == Some(package))
     }
 
-    /// Every loaded package, by name.
-    pub fn iter(&self) -> impl Iterator<Item = (&Name, HeapPtr)> + '_ {
-        self.by_name.iter().map(|(name, &ptr)| (name, ptr))
+    /// Every loaded package's `Object::Package` pointer, by ordinal.
+    pub fn package_ptrs(&self) -> impl Iterator<Item = HeapPtr> + '_ {
+        self.packages.iter().copied()
     }
 
     /// Every impl rule of the interface at `iface_ptr`, across all packages.
@@ -398,15 +393,25 @@ fn resolve_impl_rule(heap: &BexHeap, rule: &ProgramImplRule) -> RuntimeImplRule 
 }
 
 /// Fill every reserved slot with its resolved object, returning the
-/// [`PackageIndex`].
+/// [`PackageIndex`] rooted at the package at `root`.
 fn fill_package_slots(
     heap: &mut BexHeap,
-    packages: &IndexMap<Name, ProgramPackage>,
-    layout: &IndexMap<Name, PackageSlots>,
+    packages: &[ProgramPackage],
+    root: u32,
+    layout: &[PackageSlots],
 ) -> PackageIndex {
-    let mut index = PackageIndex::default();
-    for (name, pkg) in packages {
-        let slots = &layout[name];
+    // Every package's pointer is known before any is filled: the slots were
+    // reserved up front, so an edge can point at a package not yet written.
+    let package_ptrs: Vec<HeapPtr> = layout
+        .iter()
+        .map(|slots| heap.compile_time_ptr(slots.package_slot))
+        .collect();
+    let mut index = PackageIndex {
+        packages: package_ptrs.clone(),
+        root: package_ptrs[root as usize],
+        impl_rules: IndexMap::new(),
+    };
+    for (pkg, slots) in packages.iter().zip(layout) {
         // Impl rules first: a package's `impl_rules` map points at their slots.
         let mut impl_rules: IndexMap<HeapPtr, Vec<HeapPtr>> = IndexMap::new();
         for (iface_idx, rules) in &pkg.impl_rules {
@@ -439,33 +444,72 @@ fn fill_package_slots(
             impl_rules.insert(iface_ptr, rule_ptrs);
         }
         let package = Package {
-            exported_names: pkg.exported_names.clone(),
+            name: pkg.name.clone(),
+            edges: pkg
+                .edges
+                .iter()
+                .map(|edge| {
+                    (
+                        edge.name.clone(),
+                        bex_vm_types::types::Edge {
+                            target: package_ptrs[edge.target as usize],
+                            kind: edge.kind,
+                        },
+                    )
+                })
+                .collect(),
             classes: resolve_members(heap, &pkg.classes),
             enums: resolve_members(heap, &pkg.enums),
             interfaces: resolve_members(heap, &pkg.interfaces),
             impl_rules,
-            functions: resolve_members(heap, &pkg.functions),
             type_aliases: resolve_members(heap, &pkg.type_aliases),
-            interface_blob: pkg.interface_blob.clone(),
+            globals: pkg.globals.clone(),
+            slots: bex_vm_types::types::Slots::Program {
+                base: pkg.slot_base,
+            },
+            objects: bex_vm_types::types::Objects::Program,
+            surface: bex_vm_types::types::ExportSurface::Compiled(pkg.interface_blob.clone()),
+            init: pkg
+                .init
+                .map(|index| heap.compile_time_ptr(index.into_raw())),
             test_init: pkg
                 .test_init
                 .map(|index| heap.compile_time_ptr(index.into_raw())),
-            mounted_types: IndexMap::new(),
-            kind: PackageKind::Static,
+            diagnostics: Vec::new(),
+            session: None,
         };
         heap.set_compile_time_object(slots.package_slot, Object::Package(Box::new(package)));
-        index
-            .by_name
-            .insert(name.clone(), heap.compile_time_ptr(slots.package_slot));
+        // Every declaration knows its package: the edge a runtime declaration
+        // carries to the package that declared it, and what the compile seam
+        // reads to say where a re-exported declaration is defined.
+        let owner = heap.compile_time_ptr(slots.package_slot);
+        for index in pkg
+            .classes
+            .values()
+            .chain(pkg.enums.values())
+            .chain(pkg.interfaces.values())
+            .chain(pkg.type_aliases.values())
+        {
+            match heap.compile_time_object_mut(index.into_raw()) {
+                Object::Class(class) => class.owner = bex_vm_types::types::Owner::Package(owner),
+                Object::Enum(enm) => enm.owner = bex_vm_types::types::Owner::Package(owner),
+                Object::Interface(interface) => interface.owner = owner,
+                Object::TypeAlias(alias) => alias.owner = owner,
+                other => unreachable!(
+                    "a package's declaration table names a {:?} object",
+                    bex_vm_types::ObjectType::of(other)
+                ),
+            }
+        }
     }
     index
 }
 
 /// Look up a class, enum, or interface object pointer by its fully-qualified
-/// dotted name — package as the leading segment — through the package index.
-/// The free-function form of [`crate::vm::BexVm::lookup_type_by_fqn`], usable
-/// before a `BexVm` exists (e.g. to pre-resolve builtin error/panic classes in
-/// `BexVm::new`).
+/// dotted name — the package as the root reaches it, then the item path —
+/// from the root's viewpoint. The free-function form of
+/// [`crate::vm::BexVm::lookup_type_by_fqn`], usable before a `BexVm` exists
+/// (e.g. to pre-resolve builtin error/panic classes in `BexVm::new`).
 pub fn lookup_type_by_fqn(packages: &PackageIndex, fqn: &str) -> Option<HeapPtr> {
     let mut parts: Vec<Name> = fqn.split('.').map(Name::new).collect();
     let name = parts.pop()?;
@@ -473,7 +517,7 @@ pub fn lookup_type_by_fqn(packages: &PackageIndex, fqn: &str) -> Option<HeapPtr>
         return None;
     }
     let pkg = parts.remove(0);
-    let pkg_ptr = packages.package_ptr(&pkg)?;
+    let pkg_ptr = packages.accessible(&pkg)?;
     // SAFETY: `packages` only ever holds compile-time `Object::Package` pointers.
     #[expect(unsafe_code, reason = "deref a compile-time package pointer")]
     let package = (unsafe { pkg_ptr.get() }).as_package()?;
@@ -489,6 +533,168 @@ pub fn lookup_type_by_fqn(packages: &PackageIndex, fqn: &str) -> Option<HeapPtr>
         .copied()
 }
 
+/// The head of the class, enum, interface, or type alias `fqn` names — its
+/// pointer and the tag it carries — from the root's viewpoint. Usable before
+/// a `BexVm` exists.
+pub fn declaration_head_by_fqn(packages: &PackageIndex, fqn: &str) -> Option<TypeHead> {
+    let mut parts: Vec<Name> = fqn.split('.').map(Name::new).collect();
+    let name = parts.pop()?;
+    if parts.is_empty() {
+        return None;
+    }
+    let pkg = parts.remove(0);
+    let pkg_ptr = packages.accessible(&pkg)?;
+    // SAFETY: `packages` only ever holds compile-time `Object::Package` pointers.
+    #[expect(unsafe_code, reason = "deref a compile-time package pointer")]
+    let package = (unsafe { pkg_ptr.get() }).as_package()?;
+    let local = LocalName {
+        namespace: parts,
+        name,
+    };
+    let ptr = *package
+        .classes
+        .get(&local)
+        .or_else(|| package.enums.get(&local))
+        .or_else(|| package.interfaces.get(&local))
+        .or_else(|| package.type_aliases.get(&local))?;
+    // SAFETY: a package's declaration pointers are compile-time objects.
+    #[expect(unsafe_code, reason = "deref a compile-time declaration pointer")]
+    let tag = match unsafe { ptr.get() } {
+        Object::Class(class) => class.type_tag,
+        Object::Enum(enm) => enm.type_tag,
+        Object::Interface(interface) => interface.type_tag,
+        Object::TypeAlias(alias) => alias.type_tag,
+        _ => return None,
+    };
+    Some(TypeHead::new(ptr, tag))
+}
+
+/// One of the stdlib time classes a CSV cell decodes to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TimeClass {
+    Instant,
+    PlainDate,
+    PlainDateTime,
+}
+
+/// The stdlib declarations the runtime recognizes structurally — the CSV
+/// cell classes, the JSON media wrappers, the `json` alias, the prompt cache
+/// delimiter, and the live
+/// capabilities a host proxies — resolved to heads once from the loaded
+/// packages and shared by every VM the engine spawns, like the error and
+/// panic class tables.
+///
+/// A program that does not load one of them (no stdlib) has no value of that
+/// type, so the entry is absent and nothing matches it.
+#[derive(Debug, Default)]
+pub struct StdlibHeads {
+    time: Vec<(TimeClass, TypeHead)>,
+    media: Vec<(MediaKind, TypeHead)>,
+    json: Option<TypeHead>,
+    cache_delimiter: Option<TypeHead>,
+    capabilities: Vec<(StdlibCapability, TypeHead)>,
+}
+
+/// A live stdlib capability a host reaches through a proxy rather than a
+/// value: an instance stays on the heap behind a handle.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StdlibCapability {
+    /// `ai.FunctionSpec`.
+    FunctionSpec,
+    /// `ai.stream.Stream`.
+    Stream,
+}
+
+impl StdlibHeads {
+    pub fn resolve(packages: &PackageIndex) -> Self {
+        let head = |fqn: &str| declaration_head_by_fqn(packages, fqn);
+        let time = [
+            (TimeClass::Instant, "baml.time.Instant"),
+            (TimeClass::PlainDate, "baml.time.PlainDate"),
+            (TimeClass::PlainDateTime, "baml.time.PlainDateTime"),
+        ]
+        .into_iter()
+        .filter_map(|(class, fqn)| Some((class, head(fqn)?)))
+        .collect();
+        // A runtime media value is an instance of one of these classes; there
+        // is no `Generic` media value, and no wrapper class for it.
+        let media = [
+            MediaKind::Image,
+            MediaKind::Audio,
+            MediaKind::Video,
+            MediaKind::Pdf,
+        ]
+        .into_iter()
+        .filter_map(|kind| Some((kind, head(kind.wrapper_class_name()?)?)))
+        .collect();
+        // Resolved from the root's viewpoint under the prelude's fixed names,
+        // once, at load: a package of the user's spelled `ai` cannot be
+        // reached under that name (the edge is reserved), and nothing here is
+        // ever re-derived from a declaration's rendered name.
+        let capabilities = [
+            (
+                StdlibCapability::FunctionSpec,
+                baml_type::qualified_name::AI_FUNCTION_SPEC,
+            ),
+            (
+                StdlibCapability::Stream,
+                baml_type::qualified_name::AI_STREAM_STREAM,
+            ),
+        ]
+        .into_iter()
+        .filter_map(|(capability, fqn)| Some((capability, head(fqn)?)))
+        .collect();
+        Self {
+            time,
+            media,
+            json: head("baml.json.json"),
+            cache_delimiter: head("ai.CacheDelimiter"),
+            capabilities,
+        }
+    }
+
+    /// Which live stdlib capability the declaration tagged `tag` is, if any:
+    /// the stdlib's own declaration, by identity, never a same-spelled one.
+    pub fn capability(&self, tag: baml_type::typetag::TypeTag) -> Option<StdlibCapability> {
+        self.capabilities
+            .iter()
+            .find(|(_, head)| head.tag() == tag)
+            .map(|(capability, _)| *capability)
+    }
+
+    /// Which stdlib time class `head` is, if any.
+    pub fn time_class(&self, head: TypeHead) -> Option<TimeClass> {
+        self.time
+            .iter()
+            .find(|(_, h)| *h == head)
+            .map(|(class, _)| *class)
+    }
+
+    /// Which media wrapper class `head` is, if any.
+    pub fn media_kind(&self, head: TypeHead) -> Option<MediaKind> {
+        self.media
+            .iter()
+            .find(|(_, h)| *h == head)
+            .map(|(kind, _)| *kind)
+    }
+
+    /// Whether `head` is `ai.CacheDelimiter`, the value `${cache(args)}`
+    /// interpolates into a prompt.
+    pub fn is_cache_delimiter(&self, head: TypeHead) -> bool {
+        self.cache_delimiter == Some(head)
+    }
+
+    /// The recursive `baml.json.json` alias, if the program loads it.
+    pub fn json_alias(&self) -> Option<TypeHead> {
+        self.json
+    }
+
+    /// Whether `head` is the recursive `baml.json.json` alias.
+    pub fn is_json_alias(&self, head: TypeHead) -> bool {
+        self.json == Some(head)
+    }
+}
+
 /// Flatten every package's recursive type aliases into one `TypeName → RuntimeTy`
 /// map (the shape `SysOpContext::type_alias_definitions` wants for output-format
 /// rendering), reconstructing each qualified name from its package + `LocalName`.
@@ -496,7 +702,7 @@ pub fn all_recursive_type_aliases(
     packages: &PackageIndex,
 ) -> IndexMap<baml_type::TaggedTypeName, bex_vm_types::RealizedTy> {
     let mut out = IndexMap::new();
-    for (pkg_name, pkg_ptr) in packages.iter() {
+    for pkg_ptr in packages.package_ptrs() {
         // SAFETY: `packages` only ever holds compile-time `Object::Package`
         // pointers (built by `fill_package_slots`), valid for the heap's lifetime.
         #[expect(unsafe_code, reason = "deref a compile-time package pointer")]
@@ -504,6 +710,7 @@ pub fn all_recursive_type_aliases(
         let Some(package) = object.as_package() else {
             continue;
         };
+        let pkg_name = &package.name;
         for (local, alias_ptr) in &package.type_aliases {
             // SAFETY: as above — a package's alias map only holds compile-time
             // `Object::TypeAlias` pointers, allocated alongside the package.
@@ -533,18 +740,27 @@ pub fn all_recursive_type_aliases(
 
 /// Build the unified heap from `compile_time_objects`, additionally allocating
 /// the per-package `Object::Package` / `Object::ImplRule` objects and returning
-/// the [`PackageIndex`]. The heap is sealed on return.
+/// the [`PackageIndex`] rooted at the package at `root`. The heap is sealed
+/// on return.
+///
+/// The input is a converted program (`convert_program`), which checked the
+/// executable against the format's laws (`Program::validate`) before handing
+/// it on: every index here is within its pool and names the kind its table
+/// says, every head binds, every switch is solved. The assertions below hold
+/// the loader to that, not to a decoded artifact.
 pub fn build_heap_with_packages(
     mut compile_time_objects: Vec<Object>,
-    packages: &IndexMap<Name, ProgramPackage>,
+    packages: &[ProgramPackage],
+    root: u32,
 ) -> (Arc<BexHeap>, PackageIndex) {
     let layout = reserve_package_slots(&mut compile_time_objects, packages);
     let mut heap = BexHeap::build_unsealed_default(compile_time_objects);
-    let index = fill_package_slots(&mut heap, packages, &layout);
+    let index = fill_package_slots(&mut heap, packages, root, &layout);
     // Every slot is now real (impl rules carry heads in their patterns), so
     // this is the one point where the whole image can bind — and prove it
     // bound — before anything can dereference a head.
     heap.bind_type_heads();
+    heap.assert_switch_tables_dispatch();
     (heap.seal(), index)
 }
 

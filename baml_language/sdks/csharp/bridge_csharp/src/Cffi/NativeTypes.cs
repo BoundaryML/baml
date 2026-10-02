@@ -39,7 +39,7 @@ internal unsafe struct BamlApiV1
     internal uint AbiVersion;
     internal nuint StructSize;
     internal delegate* unmanaged[Cdecl]<BamlBuffer> Version;
-    internal delegate* unmanaged[Cdecl]<byte*, nuint, BamlBuffer> InitializeRuntimeFromBytecode;
+    internal delegate* unmanaged[Cdecl]<byte*, nuint, BamlBuffer> InitializeRuntimeFromBlob;
     internal delegate* unmanaged[Cdecl]<BamlBuffer, void> FreeBuffer;
     internal delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<uint, byte*, nuint, void>, void> RegisterCallback;
     internal delegate* unmanaged[Cdecl]<byte*, nuint, uint, void> CallFunction;
@@ -60,12 +60,12 @@ internal unsafe struct BamlApiV1
     internal delegate* unmanaged[Cdecl]<BamlBridgeInfoV1*, BamlBuffer> RegisterBridge;
     internal delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<sbyte*, nuint, int, void>, void> RegisterUnhandledSpawnErrorCallback;
     internal delegate* unmanaged[Cdecl]<BamlBuffer> ShutdownRuntime;
-    internal delegate* unmanaged[Cdecl]<byte*, nuint, byte*, BamlBuffer> InitializeRuntimeFromBytecodeWithMetadata;
+    internal delegate* unmanaged[Cdecl]<byte*, nuint, byte*, BamlBuffer> InitializeRuntimeFromBlobWithMetadata;
 }
 
 internal static unsafe class BamlApiV1Layout
 {
-    internal static readonly nuint RequiredPrefixSize = EndOf(nameof(BamlApiV1.InitializeRuntimeFromBytecodeWithMetadata));
+    internal static readonly nuint RequiredPrefixSize = EndOf(nameof(BamlApiV1.InitializeRuntimeFromBlobWithMetadata));
 
     private static nuint EndOf(string field) =>
         checked((nuint)Marshal.OffsetOf<BamlApiV1>(field) + (nuint)IntPtr.Size);

@@ -18,10 +18,52 @@
 //! edges — the future's *root* walk only repoints the future object itself,
 //! so liveness and repointing of the output-type declarations happen here.
 
-use crate::{Object, TypeHead};
+use crate::{Function, Object, TypeHead};
+
+macro_rules! walk_function_heads {
+    ($name:ident, $visit:ident $(, $mut:tt)?) => {
+        /// Call `f` on every head a function reaches: its signature, its
+        /// bounds, and the type templates in its constant pool.
+        pub fn $name(func: &$($mut)? Function, f: &mut impl FnMut(&$($mut)? TypeHead)) {
+            func.return_type.$visit(f);
+            func.throws_type.$visit(f);
+            for param in &$($mut)? func.param_types {
+                param.$visit(f);
+            }
+            for bounds in &$($mut)? func.generic_param_bounds {
+                for bound in bounds {
+                    f(&$($mut)? bound.interface);
+                    for arg in &$($mut)? bound.args {
+                        arg.$visit(f);
+                    }
+                    for (_, assoc) in &$($mut)? bound.assoc {
+                        assoc.$visit(f);
+                    }
+                }
+            }
+            for constant in &$($mut)? func.bytecode.constants {
+                match constant {
+                    crate::ConstValue::Type(template) => template.$visit(f),
+                    crate::ConstValue::ClassWithTypeArgs {
+                        type_args_templates,
+                        ..
+                    } => {
+                        for template in type_args_templates {
+                            template.$visit(f);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    };
+}
+
+walk_function_heads!(visit_function_heads, visit_heads);
+walk_function_heads!(visit_function_heads_mut, visit_heads_mut, mut);
 
 macro_rules! walk_object_heads {
-    ($name:ident, $visit:ident $(, $mut:tt)?) => {
+    ($name:ident, $visit:ident, $func_walk:ident $(, $mut:tt)?) => {
         /// Call `f` on every head `object` reaches.
         pub fn $name(object: &$($mut)? Object, f: &mut impl FnMut(&$($mut)? TypeHead)) {
             match object {
@@ -85,38 +127,7 @@ macro_rules! walk_object_heads {
                         }
                     }
                 }
-                Object::Function(func) => {
-                    func.return_type.$visit(f);
-                    func.throws_type.$visit(f);
-                    for param in &$($mut)? func.param_types {
-                        param.$visit(f);
-                    }
-                    for bounds in &$($mut)? func.generic_param_bounds {
-                        for bound in bounds {
-                            f(&$($mut)? bound.interface);
-                            for arg in &$($mut)? bound.args {
-                                arg.$visit(f);
-                            }
-                            for (_, assoc) in &$($mut)? bound.assoc {
-                                assoc.$visit(f);
-                            }
-                        }
-                    }
-                    for constant in &$($mut)? func.bytecode.constants {
-                        match constant {
-                            crate::ConstValue::Type(template) => template.$visit(f),
-                            crate::ConstValue::ClassWithTypeArgs {
-                                type_args_templates,
-                                ..
-                            } => {
-                                for template in type_args_templates {
-                                    template.$visit(f);
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                }
+                Object::Function(func) => $func_walk(func, f),
                 Object::TypeAlias(alias) => alias.definition.$visit(f),
                 Object::Type(value) => value.ty.$visit(f),
                 Object::Instance(instance) => {
@@ -146,10 +157,6 @@ macro_rules! walk_object_heads {
                         param.ty.$visit(f);
                     }
                 }
-                Object::UnscheduledFuture(fut) => {
-                    fut.returns.$visit(f);
-                    fut.throws.$visit(f);
-                }
                 Object::Future(fut) => fut.$visit(f),
                 Object::Array(array) => array.element_ty.$visit(f),
                 Object::Map(map) => {
@@ -175,5 +182,10 @@ macro_rules! walk_object_heads {
     };
 }
 
-walk_object_heads!(visit_object_heads, visit_heads);
-walk_object_heads!(visit_object_heads_mut, visit_heads_mut, mut);
+walk_object_heads!(visit_object_heads, visit_heads, visit_function_heads);
+walk_object_heads!(
+    visit_object_heads_mut,
+    visit_heads_mut,
+    visit_function_heads_mut,
+    mut
+);

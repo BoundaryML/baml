@@ -617,22 +617,30 @@ fn serialize_sse_events(events: Vec<sys_types::sse::SseEvent>) -> Result<String,
     })
 }
 
-/// Background task that reads from a byte stream, parses SSE events, and sends
-/// them through the channel. Exits when the stream ends, errors, or the
-/// receiver is dropped (channel closed).
+/// Background task that reads from a byte stream, parses SSE events (or AWS
+/// event-stream frames, by `content_type`), and sends them through the
+/// channel. Exits when the stream ends, errors, or the receiver is dropped
+/// (channel closed).
 async fn sse_background_task(
     byte_stream: crate::registry::ByteStream,
+    content_type: Option<String>,
     sender: futures::channel::mpsc::UnboundedSender<Result<sys_types::sse::SseEvent, String>>,
 ) {
     use futures::StreamExt;
 
     let mut stream = byte_stream;
-    let mut parser = sys_types::sse::SseParser::new();
+    let mut parser = sys_types::sse::StreamDecoder::for_content_type(content_type.as_deref());
 
     loop {
         match stream.next().await {
             Some(Ok(bytes)) => {
-                let events = parser.feed(&bytes);
+                let events = match parser.feed(&bytes) {
+                    Ok(events) => events,
+                    Err(e) => {
+                        let _ = sender.unbounded_send(Err(e.to_string()));
+                        return;
+                    }
+                };
                 for event in events {
                     if sender.unbounded_send(Ok(event)).is_err() {
                         // Receiver dropped — stream was closed.
@@ -646,7 +654,13 @@ async fn sse_background_task(
             }
             None => {
                 // Stream ended. Flush any buffered event without a trailing blank line.
-                let final_events = parser.finish();
+                let final_events = match parser.finish() {
+                    Ok(events) => events,
+                    Err(e) => {
+                        let _ = sender.unbounded_send(Err(e.to_string()));
+                        return;
+                    }
+                };
                 for event in final_events {
                     if sender.unbounded_send(Ok(event)).is_err() {
                         return;
@@ -659,17 +673,17 @@ async fn sse_background_task(
 }
 
 impl IoNamespaceHttp for WasmHttp {
-    // `timeout_nanos` is accepted for parity with the native ops but not yet
-    // honored: the browser `fetch` backend behind reqwest's wasm client has no
-    // straightforward per-request timeout hook. A `null` BAML timeout (the
-    // default) is unbounded regardless, so omitting it only affects explicit
-    // deadlines on the playground/wasm path.
+    // `timeout_nanos` and `connect_timeout_nanos` are accepted for parity with
+    // the native ops but not yet honored: the browser `fetch` backend behind
+    // reqwest's wasm client has no straightforward per-request timeout hook, so
+    // requests on the playground/wasm path run without the `baml.http` limits.
     fn _fetch(
         &self,
         _heap: &Arc<BexHeap>,
         call_id: CallId,
         url: String,
         _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         let req = io::owned::http::Request {
@@ -677,6 +691,8 @@ impl IoNamespaceHttp for WasmHttp {
             url,
             headers: indexmap::IndexMap::new(),
             body: String::new(),
+            timeout: None,
+            connect_timeout: None,
         };
         self.do_send(call_id, req)
     }
@@ -687,18 +703,19 @@ impl IoNamespaceHttp for WasmHttp {
         call_id: CallId,
         request: io::owned::http::Request,
         _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         self.do_send(call_id, request)
     }
 
-    fn _fetch_sse(
+    fn _send_sse(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         request: io::owned::http::Request,
         _timeout_nanos: Arc<num_bigint::BigInt>,
-        _first_event_timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::SseStream> {
         SysOpOutput::async_op(SendFuture(async move {
@@ -741,11 +758,20 @@ impl IoNamespaceHttp for WasmHttp {
                 .iter()
                 .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
                 .collect();
+            let content_type = response
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_owned);
             let byte_stream = Box::pin(response.bytes_stream());
 
             // Create channel and spawn background task to parse SSE events.
             let (sender, receiver) = futures::channel::mpsc::unbounded();
-            wasm_bindgen_futures::spawn_local(sse_background_task(byte_stream, sender));
+            wasm_bindgen_futures::spawn_local(sse_background_task(
+                byte_stream,
+                content_type,
+                sender,
+            ));
 
             let handle: Arc<dyn std::any::Any + Send + Sync> =
                 Arc::new(WasmSseStreamHandle::new(receiver));

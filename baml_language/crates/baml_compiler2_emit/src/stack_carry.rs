@@ -1,10 +1,11 @@
 use std::collections::{HashMap, HashSet};
 
+use baml_compiler2_hir_ty::extern_loc::ClassRef;
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, CellId, Constant, Local, MirFunctionBody, Operand, Place, Rvalue,
-    StatementKind, Terminator,
+    AggregateKind, BinOp, CellId, Constant, Local, MirFunctionBody, Operand, Place, RuntimeTy,
+    Rvalue, StatementKind, Terminator, TyTemplate,
 };
-use baml_type::{Literal, RuntimeTy, TyTemplate};
+use baml_type::Literal;
 
 use crate::{
     analysis::{LocalClassification, LocalDefUse, StatementRef, UseLocation},
@@ -270,7 +271,7 @@ fn is_stack_carry_use_safe(
 
     let single_entry = |from, to| {
         to != body.entry
-            && !body.catch_regions.iter().any(|region| region.handler == to)
+            && !body.is_handler(to)
             && predecessors
                 .get(&to)
                 .is_some_and(|preds| preds.as_slice() == [from])
@@ -625,12 +626,16 @@ fn simulate_terminator_stack<'db>(
             sim.pop_n(1)
         }
         Terminator::Call {
+            has_trace,
             callee,
             args,
 
             destination,
             ..
         } => {
+            if *has_trace {
+                return false;
+            }
             if args.iter().any(|arg| is_operand_local(arg, carried_local)) {
                 let direct = pull_semantics::resolve_constant_function_item(
                     callee,
@@ -681,7 +686,9 @@ fn simulate_terminator_stack<'db>(
                     classifications,
                     def_use,
                 };
-                if pull_semantics::walk_call_indirect_operands(&mut sink, callee, args).is_err() {
+                if pull_semantics::walk_call_indirect_operands(&mut sink, callee, args, false)
+                    .is_err()
+                {
                     return false;
                 }
 
@@ -693,8 +700,14 @@ fn simulate_terminator_stack<'db>(
             simulate_store_place_stack(destination, sim, classifications)
         }
         Terminator::VirtualCall {
-            args, destination, ..
+            has_trace,
+            args,
+            destination,
+            ..
         } => {
+            if *has_trace {
+                return false;
+            }
             if args.iter().any(|arg| is_operand_local(arg, carried_local)) {
                 let values = args.iter().collect::<Vec<_>>();
                 let trailing = [];
@@ -763,36 +776,18 @@ fn simulate_terminator_stack<'db>(
             sim.push();
             simulate_store_place_stack(destination, sim, classifications)
         }
-        Terminator::Spawn {
-            closure,
-            name,
-            config,
-            future,
-            ..
-        } => {
+        Terminator::Spawn { plan, future, .. } => {
             let mut sink = StackCarryPullSink {
                 sim,
                 carried_local,
                 classifications,
                 def_use,
             };
-            if pull_semantics::walk_operand_pull(&mut sink, closure).is_err() {
+            if pull_semantics::walk_operand_pull(&mut sink, plan).is_err() {
                 return false;
             }
-            if pull_semantics::walk_operand_pull(&mut sink, name).is_err() {
-                return false;
-            }
-            // Config operand is pushed last (null when there is no `with`
-            // clause). Mirror `emit`: always push three, pop three. The
-            // future's `T`/`E` types are pushed after it by `load_type` and
-            // popped again by `Spawn`, so like `alloc_array`'s element type
-            // they leave the net stack effect unchanged.
-            let null_config = Operand::Constant(Constant::Null);
-            let config_op = config.as_deref().unwrap_or(&null_config);
-            if pull_semantics::walk_operand_pull(&mut sink, config_op).is_err() {
-                return false;
-            }
-            if !sim.pop_n(3) {
+            // `Spawn` pops the plan and pushes the future.
+            if !sim.pop_n(1) {
                 return false;
             }
             sim.push();
@@ -840,7 +835,7 @@ fn simulate_terminator_stack<'db>(
             sim.push();
             simulate_store_place_stack(destination, sim, classifications)
         }
-        Terminator::Throw { value } | Terminator::Rethrow { value } => {
+        Terminator::Throw { value } => {
             let mut sink = StackCarryPullSink {
                 sim,
                 carried_local,
@@ -853,19 +848,22 @@ fn simulate_terminator_stack<'db>(
             // THROW consumes the thrown value from the stack when unwinding.
             sim.pop_n(1)
         }
-        Terminator::ThrowIfPanic { value, .. } => {
+        Terminator::Rethrow { value, context }
+        | Terminator::ThrowIfPanic { value, context, .. } => {
             let mut sink = StackCarryPullSink {
                 sim,
                 carried_local,
                 classifications,
                 def_use,
             };
-            if pull_semantics::walk_operand_pull(&mut sink, value).is_err() {
+            if pull_semantics::walk_operand_pull(&mut sink, value).is_err()
+                || pull_semantics::walk_operand_pull(&mut sink, context).is_err()
+            {
                 return false;
             }
-            // ThrowIfPanic loads the value, checks it, and either throws (consuming it)
-            // or continues (consuming it). Either way the stack is clean after.
-            sim.pop_n(1)
+            // RETHROW consumes the value and its context when unwinding;
+            // THROW_IF_PANIC consumes both whether it throws or continues.
+            sim.pop_n(2)
         }
         Terminator::ShortCircuit { operand, .. } => {
             // ShortCircuit peeks the operand (stays on TOS), then conditionally
@@ -1473,7 +1471,7 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
 
     fn alloc_class_instance(
         &mut self,
-        _class_name: &str,
+        _class: ClassRef<'a>,
         ntypeargs: u16,
     ) -> Result<(), Self::Error> {
         // LoadType instructions for type args were already emitted and pushed.
@@ -1489,7 +1487,7 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
 
     fn init_class_instance(
         &mut self,
-        _class_name: &str,
+        _class: ClassRef<'a>,
         ntypeargs: u16,
         field_count: usize,
     ) -> Result<(), Self::Error> {
@@ -1505,13 +1503,6 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         if !self.sim.pop_n(1) {
             return Err(());
         }
-        Ok(())
-    }
-
-    fn alloc_enum_variant(&mut self, _enum_name: &str, _variant: &str) -> Result<(), Self::Error> {
-        // Emitter loads variant index constant, then AllocVariant (pop1 push1).
-        // Net stack effect from this aggregate shape is +1.
-        self.sim.push();
         Ok(())
     }
 
@@ -1541,7 +1532,7 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         Ok(())
     }
 
-    fn is_type(&mut self, _ty: &baml_type::TyTemplate) -> Result<(), Self::Error> {
+    fn is_type(&mut self, _test: &baml_compiler2_mir::TypeTest<'a>) -> Result<(), Self::Error> {
         // Emitter consumes operand and pushes boolean result.
         if !self.sim.pop_n(1) {
             return Err(());
@@ -1559,7 +1550,7 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         Ok(())
     }
 
-    fn load_type(&mut self, _template: &baml_type::TyTemplate) -> Result<(), Self::Error> {
+    fn load_type(&mut self, _template: &baml_compiler2_mir::TyTemplate) -> Result<(), Self::Error> {
         // LoadType pushes one Object::Type value onto the stack. No operands consumed.
         self.sim.push();
         Ok(())
@@ -1635,7 +1626,7 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         format!("{field_idx}")
     }
 
-    fn class_field_name(&self, _class_name: &str, field_idx: usize) -> String {
+    fn class_field_name(&self, _class: ClassRef<'a>, field_idx: usize) -> String {
         format!("{field_idx}")
     }
 }
@@ -1668,8 +1659,9 @@ impl<'a> StackEffectSink<'a> for StackCarryPullSink<'a> {
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler2_mir::{AggregateKind, BasicBlock, LocalDecl, Statement};
-    use baml_type::{RealizedTy, TyTemplate};
+    use baml_compiler2_mir::{
+        AggregateKind, BasicBlock, LocalDecl, RealizedTy, Statement, TyTemplate,
+    };
 
     use super::*;
 
@@ -1699,10 +1691,13 @@ mod tests {
                 terminator: Some(Terminator::Return),
                 span: None,
                 terminator_span: None,
+                unwind: None,
+                handling: None,
+                landing: None,
+                shielded: false,
             }],
             entry: baml_compiler2_mir::BlockId(0),
             locals: local_tys.into_iter().map(local_decl).collect(),
-            catch_regions: vec![],
         }
     }
 
@@ -1732,6 +1727,7 @@ mod tests {
             span: None,
         });
         body.blocks[0].terminator = Some(Terminator::Call {
+            has_trace: false,
             argument_layout: None,
             callee: Operand::Constant(Constant::Null),
             args: vec![],
@@ -1925,11 +1921,15 @@ mod tests {
             used: false,
         };
 
+        let mut db = crate::tests::TestDb::default();
+        let file = db.add_file("t.baml", crate::tests::CLASSES_FOR_TESTS);
         let ok = simulate_operand_prefix_pull_stack(
             &Rvalue::Aggregate {
                 kind: AggregateKind::Class {
-                    name: "Box".to_string(),
-                    type_arg_templates: vec![TyTemplate::from(baml_type::RealizedTy::int())],
+                    class: crate::tests::class_ref(&db, file, "Box"),
+                    type_arg_templates: vec![TyTemplate::from(
+                        baml_compiler2_mir::RealizedTy::int(),
+                    )],
                 },
                 fields: vec![Operand::copy_local(sibling), Operand::copy_local(carried)],
             },
@@ -1946,9 +1946,11 @@ mod tests {
     #[test]
     fn class_aggregate_with_field_copy_is_not_modeled_as_init_plan() {
         let carried = Local(1);
+        let mut db = crate::tests::TestDb::default();
+        let file = db.add_file("t.baml", crate::tests::CLASSES_FOR_TESTS);
         let rvalue = Rvalue::Aggregate {
             kind: AggregateKind::Class {
-                name: "Box".to_string(),
+                class: crate::tests::class_ref(&db, file, "Box"),
                 type_arg_templates: vec![],
             },
             fields: vec![Operand::Copy(Place::Field {
@@ -1974,9 +1976,11 @@ mod tests {
     fn class_spread_rejects_call_result_immediate_before_incremental_init() {
         let carried = Local(1);
         let spread_base = Local(2);
+        let mut db = crate::tests::TestDb::default();
+        let file = db.add_file("t.baml", crate::tests::CLASSES_FOR_TESTS);
         let rvalue = Rvalue::Aggregate {
             kind: AggregateKind::Class {
-                name: "GuideHooks".to_string(),
+                class: crate::tests::class_ref(&db, file, "GuideHooks"),
                 type_arg_templates: vec![],
             },
             fields: vec![
@@ -2059,7 +2063,10 @@ mod tests {
             def_use: &def_use,
         };
 
-        sink.init_class_instance("Box", 1, 2).unwrap();
+        let mut db = crate::tests::TestDb::default();
+        let file = db.add_file("t.baml", crate::tests::CLASSES_FOR_TESTS);
+        sink.init_class_instance(crate::tests::class_ref(&db, file, "Box"), 1, 2)
+            .unwrap();
 
         assert_eq!(sim.depth, Some(2));
     }

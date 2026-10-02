@@ -165,7 +165,7 @@ function never_bottom(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 1);
     derived(
         root.algebra.pair(
-            root.algebra.Never {  },
+            root.algebra.Never {},
             l.value[0],
             root.algebra.Relation.Sub,
             never_bottom_rule(),
@@ -179,7 +179,7 @@ function unknown_top(seed: root.engine.Seed) -> Derived throws never {
     derived(
         root.algebra.pair(
             l.value[0],
-            root.algebra.Top {  },
+            root.algebra.Top {},
             root.algebra.Relation.Sub,
             unknown_top_rule(),
         ),
@@ -319,8 +319,8 @@ function unknown_absorbs_fact(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 1);
     derived(
         root.algebra.pair(
-            root.algebra.Union.new([l.value[0], root.algebra.Top {  }]),
-            root.algebra.Top {  },
+            root.algebra.Union.new([l.value[0], root.algebra.Top {}]),
+            root.algebra.Top {},
             root.algebra.Relation.Equiv,
             unknown_absorbs(),
         ),
@@ -332,7 +332,7 @@ function never_omitted(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 1);
     derived(
         root.algebra.pair(
-            root.algebra.Union.new([l.value[0], root.algebra.Never {  }]),
+            root.algebra.Union.new([l.value[0], root.algebra.Never {}]),
             l.value[0],
             root.algebra.Relation.Equiv,
             never_omitted_from_unions(),
@@ -440,7 +440,7 @@ function unknown_beside_member(seed: root.engine.Seed) -> Derived throws never {
     derived(
         root.algebra.pair(
             l.value[0],
-            root.algebra.Union.new([l.value[0], root.algebra.Top {  }]),
+            root.algebra.Union.new([l.value[0], root.algebra.Top {}]),
             root.algebra.Relation.Sub,
             union_member_rule(),
         ),
@@ -548,9 +548,9 @@ function never_beside_other(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 2);
     let order = root.engine.below(l.next, 2);
     let members: root.algebra.Ty[] = if (order.value == 0) {
-        [l.value[0], root.algebra.Never {  }]
+        [l.value[0], root.algebra.Never {}]
     } else {
-        [root.algebra.Never {  }, l.value[0]]
+        [root.algebra.Never {}, l.value[0]]
     };
     derived(
         root.algebra.pair(
@@ -748,16 +748,16 @@ function optional_superset(seed: root.engine.Seed) -> Derived throws never {
         [],
         [required, root.algebra.Named.new(names.value[1], l.value[1], true)],
         l.value[2],
-        root.algebra.Never {  },
+        root.algebra.Never {},
     );
-    let fewer = root.algebra.Fn.new([], [required], l.value[2], root.algebra.Never {  });
+    let fewer = root.algebra.Fn.new([], [required], l.value[2], root.algebra.Never {});
     derived(root.algebra.pair(more, fewer, root.algebra.Relation.Sub, fn_optional_superset()), names.next)
 }
 
 function positional_count(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 2);
-    let one = root.algebra.Fn.new([l.value[0]], [], l.value[1], root.algebra.Never {  });
-    let two = root.algebra.Fn.new([l.value[0], l.value[0]], [], l.value[1], root.algebra.Never {  });
+    let one = root.algebra.Fn.new([l.value[0]], [], l.value[1], root.algebra.Never {});
+    let two = root.algebra.Fn.new([l.value[0], l.value[0]], [], l.value[1], root.algebra.Never {});
     derived(root.algebra.pair(one, two, root.algebra.Relation.Unrelated, fn_positional_count()), l.next)
 }
 
@@ -772,8 +772,8 @@ function same_positional_count(seed: root.engine.Seed) -> Derived throws never {
     } else {
         [l.value[0], l.value[0]]
     };
-    let one = root.algebra.Fn.new(params, [], l.value[1], root.algebra.Never {  });
-    let other = root.algebra.Fn.new(params, [], l.value[1], root.algebra.Never {  });
+    let one = root.algebra.Fn.new(params, [], l.value[1], root.algebra.Never {});
+    let other = root.algebra.Fn.new(params, [], l.value[1], root.algebra.Never {});
     derived(root.algebra.pair(one, other, root.algebra.Relation.Equiv, fn_positional_count()), count.next)
 }
 

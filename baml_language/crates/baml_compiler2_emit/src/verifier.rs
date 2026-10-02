@@ -82,10 +82,9 @@ pub(crate) fn verify_mir_emit_invariants(
 #[cfg(test)]
 mod tests {
     use baml_compiler2_mir::{
-        BasicBlock, Constant, Local, LocalDecl, MirFunctionBody, Operand, Place, Rvalue, Statement,
-        StatementKind,
+        BasicBlock, Constant, Local, LocalDecl, MirFunctionBody, Operand, Place, RuntimeTy, Rvalue,
+        Statement, StatementKind,
     };
-    use baml_type::RuntimeTy;
 
     use super::*;
     use crate::analysis::AnalysisResult;
@@ -113,20 +112,23 @@ mod tests {
     #[test]
     fn verifier_allows_exhaustive_switch_with_unreachable_default() {
         let mut body = MirFunctionBody {
-            catch_regions: vec![],
             blocks: vec![
                 BasicBlock {
                     id: BlockId(0),
                     statements: vec![],
                     terminator: Some(Terminator::Switch {
                         discriminant: Operand::Constant(Constant::Int(0)),
-                        arms: vec![(0, BlockId(1))],
+                        arms: vec![(baml_compiler2_mir::SwitchKey::Int(0), BlockId(1))],
                         otherwise: BlockId(2),
                         exhaustive: true,
                         arm_names: vec![],
                     }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -134,6 +136,10 @@ mod tests {
                     terminator: Some(Terminator::Return),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(2),
@@ -141,6 +147,10 @@ mod tests {
                     terminator: Some(Terminator::Unreachable),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
+                    shielded: false,
                 },
             ],
             entry: BlockId(0),
@@ -159,20 +169,23 @@ mod tests {
     #[should_panic(expected = "exhaustive switch")]
     fn verifier_rejects_exhaustive_switch_with_reachable_default() {
         let mut body = MirFunctionBody {
-            catch_regions: vec![],
             blocks: vec![
                 BasicBlock {
                     id: BlockId(0),
                     statements: vec![],
                     terminator: Some(Terminator::Switch {
                         discriminant: Operand::Constant(Constant::Int(0)),
-                        arms: vec![(0, BlockId(1))],
+                        arms: vec![(baml_compiler2_mir::SwitchKey::Int(0), BlockId(1))],
                         otherwise: BlockId(2),
                         exhaustive: true,
                         arm_names: vec![],
                     }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -180,6 +193,10 @@ mod tests {
                     terminator: Some(Terminator::Return),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(2),
@@ -187,6 +204,10 @@ mod tests {
                     terminator: Some(Terminator::Goto { target: BlockId(1) }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
+                    shielded: false,
                 },
             ],
             entry: BlockId(0),

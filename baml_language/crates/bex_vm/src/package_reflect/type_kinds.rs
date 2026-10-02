@@ -70,8 +70,9 @@ impl BexVm {
                 stream_done: false,
                 type_tag,
                 has_cleanup: false,
+                methods: IndexMap::new(),
                 generic_param_count: class.generic_param_count,
-                owner: bex_vm_types::HeapPtr::null(),
+                owner: bex_vm_types::types::Owner::anonymous(),
             })));
             declared.insert(
                 class.name.clone(),
@@ -99,7 +100,7 @@ impl BexVm {
                 docstring: enm.metadata.docstring.clone(),
                 other: enm.metadata.other.clone(),
                 type_tag,
-                owner: bex_vm_types::HeapPtr::null(),
+                owner: bex_vm_types::types::Owner::anonymous(),
             })));
             declared.insert(enm.name.clone(), bex_vm_types::TypeHead::new(ptr, type_tag));
         }
@@ -385,10 +386,12 @@ pub(super) fn prepare_class_witnesses(
 /// Publish prepared witness rules for `class_ptr`. Each rule becomes an
 /// ordinary heap `Object::ImplRule` — the resolver borrows it exactly like a
 /// package-owned rule and the collector keeps its `interface_head`/
-/// `methods[].fqn` current — owned by a private package the class points to
-/// as its owner. The dynamic dispatch table then only *finds* the rules; it
-/// holds no strong reference, and the rules live exactly as long as the class
-/// does — including while only an instance still retains it.
+/// `methods[].fqn` current — held by the class itself, as the witnesses of
+/// its [`Owner::Anonymous`](bex_vm_types::types::Owner::Anonymous): a
+/// declaration with no package holds what a package would hold for it. The
+/// dynamic dispatch table then only *finds* the rules; it holds no strong
+/// reference, and the rules live exactly as long as the class does —
+/// including while only an instance still retains it.
 pub(super) fn register_class_witnesses(
     vm: &mut BexVm,
     class_ptr: bex_vm_types::HeapPtr,
@@ -397,18 +400,6 @@ pub(super) fn register_class_witnesses(
     if rules.is_empty() {
         return;
     }
-    let owner = vm.alloc_private_type_owner();
-    let Object::Class(class) = vm.get_object(class_ptr) else {
-        unreachable!("witnessed class placeholder changed variant")
-    };
-    debug_assert!(
-        class.owner.is_null(),
-        "a fresh runtime class has no owner yet"
-    );
-    let local_name = bex_vm_types::types::LocalName {
-        namespace: Vec::new(),
-        name: class.name.item_name().clone(),
-    };
     let entries: Vec<_> = rules
         .into_iter()
         .map(|rule| {
@@ -417,24 +408,22 @@ pub(super) fn register_class_witnesses(
             (interface, rule)
         })
         .collect();
-    let Object::Package(package) = vm.get_object_mut(owner) else {
-        unreachable!("a just-allocated package changed variant")
-    };
-    package.classes.insert(local_name, class_ptr);
-    for (interface, rule) in &entries {
-        package
-            .impl_rules
-            .entry(*interface)
-            .or_default()
-            .push(*rule);
+    for (_, rule) in &entries {
+        vm.tlab
+            .heap()
+            .write_barrier(class_ptr, Value::object(*rule));
     }
-    vm.tlab
-        .heap()
-        .write_barrier(class_ptr, Value::object(owner));
     let Object::Class(class) = vm.get_object_mut(class_ptr) else {
         unreachable!("witnessed class placeholder changed variant")
     };
-    class.owner = owner;
+    let bex_vm_types::types::Owner::Anonymous { witnesses } = &mut class.owner else {
+        unreachable!("a minted class belongs to no package")
+    };
+    debug_assert!(
+        witnesses.is_empty(),
+        "a class's witnesses are registered once"
+    );
+    witnesses.extend(entries.iter().map(|(_, rule)| *rule));
     for (interface, rule) in entries {
         vm.dynamic_dispatch.register_rule(
             interface,
@@ -530,8 +519,9 @@ impl BamlNamespaceClass for PackageReflectImpl {
             stream_done: false,
             type_tag,
             has_cleanup: false,
+            methods: IndexMap::new(),
             generic_param_count: 0,
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         // The head is built off the declaration that was just allocated, so the
         // type reaches it directly — there is no table to consult and no name
@@ -730,7 +720,7 @@ impl BamlNamespaceEnum for PackageReflectImpl {
             docstring: None,
             other: IndexMap::new(),
             type_tag,
-            owner: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let ty = bex_vm_types::RealizedTy::Enum(bex_vm_types::TypeHead::new(enum_ptr, type_tag));
         Ok({
@@ -2000,6 +1990,8 @@ class Fresh {}
         let mut class = (**class).clone();
         class.type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         class.name = bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new("Fresh"));
+        // A minted class belongs to no package.
+        class.owner = bex_vm_types::types::Owner::anonymous();
         let tag = class.type_tag;
         TypeHead::new(vm.tlab.alloc(Object::Class(Box::new(class))), tag)
     }

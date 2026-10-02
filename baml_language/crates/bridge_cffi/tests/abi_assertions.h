@@ -112,8 +112,8 @@ BAML_STATIC_ASSERT(
 BAML_STATIC_ASSERT(offsetof(BamlApiV1, abi_version) == 0, "ABI version must be first");
 BAML_ASSERT_AFTER(abi_version, struct_size);
 BAML_ASSERT_AFTER(struct_size, version);
-BAML_ASSERT_AFTER(version, initialize_runtime_from_bytecode);
-BAML_ASSERT_AFTER(initialize_runtime_from_bytecode, free_buffer);
+BAML_ASSERT_AFTER(version, initialize_runtime_from_blob);
+BAML_ASSERT_AFTER(initialize_runtime_from_blob, free_buffer);
 BAML_ASSERT_AFTER(free_buffer, register_callback);
 BAML_ASSERT_AFTER(register_callback, call_function);
 BAML_ASSERT_AFTER(call_function, new_function_call);
@@ -133,13 +133,13 @@ BAML_ASSERT_AFTER(media_base64, media_mime_type);
 BAML_ASSERT_AFTER(media_mime_type, register_bridge);
 BAML_ASSERT_AFTER(register_bridge, register_unhandled_spawn_error_callback);
 BAML_ASSERT_AFTER(register_unhandled_spawn_error_callback, shutdown_runtime);
-BAML_ASSERT_AFTER(shutdown_runtime, initialize_runtime_from_bytecode_with_metadata);
+BAML_ASSERT_AFTER(shutdown_runtime, initialize_runtime_from_blob_with_metadata);
 BAML_STATIC_ASSERT(
     BAML_API_V1_MIN_SIZE == offsetof(BamlApiV1, register_unhandled_spawn_error_callback),
     "the appended lifecycle fields must follow the original V1 prefix");
 
 BAML_ASSERT_FIELD_TYPE(version, BamlVersionFn)
-BAML_ASSERT_FIELD_TYPE(initialize_runtime_from_bytecode, BamlInitializeRuntimeFromBytecodeFn)
+BAML_ASSERT_FIELD_TYPE(initialize_runtime_from_blob, BamlInitializeRuntimeFromBlobFn)
 BAML_ASSERT_FIELD_TYPE(free_buffer, BamlFreeBufferFn)
 BAML_ASSERT_FIELD_TYPE(register_callback, BamlRegisterCallbackFn)
 BAML_ASSERT_FIELD_TYPE(call_function, BamlCallFunctionFn)
@@ -161,7 +161,7 @@ BAML_ASSERT_FIELD_TYPE(register_bridge, BamlRegisterBridgeFn)
 BAML_ASSERT_FIELD_TYPE(register_unhandled_spawn_error_callback,
                        BamlRegisterUnhandledSpawnErrorCallbackFn)
 BAML_ASSERT_FIELD_TYPE(shutdown_runtime, BamlShutdownRuntimeFn)
-BAML_ASSERT_FIELD_TYPE(initialize_runtime_from_bytecode_with_metadata,
-                       BamlInitializeRuntimeFromBytecodeWithMetadataFn)
+BAML_ASSERT_FIELD_TYPE(initialize_runtime_from_blob_with_metadata,
+                       BamlInitializeRuntimeFromBlobWithMetadataFn)
 
 #endif /* BAML_CFFI_TEST_ABI_ASSERTIONS_H */

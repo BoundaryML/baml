@@ -220,7 +220,7 @@ if (CanCreateLoopbackSockets())
     using Baml.Http.Server bamlServer = await Baml.Http.Server.BindAsync(
         "127.0.0.1:0",
         networkTimeout.Token);
-    TaskCompletionSource<Baml.Http.Request> receivedRequest = new(
+    TaskCompletionSource<Baml.Http.ServerRequest> receivedRequest = new(
         TaskCreationOptions.RunContinuationsAsynchronously);
     using CancellationTokenSource serveCancellation = CancellationTokenSource.CreateLinkedTokenSource(
         networkTimeout.Token);
@@ -243,13 +243,13 @@ if (CanCreateLoopbackSockets())
             $"Server.serve returned {(int)served.StatusCode}: {servedBody}");
         Require(servedBody == "served-by-baml", "Server.serve response changed");
     }
-    Baml.Http.Request serverRequest = await receivedRequest.Task.WaitAsync(networkTimeout.Token);
+    Baml.Http.ServerRequest serverRequest = await receivedRequest.Task.WaitAsync(networkTimeout.Token);
     Require(
         serverRequest.Method == "GET"
             && serverRequest.Url == "/resource?q=1"
             && serverRequest.Headers.ContainsKey("host")
             && serverRequest.Body == "",
-        "Server.serve lost Request structural fields");
+        "Server.serve lost ServerRequest structural fields");
     serveCancellation.Cancel();
     _ = await ExpectAsync<OperationCanceledException>(serveTask);
 
@@ -258,13 +258,15 @@ if (CanCreateLoopbackSockets())
     int ssePort = ((IPEndPoint)ssePeer.LocalEndpoint).Port;
     Task ssePeerTask = ServeOneSseResponseAsync(ssePeer, networkTimeout.Token);
     string sseUrl = $"http://127.0.0.1:{ssePort}/events";
-    using Baml.Http.SseStream sse = await Baml.Http.Functions.FetchSseAsync(
+    using Baml.Http.SseStream sse = await Baml.Http.Functions.SendSseAsync(
         new Baml.Http.Request
         {
             Method = "GET",
             Url = sseUrl,
             Headers = new Dictionary<string, string>(),
             Body = "",
+            Timeout = null,
+            ConnectTimeout = null,
         },
         cancellationToken: networkTimeout.Token);
     string? firstEvent = await sse.NextAsync(networkTimeout.Token);
@@ -426,15 +428,12 @@ Require(
 _ = writer.Flush();
 _ = writer.Close();
 
-using Baml.Spawn.TaskGroup group = Baml.Spawn.TaskGroup.New(2, "stdlib-resources");
-Require(group.Limit() == 2 && group.Name() == "stdlib-resources", "TaskGroup construction changed");
-_ = group.SetLimit(1);
+using Baml.Spawn.Limit limit = Baml.Spawn.Limit.New(2);
+Require(limit.Capacity() == 2, "Limit construction changed");
+_ = Expect<Baml.BamlErrorException>(() => Baml.Spawn.Limit.New(0));
 Require(
-    group.Limit() == 1
-        && group.ActiveCount() == 0
-        && group.QueuedCount() == 0
-        && group.Cancel() == 0,
-    "TaskGroup state methods changed");
+    limit.ActiveCount() == 0 && limit.QueuedCount() == 0,
+    "Limit state methods changed");
 
 _ = csvReader.Close();
 

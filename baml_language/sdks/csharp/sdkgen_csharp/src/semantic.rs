@@ -219,6 +219,7 @@ enum BuiltinProjection {
 fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
     match name.to_string().as_str() {
         "baml.http.Request"
+        | "baml.http.ServerRequest"
         | "baml.glob.ScanOptions"
         | "baml.fs.DirEntry"
         | "baml.fs.MkdirOptions"
@@ -229,9 +230,12 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.csv.Position"
         | "baml.csv.ReaderOptions"
         | "baml.csv.WriterOptions"
+        // A field-less marker a user signature can pass around, like
+        // `baml.iter.Done`.
+        | "baml.spawn.Root"
         | "baml.ws.CloseEvent" => Some(BuiltinProjection::StructuralClass),
         "baml.csv.ErrorKind" => Some(BuiltinProjection::StructuralEnum),
-        "baml.spawn.TaskGroup"
+        "baml.spawn.Limit"
         | "baml.spawn.CancelToken"
         | "baml.http.Response"
         | "baml.http.SseStream"
@@ -249,7 +253,10 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.ws.WebSocket" => Some(BuiltinProjection::Resource),
         "ai.FunctionSpec" => Some(BuiltinProjection::FunctionSpec),
         "ai.Prompt" => Some(BuiltinProjection::Prompt),
-        "baml.csv._NeedData"
+        // A plan holds a BAML closure: no host can build or run one, so a
+        // signature that mentions it has no host shape.
+        "baml.spawn.Plan"
+        | "baml.csv._NeedData"
         | "baml.csv._Skip"
         | "baml.csv._Headers"
         | "ai.OutputFormat"
@@ -292,13 +299,6 @@ fn is_public_resource_stdlib_function(name: &Name) -> bool {
     if name.name().as_str().starts_with('_') {
         return false;
     }
-    // `spawn.options` returns a VM closure, not a resource. Python and C# both
-    // classify native closure values as unsupported SDK boundaries; keeping it
-    // out here does not omit any resource factory or method.
-    if name.to_string() == "baml.spawn.options" {
-        return false;
-    }
-
     name.package().as_str() == "baml"
         && name.namespace().first().is_some_and(|namespace| {
             matches!(

@@ -389,9 +389,9 @@ fn corpus_snapshots() {
 
     // ---- Bytecode: one emit, snapshotted per namespace ----
     // `OptLevel::Two` matches what the deleted per-project codegen tests used
-    // (`generate_project_bytecode` defaults), and O2 lets emit reuse the MIR
-    // memos the snapshots above populated.
-    let program = baml_compiler2_emit::generate_project_bytecode(&db, package)
+    // (the CLI's level), and O2 lets emit reuse the MIR memos the snapshots
+    // above populated.
+    let program = baml_db::compile_program(&db, package, baml_compiler2_emit::OptLevel::Two)
         .expect("bytecode emit should succeed for an error-free corpus");
 
     // Emit mints tag-only type heads (the pointer half exists only once a heap
@@ -402,14 +402,13 @@ fn corpus_snapshots() {
 
     // Exact emitted names prevent a growing runtime namespace from silently
     // inflating its golden. Missing functions fail instead of emitting nothing.
-    let by_name: BTreeMap<_, _> = crate::engine::named_and_interface_body_functions(&program)
-        .map(|(name, idx)| (name.as_str(), idx))
-        .collect();
+    let by_name: BTreeMap<_, _> =
+        crate::engine::named_and_interface_body_functions(&program).collect();
     for example in snapshot_policy::BYTECODE {
         let mut functions: Vec<(String, &Function)> = Vec::new();
         for name in example.functions {
             let idx = *by_name
-                .get(name)
+                .get(*name)
                 .unwrap_or_else(|| panic!("bytecode snapshot function missing: {name}"));
             let func = crate::engine::bound_function(&heap, idx)
                 .unwrap_or_else(|| panic!("bytecode snapshot entry is not a function: {name}"));

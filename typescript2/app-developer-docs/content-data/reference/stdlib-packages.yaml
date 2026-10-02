@@ -1,13 +1,14 @@
 packages:
   - baml
   - reflect
-  - boundary
+  - trace
   - testing
   - assert
   - log
   - ai
   - openai
   - anthropic
+  - typesafeai
   - google
   - aws
   - vercel

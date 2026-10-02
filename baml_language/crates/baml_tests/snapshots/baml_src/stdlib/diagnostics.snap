@@ -40,22 +40,6 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[stream.baml:436:9]
- 436 │         baml.sys.panic("unreachable")
-     ·         ─────────────────────────────
-     ╰────
-
-  [type] E0146
-
-  ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[stream.baml:520:9]
- 520 │         baml.sys.panic("unreachable")
-     ·         ─────────────────────────────
-     ╰────
-
-  [type] E0146
-
-  ⚠ unreachable code: 1 statement(s) after diverging statement
      ╭─[baml/ns_csv/csv.baml:632:13]
  632 │             root.sys.panic("unreachable: Rows.next loop ended")
      ·             ───────────────────────────────────────────────────
@@ -64,31 +48,47 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[stream.baml:593:9]
+ 593 │         baml.sys.panic("unreachable")
+     ·         ─────────────────────────────
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
      ╭─[baml/ns_iter/iter.baml:786:13]
- 786 │             Done {  }
-     ·             ─────────
+ 786 │             Done {}
+     ·             ───────
      ╰────
 
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
      ╭─[baml/ns_iter/iter.baml:831:13]
- 831 │             Done {  }
-     ·             ─────────
+ 831 │             Done {}
+     ·             ───────
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[stream.baml:712:9]
+ 712 │         baml.sys.panic("unreachable")
+     ·         ─────────────────────────────
      ╰────
 
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
      ╭─[baml/ns_iter/iter.baml:891:13]
- 891 │             Done {  }
-     ·             ─────────
+ 891 │             Done {}
+     ·             ───────
      ╰────
 
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
      ╭─[baml/ns_iter/iter.baml:947:13]
- 947 │             Done {  }
-     ·             ─────────
+ 947 │             Done {}
+     ·             ───────
      ╰────

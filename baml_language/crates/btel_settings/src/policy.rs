@@ -34,14 +34,14 @@ impl<T> TelemetryPolicy<T> {
         capture_error: false,
     };
 }
-/// **Observability semantics.** Disabling entry input capture changes the data users receive;
-/// it is not equivalent-work optimization.
+/// **Observability semantics.** Default entry input capture for AI invocations.
+/// Explicit call-site capture options override this default.
 pub const AI_CAPTURE_INPUTS: bool = true;
-/// **Observability semantics.** Sticky output capture for AI invocations; change only with
-/// the capture contract.
+/// **Observability semantics.** Sticky default output capture for AI invocations.
+/// Explicit call-site capture options override this default.
 pub const AI_CAPTURE_OUTPUT: bool = true;
-/// **Observability semantics.** Sticky error capture for AI invocations; change only with the
-/// capture contract.
+/// **Observability semantics.** Sticky default error capture for AI invocations.
+/// Explicit call-site capture options override this default.
 pub const AI_CAPTURE_ERROR: bool = true;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

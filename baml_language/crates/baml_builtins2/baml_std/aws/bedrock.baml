@@ -94,6 +94,11 @@ class BedrockClient {
     /// through on_event. Status, headers, and timing are always recorded; this
     /// flag only gates the bodies.
     capture_wire: bool,
+    // The deadlines of one request attempt: a Duration is the end-to-end
+    // total; ai.LlmTimeoutOptions also sets the connect, first-token and
+    // stream-token limits. Null is the default: 5 minutes total, 10 seconds
+    // to connect. Browser/Wasm does not enforce the transport limits.
+    timeout: baml.time.Duration | ai.LlmTimeoutOptions | null,
 
     /// Creates a client. Construction reads no environment variable, so
     /// declaring one is always safe; credentials and endpoints resolve when a
@@ -118,6 +123,7 @@ class BedrockClient {
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
         capture_wire: bool = true,
+        timeout: baml.time.Duration | ai.LlmTimeoutOptions | null = null,
     ) -> BedrockClient {
         BedrockClient {
             model: model,
@@ -139,6 +145,7 @@ class BedrockClient {
             headers: headers,
             query_params: query_params,
             capture_wire: capture_wire,
+            timeout: timeout,
         }
     }
 
@@ -169,12 +176,13 @@ class BedrockClient {
         }
     }
 
-    // NOTE: deliberately no `implements ai.stream.StreamingClient`.
-    // ConverseStream frames its response as binary
-    // `application/vnd.amazon.eventstream` (length-prefixed frames with a
-    // header block and a CRC), which `baml.http.fetch_sse` cannot consume —
-    // decoding it needs a new Rust transport. Absent the interface,
-    // `ai.stream.from_spec` raises `ai.errors.StreamingUnsupported` naming
-    // this client, which is exactly right. sys_llm never streamed Bedrock
-    // either, so nothing regresses (PLAN §6).
+    /// ConverseStream. Its binary `application/vnd.amazon.eventstream`
+    /// response is decoded natively by `baml.http.send_sse`.
+    implements ai.stream.StreamingClient {
+        function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
+            root.internal.invoke_stream(self, input) catch_all (e) {
+                _ => throw ai.errors.normalize_invoke(e),
+            }
+        }
+    }
 }

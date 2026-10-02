@@ -15,8 +15,9 @@
 //!
 //! Generic over the head like the types it holds: the solver works at the
 //! compile-time head ([`DeclName`], the default), the cache
-//! manifest persists the wire head (`FunctionThrowFacts<TypeName>`), and the
-//! seed boundary re-spells between them through the file's root.
+//! manifest persists heads located by edge path from the file's own package
+//! (`FunctionThrowFacts<PathName>`), and the seed boundary converts between
+//! them through the file's root.
 
 use std::collections::BTreeSet;
 
@@ -40,8 +41,8 @@ pub struct FunctionThrowFacts<N: Clone + Ord = DeclName> {
 
 impl<N: Clone + Ord> FunctionThrowFacts<N> {
     /// These facts with every head replaced by what `f` resolves it to,
-    /// failing on the first head `f` rejects — the seed boundary's re-spelling
-    /// between the wire head and the compile-time head.
+    /// failing on the first head `f` rejects — the seed boundary's conversion
+    /// between the located head and the compile-time head.
     pub fn try_map_heads<M: Clone + Ord, E>(
         &self,
         f: &mut impl FnMut(&N) -> Result<M, E>,

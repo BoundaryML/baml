@@ -6,16 +6,35 @@ test "cancelling a completed success preserves its result" {
     assert.equal(await f, "finished");
 }
 
-test "cancelling twice reports an already settled cancellation" {
-    let group = baml.spawn.TaskGroup.new(0);
-    let f = spawn with baml.spawn.options(group = group) { "not started" };
+// A one-slot limit and the task holding that slot: anything else spawned with
+// the limit waits until the holder is cancelled.
+class Gate {
+    limit: baml.spawn.Limit,
+    holder: baml.future.Future<null, baml.errors.Io>,
+}
+
+function gate() -> Gate {
+    let limit = baml.spawn.Limit.new(1) catch (e) {
+        baml.errors.InvalidArgument => baml.sys.panic("one is positive"),
+    };
+    let holder = spawn "gate holder" with limit {
+        baml.sys.sleep(baml.time.Duration.from_seconds(60n))
+    };
+    Gate { limit: limit, holder: holder }
+}
+
+test "cancelling twice fires the token once" {
+    let g = gate();
+    defer { g.holder.cancel(); }
+    let f = spawn with g.limit { "not started" };
     assert.equal(f.cancel(), true);
     assert.equal(f.cancel(), false);
-    assert.equal(f.is_cancelled(), true);
+    // The task settles its own future, so its state is readable once it has.
     let value = (await f) catch (e) {
         baml.panics.Cancelled => "cancelled",
     };
     assert.equal(value, "cancelled");
+    assert.equal(f.is_cancelled(), true);
 }
 
 function completed_or_failed(value: int) -> int throws LookupFailed {
@@ -24,14 +43,14 @@ function completed_or_failed(value: int) -> int throws LookupFailed {
 }
 
 test "all_settled preserves failures and waits for later successes" {
-    let group = baml.spawn.TaskGroup.new(0);
+    let g = gate();
     let failed = spawn { completed_or_failed(-1) };
-    let later = spawn with baml.spawn.options(group = group) { completed_or_failed(2) };
+    let later = spawn with g.limit { completed_or_failed(2) };
     let release = spawn {
         baml.sys.sleep(baml.time.Duration.from_milliseconds(100));
-        group.set_limit(1);
+        g.holder.cancel()
     };
-    defer { group.set_limit(1); }
+    defer { g.holder.cancel(); }
     let outcomes = await baml.future.all_settled([failed, later]);
     assert.equal(later.is_settled(), true);
     assert.equal(later.is_cancelled(), false);
@@ -65,7 +84,7 @@ test "explicit cancellation cascades to attached children but not detached child
     let detached: baml.future.Future<int, baml.errors.Io>[] = [];
     let parent = spawn {
         attached.push(spawn { baml.sys.sleep(baml.time.Duration.from_seconds(60n)); 1 });
-        detached.push(spawn with baml.spawn.options(detach = true) {
+        detached.push(spawn with baml.spawn.Root.new() {
             baml.sys.sleep(baml.time.Duration.from_seconds(60n)); 2
         });
         baml.sys.sleep(baml.time.Duration.from_seconds(60n));
@@ -80,24 +99,88 @@ test "explicit cancellation cascades to attached children but not detached child
 }
 
 test "successful parent completion leaves its child running" {
-    let group = baml.spawn.TaskGroup.new(0);
+    let g = gate();
     let parent = spawn {
-        spawn with baml.spawn.options(group = group) { 42 }
+        spawn with g.limit { 42 }
     };
     let child = await parent;
     assert.equal(child.is_settled(), false);
-    group.set_limit(1);
+    g.holder.cancel();
     assert.equal(await child, 42);
 }
 
+test "a wrapper runs around the task and passes its value through" {
+    let traced = Traced {};
+    let f = spawn "traced read" with traced { simulate_read("notes.md", 1) };
+    assert.equal(await f, "contents of notes.md");
+}
+
+test "a fallback replaces an error with its value" {
+    assert.equal(read_or_empty("no/such/file.md"), "");
+}
+
+test "a fallback does not catch cancellation" {
+    let started: bool[] = [];
+    let empty = Fallback { value: "" };
+    let f = spawn with empty {
+        started.push(true);
+        baml.sys.sleep(baml.time.Duration.from_seconds(60n));
+        "finished"
+    };
+    // Cancel once the body is running inside the fallback's wrapper.
+    while (started.length() == 0) { baml.sys.sleep(baml.time.Duration.from_milliseconds(1)); }
+    f.cancel();
+    let value = (await f) catch (e) {
+        baml.panics.Cancelled => "cancelled",
+    };
+    assert.equal(value, "cancelled");
+}
+
+test "cancelling a pool's token cancels its running and waiting tasks" {
+    let pool = ProviderPool {
+        limit: baml.spawn.Limit.new(1),
+        token: baml.spawn.CancelToken.new(),
+    };
+    let running = spawn with pool {
+        baml.sys.sleep(baml.time.Duration.from_seconds(60n));
+        "finished"
+    };
+    let waiting = spawn with pool { "not started" };
+    assert.equal(pool.limit.queued_count(), 1);
+    pool.token.cancel();
+    let outcomes = [running, waiting].map((f) -> {
+        (await f) catch (e) {
+            baml.panics.Cancelled => "cancelled",
+            baml.errors.Io => "sleep failed",
+        }
+    });
+    assert.equal(outcomes, ["cancelled", "cancelled"]);
+}
+
+test "a retry loop that rethrows cancellation stops when cancelled" {
+    let f = spawn { read_when_available("no/such/file.md") };
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(120));
+    f.cancel();
+    let outcome = (await f) catch (e) {
+        baml.panics.Cancelled => "cancelled",
+    };
+    assert.equal(outcome, "cancelled");
+}
+
 test "all cancels remaining inputs before rethrowing" {
-    let group = baml.spawn.TaskGroup.new(0);
+    let g = gate();
+    defer { g.holder.cancel(); }
     let failed = spawn { completed_or_failed(-1) };
-    let later = spawn with baml.spawn.options(group = group) { completed_or_failed(2) };
+    let later = spawn with g.limit { completed_or_failed(2) };
     let message = {
         await baml.future.all([failed, later]);
         "unexpected success"
     } catch (e) { LookupFailed => e.key };
     assert.equal(message, "-1");
+    // The task settles its own future, so its state is readable once it has.
+    let _ = (await later) catch (e) {
+        baml.panics.Cancelled => 0,
+        LookupFailed => 0,
+    };
     assert.equal(later.is_cancelled(), true);
 }

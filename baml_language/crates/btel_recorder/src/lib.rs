@@ -4,6 +4,8 @@
 //! adapts it to completed-file callbacks. The `Publisher` interface is defined by
 //! `btel_processor`; no storage or networking is implemented here.
 
+use std::{collections::BTreeMap, sync::Arc};
+
 use btel_processor::AggregateDelta;
 use btel_records::SpanRecord;
 use btel_snapshot::Snapshot;
@@ -11,12 +13,15 @@ use btel_types::{CallPathNodeId, TelemetryId};
 
 mod clock;
 mod encoding;
+mod errors;
 mod flags;
+mod functions;
 mod merge;
 mod recording;
 pub use flags::CompletionFlags;
 pub use recording::{
-    RecordingBuilder, RecordingConfig, RecordingError, RecordingId, RecordingPublisher, SealedFile,
+    ProcessRecording, RecordingBuilder, RecordingConfig, RecordingError, RecordingId,
+    RecordingPublisher, SealedFile,
 };
 
 /// Generated wire messages, never the VM's in-memory layout. Scalar span
@@ -26,12 +31,25 @@ pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/baml.btel.recording.v2.rs"));
 }
 
+impl From<proto::SnapshotId> for btel_snapshot::SnapshotId {
+    fn from(id: proto::SnapshotId) -> Self {
+        let mut bytes = [0; 16];
+        bytes[..8].copy_from_slice(&id.low.to_le_bytes());
+        bytes[8..].copy_from_slice(&id.high.to_le_bytes());
+        Self::from_bytes(bytes)
+    }
+}
+
 /// Cold sections retained until sealing; spans are already encoded.
 #[derive(Default)]
 struct PendingMessages {
     definitions: proto::Definitions,
     aggregates: proto::AggregateBatch,
     clock_states: proto::ClockStateBatch,
+    /// `ErrorBatch` body, encoded as each message arrives: a throw-heavy
+    /// program sends one raise and one end per throw, and prost would
+    /// otherwise recompute every nested length several times per file.
+    errors: Vec<u8>,
 }
 
 /// Worker-local conversion state. The recording publisher drains this after
@@ -41,8 +59,16 @@ struct ConversionBuffer {
     pending: PendingMessages,
     spans: encoding::EncodedSpans,
     aggregates: merge::PendingAggregates,
+    sysops: merge::PendingSysOps,
+    functions: functions::FunctionDefinitions,
+    // Referenced epochs not yet observed settled, released once final. Bounded
+    // by live runs plus runs settled since the last sealed file.
+    unsettled_clocks: BTreeMap<u64, Arc<btel_clock::ClockEpoch>>,
     // Cached repeated-message bytes. Span bytes are already materialized.
     pending_encoded_bytes: usize,
+    // Unwinds in progress, at most one per telemetry thread. Empty unless an
+    // exception is being unwound, so ordinary completions pay one length check.
+    unwinds: errors::ActiveUnwinds,
 }
 // Count each newly constructed metadata message once; never rescan the file.
 fn push_message<M: prost::Message>(output: &mut Vec<M>, bytes: &mut usize, tag: u32, value: M) {
@@ -60,7 +86,8 @@ impl ConversionBuffer {
         parent: Option<TelemetryId>,
         path: btel_types::CallPathId,
         started: btel_types::ClockInstant,
-        clock: &btel_clock::ClockEpoch,
+        clock: &Arc<btel_clock::ClockEpoch>,
+        name: Option<&str>,
     ) {
         push_message(
             &mut self.pending.definitions.threads,
@@ -72,6 +99,7 @@ impl ConversionBuffer {
                 spawn_call_path_id: path.get(),
                 started_at_ticks: started.get(),
                 clock_epoch_id: clock.metadata().epoch.get(),
+                name: name.map(str::to_owned),
             },
         );
         push_message(
@@ -80,22 +108,70 @@ impl ConversionBuffer {
             4,
             clock::definition(clock.metadata()),
         );
+        let state = clock::state(clock);
+        if state.r#final {
+            self.unsettled_clocks.remove(&state.epoch_id);
+        } else {
+            self.unsettled_clocks
+                .entry(state.epoch_id)
+                .or_insert_with(|| Arc::clone(clock));
+        }
         push_message(
             &mut self.pending.clock_states.states,
             &mut self.pending_encoded_bytes,
             1,
-            clock::state(clock),
+            state,
         );
+    }
+
+    /// Report and release epochs that settled since their last observation.
+    /// `latest` also reports each still-unsettled epoch's current, non-final
+    /// status. True when every observed epoch has been reported final.
+    fn observe_unsettled_clocks(&mut self, latest: bool) -> bool {
+        let states = &mut self.pending.clock_states.states;
+        let bytes = &mut self.pending_encoded_bytes;
+        self.unsettled_clocks.retain(|_, epoch| {
+            let state = clock::state(epoch);
+            let settled = state.r#final;
+            if settled || latest {
+                push_message(states, bytes, 1, state);
+            }
+            !settled
+        });
+        self.unsettled_clocks.is_empty()
     }
 }
 
 impl ConversionBuffer {
+    fn define_function(&mut self, function: btel_types::FunctionId) {
+        if let Some(resolution) = self.functions.resolve(function) {
+            push_message(
+                &mut self.pending.definitions.functions,
+                &mut self.pending_encoded_bytes,
+                1,
+                proto::FunctionDefinition {
+                    function_id: function.get(),
+                    resolution: Some(resolution),
+                },
+            );
+        }
+    }
+
     fn aggregate(&mut self, delta: AggregateDelta) {
         // One recording window before serialization and delivery to its sink.
         // Span callbacks do not enter this map: the processor already counted them.
         self.pending_encoded_bytes = self
             .pending_encoded_bytes
             .saturating_add(self.aggregates.observe(delta, &mut self.pending.aggregates));
+    }
+
+    fn sysop_time(&mut self, path: btel_types::CallPathId, elapsed: btel_types::ClockDuration) {
+        self.pending_encoded_bytes =
+            self.pending_encoded_bytes
+                .saturating_add(
+                    self.sysops
+                        .observe(path, elapsed, &mut self.pending.aggregates),
+                );
     }
 
     fn is_empty(&self) -> bool {
@@ -114,17 +190,79 @@ impl ConversionBuffer {
 
     fn span(&mut self, thread: TelemetryId, record: &SpanRecord<Snapshot, Snapshot>) {
         use proto::span_event::Event;
+        if !self.unwinds.is_empty() {
+            self.link_unwound(thread, record);
+        }
         match record {
             SpanRecord::ThreadSelected { .. } => panic!("processor must consume selectors"),
+            SpanRecord::Log {
+                parent_id,
+                function,
+                pc,
+                at,
+                level,
+                event_name,
+                captured_data,
+            } => {
+                self.define_function(*function);
+                let level = match level {
+                    btel_records::LogLevel::Info => proto::LogLevel::Info,
+                    btel_records::LogLevel::Debug => proto::LogLevel::Debug,
+                    btel_records::LogLevel::Warn => proto::LogLevel::Warn,
+                    btel_records::LogLevel::Error => proto::LogLevel::Error,
+                };
+                self.event(
+                    thread,
+                    Event::Log(proto::LogEvent {
+                        parent_id: parent_id.get(),
+                        function_id: function.get(),
+                        pc: *pc,
+                        at_ticks: at.get(),
+                        level: level as i32,
+                        event_name: event_name.as_deref().map(str::to_owned),
+                        data_cas_id: captured_data.as_ref().map(snapshot_id),
+                    }),
+                );
+            }
+            SpanRecord::ContextSelected { captured_context } => {
+                self.spans.select_context(
+                    thread,
+                    captured_context.as_ref().map(|snapshot| {
+                        proto::thread_section::Context::ContextCasId(snapshot_id(snapshot))
+                    }),
+                );
+            }
+            SpanRecord::ContextCleared => {
+                self.spans.select_context(
+                    thread,
+                    Some(proto::thread_section::Context::EmptyContext(true)),
+                );
+            }
+            SpanRecord::ContextReferenced { id } => {
+                self.spans.select_context(
+                    thread,
+                    Some(proto::thread_section::Context::ContextCasId(
+                        snapshot_reference(*id),
+                    )),
+                );
+            }
             SpanRecord::ThreadSpanAnnouncement {
                 id,
                 parent_id,
                 spawn_call_path,
                 started_at,
                 clock,
+                name,
             } => {
                 assert_eq!(thread, *id, "thread definition disagrees with selector");
-                self.thread_definition(*id, *parent_id, *spawn_call_path, *started_at, clock);
+                self.thread_definition(
+                    *id,
+                    *parent_id,
+                    *spawn_call_path,
+                    *started_at,
+                    clock,
+                    name.as_ref().map(|name| &***name),
+                );
                 self.event(
                     thread,
                     Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
@@ -138,23 +276,110 @@ impl ConversionBuffer {
                 completed_at,
                 outcome,
                 clock,
+                name,
             } => {
                 assert_eq!(thread, *id, "thread definition disagrees with selector");
-                self.thread_definition(*id, *parent_id, *spawn_call_path, *started_at, clock);
+                self.thread_definition(
+                    *id,
+                    *parent_id,
+                    *spawn_call_path,
+                    *started_at,
+                    clock,
+                    name.as_ref().map(|name| &***name),
+                );
                 self.event(
                     thread,
                     Event::ThreadCompletion(proto::ThreadCompletion {
                         completed_at_ticks: completed_at.get(),
                         outcome: flags::outcome(*outcome) as i32,
+                        panicked: *outcome == btel_types::InvocationOutcome::Panicked,
                     }),
                 );
+                // A raise that never ended cannot claim anything after its thread.
+                self.unwinds.clear_thread(thread);
             }
+            SpanRecord::ThreadSpanRunning { at } => self.event(
+                thread,
+                Event::ThreadRunning(proto::ThreadRunning { at_ticks: at.get() }),
+            ),
+            SpanRecord::NetworkSpanAnnouncement(span) => self.event(
+                thread,
+                Event::NetworkAnnouncement(proto::NetworkAnnouncement {
+                    id: span.id.get(),
+                    parent_id: span.parent_id.get(),
+                    call_path_id: span.call_path.get(),
+                    started_at_ticks: span.started_at.get(),
+                    method: span.method.to_string(),
+                    url: span.url.to_string(),
+                    request_cas_id: span.request.as_ref().map(snapshot_id),
+                }),
+            ),
+            SpanRecord::NetworkEvent(event) => self.event(
+                thread,
+                Event::NetworkEvent(proto::NetworkEvent {
+                    span_id: event.span.get(),
+                    name: event.name.as_str().to_owned(),
+                    at_ticks: event.at.get(),
+                    payload_cas_id: event.payload.as_ref().map(snapshot_id),
+                }),
+            ),
+            SpanRecord::NetworkSpanCompletion(done) => self.event(
+                thread,
+                Event::NetworkCompletion(proto::NetworkCompletion {
+                    span_id: done.span.get(),
+                    completed_at_ticks: done.completed_at.get(),
+                    outcome: flags::outcome(done.outcome) as i32,
+                    panicked: done.outcome == btel_types::InvocationOutcome::Panicked,
+                    error_cas_id: done.error.as_ref().map(snapshot_id),
+                }),
+            ),
+            SpanRecord::ErrorRaiseOrigin { raise_id, origin } => {
+                self.error_raise_origin(thread, *raise_id, *origin);
+            }
+            SpanRecord::ErrorRaiseStack(stack) => self.error_raise_stack(thread, stack),
+            SpanRecord::ErrorRaised { .. } => self.error_raised(thread, record),
+            SpanRecord::ErrorRaisedAndEnded {
+                raise_id,
+                result,
+                handler_function,
+                handler_pc,
+                unwound_frames,
+                ..
+            } => {
+                self.error_raised(thread, record);
+                self.error_unwind_ended(
+                    thread,
+                    *raise_id,
+                    *result,
+                    *handler_function,
+                    (*handler_pc != btel_records::NO_PC).then_some(*handler_pc),
+                    *unwound_frames,
+                );
+            }
+            SpanRecord::ErrorRaiseFrameCompleted { raise_id } => {
+                self.error_raise_frame_completed(thread, *raise_id);
+            }
+            SpanRecord::ErrorUnwindEnded {
+                raise_id,
+                result,
+                handler_function,
+                handler_pc,
+                unwound_frames,
+            } => self.error_unwind_ended(
+                thread,
+                *raise_id,
+                *result,
+                *handler_function,
+                *handler_pc,
+                *unwound_frames,
+            ),
             SpanRecord::FunctionSpanAnnouncement {
                 id,
                 parent_id,
                 call_path,
                 entered_at,
                 captured_inputs,
+                captured_type_args,
             } => {
                 self.event(
                     thread,
@@ -164,6 +389,7 @@ impl ConversionBuffer {
                         call_path_id: call_path.get(),
                         entered_at_ticks: entered_at.get(),
                         inputs_cas_id: captured_inputs.as_ref().map(snapshot_id),
+                        type_args_cas_id: captured_type_args.as_ref().map(snapshot_id),
                     }),
                 );
             }
@@ -194,20 +420,11 @@ impl ConversionBuffer {
                         } as i32,
                     },
                 );
-                // No heap access here. A later metadata resolver may enrich these
-                // explicit placeholders; GC-collected functions may stay unnamed.
+                // No heap access here. Metadata comes from the owned table supplied
+                // at startup, once per recording; functions outside it (runtime
+                // definitions, GC-collected ones) keep the explicit placeholder.
                 for function in [Some(*callee), *visible_caller].into_iter().flatten() {
-                    push_message(
-                        &mut self.pending.definitions.functions,
-                        &mut self.pending_encoded_bytes,
-                        1,
-                        proto::FunctionDefinition {
-                            function_id: function.get(),
-                            resolution: Some(proto::function_definition::Resolution::Unavailable(
-                                proto::MetadataUnavailable {},
-                            )),
-                        },
-                    );
+                    self.define_function(function);
                 }
             }
             SpanRecord::FunctionSpanCompletionOk {
@@ -230,6 +447,7 @@ impl ConversionBuffer {
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(1).bits(),
                         value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
                     }),
                 );
             }
@@ -253,6 +471,7 @@ impl ConversionBuffer {
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(9).bits(),
                         value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
                     }),
                 );
             }
@@ -276,6 +495,7 @@ impl ConversionBuffer {
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(1).bits(),
                         value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
                     }),
                 );
             }
@@ -299,6 +519,7 @@ impl ConversionBuffer {
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(9).bits(),
                         value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
                     }),
                 );
             }
@@ -322,6 +543,7 @@ impl ConversionBuffer {
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(2).bits(),
                         value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
                     }),
                 );
             }
@@ -345,6 +567,7 @@ impl ConversionBuffer {
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(10).bits(),
                         value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
                     }),
                 );
             }
@@ -368,6 +591,7 @@ impl ConversionBuffer {
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(2).bits(),
                         value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
                     }),
                 );
             }
@@ -391,6 +615,7 @@ impl ConversionBuffer {
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(10).bits(),
                         value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
                     }),
                 );
             }
@@ -414,6 +639,32 @@ impl ConversionBuffer {
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(3).bits(),
                         value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+
+            SpanRecord::FunctionSpanCompletionPanicked {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, false).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(2).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: true,
                     }),
                 );
             }
@@ -437,6 +688,31 @@ impl ConversionBuffer {
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(11).bits(),
                         value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+            SpanRecord::FunctionSpanCompletionPanickedNeedsAnnouncement {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, false).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(10).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: true,
                     }),
                 );
             }
@@ -460,6 +736,32 @@ impl ConversionBuffer {
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(3).bits(),
                         value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+
+            SpanRecord::FunctionSpanCompletionPanickedReentry {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, true).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(2).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: true,
                     }),
                 );
             }
@@ -483,6 +785,31 @@ impl ConversionBuffer {
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(11).bits(),
                         value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+            SpanRecord::FunctionSpanCompletionPanickedReentryNeedsAnnouncement {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, true).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(10).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: true,
                     }),
                 );
             }
@@ -506,6 +833,7 @@ impl ConversionBuffer {
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(1).bits(),
                         value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
                     }),
                 );
             }
@@ -529,6 +857,7 @@ impl ConversionBuffer {
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(1).bits(),
                         value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
                     }),
                 );
             }
@@ -552,6 +881,7 @@ impl ConversionBuffer {
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(2).bits(),
                         value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
                     }),
                 );
             }
@@ -575,6 +905,7 @@ impl ConversionBuffer {
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(2).bits(),
                         value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
                     }),
                 );
             }
@@ -598,6 +929,32 @@ impl ConversionBuffer {
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(3).bits(),
                         value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+
+            SpanRecord::LateFunctionSpanCompletionPanicked {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::LateFunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, false).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(2).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: true,
                     }),
                 );
             }
@@ -621,6 +978,31 @@ impl ConversionBuffer {
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(3).bits(),
                         value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: false,
+                    }),
+                );
+            }
+            SpanRecord::LateFunctionSpanCompletionPanickedReentry {
+                id,
+                parent_id,
+                call_path,
+                entered_at,
+                exited_at,
+                await_time,
+                captured_value,
+            } => {
+                self.event(
+                    thread,
+                    Event::LateFunctionCompletion(proto::FunctionCompletion {
+                        id: id.get(),
+                        parent_id: parent_id.get(),
+                        node: CallPathNodeId::new(*call_path, true).get(),
+                        entered_at_ticks: entered_at.get(),
+                        exited_at_ticks: exited_at.get(),
+                        self_await_ticks: await_time.get().get(),
+                        completion_flags: CompletionFlags::from_variant(2).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        panicked: true,
                     }),
                 );
             }
@@ -629,6 +1011,7 @@ impl ConversionBuffer {
 
     fn take(&mut self) -> PendingMessages {
         self.aggregates.drain_into(&mut self.pending.aggregates);
+        self.sysops.drain_into(&mut self.pending.aggregates);
         // Reuse warm map capacity, trimming oversized allocations after bursts.
         self.aggregates.trim();
         self.pending_encoded_bytes = 0;
@@ -639,8 +1022,11 @@ impl ConversionBuffer {
 #[cfg(test)]
 mod tests;
 
-fn snapshot_id(snapshot: &Snapshot) -> proto::SnapshotId {
-    let bytes = snapshot.id();
+pub(crate) fn snapshot_id(snapshot: &Snapshot) -> proto::SnapshotId {
+    snapshot_reference(snapshot.id())
+}
+
+fn snapshot_reference(bytes: btel_snapshot::SnapshotId) -> proto::SnapshotId {
     proto::SnapshotId {
         low: u64::from_le_bytes(bytes.as_bytes()[..8].try_into().unwrap()),
         high: u64::from_le_bytes(bytes.as_bytes()[8..].try_into().unwrap()),

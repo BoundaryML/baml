@@ -242,7 +242,7 @@ impl<'db> Reachability<'_, 'db> {
     fn expr_exits(&self, expr: ExprId) -> bool {
         match &self.body.exprs[expr] {
             Expr::Return { .. } | Expr::Throw { .. } => true,
-            Expr::Lambda(_) | Expr::Spawn { .. } => false,
+            Expr::Lambda(_) => false,
             Expr::Block { stmts, tail_expr } => {
                 stmts.iter().any(|stmt| self.stmt_exits(*stmt))
                     || tail_expr.is_some_and(|tail| self.expr_exits(tail))

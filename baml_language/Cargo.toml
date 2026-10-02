@@ -76,6 +76,8 @@ btel_snapshot = { path = "crates/btel_snapshot" }
 bex_str = { path = "crates/bex_str" }
 baml_base = { path = "crates/baml_base" }
 baml_artifact = { path = "crates/baml_artifact" }
+baml_linker = { path = "crates/baml_linker" }
+baml_linker_types = { path = "crates/baml_linker_types" }
 baml_type = { path = "crates/baml_type" }
 baml_type_runtime = { path = "crates/baml_type_runtime" }
 baml_type_macros = { path = "crates/baml_type_macros" }
@@ -128,6 +130,7 @@ btel_records = { path = "crates/btel_records" }
 btel_processor = { path = "crates/btel_processor" }
 btel_recorder = { path = "crates/btel_recorder" }
 btel_file = { path = "crates/btel_file" }
+btel_reader = { path = "crates/btel_reader" }
 btel_ringbuffer = { path = "crates/btel_ringbuffer" }
 bex_chunkedringbuffer = { path = "crates/bex_chunkedringbuffer" }
 quanta = { path = "vendor/quanta", version = "=0.12.6", default-features = false }
@@ -141,6 +144,7 @@ baml_cli = { path = "crates/baml_cli" }
 baml_exec = { path = "crates/baml_exec" }
 bex_events = { path = "crates/bex_events" }
 baml_query = { path = "crates/baml_query" }
+baml_query_btel = { path = "crates/baml_query_btel" }
 bex_resource_types = { path = "crates/bex_resource_types" }
 darwin-kperf = "0.1.0"
 darwin-kperf-events = "0.1.0"
@@ -150,13 +154,15 @@ anyhow = { version = "1" }
 async-trait = "0.1"
 askama = { version = "0.14.0" }
 # Slim, reqwest/serde-based replacements for the AWS SDK + Google Cloud auth
-# crates, living in `forks/`. They cover only what BAML needs (Bedrock Converse,
-# AWS credential sources, and Google Cloud OAuth2 tokens for Vertex AI) without
+# crates, living in `forks/`. They cover only what BAML needs (Bedrock Converse
+# and ConverseStream, AWS credential sources, and Google Cloud OAuth2 tokens
+# for Vertex AI) without
 # the Smithy runtime or the google-cloud-rust client stack. See
 # `forks/*/Cargo.toml`. The dependency keys keep the upstream crate names so
 # call sites import them unchanged; the `package` is the `forked_*` crate.
 aws-config = { path = "forks/aws-config", package = "forked_aws_config" }
 aws-sigv4 = { path = "forks/aws-sigv4", package = "forked_aws_sigv4" }
+aws-smithy-eventstream = { path = "forks/aws-smithy-eventstream", package = "forked_aws_smithy_eventstream" }
 google-cloud-auth = { path = "forks/google-cloud-auth", package = "forked_google_cloud_auth" }
 axum = { version = "0.8.4", default-features = false, features = [ "http1", "matched-path", "original-uri", "query", "tokio", "ws" ] }
 bitflags = "2"
@@ -233,6 +239,9 @@ fancy-regex = { version = "0.19" }
 # gitignore-aware directory walking (workspace project discovery in the LSP)
 ignore = { version = "0.4" }
 base64 = "0.22"
+crc32fast = "1.5"
+# LZ4 frames compress the bytecode that generated SDKs embed.
+lz4_flex = { version = "0.13" }
 mime_guess = "2"
 bytecount = "0.6"
 reqwest = { version = "0.13.1", default-features = false, features = [
@@ -242,6 +251,7 @@ mimalloc = { version = "0.1.52" }
 rowan = { version = "0.16" }
 rustls = { version = "0.23.37", default-features = false }
 rustls-pemfile = "2"
+rusqlite = "0.37.0"
 rustc-hash = { version = "2.1" }
 xxhash-rust = { version = "=0.8.15", features = [ "xxh3" ] }
 salsa = { version = "0.26", default-features = false, features = [
@@ -259,6 +269,7 @@ semver = { version = "1" }
 serde_yaml = { package = "yaml_serde", version = "0.10" }
 sha1 = "0.10"
 smallvec = { version = "1.15", features = [ "const_generics" ] }
+sqlparser = "0.62.0"
 smol_str = { version = "0.3", features = [ "serde", "borsh" ] }
 strsim = { version = "0.11.1" }
 syn = { version = "2", features = [ "full" ] }
@@ -292,6 +303,7 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
 ] }
 unicode-normalization = "0.1.25"
 ureq = { version = "3", default-features = false, features = [ "rustls", "gzip" ] }
+url = "2.5"
 uuid = { version = "1", features = [ "serde", "v4" ] }
 walkdir = { version = "2.4" }
 tsify = { version = "0.5", features = [ "js" ] }
@@ -418,8 +430,8 @@ lto = "fat"
 codegen-units = 1
 opt-level = 3     # prioritize runtime speed
 strip = "symbols" # still keep your strip -x in packaging
-# `unwind` for every artifact — see the "Why panic = unwind" note below the
-# profile overrides.
+# Native artifacts unwind; stock wasm32-unknown-unknown remains panic-abort.
+# See the "Why panic = unwind" note below the profile overrides.
 panic = "unwind"
 
 # Some crates don't change as much but benefit more from
@@ -495,7 +507,13 @@ lto = "fat"
 [profile.dist]
 inherits = "release"
 
-# Why `panic = "unwind"` everywhere (release profile above)
+# Why `panic = "unwind"` for native artifacts (release profile above)
+#
+# The stock wasm32-unknown-unknown standard library uses panic=abort. This
+# profile alone does not enable WASM unwinding; that requires rebuilding std
+# with unwind support and compatible WASM exception handling. Rust panics trap
+# without running destructors in our WASM builds. BAML language panics and
+# initialization errors are handled by the VM, not Rust stack unwinding.
 #
 # `panic` is a whole-artifact setting: it cannot be overridden per crate and one
 # binary cannot mix strategies. `release` used to be `abort` (chosen for binary

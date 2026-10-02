@@ -604,7 +604,96 @@ describe('error captures', () => {
       file: 'baml_src/main.baml',
       line: 28,
       start: null,
+      verification: 'unverified',
     });
+  });
+
+  it('carries origin, boundary and propagation from recorded raises', () => {
+    const evidence = buildEvidence(
+      telemetry({
+        errors: [
+          errorCapture({
+            failedCallIds: ['c1', 'c2'],
+            handlerFqn: 'user.main',
+            originState: 'fresh',
+            propagation: [
+              {
+                fqn: 'user.main',
+                handlerFqn: 'user.main',
+                kind: 'await',
+                raiseId: 'r2',
+                result: 'caught',
+                site: {
+                  end: 60,
+                  file: 'baml_src/main.baml',
+                  line: 40,
+                  start: 49,
+                  state: 'resolved',
+                },
+                threadId: 'thread-root',
+              },
+            ],
+            raiseKind: 'native_boundary',
+            throwSiteEnd: 30,
+            throwSiteStart: 12,
+            unwindResult: 'unhandled',
+          }),
+          errorCapture({
+            errorId: 'r9',
+            kind: 'rethrow',
+            originCandidates: 2,
+            originState: 'ambiguous',
+            raiseKind: 'rethrow',
+          }),
+        ],
+        execution: execution({ sourceState: 'stale' }),
+      }),
+    );
+    const [origin, ambiguous] = evidence.errors;
+    // A native failure is placed at the BAML call that entered it.
+    expect(origin.boundary).toBe(true);
+    expect(origin.originState).toBe('fresh');
+    expect(origin.failedCallIds).toEqual(['c1', 'c2']);
+    expect(origin.unwindResult).toBe('unhandled');
+    expect(origin.source_location).toEqual({
+      end: 30,
+      file: 'baml_src/main.baml',
+      line: 28,
+      start: 12,
+      verification: 'stale',
+    });
+    // The await keeps its own site; it never replaces the throw site.
+    expect(origin.propagation).toEqual([
+      {
+        fn: 'main',
+        handlerFn: 'main',
+        kind: 'await',
+        raiseId: 'r2',
+        result: 'caught',
+        source: {
+          end: 60,
+          file: 'baml_src/main.baml',
+          line: 40,
+          start: 49,
+          verification: 'stale',
+        },
+        threadId: 'thread-root',
+      },
+    ]);
+    expect(ambiguous.originState).toBe('ambiguous');
+    expect(ambiguous.originCandidates).toBe(2);
+    expect(ambiguous.boundary).toBe(false);
+    expect(ambiguous.propagation).toEqual([]);
+  });
+
+  it('older backends carry no origin and no propagation', () => {
+    const [error] = buildEvidence(
+      telemetry({ errors: [errorCapture()] }),
+    ).errors;
+    expect(error.originState).toBeNull();
+    expect(error.propagation).toEqual([]);
+    expect(error.failedCallIds).toEqual([]);
+    expect(error.boundary).toBe(false);
   });
 
   it('parses a captured error value', () => {
@@ -854,7 +943,9 @@ describe('errored calls without captures', () => {
         errors: [],
       }),
     );
-    const errored = evidence.contexts.filter((c) => c.errors > 0);
+    const errored = evidence.contexts.filter(
+      (c) => c.errors != null && c.errors > 0,
+    );
     expect(errored.map((c) => c.fn).sort()).toEqual(['_send', 'invoke']);
     // Nothing retained, nothing captured: the aggregates are all there is.
     expect(evidence.spans).toHaveLength(0);
@@ -934,5 +1025,54 @@ describe('large executions', () => {
       call({ callId: `c${i}`, startedNs: (i + 1) * MS }),
     );
     expect(() => buildEvidence(telemetry({ calls: many }))).not.toThrow();
+  });
+});
+
+describe('source sites', () => {
+  it('spawned lanes carry their spawn expression, roots none', () => {
+    const evidence = buildEvidence(
+      telemetry({
+        execution: execution({ sourceState: 'verified' }),
+        threads: [
+          thread({ threadId: 'thread-root' }),
+          thread({
+            kind: 'spawn',
+            parentThreadId: 'thread-root',
+            spawnFqn: 'user.main',
+            spawnSiteFile: 'baml_src/main.baml',
+            spawnSiteLine: 12,
+            spawnSiteState: 'resolved',
+            startedNs: 5 * MS,
+            threadId: 'thread-child',
+          }),
+        ],
+      }),
+    );
+    const byId = new Map(evidence.threads.map((lane) => [lane.id, lane]));
+    expect(byId.get('thread-root')?.spawnSite).toBeNull();
+    expect(byId.get('thread-child')?.spawnSite).toEqual({
+      end: null,
+      file: 'baml_src/main.baml',
+      line: 12,
+      start: null,
+      verification: 'verified',
+    });
+  });
+
+  it('a call without a recorded site gets no invented one', () => {
+    // A direct recursive re-entry: the backend sends no site for it.
+    const evidence = buildEvidence(
+      telemetry({
+        calls: [
+          call({
+            callId: 'c-reentry',
+            callSiteFile: null,
+            callSiteLine: null,
+            callSiteState: 'recursive_reentry',
+          }),
+        ],
+      }),
+    );
+    expect(evidence.spans[0].source).toBeNull();
   });
 });

@@ -279,7 +279,7 @@ mod tests {
         let charge = declaration_bytes(&declaration).unwrap();
         snapshot.0.objects.push(SnapshotObject::Declaration {
             name: declaration,
-            tag: baml_type::typetag::TypeTag::of_head("test.Declaration"),
+            tag: baml_type::typetag::TypeTag::of_static_index(0),
             is_enum: false,
         });
         assert_eq!(snapshot.retained_bytes().unwrap() - before, charge);

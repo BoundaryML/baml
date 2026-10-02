@@ -12,8 +12,8 @@ use std::{
 };
 
 use crate::{
-    BasicBlock, BlockId, CatchRegion, CellId, Local, MirFunction, MirFunctionBody, MirFunctionKind,
-    Operand, Place, Terminator, memory,
+    BasicBlock, BlockId, CellId, Local, MirFunction, MirFunctionBody, MirFunctionKind, Operand,
+    Place, Terminator, memory,
 };
 
 mod effects;
@@ -93,25 +93,23 @@ fn optimize_body(body: &mut MirFunctionBody, arity: usize, opt: crate::OptLevel)
 
 /// Phase 1: Remove unreachable blocks via BFS from entry.
 fn eliminate_dead_blocks(body: &mut MirFunctionBody) {
-    // BFS to find all reachable blocks. Seed with entry AND exception
-    // handler blocks — they're reachable at runtime via the exception table
-    // even though they have no incoming CFG edges.
+    // BFS to find all reachable blocks. A block's handler is reachable from
+    // it: a throw or panic anywhere in the block lands there.
     let mut reachable = HashSet::new();
     let mut queue = VecDeque::new();
     queue.push_back(body.entry);
     reachable.insert(body.entry);
-    for region in &body.catch_regions {
-        if reachable.insert(region.handler) {
-            queue.push_back(region.handler);
-        }
-    }
 
     while let Some(block_id) = queue.pop_front() {
-        if let Some(term) = &body.blocks[block_id.0].terminator {
-            for succ in term.successors() {
-                if reachable.insert(succ) {
-                    queue.push_back(succ);
-                }
+        let block = &body.blocks[block_id.0];
+        let successors = block
+            .terminator
+            .iter()
+            .flat_map(Terminator::successors)
+            .chain(block.unwind);
+        for succ in successors {
+            if reachable.insert(succ) {
+                queue.push_back(succ);
             }
         }
     }
@@ -134,17 +132,16 @@ fn eliminate_dead_blocks(body: &mut MirFunctionBody) {
         }
     }
 
-    // Rewrite all BlockId references in terminators
+    // Rewrite all BlockId references in terminators and handler edges
     for block in &mut new_blocks {
         if let Some(term) = &mut block.terminator {
             rewrite_block_ids_in_terminator(term, &old_to_new);
         }
+        rewrite_handler_refs(block, &old_to_new);
     }
 
     // Rewrite entry block
     body.entry = old_to_new[body.entry.0].expect("entry block must be reachable");
-
-    rewrite_catch_region_blocks(&mut body.catch_regions, &old_to_new);
 
     body.blocks = new_blocks;
 }
@@ -200,29 +197,17 @@ fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>
     }
 }
 
-/// Rewrite `BlockId` references in all catch regions using old->new mapping.
-fn rewrite_catch_region_blocks(regions: &mut Vec<CatchRegion>, map: &[Option<BlockId>]) {
-    regions.retain_mut(|region| {
-        let Some(new_body) = map[region.body_entry.0] else {
-            return false; // body block was removed — drop the region
-        };
-        let Some(new_handler) = map[region.handler.0] else {
-            return false; // handler block was removed — drop the region
-        };
-        region.body_entry = new_body;
-        region.handler = new_handler;
-        // Remap the handler-body blocks too (drop any that were removed) so the
-        // BEP-042 cause-chain extent stays accurate after block renumbering.
-        region.handler_body = region
-            .handler_body
-            .iter()
-            .filter_map(|b| map[b.0])
-            .collect();
-        // Same for the protected body blocks (a removed block was unreachable
-        // and had nothing to protect).
-        region.body_blocks = region.body_blocks.iter().filter_map(|b| map[b.0]).collect();
-        true
-    });
+/// Rewrite a block's handler edges using an old->new mapping. A handler some
+/// kept block unwinds to, or is handling, is reachable from that block, so it
+/// is kept too.
+fn rewrite_handler_refs(block: &mut BasicBlock, map: &[Option<BlockId>]) {
+    let remap = |handler: BlockId| {
+        map[handler.0].unwrap_or_else(|| {
+            unreachable!("{handler:?} is a handler of a kept block but was removed")
+        })
+    };
+    block.unwind = block.unwind.map(remap);
+    block.handling = block.handling.map(remap);
 }
 
 // ============================================================================
@@ -295,8 +280,10 @@ fn merge_passthrough_blocks(body: &mut MirFunctionBody) {
             continue;
         }
         if let Some(Terminator::Goto { target }) = &block.terminator {
-            // Don't redirect the entry block — it must remain as-is
-            if block.id != body.entry {
+            // Neither the entry block nor a handler is redirected: the VM
+            // lands in a handler with its error slots, which the target may
+            // not share.
+            if block.id != body.entry && block.landing.is_none() {
                 redirect.insert(block.id, *target);
             }
         }
@@ -328,24 +315,9 @@ fn merge_passthrough_blocks(body: &mut MirFunctionBody) {
         }
     }
 
-    // Step 4: rewrite catch regions
-    for region in &mut body.catch_regions {
-        if let Some(&new_body) = resolved.get(&region.body_entry) {
-            region.body_entry = new_body;
-        }
-        if let Some(&new_handler) = resolved.get(&region.handler) {
-            region.handler = new_handler;
-        }
-        for b in &mut region.handler_body {
-            if let Some(&new_b) = resolved.get(b) {
-                *b = new_b;
-            }
-        }
-        // A redirected passthrough block is empty (no instructions to
-        // protect), and remapping it to its target would wrongly extend the
-        // protected range over the target's instructions — drop it instead.
-        region.body_blocks.retain(|b| !resolved.contains_key(b));
-    }
+    // Handler edges need no rewrite: a handler is never redirected, and a
+    // redirected passthrough block is empty, so its own handler protects no
+    // instruction.
 
     // Step 5: entry block redirect (shouldn't happen since we excluded it, but be safe)
     if let Some(&new_entry) = resolved.get(&body.entry) {
@@ -529,18 +501,8 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
 
                     scan_place(destination, &mut set);
                 }
-                Terminator::Spawn {
-                    closure,
-                    name,
-                    config,
-                    future,
-                    ..
-                } => {
-                    scan_operand(closure, &mut set);
-                    scan_operand(name, &mut set);
-                    if let Some(config) = config {
-                        scan_operand(config, &mut set);
-                    }
+                Terminator::Spawn { plan, future, .. } => {
+                    scan_operand(plan, &mut set);
                     scan_place(future, &mut set);
                 }
                 Terminator::Branch { condition, .. } => scan_operand(condition, &mut set),
@@ -555,10 +517,13 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
                 Terminator::Switch { discriminant, .. } => {
                     scan_operand(discriminant, &mut set);
                 }
-                Terminator::Throw { value }
-                | Terminator::Rethrow { value }
-                | Terminator::ThrowIfPanic { value, .. } => {
+                Terminator::Throw { value } => {
                     scan_operand(value, &mut set);
+                }
+                Terminator::Rethrow { value, context }
+                | Terminator::ThrowIfPanic { value, context, .. } => {
+                    scan_operand(value, &mut set);
+                    scan_operand(context, &mut set);
                 }
                 Terminator::Await {
                     future,
@@ -595,14 +560,20 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
     set
 }
 
-/// Count definition sites (assignments) for each local across all blocks.
+/// Count definition sites for each local across all blocks: assignments,
+/// terminator destinations, and the runtime's write of a handler's error and
+/// context locals when it lands there.
 ///
-/// A local is "single-definition" if it appears as an assignment destination
-/// in exactly one statement. Locals defined in multiple branches (e.g., a temp
-/// that is assigned in both arms of an if-else) have a count > 1 and must not
-/// be constant-propagated.
+/// A local is "single-definition" if it has exactly one of these. Locals
+/// defined in multiple branches (e.g., a temp that is assigned in both arms of
+/// an if-else) have a count > 1 and must not be constant-propagated; neither
+/// may a catch binding the handler body reassigns.
 fn count_local_defs(body: &MirFunctionBody<'_>) -> Vec<usize> {
     let mut defs = vec![0usize; body.locals.len()];
+    for (_, landing) in body.handlers() {
+        defs[landing.error_local.0] += 1;
+        defs[landing.context_local.0] += 1;
+    }
 
     for block in &body.blocks {
         for stmt in &block.statements {
@@ -646,19 +617,17 @@ fn count_local_uses(body: &MirFunctionBody<'_>) -> Vec<usize> {
         }
     }
 
-    // Count uses in catch region error locals (VM writes into these slots).
+    // Count uses in handler landings' error locals (VM writes into these slots).
     for (_, local) in body.unwind_error_locals() {
         uses[local.0] += 1;
     }
 
-    // The VM also materializes the caught error's `baml.errors.Context` into the
-    // context (second-binding) slot at unwind time, and the BEP-042 cause-chain
-    // pre-walk reads it from an *enclosing* handler — a use the static analysis
-    // can't see. Keep it alive even when the `ctx` binding looks dead.
-    for region in &body.catch_regions {
-        if let Some(ctx_local) = region.stack_trace_local {
-            uses[ctx_local.0] += 1;
-        }
+    // The VM also writes the caught error's `baml.errors.Context` into the
+    // context slot, and the BEP-042 cause-chain pre-walk reads it from an
+    // *enclosing* handler — a use the static analysis can't see. Keep it alive
+    // even when no binding or rethrow reads it.
+    for (_, landing) in body.handlers() {
+        uses[landing.context_local.0] += 1;
     }
 
     uses
@@ -837,18 +806,8 @@ fn count_in_terminator(term: &Terminator<'_>, uses: &mut [usize]) {
 
             count_dest_place(destination, uses);
         }
-        Terminator::Spawn {
-            closure,
-            name,
-            config,
-            future,
-            ..
-        } => {
-            count_in_operand(closure, uses);
-            count_in_operand(name, uses);
-            if let Some(config) = config {
-                count_in_operand(config, uses);
-            }
+        Terminator::Spawn { plan, future, .. } => {
+            count_in_operand(plan, uses);
             count_dest_place(future, uses);
         }
         Terminator::Await {
@@ -871,10 +830,13 @@ fn count_in_terminator(term: &Terminator<'_>, uses: &mut [usize]) {
             // destination is a write (the winning index)
             count_dest_place(destination, uses);
         }
-        Terminator::Throw { value }
-        | Terminator::Rethrow { value }
-        | Terminator::ThrowIfPanic { value, .. } => {
+        Terminator::Throw { value } => {
             count_in_operand(value, uses);
+        }
+        Terminator::Rethrow { value, context }
+        | Terminator::ThrowIfPanic { value, context, .. } => {
+            count_in_operand(value, uses);
+            count_in_operand(context, uses);
         }
         Terminator::ShortCircuit {
             operand,
@@ -1223,22 +1185,14 @@ fn apply_subst_to_terminator<'db>(
                 apply_subst_to_operand(arg, subst);
             }
         }
-        Terminator::Spawn {
-            closure,
-            name,
-            config,
-            ..
-        } => {
-            apply_subst_to_operand(closure, subst);
-            apply_subst_to_operand(name, subst);
-            if let Some(config) = config {
-                apply_subst_to_operand(config, subst);
-            }
-        }
-        Terminator::Throw { value }
-        | Terminator::Rethrow { value }
-        | Terminator::ThrowIfPanic { value, .. } => {
+        Terminator::Spawn { plan, .. } => apply_subst_to_operand(plan, subst),
+        Terminator::Throw { value } => {
             apply_subst_to_operand(value, subst);
+        }
+        Terminator::Rethrow { value, context }
+        | Terminator::ThrowIfPanic { value, context, .. } => {
+            apply_subst_to_operand(value, subst);
+            apply_subst_to_operand(context, subst);
         }
         Terminator::ShortCircuit { operand, .. } => {
             apply_subst_to_operand(operand, subst);
@@ -1398,19 +1352,16 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
         }
     }
 
-    // Rewrite catch_regions error + context locals. Both the first (`e`) and
-    // second (`ctx`/`st`) catch bindings have a payload local the VM writes
-    // into; if the context local isn't renumbered alongside the error local,
-    // the emitter computes a stale `stack_trace_slot` and the binding reads an
-    // uninitialized (Null) slot — see BEP-042 baml.errors.Context nested-catch bug.
-    for region in &mut body.catch_regions {
-        if let Some(new_local) = old_to_new[region.error_local.0] {
-            region.error_local = new_local;
-        }
-        if let Some(st_local) = region.stack_trace_local
-            && let Some(new_local) = old_to_new[st_local.0]
-        {
-            region.stack_trace_local = Some(new_local);
+    // Rewrite the handler landings' error + context locals: the VM writes
+    // both, so both are always live (see `count_local_uses`), and a stale one
+    // would make the emitter compute a stale slot — see BEP-042
+    // baml.errors.Context nested-catch bug.
+    for block in &mut body.blocks {
+        if let Some(landing) = &mut block.landing {
+            for local in [&mut landing.error_local, &mut landing.context_local] {
+                *local = old_to_new[local.0]
+                    .unwrap_or_else(|| unreachable!("a landing local is always live"));
+            }
         }
     }
 
@@ -1575,18 +1526,8 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
 
             remap_place(destination, map);
         }
-        Terminator::Spawn {
-            closure,
-            name,
-            config,
-            future,
-            ..
-        } => {
-            remap_operand(closure, map);
-            remap_operand(name, map);
-            if let Some(config) = config {
-                remap_operand(config, map);
-            }
+        Terminator::Spawn { plan, future, .. } => {
+            remap_operand(plan, map);
             remap_place(future, map);
         }
         Terminator::Await {
@@ -1605,10 +1546,13 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
             remap_operand(futures, map);
             remap_place(destination, map);
         }
-        Terminator::Throw { value }
-        | Terminator::Rethrow { value }
-        | Terminator::ThrowIfPanic { value, .. } => {
+        Terminator::Throw { value } => {
             remap_operand(value, map);
+        }
+        Terminator::Rethrow { value, context }
+        | Terminator::ThrowIfPanic { value, context, .. } => {
+            remap_operand(value, map);
+            remap_operand(context, map);
         }
         Terminator::ShortCircuit {
             operand,
@@ -1857,18 +1801,8 @@ fn verify_mir(
 
                     check_place(destination, &blk);
                 }
-                Terminator::Spawn {
-                    closure,
-                    name,
-                    config,
-                    future,
-                    ..
-                } => {
-                    check_operand(closure, &blk);
-                    check_operand(name, &blk);
-                    if let Some(config) = config {
-                        check_operand(config, &blk);
-                    }
+                Terminator::Spawn { plan, future, .. } => {
+                    check_operand(plan, &blk);
                     check_place(future, &blk);
                 }
                 Terminator::Await {
@@ -1887,10 +1821,13 @@ fn verify_mir(
                     check_operand(futures, &blk);
                     check_place(destination, &blk);
                 }
-                Terminator::Throw { value }
-                | Terminator::Rethrow { value }
-                | Terminator::ThrowIfPanic { value, .. } => {
+                Terminator::Throw { value } => {
                     check_operand(value, &blk);
+                }
+                Terminator::Rethrow { value, context }
+                | Terminator::ThrowIfPanic { value, context, .. } => {
+                    check_operand(value, &blk);
+                    check_operand(context, &blk);
                 }
                 Terminator::ShortCircuit {
                     operand,
@@ -1927,29 +1864,32 @@ fn verify_mir(
         }
     }
 
-    // 7. catch_regions: block IDs and locals must be valid.
-    for (i, region) in body.catch_regions.iter().enumerate() {
-        assert!(
-            region.body_entry.0 < num_blocks,
-            "dangling body_entry {:?} in catch_region[{i}] of MIR function {name}",
-            region.body_entry,
-        );
-        assert!(
-            region.handler.0 < num_blocks,
-            "dangling handler {:?} in catch_region[{i}] of MIR function {name}",
-            region.handler,
-        );
-        for b in &region.body_blocks {
+    // 7. Handler edges point at handler blocks, and landings name valid locals.
+    for block in &body.blocks {
+        for (edge, target) in [("unwind", block.unwind), ("handling", block.handling)] {
+            let Some(target) = target else {
+                continue;
+            };
             assert!(
-                b.0 < num_blocks,
-                "dangling body block {b:?} in catch_region[{i}] of MIR function {name}",
+                target.0 < num_blocks,
+                "dangling {edge} {target:?} of {:?} in MIR function {name}",
+                block.id,
+            );
+            assert!(
+                body.blocks[target.0].landing.is_some(),
+                "{edge} {target:?} of {:?} is not a handler block in MIR function {name}",
+                block.id,
             );
         }
-        assert!(
-            region.error_local.0 < num_locals,
-            "dangling error_local {} in catch_region[{i}] of MIR function {name}",
-            region.error_local,
-        );
+        if let Some(landing) = block.landing {
+            for local in [landing.error_local, landing.context_local] {
+                assert!(
+                    local.0 < num_locals,
+                    "dangling landing local {local} of handler {:?} in MIR function {name}",
+                    block.id,
+                );
+            }
+        }
     }
 
     // 9. Entry block must be valid.
@@ -2049,7 +1989,7 @@ fn verify_definite_assignment(
     let is_captured = |local: Local| body.local(local).is_captured;
 
     // What a terminator assigns on each outgoing edge. Handler edges from
-    // traps are not terminator edges; they are added from the catch regions.
+    // traps are not terminator edges; they are added from the blocks' `unwind`.
     let edges = |term: &Terminator<'_>| -> Vec<(BlockId, Option<Local>)> {
         let local_of = |place: &Place| match place {
             Place::Local(local) => Some(*local),
@@ -2126,12 +2066,14 @@ fn verify_definite_assignment(
     // each protected block traps to.
     let mut handler_defs: HashMap<BlockId, Vec<Local>> = HashMap::new();
     let mut trap_targets: HashMap<BlockId, Vec<BlockId>> = HashMap::new();
-    for region in &body.catch_regions {
-        let defs = handler_defs.entry(region.handler).or_default();
-        defs.push(region.error_local);
-        defs.extend(region.stack_trace_local);
-        for block in &region.body_blocks {
-            trap_targets.entry(*block).or_default().push(region.handler);
+    for (handler, landing) in body.handlers() {
+        let defs = handler_defs.entry(handler).or_default();
+        defs.push(landing.error_local);
+        defs.push(landing.context_local);
+    }
+    for block in &body.blocks {
+        if let Some(handler) = block.unwind {
+            trap_targets.entry(block.id).or_default().push(handler);
         }
     }
 
@@ -2389,18 +2331,8 @@ fn verify_definite_assignment(
                 }
                 write_place(&state, destination);
             }
-            Some(Terminator::Spawn {
-                closure,
-                name: spawn_name,
-                config,
-                future,
-                ..
-            }) => {
-                read_operand(&state, closure);
-                read_operand(&state, spawn_name);
-                if let Some(config) = config {
-                    read_operand(&state, config);
-                }
+            Some(Terminator::Spawn { plan, future, .. }) => {
+                read_operand(&state, plan);
                 write_place(&state, future);
             }
             Some(Terminator::Await {
@@ -2419,11 +2351,14 @@ fn verify_definite_assignment(
                 read_operand(&state, futures);
                 write_place(&state, destination);
             }
+            Some(Terminator::Throw { value }) => read_operand(&state, value),
             Some(
-                Terminator::Throw { value }
-                | Terminator::Rethrow { value }
-                | Terminator::ThrowIfPanic { value, .. },
-            ) => read_operand(&state, value),
+                Terminator::Rethrow { value, context }
+                | Terminator::ThrowIfPanic { value, context, .. },
+            ) => {
+                read_operand(&state, value);
+                read_operand(&state, context);
+            }
             Some(Terminator::ShortCircuit {
                 operand,
                 destination,
@@ -2458,8 +2393,8 @@ fn reorder_blocks_rpo(body: &mut MirFunctionBody) {
     let mut visited = vec![false; num_blocks];
     let mut post_order: Vec<BlockId> = Vec::with_capacity(num_blocks);
     let mut stack: Vec<(BlockId, bool)> = vec![(body.entry, false)];
-    for region in &body.catch_regions {
-        stack.push((region.handler, false));
+    for (handler, _) in body.handlers() {
+        stack.push((handler, false));
     }
 
     while let Some((block_id, processed)) = stack.pop() {
@@ -2513,7 +2448,9 @@ fn reorder_blocks_rpo(body: &mut MirFunctionBody) {
     // Rewrite entry
     body.entry = old_to_new[body.entry.0].expect("entry must be in RPO");
 
-    rewrite_catch_region_blocks(&mut body.catch_regions, &old_to_new);
+    for block in &mut new_blocks {
+        rewrite_handler_refs(block, &old_to_new);
+    }
 
     body.blocks = new_blocks;
 }
@@ -2554,13 +2491,12 @@ mod tests {
                     .into_iter()
                     .map(|name| LocalDecl {
                         name: name.map(baml_base::Name::new),
-                        ty: baml_type::RuntimeTy::int(),
+                        ty: crate::RuntimeTy::int(),
                         span: None,
                         scope_span: None,
                         is_captured: false,
                     })
                     .collect(),
-                catch_regions: vec![],
             };
             propagate_block_param_copies(&mut body, 1);
             let expected = if write.is_none() { Local(1) } else { Local(2) };

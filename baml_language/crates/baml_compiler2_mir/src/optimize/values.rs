@@ -19,15 +19,7 @@ fn scalar(constant: &Constant<'_>) -> bool {
 /// Propagate immutable scalar definitions, including named bindings. Keeping the
 /// definitions until ordinary DCE preserves locals used in projection positions.
 pub(super) fn fold_constants(body: &mut MirFunctionBody<'_>, arity: usize) {
-    let mut defs = super::count_local_defs(body);
-    for (_, local) in body.unwind_error_locals() {
-        defs[local.0] += 1;
-    }
-    for region in &body.catch_regions {
-        if let Some(local) = region.stack_trace_local {
-            defs[local.0] += 1;
-        }
-    }
+    let defs = super::count_local_defs(body);
     let mut constants = HashMap::new();
     loop {
         let previous = constants.len();
@@ -308,10 +300,8 @@ fn live_out(
 ) -> (Vec<bool>, Vec<bool>) {
     let mut live = vec![false; body.locals.len()];
     let mut exceptional = live.clone();
-    for region in &body.catch_regions {
-        if region.body_blocks.contains(&block.id) {
-            union(&mut exceptional, &live_in[region.handler.0]);
-        }
+    if let Some(handler) = block.unwind {
+        union(&mut exceptional, &live_in[handler.0]);
     }
     if let Some(term) = &block.terminator {
         for successor in term.successors() {
@@ -468,8 +458,8 @@ fn prefix_operands<'a, 'db>(
     }
 }
 
-fn constant_type(constant: &Constant<'_>) -> Option<baml_type::RuntimeTy> {
-    use baml_type::RuntimeTy;
+fn constant_type(constant: &Constant<'_>) -> Option<crate::RuntimeTy> {
+    use crate::RuntimeTy;
     Some(match constant {
         Constant::Int(_) => RuntimeTy::Int,
         Constant::Float(_) => RuntimeTy::Float,
@@ -482,10 +472,8 @@ fn constant_type(constant: &Constant<'_>) -> Option<baml_type::RuntimeTy> {
 
 #[cfg(test)]
 mod tests {
-    use baml_type::RuntimeTy;
-
     use super::*;
-    use crate::{BasicBlock, BlockId, Local, LocalDecl};
+    use crate::{BasicBlock, BlockId, Local, LocalDecl, RuntimeTy};
 
     fn binary(op: BinOp, left: Constant<'static>, right: Constant<'static>) -> Rvalue<'static> {
         Rvalue::BinaryOp {
@@ -620,7 +608,6 @@ mod tests {
                     is_captured: false,
                 })
                 .collect(),
-            catch_regions: vec![],
         };
         for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
             let mut body = original.clone();

@@ -1057,108 +1057,98 @@ function f() -> int {
     );
 }
 
-// ── BEP-034 `spawn ... with` middleware diagnostics ──────────────────────
-// Every wrong shape must produce a CONCRETE, actionable message (the chain's
-// actual input type, never `T, E` placeholders or silence).
+// -- `spawn ... with` modifier diagnostics -----------------------------------
+// A `with` operand must be a `baml.spawn.Modifier` value. The sugar desugars
+// to `Plan.new(..).with(m)`, so the operand is an ordinary argument checked
+// against the interface existential `Plan.with` declares. The operands that
+// are NOT modifiers report at the operand; their diagnostics are pinned by
+// `projects/diagnostic_errors/spawn_modifier_operands`.
 
 #[test]
-fn spawn_with_non_callable_reports_concrete_mismatch() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f() -> int { let x = spawn with 42 { 1 }; await x }"#,
-    );
-    let output = render_tir(&db, file);
-    assert!(
-        output.contains(
-            "expected (baml.spawn.Params<int, never>) -> baml.spawn.Params<unknown, unknown> throws unknown, got 42"
-        ),
-        "non-callable `with` must report the concrete transformer shape, got:\n{output}"
-    );
-}
-
-#[test]
-fn spawn_with_wrong_shape_fn_names_the_contract() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function g(n: int) -> int { n }
-function f() -> int { let x = spawn with g { 1 }; await x }"#,
-    );
-    let output = render_tir(&db, file);
-    assert!(
-        output.contains("must return a `baml.spawn.Params`")
-            && output.contains("got `(n: int) -> int throws never`"),
-        "wrong-shape `with` must name the middleware contract, got:\n{output}"
-    );
-}
-
-#[test]
-fn spawn_with_wrong_return_reports_link_input() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function h<T, E>() -> (baml.spawn.Params<T, E>) -> int throws never { (p) -> { 7 } }
-function f() -> int { let x = spawn with h() { 1 }; await x }"#,
-    );
-    let output = render_tir(&db, file);
-    assert!(
-        output.contains("this link receives `baml.spawn.Params<int, never>`")
-            && output.contains("must return a `baml.spawn.Params`"),
-        "wrong-return transformer must report the link's concrete input, got:\n{output}"
-    );
-}
-
-#[test]
-fn spawn_with_chain_input_mismatch_is_concrete() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function fix() -> (baml.spawn.Params<string, never>) -> baml.spawn.Params<string, never> throws never { (p) -> { p } }
-function f() -> int { let x = spawn with fix() { 1 }; await x }"#,
-    );
-    let output = render_tir(&db, file);
-    assert!(
-        output.contains("got (baml.spawn.Params<string, never>)")
-            && output.contains("expected (baml.spawn.Params<int, never>)"),
-        "chain input mismatch must show both concrete Params types, got:\n{output}"
-    );
-}
-
-#[test]
-fn spawn_with_non_fn_variable_reports() {
+fn spawn_with_modifier_typechecks() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
         r#"function f() -> int {
-  let nope = 7;
-  let x = spawn with nope { 1 };
+  let limit = baml.spawn.Limit.new(2) catch (e) { baml.errors.InvalidArgument => baml.sys.panic("positive") };
+  let x = spawn with limit { 1 };
   await x
 }"#,
     );
     let output = render_tir(&db, file);
+    // `!!` marks a diagnostic; `!error` is only an error-TYPED expression, so
+    // checking for it alone passes a mismatch that leaves the types intact.
     assert!(
-        output.contains("takes middleware transformer functions") && output.contains("got `int`"),
-        "non-function variable in `with` must report, got:\n{output}"
+        !output.contains("!!"),
+        "a Limit modifier must typecheck cleanly, got:\n{output}"
+    );
+    assert!(
+        output.contains(".with(limit)) : baml.future.Future<int, never>"),
+        "a Limit leaves the task's value and error types alone, got:\n{output}"
     );
 }
 
 #[test]
-fn spawn_with_wrong_param_variable_reports() {
+fn spawn_with_type_changing_modifier_carries_its_output() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
-        r#"function g(n: int) -> int { n }
-function f() -> int {
-  let t = g;
-  let x = spawn with t { 1 };
+        r#"class Stringify {}
+implements<T, E> baml.spawn.Modifier<T, E> for Stringify {
+  type Output = string
+  function apply(self, plan: baml.spawn.Plan<T, E>) -> baml.spawn.Plan<string, E> throws never {
+    plan.wrap((body: () -> T throws E) -> string throws E { let _ = body(); "wrapped" })
+  }
+}
+function f() -> string {
+  let s = Stringify {};
+  let x = spawn with s { 1 };
   await x
 }"#,
     );
     let output = render_tir(&db, file);
     assert!(
-        output.contains("this link receives `baml.spawn.Params<int, never>`"),
-        "wrong-param variable transformer must report the link input, got:\n{output}"
+        !output.contains("!!"),
+        "a type-changing modifier must typecheck cleanly, got:\n{output}"
+    );
+    // The body yields `int`: only the modifier's `Output` makes it `string`.
+    assert!(
+        output.contains(".with(s)) : baml.future.Future<string, never>"),
+        "a modifier's `Output` must reach the future's value type, got:\n{output}"
+    );
+}
+
+#[test]
+fn spawn_with_apply_error_joins_the_spawner_throws() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"class Refuses {}
+implements<T, E> baml.spawn.Modifier<T, E> for Refuses {
+  type ApplyError = string
+  function apply(self, plan: baml.spawn.Plan<T, E>) -> baml.spawn.Plan<T, E> throws string {
+    throw "refused"
+  }
+}
+function f() -> int throws never {
+  let r = Refuses {};
+  let x = spawn with r { 1 };
+  await x
+}"#,
+    );
+    let output = render_tir(&db, file);
+    // `f` declares `throws never`, so the apply error surfacing in its throws
+    // is exactly this diagnostic. (The fixture spells `string` itself, so its
+    // mere presence in the output proves nothing.)
+    assert!(
+        output.contains("declared throws is `never`, but this function may also throw `string`"),
+        "a modifier's `ApplyError` must reach the spawner's throws surface, got:\n{output}"
+    );
+    // It is the SPAWNER's error, thrown before the task exists: the task's own
+    // error channel is untouched.
+    assert!(
+        output.contains(".with(r)) : baml.future.Future<int, never>"),
+        "`ApplyError` must not leak into the task's error type, got:\n{output}"
     );
 }
 

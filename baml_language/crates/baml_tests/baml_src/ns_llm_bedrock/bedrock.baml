@@ -18,11 +18,10 @@
 //     chain). Those cases assert that a signature was produced, not what it
 //     is — the signature bytes are the Rust seam's own contract.
 //
-// There are no SSE tests: Bedrock's ConverseStream frames its response as
-// binary `application/vnd.amazon.eventstream`, which `baml.http.fetch_sse`
-// cannot consume, so `BedrockClient` deliberately does not implement
-// `ai.stream.StreamingClient` (PLAN §6). The `::live::` leaf and the error
-// cases take that budget instead.
+//   * STREAMING runs `invoke_stream` / `ai.stream.from_spec`
+//     against `root.llm_mock.mock_eventstream_serve`, which serves real binary
+//     `application/vnd.amazon.eventstream` frames (CRCs and all), so the native
+//     frame decoder behind `baml.http.send_sse` is exercised end to end.
 //
 // Corpus rules (ns_llm_mock/README.md §4): every case body is a top-level
 // function, `test` blocks only assert, cross-namespace references are
@@ -752,6 +751,211 @@ test "bedrock_cache_points" {
     assert.equal(bedrock_cache_points(), "default|default|ABSENT|2|2")
 }
 
+// ─── 7b. cache delimiters: `${cache(args)}` ──────────────────────────────────
+//
+// A `${cache(args)}` in the prompt becomes one `cachePoint` block at the
+// position it was written, and `args` is the block's value, as written.
+
+// A cached system prompt.
+function BedrockCachedSystem(name: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("system")}
+        You greet people.
+        ${cache({ "type": "default" })}
+        ${role("user")}
+        Greet ${name}.
+    `
+}
+
+// A stable prefix and a variable suffix inside one user turn.
+function BedrockCachedPrefix(name: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("system")}
+        You greet people.
+        ${role("user")}
+        Long stable reference document.
+        ${cache({ "type": "default" })}
+        Greet ${name}.
+    `
+}
+
+// A marked message with three parts before the delimiter, and a TTL.
+function BedrockCachedMedia(picture: image) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("user")}
+        Before image.
+        ${picture}
+        After image.
+        ${cache({ "type": "default", "ttl": "1h" })}
+        Describe it.
+    `
+}
+
+function _cached_body(spec: ai.FunctionSpec<string>) -> json {
+    let cl = aws.BedrockClient.new(model = _model(), region = "us-east-1");
+    _body(cl, _turn_input(spec, _empty_journal(), _no_tools()))
+}
+
+function bedrock_cache_delimiter_system() -> string {
+    let body = _cached_body(BedrockCachedSystem@spec("Ada"));
+    [
+        baml.json.stringify(baml.json.path<json>(body, ".system")),
+        baml.json.stringify(baml.json.path<json>(body, ".messages")),
+    ].join("\n")
+}
+
+test "bedrock_cache_delimiter_system" {
+    assert.equal(
+        bedrock_cache_delimiter_system(),
+        `[{"text":"You greet people."},{"cachePoint":{"type":"default"}}]\n[{"role":"user","content":[{"text":"Greet Ada."}]}]`,
+    )
+}
+
+// The text on either side of the delimiter is two blocks, each trimmed where it
+// faces the checkpoint — the bytes v0 sent for the same breakpoint.
+function bedrock_cache_delimiter_mid_turn() -> string {
+    let body = _cached_body(BedrockCachedPrefix@spec("Ada"));
+    [
+        baml.json.stringify(baml.json.path<json>(body, ".system")),
+        baml.json.stringify(baml.json.path<json>(body, ".messages")),
+    ].join("\n")
+}
+
+test "bedrock_cache_delimiter_mid_turn" {
+    assert.equal(
+        bedrock_cache_delimiter_mid_turn(),
+        `[{"text":"You greet people."}]\n[{"role":"user","content":[{"text":"Long stable reference document."},{"cachePoint":{"type":"default"}},{"text":"Greet Ada."}]}]`,
+    )
+}
+
+// One logical breakpoint is ONE cachePoint, however many parts precede it, and
+// `ttl` reaches the wire.
+function bedrock_cache_delimiter_media_ttl() -> string {
+    let picture = baml.media.Image.from_base64("SGVsbG8=", "image/png");
+    let body = _cached_body(BedrockCachedMedia@spec(picture));
+    [
+        _array_len(body, ".messages[0].content").to_string(),
+        baml.json.path<string>(body, ".messages[0].content[0].text"),
+        baml.json.path<string>(body, ".messages[0].content[1].image.format"),
+        baml.json.path<string>(body, ".messages[0].content[2].text"),
+        baml.json.stringify(baml.json.path<json>(body, ".messages[0].content[3]")),
+        baml.json.path<string>(body, ".messages[0].content[4].text"),
+    ].join("|")
+}
+
+test "bedrock_cache_delimiter_media_ttl" {
+    assert.equal(
+        bedrock_cache_delimiter_media_ttl(),
+        `5|Before image.|png|After image.|{"cachePoint":{"type":"default","ttl":"1h"}}|Describe it.`,
+    )
+}
+
+// `args` is not checked, defaulted or rewritten: a null member, a nested
+// value and a non-object all go on the wire as written.
+function BedrockCacheArgs(args: json) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("user")}
+        Stable.
+        ${cache(args)}
+        Variable.
+    `
+}
+
+function _cache_args_block(args: json) -> string {
+    let body = _cached_body(BedrockCacheArgs@spec(args));
+    baml.json.stringify(baml.json.path<json>(body, ".messages[0].content[1]"))
+}
+
+function bedrock_cache_delimiter_args_as_written() -> string {
+    [
+        _cache_args_block(baml.json.parse(`{"ttl":"1h","type":"default","extra":{"keep":null}}`)),
+        _cache_args_block(baml.json.parse(`{}`)),
+        _cache_args_block(baml.json.parse(`"1h"`)),
+    ].join("|")
+}
+
+test "bedrock_cache_delimiter_args_as_written" {
+    assert.equal(
+        bedrock_cache_delimiter_args_as_written(),
+        `{"cachePoint":{"ttl":"1h","type":"default","extra":{"keep":null}}}|{"cachePoint":{}}|{"cachePoint":"1h"}`,
+    )
+}
+
+// Where a delimiter produces NO block: before any content of its message, right
+// after another cachePoint, and with null `args` — which is as if it had not
+// been written, so the text around it stays one block.
+function BedrockCacheLeading(name: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("system")}
+        ${cache({ "type": "default" })}
+        You greet people.
+        ${role("user")}
+        ${cache({ "type": "default" })}
+        Greet ${name}.
+    `
+}
+
+function BedrockCacheTwice(name: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("user")}
+        Stable.
+        ${cache({ "type": "default" })}
+        ${cache({ "type": "default", "ttl": "1h" })}
+        Greet ${name}.
+    `
+}
+
+function bedrock_cache_delimiter_dropped() -> string {
+    let leading = _cached_body(BedrockCacheLeading@spec("Ada"));
+    let twice = _cached_body(BedrockCacheTwice@spec("Ada"));
+    let nulled = _cached_body(BedrockCacheArgs@spec(null));
+    [
+        baml.json.stringify(baml.json.path<json>(leading, ".system")),
+        baml.json.stringify(baml.json.path<json>(leading, ".messages[0].content")),
+        baml.json.stringify(baml.json.path<json>(twice, ".messages[0].content")),
+        baml.json.stringify(baml.json.path<json>(nulled, ".messages[0].content")),
+    ].join("\n")
+}
+
+test "bedrock_cache_delimiter_dropped" {
+    assert.equal(
+        bedrock_cache_delimiter_dropped(),
+        `[{"text":"You greet people."}]\n[{"text":"Greet Ada."}]\n[{"text":"Stable."},{"cachePoint":{"type":"default"}},{"text":"Greet Ada."}]\n[{"text":"Stable.\\n\\nVariable."}]`,
+    )
+}
+
+// A system-only prompt folds its system blocks into the leading user message;
+// the checkpoint moves with them, value intact.
+function BedrockCachedSystemOnly(name: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("system")}
+        Greet ${name}.
+        ${cache({ "type": "default", "ttl": "1h" })}
+    `
+}
+
+function bedrock_cache_delimiter_system_folded() -> string {
+    let body = _cached_body(BedrockCachedSystemOnly@spec("Ada"));
+    [
+        _mentions(body, "system").to_string(),
+        baml.json.stringify(baml.json.path<json>(body, ".messages")),
+    ].join("|")
+}
+
+test "bedrock_cache_delimiter_system_folded" {
+    assert.equal(
+        bedrock_cache_delimiter_system_folded(),
+        `false|[{"role":"user","content":[{"text":"Greet Ada."},{"cachePoint":{"type":"default","ttl":"1h"}}]}]`,
+    )
+}
+
 // ─── 8. passthrough: additionalModelRequestFields + request_body ─────────────
 
 function bedrock_additional_model_request_fields() -> string {
@@ -1225,6 +1429,265 @@ test "bedrock_garbage_body" {
     assert.equal(bedrock_garbage_body(), "ParseFailed")
 }
 
+// ─── 13. streaming (ConverseStream) ──────────────────────────────────────────
+
+function _stream_frames(stop: string, with_metadata: bool) -> uint8array[] {
+    let frames = [
+        root.llm_mock.eventstream_event("messageStart", `{"role":"assistant"}`),
+        root.llm_mock.eventstream_event(
+            "contentBlockDelta",
+            `{"contentBlockIndex":0,"delta":{"text":"po"}}`,
+        ),
+        // Reasoning deltas are not answer text, exactly as `invoke` keeps
+        // reasoning out of the Text blocks.
+        root.llm_mock.eventstream_event(
+            "contentBlockDelta",
+            `{"contentBlockIndex":0,"delta":{"reasoningContent":{"text":"SECRET"}}}`,
+        ),
+        root.llm_mock.eventstream_event(
+            "contentBlockDelta",
+            `{"contentBlockIndex":0,"delta":{"text":"ng"}}`,
+        ),
+        root.llm_mock.eventstream_event("contentBlockStop", `{"contentBlockIndex":0}`),
+        root.llm_mock.eventstream_event("messageStop", `{"stopReason":"${stop}"}`),
+    ];
+    if (with_metadata) {
+        frames.push(
+            root.llm_mock.eventstream_event(
+                "metadata",
+                `{"usage":{"inputTokens":10,"outputTokens":2,"totalTokens":12},"metrics":{"latencyMs":100}}`,
+            ),
+        );
+    }
+    frames
+}
+
+// The ConverseStream event model decodes every event type, including the
+// members the TurnStream does not use (tool-use start and input deltas,
+// reasoning and citation deltas, metrics, trace, performance config), and an
+// event type it does not know is null rather than an error.
+function bedrock_stream_event_model() -> string {
+    let out: string[] = [];
+    let events = [
+        ["messageStart", `{"role":"assistant","p":"padding"}`],
+        ["contentBlockStart", `{"contentBlockIndex":1,"start":{"toolUse":{"toolUseId":"tu_1","name":"weather"}}}`],
+        ["contentBlockDelta", `{"contentBlockIndex":1,"delta":{"toolUse":{"input":"{\\"city\\":"}}}`],
+        ["contentBlockDelta", `{"contentBlockIndex":0,"delta":{"reasoningContent":{"signature":"sig"}}}`],
+        ["contentBlockDelta", `{"contentBlockIndex":0,"delta":{"citation":{"title":"doc","sourceContent":[{"text":"quote"}],"location":{"documentPage":{"documentIndex":0,"start":2,"end":3}}}}}`],
+        ["contentBlockStop", `{"contentBlockIndex":1}`],
+        ["messageStop", `{"stopReason":"tool_use","additionalModelResponseFields":{"k":1}}`],
+        ["metadata", `{"usage":{"inputTokens":10,"outputTokens":2,"totalTokens":12},"metrics":{"latencyMs":321},"trace":{"guardrail":{}},"performanceConfig":{"latency":"optimized"}}`],
+        ["somethingNew", `{}`],
+    ];
+    for (let pair in events) {
+        let decoded = aws.internal.decode_stream_event(pair.at(0) ?? "", pair.at(1) ?? "");
+        let label = match (decoded) {
+            let e: aws.internal.MessageStartEvent => `start:${e.role ?? "-"}`,
+            let e: aws.internal.ContentBlockStartEvent => {
+                `block_start:${e.contentBlockIndex ?? -1}:${e.start?.toolUse?.name ?? "-"}:${e.start?.toolUse?.toolUseId ?? "-"}`
+            },
+            let e: aws.internal.ContentBlockDeltaEvent => {
+                if let tool: aws.internal.ToolUseBlockDelta = e.delta?.toolUse {
+                    `tool_input:${tool.input ?? "-"}`
+                } else if let reasoning: aws.internal.ReasoningContentBlockDelta = e.delta?.reasoningContent {
+                    `reasoning_signature:${reasoning.signature ?? "-"}`
+                } else if let citation: aws.internal.CitationsDelta = e.delta?.citation {
+                    `citation:${citation.title ?? "-"}:${citation.sourceContent?.at(0)?.text ?? "-"}:${citation.location?.documentPage?.start ?? -1}`
+                } else {
+                    "delta:?"
+                }
+            },
+            let e: aws.internal.ContentBlockStopEvent => `block_stop:${e.contentBlockIndex ?? -1}`,
+            let e: aws.internal.MessageStopEvent => {
+                `stop:${e.stopReason ?? "-"}:${baml.json.path_or<int>(e.additionalModelResponseFields ?? baml.json.parse("{}"), ".k", -1)}`
+            },
+            let e: aws.internal.ConverseStreamMetadataEvent => {
+                `metadata:${e.usage?.totalTokens ?? -1}:${e.metrics?.latencyMs ?? -1}:${e.performanceConfig?.latency ?? "-"}:${e.trace != null}`
+            },
+            null => "unknown",
+        };
+        out.push(label);
+    }
+    let failure = baml.json.from_string<aws.internal.ModelStreamErrorException>(
+        `{"message":"boom","originalStatusCode":424,"originalMessage":"upstream"}`,
+    );
+    out.push(`exception:${failure.message ?? "-"}:${failure.originalStatusCode ?? -1}:${failure.originalMessage ?? "-"}`);
+    out.join("|")
+}
+
+test "bedrock_stream_event_model" {
+    assert.equal(
+        bedrock_stream_event_model(),
+        [
+            "start:assistant",
+            "block_start:1:weather:tu_1",
+            "tool_input:{\"city\":",
+            "reasoning_signature:sig",
+            "citation:doc:quote:2",
+            "block_stop:1",
+            "stop:tool_use:1",
+            "metadata:12:321:optimized:true",
+            "unknown",
+            "exception:boom:424:upstream",
+        ].join("|"),
+    )
+}
+
+// The streamed turn's answer text.
+function _stream_text(cl: aws.BedrockClient, input: ai.ModelTurnInput) -> string {
+    let text = cl.invoke_stream(input).final_turn().terminal_text() ?? "";
+    text
+}
+
+// Text deltas accumulate into the answer, stopReason and usage fold into the
+// final turn, and the request is the signed ConverseStream call.
+function bedrock_stream_text() -> string {
+    root.llm_mock.mock_eventstream_serve(
+        _stream_frames("end_turn", true),
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = _client(mock.base_url());
+            let stream = cl.invoke_stream(
+                _turn_input(BedrockEcho@spec("Say pong."), _empty_journal(), _no_tools()),
+            );
+            let deltas: string[] = [];
+            while (true) {
+                match (stream.next()) {
+                    let d: ai.stream.Done => break,
+                    let chunk: string[] => {
+                        deltas = deltas.concat(chunk);
+                        null
+                    },
+                };
+            }
+            let turn = stream.final_turn();
+            let sent = mock.last_request();
+            [
+                deltas.join("+"),
+                turn.terminal_text() ?? "",
+                _stop_label(turn),
+                `${turn.usage?.input_tokens ?? -1}/${turn.usage?.output_tokens ?? -1}`,
+                sent.path(),
+                sent.header("accept") ?? "",
+                `${(sent.header("authorization") ?? "").starts_with("AWS4-HMAC-SHA256")}`,
+            ].join("|")
+        },
+    )
+}
+
+test "bedrock_stream_text" {
+    assert.equal(
+        bedrock_stream_text(),
+        "po+ng|pong|Complete|10/2|/model/anthropic.claude-3-5-haiku-20241022-v1%3A0/converse-stream|application/vnd.amazon.eventstream|true",
+    )
+}
+
+// The typed path a generated `Fn@stream` binding takes.
+function bedrock_stream_from_spec() -> string {
+    root.llm_mock.mock_eventstream_serve(
+        _stream_frames("end_turn", true),
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = _client(mock.base_url());
+            ai.stream.from_spec<string>(BedrockEcho@spec("Say pong."), client = cl).final()
+        },
+    )
+}
+
+test "bedrock_stream_from_spec" {
+    assert.equal(bedrock_stream_from_spec(), "pong")
+}
+
+function bedrock_stream_max_tokens() -> string {
+    root.llm_mock.mock_eventstream_serve(
+        _stream_frames("max_tokens", true),
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = _client(mock.base_url());
+            let input = _turn_input(BedrockEcho@spec("hi"), _empty_journal(), _no_tools());
+            _stop_label(cl.invoke_stream(input).final_turn())
+        },
+    )
+}
+
+test "bedrock_stream_max_tokens" {
+    assert.equal(bedrock_stream_max_tokens(), "MaxTokens")
+}
+
+// `metadata` is ConverseStream's last event. A connection that closes after
+// messageStop but before it is a truncated turn: a retry-safe NetworkFailure,
+// never `pong` reported as a complete answer.
+function bedrock_stream_truncated() -> string {
+    root.llm_mock.mock_eventstream_serve(
+        _stream_frames("end_turn", false),
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = _client(mock.base_url());
+            let input = _turn_input(BedrockEcho@spec("hi"), _empty_journal(), _no_tools());
+            _stream_text(cl, input) catch_all (e) {
+                _ => _failure_label(e),
+            }
+        },
+    )
+}
+
+test "bedrock_stream_truncated" {
+    assert.equal(bedrock_stream_truncated(), "NetworkFailure")
+}
+
+// A modeled exception frame mid-stream fails the turn with the identity the
+// same HTTP status gets on `invoke`.
+function bedrock_stream_exception(exception_type: string) -> string {
+    let frames = [
+        root.llm_mock.eventstream_event("messageStart", `{"role":"assistant"}`),
+        root.llm_mock.eventstream_event(
+            "contentBlockDelta",
+            `{"contentBlockIndex":0,"delta":{"text":"par"}}`,
+        ),
+        root.llm_mock.eventstream_exception(exception_type, "stream failed"),
+    ];
+    root.llm_mock.mock_eventstream_serve(
+        frames,
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = _client(mock.base_url());
+            let input = _turn_input(BedrockEcho@spec("hi"), _empty_journal(), _no_tools());
+            _stream_text(cl, input) catch_all (e) {
+                _ => _failure_label(e),
+            }
+        },
+    )
+}
+
+test "bedrock_stream_exceptions" {
+    assert.equal(
+        [
+            bedrock_stream_exception("throttlingException"),
+            bedrock_stream_exception("validationException"),
+            bedrock_stream_exception("modelStreamErrorException"),
+            bedrock_stream_exception("serviceUnavailableException"),
+        ].join("|"),
+        "RateLimited|InvalidRequest/400|InvalidRequest/424|NetworkFailure",
+    )
+}
+
+// A non-2xx before the stream opens classifies like `invoke`'s errors, so a
+// 403 is never a retry-safe NetworkFailure.
+function bedrock_stream_http_error(status: int) -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.error(status, `{"message":"nope"}`)],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = _client(mock.base_url());
+            let input = _turn_input(BedrockEcho@spec("hi"), _empty_journal(), _no_tools());
+            _stream_text(cl, input) catch_all (e) {
+                _ => _failure_label(e),
+            }
+        },
+    )
+}
+
+test "bedrock_stream_http_errors" {
+    assert.equal(
+        [bedrock_stream_http_error(403), bedrock_stream_http_error(429), bedrock_stream_http_error(500)].join("|"),
+        "InvalidRequest/403|RateLimited|NetworkFailure",
+    )
+}
+
 // ─── 14. live ────────────────────────────────────────────────────────────────
 //
 // Real Bedrock. Gated twice: the `live` test profile selects the testset, and
@@ -1258,10 +1721,24 @@ function live_bedrock_answers() -> bool {
     result.value.trim().length() > 0
 }
 
+function live_bedrock_streams() -> bool {
+    let cl = aws.BedrockClient.new(
+        model = "amazon.nova-micro-v1:0",
+        region = baml.env.get("AWS_REGION") ?? "us-east-1",
+        profile = baml.env.get("AWS_PROFILE"),
+        max_tokens = 64,
+    );
+    let stream = ai.stream.from_spec<string>(LiveBedrockEcho@spec("Say pong."), client = cl);
+    stream.final().trim().length() > 0
+}
+
 testset "live" with testing.Sequential() {
     if (baml.env.get("AWS_PROFILE") != null) {
         test "bedrock" {
             assert.is_true(live_bedrock_answers())
+        }
+        test "bedrock_stream" {
+            assert.is_true(live_bedrock_streams())
         }
     } else {
         log.warn("live::bedrock not registered: AWS_PROFILE is unset (local SSO session required)")

@@ -2,8 +2,8 @@
   "recording": {
     "recording_id": "07070707070707070707070707070707",
     "recording_file_sequence": 1,
-    "encoded_length": 148,
-    "sha256": "090278fe087146e1156875bc4548efbacb9e39e53a97955e3f73d948c886aa0c"
+    "encoded_length": 154,
+    "sha256": "3aecc1c569d5dfff4ab9f8d2ac888685e6d96501d42a4a585c8babb8755e6210"
   },
   "candidates": [
     {"snapshot_id": "74c24ff59c71091f052cdcfb3fb0112f", "snapshot_format_version": 2},

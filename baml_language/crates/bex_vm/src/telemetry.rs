@@ -29,6 +29,9 @@ pub use btel_types::{
 use btel_types::{FunctionId, allocate_telemetry_id};
 use rustc_hash::FxHashMap;
 
+mod errors;
+pub(crate) use errors::{ErrorBook, LandingMatch};
+mod network;
 mod policy;
 pub use policy::{TelemetryPolicies, TelemetryPolicy};
 
@@ -58,8 +61,8 @@ const _: () = assert!(CALL_PATH_CACHE_SLOTS == 1);
 const _: () = assert!(matches!(NATIVE_DEFAULT_MODE, InvocationMode::Hidden));
 
 const SPAN: u8 = 1 << 0;
-const CAPTURE_OUTPUT: u8 = 1 << 1;
-const CAPTURE_ERROR: u8 = 1 << 2;
+const INHERITED_CAPTURE_OUTPUT: u8 = 1 << 1;
+const INHERITED_CAPTURE_ERROR: u8 = 1 << 2;
 const REENTRY: u8 = 1 << 3;
 const REQUIRES_ANNOUNCEMENT: u8 = 1 << 4;
 
@@ -90,16 +93,54 @@ struct CallPathKey {
 pub struct FrameTelemetry {
     pub entered_at: ClockInstant,
     pub saved_parent_id: TelemetryId,
+    span_id: Option<TelemetryId>,
     pub await_duration: AwaitDuration,
     pub saved_call_path: CallPathId,
     flags: u8,
+    // Keep call-site overrides distinct from inherited requests latched at entry.
+    output_override: Option<bool>,
+    error_override: Option<bool>,
 }
 
 const _: () = assert!(size_of::<FrameTelemetry>() == btel_settings::layout::FRAME_TELEMETRY_BYTES);
 const _: () =
     assert!(size_of::<Option<FrameTelemetry>>() == btel_settings::layout::FRAME_TELEMETRY_BYTES);
 
+/// The type arguments a call's frame starts with, in the callee's De Bruijn
+/// order: those the callee value carries (a bound method's receiver class
+/// and method arguments, a closure's captured ones, a generic function
+/// value's), then those the call site passes.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CallTypeArgs<'a> {
+    pub carried: &'a [bex_vm_types::RealizedTy],
+    pub passed: &'a [bex_vm_types::RealizedTy],
+}
+
+impl<'a> CallTypeArgs<'a> {
+    fn is_empty(&self) -> bool {
+        self.carried.is_empty() && self.passed.is_empty()
+    }
+    fn iter(&self) -> impl Iterator<Item = &'a bex_vm_types::RealizedTy> {
+        self.carried.iter().chain(self.passed)
+    }
+}
+
+/// Invocation-local tracing controls resolved by the call boundary.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TraceConfig {
+    pub mode: Option<InvocationMode>,
+    pub inputs: Option<bool>,
+    pub output: Option<bool>,
+    pub error: Option<bool>,
+    pub reserved_id: Option<TelemetryId>,
+}
+
 impl FrameTelemetry {
+    #[inline(always)]
+    pub const fn span_id(self) -> Option<TelemetryId> {
+        self.span_id
+    }
+
     #[inline(always)]
     pub const fn is_span(self) -> bool {
         self.flags & SPAN != 0
@@ -116,7 +157,7 @@ impl FrameTelemetry {
     }
 }
 
-pub use btel_records::{SpanRecord, TimingRecord};
+pub use btel_records::{LogLevel, SpanRecord, TimingRecord};
 
 mod snapshot;
 type VmSpanRecord = SpanRecord<btel_snapshot::Snapshot, btel_snapshot::Snapshot>;
@@ -130,12 +171,22 @@ pub struct ThreadTelemetry {
     id: TelemetryId,
     parent_id: Option<TelemetryId>,
     spawn_call_path: CallPathId,
+    /// When the thread was created: for a spawned future, when it was
+    /// scheduled, before it waited to be admitted.
     started_at: ClockInstant,
     started: bool,
+    /// A spawned future's body began running (`ThreadSpanRunning` written).
+    running: bool,
     completed: bool,
+    name: Option<btel_records::ThreadName>,
 }
 
 pub struct TelemetryState {
+    context: btel_types::context::Context,
+    #[cfg(all(not(test), not(target_arch = "wasm32")))]
+    context_snapshot: Option<(btel_types::context::Context, btel_snapshot::SnapshotId)>,
+    #[cfg(all(not(test), not(target_arch = "wasm32")))]
+    pending_context_snapshot: Option<btel_snapshot::Snapshot>,
     capture_scratch: snapshot::Scratch,
     #[cfg(target_arch = "wasm32")]
     snapshots: btel_snapshot::SnapshotPool,
@@ -148,6 +199,8 @@ pub struct TelemetryState {
     clock: Arc<ClockEpoch>,
     #[cfg(not(target_arch = "wasm32"))]
     runtime: Arc<btel_processor::TelemetryRuntime>,
+    /// Exception-path bookkeeping, allocated by the first recorded raise.
+    errors: Option<Box<ErrorBook>>,
     #[cfg(test)]
     timing_records: Vec<TimingRecord>,
     #[cfg(test)]
@@ -155,6 +208,31 @@ pub struct TelemetryState {
 }
 
 impl TelemetryState {
+    pub fn set_context(&mut self, context: btel_types::context::Context) {
+        #[cfg(all(not(test), not(target_arch = "wasm32")))]
+        if !context.same_version(&self.context) {
+            self.pending_context_snapshot = None;
+        }
+        self.context = context;
+    }
+
+    #[cfg(all(not(test), not(target_arch = "wasm32")))]
+    fn prepare_context(&mut self) {
+        if self.context.is_empty()
+            || self.pending_context_snapshot.is_some()
+            || self
+                .context_snapshot
+                .as_ref()
+                .is_some_and(|(context, _)| context.same_version(&self.context))
+        {
+            return;
+        }
+        if let Some(builder) = self.runtime.acquire_snapshot() {
+            self.pending_context_snapshot =
+                btel_snapshot::context::capture_with_builder(&self.context, builder);
+        }
+    }
+
     pub fn new_root(
         policies: Arc<TelemetryPolicies>,
         clock: Arc<ClockEpoch>,
@@ -164,6 +242,11 @@ impl TelemetryState {
         let id = allocate_telemetry_id();
         let started_at = clock.read();
         Self {
+            context: btel_types::context::Context::default(),
+            #[cfg(all(not(test), not(target_arch = "wasm32")))]
+            context_snapshot: None,
+            #[cfg(all(not(test), not(target_arch = "wasm32")))]
+            pending_context_snapshot: None,
             capture_scratch: snapshot::Scratch::default(),
             #[cfg(target_arch = "wasm32")]
             snapshots: btel_snapshot::SnapshotPool::new(
@@ -179,7 +262,9 @@ impl TelemetryState {
                 spawn_call_path: CallPathId::ROOT,
                 started_at,
                 started: false,
+                running: false,
                 completed: false,
+                name: None,
             },
             call_paths: FxHashMap::default(),
             call_path_keys: FxHashMap::default(),
@@ -188,11 +273,38 @@ impl TelemetryState {
             clock,
             #[cfg(not(target_arch = "wasm32"))]
             runtime,
+            errors: None,
             #[cfg(test)]
             timing_records: Vec::new(),
             #[cfg(test)]
             span_records: Vec::new(),
         }
+    }
+
+    /// A generic call's type arguments as `map<string, Type>`, keyed by the
+    /// names the compiler gave the frame's slots. A slot without a name is
+    /// left out rather than given an invented key; nothing is recorded when
+    /// no slot has one.
+    #[cold]
+    fn capture_type_args(
+        &mut self,
+        function: &Function,
+        type_args: CallTypeArgs<'_>,
+    ) -> Option<btel_snapshot::Snapshot> {
+        let mut named: Vec<(&str, &bex_vm_types::RealizedTy)> =
+            Vec::with_capacity(function.type_param_names.len());
+        for (name, ty) in function.type_param_names.iter().zip(type_args.iter()) {
+            // A frame can bind a name twice (a lambda inside a block that
+            // rebinds it); the later slot is the one its body sees.
+            match named.iter_mut().find(|(seen, _)| *seen == name.as_str()) {
+                Some(slot) => slot.1 = ty,
+                None => named.push((name, ty)),
+            }
+        }
+        if named.is_empty() {
+            return None;
+        }
+        self.capture(snapshot::Input::TypeArgs(&named))
     }
 
     #[cold]
@@ -208,6 +320,17 @@ impl TelemetryState {
         builder.map(|builder| unsafe { self.capture_scratch.capture(builder, input) })
     }
 
+    /// The spawn context for a task whose body runs no BAML function (a host
+    /// closure): with no callee to add an edge for, the child continues the
+    /// spawner's active call path.
+    pub fn hidden_spawn_context(&self) -> ThreadSpawnContext {
+        ThreadSpawnContext {
+            parent_id: self.thread.active_id,
+            spawn_call_path: self.thread.active_call_path,
+            clock: Arc::clone(&self.clock),
+        }
+    }
+
     pub fn configure_spawn(&mut self, context: &ThreadSpawnContext) {
         assert!(
             Arc::ptr_eq(&self.clock, &context.clock),
@@ -217,6 +340,31 @@ impl TelemetryState {
         self.thread.parent_id = Some(context.parent_id);
         self.thread.spawn_call_path = context.spawn_call_path;
         self.thread.active_call_path = context.spawn_call_path;
+    }
+
+    /// Name this thread's future before it starts; its records carry it.
+    pub fn set_thread_name(&mut self, name: &str) {
+        assert!(!self.thread.started, "telemetry thread already started");
+        self.thread.name = Some(Arc::new(Box::from(name)));
+    }
+
+    /// A spawned future's body starts running now, after waiting to be
+    /// admitted. Returns that instant the first time; `None` after that and
+    /// for a root thread, which runs from the start.
+    pub fn mark_running(&mut self) -> Option<ClockInstant> {
+        if !self.is_waiting() {
+            return None;
+        }
+        self.thread.running = true;
+        self.start_thread();
+        let at = self.clock.read();
+        self.write_span(SpanRecord::ThreadSpanRunning { at });
+        Some(at)
+    }
+
+    /// A spawned future whose body has not begun running.
+    pub fn is_waiting(&self) -> bool {
+        self.thread.parent_id.is_some() && !self.thread.running
     }
 
     pub fn start_thread(&mut self) {
@@ -230,12 +378,175 @@ impl TelemetryState {
             parent_id: self.thread.parent_id,
             spawn_call_path: self.thread.spawn_call_path,
             started_at: self.thread.started_at,
+            name: self.thread.name.clone(),
         });
+    }
+
+    /// Charge one sysop's time to the innermost observed call path. Outside
+    /// every observed frame the time belongs to no node and is dropped.
+    #[inline]
+    pub fn record_sysop_time(&mut self, elapsed: ClockDuration) {
+        let call_path = self.thread.active_call_path;
+        if call_path != CallPathId::ROOT {
+            self.write_timing(TimingRecord::SysOpTime { call_path, elapsed });
+        }
+    }
+
+    /// Capture a point event without promoting its invocation to a span.
+    ///
+    /// # Safety
+    /// `data` and its reachable objects must remain live under the heap permit.
+    pub unsafe fn record_log(
+        &mut self,
+        function: FunctionId,
+        pc: u32,
+        level: btel_records::LogLevel,
+        event_name: Option<Arc<str>>,
+        data: Value,
+    ) {
+        self.start_thread();
+        let at = self.clock.read();
+        #[cfg(all(not(test), not(target_arch = "wasm32")))]
+        self.prepare_context();
+        let captured_data = self.capture(snapshot::Input::Value(data));
+        self.write_span(SpanRecord::Log {
+            parent_id: self.thread.active_id,
+            function,
+            pc,
+            at,
+            level,
+            event_name,
+            captured_data,
+        });
+    }
+
+    /// Open a span for an HTTP request the runtime is about to send, whatever
+    /// the caller's `$trace` options: `None` at the `Low` auto level. Its
+    /// parent is the innermost span, its call path the innermost observed
+    /// frame's. It stays open until `close_network_span`.
+    pub fn open_network_span(
+        &mut self,
+        request: &sys_types::network::NetworkRequest,
+    ) -> Option<TelemetryId> {
+        if self.auto_level == AutoTelemetryLevel::Low {
+            return None;
+        }
+        self.start_thread();
+        let url = network::sanitize_url(&request.url);
+        let headers = network::sanitize_headers(&request.headers, network::Direction::Request);
+        #[cfg(all(not(test), not(target_arch = "wasm32")))]
+        self.prepare_context();
+        let captured_request = self.capture(snapshot::Input::Network(
+            &network::NetworkPayload::Request {
+                method: &request.method,
+                url: &url,
+                headers: &headers,
+                body: self.policies.http_bodies().then_some(&request.body[..]),
+            },
+        ));
+        let id = allocate_telemetry_id();
+        self.write_span(SpanRecord::NetworkSpanAnnouncement(Box::new(
+            btel_records::NetworkAnnouncement {
+                id,
+                parent_id: self.thread.active_id,
+                call_path: self.thread.active_call_path,
+                started_at: self.clock.read(),
+                method: request.method.as_str().into(),
+                url: url.into_boxed_str(),
+                request: captured_request,
+            },
+        )));
+        Some(id)
+    }
+
+    /// Record what happened to an open request at `at`, an instant the IO
+    /// side read from this run's clock. Its span may belong to another thread.
+    pub fn network_event(
+        &mut self,
+        span: TelemetryId,
+        at: ClockInstant,
+        event: &sys_types::network::NetworkEventKind,
+    ) {
+        use sys_types::network::NetworkEventKind;
+
+        self.start_thread();
+        let bodies = self.policies.http_bodies();
+        let payload = match event {
+            NetworkEventKind::Connection { status, headers } => {
+                let headers = network::sanitize_headers(headers, network::Direction::Response);
+                self.capture(snapshot::Input::Network(
+                    &network::NetworkPayload::Connection {
+                        status: *status,
+                        headers: &headers,
+                    },
+                ))
+            }
+            NetworkEventKind::Body(body) if bodies => self.capture(snapshot::Input::Network(
+                &network::NetworkPayload::Body(body),
+            )),
+            NetworkEventKind::SseEvent { event, data, id } if bodies => self.capture(
+                snapshot::Input::Network(&network::NetworkPayload::SseEvent {
+                    event: event.as_deref(),
+                    data,
+                    id: id.as_deref(),
+                }),
+            ),
+            _ => None,
+        };
+        self.write_span(SpanRecord::NetworkEvent(Box::new(
+            btel_records::NetworkEventRecord {
+                span,
+                name: network::event_name(event),
+                at,
+                payload,
+            },
+        )));
+    }
+
+    /// End an open request's span. An errored one captures its error; where
+    /// the error's text quotes one of `raw_urls` (the URLs the request went
+    /// to, as sent), the capture has the sanitized URL instead.
+    ///
+    /// # Safety
+    /// `error` and its reachable objects must remain live under the heap permit.
+    pub unsafe fn close_network_span(
+        &mut self,
+        span: TelemetryId,
+        at: ClockInstant,
+        outcome: InvocationOutcome,
+        error: Option<Value>,
+        raw_urls: &[&str],
+    ) {
+        self.start_thread();
+        let error = error.and_then(|error| {
+            let mut rewrites: Vec<_> = raw_urls
+                .iter()
+                .flat_map(|url| network::url_rewrites(url))
+                .collect();
+            rewrites.sort_by_key(|(from, _)| std::cmp::Reverse(from.len()));
+            self.capture_scratch.rewrites = rewrites;
+            let captured = self.capture(snapshot::Input::Value(error));
+            self.capture_scratch.rewrites.clear();
+            captured
+        });
+        self.write_span(SpanRecord::NetworkSpanCompletion(Box::new(
+            btel_records::NetworkCompletion {
+                span,
+                completed_at: at,
+                outcome,
+                error,
+            },
+        )));
     }
 
     #[inline(always)]
     pub fn active_id(&self) -> TelemetryId {
         self.thread.active_id
+    }
+
+    /// The innermost observed frame's call path; `ROOT` outside any.
+    pub(crate) fn active_call_path(&self) -> CallPathId {
+        self.thread.active_call_path
     }
 
     pub fn spawn_context(
@@ -280,14 +591,56 @@ impl TelemetryState {
         args: &[Value],
         register: impl FnOnce(Option<HeapPtr>, HeapPtr) -> (Option<FunctionId>, FunctionId),
     ) -> Option<FrameTelemetry> {
+        // SAFETY: forwarded unchanged to the trace-aware entry point.
+        unsafe {
+            self.enter_bytecode_with_trace(
+                function,
+                callee,
+                visible_caller,
+                caller_pc,
+                caller_is_observed,
+                args,
+                None,
+                CallTypeArgs::default(),
+                register,
+            )
+        }
+    }
+
+    #[inline(always)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "entry data plus call-local tracing controls and registration hook"
+    )]
+    /// # Safety
+    /// Every argument and its reachable objects must remain live under the VM
+    /// heap permit throughout this call. Capture may traverse that graph.
+    pub unsafe fn enter_bytecode_with_trace(
+        &mut self,
+        function: &Function,
+        callee: HeapPtr,
+        visible_caller: Option<HeapPtr>,
+        caller_pc: u32,
+        caller_is_observed: bool,
+        args: &[Value],
+        trace: Option<TraceConfig>,
+        type_args: CallTypeArgs<'_>,
+        register: impl FnOnce(Option<HeapPtr>, HeapPtr) -> (Option<FunctionId>, FunctionId),
+    ) -> Option<FrameTelemetry> {
         if function.telemetry_function_id.is_none()
             || !matches!(function.kind, FunctionKind::Bytecode)
         {
             return None;
         }
 
+        let mode_override = trace.and_then(|config| {
+            config
+                .reserved_id
+                .map(|_| InvocationMode::Span)
+                .or(config.mode)
+        });
         let policy_id = function.telemetry_policy_id.load();
-        if policy_id == btel_types::TelemetryPolicyId::NONE {
+        if mode_override.is_none() && policy_id == btel_types::TelemetryPolicyId::NONE {
             if self.auto_level == AutoTelemetryLevel::Low {
                 return None;
             }
@@ -299,16 +652,19 @@ impl TelemetryState {
                     visible_caller,
                     caller_pc,
                     caller_is_observed,
+                    trace,
                     register,
                 ));
             }
         }
         let policy = self.policy_by_id(policy_id);
-        let mode = if policy_id == btel_types::TelemetryPolicyId::NONE {
-            InvocationMode::Span
-        } else {
-            default_mode(function, policy)
-        };
+        let mode = mode_override.unwrap_or_else(|| {
+            if policy_id == btel_types::TelemetryPolicyId::NONE {
+                InvocationMode::Span
+            } else {
+                default_mode(function, policy)
+            }
+        });
 
         if mode == InvocationMode::Hidden {
             return None;
@@ -342,23 +698,36 @@ impl TelemetryState {
         if mode == InvocationMode::Span {
             flags |= SPAN;
         }
+        let capture_inputs = trace.and_then(|config| config.inputs).unwrap_or(
+            policy.capture_inputs || (is_ai && btel_settings::policy::AI_CAPTURE_INPUTS),
+        );
         if policy.capture_output || (is_ai && btel_settings::policy::AI_CAPTURE_OUTPUT) {
-            flags |= CAPTURE_OUTPUT;
+            flags |= INHERITED_CAPTURE_OUTPUT;
         }
         if policy.capture_error || (is_ai && btel_settings::policy::AI_CAPTURE_ERROR) {
-            flags |= CAPTURE_ERROR;
+            flags |= INHERITED_CAPTURE_ERROR;
         }
 
-        let captured_inputs = (mode == InvocationMode::Span
-            && (policy.capture_inputs || (is_ai && btel_settings::policy::AI_CAPTURE_INPUTS)))
+        let captured_inputs = (mode == InvocationMode::Span && capture_inputs)
             .then(|| self.capture(snapshot::Input::FunctionArgs(args)))
             .flatten();
-        if captured_inputs.is_some() {
+        // Types are not user data: a span records them whether or not it
+        // captures its arguments.
+        let captured_type_args = (mode == InvocationMode::Span && !type_args.is_empty())
+            .then(|| self.capture_type_args(function, type_args))
+            .flatten();
+        if captured_inputs.is_some() || captured_type_args.is_some() {
             flags |= REQUIRES_ANNOUNCEMENT;
         }
-        let entered_at = self.clock.read();
+        #[cfg(all(not(test), not(target_arch = "wasm32")))]
         if mode == InvocationMode::Span {
-            let id = allocate_telemetry_id();
+            self.prepare_context();
+        }
+        let entered_at = self.clock.read();
+        let span_id = if mode == InvocationMode::Span {
+            let id = trace
+                .and_then(|config| config.reserved_id)
+                .unwrap_or_else(allocate_telemetry_id);
             self.thread.active_id = id;
             self.write_span(SpanRecord::FunctionSpanAnnouncement {
                 id,
@@ -366,16 +735,23 @@ impl TelemetryState {
                 call_path,
                 entered_at,
                 captured_inputs,
+                captured_type_args,
             });
-        }
+            Some(id)
+        } else {
+            None
+        };
         self.thread.active_call_path = call_path;
 
         Some(FrameTelemetry {
             entered_at,
             saved_parent_id,
+            span_id,
             await_duration: AwaitDuration::ZERO,
             saved_call_path,
             flags,
+            output_override: trace.and_then(|config| config.output),
+            error_override: trace.and_then(|config| config.error),
         })
     }
 
@@ -386,6 +762,7 @@ impl TelemetryState {
         visible_caller: Option<HeapPtr>,
         caller_pc: u32,
         caller_is_observed: bool,
+        trace: Option<TraceConfig>,
         register: impl FnOnce(Option<HeapPtr>, HeapPtr) -> (Option<FunctionId>, FunctionId),
     ) -> FrameTelemetry {
         let saved_call_path = self.thread.active_call_path;
@@ -415,10 +792,28 @@ impl TelemetryState {
         FrameTelemetry {
             entered_at,
             saved_parent_id: self.thread.active_id,
+            span_id: None,
             await_duration: AwaitDuration::ZERO,
             saved_call_path,
             flags,
+            output_override: trace.and_then(|config| config.output),
+            error_override: trace.and_then(|config| config.error),
         }
+    }
+
+    /// Whether an errored completion of this frame may capture its error:
+    /// the frame is a span or has a policy (it may be promoted) and error
+    /// capture is on. Lets the unwinder build the error's context only when
+    /// some frame can record it.
+    pub fn wants_error_capture(&self, telemetry: &FrameTelemetry, function: &Function) -> bool {
+        let policy_id = function.telemetry_policy_id.load();
+        if !telemetry.is_span() && policy_id == btel_types::TelemetryPolicyId::NONE {
+            return false;
+        }
+        telemetry.error_override.unwrap_or(
+            telemetry.flags & INHERITED_CAPTURE_ERROR != 0
+                || self.policy_by_id(policy_id).capture_error,
+        )
     }
 
     #[inline(always)]
@@ -433,6 +828,24 @@ impl TelemetryState {
         value: Option<Value>,
     ) {
         let exited_at = self.clock.read();
+        // SAFETY: forwarded from the caller.
+        unsafe { self.complete_invocation_at(telemetry, function, outcome, value, exited_at) }
+    }
+
+    /// `complete_invocation` with an exit instant this thread already read
+    /// from its clock: the frames one unwind pops share the raise's instant.
+    ///
+    /// # Safety
+    /// As `complete_invocation`.
+    #[inline(always)]
+    pub unsafe fn complete_invocation_at(
+        &mut self,
+        telemetry: FrameTelemetry,
+        function: &Function,
+        outcome: InvocationOutcome,
+        value: Option<Value>,
+        exited_at: ClockInstant,
+    ) {
         let call_path = self.thread.active_call_path;
         let policy_id = function.telemetry_policy_id.load();
         if !telemetry.is_span() && policy_id == btel_types::TelemetryPolicyId::NONE {
@@ -452,12 +865,18 @@ impl TelemetryState {
         let policy = self.policy_by_id(policy_id);
         let capture_value = match outcome {
             InvocationOutcome::Ok
-                if telemetry.flags & CAPTURE_OUTPUT != 0 || policy.capture_output =>
+                if telemetry.output_override.unwrap_or(
+                    telemetry.flags & INHERITED_CAPTURE_OUTPUT != 0 || policy.capture_output,
+                ) =>
             {
                 value
             }
             InvocationOutcome::Errored
-                if telemetry.flags & CAPTURE_ERROR != 0 || policy.capture_error =>
+            | InvocationOutcome::Cancelled
+            | InvocationOutcome::Panicked
+                if telemetry.error_override.unwrap_or(
+                    telemetry.flags & INHERITED_CAPTURE_ERROR != 0 || policy.capture_error,
+                ) =>
             {
                 value
             }
@@ -467,7 +886,7 @@ impl TelemetryState {
         if telemetry.is_span() {
             let captured_value =
                 capture_value.and_then(|value| self.capture(snapshot::Input::Value(value)));
-            let id = self.thread.active_id;
+            let id = telemetry.span_id().expect("span frame owns its identity");
             match (
                 outcome,
                 telemetry.is_reentry(),
@@ -605,6 +1024,50 @@ impl TelemetryState {
                         captured_value,
                     },
                 ),
+                (InvocationOutcome::Panicked, false, false) => {
+                    self.write_span(SpanRecord::FunctionSpanCompletionPanicked {
+                        id,
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value,
+                    });
+                }
+                (InvocationOutcome::Panicked, false, true) => self.write_span(
+                    SpanRecord::FunctionSpanCompletionPanickedNeedsAnnouncement {
+                        id,
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value,
+                    },
+                ),
+                (InvocationOutcome::Panicked, true, false) => {
+                    self.write_span(SpanRecord::FunctionSpanCompletionPanickedReentry {
+                        id,
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value,
+                    });
+                }
+                (InvocationOutcome::Panicked, true, true) => self.write_span(
+                    SpanRecord::FunctionSpanCompletionPanickedReentryNeedsAnnouncement {
+                        id,
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value,
+                    },
+                ),
             }
             self.thread.active_id = telemetry.saved_parent_id;
         } else if policy::promotes(policy, elapsed, outcome, self.clock.domain()) {
@@ -677,6 +1140,28 @@ impl TelemetryState {
                         captured_value,
                     });
                 }
+                (InvocationOutcome::Panicked, false) => {
+                    self.write_span(SpanRecord::LateFunctionSpanCompletionPanicked {
+                        id: allocate_telemetry_id(),
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value,
+                    });
+                }
+                (InvocationOutcome::Panicked, true) => {
+                    self.write_span(SpanRecord::LateFunctionSpanCompletionPanickedReentry {
+                        id: allocate_telemetry_id(),
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value,
+                    });
+                }
             }
         } else {
             self.write_timing(TimingRecord::FunctionTimingCompletion {
@@ -697,14 +1182,21 @@ impl TelemetryState {
         }
         self.start_thread();
         self.thread.completed = true;
+        let completed_at = self.clock.read();
+        if self.is_waiting() {
+            // Cancelled before it ran: it starts and ends at the same instant.
+            self.thread.running = true;
+            self.write_span(SpanRecord::ThreadSpanRunning { at: completed_at });
+        }
         self.write_span(SpanRecord::ThreadSpanCompletion {
             id: self.thread.id,
             parent_id: self.thread.parent_id,
             spawn_call_path: self.thread.spawn_call_path,
             clock: Arc::clone(&self.clock),
             started_at: self.thread.started_at,
-            completed_at: self.clock.read(),
+            completed_at,
             outcome,
+            name: self.thread.name.clone(),
         });
         self.clock.finish_thread();
     }
@@ -790,6 +1282,67 @@ impl TelemetryState {
         self.runtime.is_disabled()
     }
 
+    /// Whether raises should be recorded: a recording publisher is attached
+    /// and recording is still enabled. Exception path only.
+    #[cold]
+    pub(crate) fn error_evidence(&self) -> bool {
+        #[cfg(test)]
+        if FORCE_ERROR_EVIDENCE.with(std::cell::Cell::get) {
+            return true;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.runtime.wants_error_evidence();
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = self;
+            false
+        }
+    }
+
+    #[cold]
+    pub(crate) fn error_book(&mut self) -> &mut ErrorBook {
+        self.errors.get_or_insert_with(Box::default)
+    }
+
+    /// Clear notes when a fresh top-level run starts on an empty stack.
+    pub(crate) fn clear_error_book(&mut self) {
+        if let Some(book) = &mut self.errors {
+            book.clear();
+        }
+    }
+
+    pub(crate) fn error_book_ref(&self) -> Option<&ErrorBook> {
+        self.errors.as_deref()
+    }
+
+    pub(crate) fn take_escaped_error(&mut self) -> Option<btel_records::FutureErrorLink> {
+        self.errors.as_mut().and_then(|book| book.take_escaped())
+    }
+
+    /// Emit an exception-path record for this thread.
+    #[cold]
+    pub(crate) fn write_error_record(&mut self, record: VmSpanRecord) {
+        self.write_span(record);
+    }
+
+    /// The raise that failed `future`, stored by the thread that settled it.
+    pub(crate) fn future_error(&self, future: u64) -> btel_records::FutureErrorLookup {
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.runtime.future_error(future);
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = (self, future);
+            btel_records::FutureErrorLookup::Missing
+        }
+    }
+
+    pub(crate) fn link_future_error(&self, future: u64, link: btel_records::FutureErrorLink) {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.runtime.link_future_error(future, link);
+        #[cfg(target_arch = "wasm32")]
+        let _ = (self, future, link);
+    }
+
     /// Release clock bookkeeping without claiming that this thread completed.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn abandon(&mut self) {
@@ -828,7 +1381,38 @@ impl TelemetryState {
         #[cfg(test)]
         self.span_records.push(record);
         #[cfg(all(not(test), not(target_arch = "wasm32")))]
-        self.runtime.write_span(self.thread.id, record);
+        {
+            use btel_records::ContextReference;
+
+            if !record.is_context_observation() {
+                self.runtime.write_span(self.thread.id, record);
+                return;
+            }
+            let mut snapshot = None;
+            let reference = if self.context.is_empty() {
+                ContextReference::Empty
+            } else if let Some((context, id)) = &self.context_snapshot
+                && context.same_version(&self.context)
+            {
+                ContextReference::Snapshot(*id)
+            } else {
+                self.prepare_context();
+                if let Some(captured) = self.pending_context_snapshot.take() {
+                    let id = captured.id();
+                    snapshot = Some(captured);
+                    ContextReference::Snapshot(id)
+                } else {
+                    ContextReference::Unavailable
+                }
+            };
+            if self
+                .runtime
+                .write_span_with_context(self.thread.id, reference, snapshot, record)
+                && let ContextReference::Snapshot(id) = reference
+            {
+                self.context_snapshot = Some((self.context.clone(), id));
+            }
+        }
         #[cfg(all(not(test), target_arch = "wasm32"))]
         {
             let _ = self;
@@ -890,6 +1474,19 @@ fn default_mode(function: &Function, policy: TelemetryPolicy) -> InvocationMode 
     }
 }
 
+/// `sha256:` and the hex digits a sanitized value has in place of `value`.
+#[cfg(test)]
+pub(crate) fn network_hash_for_tests(value: &str) -> String {
+    network::hash(value)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Unit tests keep records locally; this makes their VMs build raises
+    /// even though the shared test runtime has no recording publisher.
+    pub(crate) static FORCE_ERROR_EVIDENCE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 #[cfg(all(test, not(target_arch = "wasm32")))]
 pub(crate) fn test_runtime() -> Arc<btel_processor::TelemetryRuntime> {
     static RUNTIME: std::sync::OnceLock<Arc<btel_processor::TelemetryRuntime>> =
@@ -912,6 +1509,297 @@ mod tests {
             #[cfg(not(target_arch = "wasm32"))]
             test_runtime(),
         )
+    }
+
+    fn trace_entry(
+        state: &mut TelemetryState,
+        function: &Function,
+        trace: Option<TraceConfig>,
+    ) -> Option<FrameTelemetry> {
+        // SAFETY: the argument is immediate and the registration hook never dereferences pointers.
+        unsafe {
+            state.enter_bytecode_with_trace(
+                function,
+                HeapPtr::null(),
+                None,
+                0,
+                false,
+                &[Value::int(7)],
+                trace,
+                CallTypeArgs::default(),
+                |_, _| (None, function.telemetry_function_id.unwrap()),
+            )
+        }
+    }
+
+    #[test]
+    fn invocation_modes_override_defaults_without_changing_policy() {
+        for auto_level in [
+            AutoTelemetryLevel::Low,
+            AutoTelemetryLevel::Medium,
+            AutoTelemetryLevel::High,
+        ] {
+            for mode in [
+                InvocationMode::Hidden,
+                InvocationMode::Timing,
+                InvocationMode::Span,
+            ] {
+                for reserved in [false, true] {
+                    let function = function(FunctionKind::Bytecode, None);
+                    let mut state = test_state(
+                        Arc::new(TelemetryPolicies::with_auto_level(auto_level)),
+                        test_clock(),
+                    );
+                    let reserved_id = reserved.then(allocate_telemetry_id);
+                    let frame = trace_entry(
+                        &mut state,
+                        &function,
+                        Some(TraceConfig {
+                            mode: Some(mode),
+                            reserved_id,
+                            ..TraceConfig::default()
+                        }),
+                    );
+                    assert_eq!(frame.is_some(), reserved || mode != InvocationMode::Hidden);
+                    if let Some(frame) = frame {
+                        assert_eq!(frame.is_span(), reserved || mode == InvocationMode::Span);
+                        assert_eq!(frame.span_id().is_some(), frame.is_span());
+                        if reserved {
+                            assert_eq!(frame.span_id(), reserved_id);
+                        }
+                        unsafe {
+                            state.complete_invocation(
+                                frame,
+                                &function,
+                                InvocationOutcome::Ok,
+                                None,
+                            );
+                        }
+                    }
+                    assert_eq!(
+                        function.telemetry_policy_id.load(),
+                        btel_types::TelemetryPolicyId::NONE
+                    );
+                    let default_frame = trace_entry(&mut state, &function, None);
+                    assert_eq!(
+                        default_frame.is_some(),
+                        auto_level != AutoTelemetryLevel::Low
+                    );
+                    if let Some(frame) = default_frame {
+                        assert_eq!(frame.is_span(), auto_level == AutoTelemetryLevel::High);
+                        unsafe {
+                            state.complete_invocation(
+                                frame,
+                                &function,
+                                InvocationOutcome::Ok,
+                                None,
+                            );
+                        }
+                    }
+                    if let Some(reserved_id) = reserved_id {
+                        assert!(
+                            state.span_records().iter().any(|record| matches!(record,
+                            SpanRecord::FunctionSpanAnnouncement { id, .. } if *id == reserved_id))
+                        );
+                        assert!(
+                            state.span_records().iter().any(|record| matches!(record,
+                            SpanRecord::FunctionSpanCompletionOk { id, .. } if *id == reserved_id))
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn invocation_span_identity_does_not_fall_back_to_ancestor() {
+        let function = function(FunctionKind::Bytecode, None);
+        let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+        let parent = trace_entry(
+            &mut state,
+            &function,
+            Some(TraceConfig {
+                mode: Some(InvocationMode::Span),
+                ..TraceConfig::default()
+            }),
+        )
+        .unwrap();
+        let parent_id = parent.span_id().unwrap();
+        for mode in [
+            InvocationMode::Hidden,
+            InvocationMode::Timing,
+            InvocationMode::Span,
+        ] {
+            let child = trace_entry(
+                &mut state,
+                &function,
+                Some(TraceConfig {
+                    mode: Some(mode),
+                    ..TraceConfig::default()
+                }),
+            );
+            assert_eq!(parent.span_id(), Some(parent_id));
+            assert_ne!(child.and_then(FrameTelemetry::span_id), Some(parent_id));
+            assert_eq!(
+                child.and_then(FrameTelemetry::span_id).is_some(),
+                mode == InvocationMode::Span
+            );
+            if let Some(child) = child {
+                unsafe {
+                    state.complete_invocation(child, &function, InvocationOutcome::Ok, None);
+                }
+            }
+            assert_eq!(state.active_id(), parent_id);
+        }
+        unsafe {
+            state.complete_invocation(parent, &function, InvocationOutcome::Ok, None);
+        }
+    }
+
+    #[test]
+    fn invocation_capture_overrides_policy_and_records_real_snapshots() {
+        for [capture_inputs, capture_output, capture_error] in [
+            [false, false, false],
+            [true, false, false],
+            [false, true, false],
+            [false, false, true],
+            [true, true, true],
+        ] {
+            for [inputs, output, error] in [
+                [None, None, None],
+                [Some(false), Some(false), Some(false)],
+                [Some(true), Some(false), Some(false)],
+                [Some(false), Some(true), Some(false)],
+                [Some(false), Some(false), Some(true)],
+                [Some(true), Some(true), Some(true)],
+            ] {
+                for outcome in [
+                    InvocationOutcome::Ok,
+                    InvocationOutcome::Errored,
+                    InvocationOutcome::Cancelled,
+                ] {
+                    let function = function(FunctionKind::Bytecode, None);
+                    let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+                    state
+                        .set_policy(
+                            &function,
+                            TelemetryPolicy {
+                                capture_inputs,
+                                capture_output,
+                                capture_error,
+                                ..TelemetryPolicy::NONE
+                            },
+                        )
+                        .unwrap();
+                    let frame = trace_entry(
+                        &mut state,
+                        &function,
+                        Some(TraceConfig {
+                            mode: Some(InvocationMode::Span),
+                            inputs,
+                            output,
+                            error,
+                            ..TraceConfig::default()
+                        }),
+                    )
+                    .unwrap();
+                    let id = frame.span_id().unwrap();
+                    unsafe {
+                        state.complete_invocation(frame, &function, outcome, Some(Value::int(9)));
+                    }
+                    let expected_inputs = inputs.unwrap_or(capture_inputs);
+                    let expected_value = match outcome {
+                        InvocationOutcome::Ok => output.unwrap_or(capture_output),
+                        InvocationOutcome::Errored
+                        | InvocationOutcome::Cancelled
+                        | InvocationOutcome::Panicked => error.unwrap_or(capture_error),
+                    };
+                    let inputs = state
+                        .span_records()
+                        .iter()
+                        .find_map(|record| match record {
+                            SpanRecord::FunctionSpanAnnouncement {
+                                id: record_id,
+                                captured_inputs,
+                                ..
+                            } if *record_id == id => Some(captured_inputs),
+                            _ => None,
+                        })
+                        .unwrap();
+                    assert_eq!(inputs.is_some(), expected_inputs);
+                    if let Some(inputs) = inputs {
+                        assert!(matches!(
+                            inputs.roots()[0],
+                            btel_snapshot::SnapshotValue::Int(7)
+                        ));
+                    }
+                    let output = state
+                        .span_records()
+                        .iter()
+                        .find_map(|record| match record {
+                            SpanRecord::FunctionSpanCompletionOk {
+                                id: record_id,
+                                captured_value,
+                                ..
+                            }
+                            | SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement {
+                                id: record_id,
+                                captured_value,
+                                ..
+                            } if *record_id == id && outcome == InvocationOutcome::Ok => {
+                                Some(captured_value)
+                            }
+                            SpanRecord::FunctionSpanCompletionErrored {
+                                id: record_id,
+                                captured_value,
+                                ..
+                            }
+                            | SpanRecord::FunctionSpanCompletionErroredNeedsAnnouncement {
+                                id: record_id,
+                                captured_value,
+                                ..
+                            } if *record_id == id && outcome == InvocationOutcome::Errored => {
+                                Some(captured_value)
+                            }
+                            SpanRecord::FunctionSpanCompletionCancelled {
+                                id: record_id,
+                                captured_value,
+                                ..
+                            }
+                            | SpanRecord::FunctionSpanCompletionCancelledNeedsAnnouncement {
+                                id: record_id,
+                                captured_value,
+                                ..
+                            } if *record_id == id && outcome == InvocationOutcome::Cancelled => {
+                                Some(captured_value)
+                            }
+                            _ => None,
+                        })
+                        .unwrap();
+                    assert_eq!(output.is_some(), expected_value);
+                    if let Some(output) = output {
+                        assert!(matches!(
+                            output.roots()[0],
+                            btel_snapshot::SnapshotValue::Int(9)
+                        ));
+                    }
+                    let next = trace_entry(
+                        &mut state,
+                        &function,
+                        Some(TraceConfig {
+                            mode: Some(InvocationMode::Span),
+                            ..TraceConfig::default()
+                        }),
+                    )
+                    .unwrap();
+                    assert_eq!(next.flags & INHERITED_CAPTURE_OUTPUT != 0, capture_output);
+                    assert_eq!(next.flags & INHERITED_CAPTURE_ERROR != 0, capture_error);
+                    unsafe {
+                        state.complete_invocation(next, &function, InvocationOutcome::Ok, None);
+                    }
+                }
+            }
+        }
     }
 
     #[test]
@@ -1099,6 +1987,211 @@ mod tests {
         drop(state);
     }
 
+    fn network_records(state: &TelemetryState) -> Vec<&VmSpanRecord> {
+        state
+            .span_records()
+            .iter()
+            .filter(|record| {
+                matches!(
+                    record,
+                    SpanRecord::NetworkSpanAnnouncement(_)
+                        | SpanRecord::NetworkEvent(_)
+                        | SpanRecord::NetworkSpanCompletion(_)
+                )
+            })
+            .collect()
+    }
+
+    fn shape(capture: Option<&btel_snapshot::Snapshot>) -> Option<serde_json::Value> {
+        capture.map(|snapshot| snapshot::json(snapshot, snapshot.value().unwrap()))
+    }
+
+    fn request() -> sys_types::network::NetworkRequest {
+        sys_types::network::NetworkRequest {
+            method: "POST".to_owned(),
+            url: "https://example.com/v1/messages?key=secret".to_owned(),
+            headers: vec![
+                ("Content-Type".to_owned(), "application/json".to_owned()),
+                ("X-Api-Key".to_owned(), "sk-secret".to_owned()),
+            ],
+            body: br#"{"model":"m"}"#.to_vec().into(),
+        }
+    }
+
+    #[test]
+    fn network_span_records_its_request_events_and_completion() {
+        use serde_json::json;
+        use sys_types::network::NetworkEventKind;
+
+        let function = function(FunctionKind::Bytecode, None);
+        let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+        // Made from inside a span: the span is its parent.
+        let frame = trace_entry(
+            &mut state,
+            &function,
+            Some(TraceConfig {
+                mode: Some(InvocationMode::Span),
+                ..TraceConfig::default()
+            }),
+        )
+        .unwrap();
+        let caller = frame.span_id().unwrap();
+        let call_path = state.active_call_path();
+        let span = state.open_network_span(&request()).unwrap();
+        // A request is not a frame: the caller stays the active span.
+        assert_eq!(state.active_id(), caller);
+        let at = ClockInstant::from_ticks;
+        state.network_event(
+            span,
+            at(10),
+            &NetworkEventKind::Connection {
+                status: 200,
+                headers: vec![
+                    ("Request-Id".to_owned(), "req_1".to_owned()),
+                    ("Set-Cookie".to_owned(), "session".to_owned()),
+                ],
+            },
+        );
+        state.network_event(
+            span,
+            at(11),
+            &NetworkEventKind::SseEvent {
+                event: Some("message_stop".to_owned()),
+                data: "{}".to_owned(),
+                id: None,
+            },
+        );
+        state.network_event(span, at(12), &NetworkEventKind::StreamEnd);
+        state.network_event(span, at(13), &NetworkEventKind::Await);
+        unsafe { state.close_network_span(span, at(13), InvocationOutcome::Ok, None, &[]) };
+        unsafe { state.complete_invocation(frame, &function, InvocationOutcome::Ok, None) };
+
+        let records = network_records(&state);
+        let [
+            SpanRecord::NetworkSpanAnnouncement(announcement),
+            SpanRecord::NetworkEvent(connection),
+            SpanRecord::NetworkEvent(data),
+            SpanRecord::NetworkEvent(end),
+            SpanRecord::NetworkEvent(read),
+            SpanRecord::NetworkSpanCompletion(completion),
+        ] = records.as_slice()
+        else {
+            panic!("unexpected network records: {records:?}");
+        };
+        let url = format!(
+            "https://example.com/v1/messages?key={}",
+            network::hash("secret")
+        );
+        assert_eq!(
+            (
+                announcement.id,
+                announcement.parent_id,
+                announcement.call_path
+            ),
+            (span, caller, call_path)
+        );
+        assert_eq!((&*announcement.method, &*announcement.url), ("POST", &*url));
+        assert_eq!(
+            shape(announcement.request.as_ref()),
+            Some(json!({"request": {
+                "method": "POST",
+                "url": url,
+                "headers": {
+                    "content-type": "application/json",
+                    "x-api-key": network::hash("sk-secret"),
+                },
+                "body": r#"{"model":"m"}"#,
+            }}))
+        );
+        for (event, name, ticks) in [
+            (connection, "connection", 10),
+            (data, "data", 11),
+            (end, "end", 12),
+            (read, "await", 13),
+        ] {
+            assert_eq!(
+                (event.span, event.name.as_str(), event.at),
+                (span, name, at(ticks))
+            );
+        }
+        assert_eq!(
+            shape(connection.payload.as_ref()),
+            Some(json!({"status": 200, "headers": {
+                "request-id": "req_1",
+                "set-cookie": network::hash("session"),
+            }}))
+        );
+        assert_eq!(
+            shape(data.payload.as_ref()),
+            Some(json!({"event": "message_stop", "data": "{}", "id": null}))
+        );
+        assert!(end.payload.is_none() && read.payload.is_none());
+        assert_eq!(
+            (completion.span, completion.completed_at, completion.outcome),
+            (span, at(13), InvocationOutcome::Ok)
+        );
+        assert!(completion.error.is_none());
+    }
+
+    #[test]
+    fn network_span_errors_bodies_off_and_low_level() {
+        use sys_types::network::NetworkEventKind;
+
+        let mut state = test_state(
+            Arc::new(TelemetryPolicies::new().with_http_bodies(false)),
+            test_clock(),
+        );
+        // Outside any frame: the thread is the parent.
+        let span = state.open_network_span(&request()).unwrap();
+        let at = ClockInstant::from_ticks;
+        state.network_event(
+            span,
+            at(5),
+            &NetworkEventKind::Body(b"secret".to_vec().into()),
+        );
+        unsafe {
+            state.close_network_span(
+                span,
+                at(6),
+                InvocationOutcome::Errored,
+                Some(Value::int(3)),
+                &[],
+            );
+        }
+        let records = network_records(&state);
+        let [
+            SpanRecord::NetworkSpanAnnouncement(announcement),
+            SpanRecord::NetworkEvent(data),
+            SpanRecord::NetworkSpanCompletion(completion),
+        ] = records.as_slice()
+        else {
+            panic!("unexpected network records: {records:?}");
+        };
+        assert_eq!(
+            (announcement.parent_id, announcement.call_path),
+            (state.thread.id, CallPathId::ROOT)
+        );
+        let captured = shape(announcement.request.as_ref()).unwrap();
+        assert!(captured["request"].get("body").is_none());
+        assert_eq!(captured["request"]["method"], "POST");
+        assert_eq!((data.name.as_str(), data.payload.is_none()), ("data", true));
+        assert_eq!(completion.outcome, InvocationOutcome::Errored);
+        assert!(matches!(
+            completion
+                .error
+                .as_ref()
+                .and_then(btel_snapshot::Snapshot::value),
+            Some(btel_snapshot::SnapshotValue::Int(3))
+        ));
+
+        let mut low = test_state(
+            Arc::new(TelemetryPolicies::with_auto_level(AutoTelemetryLevel::Low)),
+            test_clock(),
+        );
+        assert_eq!(low.open_network_span(&request()), None);
+        assert!(network_records(&low).is_empty());
+    }
+
     fn function(kind: FunctionKind, body_meta: Option<FunctionMeta>) -> Function {
         Function {
             name: "telemetry_test".to_string(),
@@ -1124,6 +2217,7 @@ mod tests {
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
+            type_param_names: Vec::new(),
             generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: "null".to_string(),
@@ -1134,6 +2228,121 @@ mod tests {
             body_meta,
             runtime_package: HeapPtr::null(),
         }
+    }
+
+    /// Records of one generic call made with `type_args`: its announced
+    /// type arguments, and whether its completion depends on the
+    /// announcement.
+    fn type_args_of(
+        function: &Function,
+        inputs: bool,
+        type_args: CallTypeArgs<'_>,
+    ) -> (Option<serde_json::Value>, bool) {
+        let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+        let trace = TraceConfig {
+            mode: Some(InvocationMode::Span),
+            inputs: Some(inputs),
+            ..TraceConfig::default()
+        };
+        // SAFETY: no heap values; the registration hook dereferences nothing.
+        let frame = unsafe {
+            state.enter_bytecode_with_trace(
+                function,
+                HeapPtr::null(),
+                None,
+                0,
+                false,
+                &[],
+                Some(trace),
+                type_args,
+                |_, _| (None, function.telemetry_function_id.unwrap()),
+            )
+        }
+        .unwrap();
+        unsafe {
+            state.complete_invocation(frame, function, InvocationOutcome::Ok, None);
+        }
+        let announced = state.span_records().iter().find_map(|record| match record {
+            SpanRecord::FunctionSpanAnnouncement {
+                captured_type_args, ..
+            } => Some(shape(captured_type_args.as_ref())),
+            _ => None,
+        });
+        let completed = state.span_records().last().unwrap().completion().unwrap();
+        (announced.unwrap(), completed.requires_announcement)
+    }
+
+    #[test]
+    fn a_generic_call_records_its_type_args_by_name_whether_or_not_inputs_are() {
+        let mut generic = function(FunctionKind::Bytecode, None);
+        // A method of `Box<T>`: the class's parameter rides on the receiver,
+        // the method's own is passed by the call.
+        generic.type_param_names = vec!["T".into(), "U".into()];
+        let carried = [bex_vm_types::RealizedTy::int()];
+        let passed = [bex_vm_types::RealizedTy::string()];
+        let both = CallTypeArgs {
+            carried: &carried,
+            passed: &passed,
+        };
+        for inputs in [false, true] {
+            assert_eq!(
+                type_args_of(&generic, inputs, both),
+                (
+                    Some(serde_json::json!({"T": "type: int", "U": "type: string"})),
+                    true
+                ),
+                "inputs captured: {inputs}"
+            );
+        }
+        // Without type arguments nothing is recorded, and the completion
+        // does not wait for an announcement.
+        let plain = function(FunctionKind::Bytecode, None);
+        assert_eq!(
+            type_args_of(&plain, false, CallTypeArgs::default()),
+            (None, false)
+        );
+        // A slot the compiler did not name is left out, never given a key.
+        let mut partial = generic;
+        partial.type_param_names.truncate(1);
+        assert_eq!(
+            type_args_of(&partial, false, both),
+            (Some(serde_json::json!({"T": "type: int"})), true)
+        );
+        partial.type_param_names.clear();
+        assert_eq!(type_args_of(&partial, false, both), (None, false));
+    }
+
+    #[test]
+    fn argument_layout_is_absent_unless_declaration_names_cover_every_slot() {
+        let mut declared = function(FunctionKind::Bytecode, None);
+        declared.arity = 2;
+        declared.param_names = vec!["self".into(), "customer".into()];
+        let layout = declared
+            .runtime_metadata()
+            .unwrap()
+            .argument_layout
+            .unwrap();
+        assert_eq!(
+            layout
+                .slots
+                .iter()
+                .map(|slot| (slot.name.as_deref(), slot.receiver))
+                .collect::<Vec<_>>(),
+            [(Some("self"), true), (Some("customer"), false)]
+        );
+        // A synthesized body with slots but no declaration names: unknown,
+        // never a guessed or empty layout.
+        let mut synthesized = function(FunctionKind::Bytecode, None);
+        synthesized.arity = 1;
+        assert_eq!(
+            synthesized.runtime_metadata().unwrap().argument_layout,
+            None
+        );
+        let empty = function(FunctionKind::Bytecode, None);
+        assert_eq!(
+            empty.runtime_metadata().unwrap().argument_layout,
+            Some(btel_types::ArgumentLayout::default())
+        );
     }
 
     #[test]
@@ -1170,9 +2379,9 @@ mod tests {
         // Heap-debug adds an epoch to HeapPtr; the rest of each frame stays fixed.
         let pointer_bytes = size_of::<HeapPtr>();
         assert!(matches!(pointer_bytes, 8 | 16));
-        assert_eq!(size_of::<crate::vm::BytecodeFrame>(), 88 + pointer_bytes);
+        assert_eq!(size_of::<crate::vm::BytecodeFrame>(), 104 + pointer_bytes);
         assert_eq!(size_of::<crate::vm::NativeFrame>(), 24 + pointer_bytes);
-        assert_eq!(size_of::<crate::vm::Frame>(), 88 + pointer_bytes);
+        assert_eq!(size_of::<crate::vm::Frame>(), 104 + pointer_bytes);
     }
 
     #[test]
@@ -1565,7 +2774,7 @@ mod tests {
                     reentry,
                     ..
                 } => Some((await_time.get().get(), *reentry)),
-                TimingRecord::ThreadSelected { .. } => None,
+                TimingRecord::ThreadSelected { .. } | TimingRecord::SysOpTime { .. } => None,
             })
             .collect();
         // Completion must carry each invocation's own wait, without rolling
@@ -1757,6 +2966,85 @@ mod tests {
     }
 
     #[test]
+    fn capture_overrides_survive_policy_changes_and_late_promotion() {
+        for mode in [
+            None,
+            Some(InvocationMode::Timing),
+            Some(InvocationMode::Span),
+        ] {
+            for initial in [false, true] {
+                for current in [false, true] {
+                    for override_ in [None, Some(false), Some(true)] {
+                        for outcome in [
+                            InvocationOutcome::Ok,
+                            InvocationOutcome::Errored,
+                            InvocationOutcome::Cancelled,
+                        ] {
+                            let function = function(FunctionKind::Bytecode, None);
+                            let mut state =
+                                test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+                            state.start_thread();
+                            state
+                                .set_policy(
+                                    &function,
+                                    TelemetryPolicy {
+                                        capture_output: initial,
+                                        capture_error: initial,
+                                        ..TelemetryPolicy::NONE
+                                    },
+                                )
+                                .unwrap();
+                            let frame = trace_entry(
+                                &mut state,
+                                &function,
+                                Some(TraceConfig {
+                                    mode,
+                                    output: override_,
+                                    error: override_,
+                                    ..TraceConfig::default()
+                                }),
+                            )
+                            .unwrap();
+                            let initially_span = frame.is_span();
+                            state
+                                .set_policy(
+                                    &function,
+                                    TelemetryPolicy {
+                                        span_from_entry: true,
+                                        capture_output: current,
+                                        capture_error: current,
+                                        ..TelemetryPolicy::NONE
+                                    },
+                                )
+                                .unwrap();
+                            unsafe {
+                                state.complete_invocation(
+                                    frame,
+                                    &function,
+                                    outcome,
+                                    Some(Value::int(7)),
+                                );
+                            }
+                            let recorded =
+                                state.span_records().last().unwrap().completion().unwrap();
+                            assert_eq!(recorded.outcome, outcome);
+                            assert_eq!(recorded.late, !initially_span);
+                            assert_eq!(
+                                recorded.captured_value.map(|snapshot| matches!(
+                                    snapshot.roots()[0],
+                                    btel_snapshot::SnapshotValue::Int(7)
+                                )),
+                                override_.unwrap_or(initial || current).then_some(true),
+                                "{mode:?}/{initial}/{current}/{override_:?}/{outcome:?}",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn entry_capture_survives_policy_updates_for_output_and_error() {
         for outcome in [InvocationOutcome::Ok, InvocationOutcome::Errored] {
             for initial in [false, true] {
@@ -1841,10 +3129,12 @@ mod tests {
         child
             .span_records
             .retain(|record| !matches!(record, SpanRecord::ThreadSpanAnnouncement { .. }));
+        // It ended without running: it began running when it completed.
         assert!(
-            matches!(child.span_records(), [SpanRecord::ThreadSpanCompletion {
-            id, parent_id: Some(parent_id), spawn_call_path, clock, outcome: InvocationOutcome::Errored, ..
-        }] if *id == child_id && *parent_id == context.parent_id
+            matches!(child.span_records(), [SpanRecord::ThreadSpanRunning { at }, SpanRecord::ThreadSpanCompletion {
+            id, parent_id: Some(parent_id), spawn_call_path, clock, outcome: InvocationOutcome::Errored,
+            completed_at, ..
+        }] if *id == child_id && *parent_id == context.parent_id && at == completed_at
             && *spawn_call_path == context.spawn_call_path && Arc::ptr_eq(clock, &context.clock))
         );
     }

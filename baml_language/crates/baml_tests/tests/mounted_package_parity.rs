@@ -3,15 +3,16 @@
 //!
 //! The SOURCE path puts the rich `app` fixture and the consumer in one database.
 //! The BLOB path compiles `app` independently into its check artifact (borsh of
-//! `PackageInterface`) and run artifact (`CompilationUnit`s), then mounts the
+//! `PackageInterface`) and run artifact (its `EmittedPackage`), then mounts the
 //! former in a fresh source-less consumer database and links the latter through
-//! `generate_project_bytecode_with_mounted_units`.
+//! `compile_program_with`, served for the mount.
 //!
 //! The oracle pins four boundaries:
 //!
 //! 1. normalized diagnostic bytes (code, message, and user-source range),
 //! 2. runtime values and caught throws,
-//! 3. emitted-program and relocatable-unit invariants,
+//! 3. the emitted program: a consumer linked against the served dependency
+//!    is byte-identical to one compiled beside its source,
 //! 4. primary-only E0132 attribution for a user impl conflicting with a
 //!    span-less mounted impl.
 //!
@@ -24,15 +25,15 @@
 //! unchanged.
 
 use baml_base::Name;
-use baml_compiler2_emit::{
-    MountedPackageLinkError, OptLevel, emit_units, generate_project_bytecode_with_mounted_units,
-    generate_project_bytecode_with_opt,
+use baml_compiler2_emit::{OptLevel, emit_package};
+use baml_compiler2_hir_ty::package_interface::{ExportedType, WireInterface, export_interface};
+use baml_db::{
+    EmittedPackage, PackageCache, ProjectDatabase, collect_diagnostics, compile_program,
+    compile_program_with, testing::assert_no_diagnostic_errors,
 };
-use baml_compiler2_hir_ty::package_interface::{ExportedType, PackageInterface, export_interface};
-use baml_db::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
 use baml_tests::engine::{TestDbExt, run_compiled};
 use bex_engine::BexExternalValue;
-use bex_vm_types::{CompilationUnit, Program};
+use bex_vm_types::{Object, Program};
 use indexmap::IndexMap;
 
 const ROOT: &str = "/mounted-parity";
@@ -155,22 +156,49 @@ fn library_db() -> ProjectDatabase {
 
 struct LibraryArtifacts {
     blob: Vec<u8>,
-    interface: PackageInterface<baml_type::TypeName>,
-    units: Vec<CompilationUnit>,
+    interface: WireInterface,
+    /// `app`'s run artifact: what a store serves for its mount.
+    emitted: EmittedPackage,
+}
+
+/// The store the blob path compiles against: it serves `app`'s output —
+/// emitted once in the library database — for the consumer database's
+/// source-less mount of `app`, and nothing else.
+struct ServedLibrary<'a> {
+    app: &'a EmittedPackage,
+}
+
+impl PackageCache for ServedLibrary<'_> {
+    fn load(
+        &self,
+        db: &dyn baml_compiler2_hir::Db,
+        root: baml_db::SourceRoot,
+        _opt: OptLevel,
+    ) -> Option<EmittedPackage> {
+        (baml_compiler2_hir::package::spelling(db).of(root).as_str() == "app")
+            .then(|| self.app.clone())
+    }
+
+    fn store(
+        &self,
+        _db: &dyn baml_compiler2_hir::Db,
+        _root: baml_db::SourceRoot,
+        _opt: OptLevel,
+        _emitted: &EmittedPackage,
+    ) {
+    }
 }
 
 fn library_artifacts() -> LibraryArtifacts {
     let db = library_db();
     assert_no_diagnostic_errors(&db);
-    let interface = export_interface(
-        &db,
-        baml_compiler2_hir::package::spelling(&db)
-            .root(&Name::new("app"))
-            .unwrap(),
-    );
+    let app = baml_compiler2_hir::package::spelling(&db)
+        .root(&Name::new("app"))
+        .unwrap();
+    let interface = export_interface(&db, app);
     let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
         .expect("serialize app package interface");
-    let round_trip = baml_artifact::decode::<PackageInterface<baml_type::TypeName>>(
+    let round_trip = baml_artifact::decode::<WireInterface>(
         baml_artifact::ArtifactKind::PackageInterface,
         &blob,
     )
@@ -179,11 +207,11 @@ fn library_artifacts() -> LibraryArtifacts {
         interface, round_trip,
         "interface blob must round-trip exactly"
     );
-    let units = emit_units(&db, package(&db), OPT).expect("emit independent app units");
+    let emitted = emit_package(&db, app, OPT).expect("emit the app package");
     LibraryArtifacts {
         blob,
         interface,
-        units,
+        emitted,
     }
 }
 
@@ -211,14 +239,87 @@ fn blob_db(user: &str, blob: Vec<u8>) -> ProjectDatabase {
 fn compile_source(user: &str) -> Program {
     let db = source_db(user);
     assert_no_diagnostic_errors(&db);
-    generate_project_bytecode_with_opt(&db, package(&db), OPT).expect("source-path compile")
+    compile_program(&db, package(&db), OPT).expect("source-path compile")
 }
 
 fn compile_blob(user: &str, artifacts: &LibraryArtifacts) -> Program {
     let db = blob_db(user, artifacts.blob.clone());
     assert_no_diagnostic_errors(&db);
-    generate_project_bytecode_with_mounted_units(&db, package(&db), OPT, &artifacts.units)
-        .expect("blob-path compile and link")
+    let served = ServedLibrary {
+        app: &artifacts.emitted,
+    };
+    compile_program_with(&db, package(&db), OPT, &served).expect("blob-path compile and link")
+}
+
+/// A program's bytes with every database-local debug `FileId` normalized:
+/// the two lanes number `main.baml` differently, and nothing else about
+/// the program may differ.
+fn normalized_bytes(mut program: Program) -> Vec<u8> {
+    let normalized = baml_base::FileId::new(0);
+    for object in program.objects.iter_mut() {
+        let Object::Function(function) = object else {
+            continue;
+        };
+        function.span.file_id = normalized;
+        for entry in &mut function.bytecode.line_table {
+            entry.span.file_id = normalized;
+        }
+        for local in &mut function.debug_locals {
+            local.scope_span.file_id = normalized;
+        }
+    }
+    borsh::to_vec(&program).expect("serialize program")
+}
+
+/// The static cache lane's oracle: a consumer compiled against `app`
+/// MOUNTED from its interface and linked against `app`'s SERVED unit is,
+/// byte for byte, the consumer compiled beside `app`'s source — every
+/// import key, slot, operand, and tag the served lane produces is what the
+/// source lane produces.
+#[test]
+fn a_consumer_linked_against_the_served_dependency_is_byte_identical_to_the_source_compile() {
+    let artifacts = library_artifacts();
+    let user = r#"
+function main() -> int throws never {
+    let widget = app.Widget { name: "widget", value: 7 }
+    let boxed = app.Box<app.Widget> { value: widget }
+    let score: app.Score = 3
+    widget.measure() + app.measure_twice(widget) + score + boxed.value.value
+}
+"#;
+    let source = normalized_bytes(compile_source(user));
+    let served = normalized_bytes(compile_blob(user, &artifacts));
+    let first_difference = source
+        .iter()
+        .zip(&served)
+        .position(|(left, right)| left != right)
+        .unwrap_or_else(|| source.len().min(served.len()));
+    assert!(
+        source == served,
+        "programs differ first at byte {first_difference} (source {} bytes, served {} bytes)",
+        source.len(),
+        served.len()
+    );
+}
+
+/// A mounted dependency is in the program through the output a store holds
+/// for it. A store that holds nothing is refused by name — never a package
+/// quietly missing from the link set with the consumer's imports of it left
+/// to fail as unknown edges.
+#[test]
+fn a_mounted_dependency_without_served_output_is_refused_by_name() {
+    let artifacts = library_artifacts();
+    let db = blob_db(WIDGET_CONSUMER, artifacts.blob.clone());
+    assert_no_diagnostic_errors(&db);
+    let error = compile_program_with(&db, package(&db), OPT, &baml_db::NoCache)
+        .expect_err("nothing serves `app`");
+    assert!(
+        matches!(
+            &error,
+            baml_db::CompileProgramError::ServedWithoutOutput { package } if package.as_str() == "app"
+        ),
+        "{error}"
+    );
 }
 
 async fn run(program: Program, entry: &str) -> Result<BexExternalValue, String> {
@@ -428,173 +529,12 @@ class Broken {
     }
 }
 
-const ARTIFACT_USER: &str = r#"
-class Local {
-    name string
-    implements app.Named {}
-}
-
-function status_score(status: app.Status) -> int throws never {
-    match status {
-        app.Status.Active => 1
-        app.Status.Retired => 2
-    }
-}
-
-function main() -> int throws never {
-    let widget = app.Widget { name: "artifact", value: 20 }
-    let boxed = app.Box<app.Widget> { value: widget }
-    let enum_score = status_score(app.Status.Active)
-    let boxed_score = if boxed.inner_name() == "artifact" { 1 } else { 0 }
-    let tagged = app.tag_of(Local { name: "local" })
-    let tagged_score = if tagged == "any" { 1 } else { 0 }
-    app.measure_twice(widget)
-        + enum_score
-        + boxed_score
-        + tagged_score
-}
-"#;
-
-fn unit<'a>(units: &'a [CompilationUnit], path: &str) -> &'a CompilationUnit {
-    units
-        .iter()
-        .find(|unit| unit.source_file == path)
-        .unwrap_or_else(|| panic!("missing unit `{path}`"))
-}
-
-#[track_caller]
-fn assert_bytes_identical(label: &str, left: &[u8], right: &[u8]) {
-    if left == right {
-        return;
-    }
-    let first_difference = left
-        .iter()
-        .zip(right)
-        .position(|(left, right)| left != right)
-        .unwrap_or_else(|| left.len().min(right.len()));
-    panic!(
-        "{label}: byte streams differ first at {first_difference} (left len {}, right len {})",
-        left.len(),
-        right.len()
-    );
-}
-
-fn normalize_object_debug_file_ids(object: &mut bex_vm_types::Object) {
-    let bex_vm_types::Object::Function(function) = object else {
-        return;
-    };
-    let normalized = baml_base::FileId::new(0);
-    function.span.file_id = normalized;
-    for entry in &mut function.bytecode.line_table {
-        entry.span.file_id = normalized;
-    }
-    for local in &mut function.debug_locals {
-        local.scope_span.file_id = normalized;
-    }
-}
-
-fn normalized_unit(mut unit: CompilationUnit) -> CompilationUnit {
-    for object in &mut unit.code {
-        normalize_object_debug_file_ids(object);
-    }
-    if let Some(tail) = &mut unit.init_tail {
-        for object in &mut tail.objects {
-            normalize_object_debug_file_ids(object);
-        }
-    }
-    unit
-}
-
-fn normalized_program(mut program: Program) -> Program {
-    for object in program.objects.iter_mut() {
-        normalize_object_debug_file_ids(object);
-    }
-    program
-}
-
-#[test]
-fn emitted_program_dependency_and_consumer_units_are_byte_identical() {
-    let artifacts = library_artifacts();
-    let source_db = source_db(ARTIFACT_USER);
-    assert_no_diagnostic_errors(&source_db);
-    let source_program = generate_project_bytecode_with_opt(&source_db, package(&source_db), OPT)
-        .expect("source program");
-    let source_units = emit_units(&source_db, package(&source_db), OPT).expect("source units");
-
-    let blob_db = blob_db(ARTIFACT_USER, artifacts.blob.clone());
-    assert_no_diagnostic_errors(&blob_db);
-    // The blob side decomposes with ITS OWN db's coordinates (the
-    // same-frame artifacts API), never against the source db: decompose
-    // consumes the generating emit's declaration-keyed placements, and a
-    // foreign db has none for this program. (The pre-coordinates version
-    // of this oracle exploited the old Pass-1 replay to decompose a
-    // foreign program — that road no longer exists, on purpose.)
-    let (blob_program, blob_units) =
-        baml_compiler2_emit::generate_project_bytecode_with_mounted_units_artifacts(
-            &blob_db,
-            package(&blob_db),
-            OPT,
-            &artifacts.units,
-        )
-        .expect("blob program");
-
-    let source_program_bytes = borsh::to_vec(&source_program).expect("serialize source program");
-    let blob_program_bytes = borsh::to_vec(&blob_program).expect("serialize blob program");
-    let source_user = unit(&source_units, "main.baml");
-    let blob_user = unit(&blob_units, "main.baml");
-    assert_ne!(
-        borsh::to_vec(source_user).expect("serialize raw source user unit"),
-        borsh::to_vec(blob_user).expect("serialize raw blob user unit"),
-        "the fixture must keep the database-local FileId distinction visible"
-    );
-    assert_bytes_identical(
-        "consumer unit after debug FileId normalization",
-        &borsh::to_vec(&normalized_unit(source_user.clone()))
-            .expect("serialize normalized source user unit"),
-        &borsh::to_vec(&normalized_unit(blob_user.clone()))
-            .expect("serialize normalized blob user unit"),
-    );
-
-    let imported_app_symbols: Vec<&str> = source_user
-        .object_imports
-        .iter()
-        .chain(&source_user.global_imports)
-        .map(|symbol| symbol.fq_name.as_str())
-        .filter(|name| name.starts_with("app."))
-        .collect();
-    assert!(
-        !imported_app_symbols.is_empty(),
-        "consumer must exercise symbolic app imports"
-    );
-    assert_eq!(source_user.object_imports, blob_user.object_imports);
-    assert_eq!(source_user.global_imports, blob_user.global_imports);
-
-    let source_app = unit(&source_units, "<builtin>/app/lib.baml");
-    let independent_app = unit(&artifacts.units, "<builtin>/app/lib.baml");
-    assert_bytes_identical(
-        "independent library unit",
-        &borsh::to_vec(source_app).expect("serialize source app unit"),
-        &borsh::to_vec(independent_app).expect("serialize independent app unit"),
-    );
-
-    assert_ne!(
-        source_program_bytes, blob_program_bytes,
-        "raw programs retain the consumer database's debug FileId"
-    );
-    assert_bytes_identical(
-        "linked program after debug FileId normalization",
-        &borsh::to_vec(&normalized_program(source_program))
-            .expect("serialize normalized source program"),
-        &borsh::to_vec(&normalized_program(blob_program))
-            .expect("serialize normalized blob program"),
-    );
-}
-
 #[test]
 fn exported_impl_method_preserves_synthetic_callback_effect_params() {
     let artifacts = library_artifacts();
     let runner = artifacts
         .interface
+        .rows
         .impls
         .iter()
         .find(|implementation| {
@@ -615,21 +555,6 @@ fn exported_impl_method_preserves_synthetic_callback_effect_params() {
         apply.generic_params[0].name()
     ));
     assert_eq!(apply.generic_param_bounds, vec![Vec::new()]);
-}
-
-#[test]
-fn mounted_unit_api_preserves_dependency_link_errors() {
-    let artifacts = library_artifacts();
-    let mut duplicate_units = artifacts.units.clone();
-    duplicate_units.push(unit(&artifacts.units, "<builtin>/app/lib.baml").clone());
-    let db = blob_db("function main() -> int { 0 }", artifacts.blob);
-    let error =
-        generate_project_bytecode_with_mounted_units(&db, package(&db), OPT, &duplicate_units)
-            .expect_err("duplicate dependency export must fail before consumer emit");
-    assert!(matches!(
-        error,
-        MountedPackageLinkError::DependencyLink(bex_vm_types::link::LinkError::DuplicateExport(_))
-    ));
 }
 
 #[test]
@@ -670,8 +595,8 @@ implement app.Tagged for Mine {
 
 /// A user impl for a mounted ALIAS overlaps a user impl for the alias's body
 /// in both lanes: the blob's alias rows are the only place a mounted
-/// package's aliases exist (link stubs carry none), and an alias coherence
-/// cannot expand fails open — the unifier's fallback verdict is "disjoint".
+/// package's aliases exist, and an alias coherence cannot expand fails open —
+/// the unifier's fallback verdict is "disjoint".
 #[test]
 fn alias_headed_overlap_is_e0132_in_both_lanes() {
     const USER: &str = r#"
@@ -721,12 +646,97 @@ fn blob_vs_blob_overlap_is_not_expressible_for_valid_artifacts() {
     // and therefore would reject any downstream overlapping source impl before
     // that downstream package could become a second valid blob.
     let artifacts = library_artifacts();
-    assert!(artifacts.interface.impls.iter().any(|implementation| {
+    assert!(artifacts.interface.rows.impls.iter().any(|implementation| {
         implementation.interface.name.name().as_str() == "Tagged"
             && matches!(implementation.for_ty_pattern, baml_type::Ty::TypeVar(_))
     }));
     assert!(matches!(
-        artifacts.interface.lookup_type(&[], &Name::new("Tagged")),
+        artifacts
+            .interface
+            .rows
+            .lookup_type(&[], &Name::new("Tagged")),
         Some(ExportedType::Interface { .. })
     ));
+}
+
+/// `app`'s interface with one free function the consumers below never name
+/// removed: a different interface, hence a different fingerprint.
+fn mutated_interface(artifacts: &LibraryArtifacts) -> WireInterface {
+    let mut interface = artifacts.interface.clone();
+    let root_functions = interface
+        .rows
+        .functions
+        .get_mut(&Vec::new())
+        .expect("the library exports root-level functions");
+    root_functions
+        .shift_remove(&Name::new("parse_positive"))
+        .expect("the library exports `parse_positive`");
+    interface
+}
+
+fn encode_interface(interface: &WireInterface) -> Vec<u8> {
+    baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
+        .expect("serialize app package interface")
+}
+
+const WIDGET_CONSUMER: &str = r#"
+function main() -> int throws never {
+    app.Widget { name: "widget", value: 7 }.measure()
+}
+"#;
+
+fn assert_interface_mismatch(error: baml_db::CompileProgramError) {
+    match error {
+        baml_db::CompileProgramError::Link(baml_linker::LinkError::InterfaceMismatch {
+            package,
+            edge,
+            expected,
+            found,
+        }) => {
+            assert_eq!(package.as_str(), "user");
+            assert_eq!(edge.as_str(), "app");
+            assert_ne!(expected, found);
+        }
+        other => panic!("expected an interface mismatch, got {other:?}"),
+    }
+}
+
+/// The consumer compiled against a mutated `app` interface; the store serves
+/// `app`'s real output. The unit records the digest of what it read, so the
+/// link refuses to bind it to the package it did not compile against — the
+/// edge locates, the fingerprint binds.
+#[test]
+fn a_consumer_compiled_against_a_mutated_interface_is_refused() {
+    let artifacts = library_artifacts();
+    let mutated = encode_interface(&mutated_interface(&artifacts));
+    assert_ne!(mutated, artifacts.blob);
+    let db = blob_db(WIDGET_CONSUMER, mutated);
+    assert_no_diagnostic_errors(&db);
+    let served = ServedLibrary {
+        app: &artifacts.emitted,
+    };
+    let error = compile_program_with(&db, package(&db), OPT, &served)
+        .expect_err("a consumer of another interface must not link");
+    assert_interface_mismatch(error);
+}
+
+/// The consumer compiled against the real interface; the store serves an
+/// `app` output whose record carries a mutated interface — a stale or forged
+/// artifact. Refused the same way.
+#[test]
+fn a_served_output_carrying_another_interface_is_refused() {
+    let artifacts = library_artifacts();
+    let mut stale = artifacts.emitted.clone();
+    stale.record.interface_blob = encode_interface(&mutated_interface(&artifacts));
+    let db = blob_db(WIDGET_CONSUMER, artifacts.blob.clone());
+    assert_no_diagnostic_errors(&db);
+    let served = ServedLibrary { app: &stale };
+    let error = compile_program_with(&db, package(&db), OPT, &served)
+        .expect_err("a stale served output must not link");
+    assert_interface_mismatch(error);
+    // The honest pairing links.
+    let served = ServedLibrary {
+        app: &artifacts.emitted,
+    };
+    compile_program_with(&db, package(&db), OPT, &served).expect("the real output links");
 }

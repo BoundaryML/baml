@@ -554,6 +554,7 @@ fn check_builtin_body(expr_body_node: &SyntaxNode) -> Option<BuiltinKind> {
             "$rust_io_function" => return Some(BuiltinKind::Io),
             "$compiler_intrinsic" => return Some(BuiltinKind::Intrinsic),
             "$await_any" => return Some(BuiltinKind::AwaitAny),
+            "$spawn" => return Some(BuiltinKind::Spawn),
             _ => {}
         }
     }
@@ -2011,7 +2012,7 @@ fn synthesize_init_test_function(
         body: Some(FunctionBodyDef::Expr(body, source_map)),
         declarative_meta: None,
         metadata: crate::ast::FunctionMetadata::language_internal(
-            crate::ast::FunctionOrigin::Internal,
+            crate::ast::FunctionOrigin::TestInitializer,
         ),
         attributes: vec![],
         docstring: None,

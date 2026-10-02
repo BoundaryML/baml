@@ -8,6 +8,9 @@ use btel_recorder::{RecordingBuilder, RecordingConfig, RecordingId};
 
 use crate::{BexEngine, EngineError, RuntimeCompiler};
 
+const BOUNDARY_URL: &str = "BOUNDARY_URL";
+const BOUNDARY_API_KEY: &str = "BOUNDARY_API_KEY";
+
 /// One recording per engine, delivered to local files or BCS. Cloud payload
 /// failures discard that payload and allow later delivery. Local storage and
 /// fatal worker failures disable recording. Errors remain available through
@@ -16,6 +19,9 @@ pub struct TelemetryRecording {
     id: RecordingId,
     config: RecordingConfig,
     destination: Destination,
+    host: String,
+    sources: Vec<(String, String)>,
+    exit: Arc<btel_types::ProcessExitSlot>,
 }
 enum Destination {
     LocalFiles {
@@ -74,6 +80,24 @@ impl RecordingDelivery {
 }
 
 impl TelemetryRecording {
+    /// Configure cloud delivery when both Boundary environment variables are
+    /// non-empty and the URL parses. Delivery validates the URL and bearer
+    /// header at engine construction; a rejected config disables recording.
+    pub fn from_boundary_env() -> Option<Self> {
+        let url = std::env::var(BOUNDARY_URL).ok()?;
+        let key = std::env::var(BOUNDARY_API_KEY).ok()?;
+        if url.is_empty() || key.is_empty() {
+            return None;
+        }
+        let mut delivery = btel_bcs::delivery::DeliveryConfig::new(url.parse().ok()?);
+        delivery.bearer_token = Some(key);
+        Some(Self::cloud(
+            RecordingConfig::default(),
+            btel_bcs::CloudPublisherConfig::default(),
+            delivery,
+        ))
+    }
+
     /// Deliver through the proposed BCS prepare protocol and presigned PUTs.
     /// No worker starts until engine construction. There is no durable spool.
     pub fn cloud(
@@ -84,6 +108,9 @@ impl TelemetryRecording {
         Self {
             id: RecordingId::generate(),
             config,
+            host: "unknown".to_owned(),
+            sources: Vec::new(),
+            exit: Arc::default(),
             destination: Destination::Cloud {
                 publisher,
                 delivery: Box::new(delivery),
@@ -101,6 +128,9 @@ impl TelemetryRecording {
         Self {
             id: RecordingId::generate(),
             config,
+            host: "unknown".to_owned(),
+            sources: Vec::new(),
+            exit: Arc::default(),
             destination: Destination::LocalFiles {
                 recordings: project_root
                     .as_ref()
@@ -122,6 +152,9 @@ impl TelemetryRecording {
         Self {
             id: RecordingId::generate(),
             config,
+            host: "unknown".to_owned(),
+            sources: Vec::new(),
+            exit: Arc::default(),
             destination: Destination::LocalFiles { recordings, cas },
         }
     }
@@ -135,6 +168,9 @@ impl TelemetryRecording {
         Self {
             id: RecordingId::generate(),
             config,
+            host: "unknown".to_owned(),
+            sources: Vec::new(),
+            exit: Arc::default(),
             destination: Destination::UserFiles,
         }
     }
@@ -143,9 +179,64 @@ impl TelemetryRecording {
         self.id
     }
 
+    /// What runs this engine: `baml` (the CLI), `lsp`, `pack`, `python`, ...
+    #[must_use]
+    pub fn with_host(mut self, host: impl Into<String>) -> Self {
+        self.host = host.into();
+        self
+    }
+
+    /// The project's BAML sources, `(path, content)`, stored once in the CAS
+    /// so a recording can be read against the code that produced it.
+    #[must_use]
+    pub fn with_sources(mut self, sources: Vec<(String, String)>) -> Self {
+        self.sources = sources;
+        self
+    }
+
+    /// Where the host records how the process ended.
+    pub(crate) fn process_exit(&self) -> Arc<btel_types::ProcessExitSlot> {
+        Arc::clone(&self.exit)
+    }
+
+    fn process(&self) -> btel_recorder::ProcessRecording {
+        btel_recorder::ProcessRecording {
+            info: btel_types::ProcessInfo {
+                process_id: bex_events::ids::ProcessEuid::current().0,
+                baml_version: baml_version::CANONICAL_VERSION.to_owned(),
+                host: self.host.clone(),
+                // Arguments can hold secrets (`--api-key ...`), so a cloud
+                // recording does not upload them; local recordings keep them.
+                // `args_os`: `args` panics on an argument that is not UTF-8.
+                command: if matches!(self.destination, Destination::Cloud { .. }) {
+                    Vec::new()
+                } else {
+                    std::env::args_os()
+                        .map(|arg| arg.to_string_lossy().into_owned())
+                        .collect()
+                },
+                started_at_unix_ns: process_started_at_unix_ns(),
+            },
+            sources: (!self.sources.is_empty())
+                .then(|| {
+                    let pool = btel_snapshot::SnapshotPool::new(
+                        1,
+                        btel_snapshot::Limits {
+                            max_bytes: Some(SOURCES_MAX_BYTES),
+                            ..btel_snapshot::Limits::default()
+                        },
+                    );
+                    btel_snapshot::string_map(&pool, &self.sources)
+                })
+                .flatten(),
+            exit: Arc::clone(&self.exit),
+        }
+    }
+
     pub(crate) fn start(
         self,
         source_snapshot: Option<[u8; 32]>,
+        functions: Arc<btel_types::FunctionMetadataTable>,
     ) -> Result<
         (
             Arc<btel_processor::TelemetryRuntime>,
@@ -154,6 +245,7 @@ impl TelemetryRecording {
         EngineError,
     > {
         let transport = btel_settings::transport::ChunkConfig::default();
+        let process = self.process();
         self.config
             .validate_transport(&transport)
             .map_err(|error| EngineError::Other(error.to_owned()))?;
@@ -168,7 +260,9 @@ impl TelemetryRecording {
                     publisher,
                     *delivery,
                     source_snapshot,
+                    functions,
                     transport,
+                    process,
                 );
             }
             Destination::UserFiles => std::env::home_dir()
@@ -199,7 +293,9 @@ impl TelemetryRecording {
                 });
                 let builder = RecordingBuilder::new(self.id, self.config)
                     .map_err(std::io::Error::other)?
-                    .with_source_snapshot(source_snapshot);
+                    .with_source_snapshot(source_snapshot)
+                    .with_function_metadata(functions)
+                    .with_process(process);
                 let publisher = match writer {
                     Ok(writer) => {
                         let publisher = btel_file::LocalPublisher::new(builder, writer);
@@ -222,13 +318,16 @@ impl TelemetryRecording {
         Ok((runtime, delivery.map(RecordingDelivery::Local)))
     }
 
+    #[expect(clippy::too_many_arguments)]
     fn start_cloud(
         id: RecordingId,
         config: RecordingConfig,
         publisher_config: btel_bcs::CloudPublisherConfig,
         delivery_config: btel_bcs::delivery::DeliveryConfig,
         source_snapshot: Option<[u8; 32]>,
+        functions: Arc<btel_types::FunctionMetadataTable>,
         transport: btel_settings::transport::ChunkConfig,
+        process: btel_recorder::ProcessRecording,
     ) -> Result<
         (
             Arc<btel_processor::TelemetryRuntime>,
@@ -258,7 +357,12 @@ impl TelemetryRecording {
                     }
                 };
                 btel_bcs::CloudPublisher::new(id, config, publisher_config, handle)
-                    .map(|publisher| publisher.with_source_snapshot(source_snapshot))
+                    .map(|publisher| {
+                        publisher
+                            .with_source_snapshot(source_snapshot)
+                            .with_function_metadata(functions)
+                            .with_process(process)
+                    })
                     .map_err(std::io::Error::other)
             })
             .map_err(|error| EngineError::Other(format!("telemetry processor startup: {error}")))?;
@@ -266,7 +370,46 @@ impl TelemetryRecording {
     }
 }
 
+/// Sources beyond this are cut from the snapshot, which says so.
+const SOURCES_MAX_BYTES: usize = 64 << 20;
+
+/// When this process first described itself: close to its start, and the
+/// same for every engine it creates.
+fn process_started_at_unix_ns() -> i64 {
+    static STARTED: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
+    *STARTED.get_or_init(unix_now_ns)
+}
+
+fn unix_now_ns() -> i64 {
+    web_time::SystemTime::now()
+        .duration_since(web_time::UNIX_EPOCH)
+        .ok()
+        .and_then(|elapsed| i64::try_from(elapsed.as_nanos()).ok())
+        .unwrap_or(0)
+}
+
 impl BexEngine {
+    /// Whether a panic escaped any root call of this engine.
+    pub fn root_panicked(&self) -> bool {
+        self.root_panicked
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// The process is exiting with `status`: engines shut down after this
+    /// end their recordings with it. Hosts call it once, before shutdown.
+    pub fn record_process_exit(&self, status: btel_types::ProcessStatus) {
+        if let Some(exit) = self
+            .telemetry
+            .as_ref()
+            .and_then(|telemetry| telemetry.process_exit.as_ref())
+        {
+            exit.set(btel_types::ProcessExit {
+                status,
+                at_unix_ns: unix_now_ns(),
+            });
+        }
+    }
+
     /// Configure encoded-file delivery before initialization executes. Existing
     /// constructors run the diagnostic processor without creating a recording.
     /// `BAML_TELEMETRY=off` disables it even when a recording is supplied.
@@ -358,3 +501,6 @@ impl BexEngine {
 
 #[cfg(all(test, unix))]
 mod failure_tests;
+
+#[cfg(test)]
+mod boundary_env_tests;

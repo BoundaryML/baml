@@ -13,9 +13,11 @@ use std::sync::Arc;
 
 use baml_base::SourceRoot;
 use baml_compiler_diagnostics::Severity;
-use baml_compiler2_emit::{LoweringError, generate_project_bytecode, generate_stdlib_program};
+use baml_compiler2_emit::{LoweringError, emit_package};
 use baml_compiler2_hir::package::{spelling, spelling_within, world_roots};
-use baml_db::{OptLevel, ProjectDatabase, SourceRootKind, SourceRootSpec};
+use baml_db::{
+    CompileProgramError, OptLevel, ProjectDatabase, SourceRootKind, SourceRootSpec, compile_program,
+};
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_vm_types::{Object, Program};
 use sys_native::SysOpsExt;
@@ -124,8 +126,8 @@ fn each_workspace_root_is_its_own_world() {
 #[test]
 fn same_named_declarations_in_two_roots_emit_as_two_programs() {
     let (db, a, b) = two_workspaces("class Point { x int }\n", "class Point { y string }\n");
-    let program_a = generate_project_bytecode(&db, a).expect("root a emits alone");
-    let program_b = generate_project_bytecode(&db, b).expect("root b emits alone");
+    let program_a = compile_program(&db, a, OptLevel::Two).expect("root a emits alone");
+    let program_b = compile_program(&db, b, OptLevel::Two).expect("root b emits alone");
     // Exactly one `Point` per program, the workspace's own.
     let points_a = classes_named(&program_a, "Point");
     let points_b = classes_named(&program_b, "Point");
@@ -136,8 +138,9 @@ fn same_named_declarations_in_two_roots_emit_as_two_programs() {
         panic!("program b holds one Point: {points_b:?}");
     };
     assert_eq!(name_a, name_b, "each is its program's workspace package");
-    // Tags are per program: content-addressed over the wire name, so the two
-    // programs' `Point`s agree — they never share a VM.
+    // Tags are per program: the linker assigns each declaration the tag of its
+    // object index, and these two programs lay out identically, so the two
+    // `Point`s agree — they never share a VM.
     assert_eq!(tag_a, tag_b);
 }
 
@@ -147,8 +150,8 @@ async fn each_program_runs_its_own_root() {
         "function main() -> int throws never { 1 }\nfunction only_a() -> int throws never { 10 }\n",
         "function main() -> int throws never { 2 }\nfunction only_b() -> int throws never { 20 }\n",
     );
-    let program_a = generate_project_bytecode(&db, a).expect("root a emits");
-    let program_b = generate_project_bytecode(&db, b).expect("root b emits");
+    let program_a = compile_program(&db, a, OptLevel::Two).expect("root a emits");
+    let program_b = compile_program(&db, b, OptLevel::Two).expect("root b emits");
     assert_eq!(
         function_names(&program_a),
         vec!["user.main".to_string(), "user.only_a".to_string()]
@@ -168,7 +171,9 @@ fn one_roots_errors_do_not_block_another() {
         "function main() -> int throws never { \"not an int\" }\n",
     );
     assert!(db.get_bytecode(a).is_ok(), "root a is clean and builds");
-    let Err(LoweringError::ProjectHasErrors { error_count }) = db.get_bytecode(b) else {
+    let Err(CompileProgramError::Emit(LoweringError::ProjectHasErrors { error_count })) =
+        db.get_bytecode(b)
+    else {
         panic!("root b has a type error and must not build");
     };
     assert_eq!(error_count, 1);
@@ -194,14 +199,30 @@ fn every_world_shares_the_stdlib_prefix() {
         "function main() -> int throws never { 1 }\n",
         "class Other { z bool }\n",
     );
-    let stdlib = generate_stdlib_program(&db, OptLevel::Two).expect("the stdlib emits");
-    for root in [a, b] {
-        let program = generate_project_bytecode(&db, root).expect("the root emits");
-        let stdlib_objects = object_bytes(&stdlib);
-        assert_eq!(
-            object_bytes(&program)[..stdlib_objects.len()],
-            stdlib_objects[..],
-            "the stdlib is a user-independent prefix of every program"
-        );
-    }
+    // The linker lays the stdlib group out first, so the stdlib packages'
+    // objects are a prefix of every program: as many objects as their
+    // outputs hold, whichever root the program is for.
+    let stdlib_objects: usize = db
+        .source_roots()
+        .into_iter()
+        .filter(|root| root.kind(&db) == SourceRootKind::Stdlib)
+        .map(|root| {
+            let emitted = emit_package(&db, root, OptLevel::Two).expect("the stdlib emits");
+            let unit = &emitted.unit;
+            unit.classes.len()
+                + unit.enums.len()
+                + unit.interfaces.len()
+                + unit.type_alias_objects.len()
+                + unit.code.len()
+                + emitted.tail.as_ref().map_or(0, |tail| tail.objects.len())
+        })
+        .sum();
+    assert!(stdlib_objects > 0);
+    let program_a = compile_program(&db, a, OptLevel::Two).expect("root a emits");
+    let program_b = compile_program(&db, b, OptLevel::Two).expect("root b emits");
+    assert_eq!(
+        object_bytes(&program_a)[..stdlib_objects],
+        object_bytes(&program_b)[..stdlib_objects],
+        "the stdlib is a user-independent prefix of every program"
+    );
 }

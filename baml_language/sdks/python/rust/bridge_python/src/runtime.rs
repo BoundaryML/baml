@@ -57,14 +57,11 @@ impl BamlRuntime {
     /// * `bytecode` - borsh-encoded BAML bytecode program
     #[staticmethod]
     #[pyo3(signature = (bytecode, embedded_baml_toml=None))]
-    fn initialize_runtime_from_bytecode(
+    fn initialize_runtime_from_blob(
         bytecode: Vec<u8>,
         embedded_baml_toml: Option<String>,
     ) -> PyResult<Self> {
-        match bridge_cffi::initialize_runtime_from_bytecode(
-            &bytecode,
-            embedded_baml_toml.as_deref(),
-        ) {
+        match bridge_cffi::initialize_runtime_from_blob(&bytecode, embedded_baml_toml.as_deref()) {
             Ok(_bex) => Ok(BamlRuntime),
             Err(e) => Err(crate::errors::bridge_error_to_initialization_error(e)),
         }

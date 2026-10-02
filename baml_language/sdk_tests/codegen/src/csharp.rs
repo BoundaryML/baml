@@ -462,18 +462,15 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
             ],
         ),
         (
-            "Spawn/TaskGroup.g.cs",
+            // `apply` comes from `implements baml.spawn.Modifier`;
+            // interface-impl methods are not generated, which is what keeps
+            // the host-unrepresentable `baml.spawn.Plan` off this surface.
+            "Spawn/Limit.g.cs",
             vec![
                 " New(",
                 " NewAsync(",
-                " Cancel(",
-                " CancelAsync(",
-                " SetLimit(",
-                " SetLimitAsync(",
-                " Limit(",
-                " LimitAsync(",
-                " Name(",
-                " NameAsync(",
+                " Capacity(",
+                " CapacityAsync(",
                 " ActiveCount(",
                 " ActiveCountAsync(",
                 " QueuedCount(",
@@ -620,8 +617,8 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
                 " FetchAsync(",
                 " Send(",
                 " SendAsync(",
-                " FetchSse(",
-                " FetchSseAsync(",
+                " SendSse(",
+                " SendSseAsync(",
             ],
         ),
         (

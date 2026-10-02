@@ -78,11 +78,16 @@ class TextDelta {
 
 /// Turn metadata as it arrives on the wire. Providers send stop_reason and
 /// token counts on different events; each TurnMeta carries what its event had
-/// and TurnStream folds non-null fields together (last write wins).
+/// and TurnStream folds non-null fields together (last write wins). The token
+/// counts mean what they mean in `root.events.Usage`.
 class TurnMeta {
     stop_reason: root.content.StopReason?,
     input_tokens: int?,
     output_tokens: int?,
+    cached_input_tokens: int?,
+    cache_write_input_tokens: int?,
+    uncached_input_tokens: int?,
+    reasoning_tokens: int?,
 }
 
 /// The provider's explicit end-of-turn marker — the decoded form of `[DONE]`,
@@ -97,10 +102,20 @@ class TurnMeta {
 class TurnDone {
 }
 
+/// Non-empty content that is not assistant text: a reasoning or tool-input
+/// delta, or a complete tool-call or file part. There is nothing to deliver to
+/// the caller, but the model is producing output, which is what
+/// `first_token_timeout` and `stream_token_timeout` measure. A decoder yields
+/// it for every content-bearing event that produces no TextDelta; events that
+/// carry no content (`message_start`, `response.created`, pings, usage-only
+/// frames, empty deltas) yield nothing.
+class ContentSeen {
+}
+
 /// One provider-agnostic event decoded from an SSE batch: a piece of
-/// assistant text, the turn metadata that arrived alongside it, or the
-/// provider's end-of-turn marker.
-type Event = TextDelta | TurnMeta | TurnDone;
+/// assistant text, content that is not text, the turn metadata that arrived
+/// alongside it, or the provider's end-of-turn marker.
+type Event = TextDelta | ContentSeen | TurnMeta | TurnDone;
 
 /// The single end-of-stream marker returned by both raw turn streams and typed
 /// function streams. A nominal sentinel is required because null may itself be
@@ -142,6 +157,10 @@ class TurnStream {
     _stop_reason: root.content.StopReason?,
     _input_tokens: int?,
     _output_tokens: int?,
+    _cached_input_tokens: int?,
+    _cache_write_input_tokens: int?,
+    _uncached_input_tokens: int?,
+    _reasoning_tokens: int?,
     _done: bool,
     // strict termination (see the contract at the top of this file): the
     // provider id when this stream requires an explicit TurnDone, null when a
@@ -160,6 +179,20 @@ class TurnStream {
     // TTFT base: stamped when the SSE response opened (legacy TTFT semantics);
     // falls back to _call_started when a provider did not set it.
     _ttft_from: baml.time.Instant?,
+    // The two token deadlines of a wire-backed stream (see
+    // `root.LlmTimeoutOptions`); null is not enforced. `_first_token_timeout`
+    // applies until the first non-empty content delta is delivered, and
+    // `_stream_token_timeout` between content deltas after it: the two never
+    // run at the same time.
+    _first_token_timeout: baml.time.Duration?,
+    _stream_token_timeout: baml.time.Duration?,
+    // How many non-empty content deltas have been delivered.
+    _content_deltas: int,
+    // How long this stream has waited on the provider since the attempt was
+    // dispatched (before the first content delta) or since the last content
+    // delta (after it). Only time spent waiting for the provider is added, so
+    // a caller that is slow between pulls is not charged.
+    _token_waited: baml.time.Duration,
     _capture_sse: bool,
 
     /// A turn stream over a live SSE connection. `decode` receives the raw
@@ -173,11 +206,36 @@ class TurnStream {
     /// before that event arrives, rather than reporting the truncated text as a
     /// completed turn. Leave it null (the default) only for a protocol whose
     /// sole end-of-turn signal IS the socket closing.
+    ///
+    /// `timeout_options` supplies the two token deadlines, which this stream enforces:
+    /// `next()` throws `baml.errors.Timeout` with `timeout_type`
+    /// `"first_token_timeout"` when no non-empty content delta arrives in
+    /// time, and `"stream_token_timeout"` when the gap between two of them is
+    /// too long. Content is a non-empty `TextDelta` or a `ContentSeen`.
+    /// `dispatched` is when the request attempt was sent (before connecting),
+    /// which is where the first-token clock starts; it defaults to now. If the
+    /// first-token deadline has already passed, the stream is closed and this
+    /// throws that `Timeout`. `timeout_options.timeout` and `timeout_options.connect_timeout`
+    /// are the transport's and are not read here.
     function from_sse(
         sse: baml.http.SseStream,
         decode: (string) -> Event[] throws root.errors.InvokeError,
         require_terminal: string? = null,
+        timeout_options: root.LlmTimeoutOptions? = null,
+        dispatched: baml.time.Instant? = null,
     ) -> TurnStream {
+        let first_token_timeout = _token_limit(timeout_options?.first_token_timeout);
+        // Everything since dispatch was spent waiting on the provider.
+        let waited = match (dispatched) {
+            let at: baml.time.Instant => at.elapsed(),
+            null => baml.time.Duration.from_nanoseconds(0),
+        };
+        if let limit: baml.time.Duration = first_token_timeout {
+            if (waited.to_nanoseconds() >= limit.to_nanoseconds()) {
+                sse.close();
+                throw _token_timeout_error(limit, "first_token_timeout")
+            }
+        }
         TurnStream {
             _event_source: null,
             _sse: sse,
@@ -190,6 +248,10 @@ class TurnStream {
             _stop_reason: null,
             _input_tokens: null,
             _output_tokens: null,
+            _cached_input_tokens: null,
+            _cache_write_input_tokens: null,
+            _uncached_input_tokens: null,
+            _reasoning_tokens: null,
             _done: false,
             _require_terminal: require_terminal,
             _saw_terminal: false,
@@ -197,6 +259,10 @@ class TurnStream {
             _wire_call: null,
             _call_started: null,
             _ttft_from: null,
+            _first_token_timeout: first_token_timeout,
+            _stream_token_timeout: _token_limit(timeout_options?.stream_token_timeout),
+            _content_deltas: 0,
+            _token_waited: waited,
             _capture_sse: false,
         }
     }
@@ -218,6 +284,10 @@ class TurnStream {
             _stop_reason: null,
             _input_tokens: null,
             _output_tokens: null,
+            _cached_input_tokens: null,
+            _cache_write_input_tokens: null,
+            _uncached_input_tokens: null,
+            _reasoning_tokens: null,
             _done: false,
             _require_terminal: null,
             _saw_terminal: false,
@@ -225,6 +295,10 @@ class TurnStream {
             _wire_call: null,
             _call_started: null,
             _ttft_from: null,
+            _first_token_timeout: null,
+            _stream_token_timeout: null,
+            _content_deltas: 0,
+            _token_waited: baml.time.Duration.from_nanoseconds(0),
             _capture_sse: false,
         }
     }
@@ -247,6 +321,10 @@ class TurnStream {
             _stop_reason: null,
             _input_tokens: null,
             _output_tokens: null,
+            _cached_input_tokens: null,
+            _cache_write_input_tokens: null,
+            _uncached_input_tokens: null,
+            _reasoning_tokens: null,
             _done: false,
             _require_terminal: null,
             _saw_terminal: false,
@@ -254,6 +332,10 @@ class TurnStream {
             _wire_call: null,
             _call_started: null,
             _ttft_from: null,
+            _first_token_timeout: null,
+            _stream_token_timeout: null,
+            _content_deltas: 0,
+            _token_waited: baml.time.Duration.from_nanoseconds(0),
             _capture_sse: false,
         }
     }
@@ -266,6 +348,62 @@ class TurnStream {
                     call.timing.ttft_ms = base.elapsed().to_milliseconds();
                 }
             }
+        }
+    }
+
+    /// (internal) A non-empty content delta was delivered: the first-token
+    /// deadline is met, and the stream-token clock starts over.
+    function _saw_content(self) -> void {
+        self._content_deltas += 1;
+        self._token_waited = baml.time.Duration.from_nanoseconds(0);
+    }
+
+    /// (internal) One wire pull, bounded by whichever token deadline is
+    /// running: `first_token_timeout` until the first content delta, then
+    /// `stream_token_timeout`. The clock only runs here, while waiting on the
+    /// provider. A batch with no content in it does not reset it, so the next
+    /// pull gets what is left of the same budget.
+    ///
+    /// The transport's own `Timeout` (the request's end-to-end limit) is
+    /// carried out of the timed body as a value so it is never mistaken for
+    /// the token deadline, then rethrown unchanged.
+    function _pull(self, sse: baml.http.SseStream) -> string? {
+        let timeout_type = if (self._content_deltas > 0) {
+            "stream_token_timeout"
+        } else {
+            "first_token_timeout"
+        };
+        let active = if (self._content_deltas > 0) {
+            self._stream_token_timeout
+        } else {
+            self._first_token_timeout
+        };
+        match (active) {
+            null => sse.next(),
+            let limit: baml.time.Duration => {
+                let remaining = limit.sub(self._token_waited);
+                if (remaining.to_nanoseconds() <= 0n) {
+                    self._finish();
+                    throw _token_timeout_error(limit, timeout_type)
+                }
+                let pull_started = baml.time.Instant.now();
+                let pulled = baml.future.with_timeout(remaining, () -> {
+                    sse.next() catch (e) {
+                        let transport: baml.errors.Timeout => transport,
+                    }
+                }) catch (e) {
+                    baml.errors.Timeout => {
+                        self._finish();
+                        throw _token_timeout_error(limit, timeout_type)
+                    },
+                };
+                self._token_waited = self._token_waited.add(pull_started.elapsed());
+                match (pulled) {
+                    let transport: baml.errors.Timeout => throw transport,
+                    let batch: string => batch,
+                    null => null,
+                }
+            },
         }
     }
 
@@ -335,7 +473,7 @@ class TurnStream {
         let ready: string[] = [];
         while (true) {
             if (self._done) {
-                return Done {  };
+                return Done {};
             }
             // deliver every decoded event before pulling more from the wire
             while (self._pcursor < self._pending.length()) {
@@ -344,8 +482,15 @@ class TurnStream {
                 match (e) {
                     let d: TextDelta => {
                         self._stamp_first_delta();
+                        if (d.text != "") {
+                            self._saw_content();
+                        }
                         self._text = `${self._text}${d.text}`;
                         ready.push(d.text);
+                        null
+                    },
+                    let seen: ContentSeen => {
+                        self._saw_content();
                         null
                     },
                     let m: TurnMeta => {
@@ -358,6 +503,18 @@ class TurnStream {
                         if let o: int = m.output_tokens {
                             self._output_tokens = o;
                         }
+                        if let c: int = m.cached_input_tokens {
+                            self._cached_input_tokens = c;
+                        }
+                        if let w: int = m.cache_write_input_tokens {
+                            self._cache_write_input_tokens = w;
+                        }
+                        if let u: int = m.uncached_input_tokens {
+                            self._uncached_input_tokens = u;
+                        }
+                        if let r: int = m.reasoning_tokens {
+                            self._reasoning_tokens = r;
+                        }
                         null
                     },
                     let d: TurnDone => {
@@ -368,7 +525,7 @@ class TurnStream {
                         if (ready.length() > 0) {
                             return ready;
                         }
-                        return Done {  };
+                        return Done {};
                     },
                     null => null,
                 };
@@ -392,14 +549,14 @@ class TurnStream {
             }
             match (self._sse) {
                 let sse: baml.http.SseStream => {
-                    match (sse.next()) {
+                    match (self._pull(sse)) {
                         null => {
                             // end of connection. On a strict stream with no
                             // TurnDone decoded this is a truncated turn, and
                             // _check_terminal throws rather than completing it.
                             self._finish();
                             self._check_terminal();
-                            return Done {  };
+                            return Done {};
                         },
                         let batch: string => {
                             self._capture_batch(batch);
@@ -427,7 +584,7 @@ class TurnStream {
                         },
                         null => {
                             self._finish();
-                            return Done {  };
+                            return Done {};
                         },
                     }
                 },
@@ -460,8 +617,10 @@ class TurnStream {
             root.events.Usage {
                 input_tokens: self._input_tokens ?? 0,
                 output_tokens: self._output_tokens ?? 0,
-                cached_input_tokens: null,
-                reasoning_tokens: null,
+                cached_input_tokens: self._cached_input_tokens,
+                reasoning_tokens: self._reasoning_tokens,
+                cache_write_input_tokens: self._cache_write_input_tokens,
+                uncached_input_tokens: self._uncached_input_tokens,
             }
         } else {
             null
@@ -482,6 +641,39 @@ class TurnStream {
     }
 }
 
+/// (internal) A configured token deadline, or null when there is none: a zero
+/// or negative duration means no limit.
+function _token_limit(limit: baml.time.Duration?) -> baml.time.Duration? {
+    match (limit) {
+        null => null,
+        let configured: baml.time.Duration => {
+            if (configured.to_nanoseconds() > 0n) {
+                configured
+            } else {
+                null
+            }
+        },
+    }
+}
+
+/// (internal) The error for an elapsed token deadline. `timeout_type` is the
+/// `LlmTimeoutOptions` field that set it.
+function _token_timeout_error(
+    limit: baml.time.Duration,
+    timeout_type: string,
+) -> baml.errors.Timeout {
+    let waiting_for = if (timeout_type == "first_token_timeout") {
+        "the first content from the model"
+    } else {
+        "more content from the model"
+    };
+    baml.errors.Timeout {
+        message: `no ${waiting_for} within ${limit.to_milliseconds()}ms (${timeout_type})`,
+        duration: limit,
+        timeout_type: timeout_type,
+    }
+}
+
 /// The typed partial-value stream returned by an LLM function's `@stream`
 /// projection. This is the one canonical host-stream class; tagged handles carry
 /// its FQN across FFI so host bridges do not need to hardcode a namespace.
@@ -498,12 +690,12 @@ class Stream<T> {
     function next(self) -> T | Done {
         while (true) {
             if (self._finished) {
-                return Done {  };
+                return Done {};
             }
             match (self._next_text()) {
                 null => {
                     self._finished = true;
-                    return Done {  };
+                    return Done {};
                 },
                 let s: string => {
                     self._text = self._text + s;

@@ -436,7 +436,7 @@ BAML has a special challenge: names can be referenced across files. This means g
 2. **Topological sort of packages:** Packages are sorted by their dependency graph (e.g., `baml` before `user`).
 3. **Topological sort of lets within each package:** Within each package, `Let` bindings are topologically sorted by their dependency edges (derived from `Expr::Path` references in their initializers). If a cyclic dependency is detected, the compiler emits an error.
 4. **Init function compilation:** For each package, a `$init` function is compiled that evaluates the `Let` bindings in topological order, storing each result in a global slot.
-5. **Package init order:** The VM receives a `package_init_order` list and calls each package's `$init` function in order during startup.
+5. **Package init order:** The engine reads `Program::init_order` (package ordinals in dependency order) and runs each listed package's `$init` during startup.
 
 This is exactly how Go handles global variable initialization: topological sort across the dependency graph, then evaluate in order.
 
@@ -821,4 +821,4 @@ When implementing a new feature, walk through these questions in order:
 | HIR | `baml_compiler2_hir` | No | `file_semantic_index`, `namespace_items`, `package_items` | No |
 | TIR | `baml_compiler2_tir` | No | `infer_scope_types`, `resolve_name_at` | No |
 | MIR | `baml_compiler2_mir` | Yes (AST → CFG) | `lower_function`, `lower_let_body` | Yes |
-| Emit | `baml_compiler2_emit` | Yes (MIR → bytecode) | `generate_project_bytecode` | Yes (bytecode) |
+| Emit | `baml_compiler2_emit` | Yes (MIR → bytecode) | `emit_package` | Yes (bytecode) |

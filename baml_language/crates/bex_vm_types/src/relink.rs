@@ -8,13 +8,13 @@
 //! collect a function's external references or rewrite them when the
 //! function is spliced into a program with a different layout.
 //!
-//! Class *type tags* are deliberately not visited: tags are
-//! content-addressed (`baml_type::typetag::class_type_tag`), a pure function
-//! of the class's fully-qualified name, so they never change between
-//! layouts. Constant-pool / jump-table / init-plan *indices* are
-//! function-local and never relocate. Field indices bake a class's layout,
-//! which is part of that class's signature — a layout change must recompile
-//! the referencing function, not patch it.
+//! Type *heads* are visited by their own walk (`head_walk`), since they live
+//! inside types rather than in operands; a type switch's declaration keys
+//! ([`SwitchKey::Declaration`](crate::bytecode::SwitchKey)) are object
+//! operands and ARE visited here. Constant-pool / jump-table / init-plan
+//! *indices* are function-local and never relocate. Field indices bake a
+//! class's layout, which is part of that class's signature — a layout change
+//! must recompile the referencing function, not patch it.
 //!
 //! The instruction match below is EXHAUSTIVE on purpose: adding an opcode
 //! that carries a `GlobalIndex`/`ObjectIndex` fails compilation here instead
@@ -23,7 +23,7 @@
 
 use crate::{
     GlobalIndex, ObjectIndex,
-    bytecode::{ClassInitPlan, Instruction},
+    bytecode::{ClassInitPlan, Instruction, SwitchDispatch, SwitchKey, SwitchTable},
     types::{ConstValue, Function},
 };
 
@@ -47,7 +47,7 @@ pub enum IndexOperandRef<'a> {
 // operand-carrying opcode or `ConstValue` variant fails compilation instead of
 // silently escaping the walk.
 macro_rules! visit_bytecode_index_operands {
-    ($instructions:expr, $constants:expr, $plans:expr, $visit:ident, $operand:ident) => {{
+    ($instructions:expr, $constants:expr, $plans:expr, $tables:expr, $visit:ident, $operand:ident) => {{
         use Instruction as I;
         let mut bakes_type_layout = false;
         for instruction in $instructions {
@@ -139,6 +139,7 @@ macro_rules! visit_bytecode_index_operands {
             | I::Await
             | I::AwaitAny
             | I::CallIndirect
+            | I::SetCallTrace
             | I::Throw
             | I::Rethrow
             | I::Return
@@ -178,6 +179,25 @@ macro_rules! visit_bytecode_index_operands {
             let ClassInitPlan { class_obj, .. } = plan;
             $visit($operand::Object(class_obj));
         }
+        // A switch's declaration keys name their declarations by object
+        // operand; the kind keys are constants. A solved table holds values,
+        // which name nothing.
+        for table in $tables {
+            let SwitchTable { dispatch, .. } = table;
+            match dispatch {
+                SwitchDispatch::Keys(keys) => {
+                    for key in keys {
+                        match key {
+                            SwitchKey::Declaration(declaration) => {
+                                $visit($operand::Object(declaration));
+                            }
+                            SwitchKey::Kind(_) => {}
+                        }
+                    }
+                }
+                SwitchDispatch::Hash { .. } | SwitchDispatch::Sorted(_) => {}
+            }
+        }
         bakes_type_layout
     }};
 }
@@ -188,6 +208,7 @@ pub fn visit_index_operands(function: &mut Function, mut visit: impl FnMut(Index
         &mut function.bytecode.instructions,
         &mut function.bytecode.constants,
         &mut function.bytecode.class_init_plans,
+        &mut function.bytecode.switch_tables,
         visit,
         IndexOperand
     );
@@ -203,6 +224,7 @@ pub fn visit_index_operands_ref(
         &function.bytecode.instructions,
         &function.bytecode.constants,
         &function.bytecode.class_init_plans,
+        &function.bytecode.switch_tables,
         visit,
         IndexOperandRef
     )
@@ -235,9 +257,16 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
                 }
             }
         }
+        // A class names each inherent method's pooled function — relocated
+        // exactly like an interface's default bodies.
+        Object::Class(class) => {
+            let mut visit = visit;
+            for method in class.methods.values_mut() {
+                visit(IndexOperand::Object(&mut method.function));
+            }
+        }
         // Inert at relink time: no cross-function index operands.
-        Object::Class(..)
-        | Object::Enum(..)
+        Object::Enum(..)
         | Object::TypeAlias(..)
         | Object::Package(..)
         | Object::ImplRule(..)
@@ -259,7 +288,6 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
         | Object::Map(..)
         | Object::Float(..)
         | Object::Future(..)
-        | Object::UnscheduledFuture(..)
         | Object::RustData(..) => {}
     }
 }
@@ -268,7 +296,7 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
 mod tests {
     use super::*;
     use crate::{
-        HeapPtr,
+        HeapPtr, Object,
         bytecode::{Bytecode, ClassInitPlan},
         types::{FunctionKind, FunctionOrigin},
     };
@@ -308,6 +336,13 @@ mod tests {
                 ntypeargs: 0,
                 fields: Vec::new(),
             }],
+            switch_tables: vec![SwitchTable::of_keys(
+                vec![
+                    SwitchKey::Kind(0),
+                    SwitchKey::Declaration(ObjectIndex::from_raw(11)),
+                ],
+                vec!["int".to_string(), "Widget".to_string()],
+            )],
             ..Bytecode::default()
         };
         Function {
@@ -330,6 +365,7 @@ mod tests {
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
+            type_param_names: Vec::new(),
             generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: String::new(),
@@ -338,9 +374,30 @@ mod tests {
             is_interface_body: false,
             native_key: None,
             body_meta: None,
-
             runtime_package: HeapPtr::null(),
         }
+    }
+
+    /// A function's telemetry policy is runtime state: it is no part of the
+    /// artifact, and a loaded function starts with none.
+    #[test]
+    fn function_artifacts_exclude_runtime_policy_and_load_with_none() {
+        let object = Object::Function(Box::new(test_function()));
+        let original_bytes = borsh::to_vec(&object).unwrap();
+        let Object::Function(function) = &object else {
+            unreachable!()
+        };
+        function.telemetry_policy_id.store(17);
+        let bytes = borsh::to_vec(&object).unwrap();
+        assert_eq!(bytes, original_bytes);
+
+        let Object::Function(loaded) = borsh::from_slice::<Object>(&bytes).unwrap() else {
+            unreachable!()
+        };
+        assert_eq!(
+            loaded.telemetry_policy_id.load(),
+            crate::TelemetryPolicyId::NONE
+        );
     }
 
     #[test]
@@ -354,7 +411,7 @@ mod tests {
             IndexOperand::Object(obj) => objects.push(obj.raw()),
         });
         assert_eq!(globals, vec![3, 7], "global-slot operands");
-        assert_eq!(objects, vec![2, 9, 4, 6, 8], "object-pool operands");
+        assert_eq!(objects, vec![2, 9, 4, 6, 8, 11], "object-pool operands");
 
         // Rewrite through the visitor, then re-collect to prove mutation
         // reaches the stored bytecode (instructions, constants, and plans).
@@ -367,6 +424,6 @@ mod tests {
             IndexOperand::Global(slot) => rewritten.push(slot.raw()),
             IndexOperand::Object(obj) => rewritten.push(obj.raw()),
         });
-        assert_eq!(rewritten, vec![103, 107, 102, 109, 104, 106, 108]);
+        assert_eq!(rewritten, vec![103, 107, 102, 109, 104, 106, 108, 111]);
     }
 }

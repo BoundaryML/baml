@@ -202,6 +202,14 @@ fn renameable(
     };
     let name = token.text().to_string();
 
+    // A served package's row has no source to rewrite. The group builder
+    // would report it the same way (a name outside the workspace); refusing
+    // here keeps the row out of the declaration loop below, which filters
+    // out a symbol without a declaration rather than refusing it.
+    if let SymbolTarget::Item(DeclRef::External(_)) = target {
+        return Err(RenameError::NotInWorkspace { name });
+    }
+
     // The group first: a served package's row member has no declaration
     // location at all, and the group builder is where that is reported as
     // what it is — a name outside the workspace — rather than as "no

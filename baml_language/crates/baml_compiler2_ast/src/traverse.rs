@@ -97,15 +97,6 @@ impl ExprBody {
                     }
                 }
             }
-            Expr::Spawn {
-                name,
-                with_exprs,
-                body,
-            } => {
-                out.extend(name.map(BodyNode::Expr));
-                out.extend(with_exprs.iter().copied().map(BodyNode::Expr));
-                out.push(BodyNode::Expr(*body));
-            }
             Expr::Binary { lhs, rhs, .. } => {
                 out.push(BodyNode::Expr(*lhs));
                 out.push(BodyNode::Expr(*rhs));

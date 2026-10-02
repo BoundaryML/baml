@@ -321,8 +321,13 @@ class Package {
         $rust_function
     }
 
-    /// Return a derived package view that exports exact runtime type values
-    /// under source-visible names for subsequent Package.compile calls.
+    /// A package that exports everything this one does, plus `types` under
+    /// the given names, for a later `Package.compile` to mount: a bare class,
+    /// enum, interface, or alias declaration is re-exported under its name
+    /// (the same declaration, so a consumer that mounts both packages sees
+    /// one type), any other type is declared as an alias, and every
+    /// declaration a mounted type reaches is exported under its own name. A
+    /// name this package already exports is refused.
     //baml:mut_vm
     function with_types(
         self,

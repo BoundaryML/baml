@@ -90,7 +90,7 @@ fn sources(pool: &SnapshotPool, count: usize) -> (SealedFile, Vec<Snapshot>) {
         );
     }
     let snapshots = builder.take_snapshots().collect();
-    let file = builder.finish_recording().unwrap().unwrap();
+    let file = builder.flush_recording().unwrap().unwrap();
     (file, snapshots)
 }
 
@@ -253,7 +253,6 @@ async fn check_case(case: &str) {
         BcsDelivery::new(
             DeliveryConfig {
                 bearer_token: Some("golden-prepare-token".into()),
-                allow_http: true,
                 max_candidates: 8,
                 max_targets: 8,
                 max_recording_body_bytes: 4096,

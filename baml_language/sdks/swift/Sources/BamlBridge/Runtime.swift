@@ -133,14 +133,14 @@ public final class BamlRuntime: @unchecked Sendable {
         let errorBuffer = bytecode.withUnsafeBytes { buf -> BamlBuffer in
             if let embeddedBamlToml {
                 return embeddedBamlToml.withCString { manifest in
-                    BamlApi.initializeRuntimeFromBytecodeWithMetadata(
+                    BamlApi.initializeRuntimeFromBlobWithMetadata(
                         buf.baseAddress?.assumingMemoryBound(to: UInt8.self),
                         buf.count,
                         manifest
                     )
                 }
             }
-            return BamlApi.initializeRuntimeFromBytecode(
+            return BamlApi.initializeRuntimeFromBlob(
                 buf.baseAddress?.assumingMemoryBound(to: UInt8.self), buf.count)
         }
         let initError = String(decoding: BamlApi.takeBuffer(errorBuffer), as: UTF8.self)

@@ -138,7 +138,9 @@ pub fn file_annotations(
         // calls, and since we don't recurse into skipped functions, their
         // internals stay hidden.
         match func_data.metadata.origin {
-            FunctionOrigin::UserDefined | FunctionOrigin::Internal => {}
+            FunctionOrigin::UserDefined
+            | FunctionOrigin::Internal
+            | FunctionOrigin::TestInitializer => {}
             FunctionOrigin::Companion | FunctionOrigin::AutoDerive => continue,
         }
         if baml_compiler2_hir::item_data::function_llm_meta(db, func_loc).is_some() {
@@ -518,7 +520,7 @@ fn is_assert_without_hints(
     // The syntax can also name a local `assert` value or a user namespace.
     // Only the embedded standard assertion package gets this suppression.
     let offset = callee_span.end() - TextSize::from(1);
-    let Some(SymbolTarget::Item(Definition::Function(function))) =
+    let Some(SymbolTarget::Item(DeclRef::Source(Definition::Function(function)))) =
         crate::resolve::symbol_at(db, file, offset)
     else {
         return false;
@@ -539,7 +541,7 @@ fn parameter_definition(
     let offset = callee_span.end() - TextSize::from(1);
     // Only a source-lane function has a parameter span to link to; a method
     // served from a package interface (`DeclRef::External`) has no source.
-    let (SymbolTarget::Item(Definition::Function(function))
+    let (SymbolTarget::Item(DeclRef::Source(Definition::Function(function)))
     | SymbolTarget::Method {
         func: DeclRef::Source(function),
     }) = crate::resolve::symbol_at(db, file, offset)?

@@ -34,7 +34,7 @@ async fn shell_with_pipe() {
         load_field .stdout
         load_type baml.ToString
         load_const "to_string"
-        virtual_call nargs=1 ntypeargs=0
+        virtual_call nargs=1 ntypeargs=0 self_arg=0
         return
     }
     "#);
@@ -388,7 +388,7 @@ async fn start_process_stdout_read_is_cancellable() {
                 defer { process.close() }
 
                 let tok = baml.spawn.CancelToken.new();
-                let read = spawn with baml.spawn.options(cancel = tok) {
+                let read = spawn with tok {
                     process.stdout.lines().next()
                 };
                 let deadline = spawn {
@@ -486,7 +486,7 @@ async fn claude_code_client_preserves_process_wait_timeout() {
                 );
                 let _ = cl.invoke(timeout_provider_input()) catch_all (e) {
                     let timeout: baml.errors.Timeout => {
-                        return `Timeout:${timeout.message}:${timeout.duration_ms ?? -1}`;
+                        return `Timeout:${timeout.message}:${timeout.duration?.to_milliseconds() ?? -1n}`;
                     },
                     _ => { return `unexpected:${e.to_string()}`; },
                 };

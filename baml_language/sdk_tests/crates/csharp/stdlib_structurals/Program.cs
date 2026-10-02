@@ -71,6 +71,8 @@ var request = new Request
         ["x-nul"] = "a\0b",
     },
     Body = "payload\0雪",
+    Timeout = null,
+    ConnectTimeout = null,
 };
 Request requestResult = await UserFunctions.EchoRequestAsync(request);
 Require(
@@ -105,6 +107,9 @@ Require(
 
 Done doneResult = await UserFunctions.EchoDoneAsync(new Done());
 Require(doneResult is not null, "iter.Done structural roundtrip changed");
+
+Baml.Spawn.Root rootResult = await UserFunctions.EchoRootAsync(new Baml.Spawn.Root());
+Require(rootResult is not null, "spawn.Root structural roundtrip changed");
 
 Require(
     UserFunctions.EchoCsvErrorKind(Baml.Csv.ErrorKind.FieldCount) == Baml.Csv.ErrorKind.FieldCount,

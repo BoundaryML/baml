@@ -108,7 +108,7 @@ function fn1() -> root.algebra.Ty throws never {
         [root.algebra.Prim.int()],
         [],
         root.algebra.Prim.string(),
-        root.algebra.Never {  },
+        root.algebra.Never {},
     )
 }
 
@@ -130,8 +130,8 @@ function corpus() -> Corpus[] throws never {
         entry("bigint", root.algebra.Prim.bigint()),
         entry("null", root.algebra.Prim.null_ty()),
         entry("uint8array", root.algebra.Prim.uint8array()),
-        entry("never", root.algebra.Never {  }),
-        entry("unknown", root.algebra.Top {  }),
+        entry("never", root.algebra.Never {}),
+        entry("unknown", root.algebra.Top {}),
         entry("lit int", root.algebra.Lit.new(1)),
         entry("lit negative", root.algebra.Lit.new(-2)),
         entry("lit string", root.algebra.Lit.new("sheep")),
@@ -171,13 +171,13 @@ function corpus() -> Corpus[] throws never {
                 [root.algebra.Prim.int()],
                 [],
                 int_or_string(),
-                root.algebra.Never {  },
+                root.algebra.Never {},
             ),
             "(int) -> int | string throws never",
         ),
         printed_as(
             "fn returning fn",
-            root.algebra.Fn.new([], [], fn1(), root.algebra.Never {  }),
+            root.algebra.Fn.new([], [], fn1(), root.algebra.Never {}),
             "() -> ((int) -> string throws never) throws never",
         ),
         entry("fn throwing union", root.algebra.Fn.new([], [], root.algebra.Prim.int(), int_or_string())),
@@ -188,16 +188,16 @@ function corpus() -> Corpus[] throws never {
                 [int_or_string()],
                 [],
                 root.algebra.Prim.int(),
-                root.algebra.Never {  },
+                root.algebra.Never {},
             ),
         ),
         entry(
             "fn taking fn",
-            root.algebra.Fn.new([fn1()], [], root.algebra.Prim.int(), root.algebra.Never {  }),
+            root.algebra.Fn.new([fn1()], [], root.algebra.Prim.int(), root.algebra.Never {}),
         ),
         entry(
             "fn no params",
-            root.algebra.Fn.new([], [], root.algebra.Prim.null_ty(), root.algebra.Top {  }),
+            root.algebra.Fn.new([], [], root.algebra.Prim.null_ty(), root.algebra.Top {}),
         ),
         printed_as(
             "fn named params",
@@ -208,7 +208,7 @@ function corpus() -> Corpus[] throws never {
                     root.algebra.Named.new("b", root.algebra.Prim.string(), true),
                 ],
                 root.algebra.Prim.int(),
-                root.algebra.Never {  },
+                root.algebra.Never {},
             ),
             "(int, string) -> int throws never",
         ),
@@ -472,12 +472,12 @@ function equivalences() -> Equivalence[] throws never {
             ),
         },
         Equivalence {
-            left: root.algebra.Union.new([root.algebra.Prim.int(), root.algebra.Never {  }]),
+            left: root.algebra.Union.new([root.algebra.Prim.int(), root.algebra.Never {}]),
             right: root.algebra.Prim.int(),
         },
         Equivalence {
-            left: root.algebra.Union.new([root.algebra.Prim.int(), root.algebra.Top {  }]),
-            right: root.algebra.Top {  },
+            left: root.algebra.Union.new([root.algebra.Prim.int(), root.algebra.Top {}]),
+            right: root.algebra.Top {},
         },
     ]
 }
@@ -515,7 +515,7 @@ function transfer_table_holds() -> bool throws never {
     let sup: root.algebra.Knowledge = root.algebra.Relation.Super;
     let eq: root.algebra.Knowledge = root.algebra.Relation.Equiv;
     let un: root.algebra.Knowledge = root.algebra.Relation.Unrelated;
-    let none: root.algebra.Knowledge = root.algebra.Undecided {  };
+    let none: root.algebra.Knowledge = root.algebra.Undecided {};
     root.algebra.covariant(sub) == sub
         && root.algebra.contravariant(sub) == sup
         && root.algebra.contravariant(sup) == sub
@@ -538,7 +538,7 @@ function transfer_table_holds() -> bool throws never {
 function union_context_declines_absorbers() -> bool throws never {
     let rule = root.bank.union_member_covariant();
     let base = root.algebra.pair(
-        root.algebra.Never {  },
+        root.algebra.Never {},
         root.algebra.Prim.int(),
         root.algebra.Relation.Sub,
         root.bank.never_bottom_rule(),
@@ -581,19 +581,19 @@ function union_context_declines_absorbers() -> bool throws never {
     // `unknown` holds every value, so nothing is disjoint from a side that is
     // it.
     let top = root.algebra.pair(
-        root.algebra.Never {  },
-        root.algebra.Top {  },
+        root.algebra.Never {},
+        root.algebra.Top {},
         root.algebra.Relation.Sub,
         root.bank.never_bottom_rule(),
     );
     let beside_top = root.algebra.knowledge(root.algebra.in_union_with(top, root.algebra.Prim.int(), rule));
     disjoint == root.algebra.Relation.Sub
-        && absorbing_member == root.algebra.Undecided {  }
-        && non_leaf == root.algebra.Undecided {  }
-        && member_of_side == root.algebra.Undecided {  }
-        && covers_literals == root.algebra.Undecided {  }
-        && covers_a_member == root.algebra.Undecided {  }
-        && beside_top == root.algebra.Undecided {  }
+        && absorbing_member == root.algebra.Undecided {}
+        && non_leaf == root.algebra.Undecided {}
+        && member_of_side == root.algebra.Undecided {}
+        && covers_literals == root.algebra.Undecided {}
+        && covers_a_member == root.algebra.Undecided {}
+        && beside_top == root.algebra.Undecided {}
 }
 
 test "relations: transfer functions match the spec's variance rules" {
@@ -633,8 +633,8 @@ class Flow {
 function flows() -> Flow[] throws never {
     let rec = root.algebra.Alias { decl: rec_decl() };
     let unfolded = root.algebra.Union.new([root.algebra.Prim.int(), root.algebra.Array.new(rec)]);
-    let returns_int = root.algebra.Fn.new([], [], root.algebra.Prim.int(), root.algebra.Never {  });
-    let returns_union = root.algebra.Fn.new([], [], int_or_string(), root.algebra.Never {  });
+    let returns_int = root.algebra.Fn.new([], [], root.algebra.Prim.int(), root.algebra.Never {});
+    let returns_union = root.algebra.Fn.new([], [], int_or_string(), root.algebra.Never {});
     [
         Flow {
             name: "identity",
@@ -674,25 +674,25 @@ function flows() -> Flow[] throws never {
         },
         Flow {
             name: "never into leaf",
-            source: root.algebra.Never {  },
+            source: root.algebra.Never {},
             target: root.algebra.Prim.int(),
             relation: root.algebra.Relation.Sub,
         },
         Flow {
             name: "leaf into never",
             source: root.algebra.Prim.int(),
-            target: root.algebra.Never {  },
+            target: root.algebra.Never {},
             relation: root.algebra.Relation.Super,
         },
         Flow {
             name: "leaf into unknown",
             source: root.algebra.Prim.int(),
-            target: root.algebra.Top {  },
+            target: root.algebra.Top {},
             relation: root.algebra.Relation.Sub,
         },
         Flow {
             name: "unknown into leaf",
-            source: root.algebra.Top {  },
+            source: root.algebra.Top {},
             target: root.algebra.Prim.int(),
             relation: root.algebra.Relation.Super,
         },

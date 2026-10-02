@@ -8,7 +8,7 @@ class ReplayHandler {
   sse_body: string
   stop: baml.spawn.CancelToken
 
-  function handle(self, req: baml.http.Request) -> baml.http.Response {
+  function handle(self, req: baml.http.ServerRequest) -> baml.http.Response {
     if (req.url == "/__replay__/health") {
       baml.http.Response.new(200, { }, "ok".to_utf8())
     } else if (req.url == "/__replay__/shutdown") {
@@ -79,9 +79,9 @@ function replay_serve_detached(recording_path: string) -> string {
     stop: baml.spawn.CancelToken.new(),
   };
   let server = baml.http.Server.bind("127.0.0.1:0");
-  let task = spawn with baml.spawn.options(detach = true) { server.serve(handler.handle) };
+  let task = spawn with baml.spawn.Root.new() { server.serve(handler.handle) };
   // Reaper: also detached; tears the serve down once shutdown fires.
-  spawn with baml.spawn.options(detach = true) {
+  spawn with baml.spawn.Root.new() {
     while (!handler.stop.is_cancelled()) {
       baml.sys.sleep(baml.time.Duration.from_milliseconds(25n));
     }

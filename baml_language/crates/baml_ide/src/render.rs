@@ -615,6 +615,32 @@ impl<'db> FnSigParts<'db> {
         file: SourceFile,
         style: SigStyle,
     ) -> String {
+        self.render_with(style, |slot| slot.render(db, file, style))
+    }
+
+    /// [`Self::render`] for a row with no defining file in this database — a
+    /// served package's — every resolved slot spelled addressably from
+    /// `viewer`'s package ([`display_addressable_ty`]).
+    pub fn render_for_viewer(
+        &self,
+        db: &dyn baml_compiler2_hir::Db,
+        viewer: SourceRoot,
+        style: SigStyle,
+    ) -> String {
+        self.render_with(style, |slot| match slot {
+            SigSlot::Resolved(ty) => display_addressable_ty(db, viewer, ty),
+            SigSlot::ResolvedOwned(ty) => display_addressable_ty(db, viewer, ty),
+            SigSlot::Syntax(store, id) => style.type_form.render(store, *id),
+            SigSlot::Missing => MISSING_RETURN.to_string(),
+            SigSlot::Inferred => PENDING_INFERENCE.to_string(),
+        })
+    }
+
+    fn render_with(
+        &self,
+        style: SigStyle,
+        render_slot: impl Fn(&SigSlot<'db>) -> String,
+    ) -> String {
         let params = self
             .params
             .iter()
@@ -626,20 +652,15 @@ impl<'db> FnSigParts<'db> {
                 Some(match &param.ty {
                     Some(slot) => {
                         let optional = if param.optional { "?" } else { "" };
-                        format!(
-                            "{}{}: {}",
-                            param.name,
-                            optional,
-                            slot.render(db, file, style)
-                        )
+                        format!("{}{}: {}", param.name, optional, render_slot(slot))
                     }
                     None => param.name.clone(),
                 })
             })
             .collect::<Vec<_>>()
             .join(", ");
-        let ret = format!(" -> {}", self.ret.render(db, file, style));
-        let throws = format!(" throws {}", self.throws.render(db, file, style));
+        let ret = format!(" -> {}", render_slot(&self.ret));
+        let throws = format!(" throws {}", render_slot(&self.throws));
         if style.keyword_and_name {
             let generics = if self.generics.is_empty() {
                 String::new()

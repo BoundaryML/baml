@@ -8,10 +8,11 @@
 
 use std::collections::{HashMap, HashSet};
 
+use baml_compiler2_hir_ty::extern_loc::ClassRef;
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, CellId, Constant, IndexKind, Local, Operand, Place, Rvalue, UnaryOp,
+    AggregateKind, BinOp, CellId, Constant, IndexKind, Local, Operand, Place, Rvalue, TyTemplate,
+    TypeTest, UnaryOp,
 };
-use baml_type::TyTemplate;
 
 use crate::analysis::{LocalClassification, LocalDefUse};
 
@@ -55,23 +56,24 @@ pub(crate) trait PullSink<'db> {
         len: usize,
     ) -> Result<(), Self::Error>;
 
-    fn alloc_class_instance(&mut self, class_name: &str, ntypeargs: u16)
-    -> Result<(), Self::Error>;
+    fn alloc_class_instance(
+        &mut self,
+        class: ClassRef<'db>,
+        ntypeargs: u16,
+    ) -> Result<(), Self::Error>;
     fn init_class_instance(
         &mut self,
-        class_name: &str,
+        class: ClassRef<'db>,
         ntypeargs: u16,
         field_count: usize,
     ) -> Result<(), Self::Error>;
     fn init_field(&mut self, field_idx: usize, name: &str) -> Result<(), Self::Error>;
 
-    fn alloc_enum_variant(&mut self, enum_name: &str, variant: &str) -> Result<(), Self::Error>;
-
     fn discriminant(&mut self) -> Result<(), Self::Error>;
     fn type_tag(&mut self) -> Result<(), Self::Error>;
 
     fn len_of_place(&mut self, place: &Place) -> Result<(), Self::Error>;
-    fn is_type(&mut self, ty_template: &TyTemplate) -> Result<(), Self::Error>;
+    fn is_type(&mut self, test: &TypeTest<'db>) -> Result<(), Self::Error>;
     /// Coarse runtime type-tag test (`Rvalue::IsTypeTag`): the MIR lowering
     /// proved the `baml_type::typetag` constant `tag` a sound substitute for
     /// the structural check, so the test is the tag comparison itself.
@@ -133,8 +135,8 @@ pub(crate) trait PullSink<'db> {
     /// Resolve the field name for a `Place::Field { base, field }` access.
     fn resolve_field_name(&self, base: &Place, field_idx: usize) -> String;
 
-    /// Resolve a field name given the class name directly (used for `Aggregate::Class`).
-    fn class_field_name(&self, class_name: &str, field_idx: usize) -> String;
+    /// Resolve a field name given the class directly (used for `Aggregate::Class`).
+    fn class_field_name(&self, class: ClassRef<'db>, field_idx: usize) -> String;
 }
 
 /// Stack-effect callbacks for statement/terminator helpers.
@@ -246,14 +248,17 @@ pub(crate) fn walk_call_direct_args<'db, S: PullSink<'db>>(
     Ok(())
 }
 
-/// Shared pull order for indirect calls: `args..., callee`.
+/// Shared pull order for indirect calls: `args..., callee, trace?`.
 pub(crate) fn walk_call_indirect_operands<'db, S: PullSink<'db>>(
     sink: &mut S,
     callee: &Operand<'db>,
     args: &[Operand<'db>],
+    has_trace: bool,
 ) -> Result<(), S::Error> {
-    walk_call_direct_args(sink, args)?;
-    walk_operand_pull(sink, callee)
+    let value_count = args.len() - usize::from(has_trace);
+    walk_call_direct_args(sink, &args[..value_count])?;
+    walk_operand_pull(sink, callee)?;
+    walk_call_direct_args(sink, &args[value_count..])
 }
 
 /// Resolve a call operand to a statically-known function item through
@@ -412,12 +417,12 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
                 // produced by the array-literal lowering (which emits the typed
                 // `Rvalue::Array`); this arm is a defensive fallback.
                 sink.alloc_array(
-                    &TyTemplate::from(baml_type::RealizedTy::unknown()),
+                    &TyTemplate::from(baml_compiler2_mir::RealizedTy::unknown()),
                     fields.len(),
                 )
             }
             AggregateKind::Class {
-                name: class_name,
+                class,
                 type_arg_templates,
             } => {
                 let ntypeargs = u16::try_from(type_arg_templates.len())
@@ -428,7 +433,7 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
                     for template in type_arg_templates {
                         sink.load_type(template)?;
                     }
-                    return sink.alloc_class_instance(class_name, ntypeargs);
+                    return sink.alloc_class_instance(*class, ntypeargs);
                 }
 
                 for field_operand in fields {
@@ -437,10 +442,7 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
                 for template in type_arg_templates {
                     sink.load_type(template)?;
                 }
-                sink.init_class_instance(class_name, ntypeargs, fields.len())
-            }
-            AggregateKind::EnumVariant { enum_name, variant } => {
-                sink.alloc_enum_variant(enum_name, variant)
+                sink.init_class_instance(*class, ntypeargs, fields.len())
             }
         },
         Rvalue::Discriminant(place) => {
@@ -452,12 +454,9 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
             sink.type_tag()
         }
         Rvalue::Len(place) => sink.len_of_place(place),
-        Rvalue::IsType {
-            operand,
-            ty_template,
-        } => {
+        Rvalue::IsType { operand, test } => {
             walk_operand_pull(sink, operand)?;
-            sink.is_type(ty_template)
+            sink.is_type(test)
         }
         Rvalue::IsTypeTag { operand, tag } => {
             walk_operand_pull(sink, operand)?;

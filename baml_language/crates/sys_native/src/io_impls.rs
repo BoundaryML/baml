@@ -1418,7 +1418,10 @@ fn process_timeout_error(label: &str, timeout_ms: Option<i64>) -> VmBamlError {
     let duration_ms = timeout_ms.unwrap_or(0);
     VmBamlError::Timeout {
         message: format!("Command '{label}' timed out after {duration_ms}ms"),
-        duration_ms: Some(duration_ms),
+        duration: Some(std::time::Duration::from_millis(
+            u64::try_from(duration_ms).unwrap_or(0),
+        )),
+        timeout_type: "timeout".to_string(),
     }
 }
 
@@ -1707,7 +1710,8 @@ async fn run_process(
                 wait_task.abort();
                 return Err(VmRustFnError::from(VmBamlError::Timeout {
                     message: format!("Command '{label}' timed out after {ms}ms"),
-                    duration_ms: i64::try_from(duration.as_millis()).ok(),
+                    duration: Some(duration),
+                    timeout_type: "timeout".to_string(),
                 }));
             }
         }
@@ -2072,7 +2076,8 @@ impl io::IoClassNetTcpStream for NativeSysOps {
                     Err(_elapsed) => {
                         return Err(VmBamlError::Timeout {
                             message: format!("Connecting to '{addr}' timed out"),
-                            duration_ms: i64::try_from(dur.as_millis()).ok(),
+                            duration: Some(dur),
+                            timeout_type: "timeout".to_string(),
                         }
                         .into());
                     }
@@ -2315,7 +2320,8 @@ impl io::IoClassNetUdpSocket for NativeSysOps {
                     Err(_elapsed) => {
                         return Err(VmBamlError::Timeout {
                             message: format!("Sending to '{addr}' timed out"),
-                            duration_ms: i64::try_from(dur.as_millis()).ok(),
+                            duration: Some(dur),
+                            timeout_type: "timeout".to_string(),
                         }
                         .into());
                     }
@@ -2358,7 +2364,8 @@ impl io::IoClassNetUdpSocket for NativeSysOps {
                     Err(_elapsed) => {
                         return Err(VmBamlError::Timeout {
                             message: "Receiving datagram timed out".to_string(),
-                            duration_ms: i64::try_from(dur.as_millis()).ok(),
+                            duration: Some(dur),
+                            timeout_type: "timeout".to_string(),
                         }
                         .into());
                     }
@@ -2409,8 +2416,9 @@ impl io::IoClassHttpResponse for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         SysOpOutput::async_op(async move {
+            let network = crate::http_server::network_of(&response._body);
             crate::http_server::downcast_body(&response._body)?
-                .read_text()
+                .read_text(network.as_ref())
                 .await
                 .map_err(VmRustFnError::from)
         })
@@ -2439,8 +2447,9 @@ impl io::IoClassHttpResponse for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
         SysOpOutput::async_op(async move {
+            let network = crate::http_server::network_of(&response._body);
             crate::http_server::downcast_body(&response._body)?
-                .read_bytes()
+                .read_bytes(network.as_ref())
                 .await
                 .map(|b| b.to_vec())
                 .map_err(VmRustFnError::from)
@@ -2592,13 +2601,24 @@ impl io::IoClassHttpResponse for NativeSysOps {
 /// handle network failures instead of them surfacing as an uncatchable host
 /// error.
 #[cfg(feature = "bundle-http")]
-pub(crate) fn http_transport_error(context: &str, e: &reqwest::Error) -> VmBamlError {
+pub(crate) fn http_transport_error(
+    context: &str,
+    e: &reqwest::Error,
+    timeout_options: HttpTimeoutOptions,
+) -> VmBamlError {
     if e.is_timeout() {
+        // reqwest doesn't say which of its deadlines elapsed. Only the connect
+        // deadline fails inside the connector, so a timeout that is also a
+        // connect error is that one; anything else is the total.
+        let (timeout_type, duration) = if e.is_connect() && timeout_options.connect.is_some() {
+            ("connect_timeout", timeout_options.connect)
+        } else {
+            ("timeout", timeout_options.total)
+        };
         VmBamlError::Timeout {
             message: format!("{context}: {e}"),
-            // reqwest doesn't expose the configured timeout on the error, so
-            // the elapsed duration is unknown.
-            duration_ms: None,
+            duration,
+            timeout_type: timeout_type.to_string(),
         }
     } else {
         VmBamlError::Io {
@@ -2607,35 +2627,120 @@ pub(crate) fn http_transport_error(context: &str, e: &reqwest::Error) -> VmBamlE
     }
 }
 
-/// Applies the optional total-request timeout (carried as bigint nanos across
-/// the sys-op boundary) to a `reqwest` request builder. `0n`/negative means no
-/// deadline (`timeout_from_nanos` returns `None`); a configured deadline that
-/// elapses surfaces as `reqwest::Error::is_timeout`, which `http_transport_error`
-/// maps to `baml.errors.Timeout`.
+/// Parses `Request.method`. A request built with `Request.from_url` has no
+/// method until `set_method` is called, and sending it is an error.
 #[cfg(feature = "bundle-http")]
-fn apply_http_timeout(
-    builder: reqwest::RequestBuilder,
-    timeout_nanos: &num_bigint::BigInt,
-) -> reqwest::RequestBuilder {
-    match timeout_from_nanos(timeout_nanos) {
-        Some(dur) => builder.timeout(dur),
-        None => builder,
+fn http_method(method: &str) -> Result<reqwest::Method, VmBamlError> {
+    if method.is_empty() {
+        return Err(VmBamlError::InvalidArgument {
+            message: "Invalid HTTP method '': the request has no method set".to_string(),
+        });
+    }
+    reqwest::Method::from_bytes(method.as_bytes()).map_err(|e| VmBamlError::InvalidArgument {
+        message: format!("Invalid HTTP method '{method}': {e}"),
+    })
+}
+
+/// The deadlines one outgoing HTTP request runs under, as `baml.http` resolved
+/// them: `total` is `Request.timeout` (end to end, connecting included) and
+/// `connect` is `Request.connect_timeout`. `None` is no limit.
+#[cfg(feature = "bundle-http")]
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct HttpTimeoutOptions {
+    pub(crate) total: Option<std::time::Duration>,
+    pub(crate) connect: Option<std::time::Duration>,
+}
+
+#[cfg(feature = "bundle-http")]
+impl HttpTimeoutOptions {
+    /// Both deadlines cross the sys-op boundary as bigint nanos; `0n`/negative
+    /// means no limit (`timeout_from_nanos` returns `None`).
+    fn from_nanos(
+        timeout_nanos: &num_bigint::BigInt,
+        connect_timeout_nanos: &num_bigint::BigInt,
+    ) -> Self {
+        Self {
+            total: timeout_from_nanos(timeout_nanos),
+            connect: timeout_from_nanos(connect_timeout_nanos),
+        }
+    }
+
+    /// A client that enforces the connect deadline (TCP and TLS).
+    fn client(self) -> Result<reqwest::Client, VmBamlError> {
+        let mut builder = reqwest::Client::builder();
+        if let Some(connect) = self.connect {
+            builder = builder.connect_timeout(connect);
+        }
+        builder
+            .build()
+            .map_err(|e| http_transport_error("HTTP client initialization failed", &e, self))
+    }
+
+    /// Applies the total deadline to a request. One that elapses surfaces as
+    /// `reqwest::Error::is_timeout`, which `http_transport_error` maps to
+    /// `baml.errors.Timeout`.
+    fn apply(self, builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        match self.total {
+            Some(total) => builder.timeout(total),
+            None => builder,
+        }
     }
 }
 
 #[cfg(feature = "bundle-http")]
-fn build_io_http_response(response: reqwest::Response, url: String) -> owned::http::Response {
+fn build_io_http_response(
+    response: reqwest::Response,
+    url: String,
+    timeout_options: HttpTimeoutOptions,
+    network: Option<sys_types::network::NetworkContext>,
+) -> owned::http::Response {
     let status = i64::from(response.status().as_u16());
     let headers: indexmap::IndexMap<String, String> = response
         .headers()
         .iter()
         .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
         .collect();
+    let body = crate::http_server::HttpBody::client(response, timeout_options);
     owned::http::Response {
         status_code: status,
         headers,
         url,
-        _body: crate::http_server::HttpBody::client(response),
+        _body: traced(network, body),
+    }
+}
+
+/// Queue a traced request's status and headers, as they arrived.
+#[cfg(feature = "bundle-http")]
+fn push_connection(
+    network: Option<&sys_types::network::NetworkContext>,
+    response: &reqwest::Response,
+) {
+    if let Some(network) = network {
+        network.push(sys_types::network::NetworkEventKind::Connection {
+            status: response.status().as_u16(),
+            headers: response
+                .headers()
+                .iter()
+                .map(|(name, value)| {
+                    (
+                        name.as_str().to_owned(),
+                        String::from_utf8_lossy(value.as_bytes()).into_owned(),
+                    )
+                })
+                .collect(),
+        });
+    }
+}
+
+/// `data` as `$rust_type` data, behind its request's span when traced.
+#[cfg(feature = "bundle-http")]
+fn traced(
+    network: Option<sys_types::network::NetworkContext>,
+    data: Arc<dyn Any + Send + Sync>,
+) -> Arc<dyn Any + Send + Sync> {
+    match network {
+        Some(network) => sys_types::network::NetworkTraced::wrap(network, data),
+        None => data,
     }
 }
 
@@ -2766,12 +2871,11 @@ impl io::IoClassHttpSseStream for NativeSysOps {
         use std::sync::atomic::Ordering;
 
         SysOpOutput::async_op(async move {
-            let handle = sse_stream
-                ._handle
+            let handle = sys_types::network::NetworkTraced::inner(sse_stream._handle)
                 .downcast::<bex_resource_types::ResourceHandle>()
                 .map_err(|handle| VmInternalError::RustTypeError {
                     expected: TypeId::of::<bex_resource_types::ResourceHandle>(),
-                    got: handle.type_id(),
+                    got: handle.as_ref().type_id(),
                 })?;
 
             let (buffer, notify, closed) = crate::registry::REGISTRY
@@ -2854,17 +2958,28 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _call_id: CallId,
         url: String,
         timeout_nanos: Arc<num_bigint::BigInt>,
-        _ctx: &SysOpContext,
+        connect_timeout_nanos: Arc<num_bigint::BigInt>,
+        ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
+        let network = ctx.network.clone();
         SysOpOutput::async_op(async move {
             crate::ensure_rustls_crypto_provider();
-            let client = reqwest::Client::new();
-            let response = apply_http_timeout(client.get(&url), &timeout_nanos)
+            let timeout_options =
+                HttpTimeoutOptions::from_nanos(&timeout_nanos, &connect_timeout_nanos);
+            let client = timeout_options.client()?;
+            let response = timeout_options
+                .apply(client.get(&url))
                 .send()
                 .await
-                .map_err(|e| http_transport_error("HTTP fetch failed", &e))?;
+                .map_err(|e| http_transport_error("HTTP fetch failed", &e, timeout_options))?;
+            push_connection(network.as_ref(), &response);
             let final_url = response.url().to_string();
-            Ok(build_io_http_response(response, final_url))
+            Ok(build_io_http_response(
+                response,
+                final_url,
+                timeout_options,
+                network,
+            ))
         })
     }
 
@@ -2875,6 +2990,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _call_id: CallId,
         _url: String,
         _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -2890,17 +3006,17 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _call_id: CallId,
         request: owned::http::Request,
         timeout_nanos: Arc<num_bigint::BigInt>,
-        _ctx: &SysOpContext,
+        connect_timeout_nanos: Arc<num_bigint::BigInt>,
+        ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
+        let network = ctx.network.clone();
         SysOpOutput::async_op(async move {
-            let method = reqwest::Method::from_bytes(request.method.as_bytes()).map_err(|e| {
-                VmBamlError::InvalidArgument {
-                    message: format!("Invalid HTTP method '{}': {e}", request.method),
-                }
-            })?;
+            let method = http_method(&request.method)?;
 
             crate::ensure_rustls_crypto_provider();
-            let client = reqwest::Client::new();
+            let timeout_options =
+                HttpTimeoutOptions::from_nanos(&timeout_nanos, &connect_timeout_nanos);
+            let client = timeout_options.client()?;
             let mut builder = client.request(method, &request.url);
 
             for (k, v) in &request.headers {
@@ -2911,12 +3027,19 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 builder = builder.body(request.body);
             }
 
-            let response = apply_http_timeout(builder, &timeout_nanos)
+            let response = timeout_options
+                .apply(builder)
                 .send()
                 .await
-                .map_err(|e| http_transport_error("HTTP send failed", &e))?;
+                .map_err(|e| http_transport_error("HTTP send failed", &e, timeout_options))?;
+            push_connection(network.as_ref(), &response);
             let final_url = response.url().to_string();
-            Ok(build_io_http_response(response, final_url))
+            Ok(build_io_http_response(
+                response,
+                final_url,
+                timeout_options,
+                network,
+            ))
         })
     }
 
@@ -2927,6 +3050,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _call_id: CallId,
         _request: owned::http::Request,
         _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -2936,32 +3060,47 @@ impl io::IoNamespaceHttp for NativeSysOps {
     }
 
     #[cfg(feature = "bundle-http")]
-    fn _fetch_sse(
+    fn _send_sse(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         request: owned::http::Request,
         timeout_nanos: Arc<num_bigint::BigInt>,
-        first_event_timeout_nanos: Arc<num_bigint::BigInt>,
-        _ctx: &SysOpContext,
+        connect_timeout_nanos: Arc<num_bigint::BigInt>,
+        ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::SseStream> {
         use std::sync::atomic::{AtomicBool, Ordering};
 
         use futures::StreamExt;
-        use sys_types::sse::SseParser;
+        use sys_types::{network::NetworkEventKind, sse::StreamDecoder};
         use tokio::sync::{Mutex as TokioMutex, Notify};
 
         use crate::registry::{REGISTRY, SseBuffer};
 
-        SysOpOutput::async_op(async move {
-            let method = reqwest::Method::from_bytes(request.method.as_bytes()).map_err(|e| {
-                VmBamlError::InvalidArgument {
-                    message: format!("Invalid HTTP method '{}': {e}", request.method),
+        // Each parsed event, queued on the request's span when it is traced.
+        fn push_events(
+            network: Option<&sys_types::network::NetworkContext>,
+            events: &[sys_types::sse::SseEvent],
+        ) {
+            if let Some(network) = network {
+                for event in events {
+                    network.push(NetworkEventKind::SseEvent {
+                        event: (!event.event.is_empty()).then(|| event.event.clone()),
+                        data: event.data.clone(),
+                        id: event.id.clone(),
+                    });
                 }
-            })?;
+            }
+        }
+
+        let network = ctx.network.clone();
+        SysOpOutput::async_op(async move {
+            let method = http_method(&request.method)?;
 
             crate::ensure_rustls_crypto_provider();
-            let client = reqwest::Client::new();
+            let timeout_options =
+                HttpTimeoutOptions::from_nanos(&timeout_nanos, &connect_timeout_nanos);
+            let client = timeout_options.client()?;
             let mut builder = client.request(method, &request.url);
 
             for (key, value) in &request.headers {
@@ -2972,19 +3111,27 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 builder = builder.body(request.body.clone());
             }
 
-            let response = apply_http_timeout(builder, &timeout_nanos)
-                .send()
-                .await
-                .map_err(|e| http_transport_error("SSE connection failed", &e))?;
+            let response =
+                timeout_options.apply(builder).send().await.map_err(|e| {
+                    http_transport_error("SSE connection failed", &e, timeout_options)
+                })?;
+            push_connection(network.as_ref(), &response);
 
             if !response.status().is_success() {
                 let status = response.status().as_u16();
-                let body = match response.text().await {
-                    Ok(body) => body,
+                // Lossy UTF-8, as `reqwest`'s `text()` without `charset`.
+                let body = match response.bytes().await {
+                    Ok(body) => {
+                        if let Some(network) = &network {
+                            network.push(NetworkEventKind::Body(body.clone()));
+                        }
+                        String::from_utf8_lossy(&body).into_owned()
+                    }
                     Err(error) if error.is_timeout() => {
                         return Err(VmRustFnError::from(http_transport_error(
                             "SSE error response body failed",
                             &error,
+                            timeout_options,
                         )));
                     }
                     Err(_) => "<could not read body>".to_string(),
@@ -3001,13 +3148,13 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 .iter()
                 .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
                 .collect();
-            // Legacy TTFT semantics start after the SSE response opens and end
-            // on the first parsed event; connection/headers are governed only
-            // by the total request timeout.
-            let first_event_timeout = timeout_from_nanos(&first_event_timeout_nanos);
-            let first_event_deadline = first_event_timeout
-                .map(|duration| (tokio::time::Instant::now() + duration, duration));
-
+            // Text SSE, or a binary AWS event stream (Bedrock ConverseStream)
+            // surfaced as the same events.
+            let content_type = response
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_owned);
             let buffer = Arc::new(TokioMutex::new(SseBuffer {
                 events: Vec::new(),
                 done: false,
@@ -3019,6 +3166,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
             let buf_clone = buffer.clone();
             let closed_clone = closed.clone();
             let notify_clone = notify.clone();
+            let consumer_network = network.clone();
             let consumer = tokio::spawn(async move {
                 struct SseDropGuard {
                     buffer: Arc<TokioMutex<SseBuffer>>,
@@ -3045,6 +3193,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                     }
                 }
 
+                let network = consumer_network.as_ref();
                 let mut guard = SseDropGuard {
                     buffer: buf_clone.clone(),
                     closed: closed_clone.clone(),
@@ -3052,76 +3201,31 @@ impl io::IoNamespaceHttp for NativeSysOps {
                     completed: false,
                 };
 
-                let mut parser = SseParser::new();
+                let mut parser = StreamDecoder::for_content_type(content_type.as_deref());
                 let mut byte_stream = response.bytes_stream();
-                let mut first_event_deadline = first_event_deadline;
 
                 loop {
-                    let next_chunk = if let Some((deadline, duration)) = first_event_deadline {
-                        // `timeout_at` polls the inner future before checking
-                        // the clock, so a task whose first poll is delayed past
-                        // BOTH the deadline and the server's send would find
-                        // the data already buffered and never time out. Check
-                        // the deadline explicitly first: an expired budget is a
-                        // timeout even when bytes arrived late.
-                        let outcome = if tokio::time::Instant::now() >= deadline {
-                            Err(())
-                        } else {
-                            tokio::time::timeout_at(deadline, byte_stream.next())
-                                .await
-                                .map_err(|_elapsed| ())
-                        };
-                        match outcome {
-                            Ok(chunk) => chunk,
-                            Err(()) => {
-                                let mut buf = buf_clone.lock().await;
-                                buf.error = Some(VmBamlError::Timeout {
-                                    message: format!(
-                                        "SSE first event timed out after {}ms",
-                                        duration.as_millis()
-                                    ),
-                                    duration_ms: i64::try_from(duration.as_millis()).ok(),
-                                });
-                                buf.done = true;
-                                notify_clone.notify_waiters();
-                                guard.completed = true;
-                                return;
-                            }
-                        }
-                    } else {
-                        byte_stream.next().await
-                    };
+                    let next_chunk = byte_stream.next().await;
                     let Some(chunk_result) = next_chunk else {
                         break;
                     };
                     match chunk_result {
                         Ok(bytes) => {
-                            let events = parser.feed(&bytes);
-                            if !events.is_empty() {
-                                // The budget runs to the first PARSED event.
-                                // `timeout_at` polls the stream before the
-                                // clock, so a wakeup delayed past the deadline
-                                // can hand over late-but-buffered data — and a
-                                // chunk taken in time can still parse late.
-                                // Enforcing here, where the first events are
-                                // about to be stored, covers every path.
-                                if let Some((deadline, duration)) = first_event_deadline
-                                    && tokio::time::Instant::now() >= deadline
-                                {
+                            let events = match parser.feed(&bytes) {
+                                Ok(events) => events,
+                                Err(e) => {
                                     let mut buf = buf_clone.lock().await;
-                                    buf.error = Some(VmBamlError::Timeout {
-                                        message: format!(
-                                            "SSE first event timed out after {}ms",
-                                            duration.as_millis()
-                                        ),
-                                        duration_ms: i64::try_from(duration.as_millis()).ok(),
+                                    buf.error = Some(VmBamlError::Io {
+                                        message: e.to_string(),
                                     });
                                     buf.done = true;
                                     notify_clone.notify_waiters();
                                     guard.completed = true;
                                     return;
                                 }
-                                first_event_deadline = None;
+                            };
+                            if !events.is_empty() {
+                                push_events(network, &events);
                                 let mut buf = buf_clone.lock().await;
                                 buf.events.extend(events);
                                 notify_clone.notify_waiters();
@@ -3129,7 +3233,11 @@ impl io::IoNamespaceHttp for NativeSysOps {
                         }
                         Err(e) => {
                             let mut buf = buf_clone.lock().await;
-                            buf.error = Some(http_transport_error("SSE stream failed", &e));
+                            buf.error = Some(http_transport_error(
+                                "SSE stream failed",
+                                &e,
+                                timeout_options,
+                            ));
                             buf.done = true;
                             notify_clone.notify_waiters();
                             guard.completed = true;
@@ -3140,26 +3248,22 @@ impl io::IoNamespaceHttp for NativeSysOps {
 
                 // Stream ended cleanly — flush any event buffered without a
                 // trailing blank line (some servers omit the final delimiter).
-                // The first-event budget applies here too: a flush-delivered
-                // first event that only materialized after the deadline is a
-                // timeout, not a completion.
-                let final_events = parser.finish();
-                if !final_events.is_empty()
-                    && let Some((deadline, duration)) = first_event_deadline
-                    && tokio::time::Instant::now() >= deadline
-                {
-                    let mut buf = buf_clone.lock().await;
-                    buf.error = Some(VmBamlError::Timeout {
-                        message: format!(
-                            "SSE first event timed out after {}ms",
-                            duration.as_millis()
-                        ),
-                        duration_ms: i64::try_from(duration.as_millis()).ok(),
-                    });
-                    buf.done = true;
-                    notify_clone.notify_waiters();
-                    guard.completed = true;
-                    return;
+                let final_events = match parser.finish() {
+                    Ok(events) => events,
+                    Err(e) => {
+                        let mut buf = buf_clone.lock().await;
+                        buf.error = Some(VmBamlError::Io {
+                            message: e.to_string(),
+                        });
+                        buf.done = true;
+                        notify_clone.notify_waiters();
+                        guard.completed = true;
+                        return;
+                    }
+                };
+                push_events(network, &final_events);
+                if let Some(network) = network {
+                    network.push(NetworkEventKind::StreamEnd);
                 }
                 let mut buf = buf_clone.lock().await;
                 if !final_events.is_empty() {
@@ -3177,24 +3281,23 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 consumer.abort_handle(),
                 url.clone(),
             );
-            let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new(handle);
             Ok(owned::http::SseStream {
                 url,
                 status_code,
                 headers,
-                _handle: handle,
+                _handle: traced(network, Arc::new(handle)),
             })
         })
     }
 
     #[cfg(not(feature = "bundle-http"))]
-    fn _fetch_sse(
+    fn _send_sse(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         _request: owned::http::Request,
         _timeout_nanos: Arc<num_bigint::BigInt>,
-        _first_event_timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::SseStream> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -3547,7 +3650,8 @@ impl io::IoNamespaceWs for NativeSysOps {
                     Err(_) => {
                         return Err(VmBamlError::Timeout {
                             message: format!("Connecting WebSocket to '{url}' timed out"),
-                            duration_ms: i64::try_from(duration.as_millis()).ok(),
+                            duration: Some(duration),
+                            timeout_type: "timeout".to_string(),
                         }
                         .into());
                     }

@@ -85,20 +85,19 @@ fn interface_bodies_are_pooled_and_slotted_but_in_no_name_map() {
             )),
             "`{spelling}`'s function object must own a global slot"
         );
-        // And it is absent from every name map of the program.
+        // And no rendered view of the package tables names it.
         assert!(
-            !program.function_indices.contains_key(spelling),
-            "`{spelling}` leaked into function_indices"
-        );
-        assert!(
-            !program.function_global_indices.contains_key(spelling),
-            "`{spelling}` leaked into function_global_indices"
+            !program.rendered_callables().contains_key(spelling),
+            "`{spelling}` leaked into the rendered callables"
         );
     }
 
     // Real logical items stay where they were.
-    assert!(program.function_indices.contains_key("user.main"));
-    assert!(program.function_global_indices.contains_key("user.main"));
+    let main = program.rendered_callables()["user.main"];
+    assert!(
+        matches!(program.globals[main.slot.raw()], bex_vm_types::ConstValue::Object(object) if object == main.object),
+        "`user.main`'s cell holds it"
+    );
 }
 
 #[tokio::test]
