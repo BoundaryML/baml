@@ -389,6 +389,8 @@ struct RootCallWork {
     work_guard: bex_work::BexWorkGuard,
     engine: Arc<BexEngine>,
     call_id: CallId,
+    /// Claimed at admission, even if execution is cancelled before VM entry.
+    reserved_id: Option<btel_types::TelemetryId>,
 }
 
 /// Owns a producer future and its work guard, including time spent queued.
@@ -472,6 +474,7 @@ impl RootCallWork {
         engine: Arc<BexEngine>,
         call_id: CallId,
         cancel: TaskCancel,
+        reservation: Option<&bex_vm_types::trace::ReservedSpanData>,
     ) -> Result<Self, EngineError> {
         let lifecycle = engine
             .lifecycle
@@ -495,10 +498,21 @@ impl RootCallWork {
         if cancel.is_cancelled() {
             return Err(cancelled_unhandled_throw());
         }
-        // This insert is the commit point. Cancellation routed by call ID
-        // holds this same lock, so it either leaves a pending request above
-        // or observes and cancels this admitted invocation.
+        // Admission commits reservation attachment and execution ownership
+        // under the same lock used by call-ID cancellation. No fallible setup,
+        // VM entry, defaults or host code runs between claiming and insertion.
+        // Concurrent aliases may have passed preparation; only one can claim.
+        map.reserve(1);
         let work_guard = engine.bex_work.register_work();
+        let reserved_id = reservation
+            .map(|reservation| {
+                reservation
+                    .attach(engine.trace_scope)
+                    .map_err(|error| EngineError::TypeMismatch {
+                        message: format!("invalid trace reservation: {error:?}"),
+                    })
+            })
+            .transpose()?;
         map.insert(
             call_id,
             ActiveCall {
@@ -513,6 +527,7 @@ impl RootCallWork {
             work_guard,
             engine,
             call_id,
+            reserved_id,
         };
         #[cfg(not(target_arch = "wasm32"))]
         registration.engine.ensure_idle_gc_worker();
@@ -3517,7 +3532,7 @@ impl BexEngine {
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
             Arc::clone(&self.stdlib_heads),
-            match inherited.and_then(|state| state.telemetry.as_ref()) {
+            match inherited.and_then(|state| state.ancestry.as_ref()) {
                 Some(ancestry) => {
                     EngineTelemetry::new_child(self.telemetry.as_ref(), Some(ancestry))
                 }
@@ -4187,7 +4202,7 @@ impl BexEngine {
             engine_id: self.engine_id,
             cancellation: call.cancel.clone(),
             context: frame.0.clone(),
-            telemetry: frame.1.clone(),
+            ancestry: frame.1.clone(),
             host_environment: frame.2,
         })
     }
@@ -5809,7 +5824,7 @@ impl BexEngine {
                                 engine_id: self.engine_id,
                                 cancellation: thread.vm_thread_cancel().clone(),
                                 context: thread.vm.current_context().clone(),
-                                telemetry: thread.vm.invocation_ancestry(),
+                                ancestry: thread.vm.invocation_ancestry(),
                                 host_environment: thread.host_environment,
                             };
                             let cancel_projection = if operation == SysOp::BamlHostCallHostValue {

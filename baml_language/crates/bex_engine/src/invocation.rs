@@ -136,8 +136,12 @@ pub(super) struct PreparedInvocation {
 impl PreparedInvocation {
     pub(super) fn admit(self) -> Result<ActiveInvocation, EngineError> {
         let cancel = self.thread.vm_thread_cancel().clone();
-        let registration =
-            RootCallWork::register(Arc::clone(&self.runtime), self.host_call_id, cancel)?;
+        let registration = RootCallWork::register(
+            Arc::clone(&self.runtime),
+            self.host_call_id,
+            cancel,
+            self.thread.entry_reservation.as_deref(),
+        )?;
         Ok(ActiveInvocation {
             prepared: self,
             registration,
@@ -176,12 +180,9 @@ impl ActiveInvocation {
 
         let execution = async {
             if let Some(reservation) = thread.entry_reservation.take() {
-                let id = reservation.attach(runtime.trace_scope).map_err(|error| {
-                    EngineError::TypeMismatch {
-                        message: format!("invalid trace reservation: {error:?}"),
-                    }
-                })?;
-                thread.vm.set_entry_trace(&reservation.options, Some(id));
+                thread
+                    .vm
+                    .set_entry_trace(&reservation.options, registration.reserved_id);
             }
             thread
                 .vm
@@ -288,8 +289,19 @@ mod tests {
         context
             .bind_timeout(engine.engine_id, engine.invocation_clock)
             .unwrap();
-        let mut thread = engine.new_root_thread(CancellationToken::new()).await;
+        let mut thread = engine
+            .new_entry_thread(CancellationToken::new(), context.inherited_state.as_ref())
+            .await;
         let (entry, _) = engine.lookup_function("main").unwrap();
+        engine
+            .prepare_invocation_state(
+                &mut thread,
+                context.inherited_state.as_ref(),
+                context.trace_options,
+                context.trace_reservation,
+                context.host_environment,
+            )
+            .unwrap();
         engine
             .prepare_cancellation(
                 &mut thread,
@@ -361,6 +373,175 @@ mod tests {
         drop(parked);
     }
 
+    fn reservation(engine: &BexEngine) -> Arc<bex_vm_types::trace::ReservedSpanData> {
+        Arc::new(bex_vm_types::trace::ReservedSpanData::new(
+            engine.trace_scope,
+            bex_vm_types::trace::TraceOptionsData::default(),
+        ))
+    }
+
+    #[tokio::test]
+    async fn reservation_is_consumed_at_admission_before_execution() {
+        let engine = engine();
+        let reserved = reservation(&engine);
+        let call = prepared_with_context(
+            &engine,
+            crate::FunctionCallContextBuilder::new(CallId::next())
+                .with_trace_reservation(reserved.clone())
+                .build(),
+            Value::OMITTED_ARG,
+        )
+        .await;
+        assert!(reserved.validate(engine.trace_scope).is_ok());
+        let active = call.admit().unwrap();
+        assert_eq!(
+            reserved.validate(engine.trace_scope),
+            Err(bex_vm_types::trace::ReservationError::AlreadyAttached)
+        );
+        // Defaults have not run. Their later failure cannot refund admission.
+        assert!(active.execute().await.unwrap().value.is_err());
+        assert_eq!(engine.active_call_count(), 0);
+        assert!(reserved.validate(engine.trace_scope).is_err());
+    }
+
+    #[tokio::test]
+    async fn cancellation_before_admission_leaves_reservation_available() {
+        let engine = engine();
+        let reserved = reservation(&engine);
+        let id = CallId::next();
+        let call = prepared_with_context(
+            &engine,
+            crate::FunctionCallContextBuilder::new(id)
+                .with_trace_reservation(reserved.clone())
+                .build(),
+            Value::OMITTED_ARG,
+        )
+        .await;
+        engine.cancel_function_call(id).unwrap();
+        assert!(call.admit().is_err());
+        assert!(reserved.validate(engine.trace_scope).is_ok());
+        assert_eq!(engine.active_call_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn competing_preparations_cannot_both_admit_one_reservation() {
+        let engine = engine();
+        let reserved = reservation(&engine);
+        let mut calls = Vec::new();
+        for _ in 0..2 {
+            calls.push(
+                prepared_with_context(
+                    &engine,
+                    crate::FunctionCallContextBuilder::new(CallId::next())
+                        .with_trace_reservation(reserved.clone())
+                        .build(),
+                    Value::int(42),
+                )
+                .await,
+            );
+        }
+        let admitted = calls.pop().unwrap().admit().unwrap();
+        assert!(calls.pop().unwrap().admit().is_err());
+        assert_eq!(engine.active_call_count(), 1);
+        drop(admitted);
+        assert_eq!(engine.active_call_count(), 0);
+        assert!(reserved.validate(engine.trace_scope).is_err());
+    }
+
+    #[tokio::test]
+    async fn retained_state_owns_live_sources_without_owning_active_execution() {
+        let engine = engine();
+        let input = CancellationToken::new();
+        let active = prepared(&engine, &input, Value::int(42))
+            .await
+            .admit()
+            .unwrap();
+        let id = active.prepared.host_call_id;
+        engine.record_invocation_frame(id, &active.prepared.thread);
+        let state = engine.invocation_state(id).unwrap();
+        drop(active);
+        assert_eq!(engine.active_call_count(), 0);
+        assert!(engine.invocation_state(id).is_err());
+        assert!(!state.is_cancelled());
+        input.cancel();
+        assert!(state.is_cancelled());
+        state.cancelled().await;
+        // Retention does not hold a VM heap permit or a running-work guard.
+        let parked = engine.heap_permit_manager.request_park().await;
+        drop(parked);
+        tokio::time::timeout(std::time::Duration::from_secs(5), engine.shutdown())
+            .await
+            .expect("retained context must not prevent shutdown");
+    }
+
+    #[test]
+    fn concurrent_reservation_admission_has_one_execution_owner() {
+        let engine = engine();
+        let reserved = reservation(&engine);
+        let barrier = Arc::new(std::sync::Barrier::new(2));
+        let admitting: Vec<_> = (0..2)
+            .map(|_| {
+                let engine = engine.clone();
+                let reserved = reserved.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    RootCallWork::register(
+                        engine,
+                        CallId::next(),
+                        crate::thread::TaskCancel::detached([]),
+                        Some(&reserved),
+                    )
+                })
+            })
+            .collect();
+        let results: Vec<_> = admitting
+            .into_iter()
+            .map(|task| task.join().unwrap())
+            .collect();
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        assert_eq!(engine.active_call_count(), 1);
+        assert!(reserved.validate(engine.trace_scope).is_err());
+        drop(results);
+        assert_eq!(engine.active_call_count(), 0);
+    }
+
+    #[test]
+    fn cancellation_racing_reservation_admission_has_one_commit_point() {
+        let engine = engine();
+        for _ in 0..32 {
+            let reserved = reservation(&engine);
+            let effective = crate::thread::TaskCancel::detached([]);
+            let id = CallId::next();
+            let barrier = Arc::new(std::sync::Barrier::new(2));
+            let admitting = {
+                let engine = engine.clone();
+                let reserved = reserved.clone();
+                let barrier = barrier.clone();
+                let effective = effective.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    RootCallWork::register(engine, id, effective, Some(&reserved))
+                })
+            };
+            barrier.wait();
+            engine.cancel_function_call(id).unwrap();
+            match admitting.join().unwrap() {
+                Ok(registration) => {
+                    assert!(reserved.validate(engine.trace_scope).is_err());
+                    assert!(effective.is_cancelled());
+                    assert_eq!(engine.active_call_count(), 1);
+                    drop(registration);
+                }
+                Err(error) => {
+                    assert!(is_cancelled_engine_error(&error));
+                    assert!(reserved.validate(engine.trace_scope).is_ok());
+                }
+            }
+            assert_eq!(engine.active_call_count(), 0);
+        }
+    }
+
     #[tokio::test]
     async fn invalid_arguments_take_precedence_over_pending_cancellation() {
         let engine = engine();
@@ -417,7 +598,7 @@ mod tests {
                 let effective = effective.clone();
                 std::thread::spawn(move || {
                     barrier.wait();
-                    RootCallWork::register(engine, id, effective)
+                    RootCallWork::register(engine, id, effective, None)
                 })
             };
             barrier.wait();

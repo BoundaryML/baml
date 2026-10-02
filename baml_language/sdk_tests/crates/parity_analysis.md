@@ -2,24 +2,24 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 851. IDs with complete required parity: 155. Required gaps: 4805.
+Distinct exact test IDs: 858. IDs with complete required parity: 155. Required gaps: 4847.
 
 ## Python-baselined parity
 
-Parity is the share of the 397 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 404 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 397 / 397 | 100.0% |
-| typescript_node | 160 / 397 | 40.3% |
-| typescript_web_chromium | 153 / 397 | 38.5% |
-| typescript_web_cloudflare_workers | 153 / 397 | 38.5% |
-| cpp | 130 / 397 | 32.7% |
-| csharp | 0 / 397 | 0.0% |
-| rust | 229 / 397 | 57.7% |
-| go | 13 / 397 | 3.3% |
-| java | 299 / 397 | 75.3% |
-| swift | 184 / 397 | 46.3% |
+| python_pydantic2 | 404 / 404 | 100.0% |
+| typescript_node | 167 / 404 | 41.3% |
+| typescript_web_chromium | 160 / 404 | 39.6% |
+| typescript_web_cloudflare_workers | 160 / 404 | 39.6% |
+| cpp | 130 / 404 | 32.2% |
+| csharp | 0 / 404 | 0.0% |
+| rust | 229 / 404 | 56.7% |
+| go | 13 / 404 | 3.2% |
+| java | 299 / 404 | 74.0% |
+| swift | 184 / 404 | 45.5% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -64,6 +64,7 @@ Parity is the share of the 397 test IDs declared in `python_pydantic2` that are 
 | function_calls/boolean_timeout_rejected_python_only | y | - | - | - | - | - | - | - | - | - | all |  |
 | function_calls/callable_entry_invokes_callback | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/callable_entry_waits_for_callback_completion | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/callback_captures_internal_baml_context | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/callback_frame_and_reentry | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/callback_frame_is_installed_and_restored | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/callback_reenters_baml | y | y | y | y | - | - | - | - | - | - | all |  |
@@ -102,6 +103,7 @@ Parity is the share of the 397 test IDs declared in `python_pydantic2` that are 
 | function_calls/cancelled_waiter_does_not_end_host_execution | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/cancelled_waiter_keeps_host_context_through_cleanup_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python task unwinding and ContextVar semantics |
 | function_calls/cancelled_waiter_keeps_host_resource_until_promise_exit_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node AsyncResource destruction and AsyncLocalStorage |
+| function_calls/cancelled_waiter_preserves_callback_context | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/cancelled_waiter_stays_cancelled_when_callback_returns_late | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/cancelling_call_delivers_cancellation_and_allows_callback_cleanup_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python callback task and event loop ownership |
 | function_calls/canonical_json_class_union_uses_declared_field_codecs | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -129,10 +131,12 @@ Parity is the share of the 397 test IDs declared in `python_pydantic2` that are 
 | function_calls/concurrent_calls_isolate_async_local_storage_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/concurrent_calls_keep_callback_results_independent | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/concurrent_calls_share_callback_without_sharing_context_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
+| function_calls/concurrent_invocations_isolate_context | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/concurrent_reservation_attaches_once | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/configuration_snapshot_is_not_live | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/cooperative_abort_allows_callback_cleanup_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/cooperative_abort_cleans_up_retained_callback_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/current_context_returns_detached_snapshot | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/deadline_reentry_does_not_reset_budget | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/dropping_started_future_cancels_rust_only | - | - | - | - | - | - | y | - | - | - | rust | Rust task scopes and lazy future cancellation are specific to Rust |
 | function_calls/dynamic_application_map_preserves_control_like_keys | y | y | y | y | - | - | - | - | - | - | all |  |
@@ -271,6 +275,7 @@ Parity is the share of the 397 test IDs declared in `python_pydantic2` that are 
 | function_calls/go_codegen_optional_arg_last_value_wins | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/go_codegen_person_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/hello_world_returns_literal | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/hidden_mode_does_not_inherit | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callable_cancellation_while_dispatched | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/host_callable_class_argument | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/host_callable_closed_union_containers_and_nominal_arms | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -441,8 +446,10 @@ Parity is the share of the 397 test IDs declared in `python_pydantic2` that are 
 | function_calls/repeated_dispatches_each_start_with_entry_async_local_storage_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/repeated_dispatches_each_start_with_entry_context_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python ContextVar isolation between dispatch tasks |
 | function_calls/repeated_dispatches_invoke_callback_in_order | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/reservation_does_not_inherit | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/reservation_is_single_use | - | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/retained_callback_uses_invocation_async_local_storage_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/retained_context_survives_parent_completion | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/retained_effective_token_observes_late_parent_cancellation | - | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/retained_effective_token_stays_live_after_callback | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/retained_host_callback_uses_later_invocations_application_context_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python callback task and event loop ownership |

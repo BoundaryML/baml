@@ -5,8 +5,9 @@ enum Mode {
     Span,
 }
 
-/// Per-invocation capture overrides: true captures, false disables capture,
-/// and null inherits automatic behavior. Explicit values override function policy.
+/// Per-invocation capture requests: true requests capture; false and null add
+/// no request. Applicable function-policy requests still capture; false is not
+/// a privacy veto. Requests do not propagate to descendant invocations.
 class Capture {
     inputs: bool?,
     output: bool?,
@@ -59,7 +60,7 @@ class Options {
         $rust_function
     }
 
-    /// Select Span mode and replace all three capture overrides.
+    /// Select Span mode and replace all three capture requests.
     function span(
         self,
         inputs: bool? = null,
