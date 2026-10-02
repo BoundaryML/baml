@@ -814,9 +814,8 @@ test "bedrock_cache_delimiter_system" {
     )
 }
 
-// The text on either side of the delimiter is two blocks, and the delimiter
-// takes nothing from either: joined, they are the text of the same prompt
-// without the `${cache(...)}`.
+// The text on either side of the delimiter is two blocks, each trimmed where it
+// faces the checkpoint — the bytes v0 sent for the same breakpoint.
 function bedrock_cache_delimiter_mid_turn() -> string {
     let body = _cached_body(BedrockCachedPrefix@spec("Ada"));
     [
@@ -828,7 +827,7 @@ function bedrock_cache_delimiter_mid_turn() -> string {
 test "bedrock_cache_delimiter_mid_turn" {
     assert.equal(
         bedrock_cache_delimiter_mid_turn(),
-        `[{"text":"You greet people."}]\n[{"role":"user","content":[{"text":"Long stable reference document.\\n"},{"cachePoint":{"type":"default"}},{"text":"\\nGreet Ada."}]}]`,
+        `[{"text":"You greet people."}]\n[{"role":"user","content":[{"text":"Long stable reference document."},{"cachePoint":{"type":"default"}},{"text":"Greet Ada."}]}]`,
     )
 }
 
@@ -850,7 +849,7 @@ function bedrock_cache_delimiter_media_ttl() -> string {
 test "bedrock_cache_delimiter_media_ttl" {
     assert.equal(
         bedrock_cache_delimiter_media_ttl(),
-        `5|Before image.|png|After image.\n|{"cachePoint":{"type":"default","ttl":"1h"}}|\nDescribe it.`,
+        `5|Before image.|png|After image.|{"cachePoint":{"type":"default","ttl":"1h"}}|Describe it.`,
     )
 }
 
@@ -887,7 +886,8 @@ test "bedrock_cache_delimiter_args_as_written" {
 }
 
 // Where a delimiter produces NO block: before any content of its message, right
-// after another cachePoint, and with null `args`.
+// after another cachePoint, and with null `args` — which is as if it had not
+// been written, so the text around it stays one block.
 function BedrockCacheLeading(name: string) -> string {
     client: "openai/gpt-4o-mini"
     prompt: `
@@ -926,7 +926,7 @@ function bedrock_cache_delimiter_dropped() -> string {
 test "bedrock_cache_delimiter_dropped" {
     assert.equal(
         bedrock_cache_delimiter_dropped(),
-        `[{"text":"You greet people."}]\n[{"text":"Greet Ada."}]\n[{"text":"Stable.\\n"},{"cachePoint":{"type":"default"}},{"text":"\\nGreet Ada."}]\n[{"text":"Stable.\\n"},{"text":"\\nVariable."}]`,
+        `[{"text":"You greet people."}]\n[{"text":"Greet Ada."}]\n[{"text":"Stable."},{"cachePoint":{"type":"default"}},{"text":"Greet Ada."}]\n[{"text":"Stable.\\n\\nVariable."}]`,
     )
 }
 

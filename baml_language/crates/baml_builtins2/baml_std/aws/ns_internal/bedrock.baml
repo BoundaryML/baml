@@ -631,7 +631,7 @@ function _lower_blocks(blocks: ai.content.Block[], preview: bool = false) -> Con
 /// rather than silently dropped (`build_request/bedrock.rs:174-176`).
 function _prompt_system(message: ai.PromptMessage) -> SystemContentBlock[] {
     let blocks: SystemContentBlock[] = [];
-    for (let part in message.parts) {
+    for (let part in ai.wire.prompt_parts(message)) {
         match (part) {
             let text: string => {
                 // Blank text is dropped here too: Converse rejects an empty
@@ -667,6 +667,7 @@ function _prompt_system(message: ai.PromptMessage) -> SystemContentBlock[] {
 ///     prefix, and each one counts against the four a request may carry.
 ///   * `cache(null)`: there is no value to embed, and a null member is dropped
 ///     from the body, which would leave an empty block behind.
+///     (`ai.wire.prompt_parts` already removes these; this is the backstop.)
 function _takes_cache_point(
     previous: baml.json.json?,
     lowered: int,
@@ -681,10 +682,11 @@ function _takes_cache_point(
 /// (internal) One non-system prompt message as Converse content blocks. Text
 /// and media lower exactly as they do for a journal turn; a `${cache(args)}`
 /// becomes a `cachePoint` block at the position it was written, with `args`
-/// embedded as written.
+/// embedded as written, and the text on either side of it is trimmed where it
+/// faces the checkpoint (`ai.wire.prompt_parts`).
 function _prompt_content(message: ai.PromptMessage, preview: bool = false) -> ContentBlock[] {
     let content: ContentBlock[] = [];
-    for (let part in message.parts) {
+    for (let part in ai.wire.prompt_parts(message)) {
         match (part) {
             let text: string => {
                 let block = ai.content.Text { text: text };
