@@ -99,7 +99,7 @@ pub(crate) fn id(value: u64) -> [u8; 8] {
     value.to_be_bytes()
 }
 
-fn snapshot_id(id: &proto::SnapshotId) -> [u8; 16] {
+fn cas_id(id: &proto::CasId) -> [u8; 16] {
     let mut bytes = [0; 16];
     bytes[..8].copy_from_slice(&id.low.to_le_bytes());
     bytes[8..].copy_from_slice(&id.high.to_le_bytes());
@@ -356,7 +356,7 @@ pub(super) fn record_process(
             header.host,
             command,
             header.process_started_at_unix_ns,
-            header.source_cas_id.as_ref().map(snapshot_id)
+            header.source_cas_id.as_ref().map(cas_id)
         ])?;
     }
     if let Some(end) = file.end.as_ref().and_then(|end| end.process_end.as_ref()) {
@@ -1261,8 +1261,8 @@ impl<'t> Applier<'t> {
                                     i64::from(entry.call_path_id),
                                     sequence_i64(sequence)?,
                                     tick(entry.entered_at_ticks),
-                                    entry.inputs_cas_id.as_ref().map(snapshot_id),
-                                    entry.type_args_cas_id.as_ref().map(snapshot_id)
+                                    entry.inputs_cas_id.as_ref().map(cas_id),
+                                    entry.type_args_cas_id.as_ref().map(cas_id)
                                 ])?;
                         }
                         Some(Event::FunctionCompletion(done)) => {
@@ -1298,7 +1298,7 @@ impl<'t> Applier<'t> {
                                     seq,
                                     observed.name,
                                     tick(observed.at_ticks),
-                                    observed.payload_cas_id.as_ref().map(snapshot_id)
+                                    observed.payload_cas_id.as_ref().map(cas_id)
                                 ])?;
                         }
                         Some(Event::NetworkCompletion(done)) => {
@@ -1371,7 +1371,7 @@ impl<'t> Applier<'t> {
                 tick(done.self_await_ticks),
                 outcome.code(),
                 needs_announcement,
-                done.value_cas_id.as_ref().map(snapshot_id),
+                done.value_cas_id.as_ref().map(cas_id),
                 done.panicked
             ])?;
         Ok(())
@@ -1397,7 +1397,7 @@ impl<'t> Applier<'t> {
             path.map(i64::from),
             entry.method,
             entry.url,
-            entry.request_cas_id.as_ref().map(snapshot_id),
+            entry.request_cas_id.as_ref().map(cas_id),
             tick(entry.started_at_ticks)
         ];
         let inserted = self
@@ -1460,7 +1460,7 @@ impl<'t> Applier<'t> {
             tick(done.completed_at_ticks),
             done.outcome,
             done.panicked,
-            done.error_cas_id.as_ref().map(snapshot_id)
+            done.error_cas_id.as_ref().map(cas_id)
         ];
         self.tx
             .prepare_cached(

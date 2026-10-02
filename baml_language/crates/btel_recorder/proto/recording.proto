@@ -45,7 +45,7 @@ message RecordingHeader {
   repeated string command = 8;  // The process's arguments; debugging only.
   optional sfixed64 process_started_at_unix_ns = 9;
   // The project's BAML sources, as a CAS map<path, content> snapshot.
-  optional SnapshotId source_cas_id = 10;
+  optional CasId source_cas_id = 10;
 }
 
 message Definitions {
@@ -297,7 +297,7 @@ message ThreadSection {
   // means unavailable, never empty. Every section is independently interpretable;
   // nothing inherits from an earlier section or file.
   oneof context {
-    SnapshotId context_cas_id = 3;
+    CasId context_cas_id = 3;
     bool empty_context = 4;    // Must be true when selected.
   }
 }
@@ -324,7 +324,7 @@ message LogEvent {
   fixed64 at_ticks = 4;
   LogLevel level = 5;
   optional string event_name = 6; // Absent is unnamed; an empty string remains present.
-  SnapshotId data_cas_id = 7;    // May be unavailable; null data is a captured value.
+  CasId data_cas_id = 7;         // May be unavailable; null data is a captured value.
 }
 
 enum LogLevel {
@@ -356,10 +356,10 @@ message FunctionAnnouncement {
   uint64 parent_id = 2;        // Nonzero thread/function node ID.
   uint32 call_path_id = 3;     // Nonzero; producer announcement has no reentry bit.
   fixed64 entered_at_ticks = 4;
-  SnapshotId inputs_cas_id = 5; // Presence does not promise payload availability.
+  CasId inputs_cas_id = 5; // Presence does not promise payload availability.
   // Minor 8. A generic call's type arguments: map<string, Type> keyed by
   // type-parameter name. Absent for a call without type arguments.
-  SnapshotId type_args_cas_id = 6;
+  CasId type_args_cas_id = 6;
 }
 
 message FunctionCompletion {
@@ -375,7 +375,7 @@ message FunctionCompletion {
   // Late completions must not set bit 3. This is an explicit wire mapping,
   // unrelated to the Rust enum's discriminants or memory layout.
   uint32 completion_flags = 7;
-  SnapshotId value_cas_id = 8; // Output/error identity; absence means no captured value.
+  CasId value_cas_id = 8; // Output/error identity; absence means no captured value.
   // Minor 3. Only with an ERRORED outcome: a panic ended it. Since minor 3
   // an errored value is the baml.errors.Context a handler would bind.
   bool panicked = 9;
@@ -393,7 +393,7 @@ message NetworkAnnouncement {
   string url = 6;              // Query values and credentials hashed.
   // {request: {method, url, headers, body}}; header values outside the
   // allowlist hashed. No body when bodies are not recorded.
-  SnapshotId request_cas_id = 7;
+  CasId request_cas_id = 7;
 }
 
 // Minor 7. Names: connection ({status, headers}), data (a whole body, or one
@@ -405,7 +405,7 @@ message NetworkEvent {
   uint64 span_id = 1;
   string name = 2;
   fixed64 at_ticks = 3;        // The announcing thread's clock.
-  SnapshotId payload_cas_id = 4; // Absent: no payload, or bodies not recorded.
+  CasId payload_cas_id = 4; // Absent: no payload, or bodies not recorded.
 }
 
 // Minor 7. A request that is never read has none.
@@ -414,7 +414,7 @@ message NetworkCompletion {
   fixed64 completed_at_ticks = 2;
   InvocationOutcome outcome = 3;
   bool panicked = 4;           // Only with ERRORED: a panic ended it.
-  SnapshotId error_cas_id = 5; // The baml.errors.Context of the error.
+  CasId error_cas_id = 5; // The baml.errors.Context of the error.
 }
 
 enum InvocationOutcome {
@@ -424,10 +424,11 @@ enum InvocationOutcome {
   INVOCATION_OUTCOME_CANCELLED = 3;
 }
 
-// XXH3-128 snapshot-format-1 digest, seed zero. Words are little-endian.
+// A capture's root CAS blob: XXH3-128 snapshot hash format 3, seed zero,
+// little-endian words. The root blob may reference child blobs by their IDs.
 // All-zero is valid. Message presence distinguishes no capture from that ID.
 // A reference can be unresolved: this schema does not assert CAS delivery.
-message SnapshotId {
+message CasId {
   fixed64 low = 1;
   fixed64 high = 2;
 }

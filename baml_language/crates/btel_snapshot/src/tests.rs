@@ -1,9 +1,23 @@
+use std::sync::Arc;
+
+use num_bigint::BigInt;
+
 use super::*;
+
+/// A byte array's object, and the handle that reads its bytes back.
+fn bytes(b: &mut Builder, content: &[u8]) -> (SnapshotObject, Uint8ArrayData) {
+    let object = b.bytes(content);
+    let SnapshotObject::Uint8Array { data } = &object else {
+        panic!("the bytes fit the arena")
+    };
+    let data = *data;
+    (object, data)
+}
 
 fn scalar(pool: &SnapshotPool, n: i64) -> Snapshot {
     pool.try_acquire()
         .unwrap()
-        .finish_value(SnapshotValue::Int(n))
+        .finish(SnapshotValue::Int(n), &mut Shaper::default())
 }
 #[test]
 fn capacity_counts_owners_across_threads_and_reuse_has_no_stale_values() {
@@ -28,8 +42,10 @@ fn immutable_leaves_and_pool_survive_the_original_owners() {
     let weak = Arc::downgrade(&leaf);
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
-    let id = b.bigint(&leaf).unwrap();
-    let snapshot = b.finish_value(SnapshotValue::Bigint(id));
+    let SnapshotValue::Bigint(id) = b.leaves().bigint(&leaf) else {
+        panic!("the bigint is held")
+    };
+    let snapshot = b.finish(SnapshotValue::Bigint(id), &mut Shaper::default());
     drop(leaf);
     drop(pool);
     assert!(weak.upgrade().is_some());
@@ -49,16 +65,9 @@ fn unwind_releases_builder_and_large_allocations_are_not_retained() {
     );
     let mut b = pool.try_acquire().unwrap();
     let data = vec![9; 512 * 1024];
-    let range = b.copy_bytes(&data);
-    let id = b.reserve_object().unwrap();
-    b.set_object(
-        id,
-        SnapshotObject::Bytes {
-            data: range,
-            original_len: data.len(),
-        },
-    );
-    let snapshot = b.finish_value(SnapshotValue::Object(id));
+    let (object, range) = bytes(&mut b, &data);
+    let id = b.leaves().object(object).unwrap();
+    let snapshot = b.finish(SnapshotValue::Object(id), &mut Shaper::default());
     assert_eq!(snapshot.bytes(range), data);
     assert!(pool.stats().allocated_bytes > data.len());
     drop(snapshot);
@@ -68,34 +77,151 @@ fn unwind_releases_builder_and_large_allocations_are_not_retained() {
     assert_eq!(snapshot.roots().len(), 1);
 }
 #[test]
-fn limits_are_explicit_and_recycled_handles_are_released() {
+fn limits_are_explicit_and_what_they_cut_shows_in_the_capture() {
     let pool = SnapshotPool::new(
         1,
         Limits {
             max_objects: Some(1),
-            max_values: None,
-            max_bytes: Some(3),
+            max_values: Some(2),
             max_depth: Some(2),
+            ..Limits::default()
         },
     );
     let mut b = pool.try_acquire().unwrap();
-    let range = b.copy_bytes(b"abcde");
-    let id = b.reserve_object().unwrap();
-    b.set_object(
-        id,
-        SnapshotObject::Bytes {
-            data: range,
-            original_len: 5,
+    let (object, range) = bytes(&mut b, b"abcde");
+    let id = b.leaves().object(object).unwrap();
+    assert!(b.leaves().reserve().is_none());
+    // A list takes the items the value limit allows and records how many
+    // its source had.
+    let ty = b.leaves().ty(baml_type::RealizedTy::Int);
+    let list = b.list(ty, [1, 2, 3].into_iter(), |_, n| SnapshotValue::Int(n));
+    assert!(list.is_cut());
+    assert!(matches!(
+        list,
+        SnapshotObject::List { items, original_len: 3, .. } if items.len() == 2
+    ));
+    let whole = b.finish(SnapshotValue::Object(id), &mut Shaper::default());
+    assert_eq!(whole.bytes(range), b"abcde");
+    let stats = whole.stats();
+    assert!(!stats.limited);
+    assert_eq!((stats.copied_bytes, stats.shared_bytes), (5, 0));
+    drop(whole);
+
+    // A storage that is used again keeps nothing of the capture before.
+    let mut b = pool.try_acquire().unwrap();
+    let held = "h".repeat(100);
+    let text = b.leaves().string_value(&held.as_str().into());
+    // A cut value anywhere in the capture marks it.
+    b.leaves()
+        .object(SnapshotObject::Cell(SnapshotValue::Truncated(Limit::Depth)))
+        .unwrap();
+    let cut = b.finish(text, &mut Shaper::default());
+    let stats = cut.stats();
+    assert!(stats.limited);
+    assert_eq!((stats.copied_bytes, stats.shared_bytes), (0, 100));
+}
+
+#[test]
+fn a_leaf_over_the_leaf_limit_is_cut_and_nothing_else_is() {
+    let limits = Limits::default();
+    assert_eq!(
+        limits.max_leaf_bytes,
+        btel_settings::snapshot::MAX_LEAF_BYTES
+    );
+    assert_eq!(
+        (limits.max_values, limits.max_objects, limits.max_depth),
+        (None, None, None)
+    );
+    let pool = SnapshotPool::new(
+        1,
+        Limits {
+            max_leaf_bytes: 8,
+            ..limits
         },
     );
-    assert!(b.reserve_object().is_none());
-    let snapshot = b.finish_value(SnapshotValue::Object(id));
+    let mut b = pool.try_acquire().unwrap();
+    let ty = b.leaves().ty(baml_type::RealizedTy::Int);
+    // Each kind at the limit, then just over it. A bigint is measured as the
+    // blob writes it, in limbs of eight bytes.
+    let at = BexStr::from("12345678");
+    let over = BexStr::from("123456789");
+    let kept = [
+        b.leaves().string_value(&at),
+        b.leaves().bigint(&Arc::new(BigInt::from(u64::MAX))),
+    ];
+    assert!(matches!(
+        kept,
+        [SnapshotValue::String(_), SnapshotValue::Bigint(_)]
+    ));
+    let (whole, range) = bytes(&mut b, b"abcdefgh");
+    assert!(!whole.is_cut());
+    assert!(b.leaves().string(&over).is_none());
+    let cut = [
+        b.leaves().string_value(&over),
+        b.leaves().bigint(&Arc::new(BigInt::from(u64::MAX) + 1)),
+    ];
+    assert_eq!(cut, [SnapshotValue::Truncated(Limit::Bytes); 2]);
+    // A byte array over the limit keeps its length and none of its content.
+    let none = b.bytes(b"abcdefghi");
+    assert!(matches!(
+        none,
+        SnapshotObject::Uint8ArrayTruncated { original_len: 9 }
+    ));
+    // Only one leaf's size counts: any number that each fit are all kept.
+    let many = b.list(ty, (0..64).map(|_| &at), |leaves, text| {
+        leaves.string_value(text)
+    });
+    assert!(!many.is_cut());
+    let many = b.leaves().object(many).unwrap();
+    // A key is written with its entry, so the entry goes with it, and what
+    // the entry held is in no blob.
+    let dropped = b.leaves().object(whole).unwrap();
+    let entries = [
+        (at.clone(), SnapshotValue::Object(many)),
+        (over, SnapshotValue::Object(dropped)),
+        ("after".into(), SnapshotValue::Int(1)),
+    ];
+    let map = b.map(ty, ty, entries.into_iter(), |_, entry| entry);
+    assert!(map.is_cut());
+    assert!(matches!(
+        map,
+        SnapshotObject::Map { entries, original_len: 3, .. } if entries.len() == 2
+    ));
+    let map = b.leaves().object(map).unwrap();
+    let snapshot = b.finish(SnapshotValue::Object(map), &mut Shaper::default());
     assert!(snapshot.stats().limited);
-    assert_eq!(snapshot.bytes(range), b"abc");
-    drop(snapshot);
-    let snapshot = scalar(&pool, 1);
-    assert!(!snapshot.stats().limited);
-    assert_eq!(snapshot.stats().copied_bytes, 0);
+    assert_eq!(snapshot.bytes(range), b"abcdefgh");
+    assert_eq!(snapshot.0.graph.bytes.len(), 8, "nothing else was copied");
+    let SnapshotObject::Map { entries, .. } = snapshot.object(map) else {
+        unreachable!("the root is the map")
+    };
+    let keys: Vec<_> = snapshot
+        .entries(*entries)
+        .iter()
+        .map(|entry| entry.key.as_str())
+        .collect();
+    assert_eq!(keys, ["12345678", "after"]);
+    let decoded = decode_blob(&root_blob_bytes(&snapshot), &DecodeLimits::default()).unwrap();
+    assert_eq!(decoded.id, snapshot.root_id());
+}
+
+#[test]
+fn a_sliced_string_is_hashed_once_however_often_it_is_captured() {
+    let hashed = |text: &BexStr| match text {
+        BexStr::Slice { hash, .. } => hash[1].load(std::sync::atomic::Ordering::Acquire) != 0,
+        other => panic!("expected a slice, got {other:?}"),
+    };
+    let source = BexStr::from("a long string to take a part of: ".repeat(8));
+    let part = source.substring(4, 204);
+    assert!(!hashed(&part));
+    let pool = SnapshotPool::new(1, Limits::default());
+    let mut b = pool.try_acquire().unwrap();
+    let id = b.leaves().string(&part).unwrap();
+    // The caller's handle has the hash now, and so has the capture's.
+    assert!(hashed(&part));
+    let snapshot = b.finish(SnapshotValue::String(id), &mut Shaper::default());
+    assert!(hashed(snapshot.string(id)));
+    assert_eq!(snapshot.string(id).content_hash(), part.content_hash());
 }
 
 #[test]
@@ -109,20 +235,13 @@ fn growth_accounts_for_replacement_overlap_and_ignores_idle_budget() {
         },
     );
     let mut b = pool.try_acquire().unwrap();
-    let first = b.copy_bytes(&[7; 512]);
-    let second = b.copy_bytes(&[9; 513]);
+    let (_, first) = bytes(&mut b, &[7; 512]);
+    let (object, second) = bytes(&mut b, &[9; 513]);
     // Check immediately: later arena allocations can raise the live total.
     let growth_stats = pool.stats();
     assert!(growth_stats.peak_accounted_bytes >= growth_stats.allocated_bytes + 512);
-    let id = b.reserve_object().unwrap();
-    b.set_object(
-        id,
-        SnapshotObject::Bytes {
-            data: second,
-            original_len: 513,
-        },
-    );
-    let snapshot = b.finish_value(SnapshotValue::Object(id));
+    let id = b.leaves().object(object).unwrap();
+    let snapshot = b.finish(SnapshotValue::Object(id), &mut Shaper::default());
     assert_eq!(snapshot.bytes(first), &[7; 512]);
     assert_eq!(snapshot.bytes(second), &[9; 513]);
     let stats = pool.stats();
@@ -147,12 +266,14 @@ fn idle_budget_is_total_not_per_buffer_and_relocation_preserves_owners() {
     let leaf = Arc::new(BigInt::from(99));
     let weak = Arc::downgrade(&leaf);
     let mut b = pool.try_acquire().unwrap();
-    let root = b.bigint(&leaf).unwrap();
+    let SnapshotValue::Bigint(root) = b.leaves().bigint(&leaf) else {
+        panic!("the bigint is held")
+    };
     // Move initialized Arc owners during arena growth; indices stay valid.
     for _ in 0..256 {
-        b.bigint(&leaf).unwrap();
+        b.leaves().bigint(&leaf);
     }
-    let a = b.finish_value(SnapshotValue::Bigint(root));
+    let a = b.finish(SnapshotValue::Bigint(root), &mut Shaper::default());
     let b = scalar(&pool, 2);
     let c = scalar(&pool, 3);
     assert_eq!(**a.bigint(root), BigInt::from(99));
@@ -174,7 +295,12 @@ fn idle_budget_is_total_not_per_buffer_and_relocation_preserves_owners() {
 #[test]
 fn content_ids_include_value_kinds_omissions_and_leaf_contents() {
     let pool = SnapshotPool::new(1, Limits::default());
-    let id = |v| pool.try_acquire().unwrap().finish_value(v).id();
+    let id = |v| {
+        pool.try_acquire()
+            .unwrap()
+            .finish(v, &mut Shaper::default())
+            .root_id()
+    };
     let values = [
         SnapshotValue::Null,
         SnapshotValue::OmittedArg,
@@ -189,8 +315,9 @@ fn content_ids_include_value_kinds_omissions_and_leaf_contents() {
     assert_eq!(ids.len(), values.len());
     let string_id = |s: &BexStr| {
         let mut b = pool.try_acquire().unwrap();
-        let value = b.string(s).unwrap();
-        b.finish_value(SnapshotValue::String(value)).id()
+        let value = b.leaves().string(s).unwrap();
+        b.finish(SnapshotValue::String(value), &mut Shaper::default())
+            .root_id()
     };
     let rope = BexStr::concat("a".repeat(60).into(), "b".repeat(60).into());
     let flat = BexStr::from(format!("{}{}", "a".repeat(60), "b".repeat(60)));
@@ -198,8 +325,8 @@ fn content_ids_include_value_kinds_omissions_and_leaf_contents() {
     assert_ne!(string_id(&flat), string_id(&"different".into()));
     let big_id = |n| {
         let mut b = pool.try_acquire().unwrap();
-        let value = b.bigint(&Arc::new(BigInt::from(n))).unwrap();
-        b.finish_value(SnapshotValue::Bigint(value)).id()
+        let value = b.leaves().bigint(&Arc::new(BigInt::from(n)));
+        b.finish(value, &mut Shaper::default()).root_id()
     };
     assert_ne!(big_id(1), big_id(-1));
     assert_ne!(big_id(1), id(SnapshotValue::Int(1)));
@@ -210,29 +337,17 @@ fn graph_hashes_preserve_cycles_aliases_and_reset_on_reuse() {
     let pool = SnapshotPool::new(1, Limits::default());
     let make = |distinct: bool| {
         let mut b = pool.try_acquire().unwrap();
-        let root = b.reserve_object().unwrap();
-        let first = b.reserve_object().unwrap();
-        let second = if distinct {
-            b.reserve_object().unwrap()
-        } else {
-            first
-        };
-        b.set_object(first, SnapshotObject::Cell(SnapshotValue::Object(root)));
-        b.set_object(second, SnapshotObject::Cell(SnapshotValue::Object(root)));
-        let ty = b.push_type(baml_type::RealizedTy::Int);
-        let start = b.value_start();
-        b.push_value(SnapshotValue::Object(first));
-        b.push_value(SnapshotValue::Object(second));
-        let items = b.value_range(start);
-        b.set_object(
-            root,
-            SnapshotObject::List {
-                element_type: ty,
-                items,
-                original_len: 2,
-            },
-        );
-        b.finish_value(SnapshotValue::Object(root)).id()
+        let slot = b.leaves().reserve().unwrap();
+        let root = SnapshotValue::Object(slot.id());
+        let cell = |b: &mut Builder| b.leaves().object(SnapshotObject::Cell(root)).unwrap();
+        let first = cell(&mut b);
+        let second = if distinct { cell(&mut b) } else { first };
+        let ty = b.leaves().ty(baml_type::RealizedTy::Int);
+        let list = b.list(ty, [first, second].into_iter(), |_, id| {
+            SnapshotValue::Object(id)
+        });
+        b.fill(slot, list);
+        b.finish(root, &mut Shaper::default()).root_id()
     };
     let aliased = make(false);
     let separate = make(true);
@@ -240,4 +355,53 @@ fn graph_hashes_preserve_cycles_aliases_and_reset_on_reuse() {
     assert_eq!(make(false), aliased);
     assert_eq!(make(true), separate);
     assert_eq!(pool.stats().allocation_misses, 1);
+}
+
+fn root_blob_bytes(snapshot: &Snapshot) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    snapshot
+        .root_blob()
+        .write(&mut BlobScratch::default(), &mut bytes)
+        .unwrap();
+    bytes
+}
+
+#[test]
+fn blobs_ignore_discovery_order_unreachable_objects_and_reused_scratch() {
+    let pool = SnapshotPool::new(1, Limits::default());
+    let mut reused = Shaper::default();
+    // A list of two cells, the second pointing at the first, with its objects
+    // reserved in either order and optionally beside an unreachable object.
+    let capture = |reverse: bool, stray: bool, shaper: &mut Shaper| {
+        let mut b = pool.try_acquire().unwrap();
+        let ty = b.leaves().ty(baml_type::RealizedTy::Int);
+        if stray {
+            b.leaves()
+                .object(SnapshotObject::Cell(SnapshotValue::Int(9)))
+                .unwrap();
+        }
+        let mut slots = [(); 3].map(|()| b.leaves().reserve().unwrap());
+        if reverse {
+            slots.reverse();
+        }
+        let [list, first, second] = slots;
+        let (root, first_id, second_id) = (list.id(), first.id(), second.id());
+        b.fill(first, SnapshotObject::Cell(SnapshotValue::Int(1)));
+        b.fill(
+            second,
+            SnapshotObject::Cell(SnapshotValue::Object(first_id)),
+        );
+        let items = b.list(ty, [first_id, second_id].into_iter(), |_, id| {
+            SnapshotValue::Object(id)
+        });
+        b.fill(list, items);
+        let snapshot = b.finish(SnapshotValue::Object(root), shaper);
+        assert_eq!(snapshot.blobs().len(), 1);
+        (snapshot.root_id(), root_blob_bytes(&snapshot))
+    };
+    let canonical = capture(false, false, &mut Shaper::default());
+    for (reverse, stray) in [(true, false), (false, true), (true, true), (false, false)] {
+        assert_eq!(capture(reverse, stray, &mut reused), canonical);
+    }
+    assert_eq!(pool.stats().in_use, 0);
 }

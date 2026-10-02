@@ -29,3 +29,7 @@ impl Default for LocalDeliveryConfig {
 pub const CAS_DIRECTORY: &str = ".baml/btel/cas";
 /// Writer buffering for scalar-heavy snapshot blobs; does not constrain capture size.
 pub const CAS_WRITE_BUFFER_BYTES: usize = 64 * 1024;
+/// Blob IDs one local CAS writer remembers as in place, so a blob that repeats
+/// across captures (a shared payload, the unchanged elements of a list) costs
+/// no filesystem check. Forgetting them at capacity costs checks, never blobs.
+pub const KNOWN_BLOB_IDS: usize = 65_536;

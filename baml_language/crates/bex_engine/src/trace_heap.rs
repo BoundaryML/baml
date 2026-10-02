@@ -13,10 +13,9 @@ use std::{
     },
 };
 
-use baml_builtins2::{MediaContent, MediaValue};
 use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind, try_convert_rust_data};
 use bex_heap::{BexHeap, PermitProof};
-use bex_vm_types::{HeapPtr, Object, Value, ValueKind};
+use bex_vm_types::{HeapPtr, MediaContent, MediaValue, Object, Value, ValueKind};
 
 /// A structured-log snapshot could not allocate its owned value graph.
 #[derive(Debug)]
@@ -554,10 +553,9 @@ fn unsupported_object_message(object: &Object) -> &'static str {
 mod tests {
     use std::{collections::HashMap, sync::Arc};
 
-    use baml_builtins2::MediaValue;
     use bex_external_types::MediaKind;
     use bex_heap::{BexHeap, HeapPermit as _, HeapPermitManager, Tlab, TlabHolder};
-    use bex_vm_types::{Object, RootHaver, Value};
+    use bex_vm_types::{MediaValue, Object, RootHaver, Value};
 
     use super::{TraceHeap, TraceMediaContent, TraceOmissionReason, TraceValue};
 
@@ -664,8 +662,11 @@ mod tests {
             .await
             .acquire()
             .await;
-        let media =
-            MediaValue::from_base64(MediaKind::Image, "aW1hZ2UtYnl0ZXM=", Some("image/png"));
+        let media = MediaValue::from_base64(
+            MediaKind::Image,
+            "aW1hZ2UtYnl0ZXM=".into(),
+            Some("image/png"),
+        );
         let media_ptr = permit.tlab_mut().alloc(Object::RustData(media));
         let trace_heap = TraceHeap::new();
 

@@ -3,72 +3,73 @@
 use baml_type::RealizedTy;
 use btel_types::context::{Context, ContextValue};
 
-use crate::{Builder, Snapshot, SnapshotObject, SnapshotPool, SnapshotValue};
+use crate::{Builder, Leaves, Limit, Shaper, Snapshot, SnapshotPool, SnapshotValue};
 
 /// Capture an entire context or decline it. A truncated metadata map must not
 /// look like a complete context with missing keys. Pool admission never affects
 /// the live execution context.
 pub fn capture(context: &Context, pool: &SnapshotPool) -> Option<Snapshot> {
-    capture_with_builder(context, pool.try_acquire()?)
+    capture_with_builder(context, pool.try_acquire()?, &mut Shaper::default())
 }
 
-pub fn capture_with_builder(context: &Context, mut builder: Builder) -> Option<Snapshot> {
+/// As [`capture`], into `builder`, shaped with the capturing thread's
+/// `shaper`.
+pub fn capture_with_builder(
+    context: &Context,
+    mut builder: Builder,
+    shaper: &mut Shaper,
+) -> Option<Snapshot> {
     if builder.limits().max_depth.is_some_and(|depth| depth < 2) {
         return None;
     }
-    let root = builder.reserve_object()?;
-    let metadata = builder.reserve_object()?;
-    let key_type = builder.push_type(RealizedTy::String);
-    let value_type = builder.push_type(RealizedTy::Unknown);
-    let start = builder.entry_start();
-    // BTreeMap ordering makes the hash independent of patch construction order.
-    for (key, value) in context.metadata() {
-        let value = match value {
-            ContextValue::String(text) => {
-                SnapshotValue::String(builder.string(&text.as_str().into())?)
-            }
-            ContextValue::Int(value) => SnapshotValue::Int(*value),
-            ContextValue::Float(value) => SnapshotValue::Float(*value),
-            ContextValue::Bool(value) => SnapshotValue::Bool(*value),
-        };
-        entry(&mut builder, key, value)?;
-    }
-    let entries = builder.entry_range(start);
-    builder.set_object(
-        metadata,
-        SnapshotObject::Map {
-            key_type,
-            value_type,
-            entries,
-            original_len: context.metadata().len(),
-        },
-    );
-    let identity = match context.distinct_id() {
-        Some(value) => SnapshotValue::String(builder.string(&value.into())?),
-        None => SnapshotValue::Null,
+    let key_type = builder.leaves().ty(RealizedTy::String);
+    let value_type = builder.leaves().ty(RealizedTy::Unknown);
+    let mut cut = false;
+    let mut text = |leaves: &mut Leaves<'_>, text: &str| match leaves.string(&text.into()) {
+        Some(id) => SnapshotValue::String(id),
+        None => {
+            cut = true;
+            SnapshotValue::Truncated(Limit::Bytes)
+        }
     };
-    let start = builder.entry_start();
-    entry(&mut builder, "distinct_id", identity)?;
-    entry(&mut builder, "metadata", SnapshotValue::Object(metadata))?;
-    let entries = builder.entry_range(start);
-    builder.set_object(
-        root,
-        SnapshotObject::Map {
-            key_type,
-            value_type,
-            entries,
-            original_len: 2,
+    // BTreeMap ordering makes the hash independent of patch construction order.
+    let metadata = builder.map(
+        key_type,
+        value_type,
+        context.metadata().iter(),
+        |leaves, (key, value)| {
+            let value = match value {
+                ContextValue::String(value) => text(leaves, value),
+                ContextValue::Int(value) => SnapshotValue::Int(*value),
+                ContextValue::Float(value) => SnapshotValue::Float(*value),
+                ContextValue::Bool(value) => SnapshotValue::Bool(*value),
+            };
+            (key.as_str().into(), value)
         },
     );
-    Some(builder.finish_value(SnapshotValue::Object(root)))
-}
-
-fn entry(builder: &mut Builder, key: &str, value: SnapshotValue) -> Option<()> {
-    if builder.remaining_entries() == 0 || !builder.content(key.len(), false) {
+    if metadata.is_cut() {
         return None;
     }
-    builder.entry(&key.into(), value);
-    Some(())
+    let metadata = builder.leaves().object(metadata)?;
+    let identity = match context.distinct_id() {
+        Some(value) => text(&mut builder.leaves(), value),
+        None => SnapshotValue::Null,
+    };
+    let fields = [
+        ("distinct_id", identity),
+        ("metadata", SnapshotValue::Object(metadata)),
+    ];
+    let root = builder.map(
+        key_type,
+        value_type,
+        fields.into_iter(),
+        |_, (key, value)| (key.into(), value),
+    );
+    if cut || root.is_cut() {
+        return None;
+    }
+    let root = builder.leaves().object(root)?;
+    Some(builder.finish(SnapshotValue::Object(root), shaper))
 }
 
 #[cfg(test)]
@@ -76,7 +77,7 @@ mod tests {
     use btel_types::context::ContextPatch;
 
     use super::*;
-    use crate::{DecodeLimits, Limits, SnapshotRoot, decode_blob};
+    use crate::{BlobScratch, DecodeLimits, Limits, SnapshotObject, SnapshotRoot, decode_blob};
 
     fn context() -> Context {
         Context::default().with_patch(&ContextPatch {
@@ -99,10 +100,13 @@ mod tests {
         let pool = SnapshotPool::new(2, Limits::default());
         let snapshot = capture(&context(), &pool).unwrap();
         let mut bytes = Vec::new();
-        snapshot.write_blob(&mut bytes).unwrap();
+        snapshot
+            .root_blob()
+            .write(&mut BlobScratch::default(), &mut bytes)
+            .unwrap();
         let decoded = decode_blob(&bytes, &DecodeLimits::default()).unwrap();
-        assert_eq!(decoded.id, snapshot.id());
-        assert!(!decoded.limited);
+        assert_eq!(decoded.id, snapshot.root_id());
+        assert!(!snapshot.stats().limited);
         let SnapshotRoot::Value(SnapshotValue::Object(root)) = snapshot.root() else {
             panic!("context root must be a map");
         };
@@ -147,7 +151,7 @@ mod tests {
         }
         let first = capture(&context, &pool).unwrap();
         let second = capture(&rebuilt, &pool).unwrap();
-        assert_eq!(first.id(), second.id());
+        assert_eq!(first.root_id(), second.root_id());
     }
 
     #[test]
@@ -174,16 +178,43 @@ mod tests {
                 ..Limits::default()
             },
             Limits {
-                max_bytes: Some(1),
-                ..Limits::default()
-            },
-            Limits {
                 max_depth: Some(1),
                 ..Limits::default()
             },
         ] {
             let pool = SnapshotPool::new(1, limits);
             assert!(capture(&context(), &pool).is_none());
+            assert!(pool.try_acquire().is_some());
+        }
+    }
+
+    #[test]
+    fn a_string_over_the_leaf_limit_declines_the_context() {
+        let pool = SnapshotPool::new(
+            1,
+            Limits {
+                max_leaf_bytes: 16,
+                ..Limits::default()
+            },
+        );
+        assert!(capture(&context(), &pool).is_some());
+        let long = "x".repeat(17);
+        // As a metadata value, as a metadata key, and as the identity.
+        for patch in [
+            ContextPatch {
+                metadata: [("text".into(), Some(ContextValue::String(long.clone())))].into(),
+                distinct_id: None,
+            },
+            ContextPatch {
+                metadata: [(long.clone(), Some(ContextValue::Int(1)))].into(),
+                distinct_id: None,
+            },
+            ContextPatch {
+                metadata: [].into(),
+                distinct_id: Some(long),
+            },
+        ] {
+            assert!(capture(&context().with_patch(&patch), &pool).is_none());
             assert!(pool.try_acquire().is_some());
         }
     }

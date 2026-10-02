@@ -9,7 +9,6 @@
 //! - [`new`] — compile source files and return `Arc<dyn Bex>`.
 use std::{collections::HashMap, sync::Arc};
 
-pub use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 pub use bex::{Bex, BexRunResult};
 // The engine type itself, and the compiled program it is built from, for
 // hosts that manage engine lifecycles (the LSP server's and the browser's
@@ -37,7 +36,7 @@ pub use bex_external_types::{
     runtime_ty_structurally_equal, selected_arm_equal, try_convert_rust_data, validate_host_return,
 };
 pub use bex_vm_types::{
-    HeapPtr, Program,
+    HeapPtr, MediaContent, MediaValue, Program, PromptAst, PromptAstSimple,
     trace::{HostMarker, ReservedSpanData, TraceOptionsData},
 };
 use indexmap::IndexMap;

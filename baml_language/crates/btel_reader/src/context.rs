@@ -2,13 +2,13 @@
 //! to associate events with a context, including when earlier files are missing.
 
 use btel_recorder::proto::{ThreadSection, thread_section::Context};
-use btel_snapshot::SnapshotId;
+use btel_snapshot::CasId;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ContextReference {
     Unavailable,
     Empty,
-    Snapshot(SnapshotId),
+    Snapshot(CasId),
     /// A selected empty marker must contain true, not false.
     Invalid,
 }
@@ -38,10 +38,8 @@ mod tests {
                 ContextReference::Invalid,
             ),
             (
-                Some(Context::ContextCasId(
-                    btel_recorder::proto::SnapshotId::default(),
-                )),
-                ContextReference::Snapshot(SnapshotId::from_bytes([0; 16])),
+                Some(Context::ContextCasId(btel_recorder::proto::CasId::default())),
+                ContextReference::Snapshot(CasId::from_bytes([0; 16])),
             ),
         ] {
             assert_eq!(

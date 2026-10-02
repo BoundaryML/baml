@@ -5,16 +5,16 @@
 //! the launch context. They are fallbacks, never overrides. Running markers
 //! supply timing, not another context capture. A network span has only its
 //! announcement's context.
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use btel_reader::{
-    cas::{CasOutcome, CasStore},
+    cas::{CasStore, CasUnavailable},
     context::{ContextReference, reference},
     discovery::FileStamp,
-    value::{Nav, Root, Segment, navigate},
+    value::{Found, Nav, RenderLimits, Root, Segment, navigate},
 };
 use btel_recorder::proto::{self, span_event::Event};
-use btel_snapshot::{DecodedObject, DecodedRoot, DecodedValue, SnapshotId};
+use btel_snapshot::{CasId, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue};
 use rusqlite::{Connection, Transaction, params};
 
 use crate::Error;
@@ -117,7 +117,7 @@ fn resolve_with(
     cas: &CasStore,
     options: &super::RefreshOptions,
     facts_changed: bool,
-    mut load: impl FnMut(SnapshotId) -> btel_reader::cas::CasLoad,
+    mut load: impl FnMut(CasId) -> btel_reader::cas::CasLoad,
 ) -> Result<(), Error> {
     if facts_changed {
         conn.execute(
@@ -151,7 +151,7 @@ fn resolve_with(
         let mut bytes = 0u64;
         for (id, failed_stamp) in pending {
             after = id.to_vec();
-            let snapshot_id = SnapshotId::from_bytes(id);
+            let snapshot_id = CasId::from_bytes(id);
             let stamp = std::fs::metadata(cas.path(snapshot_id))
                 .ok()
                 .map(|metadata| fingerprint(FileStamp::of(&metadata)));
@@ -160,18 +160,20 @@ fn resolve_with(
             }
             let loaded = load(snapshot_id);
             bytes = bytes.saturating_add(loaded.bytes_read);
-            let (state, identity, failed_stamp) = match loaded.outcome {
-                CasOutcome::Available(snapshot) => {
-                    let identity = identity(&snapshot);
+            let (state, identity, failed_stamp) = match loaded.snapshot {
+                Ok(snapshot) => {
+                    let identity = identity(cas, &snapshot);
                     (
                         if identity.is_ok() { 1 } else { 2 },
-                        identity.ok().flatten().map(str::to_owned),
+                        identity.ok().flatten(),
                         None,
                     )
                 }
-                CasOutcome::Corrupt(_) | CasOutcome::TooLarge { .. } => (0, None, stamp),
+                Err(CasUnavailable::Corrupt(_) | CasUnavailable::TooLarge { .. }) => {
+                    (0, None, stamp)
+                }
                 // Missing and transiently unreadable files remain retryable.
-                CasOutcome::Missing | CasOutcome::Unreadable(_) => (0, None, None),
+                Err(CasUnavailable::Missing | CasUnavailable::Unreadable(_)) => (0, None, None),
             };
             hydrated.push((id, state, identity, failed_stamp));
             if bytes >= options.batch_bytes {
@@ -204,44 +206,63 @@ fn fingerprint(stamp: FileStamp) -> Vec<u8> {
     .concat()
 }
 
-fn identity(snapshot: &btel_snapshot::DecodedSnapshot) -> Result<Option<&str>, ()> {
+/// A context's `distinct_id`, or `Err` when the blob is not a context: a map
+/// whose `metadata` is a map of scalars. A long string is a blob of its own,
+/// read from `cas`.
+fn identity(cas: &CasStore, snapshot: &Arc<DecodedSnapshot>) -> Result<Option<String>, ()> {
+    let max_blobs = RenderLimits::default().max_blobs;
+    let find = |path: &[Segment]| navigate(cas, snapshot, Root::Value, None, path, max_blobs);
+    let key = |key: &str| Segment::Key(key.to_owned());
     let DecodedRoot::Value(DecodedValue::Object(root)) = snapshot.root else {
         return Err(());
     };
     if !matches!(snapshot.object(root), DecodedObject::Map { .. }) {
         return Err(());
     }
-    let Nav::Value(DecodedValue::Object(metadata)) = navigate(
-        snapshot,
-        Root::Value,
-        None,
-        &[Segment::Key("metadata".into())],
-    ) else {
+    let Nav::Value(metadata) = find(&[key("metadata")]) else {
         return Err(());
     };
-    let DecodedObject::Map { entries, .. } = snapshot.object(*metadata) else {
+    let Found::Object(id) = metadata.value() else {
         return Err(());
     };
-    if !entries.iter().all(|(_, value)| {
-        matches!(
-            value,
+    let DecodedObject::Map { entries, .. } = metadata.blob().object(*id) else {
+        return Err(());
+    };
+    for (name, value) in entries {
+        let scalar = match value {
             DecodedValue::String(_)
-                | DecodedValue::Int(_)
-                | DecodedValue::Float(_)
-                | DecodedValue::Bool(_)
-        )
-    }) {
-        return Err(());
+            | DecodedValue::Int(_)
+            | DecodedValue::Float(_)
+            | DecodedValue::Bool(_) => true,
+            DecodedValue::External(_) | DecodedValue::ExternalNode { .. } => matches!(
+                find(&[key("metadata"), key(name)]),
+                Nav::Value(found) if matches!(found.value(), Found::String(_))
+            ),
+            DecodedValue::Null
+            | DecodedValue::OmittedArg
+            | DecodedValue::Bigint(_)
+            | DecodedValue::Object(_)
+            | DecodedValue::Type(_)
+            | DecodedValue::Enum { .. }
+            | DecodedValue::Truncated(_) => false,
+        };
+        if !scalar {
+            return Err(());
+        }
     }
-    match navigate(
-        snapshot,
-        Root::Value,
-        None,
-        &[Segment::Key("distinct_id".into())],
-    ) {
-        Nav::Value(DecodedValue::String(value)) => Ok(Some(value.as_ref())),
-        Nav::Value(DecodedValue::Null) => Ok(None),
-        _ => Err(()),
+    match find(&[key("distinct_id")]) {
+        Nav::Value(found) => match found.value() {
+            Found::String(value) => Ok(Some(value.to_string())),
+            Found::Null => Ok(None),
+            Found::Bool(_)
+            | Found::Int(_)
+            | Found::Float(_)
+            | Found::Bigint(_)
+            | Found::Type(_)
+            | Found::Enum { .. }
+            | Found::Object(_) => Err(()),
+        },
+        Nav::Arguments(_) | Nav::Missing | Nav::Unavailable(_) => Err(()),
     }
 }
 
@@ -258,7 +279,10 @@ mod tests {
         let pool = SnapshotPool::new(1, Limits::default());
         let snapshot = btel_snapshot::context::capture(&Context::default(), &pool).unwrap();
         let mut valid = Vec::new();
-        snapshot.write_blob(&mut valid).unwrap();
+        snapshot
+            .root_blob()
+            .write(&mut btel_snapshot::BlobScratch::default(), &mut valid)
+            .unwrap();
         for (oversized, remove) in [(false, false), (true, false), (false, true), (true, true)] {
             let directory = tempfile::tempdir().unwrap();
             let cas = CasStore::new(
@@ -268,7 +292,7 @@ mod tests {
                     ..Default::default()
                 },
             );
-            let path = cas.path(snapshot.id());
+            let path = cas.path(snapshot.root_id());
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             let invalid = vec![0; if oversized { valid.len() + 1 } else { 1 }];
             std::fs::write(&path, invalid).unwrap();
@@ -276,7 +300,7 @@ mod tests {
             conn.execute_batch(crate::schema::DDL).unwrap();
             conn.execute(
                 "INSERT INTO context_snapshot (cas) VALUES (?1)",
-                [snapshot.id().as_bytes()],
+                [snapshot.root_id().as_bytes()],
             )
             .unwrap();
             let options = super::super::RefreshOptions::default();
@@ -326,14 +350,18 @@ mod tests {
                 ..Default::default()
             });
             let snapshot = btel_snapshot::context::capture(&context, &pool).unwrap();
-            let path = cas.path(snapshot.id());
+            let path = cas.path(snapshot.root_id());
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             snapshot
-                .write_blob(&mut std::fs::File::create(path).unwrap())
+                .root_blob()
+                .write(
+                    &mut btel_snapshot::BlobScratch::default(),
+                    &mut std::fs::File::create(path).unwrap(),
+                )
                 .unwrap();
             conn.execute(
                 "INSERT INTO context_snapshot (cas) VALUES (?1)",
-                [snapshot.id().as_bytes()],
+                [snapshot.root_id().as_bytes()],
             )
             .unwrap();
         }

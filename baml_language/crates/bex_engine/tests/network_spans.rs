@@ -5,7 +5,7 @@
 use std::{collections::BTreeMap, path::Path, sync::Arc, time::Duration};
 
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, TelemetryRecording};
-use btel_reader::cas::{CasLimits, CasOutcome, CasStore};
+use btel_reader::cas::{CasLimits, CasStore};
 use btel_recorder::{RecordingConfig, proto};
 use btel_snapshot::{DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue};
 use serde_json::{Value as Json, json};
@@ -238,18 +238,18 @@ fn spans(files: &[proto::RecordingFile]) -> BTreeMap<String, Span> {
         .collect()
 }
 
-fn json(snapshot: &DecodedSnapshot) -> Json {
+fn json(cas: &CasStore, snapshot: &DecodedSnapshot) -> Json {
     let DecodedRoot::Value(value) = &snapshot.root else {
         panic!("network snapshots are values")
     };
-    value_json(snapshot, value)
+    value_json(cas, snapshot, value)
 }
 
-fn value_json(snapshot: &DecodedSnapshot, value: &DecodedValue) -> Json {
+fn value_json(cas: &CasStore, snapshot: &DecodedSnapshot, value: &DecodedValue) -> Json {
     let entries = |entries: &btel_snapshot::Entries| {
         entries
             .iter()
-            .map(|(key, value)| (key.to_string(), value_json(snapshot, value)))
+            .map(|(key, value)| (key.to_string(), value_json(cas, snapshot, value)))
             .collect::<serde_json::Map<_, _>>()
             .into()
     };
@@ -260,11 +260,19 @@ fn value_json(snapshot: &DecodedSnapshot, value: &DecodedValue) -> Json {
         DecodedValue::Object(id) => match snapshot.object(*id) {
             DecodedObject::Map { entries: map, .. } => entries(map),
             DecodedObject::Instance { fields, .. } => entries(fields),
-            DecodedObject::Bytes { data, .. } => data.clone().into(),
+            DecodedObject::Uint8Array { data, .. } => data.clone().into(),
             object => format!("{object:?}").into(),
         },
+        // A long string, or a large part of a payload, is a blob of its own.
+        DecodedValue::External(child) => json(cas, &blob(cas, snapshot.children[child.0 as usize])),
         value => format!("{value:?}").into(),
     }
+}
+
+fn blob(cas: &CasStore, id: btel_snapshot::CasId) -> std::sync::Arc<DecodedSnapshot> {
+    cas.load(id)
+        .snapshot
+        .unwrap_or_else(|error| panic!("network capture was not persisted: {error:?}"))
 }
 
 fn is_hash(value: &Json) -> bool {
@@ -295,11 +303,8 @@ fn read(directory: &Path, engine: &BexEngine) -> (BTreeMap<String, Span>, CasSto
     )
 }
 
-fn load(cas: &CasStore, id: Option<proto::SnapshotId>) -> Json {
-    let CasOutcome::Available(snapshot) = cas.load(id.expect("captured").into()).outcome else {
-        panic!("network capture was not persisted")
-    };
-    json(&snapshot)
+fn load(cas: &CasStore, id: Option<proto::CasId>) -> Json {
+    json(cas, &blob(cas, id.expect("captured").into()))
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

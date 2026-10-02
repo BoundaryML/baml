@@ -13,9 +13,8 @@ fn blob_path(project: &std::path::Path, hex: &str) -> std::path::PathBuf {
         .step_by(2)
         .map(|at| u8::from_str_radix(&hex[at..at + 2], 16).unwrap())
         .collect();
-    btel_reader::layout::SourceLayout::for_project(project).blob_path(
-        btel_reader::SnapshotId::from_bytes(bytes.try_into().unwrap()),
-    )
+    btel_reader::layout::SourceLayout::for_project(project)
+        .blob_path(btel_reader::CasId::from_bytes(bytes.try_into().unwrap()))
 }
 
 /// Captured inputs and value CAS ids of a function's calls, oldest first.
@@ -112,6 +111,26 @@ async fn structured_comparisons_use_captured_content_across_blobs_and_queries() 
     );
     assert_eq!(independent.rows, vec![vec![json!(3)]]);
     assert_eq!(independent.outcome.status, Status::Complete);
+    // A rendering cut by its limits says so.
+    let cut = sql(
+        &mut unrendered,
+        "SELECT output_value FROM spans WHERE span_name = 'user.Extract'",
+    );
+    assert_eq!(cut.rows[0][0], json!({"$truncated": "render_depth"}));
+    assert_eq!(cut.outcome.status, Status::Incomplete);
+    assert_eq!(cut.outcome.diagnostics[0].code, "render_limit");
+    // Results are kept for a query under a byte limit too. The newest stays,
+    // so each kind still finds its rendering; the two equal outputs no longer
+    // share one.
+    let select = "SELECT output_value FROM spans WHERE span_name = 'user.Extract'";
+    let kept = sql(&mut index, select);
+    let mut small = baml_query_btel::IndexOptions::default();
+    small.values.max_cached_result_bytes = 0;
+    let mut forgetful = baml_query_btel::Index::open(layout.clone(), small).unwrap();
+    let forgotten = sql(&mut forgetful, select);
+    assert_eq!(forgotten.rows, kept.rows);
+    assert_eq!(kept.outcome.query.values.result_cache_hits, 4);
+    assert_eq!(forgotten.outcome.query.values.result_cache_hits, 3);
     options.values.comparison.max_nodes = 1;
     let mut bounded = baml_query_btel::Index::open(layout, options).unwrap();
     let limited = sql(
@@ -213,4 +232,149 @@ async fn missing_and_corrupt_blobs_are_reported_not_answered() {
     let metadata = sql(&mut index, "SELECT COUNT(*) FROM spans");
     assert_eq!(metadata.outcome.status, Status::Complete);
     assert_eq!(metadata.outcome.query.values.cas_loads, 0);
+}
+
+/// The size of every blob in the project's CAS, smallest first.
+fn blob_sizes(project: &std::path::Path) -> Vec<u64> {
+    let mut sizes = Vec::new();
+    let mut pending = vec![btel_reader::layout::SourceLayout::for_project(project).cas];
+    while let Some(directory) = pending.pop() {
+        for entry in std::fs::read_dir(directory).unwrap() {
+            let entry = entry.unwrap();
+            let metadata = entry.metadata().unwrap();
+            if metadata.is_dir() {
+                pending.push(entry.path());
+            } else {
+                sizes.push(metadata.len());
+            }
+        }
+    }
+    sizes.sort_unstable();
+    sizes
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn large_strings_are_stored_once_and_queries_read_through_them() {
+    let project = tempfile::tempdir().unwrap();
+    let source = r#"
+        function Echo(parts: string[]) -> string[] { parts }
+        function main(n: int) -> int {
+            let chunk = "x";
+            let i = 0;
+            while (i < 15) {
+                chunk = chunk + chunk;
+                i = i + 1;
+            }
+            let last = if (n == 0) { "c" } else { "d" };
+            Echo([chunk + "a", chunk + "b", chunk + last]);
+            n
+        }
+    "#;
+    let results = record_program(
+        project.path(),
+        source,
+        &["Echo"],
+        &[("main", 0), ("main", 1)],
+    )
+    .await;
+    assert_eq!(
+        results,
+        vec![
+            Ok(bex_engine::BexExternalValue::Int(0)),
+            Ok(bex_engine::BexExternalValue::Int(1)),
+        ]
+    );
+    // Four distinct 32 KiB strings, each stored once, and per call a small
+    // inputs root and a small output root that name them.
+    let sizes = blob_sizes(project.path());
+    let (small, large): (Vec<u64>, Vec<u64>) = sizes.iter().partition(|size| **size < 1024);
+    assert_eq!(small.len(), 4, "{sizes:?}");
+    assert_eq!(large.len(), 4, "{sizes:?}");
+    assert!(large.iter().all(|size| (32 << 10..33 << 10).contains(size)));
+
+    let mut index = index(project.path());
+    let result = sql(
+        &mut index,
+        "SELECT length(input_args['parts'][0]) AS first, output_value[2] LIKE '%c' AS third_is_c,
+           output_value = input_args['parts'] AS echoed
+         FROM spans WHERE span_name = 'user.Echo' ORDER BY start_time",
+    );
+    assert_eq!(
+        result.rows,
+        vec![
+            vec![json!((32 << 10) + 1), json!(1), json!(1)],
+            vec![json!((32 << 10) + 1), json!(0), json!(1)],
+        ]
+    );
+    assert_eq!(
+        result.outcome.status,
+        Status::Complete,
+        "{:?}",
+        result.outcome.diagnostics
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn captured_images_store_each_content_once_and_render_as_descriptors() {
+    let project = tempfile::tempdir().unwrap();
+    let source = r#"
+        function Show(images: image[]) -> int { 0 }
+        function main(n: int) -> int {
+            let chunk = "iVBORw0K";
+            let i = 0;
+            while (i < 12) {
+                chunk = chunk + chunk;
+                i = i + 1;
+            }
+            let last = if (n == 0) { "c" } else { "d" };
+            Show([
+                baml.media.Image.from_base64(chunk + "a", "image/png"),
+                baml.media.Image.from_base64(chunk + "b", "image/png"),
+                baml.media.Image.from_base64(chunk + last, "image/png"),
+            ]);
+            n
+        }
+    "#;
+    let results = record_program(
+        project.path(),
+        source,
+        &["Show"],
+        &[("main", 0), ("main", 1)],
+    )
+    .await;
+    assert_eq!(
+        results,
+        vec![
+            Ok(bex_engine::BexExternalValue::Int(0)),
+            Ok(bex_engine::BexExternalValue::Int(1)),
+        ]
+    );
+    // Four distinct images, each stored once; per call a small inputs root
+    // that names them, and one output both calls share.
+    let sizes = blob_sizes(project.path());
+    let (small, large): (Vec<u64>, Vec<u64>) = sizes.iter().partition(|size| **size < 1024);
+    assert_eq!(large.len(), 4, "{sizes:?}");
+    assert_eq!(small.len(), 3, "{sizes:?}");
+    assert!(large.iter().all(|size| (32 << 10..33 << 10).contains(size)));
+
+    let mut index = index(project.path());
+    let result = sql(
+        &mut index,
+        "SELECT input_args['images'][2] AS third,
+           input_args['images'][0] = input_args['images'][0] AS same,
+           input_args['images'][0] = input_args['images'][1] AS different
+         FROM spans WHERE span_name = 'user.Show' ORDER BY start_time",
+    );
+    assert_eq!(
+        result.outcome.status,
+        Status::Complete,
+        "{:?}",
+        result.outcome.diagnostics
+    );
+    let descriptor = json!({"$media": "image", "mime": "image/png", "base64_len": (32 << 10) + 1});
+    for row in &result.rows {
+        assert_eq!(row[0]["_data"], descriptor, "{}", row[0]);
+        assert_eq!((&row[1], &row[2]), (&json!(1), &json!(0)));
+    }
+    assert_eq!(result.rows.len(), 2);
 }
