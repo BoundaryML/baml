@@ -102,6 +102,30 @@ pub(super) fn sanitize_url(url: &str) -> String {
     sanitized
 }
 
+/// What a captured error must not quote of a request's raw `url`: the URL
+/// and its query string, each with its sanitized form.
+pub(super) fn url_rewrites(url: &str) -> Vec<(String, String)> {
+    let mut rewrites = Vec::new();
+    let sanitized = sanitize_url(url);
+    if sanitized != url {
+        rewrites.push((url.to_owned(), sanitized));
+    }
+    let query = url
+        .split('#')
+        .next()
+        .and_then(|url| url.split_once('?'))
+        .map(|(_, query)| query)
+        .filter(|query| !query.is_empty());
+    if let Some(query) = query {
+        let sanitized = sanitize_url(&format!("?{query}"));
+        let sanitized = &sanitized[1..];
+        if sanitized != query {
+            rewrites.push((query.to_owned(), sanitized.to_owned()));
+        }
+    }
+    rewrites
+}
+
 /// `sha256:` and the first hex digits of the value's plain SHA-256.
 pub(super) fn hash(value: &str) -> String {
     let digest = Sha256::digest(value.as_bytes());
@@ -244,6 +268,22 @@ mod tests {
                 hash("token")
             )
         );
+    }
+
+    #[test]
+    fn url_rewrites_cover_the_url_and_its_query_alone() {
+        let url = "https://example.com/v1?key=secret&alt=json#frag";
+        assert_eq!(
+            url_rewrites(url),
+            [
+                (url.to_owned(), sanitize_url(url)),
+                (
+                    "key=secret&alt=json".to_owned(),
+                    format!("key={}&alt={}", hash("secret"), hash("json"))
+                ),
+            ]
+        );
+        assert!(url_rewrites("https://example.com/v1").is_empty());
     }
 
     #[test]

@@ -2416,8 +2416,9 @@ impl io::IoClassHttpResponse for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         SysOpOutput::async_op(async move {
+            let network = crate::http_server::network_of(&response._body);
             crate::http_server::downcast_body(&response._body)?
-                .read_text()
+                .read_text(network.as_ref())
                 .await
                 .map_err(VmRustFnError::from)
         })
@@ -2446,8 +2447,9 @@ impl io::IoClassHttpResponse for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
         SysOpOutput::async_op(async move {
+            let network = crate::http_server::network_of(&response._body);
             crate::http_server::downcast_body(&response._body)?
-                .read_bytes()
+                .read_bytes(network.as_ref())
                 .await
                 .map(|b| b.to_vec())
                 .map_err(VmRustFnError::from)
@@ -2690,6 +2692,7 @@ fn build_io_http_response(
     response: reqwest::Response,
     url: String,
     timeout_options: HttpTimeoutOptions,
+    network: Option<sys_types::network::NetworkContext>,
 ) -> owned::http::Response {
     let status = i64::from(response.status().as_u16());
     let headers: indexmap::IndexMap<String, String> = response
@@ -2697,11 +2700,47 @@ fn build_io_http_response(
         .iter()
         .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
         .collect();
+    let body = crate::http_server::HttpBody::client(response, timeout_options);
     owned::http::Response {
         status_code: status,
         headers,
         url,
-        _body: crate::http_server::HttpBody::client(response, timeout_options),
+        _body: traced(network, body),
+    }
+}
+
+/// Queue a traced request's status and headers, as they arrived.
+#[cfg(feature = "bundle-http")]
+fn push_connection(
+    network: Option<&sys_types::network::NetworkContext>,
+    response: &reqwest::Response,
+) {
+    if let Some(network) = network {
+        network.push(sys_types::network::NetworkEventKind::Connection {
+            status: response.status().as_u16(),
+            headers: response
+                .headers()
+                .iter()
+                .map(|(name, value)| {
+                    (
+                        name.as_str().to_owned(),
+                        String::from_utf8_lossy(value.as_bytes()).into_owned(),
+                    )
+                })
+                .collect(),
+        });
+    }
+}
+
+/// `data` as `$rust_type` data, behind its request's span when traced.
+#[cfg(feature = "bundle-http")]
+fn traced(
+    network: Option<sys_types::network::NetworkContext>,
+    data: Arc<dyn Any + Send + Sync>,
+) -> Arc<dyn Any + Send + Sync> {
+    match network {
+        Some(network) => sys_types::network::NetworkTraced::wrap(network, data),
+        None => data,
     }
 }
 
@@ -2832,12 +2871,11 @@ impl io::IoClassHttpSseStream for NativeSysOps {
         use std::sync::atomic::Ordering;
 
         SysOpOutput::async_op(async move {
-            let handle = sse_stream
-                ._handle
+            let handle = sys_types::network::NetworkTraced::inner(sse_stream._handle)
                 .downcast::<bex_resource_types::ResourceHandle>()
                 .map_err(|handle| VmInternalError::RustTypeError {
                     expected: TypeId::of::<bex_resource_types::ResourceHandle>(),
-                    got: handle.type_id(),
+                    got: handle.as_ref().type_id(),
                 })?;
 
             let (buffer, notify, closed) = crate::registry::REGISTRY
@@ -2921,8 +2959,9 @@ impl io::IoNamespaceHttp for NativeSysOps {
         url: String,
         timeout_nanos: Arc<num_bigint::BigInt>,
         connect_timeout_nanos: Arc<num_bigint::BigInt>,
-        _ctx: &SysOpContext,
+        ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
+        let network = ctx.network.clone();
         SysOpOutput::async_op(async move {
             crate::ensure_rustls_crypto_provider();
             let timeout_options =
@@ -2933,8 +2972,14 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 .send()
                 .await
                 .map_err(|e| http_transport_error("HTTP fetch failed", &e, timeout_options))?;
+            push_connection(network.as_ref(), &response);
             let final_url = response.url().to_string();
-            Ok(build_io_http_response(response, final_url, timeout_options))
+            Ok(build_io_http_response(
+                response,
+                final_url,
+                timeout_options,
+                network,
+            ))
         })
     }
 
@@ -2962,8 +3007,9 @@ impl io::IoNamespaceHttp for NativeSysOps {
         request: owned::http::Request,
         timeout_nanos: Arc<num_bigint::BigInt>,
         connect_timeout_nanos: Arc<num_bigint::BigInt>,
-        _ctx: &SysOpContext,
+        ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
+        let network = ctx.network.clone();
         SysOpOutput::async_op(async move {
             let method = http_method(&request.method)?;
 
@@ -2986,8 +3032,14 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 .send()
                 .await
                 .map_err(|e| http_transport_error("HTTP send failed", &e, timeout_options))?;
+            push_connection(network.as_ref(), &response);
             let final_url = response.url().to_string();
-            Ok(build_io_http_response(response, final_url, timeout_options))
+            Ok(build_io_http_response(
+                response,
+                final_url,
+                timeout_options,
+                network,
+            ))
         })
     }
 
@@ -3015,16 +3067,33 @@ impl io::IoNamespaceHttp for NativeSysOps {
         request: owned::http::Request,
         timeout_nanos: Arc<num_bigint::BigInt>,
         connect_timeout_nanos: Arc<num_bigint::BigInt>,
-        _ctx: &SysOpContext,
+        ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::SseStream> {
         use std::sync::atomic::{AtomicBool, Ordering};
 
         use futures::StreamExt;
-        use sys_types::sse::StreamDecoder;
+        use sys_types::{network::NetworkEventKind, sse::StreamDecoder};
         use tokio::sync::{Mutex as TokioMutex, Notify};
 
         use crate::registry::{REGISTRY, SseBuffer};
 
+        // Each parsed event, queued on the request's span when it is traced.
+        fn push_events(
+            network: Option<&sys_types::network::NetworkContext>,
+            events: &[sys_types::sse::SseEvent],
+        ) {
+            if let Some(network) = network {
+                for event in events {
+                    network.push(NetworkEventKind::SseEvent {
+                        event: (!event.event.is_empty()).then(|| event.event.clone()),
+                        data: event.data.clone(),
+                        id: event.id.clone(),
+                    });
+                }
+            }
+        }
+
+        let network = ctx.network.clone();
         SysOpOutput::async_op(async move {
             let method = http_method(&request.method)?;
 
@@ -3046,11 +3115,18 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 timeout_options.apply(builder).send().await.map_err(|e| {
                     http_transport_error("SSE connection failed", &e, timeout_options)
                 })?;
+            push_connection(network.as_ref(), &response);
 
             if !response.status().is_success() {
                 let status = response.status().as_u16();
-                let body = match response.text().await {
-                    Ok(body) => body,
+                // Lossy UTF-8, as `reqwest`'s `text()` without `charset`.
+                let body = match response.bytes().await {
+                    Ok(body) => {
+                        if let Some(network) = &network {
+                            network.push(NetworkEventKind::Body(body.clone()));
+                        }
+                        String::from_utf8_lossy(&body).into_owned()
+                    }
                     Err(error) if error.is_timeout() => {
                         return Err(VmRustFnError::from(http_transport_error(
                             "SSE error response body failed",
@@ -3090,6 +3166,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
             let buf_clone = buffer.clone();
             let closed_clone = closed.clone();
             let notify_clone = notify.clone();
+            let consumer_network = network.clone();
             let consumer = tokio::spawn(async move {
                 struct SseDropGuard {
                     buffer: Arc<TokioMutex<SseBuffer>>,
@@ -3116,6 +3193,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                     }
                 }
 
+                let network = consumer_network.as_ref();
                 let mut guard = SseDropGuard {
                     buffer: buf_clone.clone(),
                     closed: closed_clone.clone(),
@@ -3147,6 +3225,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                                 }
                             };
                             if !events.is_empty() {
+                                push_events(network, &events);
                                 let mut buf = buf_clone.lock().await;
                                 buf.events.extend(events);
                                 notify_clone.notify_waiters();
@@ -3182,6 +3261,10 @@ impl io::IoNamespaceHttp for NativeSysOps {
                         return;
                     }
                 };
+                push_events(network, &final_events);
+                if let Some(network) = network {
+                    network.push(NetworkEventKind::StreamEnd);
+                }
                 let mut buf = buf_clone.lock().await;
                 if !final_events.is_empty() {
                     buf.events.extend(final_events);
@@ -3198,12 +3281,11 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 consumer.abort_handle(),
                 url.clone(),
             );
-            let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new(handle);
             Ok(owned::http::SseStream {
                 url,
                 status_code,
                 headers,
-                _handle: handle,
+                _handle: traced(network, Arc::new(handle)),
             })
         })
     }

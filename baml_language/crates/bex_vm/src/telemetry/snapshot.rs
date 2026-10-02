@@ -1,5 +1,7 @@
 //! Heap traversal stays in the VM. Frozen graphs contain only owned leaves and
 //! snapshot-local indexes. Locks sample containers independently, not atomically.
+use std::borrow::Cow;
+
 use bex_vm_types::{HeapPtr, Object, Value, ValueKind};
 use btel_snapshot::{
     Builder, Description, Limit, ObjectId, OwnedType, Snapshot, SnapshotObject, SnapshotValue,
@@ -21,8 +23,26 @@ pub(super) struct Scratch {
     seen: FxHashMap<HeapPtr, SnapshotValue>,
     rust_seen: FxHashMap<usize, ObjectId>,
     work: Vec<(ObjectId, HeapPtr, usize)>,
+    /// Text replaced wherever a captured string or map key quotes it, longest
+    /// first. Empty except while a network span's error is captured: it must
+    /// not quote the request's raw URL. The heap value is never changed.
+    pub(super) rewrites: Vec<(String, String)>,
 }
 impl Scratch {
+    fn rewritten<'a>(&self, text: &'a bex_str::BexStr) -> Cow<'a, bex_str::BexStr> {
+        if self.rewrites.is_empty() {
+            return Cow::Borrowed(text);
+        }
+        let mut rewritten: Option<String> = None;
+        for (from, to) in &self.rewrites {
+            let current = rewritten.as_deref().unwrap_or(text.as_str());
+            if current.contains(from.as_str()) {
+                rewritten = Some(current.replace(from.as_str(), to));
+            }
+        }
+        rewritten.map_or(Cow::Borrowed(text), |text| Cow::Owned(text.into()))
+    }
+
     fn add(&mut self, b: &mut Builder, value: Value, depth: usize) -> SnapshotValue {
         if let Some(ptr) = value.as_object_ptr() {
             if let Some(value) = self.seen.get(&ptr) {
@@ -44,7 +64,7 @@ impl Scratch {
             // Boxes are an execution detail, not snapshot identity. No work item
             // or memo-table entry for floats, even when every source box differs.
             Object::Float(v) => return SnapshotValue::Float(*v),
-            Object::String(s) => b.string(s).map_or(
+            Object::String(s) => b.string(&self.rewritten(s)).map_or(
                 SnapshotValue::Truncated(Limit::Bytes),
                 SnapshotValue::String,
             ),
@@ -161,11 +181,12 @@ impl Scratch {
                     let count = data.len().min(b.remaining_entries());
                     b.reserve_entries(count);
                     for (key, value) in data.iter().take(count) {
-                        if !b.content(key.len(), !matches!(key, bex_str::BexStr::Inline { .. })) {
+                        let key = self.rewritten(key);
+                        if !b.content(key.len(), !matches!(*key, bex_str::BexStr::Inline { .. })) {
                             break;
                         }
                         let value = self.add(&mut b, *value, depth + 1);
-                        b.entry(key, value);
+                        b.entry(&key, value);
                     }
                     let entries = b.entry_range(start);
                     if entries.len() < data.len() {

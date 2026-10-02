@@ -32,6 +32,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "macros" ] }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
+url = { workspace = true }
 web-time = { workspace = true }
 
 # Native-only: tokio runtime for spawning async tasks
