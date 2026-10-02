@@ -69,6 +69,15 @@ function make_role(
     root.Role { name: name, metadata: metadata }
 }
 
+/// Construct a cache delimiter for structural prompt assembly.
+/// The `${cache(...)}` desugar in an LLM prompt body lowers to this call.
+///
+/// `args` is the provider's own cache object. It reaches the provider client
+/// as `ai.CacheDelimiter.args`, untouched.
+function make_cache(args: baml.json.json) -> root.CacheDelimiter throws never {
+    root.CacheDelimiter { args: args }
+}
+
 /// Look up an LLM function's declared return type. Retained for type-reflection
 /// compatibility; the `ai.Agent` path uses lexical type arguments instead.
 function get_return_type(function_name: string) -> reflect.Type throws baml.errors.InvalidArgument {

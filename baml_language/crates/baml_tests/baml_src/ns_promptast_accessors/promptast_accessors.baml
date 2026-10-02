@@ -136,7 +136,7 @@ test "message_parts_preserve_all_media_structurally" {
 
 // ─── cache delimiters ─────────────────────────────────────────────────────────
 
-// `${ai.cache(args)}` is its own structural part, at the position it was
+// An interpolated `ai.CacheDelimiter` is its own structural part, at the position it was
 // written and nowhere else, carrying `args` as written. It holds no text: the
 // readable projections are those of the same prompt without it.
 function pa_cache_delimiter_parts() -> string {
@@ -147,7 +147,7 @@ function pa_cache_delimiter_parts() -> string {
         Be terse.
         ${role("user")}
         before ${img} after
-        ${ai.cache({ "type": "default", "ttl": "1h" })}
+        ${ai.CacheDelimiter { args: { "type": "default", "ttl": "1h" } }}
         question
     `;
     let out: string[] = [];
@@ -175,7 +175,7 @@ test "cache_delimiter_is_a_part_where_it_was_written" {
 function pa_cache_delimiter_text() -> string {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] };
     let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) };
-    let marked = prompt`${role("user")}stable ${ai.cache({ "type": "default" })}variable ${ai.cache({ "type": "default" })}`;
+    let marked = prompt`${role("user")}stable ${ai.CacheDelimiter { args: { "type": "default" } }}variable ${ai.CacheDelimiter { args: { "type": "default" } }}`;
     let plain = prompt`${role("user")}stable variable `;
     [
         marked(ctx).text(),

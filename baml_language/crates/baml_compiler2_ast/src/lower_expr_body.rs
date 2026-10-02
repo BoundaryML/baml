@@ -465,8 +465,8 @@ pub(crate) fn synthesize_llm_spec_body(
             vec![TemplateSegment::Text(lit.value())]
         }
     };
-    // `cache(...)` is prompt-local in the same way: it is the public
-    // `ai.cache`, spelled bare inside a prompt.
+    // `cache(...)` is prompt-local in the same way: a bare call lowers to
+    // `ai.internal.make_cache`.
     let prompt_local_callees: Vec<(ExprId, &[&str])> = ctx
         .exprs
         .iter()
@@ -482,7 +482,7 @@ pub(crate) fn synthesize_llm_spec_body(
             };
             let target: &[&str] = match name.as_str() {
                 "role" => &["ai", "internal", "make_role"],
-                "cache" => &["ai", "cache"],
+                "cache" => &["ai", "internal", "make_cache"],
                 _ => return None,
             };
             Some((*callee, target))
