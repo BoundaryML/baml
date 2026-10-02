@@ -694,7 +694,9 @@ dependencies = [
  "bex_project",
  "bex_vm_types",
  "borsh",
+ "btel_bcs",
  "btel_file",
+ "btel_recorder",
  "btel_settings",
  "clap",
  "console",
@@ -705,6 +707,7 @@ dependencies = [
  "libsui",
  "mimalloc",
  "mime_guess",
+ "prost",
  "rayon",
  "reqwest",
  "sdkgen_cpp",
@@ -727,6 +730,7 @@ dependencies = [
  "toml_edit 0.22.27",
  "uuid",
  "webbrowser",
+ "wiremock",
  "yaml_serde",
 ]
 
@@ -1437,6 +1441,7 @@ dependencies = [
  "bex_vm",
  "bex_vm_types",
  "borsh",
+ "btel_settings",
  "ignore",
  "indexmap",
  "log",

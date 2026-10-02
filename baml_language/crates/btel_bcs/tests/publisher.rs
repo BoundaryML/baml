@@ -71,7 +71,6 @@ async fn setup(
         .await;
     let delivery = BcsDelivery::new(
         DeliveryConfig {
-            allow_http: true,
             ..DeliveryConfig::new(server.uri().parse().unwrap())
         },
         |_| {},
@@ -236,7 +235,6 @@ async fn lost_recording_replays_metadata_and_reoffers_cas_without_replaying_even
         .await;
     let delivery = BcsDelivery::new(
         DeliveryConfig {
-            allow_http: true,
             retry_delay: Duration::from_millis(1),
             ..DeliveryConfig::new(server.uri().parse().unwrap())
         },

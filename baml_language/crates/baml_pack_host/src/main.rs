@@ -97,10 +97,13 @@ fn run_single(envelope: PackEnvelope) -> ExitCode {
         argv.clone(),
         Some(bex_project::runtime_compiler()),
         btel_settings::clock::DEFAULT_MODE,
-        bex_engine::TelemetryRecording::user_files(
-            btel_settings::publisher::RecordingConfig::default(),
-        )
-        .with_host("pack"),
+        bex_engine::TelemetryRecording::from_boundary_env()
+            .unwrap_or_else(|| {
+                bex_engine::TelemetryRecording::user_files(
+                    btel_settings::publisher::RecordingConfig::default(),
+                )
+            })
+            .with_host("pack"),
     ) {
         Ok(e) => Arc::new(e),
         Err(e) => {
@@ -176,10 +179,13 @@ fn run_subcommand(envelope: PackEnvelope) -> ExitCode {
         bootstrap_argv,
         Some(bex_project::runtime_compiler()),
         btel_settings::clock::DEFAULT_MODE,
-        bex_engine::TelemetryRecording::user_files(
-            btel_settings::publisher::RecordingConfig::default(),
-        )
-        .with_host("pack"),
+        bex_engine::TelemetryRecording::from_boundary_env()
+            .unwrap_or_else(|| {
+                bex_engine::TelemetryRecording::user_files(
+                    btel_settings::publisher::RecordingConfig::default(),
+                )
+            })
+            .with_host("pack"),
     ) {
         Ok(e) => e,
         Err(e) => {
